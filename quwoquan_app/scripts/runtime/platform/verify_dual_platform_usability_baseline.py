@@ -8,9 +8,12 @@ environment CaseResult report.
 
 from __future__ import annotations
 
-
+import json
+import re
 import sys
 from pathlib import Path
+
+sys.dont_write_bytecode = True
 
 _SCRIPTS_ROOT = next(
     parent
@@ -20,12 +23,7 @@ _SCRIPTS_ROOT = next(
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
-
-import json
-import re
-import sys
-from pathlib import Path
+from _common.paths import REPO_ROOT
 
 
 ROOT = REPO_ROOT
@@ -41,6 +39,11 @@ CORE_READBACK_PATROL = (
     APP
     / "test/user_acceptance/journeys/app_startup"
     / "app_core_readback__user_acceptance_test.dart"
+)
+BASIC_READBACK_PATROL = (
+    APP
+    / "test/user_acceptance/journeys/app_startup"
+    / "basic_viability__user_acceptance_test.dart"
 )
 CORE_READBACK_SUPPORT = (
     APP / "test/support/runtime/patrol/patrol_core_readback_support.dart"
@@ -63,6 +66,7 @@ def main() -> int:
         IOS_WRAPPER,
         RUN_SH,
         CORE_READBACK_PATROL,
+        BASIC_READBACK_PATROL,
         CORE_READBACK_SUPPORT,
         SMOKE,
         VALIDATION,
@@ -121,21 +125,27 @@ def main() -> int:
                 f"{ERROR_STATE.relative_to(ROOT)}: page error state must expose accessibility live region",
             )
 
+    # 本地启动契约的 owner 是 run.sh 与 launcher handoff 校验器，Gradle 只编译。
+    # 因此这里查的是 Gradle 有没有重新拿回 target authority，而不是它有没有
+    # 自带校验任务——后者本身就是第二真相源。
     gradle = ANDROID_GRADLE.read_text(encoding="utf-8")
-    if "verifyAndroidLocalLauncherContract" not in gradle:
-        fail(
-            failures,
-            f"{ANDROID_GRADLE.relative_to(ROOT)}: missing verifyAndroidLocalLauncherContract",
-        )
     if "startLocalStackIfNeeded" in gradle or "autoStartStack" in gradle:
         fail(
             failures,
             f"{ANDROID_GRADLE.relative_to(ROOT)}: must not auto-start local stack",
         )
-    if "ProcessBuilder" in gradle and "reverse" in gradle and "verifyAndroidLocalLauncherContract" not in gradle:
+    if "ProcessBuilder" in gradle and "reverse" in gradle:
         fail(
             failures,
             f"{ANDROID_GRADLE.relative_to(ROOT)}: Gradle must not establish adb reverse itself",
+        )
+    # 只查注入面。Gradle 里那条「编译期不得消费 runtime dart-define」的禁止性
+    # 守卫必须保留，它正是 signed package 单轨的守门人。
+    if "dartDefinesDigest" in gradle or "--dart-define=" in gradle:
+        fail(
+            failures,
+            f"{ANDROID_GRADLE.relative_to(ROOT)}: runtime configuration is owned by the "
+            "signed runtime package, not by Gradle dart-define plumbing",
         )
 
     wrapper = IOS_WRAPPER.read_text(encoding="utf-8")
@@ -153,8 +163,9 @@ def main() -> int:
         "enable_android_adb_reverse",
         'export QWQ_ENVIRONMENT="${REQUESTED_ENVIRONMENT:-alpha}"',
         'export QWQ_APP_RUNTIME_ENV="$QWQ_ENVIRONMENT"',
-        'export QWQ_LAUNCH_TARGET="${QWQ_APP_RUNTIME_ENV}-local"',
-        'app-debug-preflight --target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
+        'export QWQ_LAUNCH_TARGET="${REQUESTED_TARGET:-${QWQ_APP_RUNTIME_ENV}-local}"',
+        'app-debug-preflight --purpose "$PREFLIGHT_PURPOSE"',
+        '--target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
         '--env "$QWQ_APP_RUNTIME_ENV"',
         '--target "$QWQ_LAUNCH_TARGET"',
     ):
@@ -162,21 +173,18 @@ def main() -> int:
             fail(failures, f"{RUN_SH.relative_to(ROOT)}: missing launcher requirement {required}")
 
     patrol = CORE_READBACK_PATROL.read_text(encoding="utf-8")
-    if "skip:" in patrol or "kRunPatrolAcceptance" in patrol:
+    if "skip: !kRunPatrolAcceptance" not in patrol:
         fail(
             failures,
             (
                 f"{CORE_READBACK_PATROL.relative_to(ROOT)}: required readback "
-                "must not use a dynamic skip"
+                "must use only the canonical Patrol compile guard"
             ),
         )
     for needle in (
         "environment_app_core_readback",
-        "provisionPatrolCoreChatConversation",
         "home-feed-card-0",
         "video-player-ready",
-        "chat-inbox-row-",
-        "AppRoutePaths.profile",
         "DATA_RELEASE_CREATOR_USER_HANDLE",
         "DATA_RELEASE_CREATOR_PERSONA_ID",
         "DATA_RELEASE_CREATOR_AVATAR_ASSET_ID",
@@ -187,6 +195,29 @@ def main() -> int:
             fail(
                 failures,
                 f"{CORE_READBACK_PATROL.relative_to(ROOT)}: missing journey assertion {needle}",
+            )
+
+    basic_patrol = BASIC_READBACK_PATROL.read_text(encoding="utf-8")
+    if "skip: !kRunPatrolAcceptance" not in basic_patrol:
+        fail(
+            failures,
+            (
+                f"{BASIC_READBACK_PATROL.relative_to(ROOT)}: required readback "
+                "must use only the canonical Patrol compile guard"
+            ),
+        )
+    for needle in (
+        "environment_post_auth_core_social_readback",
+        "provisionPatrolCoreChatConversation",
+        "chat-inbox-row-",
+        "AppRoutePaths.profile",
+        "profile-header-avatar-image",
+        "startupRecoveryTitle",
+    ):
+        if needle not in basic_patrol:
+            fail(
+                failures,
+                f"{BASIC_READBACK_PATROL.relative_to(ROOT)}: missing journey assertion {needle}",
             )
 
     support = CORE_READBACK_SUPPORT.read_text(encoding="utf-8")
@@ -203,10 +234,13 @@ def main() -> int:
             )
 
     smoke = SMOKE.read_text(encoding="utf-8")
-    if "app_core_readback__user_acceptance_test.dart" not in smoke:
+    if "CORE_READBACK_TARGET" not in smoke or "BASIC_VIABILITY_TARGET" not in smoke:
         fail(
             failures,
-            f"{SMOKE.relative_to(ROOT)}: must declare CORE_READBACK_TARGET",
+            (
+                f"{SMOKE.relative_to(ROOT)}: must declare both content and "
+                "content-free core readback targets"
+            ),
         )
     if '"local-gamma"' not in smoke or "runtime_anonymous_session" not in smoke:
         fail(
@@ -217,11 +251,34 @@ def main() -> int:
     suites = json.loads(VALIDATION.read_text(encoding="utf-8"))
     pr_light = suites["profiles"]["pr_light"]["deviceMatrix"]
     matrix_kinds = set(pr_light.get("matrixKinds") or [])
-    if "app-core-readback" not in matrix_kinds and "environment-smoke" not in matrix_kinds:
+    if matrix_kinds != {"assistant", "environment-smoke"}:
         fail(
             failures,
-            f"{VALIDATION.relative_to(ROOT)}: pr_light must require app-core-readback or environment-smoke",
+            (
+                f"{VALIDATION.relative_to(ROOT)}: pr_light must keep the "
+                "content-free assistant and environment-smoke device baseline"
+            ),
         )
+    if pr_light.get("requireAllPlatforms") is not True:
+        fail(
+            failures,
+            (
+                f"{VALIDATION.relative_to(ROOT)}: pr_light must require both "
+                "Android and iOS platform evidence"
+            ),
+        )
+    for profile_name in ("manual_full", "nightly_full", "release_candidate"):
+        full_matrix_kinds = set(
+            suites["profiles"][profile_name]["deviceMatrix"].get("matrixKinds") or []
+        )
+        if "app-core-readback" not in full_matrix_kinds:
+            fail(
+                failures,
+                (
+                    f"{VALIDATION.relative_to(ROOT)}: {profile_name} must retain "
+                    "release-bound app-core-readback"
+                ),
+            )
 
     workflow = DEVICE_MATRIX.read_text(encoding="utf-8")
     if "app-core-readback" not in workflow:

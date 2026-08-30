@@ -11,7 +11,7 @@
 
 ## 2. Story 协作与状态流
 
-- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：`main` 是唯一长期发布主干；短期 PR 分支受控、合入即删，退役分支只保留 archive tag/bundle。
+- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：仓库只保留 `dev1.0` 与 `main`；日常开发直接进入 `dev1.0`，唯一 PR 边为 `dev1.0 -> main` promotion。
 - [`gray-release-to-prod`](./gray-release-to-prod/spec.md)：**统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
 - [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
 - [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：beta 云侧本地集成栈始终只允许**一套**，启动新实例前必须先停止旧实例再重启。
@@ -29,14 +29,26 @@
 ## 4. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 main 后只允许一条权威受控主链
-- 决策：main 后只允许一条权威受控主链。
-- 分支真相：`main` 同时是唯一长期开发与发布真相源；短期 PR 分支不是第二主干，禁止从 archive tag/bundle 恢复为活动发布分支。
-- 理由：以 `alpha-local`、`beta-local`、`gamma` 本地镜像和 `prod-hosted` 为环境边界，由 `stackctl` 与 GitHub Actions 统一完成打包、启动、健康检查、端云验证、灰度发布与回滚。
-- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
-- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
-- main push 自动启动同一 DAG，完成不可变 OCI `ReleaseEvidenceManifest` 的 `component-ready -> candidate-ready` 总装与 Alpha/Beta/Gamma 阻断验证；正式 Prod apply 不由 workflow_run 或 push 静默执行，必须由人工 dispatch 绑定可达 main 的精确 Git SHA、显式设置非 dry-run，并通过 production environment approval。
-- `candidate-ready` 必须绑定四环境配置包、四环境 App 真实 payload、ContractGraph、真实 Provider readiness 与三层测试；按序接受 Alpha/Beta/Gamma 回执并绑定 rollback readiness 后才成为 `deployable`，Prod 全量验证后才成为 `released`。
+### DEC-001 dev1.0 集成与 main 发布组成唯一受控主链
+- 决策：仓库只保留 `dev1.0`、`main` 两个分支。长期集成真相源固定为 `dev1.0` 并接受日常直接开发，唯一发布真相源固定为 `main` 且只接受 `dev1.0 -> main` promotion PR；promotion 成功后仅受管系统可把 `main` fast-forward backsync 到 `dev1.0`。
+- 单向状态流：`dev1.0` push 只生成绑定精确 SHA 的 `03/04/05` hosted check evidence，不取得 release eligibility。`dev1.0` 合入 `main` 后生成 promotion receipt 并允许 mainline candidate admission。系统 backsync 只同步 ref，不生成新的 promotion 或 release eligibility。
+- 同 SHA 证据所有权：候选级 App `static/tests/serial/coverage` 只由 `dev1.0` push lane 执行。push 使用 `merge-base(origin/main, HEAD) -> HEAD` 判断候选 App 是否受影响，并以绑定 base/head/changed-path digest 的 `required|not_required` scope receipt 表达，不从 skipped 推导。PR 继续拥有 `main -> head` 区间 gate，但不重复执行候选级 App 测试。PR 通过只读 GitHub Actions authority 验签唯一 push run ID 的 workflow path、repository、event、head branch/SHA、最高 attempt、completed/success 状态与 7-job 完整成功闭包。缺失、多个 run ID、仍运行、失败/取消/skipped、attempt 混用、job 集漂移均 fail closed。不允许按 head SHA 合并两条 workflow concurrency group，也不允许用静态路径、本地缓存或调用方布尔值冒充 hosted evidence。
+- 计时边界：`03.delivery_gate` 的唯一预算来源是 `pr_gate_timing_budgets.json` 的 1500/1800。`600` 是上层 mainline 软目标，不覆盖本 gate。PR 公式固定为 `created_at -> max(local interval gates completed_at, push App evidence verifier completed_at)`。push phase durations 只作为 external machine diagnostic 与本地 sibling 取 max，不改变 PR calendar。verifier 从 PR run 官方 created_at 派生 1500/1800 绝对 deadline，排队不重置。workflow_call/mainline release 在自身 DAG 内运行完整 App 证据，不依赖另一个可变 run。
+- GitHub authority 读取：复用单一只读分页/重试 helper，最小权限 `actions:read`。暂态重试遵守服务端退避并 clamp 到 evidence deadline，终态错误与耗尽均结构化 `GATE_BLOCK`，诊断不含 token。唯一 run ID rerun 时只接受最高 attempt，多个 run ID 必须新 SHA。回滚只允许整体 Git revert，不保留 PR 本地 App fallback 或 feature flag。
+- 三层测试映射：`local_contract` 以最小 typed run/job fixture 锁定零/一/多 run、identity、最高 attempt、7-job 闭包、skipped/失败/取消、分页、deadline、API 暂态与 PR machine/calendar 公式，并直接绑定 `SIT-001.t1`。`api_integration` 使用 production reader/CLI 只读当前仓库真实 GitHub API，证明分页、权限、唯一 run/attempt 与 job timestamps，不在测试内另写 HTTP verifier。`user_acceptance` 由最终候选 SHA 的真实 `dev1.0` push、promotion PR 与 workflow_call CaseResult 证明 required-check、双区间与官方日历边界。真实 hosted 闭环在本增量完成前不得关闭 `daily-merge-release-strategy OPEN-001`。
+- 机器真相源：`quwoquan_ops/policies/branch_policy.yaml` 唯一声明两个分支、唯一 PR 边、integration/release/production-source 角色与 system backsync。hook、Actions、release governance 和 Prod source admission 只消费该合同，不各自维护第二份 allowlist。
+- 对象边界：`BranchPolicy` 是从上述版本化合同加载的不可变配置，`BranchTransition` 是一次评估的不可变输入值，`BranchDecision` 是不可变判断结果。Integration evidence 直接使用 GitHub 对精确 SHA 的 hosted Check Runs；Platform Ops 的 `BranchGovernanceEvidenceWriter` 只负责 promotion、backsync 与 blocker receipt，receipt 只引用 Git/GitHub 权威事实和 policy digest，不成为可修改分支状态或第二套 policy。
+- 决策导出面：生产模块提供纯 `BranchTransition(event, actorKind, repository, head, base, beforeOid, afterOid, refs) -> BranchDecision(status, reasonCode, stringContext)`。`status` 只允许 `allowed|blocked`，`reasonCode` 只使用 `OPS.BRANCH.*` 稳定身份，OID、ref、actor 与远端诊断只进入 string context；local contract 直接调用该生产 evaluator。
+- Git authority 端口：`BranchRefReader.readHeads(repository) -> BranchRefSnapshot` 读取权威 heads、精确 OID 与 ancestry。`BranchBacksyncWriter.fastForward(expectedBeforeOid, promotionOid) -> BranchBacksyncResult` 只执行无 force fast-forward 并回读 exact after OID。equal 为幂等 no-op；同一 attempt 发现 before OID 漂移即返回 `OPS.BRANCH.BACKSYNC_CAS_CONFLICT` 且零写，只有新 attempt 取得新快照后才能重新判定。任何分叉、main 落后、non-fast-forward、权限或网络不可确认都不写 ref。
+- Hosted authority：只读 `HostedGovernanceReader` 绑定 repository/default branch、PR number、head/base/merged SHA、workflow run/attempt/source ref、actor/installation identity、main/dev before-after OID、适用 protection/ruleset、observedAt 与 evidence digest。fixture 只能验证 parser，不能冒充 hosted evidence；尚未精确证明的托管 authority 保留在 L3 `OPEN-002`。
+- Prod admission：先验证 workflow definition 来自 `refs/heads/main`、source 是可达 `origin/main` 的精确 commit，并由 GitHub readback 证明唯一已合并 `dev1.0 -> main` promotion、merge SHA、最终 promotion head、绑定该 head 的 approval、canonical required workflow run/attempt/check identity、repository default branch 与当前 workflow attempt。
+- Prod effect isolation：任一逐次 readback 不可证明时 fail-closed，只产 blocker receipt；candidate、credential materialization、Provider 与 `stackctl` rollout command 均不可达。
+- Private-free 边界：无原生 protection/ruleset 时记录 `hostedProtectionVerified=false` 并阻断 `formalProd` 声明，具备上述逐次证据的 release validation 可以继续；满足父能力的 hosted protection 与 approval 后才交给 `gray-release-to-prod` 的 effectful rollout。
+- 理由：把频繁集成和唯一发布拆开可以稳定 integration checks，同时保持未晋级代码无法取得 release eligibility；共享 evaluator、真实 Git 端口与 hosted readback使三层证据绑定同一 repository、run 与 OID。
+- 被否决方案：`main` 同时承担日常集成、创建任何临时或第三长期分支、非 `dev1.0 -> main` PR 直达发布、人工 `main -> dev1.0`、force backsync、用环境变量自报 system identity，或由 hook/workflow复制分支规则。
+- 约束与影响：GitHub 原生保护不可用时，仓内 gate 只能阻断 eligibility 而不能声称远端 direct push 未发生。`dev1.0` 异常只允许在同一分支追加修复提交，禁止临时 reconcile 分支、自动 merge、force push 或历史改写。
+- 合法 main promotion 入库后自动启动同一 DAG，完成不可变 OCI `ReleaseEvidenceManifest` 的 `component-ready -> candidate-ready` 总装与 Alpha/Beta/Gamma 阻断验证；正式 Prod apply 不由 workflow_run 或 push 静默执行，必须由人工 dispatch 绑定可达 `main` 的精确 Git SHA、显式设置非 dry-run，并通过 production environment approval。
+- `candidate-ready` 必须绑定四环境配置包、Android/iOS 的 nonprod/prod 组件、单一 Web bundle、ContractGraph、真实 Provider readiness 与三层测试。Alpha、Beta、Gamma 环境 composition 引用同一 nonprod App bytes digest，按序接受回执并绑定 rollback readiness 后才成为 `deployable`，Prod 全量验证后才成为 `released`。
 - 同一候选制品就绪后，Alpha、Beta、Gamma-local 在隔离运行面并行执行；聚合器仍按 `alpha -> beta -> gamma` 验证回执，任一失败均不得申请 Prod approval。
 - Prod 只保留一个 production environment approval 与一个事务 job；checkout、OIDC/registry login、ReleaseEvidenceManifest 验签、治理校验和配置包物化只执行一次，随后由 `stackctl` 依次推进 `canary、5、20、50、100`。
 - push 与默认 dispatch 均保持 dry-run；dry-run 不提交 hosted ledger，因此只执行 `canary` 只读校验并明确标记边界，禁止伪造 `5/20/50/100` 回执。
@@ -71,17 +83,71 @@
 - 影响 Story：[`service-core-composition`](./service-core-composition/spec.md)
 - 关联验收：[`service-core-composition GWT-001/GWT-002`](./service-core-composition/spec.md#gwt-001)
 
+<a id="dec-004"></a>
+### DEC-004 App 制品身份、签名隔离与多渠道分发回执
+- 决策：App 分发以三个分离对象承载事实——`AppArtifactManifest`（`ReleaseEvidenceManifest` 候选内的 immutable owned entity，拥有 platform、BuildMode、distributionClass、package/bundle ID、version/build、signing identity、source/artifact/launch-manifest digest 与 promotability）、`InstallReceipt`（按 store/device/build 追加且集合无界的 separate append-only fact，独立生命周期与查询）、渠道矩阵（从 canonical metadata 生成，覆盖 Apple App Store/TestFlight、华为、小米、OPPO、vivo、应用宝与官网 `official_web` APK）。打包、签名校验、安装与渠道登记统一走 `stackctl package` 的 canonical App 入口（显式 `env/platform/build-mode/distribution-class/device`），`run.sh` 与 IDE 只做薄包装。
+- 跨边界 port：构建写入走 `AppArtifactPackageWriter` 生成不可变制品、`AppArtifactManifestReader` 提供验证查询；安装证据走 `AppInstallReceiptAppender` 只追加真实安装/商店回执、`AppInstallReceiptQuery` 供准出读取。禁止脚本或 Provider 直连绕过 port。
+- 包身份隔离：alpha/beta/gamma/prod 与 Debug/Release 使用不覆盖的 application/bundle ID、显示名与签名映射。
+- 正式身份来源：Prod 正式 ID 只取已登记外部事实，非 Prod/Debug 使用隔离后缀并同步 Universal/App Links、OAuth、推送与 Keychain/App Group。
+- 签名分发边界：Debug 签名制品仅限开发者本机、Simulator/Emulator 与登记设备；TestFlight、市场与官网只接受 Release。
+- 制品格式与渠道解耦：`AppArtifactManifest` 携带显式 `artifactFormat(apk/aab/ipa/app/web)`，由打包请求声明或按平台默认推导，禁止由 distributionClass 推导（原 `store → AAB` 耦合废除）；官网与全部 APK 市场引用同一 release APK source digest，`aab` 仅当已启用渠道 capability 硬性要求时按 DEC-005 构建一次。
+- 正式 Android 身份：`com.leadwise.quwoquan`（vivo 开放平台已登记外部事实）；Java namespace 与 applicationId 分离，微信回调 Activity 按 applicationId 约定放置。iOS 正式 Bundle ID 仍缺已登记外部事实，store 渠道保持阻断。
+- 渠道逐项声明：每渠道登记 `channelId`、`uploadFormat(ipa/aab/apk)`、package/bundle ID、store product ID、track、version/build、developer signing identity、store signing custodian、可能的 split/optimize/re-sign transformation、source candidate/artifact/launch-manifest digest、upload/review/release receipt 与安装后 signature/receipt 校验方式。`uploadFormat` 只声明渠道接受能力，不驱动构建。市场可能重签或优化，准出不要求下载二进制逐字节相同，而以 source digest、version/build、store 官方签名/receipt、嵌入 launch manifest 与启动 telemetry 绑定；一个渠道的回执不得替代另一渠道。
+- 官网分发：Android 官网 APK 复用 official distribution 部署到不可变 CDN 对象并出带 SHA-256 的 receipt，发布前通过包名/签名证书摘要/Build/SHA-256 预验证门禁；`app_release` 契约字段是恢复页、更新提示与网页安装组件共用的唯一下载真相源。iOS 网页版不提供二进制下载。
+- 灰度顺序：先内测或分阶段，再公开发布。
+- 快速止损：内容 active pointer、Web current pointer 与远端配置的止损在 300 秒内完成，且不要求重新打包或再次审核。
+- 商店回滚边界：已安装商店 App 不可强制回滚，服务保留商店客户端 N/N-1 兼容面，禁止把“重新发版”当唯一恢复动作。
+- 被否决方案：单一 applicationId/bundle ID 覆盖安装、Debug 包进入市场、要求市场下载物逐字节等同上传物、把内容 release 绑进商店二进制、side-load 冒充市场安装回执。
+- 关联要求：`REQ-001`
+- 影响 Story：[`gray-release-to-prod`](./gray-release-to-prod/spec.md)、[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)
+- 关联验收：[`environment-topology-and-packaging GWT-003`](../runtime-config/environment-topology-and-packaging/spec.md#gwt-003)、[`app-release-recovery-routing GWT-004`](../../product-ops-growth/product-control-plane-foundation/app-release-recovery-routing/spec.md#gwt-004)、[`cold-start-performance GWT-005`](../runtime-client-foundation/cold-start-performance/spec.md#gwt-005)
+
+<a id="dec-005"></a>
+### DEC-005 组件构建身份：build once、环境无关、按 digest 复用
+- 决策：打包的唯一职责是把一份受审源码闭包变成一份带可验证身份（真实 bytes digest + 签名 + provenance：源码依赖闭包、工具链、签名身份）的不可变字节；选环境、选渠道、选灰度阶段、注入 endpoint 都不属于构建。可执行字节只按 `nonprod/prod` 两个信任域分叉（applicationId、签名、entitlements、三方 SDK 注册身份），环境是部署与激活期的数据输入。
+- 最小构建矩阵：Android `nonprod.apk` + `prod.apk`（`com.leadwise.quwoquan`，同一签名 APK 复用官网与全部 APK 市场）；`prod.aab` 仅当已启用渠道 capability 硬性要求时构建一次。iOS `nonprod/prod` 两个身份/签名档位，不按环境重编译。Web 一份 immutable bundle。云侧每组件/OS/arch 按 `nonprod/prod` 两个信任域各构建一次：alpha/beta/gamma 复用同一 nonprod digest，prod 独立 digest。环境名、config digest 与 rollout stage 不得写入镜像字节。
+- 云侧信任域裁决：external Provider binding 经编译期 overlay 固化为 Go 二进制内的单环境 `CompiledBindingFor` 视图，是防止 provider substitute 进入 prod 的最强供应链阻断，本决策保留该编译期固化而不改为运行时挂载数据。代价是云镜像不能四环境同 digest，只能按信任域二分——与 App 侧 nonprod/prod 档位完全对称。前提是 alpha/beta/gamma 三环境的 `externalBindings` 声明收敛为同一 nonprod 档内容；环境身份文件（`artifact-identity.json`）与 platform-ops 环境配置树改为部署面挂载物料，从镜像字节中移除。
+- 配置外置三层通道：编译与制品封装层不接受 endpoint 类 define，也不携带 target runtime package；AppArtifact 只内置 build-profile 级信任根。安装后 activation 层由 stackctl/canonical launcher 将带 schema 版本的签名 runtime config package 原子写入平台私有容器，可独立重发与回滚而不重编、不重签 AppArtifact。服务端 bootstrap 层下发内容绑定身份、最低支持版本与 feature flag 等运行时事实，灰度阶段不在此列。cache/tag 不授予准出资格，复用时仍 100% 验证 exact digest、producer、SBOM、provenance 与签名。
+- 被否决方案：按环境重复编译（12 份 App 制品、4 套云镜像）、按渠道打不同 APK、嵌入渠道号或渠道 SDK 分支、把 rollout stage 写入制品、自建 APK 差分（商店差分由渠道免费提供，开发者永远上传全量包）。
+- 约束与影响：身份后缀与 flavor 的 `nonprod` 统一切换必须与 producer/reader 同增量原子完成，切换前 `environment_suffixes` 仍是唯一现行身份派生轨，不得双轨；`app_artifact_manifest.yaml` 的 `build_profiles` 是本决策的 metadata 冻结面。
+- 关联要求：`REQ-001`
+- 影响 Story：[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)、[`gray-release-to-prod`](./gray-release-to-prod/spec.md)
+- 关联验收：`SIT-001`
+
+<a id="dec-006"></a>
+### DEC-006 发布组合身份 releaseCompositionId 与重建指令解耦
+- 决策：候选身份（沿用字段名 `candidateId`，语义收窄为 releaseCompositionId）是对有序组件摘要、环境配置摘要与 ContractGraph/迁移兼容摘要求出的 digest，排除 OCI 仓库/tag、transport locator、channelId、分发回执、灰度阶段与运行时审核状态。候选不是重建指令：App-only change 的新候选引用原 Cloud 组件摘要，Cloud builder invocation 必须为 0，反之亦然；渠道回执、审核状态与灰度阶段变化均不产生新候选。
+- OCI 边界：`repository@sha256:...` 只用于 CI 内部不可变搬运与 provenance，不进入候选身份，也不强制进入分发回执。
+- 被否决方案：把全仓 transport locator、channel/receipt/stage 混入候选摘要（任何分发事件都会伪造“新候选”并触发全量重建）、端云双交付单元各自持有第二套身份、为每用途生成独立制品身份。
+- 约束与影响：`canonical_digests.py` 及聚合器、校验器、timing gate 必须在同一受审增量原子切换，不保留双 publisher/双 reader/运行时 flag；失败只允许 Git revert 后继续使用上一 immutable candidate。
+- 关联要求：`REQ-001`
+- 影响 Story：[`multi-environment-wave-deployment`](./multi-environment-wave-deployment/spec.md)
+- 关联验收：`SIT-001`
+
+<a id="dec-007"></a>
+### DEC-007 部署/分发执行与回执 owner 边界
+- 决策：CI/CD release/distribution control plane 是渠道分发动作与原始回执的唯一 owner。渠道分发回执只保留 `releaseCompositionId`、source artifact digest、`channelId`、version/build、平台侧脱敏 ID/状态、权威 readback 摘要与时间，每渠道独立且不复制 APK。灰度激活是 Platform Ops 拥有的流量策略：激活回执单独绑定 `releaseCompositionId`、策略 revision、stage、SLO 判定与时间，`policyDigest` 只属于激活决策。`canary/5/20/50/100` 不改变 APK、镜像、配置包或候选身份，App 全程无感知灰度阶段。Product Ops 只消费“最低可用版本、更新/恢复入口、当前公开版本”等只读投影，无分发执行权、不保存市场 Attempt、不持有市场凭据。
+- 指针条件更新：Web `current` 与 Android `latest` 的 compare-and-swap 只是“预期当前值一致才切换”的部署并发保护，不属于打包，不进入候选身份。
+- 数据边界：数据不是交付物，从不进入任何包。内容只经 canonical immutable content release activation 进入四环境；行为数据只允许非生产由测试数据控制面经领域公开 command/event 构造，Prod 在首条 mutation 前拒绝。
+- 被否决方案：Product Ops PostgreSQL 保存分发 Attempt/Receipt、Integration runtime 代理应用市场发布、把审核/回执/CAS/OCI/policy 塞进打包身份、灰度 stage 写入 IaC 制品。
+- 约束与影响：应用市场分发只消费“Cloud 已达到允许公开的稳定状态”，不拥有也不推进灰度；市场安装事实在首个商用闭环前不得以静态渠道登记、side-load 或官网安装替代。
+- 关联要求：`REQ-001`
+- 影响 Story：[`gray-release-to-prod`](./gray-release-to-prod/spec.md)
+- 关联验收：`SIT-001`
+
 ## 5. 失败与恢复
 
-- 失败类型：权限拒绝、依赖超时、候选摘要冲突、证据缺失或持久化失败。
-- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
-- 恢复动作：调用方按 canonical recovery action 重试、刷新或停止；不得自行合成成功结果。
+- 失败类型：分支 policy 无效、PR/ref 非法、`main` direct push、backsync 非 fast-forward、ref compare-and-swap 冲突、Prod source 不可达 main、权限拒绝、依赖超时、候选摘要冲突、证据缺失或持久化失败。
+- 可见结果：调用方收到稳定 `OPS.BRANCH.*` 或父能力 canonical failure；任何失败均不写 promotion、candidate、backsync、deploy 或 rollback 成功事实。
+- 恢复动作：非法 PR/ref 修正 head/base 后重试。backsync equal 幂等完成，安全 ancestor 可重读后重试。`dev1.0` 分叉时停止并要求人工裁决，不创建临时分支或 force。push 返回成功但 readback 未知时禁止盲重试，先从权威 ref 回读。after 等于 promotion OID 时收口成功，after 仍等于 before 时可安全重试，其他值冻结 eligibility。远端权限、网络、ancestry 或 hosted authority 不可确认时停止并保留 before/after readback。
 - 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
 
 ## 6. 质量与观测
 
+- 分支治理由 Platform Ops owner 记录 `branch_policy_decision_total{event,status,reasonCode}`、`branch_backsync_terminal_seconds{status}`、`branch_ref_readback_complete_total{ref,status}` 与 `branch_release_eligibility_total{status,reasonCode}`；每条 attempt 绑定 repository、run/attempt、promotion SHA、before/after OID 和 evidence digest，脱敏 receipts 保留至少 90 天。
+- 每个 policy/admission attempt 的 reason 覆盖率与 ref readback 完整率目标为 100%。成功 promotion 后 backsync 在 300 秒内进入 success、idempotent 或 blocked 终态的月度目标为 99%。任一无 reason decision、readback 缺失、`main/dev1.0` 分叉、未授权 main source 取得 eligibility 或 backsync 超过 300 秒立即触发 Platform Ops P1 告警。外部 GitHub 不可用时保持 fail-closed，不用 availability 降级换取放行。
 - `prod-hosted` 的正式灰度 workflow 必须人工 dispatch 并保留 approval；在 Provider、SFU、真实数据、观测、灾备或回滚证据缺失时只允许不可提升 prevalidate，且 post-deploy probe 置信度仍须单独验收。
 - 运行装配从各服务 `environments/<env>/deploy`、Ops 同名环境入口和真实 Compose/Kustomize 扫描推导；本地端口保留 `local_env_port_manifest`，prod rollout 保留 `gray_rollout_stages`，服务配置由自治 package 的 provenance 摘要证明。
 - 每个 Prod rollout stage 必须执行 `stackctl health + inspect + doctor + integration probes + slo gate`；任一失败写入 GATE_BLOCK/rollback 证据，不得由 workflow 合成成功。
-- App 四分片耗时必须读取四个实际 Jobs API 节点并取最大值；任何 shard 缺失时 timing gate 失败，不允许回退到 static/serial 近似值。
+- App 构建耗时必须读取 Android nonprod/prod、iOS nonprod/prod 与 Web shared 五个实际 Jobs API 节点并取最大值。任何 shard 缺失时 timing gate 失败，不允许回退到 static/serial 近似值。
 - 独立可观测：每域 `service.name` + 指标维度独立，使“逻辑独立”在合并部署时依然成立，并为拆分提供数据依据。

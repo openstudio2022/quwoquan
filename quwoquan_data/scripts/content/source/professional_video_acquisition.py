@@ -10,28 +10,37 @@ from typing import Any
 
 from core.content_source_registry import load_content_source_registry
 from core.io import read_json
-from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
 from core.video_source_admission import assert_video_acquisition_path_allowed
 from governance.coverage.distribution import (
     AcquisitionStatus,
     DistributionDecision,
-    ProductLifecycleState,
     RightsStatus,
-    distribution_decision,
-    load_content_distribution_policy,
 )
 
-from content.execution.controller.execute.pre_acquisition_handoff import (
+from content.source.pre_acquisition_handoff import (
     guard_acquisition_source_identity,
 )
 from content.source.professional_safety_evidence import (
+    file_sha256,
     load_bound_safety_evidence,
     validate_video_safety_payload,
+)
+from content.source.professional_video_asset_acquisition import (
+    acquire_video_item,
+    empty_video_row,
 )
 from content.source.professional_video_catalog_binding import (
     POPULAR_BINDING_FIELDS,
     resolve_popular_candidate_binding,
+)
+from content.source.professional_video_frozen_asset import (
+    resolve_frozen_video_asset,
+)
+from content.source.professional_video_deduplication import (
+    duplicate_source,
+    prior_content_index,
+    source_identity,
 )
 from content.source.professional_video_plan_spec import build_video_plan_spec
 from content.source.professional_video_popularity import (
@@ -42,23 +51,39 @@ from content.source.professional_video_probe import probe_professional_video
 from content.source.professional_video_receipt import (
     ACCEPTED_DECISIONS,
     ACQUISITION_ROOT,
-    acquired_video_specs_for_entity,
     assert_funnel_consistent,
     document_digest,
     load_professional_video_acquisition_receipt,
     provider_counts,
     resolve_professional_video_candidate,
 )
+from content.source.professional_video_spec_index import (
+    acquired_video_specs_for_entity,
+)
 from content.source.professional_video_store import (
-    put_video_cas,
+    ProfessionalVideoCasCollision,
     write_create_once_video_receipt,
 )
-from content.source.professional_video_transport import (
-    copy_manual_video,
-    fetch_public_video,
-    redact_sensitive_video_url,
-)
+from content.source.professional_video_transport import fetch_public_video
 from content.source.research.text_match import _normalized_title
+
+
+class ProfessionalVideoAcquisitionBlocked(ValueError):
+    """A valid batch froze its evidence but admitted no video object."""
+
+    code = "DATA.SOURCE.VIDEO_BATCH_NO_SUCCESS"
+
+    def __init__(self, receipt: dict[str, Any], receipt_path: Path) -> None:
+        self.receipt = receipt
+        self.receipt_path = receipt_path
+        failures = [
+            f"{row['assetId']}={row['failureCode']}:{row['failure']}"
+            for row in receipt["assets"]
+        ]
+        super().__init__(
+            f"{self.code}: no professional video was admitted; "
+            + "; ".join(failures)
+        )
 
 
 def _registered_video_source(
@@ -97,8 +122,7 @@ def _validate_item(
     item: Mapping[str, Any],
     *,
     registry: Mapping[str, Any],
-    lifecycle: ProductLifecycleState,
-) -> tuple[RightsStatus, str]:
+) -> RightsStatus:
     asset_id = str(item["assetId"])
     rights = RightsStatus(str(item["rightsStatus"]))
     if rights is not RightsStatus.VERIFIED and not item["rightsIssues"]:
@@ -124,11 +148,6 @@ def _validate_item(
     source = _registered_video_source(str(item["provider"]), registry=registry)
     if str(item["platform"]) != source["platform"]:
         raise ValueError(f"{asset_id}: platform does not match registered provider")
-    publication = (
-        "research_release"
-        if lifecycle is ProductLifecycleState.RESEARCH
-        else "commercial_release"
-    )
     assert_video_acquisition_path_allowed(
         registry,
         source_id=str(item["provider"]),
@@ -170,245 +189,64 @@ def _validate_item(
         raise ValueError(
             f"{asset_id}: popular candidate/catalog ref/digest/file SHA must be supplied together"
         )
-    return rights, publication
+    return rights
 
 
-def _pre_acquisition_block(item: Mapping[str, Any]) -> tuple[str, str]:
-    access = item["accessEvidence"]
-    if any(
-        bool(access[field])
-        for field in (
-            "loginRequired",
-            "captchaRequired",
-            "paywallRequired",
-            "drmProtected",
-            "accessControlBypass",
-        )
-    ):
-        return "DATA.SOURCE.ACCESS_CONTROL_BLOCKED", "access barrier or bypass declared"
-    if item["acquisitionPath"] != "manual_file" and not access["anonymousAssetAccess"]:
-        return "DATA.SOURCE.ANONYMOUS_ACCESS_REQUIRED", "network video is not anonymously accessible"
-    review = item["safetyReview"]
-    if review["status"] != "passed":
-        return "DATA.SOURCE.SAFETY_REVIEW_BLOCKED", "safety review is not passed"
-    if review["entityMatch"] != "matched":
-        return "DATA.SOURCE.ENTITY_MISMATCH", "safety review entity does not match"
-    if any(
-        review[field] != "none"
-        for field in ("privacyRisk", "minorRisk", "maliciousMediaRisk")
-    ):
-        return "DATA.SOURCE.SAFETY_RISK_BLOCKED", "privacy, minor or malicious-media risk"
-    if review["watermarkStatus"] != "absent":
-        return "DATA.SOURCE.WATERMARK_BLOCKED", "watermark is present or unknown"
-    entity_key = _normalized_title(str(item["entityId"]))
-    observed_key = _normalized_title(str(item["observedEntityId"]))
-    if not entity_key or observed_key != entity_key:
-        return "DATA.SOURCE.ENTITY_MISMATCH", "observedEntityId does not match entityId"
-    evidence_key = _normalized_title(f"{item['title']} {item['relevance']}")
-    aliases = [
-        _normalized_title(value)
-        for value in [item["entityId"], *item["entityAliases"]]
-        if _normalized_title(value)
-    ]
-    if not any(alias in evidence_key for alias in aliases):
-        return "DATA.SOURCE.ENTITY_MISMATCH", "title and relevance do not identify entity"
-    return "", ""
-
-
-def _source_identity(document: Mapping[str, Any]) -> tuple[str, str, str]:
-    return (
-        str(document["sourceRevision"]),
-        str(document["sourceDigest"]),
-        str(document["entityCatalogDigest"]),
-    )
-
-
-def _receipt_source_identity_header(path: Path) -> tuple[str, str, str]:
-    """Read only the immutable identity header before current-schema validation.
-
-    Historical receipts from another source identity are not candidates for
-    deduplication and may predate the current receipt body schema.  A malformed
-    header still fails closed because its identity cannot be proven foreign.
-    """
-    document = read_json(path)
-    if not isinstance(document, Mapping):
-        raise TypeError(
-            f"professional video acquisition receipt header must be an object: {path}"
-        )
-    if document.get("schema") != "quwoquan_data.professional_video_acquisition_receipt":
-        raise ValueError(
-            f"professional video acquisition receipt header schema is invalid: {path}"
-        )
-    values: list[str] = []
-    for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest"):
-        value = document.get(field)
-        if not isinstance(value, str) or not value.strip():
-            raise ValueError(
-                "professional video acquisition receipt identity header is invalid: "
-                f"{path} field={field}"
-            )
-        values.append(value)
-    return values[0], values[1], values[2]
-
-
-def _prior_content_index(
-    output_root: Path,
-    *,
-    current_receipt: Path,
-    source_identity: tuple[str, str, str],
-) -> dict[str, str]:
-    index: dict[str, str] = {}
-    receipts = output_root / "receipts"
-    if not receipts.is_dir():
-        return index
-    for path in sorted(receipts.glob("*.json")):
-        if path.resolve() == current_receipt.resolve():
-            continue
-        ref = path.relative_to(output_root).as_posix()
-        if _receipt_source_identity_header(path) != source_identity:
-            continue
-        receipt = load_professional_video_acquisition_receipt(ref, root=output_root)
-        for row in receipt["assets"]:
-            digest = str(row.get("contentSha256") or "")
-            if row.get("acquisitionStatus") == "acquired" and digest:
-                index.setdefault(digest, f"{ref}#{row['assetId']}")
-    return index
-
-
-def _empty_row(item: Mapping[str, Any], *, rights: RightsStatus) -> dict[str, Any]:
-    row = {
-        **{key: item[key] for key in (
-            "assetId", "entityId", "observedEntityId", "provider", "platform",
-            "displayName", "sourceKind", "acquisitionPath", "sourceUrl", "assetUrl",
-            "manualFile", "apiEvidence", "accessEvidence", "title", "relevance",
-            "creator", "capturedAt", "license", "termsUrl", "authorizationProof",
-            "rightsIssues", "modelReleaseStatus", "propertyReleaseStatus", "safetyReview",
-        )},
-        "acquisitionStatus": AcquisitionStatus.BLOCKED.value,
-        "rightsStatus": rights.value,
-        "authorizationRequired": rights is not RightsStatus.VERIFIED or not str(item["authorizationProof"]).strip(),
-        "distributionDecision": DistributionDecision.BLOCKED.value,
-        "contentSha256": "",
-        "assetRef": "",
-        "bytes": 0,
-        "mediaProbe": None,
-        "duplicateOf": "",
-        "failureCode": "",
-        "failure": "",
-        "popularitySignals": initial_popularity_signals(dict(item["popularitySignals"])),
-        "planVideoSpec": None,
-        "popularCandidateId": str(item.get("popularCandidateId") or ""),
-        "popularCatalogRef": str(item.get("popularCatalogRef") or ""),
-        "popularCatalogDigest": str(item.get("popularCatalogDigest") or ""),
-        "popularCatalogFileSha256": str(item.get("popularCatalogFileSha256") or ""),
-    }
-    for field in ("sourceUrl", "assetUrl", "apiEvidence", "termsUrl", "authorizationProof"):
-        row[field] = redact_sensitive_video_url(str(row[field]))
-    return row
-
-
-def _acquire_item(
+def _excluded_item_row(
     item: Mapping[str, Any],
     *,
     rights: RightsStatus,
-    safety_evidence: Mapping[str, Any],
-    manual_root: Path | None,
-    output_root: Path,
-    temporary_root: Path,
-    lifecycle: ProductLifecycleState,
+    code: str,
+    error: BaseException,
 ) -> dict[str, Any]:
-    row = _empty_row(item, rights=rights)
-    failure_code, failure = _pre_acquisition_block(item)
-    if failure_code:
-        row.update(failureCode=failure_code, failure=failure)
-        return row
-    temporary = temporary_root / f"{item['assetId']}.download"
-    try:
-        if item["acquisitionPath"] == "manual_file":
-            if manual_root is None:
-                raise ValueError("manual_root is required by manual_file acquisition")
-            suffix = copy_manual_video(str(item["manualFile"]), temporary, manual_root=manual_root)
-        else:
-            suffix = fetch_public_video(
-                str(item["assetUrl"]),
-                temporary,
-                supported_api=item["acquisitionPath"] == "supported_api",
-            )
-        cas_path, content_sha256 = put_video_cas(
-            temporary,
-            suffix,
-            output_root=output_root,
-        )
-    except (FileNotFoundError, OSError, TimeoutError, ValueError) as exc:
-        row.update(
-            acquisitionStatus=AcquisitionStatus.FAILED.value,
-            failureCode="DATA.SOURCE.ACQUISITION_FAILED",
-            failure=f"{type(exc).__name__}: {exc}",
-        )
-        return row
-    finally:
-        temporary.unlink(missing_ok=True)
-    row.update(
-        acquisitionStatus=AcquisitionStatus.ACQUIRED.value,
-        contentSha256=content_sha256,
-        assetRef=cas_path.relative_to(output_root).as_posix(),
-        bytes=cas_path.stat().st_size,
-    )
-    decision = distribution_decision(
-        acquisition_status=AcquisitionStatus.ACQUIRED,
-        rights_status=rights,
-        authorization_proof=str(item["authorizationProof"]),
-    )
-    try:
-        probe = probe_professional_video(cas_path)
-    except (OSError, RuntimeError, TypeError, ValueError) as exc:
-        row.update(
-            distributionDecision=DistributionDecision.BLOCKED.value,
-            failureCode="DATA.SOURCE.MEDIA_PROBE_FAILED",
-            failure=f"{type(exc).__name__}: {exc}",
-        )
-        return row
-    try:
-        validate_video_safety_payload(
-            safety_evidence,
-            item,
-            content_sha256=content_sha256,
-            size_bytes=cas_path.stat().st_size,
-            media_probe=probe,
-        )
-        row["mediaProbe"] = probe
-    except (OSError, RuntimeError, TypeError, ValueError) as exc:
-        row.update(
-            distributionDecision=DistributionDecision.BLOCKED.value,
-            failureCode="DATA.SOURCE.SOURCE_BYTES_DRIFT",
-            failure=f"{type(exc).__name__}: {exc}",
-        )
-        return row
-    if not probe["playable"] or not probe["motionVideo"]:
-        row.update(
-            distributionDecision=DistributionDecision.BLOCKED.value,
-            failureCode="DATA.SOURCE.NOT_PLAYABLE_MOTION_VIDEO",
-            failure="video is unplayable or a static-image sequence",
-        )
-        return row
-    if decision is DistributionDecision.BLOCKED:
-        row.update(
-            failureCode="DATA.SOURCE.RIGHTS_RESTRICTED",
-            failure="restricted rights block research and commercial distribution",
-        )
-        return row
-    commercial_proof = str(row["authorizationProof"]).startswith("https://")
-    if lifecycle is ProductLifecycleState.COMMERCIAL and (
-        decision is not DistributionDecision.COMMERCIAL_ALLOWED or not commercial_proof
-    ):
-        row.update(
-            distributionDecision=DistributionDecision.BLOCKED.value,
-            failureCode="DATA.SOURCE.COMMERCIAL_RIGHTS_REQUIRED",
-            failure="commercial lifecycle rejects research-only video",
-        )
-        return row
-    row["distributionDecision"] = decision.value
+    detail = str(error).strip() or f"{type(error).__name__} excluded this asset"
+    row = empty_video_row(item, rights=rights)
+    row.update(failureCode=code, failure=detail)
     return row
+
+
+def _build_isolated_plan_specs(
+    rows: list[dict[str, Any]],
+    *,
+    receipt_ref: str,
+) -> None:
+    """Rank and project accepted rows; one projection failure excludes only it."""
+    while True:
+        ordinary_rows = [row for row in rows if not row["popularCandidateId"]]
+        for row in ordinary_rows:
+            row["planVideoSpec"] = None
+            row["popularitySignals"] = initial_popularity_signals(
+                dict(row["popularitySignals"])
+            )
+        apply_popularity_percentiles(ordinary_rows)
+        for row in rows:
+            row["planVideoSpec"] = None
+        failed = False
+        for row in rows:
+            if row["distributionDecision"] not in ACCEPTED_DECISIONS:
+                continue
+            try:
+                row["planVideoSpec"] = build_video_plan_spec(
+                    row,
+                    receipt_ref=receipt_ref,
+                )
+            except Exception as exc:  # noqa: BLE001 - isolate one plan candidate.
+                row["popularitySignals"].update(
+                    popularityPercentile=None,
+                    rankingEligible=False,
+                    ineligibleReason="asset_not_accepted",
+                    comparisonCandidateCount=0,
+                )
+                row.update(
+                    distributionDecision=DistributionDecision.BLOCKED.value,
+                    failureCode="DATA.SOURCE.PLAN_SPEC_INVALID",
+                    failure=str(exc).strip()
+                    or f"{type(exc).__name__} rejected video plan projection",
+                    planVideoSpec=None,
+                )
+                failed = True
+        if not failed:
+            return
 
 
 def acquire_professional_videos(
@@ -425,51 +263,119 @@ def acquire_professional_videos(
     if not isinstance(manifest, dict):
         raise TypeError("professional video acquisition manifest must be an object")
     assert_valid(manifest, "source", "professional_video_acquisition_manifest", label="professional video acquisition manifest")
-    guard_acquisition_source_identity(
+    handoff = guard_acquisition_source_identity(
         manifest,
         handoff_ref=handoff_ref,
         repo_root=repo_root,
     )
+    source_review_identity: dict[str, str] | None = None
+    if (
+        isinstance(handoff, Mapping)
+        and isinstance(handoff.get("sourceDigest"), Mapping)
+        and isinstance(handoff.get("executionBundle"), Mapping)
+    ):
+        source_review_identity = {
+            "sourceRevision": str(handoff["sourceRevision"]),
+            "sourceDigest": str(handoff["sourceDigest"]["digest"]),
+            "entityCatalogDigest": str(handoff["entityCatalogDigest"]),
+            "executionBundleDigest": str(handoff["executionBundle"]["digest"]),
+            "handoffDigest": file_sha256(handoff_ref.expanduser().resolve()),
+        }
     if not manifest["items"]:
         raise ValueError("professional video acquisition manifest must contain items")
     asset_ids = [str(item["assetId"]) for item in manifest["items"]]
     if len(asset_ids) != len(set(asset_ids)):
         raise ValueError("professional video acquisition assetId values must be unique")
     provider_labels: dict[str, tuple[str, str]] = {}
-    validated: list[
-        tuple[dict[str, Any], RightsStatus, str, dict[str, Any]]
+    prepared: list[
+        tuple[int, dict[str, Any], RightsStatus, dict[str, Any], Path | None]
     ] = []
+    rows_by_index: dict[int, dict[str, Any]] = {}
     popular_bindings: dict[str, dict[str, Any]] = {}
     catalog_cache: dict[tuple[str, str, str], dict[str, Any]] = {}
     registry = load_content_source_registry()
-    lifecycle = load_content_distribution_policy().product_lifecycle_state
-    for raw in manifest["items"]:
+    frozen_receipts: dict[str, tuple[dict[str, Any], str]] = {}
+    frozen_reuse_digests: dict[str, str] = {}
+    for index, raw in enumerate(manifest["items"]):
         item = dict(raw)
-        rights, publication = _validate_item(
-            item,
-            registry=registry,
-            lifecycle=lifecycle,
-        )
-        safety_evidence = load_bound_safety_evidence(
-            item,
-            evidence_root=root,
-            kind="video",
-            manual_root=manual_root,
-        )
-        popular = resolve_popular_candidate_binding(
-            item,
-            catalog_root=root,
-            manual_root=manual_root,
-            expected_identity=_source_identity(manifest),
-            catalog_cache=catalog_cache,
-        )
+        rights = RightsStatus(str(item["rightsStatus"]))
+        try:
+            rights = _validate_item(item, registry=registry)
+        except Exception as exc:  # noqa: BLE001 - one manifest item is isolated.
+            rows_by_index[index] = _excluded_item_row(
+                item,
+                rights=rights,
+                code="DATA.SOURCE.ITEM_PREVALIDATION_FAILED",
+                error=exc,
+            )
+            continue
+        try:
+            safety_evidence = load_bound_safety_evidence(
+                item,
+                evidence_root=root,
+                kind="video",
+                manual_root=manual_root,
+                source_review_identity=source_review_identity,
+            )
+        except Exception as exc:  # noqa: BLE001 - one safety binding is isolated.
+            rows_by_index[index] = _excluded_item_row(
+                item,
+                rights=rights,
+                code="DATA.SOURCE.SAFETY_EVIDENCE_INVALID",
+                error=exc,
+            )
+            continue
+        try:
+            frozen_asset = resolve_frozen_video_asset(
+                item,
+                manifest=manifest,
+                output_root=root,
+                receipt_cache=frozen_receipts,
+            )
+        except Exception as exc:  # noqa: BLE001 - one frozen asset is isolated.
+            rows_by_index[index] = _excluded_item_row(
+                item,
+                rights=rights,
+                code="DATA.SOURCE.FROZEN_ASSET_INVALID",
+                error=exc,
+            )
+            continue
+        if frozen_asset is not None:
+            frozen_reuse_digests[str(item["assetId"])] = str(
+                item["frozenAsset"]["contentSha256"]
+            )
+        try:
+            popular = resolve_popular_candidate_binding(
+                item,
+                catalog_root=root,
+                manual_root=manual_root,
+                expected_identity=source_identity(manifest),
+                catalog_cache=catalog_cache,
+            )
+        except Exception as exc:  # noqa: BLE001 - one catalog binding is isolated.
+            rows_by_index[index] = _excluded_item_row(
+                item,
+                rights=rights,
+                code="DATA.SOURCE.POPULAR_BINDING_INVALID",
+                error=exc,
+            )
+            continue
+        label = (str(item["displayName"]), str(item["platform"]))
+        provider = str(item["provider"])
+        if provider in provider_labels and provider_labels[provider] != label:
+            rows_by_index[index] = _excluded_item_row(
+                item,
+                rights=rights,
+                code="DATA.SOURCE.ITEM_PREVALIDATION_FAILED",
+                error=ValueError(
+                    f"{item['assetId']}: provider displayName/platform are inconsistent"
+                ),
+            )
+            continue
+        provider_labels[provider] = label
         if popular is not None:
             popular_bindings[str(item["assetId"])] = popular
-        label = (str(item["displayName"]), str(item["platform"]))
-        if str(item["provider"]) in provider_labels and provider_labels[str(item["provider"])] != label:
-            raise ValueError(f"{item['assetId']}: provider displayName/platform are inconsistent")
-        provider_labels[str(item["provider"])] = label
-        validated.append((item, rights, publication, safety_evidence))
+        prepared.append((index, item, rights, safety_evidence, frozen_asset))
     manifest_digest = document_digest(manifest)
     manifest_token = manifest_digest.removeprefix("sha256:")
     receipts_root = root / "receipts"
@@ -492,6 +398,8 @@ def acquire_professional_videos(
             for row in receipt["assets"]
         )
         if not retryable:
+            if int(receipt["acceptedAssetCount"]) == 0:
+                raise ProfessionalVideoAcquisitionBlocked(receipt, latest_path)
             return receipt, latest_path
         # A frozen failure (for example an upstream 429) must not freeze the
         # manifest forever: append a new immutable attempt receipt instead of
@@ -502,52 +410,74 @@ def acquire_professional_videos(
     else:
         receipt_ref = f"receipts/{manifest_token}.json"
     receipt_path = root / receipt_ref
-    prior = _prior_content_index(
+    prior = prior_content_index(
         root,
         current_receipt=receipt_path,
-        source_identity=_source_identity(manifest),
+        source_identity=source_identity(manifest),
     )
-    rows: list[dict[str, Any]] = []
     seen: dict[str, str] = {}
     root.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="professional-video-", dir=root) as temporary:
-        temporary_root = Path(temporary)
-        max_workers = min(
-            len(validated),
-            active_runtime_policy().download_concurrency,
+    if prepared:
+        with tempfile.TemporaryDirectory(
+            prefix="professional-video-", dir=root
+        ) as temporary:
+            temporary_root = Path(temporary)
+            with ThreadPoolExecutor(
+                max_workers=len(prepared),
+                thread_name_prefix="professional-video",
+            ) as executor:
+                futures = [
+                    (
+                        index,
+                        item,
+                        rights,
+                        executor.submit(
+                            acquire_video_item,
+                            item,
+                            rights=rights,
+                            safety_evidence=safety_evidence,
+                            manual_root=manual_root,
+                            output_root=root,
+                            temporary_root=temporary_root,
+                            safety_validator=validate_video_safety_payload,
+                            network_fetcher=fetch_public_video,
+                            media_probe=probe_professional_video,
+                            frozen_asset=frozen_asset,
+                        ),
+                    )
+                    for index, item, rights, safety_evidence, frozen_asset in prepared
+                ]
+                for index, item, rights, future in futures:
+                    try:
+                        rows_by_index[index] = future.result()
+                    except ProfessionalVideoCasCollision:
+                        raise
+                    except Exception as exc:  # noqa: BLE001 - one asset is isolated.
+                        row = empty_video_row(item, rights=rights)
+                        row.update(
+                            acquisitionStatus=AcquisitionStatus.FAILED.value,
+                            failureCode="DATA.SOURCE.ACQUISITION_FAILED",
+                            failure=f"{type(exc).__name__}: {exc}",
+                        )
+                        rows_by_index[index] = row
+    rows = [rows_by_index[index] for index in range(len(manifest["items"]))]
+    for row in rows:
+        digest = str(row["contentSha256"])
+        duplicate_of = duplicate_source(
+            row,
+            seen=seen,
+            prior=prior,
+            frozen_reuse_digests=frozen_reuse_digests,
         )
-        with ThreadPoolExecutor(
-            max_workers=max_workers,
-            thread_name_prefix="professional-video",
-        ) as executor:
-            futures = [
-                executor.submit(
-                    _acquire_item,
-                    item,
-                    rights=rights,
-                    safety_evidence=safety_evidence,
-                    manual_root=manual_root,
-                    output_root=root,
-                    temporary_root=temporary_root,
-                    lifecycle=lifecycle,
-                )
-                for item, rights, _publication, safety_evidence in validated
-            ]
-            acquired_rows = [future.result() for future in futures]
-        for row in acquired_rows:
-            digest = str(row["contentSha256"])
-            duplicate_of = seen.get(digest) or prior.get(digest) if digest else ""
-            if duplicate_of:
-                row.update(
-                    distributionDecision=DistributionDecision.BLOCKED.value,
-                    duplicateOf=duplicate_of,
-                    failureCode="DATA.SOURCE.DUPLICATE_ASSET",
-                    failure=f"duplicate professional video: {duplicate_of}",
-                )
-            elif digest:
-                seen[digest] = str(row["assetId"])
-            rows.append(row)
-    apply_popularity_percentiles(rows)
+        if duplicate_of:
+            row.update(
+                distributionDecision=DistributionDecision.BLOCKED.value,
+                duplicateOf=duplicate_of,
+                failureCode="DATA.SOURCE.DUPLICATE_ASSET",
+                failure=f"duplicate professional video: {duplicate_of}",
+            )
+        elif digest:
+            seen[digest] = str(row["assetId"])
     for row in rows:
         popular = popular_bindings.get(str(row["assetId"]))
         if popular is None:
@@ -568,14 +498,7 @@ def acquire_professional_videos(
             "rankingEligible": True,
             "ineligibleReason": "",
         }
-    publication = validated[0][2]
-    for row in rows:
-        if row["distributionDecision"] in ACCEPTED_DECISIONS:
-            row["planVideoSpec"] = build_video_plan_spec(
-                row,
-                receipt_ref=receipt_ref,
-                publication=publication,
-            )
+    _build_isolated_plan_specs(rows, receipt_ref=receipt_ref)
     planned = len(rows)
     downloaded = sum(row["acquisitionStatus"] == "acquired" for row in rows)
     accepted = sum(row["distributionDecision"] in ACCEPTED_DECISIONS for row in rows)
@@ -602,11 +525,14 @@ def acquire_professional_videos(
         receipt,
         output_root=root,
     )
+    if accepted == 0:
+        raise ProfessionalVideoAcquisitionBlocked(frozen, receipt_path)
     return frozen, receipt_path
 
 
 __all__ = [
     "ACQUISITION_ROOT",
+    "ProfessionalVideoAcquisitionBlocked",
     "acquire_professional_videos",
     "acquired_video_specs_for_entity",
     "load_professional_video_acquisition_receipt",

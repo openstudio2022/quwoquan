@@ -17,6 +17,7 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/adapters/gathering_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_remote.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
@@ -25,6 +26,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 import '../../../../../support/runtime/api_contract/production_cloud_operation_telemetry_evidence.dart';
 import '../../../../../support/runtime/api_contract/user_api_contract_harness.dart';
 
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_board_plan_reader.dart';
+
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
   defaultValue: 'gamma',
@@ -32,125 +35,117 @@ const _apiContractEnv = String.fromEnvironment(
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 
 void main() {
-  test(
-    'production Remote creates one availability watch without Participation or admission mutation',
-    () async {
-      final inputs = _GatheringProviderInputs.fromProcessEnvironment();
-      UserApiContractHarness? accountHarness;
-      _GatheringProviderHarness? gatheringHarness;
-      final suffix = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
+  test('production Remote creates one availability watch without Participation or admission mutation', () async {
+    final inputs = _GatheringProviderInputs.fromProcessEnvironment();
+    UserApiContractHarness? accountHarness;
+    _GatheringProviderHarness? gatheringHarness;
+    final suffix = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
 
+    try {
+      accountHarness = await UserApiContractHarness.create();
+      final session = await accountHarness.loginDisposableAccount(
+        'gathering-watch-$suffix',
+      );
+      final personaId = session.activePersona?.personaId.trim() ?? '';
+      if (personaId.isEmpty) {
+        throw StateError('availability watch actor requires an active persona');
+      }
+      gatheringHarness = await _GatheringProviderHarness.create(
+        session: session,
+        personaId: personaId,
+      );
+
+      final before = await gatheringHarness.remote.getDetail(
+        GatheringDetailQuery(gatheringId: inputs.gatheringId),
+      );
+      final publicBefore = _requireWatchableGathering(
+        before,
+        inputs.gatheringId,
+      );
+      final intent = GatheringAvailabilityWatchCommandInput(
+        idempotencyKey: 'gathering-watch-$suffix',
+        gatheringId: inputs.gatheringId,
+        expectedGatheringVersion: publicBefore.aggregateVersion,
+        expectedWatchVersion: 0,
+      );
+
+      final first = await gatheringHarness.remote.watchAvailability(intent);
+      final replay = await gatheringHarness.remote.watchAvailability(intent);
+      _validateWatchReceipt(
+        first,
+        gatheringId: inputs.gatheringId,
+        previousVersion: publicBefore.aggregateVersion,
+        replayed: false,
+      );
+      _validateWatchReceipt(
+        replay,
+        gatheringId: inputs.gatheringId,
+        previousVersion: publicBefore.aggregateVersion,
+        replayed: true,
+      );
+      if (replay.aggregateVersion != first.aggregateVersion) {
+        throw StateError('availability watch replay advanced the aggregate');
+      }
+
+      final after = await gatheringHarness.remote.getDetail(
+        GatheringDetailQuery(gatheringId: inputs.gatheringId),
+      );
+      final publicAfter = _requireWatchableGathering(after, inputs.gatheringId);
+      if (publicAfter.aggregateVersion != first.aggregateVersion ||
+          publicAfter.capacity.maxParticipants !=
+              publicBefore.capacity.maxParticipants ||
+          publicAfter.capacity.occupiedSeats !=
+              publicBefore.capacity.occupiedSeats ||
+          publicAfter.capacity.remainingSeats !=
+              publicBefore.capacity.remainingSeats ||
+          publicAfter.admissionState != publicBefore.admissionState ||
+          publicAfter.viewerParticipation != null) {
+        throw StateError(
+          'availability watch changed admission, capacity, or Participation',
+        );
+      }
+
+      final events = await gatheringHarness.telemetry.waitForEvents(
+        minimumCount: 6,
+      );
+      final publicReads = events.where(
+        (event) =>
+            event.canonicalOperationId ==
+            cloud.AppCloudOperationIds.circleGatheringGetPublicGathering,
+      );
+      final watchWrites = events.where(
+        (event) =>
+            event.canonicalOperationId ==
+            cloud
+                .AppCloudOperationIds
+                .circleGatheringWatchGatheringAvailability,
+      );
+      if (publicReads.length != 2 ||
+          publicReads.any((event) => !event.succeeded) ||
+          watchWrites.length != 2 ||
+          watchWrites.any((event) => !event.succeeded)) {
+        throw StateError(
+          'availability watch did not emit the canonical production operation set',
+        );
+      }
+    } finally {
       try {
-        accountHarness = await UserApiContractHarness.create();
-        final session = await accountHarness.loginDisposableAccount(
-          'gathering-watch-$suffix',
-        );
-        final personaId = session.activePersona?.personaId.trim() ?? '';
-        if (personaId.isEmpty) {
-          throw StateError(
-            'availability watch actor requires an active persona',
-          );
-        }
-        gatheringHarness = await _GatheringProviderHarness.create(
-          session: session,
-          personaId: personaId,
-        );
-
-        final before = await gatheringHarness.remote.getDetail(
-          GatheringDetailQuery(gatheringId: inputs.gatheringId),
-        );
-        final publicBefore = _requireWatchableGathering(
-          before,
-          inputs.gatheringId,
-        );
-        final intent = GatheringAvailabilityWatchCommandInput(
-          idempotencyKey: 'gathering-watch-$suffix',
-          gatheringId: inputs.gatheringId,
-          expectedGatheringVersion: publicBefore.aggregateVersion,
-          expectedWatchVersion: 0,
-        );
-
-        final first = await gatheringHarness.remote.watchAvailability(intent);
-        final replay = await gatheringHarness.remote.watchAvailability(intent);
-        _validateWatchReceipt(
-          first,
-          gatheringId: inputs.gatheringId,
-          previousVersion: publicBefore.aggregateVersion,
-          replayed: false,
-        );
-        _validateWatchReceipt(
-          replay,
-          gatheringId: inputs.gatheringId,
-          previousVersion: publicBefore.aggregateVersion,
-          replayed: true,
-        );
-        if (replay.aggregateVersion != first.aggregateVersion) {
-          throw StateError('availability watch replay advanced the aggregate');
-        }
-
-        final after = await gatheringHarness.remote.getDetail(
-          GatheringDetailQuery(gatheringId: inputs.gatheringId),
-        );
-        final publicAfter = _requireWatchableGathering(
-          after,
-          inputs.gatheringId,
-        );
-        if (publicAfter.aggregateVersion != first.aggregateVersion ||
-            publicAfter.capacity.maxParticipants !=
-                publicBefore.capacity.maxParticipants ||
-            publicAfter.capacity.occupiedSeats !=
-                publicBefore.capacity.occupiedSeats ||
-            publicAfter.capacity.remainingSeats !=
-                publicBefore.capacity.remainingSeats ||
-            publicAfter.admissionState != publicBefore.admissionState ||
-            publicAfter.viewerParticipation != null) {
-          throw StateError(
-            'availability watch changed admission, capacity, or Participation',
-          );
-        }
-
-        final events = await gatheringHarness.telemetry.waitForEvents(
-          minimumCount: 6,
-        );
-        final publicReads = events.where(
-          (event) =>
-              event.canonicalOperationId ==
-              cloud.AppCloudOperationIds.circleGatheringGetPublicGathering,
-        );
-        final watchWrites = events.where(
-          (event) =>
-              event.canonicalOperationId ==
-              cloud
-                  .AppCloudOperationIds
-                  .circleGatheringWatchGatheringAvailability,
-        );
-        if (publicReads.length != 2 ||
-            publicReads.any((event) => !event.succeeded) ||
-            watchWrites.length != 2 ||
-            watchWrites.any((event) => !event.succeeded)) {
-          throw StateError(
-            'availability watch did not emit the canonical production operation set',
+        if (accountHarness != null) {
+          await accountHarness.accountLifecycle.closeAccount(
+            cloud.CloseAccountCommand(
+              clientRequestId: 'gathering-watch-cleanup-$suffix',
+            ),
           );
         }
       } finally {
         try {
-          if (accountHarness != null) {
-            await accountHarness.accountLifecycle.closeAccount(
-              cloud.CloseAccountCommand(
-                clientRequestId: 'gathering-watch-cleanup-$suffix',
-              ),
-            );
-          }
+          await gatheringHarness?.close();
         } finally {
-          try {
-            await gatheringHarness?.close();
-          } finally {
-            await accountHarness?.close();
-          }
+          await accountHarness?.close();
         }
       }
-    },
-  );
+    }
+  });
 }
 
 GatheringPublicDetailSlice _requireWatchableGathering(
@@ -250,21 +245,30 @@ final class _GatheringProviderHarness {
           gatewayBaseUri: gateway,
         ),
       );
+      cloud.CloudOperationInvocationContext invocationContext(
+        String clientPageId, {
+        String? idempotencyKey,
+      }) => cloud.CloudOperationInvocationContext(
+        surfaceId: AppUiSurfaces.gatheringDetail.id,
+        routeId: AppUiSurfaces.gatheringDetail.routeId,
+        clientPageId: clientPageId,
+        idempotencyKey: idempotencyKey,
+        actor: cloud.CloudOperationActorContext(
+          accountId: session.ownerId,
+          personaId: personaId,
+          deviceActorId: 'gathering-provider-api-runner',
+        ),
+      );
       return _GatheringProviderHarness(
         remote: RemoteGatheringFacet(
           client: client,
-          invocationContext: (clientPageId, {idempotencyKey}) =>
-              cloud.CloudOperationInvocationContext(
-                surfaceId: AppUiSurfaces.gatheringDetail.id,
-                routeId: AppUiSurfaces.gatheringDetail.routeId,
-                clientPageId: clientPageId,
-                idempotencyKey: idempotencyKey,
-                actor: cloud.CloudOperationActorContext(
-                  accountId: session.ownerId,
-                  personaId: personaId,
-                  deviceActorId: 'gathering-provider-api-runner',
-                ),
-              ),
+          invocationContext: invocationContext,
+          planReader: GatheringBoardPlanReaderFacade(
+            RemoteGatheringPlanFacet(
+              client: client,
+              invocationContext: invocationContext,
+            ),
+          ),
         ),
         telemetry: telemetry,
         httpClient: httpClient,

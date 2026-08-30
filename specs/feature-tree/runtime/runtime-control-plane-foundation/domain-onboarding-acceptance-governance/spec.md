@@ -152,6 +152,7 @@
 - THEN 两次报告字节一致，全部 Python 文件数等于各治理边界分类之和，且每个受管脚本的 scope、角色、引用和 orphan 候选由当前物理树派生，不读取 registry、baseline 或人工 allowlist。
 - AND App/Service 的 L1 owner、可证明的 context/object 下钻、Ops/Data concern、里程碑命名与失效入口均产生可定位结果。
 - AND 未分类 Python、临时缓存/备份、无 owner tool、空扫描 gate、canonical release 读取环境回执与失效测试/文档路径均产生阻断结果。
+- AND 可直接调用的稳定脚本入口在第一次仓内 import 之前自行抑制字节码写入，因此绕过 Make 直接运行任一入口都不会把 `__pycache__` 写进源码树；缺该守卫即阻断，使缓存禁令不依赖调用方是否记得设环境变量。
 - AND acceptance runner、generator 与被 import 的 lib 不被误判为可自动删除的 orphan；orphan 候选只报告、不自动删除。
 
 ## 6. 依赖

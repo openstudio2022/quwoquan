@@ -48,14 +48,23 @@ def _probe(
     *,
     timeout: float = 2.0,
     context: ssl.SSLContext | None = None,
+    host_header: str = "",
 ) -> bool:
+    request = urllib.request.Request(url)
+    if host_header:
+        # service-core 单栈把多个服务模块合并到同一个监听端口并按 Host 头分发，
+        # 不带该头只会拿到 421，那是路由未命中而不是服务不可用。
+        request.add_header("Host", host_header)
     try:
         with urllib.request.urlopen(
-            url,
+            request,
             timeout=timeout,
             context=context,
         ) as response:
             return 200 <= int(response.status) < 500
+    except urllib.error.HTTPError as error:
+        # 回了 HTTP 状态就说明进程在服务请求；只有连不上才是不可用。
+        return 200 <= int(error.code) < 500
     except (urllib.error.URLError, TimeoutError, ValueError):
         return False
 
@@ -67,12 +76,19 @@ def _runtime_probes(
     integration_health: str,
     substitute_health: str,
     local_tls: ssl.SSLContext,
-) -> tuple[tuple[str, str, ssl.SSLContext | None], ...]:
+) -> tuple[tuple[str, str, ssl.SSLContext | None, str], ...]:
+    # 第四项是 Host 头：合并进 service-core 的模块必须带它才能被路由到，
+    # 独立监听的 api-edge 与 Provider 容器忽略它。
     return (
-        ("api-edge", api_base + "/healthz" if api_base else "", local_tls),
-        ("user-service", user_health, None),
-        ("integration-service", integration_health, None),
-        ("sms-provider-substitute", substitute_health, local_tls),
+        ("api-edge", api_base + "/healthz" if api_base else "", local_tls, ""),
+        ("user-service", user_health, None, "user-service"),
+        (
+            "integration-service",
+            integration_health,
+            None,
+            "integration-service",
+        ),
+        ("sms-provider-substitute", substitute_health, local_tls, ""),
     )
 
 
@@ -243,8 +259,8 @@ def main() -> int:
     )
     missing = [
         name
-        for name, url, context in probes
-        if not url or not _probe(url, context=context)
+        for name, url, context, host_header in probes
+        if not url or not _probe(url, context=context, host_header=host_header)
     ]
     if missing:
         return _gate_block(

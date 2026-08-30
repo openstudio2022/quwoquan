@@ -245,6 +245,7 @@ class _DiscoverEntityListTile extends StatelessWidget {
       ColorType.separatorSubtle,
     );
     final imageUrl = (item.coverUrl ?? '').trim();
+    final binding = item.coverBinding;
     final imageSize = imageStyle == _DiscoverEntityImageStyle.avatar
         ? AppSpacing.avatarUserMd
         : AppSpacing.avatarUserLg;
@@ -278,14 +279,26 @@ class _DiscoverEntityListTile extends StatelessWidget {
                 ),
                 child: SizedBox.square(
                   dimension: imageSize,
-                  child: imageUrl.isEmpty
-                      ? Icon(
-                          fallbackIcon,
-                          size: AppSpacing.iconMedium,
-                          color: fgSecondary,
-                        )
-                      : AppCachedNetworkImage(
-                          imageUrl: imageUrl,
+                  child: mediaDeliveryImage(
+                    binding: binding.hasRenderableSource
+                        ? binding
+                        : MediaDeliveryBinding(
+                            assetId: '',
+                            accessMode: null,
+                            publicUrl: imageUrl,
+                          ),
+                    kind: MediaDeliveryKind.image,
+                    width: imageSize,
+                    height: imageSize,
+                    fit: BoxFit.cover,
+                    absentWidget: Icon(
+                      fallbackIcon,
+                      size: AppSpacing.iconMedium,
+                      color: fgSecondary,
+                    ),
+                    publicBuilder: (context, publicUrl) =>
+                        AppCachedNetworkImage(
+                          imageUrl: publicUrl,
                           fit: BoxFit.cover,
                           width: imageSize,
                           height: imageSize,
@@ -299,6 +312,7 @@ class _DiscoverEntityListTile extends StatelessWidget {
                             color: fgSecondary,
                           ),
                         ),
+                  ),
                 ),
               ),
               SizedBox(width: AppSpacing.containerSm),

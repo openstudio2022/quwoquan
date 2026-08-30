@@ -280,6 +280,40 @@ func TestDecodeDataContentWorkItemCarriesExactWorkerHostFence(t *testing.T) {
 	}
 }
 
+func TestDecodeDataContentWorkItemCarriesExactCampaignBinding(t *testing.T) {
+	job := dataJob(53)
+	job.Campaign = DataContentCampaignBinding{
+		RootExecutionID:     job.ExecutionID,
+		RunID:               "campaign-run-53",
+		Generation:          1,
+		FencingToken:        "sha256:" + strings.Repeat("1", 64),
+		PlanDigest:          "sha256:" + strings.Repeat("2", 64),
+		SourceRevision:      "sha256:" + strings.Repeat("3", 64),
+		SourceDigest:        "sha256:" + strings.Repeat("4", 64),
+		EntityCatalogDigest: "sha256:" + strings.Repeat("5", 64),
+	}
+	job.ExecutionEnvelopeDigest = "sha256:" + strings.Repeat("6", 64)
+	task := ReliableAsyncTask{
+		TaskID: "runtime-task-53", TaskType: DataContentTaskType,
+		AggregateID: job.EntityRef, IdempotencyKey: job.IdempotencyKey,
+		PartitionKey: job.PartitionKey, Payload: job.payload(job.IdempotencyKey),
+		LeaseToken: "lease-53",
+	}
+	item, err := DecodeDataContentWorkItem(task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.Campaign != job.Campaign ||
+		item.ExecutionEnvelopeDigest != job.ExecutionEnvelopeDigest {
+		t.Fatalf("campaign binding transit drift: %#v", item)
+	}
+	delete(task.Payload, "campaignPlanDigest")
+	if _, err := DecodeDataContentWorkItem(task); err == nil ||
+		!strings.Contains(err.Error(), "campaign binding is incomplete") {
+		t.Fatalf("incomplete campaign binding was accepted: %v", err)
+	}
+}
+
 func TestDataContentFleetAuditedRecoveryReleasesNewLease(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
@@ -657,7 +691,7 @@ func TestDataContentFleetWritesAcceptedObjectTransactionResultBeforeCompletion(t
 				ObjectTransactionID:   "txn-object-001",
 				PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 				ResultEnvelopeRef:     "posts/homepage/result_envelope.json",
-				AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
+				AcceptanceClass:       DataContentAcceptanceCanonicalPool,
 				CompletedAt:           time.Now().UTC(),
 			}, nil
 		}),
@@ -670,7 +704,7 @@ func TestDataContentFleetWritesAcceptedObjectTransactionResultBeforeCompletion(t
 		t.Fatalf("task status=%s want=%s", stored.Status, TaskStatusSucceeded)
 	}
 	if !verified {
-		t.Fatal("commercial result evidence verifier was not invoked")
+		t.Fatal("canonical result evidence verifier was not invoked")
 	}
 	if stored.Result["status"] != "accepted" ||
 		stored.Result["objectTransactionId"] != "txn-object-001" ||
@@ -679,7 +713,7 @@ func TestDataContentFleetWritesAcceptedObjectTransactionResultBeforeCompletion(t
 	}
 }
 
-func TestDataContentFleetRejectsCommercialResultWithoutEvidenceVerifier(t *testing.T) {
+func TestDataContentFleetRejectsCanonicalPoolResultWithoutEvidenceVerifier(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
 	job := dataPublishJob(1)
@@ -711,19 +745,19 @@ func TestDataContentFleetRejectsCommercialResultWithoutEvidenceVerifier(t *testi
 				ObjectTransactionID:   "txn-unverified",
 				PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 				ResultEnvelopeRef:     "result_envelope.json",
-				AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
+				AcceptanceClass:       DataContentAcceptanceCanonicalPool,
 				CompletedAt:           time.Now().UTC(),
 			}, nil
 		}),
 	)
 	if err != nil || !processed {
-		t.Fatalf("process unverified commercial result processed=%v err=%v", processed, err)
+		t.Fatalf("process unverified canonical-pool result processed=%v err=%v", processed, err)
 	}
 	task := store.tasks[tasks[0].TaskID]
 	if task.Status != TaskStatusDead ||
 		task.LastFailure == nil ||
 		!strings.Contains(task.LastFailure.Message, "requires evidence verifier") {
-		t.Fatalf("unverified commercial result was not rejected: %#v", task)
+		t.Fatalf("unverified canonical-pool result was not rejected: %#v", task)
 	}
 }
 
@@ -777,6 +811,7 @@ func TestDataContentFleetRecordsAuthorStageWithoutCommercialAcceptance(t *testin
 		0,
 		1,
 		0,
+		1,
 	)
 	if report.StageCompletedCount != 1 ||
 		report.PublishTaskCount != 0 ||
@@ -789,7 +824,7 @@ func TestDataContentFleetRecordsAuthorStageWithoutCommercialAcceptance(t *testin
 	}
 }
 
-func TestDataContentResultRejectsCommercialAcceptanceBeforePublish(t *testing.T) {
+func TestDataContentResultRejectsCanonicalAcceptanceBeforePublish(t *testing.T) {
 	job := dataJob(1)
 	item := DataContentWorkItem{
 		JobID:       job.JobID,
@@ -803,16 +838,45 @@ func TestDataContentResultRejectsCommercialAcceptanceBeforePublish(t *testing.T)
 		CanonicalObjectSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		ObjectTransactionID:   "txn-author-must-not-accept",
 		ResultEnvelopeRef:     "result_envelope.json",
-		AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
+		AcceptanceClass:       DataContentAcceptanceCanonicalPool,
 		CompletedAt:           time.Now().UTC(),
 	}
 	if err := result.validate(item); err == nil ||
 		!strings.Contains(err.Error(), "requires publish stage") {
-		t.Fatalf("author stage commercial acceptance error=%v", err)
+		t.Fatalf("author stage canonical acceptance error=%v", err)
 	}
 }
 
-func TestDataContentResultAcceptsResearchCanonicalPublishWithoutCommercialCount(t *testing.T) {
+// data_content_worker_response.schema.json enumerates exactly three acceptance
+// classes; anything a caller invents must fail closed rather than silently
+// bypass the canonical evidence path.
+func TestDataContentResultRejectsUndeclaredAcceptanceClasses(t *testing.T) {
+	job := dataPublishJob(1)
+	item := DataContentWorkItem{
+		JobID:       job.JobID,
+		ExecutionID: job.ExecutionID,
+		Stage:       job.Stage,
+	}
+	for _, acceptanceClass := range []string{"commercial_canonical", "research_canonical"} {
+		result := DataContentExecutionResult{
+			ExecutionID:           job.ExecutionID,
+			JobID:                 job.JobID,
+			CanonicalObjectRef:    job.Ref,
+			CanonicalObjectSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			ObjectTransactionID:   "txn-undeclared-class",
+			PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+			ResultEnvelopeRef:     "result_envelope.json",
+			AcceptanceClass:       acceptanceClass,
+			CompletedAt:           time.Now().UTC(),
+		}
+		if err := result.validate(item); err == nil ||
+			!strings.Contains(err.Error(), "is invalid") {
+			t.Fatalf("acceptanceClass=%q was accepted: %v", acceptanceClass, err)
+		}
+	}
+}
+
+func TestDataContentResultAcceptsCanonicalPoolPublishWithoutCommercialCount(t *testing.T) {
 	job := dataPublishJob(1)
 	item := DataContentWorkItem{
 		JobID:       job.JobID,
@@ -828,11 +892,11 @@ func TestDataContentResultAcceptsResearchCanonicalPublishWithoutCommercialCount(
 		ObjectTransactionID:   "txn-research-object-001",
 		PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		ResultEnvelopeRef:     "result_envelope.json",
-		AcceptanceClass:       DataContentAcceptanceResearchCanonical,
+		AcceptanceClass:       DataContentAcceptanceCanonicalPool,
 		CompletedAt:           completed,
 	}
 	if err := result.validate(item); err != nil {
-		t.Fatalf("research canonical result rejected: %v", err)
+		t.Fatalf("canonical pool result rejected: %v", err)
 	}
 	key, err := job.ValidateIdentity()
 	if err != nil {
@@ -851,6 +915,7 @@ func TestDataContentResultAcceptsResearchCanonicalPublishWithoutCommercialCount(
 		completed,
 		0,
 		0,
+		1,
 		1,
 		1,
 	)
@@ -894,7 +959,7 @@ func TestDataContentFleetRejectsControlPlaneOnlySuccess(t *testing.T) {
 				JobID:              item.JobID,
 				CanonicalObjectRef: item.Ref,
 				ResultEnvelopeRef:  "result_envelope.json",
-				AcceptanceClass:    DataContentAcceptanceCommercialCanonical,
+				AcceptanceClass:    DataContentAcceptanceCanonicalPool,
 				CompletedAt:        time.Now().UTC(),
 			}, nil
 		}),
@@ -933,6 +998,7 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 		0,
 		1,
 		0,
+		1,
 	)
 	if blocked.CommercialAcceptedCount != 0 ||
 		blocked.EndToEndAcceptedThroughputPerHour != 0 ||
@@ -958,6 +1024,7 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 		0,
 		1,
 		0,
+		1,
 	)
 	if fixtureOnly.ObjectTransactionResultCount != 0 ||
 		fixtureOnly.CommercialAcceptedCount != 0 ||
@@ -971,7 +1038,7 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 		t.Fatal(err)
 	}
 	accepted := ReliableAsyncTask{
-		TaskID:  "commercial-publish",
+		TaskID:  "canonical-publish",
 		Status:  TaskStatusSucceeded,
 		Payload: publishJob.payload(publishKey),
 	}
@@ -983,7 +1050,7 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 		ObjectTransactionID:   "txn-object-001",
 		PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		ResultEnvelopeRef:     "result_envelope.json",
-		AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
+		AcceptanceClass:       DataContentAcceptanceCanonicalPool,
 		CompletedAt:           completed,
 	}.document()
 	measured := BuildDataContentFleetReport(
@@ -995,18 +1062,20 @@ func TestDataContentFleetReportSeparatesAcceptedFromControlPlaneThroughput(t *te
 		0,
 		1,
 		0,
+		1,
 	)
 	if !measured.Passed ||
 		measured.PublishTaskCount != 1 ||
 		measured.ObjectTransactionResultCount != 1 ||
-		measured.CommercialAcceptedCount != 1 ||
+		measured.ResearchAcceptedCount != 1 ||
+		measured.CommercialAcceptedCount != 0 ||
 		measured.EndToEndAcceptedThroughputPerHour <= 0 ||
 		measured.AcceptedContentThroughputStatus != "MEASURED" {
 		t.Fatalf("accepted object throughput was not measured: %#v", measured)
 	}
 }
 
-func TestDataContentFleetReportRejectsUnboundOrMalformedCommercialEvidence(t *testing.T) {
+func TestDataContentFleetReportRejectsUnboundOrMalformedCanonicalEvidence(t *testing.T) {
 	started := time.Now().UTC().Add(-time.Hour)
 	completed := time.Now().UTC()
 	job := dataPublishJob(1)
@@ -1015,7 +1084,7 @@ func TestDataContentFleetReportRejectsUnboundOrMalformedCommercialEvidence(t *te
 		t.Fatal(err)
 	}
 	task := ReliableAsyncTask{
-		TaskID:  "invalid-commercial-evidence",
+		TaskID:  "invalid-canonical-evidence",
 		Status:  TaskStatusSucceeded,
 		Payload: job.payload(key),
 		Result: DataContentExecutionResult{
@@ -1026,7 +1095,7 @@ func TestDataContentFleetReportRejectsUnboundOrMalformedCommercialEvidence(t *te
 			ObjectTransactionID:   "txn-invalid-001",
 			PoolDeliveryIntentID:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 			ResultEnvelopeRef:     "result_envelope.json",
-			AcceptanceClass:       DataContentAcceptanceCommercialCanonical,
+			AcceptanceClass:       DataContentAcceptanceCanonicalPool,
 			CompletedAt:           completed,
 		}.document(),
 	}
@@ -1040,12 +1109,14 @@ func TestDataContentFleetReportRejectsUnboundOrMalformedCommercialEvidence(t *te
 		0,
 		1,
 		0,
+		1,
 	)
 	if report.Passed ||
 		report.ObjectTransactionResultCount != 0 ||
+		report.ResearchAcceptedCount != 0 ||
 		report.CommercialAcceptedCount != 0 ||
 		report.EndToEndAcceptedThroughputPerHour != 0 {
-		t.Fatalf("invalid commercial evidence was accepted: %#v", report)
+		t.Fatalf("invalid canonical evidence was accepted: %#v", report)
 	}
 }
 

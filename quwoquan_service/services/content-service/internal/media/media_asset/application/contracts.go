@@ -102,7 +102,7 @@ type MediaAssetCommandResult struct {
 	VideoContainer               mediamodel.MediaContainer   `json:"videoContainer,omitempty"`
 	VideoAudioCodec              mediamodel.AudioCodec       `json:"videoAudioCodec,omitempty"`
 	VideoKeyframeIntervalMs      int                         `json:"videoKeyframeIntervalMs,omitempty"`
-	VideoFastStart               bool                        `json:"videoFastStart,omitempty"`
+	VideoFastStart               bool                        `json:"videoFastStart"`
 	PreviewTrackVersion          int                         `json:"previewTrackVersion,omitempty"`
 	HLSCMAFDescriptorVersion     int                         `json:"hlsCmafDescriptorVersion,omitempty"`
 	HLSCMAFRenditionCount        int                         `json:"hlsCmafRenditionCount,omitempty"`
@@ -153,7 +153,7 @@ type MediaAssetSlice struct {
 	VideoContainer                mediamodel.MediaContainer   `json:"videoContainer,omitempty"`
 	VideoAudioCodec               mediamodel.AudioCodec       `json:"videoAudioCodec,omitempty"`
 	VideoKeyframeIntervalMs       int                         `json:"videoKeyframeIntervalMs,omitempty"`
-	VideoFastStart                bool                        `json:"videoFastStart,omitempty"`
+	VideoFastStart                bool                        `json:"videoFastStart"`
 	VideoPublicSliceKey           string                      `json:"-"`
 	CoverPublicSliceKey           string                      `json:"-"`
 	PreviewTrackVersion           int                         `json:"previewTrackVersion,omitempty"`
@@ -200,7 +200,7 @@ type MediaAssetDeliveryReferenceSlice struct {
 	VideoHeight                   int                         `json:"videoHeight,omitempty"`
 	VideoAudioCodec               mediamodel.AudioCodec       `json:"videoAudioCodec,omitempty"`
 	VideoKeyframeIntervalMs       int                         `json:"videoKeyframeIntervalMs,omitempty"`
-	VideoFastStart                bool                        `json:"videoFastStart,omitempty"`
+	VideoFastStart                bool                        `json:"videoFastStart"`
 	VideoPublicSliceKey           string                      `json:"videoPublicSliceKey,omitempty"`
 	CoverPublicSliceKey           string                      `json:"coverPublicSliceKey,omitempty"`
 	PreviewTrackVersion           int                         `json:"previewTrackVersion,omitempty"`

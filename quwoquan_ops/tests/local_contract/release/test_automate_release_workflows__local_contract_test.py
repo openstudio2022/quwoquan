@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -18,6 +21,39 @@ SPEC_REF = (
 
 def _workflow(path: Path) -> dict[str, object]:
     return yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+
+
+def _prod_sim_ssh_gate() -> str:
+    workflow = _workflow(PROD_SIM_WORKFLOW)
+    steps = workflow["jobs"]["prod_sim_admission"]["steps"]
+    return next(
+        step["run"]
+        for step in steps
+        if step.get("name") == "Require runner-local prevalidation SSH credentials"
+    )
+
+
+def _write_runner_key(home: Path, account: str, *, mode: int = 0o600) -> None:
+    key_dir = home / ".ssh" / "quwoquan-prod"
+    key_dir.mkdir(parents=True, exist_ok=True)
+    key = key_dir / account
+    key.write_text("local-contract-key-material\n", encoding="utf-8")
+    key.chmod(mode)
+
+
+def _run_prod_sim_ssh_gate(home: Path, *, host: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["bash", "-c", _prod_sim_ssh_gate()],
+        cwd=ROOT,
+        env={
+            **os.environ,
+            "HOME": str(home),
+            "PROD_SIM_SSH_MANAGEMENT_HOST": host,
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
 
 
 def test_provider_release_evidence_derives_one_release_and_executes_all_cells() -> None:
@@ -49,6 +85,32 @@ def test_provider_release_evidence_derives_one_release_and_executes_all_cells() 
     assert "evidence_count: ${{ steps.package.outputs.evidence_count }}" in text
     assert "NIGHTLY_" not in text
     assert "PROVIDER_ALPHA_" not in text
+
+
+def test_mainline_prod_package_is_immediately_verified_before_deploy() -> None:
+    workflow = _workflow(PROD_WORKFLOW)
+    steps = workflow["jobs"]["prod_rollout"]["steps"]
+    step_names = [str(step.get("name") or "") for step in steps]
+    package_index = step_names.index("Materialize canonical configuration packages once")
+    verify_index = step_names.index("Verify exact Prod packaging candidate")
+    deploy_index = step_names.index("Deploy Prod canary")
+
+    assert verify_index == package_index + 1
+    assert verify_index < deploy_index
+
+    text = PROD_WORKFLOW.read_text(encoding="utf-8")
+    package = text.index("Materialize canonical configuration packages once")
+    verify = text.index("Verify exact Prod packaging candidate")
+    deploy = text.index("Deploy Prod canary")
+
+    assert package < verify < deploy
+    verification = text[verify:deploy]
+    assert "stackctl.py verify" in verification
+    assert "--env prod" in verification
+    assert "--target prod-hosted" in verification
+    assert "--kind packaging" in verification
+    assert "--profile smoke" in verification
+    assert "--reuse-package" not in verification
 
 
 def test_provider_oci_is_bound_to_released_candidate_and_manifest_closure() -> None:
@@ -122,16 +184,106 @@ def test_prod_sim_is_manual_approved_and_explicitly_non_promotable() -> None:
 
     assert set(payload["on"]) == {"workflow_dispatch"}
     assert job["environment"] == "prod-sim-admission"
+    assert job["runs-on"] == ["self-hosted", "macOS", "ARM64"]
+    assert job["env"]["PROD_SIM_SSH_MANAGEMENT_HOST"] == (
+        "${{ vars.PROD_SIM_SSH_MANAGEMENT_HOST }}"
+    )
     assert "--target prod-hosted" in text
     assert "--mode prevalidate" in text
     assert "--data-mode isolated" in text
     assert "--prevalidate-scope first-party" in text
     assert "PROD_SSH_HOST" not in text
-    assert "--ssh-host" not in text
+    assert '--ssh-host "$PROD_SIM_SSH_MANAGEMENT_HOST"' in text
+    assert "secrets.PROD_EDGE_SSH_KEY" not in text
+    assert "secrets.PROD_SERVICE_SSH_KEY" not in text
+    assert 'Path(os.environ["HOME"]) / ".ssh" / "quwoquan-prod"' in text
+    assert '"prod-edge-svc", "prod-service-svc"' in text
+    assert "stat.S_IMODE" in text
     assert '(report.get("releaseEligibility") or {}).get("status") != "GATE_BLOCK"' in text
     assert "environment-evidence" not in text
     assert "delivery-gate.yml" not in text
     assert "retention-days: 1" in text
+
+
+def test_prod_sim_runner_local_ssh_gate_accepts_canonical_inputs() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        _write_runner_key(home, "prod-edge-svc")
+        _write_runner_key(home, "prod-service-svc")
+
+        result = _run_prod_sim_ssh_gate(home, host="203.0.113.10")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_prod_sim_runner_local_ssh_gate_rejects_missing_or_invalid_host() -> None:
+    for host in (
+        "",
+        "https://203.0.113.10",
+        "-F",
+        "..",
+        ".hidden",
+        "host..example",
+        "-host.example",
+        "host-.example",
+        "2001:db8::1",
+    ):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            _write_runner_key(home, "prod-edge-svc")
+            _write_runner_key(home, "prod-service-svc")
+
+            result = _run_prod_sim_ssh_gate(home, host=host)
+
+        assert result.returncode == 2, result.stdout + result.stderr
+        assert "PROD_SIM_SSH_MANAGEMENT_HOST must be a bare SSH host" in (
+            result.stdout + result.stderr
+        )
+
+
+def test_prod_sim_runner_local_ssh_gate_rejects_missing_plane_key() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        _write_runner_key(home, "prod-edge-svc")
+
+        result = _run_prod_sim_ssh_gate(home, host="203.0.113.10")
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "runner-local SSH key is missing for prod-service-svc" in (
+        result.stdout + result.stderr
+    )
+
+
+def test_prod_sim_runner_local_ssh_gate_rejects_non_private_permissions() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        _write_runner_key(home, "prod-edge-svc")
+        _write_runner_key(home, "prod-service-svc", mode=0o644)
+
+        result = _run_prod_sim_ssh_gate(home, host="203.0.113.10")
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "runner-local SSH key must use mode 0600 for prod-service-svc" in (
+        result.stdout + result.stderr
+    )
+
+
+def test_prod_sim_runner_local_ssh_gate_rejects_symlinked_key() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        _write_runner_key(home, "prod-edge-svc")
+        key_dir = home / ".ssh" / "quwoquan-prod"
+        target = key_dir / "prod-service-svc-target"
+        target.write_text("local-contract-key-material\n", encoding="utf-8")
+        target.chmod(0o600)
+        (key_dir / "prod-service-svc").symlink_to(target)
+
+        result = _run_prod_sim_ssh_gate(home, host="203.0.113.10")
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "runner-local SSH key is missing for prod-service-svc" in (
+        result.stdout + result.stderr
+    )
 
 
 def test_nightly_soak_has_start_and_end_diagnostics_before_owned_teardown() -> None:

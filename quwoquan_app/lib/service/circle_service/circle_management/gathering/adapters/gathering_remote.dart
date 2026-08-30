@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/transport/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/adapters/gathering_wire_codec.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/application/public/gathering_plan_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart';
@@ -24,10 +25,14 @@ final class RemoteGatheringFacet
   const RemoteGatheringFacet({
     required this.client,
     required this.invocationContext,
+    required this.planReader,
   });
 
   final cloud.GeneratedCloudOperationClient client;
   final GatheringInvocationContextFactory invocationContext;
+
+  /// Plan 是独立对象，看板只经它的公开 port 读取，不触碰其内部投影实现。
+  final GatheringBoardPlanReader planReader;
 
   Future<GatheringCommandResult> _mapCommand(
     Future<cloud.GatheringCommandResult> wire,
@@ -401,7 +406,10 @@ final class RemoteGatheringFacet
     if (wire == null) {
       throw StateError('gathering board circle detail unavailable');
     }
-    return gatheringBoardCircleFromPrivateWire(wire);
+    return gatheringBoardCircleFromPrivateWire(
+      wire,
+      plan: await planReader.loadPlan(normalized),
+    );
   }
 
   @override

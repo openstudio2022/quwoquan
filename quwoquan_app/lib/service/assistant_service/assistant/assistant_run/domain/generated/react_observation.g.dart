@@ -16,11 +16,11 @@ class ReactObservationDto {
   final double freshnessHours;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'status': status,
-        'coverage': coverage,
-        'confidence': confidence,
-        'freshnessHours': freshnessHours,
-      };
+    'status': status,
+    'coverage': coverage,
+    'confidence': confidence,
+    'freshnessHours': freshnessHours,
+  };
 
   factory ReactObservationDto.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -33,19 +33,37 @@ class ReactObservationDto {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('ReactObservationDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'ReactObservationDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('status') && json['status'] != null && (json['status'] is! String)) {
-      throw const FormatException('ReactObservationDto field status has an invalid wire value');
+    if (json.containsKey('status') &&
+        json['status'] != null &&
+        (json['status'] is! String)) {
+      throw const FormatException(
+        'ReactObservationDto field status has an invalid wire value',
+      );
     }
-    if (json.containsKey('coverage') && json['coverage'] != null && (json['coverage'] is! num)) {
-      throw const FormatException('ReactObservationDto field coverage has an invalid wire value');
+    if (json.containsKey('coverage') &&
+        json['coverage'] != null &&
+        (json['coverage'] is! num)) {
+      throw const FormatException(
+        'ReactObservationDto field coverage has an invalid wire value',
+      );
     }
-    if (json.containsKey('confidence') && json['confidence'] != null && (json['confidence'] is! num)) {
-      throw const FormatException('ReactObservationDto field confidence has an invalid wire value');
+    if (json.containsKey('confidence') &&
+        json['confidence'] != null &&
+        (json['confidence'] is! num)) {
+      throw const FormatException(
+        'ReactObservationDto field confidence has an invalid wire value',
+      );
     }
-    if (json.containsKey('freshnessHours') && json['freshnessHours'] != null && (json['freshnessHours'] is! num)) {
-      throw const FormatException('ReactObservationDto field freshnessHours has an invalid wire value');
+    if (json.containsKey('freshnessHours') &&
+        json['freshnessHours'] != null &&
+        (json['freshnessHours'] is! num)) {
+      throw const FormatException(
+        'ReactObservationDto field freshnessHours has an invalid wire value',
+      );
     }
     return ReactObservationDto(
       status: (json['status'] as String?)?.trim() ?? "",

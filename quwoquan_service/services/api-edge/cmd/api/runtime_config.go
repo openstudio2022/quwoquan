@@ -4,21 +4,18 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	configrelease "quwoquan_service/runtime/configrelease"
+	"quwoquan_service/runtime/servicekit"
 	"quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/application"
 	"quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/domain"
 	"quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/infrastructure/redisstore"
 	rolloutapp "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/application"
 	rolloutdomain "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/domain"
 	graphread "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/adapters/inbound/http"
-
-	"gopkg.in/yaml.v3"
 )
 
 var sha256ReferencePattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -37,25 +34,35 @@ func (config policyConfig) policy() domain.Policy {
 	}
 }
 
+// runtimeConfig 是 api-edge 的声明式配置：通用段内嵌 servicekit.BaseConfig
+// （HTTP 监听地址、配置快照版本、账号安全 authority），env 覆盖键由服务名
+// 派生前缀 API_EDGE 拼出（DEC-028）。
+//
+// Redis 刻意不声明 servicekit.RedisSceneConfig：admission 与 rollout 必须
+// 共用同一个 UniversalClient——那是 prod rollout 的 stable/gray 共享同一个
+// 原子准入桶的前提，而 scene 自动装配会给出两个独立 client，且地址缺失时
+// 回落到内存实现（对全站唯一对外入口是 fail-open）。客户端在 Assemble 里
+// 由 admissionredis.NewClient 构造，见 newModule。
 type runtimeConfig struct {
-	Service struct {
-		HTTP struct {
-			Addr string `yaml:"addr"`
-		} `yaml:"http"`
-	} `yaml:"service"`
+	servicekit.BaseConfig `yaml:",inline"`
+
 	Edge struct {
 		TrustedNetworkHeader string `yaml:"trusted_network_header"`
 	} `yaml:"edge"`
 	Redis struct {
 		Admission struct {
-			Mode           string   `yaml:"mode"`
-			Addr           string   `yaml:"addr"`
-			Addrs          []string `yaml:"addrs"`
-			TLS            bool     `yaml:"tls"`
-			PoolSize       int      `yaml:"pool_size"`
-			DialTimeoutMS  int      `yaml:"dial_timeout_ms"`
-			ReadTimeoutMS  int      `yaml:"read_timeout_ms"`
-			WriteTimeoutMS int      `yaml:"write_timeout_ms"`
+			Mode  string   `yaml:"mode"`
+			Addr  string   `yaml:"addr"`
+			Addrs []string `yaml:"addrs"`
+			// Password 的键名与 environments/prod/config.yaml 的 secretRef
+			// `sys.api-edge.redis.admission.password: API_EDGE_REDIS_PASSWORD`
+			// 同源：快照只留引用，值由部署面按该键注入。
+			Password       string `yaml:"password" env:"REDIS_PASSWORD"`
+			TLS            bool   `yaml:"tls"`
+			PoolSize       int    `yaml:"pool_size"`
+			DialTimeoutMS  int    `yaml:"dial_timeout_ms"`
+			ReadTimeoutMS  int    `yaml:"read_timeout_ms"`
+			WriteTimeoutMS int    `yaml:"write_timeout_ms"`
 		} `yaml:"admission"`
 	} `yaml:"redis"`
 	RateLimit struct {
@@ -69,12 +76,6 @@ type runtimeConfig struct {
 			OpsRecoveryFailureReport policyConfig `yaml:"ops_recovery_failure_report"`
 		} `yaml:"operation"`
 	} `yaml:"rate_limit"`
-	UserService struct {
-		AccountSecurity struct {
-			BaseURL   string `yaml:"base_url"`
-			TimeoutMS int    `yaml:"timeout_ms"`
-		} `yaml:"account_security"`
-	} `yaml:"user_service"`
 	MinimumBuild struct {
 		Mode         string   `yaml:"mode"`
 		SourceDigest string   `yaml:"source_digest"`
@@ -84,9 +85,13 @@ type runtimeConfig struct {
 		ExemptPaths  []string `yaml:"exempt_paths"`
 	} `yaml:"minimum_build"`
 	Rollout struct {
-		Enabled                 bool                                     `yaml:"enabled"`
-		PolicyFile              string                                   `yaml:"policy_file"`
-		PolicySHA256            string                                   `yaml:"policy_sha256"`
+		Enabled      bool   `yaml:"enabled"`
+		PolicyFile   string `yaml:"policy_file"`
+		PolicySHA256 string `yaml:"policy_sha256"`
+		// AllocationKey 的键名与 environments/prod/config.yaml 的 secretRef
+		// `sys.api-edge.rollout.allocation_key: API_EDGE_ROLLOUT_ALLOCATION_KEY`
+		// 同源。长度判据仍归 rolloutapp.AllocationKey，见 newModule。
+		AllocationKey           string                                   `yaml:"allocation_key" env:"ROLLOUT_ALLOCATION_KEY"`
 		NetworkAttributeCatalog rolloutapp.NetworkAttributeCatalogConfig `yaml:"network_attribute_catalog"`
 		Policy                  rolloutdomain.Policy                     `yaml:"-"`
 	} `yaml:"rollout"`
@@ -95,20 +100,20 @@ type runtimeConfig struct {
 	CandidateUpstreams map[string]string `yaml:"candidate_upstreams"`
 }
 
-func loadRuntimeConfig(serviceName, environment, configRoot string) (runtimeConfig, error) {
-	path, err := configrelease.File(configRoot, serviceName, environment)
-	if err != nil {
-		return runtimeConfig{}, err
+// validateEdgeConfig 是骨架的领域配置校验钩子：它在 env 覆盖与 required
+// 校验之后、观测栈与任何基础设施连接之前执行，因此非法配置不会产生外部副
+// 作用。快照路径与 canonical 环境由骨架写入 BaseConfig，不在此重算选路。
+//
+// 迁移前 loadRuntimeConfig 的每一条判据都原样落在这里，顺序不变。
+func validateEdgeConfig(config *runtimeConfig) error {
+	if config == nil {
+		return errors.New("runtime config is required")
 	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return runtimeConfig{}, err
+	path := strings.TrimSpace(config.ConfigPath)
+	if path == "" {
+		return errors.New("effective config snapshot path is required")
 	}
-	var config runtimeConfig
-	if err := yaml.Unmarshal(raw, &config); err != nil {
-		return runtimeConfig{}, fmt.Errorf("parse %s: %w", path, err)
-	}
-	config.Service.HTTP.Addr = strings.TrimSpace(config.Service.HTTP.Addr)
+	environment := strings.TrimSpace(config.Environment)
 	config.Edge.TrustedNetworkHeader = strings.TrimSpace(config.Edge.TrustedNetworkHeader)
 	config.Redis.Admission.Mode = strings.TrimSpace(config.Redis.Admission.Mode)
 	config.Redis.Admission.Addr = strings.TrimSpace(config.Redis.Admission.Addr)
@@ -120,48 +125,50 @@ func loadRuntimeConfig(serviceName, environment, configRoot string) (runtimeConf
 	config.Rollout.PolicySHA256 = strings.ToLower(strings.TrimSpace(
 		config.Rollout.PolicySHA256,
 	))
-	config.UserService.AccountSecurity.BaseURL = strings.TrimSpace(
-		config.UserService.AccountSecurity.BaseURL,
+	config.UserAccountSecurityAuthority.BaseURL = strings.TrimSpace(
+		config.UserAccountSecurityAuthority.BaseURL,
 	)
-	if config.Service.HTTP.Addr == "" || config.Edge.TrustedNetworkHeader == "" {
-		return runtimeConfig{}, errors.New("service HTTP address and trusted network header are required")
+	// Service.HTTP.Addr 的非空由 BaseConfig 的 required tag 承担，此处只保留
+	// api-edge 自己的 trusted network header 判据。
+	if config.Edge.TrustedNetworkHeader == "" {
+		return errors.New("trusted network header is required")
 	}
-	if config.UserService.AccountSecurity.TimeoutMS < 50 ||
-		config.UserService.AccountSecurity.TimeoutMS > 5000 {
-		return runtimeConfig{}, errors.New("account security timeout must be within 50..5000ms")
+	if config.UserAccountSecurityAuthority.TimeoutMs < 50 ||
+		config.UserAccountSecurityAuthority.TimeoutMs > 5000 {
+		return errors.New("account security timeout must be within 50..5000ms")
 	}
-	if _, err := parseOrigin(config.UserService.AccountSecurity.BaseURL); err != nil {
-		return runtimeConfig{}, fmt.Errorf("account security authority: %w", err)
+	if _, err := parseOrigin(config.UserAccountSecurityAuthority.BaseURL); err != nil {
+		return fmt.Errorf("account security authority: %w", err)
 	}
 	minimumBuildPolicy := config.minimumBuildPolicy()
 	if err := minimumBuildPolicy.Validate(); err != nil {
-		return runtimeConfig{}, fmt.Errorf("minimum build policy: %w", err)
+		return fmt.Errorf("minimum build policy: %w", err)
 	}
 	if !sha256ReferencePattern.MatchString(config.MinimumBuild.SourceDigest) {
-		return runtimeConfig{}, errors.New("minimum build source digest is invalid")
+		return errors.New("minimum build source digest is invalid")
 	}
 	exemptPaths, err := config.minimumBuildExemptPaths()
 	if err != nil {
-		return runtimeConfig{}, err
+		return err
 	}
 	if _, exists := exemptPaths["/ops/app-recovery/version"]; !exists {
-		return runtimeConfig{}, errors.New(
+		return errors.New(
 			"minimum build exemptions must include /ops/app-recovery/version",
 		)
 	}
 	policies := config.policySet()
 	if err := policies.Validate(); err != nil {
-		return runtimeConfig{}, err
+		return err
 	}
 	for _, name := range requiredUpstreams() {
 		origin := strings.TrimSpace(config.Upstreams[name])
 		if _, err := parseOrigin(origin); err != nil {
-			return runtimeConfig{}, fmt.Errorf("upstream %s: %w", name, err)
+			return fmt.Errorf("upstream %s: %w", name, err)
 		}
 		config.Upstreams[name] = origin
 	}
-	if err := validateAndLoadRolloutConfig(&config, environment, path); err != nil {
-		return runtimeConfig{}, err
+	if err := validateAndLoadRolloutConfig(config, environment, path); err != nil {
+		return err
 	}
 	if err := graphread.ValidateAndResolveConfig(
 		&config.GraphQLRead,
@@ -169,15 +176,14 @@ func loadRuntimeConfig(serviceName, environment, configRoot string) (runtimeConf
 		config.Rollout.Enabled,
 		config.Rollout.Policy.CandidateDigest,
 	); err != nil {
-		return runtimeConfig{}, err
+		return err
 	}
-	redisConfig := config.redisConfig()
-	client, err := redisstore.NewClient(redisConfig)
+	client, err := redisstore.NewClient(config.redisConfig())
 	if err != nil {
-		return runtimeConfig{}, fmt.Errorf("admission Redis config: %w", err)
+		return fmt.Errorf("admission Redis config: %w", err)
 	}
 	_ = client.Close()
-	return config, nil
+	return nil
 }
 
 func validateAndLoadRolloutConfig(
@@ -247,7 +253,7 @@ func (config runtimeConfig) policySet() application.PolicySet {
 			"session": config.RateLimit.Session.policy(),
 		},
 		ByOperationID: map[string]domain.Policy{
-			"content.post.GetFeed": config.RateLimit.Operation.ContentPostGetFeed.policy(),
+			"content.post.GetFeed":                       config.RateLimit.Operation.ContentPostGetFeed.policy(),
 			"ops.recovery_failure.ReportRecoveryFailure": config.RateLimit.Operation.OpsRecoveryFailureReport.policy(),
 		},
 	}
@@ -258,7 +264,7 @@ func (config runtimeConfig) redisConfig() redisstore.Config {
 		Mode:         config.Redis.Admission.Mode,
 		Addr:         config.Redis.Admission.Addr,
 		Addrs:        append([]string(nil), config.Redis.Admission.Addrs...),
-		Password:     strings.TrimSpace(os.Getenv("API_EDGE_REDIS_PASSWORD")),
+		Password:     strings.TrimSpace(config.Redis.Admission.Password),
 		TLS:          config.Redis.Admission.TLS,
 		PoolSize:     config.Redis.Admission.PoolSize,
 		DialTimeout:  time.Duration(config.Redis.Admission.DialTimeoutMS) * time.Millisecond,

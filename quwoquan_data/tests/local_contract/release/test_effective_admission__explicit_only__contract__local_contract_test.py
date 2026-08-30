@@ -44,6 +44,7 @@ def _attribution() -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-01T00:00:00Z",
         "takedownPolicy": "remove on substantiated request",
+        "derivedModifications": [],
         "authorizationProofUrl": "https://commons.wikimedia.org/wiki/File:history.jpg",
         "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
     }
@@ -184,10 +185,5 @@ def test_attribution_gate_requires_complete_attribution() -> None:
         source="explicit",
     )
 
-    assert effective_source_attribution_ready(complete, release_mode="research")
-    assert effective_source_attribution_ready(complete, release_mode="commercial")
-    assert not effective_source_attribution_ready(incomplete, release_mode="research")
-    assert not effective_source_attribution_ready(
-        incomplete,
-        release_mode="commercial",
-    )
+    assert effective_source_attribution_ready(complete)
+    assert not effective_source_attribution_ready(incomplete)

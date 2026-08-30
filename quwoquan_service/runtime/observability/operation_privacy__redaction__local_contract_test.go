@@ -178,6 +178,9 @@ func TestOperationPrivacyUnknownOperationFailsClosed(t *testing.T) {
 
 func TestOperationPrivacyGeneratedTableCoversEveryDomain(t *testing.T) {
 	redactor := NewOperationPrivacyRedactor()
+	if got := len(redactor.OperationIDs()); got != generatedOperationPrivacyPolicyCount {
+		t.Fatalf("派生表条目数=%d，与同次 codegen 计数=%d 不一致", got, generatedOperationPrivacyPolicyCount)
+	}
 	domains := map[string]int{}
 	for _, operationID := range redactor.OperationIDs() {
 		policy, _ := redactor.Policy(operationID)

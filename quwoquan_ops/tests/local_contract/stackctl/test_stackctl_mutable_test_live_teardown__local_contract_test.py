@@ -5,7 +5,6 @@ spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
 
 from __future__ import annotations
 
-import argparse
 import json
 import subprocess
 import tempfile
@@ -14,6 +13,12 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
+from quwoquan_ops.tests.support.stackctl_dev_session_test_support import (
+    StackctlMutableTeardownTestBase,
+    _mutable_teardown_down_args as _down_args,
+    _mutable_teardown_receipt as _receipt,
+)
 
 
 def _completed(
@@ -26,48 +31,8 @@ def _completed(
     return subprocess.CompletedProcess(args, returncode, stdout, stderr)
 
 
-def _receipt(run_root: Path, *, status: str = "running") -> dict[str, object]:
-    return {
-        "schema": "stackctl.mutable_test_live_startup_attempt",
-        "launchPolicy": "test_live",
-        "nonPromotable": True,
-        "contentBindingState": "unbound",
-        "attemptId": "alpha-test-live-attempt-1",
-        "environment": "alpha",
-        "target": "alpha-local",
-        "status": status,
-        "workload": "full",
-        "composeProject": "quwoquan_alpha_test_live",
-        "composeDigest": "sha256:" + "1" * 64,
-        "configurationDigest": "sha256:" + "2" * 64,
-        "providerRuntimeDigest": "sha256:" + "3" * 64,
-        "portProfile": "alpha-local",
-        "portBlock": {"start": 17000, "end": 17999},
-        "publishedPorts": {"api-edge": 17000},
-        "tlsProfile": "local-managed",
-        "resolverHandoffDigest": "sha256:" + "4" * 64,
-        "sourceRevision": "a" * 40,
-        "workspaceStatusDigest": "sha256:" + "5" * 64,
-        "mutableStateDigest": "sha256:" + "6" * 64,
-        "runRoot": str(run_root),
-        "startedAt": "2026-08-10T12:00:00Z",
-        "updatedAt": "2026-08-10T12:00:01Z",
-        "failure": None,
-    }
+class StackctlMutableTestLiveTeardownTest(StackctlMutableTeardownTestBase):
 
-
-def _down_args(report_dir: Path) -> argparse.Namespace:
-    return argparse.Namespace(
-        target="alpha-local",
-        workload="full",
-        formal_release=False,
-        release_manifest="",
-        purge_rebuildable_state=False,
-        report_dir=str(report_dir),
-    )
-
-
-class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
     def test_down_selects_running_mutable_receipt_when_immutable_is_stopped(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             report_dir = Path(temporary)
@@ -211,10 +176,8 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
                 json.dumps(
                     {
                         "services": {
-                            "api-edge": {"image": "quwoquan/api-edge:old"},
-                            "integration-service": {
-                                "image": "quwoquan/integration-service:old"
-                            },
+                            "gamma-proxy": {"image": "quwoquan/gamma-proxy:old"},
+                            "service-core": {"image": "quwoquan/service-core:old"},
                         }
                     }
                 )
@@ -223,7 +186,7 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
             runtime_plan = {"executionComposeFiles": [str(compose_path)]}
 
             containers = []
-            for index, service in enumerate(("api-edge", "integration-service"), 1):
+            for index, service in enumerate(("gamma-proxy", "service-core"), 1):
                 containers.append(
                     {
                         "Id": f"container-{index}",
@@ -238,6 +201,13 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
                                     compose_path
                                 ),
                             },
+                        },
+                        "HostConfig": {
+                            "PortBindings": (
+                                {"17000/tcp": [{"HostPort": "17000"}]}
+                                if service == "gamma-proxy"
+                                else {}
+                            )
                         },
                         "NetworkSettings": {
                             "Networks": {"quwoquan_alpha_test_live_default": {}}
@@ -283,6 +253,8 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
                         receipt=receipt,
                         runtime_plan=runtime_plan,
                         run_root=run_root,
+                        port_manifest=load_port_manifest(),
+                        port_profile="alpha-local",
                     )
                 )
 
@@ -294,9 +266,9 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
         )
         self.assertEqual(
             set(manifest["services"]),
-            {"api-edge", "integration-service"},
+            {"gamma-proxy", "service-core"},
         )
-        self.assertEqual(manifest["services"]["api-edge"]["networks"], ["default"])
+        self.assertEqual(manifest["services"]["gamma-proxy"]["networks"], ["default"])
 
     def test_partial_manifest_accepts_receipt_bound_service_prefix(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -306,30 +278,41 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
                 json.dumps(
                     {
                         "services": {
-                            "api-edge": {"image": "quwoquan/api-edge:old"},
-                            "integration-service": {
-                                "image": "quwoquan/integration-service:old"
-                            },
+                            "gamma-proxy": {"image": "quwoquan/gamma-proxy:old"},
+                            "service-core": {"image": "quwoquan/service-core:old"},
                         }
                     }
                 )
             )
             receipt = _receipt(run_root, status="partial")
+            receipt["publishedPorts"] = [
+                *receipt["publishedPorts"],
+                {
+                    "role": "product-ops-service",
+                    "hostPort": profile_ports(load_port_manifest(), "alpha-local")[
+                        "product-ops-service"
+                    ],
+                    "protocol": "tcp",
+                },
+            ]
             runtime_plan = {"executionComposeFiles": [str(compose_path)]}
             containers = [
                 {
                     "Id": "container-1",
                     "Config": {
-                        "Image": "quwoquan/api-edge:old",
+                        "Image": "quwoquan/gamma-proxy:old",
                         "Labels": {
                             "com.docker.compose.project": "quwoquan_alpha_test_live",
-                            "com.docker.compose.service": "api-edge",
+                            "com.docker.compose.service": "gamma-proxy",
                             "com.docker.compose.oneoff": "False",
                             "com.docker.compose.config-hash": "hash-1",
                             "com.docker.compose.project.config_files": str(
                                 compose_path
                             ),
                         },
+                    },
+                    "HostConfig": {
+                        "PortBindings": {"17000/tcp": [{"HostPort": "17000"}]}
                     },
                     "NetworkSettings": {
                         "Networks": {"quwoquan_alpha_test_live_default": {}}
@@ -375,11 +358,73 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
                         receipt=receipt,
                         runtime_plan=runtime_plan,
                         run_root=run_root,
+                        port_manifest=load_port_manifest(),
+                        port_profile="alpha-local",
                     )
                 )
 
         self.assertEqual(container_ids, ["container-1"])
-        self.assertEqual(set(manifest["services"]), {"api-edge"})
+        self.assertEqual(set(manifest["services"]), {"gamma-proxy"})
+
+    def test_manifest_rejects_live_publisher_drift_before_volume_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            run_root = Path(temporary)
+            compose_path = run_root / "compose.json"
+            compose_path.write_text(
+                json.dumps(
+                    {
+                        "services": {
+                            "gamma-proxy": {"image": "quwoquan/gamma-proxy:old"}
+                        }
+                    }
+                )
+            )
+            receipt = _receipt(run_root)
+            runtime_plan = {"executionComposeFiles": [str(compose_path)]}
+            container = {
+                "Id": "container-1",
+                "Config": {
+                    "Image": "quwoquan/gamma-proxy:old",
+                    "Labels": {
+                        "com.docker.compose.project": "quwoquan_alpha_test_live",
+                        "com.docker.compose.service": "gamma-proxy",
+                        "com.docker.compose.oneoff": "False",
+                        "com.docker.compose.config-hash": "hash-1",
+                        "com.docker.compose.project.config_files": str(compose_path),
+                    },
+                },
+                "HostConfig": {
+                    "PortBindings": {"17000/tcp": [{"HostPort": "17999"}]}
+                },
+                "NetworkSettings": {"Networks": {}},
+            }
+
+            def run_command(
+                command: list[str],
+                **_: object,
+            ) -> subprocess.CompletedProcess[str]:
+                if command[:3] == ["docker", "ps", "-aq"]:
+                    return _completed(command, stdout="container-1\n")
+                if command[:2] == ["docker", "inspect"]:
+                    return _completed(command, stdout=json.dumps([container]))
+                if command[:3] == ["docker", "network", "ls"]:
+                    return _completed(command)
+                if command[:3] == ["docker", "volume", "ls"]:
+                    self.fail("volume inventory must not run after publisher drift")
+                self.fail(f"unexpected command: {command}")
+
+            with mock.patch.object(stackctl, "run", side_effect=run_command):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "Compose published endpoint identity drifted",
+                ):
+                    stackctl._mutable_test_live_teardown_manifest(
+                        receipt=receipt,
+                        runtime_plan=runtime_plan,
+                        run_root=run_root,
+                        port_manifest=load_port_manifest(),
+                        port_profile="alpha-local",
+                    )
 
     def test_partial_teardown_preserves_volumes_and_commits_stopped_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -427,7 +472,7 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
                 ),
                 mock.patch.object(
                     stackctl,
-                    "_wait_for_exact_tcp_ports_released",
+                    "_wait_for_published_endpoints_released",
                     return_value=[],
                 ),
                 mock.patch.object(
@@ -552,7 +597,7 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
                 ),
                 mock.patch.object(
                     stackctl,
-                    "_wait_for_exact_tcp_ports_released",
+                    "_wait_for_published_endpoints_released",
                     return_value=[],
                 ),
                 mock.patch.object(
@@ -576,6 +621,232 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
         )
         self.assertEqual(report["startupAttempt"]["status"], "running")
         transition.assert_not_called()
+
+    def test_orphaned_networks_are_reclaimed_and_down_converges(self) -> None:
+        """无容器但残留孤儿网络时，down 必须回收后收敛，而不是死锁 GATE_BLOCK。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            report_dir = Path(temporary)
+            receipt = _receipt(report_dir)
+            runtime_plan = {"schema": "stackctl.mutable_test_live_runtime"}
+            stopped = {**receipt, "status": "stopped"}
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "_mutable_test_live_runtime_plan_from_receipt",
+                    return_value=(runtime_plan, report_dir),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_mutable_test_live_container_ids",
+                    side_effect=[[], []],
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_mutable_test_live_resource_names",
+                    side_effect=[
+                        ["volume-1"],
+                        ["quwoquan_alpha_test_live_default"],
+                        [],
+                        ["volume-1"],
+                    ],
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_reclaim_orphaned_project_networks",
+                    return_value=(["quwoquan_alpha_test_live_default"], []),
+                ) as reclaim,
+                mock.patch.object(
+                    stackctl,
+                    "_wait_for_published_endpoints_released",
+                    return_value=[],
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "transition_test_live_startup_attempt",
+                    return_value=stopped,
+                ) as transition,
+                mock.patch.object(stackctl, "run") as runner,
+            ):
+                result = stackctl._command_mutable_test_live_down(
+                    _down_args(report_dir),
+                    env_name="alpha",
+                    report_dir=report_dir,
+                    receipt=receipt,
+                )
+
+            report = json.loads((report_dir / "report.json").read_text())
+
+        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(report["startupAttempt"]["status"], "stopped")
+        self.assertIn(
+            "orphaned Compose networks reclaimed",
+            " ".join(report["details"]),
+        )
+        reclaim.assert_called_once_with(
+            ["quwoquan_alpha_test_live_default"],
+            compose_project="quwoquan_alpha_test_live",
+        )
+        runner.assert_not_called()
+        transition.assert_called_once()
+
+    def test_unreclaimable_networks_keep_down_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            report_dir = Path(temporary)
+            receipt = _receipt(report_dir)
+            runtime_plan = {"schema": "stackctl.mutable_test_live_runtime"}
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "_mutable_test_live_runtime_plan_from_receipt",
+                    return_value=(runtime_plan, report_dir),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_mutable_test_live_container_ids",
+                    side_effect=[[], []],
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_mutable_test_live_resource_names",
+                    side_effect=[
+                        ["volume-1"],
+                        ["quwoquan_alpha_test_live_default"],
+                        ["quwoquan_alpha_test_live_default"],
+                        ["volume-1"],
+                    ],
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_reclaim_orphaned_project_networks",
+                    return_value=(
+                        [],
+                        [
+                            "orphaned Compose network was not reclaimed: "
+                            "quwoquan_alpha_test_live_default: docker network rm "
+                            "failed with exit code 1: network has active endpoints"
+                        ],
+                    ),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_wait_for_published_endpoints_released",
+                    return_value=[],
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "transition_test_live_startup_attempt",
+                ) as transition,
+                mock.patch.object(stackctl, "run"),
+            ):
+                result = stackctl._command_mutable_test_live_down(
+                    _down_args(report_dir),
+                    env_name="alpha",
+                    report_dir=report_dir,
+                    receipt=receipt,
+                )
+
+            report = json.loads((report_dir / "report.json").read_text())
+
+        self.assertEqual(result["exitCode"], 2)
+        self.assertEqual(
+            result["blockerKind"],
+            "mutable_test_live_teardown_not_converged",
+        )
+        reported = " ".join(report["resourceReleaseIssues"])
+        self.assertIn("networks remain after down", reported)
+        # 判否之外还必须带出未回收的根因，否则操作员只知道「仍在」不知道为什么。
+        self.assertIn("network has active endpoints", reported)
+        transition.assert_not_called()
+
+    def test_reclaim_removes_only_endpoint_free_project_networks(self) -> None:
+        """只删 label 复核通过且无 endpoint 的本项目网络；busy 与他项目网络不动。"""
+        project = "quwoquan_alpha_test_live"
+
+        def _run(command: list[str], **_kwargs: object) -> object:
+            if command[:3] == ["docker", "network", "inspect"]:
+                name = command[3]
+                containers = (
+                    {"cid": {"Name": "svc"}} if name == "net-busy" else {}
+                )
+                # net-foreign 在 ls 与 rm 之间被重建为他项目同名网络。
+                label_project = "other_project" if name == "net-foreign" else project
+                return _completed(
+                    command,
+                    stdout=json.dumps(
+                        [
+                            {
+                                "Name": name,
+                                "Containers": containers,
+                                "Labels": {
+                                    "com.docker.compose.project": label_project
+                                },
+                            }
+                        ]
+                    ),
+                )
+            if command[:3] == ["docker", "network", "rm"]:
+                return _completed(command)
+            raise AssertionError(f"unexpected command: {command}")
+
+        with mock.patch.object(stackctl, "run", side_effect=_run) as runner:
+            reclaimed, issues = stackctl._reclaim_orphaned_project_networks(
+                ["net-busy", "net-empty", "net-foreign"],
+                compose_project=project,
+            )
+
+        self.assertEqual(reclaimed, ["net-empty"])
+        removed = [
+            call.args[0][3]
+            for call in runner.call_args_list
+            if call.args[0][:3] == ["docker", "network", "rm"]
+        ]
+        self.assertEqual(removed, ["net-empty"])
+        # 未回收的两条必须各自带上可判否的原因，而不是静默跳过。
+        reported = " ".join(issues)
+        self.assertIn("net-busy", reported)
+        self.assertIn("still has attached endpoints", reported)
+        self.assertIn("net-foreign", reported)
+        self.assertIn("not this project at removal time", reported)
+        self.assertNotIn("net-empty", reported)
+
+    def test_reclaim_reports_inspect_and_removal_failure_reasons(self) -> None:
+        """inspect/rm 的 stderr 是唯一的失败根因来源，不能丢。"""
+        project = "quwoquan_alpha_test_live"
+
+        def _run(command: list[str], **_kwargs: object) -> object:
+            if command[:3] == ["docker", "network", "inspect"]:
+                name = command[3]
+                if name == "net-unreadable":
+                    return _completed(command, returncode=1, stderr="daemon unreachable")
+                if name == "net-malformed":
+                    return _completed(command, stdout="{not json")
+                return _completed(
+                    command,
+                    stdout=json.dumps(
+                        [
+                            {
+                                "Name": name,
+                                "Containers": {},
+                                "Labels": {"com.docker.compose.project": project},
+                            }
+                        ]
+                    ),
+                )
+            if command[:3] == ["docker", "network", "rm"]:
+                return _completed(command, returncode=1, stderr="network has active endpoints")
+            raise AssertionError(f"unexpected command: {command}")
+
+        with mock.patch.object(stackctl, "run", side_effect=_run):
+            reclaimed, issues = stackctl._reclaim_orphaned_project_networks(
+                ["net-unreadable", "net-malformed", "net-stuck"],
+                compose_project=project,
+            )
+
+        self.assertEqual(reclaimed, [])
+        reported = " ".join(issues)
+        self.assertIn("daemon unreachable", reported)
+        self.assertIn("payload is unreadable", reported)
+        self.assertIn("network has active endpoints", reported)
 
     def test_retry_after_compose_down_commits_stopped_receipt_from_readback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -601,7 +872,7 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
                 ),
                 mock.patch.object(
                     stackctl,
-                    "_wait_for_exact_tcp_ports_released",
+                    "_wait_for_published_endpoints_released",
                     return_value=[],
                 ) as wait_ports,
                 mock.patch.object(
@@ -624,7 +895,9 @@ class StackctlMutableTestLiveTeardownTest(unittest.TestCase):
         self.assertEqual(report["startupAttempt"]["status"], "stopped")
         self.assertIn("recovery observed", " ".join(report["details"]))
         runner.assert_not_called()
-        wait_ports.assert_called_once_with([17000])
+        wait_ports.assert_called_once_with(
+            [{"role": "api-edge", "hostPort": 17000, "protocol": "tcp"}]
+        )
         transition.assert_called_once()
 
 

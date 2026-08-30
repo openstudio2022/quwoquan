@@ -63,6 +63,12 @@
 - mutable runtime 退出不得删除 named volume，也不得从当前源码重渲染旧 runtime；只有 Compose 资源释放、volume 保留和 canonical port 收敛均被回读后，receipt 才能进入 `stopped`。
 - 任一 mutable runtime 身份或收敛检查失败必须返回 typed `GATE_BLOCK`，不得写入成功事实。
 - immutable runtime 退出必须绑定 canonical running startup receipt 与其 `candidateDigest` 对应的只读 candidate root；candidate 自身 package/Graph/provider/observability/Compose 字节仍须完整校验，但不得因当前工作区已生成下一版 Graph 而拒绝停止旧 candidate。
+- 本地 runtime teardown 与 receipt 残留修复必须组合 `config-and-reliability-governance` 的唯一资源所有权结果，只裁定目标 runtime 自有资源并保持独立控制面在场；所有权无法唯一裁定或目标自有资源未收敛时必须 `GATE_BLOCK`，不得写入成功终态。
+- 私有仓无法启用原生 required reviewers 时，生产审批事实由本领域独立 hosted approval authority 拥有。受控 GitHub App/webhook 只接收官方 event/action 闭集，验证签名与 delivery ID 后按 request→approved 追加，并绑定 installation、repository、workflow run、head SHA、candidate、environment 与 reviewer decision。
+- workflow 只按 candidate/run 读取 hosted exact-byte approval readback；该 readback 必须声明 `nativeProtection=false` 与 `enforcement=external_hosted_ledger`。缺 request/approved、签名无效、重复 delivery 不同 payload、顺序或身份漂移均 `GATE_BLOCK`，不得用 job queue、Deployment status 或人工布尔值替代。
+- 门禁 GATE_BLOCK 结构化输出只经 `quwoquan_ops/cli/lib/gate_output.py` 统一 schema 落盘 `.qwq_output/env/repo/runs/gate/`。`quwoquan_ops/gate/gate_repo.sh` 经 EXIT trap 调 `emit_gate_repo_summary.py` 发射整链结构化 summary，按 scope 独立落盘（以上支撑 DOM-001 的机器可读裁定能力）。
+- `spec_ref` 测试证据只认两种显式绑定形态：ref 同行前置独立 `spec_ref` token（注释或常量），或独占一行的 `spec_ref:` 后接连续列表项。裸字符串字面量（fixture、断言消息、`not_a_spec_ref` 子串、Go `SpecRef:` 数据字段）不构成绑定，正反例由 feature-tree 合约测试锁定。
+- `spec_ref` 语法解析全仓单轨：唯一 lexical 入口是 feature-tree 库 `extract_spec_refs`（正则定义于 `quwoquan_ops/cli/lib/feature_tree/patterns.py`）；coverage-map、service-architecture、domain-remote、provider-conformance 等消费方只保留语义校验（验收锚点类型过滤、`.tN` 子句剥离、目标存在性、原文行序重建），不得自带第二套语法解析正则。AST 级结构测试锁定该唯一定义点：`re.compile` 与 `re.match/search/findall` 等直接调用形态的解析正则定义即红。
 
 <a id="req-003"></a>
 ### REQ-003 候选绑定的保留数据修复必须在业务 API 启动前完成
@@ -72,6 +78,17 @@
 - 修复拓扑只允许启动候选内的 owning store 与 candidate-packaged importer；业务 API、relay 与 consumer 必须保持停止，release/creator 输入只读挂载，named volume 不得 purge。
 - 每次动作必须记录 candidate/release/receipt、受管命令、修复事件摘要与 teardown readback；首次修复与期望零修复的幂等复核分别生成稳定 receipt。
 - runtime health 与 `stackctl health` 必须保留确定排序的失败 check、完整失败详情摘要与 body digest，不得只保存 middleware 泛化后的错误。
+
+<a id="req-004"></a>
+### REQ-004 环境可用性判据必须覆盖依赖就绪、必需容器现况与容量水位
+
+- `stackctl health` 的服务探针必须按各服务真实探针形态判定：声明独立就绪端点的服务必须同时探存活与就绪，两者作为可分别定位的 check 上报；只声明单一深探针的服务不得被补一个恒真的浅探针充数。
+- 就绪失败必须与存活失败可区分，并向上传导为 `stackctl health` 与 `up` 的失败；任何环境不得因存活探针返回成功而判定为可用。
+- startup receipt 的 `running` 只表达启动时刻的事实，不表达当前可用。消费 receipt 判定环境可用时必须复验该 target 必需容器的当前状态与健康：任一必需容器已退出或 unhealthy 必须返回 typed blocker，并落到 `runtimeHealthStatus` 的降级态。
+- App 编译安装前的 preflight 必须消费上述复验结果并保留结构化诊断。Alpha/Beta/Gamma 的 mutable `test_live` App 启动中，必需容器、服务/Provider readiness、内容、观测与容量水位不可用只写入本次 launch attempt 的 warning，继续真实编译、安装、activation 与启动；身份、信任、非法 target、无法生成最小 runtime package、工具链、真实编译、设备或 activation 失败仍在对应阶段 fail closed。immutable candidate、内容 UAT 与 Prod readiness 对依赖就绪和容量水位保持安装前严格阻断，不能消费 `test_live` warning 作为通过。
+- 本地容器运行时的容量水位必须成为 `doctor`、`up`、`package`、`dev-session` 与 App preflight 的前置判定：宿主可用空间与容器存储可用空间任一低于声明阈值时，环境变更、candidate/Prod 与准出命令必须 `GATE_BLOCK`；只读诊断与 Alpha/Beta/Gamma mutable `test_live` App 启动按上一条 warning 语义继续到真实构建阶段。所有报告都给出实测可用量、阈值、可回收量与精确回收命令。
+- 容量耗尽必须表达为 typed blocker，不得只依赖对底层 `no space left on device` 文本的字符串匹配。
+- 容量不足或候选身份漂移不得阻断本领域白名单恢复动作本身；恢复路径必须在环境已经不可用时仍然可执行。
 
 ## 6. 领域验收
 
@@ -85,6 +102,8 @@
 - 禁止结果：不得绕过本领域公开 command/query/event 写入其拥有事实。
 - 禁止结果：不得用当前工作树重新推断旧 runtime、手工删除容器、purge volume，或在资源未收敛时伪造 `stopped` receipt。
 - 可观察结果：immutable teardown 在当前 workspace 前进后仍从 receipt candidate 自身恢复精确 Provider/observability/image composition，受控释放旧 Compose 容器与网络并保留 named volumes。
+- 可观察结果：本地 runtime teardown 与 receipt 残留修复只要求目标自有资源收敛，独立控制面保持在场不构成残留；所有权无法唯一裁定或目标自有资源仍有残留时返回 `GATE_BLOCK` 且不写成功终态。
+- 可观察结果：GitHub webhook request/approved 事件经签名验证后进入独立 append-only approval authority，同一 delivery 幂等、不同 payload 冲突，workflow exact-byte 回读同一 candidate 且明确不冒充原生 protection。
 
 <a id="dom-002"></a>
 ### DOM-002 active release 保留数据修复与启动前证据
@@ -93,6 +112,17 @@
 - 可观察结果：显式确认的修复只启动 owning store 与 candidate-packaged importer；首次修复精确收敛已知 legacy 负载，随后期望零修复的重放零写且字节幂等，两次均输出可读回的稳定 receipt。
 - 可观察结果：修复后业务 API 才可启动；若启动或健康仍失败，受管报告包含精确失败 check、完整详情摘要和 body digest。
 - 禁止结果：candidate/release/receipt/期望数量/CAS/cleanup 任一漂移不得写成功事实；不得启动 API/relay/consumer、删除 named volume、推进 release 或绕过 owning importer 直写数据库。
+
+<a id="dom-003"></a>
+### DOM-003 依赖就绪、必需容器现况与容量水位的可用性证据
+
+- 条件：某 local target 已有 running startup receipt，其必需容器集合与容量阈值均由该 target 的 canonical 声明派生。
+- 可观察结果：服务探针矩阵对声明独立就绪端点的服务同时产出存活与就绪两个 check；就绪失败时 `stackctl health` 失败，且失败 check 可定位到具体服务与被探端点。
+- 可观察结果：必需容器已退出或 unhealthy 时，环境可用性判定返回 typed blocker 与降级 `runtimeHealthStatus`；Alpha/Beta/Gamma mutable `test_live` App preflight 把该事实写为 launch warning 并继续，immutable candidate、内容 UAT 与 Prod readiness 在编译安装前阻断。
+- 可观察结果：宿主或容器存储可用空间低于阈值时，`doctor`、`up`、`package`、`dev-session` 以及 candidate/Prod App preflight 在执行前 `GATE_BLOCK`；Alpha/Beta/Gamma mutable `test_live` App preflight 写 warning 后继续。报告均含实测可用量、阈值、可回收量与回收命令。
+- 可观察结果：容量耗尽以 typed blocker 表达，同一判定在容量恢复后不再阻断。
+- 禁止结果：不得因存活探针成功、receipt 仍为 `running` 或容量检查缺席而判定环境可用。
+- 禁止结果：不得把容量耗尽降级为无类型错误或纯字符串匹配，也不得让容量不足阻断白名单恢复动作本身。
 
 ## 7. 工程归属
 
@@ -115,3 +145,12 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：领域边界、上下游依赖、工程映射和服务治理清晰。
 - 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 全局容量规划与灾备观测统稿 L2
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：缺全局容量规划、灾备与观测统稿的 L2 owner，相关知识散落。具体 P0 缺口已在 [`commercial-readiness-risk-closure/spec.md#OPEN-007`](./commercial-readiness-risk-closure/spec.md#open-007)（备份恢复演练与 RPO/RTO）与 [`commercial-readiness-risk-closure/spec.md#OPEN-008`](./commercial-readiness-risk-closure/spec.md#open-008)（日志统一 collector 上云）登记，本 OPEN 只补「统稿 L2 结构」缺口，不重复登记具体风险项。
+- 完成判定：`DOM-003` 的容量水位可用性证据获得统稿 owner——本 L1 下建立容量/灾备/观测统稿 L2（经 prd→design 流程），上述两条现存 OPEN 由该 L2 承接或保留原节点并被其引用；`make verify-feature-tree` 退出 0。

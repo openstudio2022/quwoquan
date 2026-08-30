@@ -126,4 +126,8 @@
 - 优先级：`P2`
 - 准出影响：`track`
 - 影响或价值：content 库的 `rm_discovery_feed`（`releaseimport.UpsertDiscoveryFeed` 与在线 `DiscoveryFeedProjector` 双写）当前无任何在线读方；feed 读路径已单轨经 recommendation-service 候选投影与 RankedRecommendationWindow，残留双写构成第二真相源回归风险。裁决为收敛单轨：删除 content 侧双写与 `projections/discovery_feed.yaml` 声明，读写真相统一归 recommendation-platform REQ-001。删除前置条件：四环境存量集合处置方案、release importer 字节幂等回归、冷启动候选供给证明只依赖 `PostPublished` outbox → `events.content.post_lifecycle` 链路。
-- 完成判定：`SIT-001` 在 content-service 不再写 `rm_discovery_feed` 的前提下仍然成立（importer 幂等与冷启动 feed api_integration 证据通过），投影契约声明同步删除。
+- 识别现场：`705e1b8` 已删除 release importer 侧的 `UpsertDiscoveryFeedWithOptions` 调用，本次退役只完成了写入侧。
+- 识别现场：`releaseimport/runtime.go` 的 `UpsertReleaseState` 仍把 `readback.counts.discoveryPosts` 映射到永不写入的 `counts["feedUpserted"]`，环境侧回读恒为 `null`。
+- 识别现场：`release_readiness.py` 与 `app_preflight_readiness.py` 仍以 `discoveryPosts` 非零作为环境准入判据，alpha 实测 `postsUpserted=5` 而 `discoveryPosts=null`，`contentBindingState` 因此无法进入 `bound`。
+- 识别现场：上述悬空引用属于本次退役的收尾范围，随读写真相收敛一并清除，不单独立项。
+- 完成判定：`SIT-001` 在 content-service 不再写 `rm_discovery_feed` 的前提下仍然成立。投影契约声明与 importer 写入同步删除，release readback/readiness 不再引用退役的 `discoveryPosts/feedUpserted`，而以 canonical Post/recommendation identity 判定 bound。Alpha/Beta/Gamma 对同一 `releaseId + manifestDigest` 的 import、activation、readback 均进入 `contentBindingState=bound`，首页 Remote UAT 读到同一 identity。无合格 release 时保持 typed blocker 或 `no_active_release`，不得以普通空列表通过。

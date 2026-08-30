@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Move App matrix shards through exact OCI refs without Actions Artifact."""
 
 from __future__ import annotations
@@ -9,14 +8,25 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+sys.dont_write_bytecode = True
 
-ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
-PLATFORMS = ("android", "ios", "web", "macos")
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.app_identity import supported_build_products
+
+BUILD_PRODUCT_IDS = tuple(
+    product.build_product_id for product in supported_build_products()
+)
+if len(BUILD_PRODUCT_IDS) != 5 or len(set(BUILD_PRODUCT_IDS)) != 5:
+    raise ValueError("baseline App build product set must contain exactly five products")
 ARCHIVE_NAME = "app-candidate-shard.tar.gz"
 ARTIFACT_TYPE = "application/vnd.quwoquan.app-candidate-shard"
 LAYER_TYPE = "application/vnd.quwoquan.app-candidate-shard+tar+gzip"
@@ -61,21 +71,23 @@ def create_archive(bundle_dir: Path, archive_path: Path) -> None:
     root = bundle_dir.expanduser().resolve()
     files = _files(root)
     archive_path.parent.mkdir(parents=True, exist_ok=True)
-    with archive_path.open("wb") as raw:
-        with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as compressed:
-            with tarfile.open(fileobj=compressed, mode="w") as archive:
-                for path in files:
-                    relative = path.relative_to(root).as_posix()
-                    info = tarfile.TarInfo(relative)
-                    info.size = path.stat().st_size
-                    info.mode = 0o644
-                    info.mtime = 0
-                    info.uid = 0
-                    info.gid = 0
-                    info.uname = ""
-                    info.gname = ""
-                    with path.open("rb") as source:
-                        archive.addfile(info, source)
+    with (
+        archive_path.open("wb") as raw,
+        gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as compressed,
+        tarfile.open(fileobj=compressed, mode="w") as archive,
+    ):
+        for path in files:
+            relative = path.relative_to(root).as_posix()
+            info = tarfile.TarInfo(relative)
+            info.size = path.stat().st_size
+            info.mode = 0o644
+            info.mtime = 0
+            info.uid = 0
+            info.gid = 0
+            info.uname = ""
+            info.gname = ""
+            with path.open("rb") as source:
+                archive.addfile(info, source)
 
 
 def _validated_members(archive: tarfile.TarFile) -> list[tarfile.TarInfo]:
@@ -178,27 +190,29 @@ def materialize_shards(
     refs: dict[str, str] = {}
     with tempfile.TemporaryDirectory(prefix="app-candidate-shards-pull-") as directory:
         scratch = Path(directory)
-        for platform in PLATFORMS:
-            for environment in ENVIRONMENTS:
-                key = f"{platform}/{environment}"
-                repository = (
-                    f"{repository_prefix}/app-candidate-shard-{platform}-{environment}"
+        for build_product_id in BUILD_PRODUCT_IDS:
+            repository = (
+                f"{repository_prefix}/app-candidate-shard-{build_product_id}"
+            )
+            tagged_ref = f"{repository}:{transport_tag}"
+            exact_ref = _run(["oras", "resolve", "--full-reference", tagged_ref])
+            match = OCI_REF_PATTERN.fullmatch(exact_ref)
+            if match is None or match.group("repository") != repository:
+                raise ValueError(
+                    f"ORAS shard resolution is not immutable: {build_product_id}"
                 )
-                tagged_ref = f"{repository}:{transport_tag}"
-                exact_ref = _run(["oras", "resolve", "--full-reference", tagged_ref])
-                match = OCI_REF_PATTERN.fullmatch(exact_ref)
-                if match is None or match.group("repository") != repository:
-                    raise ValueError(f"ORAS shard resolution is not immutable: {key}")
-                stage = scratch / platform / environment
-                stage.mkdir(parents=True)
-                _run(["oras", "pull", "--output", str(stage), exact_ref])
-                children = list(stage.iterdir())
-                if children != [stage / ARCHIVE_NAME]:
-                    raise ValueError(f"ORAS shard payload set is not canonical: {key}")
-                merge_archive(children[0], bundle)
-                refs[key] = exact_ref
-    if len(refs) != len(PLATFORMS) * len(ENVIRONMENTS):
-        raise ValueError("App candidate matrix shard set is incomplete")
+            stage = scratch / build_product_id
+            stage.mkdir(parents=True)
+            _run(["oras", "pull", "--output", str(stage), exact_ref])
+            children = list(stage.iterdir())
+            if children != [stage / ARCHIVE_NAME]:
+                raise ValueError(
+                    f"ORAS shard payload set is not canonical: {build_product_id}"
+                )
+            merge_archive(children[0], bundle)
+            refs[build_product_id] = exact_ref
+    if tuple(refs) != BUILD_PRODUCT_IDS:
+        raise ValueError("App candidate build-product shard set is incomplete")
     return refs
 
 

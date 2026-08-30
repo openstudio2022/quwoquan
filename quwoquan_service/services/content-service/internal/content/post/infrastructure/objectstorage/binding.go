@@ -28,10 +28,7 @@ func LoadBinding(
 	if configProvider == nil {
 		return Binding{}, fmt.Errorf("runtime.object.storage binding has no runtime config provider")
 	}
-	descriptor, found := contentgenerated.ExternalProviderBindingFor(
-		appEnv,
-		objectStorageCapabilityID,
-	)
+	descriptor, found := contentgenerated.CompiledBindingFor(objectStorageCapabilityID)
 	if !found || descriptor.State != "enabled" {
 		return Binding{}, fmt.Errorf(
 			"runtime.object.storage binding is unavailable for environment=%s",

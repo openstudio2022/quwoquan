@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from content.execution import context, execution_supersession, execution_terminal
+from content.execution.closure import execution_supersession_admission
 from content.execution.controller.execute import reconcile
 from content.execution.execution_terminal import load_terminal_execution_evidence
 from content.execution import workspace
@@ -149,6 +150,36 @@ def _assert_global_gates_accept_only_as_historical(
         list,
     )
     assert verify_runtime_input_ownership.runtime_input_ownership_issues() == []
+
+
+def test_succeeded_journal_is_a_natural_read_only_terminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _fixture(tmp_path, monkeypatch)
+    state = context.load_execution_state(EXECUTION_ID)
+    state.status = ExecutionStateStatus.SUCCEEDED
+    context.save_execution_state(state)
+    _drift_manifest(root)
+
+    terminal = load_terminal_execution_evidence(root)
+
+    assert terminal is not None
+    assert terminal.decision == "succeeded"
+    assert terminal.path == root / "_shared" / "execution_state.json"
+    _assert_global_gates_accept_only_as_historical(root, monkeypatch)
+
+
+def test_manual_required_state_remains_resumable_without_terminal_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _fixture(tmp_path, monkeypatch)
+    state = context.load_execution_state(EXECUTION_ID)
+    state.status = ExecutionStateStatus.MANUAL_REQUIRED
+    context.save_execution_state(state)
+
+    assert load_terminal_execution_evidence(root) is None
 
 
 def test_stale_execution_writes_create_once_receipt_and_terminal_snapshot(
@@ -389,12 +420,12 @@ def test_source_drift_supersession_refuses_live_recorded_identity_without_argv(
     }
     write_json(root / "_shared/controller_lease.json", lease)
     monkeypatch.setattr(
-        execution_supersession,
+        execution_supersession_admission,
         "_pid_alive",
         lambda _pid: live_field == "pid",
     )
     monkeypatch.setattr(
-        execution_supersession,
+        execution_supersession_admission,
         "_pgid_alive",
         lambda _pgid: live_field == "pgid",
     )
@@ -406,8 +437,9 @@ def test_source_drift_supersession_refuses_live_recorded_identity_without_argv(
             executions_root=root.parent,
         )
 
-    assert not hasattr(execution_supersession, "_process_command")
-    assert not hasattr(execution_supersession, "_group_commands")
+    for module in (execution_supersession, execution_supersession_admission):
+        assert not hasattr(module, "_process_command")
+        assert not hasattr(module, "_group_commands")
 
 
 def test_source_drift_supersession_refuses_active_state_without_live_process(
@@ -484,6 +516,137 @@ def test_source_drift_supersession_receipt_detects_root_inventory_drift(
 
     with pytest.raises(ValueError, match="root inventory drift"):
         load_terminal_execution_evidence(root)
+
+    class CurrentRequestSchemaMustNotRun:
+        @staticmethod
+        def from_document(_document: object) -> object:
+            raise AssertionError(
+                "invalid terminal evidence must remain the first and only blocker"
+            )
+
+    monkeypatch.setattr(
+        verify_runtime_input_ownership,
+        "DATA_EXECUTIONS_ROOT",
+        root.parent,
+    )
+    monkeypatch.setattr(verify_runtime_input_ownership, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        verify_runtime_input_ownership,
+        "RuntimeExecutionRequest",
+        CurrentRequestSchemaMustNotRun,
+    )
+
+    assert verify_runtime_input_ownership._request_issues() == [
+        f"{root.relative_to(tmp_path)}: invalid terminal execution evidence: "
+        "execution supersession root inventory drift"
+    ]
+
+
+def test_terminal_evidence_precheck_reports_invalid_candidate_without_writes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from content.execution import terminal_evidence_precheck
+
+    root = tmp_path / "tasks" / EXECUTION_ID
+    _pre_controller_fixture(root)
+    _freeze_supersession_source(monkeypatch)
+    execution_supersession.supersede_execution(
+        EXECUTION_ID,
+        reason="source_drift",
+        executions_root=root.parent,
+    )
+    write_json(root / "evidence/homepage_media_completeness.json", {"passed": True})
+    before = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+
+    report = terminal_evidence_precheck.terminal_evidence_precheck(
+        EXECUTION_ID,
+        executions_root=root.parent,
+    )
+
+    after = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    assert report == {
+        "schema": "quwoquan_data.terminal_evidence_precheck",
+        "executionId": EXECUTION_ID,
+        "passed": False,
+        "decision": None,
+        "errorCode": "DATA.EXECUTION.TERMINAL_EVIDENCE_INVALID",
+        "issues": ["execution supersession root inventory drift"],
+        "writable": False,
+        "repairSupported": False,
+    }
+    assert after == before
+
+
+def test_terminal_evidence_precheck_cli_returns_typed_blocker(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import argparse
+    import json
+
+    from content.execution import terminal_evidence_precheck
+
+    monkeypatch.setattr(
+        terminal_evidence_precheck,
+        "terminal_evidence_precheck",
+        lambda _execution_id: {
+            "schema": "quwoquan_data.terminal_evidence_precheck",
+            "executionId": EXECUTION_ID,
+            "passed": False,
+            "decision": None,
+            "errorCode": "DATA.EXECUTION.TERMINAL_EVIDENCE_INVALID",
+            "issues": ["execution supersession root inventory drift"],
+            "writable": False,
+            "repairSupported": False,
+        },
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        terminal_evidence_precheck._handle(
+            argparse.Namespace(execution_id=EXECUTION_ID)
+        )
+
+    assert exc_info.value.code == 1
+    assert json.loads(capsys.readouterr().out)["errorCode"] == (
+        "DATA.EXECUTION.TERMINAL_EVIDENCE_INVALID"
+    )
+
+
+def test_terminal_evidence_precheck_accepts_valid_supersession(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from content.execution import terminal_evidence_precheck
+
+    root = tmp_path / "tasks" / EXECUTION_ID
+    _pre_controller_fixture(root)
+    _freeze_supersession_source(monkeypatch)
+    execution_supersession.supersede_execution(
+        EXECUTION_ID,
+        reason="source_drift",
+        executions_root=root.parent,
+    )
+
+    report = terminal_evidence_precheck.terminal_evidence_precheck(
+        EXECUTION_ID,
+        executions_root=root.parent,
+    )
+
+    assert report["passed"] is True
+    assert report["decision"] == "superseded"
+    assert report["errorCode"] is None
+    assert report["issues"] == []
+    assert report["writable"] is False
+    assert report["repairSupported"] is False
 
 
 def test_stale_reconciliation_refuses_live_controller(

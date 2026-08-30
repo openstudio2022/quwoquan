@@ -33,6 +33,10 @@ func TestAppExposedChatLimitDefaultsAreOwnedByEachOperation(t *testing.T) {
 			requestEntity: "ChatSyncMessagesQuery", defaultItems: 500, maximumItems: 500,
 		},
 		{
+			object: "message", operation: "ListConversationAssets",
+			requestEntity: "ChatListConversationAssetsQuery", defaultItems: 60, maximumItems: 200,
+		},
+		{
 			object: "conversation", operation: "ListContacts",
 			requestEntity: "ChatListContactsQuery", defaultItems: 20, maximumItems: 100,
 		},

@@ -89,9 +89,7 @@ class _AuthenticatedSession extends AuthSessionController {
   }
 }
 
-List<Override> _boundaryOverrides({
-  required _StubGatheringQueryReader reader,
-}) {
+List<Override> _boundaryOverrides({required _StubGatheringQueryReader reader}) {
   return <Override>[
     ...sealedCloudBoundaryOverrides(),
     authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
@@ -152,7 +150,12 @@ void main() {
     test('completed → 已结束；cancelled → 已取消；draft → 草稿；未知 lifecycle 防御归入已结束', () {
       expect(
         myGatheringsSegmentOf(
-          _card(id: 'g4', title: 't', lifecycle: 'completed', temporal: 'ended'),
+          _card(
+            id: 'g4',
+            title: 't',
+            lifecycle: 'completed',
+            temporal: 'ended',
+          ),
         ),
         MyGatheringsSegment.ended,
       );
@@ -164,9 +167,7 @@ void main() {
       );
       // draft 是私有读面的一等分组（OPEN-008 收口）。
       expect(
-        myGatheringsSegmentOf(
-          _card(id: 'g6', title: 't', lifecycle: 'draft'),
-        ),
+        myGatheringsSegmentOf(_card(id: 'g6', title: 't', lifecycle: 'draft')),
         MyGatheringsSegment.draft,
       );
       // 未识别 lifecycle 防御归入已结束，不渲染进行中假象。
@@ -224,15 +225,19 @@ void main() {
     expect(find.text('双人看展邀约'), findsOneWidget);
     expect(find.text('草稿里的行动'), findsNothing);
     expect(find.text('西岸美术馆看展'), findsNothing);
-    expect(find.text(GatheringText.sourceGatheringSeatsRemaining(2)),
-        findsNWidgets(2));
+    expect(
+      find.text(GatheringText.sourceGatheringSeatsRemaining(2)),
+      findsNWidgets(2),
+    );
 
     // 切到草稿分组：draft 只在私有读面出现，且不展示余席。
     await tester.tap(find.text(GatheringText.myGatheringsSegmentDraft));
     await tester.pump();
     expect(find.text('草稿里的行动'), findsOneWidget);
-    expect(find.text(GatheringText.sourceGatheringSeatsRemaining(2)),
-        findsNothing);
+    expect(
+      find.text(GatheringText.sourceGatheringSeatsRemaining(2)),
+      findsNothing,
+    );
 
     // 切到已结束分组。
     await tester.tap(find.text(GatheringText.myGatheringsSegmentEnded));
@@ -255,7 +260,9 @@ void main() {
       ),
     );
     await _pumpPage(tester, reader);
-    await tester.tap(find.byKey(const ValueKey<String>('my-gathering-card-g-up')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('my-gathering-card-g-up')),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     expect(find.text('GATHERING:g-up'), findsOneWidget);

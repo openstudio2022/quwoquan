@@ -9,7 +9,7 @@ fields:
 - {name: minimumSupportedVersion, type: string}
 - {name: minimumSupportedBuild, type: string}
 - {name: updateState, type: enum, enum_ref: AppReleaseUpdateState}
-- {name: updateUrl, type: string}
+- {name: updateUrl, type: string, nullable: true}
 - {name: recoveryUrl, type: string}
 consistency: strong_config_release
 readers:

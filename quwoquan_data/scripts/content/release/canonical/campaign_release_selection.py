@@ -1,4 +1,4 @@
-"""Validate one immutable four-lane campaign selection and retry lineage."""
+"""Validate one immutable active-workload campaign and retry lineage."""
 
 from __future__ import annotations
 
@@ -12,11 +12,12 @@ from content.execution.campaign.external_inputs import (
     content_source_revision,
     external_inputs_digest,
 )
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.submission import campaign_root, load_submissions
 from content.execution.campaign.submission_reconciliation import (
     load_reconciliation_reference,
-    predecessor_campaign_root_execution_id,
+)
+from content.execution.campaign.submission_reconciliation_workload import (
+    campaign_root_for_submission,
 )
 from content.execution.closure.adoption_campaign_contract import (
     ADOPTION_OPERATIONS,
@@ -31,11 +32,14 @@ from content.release.canonical.campaign_release_contract import (
     read_regular,
     typed_error,
 )
+from content.release.canonical.campaign_release_scope import active_campaign_scope
+from content.release.canonical.campaign_release_runtime import validate_runtime
 from content.release.canonical.campaign_release_selection_mixed import (
     consume_mixed_finalized_boundary,
     validate_reconciliation_retry_set,
 )
 from core.schema import assert_valid
+from core.source_digest import ExecutionBundleIdentity, SourceDefinitionSnapshot
 
 
 def validate_plan(
@@ -66,25 +70,21 @@ def validate_plan(
         raise typed_error(
             "SOURCE_REVISION_DRIFT", "campaign sourceRevision drift", evidence=path
         )
-    execution_ids = plan.get("executionIds")
-    lane_inputs = plan.get("laneExternalInputs")
-    if not isinstance(execution_ids, Mapping) or set(execution_ids) != set(
-        CAMPAIGN_CARRIERS
-    ):
-        raise typed_error(
-            "PLAN_LANES_INVALID",
-            "plan must own exactly four current executionIds",
-            evidence=path,
+    try:
+        active, _workloads, execution_ids = active_campaign_scope(
+            plan,
+            root_execution_id=root_id,
         )
-    if not isinstance(lane_inputs, Mapping) or set(lane_inputs) != set(
-        CAMPAIGN_CARRIERS
-    ):
+    except (TypeError, ValueError) as exc:
+        raise typed_error("PLAN_LANES_INVALID", str(exc), evidence=path) from exc
+    lane_inputs = plan.get("laneExternalInputs")
+    if not isinstance(lane_inputs, Mapping):
         raise typed_error(
             "EXTERNAL_INPUT_DRIFT",
             "plan external input lanes are incomplete",
             evidence=path,
         )
-    for carrier in CAMPAIGN_CARRIERS:
+    for carrier in active:
         row = lane_inputs[carrier]
         refs = row.get("externalInputRefs") if isinstance(row, Mapping) else None
         if (
@@ -110,12 +110,6 @@ def validate_plan(
     ):
         raise typed_error(
             "EXTERNAL_INPUT_DRIFT", "campaign externalInputsDigest drift", evidence=path
-        )
-    if execution_ids["homepage"] != root_id or len(set(execution_ids.values())) != 4:
-        raise typed_error(
-            "PLAN_LANES_INVALID",
-            "plan lane identities are not four unique current executions",
-            evidence=path,
         )
     adoption_document = plan.get(CAMPAIGN_ADOPTION_FIELD)
     if adoption_document is not None:
@@ -151,27 +145,56 @@ def validate_submissions(
         submissions = load_submissions(root_id, root=roots.campaigns_root)
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         raise typed_error("SUBMISSION_INVALID", str(exc)) from exc
-    if set(submissions) != set(CAMPAIGN_CARRIERS):
+    try:
+        active, workloads, execution_ids = active_campaign_scope(
+            plan,
+            root_execution_id=root_id,
+        )
+    except (TypeError, ValueError) as exc:
+        raise typed_error("PLAN_LANES_INVALID", str(exc)) from exc
+    if set(submissions) != set(active):
         raise typed_error(
             "SUBMISSION_INVALID",
-            "campaign must contain exactly four immutable submissions",
+            "campaign submissions must exactly match active carriers",
         )
-    source_documents = {
-        json.dumps(row["sourceDigest"], sort_keys=True) for row in submissions.values()
-    }
-    if len(source_documents) != 1:
+    try:
+        source_documents = {
+            json.dumps(
+                SourceDefinitionSnapshot.from_document(row["sourceDigest"])
+                .to_document(),
+                sort_keys=True,
+            )
+            for row in submissions.values()
+        }
+        bundle_documents = {
+            json.dumps(
+                ExecutionBundleIdentity.from_document(row["executionBundle"])
+                .to_document(),
+                sort_keys=True,
+            )
+            for row in submissions.values()
+        }
+    except (KeyError, TypeError, ValueError) as exc:
+        raise typed_error("SOURCE_DIGEST_DRIFT", str(exc)) from exc
+    if len(source_documents) != 1 or len(bundle_documents) != 1:
         raise typed_error(
-            "SOURCE_DIGEST_DRIFT", "submission sourceDigest documents drift"
+            "SOURCE_DIGEST_DRIFT", "submission source/bundle documents drift"
         )
     root_vertical = parse_execution_id(root_id).vertical
-    for carrier in CAMPAIGN_CARRIERS:
+    for carrier in active:
         row = submissions[carrier]
         lane_inputs = plan["laneExternalInputs"][carrier]
         expected = {
             "rootExecutionId": root_id,
-            "executionId": plan["executionIds"][carrier],
+            "executionId": execution_ids[carrier],
             "requestDigest": plan["submissionDigests"][carrier],
+            "scale": plan["scale"],
+            "workloadMode": plan["workloadMode"],
+            "activeCarriers": list(active),
+            "workloads": workloads,
+            "quota": workloads[carrier],
             "sourceRevision": plan["sourceRevision"],
+            "executionBundle": plan["executionBundle"],
             "entityCatalogDigest": plan["entityCatalogDigest"],
             "externalInputsDigest": lane_inputs["externalInputsDigest"],
             "externalInputRefs": lane_inputs["externalInputRefs"],
@@ -280,7 +303,10 @@ def _consume_post_publish_boundary(
         or not isinstance(partial, Mapping)
         or row.get("executionId") != execution_id
         or receipt.get("rootExecutionId")
-        != predecessor_campaign_root_execution_id(execution_id)
+        != campaign_root_for_submission(
+            execution_id,
+            output_root=roots.output_root,
+        )
         or receipt.get("observedSourceIdentity") != expected_observed
         or any(row.get(key) != submission.get(key) for key in scope_fields)
         or execution_evidence.get("evidenceDisposition")
@@ -448,7 +474,10 @@ def retry_lineage(
                 or row.get("executionId") != execution_id
                 or row.get("retryOf") is not None
                 or receipt.get("rootExecutionId")
-                != predecessor_campaign_root_execution_id(execution_id)
+                != campaign_root_for_submission(
+                    execution_id,
+                    output_root=roots.output_root,
+                )
                 or receipt.get("observedSourceIdentity") != expected_observed
                 or any(row.get(key) != submission.get(key) for key in scope_fields)
             ):
@@ -521,68 +550,6 @@ def retry_lineage(
             f"{carrier} predecessor reconciliation was not consumed",
         )
     return lineage
-
-
-def validate_runtime(
-    root_id: str,
-    plan: Mapping[str, Any],
-    *,
-    roots: CampaignReleaseRoots,
-) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
-    runtime_root = campaign_root(root_id, root=roots.campaigns_root) / "runtime"
-    snapshot_path = runtime_root / "snapshot.json"
-    snapshot = read_regular(snapshot_path, label="campaign runtime snapshot")
-    run_id = str(snapshot.get("runId") or "")
-    try:
-        generation = int(snapshot.get("generation") or 0)
-    except (TypeError, ValueError) as exc:
-        raise typed_error(
-            "RUNTIME_NOT_FINAL",
-            "campaign runtime generation is invalid",
-            evidence=snapshot_path,
-        ) from exc
-    token = str(snapshot.get("fencingToken") or "")
-    if (
-        snapshot.get("rootExecutionId") != root_id
-        or not run_id
-        or generation < 1
-        or not token.startswith("sha256:")
-        or snapshot.get("status") not in {"succeeded", "succeeded_partial"}
-        or snapshot.get("phase") != "completed"
-        or snapshot.get("planDigest") != plan["planDigest"]
-        or snapshot.get("failure") not in {None, ""}
-    ):
-        raise typed_error(
-            "RUNTIME_NOT_FINAL",
-            "campaign runtime is not one current fenced completion",
-            evidence=snapshot_path,
-        )
-    checkpoints: dict[str, dict[str, Any]] = {}
-    for carrier in CAMPAIGN_CARRIERS:
-        path = runtime_root / "lanes" / f"{carrier}.json"
-        row = read_regular(path, label=f"{carrier} runtime checkpoint")
-        expected = {
-            "rootExecutionId": root_id,
-            "runId": run_id,
-            "generation": generation,
-            "fencingToken": token,
-            "carrier": carrier,
-            "executionId": plan["executionIds"][carrier],
-            "phase": "run",
-            "status": "succeeded",
-            "returnCode": 0,
-            "executionRoot": str(
-                (roots.tasks_root / plan["executionIds"][carrier]).resolve()
-            ),
-        }
-        if any(row.get(key) != value for key, value in expected.items()):
-            raise typed_error(
-                "FENCE_DRIFT",
-                f"{carrier} checkpoint differs from current fenced run",
-                evidence=path,
-            )
-        checkpoints[carrier] = row
-    return snapshot, checkpoints
 
 
 __all__ = [

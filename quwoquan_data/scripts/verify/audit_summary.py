@@ -2,7 +2,8 @@
 
 目标：
 - 为 `qwq-data verify --execution-id ...` 生成可直接复核的审计包。
-- 把脚本硬门结果、都江堰锚点对象、以及人工抽检项收敛到 execution `_shared/` 下。
+- 把脚本硬门结果、锚点对象与人工抽检项写到 repo-local diagnostic workspace，
+  不修改被审计 execution。
 """
 from __future__ import annotations
 
@@ -10,14 +11,14 @@ import math
 from pathlib import Path
 from typing import Any, Mapping
 
+from content.execution.execution_terminal import load_terminal_execution_evidence
 from content.post.object_index import iter_content_refs, content_object_dir
 from core.io import read_json, write_json
 from core.paths import (
-    execution_audit_markdown_path,
-    execution_audit_summary_path,
     execution_entity_object_dir,
     execution_root,
     now_iso,
+    OUTPUT_ARTIFACTS_ROOT,
 )
 from content.execution import store
 
@@ -476,8 +477,11 @@ def write_execution_audit_summary(execution_id: str, *, roots: list[Path], issue
         },
         "manualChecklist": manual,
     }
-    json_path = execution_audit_summary_path(execution_id)
-    md_path = execution_audit_markdown_path(execution_id)
+    # 校验 terminal candidate 的受保护证据；active 与 terminal 均不反写 execution。
+    load_terminal_execution_evidence(execution_dir)
+    report_dir = OUTPUT_ARTIFACTS_ROOT / "execution-audit" / execution_id
+    json_path = report_dir / "audit_summary.json"
+    md_path = report_dir / "audit_summary.md"
     json_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(json_path, summary)
     md_path.write_text(_summary_markdown(summary), encoding="utf-8")

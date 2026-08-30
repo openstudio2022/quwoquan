@@ -2,11 +2,11 @@
   "label": "峨眉山",
   "domain": "地点",
   "type": "景区",
-  "executionId": "20260812--travel-homepage-m100--china--scale-011",
+  "executionId": "20260817--travel-homepage-fourcarrier--china-sichuan--pilot-001",
   "entityRef": "/entity/地点/景区/峨眉山",
-  "summary": "这座名山坐落于四川峨眉山市，景区约一百五十四平方公里。",
+  "summary": "峨眉山亦作峨嵋山，位于四川省峨眉山市境内，景区面积约154平方公里。",
   "sourceRefs": [
-    "sources/homepage-source-e3c6385aa3275fa420ef/source.md"
+    "sources/峨眉山__wikipedia__9df1cadc/source.md"
   ],
   "sourceUrls": [
     "https://zh.wikipedia.org/wiki/%E5%B3%A8%E7%9C%89%E5%B1%B1"
@@ -17,43 +17,44 @@
     "extractor": "wikipedia_api",
     "canonicalUrl": "https://zh.wikipedia.org/wiki/%E5%B3%A8%E7%9C%89%E5%B1%B1",
     "sourceUrl": "https://zh.wikipedia.org/wiki/%E5%B3%A8%E7%9C%89%E5%B1%B1",
-    "title": "维基百科",
-    "fetchedAt": "2026-08-12T10:44:00Z",
-    "snapshotHash": "sha256:2d4e021d1a3cab1934e6cd72a7a5f7a4e8b540cea5035ba5da61eeca77e48b8e",
+    "title": "峨眉山",
+    "fetchedAt": "2026-08-17T07:23:07Z",
+    "snapshotHash": "sha256:337dbf2099e67829ec65a111cde8f4bfa9b5b7c56ccc2c438cacd98925b05ab7",
     "policyRevision": "encyclopedia-primary",
-    "sourceUseMode": "factual_reference_only"
+    "sourceUseMode": "licensed_adaptation"
   },
   "sourceAttribution": {
-    "attributionText": "正文事实来源：维基百科（维基百科贡献者）",
-    "audioRightsStatus": "no_audio",
-    "authorizationProofUrl": "https://zh.wikipedia.org/wiki/%E5%B3%A8%E7%9C%89%E5%B1%B1",
-    "collectedAt": "2026-08-12T10:44:00Z",
-    "commercialAuthorizationStatus": "verified",
     "isOriginal": false,
-    "modelReleaseStatus": "not_required",
-    "originalAssetUrl": "https://zh.wikipedia.org/wiki/%E5%B3%A8%E7%9C%89%E5%B1%B1",
     "originalCreatorId": null,
     "originalCreatorName": "维基百科贡献者",
     "originalCreatorProfileUrl": null,
     "platform": "维基百科",
-    "propertyReleaseStatus": "not_required",
-    "publicationAdmission": "research_release",
-    "rightsBasis": "CC BY-SA 4.0",
-    "riskAcceptanceId": null,
     "sourcePostUrl": "https://zh.wikipedia.org/wiki/%E5%B3%A8%E7%9C%89%E5%B1%B1",
-    "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+    "originalAssetUrl": "https://zh.wikipedia.org/wiki/%E5%B3%A8%E7%9C%89%E5%B1%B1",
+    "attributionText": "正文事实来源：维基百科（维基百科贡献者）",
+    "rightsBasis": "CC BY-SA 4.0",
+    "commercialAuthorizationStatus": "verified",
+    "publicationAdmission": "research_release",
+    "authorizationProofUrl": "https://zh.wikipedia.org/wiki/%E5%B3%A8%E7%9C%89%E5%B1%B1",
     "termsUrl": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
-    "watermarkStatus": "absent"
+    "riskAcceptanceId": null,
+    "watermarkStatus": "absent",
+    "audioRightsStatus": "no_audio",
+    "modelReleaseStatus": "not_required",
+    "propertyReleaseStatus": "not_required",
+    "collectedAt": "2026-08-17T07:23:07Z",
+    "takedownPolicy": "remove_on_verified_rights_or_source_dispute"
   },
   "textSourceRefs": [
-    "sources/homepage-source-e3c6385aa3275fa420ef/source.md"
+    "sources/峨眉山__wikipedia__9df1cadc/source.md"
   ],
   "imageSourceRefs": [
-    "sources/homepage-source-e3c6385aa3275fa420ef/source.md"
+    "sources/峨眉山__wikipedia__9df1cadc/source.md"
   ],
-  "heroAssetId": "峨眉山_cover_日出金顶_275_57047c39",
+  "heroAssetId": "峨眉山_cover_日出金顶_328_a476df03",
   "mediaAssetIds": [
-    "峨眉山_cover_日出金顶_275_57047c39"
+    "峨眉山_cover_日出金顶_328_a476df03",
+    "峨眉山_detail_经清音阁的线路_328_1138423b"
   ],
   "tagRefs": [
     "Entity/地点/景区",

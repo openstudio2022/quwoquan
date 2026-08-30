@@ -752,6 +752,12 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         title: _entryHeadlineText(entry),
         supportingText: _entrySupportingText(entry),
         coverUrl: _entryCoverUrl(entry),
+        // 交付形态取自 entry.post 投影的 mediaItems（DEC-033）。
+        mediaContent: mediaDeliveryCoverSlot(
+          binding: contentPostMediaBinding(entry.post, _entryCoverUrl(entry)),
+          placeholderColor: fgSecondary.withValues(alpha: 0.12),
+          cdnPreset: CdnImagePreset.thumbnail,
+        ),
         showVideoBadge: _entryIsVideo(entry),
         onTap: onTap,
         footer: Row(
@@ -791,6 +797,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       supportingText: _entrySupportingText(entry),
       supportingTextMaxLines: widget.participantSlots.articleSummaryLineLimit(),
       coverUrl: _entryCoverUrl(entry),
+      // 交付形态取自 entry.post 投影的 mediaItems（DEC-033）。
+      mediaContent: mediaDeliveryCoverSlot(
+        binding: contentPostMediaBinding(entry.post, _entryCoverUrl(entry)),
+        placeholderColor: fgSecondary.withValues(alpha: 0.12),
+      ),
       mediaAspectRatio: _creationGridCoverAspectRatio,
       mediaOverlay: _entryArticleTemplateBadge(entry),
       header: widget.participantSlots.buildIntersectionReason(
@@ -878,6 +889,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       supportingText: _entrySupportingText(entry),
       supportingTextMaxLines: widget.participantSlots.articleSummaryLineLimit(),
       coverUrl: _entryCoverUrl(entry),
+      // 交付形态取自 entry.post 投影的 mediaItems（DEC-033）。
+      mediaContent: mediaDeliveryCoverSlot(
+        binding: contentPostMediaBinding(entry.post, _entryCoverUrl(entry)),
+        placeholderColor: fgSecondary.withValues(alpha: 0.12),
+      ),
       hideThumbnailWhenNoCover: true,
       onTap: onTap,
       footer: Row(

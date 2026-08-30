@@ -7,6 +7,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _SCRIPTS_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -29,6 +31,14 @@ PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bPrefabUserResolver\b"), "PrefabUserResolver"),
     (re.compile(r"\bPrefabUserMetadata\b"), "PrefabUserMetadata"),
     (re.compile(r"\bkMockCurrent(?:Owner|Persona)Id\b"), "mock session identity"),
+    (
+        re.compile(r"\bhydrateFromNativeRuntimePackageForTest\b"),
+        "hydrateFromNativeRuntimePackageForTest",
+    ),
+    (
+        re.compile(r"\b_forceNativeRuntimePackageForTest\b"),
+        "_forceNativeRuntimePackageForTest",
+    ),
 ]
 RETIRED_FIXTURE_PATHS = (
     "cloud/runtime/contract_fixture_runtime_loader.dart",
@@ -38,17 +48,22 @@ RETIRED_FIXTURE_PATHS = (
 )
 
 
-def main() -> int:
+def collect_violations(app_lib: Path = APP_LIB) -> list[str]:
     violations: list[str] = []
     for rel in RETIRED_FIXTURE_PATHS:
-        if (APP_LIB / rel).exists():
+        if (app_lib / rel).exists():
             violations.append(f"{rel}: retired production fixture helper exists")
-    for path in sorted(APP_LIB.rglob("*.dart")):
-        rel = path.relative_to(APP_LIB).as_posix()
+    for path in sorted(app_lib.rglob("*.dart")):
+        rel = path.relative_to(app_lib).as_posix()
         text = path.read_text(encoding="utf-8")
         for rx, sym in PATTERNS:
             if rx.search(text):
                 violations.append(f"{rel}: forbidden test-only symbol {sym}")
+    return violations
+
+
+def main() -> int:
+    violations = collect_violations()
 
     if violations:
         print("lib_test_only_symbols: FAIL", file=sys.stderr)

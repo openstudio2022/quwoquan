@@ -223,6 +223,50 @@ func TestClientSearchMapsHitsToCandidates(t *testing.T) {
 	}
 }
 
+func TestClientCheckSearchReadyRejectsRootOnlyLiveness(t *testing.T) {
+	var readinessBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/":
+			writeJSON(w, http.StatusOK, map[string]any{"cluster_name": "root-only"})
+		case r.Method == http.MethodPost && r.URL.Path == "/"+DefaultIndex+"/_search":
+			if err := json.NewDecoder(r.Body).Decode(&readinessBody); err != nil {
+				t.Fatalf("decode readiness body: %v", err)
+			}
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "shards unavailable"})
+		default:
+			http.Error(w, "unexpected "+r.Method+" "+r.URL.Path, http.StatusTeapot)
+		}
+	}))
+	defer server.Close()
+	client := newTestClient(t, server)
+
+	if err := client.Ping(context.Background()); err != nil {
+		t.Fatalf("root liveness should pass: %v", err)
+	}
+	err := client.CheckSearchReady(context.Background())
+	if !errors.Is(err, ErrDependencyUnavailable) {
+		t.Fatalf("query readiness error=%v, want ErrDependencyUnavailable", err)
+	}
+	if readinessBody["size"] != float64(1) || readinessBody["track_total_hits"] != false {
+		t.Fatalf("readiness query must exercise one bounded hit: %#v", readinessBody)
+	}
+}
+
+func TestClientCheckSearchReadyAcceptsQueryableAlias(t *testing.T) {
+	cluster := newFakeCluster()
+	server := httptest.NewServer(cluster.handler())
+	defer server.Close()
+	client := newTestClient(t, server)
+
+	if err := client.CheckSearchReady(context.Background()); err != nil {
+		t.Fatalf("CheckSearchReady err=%v", err)
+	}
+	if cluster.lastSearch["size"] != float64(1) || cluster.lastSearch["_source"] != false {
+		t.Fatalf("unexpected readiness query: %#v", cluster.lastSearch)
+	}
+}
+
 func TestClientUpsertAndDelete(t *testing.T) {
 	fc := newFakeCluster()
 	srv := httptest.NewServer(fc.handler())

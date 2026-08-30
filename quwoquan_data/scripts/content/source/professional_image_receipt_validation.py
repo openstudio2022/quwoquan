@@ -16,6 +16,11 @@ from governance.coverage.distribution import (
     image_distribution_decision,
 )
 
+from content.source.acquisition_body_state import (
+    AcquiredBody,
+    ReclaimedBody,
+    assert_unit_reclamation_is_total,
+)
 from content.source.image_payload import sniff_image_ext
 from content.source.professional_image_source_attribution import (
     bound_image_source_attribution,
@@ -39,7 +44,8 @@ def _resolved_cas_asset(
     resolved_root: Path,
     min_image_bytes: int,
     max_image_bytes: int,
-) -> Path:
+    require_bodies: bool,
+) -> AcquiredBody:
     asset_id = str(row.get("assetId") or "")
     content_sha256 = str(row.get("contentSha256") or "")
     asset_ref = str(row.get("assetRef") or "")
@@ -58,15 +64,23 @@ def _resolved_cas_asset(
         )
     unresolved_path = resolved_root / relative
     asset_path = unresolved_path.resolve()
+    # A symlink or an escaping path is never a reclamation outcome: the collector
+    # only unlinks bodies in place, so these stay hard failures regardless of
+    # whether the caller tolerates a reclaimed unit.
     if (
         unresolved_path.is_symlink()
         or asset_path == resolved_root
         or resolved_root not in asset_path.parents
-        or not asset_path.is_file()
     ):
         raise ValueError(
-            f"professional image acquisition CAS asset is missing: {asset_ref}"
+            f"professional image acquisition CAS asset is invalid: {asset_ref}"
         )
+    if not asset_path.is_file():
+        if require_bodies:
+            raise ValueError(
+                f"professional image acquisition CAS asset is missing: {asset_ref}"
+            )
+        return ReclaimedBody(asset_ref=asset_ref)
     body = asset_path.read_bytes()
     if not min_image_bytes <= len(body) <= max_image_bytes:
         raise ValueError(
@@ -99,7 +113,7 @@ def _resolved_cas_asset(
 def _validate_accepted_asset(
     row: Mapping[str, Any],
     *,
-    asset_path: Path | None,
+    asset_path: AcquiredBody | None,
     validate_item: ValidateItem,
     pre_acquisition_block: PreAcquisitionBlock,
 ) -> None:
@@ -240,8 +254,15 @@ def validate_image_receipt_inventory(
     validate_item: ValidateItem,
     pre_acquisition_block: PreAcquisitionBlock,
     provider_counts: ProviderCounts,
+    require_bodies: bool = True,
 ) -> None:
-    """Re-derive CAS, admission and funnel truth from one strict receipt."""
+    """Re-derive CAS, admission and funnel truth from one strict receipt.
+
+    ``require_bodies`` is for readers that inspect receipts long after the fact,
+    such as the collector: with it disabled a unit whose bodies were all
+    reclaimed still validates, because the receipt remains a complete record of
+    what was fetched. A unit that is only partly reclaimed fails either way.
+    """
 
     rows = [dict(row) for row in receipt["assets"]]
     asset_ids = [str(row["assetId"]) for row in rows]
@@ -252,9 +273,10 @@ def validate_image_receipt_inventory(
     downloaded = 0
     accepted = 0
     accepted_digests: set[str] = set()
+    bodies: list[AcquiredBody] = []
     for row in rows:
         acquired = row["acquisitionStatus"] == "acquired"
-        asset_path: Path | None = None
+        asset_path: AcquiredBody | None = None
         if acquired:
             downloaded += 1
             asset_path = _resolved_cas_asset(
@@ -262,7 +284,9 @@ def validate_image_receipt_inventory(
                 resolved_root=resolved_root,
                 min_image_bytes=min_image_bytes,
                 max_image_bytes=max_image_bytes,
+                require_bodies=require_bodies,
             )
+            bodies.append(asset_path)
         elif any(
             (
                 row["assetRef"],
@@ -293,6 +317,10 @@ def validate_image_receipt_inventory(
                     f"must be unique: {content_sha256}"
                 )
             accepted_digests.add(content_sha256)
+    assert_unit_reclamation_is_total(
+        bodies,
+        label="professional image acquisition receipt",
+    )
     expected_counts = {
         "plannedAssetCount": len(rows),
         "discoveredAssetCount": len(rows),
@@ -307,6 +335,17 @@ def validate_image_receipt_inventory(
         raise ValueError(
             "professional image acquisition receipt funnel count drift: "
             + ",".join(sorted(drifted_counts))
+        )
+    expected_status = (
+        "ready"
+        if accepted == len(rows)
+        else ("partial" if accepted else "blocked")
+    )
+    recorded_status = receipt.get("status")
+    if recorded_status is not None and recorded_status != expected_status:
+        raise ValueError(
+            "professional image acquisition receipt status drift: "
+            f"expected={expected_status} actual={recorded_status}"
         )
     if list(receipt["providerAssetCounts"]) != provider_counts(rows):
         raise ValueError("professional image acquisition providerAssetCounts drift")

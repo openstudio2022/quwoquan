@@ -15,13 +15,11 @@ from content.execution.campaign.source_pool_binding import (
 from content.release.canonical.campaign_scale_evidence import (
     write_campaign_scale_evidence,
 )
-from content.release.canonical.object_source_identity import (
-    source_identity_digest,
-    source_identity_set,
-)
+from content.release.canonical.object_source_identity import source_identity_set
 from support.campaign_scale_evidence_fixture import (
     CARRIERS,
     CATALOG_DIGEST,
+    EXECUTION_BUNDLE_DOCUMENT,
     FENCING_TOKEN,
     GENERATION,
     RUN_ID,
@@ -42,6 +40,10 @@ from support.campaign_scale_evidence_fixture import (
     _write_ranked_release_videos,
     _write_semantic_pair,
     _write_sol_calibration_runs,
+)
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
 )
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
@@ -66,6 +68,8 @@ def _sample_measurements(
             "pgid": 100,
             "processIdentityDigest": "sha256:" + "1" * 64,
             "rssBytes": controller_rss,
+            "cpuPercent": 12.5,
+            "isCursorSdkBridge": False,
             "openFdCount": 60 + index,
         }
     ]
@@ -81,6 +85,8 @@ def _sample_measurements(
                 "pgid": 100 + offset,
                 "processIdentityDigest": "sha256:" + str(offset + 1) * 64,
                 "rssBytes": video_rss if carrier == "video" else non_video_rss,
+                "cpuPercent": 8.0,
+                "isCursorSdkBridge": False,
                 "openFdCount": 10,
             }
         )
@@ -127,6 +133,12 @@ def _sample_measurements(
         "totalRssBytes": sum(int(row["rssBytes"]) for row in processes),
         "temporaryWorkspaceBytes": temporary_bytes,
         "terminalResidualBytes": terminal_bytes,
+        "hostCpuPercent": round(
+            sum(float(row["cpuPercent"]) for row in processes), 3
+        ),
+        "cursorBridgeProcessCount": sum(
+            1 for row in processes if row["isCursorSdkBridge"] is True
+        ),
         "openFdCount": sum(int(row["openFdCount"]) for row in processes),
         "queueDepth": queue_depth,
         "oldestReadyAgeSeconds": 300 if queue_depth else 0,
@@ -375,18 +387,25 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
         pool_selections,
         source_pool_snapshot_digest,
     ) = _scale_pool_fixture(output, source_revision=source_revision)
+    active_carriers = list(pool_plan["activeCarriers"])
+    workloads = dict(pool_plan["workloadTargets"])
     plan_stable: dict[str, object] = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": root_id,
         "executionMode": "central",
         "scale": "M100",
+        "workloadMode": pool_plan["workloadMode"],
+        "activeCarriers": active_carriers,
+        "workloads": workloads,
         "gitBranch": "dev1.0",
         "gitCommitSha": "d" * 40,
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": dict(EXECUTION_BUNDLE_DOCUMENT),
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": terra_preflight_binding,
+        "executionAuthority": synthetic_governed_execution_authority(),
         "scaleSourcePool": pool_binding,
         "sourcePoolEvidenceRootRef": pool_evidence_ref,
         "laneSourcePoolSelections": pool_selections,
@@ -414,10 +433,12 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
     _write(plan_path, plan)
     capsule_stable = {
         "schema": "quwoquan_data.content_campaign_source_capsule",
-        "format": "source-snapshot-v1",
+        "format": "source-capsule-v2",
+        "gitBranch": plan["gitBranch"],
         "gitCommitSha": plan["gitCommitSha"],
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": dict(EXECUTION_BUNDLE_DOCUMENT),
         "entityCatalogDigest": CATALOG_DIGEST,
         "roots": ["quwoquan_data"],
         "laneExternalInputs": {
@@ -477,6 +498,8 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
         {
             "schema": "quwoquan_data.content_campaign_report",
             "rootExecutionId": root_id,
+            "activeCarriers": active_carriers,
+            "workloads": workloads,
             "campaignRunId": f"{root_id}-run",
             "campaignGeneration": 1,
             "campaignFencingToken": FENCING_TOKEN,
@@ -489,6 +512,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
             "entityCatalogDigest": CATALOG_DIGEST,
             "lanes": {carrier: report_lane(carrier) for carrier in CARRIERS},
             "failure": None,
+            "revisionAudits": [],
             "startedAt": START.isoformat(),
             "updatedAt": (START + timedelta(seconds=3720)).isoformat(),
         },
@@ -554,8 +578,9 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
             {
                 "schema": "quwoquan_data.execution_publish_ref",
                 "executionId": execution_id,
-                "canonicalPublishRoot": "quwoquan_data/publish",
+                "canonicalPublishRoot": "canonical-publish",
                 "publishedRefs": refs,
+                "publishDiscards": [],
             },
         )
         _write(
@@ -569,6 +594,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
                 "status": "finalized",
                 "approvedQuota": 10 if carrier == "video" else 100,
                 "qualifiedCount": 100,
+                "reviewQualifiedCount": 100,
                 "finalizedCount": 100,
                 "selectedCount": 100,
                 "discardedCount": 0,
@@ -579,6 +605,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
                 "campaignGeneration": 1,
                 "campaignFencingToken": "sha256:" + "f" * 64,
                 "discards": [],
+                "publishDiscards": [],
             },
         )
         for index in range(10):
@@ -677,9 +704,6 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
     source_identities, source_identity_set_digest = source_identity_set(
         object_source_identities
     )
-    source_identity_digest_value = source_identity_digest(
-        object_source_identities[0]
-    )
     milestone_post_refs = {
         "article": _publish_refs("article")["posts"],
         "image": _publish_refs("image")["posts"],
@@ -690,8 +714,15 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
             "contentId": f"content-{carrier}-{index:03d}",
             "version": 1,
             "postRef": raw_ref,
-            "executionId": execution_ids[carrier],
-            "sourceIdentityDigest": source_identity_digest_value,
+            "selectionIdentityDigest": _digest(
+                {"kind": "selection", "carrier": carrier, "postRef": raw_ref}
+            ),
+            "canonicalObjectDigest": _digest(
+                {"kind": "canonical", "carrier": carrier, "postRef": raw_ref}
+            ),
+            "contentLibraryBindingDigest": _digest(
+                {"kind": "content_library", "carrier": carrier, "postRef": raw_ref}
+            ),
         }
         for carrier, refs in milestone_post_refs.items()
         for index, raw_ref in enumerate(refs)
@@ -720,6 +751,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
             "sourceDigests": [SOURCE_DIGEST_DOCUMENT],
             "sourceIdentities": source_identities,
             "sourceIdentitySetDigest": source_identity_set_digest,
+            "selectionScope": "milestone",
             "milestone": "M100",
             "milestoneTargets": {
                 "homepage": 100,
@@ -737,6 +769,8 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
             },
             "contents": release_contents,
             "authors": [],
+            "samplePlanRef": "uat/sample_plan.json",
+            "samplePlanDigest": _digest({"releaseId": "research-release", "kind": "sample-plan"}),
             "buildResult": "completed",
         },
     )

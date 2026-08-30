@@ -8,8 +8,6 @@ import urllib.parse
 
 from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 
-_OPENVERSE_API = "https://api.openverse.org/images/"
-
 _QUNAR_SEARCH_API = "https://touch.travel.qunar.com/search"
 
 _BASE_DRAFT_IMAGE_CANDIDATES = MEDIA_PROCESSING_POLICY.base_draft_image_candidates

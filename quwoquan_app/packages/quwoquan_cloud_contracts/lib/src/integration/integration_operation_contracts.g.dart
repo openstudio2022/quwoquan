@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
+// ContractGraph SHA256: cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f
 
 library;
 
@@ -128,16 +128,24 @@ enum ConnectorInvocationStatus {
 }
 
 final class ConnectorConnectionListSlice {
-  const ConnectorConnectionListSlice({
-    required this.items,
-  });
+  const ConnectorConnectionListSlice({required this.items});
 
   final List<ConnectorConnectionView> items;
 
-  factory ConnectorConnectionListSlice.fromWire(Map<String, Object?> map, [String path = "ConnectorConnectionListSlice"]) {
+  factory ConnectorConnectionListSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConnectorConnectionListSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items"}, path);
     return ConnectorConnectionListSlice(
-      items: List<ConnectorConnectionView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ConnectorConnectionView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<ConnectorConnectionView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ConnectorConnectionView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -155,10 +163,16 @@ final class ConnectorConnectionMutationReceipt {
   final ConnectorConnectionView connection;
   final bool replayed;
 
-  factory ConnectorConnectionMutationReceipt.fromWire(Map<String, Object?> map, [String path = "ConnectorConnectionMutationReceipt"]) {
+  factory ConnectorConnectionMutationReceipt.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConnectorConnectionMutationReceipt",
+  ]) {
     _rejectUnknownFields(map, const <String>{"connection", "replayed"}, path);
     return ConnectorConnectionMutationReceipt(
-      connection: ConnectorConnectionView.fromWire(_requiredObject(map["connection"], '$path.connection'), '$path.connection'),
+      connection: ConnectorConnectionView.fromWire(
+        _requiredObject(map["connection"], '$path.connection'),
+        '$path.connection',
+      ),
       replayed: _requiredBool(map["replayed"], '$path.replayed'),
     );
   }
@@ -194,16 +208,50 @@ final class ConnectorConnectionView {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  factory ConnectorConnectionView.fromWire(Map<String, Object?> map, [String path = "ConnectorConnectionView"]) {
-    _rejectUnknownFields(map, const <String>{"connectionId", "connectorId", "grantedCapabilities", "status", "freshnessAt", "expiresAt", "revokedAt", "revision", "createdAt", "updatedAt"}, path);
+  factory ConnectorConnectionView.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConnectorConnectionView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "connectionId",
+      "connectorId",
+      "grantedCapabilities",
+      "status",
+      "freshnessAt",
+      "expiresAt",
+      "revokedAt",
+      "revision",
+      "createdAt",
+      "updatedAt",
+    }, path);
     return ConnectorConnectionView(
-      connectionId: _requiredNonBlankString(map["connectionId"], '$path.connectionId'),
-      connectorId: _requiredNonBlankString(map["connectorId"], '$path.connectorId'),
-      grantedCapabilities: List<String>.unmodifiable(_requiredList(map["grantedCapabilities"], '$path.grantedCapabilities').asMap().entries.map((entry) => _requiredString(entry.value, '$path.grantedCapabilities' + '[${entry.key}]'))),
+      connectionId: _requiredNonBlankString(
+        map["connectionId"],
+        '$path.connectionId',
+      ),
+      connectorId: _requiredNonBlankString(
+        map["connectorId"],
+        '$path.connectorId',
+      ),
+      grantedCapabilities: List<String>.unmodifiable(
+        _requiredList(
+          map["grantedCapabilities"],
+          '$path.grantedCapabilities',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.grantedCapabilities' + '[${entry.key}]',
+          ),
+        ),
+      ),
       status: ConnectorConnectionStatus.fromWire(map["status"], '$path.status'),
       freshnessAt: _requiredTimestamp(map["freshnessAt"], '$path.freshnessAt'),
-      expiresAt: map["expiresAt"] == null ? null : _requiredTimestamp(map["expiresAt"], '$path.expiresAt'),
-      revokedAt: map["revokedAt"] == null ? null : _requiredTimestamp(map["revokedAt"], '$path.revokedAt'),
+      expiresAt: map["expiresAt"] == null
+          ? null
+          : _requiredTimestamp(map["expiresAt"], '$path.expiresAt'),
+      revokedAt: map["revokedAt"] == null
+          ? null
+          : _requiredTimestamp(map["revokedAt"], '$path.revokedAt'),
       revision: _requiredInt(map["revision"], '$path.revision'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
@@ -213,7 +261,9 @@ final class ConnectorConnectionView {
   Map<String, Object?> toWire() => <String, Object?>{
     "connectionId": connectionId,
     "connectorId": connectorId,
-    "grantedCapabilities": grantedCapabilities.map((value) => value).toList(growable: false),
+    "grantedCapabilities": grantedCapabilities
+        .map((value) => value)
+        .toList(growable: false),
     "status": status.wireName,
     "freshnessAt": freshnessAt.toUtc().toIso8601String(),
     if (expiresAt != null) "expiresAt": expiresAt!.toUtc().toIso8601String(),
@@ -251,19 +301,72 @@ final class ConnectorDefinition {
   final String releaseDigest;
   final DateTime publishedAt;
 
-  factory ConnectorDefinition.fromWire(Map<String, Object?> map, [String path = "ConnectorDefinition"]) {
-    _rejectUnknownFields(map, const <String>{"connectorId", "displayName", "description", "capabilities", "authorizationMode", "confirmationPolicy", "dataClassification", "supportedSurfaceKinds", "status", "releaseDigest", "publishedAt"}, path);
+  factory ConnectorDefinition.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConnectorDefinition",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "connectorId",
+      "displayName",
+      "description",
+      "capabilities",
+      "authorizationMode",
+      "confirmationPolicy",
+      "dataClassification",
+      "supportedSurfaceKinds",
+      "status",
+      "releaseDigest",
+      "publishedAt",
+    }, path);
     return ConnectorDefinition(
-      connectorId: _requiredNonBlankString(map["connectorId"], '$path.connectorId'),
-      displayName: _requiredNonBlankString(map["displayName"], '$path.displayName'),
+      connectorId: _requiredNonBlankString(
+        map["connectorId"],
+        '$path.connectorId',
+      ),
+      displayName: _requiredNonBlankString(
+        map["displayName"],
+        '$path.displayName',
+      ),
       description: _requiredString(map["description"], '$path.description'),
-      capabilities: List<String>.unmodifiable(_requiredList(map["capabilities"], '$path.capabilities').asMap().entries.map((entry) => _requiredString(entry.value, '$path.capabilities' + '[${entry.key}]'))),
-      authorizationMode: ConnectorAuthorizationMode.fromWire(map["authorizationMode"], '$path.authorizationMode'),
-      confirmationPolicy: ConnectorConfirmationPolicy.fromWire(map["confirmationPolicy"], '$path.confirmationPolicy'),
-      dataClassification: ConnectorDataClassification.fromWire(map["dataClassification"], '$path.dataClassification'),
-      supportedSurfaceKinds: List<String>.unmodifiable(_requiredList(map["supportedSurfaceKinds"], '$path.supportedSurfaceKinds').asMap().entries.map((entry) => _requiredString(entry.value, '$path.supportedSurfaceKinds' + '[${entry.key}]'))),
+      capabilities: List<String>.unmodifiable(
+        _requiredList(
+          map["capabilities"],
+          '$path.capabilities',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.capabilities' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      authorizationMode: ConnectorAuthorizationMode.fromWire(
+        map["authorizationMode"],
+        '$path.authorizationMode',
+      ),
+      confirmationPolicy: ConnectorConfirmationPolicy.fromWire(
+        map["confirmationPolicy"],
+        '$path.confirmationPolicy',
+      ),
+      dataClassification: ConnectorDataClassification.fromWire(
+        map["dataClassification"],
+        '$path.dataClassification',
+      ),
+      supportedSurfaceKinds: List<String>.unmodifiable(
+        _requiredList(
+          map["supportedSurfaceKinds"],
+          '$path.supportedSurfaceKinds',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.supportedSurfaceKinds' + '[${entry.key}]',
+          ),
+        ),
+      ),
       status: ConnectorDefinitionStatus.fromWire(map["status"], '$path.status'),
-      releaseDigest: _requiredString(map["releaseDigest"], '$path.releaseDigest'),
+      releaseDigest: _requiredString(
+        map["releaseDigest"],
+        '$path.releaseDigest',
+      ),
       publishedAt: _requiredTimestamp(map["publishedAt"], '$path.publishedAt'),
     );
   }
@@ -276,7 +379,9 @@ final class ConnectorDefinition {
     "authorizationMode": authorizationMode.wireName,
     "confirmationPolicy": confirmationPolicy.wireName,
     "dataClassification": dataClassification.wireName,
-    "supportedSurfaceKinds": supportedSurfaceKinds.map((value) => value).toList(growable: false),
+    "supportedSurfaceKinds": supportedSurfaceKinds
+        .map((value) => value)
+        .toList(growable: false),
     "status": status.wireName,
     "releaseDigest": releaseDigest,
     "publishedAt": publishedAt.toUtc().toIso8601String(),
@@ -284,16 +389,24 @@ final class ConnectorDefinition {
 }
 
 final class ConnectorDefinitionListSlice {
-  const ConnectorDefinitionListSlice({
-    required this.items,
-  });
+  const ConnectorDefinitionListSlice({required this.items});
 
   final List<ConnectorDefinition> items;
 
-  factory ConnectorDefinitionListSlice.fromWire(Map<String, Object?> map, [String path = "ConnectorDefinitionListSlice"]) {
+  factory ConnectorDefinitionListSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConnectorDefinitionListSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items"}, path);
     return ConnectorDefinitionListSlice(
-      items: List<ConnectorDefinition>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ConnectorDefinition.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<ConnectorDefinition>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ConnectorDefinition.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -303,16 +416,24 @@ final class ConnectorDefinitionListSlice {
 }
 
 final class ConnectorInvocationListSlice {
-  const ConnectorInvocationListSlice({
-    required this.items,
-  });
+  const ConnectorInvocationListSlice({required this.items});
 
   final List<ConnectorInvocationView> items;
 
-  factory ConnectorInvocationListSlice.fromWire(Map<String, Object?> map, [String path = "ConnectorInvocationListSlice"]) {
+  factory ConnectorInvocationListSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConnectorInvocationListSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items"}, path);
     return ConnectorInvocationListSlice(
-      items: List<ConnectorInvocationView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ConnectorInvocationView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<ConnectorInvocationView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ConnectorInvocationView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -348,20 +469,56 @@ final class ConnectorInvocationView {
   final DateTime updatedAt;
   final DateTime? completedAt;
 
-  factory ConnectorInvocationView.fromWire(Map<String, Object?> map, [String path = "ConnectorInvocationView"]) {
-    _rejectUnknownFields(map, const <String>{"invocationId", "connectionId", "capability", "status", "continuationRef", "normalizedFailureCode", "recoveryAction", "revision", "createdAt", "updatedAt", "completedAt"}, path);
+  factory ConnectorInvocationView.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConnectorInvocationView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "invocationId",
+      "connectionId",
+      "capability",
+      "status",
+      "continuationRef",
+      "normalizedFailureCode",
+      "recoveryAction",
+      "revision",
+      "createdAt",
+      "updatedAt",
+      "completedAt",
+    }, path);
     return ConnectorInvocationView(
-      invocationId: _requiredNonBlankString(map["invocationId"], '$path.invocationId'),
-      connectionId: _requiredNonBlankString(map["connectionId"], '$path.connectionId'),
-      capability: _requiredNonBlankString(map["capability"], '$path.capability'),
+      invocationId: _requiredNonBlankString(
+        map["invocationId"],
+        '$path.invocationId',
+      ),
+      connectionId: _requiredNonBlankString(
+        map["connectionId"],
+        '$path.connectionId',
+      ),
+      capability: _requiredNonBlankString(
+        map["capability"],
+        '$path.capability',
+      ),
       status: ConnectorInvocationStatus.fromWire(map["status"], '$path.status'),
-      continuationRef: map["continuationRef"] == null ? null : _requiredString(map["continuationRef"], '$path.continuationRef'),
-      normalizedFailureCode: map["normalizedFailureCode"] == null ? null : _requiredString(map["normalizedFailureCode"], '$path.normalizedFailureCode'),
-      recoveryAction: _requiredString(map["recoveryAction"], '$path.recoveryAction'),
+      continuationRef: map["continuationRef"] == null
+          ? null
+          : _requiredString(map["continuationRef"], '$path.continuationRef'),
+      normalizedFailureCode: map["normalizedFailureCode"] == null
+          ? null
+          : _requiredString(
+              map["normalizedFailureCode"],
+              '$path.normalizedFailureCode',
+            ),
+      recoveryAction: _requiredString(
+        map["recoveryAction"],
+        '$path.recoveryAction',
+      ),
       revision: _requiredInt(map["revision"], '$path.revision'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
-      completedAt: map["completedAt"] == null ? null : _requiredTimestamp(map["completedAt"], '$path.completedAt'),
+      completedAt: map["completedAt"] == null
+          ? null
+          : _requiredTimestamp(map["completedAt"], '$path.completedAt'),
     );
   }
 
@@ -371,12 +528,14 @@ final class ConnectorInvocationView {
     "capability": capability,
     "status": status.wireName,
     if (continuationRef != null) "continuationRef": continuationRef!,
-    if (normalizedFailureCode != null) "normalizedFailureCode": normalizedFailureCode!,
+    if (normalizedFailureCode != null)
+      "normalizedFailureCode": normalizedFailureCode!,
     "recoveryAction": recoveryAction,
     "revision": revision,
     "createdAt": createdAt.toUtc().toIso8601String(),
     "updatedAt": updatedAt.toUtc().toIso8601String(),
-    if (completedAt != null) "completedAt": completedAt!.toUtc().toIso8601String(),
+    if (completedAt != null)
+      "completedAt": completedAt!.toUtc().toIso8601String(),
   };
 }
 
@@ -397,15 +556,29 @@ final class LocationPoi {
   final String? address;
   final int? distanceMeters;
 
-  factory LocationPoi.fromWire(Map<String, Object?> map, [String path = "LocationPoi"]) {
-    _rejectUnknownFields(map, const <String>{"id", "name", "latitude", "longitude", "address", "distanceMeters"}, path);
+  factory LocationPoi.fromWire(
+    Map<String, Object?> map, [
+    String path = "LocationPoi",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "name",
+      "latitude",
+      "longitude",
+      "address",
+      "distanceMeters",
+    }, path);
     return LocationPoi(
       id: _requiredNonBlankString(map["id"], '$path.id'),
       name: _requiredNonBlankString(map["name"], '$path.name'),
       latitude: _requiredDouble(map["latitude"], '$path.latitude'),
       longitude: _requiredDouble(map["longitude"], '$path.longitude'),
-      address: map["address"] == null ? null : _requiredString(map["address"], '$path.address'),
-      distanceMeters: map["distanceMeters"] == null ? null : _requiredInt(map["distanceMeters"], '$path.distanceMeters'),
+      address: map["address"] == null
+          ? null
+          : _requiredString(map["address"], '$path.address'),
+      distanceMeters: map["distanceMeters"] == null
+          ? null
+          : _requiredInt(map["distanceMeters"], '$path.distanceMeters'),
     );
   }
 
@@ -420,16 +593,24 @@ final class LocationPoi {
 }
 
 final class LocationPoiListSlice {
-  const LocationPoiListSlice({
-    required this.items,
-  });
+  const LocationPoiListSlice({required this.items});
 
   final List<LocationPoi> items;
 
-  factory LocationPoiListSlice.fromWire(Map<String, Object?> map, [String path = "LocationPoiListSlice"]) {
+  factory LocationPoiListSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "LocationPoiListSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items"}, path);
     return LocationPoiListSlice(
-      items: List<LocationPoi>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => LocationPoi.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<LocationPoi>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => LocationPoi.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -438,29 +619,57 @@ final class LocationPoiListSlice {
   };
 }
 
-ConnectorConnectionListSlice decodeConnectorConnectionListSlice(Object? response) =>
-    ConnectorConnectionListSlice.fromWire(_requiredObject(response, "ConnectorConnectionListSlice"), "ConnectorConnectionListSlice");
+ConnectorConnectionListSlice decodeConnectorConnectionListSlice(
+  Object? response,
+) => ConnectorConnectionListSlice.fromWire(
+  _requiredObject(response, "ConnectorConnectionListSlice"),
+  "ConnectorConnectionListSlice",
+);
 
-ConnectorConnectionMutationReceipt decodeConnectorConnectionMutationReceipt(Object? response) =>
-    ConnectorConnectionMutationReceipt.fromWire(_requiredObject(response, "ConnectorConnectionMutationReceipt"), "ConnectorConnectionMutationReceipt");
+ConnectorConnectionMutationReceipt decodeConnectorConnectionMutationReceipt(
+  Object? response,
+) => ConnectorConnectionMutationReceipt.fromWire(
+  _requiredObject(response, "ConnectorConnectionMutationReceipt"),
+  "ConnectorConnectionMutationReceipt",
+);
 
 ConnectorConnectionView decodeConnectorConnectionView(Object? response) =>
-    ConnectorConnectionView.fromWire(_requiredObject(response, "ConnectorConnectionView"), "ConnectorConnectionView");
+    ConnectorConnectionView.fromWire(
+      _requiredObject(response, "ConnectorConnectionView"),
+      "ConnectorConnectionView",
+    );
 
 ConnectorDefinition decodeConnectorDefinition(Object? response) =>
-    ConnectorDefinition.fromWire(_requiredObject(response, "ConnectorDefinition"), "ConnectorDefinition");
+    ConnectorDefinition.fromWire(
+      _requiredObject(response, "ConnectorDefinition"),
+      "ConnectorDefinition",
+    );
 
-ConnectorDefinitionListSlice decodeConnectorDefinitionListSlice(Object? response) =>
-    ConnectorDefinitionListSlice.fromWire(_requiredObject(response, "ConnectorDefinitionListSlice"), "ConnectorDefinitionListSlice");
+ConnectorDefinitionListSlice decodeConnectorDefinitionListSlice(
+  Object? response,
+) => ConnectorDefinitionListSlice.fromWire(
+  _requiredObject(response, "ConnectorDefinitionListSlice"),
+  "ConnectorDefinitionListSlice",
+);
 
-ConnectorInvocationListSlice decodeConnectorInvocationListSlice(Object? response) =>
-    ConnectorInvocationListSlice.fromWire(_requiredObject(response, "ConnectorInvocationListSlice"), "ConnectorInvocationListSlice");
+ConnectorInvocationListSlice decodeConnectorInvocationListSlice(
+  Object? response,
+) => ConnectorInvocationListSlice.fromWire(
+  _requiredObject(response, "ConnectorInvocationListSlice"),
+  "ConnectorInvocationListSlice",
+);
 
 ConnectorInvocationView decodeConnectorInvocationView(Object? response) =>
-    ConnectorInvocationView.fromWire(_requiredObject(response, "ConnectorInvocationView"), "ConnectorInvocationView");
+    ConnectorInvocationView.fromWire(
+      _requiredObject(response, "ConnectorInvocationView"),
+      "ConnectorInvocationView",
+    );
 
 LocationPoiListSlice decodeLocationPoiListSlice(Object? response) =>
-    LocationPoiListSlice.fromWire(_requiredObject(response, "LocationPoiListSlice"), "LocationPoiListSlice");
+    LocationPoiListSlice.fromWire(
+      _requiredObject(response, "LocationPoiListSlice"),
+      "LocationPoiListSlice",
+    );
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {
@@ -485,7 +694,9 @@ void _rejectUnknownFields(
   final unknown = value.keys.where((key) => !allowed.contains(key)).toList()
     ..sort();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }
 

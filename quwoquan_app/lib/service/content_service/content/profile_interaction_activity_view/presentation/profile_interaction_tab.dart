@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
+    show MediaDeliveryKind;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';

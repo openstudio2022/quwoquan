@@ -40,7 +40,7 @@ class StackctlGammaOperationLockContractTest(
                     return_value={
                         "QWQ_LOCAL_RELEASE_ENV": "alpha",
                         "QWQ_LOCAL_RELEASE_TARGET": "alpha-local",
-                        "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": "quwoquan_alpha_release_new_2",
+                        "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": "quwoquan_alpha_release_7002_1",
                     },
                 ),
                 mock.patch.object(
@@ -65,11 +65,27 @@ class StackctlGammaOperationLockContractTest(
                     "_load_gamma_runtime_image_composition",
                     return_value=(
                         {"images": {}},
-                        "quwoquan_alpha_release_old_1",
+                        "quwoquan_alpha_release_7001_1",
                     ),
                 ),
                 mock.patch.object(stackctl, "_apply_gamma_image_composition"),
                 mock.patch.object(stackctl, "_bind_gamma_down_parse_environment"),
+                mock.patch.object(
+                    stackctl,
+                    "_receipt_bound_local_compose_model",
+                    return_value={"services": {"media-origin": {"ports": [{}]}}},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "project_compose_published_endpoints",
+                    return_value=[
+                        {
+                            "role": "media-origin",
+                            "hostPort": 17110,
+                            "protocol": "tcp",
+                        }
+                    ],
+                ),
                 mock.patch.object(
                     stackctl,
                     "_local_stack_operation_lock",
@@ -77,7 +93,22 @@ class StackctlGammaOperationLockContractTest(
                 ),
                 mock.patch.object(
                     stackctl,
-                    "_wait_for_network_ports_released",
+                    "_runtime_owned_port_occupancy_report",
+                    return_value={
+                        "profile": "alpha-local",
+                        "publishedEndpoints": [
+                            {
+                                "role": "media-origin",
+                                "hostPort": 17110,
+                                "protocol": "tcp",
+                                "open": False,
+                            }
+                        ],
+                    },
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_wait_for_published_endpoints_released",
                     return_value=[],
                 ),
                 mock.patch.object(stackctl, "_write_summary_bundle"),
@@ -94,7 +125,7 @@ class StackctlGammaOperationLockContractTest(
             run.call_args_list[0].kwargs["env"][
                 "LOCAL_GAMMA_COMPOSE_PROJECT_NAME"
             ],
-            "quwoquan_alpha_release_old_1",
+            "quwoquan_alpha_release_7001_1",
         )
         self.assertEqual(
             [call.args[0] for call in run.call_args_list],
@@ -124,7 +155,7 @@ class StackctlGammaOperationLockContractTest(
             environment = {
                 "QWQ_LOCAL_RELEASE_ENV": "alpha",
                 "QWQ_LOCAL_RELEASE_TARGET": "alpha-local",
-                "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": "quwoquan_alpha_release_new_2",
+                "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": "quwoquan_alpha_release_7002_1",
             }
             with (
                 mock.patch.object(
@@ -135,7 +166,9 @@ class StackctlGammaOperationLockContractTest(
                 mock.patch.object(
                     stackctl,
                     "get_target",
-                    return_value={"env": "alpha"},
+                    # portProfile 是本地 target 的必需声明位，端口所有权投影只从
+                    # 这里取 profile；替身省掉它会让真实拓扑下可跑的路径判否。
+                    return_value={"env": "alpha", "portProfile": "alpha-local"},
                 ),
                 mock.patch.object(
                     stackctl,
@@ -169,11 +202,27 @@ class StackctlGammaOperationLockContractTest(
                     "_load_gamma_runtime_image_composition",
                     return_value=(
                         {"images": {}},
-                        "quwoquan_alpha_release_old_1",
+                        "quwoquan_alpha_release_7001_1",
                     ),
                 ),
                 mock.patch.object(stackctl, "_apply_gamma_image_composition"),
                 mock.patch.object(stackctl, "_bind_gamma_down_parse_environment"),
+                mock.patch.object(
+                    stackctl,
+                    "_receipt_bound_local_compose_model",
+                    return_value={"services": {"media-origin": {"ports": [{}]}}},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "project_compose_published_endpoints",
+                    return_value=[
+                        {
+                            "role": "media-origin",
+                            "hostPort": 17110,
+                            "protocol": "tcp",
+                        }
+                    ],
+                ),
                 mock.patch.object(
                     stackctl,
                     "run",
@@ -186,7 +235,22 @@ class StackctlGammaOperationLockContractTest(
                 ),
                 mock.patch.object(
                     stackctl,
-                    "_wait_for_network_ports_released",
+                    "_runtime_owned_port_occupancy_report",
+                    return_value={
+                        "profile": "alpha-local",
+                        "publishedEndpoints": [
+                            {
+                                "role": "media-origin",
+                                "hostPort": 17110,
+                                "protocol": "tcp",
+                                "open": False,
+                            }
+                        ],
+                    },
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_wait_for_published_endpoints_released",
                     return_value=[],
                 ),
                 mock.patch.object(
@@ -220,19 +284,19 @@ class StackctlGammaOperationLockContractTest(
             run.call_args_list[0].kwargs["env"][
                 "LOCAL_GAMMA_COMPOSE_PROJECT_NAME"
             ],
-            "quwoquan_alpha_release_old_1",
+            "quwoquan_alpha_release_7001_1",
         )
         self.assertTrue(report["destructiveRepairPerformed"])
         self.assertEqual(
             report["destructiveActions"],
             [
-                "purge-compose-volumes:quwoquan_alpha_release_old_1",
+                "purge-compose-volumes:quwoquan_alpha_release_7001_1",
                 "purge-target-cache:alpha-local",
             ],
         )
         self.assertFalse(target_cache.exists())
 
-    def test_alpha_down_fails_when_canonical_port_remains_occupied(self) -> None:
+    def test_alpha_down_fails_when_runtime_owned_port_remains_occupied(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             report_dir = Path(temporary_dir)
             with (
@@ -281,9 +345,44 @@ class StackctlGammaOperationLockContractTest(
                 mock.patch.object(stackctl, "_bind_gamma_down_parse_environment"),
                 mock.patch.object(
                     stackctl,
-                    "_wait_for_network_ports_released",
+                    "_receipt_bound_local_compose_model",
+                    return_value={"services": {"media-origin": {"ports": [{}]}}},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "project_compose_published_endpoints",
                     return_value=[
-                        {"name": "media-origin", "port": 17110, "open": True}
+                        {
+                            "role": "media-origin",
+                            "hostPort": 17110,
+                            "protocol": "tcp",
+                        }
+                    ],
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_runtime_owned_port_occupancy_report",
+                    return_value={
+                        "profile": "alpha-local",
+                        "publishedEndpoints": [
+                            {
+                                "role": "media-origin",
+                                "hostPort": 17110,
+                                "protocol": "tcp",
+                                "open": True,
+                            }
+                        ],
+                    },
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_wait_for_published_endpoints_released",
+                    return_value=[
+                        {
+                            "role": "media-origin",
+                            "hostPort": 17110,
+                            "protocol": "tcp",
+                        }
                     ],
                 ),
                 mock.patch.object(
@@ -298,7 +397,7 @@ class StackctlGammaOperationLockContractTest(
                 )
 
         self.assertEqual(result["exitCode"], 2)
-        self.assertIn("canonical port remains occupied", result["details"][0])
+        self.assertIn("runtime-owned endpoint remains occupied", result["details"][0])
 
     def test_down_waits_for_host_port_forward_release(self) -> None:
         reports = iter(

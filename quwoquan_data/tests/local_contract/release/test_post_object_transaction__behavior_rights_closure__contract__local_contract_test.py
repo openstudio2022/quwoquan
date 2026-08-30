@@ -19,7 +19,7 @@ from content.release.canonical.object_transaction_audit import (
 from content.release.canonical.post_transaction import (
     ObjectTransactionError,
 )
-from core.schema import validate_result
+from core.schema import assert_valid, validate_result
 from core.source_digest import (
     current_execution_bundle_identity,
     current_source_definition_snapshot,
@@ -30,9 +30,8 @@ from support.post_object_transaction_fixture import (
     CREATOR_REF,
     POST_REF,
     _admit_packaged_creator,
-    _copy_creator_avatar_cas,
+    _seed_creator_avatar_holding,
     _fixture,
-    _force_commercial_lifecycle,
     _isolate_creator_avatar_cas,
     _source_attribution,
     _write_json,
@@ -40,15 +39,15 @@ from support.post_object_transaction_fixture import (
 )
 
 
-def test_travel_commercial_asset_blocks_unverified_rights(
+def test_travel_unverified_asset_is_retained_for_research(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _force_commercial_lifecycle(monkeypatch)
     execution, package, _publish, transaction_id = _fixture(tmp_path)
     manifest_path = execution / "posts" / POST_REF / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     asset = manifest["assets"][0]
+    asset["distributionDecision"] = "commercial_allowed"
     asset["creator"] = ""
     asset["license"] = ""
     asset["termsUrl"] = ""
@@ -62,6 +61,7 @@ def test_travel_commercial_asset_blocks_unverified_rights(
     source_index_path = execution / "sources/commons/assets/index.json"
     source_index = json.loads(source_index_path.read_text(encoding="utf-8"))
     source_asset = source_index["assets"][0]
+    source_asset["distributionDecision"] = "commercial_allowed"
     source_asset["authorizationProof"] = ""
     source_asset["termsUrl"] = ""
     source_asset["creator"] = ""
@@ -70,29 +70,32 @@ def test_travel_commercial_asset_blocks_unverified_rights(
     source_asset["rightsAuditIssues"] = list(asset["rightsAuditIssues"])
     _write_json(source_index_path, source_index)
 
-    with pytest.raises(
-        ObjectTransactionError,
-        match="权利审计仍有未关闭问题",
-    ):
-        build_post_object_transaction_package(
-            execution_root=execution,
-            object_ref=POST_REF,
-            transaction_id=transaction_id,
-            package_root=package,
-        )
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    rights = json.loads(
+        (package / "object/rights.json").read_text(encoding="utf-8")
+    )["assets"][0]
+    assert rights["distributionDecision"] == "research_allowed"
+    assert "commercial distribution proof incomplete; retained for research" in rights[
+        "rightsAuditIssues"
+    ]
 
 
-def test_travel_commercial_asset_blocks_unverified_collection_page_rights(
+def test_unverified_collection_page_is_retained_for_research(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _force_commercial_lifecycle(monkeypatch)
     execution, package, _publish, transaction_id = _fixture(tmp_path)
     manifest_path = execution / "posts" / POST_REF / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["sourceUrls"] = ["https://content.example.test/article/landscape"]
     asset = manifest["assets"][0]
     asset.pop("sourceAssetId", None)
+    asset["distributionDecision"] = "commercial_allowed"
     asset["collectionPageUrl"] = "https://travel.example.test/article/landscape"
     asset["creator"] = ""
     asset["license"] = ""
@@ -115,6 +118,7 @@ def test_travel_commercial_asset_blocks_unverified_collection_page_rights(
             "authorizationProof": "",
             "termsUrl": "",
             "creator": "",
+            "distributionDecision": "commercial_allowed",
             "license": "",
             "rightsAuditStatus": "unverified",
             "rightsAuditIssues": ["imageRights: source terms not yet verified"],
@@ -122,16 +126,19 @@ def test_travel_commercial_asset_blocks_unverified_collection_page_rights(
     )
     _write_json(source_index_path, source_index)
 
-    with pytest.raises(
-        ObjectTransactionError,
-        match="权利审计仍有未关闭问题",
-    ):
-        build_post_object_transaction_package(
-            execution_root=execution,
-            object_ref=POST_REF,
-            transaction_id=transaction_id,
-            package_root=package,
-        )
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    rights = json.loads(
+        (package / "object/rights.json").read_text(encoding="utf-8")
+    )["assets"][0]
+    assert rights["distributionDecision"] == "research_allowed"
+    assert "commercial distribution proof incomplete; retained for research" in rights[
+        "rightsAuditIssues"
+    ]
 
 
 def test_canonical_source_catalog_preserves_factual_reference_only_truth(
@@ -166,6 +173,8 @@ def test_canonical_source_catalog_preserves_factual_reference_only_truth(
         (package / "object/rights.json").read_text(encoding="utf-8")
     )
     assert rights["assets"][0]["sourceUseMode"] == "factual_reference_only"
+    assert rights["assets"][0]["distributionDecision"] == "research_allowed"
+    assert_valid(rights, "release", "asset_rights_closure")
     assert validate_result(rights, "release", "asset_rights_closure") == []
 
 
@@ -398,11 +407,12 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
                     "sha256": "sha256:" + hashlib.sha256(video.read_bytes()).hexdigest(),
                     "mimeType": "video/mp4",
                     "width": 1080,
-                        "height": 1920,
-                        "usageScope": "app_publish",
-                        "modelReleaseStatus": "not_required",
-                        "rightsAuditStatus": "verified",
-                        "rightsAuditIssues": [],
+                    "height": 1920,
+                    "usageScope": "app_publish",
+                    "distributionDecision": "commercial_allowed",
+                    "modelReleaseStatus": "not_required",
+                    "rightsAuditStatus": "verified",
+                    "rightsAuditIssues": [],
                 },
                 {
                     "assetId": poster_id,
@@ -411,11 +421,12 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
                     "role": "cover",
                     "sourceAssetRefs": [frame_ref],
                     "sha256": "sha256:" + hashlib.sha256(poster.read_bytes()).hexdigest(),
-                        "mimeType": "image/webp",
-                        "usageScope": "app_publish",
-                        "modelReleaseStatus": "not_required",
-                        "rightsAuditStatus": "verified",
-                        "rightsAuditIssues": [],
+                    "mimeType": "image/webp",
+                    "usageScope": "app_publish",
+                    "distributionDecision": "commercial_allowed",
+                    "modelReleaseStatus": "not_required",
+                    "rightsAuditStatus": "verified",
+                    "rightsAuditIssues": [],
                 },
             ],
         },
@@ -464,9 +475,9 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
     assert canonical_assets[poster_id]["role"] == "cover"
 
     publish = tmp_path / "publish-video"
-    for relative in ("creators", "entities", "posts", "tags", "media/objects"):
+    for relative in ("creators", "entities", "posts", "tags"):
         (publish / relative).mkdir(parents=True, exist_ok=True)
-    _copy_creator_avatar_cas(publish)
+    _seed_creator_avatar_holding()
     _admit_packaged_creator(package_root, publish)
     output = tmp_path / "output-video"
     audit = audit_object_transaction(

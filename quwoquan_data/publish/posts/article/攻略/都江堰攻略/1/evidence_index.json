@@ -1,34 +1,34 @@
 {
   "schema": "quwoquan_data.evidence_index",
   "stage": "5.review",
-  "executionId": "20260810--travel-article-m1--china-dujiangyan-research-062aa4a3-epoch10-not-m100--scale-010",
+  "executionId": "20260822--travel-article-workload-article-1--china-cultural-deep-tour--scale-007",
   "executionBinding": "frozen",
-  "objectRef": "都江堰__article_frontier_wikipedia_zh_1826e2249455",
+  "objectRef": "都江堰__article-source-bec7871d52c0454f09a0",
   "evidence": [
     {
       "kind": "runtime_review",
       "ref": "5.review/deterministic_gate.json",
-      "sha256": "sha256:1688331ff05d980ecb28753a151d8c288777cea6799c44efa31d84149cabfda4"
+      "sha256": "sha256:44dbd1775df94cb0893d9d115bf38402ca93338bb6b1d91f5918e5b92a4c2620"
     },
     {
       "kind": "runtime_review",
       "ref": "5.review/media_ref_review.json",
-      "sha256": "sha256:3260c4319f8182dca69c75627ecc6942f6ddcc5f8041d4dadc5d04cccc7bf03f"
+      "sha256": "sha256:d63b0c1a75e2fd739492ff9aac1f12189c81e1b2bcf7a8d27f5c894006b8ca37"
     },
     {
       "kind": "runtime_review",
       "ref": "5.review/provenance.json",
-      "sha256": "sha256:9ffb38d983fa352220fbe33a706440c31c2ec54382cd4f172d43bb6ec9e59d2d"
+      "sha256": "sha256:e40be7b0e0e25705d8c911ea7de44c7f37779277378175eeb5c1058cf8285ef8"
     },
     {
       "kind": "runtime_review",
       "ref": "5.review/finalization_report.json",
-      "sha256": "sha256:575394276c0f51f99bd79dde0ea98ff6c8adc45055581d60ca979aef3fa503f0"
+      "sha256": "sha256:4c90d20ff875c40b076595ecf97606d39d430e1b2b79cfd29a653db8b266cb96"
     },
     {
       "kind": "independent_reviewer_result",
       "ref": "5.review/reviewer_result.json",
-      "sha256": "sha256:c01ae3e101f84e0dbb265395c9bc152c7eda31e9e137e34ef4e523a6f9071dea"
+      "sha256": "sha256:d62d8a13752dc4ff17aca3e8da9519d68d5e11b6874db5de5d219bf48a4daa32"
     }
   ]
 }

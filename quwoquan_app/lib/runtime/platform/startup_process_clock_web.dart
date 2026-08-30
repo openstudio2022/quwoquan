@@ -6,7 +6,8 @@ external JSNumber _webStartupElapsedMs();
 @JS('__qwqRecordStartupEvent')
 external void _webRecordStartupEvent(JSString json);
 
-int? readPlatformStartupElapsedMs() {
+/// 返回 null 表示宿主页面没有安装启动探针，不表示测量失败；与 stub 实现同义。
+int? tryReadPlatformStartupElapsedMs() {
   try {
     return _webStartupElapsedMs().toDartDouble.round();
   } catch (_) {

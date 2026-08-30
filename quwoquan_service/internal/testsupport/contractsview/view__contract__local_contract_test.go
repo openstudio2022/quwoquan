@@ -15,9 +15,12 @@ import (
 
 const provenanceFilename = ".contract-view-provenance"
 
+// 版本标识是 format 而非独立的 schemaVersion：生产加载器
+// internal/metadata/load/contract_view_provenance.go 对该文档启用
+// DisallowUnknownFields，多写一个版本字段会让加载 fail closed。
 type provenanceDocument struct {
-	SchemaVersion int `json:"schemaVersion"`
-	Files         []struct {
+	Format string `json:"format"`
+	Files  []struct {
 		Path        string   `json:"path"`
 		SHA256      string   `json:"sha256"`
 		SourcePaths []string `json:"sourcePaths"`
@@ -34,7 +37,7 @@ func TestBuildCreatesByteSnapshotWithCanonicalProvenance(t *testing.T) {
 	if err := json.Unmarshal(payload, &document); err != nil {
 		t.Fatalf("decode contract view provenance: %v", err)
 	}
-	if document.SchemaVersion != 1 || len(document.Files) == 0 {
+	if document.Format != "contract-view-provenance" || len(document.Files) == 0 {
 		t.Fatalf("contract view provenance is incomplete: %+v", document)
 	}
 

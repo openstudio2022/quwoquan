@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Iterable, Mapping
+
+from core.media_source_provenance import DerivedModification
+from core.source_attribution import derived_modifications_value
 
 
 def _text(value: object) -> str:
@@ -13,6 +16,29 @@ def _text(value: object) -> str:
 def _optional_text(value: object) -> str | None:
     text = _text(value)
     return text or None
+
+
+_ADMISSION_DECISIONS = {
+    "commercial_release": "commercial_allowed",
+    "research_release": "research_allowed",
+    "risk_accepted_attribution_only": "research_allowed",
+}
+
+
+_DECISION_ADMISSIONS = {
+    "commercial_allowed": "commercial_release",
+    "research_allowed": "research_release",
+}
+
+
+def distribution_decision_for_admission(publication_admission: str) -> str:
+    """Project the governed asset-level decision from a publication admission."""
+    return _ADMISSION_DECISIONS.get(publication_admission, "")
+
+
+def publication_admission_for_decision(distribution_decision: str) -> str:
+    """Project the release-side admission from a governed distribution decision."""
+    return _DECISION_ADMISSIONS.get(distribution_decision, "")
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +73,21 @@ class SourcedVideoEvidence:
     authorization_proof_url: str | None = None
     terms_url: str | None = None
     risk_acceptance_id: str | None = None
+    distribution_decision: str = ""
+
+    @property
+    def effective_distribution_decision(self) -> str:
+        """Resolve the asset decision for publication-admission payloads."""
+        return self.distribution_decision or distribution_decision_for_admission(
+            self.publication_admission
+        )
+
+    @property
+    def effective_publication_admission(self) -> str:
+        """Resolve the release-side admission for decision-only payloads."""
+        return self.publication_admission or publication_admission_for_decision(
+            self.distribution_decision
+        )
 
     @classmethod
     def from_mapping(
@@ -78,6 +119,7 @@ class SourcedVideoEvidence:
                 payload.get("commercialAuthorizationStatus")
             ),
             publication_admission=_text(payload.get("publicationAdmission")),
+            distribution_decision=_text(payload.get("distributionDecision")),
             authorization_proof_url=_optional_text(
                 payload.get("authorizationProofUrl")
             ),
@@ -111,7 +153,6 @@ class SourcedVideoEvidence:
             "attributionText": self.attribution_text,
             "rightsBasis": self.rights_basis,
             "commercialAuthorizationStatus": self.commercial_authorization_status,
-            "publicationAdmission": self.publication_admission,
             "watermarkStatus": self.watermark_status,
             "audioRightsStatus": self.audio_rights_status,
             "modelReleaseStatus": self.model_release_status,
@@ -150,32 +191,40 @@ class SourcedVideoEvidence:
             "commercial_release",
             "risk_accepted_attribution_only",
         }
-        if self.publication_admission not in allowed_admission:
+        decision = self.effective_distribution_decision
+        if self.distribution_decision:
+            if self.distribution_decision not in {
+                "research_allowed",
+                "commercial_allowed",
+            }:
+                issues.append("sourceVideo distributionDecision is not publishable")
+        elif not self.publication_admission:
+            issues.append("sourceVideo missing distributionDecision")
+        elif self.publication_admission not in allowed_admission:
             issues.append("sourceVideo publicationAdmission is not publishable")
         if (
             self.commercial_authorization_status == "unverified"
-            and self.publication_admission
-            not in {"research_release", "risk_accepted_attribution_only"}
+            and decision != "research_allowed"
         ):
             issues.append(
-                "sourceVideo unverified authorization requires research or risk acceptance"
+                "sourceVideo unverified authorization requires research_allowed"
             )
         if (
             self.publication_admission == "risk_accepted_attribution_only"
             and not self.risk_acceptance_id
         ):
             issues.append("sourceVideo riskAcceptanceId is required")
-        if self.publication_admission == "commercial_release" and (
+        if decision == "commercial_allowed" and (
             self.commercial_authorization_status != "verified"
             or not str(self.authorization_proof_url or "").startswith("https://")
             or not str(self.terms_url or "").startswith("https://")
         ):
             issues.append(
-                "sourceVideo commercial release requires verified HTTPS authorization and terms proof"
+                "sourceVideo commercial_allowed requires verified HTTPS authorization and terms proof"
             )
         if (
             self.audio_rights_status == "unverified"
-            and self.publication_admission != "research_release"
+            and self.effective_publication_admission != "research_release"
         ):
             issues.append(
                 "sourceVideo unverified audio is restricted to research_release"
@@ -194,7 +243,8 @@ class SourcedVideoEvidence:
             "attributionText": self.attribution_text,
             "rightsBasis": self.rights_basis,
             "commercialAuthorizationStatus": self.commercial_authorization_status,
-            "publicationAdmission": self.publication_admission,
+            "publicationAdmission": self.effective_publication_admission,
+            "distributionDecision": self.effective_distribution_decision,
             "authorizationProofUrl": self.authorization_proof_url,
             "termsUrl": self.terms_url,
             "riskAcceptanceId": self.risk_acceptance_id,
@@ -204,6 +254,25 @@ class SourcedVideoEvidence:
             "propertyReleaseStatus": self.property_release_status,
             "collectedAt": self.collected_at,
             "takedownPolicy": self.takedown_policy,
+        }
+
+    def post_attribution_dict(
+        self,
+        *,
+        derived_modifications: Iterable[DerivedModification],
+    ) -> dict[str, object]:
+        """Project attribution for a post manifest, which carries no asset decision.
+
+        衍生修改由调用方按本次交付真实做过的操作传入，并只在这里物化一次。
+        ``attribution_dict`` 描述的是未经修改的原始来源，交付副本的修改事实不能
+        与它共用一个取值，否则「原样收到」与「转码后发布」在证据上无法区分。
+        """
+        return {
+            field: value
+            for field, value in self.attribution_dict().items()
+            if field != "distributionDecision"
+        } | {
+            "derivedModifications": derived_modifications_value(derived_modifications)
         }
 
     def author_prompt_dict(self) -> dict[str, object]:

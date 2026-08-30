@@ -21,6 +21,11 @@ fields:
 - {name: claimStatus, type: string}
 - {name: categoryTags, type: '[]string'}
 - {name: coverUrl, type: string, nullable: true}
+# cover 的配对媒体资产标识与交付访问模式（DEC-033），与 HomepageIntroduction
+# 同一范式：signed_grant 时 App 以 coverAssetId 换取短签，禁止以 homepageId
+# 冒充媒体资产标识，也禁止按 coverUrl 形态反推交付形态。
+- {name: coverAssetId, type: string, nullable: true}
+- {name: coverAccessMode, type: enum, enum_ref: MediaDeliveryAccessMode, nullable: true}
 - {name: address, type: string, nullable: true}
 - {name: city, type: string, nullable: true}
 - {name: location, type: HomepageGeoPoint, nullable: true}

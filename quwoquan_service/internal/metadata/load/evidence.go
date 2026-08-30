@@ -101,7 +101,7 @@ var appSourceSuffixes = map[string]struct{}{".dart": {}}
 var testSourceSuffixes = map[string]struct{}{".go": {}, ".py": {}, ".dart": {}}
 
 // production 扫描要排除的路径段：测试替身与 fixture 不是实现证据（对齐
-// `.cursor/rules/08-mock-data-isolation.mdc`）。
+// runtime/system-architecture-and-engineering-guide DEC-019）。
 var nonProductionSegments = map[string]struct{}{
 	"testsupport":   {},
 	"test_fixtures": {},

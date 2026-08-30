@@ -9,6 +9,26 @@ from quwoquan_ops.ci.render_provider_conformance_source import (
 )
 from quwoquan_ops.ci.render_provider_release_evidence import render
 
+ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
+
+
+def _environment_artifacts() -> dict:
+    """Bind one environment-owned service image per environment.
+
+    Provider readiness evidence is per environment, so the component material it
+    quotes must be too: a single shared image digest would let one environment's
+    readiness stand in for another's.
+    """
+
+    return {
+        environment: {
+            "environment": environment,
+            "environmentArtifactDigest": f"sha256:{index:064x}",
+            "images": {"service": {"digest": f"sha256:{index + 16:064x}"}},
+        }
+        for index, environment in enumerate(ENVIRONMENTS, start=1)
+    }
+
 
 class ProviderReleaseEvidenceTest(unittest.TestCase):
     def _source_evidence(self, evidence_count: int) -> dict:
@@ -64,9 +84,7 @@ class ProviderReleaseEvidenceTest(unittest.TestCase):
                 "repository": "owner/repo",
                 "workflowRunId": "123",
             },
-            "images": {
-                "service": {"digest": "sha256:" + "c" * 64},
-            },
+            "environmentArtifacts": _environment_artifacts(),
         }
 
     def test_readiness_derived_size_fixture_passes(self) -> None:
@@ -216,9 +234,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
                 "repository": "owner/repo",
                 "workflowRunId": "123",
             },
-            "images": {
-                "service": {"digest": "sha256:" + "c" * 64},
-            },
+            "environmentArtifacts": _environment_artifacts(),
         }
 
     def test_workflow_delegates_exact_cell_ownership_to_canonical_python(self) -> None:
@@ -254,7 +270,7 @@ class ProviderReleaseEvidenceProducerTest(unittest.TestCase):
             "exactly 140",
         ):
             self.assertNotIn(fixed_count_token, workflow)
-        self.assertIn("${{ runner.temp }}", workflow)
+        self.assertIn("QWQ_OUTPUT_ROOT=$RUNNER_TEMP/", workflow)
         self.assertNotIn("local-sha256", workflow)
         self.assertNotIn("QWQ_PROVIDER_CONFORMANCE_ATTESTATION_AUTHORITY: local", workflow)
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from content.release.canonical.object_transaction_contract import (
@@ -12,8 +13,25 @@ from content.release.canonical.object_transaction_contract import (
 from content.release.canonical.release_attestation import ReleaseAttestation
 from content.release.canonical.release_header import validate_release_header
 from content.release.model import DataSourceOwner, ReleaseKind
+from governance.coverage.distribution import ProductLifecycleState, ReleaseClass
+from core.release_layout import verify_release_holdings
 from core.schema import assert_valid
-from core.source_digest import FrozenSourceDigest, SourceDigest
+from core.source_digest import SourceDefinitionSnapshot
+
+
+def assert_holdings_reachable(release_root: Path, release_id: str) -> None:
+    """Fail closed when the content library can no longer honour a holding.
+
+    A release references media bodies instead of copying them, so the payload
+    bytes being present is a weaker claim than the release being intact: the
+    holding stands only while the library still keeps that entry at the digest
+    the release recorded.
+    """
+    issues = verify_release_holdings(release_root)
+    if issues:
+        raise ObjectTransactionError(
+            f"DATA.RELEASE.HOLDING_UNREACHABLE: {release_id}: " + "; ".join(issues)
+        )
 
 
 def release_desired_state_document(
@@ -48,6 +66,7 @@ def release_header_document(
     release_class: str,
     product_lifecycle_state: str,
     reviewed_closure_adoption: Mapping[str, Any] | None,
+    selection_scope: str | None = None,
     target_environment: str | None = None,
     release_mode: str | None = None,
     pool_digest: str | None = None,
@@ -56,6 +75,8 @@ def release_header_document(
     authors: list[dict[str, object]] | None = None,
     milestone: str | None = None,
     milestone_targets: Mapping[str, int] | None = None,
+    sample_plan_ref: str | None = None,
+    sample_plan_digest: str | None = None,
     source_identities: list[dict[str, object]] | None = None,
     source_identity_set_digest: str | None = None,
 ) -> dict[str, Any]:
@@ -97,6 +118,17 @@ def release_header_document(
         "executionIds": execution_ids,
         "sourceDigests": source_digest_documents,
     }
+    sample_binding = (sample_plan_ref, sample_plan_digest)
+    if any(value is not None for value in sample_binding) and not all(
+        value is not None for value in sample_binding
+    ):
+        raise ObjectTransactionError(
+            "DATA.RELEASE.UAT_SAMPLE_BINDING_INCOMPLETE"
+        )
+    if milestone is not None and sample_plan_ref is None:
+        raise ObjectTransactionError(
+            "DATA.RELEASE.UAT_SAMPLE_BINDING_REQUIRED"
+        )
     if scalar_mode:
         document.update(
             {
@@ -114,6 +146,7 @@ def release_header_document(
     if pool_digest is not None:
         document.update(
             {
+                "selectionScope": selection_scope,
                 "releaseMode": release_mode,
                 "poolDigest": pool_digest,
                 "counts": dict(counts or {}),
@@ -127,6 +160,9 @@ def release_header_document(
         if milestone is not None:
             document["milestone"] = milestone
             document["milestoneTargets"] = dict(milestone_targets or {})
+        if sample_plan_ref is not None:
+            document["samplePlanRef"] = sample_plan_ref
+            document["samplePlanDigest"] = sample_plan_digest
     validate_release_header(document, label=f"release_header:{release_id}")
     return document
 
@@ -138,7 +174,7 @@ def release_attestation_document(
     source_revision: str | None,
     source_digest: str | None,
     entity_catalog_digest: str | None,
-    source_digests: tuple[SourceDigest | FrozenSourceDigest, ...],
+    source_digests: tuple[SourceDefinitionSnapshot, ...],
     asset_admission: Mapping[str, Any],
     canonical_merkle: str,
     entity_count: int,
@@ -147,7 +183,7 @@ def release_attestation_document(
     tag_count: int,
     payload_sha256: str,
     recorded_at: str,
-    distribution_policy: Any,
+    release_class: str,
     source_identities: tuple[dict[str, object], ...] = (),
     source_identity_set_digest: str | None = None,
 ) -> dict[str, object]:
@@ -155,8 +191,8 @@ def release_attestation_document(
         release_id=release_id,
         source_owner=DataSourceOwner.QWQ_DATA,
         release_kind=ReleaseKind.CONTENT,
-        release_class=distribution_policy.release_class,
-        product_lifecycle_state=distribution_policy.product_lifecycle_state,
+        release_class=ReleaseClass(release_class),
+        product_lifecycle_state=ProductLifecycleState(release_class),
         contains_unverified_assets=bool(
             asset_admission["containsUnverifiedAssets"]
         ),
@@ -184,6 +220,7 @@ def release_attestation_document(
 
 
 __all__ = [
+    "assert_holdings_reachable",
     "release_attestation_document",
     "release_desired_state_document",
     "release_header_document",

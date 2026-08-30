@@ -221,20 +221,27 @@ class ArticleDarkPaperThemeConfig {
 
 abstract final class ContentFeatureFlags {
   static const String enableArticleBookReader = "enable_article_book_reader";
-  static const String enableArticleDistributionProfiles = "enable_article_distribution_profiles";
+  static const String enableArticleDistributionProfiles =
+      "enable_article_distribution_profiles";
   static const String enableArticlePageCurl = "enable_article_page_curl";
-  static const String enableAssistantContentIdentityIndex = "enable_assistant_content_identity_index";
+  static const String enableAssistantContentIdentityIndex =
+      "enable_assistant_content_identity_index";
   static const String enableBehaviorTracking = "enable_behavior_tracking";
   static const String enableCreateActionEntry = "enable_create_action_entry";
   static const String enableHelperRead = "enable_helper_read";
   static const String enableHlsCmafAbr = "enable_hls_cmaf_abr";
-  static const String enableIdentityBasedSurfaces = "enable_identity_based_surfaces";
-  static const String enableIdentityShareTemplate = "enable_identity_share_template";
+  static const String enableIdentityBasedSurfaces =
+      "enable_identity_based_surfaces";
+  static const String enableIdentityShareTemplate =
+      "enable_identity_share_template";
   static const String enablePhotoWaterfall = "enable_photo_waterfall";
   static const String enableShareToCircle = "enable_share_to_circle";
-  static const String enableSharedVideoTimeline = "enable_shared_video_timeline";
-  static const String enableUnifiedCreateEditor = "enable_unified_create_editor";
-  static const String enableVideoTimelinePreview = "enable_video_timeline_preview";
+  static const String enableSharedVideoTimeline =
+      "enable_shared_video_timeline";
+  static const String enableUnifiedCreateEditor =
+      "enable_unified_create_editor";
+  static const String enableVideoTimelinePreview =
+      "enable_video_timeline_preview";
   static const String showViewCount = "show_view_count";
 }
 
@@ -243,114 +250,450 @@ class ContentUIConfig {
   const ContentUIConfig._();
 
   static const List<HomeChannelConfig> homeChannels = <HomeChannelConfig>[
-    HomeChannelConfig(id: "following", labelKey: "home_tab_following", template: "single_column_relations", layoutTemplate: "singleColumnRelations", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "none", contentCardPolicy: "richRelation", feedQuery: <String, String>{"channel": "following"}, moodCopyKey: "home_mood_following", order: 0),
-    HomeChannelConfig(id: "recommend", labelKey: "home_tab_recommend", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "recommend"}, moodCopyKey: "home_mood_recommend", order: 1),
-    HomeChannelConfig(id: "campus", labelKey: "home_tab_campus", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "campus"}, moodCopyKey: "home_mood_campus", order: 2),
-    HomeChannelConfig(id: "travel", labelKey: "home_tab_travel", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "spotlightSegment", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "travel"}, moodCopyKey: "home_mood_travel", order: 3),
-    HomeChannelConfig(id: "photography", labelKey: "home_tab_photography", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "photography"}, moodCopyKey: "home_mood_photography", order: 4),
-    HomeChannelConfig(id: "tech", labelKey: "home_tab_tech", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "tech"}, moodCopyKey: "home_mood_tech", order: 5),
-    HomeChannelConfig(id: "car", labelKey: "home_tab_car", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "car"}, moodCopyKey: "home_mood_car", order: 6),
+    HomeChannelConfig(
+      id: "following",
+      labelKey: "home_tab_following",
+      template: "single_column_relations",
+      layoutTemplate: "singleColumnRelations",
+      phoneColumns: 1,
+      supportsFullSpanModules: false,
+      intersectionModulePolicy: "none",
+      contentCardPolicy: "richRelation",
+      feedQuery: <String, String>{"channel": "following"},
+      moodCopyKey: "home_mood_following",
+      order: 0,
+    ),
+    HomeChannelConfig(
+      id: "recommend",
+      labelKey: "home_tab_recommend",
+      template: "single_column_multiform",
+      layoutTemplate: "singleColumnMultiForm",
+      phoneColumns: 1,
+      supportsFullSpanModules: false,
+      intersectionModulePolicy: "inlineOnly",
+      contentCardPolicy: "richMultiForm",
+      feedQuery: <String, String>{"channel": "recommend"},
+      moodCopyKey: "home_mood_recommend",
+      order: 1,
+    ),
+    HomeChannelConfig(
+      id: "featured",
+      labelKey: "home_tab_featured",
+      template: "premium_immersive",
+      layoutTemplate: "immersivePremiumStream",
+      phoneColumns: 1,
+      supportsFullSpanModules: true,
+      intersectionModulePolicy: "inlineOnly",
+      contentCardPolicy: "premiumImmersive",
+      feedQuery: <String, String>{"channel": "premium"},
+      moodCopyKey: "home_mood_recommend",
+      order: 2,
+    ),
+    HomeChannelConfig(
+      id: "campus",
+      labelKey: "home_tab_campus",
+      template: "single_column_multiform",
+      layoutTemplate: "singleColumnMultiForm",
+      phoneColumns: 1,
+      supportsFullSpanModules: false,
+      intersectionModulePolicy: "inlineOnly",
+      contentCardPolicy: "richMultiForm",
+      feedQuery: <String, String>{"channel": "campus"},
+      moodCopyKey: "home_mood_campus",
+      order: 3,
+    ),
+    HomeChannelConfig(
+      id: "travel",
+      labelKey: "home_tab_travel",
+      template: "single_column_multiform",
+      layoutTemplate: "singleColumnMultiForm",
+      phoneColumns: 1,
+      supportsFullSpanModules: false,
+      intersectionModulePolicy: "spotlightSegment",
+      contentCardPolicy: "richMultiForm",
+      feedQuery: <String, String>{"channel": "travel"},
+      moodCopyKey: "home_mood_travel",
+      order: 4,
+    ),
+    HomeChannelConfig(
+      id: "photography",
+      labelKey: "home_tab_photography",
+      template: "single_column_multiform",
+      layoutTemplate: "singleColumnMultiForm",
+      phoneColumns: 1,
+      supportsFullSpanModules: false,
+      intersectionModulePolicy: "inlineOnly",
+      contentCardPolicy: "richMultiForm",
+      feedQuery: <String, String>{"channel": "photography"},
+      moodCopyKey: "home_mood_photography",
+      order: 5,
+    ),
+    HomeChannelConfig(
+      id: "tech",
+      labelKey: "home_tab_tech",
+      template: "single_column_multiform",
+      layoutTemplate: "singleColumnMultiForm",
+      phoneColumns: 1,
+      supportsFullSpanModules: false,
+      intersectionModulePolicy: "inlineOnly",
+      contentCardPolicy: "richMultiForm",
+      feedQuery: <String, String>{"channel": "tech"},
+      moodCopyKey: "home_mood_tech",
+      order: 6,
+    ),
+    HomeChannelConfig(
+      id: "car",
+      labelKey: "home_tab_car",
+      template: "single_column_multiform",
+      layoutTemplate: "singleColumnMultiForm",
+      phoneColumns: 1,
+      supportsFullSpanModules: false,
+      intersectionModulePolicy: "inlineOnly",
+      contentCardPolicy: "richMultiForm",
+      feedQuery: <String, String>{"channel": "car"},
+      moodCopyKey: "home_mood_car",
+      order: 7,
+    ),
   ];
 
   static const List<DiscoveryTabConfig> discoveryTabs = <DiscoveryTabConfig>[
-    DiscoveryTabConfig(id: "photo", labelKey: "tab_photo", icon: "photo_camera_outlined", contentType: "image", layout: "waterfall_grid"),
-    DiscoveryTabConfig(id: "video", labelKey: "tab_video", icon: "play_circle_outline", contentType: "video", layout: "full_width_vertical_pager"),
-    DiscoveryTabConfig(id: "moment", labelKey: "tab_moment", icon: "chat_bubble_outline", contentType: "micro", layout: "list_with_optional_media"),
-    DiscoveryTabConfig(id: "article", labelKey: "tab_article", icon: "article_outlined", contentType: "article", layout: "list_with_cover"),
+    DiscoveryTabConfig(
+      id: "photo",
+      labelKey: "tab_photo",
+      icon: "photo_camera_outlined",
+      contentType: "image",
+      layout: "waterfall_grid",
+    ),
+    DiscoveryTabConfig(
+      id: "video",
+      labelKey: "tab_video",
+      icon: "play_circle_outline",
+      contentType: "video",
+      layout: "full_width_vertical_pager",
+    ),
+    DiscoveryTabConfig(
+      id: "moment",
+      labelKey: "tab_moment",
+      icon: "chat_bubble_outline",
+      contentType: "micro",
+      layout: "list_with_optional_media",
+    ),
+    DiscoveryTabConfig(
+      id: "article",
+      labelKey: "tab_article",
+      icon: "article_outlined",
+      contentType: "article",
+      layout: "list_with_cover",
+    ),
   ];
 
   static const List<DiscoveryRailConfig> discoveryRails = <DiscoveryRailConfig>[
-    DiscoveryRailConfig(id: "moment", labelKey: "discovery_rail_moment", identity: "moment", isDefault: true),
-    DiscoveryRailConfig(id: "work", labelKey: "discovery_rail_work", identity: "work", isDefault: false),
+    DiscoveryRailConfig(
+      id: "moment",
+      labelKey: "discovery_rail_moment",
+      identity: "moment",
+      isDefault: true,
+    ),
+    DiscoveryRailConfig(
+      id: "work",
+      labelKey: "discovery_rail_work",
+      identity: "work",
+      isDefault: false,
+    ),
   ];
 
-  static const List<IdentityFilterConfig> creationIdentityFilters = <IdentityFilterConfig>[
-    IdentityFilterConfig(id: "all", labelKey: "creation_filter_all", identity: null),
-    IdentityFilterConfig(id: "moment", labelKey: "creation_filter_moment", identity: "moment"),
-    IdentityFilterConfig(id: "work", labelKey: "creation_filter_work", identity: "work"),
+  static const List<IdentityFilterConfig> creationIdentityFilters =
+      <IdentityFilterConfig>[
+        IdentityFilterConfig(
+          id: "all",
+          labelKey: "creation_filter_all",
+          identity: null,
+        ),
+        IdentityFilterConfig(
+          id: "moment",
+          labelKey: "creation_filter_moment",
+          identity: "moment",
+        ),
+        IdentityFilterConfig(
+          id: "work",
+          labelKey: "creation_filter_work",
+          identity: "work",
+        ),
+      ];
+
+  static const List<WorkFormatFilterConfig> workFormatFilters =
+      <WorkFormatFilterConfig>[
+        WorkFormatFilterConfig(
+          id: "all",
+          labelKey: "work_format_all",
+          contentType: null,
+        ),
+        WorkFormatFilterConfig(
+          id: "image",
+          labelKey: "work_format_image",
+          contentType: "image",
+        ),
+        WorkFormatFilterConfig(
+          id: "video",
+          labelKey: "work_format_video",
+          contentType: "video",
+        ),
+        WorkFormatFilterConfig(
+          id: "article",
+          labelKey: "work_format_article",
+          contentType: "article",
+        ),
+      ];
+
+  static const OnboardingInterestCatalogConfig onboardingInterestCatalog =
+      OnboardingInterestCatalogConfig(
+        minSelectionCount: 1,
+        maxSelectionCount: 12,
+        dimensions: <OnboardingInterestDimensionConfig>[
+          OnboardingInterestDimensionConfig(
+            id: "topic",
+            tagRef: "Topic",
+            displayLabel: "主题",
+            minSelections: 0,
+            maxSelections: 4,
+            order: 0,
+          ),
+          OnboardingInterestDimensionConfig(
+            id: "audience",
+            tagRef: "Audience",
+            displayLabel: "人群",
+            minSelections: 0,
+            maxSelections: 4,
+            order: 1,
+          ),
+          OnboardingInterestDimensionConfig(
+            id: "format",
+            tagRef: "Format",
+            displayLabel: "内容形式",
+            minSelections: 0,
+            maxSelections: 4,
+            order: 2,
+          ),
+          OnboardingInterestDimensionConfig(
+            id: "entity",
+            tagRef: "Entity",
+            displayLabel: "地点与对象",
+            minSelections: 0,
+            maxSelections: 4,
+            order: 3,
+          ),
+        ],
+      );
+
+  static const List<ShareTemplateProfileConfig> shareTemplateProfiles =
+      <ShareTemplateProfileConfig>[
+        ShareTemplateProfileConfig(
+          id: "moment",
+          titleKey: "share_template_moment_title",
+          subtitleKey: "share_template_moment_subtitle",
+          layout: "moment_card",
+          coverStrategy: "first_media_or_gradient",
+          includeAuthor: true,
+          includeTimeContext: true,
+          includeTags: false,
+        ),
+        ShareTemplateProfileConfig(
+          id: "work",
+          titleKey: "share_template_work_title",
+          subtitleKey: "share_template_work_subtitle",
+          layout: "work_card",
+          coverStrategy: "cover_or_first_media",
+          includeAuthor: true,
+          includeTimeContext: false,
+          includeTags: true,
+        ),
+      ];
+
+  static const List<ArticleDistributionProfileConfig>
+  articleDistributionProfiles = <ArticleDistributionProfileConfig>[
+    ArticleDistributionProfileConfig(
+      id: "circle_dual_column_with_optional_cover",
+      surface: "circle_dual_column",
+      layout: "cover_top_title_summary_or_text_card",
+      coverMode: "optional_cover",
+      summaryLineLimit: 3,
+    ),
+    ArticleDistributionProfileConfig(
+      id: "follow_list_with_optional_cover",
+      surface: "following_feed",
+      layout: "cover_leading_title_summary",
+      coverMode: "optional_cover",
+      summaryLineLimit: 2,
+    ),
   ];
 
-  static const List<WorkFormatFilterConfig> workFormatFilters = <WorkFormatFilterConfig>[
-    WorkFormatFilterConfig(id: "all", labelKey: "work_format_all", contentType: null),
-    WorkFormatFilterConfig(id: "image", labelKey: "work_format_image", contentType: "image"),
-    WorkFormatFilterConfig(id: "video", labelKey: "work_format_video", contentType: "video"),
-    WorkFormatFilterConfig(id: "article", labelKey: "work_format_article", contentType: "article"),
-  ];
+  static const List<ArticleReaderProfileConfig> articleReaderProfiles =
+      <ArticleReaderProfileConfig>[
+        ArticleReaderProfileConfig(
+          id: "full_screen_book_stage",
+          stageLayout: "full_bleed_book",
+          pageIndicatorAnchor: "top_after_back",
+          edgeTreatment: "stitched_spine",
+          supportsPageCurl: true,
+        ),
+        ArticleReaderProfileConfig(
+          id: "top_nav_with_page_fraction",
+          stageLayout: "top_nav_page_fraction",
+          pageIndicatorAnchor: "top_after_back",
+          edgeTreatment: "clean",
+          supportsPageCurl: false,
+        ),
+      ];
 
-  static const OnboardingInterestCatalogConfig onboardingInterestCatalog = OnboardingInterestCatalogConfig(
-    minSelectionCount: 1,
-    maxSelectionCount: 12,
-    dimensions: <OnboardingInterestDimensionConfig>[
-      OnboardingInterestDimensionConfig(id: "topic", tagRef: "Topic", displayLabel: "主题", minSelections: 0, maxSelections: 4, order: 0),
-      OnboardingInterestDimensionConfig(id: "audience", tagRef: "Audience", displayLabel: "人群", minSelections: 0, maxSelections: 4, order: 1),
-      OnboardingInterestDimensionConfig(id: "format", tagRef: "Format", displayLabel: "内容形式", minSelections: 0, maxSelections: 4, order: 2),
-      OnboardingInterestDimensionConfig(id: "entity", tagRef: "Entity", displayLabel: "地点与对象", minSelections: 0, maxSelections: 4, order: 3),
-    ],
-  );
+  static const List<ArticleTemplateConfig> articleTemplateConfigs =
+      <ArticleTemplateConfig>[
+        ArticleTemplateConfig(
+          id: "diffuse",
+          defaultFontPreset: "clean",
+          paperTexture: "mist_canvas",
+          decorationStyle: "translucent_sticker",
+          chromeStyle: "floating_album",
+        ),
+        ArticleTemplateConfig(
+          id: "gentle",
+          defaultFontPreset: "clean",
+          paperTexture: "cotton_fiber",
+          decorationStyle: "pressed_flower",
+          chromeStyle: "soft_album",
+        ),
+        ArticleTemplateConfig(
+          id: "journal",
+          defaultFontPreset: "handwritten",
+          paperTexture: "scrapbook_paper",
+          decorationStyle: "tape_sticker",
+          chromeStyle: "handmade_notebook",
+        ),
+        ArticleTemplateConfig(
+          id: "ritual",
+          defaultFontPreset: "classic",
+          paperTexture: "xuan_paper",
+          decorationStyle: "seal_ribbon",
+          chromeStyle: "stitched_ledger",
+        ),
+        ArticleTemplateConfig(
+          id: "tech",
+          defaultFontPreset: "mono",
+          paperTexture: "blueprint_grid",
+          decorationStyle: "data_label",
+          chromeStyle: "precision_manual",
+        ),
+      ];
 
-  static const List<ShareTemplateProfileConfig> shareTemplateProfiles = <ShareTemplateProfileConfig>[
-    ShareTemplateProfileConfig(id: "moment", titleKey: "share_template_moment_title", subtitleKey: "share_template_moment_subtitle", layout: "moment_card", coverStrategy: "first_media_or_gradient", includeAuthor: true, includeTimeContext: true, includeTags: false),
-    ShareTemplateProfileConfig(id: "work", titleKey: "share_template_work_title", subtitleKey: "share_template_work_subtitle", layout: "work_card", coverStrategy: "cover_or_first_media", includeAuthor: true, includeTimeContext: false, includeTags: true),
-  ];
-
-  static const List<ArticleDistributionProfileConfig> articleDistributionProfiles = <ArticleDistributionProfileConfig>[
-    ArticleDistributionProfileConfig(id: "circle_dual_column_with_optional_cover", surface: "circle_dual_column", layout: "cover_top_title_summary_or_text_card", coverMode: "optional_cover", summaryLineLimit: 3),
-    ArticleDistributionProfileConfig(id: "follow_list_with_optional_cover", surface: "following_feed", layout: "cover_leading_title_summary", coverMode: "optional_cover", summaryLineLimit: 2),
-  ];
-
-  static const List<ArticleReaderProfileConfig> articleReaderProfiles = <ArticleReaderProfileConfig>[
-    ArticleReaderProfileConfig(id: "full_screen_book_stage", stageLayout: "full_bleed_book", pageIndicatorAnchor: "top_after_back", edgeTreatment: "stitched_spine", supportsPageCurl: true),
-    ArticleReaderProfileConfig(id: "top_nav_with_page_fraction", stageLayout: "top_nav_page_fraction", pageIndicatorAnchor: "top_after_back", edgeTreatment: "clean", supportsPageCurl: false),
-  ];
-
-  static const List<ArticleTemplateConfig> articleTemplateConfigs = <ArticleTemplateConfig>[
-    ArticleTemplateConfig(id: "diffuse", defaultFontPreset: "clean", paperTexture: "mist_canvas", decorationStyle: "translucent_sticker", chromeStyle: "floating_album"),
-    ArticleTemplateConfig(id: "gentle", defaultFontPreset: "clean", paperTexture: "cotton_fiber", decorationStyle: "pressed_flower", chromeStyle: "soft_album"),
-    ArticleTemplateConfig(id: "journal", defaultFontPreset: "handwritten", paperTexture: "scrapbook_paper", decorationStyle: "tape_sticker", chromeStyle: "handmade_notebook"),
-    ArticleTemplateConfig(id: "ritual", defaultFontPreset: "classic", paperTexture: "xuan_paper", decorationStyle: "seal_ribbon", chromeStyle: "stitched_ledger"),
-    ArticleTemplateConfig(id: "tech", defaultFontPreset: "mono", paperTexture: "blueprint_grid", decorationStyle: "data_label", chromeStyle: "precision_manual"),
-  ];
-
-  static const List<ArticleTemplateRecommendationConfig> articleTemplateRecommendations = <ArticleTemplateRecommendationConfig>[
-    ArticleTemplateRecommendationConfig(categoryId: "food", recommendedArticleTemplates: <String>["gentle", "journal"]),
-    ArticleTemplateRecommendationConfig(categoryId: "humanity", recommendedArticleTemplates: <String>["journal", "ritual"]),
-    ArticleTemplateRecommendationConfig(categoryId: "life", recommendedArticleTemplates: <String>["gentle", "diffuse"]),
-    ArticleTemplateRecommendationConfig(categoryId: "photography", recommendedArticleTemplates: <String>["journal", "ritual"]),
-    ArticleTemplateRecommendationConfig(categoryId: "tech", recommendedArticleTemplates: <String>["tech", "diffuse"]),
-    ArticleTemplateRecommendationConfig(categoryId: "travel", recommendedArticleTemplates: <String>["journal", "gentle"]),
+  static const List<ArticleTemplateRecommendationConfig>
+  articleTemplateRecommendations = <ArticleTemplateRecommendationConfig>[
+    ArticleTemplateRecommendationConfig(
+      categoryId: "food",
+      recommendedArticleTemplates: <String>["gentle", "journal"],
+    ),
+    ArticleTemplateRecommendationConfig(
+      categoryId: "humanity",
+      recommendedArticleTemplates: <String>["journal", "ritual"],
+    ),
+    ArticleTemplateRecommendationConfig(
+      categoryId: "life",
+      recommendedArticleTemplates: <String>["gentle", "diffuse"],
+    ),
+    ArticleTemplateRecommendationConfig(
+      categoryId: "photography",
+      recommendedArticleTemplates: <String>["journal", "ritual"],
+    ),
+    ArticleTemplateRecommendationConfig(
+      categoryId: "tech",
+      recommendedArticleTemplates: <String>["tech", "diffuse"],
+    ),
+    ArticleTemplateRecommendationConfig(
+      categoryId: "travel",
+      recommendedArticleTemplates: <String>["journal", "gentle"],
+    ),
   ];
 
   static const String articleDarkPaperDefaultTheme = "darkPaper";
 
-  static const List<ArticlePaperThemeOptionConfig> articlePaperThemeOptions = <ArticlePaperThemeOptionConfig>[
-    ArticlePaperThemeOptionConfig(id: "system", labelKey: "article_paper_theme_system"),
-    ArticlePaperThemeOptionConfig(id: "darkPaper", labelKey: "article_paper_theme_dark_paper"),
-    ArticlePaperThemeOptionConfig(id: "coolGray", labelKey: "article_paper_theme_cool_gray"),
-    ArticlePaperThemeOptionConfig(id: "warmBlack", labelKey: "article_paper_theme_warm_black"),
-    ArticlePaperThemeOptionConfig(id: "inkGreen", labelKey: "article_paper_theme_ink_green"),
-    ArticlePaperThemeOptionConfig(id: "deepBrown", labelKey: "article_paper_theme_deep_brown"),
-  ];
+  static const List<ArticlePaperThemeOptionConfig> articlePaperThemeOptions =
+      <ArticlePaperThemeOptionConfig>[
+        ArticlePaperThemeOptionConfig(
+          id: "system",
+          labelKey: "article_paper_theme_system",
+        ),
+        ArticlePaperThemeOptionConfig(
+          id: "darkPaper",
+          labelKey: "article_paper_theme_dark_paper",
+        ),
+        ArticlePaperThemeOptionConfig(
+          id: "coolGray",
+          labelKey: "article_paper_theme_cool_gray",
+        ),
+        ArticlePaperThemeOptionConfig(
+          id: "warmBlack",
+          labelKey: "article_paper_theme_warm_black",
+        ),
+        ArticlePaperThemeOptionConfig(
+          id: "inkGreen",
+          labelKey: "article_paper_theme_ink_green",
+        ),
+        ArticlePaperThemeOptionConfig(
+          id: "deepBrown",
+          labelKey: "article_paper_theme_deep_brown",
+        ),
+      ];
 
-  static const Map<String, String> articlePaperVerticalDefaults = <String, String>{
-    "history": "deepBrown",
-    "nature": "inkGreen",
-    "photography": "darkPaper",
-    "tech": "coolGray",
-    "travel": "warmBlack",
-  };
+  static const Map<String, String> articlePaperVerticalDefaults =
+      <String, String>{
+        "history": "deepBrown",
+        "nature": "inkGreen",
+        "photography": "darkPaper",
+        "tech": "coolGray",
+        "travel": "warmBlack",
+      };
 
-  static const List<ArticleDarkPaperThemeConfig> articleDarkPaperThemes = <ArticleDarkPaperThemeConfig>[
-    ArticleDarkPaperThemeConfig(id: "coolGray", stage: "#101318", paper: "#1A1F26", text: "#E6E8EB", secondaryText: "#8B919C"),
-    ArticleDarkPaperThemeConfig(id: "darkPaper", stage: "#0F1115", paper: "#161A20", text: "#E6E8EB", secondaryText: "#8B919C"),
-    ArticleDarkPaperThemeConfig(id: "deepBrown", stage: "#15110F", paper: "#1F1A17", text: "#E8E4DF", secondaryText: "#8F8882"),
-    ArticleDarkPaperThemeConfig(id: "inkGreen", stage: "#101511", paper: "#161B18", text: "#E6EAE6", secondaryText: "#879086"),
-    ArticleDarkPaperThemeConfig(id: "warmBlack", stage: "#13100D", paper: "#1E1A16", text: "#E8E6E3", secondaryText: "#8D8680"),
-  ];
+  static const List<ArticleDarkPaperThemeConfig> articleDarkPaperThemes =
+      <ArticleDarkPaperThemeConfig>[
+        ArticleDarkPaperThemeConfig(
+          id: "coolGray",
+          stage: "#101318",
+          paper: "#1A1F26",
+          text: "#E6E8EB",
+          secondaryText: "#8B919C",
+        ),
+        ArticleDarkPaperThemeConfig(
+          id: "darkPaper",
+          stage: "#0F1115",
+          paper: "#161A20",
+          text: "#E6E8EB",
+          secondaryText: "#8B919C",
+        ),
+        ArticleDarkPaperThemeConfig(
+          id: "deepBrown",
+          stage: "#15110F",
+          paper: "#1F1A17",
+          text: "#E8E4DF",
+          secondaryText: "#8F8882",
+        ),
+        ArticleDarkPaperThemeConfig(
+          id: "inkGreen",
+          stage: "#101511",
+          paper: "#161B18",
+          text: "#E6EAE6",
+          secondaryText: "#879086",
+        ),
+        ArticleDarkPaperThemeConfig(
+          id: "warmBlack",
+          stage: "#13100D",
+          paper: "#1E1A16",
+          text: "#E8E6E3",
+          secondaryText: "#8D8680",
+        ),
+      ];
 
   static const Map<String, bool> featureFlags = <String, bool>{
     'enable_article_book_reader': false,
     'enable_article_distribution_profiles': false,
-    'enable_article_page_curl': false,
+    'enable_article_page_curl': true,
     'enable_assistant_content_identity_index': false,
     'enable_behavior_tracking': true,
     'enable_create_action_entry': false,
@@ -366,20 +709,21 @@ class ContentUIConfig {
     'show_view_count': false,
   };
 
-  static const Map<String, Map<String, String>> emptyStates = <String, Map<String, String>>{
-    'feed_empty': <String, String>{
-      'titleKey': 'feed_empty_title',
-      'subtitleKey': 'feed_empty_subtitle',
-      'ctaKey': 'explore_more',
-    },
-    'feed_error': <String, String>{
-      'titleKey': 'feed_load_error_title',
-      'subtitleKey': 'feed_load_error_subtitle',
-    },
-    'post_not_found': <String, String>{
-      'titleKey': 'post_not_found_title',
-      'subtitleKey': 'post_not_found_subtitle',
-      'ctaKey': 'back_to_feed',
-    },
-  };
+  static const Map<String, Map<String, String>> emptyStates =
+      <String, Map<String, String>>{
+        'feed_empty': <String, String>{
+          'titleKey': 'feed_empty_title',
+          'subtitleKey': 'feed_empty_subtitle',
+          'ctaKey': 'explore_more',
+        },
+        'feed_error': <String, String>{
+          'titleKey': 'feed_load_error_title',
+          'subtitleKey': 'feed_load_error_subtitle',
+        },
+        'post_not_found': <String, String>{
+          'titleKey': 'post_not_found_title',
+          'subtitleKey': 'post_not_found_subtitle',
+          'ctaKey': 'back_to_feed',
+        },
+      };
 }

@@ -361,6 +361,9 @@ class _JourneyPersonaCommandWriter
 Widget _wrap(_JourneyPersonaStore store) {
   return ProviderScope(
     overrides: [
+      contentRuntimeConfigProvider.overrideWithValue(
+        buildProductionContentRuntimeConfigDefaults(),
+      ),
       personaQueryProvider.overrideWith(
         (ref, surface) => _JourneyUserRepository(store),
       ),
@@ -492,6 +495,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           personaQueryProvider.overrideWith((ref, surface) => repository),
           personaCommandWriterProvider.overrideWithValue(
             _JourneyPersonaCommandWriter(store),

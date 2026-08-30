@@ -32,12 +32,16 @@ type canonicalSearchHitWire struct {
 }
 
 type canonicalSearchContentHitWire struct {
-	PostID            string `json:"postId"`
-	ContentType       string `json:"contentType"`
-	ContentIdentity   string `json:"contentIdentity,omitempty"`
-	Title             string `json:"title,omitempty"`
-	Summary           string `json:"summary,omitempty"`
-	CoverURL          string `json:"coverUrl,omitempty"`
+	PostID          string `json:"postId"`
+	ContentType     string `json:"contentType"`
+	ContentIdentity string `json:"contentIdentity,omitempty"`
+	Title           string `json:"title,omitempty"`
+	Summary         string `json:"summary,omitempty"`
+	CoverURL        string `json:"coverUrl,omitempty"`
+	// 封面的配对媒体资产标识与交付访问模式（DEC-033）：research 相位的
+	// coverUrl 是相对私有 CAS 引用，App 按 coverAssetId 换短签才渲染得出。
+	CoverAssetID      string `json:"coverAssetId,omitempty"`
+	CoverAccessMode   string `json:"coverAccessMode,omitempty"`
 	AuthorID          string `json:"authorId,omitempty"`
 	AuthorDisplayName string `json:"authorDisplayName,omitempty"`
 	AuthorAvatarURL   string `json:"authorAvatarUrl,omitempty"`
@@ -51,6 +55,8 @@ type canonicalSearchContentHitWire struct {
 // non-content hits; content.post must use canonicalSearchContentHitWire.
 type canonicalSearchPayloadWire struct {
 	CoverURL            string `json:"coverUrl,omitempty"`
+	CoverAssetID        string `json:"coverAssetId,omitempty"`
+	CoverAccessMode     string `json:"coverAccessMode,omitempty"`
 	PlaceName           string `json:"placeName,omitempty"`
 	Address             string `json:"address,omitempty"`
 	FollowerCount       *int   `json:"followerCount,omitempty"`
@@ -101,6 +107,8 @@ func CanonicalSearchHit(hit rtsearch.RetrieveHit) canonicalSearchHitWire {
 			ContentIdentity: payloadText(hit.Payload, "contentIdentity"),
 			Title:           wire.Title, Summary: wire.Snippet,
 			CoverURL:          payloadText(hit.Payload, "coverUrl"),
+			CoverAssetID:      payloadText(hit.Payload, "coverAssetId"),
+			CoverAccessMode:   payloadText(hit.Payload, "coverAccessMode"),
 			AuthorID:          payloadText(hit.Payload, "authorId"),
 			AuthorDisplayName: payloadText(hit.Payload, "authorDisplayName"),
 			AuthorAvatarURL:   payloadText(hit.Payload, "authorAvatarUrl"),
@@ -136,8 +144,10 @@ func canonicalNonContentPayload(payload map[string]any) *canonicalSearchPayloadW
 		return nil
 	}
 	wire := &canonicalSearchPayloadWire{
-		CoverURL:  payloadText(payload, "coverUrl"),
-		PlaceName: payloadText(payload, "placeName"), Address: payloadText(payload, "address"),
+		CoverURL:        payloadText(payload, "coverUrl"),
+		CoverAssetID:    payloadText(payload, "coverAssetId"),
+		CoverAccessMode: payloadText(payload, "coverAccessMode"),
+		PlaceName:       payloadText(payload, "placeName"), Address: payloadText(payload, "address"),
 		FollowerCount: payloadInt(payload, "followerCount"), ContentCount: payloadInt(payload, "contentCount"),
 		CircleID: payloadText(payload, "circleId"), CategoryID: payloadText(payload, "categoryId"),
 		SubCategory: payloadText(payload, "subCategory"), DomainID: payloadText(payload, "domainId"),

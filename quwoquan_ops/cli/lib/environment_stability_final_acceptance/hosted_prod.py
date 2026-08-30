@@ -229,7 +229,13 @@ def verify_canonical_hosted_prod_soak(
     source = manifest.get("source")
     if not isinstance(source, Mapping):
         raise TypeError("released manifest source is missing")
-    configuration_packages = manifest.get("configurationPackages")
+    artifacts = manifest.get("environmentArtifacts")
+    prod_artifact = artifacts.get("prod") if isinstance(artifacts, Mapping) else None
+    configuration_packages = (
+        prod_artifact.get("configurationPackages")
+        if isinstance(prod_artifact, Mapping)
+        else None
+    )
     config_graph_digest = _canonical_digest(configuration_packages)
     expected_bindings = {
         "fullRolloutReceiptId": rollout_receipt.get("receiptId"),

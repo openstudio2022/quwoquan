@@ -1470,11 +1470,18 @@ func (e *Engine) parallelRecallInto(
 			continue
 		}
 		go func(idx int, s CandidateSource, sourceSlot chan struct{}) {
-			defer func() {
+			released := false
+			releaseSlots := func() {
+				if released {
+					return
+				}
 				<-sourceSlot
 				<-e.recallGlobalSlots
-			}()
+				released = true
+			}
+			defer releaseSlots()
 			if s == nil {
+				releaseSlots()
 				resultCh <- result{index: idx, err: SkipRecall("nil source")}
 				return
 			}
@@ -1486,6 +1493,7 @@ func (e *Engine) parallelRecallInto(
 				recallSourceLabel(s),
 			)
 			err = errors.Join(err, admissionErr)
+			releaseSlots()
 			resultCh <- result{index: idx, candidates: candidates, err: err}
 		}(i, src, slot)
 	}

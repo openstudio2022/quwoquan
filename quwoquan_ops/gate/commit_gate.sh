@@ -21,7 +21,7 @@ if [[ -z "$SOFT_BUDGET" || -z "$HARD_BUDGET" ]]; then
 fi
 
 STARTED_AT=$(date +%s)
-FINGERPRINT_START="$(git status --porcelain | shasum -a 256 | awk '{print $1}')"
+FINGERPRINT_START="$(python3 -B quwoquan_ops/cli/local_readiness.py plan --level fast --staged | python3 -c 'import json,sys; print(json.load(sys.stdin)["fingerprint"]["digest"])')"
 PLAN_JSON="$REPORT_DIR/plan.json"
 PHASE_LOG="$REPORT_DIR/phases.jsonl"
 : >"$PHASE_LOG"
@@ -43,7 +43,7 @@ write_summary() {
   local result="$1"
   local elapsed fingerprint_end
   elapsed="$(elapsed_now)"
-  fingerprint_end="$(git status --porcelain | shasum -a 256 | awk '{print $1}')"
+  fingerprint_end="$(python3 -B quwoquan_ops/cli/local_readiness.py plan --level fast --staged | python3 -c 'import json,sys; print(json.load(sys.stdin)["fingerprint"]["digest"])')"
   REPORT_DIR="$REPORT_DIR" PLAN_JSON="$PLAN_JSON" PHASE_LOG="$PHASE_LOG" \
   RESULT="$result" ELAPSED="$elapsed" SOFT_BUDGET="$SOFT_BUDGET" HARD_BUDGET="$HARD_BUDGET" \
   FINGERPRINT_START="$FINGERPRINT_START" FINGERPRINT_END="$fingerprint_end" \
@@ -106,14 +106,19 @@ run_static_check() {
   case "$check" in
     branch_policy) return 0 ;;
     feature_tree) make verify-feature-tree ;;
-    python_script_governance)
+    python_script_governance_app|python_script_governance_service|python_script_governance_ops|python_script_governance_data)
+      local governance_scope="${check#python_script_governance_}"
       python3 -B quwoquan_ops/gate/verify_python_script_governance.py \
-        --scope all --mode check
+        --scope "$governance_scope" --mode check
       ;;
     entrypoint_script_paths)
       python3 -B quwoquan_ops/gate/verify_entrypoint_script_paths.py
       ;;
+    local_worktree_lifecycle)
+      python3 -B quwoquan_ops/gate/verify_local_worktree_lifecycle.py
+      ;;
     service_architecture) make verify-service-architecture ;;
+    service_probe_homology) make verify-service-probe-homology ;;
     app_generated_manifest) make verify-app-generated-manifest ;;
     app_contract_handoff) make verify-app-contract-handoff ;;
     verify-app-mock-isolation) make verify-app-mock-isolation ;;
@@ -126,6 +131,7 @@ run_static_check() {
     metadata_contract) bash quwoquan_service/scripts/verify/contract_graph/verify_contract_metadata.sh ;;
     commercial_contract) make verify-commercial-contract-generation ;;
     pageflip_backward_mainline) make verify-app-pageflip-back-mainline ;;
+    app_uat_widget_key_references) make verify-app-uat-widget-key-references ;;
     data_verify) python3 quwoquan_data/scripts/cli.py verify all ;;
     *)
       log "FAIL: unknown static check: $check"
@@ -265,6 +271,13 @@ if [[ "${#PYTEST_PATHS[@]}" -gt 0 ]]; then
     set -euo pipefail
     pytest_python="$1"
     shift
+    # Git exports repository-local variables to hooks.  Test fixtures that
+    # create a temporary repository must not inherit the real worktree index
+    # or refs; cwd still points at ROOT, so tests that intentionally inspect
+    # the current repository continue to discover it normally.
+    while IFS= read -r git_local_var; do
+      [[ -n "$git_local_var" ]] && unset "$git_local_var"
+    done < <(git rev-parse --local-env-vars)
     if "$pytest_python" -c "import xdist" >/dev/null 2>&1; then
       "$pytest_python" -m pytest -n 4 -q "$@"
     else
@@ -304,7 +317,7 @@ if [[ "$DEFERRED_COUNT" -gt 0 ]]; then
   log "deferred_to_ci=$DEFERRED_COUNT Flutter tests (see plan.json)"
 fi
 
-FINGERPRINT_END="$(git status --porcelain | shasum -a 256 | awk '{print $1}')"
+FINGERPRINT_END="$(python3 -B quwoquan_ops/cli/local_readiness.py plan --level fast --staged | python3 -c 'import json,sys; print(json.load(sys.stdin)["fingerprint"]["digest"])')"
 if [[ "$FINGERPRINT_START" != "$FINGERPRINT_END" ]]; then
   log "FAIL: working tree changed during commit gate (concurrent writers?). Re-run after stabilizing the tree."
   write_summary "fail_fingerprint"

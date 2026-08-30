@@ -315,6 +315,7 @@ def handle_coverage_source_ready(args: argparse.Namespace) -> None:
                 if item.strip()
             ],
             minimum_per_province=int(args.minimum_per_province),
+            max_concurrent_workers=int(args.max_concurrent_workers),
             include_master_list=bool(args.include_master_list),
             exhaust_input=bool(args.exhaust_input),
             resume=bool(args.resume),
@@ -510,6 +511,12 @@ def register_coverage_parser(subparsers: argparse._SubParsersAction) -> None:
         type=int,
         required=True,
         help="每省必须达到的唯一 source-ready 对象数",
+    )
+    pcs.add_argument(
+        "--max-concurrent-workers",
+        type=int,
+        required=True,
+        help="来源预筛任一时刻可同时运行的探测进程数上限（无默认值）",
     )
     pcs.add_argument("--run-id", required=True, help="可恢复来源预筛运行 ID")
     pcs.add_argument(

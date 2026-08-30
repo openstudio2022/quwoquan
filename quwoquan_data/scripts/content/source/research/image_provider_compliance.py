@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from core.content_source_registry import _registry_sources, load_content_source_registry
+from core.content_source_registry import load_content_source_registry
+from core.content_source_registry_projection import registry_sources
 
 
 RIGHTS_POLICY_ACCESS_MODE: dict[str, str] = {
@@ -38,7 +39,7 @@ _DEFAULT_PATHS_BY_FETCH_MODE: dict[str, tuple[str, ...]] = {
 def _image_provider_rows(data: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
     registry = data if data is not None else load_content_source_registry()
     rows: list[dict[str, Any]] = []
-    for _scope, row in _registry_sources(registry):
+    for _scope, row in registry_sources(registry):
         lanes = row.get("lanes")
         if isinstance(lanes, list) and "image" in {str(item).strip() for item in lanes}:
             rows.append(dict(row))

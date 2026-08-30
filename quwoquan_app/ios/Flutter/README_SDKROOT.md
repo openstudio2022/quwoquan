@@ -9,7 +9,7 @@ Target native_assets required define SdkRoot but it was not provided
 ### 与 Xcode / 全量构建无关时
 该报错常见于 **`flutter run` 热重载路径**：工具链传给 native_assets 的环境缺少 `SdkRoot`（与全量 `flutter build` 不同）。Flutter 已在 master 修复（见 [flutter/flutter#180603](https://github.com/flutter/flutter/issues/180603) 及关联 PR）。
 
-**推荐**：将 Flutter SDK 升级到已包含上述修复的稳定版 / beta（本仓库目标 Flutter >= 3.44）。
+**推荐**：将 Flutter SDK 升级到已包含上述修复的稳定版 / beta（本仓库目标 Flutter >= 3.47）。
 
 **临时规避**（可能影响依赖 native assets 的 FFI 包，慎用）：
 ```bash
@@ -27,7 +27,7 @@ flutter config --enable-native-assets
 VM/CI 单测使用：
 
 - `sqflite_common_ffi ^2.4.0+3`
-- `sqlite3 3.3.2`（由上游传递解析）
+- `sqlite3 3.5.1`（由上游传递解析）
 
 当前验证结论：
 
@@ -45,8 +45,12 @@ VM/CI 单测使用：
 ## 本地依赖纯度策略（2026-06-22）
 
 - `quwoquan_app/run.sh` 与 `quwoquan_app/scripts/env/run_flutter_test_guarded.py`
-  统一使用 `flutter pub get --offline`，并以 `flutter run --no-pub` 启动，禁止
+  统一使用 `flutter pub get --offline`，并由 canonical launcher 在内部以
+  `flutter run --no-pub` 启动，禁止
   启动链偷偷联网补依赖。
+- 操作者不得直接执行 `flutter run --no-pub`。Cursor 字面 `flutter run -d <device-id>`
+  必须先经 `make app-activate-flutter-facade`、Reload Window 和新终端
+  `command -v flutter` 校验，由 workspace facade 接管 runtime trust handoff。
 - iOS 侧要求 `ios/Podfile.lock` 与 `ios/Pods/Manifest.lock` 完全一致；若 drift，
   启动脚本直接 fail-closed，而不是在运行时尝试修复 pod graph。
 - Android 自定义上游 AAR（`webrtc-sdk`、`audioswitch`、`livekit noise`）已固定

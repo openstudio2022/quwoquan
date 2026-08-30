@@ -47,8 +47,10 @@ String feedRealtimePatchChannelFor(String userId) =>
 enum FeedRealtimePatchType {
   /// 有新候选可纳入推荐（如用户关注图扩展），提示可刷新；端侧仅展示「有更新」入口，不强插。
   newCandidateHint('new_candidate_hint'),
+
   /// 用户负反馈后，端侧从当前 feed 剔除匹配内容；只剔除非当前阅读 / 未在视口的项。
   negativeFeedbackRemoval('negative_feedback_removal'),
+
   /// 疲劳 / 时效启发式触发，建议用户刷新；端侧仅提示，不自动刷新打断浏览。
   refreshSuggestion('refresh_suggestion');
 
@@ -65,7 +67,9 @@ enum FeedRealtimePatchType {
       case 'refresh_suggestion':
         return FeedRealtimePatchType.refreshSuggestion;
       default:
-        throw FormatException('Invalid FeedRealtimePatchType wire value: $value');
+        throw FormatException(
+          'Invalid FeedRealtimePatchType wire value: $value',
+        );
     }
   }
 }
@@ -74,18 +78,25 @@ enum FeedRealtimePatchType {
 enum FeedPatchReasonCode {
   /// 用户「不感兴趣」
   negativeDislike('negative_dislike'),
+
   /// 用户「减少该作者」
   negativeHideAuthor('negative_hide_author'),
+
   /// 用户「减少此类内容」
   negativeHideContentType('negative_hide_content_type'),
+
   /// 用户举报内容
   negativeReport('negative_report'),
+
   /// 关注/进圈/加联系人扩展了关系图，有新社交召回候选
   relationshipExpanded('relationship_expanded'),
+
   /// 命中兴趣的新内容入库可纳入
   newCandidatesAvailable('new_candidates_available'),
+
   /// 会话内负反馈/快速跳过比例高，疲劳信号
   sessionFatigue('session_fatigue'),
+
   /// 当前 feed 下发过久，时效信号
   feedStaleness('feed_staleness');
 
@@ -121,8 +132,10 @@ enum FeedPatchReasonCode {
 enum FeedPatchRemovalDimension {
   /// 单条内容（targetPostIds 直接命中）
   post('post'),
+
   /// 同作者（removalDimensionValue=authorId）
   author('author'),
+
   /// 同内容类型（removalDimensionValue=contentType）
   contentType('content_type');
 
@@ -139,7 +152,9 @@ enum FeedPatchRemovalDimension {
       case 'content_type':
         return FeedPatchRemovalDimension.contentType;
       default:
-        throw FormatException('Invalid FeedPatchRemovalDimension wire value: $value');
+        throw FormatException(
+          'Invalid FeedPatchRemovalDimension wire value: $value',
+        );
     }
   }
 }
@@ -181,15 +196,32 @@ class FeedRealtimePatch {
       patchId: _requiredNonEmptyString(payload['patchId'], 'patchId'),
       patchType: FeedRealtimePatchType.fromWire(payload['patchType']),
       userId: _requiredNonEmptyString(payload['userId'], 'userId'),
-      feedRequestId: _optionalValue<String>(payload['feedRequestId'], 'feedRequestId'),
+      feedRequestId: _optionalValue<String>(
+        payload['feedRequestId'],
+        'feedRequestId',
+      ),
       channelId: _optionalValue<String>(payload['channelId'], 'channelId'),
       targetPostIds: _stringList(payload['targetPostIds'], 'targetPostIds'),
       reasonCode: FeedPatchReasonCode.fromWire(payload['reasonCode']),
-      removalDimension: payload['removalDimension'] == null ? null : FeedPatchRemovalDimension.fromWire(payload['removalDimension']),
-      removalDimensionValue: _optionalValue<String>(payload['removalDimensionValue'], 'removalDimensionValue'),
-      affectedCount: _optionalValue<int>(payload['affectedCount'], 'affectedCount') ?? 0,
-      policyDigest: _optionalCanonicalSha256(payload['policyDigest'], 'policyDigest'),
-      safeToApplyWhileViewing: _optionalValue<bool>(payload['safeToApplyWhileViewing'], 'safeToApplyWhileViewing') ?? false,
+      removalDimension: payload['removalDimension'] == null
+          ? null
+          : FeedPatchRemovalDimension.fromWire(payload['removalDimension']),
+      removalDimensionValue: _optionalValue<String>(
+        payload['removalDimensionValue'],
+        'removalDimensionValue',
+      ),
+      affectedCount:
+          _optionalValue<int>(payload['affectedCount'], 'affectedCount') ?? 0,
+      policyDigest: _optionalCanonicalSha256(
+        payload['policyDigest'],
+        'policyDigest',
+      ),
+      safeToApplyWhileViewing:
+          _optionalValue<bool>(
+            payload['safeToApplyWhileViewing'],
+            'safeToApplyWhileViewing',
+          ) ??
+          false,
       emittedAt: _requiredNonEmptyString(payload['emittedAt'], 'emittedAt'),
     );
   }
@@ -203,7 +235,8 @@ class FeedRealtimePatch {
     'targetPostIds': targetPostIds.toList(growable: false),
     'reasonCode': reasonCode.wire,
     if (removalDimension != null) 'removalDimension': removalDimension!.wire,
-    if (removalDimensionValue != null) 'removalDimensionValue': removalDimensionValue!,
+    if (removalDimensionValue != null)
+      'removalDimensionValue': removalDimensionValue!,
     'affectedCount': affectedCount,
     if (policyDigest != null) 'policyDigest': policyDigest!,
     'safeToApplyWhileViewing': safeToApplyWhileViewing,

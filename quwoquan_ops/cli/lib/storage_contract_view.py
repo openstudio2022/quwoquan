@@ -32,6 +32,26 @@ STORAGE_DOCUMENT_KEYS = frozenset(
     }
 )
 STORAGE_DOCUMENT_REQUIRED_OUTPUT_KEYS = frozenset({"backend", "role"})
+# `go run` 在 module cache 未预热时把自身进度写到 stderr。这些行属于工具链，
+# 不是被调用程序的诊断；把它们当违规会让首次运行与新克隆产出假失败。
+GO_TOOLCHAIN_PROGRESS_PREFIXES = (
+    "go: downloading ",
+    "go: extracting ",
+    "go: finding ",
+    "go: added ",
+    "go: upgraded ",
+    "go: downloading",
+)
+
+
+def _program_diagnostics(stderr: str) -> str:
+    """只保留被调用程序自己写出的 stderr。"""
+    return "\n".join(
+        line
+        for line in stderr.splitlines()
+        if line.strip()
+        and not line.startswith(GO_TOOLCHAIN_PROGRESS_PREFIXES)
+    ).strip()
 
 
 class StorageContractViewError(RuntimeError):
@@ -121,9 +141,10 @@ def load_storage_contract_view(
         raise StorageContractViewError(
             f"{path} canonical storage view exited {completed.returncode}: {detail}"
         )
-    if completed.stderr.strip():
+    diagnostics = _program_diagnostics(completed.stderr)
+    if diagnostics:
         raise StorageContractViewError(
-            f"{path} canonical storage view emitted stderr: {completed.stderr.strip()}"
+            f"{path} canonical storage view emitted stderr: {diagnostics}"
         )
     if not completed.stdout.strip():
         raise StorageContractViewError(

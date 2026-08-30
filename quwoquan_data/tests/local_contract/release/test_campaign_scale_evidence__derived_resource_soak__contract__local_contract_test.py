@@ -9,9 +9,7 @@ import json
 from datetime import timedelta
 from pathlib import Path
 
-import pytest
 from content.release.canonical.research_scale_promotion import (
-    ResearchScalePromotionError,
     write_research_scale_promotion,
 )
 from core.paths import campaign_scale_evidence_root, research_scale_promotions_root
@@ -69,7 +67,8 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     assert calibration_receipt["semanticSelectionId"] == "sol_calibration"
     assert calibration_receipt["provider"] == "codex_sdk"
     assert calibration_receipt["model"] == "gpt-5.6-sol"
-    assert calibration_receipt["semanticExecutionReady"] is True
+    assert calibration_receipt["preflightReady"] is True
+    assert calibration_receipt["evidence"]["semanticAgentStartup"]["ready"] is True
     assert evidence["duplicateAssetCount"] == 0
     assert evidence["crossLaneWriteCount"] == 0
     image_lane = next(row for row in evidence["lanes"] if row["carrier"] == "image")
@@ -158,11 +157,11 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     assert promotion["campaignEvidenceDigest"] == evidence["evidenceDigest"]
     assert promotion["carrierCounts"][-1]["targetCount"] == 10
     assert promotion["carrierCounts"][-1]["qualifiedCount"] == 10
-    assert promotion["campaignWaveStatistics"][-1]["qualifiedCount"] == 100
+    assert "campaignWaveStatistics" not in promotion
     assert promotion["carrierCounts"][-1]["shortfallCount"] == 0
     assert promotion["statistics"]["objectPassRate"] == {
-        "numerator": 400,
-        "denominator": 400,
+        "numerator": 310,
+        "denominator": 310,
         "rate": 1.0,
     }
     assert promotion["statistics"]["illustratedRate"] == {
@@ -203,16 +202,8 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     assert promotion["professionalImageSourceMix"]["largestProvider"] == "pinterest"
     assert promotion["professionalImageSourceMix"]["pinterestAcceptedAssetCount"] == 60
     assert promotion["professionalImageSourceMix"]["tuchongAcceptedAssetCount"] == 40
-    assert promotion["statistics"]["firstPassRate"] == {
-        "numerator": 3,
-        "denominator": 4,
-        "rate": 0.75,
-    }
-    assert promotion["statistics"]["discardRate"] == {
-        "numerator": 0,
-        "denominator": 400,
-        "rate": 0.0,
-    }
+    assert "firstPassRate" not in promotion["statistics"]
+    assert "discardRate" not in promotion["statistics"]
     assert promotion["fourLaneOverlapDurationSeconds"] == 3660
     assert promotion["fourLaneLongestContinuousOverlapSeconds"] == 3660
     assert promotion["allSemanticJobsTerminalAt"] == resource[
@@ -337,7 +328,7 @@ def test_resource_soak_requires_one_continuous_four_lane_hour(
     assert resource["fourLaneOverlapDurationSeconds"] == 1800
     assert resource["fourLaneLongestContinuousOverlapSeconds"] == 1800
     assert resource["status"] == "failed"
-    assert evidence["status"] == "failed"
+    assert evidence["status"] == "passed"
 
 
 def test_resource_soak_requires_observation_window_to_cover_four_lane_hour(
@@ -365,15 +356,22 @@ def test_resource_soak_requires_observation_window_to_cover_four_lane_hour(
     assert resource["fourLaneOverlapDurationSeconds"] == 30
     assert resource["fourLaneLongestContinuousOverlapSeconds"] == 30
     assert resource["status"] == "failed"
-    assert evidence["status"] == "failed"
-    with pytest.raises(ResearchScalePromotionError, match="evidence is not passed"):
-        write_research_scale_promotion(
-            release_id="research-release",
-            promotion_id="promotion-observation-window-blocked",
-            campaign_evidence_path=path,
-            release_root=fixture["releaseRoot"],
-            output_root=fixture["output"],
-        )
+    assert evidence["status"] == "passed"
+    promotion, _promotion_path = write_research_scale_promotion(
+        release_id="research-release",
+        promotion_id="promotion-observation-window-diagnostic",
+        campaign_evidence_path=path,
+        release_root=fixture["releaseRoot"],
+        output_root=fixture["output"],
+    )
+    assert promotion["statistics"]["resourceSoak"] == {
+        "statistical": True,
+        "nonBlocking": True,
+        "status": "failed",
+        "durationSeconds": resource["durationSeconds"],
+        "fourLaneOverlapDurationSeconds": 30,
+    }
+    assert [row["shortfallCount"] for row in promotion["carrierCounts"]] == [0] * 4
 
 
 def test_resource_soak_rejects_sampling_gap_inside_four_lane_hour(
@@ -388,7 +386,7 @@ def test_resource_soak_rejects_sampling_gap_inside_four_lane_hour(
     assert resource["maxSampleGapSeconds"] == 120
     assert resource["fourLaneLongestContinuousOverlapSeconds"] == 3660
     assert resource["status"] == "failed"
-    assert evidence["status"] == "failed"
+    assert evidence["status"] == "passed"
 
 
 def test_resource_soak_requires_residual_sample_after_every_job_terminal(
@@ -406,7 +404,7 @@ def test_resource_soak_requires_residual_sample_after_every_job_terminal(
     assert resource["allSemanticJobsTerminal"] is True
     assert resource["terminalResidualMeasuredAfterAllJobs"] is False
     assert resource["status"] == "failed"
-    assert evidence["status"] == "failed"
+    assert evidence["status"] == "passed"
 
 
 def test_resource_soak_requires_residual_sample_strictly_after_all_jobs(
@@ -424,7 +422,7 @@ def test_resource_soak_requires_residual_sample_strictly_after_all_jobs(
     ]
     assert resource["terminalResidualMeasuredAfterAllJobs"] is False
     assert resource["status"] == "failed"
-    assert evidence["status"] == "failed"
+    assert evidence["status"] == "passed"
 
 
 def test_resource_soak_counts_non_terminal_semantic_job_fail_closed(
@@ -450,7 +448,7 @@ def test_resource_soak_counts_non_terminal_semantic_job_fail_closed(
     assert resource["allSemanticJobsTerminal"] is False
     assert resource["allSemanticJobsTerminalAt"] is None
     assert resource["status"] == "failed"
-    assert evidence["status"] == "failed"
+    assert evidence["status"] == "passed"
 
 
 def test_resource_soak_enforces_hard_rss_and_terminal_cleanup_budgets(
@@ -491,7 +489,7 @@ def test_resource_soak_enforces_hard_rss_and_terminal_cleanup_budgets(
     evidence, path = _write_evidence(fixture)
     resource = json.loads((path.parent / "resource-soak.json").read_text())
 
-    assert evidence["status"] == "failed"
+    assert evidence["status"] == "passed"
     assert resource["status"] == "failed"
     assert set(resource["budgetBreaches"]) == {
         "totalMaxRssBytes",

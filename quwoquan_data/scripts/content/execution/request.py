@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import math
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -17,27 +15,61 @@ def resolve_candidate_pool(
     quota: object,
     count: object,
 ) -> tuple[int, int]:
-    """Return the approved quota and the oversampled candidate pool.
+    """Return the approved quota and the first pursuit round's candidate pool.
 
-    ``--quota`` is the delivery promise.  ``--count`` only widens the candidate
-    pool beyond the policy oversample factor; omitting it derives the pool from
-    that single policy truth source.
+    ``--quota`` is the delivery promise.  ``--count`` only widens the first
+    round beyond the policy oversample factor; omitting it derives the round
+    from that single policy truth source.  Later rounds are sized by
+    ``QuotaPursuitProgress.next_round_pool`` against the open deficit, so a
+    below-forecast pass rate is recovered by replenishment rather than by an
+    inflated one-shot draw.
     """
+    from content.execution.planning.quota_pursuit import initial_candidate_pool
     from core.runtime_policy import active_runtime_policy
 
     if isinstance(quota, bool) or not isinstance(quota, int) or quota < 1:
         raise SystemExit("[task execute] GATE_BLOCK --quota must be a positive integer")
-    factor = active_runtime_policy().oversample_factor
-    derived = int(math.ceil(quota * factor))
+    derived = initial_candidate_pool(
+        quota,
+        oversample_factor=active_runtime_policy().oversample_factor,
+    )
     if count is None:
         return quota, derived
     if isinstance(count, bool) or not isinstance(count, int) or count < 1:
         raise SystemExit("[task execute] GATE_BLOCK --count must be a positive integer")
-    if count < quota:
-        raise SystemExit(
-            f"[task execute] GATE_BLOCK --count {count} must not be smaller than --quota {quota}"
-        )
     return quota, count
+
+
+def derive_capacity_from_execution(
+    *,
+    execution_id: str,
+    work_unit_count: int,
+    capacity_calibration: Mapping[str, Any],
+    frozen_at_epoch_seconds: int,
+) -> dict[str, Any]:
+    """Derive the governed capacity fields for one single-execution request.
+
+    The campaign envelope already derives this topology from its frozen
+    work-unit count and its selected calibration receipt. A single execution
+    carries the same decision, so it must read the same truth source instead of
+    asking the caller to hand-author a digest that no document would back.
+    """
+    from content.execution.identity import parse_execution_id
+    from content.execution.planning.capacity_policy import (
+        derive_workload_capacity_fields,
+    )
+
+    try:
+        identity = parse_execution_id(execution_id)
+    except ValueError as exc:
+        raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
+    return derive_workload_capacity_fields(
+        target_scale=identity.phase.value,
+        carrier=identity.content_type.value,
+        work_unit_count=work_unit_count,
+        capacity_calibration=capacity_calibration,
+        frozen_at_epoch_seconds=frozen_at_epoch_seconds,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,9 +79,7 @@ class RuntimeExecutionRequest:
     selector: TargetSelector
     count: int
     quota: int
-    required_workers: int
-    partition_count: int
-    capacity_plan_digest: str
+    execution_authority: Mapping[str, Any]
     topic: str | None
     source_providers: tuple[str, ...]
     target_names: tuple[str, ...]
@@ -58,6 +88,7 @@ class RuntimeExecutionRequest:
     source_pool_evidence_root_ref: str | None = None
     source_pool_selection: Mapping[str, Any] | None = None
     rewrite: Mapping[str, Any] | None = None
+    retry_review_feedback: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if not self.family_ref or not self.region_ref:
@@ -68,14 +99,11 @@ class RuntimeExecutionRequest:
             raise ValueError("count must be a positive integer")
         if isinstance(self.quota, bool) or self.quota < 1:
             raise ValueError("quota must be a positive integer")
-        if self.quota > self.count:
-            raise ValueError("quota must not exceed the candidate pool count")
-        if isinstance(self.required_workers, bool) or self.required_workers < 1:
-            raise ValueError("requiredWorkers must be a positive integer")
-        if self.partition_count not in {16, 32, 64, 128, 256}:
-            raise ValueError("partitionCount must be a governed partition count")
-        if not re.fullmatch(r"sha256:[a-f0-9]{64}", self.capacity_plan_digest):
-            raise ValueError("capacityPlanDigest must be a canonical sha256 digest")
+        from content.execution.planning.execution_authority import (
+            assert_execution_authority,
+        )
+
+        assert_execution_authority(self.execution_authority)
         if self.worker_host_set_binding is not None:
             from core.schema import assert_valid
 
@@ -93,13 +121,8 @@ class RuntimeExecutionRequest:
             raise ValueError("targetNames must be deduplicated")
         if any(not name.strip() for name in self.target_names):
             raise ValueError("targetNames must contain non-empty values")
-        # 四载体 campaign 共享同一份 current-wave targetNames：小目标载体（如
-        # M100 video quota=10、count=18）从大名单挑 quota 个交付，名单大于该载体
-        # 候选池是共享名单的预期形态。唯一的硬下限是名单不得小于交付承诺。
-        if self.target_names and len(self.target_names) < self.quota:
-            raise ValueError(
-                "targetNames must contain at least the governed quota"
-            )
+        # quota is a content-object target. count/targetNames describe the
+        # unique-entity candidate scope and therefore may be smaller than quota.
         if self.rewrite is not None:
             from content.execution.planning.rewrite import RewriteBinding
 
@@ -108,6 +131,14 @@ class RuntimeExecutionRequest:
                 raise ValueError("targeted rewrite count and quota must both equal 1")
             if self.target_names != (rewrite.target_name,):
                 raise ValueError("targeted rewrite must freeze exactly its source target")
+        if self.retry_review_feedback is not None:
+            from content.execution.planning.retry_review_feedback import (
+                validate_retry_review_feedback,
+            )
+
+            feedback = validate_retry_review_feedback(self.retry_review_feedback)
+            if tuple(feedback["failedObjectRefs"]) == ():
+                raise ValueError("retry review feedback must contain failed objects")
         pool_parts = (
             self.scale_source_pool,
             self.source_pool_evidence_root_ref,
@@ -133,6 +164,14 @@ class RuntimeExecutionRequest:
                 carrier=str(selection.get("carrier") or ""),
                 count=self.count,
             )
+
+    def capacity_binding(self) -> dict[str, Any]:
+        """Project the execution-layer capacity source binding deterministically."""
+        from content.execution.planning.execution_authority import (
+            capacity_binding_from_authority,
+        )
+
+        return capacity_binding_from_authority(self.execution_authority)
 
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> "RuntimeExecutionRequest":
@@ -167,11 +206,56 @@ class RuntimeExecutionRequest:
             for value in (getattr(args, "target_names", ()) or ())
             if str(value).strip()
         )
-        required_workers = getattr(args, "required_workers", None)
-        partition_count = getattr(args, "partition_count", None)
-        capacity_plan_digest = str(
-            getattr(args, "capacity_plan_digest", "") or ""
+        raw_capacity_receipt = str(
+            getattr(args, "capacity_calibration_receipt", "") or ""
         ).strip()
+        from content.execution.planning.execution_authority import (
+            ExecutionAuthorityError,
+            build_bounded_execution_authority,
+            governed_execution_authority,
+        )
+
+        if raw_capacity_receipt:
+            from content.execution.planning.capacity_calibration import (
+                CapacityCalibrationError,
+                bind_capacity_calibration_source,
+                current_host_class,
+                resolve_capacity_calibration_ref,
+            )
+
+            receipt_ref = raw_capacity_receipt
+            try:
+                receipt_path = resolve_capacity_calibration_ref(receipt_ref)
+            except CapacityCalibrationError as exc:
+                raise SystemExit(
+                    f"[task execute] GATE_BLOCK capacity calibration: {exc}"
+                ) from exc
+
+            provider_tier = str(
+                getattr(args, "semantic_selection_id", "") or "default"
+            ).strip()
+            try:
+                execution_authority = governed_execution_authority(
+                    bind_capacity_calibration_source(
+                        receipt_path=receipt_path,
+                        receipt_ref=receipt_ref,
+                        host_class=current_host_class(),
+                        provider_tier=provider_tier,
+                    )
+                )
+            except CapacityCalibrationError as exc:
+                raise SystemExit(
+                    f"[task execute] GATE_BLOCK capacity calibration: {exc}"
+                ) from exc
+        else:
+            # 无 receipt 只有一条确定性出路：quota 落在受版本控制 bounded
+            # policy 内的 explicit 小批请求。越界仍是 typed blocked。
+            try:
+                execution_authority = build_bounded_execution_authority(
+                    total_objects=quota,
+                )
+            except ExecutionAuthorityError as exc:
+                raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
         raw_host_binding = str(
             getattr(args, "worker_host_set_binding_json", "") or ""
         ).strip()
@@ -185,19 +269,6 @@ class RuntimeExecutionRequest:
                     "[task execute] GATE_BLOCK --worker-host-set-binding-json must be an object"
                 )
             worker_host_set_binding = dict(decoded)
-        if (
-            isinstance(required_workers, bool)
-            or not isinstance(required_workers, int)
-            or required_workers < 1
-            or isinstance(partition_count, bool)
-            or not isinstance(partition_count, int)
-            or partition_count not in {16, 32, 64, 128, 256}
-            or not re.fullmatch(r"sha256:[a-f0-9]{64}", capacity_plan_digest)
-        ):
-            raise SystemExit(
-                "[task execute] GATE_BLOCK --required-workers, --partition-count "
-                "and --capacity-plan-digest are required governed capacity inputs"
-            )
         pool_id = str(getattr(args, "scale_source_pool_id", "") or "").strip()
         pool_fields = {
             "poolId": pool_id,
@@ -245,6 +316,37 @@ class RuntimeExecutionRequest:
                     "[task execute] GATE_BLOCK DATA.SOURCE.POOL_SHORTFALL: "
                     "scale source pool runtime binding is incomplete"
                 )
+            # workloadMode/activeCarriers/workloadTargets 是 plan 的确定性投影：
+            # 调用方已用 planFileSha256 把 plan 字节绑定进请求，这里按该摘要
+            # 复验后读取补齐，不构成第二可写真相源。
+            from content.execution.campaign.source_pool_binding_io import (
+                file_sha256,
+            )
+            from core.io import read_json
+            from core.paths import OUTPUT_ROOT
+
+            plan_path = (OUTPUT_ROOT / pool_fields["planRef"]).resolve()
+            if (
+                not plan_path.is_file()
+                or file_sha256(plan_path) != pool_fields["planFileSha256"]
+            ):
+                raise SystemExit(
+                    "[task execute] GATE_BLOCK DATA.SOURCE.POOL_SHORTFALL: "
+                    f"scale source pool plan bytes drift or missing: {plan_path}"
+                )
+            plan_document = read_json(plan_path)
+            if not isinstance(plan_document, Mapping):
+                raise SystemExit(
+                    "[task execute] GATE_BLOCK DATA.SOURCE.POOL_SHORTFALL: "
+                    "scale source pool plan must be an object"
+                )
+            pool_fields.update(
+                {
+                    "workloadMode": str(plan_document["workloadMode"]),
+                    "activeCarriers": list(plan_document["activeCarriers"]),
+                    "workloadTargets": dict(plan_document["workloadTargets"]),
+                }
+            )
             scale_source_pool = pool_fields
             source_pool_selection = {
                 "carrier": str(getattr(args, "source_pool_carrier", "") or ""),
@@ -262,15 +364,32 @@ class RuntimeExecutionRequest:
             from content.execution.planning.rewrite import RewriteBinding
 
             rewrite = RewriteBinding.from_document(raw_rewrite).to_document()
+        raw_retry_review_feedback = getattr(args, "retry_review_feedback", None)
+        retry_review_feedback = None
+        if raw_retry_review_feedback is not None:
+            if not isinstance(raw_retry_review_feedback, Mapping):
+                raise SystemExit(
+                    "[task execute] GATE_BLOCK retry review feedback must be an object"
+                )
+            from content.execution.planning.retry_review_feedback import (
+                validate_retry_review_feedback,
+            )
+
+            retry_review_feedback = validate_retry_review_feedback(
+                raw_retry_review_feedback
+            )
+            execution_id = str(getattr(args, "execution_id", "") or "").strip()
+            if retry_review_feedback.get("executionId") != execution_id:
+                raise SystemExit(
+                    "[task execute] GATE_BLOCK retry review feedback executionId drift"
+                )
         return cls(
             family_ref=family_ref,
             region_ref=region_ref,
             selector=selector,
             count=count,
             quota=quota,
-            required_workers=required_workers,
-            partition_count=partition_count,
-            capacity_plan_digest=capacity_plan_digest,
+            execution_authority=execution_authority,
             worker_host_set_binding=worker_host_set_binding,
             topic=topic,
             source_providers=providers,
@@ -279,6 +398,7 @@ class RuntimeExecutionRequest:
             source_pool_evidence_root_ref=evidence_ref or None,
             source_pool_selection=source_pool_selection,
             rewrite=rewrite,
+            retry_review_feedback=retry_review_feedback,
         )
 
     @classmethod
@@ -291,9 +411,7 @@ class RuntimeExecutionRequest:
                 "selector",
                 "count",
                 "quota",
-                "requiredWorkers",
-                "partitionCount",
-                "capacityPlanDigest",
+                "executionAuthority",
                 "workerHostSetBinding",
                 "topic",
                 "sourceProviders",
@@ -303,13 +421,14 @@ class RuntimeExecutionRequest:
                 "scaleSourcePool", "sourcePoolEvidenceRootRef", "sourcePoolSelection"
             }
             rewrite_keys = {"rewrite"}
+            retry_feedback_keys = {"retryReviewFeedback"}
             keys = set(document.to_document())
-            if keys not in {
-                frozenset(base),
-                frozenset(base | pool_keys),
-                frozenset(base | rewrite_keys),
-                frozenset(base | pool_keys | rewrite_keys),
-            }:
+            allowed_keys = base | pool_keys | rewrite_keys | retry_feedback_keys
+            if (
+                not base.issubset(keys)
+                or not keys.issubset(allowed_keys)
+                or bool(keys & pool_keys) != pool_keys.issubset(keys)
+            ):
                 raise JsonObjectDecodeError(
                     "execution request keys must be exactly "
                     + ", ".join(sorted(base))
@@ -321,9 +440,9 @@ class RuntimeExecutionRequest:
                 selector=TargetSelector(document.string("selector")),
                 count=document.integer("count"),
                 quota=document.integer("quota"),
-                required_workers=document.integer("requiredWorkers"),
-                partition_count=document.integer("partitionCount"),
-                capacity_plan_digest=document.string("capacityPlanDigest"),
+                execution_authority=document.object(
+                    "executionAuthority"
+                ).to_document(),
                 worker_host_set_binding=(
                     dict(raw["workerHostSetBinding"])
                     if isinstance(raw.get("workerHostSetBinding"), Mapping)
@@ -352,6 +471,11 @@ class RuntimeExecutionRequest:
                     if isinstance(raw.get("rewrite"), Mapping)
                     else None
                 ),
+                retry_review_feedback=(
+                    dict(raw["retryReviewFeedback"])
+                    if isinstance(raw.get("retryReviewFeedback"), Mapping)
+                    else None
+                ),
             )
         except (JsonObjectDecodeError, ValueError) as exc:
             raise SystemExit(f"[task execute] GATE_BLOCK invalid frozen request: {exc}") from exc
@@ -363,9 +487,7 @@ class RuntimeExecutionRequest:
             "selector": self.selector.value,
             "count": self.count,
             "quota": self.quota,
-            "requiredWorkers": self.required_workers,
-            "partitionCount": self.partition_count,
-            "capacityPlanDigest": self.capacity_plan_digest,
+            "executionAuthority": dict(self.execution_authority),
             "workerHostSetBinding": (
                 dict(self.worker_host_set_binding)
                 if self.worker_host_set_binding is not None
@@ -381,6 +503,8 @@ class RuntimeExecutionRequest:
             document["sourcePoolSelection"] = dict(self.source_pool_selection or {})
         if self.rewrite is not None:
             document["rewrite"] = dict(self.rewrite)
+        if self.retry_review_feedback is not None:
+            document["retryReviewFeedback"] = dict(self.retry_review_feedback)
         return document
 
 

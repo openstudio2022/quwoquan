@@ -5,9 +5,21 @@ enum CircleErrorCode {
   invalidArgument('CIRCLE.USER.invalid_argument', '请求参数无效', 400),
   circleNotFound('CIRCLE.USER.not_found', '圈子不存在', 404),
   circleArchived('CIRCLE.USER.circle_archived', '圈子已归档，无法修改', 409),
-  circleVersionConflict('CIRCLE.USER.circle_version_conflict', '圈子信息已被更新，请刷新后重试', 409),
-  circleIdempotencyConflict('CIRCLE.USER.circle_idempotency_conflict', '重复请求与原命令不一致', 409),
-  circleStorageWriteFailed('CIRCLE.SYSTEM.circle_storage_write_failed', '圈子操作失败，请稍后重试', 500),
+  circleVersionConflict(
+    'CIRCLE.USER.circle_version_conflict',
+    '圈子信息已被更新，请刷新后重试',
+    409,
+  ),
+  circleIdempotencyConflict(
+    'CIRCLE.USER.circle_idempotency_conflict',
+    '重复请求与原命令不一致',
+    409,
+  ),
+  circleStorageWriteFailed(
+    'CIRCLE.SYSTEM.circle_storage_write_failed',
+    '圈子操作失败，请稍后重试',
+    500,
+  ),
   permissionDenied('CIRCLE.USER.permission_denied', '权限不足', 403),
   internalError('CIRCLE.SYSTEM.internal_error', '服务异常，请稍后重试', 500),
   unknown('', '圈子服务异常，请稍后重试', 500);
@@ -45,9 +57,12 @@ class CircleErrorMessages {
     CircleErrorCode.invalidArgument: 'Invalid request',
     CircleErrorCode.circleNotFound: 'Circle not found',
     CircleErrorCode.circleArchived: 'Circle is archived and cannot be modified',
-    CircleErrorCode.circleVersionConflict: 'Circle was updated concurrently, refresh and retry',
-    CircleErrorCode.circleIdempotencyConflict: 'Idempotency key was reused for another circle command',
-    CircleErrorCode.circleStorageWriteFailed: 'Circle operation failed, retry later',
+    CircleErrorCode.circleVersionConflict:
+        'Circle was updated concurrently, refresh and retry',
+    CircleErrorCode.circleIdempotencyConflict:
+        'Idempotency key was reused for another circle command',
+    CircleErrorCode.circleStorageWriteFailed:
+        'Circle operation failed, retry later',
     CircleErrorCode.permissionDenied: 'Permission denied',
     CircleErrorCode.internalError: 'Service error, please try again',
   };

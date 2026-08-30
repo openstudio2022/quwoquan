@@ -12,6 +12,9 @@ fields:
   - {name: authorId, type: string, nullable: true}
   - {name: authorDisplayName, type: string, nullable: true}
   - {name: authorAvatarUrl, type: string, nullable: true}
+  # 作者头像的媒体资产标识与交付访问模式（DEC-033）；同 feed 投影语义。
+  - {name: authorAvatarAssetId, type: string, nullable: true}
+  - {name: authorAvatarAccessMode, type: enum, enum_ref: MediaDeliveryAccessMode, nullable: true}
   - {name: title, type: string, nullable: true}
   - {name: body, type: string, nullable: true}
   - {name: summary, type: string, nullable: true}

@@ -22,6 +22,7 @@ from ..capabilities.user_service import (
     AUTHENTICATED_ACTORS,
     PERSONA_RELATIONSHIP,
     AuthenticatedActorsParams,
+    MutualActorRelationship,
     RelationshipParams,
 )
 from .ids import AcceptanceCaseId
@@ -91,6 +92,12 @@ def chat_recall_case() -> CaseRef[DirectConversationResult]:
     actors = AUTHENTICATED_ACTORS.bind(
         AuthenticatedActorsParams(
             roles=(ActorRole.SENDER, ActorRole.RECEIVER),
+            mutual_relationships=(
+                MutualActorRelationship(
+                    source_role=ActorRole.SENDER,
+                    target_role=ActorRole.RECEIVER,
+                ),
+            ),
         )
     )
     conversation = DIRECT_CONVERSATION_WITH_MESSAGES.bind(

@@ -7,7 +7,22 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from PIL import Image, ImageStat
+
+def _pillow() -> tuple[Any, Any]:
+    """按需取 Pillow。
+
+    本包的 ``__init__`` 全量 re-export，顶层导入 Pillow 会让每个只需要日志解析的
+    调用方（例如 launcher supervisor）都硬依赖它，在未安装的环境整体起不来。
+    只有真机首帧截图分析需要 Pillow，因此推迟到实际使用点。
+    """
+    try:
+        from PIL import Image, ImageStat
+    except ImportError as error:
+        raise RuntimeError(
+            "DEVICE.STARTUP_FIRST_FRAME.pillow_absent: "
+            "截图分析需要 quwoquan_data/requirements.txt 声明的 Pillow"
+        ) from error
+    return Image, ImageStat
 
 
 @dataclass(frozen=True)
@@ -42,7 +57,8 @@ class ScreenshotAnalysis:
 
 
 def analyze_screenshot(path: Path, offset_ms: int | None = None) -> ScreenshotAnalysis:
-    image = Image.open(path).convert("RGB")
+    pil_image, pil_image_stat = _pillow()
+    image = pil_image.open(path).convert("RGB")
     width, height = image.size
     crop = image.crop(
         (
@@ -65,7 +81,7 @@ def analyze_screenshot(path: Path, offset_ms: int | None = None) -> ScreenshotAn
         if distance > 34:
             foreground += 1
     foreground_ratio = foreground / max(len(pixels), 1)
-    stddev = ImageStat.Stat(crop).stddev
+    stddev = pil_image_stat.Stat(crop).stddev
     stddev_avg = sum(stddev) / max(len(stddev), 1)
     near_white_background = min(median_rgb) >= 250
     brand_blue_base = (

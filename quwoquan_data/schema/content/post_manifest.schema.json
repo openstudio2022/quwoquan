@@ -15,7 +15,8 @@
     },
     "semanticMention": {
       "type": "object",
-      "required": ["mentionId", "kind", "surface", "location", "rangeStart", "rangeEnd", "status"],
+      "description": "语义指称。仅 location=body 的指称落在正文字符流上，因此只有它必须携带 rangeStart/rangeEnd；manifest 指称由 entityRefs/tagRefs 派生，没有可指的正文区间。",
+      "required": ["mentionId", "kind", "surface", "location", "status"],
       "properties": {
         "mentionId": { "type": "string" },
         "kind": { "type": "string", "enum": ["entity", "tag"] },
@@ -26,7 +27,12 @@
         "status": { "type": "string", "enum": ["published", "pending_review", "rejected", "offline"] },
         "candidateId": { "type": ["string", "null"] },
         "targetRef": { "type": ["string", "null"] }
-      }
+      },
+      "if": {
+        "properties": { "location": { "const": "body" } },
+        "required": ["location"]
+      },
+      "then": { "required": ["rangeStart", "rangeEnd"] }
     },
     "sourceAttribution": {
       "type": "object",
@@ -45,7 +51,8 @@
         "modelReleaseStatus",
         "propertyReleaseStatus",
         "collectedAt",
-        "takedownPolicy"
+        "takedownPolicy",
+        "derivedModifications"
       ],
       "properties": {
         "isOriginal": { "type": "boolean" },
@@ -77,7 +84,15 @@
         "modelReleaseStatus": { "type": "string", "minLength": 1 },
         "propertyReleaseStatus": { "type": "string", "minLength": 1 },
         "collectedAt": { "type": "string", "minLength": 1 },
-        "takedownPolicy": { "type": "string", "minLength": 1 }
+        "takedownPolicy": { "type": "string", "minLength": 1 },
+        "derivedModifications": {
+          "description": "CC 协议要求指明的衍生修改闭集，取值同 core.media_source_provenance.DerivedModification。必填：在场为空（空数组）表示发布字节相对原始素材逐字节原样，缺席不合法——两者是不同的事实，缺席时无法判断发布物有没有被改过。",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["video_frame_extraction", "crop", "format_conversion"]
+          }
+        }
       },
       "allOf": [
         {

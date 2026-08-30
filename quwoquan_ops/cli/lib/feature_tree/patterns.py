@@ -8,14 +8,23 @@ ACCEPTANCE_ID_RE = re.compile(r"^#{3,6}\s+(UAT|DOM|SIT|GWT)-(\d{3,})\b", re.MULT
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 LINK_RE = re.compile(r"(?<!!)\[[^\]]*\]\(([^)]+)\)")
 PATH_RE = re.compile(
-    r"`((?:quwoquan_app|quwoquan_service|quwoquan_data|quwoquan_ops|\.github)(?:/[^`\s；，]+)*)`"
+    r"`((?:quwoquan_app|quwoquan_service|quwoquan_data|quwoquan_ops"
+    r"|\.github|\.agents|\.codex|\.cursor)(?:/[^`\s；，]+)*)`"
 )
 ENGINEERING_CLAIM_RE = re.compile(
-    r"^-\s+(App|Contracts|Metadata|Service|Data|Ops|CI)(?:（[^）]*）)?："
+    r"^-\s+(App|Contracts|Metadata|Service|Data|Ops|CI|Agent)(?:（[^）]*）)?："
 )
 SPEC_REF_RE = re.compile(
     r"specs/feature-tree/(?:[A-Za-z0-9_.-]+/)*spec\.md#[A-Za-z0-9_.%\-\u4e00-\u9fff]+"
 )
+# 绑定标记有两种显式形态：ref 同行前置 `spec_ref` token（注释/常量），或
+# 独占一行的 `spec_ref:` 后接连续列表项。裸字符串（fixture、断言消息、文档提及）
+# 不构成绑定；`not_a_spec_ref` 子串与 Go `SpecRef:` readiness 字段也故意不匹配。
+SPEC_REF_MARKER_RE = re.compile(r"\bspec_ref\b", re.IGNORECASE)
+SPEC_REF_BLOCK_MARKER_RE = re.compile(
+    r"^\s*(?:[#*/]+\s*)?spec_ref\s*:\s*$", re.IGNORECASE
+)
+SPEC_REF_BLOCK_ITEM_RE = re.compile(r"^\s*(?:[#*/]+\s*)?-\s+")
 REPO_SPEC_PATH_RE = re.compile(r"`(specs/[A-Za-z0-9_./-]+\.md)(?:#[^`]*)?`")
 # 复合验收的结果子句：结果角色的顶层 bullet 是子句的载体。角色只由行首关键字决定，
 # `GIVEN`/`WHEN`/`条件：` 是前置条件，`AND` 不表达独立性、只继承最近一条角色 bullet 的角色，
@@ -41,6 +50,13 @@ ACCEPTANCE_SECTION_RE = re.compile(
 )
 # 子句级 spec_ref：`...spec.md#gwt-004.t2` 绑定该锚点第 2 个结果子句。
 CLAUSE_ANCHOR_RE = re.compile(r"^((?:uat|dom|sit|gwt)-\d{3,})\.t(\d+)$")
+# 验收锚点闭集与位数的唯一定义点：消费方语义过滤（coverage-map、
+# service-architecture、domain-remote 等）引用本常量做「验收锚点 + 可选 .tN
+# 子句」判定（group(1) 为剥离子句后的主锚点），不得各自字面枚举闭集——
+# 新增锚点类型只改这一处。位数与 ACCEPTANCE_ID_RE 同源为 \d{3,}。
+ACCEPTANCE_ANCHOR_RE = re.compile(
+    r"^((?:uat|dom|sit|gwt)-\d{3,})(?:\.t\d+)?$", re.IGNORECASE
+)
 OPEN_BLOCK_RE = re.compile(r"^###\s+(OPEN-\d{3,})\b[\s\S]*?(?=^###\s|^##\s|\Z)", re.MULTILINE)
 FORBIDDEN_GLOBALS = (
     "tree_index.yaml",

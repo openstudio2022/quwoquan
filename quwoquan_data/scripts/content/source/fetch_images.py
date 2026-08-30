@@ -10,6 +10,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from core.content_library import link_bytes_from_library
 from core.paths import (
     CONTENT_CAMPAIGN_CAPSULES_ROOT,
     DATA_ROOT,
@@ -379,7 +380,7 @@ def fetch_image(
     ext = payload["ext"]
     status = 200
     file_name = f"img_{index:02d}{ext}"
-    (images_dir / file_name).write_bytes(body)
+    link_bytes_from_library(body, images_dir / file_name, kind="media")
     return {
         "url": payload.get("url") or url,
         "requestedUrl": payload.get("requestedUrl") or url,

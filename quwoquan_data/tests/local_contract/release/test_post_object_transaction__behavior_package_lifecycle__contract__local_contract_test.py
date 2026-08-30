@@ -35,6 +35,7 @@ from support.post_object_transaction_fixture import (
     _isolate_creator_avatar_cas,
     _write_json,
     build_post_object_transaction_package,
+    make_text_only_article,
 )
 
 
@@ -138,7 +139,7 @@ def test_applied_post_pool_digest_repair_appends_record_sequence(
         )
         _write_json(record_path, record)
 
-    assert post_promotion._repair_applied_pool_record_drift(
+    assert post_promotion.repair_applied_post_pool_record_drift(
         package_root=package,
         canonical_post=canonical,
         canonical_ref=POST_REF,
@@ -153,13 +154,7 @@ def test_applied_post_pool_digest_repair_appends_record_sequence(
 
 def test_text_only_post_transaction_does_not_require_media_asset(tmp_path: Path) -> None:
     execution, package, publish, transaction_id = _fixture(tmp_path)
-    manifest_path = execution / "posts" / POST_REF / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["contentType"] = "article"
-    manifest["carrier"] = "article"
-    manifest["publishMediaMode"] = "text_only"
-    manifest["assets"] = []
-    _write_json(manifest_path, manifest)
+    make_text_only_article(execution)
 
     transaction = build_post_object_transaction_package(
         execution_root=execution,
@@ -196,15 +191,7 @@ def test_pre_audit_text_only_package_adds_missing_media_mode_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     execution, package, _publish, transaction_id = _fixture(tmp_path)
-    manifest_path = execution / "posts" / POST_REF / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest.update(
-        contentType="article",
-        carrier="article",
-        publishMediaMode="text_only",
-        assets=[],
-    )
-    _write_json(manifest_path, manifest)
+    make_text_only_article(execution)
     first = build_post_object_transaction_package(
         execution_root=execution,
         object_ref=POST_REF,
@@ -296,15 +283,7 @@ def test_media_post_transaction_rejects_empty_rights_closure(tmp_path: Path) -> 
 
 def test_text_only_package_rejects_media_mode_drift(tmp_path: Path) -> None:
     execution, package, publish, transaction_id = _fixture(tmp_path)
-    manifest_path = execution / "posts" / POST_REF / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest.update(
-        contentType="article",
-        carrier="article",
-        publishMediaMode="text_only",
-        assets=[],
-    )
-    _write_json(manifest_path, manifest)
+    make_text_only_article(execution)
     build_post_object_transaction_package(
         execution_root=execution,
         object_ref=POST_REF,
@@ -332,15 +311,7 @@ def test_text_only_package_rejects_media_mode_drift(tmp_path: Path) -> None:
 
 def test_text_only_package_rejects_missing_rights_media_mode(tmp_path: Path) -> None:
     execution, package, publish, transaction_id = _fixture(tmp_path)
-    manifest_path = execution / "posts" / POST_REF / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest.update(
-        contentType="article",
-        carrier="article",
-        publishMediaMode="text_only",
-        assets=[],
-    )
-    _write_json(manifest_path, manifest)
+    make_text_only_article(execution)
     build_post_object_transaction_package(
         execution_root=execution,
         object_ref=POST_REF,

@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/media_playback_failure.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
@@ -11,14 +12,14 @@ class VideoPlaybackFailureOverlay extends StatelessWidget {
   const VideoPlaybackFailureOverlay({
     super.key,
     required this.failure,
-    this.thumbnailReference,
+    required this.thumbnailBinding,
     this.retrying = false,
     this.onRetry,
     this.onExit,
   });
 
   final MediaPlaybackFailure failure;
-  final MediaDeliveryReference? thumbnailReference;
+  final MediaDeliveryBinding thumbnailBinding;
   final bool retrying;
   final VoidCallback? onRetry;
   final VoidCallback? onExit;
@@ -27,7 +28,6 @@ class VideoPlaybackFailureOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final copy = failure.copy;
     final message = copy.message?.trim() ?? '';
-    final thumbnailUrl = thumbnailReference?.url ?? '';
     final recoveryCopy = AppUserRecoveryContract.copyFor(
       failure.userRecoveryGroup,
     );
@@ -39,15 +39,22 @@ class VideoPlaybackFailureOverlay extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (thumbnailUrl.isNotEmpty)
-            AppCachedNetworkImage(
-              imageUrl: thumbnailUrl,
-              imageUrlCandidates: <String>[thumbnailUrl],
+          mediaDeliveryImage(
+            binding: thumbnailBinding,
+            kind: MediaDeliveryKind.image,
+            fit: BoxFit.cover,
+            placeholder: const SizedBox.shrink(),
+            errorWidget: const SizedBox.shrink(),
+            absentWidget: const SizedBox.shrink(),
+            publicBuilder: (context, publicUrl) => AppCachedNetworkImage(
+              imageUrl: publicUrl,
+              imageUrlCandidates: <String>[publicUrl],
               cdnPreset: CdnImagePreset.cover,
               fit: BoxFit.cover,
               placeholder: const SizedBox.shrink(),
               errorWidget: const SizedBox.shrink(),
             ),
+          ),
           ColoredBox(color: AppColors.black.withValues(alpha: 0.56)),
           Center(
             child: ImmersiveMediaFailureContent(

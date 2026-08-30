@@ -2,8 +2,8 @@
 
 Commons 公开视频进入统一 acquisition 链路前，必须留下可复核的准入证据：
 create-once 写入保证同一 candidate 不被就地篡改，safe ref/file 保证证据不逃逸
-acquisition root，review evidence 把 reviewer 的 request/attempt/capacity receipt
-与 digest 绑定，replay 时可逐项校验漂移。
+acquisition root，review evidence 把 reviewer 的 request/attempt 与 digest 绑定，
+replay 时可逐项校验漂移。
 """
 from __future__ import annotations
 
@@ -15,9 +15,6 @@ from pathlib import Path
 from typing import Any
 
 from core.io import read_json
-from core.runtime_policy import active_runtime_policy
-
-from content.execution.agent.outcome import AgentRunOutcome
 from content.source.professional_safety_evidence import file_sha256
 
 REVIEW_FIELDS = frozenset(
@@ -98,25 +95,6 @@ def safe_file(root: Path, ref: str) -> Path:
     return candidate
 
 
-def source_runner(prompt: str) -> AgentRunOutcome:
-    """在不构造 executionId 的前提下运行有硬时限的 Cursor Grok reviewer。"""
-    from core.cursor_model import CursorModelSelection
-
-    from content.execution.agent.agent_worker import (
-        run_source_review_agent_isolated,
-    )
-
-    policy = active_runtime_policy()
-    selection = policy.explicit_semantic_selection("cursor_grok").binding
-    return run_source_review_agent_isolated(
-        runtime=policy.explicit_semantic_selection("cursor_grok").runtime,
-        model_selection=CursorModelSelection.from_config(
-            selection.model, selection.model_parameters, label="Commons video reviewer"
-        ),
-        prompt=prompt,
-    )
-
-
 def parse_judgment(text: str) -> dict[str, Any] | None:
     candidates = [text.strip()]
     first, last = text.find("{"), text.rfind("}")
@@ -132,102 +110,7 @@ def parse_judgment(text: str) -> dict[str, Any] | None:
     return None
 
 
-def copy_capacity_receipt(source: Path, *, root: Path) -> Path:
-    destination = root / "source-reviews" / "capacity-receipts" / source.name
-    body = source.read_bytes()
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        if (
-            destination.is_symlink()
-            or not destination.is_file()
-            or destination.read_bytes() != body
-        ):
-            raise CommonsVideoInputError(
-                "DATA.SOURCE.REVIEW_CREATE_ONCE_CONFLICT",
-                f"capacity receipt collision: {destination}",
-            ) from None
-        return destination
-    with os.fdopen(descriptor, "wb") as handle:
-        handle.write(body)
-        handle.flush()
-        os.fsync(handle.fileno())
-    return destination
-
-
-def review_evidence(
-    *,
-    root: Path,
-    source_review: Mapping[str, str],
-    journal: Mapping[str, Any],
-) -> dict[str, Any]:
-    outcome = journal.get("outcome")
-    if not isinstance(outcome, AgentRunOutcome) or not outcome.succeeded:
-        kind = (
-            outcome.failure_kind.value
-            if isinstance(outcome, AgentRunOutcome) and outcome.failure_kind
-            else "unknown"
-        )
-        code = (
-            outcome.error_code
-            if isinstance(outcome, AgentRunOutcome) and outcome.error_code
-            else "no_code"
-        )
-        raise CommonsVideoInputError(
-            "DATA.AGENT.REVIEW_FAILED", f"{kind}:{code}"
-        )
-    request_path = journal["requestPath"]
-    attempt_path = journal["attemptPath"]
-    capacity_path = copy_capacity_receipt(journal["capacityReceiptPath"], root=root)
-    attempt = journal["attempt"]
-    evidence = {
-        "sourceReview": dict(source_review),
-        "sourceReviewRequestRef": safe_ref(request_path, root),
-        "sourceReviewRequestSha256": file_sha256(request_path),
-        "sourceReviewAttemptRef": safe_ref(attempt_path, root),
-        "sourceReviewAttemptSha256": file_sha256(attempt_path),
-        "sourceCapacityReceiptRef": safe_ref(capacity_path, root),
-        "sourceCapacityReceiptSha256": file_sha256(capacity_path),
-        "provider": outcome.provider.value,
-        "model": "grok-4.5",
-        "runId": outcome.run_id,
-        "resultSha256": str(attempt["resultSha256"]),
-    }
-    return evidence
-
-
-def validate_review_evidence(
-    safety: Mapping[str, Any], *, root: Path
-) -> None:
-    evidence = safety.get("reviewEvidence")
-    if not isinstance(evidence, Mapping):
-        raise CommonsVideoInputError(
-            "DATA.SOURCE.REVIEW_EVIDENCE_MISSING",
-            "Commons source safety evidence lacks source-scoped independent review",
-        )
-    pairs = (
-        ("sourceReviewRequestRef", "sourceReviewRequestSha256"),
-        ("sourceReviewAttemptRef", "sourceReviewAttemptSha256"),
-        ("sourceCapacityReceiptRef", "sourceCapacityReceiptSha256"),
-    )
-    for ref_field, digest_field in pairs:
-        path = safe_file(root, str(evidence.get(ref_field) or ""))
-        if file_sha256(path) != str(evidence.get(digest_field) or ""):
-            raise CommonsVideoInputError(
-                "DATA.SOURCE.REVIEW_REPLAY_DRIFT",
-                f"source review evidence drift: {ref_field}",
-            )
-    attempt = read_json(
-        safe_file(root, str(evidence["sourceReviewAttemptRef"]))
-    )
-    if (
-        not isinstance(attempt, Mapping)
-        or attempt.get("status") != "finished"
-        or attempt.get("runId") != evidence.get("runId")
-        or attempt.get("resultSha256") != evidence.get("resultSha256")
-    ):
-        raise CommonsVideoInputError(
-            "DATA.SOURCE.REVIEW_REPLAY_DRIFT",
-            "source review attempt no longer binds the recorded review result",
-        )
+__all__ = [
+    "CommonsVideoInputError", "REVIEW_FIELDS", "digest", "parse_judgment",
+    "safe_file", "safe_ref", "write_once",
+]

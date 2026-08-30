@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
 	externalgenerated "quwoquan_service/services/integration-service/generated/external_integration/external_interaction"
@@ -272,5 +273,49 @@ func TestRecoverDeadLetterIdempotencyKeyBoundToAnotherTaskReturnsConflict(t *tes
 	if status != http.StatusConflict ||
 		conflict["code"] != externalgenerated.ErrDeadLetterRecoveryConflict.Error() {
 		t.Fatalf("reused idempotency key must map to recovery conflict: status=%d body=%#v", status, conflict)
+	}
+}
+
+// 短信投递就绪状态只对已验证的 user-service principal 可读。缺少 principal 或
+// 换成别的调用方都必须返回 INTEGRATION.USER.external_interaction_readiness_forbidden
+// （HTTP 403），不得退化成 unauthenticated、internal_error 或泄露就绪结果。
+func TestReadinessWithoutVerifiedUserServicePrincipalReturnsForbidden(t *testing.T) {
+	service := newPushOnlyExternalInteractionService(t, reliabletask.NewMemoryStore())
+	readiness := externalapplication.NewSmsOtpDeliveryReadinessQueryFacade(
+		&readinessProbe{},
+		&readinessRelay{},
+	)
+	handler := httpadapter.NewHandler(service, readiness).Routes()
+
+	for _, principal := range []string{"", "service:content-service", "user:42"} {
+		request := httptest.NewRequest(
+			http.MethodGet,
+			externalgenerated.SmsOtpDeliveryReadinessPath,
+			nil,
+		)
+		if principal != "" {
+			request = request.WithContext(rtauth.WithPrincipal(
+				request.Context(),
+				rtauth.Principal{Claims: rtauth.Claims{Subject: principal}},
+			))
+		}
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		decoded := map[string]any{}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &decoded); err != nil {
+			t.Fatalf("principal=%q decode body=%q: %v", principal, recorder.Body.String(), err)
+		}
+		if recorder.Code != http.StatusForbidden ||
+			decoded["code"] != externalgenerated.ErrExternalInteractionReadinessForbidden.Error() {
+			t.Fatalf(
+				"principal=%q must map to readiness_forbidden: status=%d body=%#v",
+				principal,
+				recorder.Code,
+				decoded,
+			)
+		}
+		if _, leaked := decoded["availability"]; leaked {
+			t.Fatalf("principal=%q must not leak readiness result: body=%#v", principal, decoded)
+		}
 	}
 }

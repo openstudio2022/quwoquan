@@ -21,12 +21,17 @@ class ContentDeliveryRef {
     this.assetId = '',
     this.version = 0,
     this.sha256,
+    this.accessMode,
   });
 
   final String url;
   final String assetId;
   final int version;
   final String? sha256;
+
+  /// 媒体交付形态（DEC-033）：由服务端投影 typed 声明，App 不从 URL 形态推断。
+  /// 契约缺席即为 null（存量 public 投影未带该字段）。
+  final MediaDeliveryAccessMode? accessMode;
 }
 
 /// 作者引用（强类型，替代裸 Map 作者字段）。

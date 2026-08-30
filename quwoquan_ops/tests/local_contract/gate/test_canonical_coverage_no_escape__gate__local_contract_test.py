@@ -64,7 +64,14 @@ def test_the_gate_reads_no_environment_switch_that_could_turn_it_off() -> None:
     for source_path in _gate_source_files():
         source = source_path.read_text(encoding="utf-8")
 
-        assert "os.environ" not in source, source_path.name
+        if source_path.name == "app_runtime.py":
+            # App coverage 必须继承工具链所需的宿主环境，再显式清除所有会改变
+            # runtime/test selection 的键；对应清除行为由 app sharding contract
+            # 逐键验证。这里只允许这一处受控读取，禁止把它扩散成旁路开关。
+            assert source.count("os.environ") == 1
+            assert "dict(os.environ if base is None else base)" in source
+        else:
+            assert "os.environ" not in source, source_path.name
         assert "getenv" not in source, source_path.name
 
 
@@ -204,7 +211,7 @@ def test_repository_baseline_is_provenance_bound_or_explicitly_gate_blocked() ->
     baseline = vcr.load_baseline()
 
     governance = baseline["_governance"]
-    for key in ("owner", "reason", "expires_when"):
+    for key in ("owner", "reason", "expires_when", "measure"):
         assert str(governance.get(key) or "").strip(), f"_governance.{key} 不得为空"
     # 采集范围必须在 governance 里如实交代，不得谎称全量。
     assert vcr.APP_TEST_TARGET in governance["reason"]

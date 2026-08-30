@@ -5,10 +5,45 @@ from pathlib import Path
 from typing import Any
 
 from core.io import write_json, write_ndjson
-from core.paths import REPO_ROOT, ensure_object_stages, execution_catalog, execution_entity_object_dir
+from core.paths import (
+    REPO_ROOT,
+    ensure_object_stages,
+    execution_catalog,
+    execution_entity_object_dir,
+    execution_post_object_dir,
+)
 from content.execution import store
 from content.execution.identity import SelectionPolicy
 from content.execution.workspace import TARGET_SET_REF, write_frozen_target_set
+
+_POST_CARRIERS = {"article", "image", "video"}
+
+
+def _object_stage_root(
+    execution_id: str,
+    *,
+    carrier: str,
+    target: dict[str, Any],
+    type_parts: list[str],
+    name: str,
+) -> Path:
+    """Resolve one frozen target's object root by carrier (DEC-027, fail closed)."""
+    if carrier == "homepage":
+        return execution_entity_object_dir(
+            execution_id, type_parts[0], type_parts[1], name
+        )
+    if carrier not in _POST_CARRIERS:
+        raise ValueError(f"unsupported content carrier: {carrier}")
+    angle = str(target.get("publishAngle") or "").strip()
+    title = str(target.get("publishTitle") or "").strip()
+    seq = target.get("publishSeq") or 1
+    if not angle or not title:
+        raise ValueError(
+            f"post carrier target requires frozen publishAngle/publishTitle: {name}"
+        )
+    return execution_post_object_dir(
+        execution_id, carrier, angle, title, seq=int(seq)
+    )
 
 
 def write_selected_task(spec: dict[str, Any], report: dict[str, Any]) -> Path:
@@ -33,6 +68,12 @@ def write_selected_task(spec: dict[str, Any], report: dict[str, Any]) -> Path:
     store.save_progress(store.init_progress(spec["executionId"], remaining=remaining))
     rows = []
     region = str((spec.get("scope") or {}).get("region") or "")
+    carriers = [
+        str(value) for value in (spec.get("content") or {}).get("carriers") or []
+    ]
+    if len(carriers) != 1:
+        raise ValueError("execution spec must freeze exactly one content carrier")
+    carrier = carriers[0]
     for target in targets:
         entity_type = str(target.get("entityType") or "").strip()
         name = str(target.get("name") or "").strip()
@@ -42,8 +83,12 @@ def write_selected_task(spec: dict[str, Any], report: dict[str, Any]) -> Path:
         if len(type_parts) != 2:
             raise ValueError(f"invalid target entityType: {entity_type}")
         ensure_object_stages(
-            execution_entity_object_dir(
-                spec["executionId"], type_parts[0], type_parts[1], name
+            _object_stage_root(
+                spec["executionId"],
+                carrier=carrier,
+                target=target,
+                type_parts=type_parts,
+                name=name,
             )
         )
         rows.append(

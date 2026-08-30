@@ -15,6 +15,7 @@ from quwoquan_ops.cli.lib.service_core_composition import (
     SERVICE_CORE_MODULES,
     SERVICE_CORE_WORKLOAD,
 )
+from quwoquan_ops.cli.lib.service_runtime_probes import service_probe_matrix
 
 
 PROJECT = "quwoquan_alpha_test_live"
@@ -31,12 +32,23 @@ MANDATORY_STANDALONE = frozenset(
 MANDATORY_INFRA = frozenset(
     {"mongodb", "postgres", "redis", "elasticsearch"}
 )
-MODULE_PROBES = (
-    ("search-service", 18095, "/readyz"),
-    ("content-service", 18080, "/healthz"),
-    ("user-service", 18081, "/readyz"),
-    ("chat-service", 18081, "/healthz"),
+# service-core 合并模块的虚拟监听端口；探针路径不在此硬编码，由各服务
+# deploy 清单声明派生，避免探到服务端未注册的路由（必然 404）。
+MODULE_PROBE_PORTS = (
+    ("search-service", 18095),
+    ("content-service", 18080),
+    ("user-service", 18081),
+    ("chat-service", 18081),
 )
+
+
+def module_probes() -> tuple[tuple[str, int, str], ...]:
+    """合并模块的就绪探针三元组：路径取该服务声明的 readiness 探针。"""
+    matrix = service_probe_matrix()
+    return tuple(
+        (service, port, matrix[service].readiness)
+        for service, port in MODULE_PROBE_PORTS
+    )
 USER_MIGRATION_ROOT = Path(
     "quwoquan_service/services/user-service/resources/migrations"
 )
@@ -610,7 +622,7 @@ def _validate_infra_projection_identity(
 
 def _probe_modules(runner: Runner, container_id: str) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
-    for module, port, path in MODULE_PROBES:
+    for module, port, path in module_probes():
         command = [
             "docker",
             "exec",

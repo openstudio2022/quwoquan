@@ -9,12 +9,16 @@ import content.execution.campaign.request_envelope as envelopes
 from content.execution.campaign import (
     m100_alpha_acceptance,
     request_envelope_build,
+    request_envelope_writer,
 )
 from content.execution.campaign.external_inputs import content_source_revision
-from content.execution.scale.capacity_plan import throughput_basis_digest
+from content.execution.campaign.scale import resolve_campaign_scale
+from core.source_digest import SourceDefinitionSnapshot
+from content.release.canonical.research_scale_capacity import throughput_basis_digest
 from core.io import write_json
 from core.paths import research_scale_promotions_root
 from core.runtime_policy import active_runtime_policy
+from support.capacity_calibration_fixture import synthetic_capacity_source_binding
 
 
 def _capacity_throughput_row(
@@ -52,23 +56,13 @@ def _patch_envelope_deps(monkeypatch) -> None:
         "_git_commit",
         lambda _repo: "0123456789abcdef0123456789abcdef01234567",
     )
-    monkeypatch.setattr(
-        envelopes,
-        "current_source_digest",
-        lambda repo_root=None: type(
-            "Digest",
-            (),
-            {
-                "to_document": staticmethod(
-                    lambda: {
-                        "algorithm": "sha256",
-                        "digest": "sha256:" + ("a" * 64),
-                        "inputs": ["quwoquan_data/scripts"],
-                    }
-                )
-            },
-        )(),
-    )
+    frozen_snapshot = SourceDefinitionSnapshot(digest="sha256:" + ("a" * 64))
+    for module in (envelopes, request_envelope_build):
+        monkeypatch.setattr(
+            module,
+            "current_source_definition_snapshot",
+            lambda repo_root=None: frozen_snapshot,
+        )
     monkeypatch.setattr(
         request_envelope_build,
         "entity_catalog_digest",
@@ -76,19 +70,54 @@ def _patch_envelope_deps(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         request_envelope_build,
+        "bind_capacity_calibration_source",
+        lambda **kwargs: synthetic_capacity_source_binding(
+            provider_tier=str(kwargs["provider_tier"]),
+        ),
+    )
+    fixture_handoff_document = {
+        "vertical": "travel",
+        "regionRef": "china",
+        "lifecycle": "research",
+        "scopeType": "region",
+        "scope": "china",
+        "primaryTopicRef": None,
+        "relatedTopicRefs": [],
+        "handoffId": "local-contract",
+        "handoffRevision": 1,
+        "handoffDigest": "sha256:" + "9" * 64,
+        "sourceSelection": {
+            carrier: {"mode": "site_primary", "providers": ["wikipedia"]}
+            for carrier in ("homepage", "article", "image", "video")
+        },
+    }
+    fixture_handoff_binding = {
+        "handoffId": "local-contract",
+        "handoffRevision": 1,
+        "handoffRef": (
+            "data/local/workspace/content-pre-acquisition-handoffs/"
+            "local-contract/revision-001.json"
+        ),
+        "handoffDigest": "sha256:" + "9" * 64,
+        "handoffFileDigest": "sha256:" + "8" * 64,
+    }
+    monkeypatch.setattr(
+        request_envelope_build,
+        "load_pre_acquisition_handoff",
+        lambda _path: dict(fixture_handoff_document),
+    )
+    monkeypatch.setattr(
+        request_envelope_writer,
+        "load_pre_acquisition_handoff",
+        lambda _path: dict(fixture_handoff_document),
+    )
+    monkeypatch.setattr(
+        request_envelope_build,
         "freeze_carrier_pre_acquisition_inputs",
         lambda *_args, **_kwargs: (
             [],
-            {
-                "handoffId": "local-contract",
-                "handoffRevision": 1,
-                "handoffRef": (
-                    "data/local/workspace/content-pre-acquisition-handoffs/"
-                    "local-contract/revision-001.json"
-                ),
-                "handoffDigest": "sha256:" + "9" * 64,
-                "handoffFileDigest": "sha256:" + "8" * 64,
-            },
+            dict(fixture_handoff_document),
+            dict(fixture_handoff_binding),
         ),
     )
     def bind_pool(_path: Path, **kwargs: object):
@@ -97,6 +126,13 @@ def _patch_envelope_deps(monkeypatch) -> None:
         binding = {
             "poolId": "pool-local-contract",
             "targetScale": str(kwargs["target_scale"]),
+            "workloadMode": (
+                "explicit"
+                if str(kwargs["target_scale"]) == "WORKLOAD"
+                else "milestone_preset"
+            ),
+            "activeCarriers": list(kwargs.get("active_carriers") or (carrier,)),
+            "workloadTargets": dict(kwargs.get("workload_targets") or {carrier: count}),
             "sourceRevision": str(kwargs["source_revision"]),
             "sourceDigest": str(kwargs["source_digest"]),
             "entityCatalogDigest": str(kwargs["entity_catalog_digest"]),
@@ -113,6 +149,55 @@ def _patch_envelope_deps(monkeypatch) -> None:
         return binding, "data/local/workspace/source-pool/evidence", selection
 
     monkeypatch.setattr(request_envelope_build, "bind_scale_source_pool", bind_pool)
+    original_build = request_envelope_build.build_envelope
+
+    def _governed_workload(kwargs: dict[str, object]) -> bool:
+        """Mirror the builder's authority split: bounded covers small explicit."""
+        if str(kwargs.get("workload_mode") or "explicit") != "explicit":
+            return True
+        resolved = resolve_campaign_scale(
+            scale=kwargs.get("scale"),  # type: ignore[arg-type]
+            quota=kwargs.get("quota"),  # type: ignore[arg-type]
+        )
+        active = tuple(kwargs.get("active_carriers") or (kwargs["carrier"],))
+        workloads = kwargs.get("workloads")
+        if workloads is None:
+            total = resolved.quota * len(active)
+        else:
+            total = sum(int(value) for value in dict(workloads).values())  # type: ignore[call-overload]
+        return total > 10
+
+    def build_with_capacity(**kwargs: object):
+        if not kwargs.get("capacity_calibration_receipt") and _governed_workload(
+            kwargs
+        ):
+            kwargs["capacity_calibration_receipt"] = Path(
+                "data/local/tests/capacity/local-contract-capacity.json"
+            )
+        if not kwargs.get("pre_acquisition_handoff"):
+            kwargs["pre_acquisition_handoff"] = Path(
+                "data/local/workspace/content-pre-acquisition-handoffs/"
+                "local-contract/revision-001.json"
+            )
+        return original_build(**kwargs)
+
+    monkeypatch.setattr(request_envelope_build, "build_envelope", build_with_capacity)
+    monkeypatch.setattr(request_envelope_writer, "build_envelope", build_with_capacity)
+    monkeypatch.setattr(envelopes, "build_envelope", build_with_capacity)
+    original_write = request_envelope_writer.write_scale_envelopes
+
+    def write_with_handoff(*args: object, **kwargs: object):
+        if not kwargs.get("pre_acquisition_handoff"):
+            kwargs["pre_acquisition_handoff"] = Path(
+                "data/local/workspace/content-pre-acquisition-handoffs/"
+                "local-contract/revision-001.json"
+            )
+        return original_write(*args, **kwargs)
+
+    monkeypatch.setattr(
+        request_envelope_writer, "write_scale_envelopes", write_with_handoff
+    )
+    monkeypatch.setattr(envelopes, "write_scale_envelopes", write_with_handoff)
     monkeypatch.setattr(m100_alpha_acceptance, "assert_valid", lambda *_args, **_kwargs: None)
 
 
@@ -277,9 +362,18 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                     "rate": 1.0,
                 },
                 "illustratedRate": {
+                    "statistical": True,
+                    "nonBlocking": True,
                     "numerator": 90,
                     "denominator": 100,
                     "rate": 0.9,
+                },
+                "textOnlyRate": {
+                    "statistical": True,
+                    "nonBlocking": True,
+                    "numerator": 10,
+                    "denominator": 100,
+                    "rate": 0.1,
                 },
                 "videoPopularity": {
                     "statistical": True,
@@ -320,6 +414,7 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                             "ineligibleReason": "",
                         }
                     ],
+                    "observationIssues": [],
                 },
                 "automaticRecoveryRate": {
                     "statistical": True,
@@ -351,6 +446,8 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                 ],
             },
             "professionalImageSourceMix": {
+                "statistical": True,
+                "nonBlocking": True,
                 "acceptedImageAssetCount": 100,
                 "originalAssetClosureCount": 100,
                 "pinterestAcceptedAssetCount": 60,
@@ -370,6 +467,7 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                     "pinterestTuchongAtLeastHalf": True,
                     "providerAboveSeventyPercent": [],
                 },
+                "observationIssues": [],
             },
             "duplicateAssetCount": 0,
             "crossLaneWriteCount": 0,

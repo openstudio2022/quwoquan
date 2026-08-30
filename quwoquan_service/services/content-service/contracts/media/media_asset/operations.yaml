@@ -766,3 +766,12 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/content-service/tests/api_integration/media/media_asset/http_mongo_asset__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: media_asset_viewer_remote_app_uat
+    spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-001
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: content.media_viewer}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/content_service/media/media_asset/media_asset_viewer_remote__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

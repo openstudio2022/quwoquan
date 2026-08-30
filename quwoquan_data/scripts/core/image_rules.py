@@ -37,6 +37,12 @@ _INDIRECT_TARGET_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"支撑.{0,20}(?:环线|组合产品|组合一日游|交通段落)"),
 )
 
+# 「而非周边景点」这类从句是排除声明，与「实际拍的是邻近景点」语义相反。
+# 剥离时保留原标点，避免跨从句的间接性模式因切分而失效。
+_EXCLUSION_CLAUSE = re.compile(
+    r"(?:而非|并非|绝非|实非|而不是|不是|不属于)[^，,。；;！!？?\n]*"
+)
+
 _LOW_QUALITY_CAPTION_MARKERS = (
     "500px provided description",
 )
@@ -63,7 +69,7 @@ def is_generic_relevance(relevance: str, *, entity_id: str = "") -> bool:
 
 def is_indirect_target_relevance(relevance: str) -> bool:
     """识别明确把邻近景点、环线或县域素材当作目标实体配图的说明。"""
-    text = str(relevance or "").strip()
+    text = _EXCLUSION_CLAUSE.sub("", str(relevance or "").strip())
     return any(pattern.search(text) for pattern in _INDIRECT_TARGET_PATTERNS)
 
 

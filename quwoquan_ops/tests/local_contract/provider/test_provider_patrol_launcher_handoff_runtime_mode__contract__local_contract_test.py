@@ -95,7 +95,7 @@ class ProviderPatrolLauncherHandoffRuntimeModeContractTest(unittest.TestCase):
         self.assertLess(validation, lease)
         self.assertLess(lease, builder)
 
-    def test_unbound_canonical_builder_keeps_test_live_policy_without_binding(
+    def test_canonical_builder_keeps_test_live_policy_without_binding(
         self,
     ) -> None:
         completed = mock.Mock(
@@ -104,13 +104,6 @@ class ProviderPatrolLauncherHandoffRuntimeModeContractTest(unittest.TestCase):
             stderr="",
         )
         with (
-            mock.patch.object(
-                subject_handoff,
-                "load_test_live_content_binding",
-                side_effect=AssertionError(
-                    "unbound immutable handoff must not read test_live content"
-                ),
-            ) as load_binding,
             mock.patch.object(
                 subject_handoff,
                 "_effective_base_urls_for_device",
@@ -136,10 +129,8 @@ class ProviderPatrolLauncherHandoffRuntimeModeContractTest(unittest.TestCase):
                 ),
                 {"id": "ios-simulator", "targetPlatform": "ios"},
                 {},
-                content_binding_mode="unbound",
             )
 
-        load_binding.assert_not_called()
         command = run.call_args.args[0]
         self.assertEqual(
             command[command.index("--launch-policy") + 1],
@@ -155,15 +146,8 @@ class ProviderPatrolLauncherHandoffRuntimeModeContractTest(unittest.TestCase):
         command_env = {
             _IDENTITY_ENV: json.dumps(_immutable_identity(), sort_keys=True)
         }
-        expected = {"schema": "app-launcher-handoff", "contentBindingState": "unbound"}
+        expected = {"schema": "app-launcher-handoff"}
         with (
-            mock.patch.object(
-                subject_handoff,
-                "load_test_live_content_binding",
-                side_effect=AssertionError(
-                    "immutable Provider Patrol must not read test_live content"
-                ),
-            ) as load_binding,
             mock.patch.object(
                 subject_handoff,
                 "_canonical_test_live_launcher_handoff",
@@ -188,12 +172,9 @@ class ProviderPatrolLauncherHandoffRuntimeModeContractTest(unittest.TestCase):
             )
 
         self.assertIs(handoff, expected)
-        load_binding.assert_not_called()
         build_unbound.assert_called_once()
-        self.assertEqual(
-            build_unbound.call_args.kwargs,
-            {"content_binding_mode": "unbound"},
-        )
+        # launcher handoff 不再携带内容绑定，immutable 与 test_live 共用同一构建。
+        self.assertEqual(build_unbound.call_args.kwargs, {})
 
     def test_running_test_live_uses_exact_content_binding_without_fallback(
         self,

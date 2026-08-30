@@ -180,7 +180,11 @@ def assert_source_ready_evidence_matches_capsule(
         raise SourceReadyAcquisitionEvidenceError(
             ["acquisition evidence/source-unit provider drift"]
         )
-    expected_media_mode = str(candidate.get("publishMediaMode") or "illustrated")
+    expected_media_mode = (
+        "illustrated"
+        if carrier == "homepage"
+        else str(candidate["publishMediaMode"])
+    )
     if (
         validated.get("publishMediaMode") != expected_media_mode
         or validated.get("sourceAttribution") != candidate.get("sourceAttribution")

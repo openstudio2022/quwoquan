@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_cache.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_timeline.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_view_data.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/rtc_signal_events.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -17,8 +18,10 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 typedef ChatProviderRead = T Function<T>(ProviderListenable<T> listenable);
 
 /// 与 [Ref.invalidate] 兼容，用于 roster / avatar 事件后刷新 group home。
-typedef ChatProviderInvalidate =
-    void Function(ProviderOrFamily provider, {bool asReload});
+typedef ChatProviderInvalidate = void Function(
+  ProviderOrFamily provider, {
+  bool asReload,
+});
 
 /// Routes incoming realtime events to the appropriate domain handlers.
 /// Called by realtime connection delegates when a WebSocket, long-poll,
@@ -37,9 +40,31 @@ class RealtimeMessageHandler {
   final Set<String> _pendingConversationRefreshes = <String>{};
   Timer? _conversationRefreshTimer;
   Timer? _avatarPatchTimer;
-  Timer? _reconnectRecoveryTimer;
+  bool _disposed = false;
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    _conversationRefreshTimer?.cancel();
+    _conversationRefreshTimer = null;
+    _avatarPatchTimer?.cancel();
+    _avatarPatchTimer = null;
+    _pendingConversationRefreshes.clear();
+  }
+
+  Future<void> handleAndWait(Map<String, dynamic> event) async {
+    _requireActive();
+    final eventType = event['type'] as String? ?? '';
+    if (eventType == 'Reconnected') {
+      final conversationId = event['conversationId'] as String? ?? '';
+      await _onReconnected(conversationId);
+      return;
+    }
+    handle(event);
+  }
 
   void handle(Map<String, dynamic> event) {
+    if (_disposed) return;
     final eventType = event['type'] as String? ?? '';
     final conversationId = event['conversationId'] as String? ?? '';
     final payload = event['payload'] as Map<String, dynamic>? ?? event;
@@ -52,9 +77,8 @@ class RealtimeMessageHandler {
     // rtc 通话信令（rt:rtc:user 通道，wire type call.* / participant.* /
     // screen_share.*）分发给通话事件总线，由来电协调器与通话页订阅。
     if (isRtcSignalWireType(eventType)) {
-      _read(
-        rtcSignalEventBusProvider,
-      ).emit(RealtimeEventEnvelope.fromWire(event));
+      _read(rtcSignalEventBusProvider)
+          .emit(RealtimeEventEnvelope.fromWire(event));
       return;
     }
 
@@ -72,9 +96,8 @@ class RealtimeMessageHandler {
             stackTrace: stackTrace,
           );
           unawaited(
-            _read(
-              chatMessageTimelineControllerProvider(conversationId),
-            ).loadMessages(),
+            _read(chatMessageTimelineControllerProvider(conversationId))
+                .loadMessages(),
           );
           return;
         }
@@ -83,15 +106,13 @@ class RealtimeMessageHandler {
           // MediaAsset delivery fields belong to the named Reader, not the
           // MessageSent event. Refresh through the typed query before render.
           unawaited(
-            _read(
-              chatMessageTimelineControllerProvider(conversationId),
-            ).loadMessages(),
+            _read(chatMessageTimelineControllerProvider(conversationId))
+                .loadMessages(),
           );
           return;
         }
-        _read(
-          chatMessageTimelineControllerProvider(conversationId),
-        ).addMessage(msg);
+        _read(chatMessageTimelineControllerProvider(conversationId))
+            .addMessage(msg);
         unawaited(
           _read(
             localChatSearchSyncProvider,
@@ -103,9 +124,8 @@ class RealtimeMessageHandler {
         if (conversationId.isEmpty) return;
         final messageId = payload['messageId'] as String? ?? '';
         if (messageId.isNotEmpty) {
-          _read(
-            chatMessageTimelineControllerProvider(conversationId),
-          ).markRecalled(messageId);
+          _read(chatMessageTimelineControllerProvider(conversationId))
+              .markRecalled(messageId);
           unawaited(
             _read(localChatSearchSyncProvider).markMessageRecalled(
               conversationId: conversationId,
@@ -130,9 +150,8 @@ class RealtimeMessageHandler {
           return;
         }
         // 对端读位推进 → 1v1 双勾实时翻转（群聊指示器按 memberCount 保持单勾）。
-        _read(
-          chatMessageTimelineControllerProvider(conversationId),
-        ).advancePeerReadSeq(readSeq);
+        _read(chatMessageTimelineControllerProvider(conversationId))
+            .advancePeerReadSeq(readSeq);
         return;
 
       case 'ConversationMemberAdded':
@@ -180,7 +199,7 @@ class RealtimeMessageHandler {
         return;
 
       case 'Reconnected':
-        _onReconnected(conversationId);
+        unawaited(_ignoreRecoveryFailure(_onReconnected(conversationId)));
         return;
 
       default:
@@ -189,6 +208,12 @@ class RealtimeMessageHandler {
   }
 
   static String _emptyCurrentUserId() => '';
+
+  void _requireActive() {
+    if (_disposed) {
+      throw StateError('realtime message handler is disposed');
+    }
+  }
 
   // Removal/leave events are delivered to the affected user in addition to the
   // post-mutation roster. That user must purge all local copies immediately:
@@ -208,9 +233,8 @@ class RealtimeMessageHandler {
       return;
     }
     _read(chatInboxCacheProvider).removeInbox(conversationId);
-    _read(
-      chatMessageTimelineControllerProvider(conversationId),
-    ).clearLocalTimeline();
+    _read(chatMessageTimelineControllerProvider(conversationId))
+        .clearLocalTimeline();
     invalidate?.call(conversationMembersProvider(conversationId));
     invalidate?.call(groupHomeProvider(conversationId));
     unawaited(
@@ -292,9 +316,12 @@ class RealtimeMessageHandler {
 
   /// 设置/成员变更 → 强制刷新该会话的缓存（下次读取时从云端拉取最新）
   void _refreshConversationCache(String conversationId) {
+    if (_disposed) return;
     _pendingConversationRefreshes.add(conversationId);
     _conversationRefreshTimer?.cancel();
     _conversationRefreshTimer = Timer(const Duration(milliseconds: 160), () {
+      _conversationRefreshTimer = null;
+      if (_disposed) return;
       try {
         final syncService = _read(conversationSyncProvider);
         unawaited(syncService.sync(force: true));
@@ -302,9 +329,8 @@ class RealtimeMessageHandler {
         _pendingConversationRefreshes.clear();
         for (final id in pending) {
           unawaited(
-            _read(
-              localChatSearchSyncProvider,
-            ).syncConversation(conversationId: id, forceFull: true),
+            _read(localChatSearchSyncProvider)
+                .syncConversation(conversationId: id, forceFull: true),
           );
         }
       } catch (error, stackTrace) {
@@ -320,32 +346,49 @@ class RealtimeMessageHandler {
     });
   }
 
-  /// WS 重连成功 → 触发消息 seq gap 补全 + 会话列表同步
-  void _onReconnected(String conversationId) {
-    _reconnectRecoveryTimer?.cancel();
-    _reconnectRecoveryTimer = Timer(const Duration(milliseconds: 200), () {
-      try {
-        final syncService = _read(conversationSyncProvider);
-        unawaited(syncService.sync(force: true));
-        _scheduleAvatarPatchSync();
-        unawaited(_read(localChatSearchSyncProvider).sync(force: true));
-        _recoverConversationSeqGap(conversationId);
-      } catch (error, stackTrace) {
-        // 重连补全失败若静默即丢消息不可观测：必须上报，由下一次心跳/重连兜底。
-        unawaited(
-          _read(exceptionTelemetryPortProvider).recordGlobalException(
-            source: 'chat.realtime.reconnect_gap_recovery',
-            exceptionText: error.toString(),
-            stackText: stackTrace.toString(),
-          ),
-        );
+  Future<void> _ignoreRecoveryFailure(Future<void> recovery) async {
+    try {
+      await recovery;
+    } on Object {
+      // Detached WebSocket recovery has no transport cursor to hold. The
+      // awaited path records telemetry before propagating the failure.
+    }
+  }
+
+  /// 传输重连成功 → 等待消息 seq gap 补全完成后才确认事件消费。
+  Future<void> _onReconnected(String conversationId) async {
+    _requireActive();
+    try {
+      await _read(conversationSyncProvider).sync(force: true);
+      _requireActive();
+      _scheduleAvatarPatchSync();
+      await _read(localChatSearchSyncProvider).sync(force: true);
+      _requireActive();
+      await _recoverConversationSeqGap(conversationId);
+      _requireActive();
+    } catch (error, stackTrace) {
+      if (_disposed) {
+        // Delegate/container teardown may race any awaited recovery step.
+        // Preserve the lifecycle failure for the awaiting transport without
+        // touching telemetry providers owned by the disposed container.
+        Error.throwWithStackTrace(error, stackTrace);
       }
-    });
+      // 重连补全失败若静默即丢消息不可观测：记录后向 awaited transport
+      // 边界传播，使 LongPoll 保留已提交 cursor 并从同一点重试。
+      unawaited(
+        _read(exceptionTelemetryPortProvider).recordGlobalException(
+          source: 'chat.realtime.reconnect_gap_recovery',
+          exceptionText: error.toString(),
+          stackText: stackTrace.toString(),
+        ),
+      );
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   }
 
   /// 恢复事件携带活跃会话时，以端侧已持有的最大 seq 为起点向服务端补齐缺口；
   /// 补齐结果与实时推送经同一去重链路合并（reliability REQ-003/REQ-008）。
-  void _recoverConversationSeqGap(String conversationId) {
+  Future<void> _recoverConversationSeqGap(String conversationId) async {
     if (conversationId.isEmpty) {
       return;
     }
@@ -353,22 +396,33 @@ class RealtimeMessageHandler {
       chatMessageTimelineControllerProvider(conversationId),
     );
     var localMaxSeq = 0;
-    for (final message
-        in _read(chatMessageTimelineProvider(conversationId)).messages) {
+    for (final message in _read(
+      chatMessageTimelineProvider(conversationId),
+    ).messages) {
       if (message.seq > localMaxSeq) {
         localMaxSeq = message.seq;
       }
     }
     if (localMaxSeq > 0) {
-      unawaited(controller.syncFromSeq(localMaxSeq));
+      await controller.syncFromSeq(localMaxSeq);
     } else {
-      unawaited(controller.loadMessages());
+      await controller.loadMessages();
+      _requireActive();
+      final recovered = _read(chatMessageTimelineProvider(conversationId));
+      if (recovered.isLoading ||
+          recovered.isRefreshing ||
+          recovered.source != ChatTimelineContentSource.remoteSynced) {
+        throw StateError('initial timeline recovery did not reach remote sync');
+      }
     }
   }
 
   void _scheduleAvatarPatchSync() {
+    if (_disposed) return;
     _avatarPatchTimer?.cancel();
     _avatarPatchTimer = Timer(const Duration(milliseconds: 120), () {
+      _avatarPatchTimer = null;
+      if (_disposed) return;
       try {
         unawaited(
           _read(conversationSyncProvider).syncAvatarPatches(force: true),

@@ -34,16 +34,22 @@ type HomepageIntroductionSection struct {
 }
 
 type HomepageIntroduction struct {
-	HomepageID     string                        `json:"homepageId"`
-	DisplayName    string                        `json:"displayName"`
-	HomepageType   string                        `json:"homepageType"`
-	CoverURL       string                        `json:"coverUrl,omitempty"`
-	Summary        string                        `json:"summary"`
-	Sections       []HomepageIntroductionSection `json:"sections"`
-	RelatedObjects []HomepageRelatedGroup        `json:"relatedObjects"`
-	PrimarySource  *HomepageSource               `json:"primarySource,omitempty"`
-	SourceURLs     []string                      `json:"sourceUrls"`
-	UpdatedAt      string                        `json:"updatedAt"`
+	HomepageID   string `json:"homepageId"`
+	DisplayName  string `json:"displayName"`
+	HomepageType string `json:"homepageType"`
+	CoverURL     string `json:"coverUrl,omitempty"`
+	// cover 的配对媒体资产标识与交付访问模式（DEC-033，契约
+	// projections/homepage_introduction.yaml coverAssetId/coverAccessMode）。
+	// signed_grant 时 App 以 coverAssetId 换取短签；两字段均 NULLABLE，
+	// 缺席（省略键）只允许出现在存量 public 交付，禁止以 homepageId 冒充。
+	CoverAssetID    string                        `json:"coverAssetId,omitempty"`
+	CoverAccessMode string                        `json:"coverAccessMode,omitempty"`
+	Summary         string                        `json:"summary"`
+	Sections        []HomepageIntroductionSection `json:"sections"`
+	RelatedObjects  []HomepageRelatedGroup        `json:"relatedObjects"`
+	PrimarySource   *HomepageSource               `json:"primarySource,omitempty"`
+	SourceURLs      []string                      `json:"sourceUrls"`
+	UpdatedAt       string                        `json:"updatedAt"`
 }
 
 func (s *HomepageService) GetHomepageIntroduction(ctx context.Context, homepageID string) (*HomepageIntroduction, error) {
@@ -83,17 +89,24 @@ func buildHomepageIntroduction(homepage *Homepage) HomepageIntroduction {
 			Kind: "keyFacts", Title: "核心信息", BodyMarkdown: facts,
 		})
 	}
+	coverAssetID, coverAccessMode := introductionCoverBinding(
+		homepage.CoverURL,
+		nil,
+		homepage.IntroductionAssets,
+	)
 	return HomepageIntroduction{
-		HomepageID:     homepage.ID,
-		DisplayName:    homepage.Title,
-		HomepageType:   homepage.HomepageType,
-		CoverURL:       homepage.CoverURL,
-		Summary:        summary,
-		Sections:       sections,
-		RelatedObjects: emptyRelatedGroups(homepage.RelatedGroups),
-		PrimarySource:  homepage.PrimarySource,
-		SourceURLs:     cloneStrings(homepage.SourceURLs),
-		UpdatedAt:      homepage.UpdatedAt.UTC().Format(time.RFC3339),
+		HomepageID:      homepage.ID,
+		DisplayName:     homepage.Title,
+		HomepageType:    homepage.HomepageType,
+		CoverURL:        homepage.CoverURL,
+		CoverAssetID:    coverAssetID,
+		CoverAccessMode: coverAccessMode,
+		Summary:         summary,
+		Sections:        sections,
+		RelatedObjects:  emptyRelatedGroups(homepage.RelatedGroups),
+		PrimarySource:   homepage.PrimarySource,
+		SourceURLs:      cloneStrings(homepage.SourceURLs),
+		UpdatedAt:       homepage.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -111,14 +124,21 @@ func buildIntroductionFromPageMarkdown(homepage *Homepage) HomepageIntroduction 
 	}
 	frontmatter, body := splitPageFrontmatter(homepage.IntroductionMarkdown)
 	coverURL := strings.TrimSpace(homepage.CoverURL)
+	var frontmatterCover *HomepageIntroductionAsset
 	if coverAssetID := frontmatterCoverAssetID(frontmatter); coverAssetID != "" {
 		if asset, ok := assetByID[coverAssetID]; ok && strings.TrimSpace(asset.URL) != "" {
 			coverURL = strings.TrimSpace(asset.URL)
+			frontmatterCover = &asset
 		}
 	}
 	if coverURL == "" {
 		coverURL = coverURLFromIntroductionAssets(homepage.IntroductionAssets)
 	}
+	coverAssetID, coverAccessMode := introductionCoverBinding(
+		coverURL,
+		frontmatterCover,
+		homepage.IntroductionAssets,
+	)
 
 	lead, chapters := splitPageChapters(body)
 	sections := make([]HomepageIntroductionSection, 0, len(chapters)+1)
@@ -159,17 +179,50 @@ func buildIntroductionFromPageMarkdown(homepage *Homepage) HomepageIntroduction 
 		summary = introductionSummary(homepage)
 	}
 	return HomepageIntroduction{
-		HomepageID:     homepage.ID,
-		DisplayName:    homepage.Title,
-		HomepageType:   homepage.HomepageType,
-		CoverURL:       coverURL,
-		Summary:        summary,
-		Sections:       sections,
-		RelatedObjects: emptyRelatedGroups(homepage.RelatedGroups),
-		PrimarySource:  homepage.PrimarySource,
-		SourceURLs:     cloneStrings(homepage.SourceURLs),
-		UpdatedAt:      homepage.UpdatedAt.UTC().Format(time.RFC3339),
+		HomepageID:      homepage.ID,
+		DisplayName:     homepage.Title,
+		HomepageType:    homepage.HomepageType,
+		CoverURL:        coverURL,
+		CoverAssetID:    coverAssetID,
+		CoverAccessMode: coverAccessMode,
+		Summary:         summary,
+		Sections:        sections,
+		RelatedObjects:  emptyRelatedGroups(homepage.RelatedGroups),
+		PrimarySource:   homepage.PrimarySource,
+		SourceURLs:      cloneStrings(homepage.SourceURLs),
+		UpdatedAt:       homepage.UpdatedAt.UTC().Format(time.RFC3339),
 	}
+}
+
+// introductionCoverBinding 解析封面 URL 的配对交付绑定（DEC-033）。
+// 绑定只来自真实资产投影：frontmatter 直接命中的 cover 资产优先；否则在
+// introduction assets 中按 URL 同值配对（导入线的主档 coverUrl 正来自 cover
+// 资产，同值即同一资产）。配不上时两值缺席（空串→JSON 省略键），
+// 禁止以 homepageId 或其它对象标识冒充媒体资产标识。
+func introductionCoverBinding(
+	coverURL string,
+	frontmatterCover *HomepageIntroductionAsset,
+	assets []HomepageIntroductionAsset,
+) (string, string) {
+	if frontmatterCover != nil && strings.TrimSpace(frontmatterCover.AssetID) != "" {
+		return strings.TrimSpace(frontmatterCover.AssetID), strings.TrimSpace(frontmatterCover.AccessMode)
+	}
+	coverURL = strings.TrimSpace(coverURL)
+	if coverURL == "" {
+		return "", ""
+	}
+	// cover 资产优先，避免同 URL 的 inline/related 项抢占配对。
+	for _, asset := range assets {
+		if asset.Role == introductionAssetRoleCover && strings.TrimSpace(asset.URL) == coverURL {
+			return strings.TrimSpace(asset.AssetID), strings.TrimSpace(asset.AccessMode)
+		}
+	}
+	for _, asset := range assets {
+		if strings.TrimSpace(asset.URL) == coverURL {
+			return strings.TrimSpace(asset.AssetID), strings.TrimSpace(asset.AccessMode)
+		}
+	}
+	return "", ""
 }
 
 const relatedImagesHeading = "相关图片"

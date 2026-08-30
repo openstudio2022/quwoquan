@@ -13,6 +13,11 @@ from typing import Any
 from urllib.parse import urlparse
 
 from quwoquan_ops.cli.lib.android_official_release import _verify_remote_artifact
+from quwoquan_ops.cli.lib.web_official_release import (
+    WebOfficialReleaseError,
+    validate_web_official_artifact,
+    web_official_content_digest,
+)
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     validate_manifest,
     validate_manifest_files,
@@ -24,10 +29,70 @@ class OfficialDistributionReleaseError(RuntimeError):
 
 
 _SHA256 = re.compile(r"sha256:[0-9a-f]{64}")
+# 对外分发只走两个 store/hosted 产品，键必须与 ReleaseEvidence 的
+# applicationPackages 同源；后者已按 canonical build product ID 编址，
+# 不再按 environment × surface 分层。
 _KINDS = {
-    "web": "web",
-    "app-release": "android",
+    "web": "web-shared",
+    "app-release": "android-prod-apk",
 }
+_COMPONENT_SCHEMAS = {
+    "web-shared": "client-app.web.official-release",
+    "android-prod-apk": "client-app.android.official-release",
+}
+_COMPONENT_CONTENT_DIGEST_KEYS = {
+    "web-shared": "contentSHA256",
+    "android-prod-apk": "apkSHA256",
+}
+_COMPONENT_RELEASE_EVIDENCE_KEYS = {
+    "web-shared": "publicWeb",
+    "android-prod-apk": "androidOfficialRelease",
+}
+_WEB_PACKAGE_FIELDS = frozenset(
+    {
+        "schema",
+        "environment",
+        "publicOrigin",
+        "releaseId",
+        "contentSHA256",
+        "noindex",
+        "spaFallback",
+        "htmlContentType",
+        "assetCacheControl",
+        "serviceWorker",
+        "sourceGitSha",
+        "sourceTreeDigest",
+        "artifactManifest",
+    }
+)
+_ANDROID_PACKAGE_FIELDS = frozenset(
+    {
+        "schema",
+        "platform",
+        "versionName",
+        "buildNumber",
+        "minAndroidVersion",
+        "packageName",
+        "apkUrl",
+        "apkSHA256",
+        "apkSizeBytes",
+        "apkSigningCertificateSHA256",
+        "apkHostAllowlist",
+        "publicOrigin",
+        "recoveryUrl",
+        "updateUrl",
+        "minimumSupportedVersion",
+        "minimumSupportedBuild",
+        "packagedAPK",
+        "remoteVerified",
+        "sourceGitSha",
+        "sourceTreeDigest",
+        "artifactManifest",
+    }
+)
+_ANDROID_OPTIONAL_PACKAGE_FIELDS = frozenset(
+    {"minimumSupportedBuildIncreaseEvidence"}
+)
 
 
 def deploy_official_distribution(
@@ -46,6 +111,7 @@ def deploy_official_distribution(
     package_manifest = _json_object(package_manifest_path, "distribution package manifest")
     _verify_component_binding(
         release_manifest=release_manifest,
+        release_manifest_path=release_manifest_path,
         component_key=component_key,
         package_manifest_path=package_manifest_path,
         package_manifest=package_manifest,
@@ -658,49 +724,146 @@ def _release_manifest(path: Path) -> tuple[dict[str, Any], str]:
 def _verify_component_binding(
     *,
     release_manifest: dict[str, Any],
+    release_manifest_path: Path,
     component_key: str,
     package_manifest_path: Path,
     package_manifest: dict[str, Any],
 ) -> None:
     components = release_manifest.get("applicationPackages")
-    prod_components = components.get("prod") if isinstance(components, dict) else None
-    component = (
-        prod_components.get(component_key)
-        if isinstance(prod_components, dict)
-        else None
-    )
+    component = components.get(component_key) if isinstance(components, dict) else None
     if not isinstance(component, dict):
         raise OfficialDistributionReleaseError(
             f"release manifest does not bind artifact {component_key}"
         )
-    digest = "sha256:" + hashlib.sha256(package_manifest_path.read_bytes()).hexdigest()
-    if component.get("digest") != digest:
-        raise OfficialDistributionReleaseError(
-            f"release manifest distribution digest mismatch: {component_key}"
-        )
-    expected_schema = {
-        "web": "client-app.web.official-release",
-        "android": "client-app.android.official-release",
-    }[component_key]
+    expected_schema = _COMPONENT_SCHEMAS[component_key]
     if expected_schema != str(package_manifest.get("schema") or ""):
         raise OfficialDistributionReleaseError(
             f"release manifest distribution schema mismatch: {component_key}"
         )
+    _validate_distribution_manifest_fields(
+        component_key=component_key,
+        package_manifest=package_manifest,
+    )
+
+    release_root = release_manifest_path.parent
+    component_evidence_path = _bound_release_file(
+        release_root,
+        str(component.get("path") or ""),
+        f"application package {component_key}",
+    )
+    application_evidence = _json_object(
+        component_evidence_path,
+        f"application package {component_key}",
+    )
+    if component.get("packageDigest") != application_evidence.get("packageDigest"):
+        raise OfficialDistributionReleaseError(
+            f"release manifest package digest mismatch: {component_key}"
+        )
+
+    candidate_artifact_manifest = application_evidence.get("artifactManifest")
+    supplied_artifact_manifest = package_manifest.get("artifactManifest")
+    if (
+        not isinstance(candidate_artifact_manifest, dict)
+        or supplied_artifact_manifest != candidate_artifact_manifest
+    ):
+        raise OfficialDistributionReleaseError(
+            f"release manifest distribution artifactManifest mismatch: {component_key}"
+        )
+    if (
+        package_manifest.get("sourceGitSha")
+        != candidate_artifact_manifest.get("sourceGitSha")
+        or package_manifest.get("sourceTreeDigest")
+        != candidate_artifact_manifest.get("sourceTreeDigest")
+    ):
+        raise OfficialDistributionReleaseError(
+            f"release manifest distribution source identity mismatch: {component_key}"
+        )
+    artifact_digest = str(candidate_artifact_manifest.get("artifactDigest") or "")
+    content_digest = _prefixed_digest(
+        package_manifest.get(_COMPONENT_CONTENT_DIGEST_KEYS[component_key])
+    )
+    if artifact_digest != content_digest:
+        raise OfficialDistributionReleaseError(
+            f"release manifest distribution artifact digest mismatch: {component_key}"
+        )
+
+    evidence_key = _COMPONENT_RELEASE_EVIDENCE_KEYS[component_key]
+    distribution_descriptor = release_manifest.get(evidence_key)
+    if not isinstance(distribution_descriptor, dict):
+        raise OfficialDistributionReleaseError(
+            f"release manifest does not bind distribution evidence {evidence_key}"
+        )
+    candidate_manifest_path = _bound_release_file(
+        release_root,
+        str(distribution_descriptor.get("path") or ""),
+        evidence_key,
+    )
+    candidate_bytes = candidate_manifest_path.read_bytes()
+    supplied_bytes = package_manifest_path.read_bytes()
+    supplied_digest = "sha256:" + hashlib.sha256(supplied_bytes).hexdigest()
+    if (
+        distribution_descriptor.get("digest") != supplied_digest
+        or candidate_bytes != supplied_bytes
+    ):
+        raise OfficialDistributionReleaseError(
+            f"release manifest distribution evidence mismatch: {evidence_key}"
+        )
+
+
+def _validate_distribution_manifest_fields(
+    *,
+    component_key: str,
+    package_manifest: dict[str, Any],
+) -> None:
+    actual_fields = set(package_manifest)
+    if component_key == "web-shared":
+        canonical = actual_fields == _WEB_PACKAGE_FIELDS
+    else:
+        canonical = (
+            _ANDROID_PACKAGE_FIELDS.issubset(actual_fields)
+            and actual_fields.issubset(
+                _ANDROID_PACKAGE_FIELDS | _ANDROID_OPTIONAL_PACKAGE_FIELDS
+            )
+        )
+    if not canonical:
+        raise OfficialDistributionReleaseError(
+            f"release manifest distribution fields are not canonical: {component_key}"
+        )
+
+
+def _bound_release_file(root: Path, relative: str, label: str) -> Path:
+    relative_path = Path(relative)
+    if not relative or relative_path.is_absolute() or ".." in relative_path.parts:
+        raise OfficialDistributionReleaseError(f"{label} path is unsafe")
+    candidate = root / relative_path
+    resolved_root = root.resolve()
+    resolved = candidate.resolve()
+    if (
+        resolved_root not in resolved.parents
+        or candidate.is_symlink()
+        or not candidate.is_file()
+    ):
+        raise OfficialDistributionReleaseError(
+            f"{label} is missing or escapes the release evidence root"
+        )
+    return candidate
+
+
+def _prefixed_digest(value: Any) -> str:
+    digest = str(value or "")
+    return digest if digest.startswith("sha256:") else "sha256:" + digest
 
 
 def _verify_deployed_web(root: Path, manifest: dict[str, Any]) -> None:
     public = root / "public"
-    required = ("index.html", "main.dart.js", "manifest.json", "flutter_service_worker.js")
-    missing = [name for name in required if not (public / name).is_file()]
-    if missing:
+    try:
+        validate_web_official_artifact(public)
+    except (OSError, TypeError, ValueError, WebOfficialReleaseError) as error:
         raise OfficialDistributionReleaseError(
-            "deployed Web release is incomplete: " + ", ".join(missing)
-        )
+            f"deployed Web artifact is not official: {error}"
+        ) from error
     if _tree_sha256(public) != str(manifest.get("contentSHA256") or ""):
         raise OfficialDistributionReleaseError("deployed Web content digest mismatch")
-    index = (public / "index.html").read_text(encoding="utf-8")
-    if '<html lang="zh-CN">' not in index or '<meta charset="utf-8">' not in index:
-        raise OfficialDistributionReleaseError("deployed Web index is not UTF-8 zh-CN")
 
 
 def _verify_hosted_web(public_origin: str) -> None:
@@ -824,15 +987,7 @@ def _sha256_file(path: Path) -> str:
 
 
 def _tree_sha256(root: Path) -> str:
-    digest = hashlib.sha256()
-    for path in sorted(item for item in root.rglob("*") if item.is_file()):
-        relative = path.relative_to(root).as_posix().encode("utf-8")
-        digest.update(len(relative).to_bytes(4, "big"))
-        digest.update(relative)
-        with path.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(chunk)
-    return digest.hexdigest()
+    return web_official_content_digest(root)
 
 
 def _within(path: Path, parent: Path) -> bool:

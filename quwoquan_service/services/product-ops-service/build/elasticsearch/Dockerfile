@@ -16,7 +16,7 @@
 #     quwoquan_service/services/product-ops-service/build/elasticsearch
 # 发布（beta/gamma/prod）：推送私有 registry 后以 digest pin 回填
 #   deploy/local-elasticsearch.compose.yaml 与 quwoquan_ops/environments/prod/access-isolation.yaml。
-FROM docker.elastic.co/elasticsearch/elasticsearch@sha256:5af05323c9bfc52fcee63a47c682412a6ef5955ac85966f045a68ba8623db2e1
+FROM docker.elastic.co/elasticsearch/elasticsearch@sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f
 
 ARG ANALYSIS_IK_URL="https://release.infinilabs.com/analysis-ik/stable/elasticsearch-analysis-ik-8.13.4.zip"
 ARG ANALYSIS_IK_SHA256="9fa37bad9da16a7d5b256bb5d3542eec5300b041c539c461fa9c24c4c41abd09"

@@ -5,32 +5,58 @@ class RecommendationRequestPageIds {
   const RecommendationRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
-    'ActivateRecommendationModelRelease': 'recommendation.activate.recommendation.model.release',
-    'BatchScoreRecommendationCandidates': 'recommendation.batch.score.recommendation.candidates',
-    'CreateRankedRecommendationWindow': 'recommendation.create.ranked.recommendation.window',
-    'GetRankedRecommendationPage': 'recommendation.get.ranked.recommendation.page',
-    'GetRecommendationAuthorImpact': 'recommendation.get.recommendation.author.impact',
-    'GetRecommendationFlywheelFunnel': 'recommendation.get.recommendation.flywheel.funnel',
-    'GetRecommendationGatheringSocialProof': 'recommendation.get.recommendation.gathering.social.proof',
-    'GetRecommendationIntersectionSupply': 'recommendation.get.recommendation.intersection.supply',
-    'ListRecommendationAuthorImpactEvidence': 'recommendation.list.recommendation.author.impact.evidence',
-    'ListRecommendationObjectIntersections': 'recommendation.list.recommendation.object.intersections',
-    'ListRecommendationSubjectIntersections': 'recommendation.list.recommendation.subject.intersections',
-    'ScoreRecommendationCandidates': 'recommendation.score.recommendation.candidates',
-    'StageRecommendationModelRelease': 'recommendation.stage.recommendation.model.release',
+    'ActivateRecommendationModelRelease':
+        'recommendation.activate.recommendation.model.release',
+    'BatchScoreRecommendationCandidates':
+        'recommendation.batch.score.recommendation.candidates',
+    'CreateRankedRecommendationWindow':
+        'recommendation.create.ranked.recommendation.window',
+    'GetRankedRecommendationPage':
+        'recommendation.get.ranked.recommendation.page',
+    'GetRecommendationAuthorImpact':
+        'recommendation.get.recommendation.author.impact',
+    'GetRecommendationFlywheelFunnel':
+        'recommendation.get.recommendation.flywheel.funnel',
+    'GetRecommendationGatheringSocialProof':
+        'recommendation.get.recommendation.gathering.social.proof',
+    'GetRecommendationIntersectionSupply':
+        'recommendation.get.recommendation.intersection.supply',
+    'ListRecommendationAuthorImpactEvidence':
+        'recommendation.list.recommendation.author.impact.evidence',
+    'ListRecommendationObjectIntersections':
+        'recommendation.list.recommendation.object.intersections',
+    'ListRecommendationSubjectIntersections':
+        'recommendation.list.recommendation.subject.intersections',
+    'ScoreRecommendationCandidates':
+        'recommendation.score.recommendation.candidates',
+    'StageRecommendationModelRelease':
+        'recommendation.stage.recommendation.model.release',
   };
 
-  static const String activateRecommendationModelRelease = 'recommendation.activate.recommendation.model.release';
-  static const String batchScoreRecommendationCandidates = 'recommendation.batch.score.recommendation.candidates';
-  static const String createRankedRecommendationWindow = 'recommendation.create.ranked.recommendation.window';
-  static const String getRankedRecommendationPage = 'recommendation.get.ranked.recommendation.page';
-  static const String getRecommendationAuthorImpact = 'recommendation.get.recommendation.author.impact';
-  static const String getRecommendationFlywheelFunnel = 'recommendation.get.recommendation.flywheel.funnel';
-  static const String getRecommendationGatheringSocialProof = 'recommendation.get.recommendation.gathering.social.proof';
-  static const String getRecommendationIntersectionSupply = 'recommendation.get.recommendation.intersection.supply';
-  static const String listRecommendationAuthorImpactEvidence = 'recommendation.list.recommendation.author.impact.evidence';
-  static const String listRecommendationObjectIntersections = 'recommendation.list.recommendation.object.intersections';
-  static const String listRecommendationSubjectIntersections = 'recommendation.list.recommendation.subject.intersections';
-  static const String scoreRecommendationCandidates = 'recommendation.score.recommendation.candidates';
-  static const String stageRecommendationModelRelease = 'recommendation.stage.recommendation.model.release';
+  static const String activateRecommendationModelRelease =
+      'recommendation.activate.recommendation.model.release';
+  static const String batchScoreRecommendationCandidates =
+      'recommendation.batch.score.recommendation.candidates';
+  static const String createRankedRecommendationWindow =
+      'recommendation.create.ranked.recommendation.window';
+  static const String getRankedRecommendationPage =
+      'recommendation.get.ranked.recommendation.page';
+  static const String getRecommendationAuthorImpact =
+      'recommendation.get.recommendation.author.impact';
+  static const String getRecommendationFlywheelFunnel =
+      'recommendation.get.recommendation.flywheel.funnel';
+  static const String getRecommendationGatheringSocialProof =
+      'recommendation.get.recommendation.gathering.social.proof';
+  static const String getRecommendationIntersectionSupply =
+      'recommendation.get.recommendation.intersection.supply';
+  static const String listRecommendationAuthorImpactEvidence =
+      'recommendation.list.recommendation.author.impact.evidence';
+  static const String listRecommendationObjectIntersections =
+      'recommendation.list.recommendation.object.intersections';
+  static const String listRecommendationSubjectIntersections =
+      'recommendation.list.recommendation.subject.intersections';
+  static const String scoreRecommendationCandidates =
+      'recommendation.score.recommendation.candidates';
+  static const String stageRecommendationModelRelease =
+      'recommendation.stage.recommendation.model.release';
 }

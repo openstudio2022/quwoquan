@@ -49,6 +49,7 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                     "schema": "qwq.service_package",
                     "service": service,
                     "environment": environment,
+                    "configVersion": f"sha256:{'e' * 64}",
                     "digests": {"sourceTree": f"sha256:{'d' * 64}"},
                 }
             )
@@ -250,6 +251,7 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                 f"sha256:{'f' * 64}",
             )
             self.assertTrue(reuse_package.call_args.kwargs["include_services"])
+            self.assertEqual(list(root.glob(".package-staging-*")), [])
 
     def test_new_candidate_readback_failure_blocks_activation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

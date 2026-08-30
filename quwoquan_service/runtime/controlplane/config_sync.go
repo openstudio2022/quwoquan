@@ -26,6 +26,19 @@ type ConfigSyncLoopOptions struct {
 	ReleaseManifestDigest string
 	InstanceID            string
 	HotStore              *HotConfigStore
+	// OnSyncResult 在每次同步尝试结束时收到结论，供调用方接 metrics 与
+	// healthz；nil 时行为与旧调用方完全一致。
+	OnSyncResult func(ConfigSyncResult)
+}
+
+// ConfigSyncResult 是一次配置同步尝试的可观测结论。SyncErr 非 nil 表示本次
+// resolve（含允许时的磁盘回退）失败、未产生任何上报；SyncErr 为 nil 时
+// InSync/Source 有效，ReportErr 单独表达上报回执失败。
+type ConfigSyncResult struct {
+	InSync    bool
+	Source    string
+	SyncErr   error
+	ReportErr error
 }
 
 // ValidateImageIdentity requires one explicit immutable release identity.
@@ -158,6 +171,12 @@ func RunConfigSyncLoopContext(ctx context.Context, opts ConfigSyncLoopOptions) {
 		return opts.HotStore.GetBool("sys.config_center.disk_fallback_enabled", true)
 	}
 
+	notifySyncResult := func(result ConfigSyncResult) {
+		if opts.OnSyncResult != nil {
+			opts.OnSyncResult(result)
+		}
+	}
+
 	syncOnce := func() {
 		scope := ConfigResolutionScope{
 			Environment: opts.AppEnv,
@@ -180,6 +199,7 @@ func RunConfigSyncLoopContext(ctx context.Context, opts ConfigSyncLoopOptions) {
 		}
 		if err != nil {
 			log.Printf("WARN: controlplane config sync unavailable: %v", err)
+			notifySyncResult(ConfigSyncResult{SyncErr: err})
 			return
 		}
 
@@ -206,9 +226,15 @@ func RunConfigSyncLoopContext(ctx context.Context, opts ConfigSyncLoopOptions) {
 		}
 		reportCtx, cancelReport := context.WithTimeout(ctx, 4*time.Second)
 		defer cancelReport()
-		if reportErr := client.ReportInstance(reportCtx, report); reportErr != nil {
+		reportErr := client.ReportInstance(reportCtx, report)
+		if reportErr != nil {
 			log.Printf("WARN: controlplane config report failed: %v", reportErr)
 		}
+		notifySyncResult(ConfigSyncResult{
+			InSync:    report.InSync,
+			Source:    source,
+			ReportErr: reportErr,
+		})
 	}
 
 	syncOnce()

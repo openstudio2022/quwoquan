@@ -11,7 +11,7 @@ def _write(path: Path, document: dict[str, object]) -> None:
     path.write_text(json.dumps(document), encoding="utf-8")
 
 
-def test_exhausted_author_ref_can_bind_finished_checkpoint_attempt_by_capacity_receipt(
+def test_exhausted_author_ref_can_bind_checkpoint_by_invocation_attempt(
     tmp_path: Path,
 ) -> None:
     execution_id = "20260812--travel-image-m100--china--scale-001"
@@ -33,7 +33,7 @@ def test_exhausted_author_ref_can_bind_finished_checkpoint_attempt_by_capacity_r
             journal / f"attempts/{attempt:04d}.json",
             {
                 "runId": run_id,
-                "capacityReceiptDigest": digest,
+                "attemptDigest": digest,
                 "status": "finished",
             },
         )
@@ -43,7 +43,7 @@ def test_exhausted_author_ref_can_bind_finished_checkpoint_attempt_by_capacity_r
                     {
                         "ref": "乌镇_image",
                         "runId": None,
-                        "capacityReceiptDigest": digest,
+                        "invocationAttemptDigest": digest,
                         "failureKind": "checkpoint_gate",
                     }
                 ]

@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
@@ -109,13 +110,15 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
     if (deliveryReference == null) {
       return const ColoredBox(color: AppColors.black);
     }
-    final thumbnailReference = resolver.tryResolve(
-      thumbnailUrl,
-      kind: MediaDeliveryKind.image,
-    );
     return VideoPlayerWidget(
       deliveryReference: deliveryReference,
-      thumbnailReference: thumbnailReference,
+      // 本入口只拿到缩略图 URL，投影未在此交出资产身份与交付形态：显式声明
+      // 契约缺席走公开路，不猜一个资产身份去换签。
+      thumbnailBinding: MediaDeliveryBinding(
+        assetId: '',
+        accessMode: null,
+        publicUrl: thumbnailUrl ?? '',
+      ),
       autoPlay: _isPlaying,
       showControls: true,
       onTap: _togglePlayPause,

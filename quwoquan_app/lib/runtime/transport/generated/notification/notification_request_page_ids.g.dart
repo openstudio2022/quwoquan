@@ -6,29 +6,42 @@ class NotificationRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'AckAppMessage': 'notification.ack.app.message',
-    'AckIncomingCallPresentation': 'notification.ack.incoming.call.presentation',
+    'AckIncomingCallPresentation':
+        'notification.ack.incoming.call.presentation',
     'CreateAppMessage': 'notification.create.app.message',
     'GetAppMessage': 'notification.get.app.message',
     'GetAppMessageUnreadCount': 'notification.get.app.message.unread.count',
-    'GetIncomingCallDeliveryTimeline': 'notification.get.incoming.call.delivery.timeline',
-    'GetNotificationDeliveryJobMetrics': 'notification.get.notification.delivery.job.metrics',
+    'GetIncomingCallDeliveryTimeline':
+        'notification.get.incoming.call.delivery.timeline',
+    'GetNotificationDeliveryJobMetrics':
+        'notification.get.notification.delivery.job.metrics',
     'ListAppMessages': 'notification.list.app.messages',
-    'ListNotificationDeliveryJobDeadLetters': 'notification.list.notification.delivery.job.dead.letters',
+    'ListNotificationDeliveryJobDeadLetters':
+        'notification.list.notification.delivery.job.dead.letters',
     'ReadAppMessage': 'notification.read.app.message',
-    'RecoverNotificationAccountClosureDeadLetter': 'notification.recover.notification.account.closure.dead.letter',
-    'RecoverNotificationDeliveryJob': 'notification.recover.notification.delivery.job',
+    'RecoverNotificationAccountClosureDeadLetter':
+        'notification.recover.notification.account.closure.dead.letter',
+    'RecoverNotificationDeliveryJob':
+        'notification.recover.notification.delivery.job',
   };
 
   static const String ackAppMessage = 'notification.ack.app.message';
-  static const String ackIncomingCallPresentation = 'notification.ack.incoming.call.presentation';
+  static const String ackIncomingCallPresentation =
+      'notification.ack.incoming.call.presentation';
   static const String createAppMessage = 'notification.create.app.message';
   static const String getAppMessage = 'notification.get.app.message';
-  static const String getAppMessageUnreadCount = 'notification.get.app.message.unread.count';
-  static const String getIncomingCallDeliveryTimeline = 'notification.get.incoming.call.delivery.timeline';
-  static const String getNotificationDeliveryJobMetrics = 'notification.get.notification.delivery.job.metrics';
+  static const String getAppMessageUnreadCount =
+      'notification.get.app.message.unread.count';
+  static const String getIncomingCallDeliveryTimeline =
+      'notification.get.incoming.call.delivery.timeline';
+  static const String getNotificationDeliveryJobMetrics =
+      'notification.get.notification.delivery.job.metrics';
   static const String listAppMessages = 'notification.list.app.messages';
-  static const String listNotificationDeliveryJobDeadLetters = 'notification.list.notification.delivery.job.dead.letters';
+  static const String listNotificationDeliveryJobDeadLetters =
+      'notification.list.notification.delivery.job.dead.letters';
   static const String readAppMessage = 'notification.read.app.message';
-  static const String recoverNotificationAccountClosureDeadLetter = 'notification.recover.notification.account.closure.dead.letter';
-  static const String recoverNotificationDeliveryJob = 'notification.recover.notification.delivery.job';
+  static const String recoverNotificationAccountClosureDeadLetter =
+      'notification.recover.notification.account.closure.dead.letter';
+  static const String recoverNotificationDeliveryJob =
+      'notification.recover.notification.delivery.job';
 }

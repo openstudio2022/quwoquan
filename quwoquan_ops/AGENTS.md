@@ -4,7 +4,7 @@
 
 1. `specs/feature-tree/README.md`
 2. 目标特性父链，或运行 `make feature-context TARGET=<path>`
-3. `.cursor/skills/environment-ops/SKILL.md`
+3. `.agents/skills/environment-ops/SKILL.md`
 4. `quwoquan_ops/gate/gate_repo.sh`
 
 ## 运维与门禁硬约束
@@ -16,11 +16,11 @@
 - Ops 物理树内全部 Python 文件必须由脚本角色、三层测试、test support 或其他明确治理边界唯一归类；未知路径、无 owner 人工 tool、空扫描 gate、临时脚本和 Python/lint/test 缓存均为阻断项。
 - 四环境语义固定为 `alpha`、`beta`、`gamma`、`prod`；生产灰度是 `prod` rollout stage，不存在 `prod-gray`。
 - 四环境 App 均使用 production Remote composition。内容、Creator、实体与发布媒体只能由 canonical immutable release activation 产生；Alpha/Beta/Gamma 的账号、评论、圈子、会话和消息只允许 `stackctl verify` 使用真实非生产身份经领域公开 command/event 创建，Prod 只接受真实用户或正式运营行为。任何环境均禁止 Mongo/PostgreSQL/Redis 直写、fixture manifest、派生投影预填或 App 数据源切换。
-- 不手写端口、host、public URL、gateway/media base；统一读取 quwoquan_ops/environments manifests 与 stackctl 输出。
+- 不手写端口、host、public URL、gateway/media base；统一读取 quwoquan_ops/environments manifests 与 stackctl 输出。组网规则（URL role、DNS/TLS、子网四平面、端口块）的叙事真相源是特性树 [`system-topology-and-networking`](../specs/feature-tree/runtime/system-topology-and-networking/spec.md)。
 - `.qwq_output` 一级只允许 `env/` 与 `data/`。环境输出统一放 `.qwq_output/env/<env>/{runs,observability,local}/`，repo 级证据与临时状态放 `.qwq_output/env/repo/{runs,observability,local}/`，数据执行输出放 `.qwq_output/data/{tasks,releases,local}/`。
 - `local/` 下每个 target 只允许 `process/` 与 `cache/`；`process/` 只保存 pid、进程状态、stdout/stderr 等可删除运行记录，`cache/` 只保存可重建缓存。渲染配置、`.env`、Caddyfile、Caddy data/config、TLS/证书和临时部署卷一律放仓外受限的 `QWQ_DEPLOY_WORK_ROOT`；配置、网络拓扑、证书生成规则与部署约束的真相源必须留在领域 `deploy/` 或 `quwoquan_ops/environments/`，不得写入 `.qwq_output`。
 - App、Service、Legal-static 与 Portal 的可发布包统一写入 `QWQ_DEPLOY_WORK_ROOT/<target>/packages/{app,service,legal-static,ops-portal}/`；禁止将 deployment payload 写回 `.qwq_output`，也禁止重新引入 `packages/runtime/cache/tmp` 环境类别、根 `artifacts/`、`state/` 或环境特例目录。
-- 远端唯一托管目标为 `prod-hosted`（ssh-hosted；远端 gamma 已退役，仅保留 `gamma-local`）。prod 远端访问按 `edge/media/service/data` 四平面去 root 隔离，凭据为按平面 SSH 私钥 `PROD_<PLANE>_SSH_KEY`，单一真相源 `quwoquan_ops/environments/prod/access-isolation.yaml`；已退役单一全权 `PROD_KUBECONFIG`，禁止任何 prod 路径再依赖它或 `kubectl`。
+- 远端唯一托管目标为 `prod-hosted`（ssh-hosted；远端 gamma 已退役，仅保留 `gamma-local`）。prod 四平面访问隔离的叙事见 [`system-topology-and-networking`](../specs/feature-tree/runtime/system-topology-and-networking/spec.md)，凭据与账号事实单一真相源 `quwoquan_ops/environments/prod/access-isolation.yaml`（按平面 SSH 私钥 `PROD_<PLANE>_SSH_KEY`）；已退役单一全权 `PROD_KUBECONFIG`，禁止任何 prod 路径再依赖它或 `kubectl`。
 - `repair` 只允许白名单修复；涉及 prod-hosted 放量、回滚版本、密钥、hosted URL 或破坏性动作时必须停下请求人工确认。
 - 门禁脚本应可重复、可解释、失败信息能指向修复路径；禁止用 allowlist 掩盖新债。
 - ContractGraph 的输入不只是契约声明：编译期还按 `--repo-root` 扫描 `internal/**`、`tests/**` 与端侧 `lib/service/**`，把每个文件的确切字节绑进 `readinessEvidence`。`sourceDigestSetSha256` 只覆盖声明侧，`compilerHash` 只覆盖 `internal/metadata/**`，两者都看不到实现/测试输入漂移，因此「摘要不变而 graph sha256 变化」是合法现象，不是生成器非确定性。重建 graph/lock/manifest 必须在这些被扫描的实现与测试文件静止时一次做完，中途被并行会话改动会得到一份自洽但已过期的锁；用 `make verify-app-contract-handoff-inputs` 判定 graph 相对自身输入是否仍成立。

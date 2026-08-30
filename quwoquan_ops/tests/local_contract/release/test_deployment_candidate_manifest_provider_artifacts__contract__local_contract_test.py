@@ -79,7 +79,7 @@ class DeploymentCandidateManifestContractTest(
         ).read_text(encoding="utf-8")
         self.assertNotIn("x-qwq-package-elasticsearch", packaged)
         self.assertNotIn("QWQ_COMPOSE_ELASTICSEARCH_IMAGE", packaged)
-        self.assertIn(self.observability_log_sink["image"], packaged)
+        self.assertIn(selection["image"], packaged)
 
     def test_candidate_rejects_tampered_observability_artifact(self) -> None:
         path = subject.write_candidate_manifest(

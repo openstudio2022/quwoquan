@@ -87,19 +87,22 @@ func TestPublicProviderEnvironmentConfigsOnlyOverrideRealDifferences(t *testing.
 					)
 				}
 			}
-			for _, capability := range []string{
-				"location.poi.search",
-				"location.route.read",
-			} {
-				binding := config.ExternalBindings[capability]
-				if len(binding) != 1 || binding["state"] != "not_required" {
-					t.Fatalf(
-						"%s %s binding must remain exactly not_required: %#v",
-						environment,
-						capability,
-						binding,
-					)
-				}
+			// nonprod 三环境共享同一 binding 档（DEC-005），alpha 不再单独启用。
+			poiBinding := config.ExternalBindings["location.poi.search"]
+			if len(poiBinding) != 1 || poiBinding["state"] != "not_required" {
+				t.Fatalf(
+					"%s location.poi.search binding must remain exactly not_required: %#v",
+					environment,
+					poiBinding,
+				)
+			}
+			routeBinding := config.ExternalBindings["location.route.read"]
+			if len(routeBinding) != 1 || routeBinding["state"] != "not_required" {
+				t.Fatalf(
+					"%s location.route.read binding must remain exactly not_required: %#v",
+					environment,
+					routeBinding,
+				)
 			}
 			var document any
 			if err := yaml.Unmarshal(data, &document); err != nil {

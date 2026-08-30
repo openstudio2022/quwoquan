@@ -206,9 +206,8 @@ final class _MembershipQueries implements CircleGroupMembershipQueries {
   @override
   Future<CircleGroupMembershipPageSlice> list(
     CircleGroupMembershipListQuery query,
-  ) async => CircleGroupMembershipPageSlice(
-    items: <CircleGroupMembershipSlice>[],
-  );
+  ) async =>
+      CircleGroupMembershipPageSlice(items: <CircleGroupMembershipSlice>[]);
 }
 
 final class _MembershipCommands implements CircleGroupMembershipCommands {

@@ -37,12 +37,7 @@ def test_bridge_cleanup_respects_explicit_workspace_boundary(monkeypatch, tmp_pa
     assert terminated == [101, 103]
 
 
-def test_client_close_reaps_managed_local_bridge_even_after_success(
-    monkeypatch,
-    tmp_path,
-) -> None:
-    workspace = tmp_path / "repo"
-    workspace.mkdir()
+def test_client_close_does_not_reap_workspace_sibling_bridges() -> None:
     events: list[tuple[str, object]] = []
 
     class Client:
@@ -57,16 +52,6 @@ def test_client_close_reaps_managed_local_bridge_even_after_success(
         ) -> None:
             self.close()
 
-    monkeypatch.setattr(
-        agent_runner,
-        "_terminate_workspace_cursor_bridges",
-        lambda path: events.append(("terminate", path)),
-    )
+    agent_runner._close_cursor_client(Client())
 
-    agent_runner._close_cursor_client(
-        Client(),
-        workspace=workspace,
-        terminate_bridges=True,
-    )
-
-    assert events == [("close", None), ("terminate", workspace)]
+    assert events == [("close", None)]

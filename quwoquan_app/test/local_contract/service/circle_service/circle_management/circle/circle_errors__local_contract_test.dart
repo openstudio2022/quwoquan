@@ -15,16 +15,18 @@ void main() {
     });
 
     test('circle_version_conflict → circleVersionConflict / 409', () {
-      final code =
-          CircleErrorCode.fromCode('CIRCLE.USER.circle_version_conflict');
+      final code = CircleErrorCode.fromCode(
+        'CIRCLE.USER.circle_version_conflict',
+      );
       expect(code, CircleErrorCode.circleVersionConflict);
       expect(code.httpStatus, 409);
       expect(code.defaultMessage, isNotEmpty);
     });
 
     test('circle_idempotency_conflict → circleIdempotencyConflict / 409', () {
-      final code =
-          CircleErrorCode.fromCode('CIRCLE.USER.circle_idempotency_conflict');
+      final code = CircleErrorCode.fromCode(
+        'CIRCLE.USER.circle_idempotency_conflict',
+      );
       expect(code, CircleErrorCode.circleIdempotencyConflict);
       expect(code.httpStatus, 409);
       expect(code.defaultMessage, isNotEmpty);

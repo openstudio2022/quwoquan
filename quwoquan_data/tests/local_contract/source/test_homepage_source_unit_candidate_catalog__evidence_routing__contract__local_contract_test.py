@@ -40,6 +40,29 @@ def _access() -> dict[str, bool]:
     }
 
 
+def _source_attribution(
+    *, platform: str, source_url: str, asset_url: str
+) -> dict[str, object]:
+    return {
+        "isOriginal": False,
+        "originalCreatorName": "来源作者",
+        "platform": platform,
+        "sourcePostUrl": source_url,
+        "originalAssetUrl": asset_url,
+        "attributionText": f"来源作者 / {platform}",
+        "rightsBasis": "public research reference",
+        "commercialAuthorizationStatus": "unverified",
+        "publicationAdmission": "research_release",
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": "2026-08-08T00:00:00Z",
+        "takedownPolicy": "remove on substantiated request",
+        "derivedModifications": [],
+    }
+
+
 def _candidate(index: int = 0) -> dict[str, object]:
     name = f"西湖-{index}"
     entity_ref = f"/entity/地点/景区/{name}"
@@ -50,6 +73,11 @@ def _candidate(index: int = 0) -> dict[str, object]:
         "entityRef": entity_ref,
         "observedEntityRef": entity_ref,
         **IDENTITY,
+        "sourceAttribution": _source_attribution(
+            platform="维基百科",
+            source_url=primary_url,
+            asset_url=f"https://images.example.test/{index}/west-lake-original.jpg",
+        ),
         "primarySource": {
             "sourceUnitId": f"homepage-wikipedia-{index}",
             "sourceUnitRef": f"sources/homepage-wikipedia-{index}",

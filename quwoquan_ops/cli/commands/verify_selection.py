@@ -56,20 +56,31 @@ def _selected_verify_commands(
                 selected = list(command)
                 if (
                     group_name == "config"
-                    and env_name in _stackctl.ENVIRONMENTS
                     and selected
                     and selected[-1].endswith("verify_media_delivery_contract.py")
                 ):
-                    selected.extend(["--env", env_name])
+                    if profile is VerificationProfile.BASELINE:
+                        for component_environment in ("alpha", "beta", "gamma"):
+                            selected.extend(
+                                ["--component-environment", component_environment]
+                            )
+                    elif env_name in _stackctl.ENVIRONMENTS:
+                        selected.extend(["--env", env_name])
                 commands.append(selected)
         return commands
     if kind == "packaging":
         return packaging_commands
     commands = [list(command) for command in _stackctl.VERIFY_COMMAND_GROUPS[kind]]
-    if kind == "config" and env_name in _stackctl.ENVIRONMENTS:
+    if kind == "config":
         for command in commands:
             if command and command[-1].endswith("verify_media_delivery_contract.py"):
-                command.extend(["--env", env_name])
+                if profile is VerificationProfile.BASELINE:
+                    for component_environment in ("alpha", "beta", "gamma"):
+                        command.extend(
+                            ["--component-environment", component_environment]
+                        )
+                elif env_name in _stackctl.ENVIRONMENTS:
+                    command.extend(["--env", env_name])
     return commands
 
 
@@ -336,5 +347,4 @@ def _selected_profile_commands(
             if search_smoke_command is not None:
                 commands.append(search_smoke_command)
     return commands
-
 

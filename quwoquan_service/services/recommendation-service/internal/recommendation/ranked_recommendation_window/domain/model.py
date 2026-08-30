@@ -42,6 +42,7 @@ class RecommendationObjectCard:
 
 @dataclass(frozen=True, slots=True)
 class RankingResult:
+    experiment_bucket: str
     model_bucket: str
     model_channel: str | None
     model_release_id: str | None
@@ -58,6 +59,7 @@ class RankedRecommendationWindow:
     window_id: str
     subject_id: str
     scenario: str
+    experiment_bucket: str
     model_bucket: str
     model_channel: str | None
     model_release_id: str | None
@@ -91,6 +93,7 @@ class RankedRecommendationWindow:
                 window_id,
                 normalized_subject,
                 normalized_scenario,
+                ranking.experiment_bucket,
                 request_digest,
                 ranking.model_bucket,
                 ranking.policy_digest,
@@ -105,6 +108,9 @@ class RankedRecommendationWindow:
         if ranking.feature_snapshot_at.astimezone(timezone.utc) > created_at:
             raise ValueError("featureSnapshotAt cannot be later than window creation")
         normalized_bucket = ranking.model_bucket.strip()
+        normalized_experiment_bucket = ranking.experiment_bucket.strip()
+        if normalized_experiment_bucket not in {"model", "rule"}:
+            raise ValueError("experimentBucket must be model or rule")
         if normalized_bucket not in {"model", "rule"}:
             raise ValueError("modelBucket must be model or rule")
         if normalized_bucket == "model" and (
@@ -144,6 +150,7 @@ class RankedRecommendationWindow:
             window_id=window_id.strip(),
             subject_id=normalized_subject,
             scenario=normalized_scenario,
+            experiment_bucket=normalized_experiment_bucket,
             model_bucket=normalized_bucket,
             model_channel=ranking.model_channel.strip() if ranking.model_channel else None,
             model_release_id=(

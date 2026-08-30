@@ -7,6 +7,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _SCRIPTS_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -559,6 +561,42 @@ def verify_rebuild(
                 "shell navigation clean rebuild 与 committed manifest 不一致"
             )
 
+def _go_read_file_arguments(source: Path) -> list[str]:
+    return [
+        argument.strip()
+        for argument in re.findall(
+            r"os\.ReadFile\(([^)]*)\)",
+            source.read_text(encoding="utf-8"),
+        )
+    ]
+
+
+def verify_app_launch_mode_input_boundary() -> None:
+    loader = GENERATOR_ROOT / "app_launch_contract_codegen.go"
+    renderer = GENERATOR_ROOT / "app_launch_contract_render.go"
+    validator = GENERATOR_ROOT / "app_launch_contract_validation.go"
+    expected_loader_reads = ["artifactPath", "launchPath"]
+    actual_loader_reads = _go_read_file_arguments(loader)
+    if actual_loader_reads != expected_loader_reads:
+        raise AssertionError(
+            "App launch loader 只能读取两份 canonical metadata: "
+            f"actual={actual_loader_reads} expected={expected_loader_reads}"
+        )
+    expected_output_reads = ["path", "manifestPath"]
+    actual_output_reads = _go_read_file_arguments(renderer)
+    if actual_output_reads != expected_output_reads:
+        raise AssertionError(
+            "App launch renderer 只能回读声明的 generated outputs: "
+            f"actual={actual_output_reads} expected={expected_output_reads}"
+        )
+    validator_reads = _go_read_file_arguments(validator)
+    if validator_reads:
+        raise AssertionError(
+            "App launch validator 禁止读取文件输入: "
+            f"actual={validator_reads}"
+        )
+
+
 def verify_emitter_boundary() -> None:
     main_text = (GENERATOR_ROOT / "main.go").read_text(encoding="utf-8")
     service_makefile = (SERVICE / "Makefile").read_text(encoding="utf-8")
@@ -583,9 +621,18 @@ def verify_emitter_boundary() -> None:
                 f"{forbidden}"
             )
     for source in sorted(GENERATOR_ROOT.glob("*.go")):
+        # app_identity_codegen.go、app_launch_contract_{codegen,render,validation}.go 与
+        # shell_navigation_codegen.go 是 `--app-identity-only`、
+        # `--app-launch-contract-only`、`--shell-navigation-metadata-only`
+        # 独立模式，由各自的 generated manifest 与专项 verifier 绑定，不属于
+        # ContractGraph 驱动的 App emitter，因此不受 Graph/lock 唯一输入约束。
         if source.name.endswith("_test.go") or source.name in {
             "contract_graph_source.go",
             "shell_navigation_codegen.go",
+            "app_identity_codegen.go",
+            "app_launch_contract_codegen.go",
+            "app_launch_contract_render.go",
+            "app_launch_contract_validation.go",
         }:
             continue
         text = source.read_text(encoding="utf-8")
@@ -609,6 +656,7 @@ def verify_emitter_boundary() -> None:
             raise AssertionError(
                 f"App emitter 禁止读取 Graph/lock 之外的文件: {source.name}"
             )
+    verify_app_launch_mode_input_boundary()
 
 
 def main() -> int:

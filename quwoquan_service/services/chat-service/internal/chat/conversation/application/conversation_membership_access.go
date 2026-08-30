@@ -35,7 +35,7 @@ func requireActiveConversationMember(
 			"persona is not a member of this conversation",
 		)
 	}
-	if conv.Status != "" && conv.Status != model.ConversationStatusActive {
+	if conv.Status != model.ConversationStatusActive {
 		return nil, nil, chatConversationDissolved("conversation is not active")
 	}
 	return conv, member, nil

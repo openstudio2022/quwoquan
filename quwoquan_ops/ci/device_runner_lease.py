@@ -84,24 +84,37 @@ def _flutter_devices() -> list[dict[str, Any]]:
     return [item for item in payload if isinstance(item, dict)]
 
 
-def select_device(platform: str, preferred_device_id: str = "") -> str:
-    candidates: list[str] = []
+def select_device(platform: str, preferred_device_id: str = "") -> dict[str, Any]:
+    """Select one explicit physical device from Flutter's structured inventory."""
+
+    candidates: list[dict[str, Any]] = []
     for device in _flutter_devices():
-        target = str(device.get("targetPlatform") or "").lower()
+        target = str(device.get("targetPlatform") or "").strip().lower()
         device_id = str(device.get("id") or "").strip()
-        if not device_id:
+        emulator = device.get("emulator")
+        supported = device.get("isSupported", True)
+        if not device_id or type(emulator) is not bool or supported is not True:
+            continue
+        if emulator:
             continue
         if platform == "android" and target.startswith("android"):
-            candidates.append(device_id)
+            candidates.append(dict(device))
         elif platform == "ios" and target == "ios":
-            candidates.append(device_id)
+            candidates.append(dict(device))
     if preferred_device_id:
-        if preferred_device_id not in candidates:
-            raise ValueError(f"preferred {platform} device is not present on this runner")
-        return preferred_device_id
+        matching = [
+            device
+            for device in candidates
+            if str(device.get("id") or "").strip() == preferred_device_id
+        ]
+        if len(matching) != 1:
+            raise ValueError(
+                f"preferred physical {platform} device is not present on this runner"
+            )
+        return matching[0]
     if not candidates:
-        raise ValueError(f"no {platform} device is present on this runner")
-    return sorted(candidates)[0]
+        raise ValueError(f"no physical {platform} device is present on this runner")
+    return min(candidates, key=lambda item: str(item.get("id") or ""))
 
 
 def _lease_key(platform: str, host: str, device_id_digest: str) -> str:
@@ -138,7 +151,11 @@ def acquire(
     actual_host_digest = host_digest()
     if actual_host_digest != expected_host_digest:
         raise ValueError("platform runner is not the Beta stack host")
-    device_id = select_device(platform, preferred_device_id)
+    device = select_device(platform, preferred_device_id)
+    device_id = str(device.get("id") or "").strip()
+    target_platform = str(device.get("targetPlatform") or "").strip()
+    if not device_id or not target_platform or device.get("emulator") is not False:
+        raise ValueError("selected device is not an explicit physical Flutter device")
     device_id_digest = _digest("quwoquan-mobile-device\0" + device_id)
     lease_key = _lease_key(platform, actual_host_digest, device_id_digest)
     lease_root = lease_root.expanduser()
@@ -167,6 +184,7 @@ def acquire(
             )
         )
     )
+    owner_path = lock_dir / "owner.json"
     owner = {
         "leaseId": lease_id,
         "tokenDigest": _digest(token),
@@ -178,11 +196,14 @@ def acquire(
         "platform": platform,
         "hostDigest": actual_host_digest,
         "deviceIdDigest": device_id_digest,
+        "deviceClass": "physical",
+        "deviceRegistered": True,
+        "targetPlatform": target_platform,
         "leaseId": lease_id,
+        "leaseOwnerRef": str(owner_path),
         "runnerLabel": runner_label,
         "acquiredAt": acquired_at,
     }
-    owner_path = lock_dir / "owner.json"
     try:
         if evidence_output.is_symlink():
             raise ValueError("device lease evidence output must not be a symlink")
@@ -190,11 +211,13 @@ def acquire(
             json.dumps(owner, ensure_ascii=False, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        owner_path.chmod(0o600)
         evidence_output.parent.mkdir(parents=True, exist_ok=True)
         evidence_output.write_text(
             json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        evidence_output.chmod(0o600)
         values = {
             "host_digest": actual_host_digest,
             "device_id": device_id,

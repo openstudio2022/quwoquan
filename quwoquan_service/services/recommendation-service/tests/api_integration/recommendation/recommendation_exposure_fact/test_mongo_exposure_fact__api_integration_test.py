@@ -1,4 +1,5 @@
 # spec_ref: specs/feature-tree/discovery-content/exposure-governance/served-dedup-write-behind/spec.md#gwt-001
+# spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t2
 # readiness_case: append-exposure-api
 from datetime import datetime, timezone
 import hashlib
@@ -55,6 +56,7 @@ def test_feed_delivery_stream_persists_exposure_before_ack(
         "personaId": "persona-stream-001",
         "scenario": "content_feed",
         "windowId": "window-stream-001",
+        "experimentBucket": "model",
         "modelBucket": "model",
         "modelChannel": "champion",
         "modelReleaseId": "release-stream-001",
@@ -92,9 +94,11 @@ def test_feed_delivery_stream_persists_exposure_before_ack(
     )
 
     assert consumer.process_once() == 1
-    assert mongo_database["recommendation_exposure_facts"].count_documents(
+    persisted = mongo_database["recommendation_exposure_facts"].find_one(
         {"sourceEventId": event_id}
-    ) == 1
+    )
+    assert persisted is not None
+    assert persisted["experimentBucket"] == "model"
     assert len(projector.exposure_ids) == 1
     assert real_redis.xpending(FEED_PAGE_DELIVERED_STREAM, CONSUMER_GROUP)[
         "pending"
@@ -120,6 +124,7 @@ def test_exposure_fact_is_immutable_and_attributable_in_mongo(mongo_database) ->
         target_type="post",
         target_id="post-001",
         ordinal=0,
+        experiment_bucket="model",
         model_bucket="model",
         model_channel="champion",
         model_release_id="release-001",

@@ -39,7 +39,24 @@
       }
     },
     "enums": {
-      "type": "object"
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "array" },
+          {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["values"],
+            "properties": {
+              "values": { "type": "array" },
+              "client_unknown_member": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+              }
+            }
+          }
+        ]
+      }
     },
     "value_objects": {
       "type": "object",

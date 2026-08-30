@@ -144,7 +144,7 @@ func TestOpenHTTPCommitsCaseReceiptAuditAndOutboxInMongo(t *testing.T) {
 		handler,
 		http.MethodPost,
 		"/internal/content/posts/post-moderated:moderate",
-		`{"caseId":"`+opened.CaseID+`","decision":"approve","decisionReason":"content is safe"}`,
+		`{"caseId":"`+opened.CaseID+`","decision":"approved","decisionReason":"content is safe"}`,
 		"decide-moderation-once",
 		moderationOperatorPrincipal(
 			"ops.case.write",

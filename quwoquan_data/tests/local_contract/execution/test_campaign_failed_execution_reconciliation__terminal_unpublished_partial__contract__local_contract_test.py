@@ -55,6 +55,7 @@ def _write_prepared_transaction(
             "schema": "quwoquan_data.object_transaction_package",
             "transactionId": transaction_id,
             "executionId": execution_id,
+            "publishMediaMode": "not_applicable",
             "sourcePolicyRevision": "rights-cleared-content",
             "target": {
                 "layoutSchema": "quwoquan_data.canonical_publish",
@@ -89,8 +90,16 @@ def _write_prepared_transaction(
 def _write_terminal_unpublished_boundary(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    *,
+    active_carriers: tuple[str, ...] = CARRIERS,
+    target_names: tuple[str, ...] = ("杭州西湖",),
 ) -> tuple[Path, Path, dict[str, str]]:
-    output_root, campaign, execution_ids = _write_boundary(tmp_path, monkeypatch)
+    output_root, campaign, execution_ids = _write_boundary(
+        tmp_path,
+        monkeypatch,
+        active_carriers=active_carriers,
+        target_names=target_names,
+    )
     report_path = campaign / "campaign_report.json"
     report = read_json(report_path)
     assert isinstance(report, dict)
@@ -101,7 +110,7 @@ def _write_terminal_unpublished_boundary(
             "failure": "homepage:RuntimeError: terminal publish process failed",
         }
     )
-    for carrier in CARRIERS:
+    for carrier in active_carriers:
         qualified = carrier in _QUALIFIED
         claim = read_json(campaign / "claims" / f"{carrier}.json")
         lane = report["lanes"][carrier]
@@ -142,7 +151,8 @@ def _write_terminal_unpublished_boundary(
                     "discards": [],
                 },
             )
-    _write_prepared_transaction(output_root, execution_ids["image"])
+    if "image" in execution_ids:
+        _write_prepared_transaction(output_root, execution_ids["image"])
     write_json(report_path, report)
     monkeypatch.setattr(terminal_contract, "_process_group_alive", lambda _pgid: False)
     return output_root, campaign, execution_ids
@@ -222,7 +232,7 @@ def test_terminal_unpublished_source_drift_binds_reviews_without_release_credit(
     next_source_digest = "sha256:" + "d" * 64
     monkeypatch.setattr(
         reconciliation,
-        "current_source_digest",
+        "current_source_definition_snapshot",
         lambda **_kwargs: SimpleNamespace(
             to_document=lambda: _source_document(next_source_digest)
         ),
@@ -246,6 +256,97 @@ def test_terminal_unpublished_source_drift_binds_reviews_without_release_credit(
             output_root=output_root,
         )
     assert "ROOT_DRIFT" in str(caught.value)
+
+
+def test_terminal_unpublished_selector_campaign_accepts_empty_target_names(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root, campaign, _execution_ids = _write_terminal_unpublished_boundary(
+        tmp_path,
+        monkeypatch,
+        target_names=(),
+    )
+
+    receipt, _path = reconciliation.reconcile_failed_campaign(
+        ROOT_ID,
+        reason="terminal_unpublished_source_drift",
+        blocker_evidence=campaign / "campaign_report.json",
+        repo_root=tmp_path,
+        output_root=output_root,
+    )
+
+    assert all(
+        row["targetNames"] == [] for row in receipt["submissions"].values()
+    )
+
+
+def test_terminal_unpublished_shortfall_allows_carrier_retry_with_new_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root, campaign, execution_ids = _write_terminal_unpublished_boundary(
+        tmp_path,
+        monkeypatch,
+        target_names=(),
+    )
+
+    receipt, path = reconciliation.reconcile_failed_campaign(
+        ROOT_ID,
+        reason="terminal_unpublished_retryable_shortfall",
+        blocker_evidence=campaign / "campaign_report.json",
+        repo_root=tmp_path,
+        output_root=output_root,
+    )
+    predecessors, targets, _reference, loaded = (
+        request_envelope_writer._reconciliation_inputs(
+            path,
+            sequence=2,
+            retry_predecessors={"article": execution_ids["article"]},
+            target_names=("乐山大佛",),
+            output_root=output_root,
+        )
+    )
+
+    assert receipt["errorCode"] == (
+        "DATA.CAMPAIGN.TERMINAL_UNPUBLISHED_RETRYABLE_SHORTFALL"
+    )
+    # A campaign has exactly one create-once reconciliation receipt, so the reason
+    # and the observed identity are fields inside it rather than path segments:
+    # deriving the path from either would let one campaign hold two verdicts.
+    assert path.parent.name == "reconciliation"
+    assert path.name == "submission-only-abandonment.json"
+    assert receipt["observedSourceIdentity"]["sourceRevision"].startswith("sha256:")
+    assert predecessors == {"article": execution_ids["article"]}
+    assert targets == ("乐山大佛",)
+    assert loaded == receipt
+
+
+def test_terminal_unpublished_homepage_video_partial_ignores_inactive_lanes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    active = ("homepage", "video")
+    output_root, campaign, _execution_ids = _write_terminal_unpublished_boundary(
+        tmp_path,
+        monkeypatch,
+        active_carriers=active,
+    )
+
+    receipt, _path = reconciliation.reconcile_failed_campaign(
+        ROOT_ID,
+        reason="terminal_unpublished_source_drift",
+        blocker_evidence=campaign / "campaign_report.json",
+        repo_root=tmp_path,
+        output_root=output_root,
+    )
+
+    assert receipt["activeCarriers"] == list(active)
+    assert [row["carrier"] for row in receipt["executionEvidence"]["lanes"]] == list(
+        active
+    )
+    assert receipt["executionEvidence"]["reviewQualifiedLaneCount"] == 1
+    assert set(receipt["campaignEvidence"]["claims"]) == set(active)
 
 
 @pytest.mark.parametrize(
@@ -307,7 +408,7 @@ def test_terminal_unpublished_successor_must_equal_receipt_observed_identity() -
     receipt = {
         "reason": "terminal_unpublished_source_drift",
         "observedSourceIdentity": observed,
-        "retryPolicy": "new_four_lane_execution_with_retryOf",
+        "retryPolicy": "active_workload_execution_with_retryOf",
         "executionEvidence": {
             "excludedFromRetryRelease": True,
             "eligibleForRelease": False,

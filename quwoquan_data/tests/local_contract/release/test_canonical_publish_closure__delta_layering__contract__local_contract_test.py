@@ -20,6 +20,7 @@ from content.release.canonical.object_transaction_audit import (
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
 )
+from support.media_fixture import admit_media_body
 from support.object_transaction_fixtures import (
     TRANSACTION_ID,
     build_canonical,
@@ -99,13 +100,14 @@ def test_delta_closure_blocks_environment_media_url_and_non_work_identity(
     assert "environment_media_url_in_canonical" in _codes(report)
 
 
-def test_delta_closure_resolves_cas_from_same_delta_and_blocks_dangling(
+def test_delta_closure_resolves_media_from_library_and_blocks_dangling(
     tmp_path: Path,
 ) -> None:
     publish = build_canonical(tmp_path)
     run_root = tmp_path / "run"
     cover = b"cover-bytes"
     object_key = _object_key(cover)
+    admit_media_body(cover)
 
     def _manifest(key: str) -> dict[str, object]:
         return {
@@ -115,16 +117,17 @@ def test_delta_closure_resolves_cas_from_same_delta_and_blocks_dangling(
             "assets": [{"assetId": "cover", "kind": "image", "objectKey": key}],
         }
 
+    # The delta carries the manifest alone; the body it cites is already held by
+    # the library, which is where the reference closes.
     closed = validate_publish_delta(
         publish_root=publish,
         run_root=run_root,
         entries=[
-            _entry(run_root, object_key, cover),
             _entry(run_root, "posts/image/摄影/作品/1/manifest.json", _manifest(object_key)),
         ],
     )
     assert closed["status"] == "passed", closed["issues"]
-    assert closed["deltaFileCount"] == 2
+    assert closed["deltaFileCount"] == 1
 
     missing = _object_key(b"never-ingested")
     dangling = validate_publish_delta(
@@ -150,6 +153,24 @@ def test_delta_closure_resolves_cas_from_same_delta_and_blocks_dangling(
     )
     assert non_cas["status"] == "failed"
     assert "non_cas_asset_ref" in _codes(non_cas)
+
+
+def test_delta_refuses_to_land_a_media_body_under_a_canonical_root(
+    tmp_path: Path,
+) -> None:
+    publish = build_canonical(tmp_path)
+    run_root = tmp_path / "run"
+
+    report = validate_publish_delta(
+        publish_root=publish,
+        run_root=run_root,
+        entries=[
+            _entry(run_root, "posts/image/摄影/作品/1/assets/cover.jpg", b"cover-bytes"),
+        ],
+    )
+
+    assert report["status"] == "failed"
+    assert "media_body_in_publish" in _codes(report)
 
 
 def test_delta_closure_blocks_video_poster_closure_gap(tmp_path: Path) -> None:
@@ -187,13 +208,13 @@ def test_delta_closure_blocks_video_poster_closure_gap(tmp_path: Path) -> None:
     assert "video_poster_closure_invalid" in _codes(report)
 
 
-def test_delta_closure_leaves_global_orphans_to_release_invariants(
+def test_delta_closure_leaves_stray_media_bytes_to_release_invariants(
     tmp_path: Path,
 ) -> None:
     publish = build_canonical(tmp_path)
-    orphan = publish / _object_key(b"orphan-bytes")
-    orphan.parent.mkdir(parents=True, exist_ok=True)
-    orphan.write_bytes(b"orphan-bytes")
+    stray = publish / _object_key(b"stray-bytes")
+    stray.parent.mkdir(parents=True, exist_ok=True)
+    stray.write_bytes(b"stray-bytes")
     run_root = tmp_path / "run"
 
     delta = validate_publish_delta(
@@ -209,8 +230,11 @@ def test_delta_closure_leaves_global_orphans_to_release_invariants(
     )
     invariants = validate_publish_invariants(publish)
 
-    assert "orphan_media" not in _codes(delta)
-    assert "orphan_media" in _codes(invariants)
+    # A media body in the tree is not something one transaction can have caused,
+    # since no transaction is allowed to land one; the delta judges only its own
+    # entries and the whole-tree invariants are what catch a body that is there.
+    assert "noncanonical_root" not in _codes(delta)
+    assert "noncanonical_root" in _codes(invariants)
     assert invariants["status"] == "failed"
 
 

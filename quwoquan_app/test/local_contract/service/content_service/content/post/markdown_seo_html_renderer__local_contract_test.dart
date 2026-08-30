@@ -4,9 +4,10 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
-import 'package:quwoquan_app/runtime/transport/links/app_public_content_links.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/asset_url_resolver.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/markdown_seo_html_renderer.dart';
+
+import '../../../../../support/runtime/public_content_link_test_scope.dart';
 
 void main() {
   group('MarkdownSeoHtmlRenderer', () {
@@ -14,7 +15,10 @@ void main() {
       imageCdnBaseUrl: 'https://image.example.test',
       videoCdnBaseUrl: 'https://video.example.test',
     );
-    const renderer = MarkdownSeoHtmlRenderer(resolver);
+    final renderer = MarkdownSeoHtmlRenderer(
+      resolver,
+      publicLinks: testPublicContentLinks,
+    );
     String resolvedMedia(String raw) => resolveContentMediaUrl(
       raw,
       imageCdnBaseUrl: 'https://image.example.test',
@@ -76,7 +80,7 @@ asset://cover
       );
 
       expect(doc.indexable, isTrue);
-      expect(doc.canonicalUrl, AppPublicContentLinks.postWebUrl('post_seo_1'));
+      expect(doc.canonicalUrl, '$testPublicWebOrigin/post/post_seo_1');
       expect(doc.html, contains('<h1>川西自驾笔记</h1>'));
       expect(doc.html, contains('<p>第一段正文，包含'));
       expect(doc.html, contains('<blockquote>适合第一次去川西的朋友。</blockquote>'));

@@ -6,13 +6,14 @@ spec_ref: specs/feature-tree/gateway-orchestrator-foundation/spec.md#dom-001
 from __future__ import annotations
 
 import base64
+import inspect
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import yaml
@@ -21,14 +22,14 @@ ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.graphql_read_registry_package import (
     SigningMaterial,
-    materialize_graphql_read_runtime_config,
     materialize_graphql_read_registry_package,
+    materialize_graphql_read_runtime_config,
     resolve_signing_material,
     validate_packaged_graphql_read_registry,
 )
-
 
 CANDIDATE = "sha256:" + "1" * 64
 
@@ -223,6 +224,111 @@ class GraphQLReadRegistryPackageContractTest(unittest.TestCase):
                     "graphql-read-package.json",
                 },
             )
+
+    def test_prod_targets_keep_actual_target_and_cross_target_fails_closed(self) -> None:
+        for target in ("prod-sim", "prod-hosted"):
+            with self.subTest(target=target), tempfile.TemporaryDirectory(
+                prefix="qwq-graphql-prod-package-"
+            ) as temporary:
+                root = Path(temporary)
+                candidate = self._candidate(root)
+                descriptor = materialize_graphql_read_registry_package(
+                    repo_root=ROOT,
+                    candidate_root=candidate,
+                    environment="prod",
+                    target=target,
+                    candidate_digest=CANDIDATE,
+                    signing=self._signing(root),
+                )
+                self.assertEqual(descriptor["environment"], "prod")
+                self.assertEqual(descriptor["target"], target)
+                foreign_target = (
+                    "prod-hosted" if target == "prod-sim" else "prod-sim"
+                )
+                with self.assertRaisesRegex(ValueError, "candidate identity"):
+                    validate_packaged_graphql_read_registry(
+                        repo_root=ROOT,
+                        candidate_root=candidate,
+                        expected_environment="prod",
+                        expected_target=foreign_target,
+                        expected_candidate_digest=CANDIDATE,
+                        expected_descriptor=descriptor,
+                    )
+
+    def test_prod_requires_explicit_signing_material(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="qwq-graphql-prod-package-"
+        ) as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            with self.assertRaisesRegex(ValueError, "explicit signing material"):
+                materialize_graphql_read_registry_package(
+                    repo_root=ROOT,
+                    candidate_root=candidate,
+                    environment="prod",
+                    target="prod-sim",
+                    candidate_digest=CANDIDATE,
+                    signing=None,
+                )
+
+    def test_registry_boundary_excludes_unrelated_dependency_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qwq-graphql-package-") as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            framework = (
+                candidate
+                / "input-capsule/dependencies/patrol-host-ios-cocoapods"
+                / "Pods/WebRTC/WebRTC.framework"
+            )
+            framework.mkdir(parents=True)
+            framework_resources = root / "canonical-webrtc-framework-resources"
+            framework_resources.mkdir()
+            dependency_link = framework / "Resources"
+            dependency_link.symlink_to(framework_resources, target_is_directory=True)
+
+            descriptor = materialize_graphql_read_registry_package(
+                repo_root=ROOT,
+                candidate_root=candidate,
+                environment="alpha",
+                target="alpha-local",
+                candidate_digest=CANDIDATE,
+                signing=self._signing(root),
+            )
+
+            self.assertTrue(dependency_link.is_symlink())
+            self.assertEqual(
+                validate_packaged_graphql_read_registry(
+                    repo_root=ROOT,
+                    candidate_root=candidate,
+                    expected_environment="alpha",
+                    expected_target="alpha-local",
+                    expected_candidate_digest=CANDIDATE,
+                    expected_descriptor=descriptor,
+                ),
+                descriptor,
+            )
+
+    def test_registry_owned_symlink_remains_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="qwq-graphql-package-") as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            foreign_envelope = root / "foreign-registry-envelope.json"
+            foreign_envelope.write_text("{}", encoding="utf-8")
+            registry_envelope = (
+                candidate
+                / "packages/services/api-edge/config/graphql-read-registry.json"
+            )
+            registry_envelope.symlink_to(foreign_envelope)
+
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                materialize_graphql_read_registry_package(
+                    repo_root=ROOT,
+                    candidate_root=candidate,
+                    environment="alpha",
+                    target="alpha-local",
+                    candidate_digest=CANDIDATE,
+                    signing=self._signing(root),
+                )
 
     def test_mutable_runtime_materializes_signed_candidate_bound_files(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qwq-graphql-runtime-") as temporary:
@@ -432,14 +538,18 @@ class GraphQLReadRegistryPackageContractTest(unittest.TestCase):
         self.assertNotIn("QWQ_GRAPHQL_READ_REGISTRY_SIGNING_PRIVATE_KEY_FILE", launcher)
 
     def test_stackctl_fails_signing_before_staging_and_seals_before_images(self) -> None:
-        source = (ROOT / "quwoquan_ops/cli/stackctl.py").read_text(encoding="utf-8")
-        command = source[source.index("def command_package(") :]
-        new_candidate = command[: command.index("def _command_package_unlocked(")]
-        self.assertLess(
-            new_candidate.index("resolve_graphql_read_signing_material(ROOT)"),
-            new_candidate.index("staging_dir = Path("),
+        # 跟着 stackctl 的再导出取真实实现源码：package 域已迁往
+        # quwoquan_ops/cli/commands/package_{domain,runtime}.py。
+        command = inspect.getsource(stackctl.command_package)
+        signing_index = command.index(
+            "_resolve_graphql_read_signing_for_local_target("
         )
-        unlocked = command[command.index("def _command_package_unlocked(") :]
+        first_mkdir_index = command.index("capsule_parent.mkdir(")
+        # 签名材料必须先于任何目录被创建就解析成功：缺签名时连一个空的 staging 树
+        # 都不该出现，因此这段区间里也不该有任何清理动作可做。
+        self.assertLess(signing_index, first_mkdir_index)
+        self.assertNotIn("rmtree", command[signing_index:first_mkdir_index])
+        unlocked = inspect.getsource(stackctl._command_package_unlocked)
         self.assertLess(
             unlocked.index("materialize_graphql_read_registry_package("),
             unlocked.index("_build_package_bound_local_images("),

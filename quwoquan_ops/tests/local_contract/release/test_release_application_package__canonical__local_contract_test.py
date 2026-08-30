@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -8,6 +7,10 @@ from pathlib import Path
 import pytest
 
 from quwoquan_ops.ci import render_release_application_package as subject
+from quwoquan_ops.cli.lib.app_identity import (
+    application_id_for_build_product,
+    resolve_build_product,
+)
 
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -40,30 +43,83 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
     )
 
 
-def test_render_binds_real_package_to_current_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _artifact_manifest(
+    *,
+    build_product_id: str,
+    revision: str,
+    tree: str,
+    artifact_digest: str,
+) -> dict[str, object]:
+    product = resolve_build_product(build_product_id)
+    manifest = {
+        "schema": "app-artifact-manifest",
+        "buildProductId": product.build_product_id,
+        "buildProfile": product.build_profile,
+        "platform": product.platform,
+        "buildMode": product.build_mode,
+        "distributionClass": product.distribution_class,
+        "artifactFormat": product.artifact_format,
+        "applicationId": application_id_for_build_product(product.build_product_id),
+        "displayVersion": "1.0.0",
+        "buildNumber": "1",
+        "signingIdentityDigest": "sha256:" + "1" * 64,
+        "sourceGitSha": revision,
+        "sourceTreeDigest": tree,
+        "buildProvenanceDigest": "sha256:" + "2" * 64,
+        "artifactDigest": artifact_digest,
+        "promotable": product.distribution_class in {"store", "hosted_web"},
+    }
+    if product.platform in {"android", "ios"}:
+        manifest["runtimeConfigTrustEnvelopeDigest"] = "sha256:" + "4" * 64
+    return manifest
+
+
+def _write_product_artifact(root: Path, build_product_id: str) -> Path:
+    product = resolve_build_product(build_product_id)
+    artifact = root / subject.PAYLOAD_NAMES[build_product_id]
+    if product.artifact_format in {"app", "web"}:
+        artifact.mkdir(parents=True)
+        (artifact / "payload.bin").write_bytes(build_product_id.encode("utf-8"))
+    else:
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_bytes(build_product_id.encode("utf-8"))
+    return artifact
+
+
+def test_render_binds_real_product_package_to_current_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     assert SPEC_REF
     monkeypatch.chdir(ROOT)
     revision, tree = _source()
-    package = tmp_path / "app-release.apk"
-    package.write_bytes(b"signed-package")
+    package = tmp_path / "android-nonprod-apk"
+    artifact = _write_product_artifact(package, "android-nonprod-apk")
 
     payload = subject.render(
-        environment="beta",
-        surface="android",
-        package=package.parent,
+        build_product_id="android-nonprod-apk",
+        package=package,
         source_git_sha=revision,
         source_tree_digest=tree,
+        artifact_manifest=_artifact_manifest(
+            build_product_id="android-nonprod-apk",
+            revision=revision,
+            tree=tree,
+            artifact_digest=subject._package_digest(artifact),
+        ),
     )
 
     assert set(payload) == subject.GENERIC_FIELDS
     assert payload["schema"] == "release-application-package"
+    assert payload["buildProductId"] == "android-nonprod-apk"
+    assert payload["buildProfile"] == "nonprod"
+    assert payload["platform"] == "android"
     assert payload["sourceGitSha"] == revision
     assert payload["sourceTreeDigest"] == tree
-    assert payload["packageDigest"] == subject._sha256_tree(package.parent)
+    assert payload["packageDigest"] == subject._sha256_tree(package)
     assert not any("version" in key.lower() for key in payload)
 
 
-def test_render_rejects_file_digest_that_cannot_round_trip_through_payload_tree(
+def test_render_rejects_file_instead_of_canonical_payload_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     assert SPEC_REF
@@ -74,15 +130,20 @@ def test_render_rejects_file_digest_that_cannot_round_trip_through_payload_tree(
 
     with pytest.raises(ValueError, match="canonical payload directory"):
         subject.render(
-            environment="beta",
-            surface="android",
+            build_product_id="android-nonprod-apk",
             package=package,
             source_git_sha=revision,
             source_tree_digest=tree,
+            artifact_manifest=_artifact_manifest(
+                build_product_id="android-nonprod-apk",
+                revision=revision,
+                tree=tree,
+                artifact_digest=subject._package_digest(package),
+            ),
         )
 
 
-def test_bundle_requires_every_real_environment_surface_payload(
+def test_bundle_requires_exactly_five_build_products(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     assert SPEC_REF
@@ -90,111 +151,25 @@ def test_bundle_requires_every_real_environment_surface_payload(
     revision, tree = _source()
     bundle = tmp_path / "bundle"
     applications = bundle / "application-packages"
-    for environment, surface in subject.GENERIC_PACKAGES:
-        package = (
-            bundle
-            / "payloads"
-            / environment
-            / surface
-            / subject.PAYLOAD_NAMES[surface]
-        )
-        package.parent.mkdir(parents=True, exist_ok=True)
-        package.write_bytes(f"{environment}-{surface}".encode("utf-8"))
+
+    for build_product_id in subject.BUILD_PRODUCT_IDS:
+        package = bundle / "payloads" / build_product_id
+        artifact = _write_product_artifact(package, build_product_id)
         _write_json(
-            applications / f"{environment}--{surface}.json",
+            applications / f"{build_product_id}.json",
             subject.render(
-                environment=environment,
-                surface=surface,
-                package=package.parent,
+                build_product_id=build_product_id,
+                package=package,
                 source_git_sha=revision,
                 source_tree_digest=tree,
+                artifact_manifest=_artifact_manifest(
+                    build_product_id=build_product_id,
+                    revision=revision,
+                    tree=tree,
+                    artifact_digest=subject._package_digest(artifact),
+                ),
             ),
         )
-
-    web_root = tmp_path / "web-release"
-    (web_root / "public").mkdir(parents=True)
-    (web_root / "public/index.html").write_text("prod-web", encoding="utf-8")
-    web_digest = subject._public_web_tree_digest(web_root / "public").removeprefix(
-        "sha256:"
-    )
-    web_manifest = web_root / "manifest.json"
-    _write_json(
-        web_manifest,
-        {
-            "schema": "client-app.web.official-release",
-            "environment": "prod",
-            "contentSHA256": web_digest,
-        },
-    )
-    web_payload = bundle / "payloads/prod/web"
-    web_payload.mkdir(parents=True)
-    (web_payload / "index.html").write_text("prod-web", encoding="utf-8")
-    _write_json(
-        bundle / "public-web-manifest.json",
-        subject.bind_special(
-            kind="publicWeb",
-            manifest_path=web_manifest,
-            source_git_sha=revision,
-            source_tree_digest=tree,
-        ),
-    )
-
-    android_root = tmp_path / "android-release"
-    android_root.mkdir()
-    apk = android_root / "quwoquan.apk"
-    apk.write_bytes(b"prod-android")
-    android_manifest = android_root / "manifest.json"
-    _write_json(
-        android_manifest,
-        {
-            "schema": "client-app.android.official-release",
-            "platform": "android",
-            "packagedAPK": apk.name,
-            "apkSHA256": hashlib.sha256(apk.read_bytes()).hexdigest(),
-        },
-    )
-    hosted_apk = bundle / "payloads/prod/android" / apk.name
-    hosted_apk.parent.mkdir(parents=True)
-    hosted_apk.write_bytes(apk.read_bytes())
-    _write_json(
-        bundle / "android-release-manifest.json",
-        subject.bind_special(
-            kind="android",
-            manifest_path=android_manifest,
-            source_git_sha=revision,
-            source_tree_digest=tree,
-        ),
-    )
-
-    portal_root = bundle / "payloads/prod/opsPortal"
-    (portal_root / "dist").mkdir(parents=True)
-    (portal_root / "dist/index.html").write_text("portal", encoding="utf-8")
-    _write_json(portal_root / "manifest.json", {"packageDigest": "sha256:" + "a" * 64})
-    portal_provenance = tmp_path / "portal-provenance.json"
-    portal_dist_digest = subject._ops_portal_tree_digest(portal_root / "dist")
-    _write_json(
-        portal_provenance,
-        {
-            "schema": "qwq.ops_portal_package",
-            "environment": "prod",
-            "target": "prod-hosted",
-            "gitRevision": revision,
-            "packageDigest": portal_dist_digest,
-            "digests": {
-                "manifest": subject._sha256_file(portal_root / "manifest.json"),
-                "distTree": portal_dist_digest,
-            },
-        },
-    )
-    _write_json(
-        bundle / "ops-portal-provenance.json",
-        subject.bind_special(
-            kind="opsPortal",
-            manifest_path=portal_provenance,
-            source_git_sha=revision,
-            source_tree_digest=tree,
-        ),
-    )
 
     subject.validate_bundle(
         bundle_dir=bundle,
@@ -202,8 +177,13 @@ def test_bundle_requires_every_real_environment_surface_payload(
         source_tree_digest=tree,
     )
 
-    hosted_apk.write_bytes(b"tampered")
-    with pytest.raises(ValueError, match="Android hosted payload digest mismatch"):
+    apk = (
+        bundle
+        / "payloads/android-prod-apk"
+        / subject.PAYLOAD_NAMES["android-prod-apk"]
+    )
+    apk.write_bytes(b"tampered")
+    with pytest.raises(ValueError, match="android-prod-apk hosted payload digest mismatch"):
         subject.validate_bundle(
             bundle_dir=bundle,
             source_git_sha=revision,
@@ -211,17 +191,61 @@ def test_bundle_requires_every_real_environment_surface_payload(
         )
 
 
-def test_generic_evidence_rejects_contract_version_fields() -> None:
+def test_bundle_rejects_environment_duplicated_package_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert SPEC_REF
+    monkeypatch.chdir(ROOT)
+    revision, tree = _source()
+    bundle = tmp_path / "bundle"
+    applications = bundle / "application-packages"
+
+    for build_product_id in subject.BUILD_PRODUCT_IDS:
+        package = bundle / "payloads" / build_product_id
+        artifact = _write_product_artifact(package, build_product_id)
+        _write_json(
+            applications / f"{build_product_id}.json",
+            subject.render(
+                build_product_id=build_product_id,
+                package=package,
+                source_git_sha=revision,
+                source_tree_digest=tree,
+                artifact_manifest=_artifact_manifest(
+                    build_product_id=build_product_id,
+                    revision=revision,
+                    tree=tree,
+                    artifact_digest=subject._package_digest(artifact),
+                ),
+            ),
+        )
+    _write_json(applications / "alpha--android.json", {})
+
+    with pytest.raises(ValueError, match="App build product package set mismatch"):
+        subject.validate_bundle(
+            bundle_dir=bundle,
+            source_git_sha=revision,
+            source_tree_digest=tree,
+        )
+
+
+def test_product_evidence_rejects_contract_version_fields() -> None:
     assert SPEC_REF
     revision, tree = _source()
     payload = {
         "schema": subject.SCHEMA,
-        "environment": "alpha",
-        "surface": "web",
+        "buildProductId": "web-shared",
+        "buildProfile": "shared",
+        "platform": "web",
         "sourceGitSha": revision,
         "sourceTreeDigest": tree,
         "packageDigest": "sha256:" + "a" * 64,
+        "artifactManifest": _artifact_manifest(
+            build_product_id="web-shared",
+            revision=revision,
+            tree=tree,
+            artifact_digest="sha256:" + "b" * 64,
+        ),
         "schemaVersion": "forbidden",
     }
     with pytest.raises(ValueError, match="fields are not canonical"):
-        subject.validate_generic(payload, environment="alpha", surface="web")
+        subject.validate_package(payload, build_product_id="web-shared")

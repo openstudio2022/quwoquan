@@ -1,0 +1,24 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260824--travel-video-m-panda--chengdu--pilot-001",
+  "executionBinding": "frozen",
+  "objectRef": "posts/video/体验/成都大熊猫繁育研究基地大熊猫竹林进食4K实拍/1",
+  "evidence": [
+    {
+      "kind": "rubric_review",
+      "ref": "5.review/rubric_review.json",
+      "sha256": "sha256:0c7f920df50ab7de3675bd18dfc5a8a80ac60b5d8dee7924a1e3ae90b0281e3e"
+    },
+    {
+      "kind": "quality_review",
+      "ref": "5.review/quality_review.json",
+      "sha256": "sha256:1bf82a7527513c3807a0b71b9f9b4f22618d5388521daa90ba882902225e344c"
+    },
+    {
+      "kind": "rights_review",
+      "ref": "5.review/rights_review.json",
+      "sha256": "sha256:f07cc490e9a5899d9f03870b2523068706b784627e5655a44bfb502a5077ba25"
+    }
+  ]
+}

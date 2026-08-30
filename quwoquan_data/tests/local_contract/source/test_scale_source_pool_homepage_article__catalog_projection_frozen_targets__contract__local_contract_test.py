@@ -14,7 +14,11 @@ from content.source.research.scale_source_pool_runtime import (
     ScaleSourcePoolRuntimeError,
     frozen_scale_source_pool_targets,
     select_frozen_source_pool_targets,
+    write_frozen_scale_source_pool_plans,
 )
+from core.carrier_contract import research_plan_files
+from core.io import read_json, write_json
+from core.paths import STAGE_DOWNLOAD
 
 
 def test_frozen_source_pool_selection_joins_exact_governed_geo_target(
@@ -177,6 +181,107 @@ def test_frozen_source_pool_selection_rejects_admin_canonical_ref_drift(
                 "candidateCount": 1,
                 "selectionDigest": "sha256:" + "e" * 64,
             },
+        )
+
+
+def test_frozen_source_pool_article_plan_allows_single_worker_wave_subset(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution_id = "20260822--travel-article-m1--china--scale-001"
+    execution_root = tmp_path / "tasks" / execution_id
+    names = ("青城山", "都江堰")
+    rows = tuple(
+        {
+            "candidateId": f"article-{index}",
+            "entityRef": f"/entity/地点/景区/{name}",
+            "sourceReadyCapsule": {
+                "candidate": {
+                    "candidateId": f"article-{index}",
+                    "sourceUnitId": f"article-source-{index}",
+                    "platform": "测试来源",
+                    "sourceUrl": f"https://example.test/article/{index}",
+                    "sourceKind": "travelogue",
+                    "extractor": "article_html",
+                    "policyRevision": "article-v1",
+                    "publishMediaMode": "text_only",
+                    "sourceAttribution": {},
+                }
+            },
+        }
+        for index, name in enumerate(names, start=1)
+    )
+    monkeypatch.setattr(
+        "content.source.research.scale_source_pool_runtime._execution_uses_scale_source_pool",
+        lambda _execution_id: True,
+    )
+    monkeypatch.setattr(
+        "content.source.research.scale_source_pool_runtime.frozen_scale_source_pool_candidates",
+        lambda _execution_id, _carrier: rows,
+    )
+    monkeypatch.setattr(
+        "content.source.research.scale_source_pool_runtime.resolve_entity_object_dir",
+        lambda _execution_id, name, etype_hint="": (
+            execution_root / "entities" / Path(etype_hint) / name
+        ),
+    )
+    plan_path = (
+        execution_root
+        / "entities"
+        / "地点"
+        / "景区"
+        / names[0]
+        / STAGE_DOWNLOAD
+        / research_plan_files()["article"]
+    )
+    write_json(plan_path, {"payload": {"sources": []}})
+
+    report = write_frozen_scale_source_pool_plans(
+        execution_id,
+        [names[0]],
+        carrier="article",
+    )
+
+    assert report is not None
+    assert report["selectionAuthority"] == "frozen_scale_source_pool"
+    assert report["updated"] == [
+        {
+            "entityId": names[0],
+            "lane": "article",
+            "candidateId": "article-1",
+            "planRef": plan_path.as_posix(),
+        }
+    ]
+    assert read_json(plan_path)["payload"]["runtimeInputAuthority"] == (
+        "frozen_scale_source_pool"
+    )
+
+
+def test_frozen_source_pool_article_plan_rejects_entity_outside_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "content.source.research.scale_source_pool_runtime._execution_uses_scale_source_pool",
+        lambda _execution_id: True,
+    )
+    monkeypatch.setattr(
+        "content.source.research.scale_source_pool_runtime.frozen_scale_source_pool_candidates",
+        lambda _execution_id, _carrier: (
+            {
+                "candidateId": "article-1",
+                "entityRef": "/entity/地点/景区/青城山",
+            },
+        ),
+    )
+
+    with pytest.raises(
+        ScaleSourcePoolRuntimeError,
+        match="execution entity ids drift from frozen source-pool selection",
+    ):
+        write_frozen_scale_source_pool_plans(
+            "20260822--travel-article-m1--china--scale-001",
+            ["不存在的实体"],
+            carrier="article",
         )
 
 

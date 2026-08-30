@@ -17,16 +17,27 @@ const (
 	FeedEmptyReasonContinuationEnd   FeedEmptyReason = "continuation_end"
 )
 
+// emptyListFeedResponse 组装合法空页。releaseID/manifestDigest 是内容激活身份：
+// no_active_release 必须同时缺席，no_eligible_content 等 release-bound 空页
+// 必须携带完整身份，调用方传入当前 active supply 的两元组。
 func emptyListFeedResponse(
 	feedRequestID string,
 	reason FeedEmptyReason,
+	releaseID string,
+	manifestDigest string,
 ) *ListFeedResponse {
+	if reason == FeedEmptyReasonNoActiveRelease {
+		releaseID = ""
+		manifestDigest = ""
+	}
 	return &ListFeedResponse{
-		Items:         []FeedItemView{},
-		ObjectCards:   []ObjectCardView{},
-		FeedRequestID: feedRequestID,
-		Outcome:       FeedResponseOutcomeEmpty,
-		EmptyReason:   reason,
+		Items:          []FeedItemView{},
+		ObjectCards:    []ObjectCardView{},
+		FeedRequestID:  feedRequestID,
+		Outcome:        FeedResponseOutcomeEmpty,
+		EmptyReason:    reason,
+		ReleaseID:      releaseID,
+		ManifestDigest: manifestDigest,
 	}
 }
 

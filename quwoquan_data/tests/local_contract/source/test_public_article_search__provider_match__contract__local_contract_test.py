@@ -21,6 +21,7 @@ from content.source.research.public_search import (
     discover_article_source_frontier,
 )
 from content.source.research.source_registry import _travel_registry_url_fetchable
+from core import rate_limit
 from governance.coverage.source_registry import resolve_travel_source_runtime
 
 SPEC_REF = (
@@ -112,7 +113,7 @@ def _response(
 
 
 def _install_registry(monkeypatch: pytest.MonkeyPatch, site: dict) -> None:
-    article_frontier_robots._RATE_LIMITERS.clear()
+    rate_limit._RATE_LIMITERS.clear()
     monkeypatch.setattr(
         article_frontier_profile,
         "iter_travel_registry_sites",
@@ -205,10 +206,7 @@ def test_frontier_canonical_dedupe_and_entity_alias_relevance(monkeypatch):
         )["siteId"]
         == "frontier_test"
     )
-    require_source_candidate_admission(
-        outcome.source_documents()[0],
-        require_commercial_article_binding=True,
-    )
+    require_source_candidate_admission(outcome.source_documents()[0])
     assert any(
         row.reason == "entity_alias_topic_relevance_failed"
         for row in outcome.sites[0].frontier
@@ -233,7 +231,8 @@ def test_commercial_article_fetch_binding_rejects_registry_profile_drift(monkeyp
         )
 
 
-def test_commercial_article_fetch_binding_rejects_missing_site_identity(monkeypatch):
+def test_commercial_article_binding_rejects_missing_site_identity(monkeypatch):
+    """文章源的注册表绑定在计划期成立：缺 articleSiteId 的源不得进入计划。"""
     _install_registry(monkeypatch, _site())
     source = {
         "source_id": "frontier_test_001",
@@ -257,11 +256,9 @@ def test_commercial_article_fetch_binding_rejects_missing_site_identity(monkeypa
         ),
     }
 
+    require_source_candidate_admission(source)
     with pytest.raises(ValueError, match="articleSiteId"):
-        require_source_candidate_admission(
-            source,
-            require_commercial_article_binding=True,
-        )
+        auto_plan_article._bind_article_source_identity(source)
 
 
 def test_frontier_robots_deny_discards_without_fetching_page(monkeypatch):
@@ -754,11 +751,9 @@ def test_network_unavailable_is_typed_blocked_not_synthetic_success(monkeypatch)
     assert any(row.decision.value == "blocked" for row in outcome.sites[0].frontier)
 
 
-@pytest.mark.parametrize("article_commercial_mode", [True, False])
 def test_article_plan_mainline_retains_frontier_evidence(
     monkeypatch,
     tmp_path,
-    article_commercial_mode,
 ):
     ctrip_site = {
         **_site(
@@ -840,7 +835,6 @@ def test_article_plan_mainline_retains_frontier_evidence(
         prior_article_sources=[],
         homepage_sources=[],
         required_article_bases=1,
-        article_commercial_mode=article_commercial_mode,
         force=True,
     )
 

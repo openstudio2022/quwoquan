@@ -55,13 +55,36 @@ var assetRoleToIntroductionRole = map[string]string{
 	"related": "related",
 }
 
+// MediaDeliveryAccessMode 契约 enum 值（唯一真相源
+// contracts/metadata/_shared/types.yaml MediaDeliveryAccessMode）。
+// research release 的媒体交付引用是相对私有 CAS key，App 必须换短签消费；
+// commercial release 的交付引用是 canonical public slice。
+const (
+	mediaDeliveryAccessModePublic      = "public"
+	mediaDeliveryAccessModeSignedGrant = "signed_grant"
+)
+
+// mediaDeliveryAccessModeForReleaseClass 把 release header 的 releaseClass 映射
+// 为逐资产 accessMode（DEC-033）：research → signed_grant、commercial → public。
+// 其它/未声明类别返回空串表示缺席——契约 accessMode 为 NULLABLE，缺席时端按
+// 存量 public 交付消费，不得由 importer 造值。
+func mediaDeliveryAccessModeForReleaseClass(releaseClass string) string {
+	switch strings.TrimSpace(releaseClass) {
+	case "research":
+		return mediaDeliveryAccessModeSignedGrant
+	case "commercial":
+		return mediaDeliveryAccessModePublic
+	default:
+		return ""
+	}
+}
+
 type entityHeader struct {
 	Label           string                       `json:"label"`
 	Domain          string                       `json:"domain"`
 	Type            string                       `json:"type"`
 	City            string                       `json:"city"`
 	Coordinates     *entityCoordinates           `json:"coordinates"`
-	SourceTaskId    string                       `json:"sourceTaskId"`
 	TagRefs         []string                     `json:"tagRefs"`
 	StructuredFacts *application.StructuredFacts `json:"structuredFacts"`
 	PrimarySource   *application.HomepageSource  `json:"primarySource"`
@@ -142,8 +165,7 @@ type entityManifestAsset struct {
 }
 
 type entityHomepageManifest struct {
-	ExecutionID string                `json:"executionId"`
-	Assets      []entityManifestAsset `json:"assets"`
+	Assets []entityManifestAsset `json:"assets"`
 }
 
 func loadIntroductionAssets(
@@ -151,17 +173,18 @@ func loadIntroductionAssets(
 	entityDir string,
 	releaseAssets map[string]runtimemedia.ReleaseMediaAsset,
 	mediaBases runtimemedia.MediaDeliveryBases,
-) ([]application.HomepageIntroductionAsset, string, error) {
+	accessMode string,
+) ([]application.HomepageIntroductionAsset, error) {
 	rawManifest, err := os.ReadFile(filepath.Join(entityDir, "manifest.json"))
 	if err != nil {
-		return nil, "", fmt.Errorf("%s: read semantic manifest.json: %w", entityRef, err)
+		return nil, fmt.Errorf("%s: read semantic manifest.json: %w", entityRef, err)
 	}
 	var manifest entityHomepageManifest
 	if err := json.Unmarshal(rawManifest, &manifest); err != nil {
-		return nil, "", fmt.Errorf("%s: invalid semantic manifest.json: %w", entityRef, err)
+		return nil, fmt.Errorf("%s: invalid semantic manifest.json: %w", entityRef, err)
 	}
 	if len(manifest.Assets) == 0 {
-		return nil, "", fmt.Errorf("%s: semantic manifest.json has no homepage assets", entityRef)
+		return nil, fmt.Errorf("%s: semantic manifest.json has no homepage assets", entityRef)
 	}
 
 	assets := make([]application.HomepageIntroductionAsset, 0, len(manifest.Assets))
@@ -169,10 +192,10 @@ func loadIntroductionAssets(
 	for index, asset := range manifest.Assets {
 		assetID := strings.TrimSpace(asset.AssetID)
 		if assetID == "" {
-			return nil, "", fmt.Errorf("%s: manifest assets[%d] lacks assetId", entityRef, index)
+			return nil, fmt.Errorf("%s: manifest assets[%d] lacks assetId", entityRef, index)
 		}
 		if strings.TrimSpace(asset.ObjectKey) != "" {
-			return nil, "", fmt.Errorf(
+			return nil, fmt.Errorf(
 				"%s: manifest asset %s contains forbidden objectKey",
 				entityRef,
 				assetID,
@@ -180,7 +203,7 @@ func loadIntroductionAssets(
 		}
 		role, ok := assetRoleToIntroductionRole[strings.TrimSpace(asset.Role)]
 		if !ok {
-			return nil, "", fmt.Errorf("%s: manifest asset %s has unsupported role %q", entityRef, assetID, asset.Role)
+			return nil, fmt.Errorf("%s: manifest asset %s has unsupported role %q", entityRef, assetID, asset.Role)
 		}
 		resolved, resolveErr := runtimemedia.ResolveReleaseMediaAsset(
 			releaseAssets,
@@ -191,7 +214,7 @@ func loadIntroductionAssets(
 			"entities/"+entityRef,
 		)
 		if resolveErr != nil {
-			return nil, "", fmt.Errorf(
+			return nil, fmt.Errorf(
 				"%s: manifest asset %s differs from release media authority: %w",
 				entityRef,
 				assetID,
@@ -202,16 +225,17 @@ func loadIntroductionAssets(
 			coverCount++
 		}
 		assets = append(assets, application.HomepageIntroductionAsset{
-			AssetID: assetID,
-			URL:     resolved.PublicURL,
-			Caption: strings.TrimSpace(asset.Caption),
-			Role:    role,
+			AssetID:    assetID,
+			URL:        resolved.DeliveryRef,
+			AccessMode: accessMode,
+			Caption:    strings.TrimSpace(asset.Caption),
+			Role:       role,
 		})
 	}
 	if coverCount != 1 {
-		return nil, "", fmt.Errorf("%s: semantic manifest must contain exactly one cover asset, got %d", entityRef, coverCount)
+		return nil, fmt.Errorf("%s: semantic manifest must contain exactly one cover asset, got %d", entityRef, coverCount)
 	}
-	return assets, strings.TrimSpace(manifest.ExecutionID), nil
+	return assets, nil
 }
 
 func frontmatterCoverAssetID(page []byte) (string, error) {
@@ -246,13 +270,16 @@ func frontmatterCoverAssetID(page []byte) (string, error) {
 }
 
 // LoadHomepageProjections 遍历 publish/entities，把有 page.md 的实体转为导入投影。
-// filter 必须来自 immutable release desired state。
+// filter 必须来自 immutable release desired state；releaseClass 必须来自 release
+// header（DEC-031：交付形态由 release 断言，不得推断），它决定逐资产 accessMode。
 func LoadHomepageProjections(
 	publishRoot string,
 	filter map[string]bool,
 	releaseAssets map[string]runtimemedia.ReleaseMediaAsset,
 	mediaBases runtimemedia.MediaDeliveryBases,
+	releaseClass string,
 ) ([]application.ImportedHomepageInput, []string, error) {
+	accessMode := mediaDeliveryAccessModeForReleaseClass(releaseClass)
 	entRoot := filepath.Join(publishRoot, "entities")
 	var inputs []application.ImportedHomepageInput
 	var issues []string
@@ -304,11 +331,12 @@ func LoadHomepageProjections(
 			title = segs[len(segs)-1]
 		}
 
-		assets, executionID, assetErr := loadIntroductionAssets(
+		assets, assetErr := loadIntroductionAssets(
 			entityRef,
 			filepath.Dir(path),
 			releaseAssets,
 			mediaBases,
+			accessMode,
 		)
 		if assetErr != nil {
 			return assetErr
@@ -326,10 +354,6 @@ func LoadHomepageProjections(
 		}
 		if !coverMatches {
 			return fmt.Errorf("%s: page.md coverImage %q does not match semantic cover asset", entityRef, coverID)
-		}
-		sourceTask := strings.TrimSpace(header.SourceTaskId)
-		if sourceTask == "" {
-			sourceTask = executionID
 		}
 		// WP3 统一打标：_entity.json.tagRefs → categoryTags 投影，
 		// 与 content-service import 导 entities.tagRefs 同源（消除双轨不一致）。
@@ -359,7 +383,6 @@ func LoadHomepageProjections(
 			IntroductionAssets:   assets,
 			StructuredFacts:      facts,
 			CategoryTags:         categoryTags,
-			SourceTaskID:         sourceTask,
 			PrimarySource:        header.PrimarySource,
 			SourceURLs:           append([]string(nil), header.SourceURLs...),
 		})

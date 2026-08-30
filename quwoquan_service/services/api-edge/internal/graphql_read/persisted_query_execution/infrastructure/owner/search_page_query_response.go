@@ -34,17 +34,21 @@ type searchOwnerInterpretedQuery struct {
 }
 
 type searchOwnerHit struct {
-	ObjectRef    string                  `json:"objectRef"`
-	ObjectType   string                  `json:"objectType"`
-	ContentType  string                  `json:"contentType,omitempty"`
-	Title        string                  `json:"title"`
-	Snippet      string                  `json:"snippet,omitempty"`
-	ThumbnailURL string                  `json:"thumbnailUrl,omitempty"`
-	Action       string                  `json:"action,omitempty"`
-	RankPosition int                     `json:"rankPosition"`
-	MatchedTerms []string                `json:"matchedTerms"`
-	RankReasons  []searchOwnerRankReason `json:"rankReasons"`
-	Evidence     []searchOwnerEvidence   `json:"evidence"`
+	ObjectRef    string `json:"objectRef"`
+	ObjectType   string `json:"objectType"`
+	ContentType  string `json:"contentType,omitempty"`
+	Title        string `json:"title"`
+	Snippet      string `json:"snippet,omitempty"`
+	ThumbnailURL string `json:"thumbnailUrl,omitempty"`
+	// 缩略的配对资产标识与交付访问模式（DEC-033）：research 相位的封面是相对
+	// 私有 CAS 引用，端侧按 assetId 换短签，不按 URL 直连。
+	ThumbnailAssetID    string                  `json:"thumbnailAssetId,omitempty"`
+	ThumbnailAccessMode string                  `json:"thumbnailAccessMode,omitempty"`
+	Action              string                  `json:"action,omitempty"`
+	RankPosition        int                     `json:"rankPosition"`
+	MatchedTerms        []string                `json:"matchedTerms"`
+	RankReasons         []searchOwnerRankReason `json:"rankReasons"`
+	Evidence            []searchOwnerEvidence   `json:"evidence"`
 }
 
 type searchOwnerRankReason struct {
@@ -97,16 +101,18 @@ type searchPageData struct {
 }
 
 type searchPageItem struct {
-	ObjectRef    string  `json:"objectRef"`
-	ResultType   string  `json:"resultType"`
-	ContentType  *string `json:"contentType"`
-	Title        string  `json:"title"`
-	Subtitle     *string `json:"subtitle"`
-	Snippet      *string `json:"snippet"`
-	ThumbnailURL *string `json:"thumbnailUrl"`
-	Action       string  `json:"action"`
-	RankPosition int     `json:"rankPosition"`
-	RankReason   *string `json:"rankReason"`
+	ObjectRef           string  `json:"objectRef"`
+	ResultType          string  `json:"resultType"`
+	ContentType         *string `json:"contentType"`
+	Title               string  `json:"title"`
+	Subtitle            *string `json:"subtitle"`
+	Snippet             *string `json:"snippet"`
+	ThumbnailURL        *string `json:"thumbnailUrl"`
+	ThumbnailAssetID    *string `json:"thumbnailAssetId"`
+	ThumbnailAccessMode *string `json:"thumbnailAccessMode"`
+	Action              string  `json:"action"`
+	RankPosition        int     `json:"rankPosition"`
+	RankReason          *string `json:"rankReason"`
 }
 
 type searchPageFacet struct {
@@ -252,6 +258,18 @@ func projectSearchPageItem(hit searchOwnerHit) (searchPageItem, error) {
 	if err != nil {
 		return searchPageItem{}, err
 	}
+	thumbnailAssetID, err := optionalText(hit.ThumbnailAssetID, "thumbnailAssetId", 512)
+	if err != nil {
+		return searchPageItem{}, err
+	}
+	thumbnailAccessMode, err := optionalText(
+		hit.ThumbnailAccessMode,
+		"thumbnailAccessMode",
+		64,
+	)
+	if err != nil {
+		return searchPageItem{}, err
+	}
 	action, err := boundedText(hit.Action, "action", 4096, false)
 	if err != nil {
 		return searchPageItem{}, err
@@ -276,7 +294,9 @@ func projectSearchPageItem(hit searchOwnerHit) (searchPageItem, error) {
 		ObjectRef: objectRef, ResultType: resultType,
 		ContentType: searchPageContentTypeForCanonical(hit.ContentType),
 		Title:       title,
-		Subtitle:    nil, Snippet: snippet, ThumbnailURL: thumbnailURL, Action: action,
+		Subtitle:    nil, Snippet: snippet, ThumbnailURL: thumbnailURL,
+		ThumbnailAssetID: thumbnailAssetID, ThumbnailAccessMode: thumbnailAccessMode,
+		Action:       action,
 		RankPosition: hit.RankPosition, RankReason: rankReason,
 	}, nil
 }

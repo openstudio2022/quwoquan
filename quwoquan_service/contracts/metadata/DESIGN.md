@@ -114,6 +114,8 @@ compiler 先解析所有对象，再解析关系和 operation；未解析引用�
 
 OpenAPI、Go、Dart 和 Python 消费同一个 Graph hash。生成文件必须标记 `DO NOT EDIT`；手写代码只依赖生成契约，不复制 route、错误码、字段或枚举。
 
+客户端 HTTP/WS/DTO JSON 键名只使用 canonical `id`、`postId` 等语义键，不使用 `_id`；`_id` 只允许存在于 Mongo/bson 持久层内部，不得出现在任何 wire schema、DTO 或 decoder。
+
 ## 8. 配置与外部能力
 
 - 每个服务的 `config/schema.yaml` 唯一定义配置键、默认值、约束、敏感性和 rollout 语义。

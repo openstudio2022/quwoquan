@@ -1,3 +1,6 @@
+@Tags(<String>['serial', 'visual'])
+library;
+
 import 'package:flutter/cupertino.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
 import 'package:flutter/services.dart';
@@ -10,7 +13,7 @@ void main() {
   setUpAll(() async {
     final loader = FontLoader('Noto Sans SC')
       ..addFont(
-        rootBundle.load('assets/fonts/noto_sans_sc/NotoSansSC[wght].ttf'),
+        rootBundle.load('assets/fonts/noto_sans_sc/NotoSansSC-wght.ttf'),
       );
     await loader.load();
   });

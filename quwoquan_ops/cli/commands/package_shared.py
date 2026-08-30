@@ -32,6 +32,10 @@ import subprocess
 from pathlib import Path
 from typing import Any, Mapping
 
+from quwoquan_ops.cli.lib.local_environment_object_storage import (
+    package_build_object_storage_environment,
+)
+
 # 与 stackctl.ROOT 同源同值(仓库根);仅用于函数默认参数,
 # 函数体内仍统一经 `_stackctl.ROOT` 访问。
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -95,6 +99,7 @@ def _build_runtime_shared_package(
         env_name,
         target_name,
         package_dir,
+        repo_root=source_root,
     )
     _stackctl.write_json(
         package_dir / "manifest.json",
@@ -113,6 +118,7 @@ def _build_package_bound_local_images(
     target_name: str,
     *,
     report_dir: Path,
+    provider_binding_overlay: Mapping[str, Any],
     provider_runtime: Mapping[str, Any],
     observability_log_sink: Mapping[str, Any],
     candidate_root: Path,
@@ -153,21 +159,13 @@ def _build_package_bound_local_images(
             "QWQ_WORKLOAD": "full",
             "QWQ_PRODUCT_TELEMETRY_AVAILABLE": "1",
             "QWQ_RELEASE_CANDIDATE_DIGEST": candidate_digest,
-            # Compose parses storage/provider variables while building, but no
-            # build step may contact or persist them into an image.
-            "LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT": "https://127.0.0.1",
-            "LOCAL_GAMMA_OBJECT_STORAGE_BUCKET": "package-build-only",
-            "LOCAL_GAMMA_OBJECT_STORAGE_REGION": "local",
-            "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID": "package-build-only",
-            "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET": "package-build-only",
-            "LOCAL_GAMMA_OBJECT_STORAGE_CDN_SIGN_KEY": "package-build-only",
-            "LOCAL_GAMMA_OBJECT_STORAGE_TLS_DIR": str(
-                (_stackctl.target_cache_dir(target_name) / "package" / "tls").resolve()
-            ),
-            "LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE": str(
-                (_stackctl.target_cache_dir(target_name) / "package" / "tls" / "root.crt").resolve()
-            ),
+            # DEC-005：镜像字节环境无关，环境名只作为 Compose 插值输入；
+            # 环境身份由部署面在 up 时生成 artifact-identity.json 并挂载。
+            "QWQ_COMPOSE_ENV": env_name,
         }
+    )
+    environment.update(
+        package_build_object_storage_environment(target_name=target_name)
     )
     _stackctl._sync_object_storage_binding_aliases(environment, prefix="LOCAL_GAMMA")
     _stackctl._bind_package_provider_reference_environment(
@@ -175,6 +173,15 @@ def _build_package_bound_local_images(
         environment_name=env_name,
         runtime_composition=provider_runtime["composition"],
     )
+    overlay_dir, _, binding_manifest_digest = (
+        _stackctl.provider_binding_overlay_build_inputs(
+            provider_binding_overlay,
+            candidate_root=candidate_root,
+            build_context=source_root,
+        )
+    )
+    environment["QWQ_PROVIDER_BINDING_OVERLAY_CONTEXT"] = str(overlay_dir)
+    environment["QWQ_PROVIDER_BINDING_MANIFEST_DIGEST"] = binding_manifest_digest
     composition = _stackctl._bind_gamma_build_service_image_refs(
         env_name,
         environment,
@@ -267,6 +274,7 @@ def _build_package_bound_local_images(
                     "providerRuntimeDigest": sealed_provider_runtime["composition"][
                         "runtimeCompositionDigest"
                     ],
+                    "providerBindingManifestDigest": binding_manifest_digest,
                     "providerImageRefs": {
                         role: {
                             "buildInputDigest": descriptor["buildInputDigest"],

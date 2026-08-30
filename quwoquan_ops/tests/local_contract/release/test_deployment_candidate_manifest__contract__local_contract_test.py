@@ -108,6 +108,73 @@ class DeploymentCandidateManifestContractTest(
             candidate_root=self.candidate,
         )
 
+    def test_teardown_projects_only_legacy_non_prod_sim_nullable_field(self) -> None:
+        path = subject.write_candidate_manifest(
+            "alpha",
+            "alpha-local",
+            package_snapshot=self.snapshot,
+            release_attestation=str(self.release),
+            rollback_release_attestation=str(self.rollback),
+        )
+        canonical = json.loads(path.read_text(encoding="utf-8"))
+        legacy = dict(canonical)
+        legacy.pop("appLaunchBundle")
+
+        projected = subject.validate_candidate_manifest(
+            legacy,
+            expected_environment="alpha",
+            expected_target="alpha-local",
+            require_full=True,
+            candidate_root=self.candidate,
+            purpose="teardown",
+        )
+
+        self.assertIsNone(projected["appLaunchBundle"])
+        self.assertNotIn("appLaunchBundle", legacy)
+        with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
+            subject.validate_candidate_manifest(
+                legacy,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+                purpose="self_verify",
+            )
+
+        prod_sim_legacy = {**legacy, "environment": "prod", "target": "prod-sim"}
+        with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
+            subject.validate_candidate_manifest(
+                prod_sim_legacy,
+                expected_environment="prod",
+                expected_target="prod-sim",
+                require_full=True,
+                candidate_root=self.candidate,
+                purpose="teardown",
+            )
+
+        missing_other_field = dict(legacy)
+        missing_other_field.pop("runtimeConfigDigest")
+        with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
+            subject.validate_candidate_manifest(
+                missing_other_field,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+                purpose="teardown",
+            )
+
+        extra_field = {**legacy, "legacyField": None}
+        with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
+            subject.validate_candidate_manifest(
+                extra_field,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+                purpose="teardown",
+            )
+
     def test_candidate_rejects_missing_configuration_identity(self) -> None:
         path = subject.write_candidate_manifest(
             "alpha",
@@ -172,7 +239,13 @@ class DeploymentCandidateManifestContractTest(
 
         graph_drift = dict(canonical)
         graph_drift["contractGraphDigest"] = "sha256:" + "9" * 64
-        with self.assertRaisesRegex(ValueError, "ContractGraph"):
+        # The environment artifact binds the contract graph digest into its own
+        # identity, so a drifted graph breaks that binding before the package
+        # fingerprint is ever compared.
+        with self.assertRaisesRegex(
+            ValueError,
+            "environmentArtifact binding drifted or digest drifted",
+        ):
             subject.validate_candidate_manifest(
                 graph_drift,
                 expected_environment="alpha",
@@ -190,6 +263,8 @@ class DeploymentCandidateManifestContractTest(
             rollback_release_attestation=str(self.rollback),
         )
         payload = json.loads(path.read_text(encoding="utf-8"))
+        release_bytes = self.release.read_bytes()
+        rollback_bytes = self.rollback.read_bytes()
         self.contract_graph.write_text(
             json.dumps({"objects": [{"id": "drift"}], "operations": []}) + "\n",
             encoding="utf-8",
@@ -205,6 +280,21 @@ class DeploymentCandidateManifestContractTest(
             purpose="self_verify",
         )
 
+        with self.assertRaisesRegex(
+            ValueError,
+            "candidate release attestation is unreadable",
+        ):
+            subject.validate_candidate_manifest(
+                payload,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+                purpose="currentness",
+            )
+
+        self.release.write_bytes(release_bytes)
+        self.rollback.write_bytes(rollback_bytes)
         with self.assertRaisesRegex(ValueError, "ContractGraph bytes drifted"):
             subject.validate_candidate_manifest(
                 payload,
@@ -215,8 +305,6 @@ class DeploymentCandidateManifestContractTest(
                 purpose="currentness",
             )
 
-        self.release.write_text("{}\n", encoding="utf-8")
-        self.rollback.write_text("{}\n", encoding="utf-8")
         self.contract_graph.write_text(
             json.dumps({"objects": [], "operations": []}) + "\n",
             encoding="utf-8",
@@ -441,6 +529,7 @@ class DeploymentCandidateManifestContractTest(
                 expected_target="alpha-local",
                 require_full=True,
                 candidate_root=self.candidate,
+                purpose="currentness",
             )
 
 

@@ -27,6 +27,7 @@ func ConditionProfileIndex(entities []EntityDoc) map[string]map[string]any {
 type importedMediaSummary struct {
 	MediaURLs        []string
 	MediaItems       []bson.M
+	MediaAssetIDs    []string
 	CoverURL         string
 	ThumbnailURL     string
 	VideoURL         string
@@ -37,16 +38,66 @@ type importedMediaSummary struct {
 	Height           int64
 }
 
-func ImportedMediaFields(assets []AssetManifestItem) importedMediaSummary {
+// MediaDeliveryAccessMode 契约 enum 值（_shared/types.yaml MediaDeliveryAccessMode）。
+// research release 的媒体交付引用是相对私有 CAS key，App 必须换短签消费；
+// commercial release 的交付引用是 canonical public slice。
+const (
+	MediaDeliveryAccessModePublic      = "public"
+	MediaDeliveryAccessModeSignedGrant = "signed_grant"
+)
+
+// MediaDeliveryAccessModeForReleaseClass 把 release header 的 releaseClass 映射
+// 为逐媒体 accessMode（DEC-033）：research → signed_grant、commercial → public。
+// 其它/未声明类别返回空串作为 invalid sentinel；新 release importer 必须在写入前
+// fail closed。该空串不得进入投影，也不得被消费端当成 public。
+func MediaDeliveryAccessModeForReleaseClass(releaseClass string) string {
+	switch strings.TrimSpace(releaseClass) {
+	case "research":
+		return MediaDeliveryAccessModeSignedGrant
+	case "commercial":
+		return MediaDeliveryAccessModePublic
+	default:
+		return ""
+	}
+}
+
+// ImportedMediaFields 把 release 资产投影为 App 可消费的逐媒体交付绑定。
+// mediaItems 逐项使用 canonical BSON 键（mediaAssetId/mediaAssetVersion，
+// 与 contracts PostMediaItem 单轨对齐）；调用者必须先验证 accessMode，空值不会
+// 被解释为 public。
+func ImportedMediaFields(assets []AssetManifestItem, accessMode string) importedMediaSummary {
 	urls := make([]string, 0, len(assets))
 	items := make([]bson.M, 0, len(assets))
+	assetIDs := make([]string, 0, len(assets))
+	seenAssetIDs := make(map[string]struct{}, len(assets))
+	appendAssetID := func(rawAssetID string) {
+		assetID := strings.TrimSpace(rawAssetID)
+		if assetID == "" {
+			return
+		}
+		if _, seen := seenAssetIDs[assetID]; seen {
+			return
+		}
+		seenAssetIDs[assetID] = struct{}{}
+		assetIDs = append(assetIDs, assetID)
+	}
 	summary := importedMediaSummary{}
 	for _, asset := range assets {
+		itemAccessMode := strings.TrimSpace(asset.AccessMode)
+		if itemAccessMode == "" {
+			itemAccessMode = strings.TrimSpace(accessMode)
+		}
 		url := asset.CDNURL
 		if url == "" {
 			continue
 		}
+		appendAssetID(asset.AssetID)
 		isVideoAsset := strings.EqualFold(strings.TrimSpace(asset.Kind), "video")
+		if isVideoAsset {
+			// poster（coverUrl）的配对资产标识必须进入 posts.mediaAssetIds，
+			// 它是 grant 侧 release membership 判定的输入。
+			appendAssetID(asset.PosterAssetID)
+		}
 		if summary.CoverURL == "" {
 			if asset.CoverURL != "" {
 				summary.CoverURL = asset.CoverURL
@@ -56,11 +107,16 @@ func ImportedMediaFields(assets []AssetManifestItem) importedMediaSummary {
 		}
 		urls = append(urls, url)
 		item := bson.M{
-			"assetId":        asset.AssetID,
-			"kind":           asset.Kind,
-			"version":        asset.Version,
-			"publicSliceKey": asset.PublicSliceKey,
-			"url":            url,
+			"mediaAssetId":      asset.AssetID,
+			"kind":              asset.Kind,
+			"mediaAssetVersion": asset.Version,
+			"url":               url,
+		}
+		if itemAccessMode != "" {
+			item["accessMode"] = itemAccessMode
+		}
+		if isVideoAsset && strings.TrimSpace(asset.PosterAssetID) != "" {
+			item["coverAssetId"] = strings.TrimSpace(asset.PosterAssetID)
 		}
 		if asset.Caption != "" {
 			item["caption"] = asset.Caption
@@ -107,6 +163,7 @@ func ImportedMediaFields(assets []AssetManifestItem) importedMediaSummary {
 	}
 	summary.MediaURLs = urls
 	summary.MediaItems = items
+	summary.MediaAssetIDs = assetIDs
 	return summary
 }
 
@@ -161,9 +218,9 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 		if err != nil {
 			return n, fmt.Errorf("%s: %w", p.PostRef, err)
 		}
-		postID := RuntimePostID(p.ContentID, p.PostRef)
+		postID := RuntimePostID(p.ContentID)
 		if postID == "" {
-			return n, fmt.Errorf("postRef is required to derive discovery feed postId")
+			return n, fmt.Errorf("contentId is required to derive discovery feed postId")
 		}
 		var cond map[string]any
 		runtimeEntityRefs := p.NormalizedEntityRefs
@@ -208,7 +265,6 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 			"page":                      p.Page,
 			"licenseProof":              p.LicenseProof,
 			"articleAssetManifest":      p.ArticleAssetManifest,
-			"sourceTaskId":              p.SourceTaskId,
 			"conditionProfile":          cond,
 			"status":                    "published",
 			"visibility":                "public",
@@ -217,13 +273,15 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 			"updatedAt":                 p.UpdatedAt,
 			"publishedAt":               p.PublishedAt,
 		}
-		media := ImportedMediaFields(importedPostAssets(p))
+		accessMode := MediaDeliveryAccessModeForReleaseClass(opts.ReleaseClass)
+		media := ImportedMediaFields(importedPostAssets(p), accessMode)
 		if len(media.MediaURLs) > 0 {
 			set["mediaUrls"] = media.MediaURLs
 			set["mediaItems"] = media.MediaItems
 			set["coverUrl"] = media.CoverURL
 			applyImportedVideoFields(set, media)
 		}
+		ApplyImportedAuthorAvatarDeliveryFields(set, p, accessMode)
 		for key, value := range recinfra.BuildRecommendationProjectionFields(set) {
 			set[key] = value
 		}
@@ -250,6 +308,55 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 	return n, nil
 }
 
+// ApplyImportedAuthorAvatarDeliveryFields 写作者头像的媒体交付绑定（DEC-033）。
+// 真实来源是 release creator profile 的 avatarAsset.assetId（经
+// BindPostAuthorSnapshots 绑定到 PostDoc）；头像缺席时两字段写 BSON null，
+// 覆盖旧 release 残留值并保持契约 NULLABLE 的缺席语义，禁止以 authorId 冒充。
+func ApplyImportedAuthorAvatarDeliveryFields(target bson.M, post PostDoc, accessMode string) {
+	avatarAssetID := strings.TrimSpace(post.AuthorAvatarAssetID)
+	if avatarAssetID == "" {
+		target["authorAvatarAssetId"] = nil
+		target["authorAvatarAccessMode"] = nil
+		return
+	}
+	target["authorAvatarAssetId"] = avatarAssetID
+	if accessMode == "" {
+		target["authorAvatarAccessMode"] = nil
+		return
+	}
+	target["authorAvatarAccessMode"] = accessMode
+}
+
+// ImportedArticleAssetManifest 给文章素材清单逐项打上交付访问模式（DEC-033）。
+//
+// articleAssetManifest 与 mediaItems 是两条独立的 import 路径：后者已在
+// ImportedMediaFields 里写 accessMode，前者此前直接透传 release 文档，于是
+// 文章内嵌图在 research 相位没有任何交付声明，App 只能按公开 URL 取址而
+// 整片打不开。这里按同一个 releaseClass 单点映射补齐，不逐资产猜测。
+//
+// 返回 nil 表示该 Post 没有文章素材清单，调用方照原样写 null。
+func ImportedArticleAssetManifest(
+	manifest *ArticleAssetManifestDoc,
+	accessMode string,
+) *ArticleAssetManifestDoc {
+	if manifest == nil {
+		return nil
+	}
+	stamped := *manifest
+	if len(manifest.Assets) == 0 {
+		return &stamped
+	}
+	assets := make([]AssetManifestItem, len(manifest.Assets))
+	copy(assets, manifest.Assets)
+	for index := range assets {
+		if strings.TrimSpace(assets[index].AccessMode) == "" {
+			assets[index].AccessMode = accessMode
+		}
+	}
+	stamped.Assets = assets
+	return &stamped
+}
+
 // importedPostAssets keeps the release-import projection on one canonical
 // media source. LoadPosts promotes articleAssetManifest.assets into Assets,
 // while direct typed callers may still provide only the canonical article
@@ -273,9 +380,7 @@ func removePriorDiscoveryFeedIdentity(
 	runtimeID string,
 	opts ImportOptions,
 ) error {
-	priorIdentityFilters := bson.A{bson.M{"postId": bson.M{"$in": bson.A{
-		postRef, RuntimePostIDFromPostRef(postRef),
-	}}}}
+	priorIdentityFilters := bson.A{bson.M{"postId": postRef}}
 	if stableContentID := strings.TrimSpace(contentID); stableContentID != "" {
 		priorIdentityFilters = append(
 			priorIdentityFilters,

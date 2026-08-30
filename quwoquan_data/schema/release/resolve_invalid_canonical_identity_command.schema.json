@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/resolve_invalid_canonical_identity_command.schema.json",
+  "title": "Resolve invalid canonical identity command",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "objectType", "objectId", "objectRef", "action",
+    "expectedSnapshotToken", "expectedContentVersion", "expectedRecordSequence",
+    "currentPayloadDigest", "evidencePredicate", "evidenceBindings",
+    "terminalReason", "terminalNextAction"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.resolve_invalid_canonical_identity_command"},
+    "objectType": {"enum": ["homepage", "content"]},
+    "objectId": {"type": "string", "minLength": 1},
+    "objectRef": {"type": "string", "minLength": 1},
+    "action": {"enum": ["record_repair", "payload_rebuild", "terminate"]},
+    "expectedSnapshotToken": {"$ref": "#/$defs/digest"},
+    "expectedContentVersion": {"type": "integer", "minimum": 1},
+    "expectedRecordSequence": {"type": "integer", "minimum": 1},
+    "currentPayloadDigest": {"$ref": "#/$defs/digest"},
+    "evidencePredicate": {
+      "enum": ["same_logical_version", "new_payload", "unrepairable"]
+    },
+    "evidenceBindings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/evidenceBinding"}
+    },
+    "terminalReason": {
+      "type": ["string", "null"],
+      "enum": [
+        "immutable_evidence_unavailable", "identity_collision_unrecoverable",
+        "operator_closed_intent", null
+      ]
+    },
+    "terminalNextAction": {
+      "type": ["string", "null"],
+      "enum": ["select_new_identity", "close_intent", null]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"action": {"const": "record_repair"}}, "required": ["action"]},
+      "then": {
+        "properties": {
+          "evidencePredicate": {"const": "same_logical_version"},
+          "terminalReason": {"type": "null"},
+          "terminalNextAction": {"type": "null"},
+          "evidenceBindings": {"contains": {"properties": {"role": {"const": "record"}}, "required": ["role"]}}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"action": {"const": "payload_rebuild"}}, "required": ["action"]},
+      "then": {
+        "properties": {
+          "evidencePredicate": {"const": "new_payload"},
+          "terminalReason": {"type": "null"},
+          "terminalNextAction": {"type": "null"},
+          "evidenceBindings": {
+            "allOf": [
+              {"contains": {"properties": {"role": {"const": "author"}}, "required": ["role"]}},
+              {"contains": {"properties": {"role": {"const": "review"}}, "required": ["role"]}},
+              {"contains": {"properties": {"role": {"const": "rights"}}, "required": ["role"]}}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"action": {"const": "terminate"}}, "required": ["action"]},
+      "then": {
+        "properties": {
+          "evidencePredicate": {"const": "unrepairable"},
+          "terminalReason": {"type": "string"},
+          "terminalNextAction": {"type": "string"},
+          "evidenceBindings": {"contains": {"properties": {"role": {"const": "diagnostic"}}, "required": ["role"]}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "evidenceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "ref", "sha256"],
+      "properties": {
+        "role": {"enum": ["record", "author", "review", "rights", "diagnostic"]},
+        "ref": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

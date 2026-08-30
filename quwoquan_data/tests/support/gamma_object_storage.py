@@ -41,5 +41,7 @@ def resolve_gamma_object_storage() -> GammaObjectStorageConnection:
         region=environment["LOCAL_GAMMA_OBJECT_STORAGE_REGION"],
         access_key=environment["LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID"],
         secret_key=environment["LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET"],
-        ca_bundle="",
+        # The endpoint terminates TLS with the target's own root, so the client
+        # has to verify against that root rather than the public trust store.
+        ca_bundle=environment["LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE"],
     )

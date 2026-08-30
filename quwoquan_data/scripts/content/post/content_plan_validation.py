@@ -20,6 +20,7 @@ from governance.creators.assignment import (
     creator_assignment_required,
 )
 
+from content.post.article.article_media_contract import article_plan_media_binding_issues
 from content.post.article.base_draft import base_draft_readiness, load_base_draft_text
 from content.post.content_plan import (
     ARTICLE_BASE_SOURCE_ROLES,
@@ -412,6 +413,7 @@ def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[st
             issues.append(f"item[{ref}]: article baseSourceRef required for scaled task")
         if carrier == "article" and base_source_ref:
             source_meta = _source_meta(root, base_source_ref)
+            publish_media_mode = str(item.get("publishMediaMode") or "").strip()
             # 底稿中心 1:1：文章实体退化为多标签，不再用单实体聚焦门弃稿——多目的地游记照样按
             # 单一底稿成稿（entityRefs/entityTags 记录其覆盖的实体集合）。entity_focus 仅在
             # "实体->主页（百科源）"路径把关，不在 article/image 内容项重复设门。
@@ -466,7 +468,7 @@ def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[st
             if strict_rights_mode:
                 readiness = base_draft_readiness(
                     load_base_draft_text(execution_id, base_source_ref),
-                    publish_media_mode=str(item.get("publishMediaMode") or source_meta.get("publishMediaMode") or ""),
+                    publish_media_mode=publish_media_mode,
                 )
                 if not readiness["ready"]:
                     issues.append(
@@ -500,6 +502,13 @@ def validate_content_plan(execution_id: str, spec: Mapping[str, Any]) -> list[st
             ]
             if declared_asset_refs and len(set(declared_asset_refs)) != len(declared_asset_refs):
                 issues.append(f"item[{ref}]: article assetRefs contains duplicates")
+            issues.extend(article_plan_media_binding_issues(
+                ref=ref,
+                publish_media_mode=publish_media_mode,
+                source_publish_media_mode=source_meta.get("publishMediaMode"),
+                asset_refs=declared_asset_refs,
+                source_unit_freeze=item.get("articleSourceUnitFreeze"),
+            ))
             for atomic_issue in og.source_unit_atomicity_issues(
                 base_source_ref=base_source_ref,
                 asset_refs=declared_asset_refs,

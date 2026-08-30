@@ -6,11 +6,11 @@ import fcntl
 import hashlib
 import json
 import subprocess
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from core import paths
 from core.io import read_json, write_json
@@ -22,11 +22,16 @@ from core.source_digest import (
 
 from content.execution.campaign.external_inputs import (
     content_source_revision,
+    envelope_acquisition_root,
     external_inputs_digest,
+    frozen_acquisition_root_ref,
     verify_external_input_refs,
 )
-from content.execution.campaign.m100_alpha_acceptance import (
-    validate_m100_alpha_acceptance_binding,
+from content.execution.campaign.carrier_execution_policy import carrier_operation
+from content.execution.campaign.lane import (
+    CAMPAIGN_CARRIERS,
+    normalize_active_carriers,
+    normalize_workloads,
 )
 from content.execution.campaign.scale import execution_campaign_scale
 from content.execution.closure.adoption_campaign_contract import (
@@ -50,120 +55,26 @@ from content.execution.request import RuntimeExecutionRequest
 from content.execution.workspace import entity_catalog_digest
 
 SUBMISSION_SCHEMA = "quwoquan_data.content_execution_submission"
-_OPERATIONS = {
-    "homepage": "homepage.generate",
-    "article": "article.generate",
-    "image": "image.generate",
-    "video": "video.generate",
-}
 
 
-def campaigns_root() -> Path:
-    return paths.DATA_LOCAL_ROOT / "workspace" / "content-campaign-submissions"
+from content.execution.campaign.submission_identity import (
+    _assert_no_cross_campaign_collision,
+    _git_branch,
+    _git_commit,
+    _require_stable_source_inputs,
+    _sha256,
+    _submission_lock,
+    _utc_now,
+    campaign_root,
+    campaigns_root,
+    submission_path,
+)
 
 
-def campaign_root(
-    root_execution_id: str,
-    *,
-    root: Path | None = None,
-) -> Path:
-    root_id = validate_execution_id(root_execution_id)
-    return (root or campaigns_root()) / root_id
-
-
-def submission_path(
-    root_execution_id: str,
-    execution_id: str,
-    *,
-    root: Path | None = None,
-) -> Path:
-    return (
-        campaign_root(root_execution_id, root=root)
-        / "submissions"
-        / f"{validate_execution_id(execution_id)}.json"
-    )
-
-
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _sha256(payload: dict[str, Any]) -> str:
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
-
-
-def _git_commit(repo_root: Path) -> str:
-    proc = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_root,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return proc.stdout.strip()
-
-
-def _git_branch(repo_root: Path) -> str:
-    proc = subprocess.run(
-        ["git", "branch", "--show-current"],
-        cwd=repo_root,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    branch = proc.stdout.strip()
-    if not branch:
-        raise ValueError("campaign submission requires a named frozen main branch")
-    return branch
-
-
-def _require_stable_source_inputs(
-    source_document: dict[str, object],
-    *,
-    execution_bundle: dict[str, object],
-    repo_root: Path,
-) -> None:
-    """Reject digest drift without requiring a shared worktree to be clean."""
-    observed = current_source_definition_snapshot(repo_root=repo_root).to_document()
-    observed_bundle = current_execution_bundle_identity(
-        repo_root=repo_root
-    ).to_document()
-    if observed != source_document or observed_bundle != execution_bundle:
-        raise ValueError(
-            "campaign submission source snapshot/execution bundle changed during freeze"
-        )
-
-
-@contextmanager
-def _submission_lock(root: Path) -> Iterator[None]:
-    root.mkdir(parents=True, exist_ok=True)
-    lock_path = root / ".submission.lock"
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-
-
-def _assert_no_cross_campaign_collision(
-    *,
-    campaigns_dir: Path,
-    root_execution_id: str,
-    execution_id: str,
-) -> None:
-    for candidate in sorted(campaigns_dir.glob(f"*/submissions/{execution_id}.json")):
-        owner = candidate.parent.parent.name
-        if owner != root_execution_id:
-            raise ValueError(
-                f"execution {execution_id} already belongs to campaign {owner}"
-            )
+from content.execution.campaign.submission_workload import (
+    _FrozenWorkload,
+    _frozen_workload,
+)
 
 
 def write_submission(
@@ -179,15 +90,42 @@ def write_submission(
     semantic_selection_id: str | None = None,
     semantic_preflight_receipt: Path | None = None,
     semantic_preflight_output_root: Path | None = None,
+    active_carriers: Iterable[str] | None = None,
+    workloads: Mapping[str, int] | None = None,
+    workload_mode: str = "explicit",
+    retry_unfinished_refs: Iterable[str] = (),
 ) -> Path:
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
     campaigns_dir = root or campaigns_root()
     root_identity = parse_execution_id(root_execution_id)
-    if root_identity.content_type.value != "homepage":
-        raise ValueError("campaign root must use the homepage execution identity")
     identity = parse_execution_id(execution_id)
     if identity.vertical != root_identity.vertical:
         raise ValueError("campaign lanes must use the same vertical")
+    frozen_workload = _frozen_workload(
+        campaign_envelope,
+        carrier=identity.content_type.value,
+        quota=request.quota,
+        active_carriers=active_carriers,
+        workloads=workloads,
+        workload_mode=workload_mode,
+    )
+    if root_identity.content_type.value != frozen_workload.active_carriers[0]:
+        raise ValueError(
+            "campaign root must use the first active carrier execution identity"
+        )
+    if frozen_workload.workloads[identity.content_type.value] != request.quota:
+        raise ValueError(
+            "campaign lane quota must equal its frozen active workload quota"
+        )
+    unfinished_refs = [str(ref).strip() for ref in retry_unfinished_refs]
+    if any(not ref for ref in unfinished_refs) or len(set(unfinished_refs)) != len(
+        unfinished_refs
+    ):
+        raise ValueError(
+            "campaign retryUnfinishedRefs must be unique non-empty object refs"
+        )
+    if unfinished_refs and not retry_of:
+        raise ValueError("campaign retryUnfinishedRefs require a retryOf predecessor")
     scale = execution_campaign_scale(identity.execution_id, quota=request.quota)
     root_scale = execution_campaign_scale(
         root_identity.execution_id,
@@ -249,18 +187,19 @@ def write_submission(
         )
         expected_envelope = {
             "scale": scale,
+            "workloadMode": frozen_workload.workload_mode,
+            "activeCarriers": list(frozen_workload.active_carriers),
+            "workloads": frozen_workload.workloads,
             "rootExecutionId": root_identity.execution_id,
             "executionId": identity.execution_id,
-            "operation": _OPERATIONS[identity.content_type.value],
+            "operation": carrier_operation(identity.content_type.value),
             "carrier": identity.content_type.value,
             "familyRef": request.family_ref,
             "regionRef": request.region_ref,
             "selector": request.selector.value,
             "quota": request.quota,
             "count": request.count,
-            "requiredWorkers": request.required_workers,
-            "partitionCount": request.partition_count,
-            "capacityPlanDigest": request.capacity_plan_digest,
+            "executionAuthority": dict(request.execution_authority),
             "workerHostSetBinding": (
                 dict(request.worker_host_set_binding)
                 if request.worker_host_set_binding is not None
@@ -290,7 +229,6 @@ def write_submission(
             "executionBundle": execution_bundle,
             "entityCatalogDigest": catalog_digest,
             "predecessorReconciliation": envelope.get("predecessorReconciliation"),
-            "m100AlphaAcceptance": envelope.get("m100AlphaAcceptance"),
         }
         drift = [
             key
@@ -326,7 +264,6 @@ def write_submission(
                 semantic_preflight_receipt,
                 semantic_selection_id=frozen_semantic_selection_id,
                 output_root=(semantic_preflight_output_root or paths.OUTPUT_ROOT),
-                require_fresh=False,
             )
             if requested_preflight_binding != semantic_preflight_binding:
                 raise ValueError(
@@ -336,9 +273,9 @@ def write_submission(
         external_refs = verify_external_input_refs(
             identity.content_type.value,
             envelope.get("externalInputRefs") or [],
-            acquisition_root=(
-                acquisition_root or paths.SOURCE_ACQUISITION_ROOT
-            ).resolve(),
+            acquisition_root=envelope_acquisition_root(
+                envelope, override=acquisition_root
+            ),
             source_revision=source_revision,
             source_digest=str(source["digest"]),
             entity_catalog_digest=catalog_digest,
@@ -396,12 +333,6 @@ def write_submission(
                     "GATE_BLOCK DATA.CAMPAIGN.SUBMISSION_RECONCILIATION_DRIFT: "
                     "predecessor receipt lineage/target/scope binding drift"
                 )
-        alpha_acceptance = envelope.get("m100AlphaAcceptance")
-        if alpha_acceptance is not None:
-            validate_m100_alpha_acceptance_binding(
-                alpha_acceptance,
-                output_root=(semantic_preflight_output_root or paths.OUTPUT_ROOT),
-            )
     else:
         external_refs = []
         frozen_semantic_selection_id = (
@@ -441,18 +372,19 @@ def write_submission(
     stable: dict[str, Any] = {
         "schema": SUBMISSION_SCHEMA,
         "scale": scale,
+        "workloadMode": frozen_workload.workload_mode,
+        "activeCarriers": list(frozen_workload.active_carriers),
+        "workloads": frozen_workload.workloads,
         "rootExecutionId": root_identity.execution_id,
         "executionId": identity.execution_id,
-        "operation": _OPERATIONS[identity.content_type.value],
+        "operation": carrier_operation(identity.content_type.value),
         "carrier": identity.content_type.value,
         "familyRef": request.family_ref,
         "regionRef": request.region_ref,
         "selector": request.selector.value,
         "quota": request.quota,
         "count": request.count,
-        "requiredWorkers": request.required_workers,
-        "partitionCount": request.partition_count,
-        "capacityPlanDigest": request.capacity_plan_digest,
+        "executionAuthority": dict(request.execution_authority),
         "workerHostSetBinding": (
             dict(request.worker_host_set_binding)
             if request.worker_host_set_binding is not None
@@ -463,6 +395,7 @@ def write_submission(
         "sourceProviders": list(request.source_providers),
         "semanticSelectionId": frozen_semantic_selection_id,
         "retryOf": retry_of,
+        "retryUnfinishedRefs": unfinished_refs,
         "gitBranch": _git_branch(source_repo),
         "gitCommitSha": _git_commit(source_repo),
         "sourceRevision": source_revision,
@@ -472,14 +405,17 @@ def write_submission(
         "externalInputRefs": external_refs,
         "externalInputsDigest": external_inputs_digest(external_refs),
     }
+    # 下游 capsule 物化要按同一基准根再解析一次这些 ref；基准根不随提交向下传，
+    # 物化侧就只能取默认根，冻结出的 ref 在那里指不到任何字节。
+    carried_acquisition_root_ref = frozen_acquisition_root_ref(campaign_envelope)
+    if carried_acquisition_root_ref:
+        stable["acquisitionRootRef"] = carried_acquisition_root_ref
     if request.scale_source_pool is not None:
         stable["scaleSourcePool"] = dict(request.scale_source_pool)
         stable["sourcePoolEvidenceRootRef"] = request.source_pool_evidence_root_ref
         stable["sourcePoolSelection"] = dict(request.source_pool_selection or {})
     if semantic_preflight_binding is not None:
         stable["semanticPreflightReceipt"] = dict(semantic_preflight_binding)
-    if campaign_envelope is not None and campaign_envelope.get("m100AlphaAcceptance") is not None:
-        stable["m100AlphaAcceptance"] = dict(campaign_envelope["m100AlphaAcceptance"])
     if (
         campaign_envelope is not None
         and campaign_envelope.get("predecessorReconciliation") is not None
@@ -596,7 +532,7 @@ def load_submissions(
             != (
                 ADOPTION_OPERATIONS.get(carrier)
                 if CAMPAIGN_ADOPTION_FIELD in payload
-                else _OPERATIONS.get(carrier)
+                else carrier_operation(carrier)
             )
         ):
             raise ValueError(f"campaign submission identity collision: {path}")

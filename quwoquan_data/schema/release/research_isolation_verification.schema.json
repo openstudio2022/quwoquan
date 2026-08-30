@@ -26,6 +26,7 @@
     "releaseClass": {"const": "research"},
     "productLifecycleState": {"const": "research"},
     "verifyRunId": {"type": "string", "minLength": 1},
+    "reusedFromVerifyRunId": {"type": "string", "minLength": 1},
     "policyRef": {
       "type": "string",
       "pattern": "^quwoquan_ops/environments/(alpha|beta|gamma|prod)/runtime\\.yaml$"
@@ -114,6 +115,9 @@
         "auditEventId",
         "issuanceOperation",
         "accessOperation",
+        "rangeAccessOperation",
+        "forgedSignatureOperation",
+        "tamperedExpiryOperation",
         "auditReadbackOperation"
       ],
       "properties": {
@@ -126,6 +130,24 @@
           "allOf": [
             {"$ref": "#/$defs/operation"},
             {"properties": {"status": {"enum": [200, 206]}}}
+          ]
+        },
+        "rangeAccessOperation": {
+          "allOf": [
+            {"$ref": "#/$defs/operation"},
+            {"properties": {"status": {"enum": [200, 206]}}}
+          ]
+        },
+        "forgedSignatureOperation": {
+          "allOf": [
+            {"$ref": "#/$defs/operation"},
+            {"properties": {"status": {"enum": [401, 403]}}}
+          ]
+        },
+        "tamperedExpiryOperation": {
+          "allOf": [
+            {"$ref": "#/$defs/operation"},
+            {"properties": {"status": {"enum": [401, 403]}}}
           ]
         },
         "auditReadbackOperation": {"$ref": "#/$defs/successOperation"}
@@ -186,7 +208,8 @@
             {"required": ["identityAttestation"]},
             {"required": ["internalAppReadback"]},
             {"required": ["signedMedia"]},
-            {"required": ["positiveReadback"]}
+            {"required": ["positiveReadback"]},
+            {"required": ["reusedFromVerifyRunId"]}
           ]
         }
       }

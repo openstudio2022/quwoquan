@@ -72,6 +72,14 @@
 - 字段、operation、event、error、metric 与恢复语义只引用 Circle 服务本地 contracts；本节点不得复制 DTO/wire 定义。
 - Assistant 只登记并执行 canonical `ProposeGatheringPlan`：确认前仅产生 typed proposal 与 ApproveTool，确认后才消费 single-use DelegatedCommandGrant；不得自行构造 Host authority，也不得自动 create/accept/reject/commit。
 
+<a id="req-008"></a>
+### REQ-008 App 读取 Plan 的四态与恢复终态不得互相代偿
+
+- App Board 只通过 production Remote 的 canonical `GetGatheringPlan` 与 `ListGatheringPlanRevisions` 读取当前 Plan；不得从 Gathering、Chat、Assistant artifact、fixture、seed 或本地缓存推断 Plan 存在、补默认 Revision，或在失败后合成空计划。
+- 已创建且含项目的 Plan 是在场有值。已创建但当前项目集合为空是在场为空。目标 Gathering 尚未创建 optional Plan 是缺席。缺席是读取成功后的业务终态，不得显示为网络失败，也不得触发创建或写入。
+- 网络、服务、解码、权限或会话失败属于失败态；失败不得编码为缺席、空项目集合或旧缓存成功。页面必须保留 Gathering 上下文并提供与 canonical recovery 契约一致的重试、重新登录或返回动作。
+- 离线时仅允许显示明确标注来源与版本的最后已确认只读快照；没有合格快照时进入离线不可用终态。离线快照不得成为 current Revision 写真相、不得允许 proposal/commit，也不得被用作 Gamma Remote 读证据。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/circle-service/contracts/circle_management/gathering_plan/object.yaml`
@@ -107,6 +115,22 @@
 - THEN delegated owner port fail-closed 拒绝新写，已提交 Revision history 保持不可变。
 - AND acknowledgement 仍明确属于 Plan revision，不修改 GatheringRevision 或 GatheringParticipation 的 material-change acknowledgement。
 
+<a id="gwt-004"></a>
+### GWT-004 App Board 读取 Plan 时四态单义
+
+- GIVEN 已登录 Host 或有效参与者从 App Board 打开同一 managed Gamma Gathering，目标分别为含项目 Plan、空项目 Plan、尚未创建 Plan，以及依赖返回 canonical failure。
+- WHEN 页面经 production Remote composition 执行 `GetGatheringPlan`，并在 Plan 在场时按需执行 `ListGatheringPlanRevisions`。
+- THEN 含项目 Plan 展示 current Revision 与 typed items，空项目 Plan 展示可继续协作的空计划终态，未创建 Plan 展示 optional Plan 缺席终态，三者不得互换。
+- AND canonical failure 进入带恢复动作的失败终态，不显示空计划或 Plan 缺席，也不保留旧 Revision 冒充当前结果。
+
+<a id="gwt-005"></a>
+### GWT-005 网络、会话失效与离线读取可恢复且不产生伪成功
+
+- GIVEN App Board 已绑定 canonical Gathering，且分别发生可恢复网络失败、未登录或会话失效，以及设备离线。
+- WHEN 用户打开 Plan 或执行页面提供的恢复动作。
+- THEN 网络恢复后重试同一 canonical query 并只接受新 Remote 结果；未登录或会话失效进入登录续接，成功后返回原 Gathering Board，关闭登录则返回安全来源且不循环。
+- AND 离线且存在合格快照时只读显示明确的来源与版本并禁用 proposal/commit；无合格快照时显示离线不可用终态，联网后可重试，任一分支都不得自 seed、回退 `runtime_execution` 双轨或把缓存/空值计为 Gamma Remote 成功。
+
 ## 6. 依赖
 
 - 前置要求：[`gathering-coordination`](../spec.md) 的 owner、Participation、lifecycle 与 room/board 边界。
@@ -121,6 +145,6 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 Chat Board、App production Remote、真实 durable consumer 与 user_acceptance 接线。对象 contracts/runtime、generated Go、Assistant proposal dispatcher/local_contract、真实 Mongo API 与 owner-transaction typed event log 可先落地，但当前 event log 不得冒充 transactional outbox，canonical operation 也不能标记为 commercial ready。
-- 完成判定：`GWT-001`、`GWT-002`、`GWT-003` 由对象 local_contract、真实 api_integration 与跨域 user_acceptance 直接覆盖。Circle/Assistant/Chat/App 使用同一 Plan revision/digest，且无越权、last-write-wins、第二活动根或 travel fallback。至少一个真实 consumer 完成 publication、retry 与 checkpoint 的可恢复投递验证后，才可声明 transactional outbox。
-- 依赖：Gathering owner delegated port、Chat Board 与 production Remote App。
+- 影响或价值：尚缺 Chat Board 对 `circle.gathering_plan` 的显式 query slice 消费、App production Remote、managed Gamma 读取、真实 durable consumer 与 user_acceptance 接线。对象 contracts/runtime、generated Go、Assistant proposal dispatcher/local_contract、真实 Mongo API 与 owner-transaction typed event log 可先落地，但当前 event log 不得冒充 transactional outbox，canonical operation 也不能标记为 commercial ready。
+- 完成判定：`GWT-001`、`GWT-002`、`GWT-003` 由对象 local_contract 与真实 api_integration 继续覆盖。`GWT-004` 由 App 对象级 local_contract 直接证明在场有值、在场为空、缺席与失败四态，并由 managed Gamma production Remote API integration 读取预制真实 Plan。`GWT-005` 由 App local_contract 与 user_acceptance 证明网络重试、登录续接、离线快照只读和无快照终态。三层证据使用同一 Gathering、Plan revision/digest 与 production Remote composition，不自 seed、不使用 `runtime_execution` 双轨、不把缓存或空值冒充 Gamma Remote 成功。至少一个真实 consumer 完成 publication、retry 与 checkpoint 的可恢复投递验证后，才可声明 transactional outbox。
+- 依赖：Gathering owner delegated port、Chat Board、managed Gamma 测试数据能力与 production Remote App。

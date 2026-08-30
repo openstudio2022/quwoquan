@@ -15,6 +15,11 @@ def _candidate_source(candidate: Mapping[str, Any], carrier: str) -> dict[str, A
         candidate["primarySource"] if carrier == "homepage" else candidate
     )
     assert isinstance(source, Mapping)
+    publish_media_mode = (
+        "illustrated"
+        if carrier == "homepage"
+        else str(candidate["publishMediaMode"])
+    )
     result = {
         "source_id": str(source["sourceUnitId"]),
         "platform": str(source["platform"]),
@@ -27,9 +32,7 @@ def _candidate_source(candidate: Mapping[str, Any], carrier: str) -> dict[str, A
         "extractor": str(source["extractor"]),
         "policyRevision": str(source["policyRevision"]),
         "sourceUseMode": "factual_reference_only",
-        "publishMediaMode": str(
-            candidate.get("publishMediaMode") or "illustrated"
-        ),
+        "publishMediaMode": publish_media_mode,
         "category": str(source["sourceKind"]),
         "discoveryProvider": "frozen_scale_source_pool",
         "matchConfidence": 1.0,

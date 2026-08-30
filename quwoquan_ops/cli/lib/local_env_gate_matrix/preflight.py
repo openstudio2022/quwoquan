@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
+    _SHA256,
     DEVICE_PROFILE_FULL,
     DEVICE_PROFILES,
     ROOT,
-    _SHA256,
 )
 
 
@@ -178,7 +178,7 @@ def _device_binding_errors(
     return errors
 
 
-def _release_binding(attestation: str, *, label: str) -> dict[str, str]:
+def _release_binding(attestation: str, *, label: str) -> dict[str, Any]:
     path = Path(str(attestation or "").strip()).expanduser()
     if not str(attestation or "").strip():
         raise ValueError(f"{label} release attestation is required")
@@ -195,4 +195,26 @@ def _release_binding(attestation: str, *, label: str) -> dict[str, str]:
         or _SHA256.fullmatch(digest) is None
     ):
         raise ValueError(f"{label} release attestation identity is invalid")
-    return {"releaseId": release_id, "releaseDigest": digest, "attestation": str(path.resolve())}
+    release_class = payload.get("releaseClass")
+    lifecycle_state = payload.get("productLifecycleState")
+    contains_unverified_assets = payload.get("containsUnverifiedAssets")
+    if (
+        release_class not in {"research", "commercial"}
+        or lifecycle_state != release_class
+        or not isinstance(contains_unverified_assets, bool)
+        or (
+            release_class == "commercial"
+            and contains_unverified_assets is not False
+        )
+    ):
+        raise ValueError(
+            f"{label} release attestation lifecycle identity is invalid"
+        )
+    return {
+        "releaseId": release_id,
+        "releaseDigest": digest,
+        "releaseClass": release_class,
+        "productLifecycleState": lifecycle_state,
+        "containsUnverifiedAssets": contains_unverified_assets,
+        "attestation": str(path.resolve()),
+    }

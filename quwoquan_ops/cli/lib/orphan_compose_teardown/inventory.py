@@ -9,6 +9,10 @@ import json
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from ..port_manifest import (
+    compose_published_endpoint_roles,
+    compose_publisher_container_role_closure,
+)
 from .constants import (
     LOCAL_TARGETS,
     OrphanComposeTeardownError,
@@ -16,7 +20,8 @@ from .constants import (
     _SAFE_LABEL,
     _canonical_bytes,
     _digest,
-    canonical_project,
+    _normalize_published_endpoints,
+    require_canonical_project,
 )
 
 
@@ -59,6 +64,61 @@ def _list_ids(
     return values
 
 
+def discover_exact_project(
+    *,
+    target: str,
+    run_command: Callable[[list[str]], Any],
+) -> str:
+    commands = (
+        [
+            "docker",
+            "ps",
+            "--all",
+            "--no-trunc",
+            "--filter",
+            "label=com.docker.compose.project",
+            "--format",
+            '{{.Label "com.docker.compose.project"}}',
+        ],
+        [
+            "docker",
+            "network",
+            "ls",
+            "--filter",
+            "label=com.docker.compose.project",
+            "--format",
+            '{{.Label "com.docker.compose.project"}}',
+        ],
+    )
+    projects: set[str] = set()
+    for command in commands:
+        result = run_command(command)
+        if int(result.returncode) != 0:
+            detail = str(result.stderr or result.stdout or "").strip()
+            raise OrphanComposeTeardownError(
+                "orphan Compose project discovery failed"
+                + (f": {detail}" if detail else "")
+            )
+        for value in str(result.stdout or "").splitlines():
+            candidate = value.strip()
+            if not candidate:
+                continue
+            try:
+                projects.add(require_canonical_project(target, candidate))
+            except OrphanComposeTeardownError:
+                continue
+    if not projects:
+        raise OrphanComposeTeardownError(
+            f"no exact project is discoverable for orphan Compose target {target}"
+        )
+    if len(projects) != 1:
+        raise OrphanComposeTeardownError(
+            "multiple exact projects are discoverable for orphan Compose target "
+            f"{target}: {', '.join(sorted(projects))}"
+        )
+    return next(iter(projects))
+
+
 def _labels(value: object, *, project: str, label: str) -> dict[str, str]:
     if not isinstance(value, Mapping):
         raise OrphanComposeTeardownError(f"{label} has no Compose labels")
@@ -68,15 +128,35 @@ def _labels(value: object, *, project: str, label: str) -> dict[str, str]:
     return dict(sorted(labels.items()))
 
 
-def _published_ports(container: Mapping[str, Any]) -> list[int]:
+def _published_endpoints(
+    container: Mapping[str, Any],
+    *,
+    compose_service: str,
+    publisher_roles: Mapping[tuple[str, int, str, int], str],
+    container_role_closure: Mapping[tuple[str, int, str], frozenset[str]],
+) -> list[dict[str, object]]:
     host_config = container.get("HostConfig")
     bindings = host_config.get("PortBindings") if isinstance(host_config, Mapping) else None
-    ports: set[int] = set()
+    endpoints: list[dict[str, object]] = []
     if bindings is None:
         return []
     if not isinstance(bindings, Mapping):
         raise OrphanComposeTeardownError("container PortBindings is invalid")
-    for items in bindings.values():
+    for container_endpoint, items in bindings.items():
+        parts = str(container_endpoint or "").strip().lower().rsplit("/", 1)
+        if len(parts) != 2 or not parts[0].isdigit() or parts[1] not in {"tcp", "udp"}:
+            raise OrphanComposeTeardownError(
+                "container PortBindings endpoint identity is invalid"
+            )
+        container_port = int(parts[0])
+        protocol = parts[1]
+        container_identity = (compose_service, container_port, protocol)
+        declared_roles = container_role_closure.get(container_identity)
+        if declared_roles is None:
+            raise OrphanComposeTeardownError(
+                "container PortBindings publisher identity is not canonical: "
+                f"{compose_service}:{container_port}/{protocol}"
+            )
         if items is None:
             continue
         if not isinstance(items, Sequence) or isinstance(items, (str, bytes)):
@@ -87,8 +167,28 @@ def _published_ports(container: Mapping[str, Any]) -> list[int]:
             value = str(item.get("HostPort") or "")
             if not value.isdigit() or int(value) < 1 or int(value) > 65535:
                 raise OrphanComposeTeardownError("container HostPort is invalid")
-            ports.add(int(value))
-    return sorted(ports)
+            host_port = int(value)
+            role = publisher_roles.get((*container_identity, host_port))
+            if role is None:
+                # 旧栈可能把 canonical 容器口发布到非 canonical 主机端口，spec 要求这类
+                # 端口一并进入清单，所以不能按 canonical 判否。容器身份只归一个 role 时
+                # 归属确定；多 role 共用同一容器身份时 hostPort 是唯一区分位，非 canonical
+                # 值无法归因，只能判否而不能猜。
+                if len(declared_roles) != 1:
+                    raise OrphanComposeTeardownError(
+                        "container published host port cannot be attributed: "
+                        f"{compose_service}:{container_port}/{protocol}->{host_port} "
+                        f"is claimable by {','.join(sorted(declared_roles))}"
+                    )
+                role = next(iter(declared_roles))
+            endpoints.append(
+                {
+                    "role": role,
+                    "hostPort": host_port,
+                    "protocol": protocol,
+                }
+            )
+    return _normalize_published_endpoints(endpoints)
 
 
 def _canonical_mounts(value: object) -> list[dict[str, Any]]:
@@ -108,7 +208,8 @@ def _container_descriptor(
     value: Mapping[str, Any],
     *,
     project: str,
-    canonical_ports: set[int],
+    publisher_roles: Mapping[tuple[str, int, str, int], str],
+    container_role_closure: Mapping[tuple[str, int, str], frozenset[str]],
 ) -> dict[str, Any]:
     container_id = str(value.get("Id") or "").strip()
     name = str(value.get("Name") or "").strip().lstrip("/")
@@ -128,7 +229,12 @@ def _container_descriptor(
     image_digest = str(value.get("Image") or "").strip()
     if _DIGEST.fullmatch(image_digest) is None:
         raise OrphanComposeTeardownError(f"container {name} image digest is invalid")
-    published_ports = _published_ports(value)
+    published_endpoints = _published_endpoints(
+        value,
+        compose_service=service,
+        publisher_roles=publisher_roles,
+        container_role_closure=container_role_closure,
+    )
     configuration = {
         "Config": config,
         "HostConfig": host_config,
@@ -154,7 +260,7 @@ def _container_descriptor(
         "imageRef": str(config.get("Image") or "").strip(),
         "imageDigest": image_digest,
         "configurationDigest": _digest(configuration),
-        "publishedHostPorts": published_ports,
+        "publishedEndpoints": published_endpoints,
     }
 
 
@@ -213,13 +319,23 @@ def _volume_descriptor(value: Mapping[str, Any], *, project: str) -> dict[str, A
 def sample_snapshot(
     *,
     target: str,
+    project: str,
     canonical_ports: Sequence[Mapping[str, Any]],
+    port_manifest: dict[str, Any],
+    port_profile: str,
     run_command: Callable[[list[str]], Any],
     require_removable: bool = True,
     other_target_port_blocks: Sequence[Mapping[str, Any]] = (),
-    port_probe: Callable[[int], bool] | None = None,
+    port_probe: Callable[[Mapping[str, object]], bool] | None = None,
 ) -> dict[str, Any]:
-    project = canonical_project(target)
+    project = require_canonical_project(target, project)
+    try:
+        publisher_roles = compose_published_endpoint_roles(port_manifest, port_profile)
+    except ValueError as exc:
+        raise OrphanComposeTeardownError(
+            f"canonical Compose publisher identity is invalid: {exc}"
+        ) from exc
+    container_role_closure = compose_publisher_container_role_closure(publisher_roles)
     normalized_ports: list[dict[str, Any]] = []
     for item in canonical_ports:
         name = str(item.get("name") or "").strip()
@@ -229,7 +345,9 @@ def sample_snapshot(
             raise OrphanComposeTeardownError("canonical target port inventory is invalid")
         normalized_ports.append({"name": name, "port": port, "open": opened})
     normalized_ports.sort(key=lambda item: (item["port"], item["name"]))
-    port_numbers = {item["port"] for item in normalized_ports}
+    canonical_ports_by_role = {
+        str(item["name"]): int(item["port"]) for item in normalized_ports
+    }
     normalized_other_blocks: list[dict[str, Any]] = []
     for item in other_target_port_blocks:
         block_target = str(item.get("target") or "").strip()
@@ -312,7 +430,12 @@ def sample_snapshot(
         raise OrphanComposeTeardownError("volume inspection set drifted")
     container_descriptors = sorted(
         (
-            _container_descriptor(item, project=project, canonical_ports=port_numbers)
+            _container_descriptor(
+                item,
+                project=project,
+                publisher_roles=publisher_roles,
+                container_role_closure=container_role_closure,
+            )
             for item in containers
         ),
         key=lambda item: item["id"],
@@ -339,15 +462,35 @@ def sample_snapshot(
             "Compose project network has non-attested live containers: "
             + ", ".join(foreign_attachments)
         )
-    project_published_ports = sorted(
-        {
-            port
+    project_published_endpoints = _normalize_published_endpoints(
+        [
+            endpoint
             for item in container_descriptors
-            for port in item["publishedHostPorts"]
+            for endpoint in item["publishedEndpoints"]
+        ]
+    )
+    unowned_roles = sorted(
+        {
+            str(endpoint["role"])
+            for endpoint in project_published_endpoints
+            if str(endpoint["role"]) not in canonical_ports_by_role
         }
     )
-    noncanonical_ports = sorted(set(project_published_ports) - port_numbers)
-    for port in noncanonical_ports:
+    if unowned_roles:
+        raise OrphanComposeTeardownError(
+            "published endpoint role has no canonical port in the target inventory: "
+            + ", ".join(unowned_roles)
+        )
+    drifted_endpoints = [
+        endpoint
+        for endpoint in project_published_endpoints
+        if canonical_ports_by_role[str(endpoint["role"])]
+        != int(endpoint["hostPort"])
+    ]
+    for endpoint in drifted_endpoints:
+        port = int(endpoint["hostPort"])
+        protocol = str(endpoint["protocol"])
+        role = str(endpoint["role"])
         conflicting_blocks = [
             item["target"]
             for item in normalized_other_blocks
@@ -355,12 +498,14 @@ def sample_snapshot(
         ]
         if conflicting_blocks:
             raise OrphanComposeTeardownError(
-                f"non-canonical project port {port} belongs to another target block: "
+                f"non-canonical project endpoint {role}:{port}/{protocol} "
+                "belongs to another target block: "
                 + ", ".join(conflicting_blocks)
             )
-        if port_probe is None or not port_probe(port):
+        if port_probe is None or not port_probe(endpoint):
             raise OrphanComposeTeardownError(
-                f"non-canonical project port {port} is not a live attested publisher"
+                f"non-canonical project endpoint {role}:{port}/{protocol} "
+                "is not a live attested publisher"
             )
         publisher_ids = _list_ids(
             [
@@ -369,19 +514,20 @@ def sample_snapshot(
                 "--no-trunc",
                 "-q",
                 "--filter",
-                f"publish={port}",
+                f"publish={port}/{protocol}",
             ],
             run_command=run_command,
-            label=f"published port {port}",
+            label=f"published endpoint {role}:{port}/{protocol}",
         )
         expected_publishers = sorted(
             item["id"]
             for item in container_descriptors
-            if port in item["publishedHostPorts"]
+            if endpoint in item["publishedEndpoints"]
         )
         if publisher_ids != expected_publishers:
             raise OrphanComposeTeardownError(
-                f"non-canonical project port {port} live publisher differs from the attested containers"
+                f"non-canonical project endpoint {role}:{port}/{protocol} "
+                "live publisher differs from the attested containers"
             )
     if require_removable and not container_descriptors and not network_descriptors:
         raise OrphanComposeTeardownError(
@@ -392,8 +538,7 @@ def sample_snapshot(
         "project": project,
         "canonicalPorts": normalized_ports,
         "otherTargetPortBlocks": normalized_other_blocks,
-        "projectPublishedHostPorts": project_published_ports,
-        "nonCanonicalPublishedHostPorts": noncanonical_ports,
+        "publishedEndpoints": project_published_endpoints,
         "containers": container_descriptors,
         "networks": network_descriptors,
         "volumes": volume_descriptors,

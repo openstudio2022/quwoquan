@@ -26,6 +26,7 @@ class CachedContentRepository
     required ContentQuerySnapshotStore querySnapshotStore,
     UserProfileAuthorSnapshotCache? userProfileCache,
     Future<List<String>> Function()? blockedKeywordsLoader,
+    // 契约：best-effort 预热，失败自行留痕、不向上抛。
     Future<void> Function(String avatarUrl)? avatarPreloader,
     CacheTelemetrySink telemetrySink = const DeveloperLogCacheTelemetrySink(),
   }) : _feedDelegate = feedDelegate,
@@ -36,7 +37,7 @@ class CachedContentRepository
        _blockedKeywordsLoader = blockedKeywordsLoader ?? _emptyBlockedKeywords,
        _telemetrySink = telemetrySink,
        _avatarPreloader =
-           avatarPreloader ?? AppImageCacheController.preloadAvatar;
+           avatarPreloader ?? AppImageCacheController.warmAvatarCache;
 
   final ContentDiscoveryFeedQuery _feedDelegate;
   final ContentPostDeleteCommandWriter _deleteDelegate;
@@ -170,7 +171,12 @@ class CachedContentRepository
       cancellation: cancellation,
       deadlineAt: deadlineAt,
     );
-    _storeFeedPage(key, page, sessionId: sessionId);
+    _storeFeedPage(
+      key,
+      page,
+      sessionId: sessionId,
+      isInitialPage: cursor == null || cursor.trim().isEmpty,
+    );
     return page;
   }
 
@@ -213,6 +219,7 @@ class CachedContentRepository
       paginationExpiresAt: cachedPage.paginationExpiresAt,
       feedRequestId: cachedPage.feedRequestId,
       policyDigest: cachedPage.policyDigest,
+      activationIdentity: cachedPage.activationIdentity,
       cacheAgeMs: _cacheAgeMs(cached.value.fetchedAt),
     );
   }
@@ -269,6 +276,7 @@ class CachedContentRepository
       paginationExpiresAt: page.paginationExpiresAt,
       feedRequestId: page.feedRequestId,
       policyDigest: page.policyDigest,
+      activationIdentity: page.activationIdentity,
       cacheFallbackError: cacheFallbackError,
       cacheAgeMs: page.cacheAgeMs,
       revalidation: revalidation,
@@ -294,8 +302,21 @@ class CachedContentRepository
     return DateTime.now().difference(fetchedAt).inMilliseconds;
   }
 
-  void _storeFeedPage(String key, DiscoveryFeedPage page, {String? sessionId}) {
+  void _storeFeedPage(
+    String key,
+    DiscoveryFeedPage page, {
+    String? sessionId,
+    required bool isInitialPage,
+  }) {
     _storePostProjections(page.items);
+    // 远端权威响应驱动运行时内容身份：新 digest 原子切 namespace，
+    // no_active_release 停止回放 release-bound 快照。continuation 页冻结
+    // 首刷身份，不参与采纳（避免回放旧 release 时倒灌身份）。
+    if (isInitialPage) {
+      _querySnapshotStore.adoptContentActivationIdentity(
+        page.activationIdentity,
+      );
+    }
     _querySnapshotStore.put(
       key: key,
       items: page.items,
@@ -307,6 +328,7 @@ class CachedContentRepository
       policyDigest: page.policyDigest,
       outcome: page.outcome,
       emptyReason: page.emptyReason,
+      activationIdentity: page.activationIdentity,
     );
   }
 
@@ -328,7 +350,7 @@ class CachedContentRepository
       updatedAt: post.createdAt.toUtc().toIso8601String(),
     );
     if (avatarUrl.isNotEmpty) {
-      unawaited(_avatarPreloader(avatarUrl).catchError((_) => null));
+      unawaited(_avatarPreloader(avatarUrl));
     }
   }
 

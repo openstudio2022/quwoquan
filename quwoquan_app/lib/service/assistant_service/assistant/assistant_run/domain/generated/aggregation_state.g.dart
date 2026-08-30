@@ -16,42 +16,60 @@ class AggregationExpansionPlanDto {
   final PlannerReasonCode reasonCode;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'targetSkills': targetSkills,
-        'policy': policy.wireName,
-        'reasonCode': reasonCode.wireName,
-      };
+    'targetSkills': targetSkills,
+    'policy': policy.wireName,
+    'reasonCode': reasonCode.wireName,
+  };
 
   factory AggregationExpansionPlanDto.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'targetSkills',
-      'policy',
-      'reasonCode',
-    };
+    const allowedFields = <String>{'targetSkills', 'policy', 'reasonCode'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AggregationExpansionPlanDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AggregationExpansionPlanDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('targetSkills') && json['targetSkills'] != null && (json['targetSkills'] is! List || (json['targetSkills'] as List).any((item) => item is! String))) {
-      throw const FormatException('AggregationExpansionPlanDto field targetSkills has an invalid wire value');
+    if (json.containsKey('targetSkills') &&
+        json['targetSkills'] != null &&
+        (json['targetSkills'] is! List ||
+            (json['targetSkills'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AggregationExpansionPlanDto field targetSkills has an invalid wire value',
+      );
     }
-    if (json.containsKey('policy') && json['policy'] != null && (json['policy'] is! String)) {
-      throw const FormatException('AggregationExpansionPlanDto field policy has an invalid wire value');
+    if (json.containsKey('policy') &&
+        json['policy'] != null &&
+        (json['policy'] is! String)) {
+      throw const FormatException(
+        'AggregationExpansionPlanDto field policy has an invalid wire value',
+      );
     }
-    if (json.containsKey('reasonCode') && json['reasonCode'] != null && (json['reasonCode'] is! String)) {
-      throw const FormatException('AggregationExpansionPlanDto field reasonCode has an invalid wire value');
+    if (json.containsKey('reasonCode') &&
+        json['reasonCode'] != null &&
+        (json['reasonCode'] is! String)) {
+      throw const FormatException(
+        'AggregationExpansionPlanDto field reasonCode has an invalid wire value',
+      );
     }
     return AggregationExpansionPlanDto(
       targetSkills: _assistantStringList(json['targetSkills']),
-      policy: parseContextScopeExpansionPolicyStrict((json['policy'] as String?)?.trim() ?? "expand_scope_and_requery"),
-      reasonCode: parsePlannerReasonCodeStrict((json['reasonCode'] as String?)?.trim() ?? "need_more_evidence"),
+      policy: parseContextScopeExpansionPolicyStrict(
+        (json['policy'] as String?)?.trim() ?? "expand_scope_and_requery",
+      ),
+      reasonCode: parsePlannerReasonCodeStrict(
+        (json['reasonCode'] as String?)?.trim() ?? "need_more_evidence",
+      ),
     );
   }
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }
@@ -73,29 +91,38 @@ class AggregationBlockingSkillStateDto {
   final bool answerReady;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'stopReason': stopReason.wireName,
-        'answerReady': answerReady,
-      };
+    'stopReason': stopReason.wireName,
+    'answerReady': answerReady,
+  };
 
   factory AggregationBlockingSkillStateDto.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'stopReason',
-      'answerReady',
-    };
+    const allowedFields = <String>{'stopReason', 'answerReady'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AggregationBlockingSkillStateDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AggregationBlockingSkillStateDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('stopReason') && json['stopReason'] != null && (json['stopReason'] is! String)) {
-      throw const FormatException('AggregationBlockingSkillStateDto field stopReason has an invalid wire value');
+    if (json.containsKey('stopReason') &&
+        json['stopReason'] != null &&
+        (json['stopReason'] is! String)) {
+      throw const FormatException(
+        'AggregationBlockingSkillStateDto field stopReason has an invalid wire value',
+      );
     }
-    if (json.containsKey('answerReady') && json['answerReady'] != null && (json['answerReady'] is! bool)) {
-      throw const FormatException('AggregationBlockingSkillStateDto field answerReady has an invalid wire value');
+    if (json.containsKey('answerReady') &&
+        json['answerReady'] != null &&
+        (json['answerReady'] is! bool)) {
+      throw const FormatException(
+        'AggregationBlockingSkillStateDto field answerReady has an invalid wire value',
+      );
     }
     return AggregationBlockingSkillStateDto(
-      stopReason: parseFinalAnswerModeStrict((json['stopReason'] as String?)?.trim() ?? "blocked"),
+      stopReason: parseFinalAnswerModeStrict(
+        (json['stopReason'] as String?)?.trim() ?? "blocked",
+      ),
       answerReady: json['answerReady'] == true,
     );
   }
@@ -107,28 +134,29 @@ class AggregationBlockingSkillStateDtoFields {
 }
 
 class AggregationDependencyChainDto {
-  const AggregationDependencyChainDto({
-    this.runIds = const <String>[],
-  });
+  const AggregationDependencyChainDto({this.runIds = const <String>[]});
 
   final List<String> runIds;
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'runIds': runIds,
-      };
+  Map<String, dynamic> toJson() => <String, dynamic>{'runIds': runIds};
 
   factory AggregationDependencyChainDto.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'runIds',
-    };
+    const allowedFields = <String>{'runIds'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AggregationDependencyChainDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AggregationDependencyChainDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('runIds') && json['runIds'] != null && (json['runIds'] is! List || (json['runIds'] as List).any((item) => item is! String))) {
-      throw const FormatException('AggregationDependencyChainDto field runIds has an invalid wire value');
+    if (json.containsKey('runIds') &&
+        json['runIds'] != null &&
+        (json['runIds'] is! List ||
+            (json['runIds'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AggregationDependencyChainDto field runIds has an invalid wire value',
+      );
     }
     return AggregationDependencyChainDto(
       runIds: _assistantStringList(json['runIds']),
@@ -137,7 +165,10 @@ class AggregationDependencyChainDto {
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }
@@ -177,23 +208,23 @@ class AggregationStateDto {
   final Map<String, AggregationDependencyChainDto> dependencies;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'allSkillsReady': allSkillsReady,
-        'blockingSkills': blockingSkills,
-        'blockedBy': <String, dynamic>{
-          for (final entry in blockedBy.entries) entry.key: entry.value.toJson(),
-        },
-        'canGivePartialAnswer': canGivePartialAnswer,
-        'needExpansion': needExpansion,
-        'expansionPlan': expansionPlan.toJson(),
-        'finalAnswerReady': finalAnswerReady,
-        'finalAnswerMode': finalAnswerMode.wireName,
-        'clarificationNeeded': clarificationNeeded,
-        'answerOwner': answerOwner,
-        'clarificationSource': clarificationSource,
-        'dependencies': <String, dynamic>{
-          for (final entry in dependencies.entries) entry.key: entry.value.toJson(),
-        },
-      };
+    'allSkillsReady': allSkillsReady,
+    'blockingSkills': blockingSkills,
+    'blockedBy': <String, dynamic>{
+      for (final entry in blockedBy.entries) entry.key: entry.value.toJson(),
+    },
+    'canGivePartialAnswer': canGivePartialAnswer,
+    'needExpansion': needExpansion,
+    'expansionPlan': expansionPlan.toJson(),
+    'finalAnswerReady': finalAnswerReady,
+    'finalAnswerMode': finalAnswerMode.wireName,
+    'clarificationNeeded': clarificationNeeded,
+    'answerOwner': answerOwner,
+    'clarificationSource': clarificationSource,
+    'dependencies': <String, dynamic>{
+      for (final entry in dependencies.entries) entry.key: entry.value.toJson(),
+    },
+  };
 
   factory AggregationStateDto.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -214,63 +245,130 @@ class AggregationStateDto {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AggregationStateDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AggregationStateDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('allSkillsReady') && json['allSkillsReady'] != null && (json['allSkillsReady'] is! bool)) {
-      throw const FormatException('AggregationStateDto field allSkillsReady has an invalid wire value');
+    if (json.containsKey('allSkillsReady') &&
+        json['allSkillsReady'] != null &&
+        (json['allSkillsReady'] is! bool)) {
+      throw const FormatException(
+        'AggregationStateDto field allSkillsReady has an invalid wire value',
+      );
     }
-    if (json.containsKey('blockingSkills') && json['blockingSkills'] != null && (json['blockingSkills'] is! List || (json['blockingSkills'] as List).any((item) => item is! String))) {
-      throw const FormatException('AggregationStateDto field blockingSkills has an invalid wire value');
+    if (json.containsKey('blockingSkills') &&
+        json['blockingSkills'] != null &&
+        (json['blockingSkills'] is! List ||
+            (json['blockingSkills'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AggregationStateDto field blockingSkills has an invalid wire value',
+      );
     }
-    if (json.containsKey('blockedBy') && json['blockedBy'] != null && (json['blockedBy'] is! Map)) {
-      throw const FormatException('AggregationStateDto field blockedBy has an invalid wire value');
+    if (json.containsKey('blockedBy') &&
+        json['blockedBy'] != null &&
+        (json['blockedBy'] is! Map)) {
+      throw const FormatException(
+        'AggregationStateDto field blockedBy has an invalid wire value',
+      );
     }
-    if (json.containsKey('canGivePartialAnswer') && json['canGivePartialAnswer'] != null && (json['canGivePartialAnswer'] is! bool)) {
-      throw const FormatException('AggregationStateDto field canGivePartialAnswer has an invalid wire value');
+    if (json.containsKey('canGivePartialAnswer') &&
+        json['canGivePartialAnswer'] != null &&
+        (json['canGivePartialAnswer'] is! bool)) {
+      throw const FormatException(
+        'AggregationStateDto field canGivePartialAnswer has an invalid wire value',
+      );
     }
-    if (json.containsKey('needExpansion') && json['needExpansion'] != null && (json['needExpansion'] is! bool)) {
-      throw const FormatException('AggregationStateDto field needExpansion has an invalid wire value');
+    if (json.containsKey('needExpansion') &&
+        json['needExpansion'] != null &&
+        (json['needExpansion'] is! bool)) {
+      throw const FormatException(
+        'AggregationStateDto field needExpansion has an invalid wire value',
+      );
     }
-    if (json.containsKey('expansionPlan') && json['expansionPlan'] != null && (json['expansionPlan'] is! Map)) {
-      throw const FormatException('AggregationStateDto field expansionPlan has an invalid wire value');
+    if (json.containsKey('expansionPlan') &&
+        json['expansionPlan'] != null &&
+        (json['expansionPlan'] is! Map)) {
+      throw const FormatException(
+        'AggregationStateDto field expansionPlan has an invalid wire value',
+      );
     }
-    if (json.containsKey('finalAnswerReady') && json['finalAnswerReady'] != null && (json['finalAnswerReady'] is! bool)) {
-      throw const FormatException('AggregationStateDto field finalAnswerReady has an invalid wire value');
+    if (json.containsKey('finalAnswerReady') &&
+        json['finalAnswerReady'] != null &&
+        (json['finalAnswerReady'] is! bool)) {
+      throw const FormatException(
+        'AggregationStateDto field finalAnswerReady has an invalid wire value',
+      );
     }
-    if (json.containsKey('finalAnswerMode') && json['finalAnswerMode'] != null && (json['finalAnswerMode'] is! String)) {
-      throw const FormatException('AggregationStateDto field finalAnswerMode has an invalid wire value');
+    if (json.containsKey('finalAnswerMode') &&
+        json['finalAnswerMode'] != null &&
+        (json['finalAnswerMode'] is! String)) {
+      throw const FormatException(
+        'AggregationStateDto field finalAnswerMode has an invalid wire value',
+      );
     }
-    if (json.containsKey('clarificationNeeded') && json['clarificationNeeded'] != null && (json['clarificationNeeded'] is! bool)) {
-      throw const FormatException('AggregationStateDto field clarificationNeeded has an invalid wire value');
+    if (json.containsKey('clarificationNeeded') &&
+        json['clarificationNeeded'] != null &&
+        (json['clarificationNeeded'] is! bool)) {
+      throw const FormatException(
+        'AggregationStateDto field clarificationNeeded has an invalid wire value',
+      );
     }
-    if (json.containsKey('answerOwner') && json['answerOwner'] != null && (json['answerOwner'] is! String)) {
-      throw const FormatException('AggregationStateDto field answerOwner has an invalid wire value');
+    if (json.containsKey('answerOwner') &&
+        json['answerOwner'] != null &&
+        (json['answerOwner'] is! String)) {
+      throw const FormatException(
+        'AggregationStateDto field answerOwner has an invalid wire value',
+      );
     }
-    if (json.containsKey('clarificationSource') && json['clarificationSource'] != null && (json['clarificationSource'] is! String)) {
-      throw const FormatException('AggregationStateDto field clarificationSource has an invalid wire value');
+    if (json.containsKey('clarificationSource') &&
+        json['clarificationSource'] != null &&
+        (json['clarificationSource'] is! String)) {
+      throw const FormatException(
+        'AggregationStateDto field clarificationSource has an invalid wire value',
+      );
     }
-    if (json.containsKey('dependencies') && json['dependencies'] != null && (json['dependencies'] is! Map)) {
-      throw const FormatException('AggregationStateDto field dependencies has an invalid wire value');
+    if (json.containsKey('dependencies') &&
+        json['dependencies'] != null &&
+        (json['dependencies'] is! Map)) {
+      throw const FormatException(
+        'AggregationStateDto field dependencies has an invalid wire value',
+      );
     }
     return AggregationStateDto(
       allSkillsReady: json['allSkillsReady'] == true,
       blockingSkills: _assistantStringList(json['blockingSkills']),
-      blockedBy: _assistantObjectMap(json['blockedBy'], (key, value) => AggregationBlockingSkillStateDto.fromJson(value)),
+      blockedBy: _assistantObjectMap(
+        json['blockedBy'],
+        (key, value) => AggregationBlockingSkillStateDto.fromJson(value),
+      ),
       canGivePartialAnswer: json['canGivePartialAnswer'] == true,
       needExpansion: json['needExpansion'] == true,
-      expansionPlan: json['expansionPlan'] is Map ? AggregationExpansionPlanDto.fromJson((json['expansionPlan'] as Map).cast<String, dynamic>()) : const AggregationExpansionPlanDto(),
+      expansionPlan: json['expansionPlan'] is Map
+          ? AggregationExpansionPlanDto.fromJson(
+              (json['expansionPlan'] as Map).cast<String, dynamic>(),
+            )
+          : const AggregationExpansionPlanDto(),
       finalAnswerReady: json['finalAnswerReady'] == true,
-      finalAnswerMode: parseFinalAnswerModeStrict((json['finalAnswerMode'] as String?)?.trim() ?? "blocked"),
+      finalAnswerMode: parseFinalAnswerModeStrict(
+        (json['finalAnswerMode'] as String?)?.trim() ?? "blocked",
+      ),
       clarificationNeeded: json['clarificationNeeded'] == true,
       answerOwner: (json['answerOwner'] as String?)?.trim() ?? "",
-      clarificationSource: (json['clarificationSource'] as String?)?.trim() ?? "",
-      dependencies: _assistantObjectMap(json['dependencies'], (key, value) => AggregationDependencyChainDto.fromJson(value)),
+      clarificationSource:
+          (json['clarificationSource'] as String?)?.trim() ?? "",
+      dependencies: _assistantObjectMap(
+        json['dependencies'],
+        (key, value) => AggregationDependencyChainDto.fromJson(value),
+      ),
     );
   }
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }
@@ -284,7 +382,10 @@ class AggregationStateDto {
     for (final entry in value.entries) {
       final raw = entry.value;
       if (raw is! Map) continue;
-      typed[entry.key.toString()] = parser(entry.key.toString(), raw.cast<String, dynamic>());
+      typed[entry.key.toString()] = parser(
+        entry.key.toString(),
+        raw.cast<String, dynamic>(),
+      );
     }
     return typed;
   }

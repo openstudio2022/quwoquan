@@ -2,6 +2,7 @@ import 'package:quwoquan_app/runtime/errors/generated/assistant/assistant_errors
 import 'package:quwoquan_app/runtime/errors/generated/chat/chat_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/generated/circle/circle_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/generated/circle/circle_membership_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/generated/circle/gathering_plan_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/generated/entity/entity_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/generated/rtc/rtc_errors.g.dart';
@@ -66,9 +67,13 @@ class DomainErrorCodeRegistry {
       final value = CircleErrorCode.fromCode(code);
       if (value != CircleErrorCode.unknown) return _fromCircle(value);
       final membershipValue = CircleMembershipErrorCode.fromCode(code);
-      return membershipValue == CircleMembershipErrorCode.unknown
+      if (membershipValue != CircleMembershipErrorCode.unknown) {
+        return _fromCircleMembership(membershipValue);
+      }
+      final gatheringPlanValue = GatheringPlanErrorCode.fromCode(code);
+      return gatheringPlanValue == GatheringPlanErrorCode.unknown
           ? null
-          : _fromCircleMembership(membershipValue);
+          : _fromGatheringPlan(gatheringPlanValue);
     }
     if (code.startsWith('ENTITY.')) {
       final value = EntityErrorCode.fromCode(code);
@@ -176,6 +181,16 @@ class DomainErrorCodeRegistry {
   static DomainErrorCode _fromCircleMembership(
     CircleMembershipErrorCode value,
   ) {
+    return DomainErrorCode(
+      domain: 'circle',
+      code: value.code,
+      defaultMessage: value.defaultMessage,
+      httpStatus: value.httpStatus,
+      value: value,
+    );
+  }
+
+  static DomainErrorCode _fromGatheringPlan(GatheringPlanErrorCode value) {
     return DomainErrorCode(
       domain: 'circle',
       code: value.code,

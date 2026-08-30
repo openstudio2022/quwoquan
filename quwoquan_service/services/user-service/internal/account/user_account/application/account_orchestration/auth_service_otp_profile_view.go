@@ -38,8 +38,7 @@ var otpClientPlatforms = map[string]struct{}{
 // Provider names, dependency checks, response bodies and transport errors stay
 // inside the service boundary.
 func (s *AuthService) GetOtpDeliveryReadiness(ctx context.Context) OtpDeliveryReadiness {
-	checker, ok := s.externalClient.(SMSOTPReadinessChecker)
-	if !ok || checker == nil {
+	if s.smsOtpReadiness == nil {
 		return OtpDeliveryReadiness{
 			Availability:      "temporarily_unavailable",
 			RetryAfterSeconds: otpReadinessRetryAfterSeconds,
@@ -47,10 +46,15 @@ func (s *AuthService) GetOtpDeliveryReadiness(ctx context.Context) OtpDeliveryRe
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, 1200*time.Millisecond)
 	defer cancel()
-	if err := checker.CheckSMSOTPReadiness(probeCtx); err != nil {
+	readiness, err := s.smsOtpReadiness.GetSMSOTPDeliveryReadiness(probeCtx)
+	if err != nil || readiness.Availability != "ready" {
+		retryAfterSeconds := readiness.RetryAfterSeconds
+		if retryAfterSeconds <= 0 {
+			retryAfterSeconds = otpReadinessRetryAfterSeconds
+		}
 		return OtpDeliveryReadiness{
 			Availability:      "temporarily_unavailable",
-			RetryAfterSeconds: otpReadinessRetryAfterSeconds,
+			RetryAfterSeconds: retryAfterSeconds,
 		}
 	}
 	return OtpDeliveryReadiness{Availability: "ready", RetryAfterSeconds: 0}
@@ -432,7 +436,11 @@ func BuildCreatorRuntimeProfileView(creator *userrepo.CreatorRuntimeProfileView)
 		"headline":           creator.Headline,
 		"nicknameCustomized": false,
 		"avatarUrl":          creator.AvatarURL,
-		"backgroundUrl":      creator.CoverURL,
+		// 头像交付绑定（DEC-033）：assetId 来自 release media authority，
+		// accessMode 由 composition 层单点派生；缺席出 null，不造值。
+		"avatarAssetId":    nullableDeliveryValue(creator.AvatarAssetID),
+		"avatarAccessMode": nullableDeliveryValue(creator.AvatarAccessMode),
+		"backgroundUrl":    creator.CoverURL,
 		"bio":                creator.Bio,
 		"identityTags":       identityTags,
 		"expertiseClaims":    append([]string(nil), creator.ExpertiseClaims...),
@@ -448,6 +456,16 @@ func BuildCreatorRuntimeProfileView(creator *userrepo.CreatorRuntimeProfileView)
 		"overriddenFields":   []string{},
 		"updatedAt":          creator.UpdatedAt.Format(time.RFC3339),
 	}
+}
+
+// nullableDeliveryValue 把缺席的交付绑定字段投影为 wire null（契约
+// NULLABLE），在场时保持原值；失败或缺席都不得塌陷成空字符串。
+func nullableDeliveryValue(value string) any {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	return trimmed
 }
 
 func hasPublicLeakage(view map[string]any) bool {
@@ -514,7 +532,14 @@ func buildPersonaProfileView(owner *model.UserProfile, persona *model.Persona) m
 		"displayName":        displayName,
 		"nicknameCustomized": nicknameCustomized,
 		"avatarUrl":          avatarURLWithVersion(avatarURL, avatarVersion),
-		"backgroundUrl":      backgroundURL,
+		// persona/account 主路径的头像是正式上传 MediaAsset 的公开 slice
+		// 交付（存量 public）：personas/user_profiles 存储没有资产标识与
+		// 访问模式的派生信号，按契约 NULLABLE 出 null，不以 personaId
+		// 冒充资产标识（DEC-033）。research 导入 creator 走
+		// BuildCreatorRuntimeProfileView，不经此路径。
+		"avatarAssetId":    nil,
+		"avatarAccessMode": nil,
+		"backgroundUrl":    backgroundURL,
 		"bio":                bio,
 		"identityTags":       identityTags,
 		"followerCount":      owner.FollowerCount,

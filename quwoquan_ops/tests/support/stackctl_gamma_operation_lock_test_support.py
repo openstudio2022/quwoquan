@@ -16,6 +16,9 @@ from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.provider_runtime_composition import (
     compile_provider_runtime_composition,
 )
+from quwoquan_ops.tests.support.provider_binding_overlay_fixture import (
+    packaged_service_build_ref,
+)
 
 
 class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
@@ -64,7 +67,7 @@ class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
             "schema": "stackctl-observability-log-sink-package",
             "adapterId": "ext.obs.elasticsearch",
             "bindingDigest": digest,
-            "endpointRef": f"local_topology:{environment}.elasticsearch",
+            "endpointRef": "local_topology:elasticsearch",
             "endpointEnvironmentKey": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
             "secretEnvironmentKeys": [],
             "deploymentMode": "package-bound-local",
@@ -159,6 +162,17 @@ class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
             },
         }
 
+    @staticmethod
+    def _packaged_service_source_ref(service: str, digest: str) -> str:
+        repository = (
+            "core"
+            if service == stackctl.SERVICE_CORE_WORKLOAD
+            else service.replace("-", "_")
+        )
+        return f"localhost/quwoquan_service_{repository}:{digest}"
+
+    _packaged_service_build_ref = staticmethod(packaged_service_build_ref)
+
     def setUp(self) -> None:
         self.deploy_root = tempfile.TemporaryDirectory()
         self.addCleanup(self.deploy_root.cleanup)
@@ -194,6 +208,15 @@ class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
         )
         candidate_snapshot.start()
         self.addCleanup(candidate_snapshot.stop)
+        candidate_manifest = mock.patch.object(
+            stackctl,
+            "load_candidate_manifest",
+            side_effect=lambda environment_name, _target, _digest, **_kwargs: (
+                self._candidate_snapshot(environment_name)["manifest"]
+            ),
+        )
+        candidate_manifest.start()
+        self.addCleanup(candidate_manifest.stop)
         snapshot_check = mock.patch.object(
             stackctl,
             "assert_active_deployment_candidate_snapshot",

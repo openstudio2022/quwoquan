@@ -1,0 +1,62 @@
+schema_id: environment_artifact_identity
+description: 四环境部署候选统一制品身份协议；environment artifact 将共同 release train/source capsule 与环境专属 image、config、Provider binding、endpoint authority、runtime topology、ContractGraph 绑定为可复算且不可跨环境交换的摘要。
+owner: runtime
+json_schema_ref: quwoquan_service/contracts/metadata/_schemas/environment_artifact_identity.schema.json
+
+digest_contract:
+  algorithm: sha256
+  input_encoding: utf-8
+  canonical_json:
+    sort_keys: true
+    ensure_ascii: false
+    separators: [",", ":"]
+  identity_format: "sha256:<64-lowercase-hex>"
+
+target_environment:
+  alpha-local: alpha
+  beta-local: beta
+  gamma-local: gamma
+  prod-sim: prod
+  prod-hosted: prod
+
+identity:
+  schema_value: environment-artifact-identity
+  release_train_fields:
+    - sourceCapsule.sourceRevision
+    - contractGraphDigest
+  source_capsule_fields:
+    - baselineId
+    - digest
+    - sourceRevision
+    - workspaceStatusDigest
+  identity_core_fields:
+    - schema
+    - environment
+    - target
+    - releaseTrainId
+    - sourceCapsule
+    - packageDigest
+    - imageBuildInputDigest
+    - configuration
+    - provider
+    - endpointAuthorityDigest
+    - runtimeTopologyDigest
+    - contractGraphDigest
+  activation_seal_fields:
+    - identityCoreDigest
+    - imageSetDigest
+  endpoint_authority_projection_fields:
+    - environment
+    - target
+    - publicBases
+  runtime_topology_manifest_ref: packages/runtime-shared/runtime-topology/manifest.json
+
+constraints:
+  - target 必须映射到 target_environment 中唯一声明的 environment；同一 artifact 不得被其他 environment/target 验证或激活。
+  - releaseTrainId 是 digest_contract 对 release_train_fields 投影的摘要；sourceCapsule 绑定候选 input capsule 的 baseline、精确字节摘要、Git revision 与 workspace status。
+  - identityCoreDigest 是 digest_contract 对 identity_core_fields 投影的摘要；imageBuildInputDigest 属于 core，imageSetDigest 不属于 core，禁止镜像内嵌身份摘要包含最终 OCI image digest 而形成自引用。
+  - environmentArtifactDigest 是 digest_contract 对 activation_seal_fields 投影的摘要；外部 activation seal 以 identityCoreDigest 绑定最终 imageSetDigest。
+  - configuration 同时绑定 service configuration、App runtime config 与 packaged environment runtime；Provider 同时绑定 canonical binding 与 runtime composition。
+  - endpointAuthorityDigest 绑定 environment、target 与 packaged publicBases 的 canonical 投影；runtimeTopologyDigest 绑定 package-owned runtime topology manifest 的精确字节。
+  - 任一字段缺失、多余、target/environment 错配、摘要不可复算、跨环境复用或 package-owned 字节漂移均 fail-closed。
+  - 镜像字节按 nonprod/prod 两个信任域分叉（DEC-005）：alpha/beta/gamma 的同 owner 镜像必须共享同一 digest，prod 镜像 digest 必须与 nonprod 分叉；环境身份由部署面挂载的 artifact-identity.json 承载，不烤入镜像字节。environment artifact 的不可交换性由 configuration/endpoint/topology 投影差异保证，与镜像 digest 复用无冲突。

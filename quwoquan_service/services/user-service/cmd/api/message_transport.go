@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
@@ -12,24 +11,17 @@ import (
 
 // newUserMessageTransport resolves the compiler-selected runtime binding before
 // exposing the provider-neutral transport to user-domain event adapters.
+// sceneModes 是装配后各 scene 的**解析后** mode（含缺地址回落 memory 的结果），
+// 由 servicekit 的 Redis 装配返回：preflight 判定「是否接到真实 Redis」必须看
+// 实际装配结果，看快照原文会让缺地址的 scene 通过 preflight 后落 memory。
 func newUserMessageTransport(
 	ctx context.Context,
 	environment string,
 	router *rtredis.Router,
-	cfg config,
+	sceneModes map[string]string,
 ) (runtimemessaging.MessageTransport, error) {
 	const rootID = "user-service-api"
-	sceneModes := map[string]string{
-		"general":  cfg.Redis.General.Mode,
-		"realtime": cfg.Redis.Realtime.Mode,
-	}
-	if strings.TrimSpace(sceneModes["realtime"]) == "" {
-		sceneModes["realtime"] = sceneModes["general"]
-	}
-	binding, found := bindingdescriptor.ExternalProviderBindingFor(
-		environment,
-		runtimemessaging.RuntimeMessageTransportCapability,
-	)
+	binding, found := bindingdescriptor.CompiledBindingFor(runtimemessaging.RuntimeMessageTransportCapability)
 	resolved, err := runtimemessaging.RequireConfiguredRedisMessageTransport(
 		ctx,
 		environment,

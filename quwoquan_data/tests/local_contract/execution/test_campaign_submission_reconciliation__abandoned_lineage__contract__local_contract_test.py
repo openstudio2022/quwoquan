@@ -8,6 +8,7 @@ import pytest
 from content.execution.campaign import submission_reconciliation as reconciliation
 from content.execution.campaign import failed_execution_reconciliation
 from content.execution.planning.recipe import request as recipe_request
+from content.execution.planning.recipe import request_retry_scope
 from content.execution.campaign.external_inputs import payload_digest
 from core.io import read_json, write_json
 from core.schema import assert_valid
@@ -274,7 +275,9 @@ def test_terminal_reconciliation_accepts_digest_valid_pre_hard_cut_evidence_only
     )
 
     assert receipt["decision"] == "abandoned"
-    assert receipt["retryPolicy"] == "new_four_lane_execution_with_retryOf"
+    # Retry re-freezes the lanes the campaign actually declared active, which is not
+    # always four, so the policy is named for the active workload rather than a lane count.
+    assert receipt["retryPolicy"] == "active_workload_execution_with_retryOf"
     assert set(receipt["submissions"]) == set(CARRIERS)
 
 
@@ -364,7 +367,7 @@ def test_retry_target_names_use_reconciliation_when_target_set_never_existed(
 ) -> None:
     names = ("乌镇", "成都大熊猫繁育研究基地", "西湖")
     monkeypatch.setattr(
-        recipe_request,
+        request_retry_scope,
         "submission_only_predecessor_target_names",
         lambda _retry_of: names,
     )
@@ -544,7 +547,7 @@ def test_failed_campaign_reconciliation_terminalizes_dead_source_drift_lane(
     _patch_observed_identity(monkeypatch)
     monkeypatch.setattr(
         failed_execution_reconciliation,
-        "current_source_digest",
+        "current_source_definition_snapshot",
         reconciliation.current_source_digest,
     )
     monkeypatch.setattr(

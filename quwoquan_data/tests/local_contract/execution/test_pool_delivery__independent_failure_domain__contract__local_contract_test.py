@@ -1,6 +1,10 @@
 """Pool delivery preserves reviewed truth across transport outages.
 
-spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-001
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-005.t1
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-005.t2
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-005.t3
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-005.t4
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md#gwt-005.t5
 """
 from __future__ import annotations
 
@@ -20,6 +24,7 @@ from core.control_types import (
     ExecutionStage,
     ExecutionStateStatus,
     QueueJobStage,
+    QueueJobState,
     ReliableTaskDispatchStatus,
 )
 from core.data_issue import (
@@ -60,7 +65,14 @@ def test_publish_fleet_delivers_partial_reviewed_closure_below_semantic_quota(
 def test_pool_delivery_drain__down_then_ready_consumes_same_intent_without_semantic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    job = SimpleNamespace(stage=QueueJobStage.PUBLISH, job_id="publish-001")
+    job = SimpleNamespace(
+        stage=QueueJobStage.PUBLISH,
+        job_id="publish-001",
+        ref="/entity/地点/景区/都江堰",
+        state=QueueJobState.QUEUED,
+        result_envelope_ref=None,
+        last_issue=None,
+    )
     intent_id = "sha256:" + "7" * 64
     dispatch_calls: list[tuple[str, ExecutionStage]] = []
     semantic_calls: list[str] = []
@@ -88,7 +100,7 @@ def test_pool_delivery_drain__down_then_ready_consumes_same_intent_without_seman
         )
     )
     frozen_spec = SimpleNamespace(
-        execution_policy=SimpleNamespace(required_workers=1)
+        execution_policy=SimpleNamespace(fleet_max_concurrent_workers=1)
     )
 
     monkeypatch.setattr(
@@ -117,10 +129,27 @@ def test_pool_delivery_drain__down_then_ready_consumes_same_intent_without_seman
 
     def dispatch(ctx, stage):
         dispatch_calls.append((ctx.execution_id, stage))
-        return next(outcomes)
+        outcome = next(outcomes)
+        if outcome.status is ReliableTaskDispatchStatus.COMPLETED:
+            # fleet 交付成功后本地作业账本转终态；drain 报告只认这个持久事实。
+            job.state = QueueJobState.SUCCEEDED
+            job.result_envelope_ref = "data/local/workspace/apply_report.json"
+        return outcome
 
     monkeypatch.setattr(
         delivery_drain, "dispatch_reliabletask_checkpoint", dispatch
+    )
+    monkeypatch.setattr(
+        delivery_drain,
+        "_canonical_object_from_applied_evidence",
+        lambda _job: {
+            "transactionId": f"{EXECUTION_ID}--entity-000000000000",
+            "applyReportRef": "data/local/workspace/apply_report.json",
+            "canonicalObjectRef": "entities/地点/景区/都江堰",
+            "canonicalObjectSha256": "sha256:" + "a" * 64,
+            "objectClosureDigest": "sha256:" + "d" * 64,
+            "admissionResult": "appended",
+        },
     )
     monkeypatch.setattr(
         "content.execution.agent.agent_runner._managed_agent_runner_for_provider",
@@ -132,7 +161,11 @@ def test_pool_delivery_drain__down_then_ready_consumes_same_intent_without_seman
 
     assert pending["status"] == "waiting"
     assert pending["issueCodes"] == ["DATA.POOL.DELIVERY_UNAVAILABLE"]
+    assert pending["nextAction"] == "resume_delivery"
+    assert pending["reentryRef"]["intentIds"] == [intent_id]
     assert recovered["status"] == "completed"
+    assert recovered["nextAction"] == "none"
+    assert recovered["poolDelta"] == 1
     assert pending["intentIds"] == recovered["intentIds"] == [intent_id]
     assert dispatch_calls == [
         (EXECUTION_ID, ExecutionStage.PUBLISH),
@@ -144,15 +177,22 @@ def test_pool_delivery_drain__down_then_ready_consumes_same_intent_without_seman
 def test_pool_delivery_drain__reconciles_remote_dead_receipt_after_local_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    job = SimpleNamespace(stage=QueueJobStage.PUBLISH, job_id="publish-001")
+    job = SimpleNamespace(
+        stage=QueueJobStage.PUBLISH,
+        job_id="publish-001",
+        ref="/entity/地点/景区/都江堰",
+        state=QueueJobState.SUCCEEDED,
+        result_envelope_ref="data/local/workspace/apply_report.json",
+        last_issue=None,
+    )
     intent_id = "sha256:" + "7" * 64
     frozen_spec = SimpleNamespace(
-        execution_policy=SimpleNamespace(required_workers=1)
+        execution_policy=SimpleNamespace(fleet_max_concurrent_workers=1)
     )
     report = SimpleNamespace(
         passed=True,
         succeeded=1,
-        outcomes=(SimpleNamespace(attempts=3),),
+        outcomes=(SimpleNamespace(attempts=3, status="succeeded", ref=job.ref),),
     )
     monkeypatch.setattr(
         delivery_drain, "load_frozen_execution_manifest", lambda _execution_id: {}
@@ -180,10 +220,10 @@ def test_pool_delivery_drain__reconciles_remote_dead_receipt_after_local_success
     monkeypatch.setattr(
         delivery_drain, "dispatch_reliabletask_checkpoint", lambda *_args: None
     )
-    reconcile_calls: list[tuple[str, int]] = []
+    reconcile_calls: list[str] = []
 
-    def reconcile(execution_id: str, *, workers: int, **_kwargs):
-        reconcile_calls.append((execution_id, workers))
+    def reconcile(execution_id: str):
+        reconcile_calls.append(execution_id)
         return report
 
     monkeypatch.setattr(
@@ -191,15 +231,30 @@ def test_pool_delivery_drain__reconciles_remote_dead_receipt_after_local_success
         "reconcile_frozen_publish_recovery",
         reconcile,
     )
+    monkeypatch.setattr(
+        delivery_drain,
+        "_canonical_object_from_applied_evidence",
+        lambda _job: {
+            "transactionId": f"{EXECUTION_ID}--entity-000000000000",
+            "applyReportRef": "data/local/workspace/apply_report.json",
+            "canonicalObjectRef": "entities/地点/景区/都江堰",
+            "canonicalObjectSha256": "sha256:" + "a" * 64,
+            "objectClosureDigest": "sha256:" + "d" * 64,
+            "admissionResult": "replayed",
+        },
+    )
 
     result = delivery_drain.drain_pool_delivery(EXECUTION_ID)
 
     assert result["status"] == "completed"
     assert result["executionStatePreserved"] is True
     assert result["qualifiedCount"] == result["completedCount"] == 1
-    assert result["attemptedCount"] == 3
+    # 已 replay 的对象不制造新的池增量，但仍算一次已闭合交付。
+    assert result["attemptedCount"] == 1
+    assert result["replayedCount"] == 1
+    assert result["poolDelta"] == 0
     assert result["intentIds"] == [intent_id]
-    assert reconcile_calls == [(EXECUTION_ID, 1)]
+    assert reconcile_calls == [EXECUTION_ID]
 
 
 def test_pool_delivery_drain__pre_capsule_promotes_only_qualified_reviewed_object(
@@ -225,12 +280,21 @@ def test_pool_delivery_drain__pre_capsule_promotes_only_qualified_reviewed_objec
     intent = {"intentId": "sha256:" + "8" * 64}
     writes: list[tuple[str, str]] = []
     promotions: list[str] = []
+    pool_record = {
+        "recordRef": "posts/article/china/travel/qualified-post/_pool/versions/1.json",
+        "recordSha256": "sha256:" + "b" * 64,
+        "contentVersion": 1,
+        "recordSequence": 1,
+        "payloadDigest": "sha256:" + "c" * 64,
+    }
     canonical = {
         "transactionId": "transaction-qualified",
         "applyReportRef": "data/local/qualified/apply_report.json",
         "canonicalObjectRef": "posts/article/china/travel/qualified-post",
         "canonicalObjectSha256": "sha256:" + "9" * 64,
         "objectClosureDigest": "sha256:" + "a" * 64,
+        "admissionResult": "appended",
+        "poolRecord": pool_record,
     }
 
     monkeypatch.setattr(
@@ -281,6 +345,33 @@ def test_pool_delivery_drain__pre_capsule_promotes_only_qualified_reviewed_objec
     assert result["qualifiedCount"] == result["attemptedCount"] == 1
     assert result["discardedCount"] == 1
     assert result["completedCount"] == 1
+    assert result["total"] == 2
+    assert result["appendedCount"] == result["poolDelta"] == 1
+    assert result["replayedCount"] == 0
+    assert result["pendingCount"] == 0
+    assert result["excludedCount"] == 1
+    assert result["blockedCount"] == 0
+    assert result["total"] == sum(
+        result[key]
+        for key in (
+            "appendedCount",
+            "replayedCount",
+            "pendingCount",
+            "excludedCount",
+            "blockedCount",
+        )
+    )
+    assert result["nextAction"] == "none"
+    assert result["reentryRef"] == {
+        "executionId": EXECUTION_ID,
+        "batchInputDigest": result["batchInputDigest"],
+        "intentIds": [intent["intentId"]],
+    }
+    assert [row["result"] for row in result["objectResults"]] == [
+        "excluded",
+        "appended",
+    ]
+    assert result["objectResults"][1]["canonicalObject"]["poolRecord"] == pool_record
     assert writes == [(qualified.object_ref, qualified.publish_ref)]
     assert promotions == [qualified.publish_ref]
     assert result["canonicalObjects"] == [canonical]
@@ -327,7 +418,7 @@ def test_pool_delivery_drain__pre_capsule_admission_fails_closed(
         delivery_drain.drain_pool_delivery(EXECUTION_ID)
 
 
-def test_pool_delivery_drain_is_exposed_only_through_canonical_data_cli() -> None:
+def test_pool_delivery_drain_legacy_controller_cli_is_not_public() -> None:
     completed = subprocess.run(
         [
             sys.executable,
@@ -343,5 +434,5 @@ def test_pool_delivery_drain_is_exposed_only_through_canonical_data_cli() -> Non
         text=True,
     )
 
-    assert completed.returncode == 0, completed.stderr
-    assert "--execution-id" in completed.stdout
+    assert completed.returncode != 0
+    assert "invalid choice: 'drain-pool-delivery'" in completed.stderr

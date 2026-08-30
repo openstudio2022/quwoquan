@@ -74,6 +74,8 @@
 - THEN stable URL 与 manifest currentVersion 一致，版本 URL 不可变，prod 发布前先完成 gamma legal-static 探测。
 - THEN alpha / flutter run Remote public plane 可直接访问 `/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list`，不得回退 fixture/mock API 路由。
 - THEN 协议 URL 不可达或返回非成功状态时，App 展示原生错误态、提供重试和返回，不暴露 raw HTTP/WebView 错误页，且不阻断登录协议勾选与验证码登录流程。
+- THEN 对外分发的 web/android 描述文件必须由 release manifest 顶层 `publicWeb`、`androidOfficialRelease` canonical path + SHA-256 descriptor 绑定到候选 exact bytes；部署前校验字段闭集、source identity 与候选 `artifactManifest` 完全一致，任一漂移必须在首个分发写入前失败关闭。
+- THEN `applicationPackages.*.packageDigest` 只校验候选 payload tree；`contentSHA256` / `apkSHA256` 只与已验证候选 application package evidence 的 `artifactManifest.artifactDigest` 比较，禁止把两类摘要直接互比或互相替代。
 
 ## 8. 开放事项
 

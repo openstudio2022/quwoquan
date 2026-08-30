@@ -1,3 +1,6 @@
+@Tags(<String>['serial'])
+library;
+
 // 消息首页（Inbox）打开首帧与滚动的性能预算契约（固定 seed 500 会话）。
 //
 // 预算数值唯一声明于 test/support/runtime/performance/performance_budget_probe.dart
@@ -72,7 +75,10 @@ Widget _inboxApp() {
       routerConfig: GoRouter(
         initialLocation: '/chat',
         routes: [
-          GoRoute(path: '/chat', builder: (_, _) => const Scaffold(body: ChatPage())),
+          GoRoute(
+            path: '/chat',
+            builder: (_, _) => const Scaffold(body: ChatPage()),
+          ),
           GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
         ],
       ),
@@ -91,10 +97,7 @@ void main() {
       var firstRowVisible = false;
       for (var i = 0; i < 60 && !firstRowVisible; i++) {
         await tester.pump(const Duration(milliseconds: 50));
-        firstRowVisible = find
-            .textContaining('收件箱预算会话')
-            .evaluate()
-            .isNotEmpty;
+        firstRowVisible = find.textContaining('收件箱预算会话').evaluate().isNotEmpty;
       }
       expect(firstRowVisible, isTrue, reason: '消息首页必须渲染出首行会话');
     });

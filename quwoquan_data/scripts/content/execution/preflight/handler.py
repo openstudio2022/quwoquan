@@ -9,7 +9,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-from core.control_types import AgentProvider
 from core.cursor_credentials import (
     CURSOR_SENSITIVE_PROCESS_ENV_KEYS,
     cursor_safe_subprocess_env,
@@ -76,7 +75,7 @@ def _resolved_selection(args: argparse.Namespace) -> SemanticPreflightSelection:
 def _capacity_soak_report(
     selection: SemanticPreflightSelection | None = None,
 ) -> dict:
-    """Run the active provider capacity probe from the runtime policy."""
+    """Observe requested provider attempts without making an admission claim."""
     policy = active_runtime_policy()
     resolved = selection or resolve_semantic_preflight_selection(
         DEFAULT_SEMANTIC_SELECTION_ID,
@@ -91,27 +90,7 @@ def _capacity_soak_report(
         timeout_seconds=policy.startup_timeout_seconds,
         cwd=Path.cwd(),
     )
-    issues = list(report.get("issues") or [])
-    if int(report.get("successCount") or 0) != policy.startup_probe_suite_attempts:
-        issues.append(
-            "capacity probe requires every semantic-agent job to finish: "
-            f"{report.get('successCount')}/{policy.startup_probe_suite_attempts}"
-        )
-    required_concurrency = (
-        policy.cursor_bridge_instances
-        if provider is AgentProvider.CURSOR_SDK
-        else policy.campaign_lane_workers
-    )
-    if int(report.get("effectiveConcurrency") or 0) < required_concurrency:
-        issues.append(
-            "capacity probe effective concurrency is below runtime policy: "
-            f"{report.get('effectiveConcurrency')}<{required_concurrency}"
-        )
-    if int(report.get("bridgeDisconnectCount") or 0):
-        issues.append(
-            "capacity probe observed unrecovered provider disconnects"
-        )
-    report["capacityContract"] = {
+    report["probeIntent"] = {
         "attempts": policy.startup_probe_suite_attempts,
         "semanticSelectionId": resolved.selection_id,
         "selectionDigest": resolved.selection_digest,
@@ -121,19 +100,25 @@ def _capacity_soak_report(
         "runtime": resolved.runtime.value,
         "runtimeProfileId": resolved.runtime_profile_id,
         "runtimeProfileDigest": resolved.runtime_profile_digest,
-        "requiredConcurrency": required_concurrency,
         "startupTimeoutSeconds": policy.startup_timeout_seconds,
     }
-    report["issues"] = list(dict.fromkeys(str(issue) for issue in issues if str(issue)))
-    report["ready"] = not report["issues"]
     return bind_semantic_preflight_selection(report, resolved)
 
 
 def _workspace_smoke_report(
     selection: SemanticPreflightSelection | None = None,
+    *,
+    carriers: tuple[str, ...],
 ) -> dict:
-    """Exercise four independent campaign-lane workspaces concurrently."""
+    """Observe exactly the active carrier workspaces requested by the caller."""
     from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+
+    if not carriers:
+        raise ValueError("workspace smoke requires at least one active carrier")
+    if len(set(carriers)) != len(carriers) or any(
+        carrier not in CAMPAIGN_CARRIERS for carrier in carriers
+    ):
+        raise ValueError("workspace smoke carriers must be unique governed carriers")
 
     policy = active_runtime_policy()
     resolved = selection or resolve_semantic_preflight_selection(
@@ -149,7 +134,7 @@ def _workspace_smoke_report(
     ) as temporary:
         smoke_path = Path(temporary)
         workspaces: list[Path] = []
-        for carrier in CAMPAIGN_CARRIERS:
+        for carrier in carriers:
             workspace = smoke_path / carrier
             workspace.mkdir()
             workspaces.append(workspace)
@@ -424,12 +409,22 @@ def handle_ready(args: argparse.Namespace) -> None:
         else {}
     )
     run_workspace_smoke = bool(getattr(args, "workspace_smoke", False))
+    workspace_smoke_carriers = tuple(
+        str(carrier)
+        for carrier in (getattr(args, "workspace_smoke_carrier", None) or ())
+    )
+    if run_workspace_smoke and not workspace_smoke_carriers:
+        raise ValueError(
+            "--workspace-smoke requires at least one --workspace-smoke-carrier"
+        )
     workspace_smoke = (
-        _workspace_smoke_report(selection)
+        _workspace_smoke_report(
+            selection,
+            carriers=workspace_smoke_carriers,
+        )
         if run_workspace_smoke
         and bool(prepare.get("ready"))
         and bool(preflight.get("ready"))
-        and (not run_soak or bool(capacity_soak.get("ready")))
         else {}
     )
     report = {
@@ -443,6 +438,7 @@ def handle_ready(args: argparse.Namespace) -> None:
         "provider": preflight.get("provider"),
         "semanticAgentCredential": preflight.get("semanticAgentCredential") or {},
         "semanticAgentStartup": semantic_agent_startup,
+        "modelCatalog": preflight.get("modelCatalog") or {},
         "capacitySoak": capacity_soak,
         "workspaceSmoke": workspace_smoke,
         "startupRequested": _semantic_agent_startup_enabled(args),
@@ -452,11 +448,6 @@ def handle_ready(args: argparse.Namespace) -> None:
         "ready": (
             bool(prepare.get("ready"))
             and bool(preflight.get("ready"))
-            and (not run_soak or bool(capacity_soak.get("ready")))
-            and (
-                not run_workspace_smoke
-                or bool(workspace_smoke.get("ready"))
-            )
         ),
     }
     report_out = getattr(args, "report_out", None)
@@ -535,12 +526,18 @@ def register_task_preflight_parser(subparsers: argparse._SubParsersAction) -> No
     pr.add_argument(
         "--soak",
         action="store_true",
-        help="运行 runtime policy 定义的语义 Agent 并发容量探针",
+        help="可选诊断：并发尝试语义 Agent；结果不参与任务准入",
     )
     pr.add_argument(
         "--workspace-smoke",
         action="store_true",
-        help="并发验证四个隔离 campaign workspace 的语义 Agent 启动边界",
+        help="可选诊断：并发尝试显式指定的隔离 carrier workspace",
+    )
+    pr.add_argument(
+        "--workspace-smoke-carrier",
+        action="append",
+        choices=("homepage", "article", "image", "video"),
+        help="workspace 诊断的 active carrier，可重复；不默认展开四载体",
     )
     pr.add_argument("--report-out", dest="report_out", help="写出精简、脱敏的运行准入证据")
     pr.add_argument(

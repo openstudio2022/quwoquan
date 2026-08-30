@@ -4,7 +4,7 @@ objectId: content.post
 document: content_post_detail.graphql
 operationName: ContentPostDetailBase
 operationType: query
-sha256Hash: 3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110
+sha256Hash: 3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f
 assemblyProjectionId: content.post.ContentPostDetailSlice
 appClientBundle:
   bundleId: content.post.ContentPostDetail

@@ -105,7 +105,7 @@ func TestDataContentCanonicalResultRequiresPoolDeliveryIntentLineage(t *testing.
 		CanonicalObjectSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		ObjectTransactionID:   "transaction-1",
 		ResultEnvelopeRef:     "data/local/apply_report.json",
-		AcceptanceClass:       DataContentAcceptanceResearchCanonical,
+		AcceptanceClass:       DataContentAcceptanceCanonicalPool,
 		CompletedAt:           time.Now().UTC(),
 	}
 	if err := result.validate(item); err == nil || !strings.Contains(err.Error(), "poolDeliveryIntentId") {

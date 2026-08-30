@@ -74,11 +74,11 @@ def test_simplified_chinese_publish_issues_flags_foreign_and_traditional():
 
 def test_caption_gate_reuses_shared_latin_dominant():
     """caption 退化门复用共享 latin_dominant：行为不变（外文 caption 仍退化、中文 caption 通过）。"""
-    from core.asset_placement import _caption_is_degraded
+    from core.asset_placement import caption_is_degraded
 
-    assert _caption_is_degraded("Jiuzhaigou Valley scenic lake view") is True
-    assert _caption_is_degraded("九寨沟五花海") is False
-    assert _caption_is_degraded("") is True
+    assert caption_is_degraded("Jiuzhaigou Valley scenic lake view") is True
+    assert caption_is_degraded("九寨沟五花海") is False
+    assert caption_is_degraded("") is True
 
 
 def _run_all() -> None:

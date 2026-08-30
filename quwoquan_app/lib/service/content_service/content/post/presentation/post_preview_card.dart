@@ -1,4 +1,7 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
+    show MediaDeliveryKind;
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/content_post_media_aspect_ratio.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -18,6 +21,7 @@ class PostPreviewCard extends StatelessWidget {
     required this.onTap,
     this.supportingText = '',
     this.coverUrl = '',
+    this.coverBinding = const MediaDeliveryBinding.absent(),
     this.mediaAspectRatio = 1.0,
     this.showVideoBadge = false,
     this.mediaContent,
@@ -31,6 +35,10 @@ class PostPreviewCard extends StatelessWidget {
   final String title;
   final String supportingText;
   final String coverUrl;
+
+  /// 封面的 typed 交付绑定（DEC-033）。绑定在场即由唯一分流入口决定走私有短签
+  /// 还是公开候选；缺席时退回 [coverUrl] 的公开路，本骨架不从 URL 形态反推。
+  final MediaDeliveryBinding coverBinding;
   final double mediaAspectRatio;
   final bool showVideoBadge;
   final Widget? mediaContent;
@@ -108,16 +116,39 @@ class PostPreviewCard extends StatelessWidget {
                       fit: StackFit.expand,
                       children: [
                         mediaContent ??
-                            AppCachedNetworkImage(
-                              imageUrl: coverUrl,
+                            mediaDeliveryImage(
+                              binding: coverBinding.hasRenderableSource
+                                  ? coverBinding
+                                  : MediaDeliveryBinding.legacyPublic(
+                                      publicUrl: coverUrl,
+                                    ),
+                              kind: MediaDeliveryKind.image,
                               fit: BoxFit.cover,
-                              cdnPreset: CdnImagePreset.cover,
                               placeholder: ColoredBox(
                                 color: fgSecondary.withValues(alpha: 0.12),
                               ),
                               errorWidget: ColoredBox(
                                 color: fgSecondary.withValues(alpha: 0.12),
                               ),
+                              absentWidget: ColoredBox(
+                                color: fgSecondary.withValues(alpha: 0.12),
+                              ),
+                              publicBuilder: (context, publicUrl) =>
+                                  AppCachedNetworkImage(
+                                    imageUrl: publicUrl,
+                                    fit: BoxFit.cover,
+                                    cdnPreset: CdnImagePreset.cover,
+                                    placeholder: ColoredBox(
+                                      color: fgSecondary.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                    ),
+                                    errorWidget: ColoredBox(
+                                      color: fgSecondary.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                    ),
+                                  ),
                             ),
                         if (showVideoBadge)
                           Positioned(

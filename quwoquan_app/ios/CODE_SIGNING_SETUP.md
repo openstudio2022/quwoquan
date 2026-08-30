@@ -6,15 +6,17 @@
 ## 解决方案
 
 ### 方案 1: 使用 iOS 模拟器（推荐用于开发）
-模拟器不需要代码签名证书，可以直接运行：
+模拟器不需要开发者签名证书，但仍必须物化 App runtime trust envelope。使用 canonical launcher：
 ```bash
-flutter run -d "iPhone 15 Pro Max"
-# 或
-flutter run
+./quwoquan_app/run.sh -d <simulator-udid>
 ```
 
+如需在 Cursor 新终端执行字面 `flutter run`，先在仓库根运行
+`make app-activate-flutter-facade`，Reload Window，打开新终端并确认
+`command -v flutter` 指向 workspace facade，再执行 `flutter run -d <simulator-udid>`。
+
 ### 方案 2: 配置自动签名（用于真机测试）
-1. 打开 Xcode 项目：
+1. Xcode 只用于配置签名，不是本仓库的直接启动入口。打开项目：
    ```bash
    open ios/Runner.xcworkspace
    ```
@@ -43,4 +45,5 @@ flutter run
 ## 注意事项
 - 真机测试需要有效的 Apple Developer 账户（免费个人账户即可）
 - 模拟器测试不需要任何证书
-- 如果只是开发测试，建议使用模拟器
+- 原始 `flutter run`、`flutter run --no-pub` 或 Xcode Run 会绕过 runtime trust handoff 并被构建门禁拒绝
+- 如果只是开发测试，建议使用模拟器和 canonical launcher

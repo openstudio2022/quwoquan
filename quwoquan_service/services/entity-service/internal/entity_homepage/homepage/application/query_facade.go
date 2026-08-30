@@ -95,6 +95,10 @@ func (f *QueryFacade) Search(
 		if projectionErr != nil {
 			return SearchSlice{}, unavailable(projectionErr)
 		}
+		coverAssetID, coverAccessMode := detailCoverBinding(
+			snapshot.CoverURL,
+			snapshot.IntroductionAssets,
+		)
 		result.Items = append(result.Items, SearchItemView{
 			HomepageID:        snapshot.ID,
 			CanonicalEntityID: snapshot.CanonicalEntityID,
@@ -102,6 +106,8 @@ func (f *QueryFacade) Search(
 			Subtitle:          snapshot.Subtitle,
 			HomepageType:      snapshot.HomepageType,
 			CoverURL:          snapshot.CoverURL,
+			CoverAssetID:      coverAssetID,
+			CoverAccessMode:   coverAccessMode,
 			City:              snapshot.City,
 			Address:           snapshot.Address,
 			Status:            string(snapshot.Status),

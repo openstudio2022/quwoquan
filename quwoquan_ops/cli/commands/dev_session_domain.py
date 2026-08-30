@@ -1,11 +1,9 @@
-"""stackctl `dev-session` 子命令域主入口: 目标执行、launcher handoff
-与 test-live 内容绑定。
+"""stackctl `dev-session` 子命令域主入口: 目标执行与 launcher handoff。
 
 从 stackctl.py 逐字迁出（改写规则与 down_domain 相同）:
-`_dev_session_test_live_content_binding_readiness_issues` /
-`_dev_session_content_binding_request` / `_dev_session_launcher_handoff` /
-`_run_dev_session_target` / `_command_dev_session_bind_content` /
-`command_dev_session`。
+`_dev_session_launcher_handoff` / `_run_dev_session_target` /
+`command_dev_session`。test-live 内容绑定自成一条职责，见
+`dev_session_content_binding`。
 
 测试经 ``mock.patch.object(stackctl, ...)`` patch 本模块符号与协作符号，
 因此函数体内一律经函数内延迟导入 `_stackctl` 属性访问（含本模块符号互调），
@@ -16,86 +14,42 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
+import os
 import shlex
 import subprocess
 import sys
-import time
 
 from pathlib import Path
 from typing import Any
 
 # HEAD 上 stackctl.py 未导入 summarize_output（潜伏 NameError 死分支），
 # 迁出时改为显式引用 dev_up 的实现。
+from quwoquan_ops.cli.lib.app_debug_preflight_handoff import (
+    app_debug_preflight_purpose,
+    write_app_debug_preflight_receipt,
+)
 from quwoquan_ops.cli.lib.dev_up import summarize_output
 from typing import Mapping
 
 
-def _dev_session_test_live_content_binding_readiness_issues(
+def _dev_session_rot_watch(
     *,
-    environment: str,
-    startup_receipt: Mapping[str, Any],
-    preflight: Mapping[str, Any],
-) -> list[str]:
-    """Require the live App/API/Provider edge before using a content binding."""
+    target_name: str,
+    startup: Mapping[str, Any],
+) -> Any:
+    """构造运行期腐烂观测器；preflight 已证明健康，故以 healthy 起步。"""
+    import quwoquan_ops.cli.stackctl as _stackctl
 
-    issues: list[str] = []
-    tls = preflight.get("tls")
-    if not isinstance(tls, Mapping) or (
-        tls.get("profile") != "local-managed" or tls.get("status") != "ready"
-    ):
-        issues.append("target local-managed TLS is not ready")
-    provider = preflight.get("provider")
-    expected_provider = {
-        "adapterId": "ext.sms.local_capture",
-        "environment": environment,
-        "configurationDigest": startup_receipt.get("configurationDigest"),
-        "nonPromotable": True,
-        "ready": True,
-    }
-    if not isinstance(provider, Mapping) or any(
-        provider.get(field) != value for field, value in expected_provider.items()
-    ):
-        issues.append("target SMS capture Provider is not ready or identity-bound")
-    checks = preflight.get("runtimeChecks")
-    observed = {
-        str(item.get("name") or ""): item.get("ready") is True
-        for item in checks
-        if isinstance(item, Mapping)
-    } if isinstance(checks, list) else {}
-    if observed.get("user-service") is not True:
-        issues.append("user-service is not ready")
-    for name, ready in observed.items():
-        if name and not ready:
-            issues.append(f"{name} is not ready")
-    return list(dict.fromkeys(issues))
+    from quwoquan_ops.cli.lib.local_runtime_rot_watch import LocalRuntimeRotWatch
 
-
-def _dev_session_content_binding_request(args: argparse.Namespace) -> dict[str, str]:
-    """Return one explicit test-live content identity or fail on partial input."""
-
-    values = {
-        "releaseId": str(getattr(args, "release_id", "") or "").strip(),
-        "verifyRunId": str(getattr(args, "verify_run_id", "") or "").strip(),
-        "manifestDigest": str(getattr(args, "manifest_digest", "") or "").strip(),
-        "lifecycleExitRef": str(
-            getattr(args, "lifecycle_exit_ref", "") or ""
-        ).strip(),
-    }
-    mandatory = ("releaseId", "verifyRunId", "manifestDigest")
-    populated = [field for field in mandatory if values[field]]
-    if not populated and not values["lifecycleExitRef"]:
-        return {}
-    if len(populated) != len(mandatory):
-        missing = sorted(field for field in mandatory if not values[field])
-        raise ValueError(
-            "test-live content identity is partial; missing " + ", ".join(missing)
-        )
-    if re.fullmatch(r"sha256:[0-9a-f]{64}", values["manifestDigest"]) is None:
-        raise ValueError(
-            "test-live content manifestDigest must be sha256:<64 lowercase hex>"
-        )
-    return values
+    return LocalRuntimeRotWatch(
+        target=_stackctl.get_target(
+            _stackctl.load_environment_topology(),
+            target_name,
+        ),
+        startup=startup,
+        runner=_stackctl.run,
+    )
 
 
 def _dev_session_launcher_handoff(
@@ -104,10 +58,12 @@ def _dev_session_launcher_handoff(
     target: str,
     content_binding: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Render the App handoff from the exact run-bound content selection."""
+    """Render the App handoff; content activation stays a server-side fact."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
 
+    # content_binding 只属于服务端 attempt 证据；launch handoff 不再携带内容身份。
+    del content_binding
     command = [
         sys.executable,
         str(_stackctl.ROOT / "quwoquan_app/scripts/device/build_launcher_handoff.py"),
@@ -115,24 +71,11 @@ def _dev_session_launcher_handoff(
         environment,
         "--target",
         target,
-        "--launch-mode",
+        "--launch-provenance",
         "canonical_launcher",
         "--launch-policy",
         "test_live",
-        "--app-instance-namespace",
-        f"{environment}-test-live",
     ]
-    if content_binding:
-        command.extend(
-            (
-                "--content-release-id",
-                str(content_binding.get("releaseId") or ""),
-                "--content-manifest-digest",
-                str(content_binding.get("manifestDigest") or ""),
-                "--content-readiness-receipt-digest",
-                str(content_binding.get("readinessReceiptDigest") or ""),
-            )
-        )
     try:
         result = subprocess.run(
             command,
@@ -154,27 +97,11 @@ def _dev_session_launcher_handoff(
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         raise ValueError(f"test_live launcher handoff is not JSON: {exc}") from exc
-    expected_state = "bound" if content_binding else "unbound"
-    expected_content = {
-        "contentReleaseId": str(content_binding.get("releaseId") or ""),
-        "contentManifestDigest": str(content_binding.get("manifestDigest") or ""),
-        "contentReadinessReceiptDigest": str(
-            content_binding.get("readinessReceiptDigest") or ""
-        ),
-    }
     if (
         not isinstance(payload, dict)
         or payload.get("launchPolicy") != "test_live"
-        or payload.get("contentBindingState") != expected_state
-        or (
-            bool(content_binding)
-            and any(
-                payload.get(field) != value
-                for field, value in expected_content.items()
-            )
-        )
     ):
-        raise ValueError("test_live launcher handoff policy/content binding mismatch")
+        raise ValueError("test_live launcher handoff policy mismatch")
     return dict(payload)
 
 
@@ -186,6 +113,7 @@ def _run_dev_session_target(
     launch_app_requested: bool,
     report_dir: Path,
     content_binding_request: Mapping[str, str] | None = None,
+    app_mode: str = "content-live",
 ) -> dict[str, Any]:
     """Render one mutable non-production session without immutable packaging."""
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -227,11 +155,7 @@ def _run_dev_session_target(
                     environment=environment,
                     target=target,
                     workspace_snapshot=beginning_snapshot,
-                    required_running_services=(
-                        _stackctl._TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
-                        if content_binding_request
-                        else frozenset()
-                    ),
+                    required_running_services=frozenset(),
                 )
             )
             warnings.extend(resume_warnings)
@@ -282,9 +206,7 @@ def _run_dev_session_target(
                         environment=environment,
                         target=target,
                         workspace_snapshot=beginning_snapshot,
-                        required_running_services=(
-                            _stackctl._TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
-                        ),
+                        required_running_services=frozenset(),
                     )
                 )
                 validated_attempt = dict(
@@ -348,14 +270,30 @@ def _run_dev_session_target(
             }
         )
 
+    # 一次 attempt 只允许一个 preflight owner：dev-session 用与 launcher 同一
+    # purpose 执行唯一一次，再把 exact payload 交给 run.sh 复用。
+    preflight_purpose = app_debug_preflight_purpose(app_mode)
     if preflight_payload is None:
         preflight_payload = _stackctl.command_app_debug_preflight(
             _stackctl._dev_session_child_args(
                 "app-debug-preflight",
                 report_dir=report_dir / "preflight",
-                argv=["--target", target, "--runtime-mode", "test_live"],
+                argv=[
+                    "--purpose",
+                    preflight_purpose,
+                    "--target",
+                    target,
+                    "--runtime-mode",
+                    "test_live",
+                ],
             )
         )
+    preflight_receipt = write_app_debug_preflight_receipt(
+        report_dir / "preflight" / "app-debug-preflight.json",
+        preflight_payload,
+        purpose=preflight_purpose,
+        target=target,
+    )
     phases.append(_stackctl._dev_session_phase("preflight", preflight_payload))
     if int(preflight_payload.get("exitCode", 1)) != 0:
         return {
@@ -377,18 +315,24 @@ def _run_dev_session_target(
             )
         )
         if content_preflight_issues:
-            return {
-                "exitCode": 1,
-                "sessionKind": "mutable",
-                "blockerKind": "test_live_content_runtime_unready",
-                "details": content_preflight_issues,
-                "fullRuntimeSelected": True,
-                "startupAttempt": dict(
-                    runtime_payload.get("startupAttempt") or {}
-                ),
-                "contentBinding": content_binding,
-                "phases": phases,
-            }
+            readiness_warnings = [
+                "readiness.content: " + str(issue)
+                for issue in content_preflight_issues
+            ]
+            warnings.extend(readiness_warnings)
+            phases.append(
+                {
+                    "name": "test-live-content-readiness",
+                    "exitCode": 0,
+                    "status": "warning",
+                    "summary": (
+                        "content readiness is degraded; mutable test_live App "
+                        "launch remains non-promotable"
+                    ),
+                    "details": readiness_warnings,
+                    "reportDir": _stackctl.relpath(report_dir),
+                }
+            )
     warnings.extend(str(item) for item in preflight_payload.get("warnings") or [])
     mutable_workspace_warnings.extend(
         str(item) for item in preflight_payload.get("mutableWorkspaceWarnings") or []
@@ -441,6 +385,10 @@ def _run_dev_session_target(
         )
 
     if launch_app_requested:
+        from quwoquan_ops.cli.lib.app_launch_attempt import (
+            wait_for_app_launch_attempt,
+        )
+
         selected_device = device_id or _stackctl.resolve_device_id(
             include_mobile=True,
             include_web=False,
@@ -448,33 +396,118 @@ def _run_dev_session_target(
             label="[stackctl dev-session]",
         )
         launch_log = report_dir / f"app-launch-{selected_device.replace('/', '_')}.log"
+        launch_receipt = report_dir / (
+            f"app-launch-{selected_device.replace('/', '_')}.json"
+        )
         launch_log.parent.mkdir(parents=True, exist_ok=True)
         with launch_log.open("a", encoding="utf-8") as log_handle:
             process = subprocess.Popen(
-                ["bash", "run.sh", "--env", environment, "-d", selected_device],
+                [
+                    "bash",
+                    "run.sh",
+                    "--env",
+                    environment,
+                    "--target",
+                    target,
+                    "--mode",
+                    app_mode,
+                    "--launch-receipt",
+                    str(launch_receipt),
+                    "--launch-log-ref",
+                    str(launch_log),
+                    "-d",
+                    selected_device,
+                ],
                 cwd=_stackctl.ROOT / "quwoquan_app",
+                env={
+                    **os.environ,
+                    # 本 attempt 的 preflight owner 已是 dev-session；
+                    # launcher 只允许复用这份 exact receipt，不得再跑一次。
+                    "QWQ_APP_DEBUG_PREFLIGHT_RECEIPT": str(preflight_receipt),
+                },
                 stdin=subprocess.DEVNULL,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
                 text=True,
                 start_new_session=True,
             )
-        time.sleep(1.5)
-        if process.poll() is not None:
+        # 编译安装启动这段窗口可达十几分钟，依赖在窗口内退出不会回写任何
+        # receipt。运行期复验让降级在窗口内就被报出，而不是留给用户从界面发现。
+        rot_watch = _dev_session_rot_watch(
+            target_name=target,
+            startup=dict(runtime_payload.get("startupAttempt") or {}),
+        )
+
+        def report_rot_transition() -> None:
+            transition = rot_watch.observe()
+            if transition is None:
+                return
+            message = transition.describe()
+            warnings.append(message)
+            phases.append(
+                {
+                    "name": "runtime-rot-watch",
+                    "exitCode": 0 if transition.recovered else 1,
+                    "summary": message,
+                    "details": list(transition.details),
+                }
+            )
+
+        try:
+            launch_attempt = wait_for_app_launch_attempt(
+                launch_receipt,
+                timeout_seconds=900,
+                watchdog=report_rot_transition,
+            )
+        except TimeoutError as exc:
+            process.terminate()
+            try:
+                process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                process.kill()
             return {
                 "exitCode": 1,
                 "sessionKind": "mutable",
-                "blockerKind": "app_launch_failed",
-                "details": [summarize_output(launch_log.read_text(encoding="utf-8"))],
+                "blockerKind": "APP.LAUNCH.receipt_timeout",
+                "details": [str(exc), summarize_output(launch_log.read_text(encoding="utf-8"))],
                 "fullRuntimeSelected": False,
                 "phases": phases,
             }
+        launch_status = str(launch_attempt["status"])
+        if launch_status == "failed":
+            first_blocker = str(
+                launch_attempt.get("firstBlocker") or "APP.LAUNCH.launch_failed"
+            )
+            return {
+                "exitCode": 1,
+                "sessionKind": "mutable",
+                "blockerKind": first_blocker,
+                "details": [
+                    summarize_output(launch_log.read_text(encoding="utf-8")),
+                    f"launchReceipt={_stackctl.relpath(launch_receipt)}",
+                ],
+                "fullRuntimeSelected": False,
+                "appLaunchAttempt": launch_attempt,
+                "phases": phases,
+            }
+        if launch_status == "runtime_degraded":
+            warnings.extend(str(item) for item in launch_attempt["warnings"])
+        # 窗口结束时再复验一次：App 已就位但依赖刚断的情况必须在会话结论里
+        # 出现，否则「启动成功」会被读成「现在可用」。
+        report_rot_transition()
         phases.append(
             {
                 "name": "app-launch",
                 "exitCode": 0,
-                "summary": f"test_live App launch started with pid={process.pid}",
-                "details": [f"device={selected_device}"],
+                "summary": f"App machine receipt reached {launch_status}",
+                "details": [
+                    f"device={selected_device}",
+                    f"mode={app_mode}",
+                    f"configurationState={launch_attempt['configurationState']}",
+                    f"runtimeHealthStatus={launch_attempt['runtimeHealthStatus']}",
+                    f"recoveryWebStatus={launch_attempt['recoveryWebStatus']}",
+                    f"receipt={_stackctl.relpath(launch_receipt)}",
+                ],
                 "reportDir": _stackctl.relpath(report_dir),
             }
         )
@@ -500,7 +533,7 @@ def _run_dev_session_target(
             warnings.append(warning)
             mutable_workspace_warnings.append(warning)
 
-    handoff = ["./run.sh", "--env", environment]
+    handoff = ["./run.sh", "--env", environment, "--target", target, "--mode", app_mode]
     if device_id:
         handoff.extend(("-d", device_id))
     return {
@@ -528,151 +561,6 @@ def _run_dev_session_target(
         "contentBinding": content_binding,
         "launcherHandoff": handoff_payload,
         "phases": phases,
-    }
-
-
-def _command_dev_session_bind_content(args: argparse.Namespace) -> dict[str, Any]:
-    """Bind exact Data evidence to one running attempt without materialization."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    started_monotonic, started_at = _stackctl._start_timing()
-    target = str(getattr(args, "target", "") or "").strip()
-    attempt_id = str(getattr(args, "startup_attempt_id", "") or "").strip()
-    release_id = str(getattr(args, "release_id", "") or "").strip()
-    verify_run_id = str(getattr(args, "verify_run_id", "") or "").strip()
-    manifest_digest = str(getattr(args, "manifest_digest", "") or "").strip()
-    readiness_digest = str(getattr(args, "readiness_digest", "") or "").strip()
-    lifecycle_exit_ref = str(
-        getattr(args, "lifecycle_exit_ref", "") or ""
-    ).strip()
-    invalid: list[str] = []
-    if target not in {"alpha-local", "beta-local", "gamma-local"}:
-        invalid.append("--target must select alpha-local, beta-local, or gamma-local")
-    for option, value in (
-        ("--startup-attempt-id", attempt_id),
-        ("--release-id", release_id),
-        ("--verify-run-id", verify_run_id),
-        ("--manifest-digest", manifest_digest),
-        ("--readiness-digest", readiness_digest),
-    ):
-        if not value:
-            invalid.append(f"{option} is required")
-    for option, value in (
-        ("--manifest-digest", manifest_digest),
-        ("--readiness-digest", readiness_digest),
-    ):
-        if value and re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None:
-            invalid.append(f"{option} must be sha256:<64 lowercase hex>")
-    environment = target.removesuffix("-local")
-    report_dir = _stackctl.resolve_report_dir(args, environment, target)
-    if invalid:
-        timing = _stackctl._finish_timing(started_monotonic, started_at)
-        result = {
-            "exitCode": 2,
-            "summary": "stackctl dev-session bind-content is GATE_BLOCK",
-            "details": invalid,
-            "blockerKind": "invalid_content_binding_selection",
-            **timing,
-        }
-        report_dir.mkdir(parents=True, exist_ok=True)
-        _stackctl.write_json(report_dir / "report.json", result)
-        return {**result, "reportDir": _stackctl.relpath(report_dir)}
-
-    try:
-        with _stackctl._local_stack_operation_lock(target):
-            workspace = _stackctl._mutable_workspace_snapshot()
-            before_runtime, before_warnings = (
-                _stackctl._dev_session_resume_running_mutable_runtime(
-                    environment=environment,
-                    target=target,
-                    workspace_snapshot=workspace,
-                    required_running_services=(
-                        _stackctl._TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
-                    ),
-                )
-            )
-            before_attempt = dict(
-                (before_runtime or {}).get("startupAttempt") or {}
-            )
-            if before_runtime is None or before_attempt.get("attemptId") != attempt_id:
-                raise ValueError(
-                    "bind-content requires the exact current running startup attempt"
-                )
-            binding = _stackctl.create_test_live_content_binding(
-                environment=environment,
-                target=target,
-                startup_attempt_id=attempt_id,
-                release_id=release_id,
-                verify_run_id=verify_run_id,
-                manifest_digest=manifest_digest,
-                expected_readiness_receipt_digest=readiness_digest,
-                lifecycle_exit_ref=lifecycle_exit_ref,
-            )
-            after_runtime, after_warnings = (
-                _stackctl._dev_session_resume_running_mutable_runtime(
-                    environment=environment,
-                    target=target,
-                    workspace_snapshot=workspace,
-                    required_running_services=(
-                        _stackctl._TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
-                    ),
-                )
-            )
-            after_attempt = dict((after_runtime or {}).get("startupAttempt") or {})
-            if (
-                after_runtime is None
-                or after_attempt.get("attemptId") != attempt_id
-                or after_attempt != before_attempt
-            ):
-                raise ValueError(
-                    "running mutable runtime identity changed during content binding"
-                )
-            handoff = _stackctl._dev_session_launcher_handoff(
-                environment=environment,
-                target=target,
-                content_binding=binding,
-            )
-    except (OSError, RuntimeError, TypeError, ValueError) as exc:
-        timing = _stackctl._finish_timing(started_monotonic, started_at)
-        result = {
-            "exitCode": 2,
-            "summary": "stackctl dev-session bind-content is GATE_BLOCK",
-            "details": [str(exc)],
-            "blockerKind": "test_live_content_binding_invalid",
-            **timing,
-        }
-        report_dir.mkdir(parents=True, exist_ok=True)
-        _stackctl.write_json(report_dir / "report.json", result)
-        return {**result, "reportDir": _stackctl.relpath(report_dir)}
-
-    report_dir.mkdir(parents=True, exist_ok=True)
-    _stackctl.write_json(report_dir / "test-live-launcher-handoff.json", handoff)
-    timing = _stackctl._finish_timing(started_monotonic, started_at)
-    warnings = sorted(set([*before_warnings, *after_warnings]))
-    report = {
-        "command": "dev-session bind-content",
-        "target": target,
-        "status": "warning" if warnings else "passed",
-        "startupAttempt": after_attempt,
-        "contentBinding": binding,
-        "launcherHandoff": handoff,
-        "warnings": warnings,
-        "details": [
-            f"attemptId={attempt_id}",
-            f"releaseId={binding['releaseId']}",
-            f"verifyRunId={binding['verifyRunId']}",
-            f"readinessReceiptDigest={binding['readinessReceiptDigest']}",
-        ],
-        "blockerKind": "",
-        **timing,
-    }
-    _stackctl.write_json(report_dir / "report.json", report)
-    return {
-        "exitCode": 0,
-        "summary": f"stackctl dev-session bind-content completed for {target}",
-        "reportDir": _stackctl.relpath(report_dir),
-        **report,
     }
 
 
@@ -745,23 +633,57 @@ def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
     blocker_kind = ""
     details: list[str] = []
 
+    # 会话要跑打包、启动与 App 编译，全都写 Docker 数据盘与宿主盘。在入口
+    # 判一次容量，省掉「跑了十几分钟才在某个环节炸开」的无效等待。
+    for _, capacity_target in selections:
+        capacity = _stackctl.local_runtime_capacity_evidence(
+            _stackctl.get_target(topology, capacity_target)
+        )
+        if capacity["issues"]:
+            timing = _stackctl._finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": "stackctl dev-session is GATE_BLOCK",
+                "details": capacity["issues"],
+                "blockerKind": "local_runtime_capacity_exhausted",
+                "firstBlocker": capacity["blocker"],
+                "capacity": capacity["evidence"],
+                **timing,
+            }
+
     if terminal_exit == 0:
         try:
             with _stackctl._local_stack_operation_lock(selections[0][1]):
                 for environment, target in selections:
+                    # The repo-level all-nonprod run only aggregates the three
+                    # target runs.  A mutable startup receipt is target-owned,
+                    # so its runRoot must stay below that environment's
+                    # canonical runs root instead of inheriting the aggregate
+                    # repo run directory.
+                    target_report_dir = (
+                        _stackctl.artifact_run_dir(
+                            environment,
+                            args.command,
+                            target=target,
+                        )
+                        if all_nonprod
+                        else report_dir
+                    )
                     session = _stackctl._run_dev_session_target(
                         environment=environment,
                         target=target,
                         device_id=str(getattr(args, "device_id", "") or ""),
                         launch_app_requested=bool(getattr(args, "launch_app", False)),
-                        report_dir=report_dir / target,
+                        report_dir=target_report_dir,
                         content_binding_request=content_binding_request,
+                        app_mode=str(getattr(args, "app_mode", "content-live")),
                     )
                     sessions.append(
                         {
                             "environment": environment,
                             "target": target,
                             **session,
+                            "reportDir": _stackctl.relpath(target_report_dir),
                         }
                     )
                     terminal_exit = int(session["exitCode"])
@@ -861,6 +783,12 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
     dev_session_parser.add_argument("--all-nonprod", action="store_true")
     dev_session_parser.add_argument("--device-id", default="")
     dev_session_parser.add_argument("--launch-app", action="store_true")
+    dev_session_parser.add_argument(
+        "--app-mode",
+        choices=("content-live", "ui-only"),
+        default="content-live",
+        help="App 启动策略；默认严格 content-live，ui-only 显式非可提升告警继续。",
+    )
     dev_session_parser.add_argument("--startup-attempt-id", default="")
     dev_session_parser.add_argument(
         "--release-id",
@@ -887,4 +815,3 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         default="",
         help="commercial readiness必需；consumer readiness可省略。",
     )
-

@@ -17,8 +17,11 @@ from pathlib import Path
 from typing import Any
 
 from core.io import read_json, write_json
-from core.release_layout import object_closure_digest
-from core.source_digest import content_source_revision, current_source_digest
+from core.release_layout import objects_merkle
+from core.source_digest import (
+    content_source_revision,
+    current_source_definition_snapshot,
+)
 
 from content.execution.campaign.plan import freeze_plan
 from content.execution.campaign.receipt import write_adoption_publish_receipt
@@ -28,6 +31,7 @@ from content.execution.campaign.submission import (
     load_submissions,
     write_adoption_submission,
 )
+from content.execution.campaign.lane import normalize_active_carriers
 from content.execution.campaign.workspace import (
     CampaignRuntimePaths,
     current_branch,
@@ -63,7 +67,6 @@ from content.release.canonical.release_operation_lock import (
     release_operation_lock_root,
 )
 
-_CARRIERS = tuple(ADOPTION_OPERATIONS)
 _SOURCE_EVIDENCE = {
     "releaseAttestation": "attestations/release.json",
     "releaseHeader": "payload/release.json",
@@ -196,7 +199,7 @@ def _write_adoption_ref(
         "sourceDigests": list(header.get("sourceDigests") or []),
     }
     closure_digests = {
-        "objects": object_closure_digest(release_root),
+        "objects": objects_merkle(release_root),
         "media": canonical_digest(media_assets),
         "review": canonical_digest(reviews),
         "rights": canonical_digest(rights),
@@ -261,7 +264,7 @@ def _write_adoption_receipt(
         if (
             validated.adoption_id != adoption_ref["adoptionId"]
             or validated.lane_execution_ids
-            != tuple(execution_ids[carrier] for carrier in _CARRIERS)
+            != tuple(execution_ids[carrier] for carrier in execution_ids)
             or existing.get("targetSourceIdentity") != dict(target_source)
         ):
             raise ValueError("reviewed closure adoption receipt create-once conflict")
@@ -282,7 +285,7 @@ def _write_adoption_receipt(
                 "executionId": execution_ids[carrier],
                 "adoptedObjectRefs": lane_refs[carrier],
             }
-            for carrier in _CARRIERS
+            for carrier in execution_ids
         ],
         "sharedObjectRefs": [
             *[f"creators/{ref}" for ref in desired["creators"]],
@@ -398,28 +401,32 @@ def adopt_reviewed_closure(
     lease_seconds: int = 30,
 ) -> dict[str, Any]:
     selected = runtime or CampaignRuntimePaths.defaults()
-    if set(execution_ids) != set(_CARRIERS):
-        raise ValueError("reviewed closure adoption requires exactly four lane IDs")
+    active_carriers = normalize_active_carriers(execution_ids)
+    if tuple(execution_ids) != active_carriers:
+        raise ValueError("reviewed closure adoption lane IDs must use canonical order")
     identities = {
-        carrier: parse_execution_id(execution_ids[carrier]) for carrier in _CARRIERS
+        carrier: parse_execution_id(execution_ids[carrier]) for carrier in active_carriers
     }
     verticals = {identity.vertical for identity in identities.values()}
     if len(verticals) != 1 or any(
-        identities[carrier].content_type.value != carrier for carrier in _CARRIERS
+        identities[carrier].content_type.value != carrier for carrier in active_carriers
     ):
         raise ValueError("reviewed closure lane carrier/vertical identity drift")
-    root_execution_id = execution_ids["homepage"]
+    root_carrier = active_carriers[0]
+    root_execution_id = execution_ids[root_carrier]
     discovery = (
         selected.repo_root
         / "quwoquan_data/reference"
-        / identities["homepage"].vertical
+        / identities[root_carrier].vertical
         / "entities"
         / str(region_ref).strip().strip("/")
     )
     catalog_digest = entity_catalog_digest(
         discovery.relative_to(selected.repo_root).as_posix()
     )
-    source = current_source_digest(repo_root=selected.repo_root).to_document()
+    source = current_source_definition_snapshot(
+        repo_root=selected.repo_root
+    ).to_document()
     frozen_branch = current_branch(selected.repo_root)
     frozen_commit = current_commit(selected.repo_root)
     target_source = {
@@ -468,7 +475,7 @@ def adopt_reviewed_closure(
             output_root=selected.output_root,
         )
         validate_campaign_adoption_binding(binding, output_root=selected.output_root)
-        for carrier in _CARRIERS:
+        for carrier in active_carriers:
             write_adoption_submission(
                 root_execution_id=root_execution_id,
                 execution_id=execution_ids[carrier],
@@ -487,7 +494,7 @@ def adopt_reviewed_closure(
         )
         plan, _plan_digest = freeze_plan(selected, root_execution_id, submissions)
         lane_refs = adopted_object_refs(receipt)
-        for carrier in _CARRIERS:
+        for carrier in active_carriers:
             _write_task_binding(
                 runtime=selected,
                 plan=plan,
@@ -511,7 +518,7 @@ def adopt_reviewed_closure(
                     phase="publish",
                     plan_digest=str(plan["planDigest"]),
                 )
-                for carrier in _CARRIERS:
+                for carrier in active_carriers:
                     lane_execution_root = (
                         selected.output_root / "data/tasks" / execution_ids[carrier]
                     )

@@ -110,16 +110,26 @@ class ContentDistributionPolicy:
             ):
                 raise ValueError(f"scale targets must increase monotonically: {carrier}")
 
+    def milestone_targets(self) -> dict[str, dict[str, int]]:
+        """Per-carrier targets for every governed milestone.
+
+        This is the only place the milestone numbers exist. Callers that need a
+        milestone table read it from here rather than restating the constants,
+        so raising a milestone stays a control-plane edit.
+        """
+        return {
+            "M100": dict(self.m100_targets),
+            "M1000": dict(self.m1000_targets),
+            "M10000": dict(self.m10000_targets),
+        }
+
+    def governed_scales(self) -> tuple[str, ...]:
+        return tuple(self.milestone_targets())
+
     def scale_target(self, scale: str, carrier: str) -> int:
-        if scale == "M100":
-            rows = self.m100_targets
-        elif scale == "M1000":
-            rows = self.m1000_targets
-        elif scale == "M10000":
-            rows = self.m10000_targets
-        else:
+        targets = self.milestone_targets().get(scale)
+        if targets is None:
             raise ValueError(f"unsupported governed scale: {scale}")
-        targets = dict(rows)
         if carrier not in targets:
             raise ValueError(f"unsupported scale carrier: {carrier}")
         return targets[carrier]

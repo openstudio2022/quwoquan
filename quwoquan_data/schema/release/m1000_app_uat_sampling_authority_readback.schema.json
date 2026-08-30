@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/m1000_app_uat_sampling_authority_readback.schema.json",
+  "title": "Authenticated authority readback for M1000 App UAT sampling",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "role",
+    "authorityId",
+    "authenticationContextDigest",
+    "decision",
+    "strategyRef",
+    "strategyDigest",
+    "releaseId",
+    "releaseDigest",
+    "observedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.m1000_app_uat_sampling_authority_readback"
+    },
+    "role": {
+      "enum": [
+        "product_owner",
+        "quality_owner"
+      ]
+    },
+    "authorityId": {
+      "$ref": "#/$defs/identity"
+    },
+    "authenticationContextDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "decision": {
+      "const": "approved"
+    },
+    "strategyRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "strategyDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "releaseId": {
+      "$ref": "#/$defs/identity"
+    },
+    "releaseDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "observedAt": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "identity": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,255}$"
+    },
+    "ref": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)(?!.*\\\\).+$"
+    }
+  }
+}

@@ -1,9 +1,11 @@
 """Five-domain generated Remote API integration gate and stackctl contract."""
+# spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import stat
 import subprocess
 import sys
 import tempfile
@@ -39,6 +41,25 @@ SPEC.loader.exec_module(ratchet)
 
 
 class AppDomainRemoteApiIntegrationContractTest(unittest.TestCase):
+    def test_stable_spec_ref_accepts_marker_and_list_block_only(self) -> None:
+        """同行 marker 与列表块同源生效；裸字符串与非验收锚点不算稳定证据。"""
+        marker = "spec_" + "ref"
+        path = "specs/feature-tree/sample/spec.md"
+        self.assertTrue(
+            evidence.has_stable_spec_ref(f"// {marker}: {path}#gwt-001\n")
+        )
+        self.assertTrue(
+            evidence.has_stable_spec_ref(
+                f"// {marker}:\n//   - {path}#sit-002.t1\n"
+            )
+        )
+        self.assertFalse(
+            evidence.has_stable_spec_ref(f'const bare = "{path}#gwt-001";\n')
+        )
+        self.assertFalse(
+            evidence.has_stable_spec_ref(f"// {marker}: {path}#req-004\n")
+        )
+
     def test_contract_graph_derives_one_valid_object_case_per_domain(self) -> None:
         cases, discovery_issues = evidence.discover_cases(ROOT)
         validated, validation_issues = evidence.validate_cases(ROOT, cases)
@@ -57,6 +78,145 @@ class AppDomainRemoteApiIntegrationContractTest(unittest.TestCase):
                     f"/{case.domain}_api_contract_harness.dart"
                 )
             )
+
+    def test_managed_readiness_selects_only_explicit_gathering_plan_case(self) -> None:
+        cases = [
+            evidence.DomainRemoteApiCase(
+                domain="circle",
+                object_id="circle.gathering_plan",
+                test_path="gathering-plan.dart",
+                test_sha256="digest",
+                service_test_paths=("service.go",),
+                readiness_case_ids=(
+                    stackctl.AcceptanceCaseId.CIRCLE_GATHERING_PLAN.value,
+                    "message-evidence",
+                ),
+            ),
+            evidence.DomainRemoteApiCase(
+                domain="chat",
+                object_id="chat.message",
+                test_path="message.dart",
+                test_sha256="digest",
+                service_test_paths=("service.go",),
+                readiness_case_ids=("message-evidence",),
+            ),
+        ]
+
+        managed_case_ids = evidence.managed_readiness_case_ids(cases)
+        self.assertEqual(
+            managed_case_ids,
+            (stackctl.AcceptanceCaseId.CIRCLE_GATHERING_PLAN,),
+        )
+        self.assertTrue(
+            all(
+                isinstance(case_id, stackctl.AcceptanceCaseId)
+                for case_id in managed_case_ids
+            )
+        )
+
+    def test_private_define_file_is_0600_complete_and_report_path_is_redacted(
+        self,
+    ) -> None:
+        definitions = {
+            key: f"value-{index}"
+            for index, key in enumerate(
+                evidence.MANAGED_GATHERING_PLAN_DEFINE_KEYS,
+                start=1,
+            )
+        }
+        path = evidence.create_private_define_file(definitions)
+        try:
+            mode = stat.S_IMODE(path.stat().st_mode)
+            self.assertEqual(mode, 0o600)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), definitions)
+            argv = [
+                "flutter",
+                f"--dart-define-from-file={path}",
+                "test/example.dart",
+            ]
+            sanitized = evidence.sanitized_flutter_argv(argv)
+            self.assertNotIn(str(path), " ".join(sanitized))
+            self.assertEqual(
+                sanitized[1],
+                "--dart-define-from-file=<private>",
+            )
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_private_define_file_rejects_missing_required_value(self) -> None:
+        with self.assertRaisesRegex(ValueError, "definitions are incomplete"):
+            evidence.create_private_define_file({})
+
+    def test_flutter_failure_still_deletes_private_define_file(self) -> None:
+        definitions = {
+            key: f"secret-{index}"
+            for index, key in enumerate(
+                evidence.MANAGED_GATHERING_PLAN_DEFINE_KEYS,
+                start=1,
+            )
+        }
+        observed_path: Path | None = None
+
+        def failing_runner(argv: list[str], *, cwd: Path) -> None:
+            nonlocal observed_path
+            self.assertEqual(cwd, ROOT / "quwoquan_app")
+            define_argument = next(
+                item for item in argv if item.startswith("--dart-define-from-file=")
+            )
+            observed_path = Path(define_argument.partition("=")[2])
+            self.assertTrue(observed_path.is_file())
+            raise RuntimeError("flutter failed")
+
+        with self.assertRaisesRegex(RuntimeError, "flutter failed"):
+            evidence.run_flutter_with_private_defines(
+                definitions,
+                command_prefix=["flutter", "test"],
+                test_paths=["test/example.dart"],
+                runner=failing_runner,
+                cwd=ROOT / "quwoquan_app",
+            )
+        self.assertIsNotNone(observed_path)
+        self.assertFalse(observed_path.exists())
+
+    def test_flutter_result_redacts_private_define_path_and_values(self) -> None:
+        definitions = {
+            key: f"secret-{index}"
+            for index, key in enumerate(
+                evidence.MANAGED_GATHERING_PLAN_DEFINE_KEYS,
+                start=1,
+            )
+        }
+        observed_path: Path | None = None
+
+        def echoing_runner(argv: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+            nonlocal observed_path
+            define_argument = next(
+                item for item in argv if item.startswith("--dart-define-from-file=")
+            )
+            observed_path = Path(define_argument.partition("=")[2])
+            leaked = f"path={observed_path}; token={definitions['QWQ_GATHERING_PLAN_ACCESS_TOKEN']}"
+            return subprocess.CompletedProcess(
+                argv,
+                1,
+                stdout=leaked,
+                stderr=leaked,
+            )
+
+        result, argv = evidence.run_flutter_with_private_defines(
+            definitions,
+            command_prefix=["flutter", "test"],
+            test_paths=["test/example.dart"],
+            runner=echoing_runner,
+            cwd=ROOT / "quwoquan_app",
+        )
+
+        self.assertIsNotNone(observed_path)
+        self.assertFalse(observed_path.exists())
+        report_surface = "\n".join([*argv, result.stdout, result.stderr])
+        self.assertNotIn(str(observed_path), report_surface)
+        for value in definitions.values():
+            self.assertNotIn(str(value), report_surface)
+        self.assertIn("<private>", report_surface)
 
     def test_entity_and_notification_use_typed_environment_harnesses(self) -> None:
         cases, discovery_issues = evidence.discover_cases(ROOT)
@@ -276,6 +436,85 @@ class AppDomainRemoteApiIntegrationContractTest(unittest.TestCase):
             self.assertEqual(report["executed"], len(validated))
             self.assertEqual(report["skipped"], 0)
 
+    def test_focused_gathering_plan_case_uses_typed_managed_readiness(self) -> None:
+        test_path = (
+            "quwoquan_app/test/api_integration/service/circle_service/"
+            "circle_management/gathering_plan/"
+            "gathering_plan_remote__api_integration_test.dart"
+        )
+
+        cases, discovery_issues = evidence.discover_selected_cases(
+            ROOT,
+            (test_path,),
+        )
+
+        self.assertEqual(discovery_issues, [])
+        self.assertEqual([case.test_path for case in cases], [test_path])
+        self.assertEqual(
+            cases[0].readiness_case_ids,
+            (stackctl.AcceptanceCaseId.CIRCLE_GATHERING_PLAN.value,),
+        )
+        self.assertEqual(
+            evidence.managed_readiness_case_ids(cases),
+            (stackctl.AcceptanceCaseId.CIRCLE_GATHERING_PLAN,),
+        )
+
+    def test_managed_case_rejects_report_dir_outside_qwq_output_root(self) -> None:
+        test_path = (
+            "quwoquan_app/test/api_integration/service/circle_service/"
+            "circle_management/gathering_plan/"
+            "gathering_plan_remote__api_integration_test.dart"
+        )
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            temporary_root = Path(temporary_dir)
+            output_root = temporary_root / ".qwq_output"
+            escaped_report_dir = temporary_root / "source-tree-report"
+            fallback_report_dir = output_root / "env/gamma/runs/managed-report-dir-block"
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "output_root",
+                    return_value=output_root,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "artifact_run_dir",
+                    return_value=fallback_report_dir,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "active_deployment_candidate",
+                    return_value=None,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "load_startup_attempt",
+                    return_value=None,
+                ),
+                mock.patch.object(stackctl.TestDataSession, "for_case") as session,
+            ):
+                payload = stackctl.command_app_domain_api_integration(
+                    mock.Mock(
+                        target="gamma-local",
+                        command="app-domain-api-integration",
+                        test_path=[test_path],
+                        report_dir=str(escaped_report_dir),
+                        data_release_id="release",
+                        data_verify_run_id="verify",
+                        data_manifest_digest="sha256:" + "1" * 64,
+                    )
+                )
+
+            self.assertEqual(payload["exitCode"], 2)
+            session.assert_not_called()
+            self.assertFalse(escaped_report_dir.exists())
+            report = json.loads(
+                (fallback_report_dir / "report.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(
+                any("QWQ_OUTPUT_ROOT" in item for item in report["issues"])
+            )
+
     def test_focused_message_case_uses_canonical_runner_and_candidate_preflight(
         self,
     ) -> None:
@@ -289,6 +528,10 @@ class AppDomainRemoteApiIntegrationContractTest(unittest.TestCase):
         )
         self.assertEqual(discovery_issues, [])
         self.assertEqual([case.test_path for case in cases], [message_path])
+        self.assertTrue(cases[0].readiness_case_ids)
+        self.assertTrue(
+            all(case_id.strip() for case_id in cases[0].readiness_case_ids)
+        )
 
         with tempfile.TemporaryDirectory() as temporary_dir:
             with (

@@ -550,6 +550,105 @@ export interface ControlPlaneScopeQuery {
   level?: string;
 }
 
+export type HumanAuthorityCardType = 'intake' | 'choice' | 'authorization' | 'exception' | 'post_check';
+export type HumanAuthorityRound = 1 | 2;
+export type HumanAuthorityAction =
+  | 'request_evidence'
+  | 'transfer'
+  | 'pause'
+  | 'submit_round_1'
+  | 'submit_round_2'
+  | 'authorize'
+  | 'post_check';
+
+export interface HumanAuthorityOption {
+  optionId: string;
+  neutralLabel: string;
+  userOutcome: string;
+  businessOutcome: string;
+  cost: string;
+  timeToEffect: string;
+  risk: string;
+  reversibility: string;
+  scopeChange: string;
+  unknowns: string[];
+  nextStep: string;
+}
+
+export interface HumanAuthorityCardProjection {
+  schemaVersion: number;
+  cardType: HumanAuthorityCardType;
+  currentRole: string;
+  roleResponsibility: string;
+  question: string;
+  whatHappened: string;
+  userOrBusinessImpact: string;
+  knownFacts: string[];
+  unknowns: string[];
+  hardConstraints: string[];
+  options: HumanAuthorityOption[];
+  selectedOptionId: string | null;
+  agentRecommendation: string | null;
+  actions: HumanAuthorityAction[];
+  consequences: string[];
+  safestDefault: string;
+  auditDetails?: Record<string, unknown>;
+}
+
+export interface HumanAuthorityRoleTask {
+  taskId: string;
+  decisionUnitId: string;
+  role: string;
+  stage: string;
+  decisionKind: string;
+  state: string;
+  dueAt?: string;
+  sodPolicy: 'role-record-only' | 'independent-principal-required';
+  sodMessage?: string;
+  card: HumanAuthorityCardProjection;
+}
+
+export interface HumanAuthorityDecisionUnit {
+  decisionUnitId: string;
+  stage: string;
+  decisionKind: string;
+  scope: string;
+  state: string;
+  evidenceExpiresAt: string;
+  currentTask?: HumanAuthorityRoleTask;
+  readback?: HumanAuthorityReadback;
+}
+
+export interface HumanAuthorityReadback {
+  decisionUnitId: string;
+  status: string;
+  recordedAt?: string;
+  selectedOptionId?: string;
+  replayed?: boolean;
+  message: string;
+}
+
+export interface HumanAuthorityRoleSubmissionInput {
+  round: HumanAuthorityRound;
+  facts: string[];
+  impacts: string[];
+  unknowns: string[];
+  selectedOptionId?: string;
+  note?: string;
+}
+
+export interface HumanAuthorityActionInput {
+  action: 'request_evidence' | 'transfer' | 'pause' | 'authorize' | 'post_check';
+  note: string;
+  targetRole?: string;
+  selectedOptionId?: string;
+}
+
+export interface HumanAuthoritySubmissionResult {
+  task: HumanAuthorityRoleTask;
+  readback: HumanAuthorityReadback;
+}
+
 export interface ProductMetricItem {
   id: string;
   level: string;
@@ -1552,4 +1651,280 @@ export async function fetchProductTriageSummary(query: ProductEventQuery = {}): 
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
     withQuery('/control-plane/product/triage/summary', query),
   );
+}
+
+
+const humanAuthorityBasePath = '/control-plane/platform/human-authority';
+
+function asString(value: unknown, fallback?: string): string {
+  return typeof value === 'string' ? value : fallback ?? '';
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function pick(record: Record<string, unknown>, camel: string, snake: string): unknown {
+  return record[camel] ?? record[snake];
+}
+
+function adaptHumanAuthorityOption(value: unknown): HumanAuthorityOption {
+  const option = asRecord(value);
+  return {
+    optionId: asString(pick(option, 'optionId', 'option_id')),
+    neutralLabel: asString(pick(option, 'neutralLabel', 'neutral_label')),
+    userOutcome: asString(pick(option, 'userOutcome', 'user_outcome')),
+    businessOutcome: asString(pick(option, 'businessOutcome', 'business_outcome')),
+    cost: asString(option.cost),
+    timeToEffect: asString(pick(option, 'timeToEffect', 'time_to_effect')),
+    risk: asString(option.risk),
+    reversibility: asString(option.reversibility),
+    scopeChange: asString(pick(option, 'scopeChange', 'scope_change')),
+    unknowns: asStringArray(option.unknowns),
+    nextStep: asString(pick(option, 'nextStep', 'next_step')),
+  };
+}
+
+function adaptHumanAuthorityCard(value: unknown, unit: Record<string, unknown> = {}): HumanAuthorityCardProjection {
+  const card = asRecord(value);
+  const cardType = asString(pick(card, 'cardType', 'card_type'), 'intake') as HumanAuthorityCardType;
+  return {
+    schemaVersion: Number(pick(card, 'schemaVersion', 'schema_version') ?? 1),
+    cardType,
+    currentRole: asString(pick(card, 'currentRole', 'current_role')),
+    roleResponsibility: asString(pick(card, 'roleResponsibility', 'role_responsibility')),
+    question: asString(card.question),
+    whatHappened: asString(pick(card, 'whatHappened', 'what_happened')),
+    userOrBusinessImpact: asString(pick(card, 'userOrBusinessImpact', 'user_or_business_impact')),
+    knownFacts: asStringArray(pick(card, 'knownFacts', 'known_facts')),
+    unknowns: asStringArray(card.unknowns),
+    hardConstraints: asStringArray(pick(card, 'hardConstraints', 'hard_constraints')),
+    options: (Array.isArray(card.options) ? card.options : []).map(adaptHumanAuthorityOption),
+    selectedOptionId: asString(pick(card, 'selectedOptionId', 'selected_option_id')) || null,
+    agentRecommendation: asString(pick(card, 'agentRecommendation', 'agent_recommendation')) || null,
+    actions: asStringArray(card.actions) as HumanAuthorityAction[],
+    consequences: asStringArray(card.consequences),
+    safestDefault: asString(pick(card, 'safestDefault', 'safest_default'), '暂停并等待具名负责人确认。'),
+    auditDetails: Object.keys(asRecord(pick(card, 'auditDetails', 'audit_details'))).length
+      ? asRecord(pick(card, 'auditDetails', 'audit_details'))
+      : Object.keys(unit).length ? unit : undefined,
+  };
+}
+
+function taskStateFromHostedUnit(unit: Record<string, unknown>): string {
+  if (asRecord(unit.decision).decisionId || asRecord(unit.decision).decision_id) return 'recorded';
+  const sealed = Array.isArray(pick(unit, 'sealedRounds', 'sealed_rounds'))
+    ? pick(unit, 'sealedRounds', 'sealed_rounds') as unknown[]
+    : [];
+  if (sealed.includes(2)) return 'ready_to_decide';
+  if (sealed.includes(1)) return 'awaiting_round_2';
+  return 'awaiting_round_1';
+}
+
+function adaptHostedHumanAuthorityUnit(value: unknown): HumanAuthorityDecisionUnit {
+  const unit = asRecord(value);
+  const submissions = Array.isArray(unit.submissions) ? unit.submissions.map(asRecord) : [];
+  const decisionUnitId = asString(pick(unit, 'decisionUnitId', 'decision_unit_id'));
+  const requiredRoles = asStringArray(pick(unit, 'requiredRoles', 'required_roles'));
+  const currentRole = asString(pick(unit, 'accountableRole', 'accountable_role'), requiredRoles[0]);
+  const state = taskStateFromHostedUnit(unit);
+  const selectedOptionId = asString(pick(asRecord(unit.decision), 'selectedOptionId', 'selected_option_id'));
+  const cardType: HumanAuthorityCardType = state === 'recorded'
+    ? 'post_check'
+    : state === 'ready_to_decide'
+      ? 'authorization'
+      : state === 'awaiting_round_2'
+        ? 'choice'
+        : 'intake';
+  const fallbackCard = {
+    schemaVersion: 1,
+    cardType,
+    currentRole,
+    roleResponsibility: '请完成当前服务器分配给你的交付决定职责。',
+    question: cardType === 'choice' ? '请独立评估各方案的影响' : cardType === 'authorization' ? '请确认本次交付决定' : '请确认第一轮事实',
+    whatHappened: asString(unit.summary, `交付决定 ${decisionUnitId} 正等待当前职责输入。`),
+    userOrBusinessImpact: asString(pick(unit, 'impactSummary', 'impact_summary'), '请以当前服务器证据为准评估用户与业务影响。'),
+    knownFacts: submissions.filter((item) => Number(item.round) === 1).map((item) => `已收到 ${asString(item.role)} 的第一轮事实`),
+    unknowns: [] as string[],
+    hardConstraints: asStringArray(pick(unit, 'hardConstraints', 'hard_constraints')),
+    options: Array.isArray(unit.options) ? unit.options : [],
+    selectedOptionId: selectedOptionId || null,
+    agentRecommendation: null,
+    actions: cardType === 'authorization'
+      ? ['authorize', 'request_evidence', 'transfer', 'pause']
+      : cardType === 'post_check'
+        ? ['post_check', 'request_evidence', 'pause']
+        : [cardType === 'choice' ? 'submit_round_2' : 'submit_round_1', 'request_evidence', 'transfer', 'pause'],
+    consequences: asStringArray(unit.consequences),
+    safestDefault: '暂停并等待具名负责人确认，不作隐式批准。',
+    auditDetails: unit,
+  };
+  const card = Object.keys(asRecord(pick(unit, 'card', 'card_projection'))).length
+    ? adaptHumanAuthorityCard(pick(unit, 'card', 'card_projection'), unit)
+    : adaptHumanAuthorityCard(fallbackCard, unit);
+  return {
+    decisionUnitId,
+    stage: asString(unit.stage),
+    decisionKind: asString(pick(unit, 'decisionKind', 'decision_kind')),
+    scope: asString(unit.scope),
+    state,
+    evidenceExpiresAt: asString(pick(unit, 'evidenceExpiresAt', 'evidence_expires_at')),
+    currentTask: {
+      taskId: decisionUnitId,
+      decisionUnitId,
+      role: card.currentRole,
+      stage: asString(unit.stage),
+      decisionKind: asString(pick(unit, 'decisionKind', 'decision_kind')),
+      state,
+      dueAt: asString(pick(unit, 'evidenceExpiresAt', 'evidence_expires_at')) || undefined,
+      sodPolicy: asString(pick(unit, 'sodPolicy', 'sod_policy'), 'role-record-only') as HumanAuthorityRoleTask['sodPolicy'],
+      sodMessage: asString(pick(unit, 'sodMessage', 'sod_message')) || undefined,
+      card,
+    },
+    readback: state === 'recorded'
+      ? { decisionUnitId, status: state, selectedOptionId: selectedOptionId || undefined, message: '服务器已记录决定。' }
+      : undefined,
+  };
+}
+
+function adaptHumanAuthorityReadback(value: unknown, decisionUnitId: string): HumanAuthorityReadback {
+  const readback = asRecord(value);
+  const hostedUnit = Object.keys(asRecord(readback.unit)).length ? asRecord(readback.unit) : readback;
+  return {
+    decisionUnitId: asString(pick(readback, 'decisionUnitId', 'decision_unit_id'), decisionUnitId),
+    status: asString(readback.status, taskStateFromHostedUnit(hostedUnit)),
+    recordedAt: asString(pick(readback, 'recordedAt', 'recorded_at'), asString(pick(asRecord(hostedUnit.decision), 'recordedAt', 'recorded_at'))) || undefined,
+    selectedOptionId: asString(pick(readback, 'selectedOptionId', 'selected_option_id'), asString(pick(asRecord(hostedUnit.decision), 'selectedOptionId', 'selected_option_id'))) || undefined,
+    replayed: typeof readback.replayed === 'boolean' ? readback.replayed : undefined,
+    message: asString(readback.message, '服务器已返回当前 authority 记录。'),
+  };
+}
+
+function adaptHumanAuthorityTask(value: unknown): HumanAuthorityRoleTask {
+  const task = asRecord(value);
+  if (!Object.keys(asRecord(pick(task, 'card', 'card_projection'))).length) {
+    const unit = adaptHostedHumanAuthorityUnit(task);
+    if (unit.currentTask) return unit.currentTask;
+  }
+  const card = adaptHumanAuthorityCard(pick(task, 'card', 'card_projection'));
+  return {
+    taskId: asString(pick(task, 'taskId', 'task_id')),
+    decisionUnitId: asString(pick(task, 'decisionUnitId', 'decision_unit_id')),
+    role: asString(task.role, card.currentRole),
+    stage: asString(task.stage),
+    decisionKind: asString(pick(task, 'decisionKind', 'decision_kind')),
+    state: asString(task.state),
+    dueAt: asString(pick(task, 'dueAt', 'due_at')) || undefined,
+    sodPolicy: asString(pick(task, 'sodPolicy', 'sod_policy'), 'role-record-only') as HumanAuthorityRoleTask['sodPolicy'],
+    sodMessage: asString(pick(task, 'sodMessage', 'sod_message')) || undefined,
+    card,
+  };
+}
+
+function adaptHumanAuthorityDecisionUnit(value: unknown): HumanAuthorityDecisionUnit {
+  const unit = asRecord(value);
+  const taskValue = pick(unit, 'currentTask', 'current_task');
+  if (!Object.keys(asRecord(taskValue)).length) return adaptHostedHumanAuthorityUnit(unit);
+  const task = adaptHumanAuthorityTask(taskValue);
+  const decisionUnitId = asString(pick(unit, 'decisionUnitId', 'decision_unit_id'), task.decisionUnitId);
+  return {
+    decisionUnitId,
+    stage: asString(unit.stage, task.stage),
+    decisionKind: asString(pick(unit, 'decisionKind', 'decision_kind'), task.decisionKind),
+    scope: asString(unit.scope),
+    state: asString(unit.state, task.state),
+    evidenceExpiresAt: asString(pick(unit, 'evidenceExpiresAt', 'evidence_expires_at')),
+    currentTask: task,
+    readback: Object.keys(asRecord(unit.readback)).length ? adaptHumanAuthorityReadback(unit.readback, decisionUnitId) : undefined,
+  };
+}
+
+function humanAuthorityMutationKey(taskId: string, action: string): string {
+  return `portal-human-authority-${taskId}-${action}-${globalThis.crypto.randomUUID()}`;
+}
+
+export async function fetchHumanAuthorityDecisionUnits(): Promise<HumanAuthorityDecisionUnit[]> {
+  const payload = await fetchJSON<unknown>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    `${humanAuthorityBasePath}/decision-units`,
+  );
+  const record = asRecord(payload);
+  const items = Array.isArray(payload) ? payload : Array.isArray(record.items) ? record.items : [];
+  return items.map(adaptHumanAuthorityDecisionUnit);
+}
+
+export async function fetchHumanAuthorityTask(taskId: string): Promise<HumanAuthorityRoleTask> {
+  const payload = await fetchJSON<unknown>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    `${humanAuthorityBasePath}/decision-units/${encodeURIComponent(taskId)}`,
+  );
+  const record = asRecord(payload);
+  return adaptHumanAuthorityTask(record.task ?? record.unit ?? payload);
+}
+
+export async function submitHumanAuthorityRound(
+  taskId: string,
+  input: HumanAuthorityRoleSubmissionInput,
+  idempotencyKey = humanAuthorityMutationKey(taskId, `round-${input.round}`),
+): Promise<HumanAuthoritySubmissionResult> {
+  const submissionPayload = {
+    round: input.round,
+    facts: input.facts,
+    impacts: input.impacts,
+    unknowns: input.unknowns,
+    selectedOptionId: input.selectedOptionId,
+  };
+  await mutateJSON<unknown>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    'POST',
+    `${humanAuthorityBasePath}/decision-units/${encodeURIComponent(taskId)}/submissions`,
+    submissionPayload,
+    { 'Idempotency-Key': idempotencyKey },
+  );
+  const sealed = await mutateJSON<unknown>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    'POST',
+    `${humanAuthorityBasePath}/decision-units/${encodeURIComponent(taskId)}/rounds/${input.round}:seal`,
+    {},
+    { 'Idempotency-Key': `${idempotencyKey}-seal` },
+  );
+  const task = adaptHumanAuthorityTask(sealed);
+  return { task, readback: adaptHumanAuthorityReadback(sealed, task.decisionUnitId) };
+}
+
+export async function applyHumanAuthorityAction(
+  taskId: string,
+  input: HumanAuthorityActionInput,
+  idempotencyKey = humanAuthorityMutationKey(taskId, input.action),
+): Promise<HumanAuthoritySubmissionResult> {
+  if (input.action === 'authorize' || input.action === 'post_check') {
+    const payload = await mutateJSON<unknown>(
+      envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+      'POST',
+      `${humanAuthorityBasePath}/decision-units/${encodeURIComponent(taskId)}:finalize`,
+      { selectedOptionId: input.selectedOptionId, note: input.note },
+      { 'Idempotency-Key': idempotencyKey },
+    );
+    const task = adaptHumanAuthorityTask(payload);
+    return { task, readback: adaptHumanAuthorityReadback(payload, task.decisionUnitId) };
+  }
+  throw new RuntimeError(fallbackRuntimeErrorResponse({
+    code: 'HAD.ACTION_UNAVAILABLE',
+    requestPath: `${humanAuthorityBasePath}/decision-units/${encodeURIComponent(taskId)}`,
+    cause: `hosted provider has not exposed ${input.action} command`,
+  }));
+}
+
+export async function fetchHumanAuthorityReadback(decisionUnitId: string): Promise<HumanAuthorityReadback> {
+  const payload = await fetchJSON<unknown>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    `${humanAuthorityBasePath}/decision-units/${encodeURIComponent(decisionUnitId)}`,
+  );
+  return adaptHumanAuthorityReadback(payload, decisionUnitId);
 }

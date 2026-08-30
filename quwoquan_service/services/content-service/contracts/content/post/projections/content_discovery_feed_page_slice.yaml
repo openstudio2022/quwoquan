@@ -5,6 +5,14 @@ description: '首页发现流唯一响应 envelope。items 与 objectCards 均�
 
   nextCursor/previousCursor，不暴露兼容 cursor。
 
+  releaseId/manifestDigest 是运行时内容激活身份（ContentActivationIdentity）：
+
+  有内容、no_eligible_content 与 continuation 页必须携带完整身份；
+
+  emptyReason=no_active_release 时两者必须同时缺席；解码或 Remote 失败只能是
+
+  failure，不得编码为空态或缺席身份。
+
   '
 source_entities:
 - Post
@@ -41,3 +49,9 @@ fields:
   nullable: true
 - name: objectCards
   type: '[]FeedObjectCard'
+- name: releaseId
+  type: string
+  nullable: true
+- name: manifestDigest
+  type: string
+  nullable: true

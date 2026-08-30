@@ -16,8 +16,10 @@ from unittest import mock
 from quwoquan_ops.cli import stackctl
 
 from quwoquan_ops.tests.support.stackctl_dev_session_test_support import (
-    _ok,
     _handoff_completed,
+    _mutable_compose_config_json,
+    _mutable_unfinalized_runtime_plan,
+    _ok,
     _runtime_started,
     _runtime_started_with_identity,
     StackctlDevSessionTestBase,
@@ -66,6 +68,10 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                                 "healthcheck": {"test": ["CMD", "true"]},
                             },
                             "object-storage": {"image": "minio/minio:current"},
+                            "elasticsearch": {
+                                "image": "quwoquan/elasticsearch-cjk:8.13.4",
+                                "healthcheck": {"test": ["CMD", "true"]},
+                            },
                             "platform-ops-service": {
                                 "environment": {"IMAGE_VERSION": "${IMAGE_VERSION}"},
                                 "healthcheck": {"test": ["CMD", "true"]},
@@ -220,6 +226,24 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                             },
                         },
                         "State": {"Status": "running"},
+                    },
+                    {
+                        # This repository-owned, version-pinned infrastructure
+                        # image is not rebuilt from the mutable workspace.
+                        "Created": "2026-08-09T00:00:05Z",
+                        "Config": {
+                            "Image": "quwoquan/elasticsearch-cjk:8.13.4",
+                            "Env": [],
+                            "Labels": {
+                                "com.docker.compose.project": "quwoquan_alpha_test_live",
+                                "com.docker.compose.service": "elasticsearch",
+                                "com.docker.compose.config-hash": "hash-elasticsearch",
+                            },
+                        },
+                        "State": {
+                            "Status": "running",
+                            "Health": {"Status": "healthy"},
+                        },
                     },
                 )
             )
@@ -436,9 +460,10 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                     destination_root=report_dir / "rendered",
                 )
             payload = json.loads(outputs[0].read_text(encoding="utf-8"))
+            # symlink TMPDIR（macOS /var -> /private/var）下两侧展开程度可能不同，比较前归一。
             self.assertEqual(
-                payload["services"]["api"]["build"]["context"],
-                str(build_context.resolve()),
+                Path(payload["services"]["api"]["build"]["context"]).resolve(),
+                build_context.resolve(),
             )
             self.assertEqual(
                 payload["services"]["api"]["build"]["dockerfile"],
@@ -471,8 +496,8 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                 )
             payload = json.loads(outputs[1].read_text(encoding="utf-8"))
             self.assertEqual(
-                payload["services"]["api"]["build"]["context"],
-                str((root / "service").resolve()),
+                Path(payload["services"]["api"]["build"]["context"]).resolve(),
+                (root / "service").resolve(),
             )
 
     def test_mutable_compose_execution_copy_resolves_relative_bind_sources(self) -> None:
@@ -499,10 +524,10 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                 )
 
             payload = json.loads(outputs[0].read_text(encoding="utf-8"))
-            self.assertEqual(
-                payload["services"]["product-ops-service"]["volumes"],
-                [f"{policy.resolve()}:/etc/qwq/policy.yaml:ro"],
-            )
+            [bind] = payload["services"]["product-ops-service"]["volumes"]
+            bind_source, bind_rest = bind.split(":", 1)
+            self.assertEqual(Path(bind_source).resolve(), policy.resolve())
+            self.assertEqual(bind_rest, "/etc/qwq/policy.yaml:ro")
 
     def test_product_ops_policy_bind_resolves_from_canonical_source(self) -> None:
         source = (
@@ -521,6 +546,8 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
             outputs = stackctl._dev_session_materialize_compose_files(
                 [base, source],
                 destination_root=Path(temporary) / "rendered",
+                provider_binding_overlay_context=Path(temporary) / "overlay",
+                provider_binding_manifest_digest="sha256:" + "0" * 64,
             )
 
             payload = json.loads(outputs[1].read_text(encoding="utf-8"))
@@ -546,6 +573,9 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
             dockerfile = build_context / "services/content-service/build/Dockerfile"
             dockerfile.parent.mkdir(parents=True)
             dockerfile.write_text("FROM scratch\n", encoding="utf-8")
+            core_dockerfile = build_context / "cmd/service-core/Dockerfile"
+            core_dockerfile.parent.mkdir(parents=True)
+            core_dockerfile.write_text("FROM scratch\n", encoding="utf-8")
             source.write_text(
                 "services:\n"
                 "  content-service:\n"
@@ -612,10 +642,20 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
 
     def test_mutable_projection_exposes_target_public_api_host(self) -> None:
         topology = stackctl.load_environment_topology()
+        manifest = stackctl.load_port_manifest()
         for environment in ("alpha", "beta", "gamma"):
             target = f"{environment}-local"
-            projected = stackctl._gamma_env_from_port_manifest(topology, target)
+            projected = stackctl._gamma_env_from_port_manifest(
+                topology,
+                target,
+                manifest=manifest,
+            )
+            ports = stackctl.profile_ports(manifest, target)
             self.assertEqual(projected["COMPOSE_PARALLEL_LIMIT"], "1")
+            self.assertEqual(
+                projected["LOCAL_GAMMA_ADMIN_PORT"],
+                str(ports["caddy-admin"]),
+            )
             self.assertEqual(
                 projected["QWQ_OUTPUT_ROOT"],
                 str(stackctl.output_root().expanduser().resolve()),
@@ -647,12 +687,7 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
 
     def test_mutable_runtime_uses_exact_project_and_current_source_compose(self) -> None:
         rendered = {
-            "plan": {
-                "composeProject": "quwoquan_alpha_test_live",
-                "composeDigest": "sha256:" + "1" * 64,
-                "configurationDigest": "sha256:" + "2" * 64,
-                "publishedPorts": {"product-ops-service": 17250},
-            },
+            "plan": _mutable_unfinalized_runtime_plan(),
             "environment": {
                 "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS": "3600",
                 "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS": "45",
@@ -667,7 +702,12 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
         def execute(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
             executions.append(argv)
             timeouts.append(float(kwargs["timeout_seconds"]))
-            return subprocess.CompletedProcess(argv, 0, "", "")
+            stdout = (
+                _mutable_compose_config_json()
+                if argv[-3:] == ["config", "--format", "json"]
+                else ""
+            )
+            return subprocess.CompletedProcess(argv, 0, stdout, "")
 
         def transition(**kwargs: object) -> dict[str, object]:
             receipt_transitions.append(kwargs)
@@ -709,28 +749,76 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                 side_effect=AssertionError("mutable runtime must not select a candidate"),
             ),
         ):
+            report_dir = Path(temporary)
             result = stackctl._start_mutable_test_live_runtime(
                 environment="alpha",
                 target="alpha-local",
-                report_dir=Path(temporary),
+                report_dir=report_dir,
                 workspace_snapshot={"mutableStateDigest": "sha256:" + "2" * 64},
+            )
+            persisted_plan = json.loads(
+                (report_dir / "mutable-runtime-plan.json").read_text(encoding="utf-8")
             )
 
         self.assertEqual(result["exitCode"], 0)
-        self.assertEqual(len(executions), 5)
-        self.assertEqual(timeouts, [90.0, 3600.0, 3600.0, 3600.0, 3600.0])
+        self.assertEqual(
+            persisted_plan["publishedPorts"],
+            [
+                {
+                    "role": "product-ops-service",
+                    "hostPort": 17250,
+                    "protocol": "tcp",
+                }
+            ],
+        )
+        self.assertEqual(len(executions), 8)
+        self.assertEqual(timeouts, [90.0, *([3600.0] * 7)])
         for command in executions:
             self.assertEqual(command[:5], ["docker", "compose", "-p", "quwoquan_alpha_test_live", "-f"])
             self.assertNotIn("package", command)
             self.assertNotIn("candidate", " ".join(command))
-        self.assertEqual(executions[0][-2:], ["config", "--quiet"])
-        self.assertEqual(executions[1][-4:], ["up", "--build", "-d", "product-ops-service"])
-        self.assertEqual(executions[2][-1:], ["build"])
-        self.assertEqual(executions[3][-3:], ["up", "-d", "--no-deps"])
-        self.assertEqual(executions[4][-3:], ["up", "-d", "--remove-orphans"])
+        self.assertEqual(executions[0][-3:], ["config", "--format", "json"])
+        # The policy owner is brought up in four staged steps before the
+        # project-wide build. Service Core first exposes the canonical account
+        # security authority, then Product Ops can publish run-bound policy
+        # facts before Recommendation joins the full runtime.
+        self.assertEqual(
+            executions[1][-9:],
+            [
+                "up",
+                "-d",
+                "--wait",
+                "--wait-timeout",
+                "45",
+                "postgres",
+                "mongodb",
+                "redis",
+                "elasticsearch",
+            ],
+        )
+        self.assertEqual(executions[2][-3:], ["up", "--no-deps", "mongo-init"])
+        self.assertEqual(
+            executions[3][-5:],
+            ["up", "--build", "-d", "--no-deps", "service-core"],
+        )
+        self.assertEqual(
+            executions[4][-8:],
+            [
+                "up",
+                "--build",
+                "-d",
+                "--wait",
+                "--wait-timeout",
+                "45",
+                "--no-deps",
+                "product-ops-service",
+            ],
+        )
+        self.assertEqual(executions[5][-1:], ["build"])
+        self.assertEqual(executions[6][-3:], ["up", "-d", "--no-deps"])
+        self.assertEqual(executions[7][-3:], ["up", "-d", "--remove-orphans"])
         self.assertEqual(
             [row["status"] for row in receipt_transitions],
             ["prepared", "partial", "running"],
         )
         self.assertEqual(result["startupAttempt"]["status"], "running")
-

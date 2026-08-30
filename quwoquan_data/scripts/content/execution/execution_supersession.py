@@ -8,11 +8,8 @@ from __future__ import annotations
 
 import argparse
 import fcntl
-import hashlib
 import json
 import os
-import socket
-import stat
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -30,325 +27,34 @@ from core.source_digest import (
     current_source_digest,
 )
 
+from content.execution.closure.execution_supersession_admission import (
+    _completion_evidence_binding,
+    _lease_disposition,
+    _process_evidence,
+    _settled_execution_state,
+    _validate_pre_controller_closure,
+)
+from content.execution.closure.execution_supersession_inventory import (
+    _ANCHOR_REFS,
+    _LIVENESS_PROBE,
+    _anchors,
+    _digest,
+    _optional_object,
+    _path_exists,
+    _root_inventory,
+)
 from content.execution.identity import validate_execution_id
-from content.execution.terminal_state_integrity import verify_terminal_state_integrity
 
-_REASONS = frozenset({"source_drift", "missing_canonical_input"})
+_REASONS = frozenset(
+    {"source_drift", "missing_canonical_input", "unbound_completion_evidence"}
+)
 _ERROR_CODES = {
     "source_drift": "DATA.EXECUTION.SOURCE_DRIFT_SUPERSEDED",
     "missing_canonical_input": "DATA.EXECUTION.MISSING_CANONICAL_INPUT_SUPERSEDED",
+    "unbound_completion_evidence": (
+        "DATA.EXECUTION.UNBOUND_COMPLETION_EVIDENCE_SUPERSEDED"
+    ),
 }
-_ANCHOR_REFS = {
-    "executionManifest": "execution_manifest.json",
-    "request": "0.plan/request.json",
-    "targetSet": "0.plan/target_set.json",
-    "executionState": "_shared/execution_state.json",
-    "controllerLease": "_shared/controller_lease.json",
-}
-_PRE_CONTROLLER_REQUIRED_FILES = frozenset(
-    {
-        "0.plan/execution_spec.yaml",
-        "0.plan/queue_backend_envelope.json",
-        "0.plan/request.json",
-        "0.plan/target_set.json",
-        "_shared/catalog.ndjson",
-        "_shared/execution_progress.json",
-        "_shared/target_selection.json",
-        "evidence/model_readiness.json",
-        "evidence/runtime_preflight.json",
-        "execution_manifest.json",
-        "sources/qualification/request.json",
-    }
-)
-_PRE_CONTROLLER_OPTIONAL_FILES = frozenset({"_shared/execution_state.lock"})
-_PRE_CONTROLLER_IDENTITY_FILES = frozenset(
-    {
-        "0.plan/queue_backend_envelope.json",
-        "0.plan/target_set.json",
-        "_shared/execution_progress.json",
-        "_shared/target_selection.json",
-        "evidence/model_readiness.json",
-        "execution_manifest.json",
-        "sources/qualification/request.json",
-    }
-)
-_SUPERSESSION_ELIGIBLE_STATE_STATUSES = {"manual_required", "stopped_at_until"}
-_LIVENESS_PROBE = "pid_pgid_only_no_argv"
-
-
-def _digest(value: Mapping[str, Any]) -> str:
-    encoded = json.dumps(
-        dict(value), ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
-
-
-def _file_digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return "sha256:" + digest.hexdigest()
-
-
-def _file_binding(root: Path, relative: str) -> dict[str, object]:
-    path = root / relative
-    if path.is_symlink():
-        raise ValueError(f"execution supersession anchor cannot be a symlink: {path}")
-    exists = path.is_file()
-    return {
-        "ref": relative,
-        "exists": exists,
-        "sha256": _file_digest(path) if exists else None,
-    }
-
-
-def _anchors(root: Path) -> dict[str, dict[str, object]]:
-    return {
-        name: _file_binding(root, relative)
-        for name, relative in _ANCHOR_REFS.items()
-    }
-
-
-def _optional_pid(value: object) -> int | None:
-    try:
-        parsed = int(value or 0)
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed > 1 else None
-
-
-def _pid_alive(pid: int | None) -> bool:
-    if pid is None:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def _pgid_alive(pgid: int | None) -> bool:
-    if pgid is None:
-        return False
-    try:
-        os.killpg(pgid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def _optional_object(path: Path) -> dict[str, Any] | None:
-    if not path.is_file():
-        return None
-    value = read_json(path)
-    if not isinstance(value, dict):
-        raise TypeError(f"execution supersession evidence must be an object: {path}")
-    return value
-
-
-def _path_exists(path: Path) -> bool:
-    return path.exists() or path.is_symlink()
-
-
-def _require_regular_file(path: Path, *, label: str) -> None:
-    if path.is_symlink() or not path.is_file():
-        raise ValueError(f"{label} must be a regular non-symlink file: {path}")
-
-
-def _root_inventory(root: Path) -> tuple[tuple[dict[str, object], ...], str]:
-    entries: list[dict[str, object]] = []
-    candidates = sorted(
-        root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()
-    )
-    for path in candidates:
-        relative = path.relative_to(root).as_posix()
-        parts = Path(relative).parts
-        if parts[:2] == ("_shared", "reconciliation"):
-            if len(parts) == 2 and (path.is_symlink() or not path.is_dir()):
-                raise ValueError(
-                    "execution supersession reconciliation root is corrupt"
-                )
-            continue
-        metadata = path.lstat()
-        if stat.S_ISLNK(metadata.st_mode):
-            raise ValueError(
-                f"execution supersession root contains a symlink: {relative}"
-            )
-        if stat.S_ISDIR(metadata.st_mode):
-            entries.append({
-                "ref": relative, "kind": "directory", "size": None, "sha256": None
-            })
-            continue
-        if not stat.S_ISREG(metadata.st_mode):
-            raise ValueError(
-                f"execution supersession root contains a non-regular entry: {relative}"
-            )
-        entries.append(
-            {
-                "ref": relative,
-                "kind": "file",
-                "size": metadata.st_size,
-                "sha256": _file_digest(path),
-            }
-        )
-    frozen = tuple(entries)
-    return frozen, _digest({"entries": list(frozen)})
-
-
-def _settled_execution_state(root: Path) -> dict[str, Any] | None:
-    state_path = root / _ANCHOR_REFS["executionState"]
-    head_path = state_path.with_name("execution_state_head.json")
-    events_path = state_path.with_name("execution_state_events")
-    lock_path = state_path.with_name("execution_state.lock")
-    state_exists = _path_exists(state_path)
-    head_exists = _path_exists(head_path)
-    events_exist = _path_exists(events_path)
-    if _path_exists(lock_path):
-        _require_regular_file(lock_path, label="execution state lock")
-        if lock_path.stat().st_size != 0:
-            raise ValueError("execution state lock must be empty")
-    if not state_exists:
-        if head_exists or events_exist:
-            raise ValueError(
-                "execution state is missing but journal fragments are present"
-            )
-        return None
-    _require_regular_file(state_path, label="execution state snapshot")
-    state = _optional_object(state_path)
-    assert state is not None
-    assert_valid(
-        state,
-        "execution",
-        "execution_state",
-        label=f"execution supersession state:{root.name}",
-    )
-    if state.get("executionId") != root.name:
-        raise ValueError("execution supersession state executionId drift")
-    if not head_exists:
-        if events_exist:
-            raise ValueError(
-                "execution state journal has an uncommitted events directory"
-            )
-    else:
-        _require_regular_file(head_path, label="execution state head")
-        head = _optional_object(head_path)
-        assert head is not None
-        if head.get("executionId") != root.name:
-            raise ValueError("execution state head executionId drift")
-        try:
-            sequence = int(head.get("sequence"))
-        except (TypeError, ValueError) as exc:
-            raise ValueError("execution state head sequence is invalid") from exc
-        if events_path.is_symlink() or not events_path.is_dir():
-            raise ValueError("execution state journal directory is missing or invalid")
-        event_entries = sorted(events_path.iterdir(), key=lambda item: item.name)
-        if any(item.is_symlink() or not item.is_file() for item in event_entries):
-            raise ValueError("execution state journal contains a non-regular entry")
-        expected_names = [f"{item:020d}.json" for item in range(1, sequence + 1)]
-        if [item.name for item in event_entries] != expected_names:
-            raise ValueError(
-                "execution state journal is not settled at its committed head"
-            )
-    # Pure verifier: pending/torn journal recovery is forbidden above.
-    verify_terminal_state_integrity(state_path)
-    return state
-
-
-def _validate_pre_controller_closure(
-    root: Path,
-    inventory: tuple[dict[str, object], ...],
-) -> None:
-    files = {
-        str(entry["ref"])
-        for entry in inventory
-        if entry.get("kind") == "file"
-    }
-    missing = sorted(_PRE_CONTROLLER_REQUIRED_FILES - files)
-    unexpected = sorted(
-        files - _PRE_CONTROLLER_REQUIRED_FILES - _PRE_CONTROLLER_OPTIONAL_FILES
-    )
-    if missing or unexpected:
-        raise ValueError(
-            "missing-state execution is not an exact pre-controller closure: "
-            f"missing={missing} unexpected={unexpected}"
-        )
-    for relative in sorted(_PRE_CONTROLLER_REQUIRED_FILES):
-        path = root / relative
-        if relative.endswith(".json"):
-            _optional_object(path)
-        elif relative.endswith(".ndjson"):
-            lines = path.read_text(encoding="utf-8").splitlines()
-            if not lines:
-                raise ValueError("pre-controller catalog must not be empty")
-            for line in lines:
-                value = json.loads(line)
-                if not isinstance(value, dict):
-                    raise ValueError("pre-controller catalog rows must be objects")
-        elif path.stat().st_size == 0:
-            raise ValueError(f"pre-controller evidence must not be empty: {relative}")
-    for relative in _PRE_CONTROLLER_IDENTITY_FILES:
-        document = _optional_object(root / relative)
-        if document is None or document.get("executionId") != root.name:
-            raise ValueError(
-                f"pre-controller evidence executionId drift: {relative}"
-            )
-    progress = _optional_object(root / "_shared/execution_progress.json") or {}
-    counts = progress.get("counts")
-    if progress.get("lastRunId") is not None or not isinstance(counts, Mapping):
-        raise ValueError("pre-controller progress contains runtime evidence")
-    if any(int(counts.get(name) or 0) != 0 for name in ("entities", "posts")):
-        raise ValueError("pre-controller progress contains finalized objects")
-
-
-def _process_evidence(
-    root: Path,
-    *,
-    execution_id: str,
-    state: Mapping[str, Any] | None,
-) -> tuple[dict[str, object], str]:
-    lease = _optional_object(root / _ANCHOR_REFS["controllerLease"])
-    if lease is not None:
-        if lease.get("executionId") != execution_id:
-            raise ValueError("execution controller lease executionId drift")
-        lease_status = str(lease.get("status") or "").strip()
-        if lease_status == "active":
-            raise ValueError("execution controller lease is active; supersession refused")
-        if lease_status != "released":
-            raise ValueError("execution controller lease status is invalid")
-    state_status = str((state or {}).get("status") or "missing")
-    if state is not None and state_status not in _SUPERSESSION_ELIGIBLE_STATE_STATUSES:
-        raise ValueError(
-            f"execution state is not supersession-eligible: {state_status}"
-        )
-    controller = state.get("controller") if state else None
-    controller_row = controller if isinstance(controller, Mapping) else {}
-    pid = _optional_pid((lease or {}).get("pid") or controller_row.get("pid"))
-    pgid = _optional_pid((lease or {}).get("pgid") or controller_row.get("pgid"))
-    observed_pid_alive = _pid_alive(pid)
-    observed_group_alive = _pgid_alive(pgid)
-    if observed_pid_alive or observed_group_alive:
-        raise ValueError(
-            "execution controller/process group is still alive; supersession refused"
-        )
-    return (
-        {
-            "hostname": socket.gethostname(),
-            "pid": pid,
-            "pgid": pgid,
-            "observedPidAlive": observed_pid_alive,
-            "observedProcessGroupAlive": observed_group_alive,
-            "identityMatched": False,
-            "pidAlive": False,
-            "processGroupAlive": False,
-            "livenessProbe": _LIVENESS_PROBE,
-        },
-        state_status,
-    )
 
 
 @contextmanager
@@ -391,6 +97,17 @@ def validate_execution_supersession_receipt(
         raise ValueError(f"execution supersession receipt digest drift: {path}")
     if receipt["executionId"] != execution_root.name:
         raise ValueError("execution supersession executionId drift")
+    if receipt["errorCode"] != _ERROR_CODES[receipt["reason"]]:
+        raise ValueError("execution supersession error code does not match its reason")
+    binding = receipt.get("completionEvidenceBinding")
+    if receipt["reason"] == "unbound_completion_evidence":
+        if binding != _completion_evidence_binding(execution_root):
+            raise ValueError("execution supersession completion evidence binding drift")
+    elif binding is not None:
+        raise ValueError(
+            "execution supersession carries a completion evidence binding without "
+            "the reason that proves it"
+        )
     anchors = _anchors(execution_root)
     if receipt["evidenceAnchors"] != anchors:
         raise ValueError("execution supersession evidence anchor drift")
@@ -419,6 +136,9 @@ def validate_execution_supersession_receipt(
             raise ValueError("execution supersession state evidence drift")
         if receipt["processEvidence"].get("livenessProbe") != _LIVENESS_PROBE:
             raise ValueError("execution supersession liveness probe drift")
+    lease = _optional_object(execution_root / _ANCHOR_REFS["controllerLease"])
+    if receipt["controllerLeaseDisposition"] != _lease_disposition(lease):
+        raise ValueError("execution supersession controller lease disposition drift")
     source = receipt.get("manifestSourceDigest")
     source_kind = None
     if source is not None:
@@ -520,9 +240,12 @@ def supersede_execution(
                 ).to_document()
         else:
             observed_source = current_source_digest(repo_root=source_repo).to_document()
+        completion_binding: dict[str, object] | None = None
         if normalized_reason == "source_drift":
             if manifest_source is None or manifest_source == observed_source:
                 raise ValueError("source_drift supersession requires manifest drift")
+        elif normalized_reason == "unbound_completion_evidence":
+            completion_binding = _completion_evidence_binding(root)
         elif all(
             bool(anchors[name]["exists"])
             for name in ("executionManifest", "request", "targetSet")
@@ -530,10 +253,11 @@ def supersede_execution(
             raise ValueError(
                 "missing_canonical_input supersession requires a missing canonical input"
             )
-        process_evidence, previous_status = _process_evidence(
+        process_evidence, previous_status, lease_disposition = _process_evidence(
             root,
             execution_id=normalized,
             state=state,
+            reason=normalized_reason,
         )
         inventory, inventory_digest = _root_inventory(root)
         state_evidence = "settled_snapshot"
@@ -563,12 +287,15 @@ def supersede_execution(
             "observedSourceDigest": observed_source,
             "previousStatus": previous_status,
             "processEvidence": process_evidence,
+            "controllerLeaseDisposition": lease_disposition,
             "rootInventoryDigest": inventory_digest,
             "rootInventoryEntryCount": len(inventory),
             "stateEvidence": state_evidence,
             "retryPolicy": "new_execution_with_retryOf",
             "evidenceDisposition": "protected_read_only",
         }
+        if completion_binding is not None:
+            stable["completionEvidenceBinding"] = completion_binding
         receipt = {**stable, "receiptDigest": _digest(stable)}
         validate_execution_supersession_receipt(
             receipt,

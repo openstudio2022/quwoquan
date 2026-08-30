@@ -128,6 +128,50 @@ def test_frozen_authority_title_survives_plan_to_source_unit_projection():
     assert manifest["qualifiedAuthorityTitle"] == "梅湾街"
 
 
+def test_current_wikipedia_article_source_projects_complete_research_attribution():
+    """Current registry identity must reach the source unit used by publish."""
+    ensure_execution_layout(TASK)
+    entity_dir = execution_entity_object_dir(TASK, "地点", "景区", "青城山")
+    source_url = "https://zh.wikipedia.org/wiki/%E9%9D%92%E5%9F%8E%E5%B1%B1"
+
+    manifest = write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="article_frontier_wikipedia",
+        source_md="# 青城山\n\n青城山位于四川省。",
+        quality={
+            "sourceId": "article_frontier_wikipedia",
+            "quality": "B-fact",
+            "score": 5,
+        },
+        platform="维基百科",
+        source_category="encyclopedia",
+        source_kind="encyclopedia",
+        extractor="wikipedia_api",
+        policy_revision="article-source-registry-v1",
+        research_lane="article",
+        source_use_mode="factual_reference_only",
+        publish_media_mode="illustrated",
+        source_role="base",
+        image_evidence_mode="same_source",
+        url=source_url,
+        title="青城山",
+        target_ref="/entity/地点/景区/青城山",
+        source={
+            "articleSiteId": "wikipedia_zh",
+            "sourceDiscoveryProfileDigest": "sha256:" + "1" * 64,
+            "articleCommercialAdmission": "commercial_release",
+            "fetchedAt": "2026-08-15T00:00:00Z",
+        },
+    )
+
+    attribution = manifest["sourceAttribution"]
+    assert attribution["sourcePostUrl"] == source_url
+    assert attribution["originalCreatorName"] == "维基百科贡献者"
+    assert attribution["publicationAdmission"] == "research_release"
+    assert attribution["collectedAt"] == "2026-08-15T00:00:00Z"
+
+
 def test_commercial_article_binding_survives_plan_to_fetch_projection():
     """Fetch must revalidate the exact frontier profile frozen by research."""
     ensure_execution_layout(TASK)

@@ -47,6 +47,12 @@ def _fixture():
         host_tasks = [tasks[index]]
         actual = canonical_sha256(host_tasks)
         requests[host_id] = {
+            "targetObjectCount": 2,
+            "capacityPlanDigest": "sha256:" + "5" * 64,
+            "calibrationReceiptDigest": "sha256:" + "6" * 64,
+            "fleetMaxConcurrentWorkers": 1,
+            "fleetWaveCount": 1,
+            "fleetBatchDeadlineEpochSeconds": 1_786_001_200,
             "workerHostBinding": {
                 "hostScopeId": host_id,
                 "hostSetDigest": binding["hostSetDigest"],
@@ -69,6 +75,9 @@ def _fixture():
             actual_task_digest=actual,
             passed=True,
             required_quota=1,
+            fleet_peak_concurrent_workers=1,
+            fleet_wave_count=1,
+            fleet_batch_deadline_epoch_seconds=1_786_001_200,
         )
     return job_set, requests, reports
 
@@ -216,7 +225,5 @@ def test_multi_host_runtime_fails_without_audited_remote_executor(
         run_multi_host_fleet(
             "20260810--travel-homepage-host-runtime--test-region--scale-001",
             QueueJobStage.AUTHOR,
-            workers=2,
-            completion_grace_seconds=1,
         )
     assert raised.value.issues[0].code is DataIssueCode.REMOTE_HOST_EXECUTOR_UNAVAILABLE

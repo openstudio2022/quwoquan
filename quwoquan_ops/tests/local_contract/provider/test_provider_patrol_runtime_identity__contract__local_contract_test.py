@@ -158,12 +158,27 @@ def _mutable_fixture(
         "providerRuntimeDigest": provider_digest,
         "portProfile": "alpha-local",
         "portBlock": {"start": 17000, "end": 17999},
-        "publishedPorts": {
-            "provider-protocol-substitute": 17360,
-            "sms-provider-substitute": 17330,
-        },
+        "publishedPorts": [
+            {
+                "role": "provider-protocol-substitute",
+                "hostPort": 17360,
+                "protocol": "tcp",
+            },
+            {
+                "role": "sms-provider-substitute",
+                "hostPort": 17330,
+                "protocol": "tcp",
+            },
+        ],
         "tlsProfile": "local-managed",
         "resolverHandoffDigest": _digest("resolver"),
+        "publicWebPackage": {
+            "environment": "alpha",
+            "packageVersion": "web-release-alpha",
+            "manifestDigest": _digest("web-manifest"),
+            "contentDigest": _digest("web-content"),
+            "publicOrigin": "https://alpha.quwoquan.com:17000",
+        },
         "sourceRevision": "a" * 40,
         "workspaceStatusDigest": _digest("workspace-status"),
         "mutableStateDigest": _digest("mutable-state"),
@@ -196,6 +211,12 @@ def _mutable_fixture(
         "mediaRoot": media_root.relative_to(subject.ROOT).as_posix(),
         "tlsProfile": receipt["tlsProfile"],
         "resolverHandoffDigest": receipt["resolverHandoffDigest"],
+        "publicWebPackage": receipt["publicWebPackage"],
+        "graphqlReadRegistry": {
+            "schema": "gateway.graphql_read.runtime_registry",
+            "configVersion": _digest("graphql-read-config"),
+        },
+        "serviceCoreModules": [],
         "workspaceIdentity": {
             "sourceRevision": receipt["sourceRevision"],
             "workspaceStatusDigest": receipt["workspaceStatusDigest"],

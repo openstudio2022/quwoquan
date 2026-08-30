@@ -707,7 +707,8 @@ class PersonalAssistantStreamController
       if (!failed) {
         // 对话浮现兴趣回流（P3 飞轮小循环）：从 turn.completed envelope 取
         // 云侧 collectEmergedTags 下发的路径制 tagRefs，合成 assistant_interest
-        // 行为上报，进入推荐特征（rm_recommend_feature.tagInteraction）。不绑定 post。
+        // 行为上报，更新当前会话 HotPath 并形成 typed fact；不绑定 post，
+        // 也不代表 Recommendation 长期画像已持久化。
         final emergedTags = extractAssistantEmergedTags(events);
         if (emergedTags.isNotEmpty) {
           ref

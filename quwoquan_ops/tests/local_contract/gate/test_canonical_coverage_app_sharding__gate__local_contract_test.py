@@ -22,6 +22,7 @@
 """
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import sys
@@ -349,7 +350,7 @@ def _install_fake_flutter(
     red = set(red_test_files)
 
     def fake_run(
-        command: Sequence[str], *, cwd: Path
+        command: Sequence[str], *, cwd: Path, env: dict[str, str] | None = None
     ) -> subprocess.CompletedProcess[str]:
         coverage_path = next(
             argument[len("--coverage-path=") :]
@@ -388,6 +389,288 @@ def _identity() -> dict[str, str]:
         "toolchainDigest": "sha256:" + "1" * 64,
         "collectionScopeDigest": "sha256:" + "1" * 64,
     }
+
+
+def test_real_app_shard_uses_the_guarded_runner_with_a_closed_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Coverage owns runtime identity and cannot inherit CI shard/tag filters."""
+
+    destination = tmp_path / "coverage.lcov.info"
+    test_files = (
+        "test/local_contract/ordinary__local_contract_test.dart",
+        "test/local_contract/serial__local_contract_test.dart",
+    )
+    app_root = tmp_path / "quwoquan_app"
+    for test_file, source in (
+        (test_files[0], "void main() {}\n"),
+        (test_files[1], "@Tags(<String>['serial'])\nvoid main() {}\n"),
+    ):
+        path = app_root / test_file
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
+    captured: list[dict[str, object]] = []
+
+    def fake_run(
+        command: Sequence[str], *, cwd: Path, env: dict[str, str] | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        captured.append(
+            {"command": list(command), "cwd": cwd, "env": dict(env or {})}
+        )
+        phase_path = Path(
+            next(
+                argument.removeprefix("--coverage-path=")
+                for argument in command
+                if argument.startswith("--coverage-path=")
+            )
+        )
+        phase_path.write_text(_SHARD_A_LCOV, encoding="utf-8")
+        return subprocess.CompletedProcess(list(command), 0, stdout="", stderr="")
+
+    forced_environment = {
+        "FLUTTER_TEST_GUARD_MAX_ATTEMPTS": "1",
+        "FLUTTER_TEST_GUARD_TIMEOUT_SECONDS": "1800",
+        "QWQ_APP_RUNTIME_ENV": "alpha",
+    }
+    for key in set(vcr.APP_COVERAGE_CLEARED_ENV_KEYS) | set(forced_environment):
+        monkeypatch.setenv(key, "ambient-invalid")
+    monkeypatch.setattr(vcr, "APP_ROOT", app_root)
+    monkeypatch.setattr(vcr, "_run", fake_run)
+
+    assert vcr._run_app_shard(destination, test_files) == ""
+    assert destination.is_file()
+    assert len(captured) == 2
+    nonserial_command = captured[0]["command"]
+    serial_command = captured[1]["command"]
+    assert isinstance(nonserial_command, list)
+    assert isinstance(serial_command, list)
+    assert nonserial_command[:2] == [
+        sys.executable,
+        str(vcr.APP_ROOT / vcr.APP_FLUTTER_TEST_RUNNER),
+    ]
+    assert "--coverage" in nonserial_command
+    assert "--branch-coverage" in nonserial_command
+    assert "--reporter=compact" in nonserial_command
+    assert "--dart-define=APP_RUNTIME_ENV=alpha" in nonserial_command
+    assert "--concurrency=4" in nonserial_command
+    assert "--exclude-tags" in nonserial_command
+    assert "serial" in nonserial_command
+    assert "--concurrency=1" in serial_command
+    assert "--tags" in serial_command
+    assert "--exclude-tags" not in serial_command
+    assert not any(
+        argument == "--total-shards"
+        or argument.startswith("--total-shards=")
+        or argument == "--shard-index"
+        or argument.startswith("--shard-index=")
+        for command in (nonserial_command, serial_command)
+        for argument in command
+    )
+    assert tuple(
+        argument
+        for argument in nonserial_command
+        if argument.endswith(vcr.APP_TEST_FILE_SUFFIX)
+    ) == test_files
+    assert tuple(
+        argument
+        for argument in serial_command
+        if argument.endswith(vcr.APP_TEST_FILE_SUFFIX)
+    ) == (test_files[1],)
+
+    for invocation in captured:
+        environment = invocation["env"]
+        assert isinstance(environment, dict)
+        for key in vcr.APP_COVERAGE_CLEARED_ENV_KEYS:
+            assert key not in environment
+        for key, expected in forced_environment.items():
+            assert environment[key] == expected
+
+
+def _environment_read_keys(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=path.as_posix())
+    keys: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            owner = node.func.value
+            is_os_getenv = (
+                isinstance(owner, ast.Name)
+                and owner.id == "os"
+                and node.func.attr == "getenv"
+            )
+            is_environ_get = (
+                isinstance(owner, ast.Attribute)
+                and isinstance(owner.value, ast.Name)
+                and owner.value.id == "os"
+                and owner.attr == "environ"
+                and node.func.attr == "get"
+            )
+            if is_os_getenv or is_environ_get:
+                if not node.args:
+                    raise AssertionError(f"{path}: environment selector 缺少 key")
+                key = node.args[0]
+                if not isinstance(key, ast.Constant) or not isinstance(key.value, str):
+                    raise AssertionError(
+                        f"{path}: environment selector key 必须是静态字符串"
+                    )
+                keys.add(key.value)
+        if isinstance(node, ast.Subscript):
+            owner = node.value
+            if (
+                isinstance(owner, ast.Attribute)
+                and isinstance(owner.value, ast.Name)
+                and owner.value.id == "os"
+                and owner.attr == "environ"
+            ):
+                if not isinstance(node.slice, ast.Constant) or not isinstance(
+                    node.slice.value, str
+                ):
+                    raise AssertionError(
+                        f"{path}: environment selector key 必须是静态字符串"
+                    )
+                keys.add(node.slice.value)
+    return keys
+
+
+@pytest.mark.parametrize(
+    "expression",
+    (
+        'os.environ.get("NEW_TEST_SELECTOR")',
+        "os.environ.get('NEW_TEST_SELECTOR')",
+        "os.getenv('NEW_TEST_SELECTOR')",
+        "os.environ['NEW_TEST_SELECTOR']",
+    ),
+)
+def test_environment_selector_scanner_recognizes_supported_python_reads(
+    expression: str,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "selector.py"
+    source.write_text(f"import os\nVALUE = {expression}\n", encoding="utf-8")
+    assert _environment_read_keys(source) == {"NEW_TEST_SELECTOR"}
+
+
+@pytest.mark.parametrize(
+    "expression",
+    (
+        "os.environ.get(KEY)",
+        "os.getenv(KEY)",
+        "os.environ[KEY]",
+    ),
+)
+def test_environment_selector_scanner_rejects_dynamic_keys(
+    expression: str,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "selector.py"
+    source.write_text(
+        f"import os\nKEY = 'NEW_TEST_SELECTOR'\nVALUE = {expression}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(AssertionError, match="key 必须是静态字符串"):
+        _environment_read_keys(source)
+
+
+def test_app_coverage_environment_clears_or_forces_every_owned_selector() -> None:
+    forced = {
+        "FLUTTER_TEST_GUARD_MAX_ATTEMPTS": "1",
+        "FLUTTER_TEST_GUARD_TIMEOUT_SECONDS": "1800",
+        "QWQ_APP_RUNTIME_ENV": "alpha",
+    }
+    hostile = {
+        key: "ambient-invalid"
+        for key in set(vcr.APP_COVERAGE_CLEARED_ENV_KEYS) | set(forced)
+    }
+    environment = vcr.canonical_app_coverage_environment(hostile)
+    assert set(vcr.APP_COVERAGE_CLEARED_ENV_KEYS).isdisjoint(environment)
+    for key, expected in forced.items():
+        assert environment[key] == expected
+
+
+def test_app_coverage_environment_owns_every_downstream_selector() -> None:
+    forced = {
+        "FLUTTER_TEST_GUARD_MAX_ATTEMPTS",
+        "FLUTTER_TEST_GUARD_TIMEOUT_SECONDS",
+        "QWQ_APP_RUNTIME_ENV",
+    }
+    downstream_paths = (
+        vcr.APP_ROOT / vcr.APP_FLUTTER_TEST_RUNNER,
+        vcr.APP_ROOT / vcr.APP_RUNTIME_DEFINE_RESOLVER,
+        vcr.APP_ROOT / vcr.APP_TEST_SELECTION_POLICY,
+    )
+    observed = {key for path in downstream_paths for key in _environment_read_keys(path)}
+    assert observed == (
+        set(vcr.APP_COVERAGE_CLEARED_ENV_KEYS) - {"QWQ_DEPLOY_TARGET"}
+    ) | forced
+
+
+def test_app_coverage_config_identity_contains_the_runner_and_topology_closure() -> None:
+    inputs = set(vcr._collection_config_inputs(vcr.APP_COLLECTION_TARGET))
+    environment_root = vcr.ROOT / "quwoquan_ops" / "environments"
+    expected = {
+        vcr.APP_ROOT / vcr.APP_FLUTTER_TEST_RUNNER,
+        vcr.APP_ROOT / vcr.APP_RUNTIME_DEFINE_RESOLVER,
+        vcr.APP_ROOT / vcr.APP_TEST_SELECTION_POLICY,
+        vcr.APP_ROOT / "scripts/_common/__init__.py",
+        vcr.ROOT / "quwoquan_ops/cli/lib/common.py",
+        vcr.ROOT / "quwoquan_ops/cli/lib/environment_topology.py",
+        vcr.ROOT / "quwoquan_ops/cli/lib/output_paths.py",
+        vcr.ROOT / "quwoquan_ops/cli/lib/port_manifest.py",
+        environment_root / "domain_governance.yaml",
+        environment_root / "local_env_port_manifest.yaml",
+        *environment_root.glob("*/runtime.yaml"),
+    }
+    assert expected <= inputs
+    policy = vcr.app_coverage_policy_identity()
+    assert policy["runtimeEnvironment"] == "alpha"
+    assert policy["launchPolicy"] == "test_live"
+    assert policy["concurrency"] == "4"
+    assert policy["serialConcurrency"] == "1"
+    assert policy["phases"] == ["exclude-serial", "serial-only"]
+    assert policy["maxAttempts"] == "1"
+    assert policy["resolvedDartDefines"]["PUBLIC_WEB_BASE_URL"].startswith(
+        "https://"
+    )
+
+
+def test_selector_byte_drift_changes_the_app_config_digest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app_root = tmp_path / "quwoquan_app"
+    ops_root = tmp_path / "quwoquan_ops"
+    required = (
+        app_root / ".flutter-version",
+        app_root / "pubspec.yaml",
+        app_root / "pubspec.lock",
+        app_root / vcr.APP_FLUTTER_TEST_RUNNER,
+        app_root / vcr.APP_RUNTIME_DEFINE_RESOLVER,
+        app_root / vcr.APP_TEST_SELECTION_POLICY,
+        app_root / "scripts/_common/__init__.py",
+        ops_root / "cli/lib/common.py",
+        ops_root / "cli/lib/environment_topology.py",
+        ops_root / "cli/lib/output_paths.py",
+        ops_root / "cli/lib/port_manifest.py",
+        ops_root / "environments/domain_governance.yaml",
+        ops_root / "environments/local_env_port_manifest.yaml",
+        ops_root / "environments/alpha/runtime.yaml",
+    )
+    for path in required:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"fixture:{path.name}\n", encoding="utf-8")
+    monkeypatch.setattr(vcr, "ROOT", tmp_path)
+    monkeypatch.setattr(vcr, "APP_ROOT", app_root)
+
+    inputs = vcr._collection_config_inputs(vcr.APP_COLLECTION_TARGET)
+    before = vcr._tree_digest(inputs, label="fixture App coverage config")
+    selector = app_root / vcr.APP_TEST_SELECTION_POLICY
+    selector.write_text("fixture:selector-drift\n", encoding="utf-8")
+    after = vcr._tree_digest(
+        vcr._collection_config_inputs(vcr.APP_COLLECTION_TARGET),
+        label="fixture App coverage config",
+    )
+
+    assert before != after
 
 
 @pytest.fixture()
@@ -542,7 +825,9 @@ def test_a_shard_that_produces_no_lcov_blocks_as_a_collection_failure(
     """
     sharded_app(2)
 
-    def fake_run(command: Sequence[str], *, cwd: Path):
+    def fake_run(
+        command: Sequence[str], *, cwd: Path, env: dict[str, str] | None = None
+    ):
         return subprocess.CompletedProcess(list(command), 137, stdout="", stderr="Killed")
 
     monkeypatch.setattr(vcr, "_run", fake_run)
@@ -558,7 +843,9 @@ def test_an_all_empty_sharded_run_blocks_instead_of_producing_an_empty_artifact(
     """每片都空 = 采集没有真正生效，必须阻断而不是写一份空 lcov。"""
     sharded_app(4)
 
-    def fake_run(command: Sequence[str], *, cwd: Path):
+    def fake_run(
+        command: Sequence[str], *, cwd: Path, env: dict[str, str] | None = None
+    ):
         coverage_path = next(
             argument[len("--coverage-path=") :]
             for argument in command
@@ -600,7 +887,12 @@ def _tracked_baseline() -> dict:
     }
     receipts = _receipts_for_app_unit()
     return {
-        "_governance": {"owner": "o", "reason": "r", "expires_when": "w"},
+        "_governance": {
+            "owner": "o",
+            "reason": "r",
+            "expires_when": "w",
+            "measure": "m",
+        },
         "schema": vcr.BASELINE_SCHEMA,
         "ruleId": vcr.RULE_ID,
         "policy": {

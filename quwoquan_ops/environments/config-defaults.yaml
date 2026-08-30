@@ -1,0 +1,16 @@
+# 全局跨服务配置默认：所有环境、所有服务共用的显式声明层。
+#
+# 取值优先级（高到低）：服务 environments/<env>/config.yaml 的 overrides > 本环境的
+# quwoquan_ops/environments/<env>/config-defaults.yaml > 本文件 > 服务 config/schema.yaml
+# 的 default。四层都是显式声明，任一生效值都能指回一处写下它的文件。
+#
+# 本层只给服务 schema 已声明的键**供值**，不引入新键——键的真相源仍是各服务
+# config/schema.yaml。sensitive 键不得在此供值，必须走服务环境入口的 secretRef。
+#
+# 键用渲染后的路径（已去掉 sys.<workload>. 前缀），`*` 通配单段。同层多个模式命中
+# 同一个键时取通配段更少的那个，并列即声明歧义，渲染判否。
+defaults:
+  # Redis scene 的物理拓扑基线是单点。cluster 由需要集群组网的服务在自己的
+  # environments/prod/config.yaml 显式声明；不接真实 Redis 的 scene 显式声明
+  # mode: memory——那是唯一合法的关停路径，缺地址不再隐含关停。
+  redis.*.mode: standalone

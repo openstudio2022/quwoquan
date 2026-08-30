@@ -99,7 +99,7 @@ def _validate_sourced_video(
             "commercialAuthorizationStatus": (
                 source.commercial_authorization_status
             ),
-            "publicationAdmission": source.publication_admission,
+            "publicationAdmission": source.effective_publication_admission,
             "authorizationProofUrl": source.authorization_proof_url or "",
             "termsUrl": source.terms_url or "",
             "riskAcceptanceId": source.risk_acceptance_id or "",

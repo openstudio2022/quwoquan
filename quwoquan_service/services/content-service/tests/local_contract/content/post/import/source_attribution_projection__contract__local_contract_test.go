@@ -46,7 +46,7 @@ func TestLoadArticlePreservesCompleteSourceAttribution(t *testing.T) {
 		}`,
 	)
 
-	posts, err := LoadPosts(root, nil)
+	posts, err := LoadPosts(root, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

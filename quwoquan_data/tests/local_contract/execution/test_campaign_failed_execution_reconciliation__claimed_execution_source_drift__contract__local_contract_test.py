@@ -20,6 +20,10 @@ from content.execution.campaign.submission_reconciliation_contract import (
 from content.execution.identity import build_execution_id
 from core.io import read_json, write_json
 from core.source_digest import content_source_revision
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 ROOT_ID = "20260808--travel-homepage-m1--china-beta-bootstrap-not-m100--scale-021"
@@ -54,6 +58,9 @@ def _source_document(digest: str) -> dict[str, object]:
 def _write_boundary(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    *,
+    active_carriers: tuple[str, ...] = CARRIERS,
+    target_names: tuple[str, ...] = ("杭州西湖",),
 ) -> tuple[Path, Path, dict[str, str]]:
     output_root = tmp_path / "output"
     _preflight_path, preflight = ready_semantic_preflight(
@@ -71,12 +78,15 @@ def _write_boundary(
     empty_external = payload_digest(
         {"schema": "quwoquan_data.campaign_external_input_set", "refs": []}
     )
-    execution_ids = {carrier: _execution_id(carrier) for carrier in CARRIERS}
+    execution_ids = {carrier: _execution_id(carrier) for carrier in active_carriers}
     request_digests: dict[str, str] = {}
-    for carrier in CARRIERS:
+    for carrier in active_carriers:
         stable = {
             "schema": "quwoquan_data.content_execution_submission",
             "scale": "M1",
+            "workloadMode": "explicit",
+            "activeCarriers": list(active_carriers),
+            "workloads": {item: 1 for item in active_carriers},
             "rootExecutionId": ROOT_ID,
             "executionId": execution_ids[carrier],
             "operation": f"{carrier}.generate",
@@ -87,14 +97,20 @@ def _write_boundary(
             "quota": 1,
             "count": 2,
             "topic": "beta-bootstrap-not-m100",
-            "targetNames": ["杭州西湖"],
+            "targetNames": list(target_names),
             "sourceProviders": [],
             "semanticSelectionId": "default",
+            "executionAuthority": synthetic_governed_execution_authority(),
             "retryOf": execution_ids[carrier].replace("scale-021", "scale-020"),
             "gitBranch": "dev1.0",
             "gitCommitSha": "d" * 40,
             "sourceRevision": source_revision,
             "sourceDigest": _source_document(SOURCE_DIGEST),
+            "executionBundle": {
+                "algorithm": "sha256",
+                "digest": "sha256:" + "e" * 64,
+                "inputs": ["quwoquan_data/scripts"],
+            },
             "entityCatalogDigest": CATALOG_DIGEST,
             "externalInputRefs": [],
             "externalInputsDigest": empty_external,
@@ -115,20 +131,29 @@ def _write_boundary(
             "externalInputRefs": [],
             "externalInputsDigest": empty_external,
         }
-        for carrier in CARRIERS
+        for carrier in active_carriers
     }
     stable_plan = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": ROOT_ID,
         "executionMode": "distributed",
         "scale": "M1",
+        "workloadMode": "explicit",
+        "activeCarriers": list(active_carriers),
+        "workloads": {carrier: 1 for carrier in active_carriers},
         "gitBranch": "dev1.0",
         "gitCommitSha": "d" * 40,
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "e" * 64,
+            "inputs": ["quwoquan_data/scripts"],
+        },
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": preflight,
+        "executionAuthority": synthetic_governed_execution_authority(),
         "laneExternalInputs": lane_external_inputs,
         "externalInputsDigest": payload_digest(
             {
@@ -153,7 +178,7 @@ def _write_boundary(
             "status": "capsule_ready",
             "phase": "capsule",
         }
-        for carrier in CARRIERS
+        for carrier in active_carriers
     }
     write_json(
         campaign / "campaign_report.json",
@@ -184,7 +209,7 @@ def _write_boundary(
             "finishedAt": "2026-08-08T10:04:59Z",
         },
     )
-    for carrier in CARRIERS:
+    for carrier in active_carriers:
         execution_root = output_root / "data/tasks" / execution_ids[carrier]
         execution_root.mkdir(parents=True)
         supersession_path = (
@@ -246,7 +271,7 @@ def _write_boundary(
     )
     monkeypatch.setattr(
         reconciliation,
-        "current_source_digest",
+        "current_source_definition_snapshot",
         lambda **_kwargs: SimpleNamespace(
             to_document=lambda: _source_document(OBSERVED_SOURCE_DIGEST)
         ),
@@ -440,6 +465,36 @@ def test_claimed_execution_source_drift_writes_create_once_lineage_receipt(
         for row in first["executionEvidence"]["lanes"]
     )
     assert read_json(campaign / "campaign_report.json")["status"] == "running"
+
+
+def test_claimed_recovery_ignores_inactive_article_and_image_lanes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    active = ("homepage", "video")
+    output_root, campaign, execution_ids = _write_boundary(
+        tmp_path,
+        monkeypatch,
+        active_carriers=active,
+    )
+
+    receipt, _path = reconciliation.reconcile_failed_campaign(
+        ROOT_ID,
+        reason="claimed_execution_source_drift",
+        blocker_evidence=campaign / "claims/homepage.json",
+        repo_root=tmp_path,
+        output_root=output_root,
+    )
+
+    assert receipt["activeCarriers"] == list(active)
+    assert set(receipt["submissions"]) == set(active)
+    assert [row["carrier"] for row in receipt["executionEvidence"]["lanes"]] == list(
+        active
+    )
+    assert set(receipt["campaignEvidence"]["claims"]) == set(active)
+    assert execution_ids == {
+        carrier: receipt["submissions"][carrier]["executionId"] for carrier in active
+    }
 
 
 def test_claimed_execution_source_drift_requires_four_supersession_receipts(

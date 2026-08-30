@@ -12,6 +12,7 @@ import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/app
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_introduction_repository.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
+import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
 import 'package:quwoquan_app/design_system/media/content_preview_card.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_text_constants.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_page.dart';
@@ -31,10 +32,7 @@ import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart'
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
     show activePersonaContextProvider, intersectionRepositoryProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
-    show
-        homepageCommandWriterProvider,
-        homepageFacetSetProvider,
-        homepageQueryProvider;
+    show homepageFacetSetProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
     show contentRuntimeConfigProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime_defaults.dart'
@@ -58,9 +56,11 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 
-Override _homepageFacetOverride(MockHomepageRepository repository) {
-  return homepageFacetSetProvider.overrideWithValue(repository);
-}
+List<Override> _homepageFacetOverrides(MockHomepageRepository repository) =>
+    <Override>[
+      ...homepageSourceCardsBoundaryOverrides(),
+      homepageFacetSetProvider.overrideWithValue(repository),
+    ];
 
 void main() {
   late FlutterExceptionHandler? originalOnError;
@@ -99,10 +99,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          homepageQueryProvider.overrideWithValue(MockHomepageRepository()),
-          homepageCommandWriterProvider.overrideWithValue(
-            MockHomepageRepository(),
-          ),
+          ..._homepageFacetOverrides(MockHomepageRepository()),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
               personaId: 'viewer_demo',
@@ -129,7 +126,7 @@ void main() {
     expect(find.text('推荐你了解西湖摄影'), findsOneWidget);
     expect(find.text(ObjectHomepageText.objectImpactTitleEntity), findsWidgets);
     expect(find.text('认领主页'), findsNothing);
-    expect(find.text(FoundationText.follow), findsWidgets);
+    expect(find.text(ObjectHomepageText.homepageWishlistAction), findsWidgets);
     expect(
       find.text(ObjectHomepageText.entityActionPublishRecord),
       findsWidgets,
@@ -200,7 +197,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          _homepageFacetOverride(MockHomepageRepository()),
+          ..._homepageFacetOverrides(MockHomepageRepository()),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
               personaId: 'viewer_demo',
@@ -273,7 +270,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          _homepageFacetOverride(MockHomepageRepository()),
+          ..._homepageFacetOverrides(MockHomepageRepository()),
           currentUserIdProvider.overrideWithValue('viewer_demo'),
         ],
         child: const MaterialApp(
@@ -328,7 +325,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          _homepageFacetOverride(MockHomepageRepository()),
+          ..._homepageFacetOverrides(MockHomepageRepository()),
         ],
         child: const MaterialApp(
           home: HomepageDetailPage(
@@ -357,7 +354,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          _homepageFacetOverride(MockHomepageRepository()),
+          ..._homepageFacetOverrides(MockHomepageRepository()),
         ],
         child: const MaterialApp(
           home: HomepageDetailPage(homepageId: 'entity:sight:emeishan'),
@@ -384,7 +381,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          _homepageFacetOverride(MockHomepageRepository()),
+          ..._homepageFacetOverrides(MockHomepageRepository()),
         ],
         child: const MaterialApp(
           home: HomepageDetailPage(
@@ -413,7 +410,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          _homepageFacetOverride(MockHomepageRepository()),
+          ..._homepageFacetOverrides(MockHomepageRepository()),
         ],
         child: const MaterialApp(
           home: HomepageDetailPage(homepageId: 'entity:school:neworiental'),
@@ -440,7 +437,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          _homepageFacetOverride(MockHomepageRepository()),
+          ..._homepageFacetOverrides(MockHomepageRepository()),
         ],
         child: const MaterialApp(
           home: HomepageDetailPage(
@@ -487,7 +484,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          _homepageFacetOverride(MockHomepageRepository()),
+          ..._homepageFacetOverrides(MockHomepageRepository()),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),
@@ -534,7 +531,7 @@ void main() {
             contentRuntimeConfigProvider.overrideWithValue(
               buildProductionContentRuntimeConfigDefaults(),
             ),
-            _homepageFacetOverride(MockHomepageRepository()),
+            ..._homepageFacetOverrides(MockHomepageRepository()),
           ],
           child: MaterialApp(
             theme: ThemeData(
@@ -576,7 +573,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          _homepageFacetOverride(repository),
+          ..._homepageFacetOverrides(repository),
           homepageIntroductionRepositoryProvider.overrideWithValue(
             _RecordingHomepageIntroductionRepository(),
           ),
@@ -625,7 +622,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          _homepageFacetOverride(repository),
+          ..._homepageFacetOverrides(repository),
           homepageIntroductionRepositoryProvider.overrideWithValue(
             _RecordingHomepageIntroductionRepository(),
           ),
@@ -671,7 +668,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          _homepageFacetOverride(repository),
+          ..._homepageFacetOverrides(repository),
           homepageIntroductionRepositoryProvider.overrideWithValue(
             _RecordingHomepageIntroductionRepository(),
           ),
@@ -730,7 +727,7 @@ void main() {
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
           ),
-          _homepageFacetOverride(MockHomepageRepository()),
+          ..._homepageFacetOverrides(MockHomepageRepository()),
           homepageIntroductionRepositoryProvider.overrideWithValue(
             _RecordingHomepageIntroductionRepository(),
           ),

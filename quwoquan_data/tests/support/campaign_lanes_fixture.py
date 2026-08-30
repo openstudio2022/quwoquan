@@ -19,12 +19,18 @@ from content.execution.campaign.external_input_runtime import (
 )
 from content.execution.campaign.runtime import read_lane_checkpoint
 from content.execution.campaign.workspace import CampaignRuntimePaths
+from content.execution.campaign.request_envelope import workload_intent
+from content.execution.identity import build_execution_id
 from content.execution.request import RuntimeExecutionRequest
 from core.control_types import TargetSelector
 from core.io import read_json
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
-ROOT_ID = "20260728--travel-homepage-m1--china--scale-001"
+ROOT_ID = "20260728--travel-homepage-workload-homepage-1--china--scale-001"
 CARRIERS = ("homepage", "article", "image", "video")
 
 
@@ -46,7 +52,12 @@ root_id = value("--campaign-root-execution-id")
 stage = value("--stage")
 quota = int(value("--quota"))
 count = int(value("--count"))
-carrier = next(item for item in ("homepage", "article", "image", "video") if f"-{item}-" in execution_id)
+identity_body = execution_id.split("--", 2)[1]
+carrier = next(
+    item
+    for item in ("homepage", "article", "image", "video")
+    if identity_body.startswith(f"travel-{item}-")
+)
 phase = "review" if stage == "review-only" else "publish"
 event_path = Path(os.environ["CAMPAIGN_EVENT_LOG"])
 external_input_envelope = (
@@ -192,8 +203,9 @@ if phase == "publish":
     publish_document = {
         "schema": "quwoquan_data.execution_publish_ref",
         "executionId": execution_id,
-        "canonicalPublishRoot": "quwoquan_data/publish",
+        "canonicalPublishRoot": "canonical-publish",
         "publishedRefs": published_refs,
+        "publishDiscards": [],
     }
     publish_bytes = (
         json.dumps(publish_document, ensure_ascii=False, sort_keys=True) + "\n"
@@ -263,6 +275,43 @@ if phase == "publish":
     }
 
 selected = qualified + len(discards)
+# 零合格终态必须带唯一 typed 原因（DEC-005）。review 阶段观测到的零合格只可能是
+# 「全部对象质量被拒」，其判定依据是本 lane 真实写下的逐对象排除台账，摘要按台账
+# 字节现算，与生产写者同一形态。
+zero_qualified_reason = {}
+if status == "blocked":
+    basis_name = f"{carrier}-{phase}-zero-qualified-basis.json"
+    basis_document = {
+        "schema": "quwoquan_data.zero_qualified_basis_evidence",
+        "rootExecutionId": root_id,
+        "executionId": execution_id,
+        "carrier": carrier,
+        "phase": phase,
+        "evaluatedObjectCount": selected,
+        "admittedObjectCount": 0,
+        "objectExclusions": discards,
+    }
+    basis_bytes = (
+        json.dumps(basis_document, ensure_ascii=False, indent=2) + "\n"
+    ).encode("utf-8")
+    (receipts / basis_name).write_bytes(basis_bytes)
+    zero_qualified_reason = {
+        "zeroQualifiedReason": {
+            "code": "ALL_OBJECTS_QUALITY_REJECTED",
+            "observedStage": "review",
+            "determinedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "operatorAction": "repair_source",
+            "nonResumableBasis": {
+                "summary": (
+                    f"{carrier} lane 的 {selected} 个候选对象在 review 全部被拒"
+                ),
+                "evidenceRef": f"receipts/{basis_name}",
+                "evidenceDigest": (
+                    "sha256:" + hashlib.sha256(basis_bytes).hexdigest()
+                ),
+            },
+        }
+    }
 payload = {
     "schema": "quwoquan_data.content_campaign_lane_receipt",
     "rootExecutionId": root_id,
@@ -277,8 +326,12 @@ payload = {
     "discardedCount": len(discards),
     "shortfallCount": max(0, quota - qualified),
     "discards": discards,
+    **zero_qualified_reason,
     **publish_binding,
 }
+if phase == "publish":
+    payload["reviewQualifiedCount"] = qualified
+    payload["publishDiscards"] = []
 (receipts / f"{carrier}-{phase}.json").write_text(
     json.dumps(payload),
     encoding="utf-8",
@@ -385,10 +438,16 @@ def _create_repo(tmp_path: Path) -> Path:
         "# Object homepage coverage scaling design\n",
         encoding="utf-8",
     )
+    execution_bundle_spec = feature_root / "multi-carrier-release/spec.md"
+    execution_bundle_spec.parent.mkdir(parents=True)
+    execution_bundle_spec.write_text(
+        "# Multi-carrier release\n",
+        encoding="utf-8",
+    )
     catalog = repo / "quwoquan_data/reference/travel/entities/china"
     catalog.mkdir(parents=True)
     (catalog / "catalog.yaml").write_text("entities: [测试实体]\n", encoding="utf-8")
-    _git(repo, "init")
+    _git(repo, "init", "-b", "main")
     _git(repo, "config", "user.email", "campaign@example.invalid")
     _git(repo, "config", "user.name", "Campaign Test")
     _git(repo, "add", ".")
@@ -423,9 +482,7 @@ def _request(
         ),
         count=count,
         quota=quota,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "6" * 64,
+        execution_authority=synthetic_governed_execution_authority(),
         topic=None,
         source_providers=(),
         target_names=(),
@@ -435,7 +492,9 @@ def _request(
 def _execution_id(carrier: str, *, sequence: str = "001") -> str:
     if carrier == "homepage" and sequence == "001":
         return ROOT_ID
-    return f"20260728--travel-{carrier}-m1--china--scale-{sequence}"
+    return (
+        f"20260728--travel-{carrier}-workload-{carrier}-1--china--scale-{sequence}"
+    )
 
 
 def _semantic_preflight_kwargs(
@@ -473,6 +532,54 @@ def _submit_all(
             root=runtime.campaigns_root,
             **semantic_preflight,
         )
+
+
+def _submit_active(
+    repo: Path,
+    runtime: CampaignRuntimePaths,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    workloads: dict[str, int],
+) -> str:
+    """Submit an exact carrier subset without synthesizing inactive lanes."""
+
+    active = tuple(
+        carrier for carrier in CARRIERS if carrier in workloads
+    )
+    intent = workload_intent(
+        scale="M1000",
+        workload_mode="explicit",
+        workloads=workloads,
+    )
+    execution_ids = {
+        carrier: build_execution_id(
+            run_date="20260728",
+            vertical="travel",
+            content_type=carrier,
+            intent=intent,
+            scope="china",
+            phase="scale",
+            sequence=index,
+        )
+        for index, carrier in enumerate(active, start=1)
+    }
+    root_id = execution_ids[active[0]]
+    monkeypatch.setattr(campaign_submission.paths, "REPO_ROOT", repo)
+    semantic_preflight = _semantic_preflight_kwargs(runtime)
+    for carrier in active:
+        quota = int(workloads[carrier])
+        campaign_submission.write_submission(
+            root_execution_id=root_id,
+            execution_id=execution_ids[carrier],
+            request=_request(carrier, count=quota, quota=quota),
+            retry_of=None,
+            repo_root=repo,
+            root=runtime.campaigns_root,
+            active_carriers=active,
+            workloads=workloads,
+            **semantic_preflight,
+        )
+    return root_id
 
 
 def _events(path: Path) -> list[dict[str, object]]:

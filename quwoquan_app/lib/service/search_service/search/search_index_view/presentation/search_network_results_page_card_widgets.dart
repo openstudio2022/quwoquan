@@ -55,22 +55,30 @@ class _SearchPageFlatCard extends StatelessWidget {
               dimension: AppSpacing.avatarUserLg,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(AppSpacing.containerXs),
-                child: thumbnail.isEmpty
-                    ? ColoredBox(
-                        color: AppColors.primaryColor.withValues(alpha: 0.08),
-                        child: Icon(
-                          CupertinoIcons.search,
-                          color: AppColors.primaryColor,
-                          size: AppSpacing.iconMedium,
-                        ),
-                      )
-                    : AppCachedNetworkImage(
-                        imageUrl: thumbnail,
-                        fit: BoxFit.cover,
-                        cdnPreset: CdnImagePreset.thumbnail,
-                        placeholder: const SizedBox.shrink(),
-                        errorWidget: const SizedBox.shrink(),
-                      ),
+                child: mediaDeliveryImage(
+                  binding: MediaDeliveryBinding(
+                    assetId: item.thumbnailAssetId?.trim() ?? '',
+                    accessMode: item.thumbnailAccessMode,
+                    publicUrl: thumbnail,
+                  ),
+                  kind: MediaDeliveryKind.image,
+                  fit: BoxFit.cover,
+                  absentWidget: ColoredBox(
+                    color: AppColors.primaryColor.withValues(alpha: 0.08),
+                    child: Icon(
+                      CupertinoIcons.search,
+                      color: AppColors.primaryColor,
+                      size: AppSpacing.iconMedium,
+                    ),
+                  ),
+                  publicBuilder: (context, publicUrl) => AppCachedNetworkImage(
+                    imageUrl: publicUrl,
+                    fit: BoxFit.cover,
+                    cdnPreset: CdnImagePreset.thumbnail,
+                    placeholder: const SizedBox.shrink(),
+                    errorWidget: const SizedBox.shrink(),
+                  ),
+                ),
               ),
             ),
             SizedBox(width: AppSpacing.containerSm),
@@ -191,14 +199,29 @@ class _IntersectionCard extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     if (hasCover)
-                      AppCachedNetworkImage(
-                        imageUrl: model.coverUrl,
+                      mediaDeliveryImage(
+                        binding: model.coverBinding.hasRenderableSource
+                            ? model.coverBinding
+                            : MediaDeliveryBinding(
+                                assetId: '',
+                                accessMode: null,
+                                publicUrl: model.coverUrl,
+                              ),
+                        kind: MediaDeliveryKind.image,
                         fit: BoxFit.cover,
-                        cdnPreset: CdnImagePreset.cover,
-                        placeholder: _IntersectionCardPlaceholder(
-                          icon: model.categoryIcon,
-                        ),
-                        errorWidget: _IntersectionCardPlaceholder(
+                        publicBuilder: (context, publicUrl) =>
+                            AppCachedNetworkImage(
+                              imageUrl: publicUrl,
+                              fit: BoxFit.cover,
+                              cdnPreset: CdnImagePreset.cover,
+                              placeholder: _IntersectionCardPlaceholder(
+                                icon: model.categoryIcon,
+                              ),
+                              errorWidget: _IntersectionCardPlaceholder(
+                                icon: model.categoryIcon,
+                              ),
+                            ),
+                        absentWidget: _IntersectionCardPlaceholder(
                           icon: model.categoryIcon,
                         ),
                       )

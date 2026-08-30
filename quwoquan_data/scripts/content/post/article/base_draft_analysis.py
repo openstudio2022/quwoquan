@@ -183,11 +183,11 @@ def base_aware_word_count(
     carrier: str = "article",
     source_use_mode: str = "licensed_adaptation",
 ) -> dict[str, int] | None:
-    """light-edit 文章字数目标必须跟随底稿长度，否则固定上限会与 `baseDraftFidelity>=55%` 互斥。
+    """Licensed light-edit word counts must follow the base-draft length.
 
     根因实测：底稿 ~8900 字、`wordCount` 上限 1600 时，成稿最多覆盖底稿 ~18% 三连，fidelity
     必崩（成稿被逼压缩+重写）。light-edit 文章应整篇保留清洗底稿，故字数目标按清洗底稿长度派生。
-    `image/gallery`（短配文）与非改编源返回 None（沿用默认，不设底稿字数门）。
+    `image/gallery`（短配文）与 factual/blocked 等非改编源返回 None（沿用默认，不设底稿字数门）。
     """
     if str(carrier or "").lower() == "image":
         return None

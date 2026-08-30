@@ -249,6 +249,18 @@ def _run_release_video_delivery_probe(
     return evidence, report_path
 
 
+# consumer 起就要求 `premium_stream` 有 release-bound 读回，与 receipt 校验器同源
+# （environment-topology-and-packaging REQ-002）。实时探测一度只从 research 起校验，
+# 于是同一件事有两套判断；这里收敛成唯一闭集。
+_PREMIUM_BOUND_PHASES = frozenset(
+    {
+        ReadinessPhase.CONSUMER,
+        ReadinessPhase.RESEARCH,
+        ReadinessPhase.COMMERCIAL,
+    }
+)
+
+
 def _release_feed_post_expectations(
     receipt: dict[str, Any],
     *,
@@ -281,7 +293,7 @@ def _release_feed_post_expectations(
         "content_feed": discovery_ids,
         "video_book_feed": video_ids,
     }
-    if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}:
+    if readiness_phase in _PREMIUM_BOUND_PHASES:
         expectations["premium_feed"] = premium_video_ids
     empty = sorted(name for name, post_ids in expectations.items() if not post_ids)
     if empty:
@@ -300,31 +312,41 @@ def _run_release_feed_readback_probe(
     report_dir: Path,
     readiness_phase: ReadinessPhase,
 ) -> tuple[dict[str, Any], Path]:
-    """Re-read live discovery/video/premium and bind results to receipt post IDs."""
+    """Re-read live discovery/video/premium and bind results to receipt post IDs.
+
+    research 相位语义反转（DEC-032）：匿名 feed 必须收敛为 no_active_release
+    空页且不回显 release 身份——非空即隔离泄露。带凭证的 research 内容消费
+    证据由 Data post-api verification（research consumer credential）单点拥有，
+    本探针不重复。
+    """
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    research = readiness_phase is ReadinessPhase.RESEARCH
     report_file = report_dir / "integration-probe.json"
     try:
         check, _output, findings = _stackctl._run_environment_integration_probe(
             _stackctl.load_environment_topology(),
             target,
             report_dir,
-            require_non_empty_content_feed=True,
-            release_post_expectations=_stackctl._release_feed_post_expectations(
-                receipt,
-                readiness_phase=readiness_phase,
+            require_non_empty_content_feed=not research,
+            research_anonymous_convergence=research,
+            release_post_expectations=(
+                None
+                if research
+                else _stackctl._release_feed_post_expectations(
+                    receipt,
+                    readiness_phase=readiness_phase,
+                )
             ),
             release_readiness_path=readiness_path,
             only_checks=tuple(
                 (
                     "content_feed",
                     "video_book_feed",
-                    *(
-                        ("premium_feed",)
-                        if readiness_phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}
-                        else ()
-                    ),
-                    "media_sample",
+                    *(("premium_feed",) if readiness_phase in _PREMIUM_BOUND_PHASES else ()),
+                    # research 私有交付没有匿名可采样的公开图片 slice；私有媒体
+                    # 的拒绝与短签取回由 Data research isolation 证据覆盖。
+                    *(("media_sample",) if not research else ()),
                 )
             ),
             probe_name="release-bound-feed-readback",
@@ -362,10 +384,14 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             target=requirement.target,
             scope=requirement.health_scope,
             workload=requirement.workload,
+            # research 相位的匿名 feed 正确形态是 no_active_release 空页
+            # （DEC-032 收敛）：health 的 content-consumer scope 在 research
+            # 下改跑匿名收敛断言，非空断言只对公开 serving 相位成立。
             require_non_empty_content_feed=phase in {
                 ReadinessPhase.CONSUMER,
                 ReadinessPhase.COMMERCIAL,
-            } or (
+            },
+            research_anonymous_convergence=(
                 phase is ReadinessPhase.RESEARCH
                 and bool(str(getattr(args, "verify_run_id", "") or "").strip())
             ),
@@ -374,6 +400,27 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
         )
     )
     details = list(health.get("details", [])) if int(health["exitCode"]) != 0 else []
+    if phase is ReadinessPhase.IMPORT:
+        # import 门只消费 policy 声明能力（content_api/content_media/
+        # content_services）的探针结论。health 附带的 user availability 聚合
+        # 里 release_active 层描述的是「当前 serving release 的已验证证据」，
+        # 而首个 release 的导入正是为了创造这份证据（bootstrap），不得把
+        # 导入后才存在的 readiness receipt 倒置为导入前置。
+        details = [
+            item
+            for item in details
+            if not str(item).startswith("user availability/")
+        ]
+    if phase is ReadinessPhase.RESEARCH:
+        # research readiness 的消费主体是受保护内部研究身份（API 面），App
+        # 设备消费面显式 deferred（DEC-031 / OPEN-015）：device lease 与
+        # content-live 心跳不构成 research 准入，release binding 层保留。
+        details = [
+            item
+            for item in details
+            if not str(item).startswith("user availability/device")
+            and not str(item).startswith("user availability/content_live")
+        ]
     executed_checks = [
         item
         for item in _stackctl._read_json_object(str(report_dir / "health" / "report.json")).get("checks", [])
@@ -438,7 +485,10 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
                 probes.append("release-bound-feed-readback")
             except ValueError as exc:
                 details.append(f"release-bound feed readback failed: {exc}")
-            if phase in {ReadinessPhase.RESEARCH, ReadinessPhase.COMMERCIAL}:
+            if phase is ReadinessPhase.COMMERCIAL:
+                # 匿名视频播放 canary 只对公开 CDN 交付（commercial）成立；
+                # research 私有交付（DEC-031）的视频证据是 Data 侧
+                # researchMediaProbe 的匿名 401/403 拒绝 + isolation probe。
                 try:
                     video_delivery_evidence, video_delivery_path = (
                         _stackctl._run_release_video_delivery_probe(

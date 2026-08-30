@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -60,19 +62,37 @@ def render(
     if not isinstance(readiness, dict):
         raise ValueError("Provider readiness must bind all four environments")
 
-    images = manifest.get("images")
-    if not isinstance(images, dict) or not images:
-        raise ValueError("component image evidence is missing")
-    image_digests = {
-        service: descriptor.get("digest")
-        for service, descriptor in sorted(images.items())
-        if isinstance(descriptor, dict)
-    }
-    if len(image_digests) != len(images) or any(
-        DIGEST_PATTERN.fullmatch(str(digest or "")) is None
-        for digest in image_digests.values()
-    ):
-        raise ValueError("component image evidence is not immutable")
+    artifacts = manifest.get("environmentArtifacts")
+    if not isinstance(artifacts, dict) or not artifacts:
+        raise ValueError("component environment artifact evidence is missing")
+    environment_material: dict[str, dict[str, Any]] = {}
+    for environment, artifact in sorted(artifacts.items()):
+        images = artifact.get("images") if isinstance(artifact, dict) else None
+        environment_digest = (
+            artifact.get("environmentArtifactDigest")
+            if isinstance(artifact, dict)
+            else None
+        )
+        if (
+            not isinstance(images, dict)
+            or not images
+            or DIGEST_PATTERN.fullmatch(str(environment_digest or "")) is None
+        ):
+            raise ValueError("component environment artifact evidence is incomplete")
+        image_digests = {
+            owner: descriptor.get("digest")
+            for owner, descriptor in sorted(images.items())
+            if isinstance(descriptor, dict)
+        }
+        if len(image_digests) != len(images) or any(
+            DIGEST_PATTERN.fullmatch(str(digest or "")) is None
+            for digest in image_digests.values()
+        ):
+            raise ValueError("component image evidence is not immutable")
+        environment_material[environment] = {
+            "environmentArtifactDigest": environment_digest,
+            "images": image_digests,
+        }
     source = manifest["source"]
     return {
         "schema": "provider-conformance-readiness",
@@ -85,7 +105,7 @@ def render(
             "workflowRunId": source["workflowRunId"],
         },
         "candidateMaterial": {
-            "images": image_digests,
+            "environmentArtifacts": environment_material,
             "contractGraphDigest": contract_graph_digest,
         },
         "sourceEvidence": conformance["sourceEvidence"],

@@ -56,6 +56,7 @@ def test_release_identity_incident__blocks_every_ordinary_canonical_creator__loc
             release_root=releases,
             release_id=RELEASE_ID,
             execution_ids=["missing-execution"],
+            release_class="research",
             source_revision="sha256:" + "c" * 64,
             entity_catalog_digest="sha256:" + "d" * 64,
         )
@@ -67,6 +68,7 @@ def test_release_identity_incident__blocks_every_ordinary_canonical_creator__loc
             publish_root=output_root / "data/publish",
             release_root=releases,
             release_id=RELEASE_ID,
+            release_class="research",
         )
     monkeypatch.setattr(
         assemble,

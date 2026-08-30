@@ -37,12 +37,9 @@ def resolve_effective_admission(
 
 def effective_source_attribution_ready(
     admission: EffectiveAdmission,
-    *,
-    release_mode: str,
 ) -> bool:
-    """Apply attribution once, at the boundary that resolved admission truth."""
+    """Check shared-pool attribution without selecting a release class."""
 
-    del release_mode
     record = admission.record
     if not isinstance(record, Mapping):
         return False

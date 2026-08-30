@@ -33,7 +33,7 @@ from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
 from core.tree_integrity import tree_integrity_stats
 
 
-def _repair_applied_pool_record_drift(
+def repair_applied_post_pool_record_drift(
     *,
     package_root: Path,
     canonical_post: Path,
@@ -145,15 +145,26 @@ def promote_post_object(
     post_ref: str,
     *,
     pool_delivery_intent: Mapping[str, object],
+    qualified_refs: tuple[str, ...] | None = None,
 ) -> dict[str, str]:
-    """Atomically promote one reviewed post and return fenced result evidence."""
+    """Atomically promote one reviewed post and return fenced result evidence.
+
+    资格判定按协议分家（DEC-027）：存量 campaign 路径默认走 review closure；
+    receipt 协议调用方以 receipt 链 + attestation 判定后显式传 qualified_refs。
+    两者共用同一事务核心，核心不感知协议。
+    """
     root = execution_root(execution_id)
     normalized_ref = str(post_ref or "").strip().strip("/")
     if normalized_ref.startswith("posts/"):
         normalized_ref = normalized_ref.removeprefix("posts/")
     if len(normalized_ref.split("/")) < 4:
         raise ObjectTransactionError(f"post objectRef is invalid: {post_ref!r}")
-    if normalized_ref not in set(_qualified_post_refs(execution_id)):
+    qualified = (
+        {str(ref).strip().strip("/").removeprefix("posts/") for ref in qualified_refs}
+        if qualified_refs is not None
+        else set(_qualified_post_refs(execution_id))
+    )
+    if normalized_ref not in qualified:
         raise ObjectTransactionError(
             f"post is discarded by the post review closure: {normalized_ref}"
         )
@@ -195,7 +206,7 @@ def promote_post_object(
     )
     canonical_ready = (canonical_post / "manifest.json").is_file()
     if canonical_ready:
-        _repair_applied_pool_record_drift(
+        repair_applied_post_pool_record_drift(
             package_root=package_root,
             canonical_post=canonical_post,
             canonical_ref=normalized_ref,
@@ -235,11 +246,16 @@ def promote_post_object(
             tree_integrity_stats(canonical_post)["merkleRoot"]
         ),
         "objectClosureDigest": str(applied.get("objectClosureDigest") or ""),
+        "admissionResult": "replayed" if canonical_ready else "appended",
     }
 
 
 def promote_execution_posts(execution_id: str) -> tuple[str, ...]:
-    from content.execution.spec_contract import approved_quota
+    from content.execution.closure.publish_outcome import (
+        is_hard_publish_failure,
+        publish_discard,
+        publish_issue_code,
+    )
 
     refs = _qualified_post_refs(execution_id)
     promoted: list[str] = []
@@ -253,7 +269,15 @@ def promote_execution_posts(execution_id: str) -> tuple[str, ...]:
                 "posts/"
             )
             if relative:
+                if (
+                    relative in intent_by_ref
+                    and intent_by_ref[relative] != payload
+                ):
+                    raise ObjectTransactionError(
+                        "DATA.PUBLISH.TARGET_CONFLICT: duplicate pool delivery intent"
+                    )
                 intent_by_ref[relative] = payload
+    publish_discards: list[dict[str, object]] = []
     for post_ref in refs:
         try:
             intent = intent_by_ref.get(post_ref)
@@ -273,16 +297,27 @@ def promote_execution_posts(execution_id: str) -> tuple[str, ...]:
             # equals this execution's transaction package.  Any error here is
             # therefore a non-promoted ref (including execution/source drift)
             # and must never count toward quota or enter publish_ref.
+            if is_hard_publish_failure(exc):
+                raise
             failures.append(f"{post_ref}: {exc}")
-    required = approved_quota(execution_id)
-    if len(promoted) < required:
+            publish_discards.append(
+                publish_discard(post_ref, issue=publish_issue_code(exc))
+            )
+    if not promoted:
         raise ObjectTransactionError(
-            "canonical post promotion below quota: "
-            f"promoted={len(promoted)} required={required}; "
+            "canonical post promotion finalized zero objects: "
             + "; ".join(failures[:5])
         )
-    write_publish_ref(execution_id, post_refs=promoted)
+    write_publish_ref(
+        execution_id,
+        post_refs=promoted,
+        publish_discards=publish_discards,
+    )
     return tuple(promoted)
 
 
-__all__ = ["promote_execution_posts", "promote_post_object"]
+__all__ = [
+    "promote_execution_posts",
+    "promote_post_object",
+    "repair_applied_post_pool_record_drift",
+]

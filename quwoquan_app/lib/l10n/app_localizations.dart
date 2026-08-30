@@ -470,6 +470,30 @@ abstract class AppLocalizations {
   /// **'加载中...'**
   String get loading;
 
+  /// No description provided for @webBootstrapLoading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在加载，请稍候'**
+  String get webBootstrapLoading;
+
+  /// No description provided for @webBootstrapUnavailableTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'页面暂时无法打开'**
+  String get webBootstrapUnavailableTitle;
+
+  /// No description provided for @webBootstrapUnavailableBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'关键资源未能加载，可能是网络不稳定。请检查网络后重新加载。'**
+  String get webBootstrapUnavailableBody;
+
+  /// No description provided for @webBootstrapReload.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新加载'**
+  String get webBootstrapReload;
+
   /// No description provided for @retry.
   ///
   /// In zh, this message translates to:

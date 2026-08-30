@@ -227,14 +227,8 @@ void main() {
       expect(port.createCalls, 1);
       final create = port.lastCreate!;
       expect(create.policy.maxParticipants, 2);
-      expect(
-        create.policy.admission,
-        GatheringAdmissionPolicy.inviteOnly,
-      );
-      expect(
-        create.policy.audience,
-        GatheringAudiencePolicy.inviteOnly,
-      );
+      expect(create.policy.admission, GatheringAdmissionPolicy.inviteOnly);
+      expect(create.policy.audience, GatheringAudiencePolicy.inviteOnly);
     });
 
     testWidgets('表单不暴露内部 ID、授权凭证与 ISO 时间文本', (tester) async {
@@ -244,10 +238,19 @@ void main() {
       );
 
       expect(find.textContaining('persona:'), findsNothing);
-      expect(find.text(GatheringText.createAuthorityEvidenceLabel), findsNothing);
-      expect(find.text(GatheringText.createAuthorityVersionLabel), findsNothing);
+      expect(
+        find.text(GatheringText.createAuthorityEvidenceLabel),
+        findsNothing,
+      );
+      expect(
+        find.text(GatheringText.createAuthorityVersionLabel),
+        findsNothing,
+      );
       expect(find.text(GatheringText.createHostSubjectIdLabel), findsNothing);
-      expect(find.text(GatheringText.createRiskControlPolicyLabel), findsNothing);
+      expect(
+        find.text(GatheringText.createRiskControlPolicyLabel),
+        findsNothing,
+      );
       expect(find.textContaining('risk/'), findsNothing);
       final isoPattern = RegExp(r'\d{4}-\d{2}-\d{2}T');
       expect(

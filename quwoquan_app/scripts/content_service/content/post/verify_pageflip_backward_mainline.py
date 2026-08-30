@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Static gate for the BACK pageflip mainline (forward-isomorphic visual geometry).
 
-This script enforces the architectural rules in
-`.cursor/rules/12-pageflip-backward-mainline.mdc`:
+This script provides executable evidence for
+`dual-rail-discovery-redesign/design.md#dec-002`:
 
 1. Forbidden symbols (retired resolvers, host bypass branches, projected-frame
    polygon fields, deprecated soft helpers) must not exist anywhere under the
@@ -32,6 +32,8 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+
+sys.dont_write_bytecode = True
 
 _SCRIPTS_ROOT = next(
     parent
@@ -150,6 +152,12 @@ FORBIDDEN_SYMBOLS = (
     "_resolveBackwardDisplayPosition",
     "resolveBackwardSoftPageGeometry",
     "_backwardVersoAreaPolygon",
+    # Screen-space display offset: BACK visibility must come from the calculation
+    # input point and clip area, never from nudging the sheet after the fact.
+    "_singlePageBackwardFlippingDisplayOffset",
+    # Builder for the full previous-front baseline layer. BASELINE_VALUE_KEY below
+    # only catches the ValueKey; the builder can regress without it.
+    "_buildBackwardPreviousFrontBaselineLayer",
 )
 
 # Forbidden polygon fields on ArticlePageBackwardProjectedFrame.
@@ -286,7 +294,7 @@ def _check_forbidden_symbols() -> list[str]:
         for sym in FORBIDDEN_SYMBOLS:
             if sym in text:
                 violations.append(
-                    f"{rel}: forbidden symbol `{sym}` (Route-B mainline disallows the retired bypass; see .cursor/rules/12-pageflip-backward-mainline.mdc)"
+                    f"{rel}: forbidden symbol `{sym}` (Route-B mainline disallows the retired bypass; see dual-rail-discovery-redesign DEC-002)"
                 )
     return violations
 
@@ -738,7 +746,7 @@ def main() -> int:
         for v in violations:
             print(f"  {v}", file=sys.stderr)
         print(
-            "  see: .cursor/rules/12-pageflip-backward-mainline.mdc",
+            "  see: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/design.md#dec-002",
             file=sys.stderr,
         )
         return 1

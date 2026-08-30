@@ -20,6 +20,8 @@ def _find_repo_root() -> Path:
 from typing import Any
 
 
+sys.dont_write_bytecode = True
+
 ROOT = _find_repo_root()
 sys.path.insert(0, str(ROOT))
 CHAT_AVATAR_SUPPORT_DIR = Path(__file__).resolve().parents[1] / "support"

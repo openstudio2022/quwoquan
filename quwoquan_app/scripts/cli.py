@@ -7,6 +7,8 @@ import argparse
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 SCRIPTS_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS_ROOT))
 

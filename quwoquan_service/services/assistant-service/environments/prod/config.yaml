@@ -1,6 +1,6 @@
 overrides:
-  sys.assistant-service.account_security_authority.base_url: http://user-service:18081
-  sys.assistant-service.account_security_authority.timeout_ms: 300
+  sys.assistant-service.user_account_security_authority.base_url: http://user-service:18081
+  sys.assistant-service.user_account_security_authority.timeout_ms: 300
   sys.assistant-service.notification_service.base_url: http://notification-service:18087
   sys.assistant-service.policy_publication.release_artifact_ref: assistant/assistant-default/releases/6579402860644c0273747b33c23962cff013caec0839407afbe7dffdcc50f8e7.json
   sys.assistant-service.policy_publication.rollout_artifact_ref: assistant/assistant-default/rollouts/revision-4.json
@@ -10,10 +10,10 @@ overrides:
   sys.assistant-service.redis.rec.tls: true
 secretRefs:
   sys.assistant-service.skill_package.trusted_public_keys_json: ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON
-  sys.assistant-service.mongodb.uri: MONGODB_URI
-  sys.assistant-service.postgres.dsn: POSTGRES_DSN
-  sys.assistant-service.redis.general.password: REDIS_GENERAL_PASSWORD
-  sys.assistant-service.redis.rec.password: REDIS_REC_PASSWORD
+  sys.assistant-service.mongodb.uri: ASSISTANT_MONGO_URI
+  sys.assistant-service.postgres.dsn: ASSISTANT_POSTGRES_DSN
+  sys.assistant-service.redis.general.password: ASSISTANT_REDIS_GENERAL_PASSWORD
+  sys.assistant-service.redis.rec.password: ASSISTANT_REDIS_REC_PASSWORD
 externalBindings:
   integration.connector_grant.read:
     state: enabled

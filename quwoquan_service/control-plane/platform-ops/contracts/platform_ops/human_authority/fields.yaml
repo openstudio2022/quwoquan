@@ -1,0 +1,439 @@
+description: Hosted Human Authority wire entities；Portal request DTO 只接受职责输入，不接受 actor/role/MFA/authority
+  target。
+fields:
+- name: decisionUnitId
+  source: decisionUnitId
+  type: string
+  constraints:
+  - PK
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+- name: decisionKind
+  source: decisionKind
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+- name: scope
+  source: scope
+  type: CanonicalAuthorityScope
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: redacted
+  api_exposure: drop
+  ops_exposure: read
+  role: projection
+types:
+  CanonicalAuthorityScope:
+    fields:
+    - {name: objective, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: increment, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+  DecisionOption:
+    fields:
+    - name: optionId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: neutralLabel
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: userOutcome
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+    - name: businessOutcome
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+    - name: cost
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+    - name: timeToEffect
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: risk
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+    - name: reversibility
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: scopeChange
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+    - name: unknowns
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+    - name: nextStep
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+  DecisionUnit:
+    fields:
+    - name: decisionUnitId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: decisionKind
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: sodPolicy
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: scope
+      type: object
+      object_ref: CanonicalAuthorityScope
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+    - name: target
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+    - name: fingerprint
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: options
+      type: '[]DecisionOption'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+    - name: eligibility
+      type: '[]Eligibility'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+  SubmitHumanRoleEvidenceRequest:
+    description: 完整服务端调用模型；decisionUnitId 只绑定 route path，JSON body 只接受职责证据输入。
+    fields:
+    - name: decisionUnitId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
+    - name: round
+      type: integer
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
+    - name: facts
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: write
+    - name: impacts
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: write
+    - name: unknowns
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: write
+    - name: selectedOptionId
+      type: string
+      nullable: true
+      constraints:
+      - OPTIONAL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
+  FinalizeHumanDecisionRequest:
+    description: 完整服务端调用模型；decisionUnitId 只绑定 route path，JSON body 不接受 authority target。
+    fields:
+    - name: decisionUnitId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
+    - name: selectedOptionId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
+    - name: note
+      type: string
+      nullable: true
+      constraints:
+      - OPTIONAL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: write
+  RoleSubmission:
+    fields:
+    - name: role
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: actorId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: CONFIDENTIAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+    - name: round
+      type: integer
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: canonicalEvidenceBytes
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: CONFIDENTIAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read
+    - name: evidenceDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: evidenceExpiresAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+  AuthorityReceiptClaims:
+    description: 由 provider 对 exact canonicalBytes 直接签名的跨语言 claim；字段名与顺序由本 authoring source 生成绑定。
+    fields:
+    - {name: schemaVersion, type: integer, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: receiptId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: decisionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: decisionUnitId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: actorId, type: string, constraints: [NOT_NULL], classification: CONFIDENTIAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: actorAuthenticated, type: boolean, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: role, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: scope, type: object, object_ref: CanonicalAuthorityScope, constraints: [NOT_NULL], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: evidenceFingerprint, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: decisionKind, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: actions, type: '[]string', constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: issuedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: providerKind, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: providerVersion, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: providerCommit, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: contractVersion, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: issuer, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: nativeProtection, type: boolean, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: releaseEligible, type: boolean, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: testKey, type: boolean, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+  AuthorityStateAttestation:
+    description: 对 receipt state、CAS generation、winner command 与 provider chain commit 的独立 exact-byte 签名声明。
+    fields:
+    - {name: schemaVersion, type: integer, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: receiptId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: decisionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: decisionUnitId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: payloadDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: state, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: previousGeneration, type: integer, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: generation, type: integer, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: etag, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: winnerIdempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: winnerCommandDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: stateActorId, type: string, constraints: [NOT_NULL], classification: CONFIDENTIAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: stateAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: chainCommit, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: providerKind, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: providerVersion, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: providerCommit, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: contractVersion, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: issuer, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+  AuthorizationReceipt:
+    description: GET、consume 与 revoke 共用的单一 verifiable wrapper；canonicalBytes 与 attestationCanonicalBytes 均为 raw-base64 exact bytes。
+    fields:
+    - {name: schemaVersion, type: integer, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: canonicalBytes, type: string, constraints: [NOT_NULL], classification: CONFIDENTIAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: payloadDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: signatureAlgorithm, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: keyId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: signature, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: attestationCanonicalBytes, type: string, constraints: [NOT_NULL], classification: CONFIDENTIAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: attestationDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: attestationSignature, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: receiptId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: decisionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: decisionUnitId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: state, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: previousGeneration, type: integer, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: generation, type: integer, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: etag, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: winnerIdempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: winnerCommandDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: stateActorId, type: string, constraints: [NOT_NULL], classification: CONFIDENTIAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: stateAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: chainCommit, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: providerKind, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: providerVersion, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: providerCommit, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: contractVersion, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: issuer, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: releaseEligible, type: boolean, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: testKey, type: boolean, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+  ConsumeHumanAuthorizationReceiptRequest:
+    fields:
+    - {name: decisionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: fingerprint, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: scope, type: object, object_ref: CanonicalAuthorityScope, constraints: [NOT_NULL], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: write}
+    - {name: action, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: commandDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+  RevokeHumanAuthorizationReceiptRequest:
+    fields:
+    - {name: decisionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: reason, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: write}
+  Eligibility:
+    fields:
+    - name: optionId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: eligible
+      type: boolean
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: failedHardGateIds
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: redacted
+      api_exposure: drop
+      ops_exposure: read

@@ -1,0 +1,39 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260817--travel-homepage-closure--china-sichuan--pilot-001",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/景区/海螺沟",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:cbe1fcc17cbaac4848fa45e2ad2fba2c3d3a84e0d09e011dc812dc6b0f28a4af"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:7c97178d68fd30d456a7a6795e913289365eaf46d9539bc4b231a70276be2922"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:ae4ba04c386e3fec95b6d3ad20f1498fa3cc2086135aac4380dc6723ecd41a74"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:f0464e65d58cb479ec30a16cb5429f4c7b71b02bad9074ecc2984eff2351bea4"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:b13675bb94e6f52188abac9f6f0570cb50e9af534f11951eb58f1b978bb25df4"
+    }
+  ]
+}

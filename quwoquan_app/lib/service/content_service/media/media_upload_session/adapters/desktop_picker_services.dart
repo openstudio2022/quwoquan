@@ -10,7 +10,8 @@ class FilePickerDesktopDirectoryPicker implements DesktopDirectoryPicker {
   Future<String?> pickDirectory({String? initialDirectory}) {
     return FilePicker.getDirectoryPath(
       initialDirectory: initialDirectory,
-      lockParentWindow: true,
+      windowsOptions: const WindowsOptions(lockParentWindow: true),
+      linuxOptions: const LinuxOptions(lockParentWindow: true),
     );
   }
 }

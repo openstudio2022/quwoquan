@@ -60,11 +60,12 @@ func main() {
 			}
 		}
 		esCfg.Endpoints = out
-		esCfg.Enabled = true
 	}
 	if len(esCfg.Endpoints) == 0 {
 		log.Fatalf("[search-backfill] no ES endpoints: set SEARCH_ES_ENDPOINTS or --es-endpoints")
 	}
+	// 本 CLI 的存在前提就是回填 ES 索引，因此它显式声明启用，而不是靠「地址在场」
+	// 推断。地址覆盖只改地址。
 	esCfg.Enabled = true
 	if *requestTimeout > 0 {
 		esCfg.RequestTimeoutMs = int(requestTimeout.Milliseconds())

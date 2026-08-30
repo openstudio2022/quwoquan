@@ -3,82 +3,48 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
+export QWQ_OUTPUT_ROOT="$ROOT/.qwq_output"
+export PYTHONDONTWRITEBYTECODE=1
 
-python3 - <<'PY'
+updates_root="$QWQ_OUTPUT_ROOT/env/repo/local/local-readiness/process/push-updates"
+mkdir -p "$updates_root"
+chmod 700 "$updates_root"
+temporary="$(mktemp "$updates_root/incoming.XXXXXX")"
+trap 'rm -f "$temporary"' EXIT
+chmod 600 "$temporary"
+cat >"$temporary"
+if [[ ! -s "$temporary" ]]; then
+  echo "[pre-push] GATE_BLOCK: push updates 为空，无法精确绑定 release_ready" >&2
+  exit 1
+fi
+updates_digest="$(python3 - "$temporary" <<'PYDIGEST'
+import hashlib, sys
 from pathlib import Path
-import subprocess
-import sys
-
-import yaml
-
-root = Path.cwd()
-policy = yaml.safe_load((root / "quwoquan_ops/policies/branch_policy.yaml").read_text(encoding="utf-8")) or {}
-allowed_local = {str(name).strip() for name in policy.get("allowed_local_branches", []) if str(name).strip()}
-pull_request_prefixes = {
-    str(prefix).strip()
-    for prefix in policy.get("pull_request_branch_prefixes", [])
-    if str(prefix).strip()
-}
-
-completed = subprocess.run(
-    ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
-    cwd=root,
-    capture_output=True,
-    text=True,
-)
-current_branch = completed.stdout.strip() if completed.returncode == 0 else None
-if not current_branch:
-    print("[pre-push] FAIL: detached HEAD is forbidden; push from an allowed local branch in branch_policy.yaml", file=sys.stderr)
-    raise SystemExit(1)
-if current_branch not in allowed_local and not any(
-    current_branch.startswith(prefix) for prefix in pull_request_prefixes
-):
-    print(
-        f"[pre-push] FAIL: current branch '{current_branch}' is not allowed; only {sorted(allowed_local)} may push",
-        file=sys.stderr,
-    )
-    raise SystemExit(1)
-PY
-
-allowed_remote_refs="$(python3 - <<'PY'
-from pathlib import Path
-import yaml
-
-root = Path.cwd()
-policy = yaml.safe_load((root / "quwoquan_ops/policies/branch_policy.yaml").read_text(encoding="utf-8")) or {}
-for name in policy.get("allowed_remote_branches", []) or []:
-    name = str(name).strip()
-    if name:
-        print(f"refs/heads/{name}")
-for prefix in policy.get("pull_request_branch_prefixes", []) or []:
-    prefix = str(prefix).strip()
-    if prefix:
-        print(f"refs/heads/{prefix}*")
-PY
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+PYDIGEST
 )"
+updates_file="$updates_root/$updates_digest.txt"
+if [[ ! -e "$updates_file" ]]; then
+  mv "$temporary" "$updates_file"
+  chmod 600 "$updates_file"
+else
+  cmp -s "$temporary" "$updates_file" || {
+    echo "[pre-push] GATE_BLOCK: content-addressed push updates collision" >&2
+    exit 1
+  }
+fi
+trap - EXIT
+rm -f "$temporary"
 
-zero_sha="0000000000000000000000000000000000000000"
+recovery="python3 quwoquan_ops/cli/local_readiness.py release --push-updates $updates_file"
+if ! python3 quwoquan_ops/gate/verify_git_branch_policy.py --pre-push <"$updates_file"; then
+  echo "[pre-push] RECOVER: $recovery" >&2
+  exit 1
+fi
+if ! python3 -B quwoquan_ops/cli/local_readiness.py verify --level release --push-updates "$updates_file" >/dev/null; then
+  echo "[pre-push] GATE_BLOCK: exact local sha/base has no fresh Review-terminal release_ready receipt" >&2
+  echo "[pre-push] RECOVER: $recovery" >&2
+  exit 1
+fi
 
-while read -r local_ref local_sha remote_ref remote_sha; do
-  [[ -n "${remote_ref:-}" ]] || continue
-  # 删除远端分支(local_sha 全零)是清理违规分支的执行动作,必须放行;
-  # 否则策略宣布 dev1.0 违规却永远删不掉它。
-  if [[ "${local_sha:-}" == "$zero_sha" ]]; then
-    continue
-  fi
-  case "$remote_ref" in
-    refs/heads/*)
-      allowed=false
-      while IFS= read -r allowed_ref; do
-        case "$allowed_ref" in
-          *\*) [[ "$remote_ref" == ${allowed_ref%\*}* ]] && allowed=true ;;
-          *) [[ "$remote_ref" == "$allowed_ref" ]] && allowed=true ;;
-        esac
-      done <<< "$allowed_remote_refs"
-      if [[ "$allowed" != true ]]; then
-        echo "[pre-push] FAIL: push to $remote_ref is blocked; main is the only long-lived branch and temporary PR branches must use a declared prefix." >&2
-        exit 1
-      fi
-      ;;
-  esac
-done
+echo "[pre-push] fresh release_ready receipt accepted for exact push updates"

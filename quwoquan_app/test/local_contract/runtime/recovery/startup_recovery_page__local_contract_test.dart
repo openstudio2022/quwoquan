@@ -51,6 +51,8 @@ void main() {
           _VersionExecutor(() {
             versionCalls += 1;
             return <String, Object?>{
+              'platform': RecoveryVersionPlatform.android,
+              'updateChannel': RecoveryVersionChannel.nativeUpdate,
               'latestVersion': '1.8.2',
               'latestBuild': versionCalls == 1 ? '18201' : '18100',
               'minimumSupportedVersion': '1.8.0',
@@ -124,10 +126,213 @@ void main() {
     },
   );
 
+  testWidgets(
+    'confirmed recovery URL is the only Web target even when open fails',
+    (tester) async {
+      final openedTargets = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'getRecoveryContext') {
+              return <String, Object>{
+                'platform': 'ios',
+                'appVersion': '1.8.1',
+                'buildNumber': 18100,
+                'osVersion': '26.3',
+                'deviceModel': 'iPhone',
+                'environment': 'alpha',
+                'recoveryBaseUrl': 'https://api.quwoquan.com',
+                'runtimeConfigDigest': 'sha256:${'1' * 64}',
+                'effectiveLaunchManifestDigest': 'sha256:${'2' * 64}',
+                'publicWebUrl': 'https://quwoquan.com',
+                'appDownloadBaseUrl': 'https://cdn.quwoquan.com/download',
+              };
+            }
+            if (call.method == 'openTrustedExternalUrl') {
+              openedTargets.add(
+                (call.arguments! as Map<Object?, Object?>)['url']! as String,
+              );
+              return false;
+            }
+            return null;
+          });
+      final controller = StartupRecoveryController(
+        nativeBridge: AppRecoveryNativeBridge(channel: channel),
+        versionClient: RecoveryVersionClient(
+          gateway: _gateway(
+            _VersionExecutor(
+              () => <String, Object?>{
+                'platform': RecoveryVersionPlatform.ios,
+                'updateChannel': RecoveryVersionChannel.webOnly,
+                'latestVersion': '1.8.2',
+                'latestBuild': '18201',
+                'minimumSupportedVersion': '1.8.0',
+                'minimumSupportedBuild': '18000',
+                'updateState': 'available',
+                'updateUrl': null,
+                'recoveryUrl': 'https://quwoquan.com/ios',
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StartupRecoveryPage.routerError(controller: controller),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(controller.snapshot.phase, RecoveryPhase.startupWebOnly);
+      expect(controller.snapshot.phase.name, 'startupWebOnly');
+      expect(controller.snapshot.isWebOnly, isTrue);
+      expect(find.text('发现新版本'), findsOneWidget);
+      expect(find.text('前往更新'), findsNothing);
+      expect(find.text('使用网页版'), findsOneWidget);
+      expect(await controller.openWeb(), isFalse);
+      expect(openedTargets, <String>['https://quwoquan.com/ios']);
+      expect(controller.refreshVersionAfterExternalReturn(), isFalse);
+      controller.dispose();
+    },
+  );
+
+  testWidgets('runtime iOS required build settles on terminal Web CTA', (
+    tester,
+  ) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'getRecoveryContext') {
+            return <String, Object>{
+              'platform': 'ios',
+              'appVersion': '1.7.0',
+              'buildNumber': 17000,
+              'osVersion': '26.3',
+              'deviceModel': 'iPhone',
+              'environment': 'alpha',
+              'recoveryBaseUrl': 'https://api.quwoquan.com',
+              'runtimeConfigDigest': 'sha256:${'1' * 64}',
+              'effectiveLaunchManifestDigest': 'sha256:${'2' * 64}',
+              'publicWebUrl': 'https://quwoquan.com',
+              'appDownloadBaseUrl': 'https://cdn.quwoquan.com/download',
+            };
+          }
+          if (call.method == 'openTrustedExternalUrl') return true;
+          return null;
+        });
+    final controller = StartupRecoveryController(
+      initialSnapshot: const RecoverySnapshot(
+        phase: RecoveryPhase.runtimeVersionChecking,
+      ),
+      nativeBridge: AppRecoveryNativeBridge(channel: channel),
+      versionClient: RecoveryVersionClient(
+        gateway: _gateway(
+          _VersionExecutor(
+            () => <String, Object?>{
+              'platform': RecoveryVersionPlatform.ios,
+              'updateChannel': RecoveryVersionChannel.webOnly,
+              'latestVersion': '1.8.2',
+              'latestBuild': '18201',
+              'minimumSupportedVersion': '1.8.0',
+              'minimumSupportedBuild': '18000',
+              'updateState': 'required',
+              'updateUrl': null,
+              'recoveryUrl': 'https://quwoquan.com/ios',
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StartupRecoveryPage.routerError(controller: controller),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(controller.snapshot.phase, RecoveryPhase.runtimeWebOnly);
+    expect(controller.snapshot.phase.name, 'runtimeWebOnly');
+    expect(find.text('当前版本需要更新'), findsOneWidget);
+    expect(find.text('前往更新'), findsNothing);
+    expect(find.text('重新进入应用'), findsNothing);
+    expect(find.text('使用网页版'), findsOneWidget);
+    await controller.reenterRuntime();
+    expect(controller.snapshot.phase, RecoveryPhase.runtimeWebOnly);
+    expect(controller.refreshVersionAfterExternalReturn(), isFalse);
+    controller.dispose();
+  });
+
+  for (final scenario in <({String name, RecoveryPhase phase})>[
+    (name: 'startup checking', phase: RecoveryPhase.startupChecking),
+    (name: 'runtime unavailable', phase: RecoveryPhase.runtimeUnavailable),
+  ]) {
+    testWidgets('${scenario.name} Web action opens only native public URL', (
+      tester,
+    ) async {
+      final openedTargets = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'getRecoveryContext') {
+              return <String, Object>{
+                'platform': 'ios',
+                'appVersion': '1.8.1',
+                'buildNumber': 18100,
+                'osVersion': '26.3',
+                'deviceModel': 'iPhone',
+                'environment': 'alpha',
+                'recoveryBaseUrl': 'https://api.quwoquan.com',
+                'runtimeConfigDigest': 'sha256:${'1' * 64}',
+                'effectiveLaunchManifestDigest': 'sha256:${'2' * 64}',
+                'publicWebUrl': 'https://quwoquan.com',
+                'appDownloadBaseUrl': 'https://cdn.quwoquan.com/download',
+              };
+            }
+            if (call.method == 'openTrustedExternalUrl') {
+              openedTargets.add(
+                (call.arguments! as Map<Object?, Object?>)['url']! as String,
+              );
+              return true;
+            }
+            return null;
+          });
+      final controller = StartupRecoveryController(
+        initialSnapshot: RecoverySnapshot(phase: scenario.phase),
+        nativeBridge: AppRecoveryNativeBridge(channel: channel),
+        versionClient: RecoveryVersionClient(
+          gateway: _gateway(
+            _VersionExecutor(() => throw TimeoutException('offline')),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StartupRecoveryPage.routerError(controller: controller),
+        ),
+      );
+      await tester.pump();
+
+      final webButton = tester.widget<OutlinedButton>(
+        find.ancestor(
+          of: find.text('使用网页版'),
+          matching: find.byType(OutlinedButton),
+        ),
+      );
+      expect(webButton.onPressed, isNotNull);
+      await tester.tap(find.text('使用网页版'));
+      await tester.pump();
+      expect(openedTargets, <String>['https://quwoquan.com']);
+      controller.dispose();
+    });
+  }
+
   testWidgets('version timeout enters S3 without recording a fatal marker', (
     tester,
   ) async {
     var fatalMarkerRequests = 0;
+    final openedTargets = <String>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           if (call.method == 'getRecoveryContext') {
@@ -147,6 +352,12 @@ void main() {
           }
           if (call.method == 'recordFatalStartup') {
             fatalMarkerRequests += 1;
+          }
+          if (call.method == 'openTrustedExternalUrl') {
+            openedTargets.add(
+              (call.arguments! as Map<Object?, Object?>)['url']! as String,
+            );
+            return true;
           }
           return null;
         });
@@ -169,6 +380,9 @@ void main() {
     expect(controller.snapshot.phase, RecoveryPhase.startupVersionUnavailable);
     expect(find.text('应用暂时无法启动'), findsOneWidget);
     expect(fatalMarkerRequests, 0);
+    await tester.tap(find.text('使用网页版'));
+    await tester.pump();
+    expect(openedTargets, <String>['https://quwoquan.com']);
     controller.dispose();
   });
 }
@@ -188,6 +402,7 @@ final class _VersionExecutor implements RecoveryRuntimeOperations {
   ) async {
     final payload = response()! as Map<String, Object?>;
     return RecoveryVersionResponse(
+      platform: payload['platform']! as RecoveryVersionPlatform,
       latestVersion: payload['latestVersion']! as String,
       latestBuild: int.parse(payload['latestBuild']! as String),
       minimumSupportedVersion: payload['minimumSupportedVersion']! as String,
@@ -200,7 +415,8 @@ final class _VersionExecutor implements RecoveryRuntimeOperations {
         'required' => RecoveryUpdateState.required,
         _ => throw const FormatException('invalid update state'),
       },
-      updateUrl: payload['updateUrl']! as String,
+      updateChannel: payload['updateChannel']! as RecoveryVersionChannel,
+      updateUrl: payload['updateUrl'] as String?,
       recoveryUrl: payload['recoveryUrl']! as String,
     );
   }

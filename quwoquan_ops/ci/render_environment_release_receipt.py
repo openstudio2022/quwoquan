@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -158,9 +160,13 @@ def _validate_immutable_runtime(
     manifest: dict[str, Any],
     environment: str,
 ) -> None:
-    images = manifest.get("images")
+    artifacts = manifest.get("environmentArtifacts")
+    artifact = artifacts.get(environment) if isinstance(artifacts, dict) else None
+    images = artifact.get("images") if isinstance(artifact, dict) else None
     if not isinstance(images, dict) or not images:
-        raise ValueError(f"{environment} runtime requires immutable manifest images")
+        raise ValueError(
+            f"{environment} runtime requires its immutable environment artifact images"
+        )
     expected: dict[str, dict[str, str]] = {}
     for service, descriptor in sorted(images.items()):
         if not isinstance(service, str) or not isinstance(descriptor, dict):
@@ -188,6 +194,8 @@ def _validate_immutable_runtime(
         or payload.get("releaseInputClassification") != "commercial_inputs"
         or payload.get("runtimeMode") != "immutable-oci"
         or payload.get("runtimeCandidateDigest") != manifest.get("candidateId")
+        or payload.get("environmentArtifactDigest")
+        != artifact.get("environmentArtifactDigest")
         or payload.get("destructiveRepairPerformed") is not False
         or payload.get("destructiveActions") != []
     ):

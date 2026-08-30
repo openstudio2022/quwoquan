@@ -1,0 +1,58 @@
+{
+  "schema": "content_media_private_delivery_signature_cases",
+  "description": "私有媒体交付短签的跨语言 parity 向量（DEC-031 网络层边缘守卫）。签名协议由 quwoquan_service/runtime/media 单点拥有：HMAC-SHA256(signKey, '{escapedPath}-{expiresUnix}')，query 形如 sign={hex}&t={unix}。Go verifier 与 Python local_media_origin adapter 都必须断言本文件全部 case，单侧算法漂移在 local_contract 层失败。signKey 为 parity 测试专用值，不是任何环境的 secret。",
+  "signKey": "parity-test-sign-key",
+  "nowUnix": 1767225600,
+  "privatePathPrefixes": ["/media/objects/", "/media/processed/"],
+  "cases": [
+    {
+      "name": "valid cas object signature",
+      "path": "/media/objects/sha256/aa/bb/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+      "expires": 1767226200,
+      "sign": "7cfc853b9b29c4e8413350879c1a3f00c3bb598db93f4bacc11cab2e874185d1",
+      "wantValid": true
+    },
+    {
+      "name": "valid processed candidate signature",
+      "path": "/media/processed/candidates/v1/asset-1/frame.webp",
+      "expires": 1767226200,
+      "sign": "d132ed4870b2293b35415d80cff49491d5a741354dd5d85bc5f44151e2d71b7b",
+      "wantValid": true
+    },
+    {
+      "name": "signature for another path is rejected",
+      "path": "/media/objects/sha256/aa/bb/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+      "expires": 1767226200,
+      "sign": "74904aea5ff3342561a0efaf533369d597c8a976d137c5405e0ba73df6a187c8",
+      "wantValid": false
+    },
+    {
+      "name": "tampered expiry breaks the digest",
+      "path": "/media/objects/sha256/aa/bb/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+      "expires": 1767229999,
+      "sign": "7cfc853b9b29c4e8413350879c1a3f00c3bb598db93f4bacc11cab2e874185d1",
+      "wantValid": false
+    },
+    {
+      "name": "expired signature is rejected even when authentic",
+      "path": "/media/objects/sha256/aa/bb/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+      "expires": 1767225000,
+      "sign": "00713134f6dc3c9944bbfa31594bc834e53720018906ccbe450957630a64724f",
+      "wantValid": false
+    },
+    {
+      "name": "malformed non-hex signature is rejected",
+      "path": "/media/objects/sha256/aa/bb/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+      "expires": 1767226200,
+      "sign": "not-a-hex-signature",
+      "wantValid": false
+    },
+    {
+      "name": "missing expiry is rejected",
+      "path": "/media/objects/sha256/aa/bb/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg",
+      "expires": 0,
+      "sign": "7cfc853b9b29c4e8413350879c1a3f00c3bb598db93f4bacc11cab2e874185d1",
+      "wantValid": false
+    }
+  ]
+}

@@ -63,9 +63,11 @@ def _image_mentions_entity(
 ) -> bool:
     if not entity_id:
         return True
+    # 证据只取来源侧字段。`relevance` 是采集方自己写给这张图的说明，把它算作匹配证据等于
+    # 让候选自证相关：一张与实体无关的图，只要 relevance 里写上实体名就能过门，而 caption
+    # 与来源 URL 仍指向别的地方。自述不是证据，故不在此列。
     for field in (
         "caption",
-        "relevance",
         "visualSubject",
         "title",
         "sourceUrl",
@@ -81,7 +83,7 @@ def _image_mentions_entity(
             return True
     return False
 
-def _license_allows_app_publish(license_name: str, license_url: str = "") -> bool:
+def license_allows_commercial_distribution(license_name: str, license_url: str = "") -> bool:
     value = f"{license_name} {license_url}".lower()
     if not value.strip():
         return False
@@ -330,7 +332,7 @@ def _collection_admissible_image_urls(
                 continue
             if validate_image_rights(spec, vertical=vertical):
                 continue
-            if rights_proof_required(vertical) and not _license_allows_app_publish(
+            if rights_proof_required(vertical) and not license_allows_commercial_distribution(
                 str(spec.get("license") or ""),
                 str(spec.get("termsUrl") or ""),
             ):
@@ -388,7 +390,7 @@ def _collection_gate(
             issues.extend(
                 f"image[{index}]: {issue}" for issue in blocking_rights_issues
             )
-        elif rights_proof_required(vertical) and not _license_allows_app_publish(
+        elif rights_proof_required(vertical) and not license_allows_commercial_distribution(
             str(spec.get("license") or ""),
             str(spec.get("termsUrl") or ""),
         ):

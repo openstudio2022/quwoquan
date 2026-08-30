@@ -48,10 +48,34 @@ func (source *TopologySource) ReadRuntimeTopology(
 	}
 	externalRoot := filepath.Join(source.repositoryRoot, "quwoquan_ops", "external")
 	externals, err := os.ReadDir(externalRoot)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return topology, err
+	}
+	environmentsRoot := filepath.Join(source.repositoryRoot, "quwoquan_ops", "environments")
+	environmentEntries, err := os.ReadDir(environmentsRoot)
 	if err != nil {
 		return topology, err
 	}
-	for _, environment := range []string{"alpha", "beta", "gamma", "prod"} {
+	environments := make([]string, 0, 4)
+	for _, entry := range environmentEntries {
+		if !entry.IsDir() {
+			continue
+		}
+		environment := entry.Name()
+		switch environment {
+		case "alpha", "beta", "gamma", "prod":
+		default:
+			continue
+		}
+		if _, statErr := os.Stat(filepath.Join(environmentsRoot, environment, "runtime.yaml")); statErr == nil {
+			environments = append(environments, environment)
+		}
+	}
+	sort.Strings(environments)
+	if len(environments) == 0 {
+		return topology, errors.New("config snapshot topology has no packaged environment")
+	}
+	for _, environment := range environments {
 		entry := configapp.RuntimeTopologyEnvironment{}
 		for _, service := range services {
 			if !service.IsDir() {

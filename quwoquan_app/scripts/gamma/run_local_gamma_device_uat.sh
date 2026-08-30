@@ -57,6 +57,7 @@ PATROL_TARGET="${LOCAL_GAMMA_DEVICE_UAT_TARGET:-test/user_acceptance/service/con
 PATROL_INSTALL_ID="${QWQ_PATROL_INSTALL_ID:-}"
 RELEASE_UAT_CASES=""
 REMOTE_API_EVIDENCE_REPORT="${LOCAL_GAMMA_REMOTE_API_EVIDENCE_REPORT:-}"
+TARGET_UAT_BINDING="${LOCAL_GAMMA_TARGET_UAT_BINDING:-}"
 TARGET_EXPLICIT=0
 DEVICE_ID="${LOCAL_GAMMA_DEVICE_UAT_DEVICE_ID:-}"
 PLATFORM="${LOCAL_GAMMA_DEVICE_UAT_PLATFORM:-all}"
@@ -73,6 +74,7 @@ Options:
   --patrol-install-id <tpl> One-run install identity template; account closure requires {device}.
   --release-uat-cases <path> Gamma data-release generated homepage_verification_cases.json.
   --remote-api-evidence-report <path> Passed Remote API UAT report to attach request/trace evidence.
+  --target-uat-binding <path> Exact canonical TargetUatBinding for one device slot.
   --report <path>           Write the Patrol report to this runtime evidence path.
   --gateway-base-url <url>  Mirror gateway URL.
   --product-ops-base-url <url>
@@ -94,6 +96,7 @@ while [[ $# -gt 0 ]]; do
     --patrol-install-id) PATROL_INSTALL_ID="${2:-}"; shift 2 ;;
     --release-uat-cases) RELEASE_UAT_CASES="${2:-}"; shift 2 ;;
     --remote-api-evidence-report) REMOTE_API_EVIDENCE_REPORT="${2:-}"; shift 2 ;;
+    --target-uat-binding) TARGET_UAT_BINDING="${2:-}"; shift 2 ;;
     --report) REPORT="${2:-}"; shift 2 ;;
     --gateway-base-url) GATEWAY_BASE_URL="${2:-}"; shift 2 ;;
     --product-ops-base-url) PRODUCT_OPS_BASE_URL="${2:-}"; shift 2 ;;
@@ -116,26 +119,6 @@ case_result_helper() {
   PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 -B "$CASE_RESULT_HELPER" "$@"
 }
 
-block_case_result() {
-  local reason="$1"
-  case_result_helper block-device-uat \
-    --report "$REPORT" \
-    --identity-snapshot "$IDENTITY_SNAPSHOT" \
-    --patrol-report "$PATROL_REPORT" \
-    --reason "$reason" >/dev/null 2>&1 || true
-}
-
-set +e
-case_result_helper prepare-device-uat \
-  --report "$REPORT" \
-  --identity-snapshot "$IDENTITY_SNAPSHOT" \
-  --patrol-report "$PATROL_REPORT"
-prepare_status=$?
-set -e
-if [[ "$prepare_status" -ne 0 ]]; then
-  echo "[local-gamma:device-uat] GATE_BLOCK: active candidate/startup identity is unavailable" >&2
-  exit 2
-fi
 
 require_canonical_endpoint() {
   local name="$1"
@@ -153,6 +136,32 @@ require_canonical_endpoint mediaImage "$MEDIA_IMAGE_BASE_URL" "$topology_media_i
 require_canonical_endpoint mediaVideo "$MEDIA_VIDEO_BASE_URL" "$topology_media_video_base_url"
 require_canonical_endpoint mediaUpload "$MEDIA_UPLOAD_BASE_URL" "$topology_media_upload_base_url"
 require_canonical_endpoint rtc "$RTC_MEDIA_CONNECTION_URL" "$topology_rtc_media_connection_url"
+
+
+if [[ -z "$TARGET_UAT_BINDING" ]]; then
+  echo "[local-gamma:device-uat] GATE_BLOCK: --target-uat-binding is required" >&2
+  exit 2
+fi
+if [[ -z "$DEVICE_ID" ]]; then
+  echo "[local-gamma:device-uat] GATE_BLOCK: one explicit --device-id is required for exact slot binding" >&2
+  exit 2
+fi
+if [[ "$PLATFORM" == "all" ]]; then
+  echo "[local-gamma:device-uat] GATE_BLOCK: --platform must be android or ios for exact slot binding" >&2
+  exit 2
+fi
+
+set +e
+case_result_helper prepare-device-uat \
+  --report "$REPORT" \
+  --identity-snapshot "$IDENTITY_SNAPSHOT" \
+  --patrol-report "$PATROL_REPORT"
+prepare_status=$?
+set -e
+if [[ "$prepare_status" -ne 0 ]]; then
+  echo "[local-gamma:device-uat] GATE_BLOCK: active candidate/startup identity is unavailable" >&2
+  exit 2
+fi
 
 if [[ -n "$RELEASE_UAT_CASES" ]]; then
   release_homepage_target="test/user_acceptance/service/entity_service/entity_homepage/homepage/release_homepage__consumer_render__functional__user_acceptance_test.dart"
@@ -181,12 +190,10 @@ if command -v dart >/dev/null 2>&1; then
 fi
 
 if ! command -v patrol >/dev/null 2>&1; then
-  block_case_result "patrol CLI not found"
   echo "[local-gamma:device-uat] GATE_BLOCK: patrol CLI not found" >&2
   exit 2
 fi
 if ! command -v flutter >/dev/null 2>&1; then
-  block_case_result "flutter CLI not found"
   echo "[local-gamma:device-uat] GATE_BLOCK: flutter CLI not found" >&2
   exit 2
 fi
@@ -239,6 +246,7 @@ finalize_args=(
   --identity-snapshot "$IDENTITY_SNAPSHOT"
   --patrol-report "$PATROL_REPORT"
   --runner-exit-code "$patrol_status"
+  --target-uat-binding "$TARGET_UAT_BINDING"
 )
 if [[ "$DRY_RUN" == "1" ]]; then
   finalize_args+=(--dry-run)

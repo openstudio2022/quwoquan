@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_display_config.dart';
@@ -128,6 +129,17 @@ final commentRemoteConfigProvider = Provider<CommentRemoteConfig>((ref) {
 
 final contentFeatureFlagProvider = Provider.family<bool, String>((ref, flag) {
   return ref.watch(contentRuntimeConfigProvider).isEnabled(flag);
+});
+
+/// 文章翻页动效的 typed runtime 配置入口。
+///
+/// `ContentFeatureFlags` 由 content post 的配置契约生成，业务对象外的消费面不得
+/// 直接 import 另一个对象的 generated presentation 文件。组合根在这里把契约键
+/// 收敛成 typed provider，media_asset 只消费 bool，不拥有 content post 的配置事实。
+final articlePageCurlFeatureFlagProvider = Provider<bool>((ref) {
+  return ref.watch(
+    contentFeatureFlagProvider(ContentFeatureFlags.enableArticlePageCurl),
+  );
 });
 
 /// 首页频道（运营资产）：端默认 [ContentUIConfig.homeChannels] + `/config/app` 远程覆盖，

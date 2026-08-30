@@ -146,59 +146,129 @@ void _validateCanonicalSearchPayloadWire(Map<String, dynamic> m) {
     'linkedHomepageType',
     'linkedHomepageTitle',
   };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('CanonicalSearchPayload contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'CanonicalSearchPayload contains unknown fields: ${unknown.join(',')}',
+    );
   }
-  if (m.containsKey('coverUrl') && m['coverUrl'] != null && (m['coverUrl'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.coverUrl has an invalid wire value');
+  if (m.containsKey('coverUrl') &&
+      m['coverUrl'] != null &&
+      (m['coverUrl'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchPayload.coverUrl has an invalid wire value',
+    );
   }
-  if (m.containsKey('placeName') && m['placeName'] != null && (m['placeName'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.placeName has an invalid wire value');
+  if (m.containsKey('placeName') &&
+      m['placeName'] != null &&
+      (m['placeName'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchPayload.placeName has an invalid wire value',
+    );
   }
-  if (m.containsKey('address') && m['address'] != null && (m['address'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.address has an invalid wire value');
+  if (m.containsKey('address') &&
+      m['address'] != null &&
+      (m['address'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchPayload.address has an invalid wire value',
+    );
   }
-  if (m.containsKey('followerCount') && m['followerCount'] != null && (m['followerCount'] is! int)) {
-    throw FormatException('CanonicalSearchPayload.followerCount has an invalid wire value');
+  if (m.containsKey('followerCount') &&
+      m['followerCount'] != null &&
+      (m['followerCount'] is! int)) {
+    throw FormatException(
+      'CanonicalSearchPayload.followerCount has an invalid wire value',
+    );
   }
-  if (m.containsKey('contentCount') && m['contentCount'] != null && (m['contentCount'] is! int)) {
-    throw FormatException('CanonicalSearchPayload.contentCount has an invalid wire value');
+  if (m.containsKey('contentCount') &&
+      m['contentCount'] != null &&
+      (m['contentCount'] is! int)) {
+    throw FormatException(
+      'CanonicalSearchPayload.contentCount has an invalid wire value',
+    );
   }
-  if (m.containsKey('circleId') && m['circleId'] != null && (m['circleId'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.circleId has an invalid wire value');
+  if (m.containsKey('circleId') &&
+      m['circleId'] != null &&
+      (m['circleId'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchPayload.circleId has an invalid wire value',
+    );
   }
-  if (m.containsKey('categoryId') && m['categoryId'] != null && (m['categoryId'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.categoryId has an invalid wire value');
+  if (m.containsKey('categoryId') &&
+      m['categoryId'] != null &&
+      (m['categoryId'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchPayload.categoryId has an invalid wire value',
+    );
   }
-  if (m.containsKey('subCategory') && m['subCategory'] != null && (m['subCategory'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.subCategory has an invalid wire value');
+  if (m.containsKey('subCategory') &&
+      m['subCategory'] != null &&
+      (m['subCategory'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchPayload.subCategory has an invalid wire value',
+    );
   }
-  if (m.containsKey('domainId') && m['domainId'] != null && (m['domainId'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.domainId has an invalid wire value');
+  if (m.containsKey('domainId') &&
+      m['domainId'] != null &&
+      (m['domainId'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchPayload.domainId has an invalid wire value',
+    );
   }
   if (m.containsKey('kind') && m['kind'] != null && (m['kind'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.kind has an invalid wire value');
+    throw FormatException(
+      'CanonicalSearchPayload.kind has an invalid wire value',
+    );
   }
-  if (m.containsKey('displaySubjectType') && m['displaySubjectType'] != null && (m['displaySubjectType'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.displaySubjectType has an invalid wire value');
+  if (m.containsKey('displaySubjectType') &&
+      m['displaySubjectType'] != null &&
+      (m['displaySubjectType'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchPayload.displaySubjectType has an invalid wire value',
+    );
   }
-  if (m.containsKey('memberCount') && m['memberCount'] != null && (m['memberCount'] is! int)) {
-    throw FormatException('CanonicalSearchPayload.memberCount has an invalid wire value');
+  if (m.containsKey('memberCount') &&
+      m['memberCount'] != null &&
+      (m['memberCount'] is! int)) {
+    throw FormatException(
+      'CanonicalSearchPayload.memberCount has an invalid wire value',
+    );
   }
-  if (m.containsKey('postCount') && m['postCount'] != null && (m['postCount'] is! int)) {
-    throw FormatException('CanonicalSearchPayload.postCount has an invalid wire value');
+  if (m.containsKey('postCount') &&
+      m['postCount'] != null &&
+      (m['postCount'] is! int)) {
+    throw FormatException(
+      'CanonicalSearchPayload.postCount has an invalid wire value',
+    );
   }
-  if (m.containsKey('circleName') && m['circleName'] != null && (m['circleName'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.circleName has an invalid wire value');
+  if (m.containsKey('circleName') &&
+      m['circleName'] != null &&
+      (m['circleName'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchPayload.circleName has an invalid wire value',
+    );
   }
-  if (m.containsKey('linkedHomepageId') && m['linkedHomepageId'] != null && (m['linkedHomepageId'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.linkedHomepageId has an invalid wire value');
+  if (m.containsKey('linkedHomepageId') &&
+      m['linkedHomepageId'] != null &&
+      (m['linkedHomepageId'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchPayload.linkedHomepageId has an invalid wire value',
+    );
   }
-  if (m.containsKey('linkedHomepageType') && m['linkedHomepageType'] != null && (m['linkedHomepageType'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.linkedHomepageType has an invalid wire value');
+  if (m.containsKey('linkedHomepageType') &&
+      m['linkedHomepageType'] != null &&
+      (m['linkedHomepageType'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchPayload.linkedHomepageType has an invalid wire value',
+    );
   }
-  if (m.containsKey('linkedHomepageTitle') && m['linkedHomepageTitle'] != null && (m['linkedHomepageTitle'] is! String)) {
-    throw FormatException('CanonicalSearchPayload.linkedHomepageTitle has an invalid wire value');
+  if (m.containsKey('linkedHomepageTitle') &&
+      m['linkedHomepageTitle'] != null &&
+      (m['linkedHomepageTitle'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchPayload.linkedHomepageTitle has an invalid wire value',
+    );
   }
 }

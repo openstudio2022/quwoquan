@@ -6,6 +6,15 @@
     "sourceAssetMaxBytes": { "type": "integer", "minimum": 1048576 },
     "pageImageRenditionWidth": { "type": "integer", "minimum": 800 },
     "maxPublishableImagePixels": { "type": "integer", "minimum": 1000000 },
+    "objectStorageBudgetBytesByCarrier": {
+      "type": "object",
+      "properties": {
+        "default": { "type": "integer", "minimum": 1048576 },
+        "video": { "type": "integer", "minimum": 1048576 }
+      },
+      "required": ["default", "video"],
+      "additionalProperties": { "type": "integer", "minimum": 1048576 }
+    },
     "maxAssessmentImagePixels": { "type": "integer", "minimum": 1000000 },
     "assessmentJpegQuality": { "type": "integer", "minimum": 1, "maximum": 95 },
     "ocrImagePixels": { "type": "integer", "minimum": 300000 },
@@ -17,6 +26,7 @@
   },
   "required": [
     "policyId", "sourceAssetMaxBytes", "pageImageRenditionWidth", "maxPublishableImagePixels",
+    "objectStorageBudgetBytesByCarrier",
     "maxAssessmentImagePixels", "assessmentJpegQuality", "ocrImagePixels", "baseDraftImageCandidates",
     "imageFetchTargetSurplus", "imageCandidateSurplus", "webpMethod",
     "homepageBaseDraftMaxChars"

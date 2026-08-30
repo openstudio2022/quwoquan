@@ -32,6 +32,7 @@ import 'package:video_player_platform_interface/video_player_platform_interface.
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/runtime/platform/media/fake_video_player_platform.dart';
+
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 
@@ -496,9 +497,94 @@ void main() {
   test('VideoPlayerWidget API 只接收已验证的 typed delivery reference', () {
     // 编译期契约：P0/P1 都必须是 MediaDeliveryReference，不能传裸业务 object key。
     final widget = VideoPlayerWidget(deliveryReference: delivery);
-    expect(widget.deliveryReference.kind, MediaDeliveryKind.video);
-    expect(widget.deliveryReference.url, contains('video-primary-0001'));
+    // 公开路必须拿到公开交付引用；私有路由 signedDelivery 承担取址，
+    // 两者互斥由 VideoPlayerWidget 的构造断言保证。
+    expect(widget.signedDelivery, isNull);
+    expect(widget.deliveryReference!.kind, MediaDeliveryKind.video);
+    expect(widget.deliveryReference!.url, contains('video-primary-0001'));
     expect(widget.adaptiveDeliveryReference, isNull);
+  });
+
+  testWidgets('同资产短签刷新只换签一次并保持已确认播放位置', (tester) async {
+    VideoPlayerWidget.debugResetControllerSlots();
+    final previousPlatform = VideoPlayerPlatform.instance;
+    final fakePlatform = FakeVideoPlayerPlatform();
+    VideoPlayerPlatform.instance = fakePlatform;
+    addTearDown(() {
+      VideoPlayerPlatform.instance = previousPlatform;
+      VideoPlayerWidget.debugResetControllerSlots();
+    });
+    final container = ProviderContainer(overrides: _boundaryOverrides());
+    addTearDown(container.dispose);
+    final controllers = <VideoPlayerController>[];
+    var reSignRequests = 0;
+    final delivery = ValueNotifier<SignedVideoDelivery>(
+      SignedVideoDelivery(
+        deliveryUri: Uri.parse(
+          'https://media.example.test/media/objects/private.mp4?sign=one&t=1893456300',
+        ),
+        cacheIdentity: 'signed|video|asset-private-1',
+        assetId: 'asset-private-1',
+        onReSignRequested: () {
+          reSignRequests += 1;
+        },
+      ),
+    );
+    addTearDown(delivery.dispose);
+
+    Widget player() => UncontrolledProviderScope(
+      container: container,
+      child: ScreenUtilInit(
+        designSize: const Size(390, 844),
+        builder: (_, _) => ValueListenableBuilder<SignedVideoDelivery>(
+          valueListenable: delivery,
+          builder: (_, signed, _) => CupertinoApp(
+            home: SizedBox(
+              width: 390,
+              height: 220,
+              child: VideoPlayerWidget(
+                signedDelivery: signed,
+                initialize: true,
+                autoPlay: false,
+                onControllerCreated: controllers.add,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(player());
+    await tester.pumpAndSettle();
+    expect(controllers, hasLength(1));
+    controllers.single.value = controllers.single.value.copyWith(
+      position: const Duration(seconds: 37),
+    );
+
+    // 首次 401/403 的 typed failure 会请求一次 refresh；此处直接调用交付回调，
+    // 其余播放器错误分类由既有 failure tests 覆盖。
+    delivery.value.onReSignRequested!.call();
+    expect(reSignRequests, 1);
+
+    delivery.value = SignedVideoDelivery(
+      deliveryUri: Uri.parse(
+        'https://media.example.test/media/objects/private.mp4?sign=two&t=1893456600',
+      ),
+      cacheIdentity: 'signed|video|asset-private-1',
+      assetId: 'asset-private-1',
+      onReSignRequested: () {
+        reSignRequests += 1;
+      },
+    );
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pumpAndSettle();
+
+    expect(controllers, hasLength(2));
+    expect(fakePlatform.seekTargets, <Duration>[const Duration(seconds: 37)]);
+    expect(reSignRequests, 1, reason: '短签 URL 更新不得自行触发第二次 refresh');
   });
 
   testWidgets('渲染器变更会原子替换控制器而不双占槽位', (tester) async {
@@ -516,9 +602,8 @@ void main() {
           platformCapabilitiesProvider.overrideWithValue(
             CapabilityProfile.mobile,
           ),
-          contentFeatureFlagProvider(
-            hlsCmafAdaptivePlaybackFeatureFlag,
-          ).overrideWithValue(false),
+          contentFeatureFlagProvider(hlsCmafAdaptivePlaybackFeatureFlag)
+              .overrideWithValue(false),
         ],
       ),
     );
@@ -578,9 +663,8 @@ void main() {
           platformCapabilitiesProvider.overrideWithValue(
             CapabilityProfile.mobile,
           ),
-          contentFeatureFlagProvider(
-            hlsCmafAdaptivePlaybackFeatureFlag,
-          ).overrideWith((ref) => ref.watch(_runtimeAdaptiveFlagProvider)),
+          contentFeatureFlagProvider(hlsCmafAdaptivePlaybackFeatureFlag)
+              .overrideWith((ref) => ref.watch(_runtimeAdaptiveFlagProvider)),
         ],
       ),
     );
@@ -634,9 +718,8 @@ void main() {
           platformCapabilitiesProvider.overrideWithValue(
             CapabilityProfile.mobile,
           ),
-          contentFeatureFlagProvider(
-            hlsCmafAdaptivePlaybackFeatureFlag,
-          ).overrideWithValue(true),
+          contentFeatureFlagProvider(hlsCmafAdaptivePlaybackFeatureFlag)
+              .overrideWithValue(true),
         ],
       ),
     );
@@ -693,9 +776,8 @@ void main() {
           platformCapabilitiesProvider.overrideWithValue(
             CapabilityProfile.mobile,
           ),
-          contentFeatureFlagProvider(
-            hlsCmafAdaptivePlaybackFeatureFlag,
-          ).overrideWithValue(true),
+          contentFeatureFlagProvider(hlsCmafAdaptivePlaybackFeatureFlag)
+              .overrideWithValue(true),
         ],
       ),
     );
@@ -783,9 +865,8 @@ void main() {
           platformCapabilitiesProvider.overrideWithValue(
             CapabilityProfile.mobile,
           ),
-          contentFeatureFlagProvider(
-            hlsCmafAdaptivePlaybackFeatureFlag,
-          ).overrideWithValue(true),
+          contentFeatureFlagProvider(hlsCmafAdaptivePlaybackFeatureFlag)
+              .overrideWithValue(true),
         ],
       ),
     );
@@ -868,9 +949,8 @@ void main() {
           platformCapabilitiesProvider.overrideWithValue(
             CapabilityProfile.mobile,
           ),
-          contentFeatureFlagProvider(
-            hlsCmafAdaptivePlaybackFeatureFlag,
-          ).overrideWith((ref) => ref.watch(_runtimeAdaptiveFlagProvider)),
+          contentFeatureFlagProvider(hlsCmafAdaptivePlaybackFeatureFlag)
+              .overrideWith((ref) => ref.watch(_runtimeAdaptiveFlagProvider)),
         ],
       ),
     );
@@ -938,9 +1018,8 @@ void main() {
           platformCapabilitiesProvider.overrideWithValue(
             CapabilityProfile.mobile,
           ),
-          contentFeatureFlagProvider(
-            hlsCmafAdaptivePlaybackFeatureFlag,
-          ).overrideWithValue(true),
+          contentFeatureFlagProvider(hlsCmafAdaptivePlaybackFeatureFlag)
+              .overrideWithValue(true),
         ],
       ),
     );
@@ -991,11 +1070,9 @@ void main() {
       <String>[adaptiveDelivery.url, delivery.url],
     );
     expect(controllers, hasLength(2));
-    expect(
-      fakePlatform.seekTargets,
-      <Duration>[const Duration(milliseconds: 19500)],
-      reason: '超出 fallback 时长时应留出尾部安全量，不得 seek 到 duration 或从 0 秒重播',
-    );
+    expect(fakePlatform.seekTargets, <Duration>[
+      const Duration(milliseconds: 19500),
+    ], reason: '超出 fallback 时长时应留出尾部安全量，不得 seek 到 duration 或从 0 秒重播');
     expect(
       playbackSession.snapshot.lastSourceSwitchSeekResult?.target,
       const Duration(milliseconds: 19500),

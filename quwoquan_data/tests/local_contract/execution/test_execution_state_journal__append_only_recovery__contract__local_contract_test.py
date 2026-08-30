@@ -107,6 +107,18 @@ def test_replacing_with_a_different_execution_is_rejected(
     assert state.execution_id == EXECUTION_ID
 
 
+def test_succeeded_state_cannot_be_persisted_without_ship_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _bind_state_path(tmp_path, monkeypatch)
+    state = context.load_execution_state(EXECUTION_ID)
+    state.status = ExecutionStateStatus.SUCCEEDED
+
+    with pytest.raises(ValueError, match="SUCCEEDED_WRITER_INVALID"):
+        context.save_execution_state(state)
+
+
 def test_concurrent_writers_are_serialized_and_exactly_one_cas_wins(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

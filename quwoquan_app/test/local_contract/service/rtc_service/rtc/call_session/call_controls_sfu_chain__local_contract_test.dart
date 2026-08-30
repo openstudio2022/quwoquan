@@ -11,7 +11,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_session_provider.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/media_device_provider.dart';
-import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_state.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_controls_bar.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 

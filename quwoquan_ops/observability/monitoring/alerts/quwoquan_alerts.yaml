@@ -1297,6 +1297,30 @@ groups:
           summary: "ConfigLayer 控制面 5xx 比率 > 5%"
           description: "UpdateServiceConfig/Resolve 服务端错误率异常；检查 PostgreSQL platform_config_layers CAS 提交与 generated guard。"
 
+      - alert: ConfigSyncInstanceStale
+        expr: |
+          time() - qwq_config_sync_last_success_timestamp_seconds > 600
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+          domain: platform-ops
+        annotations:
+          summary: "实例配置同步失联（service={{ $labels.service }}）"
+          description: "该实例超过 10 分钟没有一次成功的 config resolve（同步周期 30s），收敛结论不可信；检查实例存活、PLATFORM_OPS_BASE_URL 连通性与 platform-ops /control-plane/platform/triage/summary 的 staleInstances 列表。"
+
+      - alert: ConfigSyncOutOfSyncSustained
+        expr: |
+          qwq_config_sync_in_sync == 0
+        for: 15m
+        labels:
+          severity: warning
+          layer: l2
+          domain: platform-ops
+        annotations:
+          summary: "实例配置持续未收敛（service={{ $labels.service }}）"
+          description: "该实例连续 15 分钟 effectiveHash 与 desiredHash 不一致或同步失败；对照 /platform/config/drift 的 outOfSyncInstances，推动实例重新对齐或回滚配置发布。"
+
   - name: quwoquan_l4_infrastructure
     rules:
       - alert: HighGoroutineCount

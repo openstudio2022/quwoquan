@@ -40,8 +40,8 @@ from content.source.research.article_frontier_profile import (
 from content.source.research.article_frontier_robots import (
     fetch_with_backoff,
     robots_for_url,
-    shared_rate_limiter,
 )
+from core.rate_limit import shared_rate_limiter
 
 _ARTICLE_ROBOTS_LOCK = threading.Lock()
 _ARTICLE_ROBOTS: dict[

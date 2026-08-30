@@ -1,11 +1,12 @@
 overrides:
   sys.chat-service.redis.general.addr: redis:6379
   sys.chat-service.redis.realtime.addr: redis:6379
-  sys.chat-service.runtime.auth.account_security_authority.timeout_ms: 500
   sys.chat-service.runtime.media.group_avatar_cdn_base_url: ${CHAT_GROUP_AVATAR_CDN_BASE_URL}
   sys.chat-service.runtime.media.group_avatar_local_media_root: /var/lib/quwoquan/chat-media
+  sys.chat-service.user_account_security_authority.base_url: http://user-service:18081
+  sys.chat-service.user_account_security_authority.timeout_ms: 500
 secretRefs:
-  sys.chat-service.mongodb.uri: MONGO_URI
+  sys.chat-service.mongodb.uri: CHAT_MONGO_URI
 externalBindings:
   runtime.message.transport:
     state: enabled

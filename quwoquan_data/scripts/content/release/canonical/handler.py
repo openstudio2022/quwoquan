@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 from content.release.canonical.acceptance_lease import (
     handle_acceptance_lease,  # noqa: F401
@@ -30,7 +31,12 @@ from content.release.canonical.commercial_transition import (
 from content.release.canonical.discard import handle_discard  # noqa: F401
 from content.release.canonical.garbage_collection import (
     apply_canonical_gc,
+    backfill_absent_execution_tombstones,
     plan_canonical_gc,
+    unresolved_execution_references,
+)
+from content.release.canonical.publish_execution import (
+    handle_publish_execution,  # noqa: F401
 )
 from content.release.canonical.handler_pool import (
     handle_pool_append,  # noqa: F401
@@ -38,18 +44,31 @@ from content.release.canonical.handler_pool import (
     handle_pool_backfill_plan,  # noqa: F401
     handle_pool_dispatch,  # noqa: F401
     handle_pool_inspect,  # noqa: F401
+    handle_pool_object_retire,  # noqa: F401
+    handle_pool_precheck,  # noqa: F401
     handle_pool_release_build,  # noqa: F401
 )
 from content.release.canonical.lifecycle_exit import (
     handle_lifecycle_exit,  # noqa: F401
 )
+from content.release.canonical.handler_uat import (
+    handle_m1000_four_environment_proof,  # noqa: F401
+    handle_project_uat_sampling_authority,  # noqa: F401
+)
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from content.release.canonical.object_transaction_lock import canonical_publish_lock
+from content.release.canonical.object_transaction_replay import (
+    replay_object_transaction_package,
+)
 from content.release.canonical.release_identity_incident import (
     record_release_identity_incident,
 )
 from content.release.canonical.release_identity_recovery import (
     write_deterministic_identity_attestation_recovery,
+)
+from content.release.canonical.release_contract_migration import (
+    migrate_release_contract,
+    release_contract_migration_precheck,
 )
 from content.release.canonical.release_operation_lock import (
     ReleaseOperationConflict,
@@ -82,6 +101,7 @@ def handle_campaign_aggregate_release(args: argparse.Namespace) -> None:
         report = build_campaign_release(
             root_execution_id=str(args.root_execution_id),
             release_id=str(args.release_id),
+            release_class=str(args.release_class),
             roots=roots,
             target_environment=(
                 str(getattr(args, "target_environment", None))
@@ -96,6 +116,26 @@ def handle_campaign_aggregate_release(args: argparse.Namespace) -> None:
         ValueError,
     ) as exc:
         raise SystemExit(f"[release campaign-aggregate] GATE_BLOCK {exc}") from exc
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def handle_release_contract_migration(args: argparse.Namespace) -> None:
+    release_root = Path(
+        getattr(args, "release_root", None) or OUTPUT_ROOT / "data/releases"
+    ).resolve()
+    try:
+        operation = (
+            migrate_release_contract
+            if bool(getattr(args, "apply", False))
+            else release_contract_migration_precheck
+        )
+        report = operation(
+            release_root=release_root,
+            source_release_id=str(args.source_release_id),
+            new_release_id=str(args.new_release_id),
+        )
+    except (FileNotFoundError, OSError, ObjectTransactionError, TypeError, ValueError) as exc:
+        raise SystemExit(f"[release contract-migrate] GATE_BLOCK {exc}") from exc
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
@@ -148,6 +188,24 @@ def handle_object_transaction_rollback(args: argparse.Namespace) -> None:
     except (FileNotFoundError, OSError, ObjectTransactionError, ValueError) as exc:
         raise SystemExit(
             f"[release object-transaction rollback] GATE_BLOCK {exc}"
+        ) from exc
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def handle_object_transaction_replay_package(args: argparse.Namespace) -> None:
+    """Replay one reviewed package whose media bodies live in a content library."""
+
+    try:
+        report = replay_object_transaction_package(
+            replay_id=str(args.replay_id),
+            source_package_root=Path(args.source_package_root),
+            media_library_root=Path(args.media_library_root),
+            output_root=Path(args.output_root or OUTPUT_ROOT).resolve(),
+            publish_root=Path(args.publish_root or PUBLISH_ROOT).resolve(),
+        )
+    except (FileNotFoundError, OSError, ObjectTransactionError, ValueError) as exc:
+        raise SystemExit(
+            f"[release object-transaction replay-package] GATE_BLOCK {exc}"
         ) from exc
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
@@ -235,6 +293,7 @@ def handle_baseline_release(args: argparse.Namespace) -> None:
                 publish_root=publish_root,
                 release_root=release_root,
                 release_id=release_id,
+                release_class=str(args.release_class),
             )
     except (
         FileNotFoundError,
@@ -308,11 +367,30 @@ def handle_research_scale_promotion(args: argparse.Namespace) -> None:
         document, path = write_research_scale_promotion(
             release_id=str(args.release_id),
             promotion_id=str(args.promotion_id),
-            campaign_evidence_path=Path(args.campaign_evidence),
+            campaign_evidence_path=(
+                Path(args.campaign_evidence)
+                if getattr(args, "campaign_evidence", None)
+                else None
+            ),
             target_scale=str(args.target_scale),
             predecessor_promotion_path=(
                 Path(args.predecessor_promotion)
                 if args.predecessor_promotion
+                else None
+            ),
+            m100_alpha_readiness_receipt_path=(
+                Path(args.m100_alpha_readiness_receipt)
+                if getattr(args, "m100_alpha_readiness_receipt", None)
+                else None
+            ),
+            m100_alpha_app_uat_receipt_path=(
+                Path(args.m100_alpha_app_uat_receipt)
+                if getattr(args, "m100_alpha_app_uat_receipt", None)
+                else None
+            ),
+            m100_alpha_acceptance_binding_path=(
+                Path(args.m100_alpha_acceptance_binding)
+                if getattr(args, "m100_alpha_acceptance_binding", None)
                 else None
             ),
             release_root=Path(args.release_root or (OUTPUT_ROOT / "data/releases")),
@@ -409,6 +487,44 @@ def handle_gc_apply(args: argparse.Namespace) -> None:
     )
 
 
+def handle_gc_backfill_tombstones(args: argparse.Namespace) -> None:
+    output_root = Path(args.output_root or OUTPUT_ROOT)
+    publish_root = Path(args.publish_root or PUBLISH_ROOT)
+    release_root = Path(args.release_root or (output_root / "data/releases"))
+    try:
+        if args.dry_run:
+            unresolved = unresolved_execution_references(
+                output_root=output_root,
+                publish_root=publish_root,
+                release_root=release_root,
+            )
+            payload: dict[str, Any] = {
+                "backfillId": str(args.backfill_id),
+                "dryRun": True,
+                "unresolvedExecutionCount": len(unresolved),
+                "unresolvedExecutions": [
+                    {"executionId": execution_id, "referencedBy": list(referrers)}
+                    for execution_id, referrers in unresolved.items()
+                ],
+            }
+        else:
+            document, path = backfill_absent_execution_tombstones(
+                backfill_id=str(args.backfill_id),
+                output_root=output_root,
+                publish_root=publish_root,
+                release_root=release_root,
+            )
+            payload = {
+                **document,
+                "receiptRef": path.relative_to(output_root.resolve()).as_posix(),
+            }
+    except (FileNotFoundError, ObjectTransactionError, TypeError, ValueError) as exc:
+        raise SystemExit(
+            f"[release gc backfill-tombstones] GATE_BLOCK {exc}"
+        ) from exc
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
 def handle_campaign_scale_evidence(args: argparse.Namespace) -> None:
     output_root = Path(args.output_root or OUTPUT_ROOT)
     release_root = Path(args.release_root or (output_root / "data/releases"))
@@ -418,7 +534,9 @@ def handle_campaign_scale_evidence(args: argparse.Namespace) -> None:
             evidence_id=str(args.evidence_id),
             release_id=str(args.release_id),
             campaign_plan_path=Path(args.campaign_plan),
-            runtime_session_path=Path(args.runtime_session),
+            runtime_session_path=(
+                Path(args.runtime_session) if args.runtime_session else None
+            ),
             calibration_preflight_receipt_path=Path(
                 args.calibration_preflight_receipt
             ),

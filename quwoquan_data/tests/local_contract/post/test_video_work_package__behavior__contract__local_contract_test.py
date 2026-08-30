@@ -31,13 +31,14 @@ def _source_video() -> dict[str, object]:
         "attributionText": "Example Creator, CC BY 4.0",
         "rightsBasis": "cc_by_4_0",
         "commercialAuthorizationStatus": "unverified",
-        "publicationAdmission": "research_release",
+        "distributionDecision": "research_allowed",
         "watermarkStatus": "absent",
         "audioRightsStatus": "no_audio",
         "modelReleaseStatus": "not_required",
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-03T00:00:00Z",
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        "derivedModifications": [],
         "directDownload": True,
         "accessControlBypassed": False,
         "drmDetected": False,
@@ -60,7 +61,7 @@ def test_video_writing_pack_accepts_only_sourced_video() -> None:
     payload = pack.to_dict()
     assert payload["sourceMode"] == "sourced_video"
     assert payload["sourceVideo"]["assetRef"] == _source_video()["assetRef"]
-    assert payload["sourceVideo"]["publicationAdmission"] == "research_release"
+    assert payload["sourceVideo"]["distributionDecision"] == "research_allowed"
     assert "sourceFrames" not in payload
 
 

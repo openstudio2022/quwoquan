@@ -11,7 +11,7 @@
   端口释放确认。
 
 `command_down` / `_command_down_unlocked` 等编排入口在
-`commands/down_domain.py`;`_wait_for_exact_tcp_ports_released` /
+`commands/down_domain.py`;`_wait_for_published_endpoints_released` /
 `mutable_test_live_runtime` 等协作符号仍由 stackctl 命名空间拥有。测试经
 ``mock.patch.object(stackctl, ...)`` patch 本模块符号与协作符号,因此
 函数体内一律经函数内延迟导入 `_stackctl` 属性访问(含本模块符号互调),
@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import stat
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -107,6 +108,7 @@ def _mutable_test_live_runtime_plan_from_receipt(
         "publishedPorts",
         "tlsProfile",
         "resolverHandoffDigest",
+        "publicWebPackage",
     ):
         if runtime_plan.get(field) != receipt.get(field):
             raise ValueError(f"mutable test-live receipt/plan drift: {field}")
@@ -125,22 +127,87 @@ def _mutable_test_live_runtime_plan_from_receipt(
     return runtime_plan, run_root
 
 
+def _compose_service_profiles(
+    payloads: Iterable[Mapping[str, Any]],
+) -> dict[str, set[str]]:
+    """Collect each service's declared Compose profiles across the overlay set.
+
+    A service may appear in several overlays with its `profiles` key declared in
+    only one of them. Unioning keeps the gate on the conservative side: a wider
+    profile set can only ever move a service into the expected roster, never out
+    of it.
+    """
+    declared: dict[str, set[str]] = {}
+    for payload in payloads:
+        services = payload.get("services")
+        if services is not None and not isinstance(services, dict):
+            raise ValueError("mutable test-live execution Compose services are invalid")
+        for name, definition in (services or {}).items():
+            profiles = (
+                definition.get("profiles")
+                if isinstance(definition, Mapping)
+                else None
+            )
+            if profiles is not None and not isinstance(profiles, list):
+                raise ValueError(
+                    "mutable test-live execution Compose profiles are invalid"
+                )
+            declared.setdefault(str(name), set()).update(
+                str(item) for item in (profiles or [])
+            )
+    return declared
+
+
+def _compose_activated_services(
+    payloads: Iterable[Mapping[str, Any]],
+    *,
+    activated_profiles: Iterable[str],
+) -> set[str]:
+    """Return only the services Compose can materialize under these profiles.
+
+    A profile-gated service has no container while its profile stays inactive,
+    so counting it as expected turns a by-design projection into a false roster
+    drift and strands both teardown and content binding.
+    """
+    activated = {str(item) for item in activated_profiles}
+    return {
+        name
+        for name, profiles in _compose_service_profiles(payloads).items()
+        if not profiles or (profiles & activated)
+    }
+
+
 def _mutable_test_live_teardown_manifest(
     *,
     receipt: Mapping[str, Any],
     runtime_plan: Mapping[str, Any],
     run_root: Path,
+    port_manifest: dict[str, Any],
+    port_profile: str,
 ) -> tuple[dict[str, Any], list[str], list[str]]:
     """Seal the exact running Compose identity into a teardown-only model."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
     compose_project = str(receipt.get("composeProject") or "")
+    publisher_roles = _stackctl.compose_published_endpoint_roles(
+        port_manifest,
+        port_profile,
+    )
+    container_role_closure = _stackctl.compose_publisher_container_role_closure(
+        publisher_roles
+    )
+    receipt_endpoints = _stackctl.orphan_compose_teardown._normalize_published_endpoints(
+        receipt.get("publishedPorts")
+    )
     execution_refs = runtime_plan.get("executionComposeFiles")
     if not isinstance(execution_refs, list) or not execution_refs:
         raise ValueError("mutable test-live runtime plan has no execution Compose files")
+    activated_profiles = runtime_plan.get("composeProfiles")
+    if activated_profiles is not None and not isinstance(activated_profiles, list):
+        raise ValueError("mutable test-live runtime plan Compose profiles are invalid")
+    activated_profiles = [str(item) for item in (activated_profiles or [])]
     declared_config_files: set[str] = set()
     execution_payloads: dict[str, dict[str, Any]] = {}
-    expected_services: set[str] = set()
     for index, raw_ref in enumerate(execution_refs):
         ref = Path(str(raw_ref or ""))
         path = ref if ref.is_absolute() else _stackctl.ROOT / ref
@@ -151,10 +218,6 @@ def _mutable_test_live_teardown_manifest(
             path,
             label=f"mutable test-live execution Compose file {index}",
         )
-        services = compose.get("services")
-        if services is not None and not isinstance(services, dict):
-            raise ValueError("mutable test-live execution Compose services are invalid")
-        expected_services.update(str(service) for service in (services or {}))
         declared_config_files.add(str(path))
         if path.name in execution_payloads:
             raise ValueError("mutable test-live execution Compose filename is duplicated")
@@ -169,6 +232,10 @@ def _mutable_test_live_teardown_manifest(
         if not path.is_relative_to(_stackctl.ROOT):
             raise ValueError("mutable test-live source Compose file escapes repository")
         declared_config_files.add(str(path))
+    expected_services = _compose_activated_services(
+        execution_payloads.values(),
+        activated_profiles=activated_profiles,
+    )
     if not expected_services:
         raise ValueError("mutable test-live execution Compose service roster is empty")
 
@@ -227,6 +294,7 @@ def _mutable_test_live_teardown_manifest(
 
     services: dict[str, Any] = {}
     actual_ids: set[str] = set()
+    actual_published_endpoints: list[dict[str, object]] = []
     for container in containers:
         try:
             container_id = str(container["Id"])
@@ -252,7 +320,7 @@ def _mutable_test_live_teardown_manifest(
         ):
             archived_root = Path(os.path.abspath(_stackctl.env_runs_root(str(receipt["environment"]))))
             archived_config_files_match = True
-            archived_services: set[str] = set()
+            archived_payloads: list[Mapping[str, Any]] = []
             for raw_path in config_files:
                 archived_path = Path(raw_path)
                 if (
@@ -273,18 +341,19 @@ def _mutable_test_live_teardown_manifest(
                 except ValueError:
                     archived_config_files_match = False
                     break
-                archived_payload_services = archived_payload.get("services")
-                if (
-                    archived_payload_services is not None
-                    and not isinstance(archived_payload_services, dict)
-                ):
+                archived_payloads.append(archived_payload)
+            if archived_config_files_match:
+                try:
+                    archived_services = _compose_activated_services(
+                        archived_payloads,
+                        activated_profiles=activated_profiles,
+                    )
+                except ValueError:
                     archived_config_files_match = False
-                    break
-                archived_services.update(
-                    str(item) for item in (archived_payload_services or {})
-                )
-            if archived_services != expected_services:
-                archived_config_files_match = False
+                else:
+                    archived_config_files_match = (
+                        archived_services == expected_services
+                    )
         identity_issues: list[str] = []
         if container_id not in container_ids:
             identity_issues.append("container-id")
@@ -333,6 +402,14 @@ def _mutable_test_live_teardown_manifest(
                 f"{service} ({','.join(identity_issues)})"
             )
         actual_ids.add(container_id)
+        actual_published_endpoints.extend(
+            _stackctl.orphan_compose_teardown._published_endpoints(
+                container,
+                compose_service=service,
+                publisher_roles=publisher_roles,
+                container_role_closure=container_role_closure,
+            )
+        )
         service_payload: dict[str, Any] = {"image": image_ref}
         if attached_networks:
             service_payload["networks"] = sorted(
@@ -349,6 +426,24 @@ def _mutable_test_live_teardown_manifest(
         service_roster_valid = set(services).issubset(expected_services)
     if actual_ids != set(container_ids) or not service_roster_valid:
         raise ValueError("mutable test-live Compose service roster drifted")
+    normalized_actual_endpoints = (
+        _stackctl.orphan_compose_teardown._normalize_published_endpoints(
+            actual_published_endpoints
+        )
+    )
+    published_endpoint_roster_valid = normalized_actual_endpoints == receipt_endpoints
+    if str(receipt.get("status") or "") == "partial":
+        # The absent service suffix of a partial startup also has no live
+        # publisher. Each observed endpoint has already passed canonical
+        # service/role/port validation above, so recovery accepts only a
+        # receipt-declared subset; an added or drifted live publisher remains
+        # fail-closed.
+        published_endpoint_roster_valid = all(
+            endpoint in receipt_endpoints
+            for endpoint in normalized_actual_endpoints
+        )
+    if not published_endpoint_roster_valid:
+        raise ValueError("mutable test-live Compose published endpoint identity drifted")
 
     volumes = _stackctl._mutable_test_live_resource_names(
         "volume",
@@ -363,12 +458,90 @@ def _mutable_test_live_teardown_manifest(
     return manifest, container_ids, volumes
 
 
+def _reclaim_orphaned_project_networks(
+    network_names: list[str],
+    *,
+    compose_project: str,
+) -> tuple[list[str], list[str]]:
+    """Remove project-labeled Compose networks that have no attached endpoints.
+
+    A partially failed startup can create the project networks without any
+    surviving container; `docker compose down` then has nothing to tear down
+    (the container branch is skipped) and every subsequent `down` blocks on the
+    same orphaned networks. Reclaiming only endpoint-free networks whose
+    project label is re-checked at removal time restores idempotent
+    convergence without touching live or foreign resources.
+
+    返回 `(reclaimed, issues)`。未被回收的网络一律带原因进 issues：残留网络会让
+    调用方的 residual 检查判否，但只报「网络仍在」说不出为什么，操作员无从判断该等
+    Docker、改权限，还是去找占用它的容器；inspect/rm 的 stderr 丢掉后就再也拿不回来。
+    """
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    reclaimed: list[str] = []
+    issues: list[str] = []
+
+    def _reason(name: str, reason: str) -> None:
+        issues.append(f"orphaned Compose network was not reclaimed: {name}: {reason}")
+
+    for name in network_names:
+        inspected = _stackctl.run(
+            ["docker", "network", "inspect", name],
+            timeout_seconds=30,
+        )
+        if inspected.returncode != 0:
+            _reason(
+                name,
+                "docker network inspect failed with exit code "
+                f"{inspected.returncode}: {str(inspected.stderr or '').strip()}",
+            )
+            continue
+        try:
+            documents = json.loads(inspected.stdout)
+            containers = documents[0].get("Containers") or {}
+            labels = documents[0].get("Labels") or {}
+        except (json.JSONDecodeError, IndexError, AttributeError, TypeError) as exc:
+            _reason(name, f"docker network inspect payload is unreadable: {exc}")
+            continue
+        # 名单来自 label 过滤枚举，但枚举与删除之间存在名字重用窗口；
+        # 删除时点复核 project label，避免误删他人同名网络。
+        observed_project = labels.get("com.docker.compose.project")
+        if observed_project != compose_project:
+            _reason(
+                name,
+                "Compose project label is not this project at removal time: "
+                f"{observed_project!r}",
+            )
+            continue
+        if containers:
+            _reason(
+                name,
+                "network still has attached endpoints: "
+                + ",".join(sorted(str(item) for item in containers)),
+            )
+            continue
+        removal = _stackctl.run(
+            ["docker", "network", "rm", name],
+            timeout_seconds=30,
+        )
+        if removal.returncode != 0:
+            _reason(
+                name,
+                f"docker network rm failed with exit code {removal.returncode}: "
+                + str(removal.stderr or "").strip(),
+            )
+            continue
+        reclaimed.append(name)
+    return sorted(reclaimed), issues
+
+
 def _command_mutable_test_live_down(
     args: argparse.Namespace,
     *,
     env_name: str,
     report_dir: Path,
     receipt: Mapping[str, Any],
+    allow_active_immutable_ports: bool = False,
 ) -> dict[str, Any]:
     """Stop one receipt-bound mutable runtime without deleting named volumes."""
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -383,6 +556,14 @@ def _command_mutable_test_live_down(
     resource_release_issues: list[str] = []
     try:
         runtime_plan, run_root = _stackctl._mutable_test_live_runtime_plan_from_receipt(receipt)
+        topology = _stackctl.load_environment_topology()
+        port_manifest = _stackctl.load_port_manifest()
+        release_scope = _stackctl._project_target_runtime_owned_ports(
+            args.target,
+            published_ports=receipt.get("publishedPorts"),
+            topology=topology,
+            manifest=port_manifest,
+        )
         container_ids = _stackctl._mutable_test_live_container_ids(compose_project)
         if container_ids:
             manifest, manifest_container_ids, preserved_volumes = (
@@ -390,6 +571,8 @@ def _command_mutable_test_live_down(
                     receipt=receipt,
                     runtime_plan=runtime_plan,
                     run_root=run_root,
+                    port_manifest=port_manifest,
+                    port_profile=str(receipt.get("portProfile") or ""),
                 )
             )
             if set(manifest_container_ids) != set(container_ids):
@@ -455,11 +638,36 @@ def _command_mutable_test_live_down(
             "network",
             compose_project=compose_project,
         )
+        reclaim_issues: list[str] = []
         if remaining_networks:
+            reclaimed_networks, reclaim_issues = (
+                _stackctl._reclaim_orphaned_project_networks(
+                    remaining_networks,
+                    compose_project=compose_project,
+                )
+            )
+            if reclaimed_networks:
+                details.append(
+                    "mutable test-live orphaned Compose networks reclaimed: "
+                    + ",".join(reclaimed_networks)
+                )
+            remaining_networks = _stackctl._mutable_test_live_resource_names(
+                "network",
+                compose_project=compose_project,
+            )
+        if reclaim_issues:
+            # 回收失败的原因无条件留在 details：只在「网络仍在」时才带出，会让
+            # inspect/rm 失败后该网络恰好被别的进程删掉的情形丢掉全部根因，回执只剩
+            # 「已收敛」——正是本项要修的静默。判否条件仍只由 remaining 非空决定。
+            details.extend(reclaim_issues)
+        if remaining_networks:
+            # 判否条件不变（网络仍在即 fail-closed），但把未回收的逐条原因一起带出：
+            # 只报「仍在」时操作员无从判断该等 Docker、修权限，还是去找占用的容器。
             resource_release_issues.append(
                 "mutable test-live Compose networks remain after down: "
                 + ",".join(remaining_networks)
             )
+            resource_release_issues.extend(reclaim_issues)
         remaining_volumes = _stackctl._mutable_test_live_resource_names(
             "volume",
             compose_project=compose_project,
@@ -470,34 +678,20 @@ def _command_mutable_test_live_down(
                 "mutable test-live named volumes were removed: "
                 + ",".join(missing_volumes)
             )
-        published_ports = receipt.get("publishedPorts")
-        if not isinstance(published_ports, Mapping) or not published_ports:
-            raise ValueError("mutable test-live receipt publishedPorts are invalid")
-        # Data ReliableTask 专属 fleet（environments/data_execution_fleet.json）
-        # 拥有其声明端口角色的独立生命周期；mutable test-live down 不拥有也
-        # 不得要求释放这些端口。
-        from quwoquan_ops.cli.lib.data_execution_fleet import (
-            load_data_execution_fleet_config,
-        )
-
-        fleet_config = load_data_execution_fleet_config()
-        fleet_owned_roles = {
-            fleet_config.mongo_port_role,
-            fleet_config.redis_port_role,
-        }
-        release_scope = {
-            str(role): int(port)
-            for role, port in published_ports.items()
-            if str(role) not in fleet_owned_roles
-        }
-        occupied_ports = _stackctl._wait_for_exact_tcp_ports_released(
-            list(release_scope.values())
-        )
-        for role, port in release_scope.items():
-            if port in occupied_ports:
-                resource_release_issues.append(
-                    f"canonical port remains occupied after mutable down: {role}:{port}"
-                )
+        if allow_active_immutable_ports:
+            details.append(
+                "mutable partial teardown preserved the active immutable runtime "
+                "and its canonical port ownership"
+            )
+        else:
+            occupied_endpoints = _stackctl._wait_for_published_endpoints_released(
+                release_scope
+            )
+            resource_release_issues.extend(
+                "canonical endpoint remains occupied after mutable down: "
+                f"{endpoint['role']}:{endpoint['hostPort']}/{endpoint['protocol']}"
+                for endpoint in occupied_endpoints
+            )
         if resource_release_issues:
             raise ValueError("; ".join(resource_release_issues))
 
@@ -542,6 +736,7 @@ def _command_mutable_test_live_down(
         "argv": command,
         "destructiveRepairPerformed": False,
         "destructiveActions": [],
+        "activeImmutableRuntimePreserved": allow_active_immutable_ports,
         "namedVolumesPreserved": preserved_volumes,
         "resourceReleaseIssues": resource_release_issues,
         "startupAttempt": stopped_receipt or dict(receipt),
@@ -575,5 +770,3 @@ def _command_mutable_test_live_down(
         "blockerKind": blocker_kind,
         "runtimeMode": "mutable-test-live",
     }
-
-

@@ -31,7 +31,6 @@ type ImportedInput struct {
 	PrimarySource        *Source
 	SourceURLs           []string
 	CategoryTags         []string
-	SourceTaskID         string
 }
 
 type ImportRequest struct {

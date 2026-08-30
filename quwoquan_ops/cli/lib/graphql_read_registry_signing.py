@@ -3,24 +3,21 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass
 import json
 import os
-from pathlib import Path
 import re
 import stat
 import subprocess
 import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
+from .openssl3_resolver import OpenSSL3Executable, resolve_openssl3
 
 SIGNING_KEY_ID_ENV = "QWQ_GRAPHQL_READ_REGISTRY_SIGNING_KEY_ID"
-SIGNING_PRIVATE_KEY_FILE_ENV = (
-    "QWQ_GRAPHQL_READ_REGISTRY_SIGNING_PRIVATE_KEY_FILE"
-)
-TRUSTED_PUBLIC_KEYS_FILE_ENV = (
-    "QWQ_GRAPHQL_READ_REGISTRY_TRUSTED_PUBLIC_KEYS_FILE"
-)
+SIGNING_PRIVATE_KEY_FILE_ENV = "QWQ_GRAPHQL_READ_REGISTRY_SIGNING_PRIVATE_KEY_FILE"
+TRUSTED_PUBLIC_KEYS_FILE_ENV = "QWQ_GRAPHQL_READ_REGISTRY_TRUSTED_PUBLIC_KEYS_FILE"
 _KEY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _RAW_ED25519_PUBLIC_KEY_SIZE = 32
 _ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
@@ -63,7 +60,9 @@ def decode_keyring(encoded: bytes) -> dict[str, str]:
     try:
         value = json.loads(encoded.decode("utf-8"))
     except (UnicodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f"GraphQL trusted public keyring is unreadable: {exc}") from exc
+        raise ValueError(
+            f"GraphQL trusted public keyring is unreadable: {exc}"
+        ) from exc
     if not isinstance(value, dict) or not value:
         raise ValueError("GraphQL trusted public keyring must be a non-empty object")
     normalized: dict[str, str] = {}
@@ -84,9 +83,14 @@ def decode_keyring(encoded: bytes) -> dict[str, str]:
     return normalized
 
 
-def _derive_public_key(private_key: bytes) -> bytes:
+def _derive_public_key(
+    private_key: bytes,
+    *,
+    openssl: OpenSSL3Executable | None = None,
+) -> bytes:
+    selected = openssl or resolve_openssl3()
     result = subprocess.run(
-        ["openssl", "pkey", "-pubout", "-outform", "DER"],
+        selected.argv("pkey", "-pubout", "-outform", "DER"),
         input=private_key,
         capture_output=True,
         check=False,
@@ -103,6 +107,8 @@ def _derive_public_key(private_key: bytes) -> bytes:
 def resolve_signing_material(
     repo_root: Path,
     getenv: Callable[[str], str | None] = os.getenv,
+    *,
+    openssl: OpenSSL3Executable | None = None,
 ) -> SigningMaterial:
     """Resolve one explicit external authority without serializing secret refs."""
 
@@ -133,15 +139,22 @@ def resolve_signing_material(
         keyring_path, label="GraphQL registry trusted public keyring"
     )
     if private_info.st_mode & 0o077:
-        raise ValueError("GraphQL registry signing private key permissions must be 0600")
+        raise ValueError(
+            "GraphQL registry signing private key permissions must be 0600"
+        )
     if keyring_info.st_mode & 0o022:
-        raise ValueError("GraphQL registry trusted public keyring permissions are unsafe")
+        raise ValueError(
+            "GraphQL registry trusted public keyring permissions are unsafe"
+        )
     private_bytes = private_path.read_bytes()
     keyring = decode_keyring(keyring_path.read_bytes())
     if key_id not in keyring:
-        raise ValueError("GraphQL registry signing keyId is absent from trusted keyring")
+        raise ValueError(
+            "GraphQL registry signing keyId is absent from trusted keyring"
+        )
     expected_public = base64.b64decode(keyring[key_id], validate=True)
-    if _derive_public_key(private_bytes) != expected_public:
+    selected = openssl or resolve_openssl3()
+    if _derive_public_key(private_bytes, openssl=selected) != expected_public:
         raise ValueError("GraphQL registry signing private key does not match keyring")
     return SigningMaterial(key_id, private_path, keyring_path)
 
@@ -149,6 +162,8 @@ def resolve_signing_material(
 def validate_signing_material(
     repo_root: Path,
     signing: SigningMaterial,
+    *,
+    openssl: OpenSSL3Executable | None = None,
 ) -> tuple[bytes, bytes, dict[str, str]]:
     resolved = resolve_signing_material(
         repo_root,
@@ -157,23 +172,36 @@ def validate_signing_material(
             SIGNING_PRIVATE_KEY_FILE_ENV: str(signing.private_key_path),
             TRUSTED_PUBLIC_KEYS_FILE_ENV: str(signing.trusted_public_keys_path),
         }.get,
+        openssl=openssl,
     )
     private_bytes = resolved.private_key_path.read_bytes()
     keyring_bytes = resolved.trusted_public_keys_path.read_bytes()
     return private_bytes, keyring_bytes, decode_keyring(keyring_bytes)
 
 
-def sign_payload(private_key: bytes, payload: bytes) -> bytes:
+def sign_payload(
+    private_key: bytes,
+    payload: bytes,
+    *,
+    openssl: OpenSSL3Executable | None = None,
+) -> bytes:
+    selected = openssl or resolve_openssl3()
     with tempfile.TemporaryDirectory(prefix="qwq-graphql-sign-") as temporary:
         payload_path = Path(temporary) / "payload.json"
         signature_path = Path(temporary) / "signature.bin"
         payload_path.write_bytes(payload)
         result = subprocess.run(
-            [
-                "openssl", "pkeyutl", "-sign", "-rawin",
-                "-inkey", "/dev/stdin", "-in", str(payload_path),
-                "-out", str(signature_path),
-            ],
+            selected.argv(
+                "pkeyutl",
+                "-sign",
+                "-rawin",
+                "-inkey",
+                "/dev/stdin",
+                "-in",
+                str(payload_path),
+                "-out",
+                str(signature_path),
+            ),
             input=private_key,
             capture_output=True,
             check=False,
@@ -186,9 +214,16 @@ def sign_payload(private_key: bytes, payload: bytes) -> bytes:
     return signature
 
 
-def verify_signature(public_key: bytes, payload: bytes, signature: bytes) -> None:
+def verify_signature(
+    public_key: bytes,
+    payload: bytes,
+    signature: bytes,
+    *,
+    openssl: OpenSSL3Executable | None = None,
+) -> None:
     if len(public_key) != 32 or len(signature) != 64:
         raise ValueError("GraphQL registry signature material is invalid")
+    selected = openssl or resolve_openssl3()
     with tempfile.TemporaryDirectory(prefix="qwq-graphql-verify-") as temporary:
         root = Path(temporary)
         public_path = root / "public.der"
@@ -198,11 +233,20 @@ def verify_signature(public_key: bytes, payload: bytes, signature: bytes) -> Non
         payload_path.write_bytes(payload)
         signature_path.write_bytes(signature)
         result = subprocess.run(
-            [
-                "openssl", "pkeyutl", "-verify", "-rawin", "-pubin",
-                "-keyform", "DER", "-inkey", str(public_path),
-                "-in", str(payload_path), "-sigfile", str(signature_path),
-            ],
+            selected.argv(
+                "pkeyutl",
+                "-verify",
+                "-rawin",
+                "-pubin",
+                "-keyform",
+                "DER",
+                "-inkey",
+                str(public_path),
+                "-in",
+                str(payload_path),
+                "-sigfile",
+                str(signature_path),
+            ),
             capture_output=True,
             check=False,
         )

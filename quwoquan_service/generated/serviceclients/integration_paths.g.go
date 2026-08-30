@@ -3,7 +3,9 @@ package serviceclients
 
 // Integration external interaction transport paths for cross-service callers.
 const (
-	IntegrationExternalRequestsPath = "/integrations/external-requests"
+	IntegrationSmsOtpDeliveryReadinessPath  = "/internal/integrations/external-requests/capabilities/identity.sms.otp/readiness"
+	IntegrationSmsOtpDeliveryReadinessScope = "integration.identity.sms.otp.readiness.read"
+	IntegrationExternalRequestsPath         = "/integrations/external-requests"
 )
 
 // Connector capability resolution path and scope for trusted service callers.
@@ -76,6 +78,7 @@ const (
 	IntegrationDeadLetterRecoveryConflictCode                = "INTEGRATION.USER.dead_letter_recovery_conflict"
 	IntegrationProviderTimeoutCode                           = "INTEGRATION.MIDDLEWARE.provider_timeout"
 	IntegrationProviderRejectedCode                          = "INTEGRATION.MIDDLEWARE.provider_rejected"
+	IntegrationExternalInteractionReadinessForbiddenCode     = "INTEGRATION.USER.external_interaction_readiness_forbidden"
 	IntegrationExternalInteractionInternalErrorCode          = "INTEGRATION.SYSTEM.external_interaction_internal_error"
 	IntegrationSmsProviderTimeoutCode                        = "INTEGRATION.MIDDLEWARE.sms_provider_timeout"
 	IntegrationSmsProviderRejectedCode                       = "INTEGRATION.MIDDLEWARE.sms_provider_rejected"

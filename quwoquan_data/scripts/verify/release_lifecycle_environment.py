@@ -100,7 +100,11 @@ def import_receipt_issues(
     dry_run: bool,
 ) -> list[str]:
     issues: list[str] = []
+    # The projection receipts and the content import receipt spell the applied
+    # state with different literals in their own schemas, so each is compared
+    # against the value its producer is allowed to write.
     expected_status = "dry-run" if dry_run else "active"
+    expected_content_status = "dry-run" if dry_run else "imported"
     receipts = {
         name: bound_report(
             result=result,
@@ -166,7 +170,7 @@ def import_receipt_issues(
                 f"{run / 'creator-import.json'}: creator readback differs from desired state"
             )
     if content:
-        if content.get("status") != expected_status:
+        if content.get("status") != expected_content_status:
             issues.append(f"{run / 'import.json'}: status does not match run mode")
         if content.get("manifestDigest") != manifest_digest:
             issues.append(

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 from content.execution.campaign.scale import campaign_workload_targets
-from content.execution.controller.execute.pre_acquisition_handoff import (
+from content.source.pre_acquisition_handoff import (
     write_pre_acquisition_handoff,
 )
 from content.source.professional_image_discovery_governed import (
@@ -52,9 +52,17 @@ def _handoff(output_root: Path) -> Path:
         supersedes_handoff=None,
         scale="M100",
         vertical="travel",
-        scope="china",
+        lifecycle="research",
+        scope_type="region",
         region_ref="china",
-        topic=None,
+        primary_topic_ref=None,
+        related_topic_refs=(),
+        source_selection={
+            "homepage": {"mode": "site_primary", "providers": ["wikipedia"]},
+            "article": {"mode": "site_primary", "providers": ["mafengwo"]},
+            "image": {"mode": "search_supplement", "providers": ["adobe_stock"]},
+            "video": {"mode": "site_primary", "providers": ["bilibili"]},
+        },
         run_date="20260812",
         campaign_sequence=1,
         campaign_retry_of=None,
@@ -91,6 +99,7 @@ def _attribution() -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": OBSERVED_AT,
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        "derivedModifications": [],
     }
 
 

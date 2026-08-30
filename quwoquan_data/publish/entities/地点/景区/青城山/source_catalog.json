@@ -1,0 +1,37 @@
+{
+  "schema": "quwoquan_data.object_source_catalog",
+  "policyRevision": "encyclopedia-primary",
+  "primaryEvidenceRef": "evidence/sources/homepage-source-ffe8e6439efae8438d38/meta.json",
+  "primarySource": {
+    "schema": "quwoquan_data.object_source_evidence",
+    "sourceUnitId": "homepage-source-ffe8e6439efae8438d38",
+    "entityName": "青城山",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E9%9D%92%E5%9F%8E%E5%B1%B1",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E9%9D%92%E5%9F%8E%E5%B1%B1",
+    "title": "维基百科",
+    "fetchedAt": "2026-08-24T17:30:00Z",
+    "snapshotHash": "sha256:3f6181bbfe92b0d175dd6bfb3145d4cace8d505baeddd9c643221d3f7fee2245",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only",
+    "evidenceRef": "evidence/sources/homepage-source-ffe8e6439efae8438d38/meta.json"
+  },
+  "sources": [
+    {
+      "schema": "quwoquan_data.object_source_evidence",
+      "sourceUnitId": "homepage-source-ffe8e6439efae8438d38",
+      "entityName": "青城山",
+      "sourceKind": "wikipedia",
+      "extractor": "wikipedia_api",
+      "canonicalUrl": "https://zh.wikipedia.org/wiki/%E9%9D%92%E5%9F%8E%E5%B1%B1",
+      "sourceUrl": "https://zh.wikipedia.org/wiki/%E9%9D%92%E5%9F%8E%E5%B1%B1",
+      "title": "维基百科",
+      "fetchedAt": "2026-08-24T17:30:00Z",
+      "snapshotHash": "sha256:3f6181bbfe92b0d175dd6bfb3145d4cace8d505baeddd9c643221d3f7fee2245",
+      "policyRevision": "encyclopedia-primary",
+      "sourceUseMode": "factual_reference_only",
+      "evidenceRef": "evidence/sources/homepage-source-ffe8e6439efae8438d38/meta.json"
+    }
+  ]
+}

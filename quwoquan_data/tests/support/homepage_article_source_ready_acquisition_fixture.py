@@ -50,10 +50,10 @@ def _planned(
 ) -> dict[str, object]:
     resolved_title = source_title or name
     row: dict[str, object] = {
-        "coverageEntityIdentity": f"name_location:{name}|四川省|成都市|锦江区",
+        "coverageEntityIdentity": f"name_location:{name}|示例省|示例市|示例区",
         "canonicalEntityRef": f"/entity/{entity_type}/{name}",
         "candidateName": name,
-        "province": "四川省",
+        "province": "示例省",
         "city": "成都市",
         "district": "锦江区",
         "entityType": entity_type,
@@ -92,6 +92,7 @@ def _attribution(name: str) -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": CAPTURED_AT,
         "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+        "derivedModifications": [],
     }
 
 
@@ -122,7 +123,7 @@ def _seed_selection(
             ),
             "coverageKey": coverage_key,
             "candidateName": name,
-            "province": "四川省",
+            "province": "示例省",
             "city": "成都市",
             "district": "锦江区",
             "entityType": "地点/景区",

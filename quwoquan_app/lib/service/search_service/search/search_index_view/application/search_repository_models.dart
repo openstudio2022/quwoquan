@@ -75,6 +75,8 @@ final class SearchPageResultItem {
     this.subtitle,
     this.snippet,
     this.thumbnailUrl,
+    this.thumbnailAssetId,
+    this.thumbnailAccessMode,
     required this.action,
     this.rankPosition = 0,
     this.rankReason,
@@ -89,6 +91,8 @@ final class SearchPageResultItem {
         subtitle: value.subtitle,
         snippet: value.snippet,
         thumbnailUrl: value.thumbnailUrl,
+        thumbnailAssetId: value.thumbnailAssetId,
+        thumbnailAccessMode: value.thumbnailAccessMode,
         action: value.action,
         rankPosition: value.rankPosition,
         rankReason: value.rankReason,
@@ -103,6 +107,11 @@ final class SearchPageResultItem {
   final String? subtitle;
   final String? snippet;
   final String? thumbnailUrl;
+
+  /// 缩略的配对资产标识与交付访问模式（DEC-033）；research 相位的
+  /// thumbnailUrl 是相对私有 CAS 引用，按 assetId 换短签。
+  final String? thumbnailAssetId;
+  final MediaDeliveryAccessMode? thumbnailAccessMode;
   final String action;
 
   /// 服务端最终排序位置（0 起）；端侧只读消费，不得客户端重排。

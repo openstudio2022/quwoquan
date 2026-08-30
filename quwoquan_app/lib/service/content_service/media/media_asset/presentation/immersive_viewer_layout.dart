@@ -50,36 +50,22 @@ class ImmersiveViewerStageLayoutSpec {
 class ImmersiveViewerLayout {
   const ImmersiveViewerLayout._();
 
+  /// 全页唯一横向对齐轨道（REQ-019）：顶栏、caption、交集句、底部工具栏与
+  /// 文章正文共用本 inset，底部 chrome 不叠加额外侧向收窄；机型底部安全区
+  /// 的保护只以垂直方向表达（见 `AppSpacing.immersiveBottomChromeLift`）。
   static double horizontalPadding(
     BuildContext context, {
     ImmersiveViewerStageLayoutSpec layoutSpec =
         ImmersiveViewerStageLayoutSpec.feedRail,
   }) => layoutSpec.horizontalInset;
 
-  /// 底部 chrome（caption / 交集 / 互动栏）的横向 inset。
-  ///
-  /// = [layoutSpec.horizontalInset] + 圆弧机型底部安全侧向保护；
-  /// 正文（文章 immersive contentPadding）与这些层必须同源，避免左右漂移。
-  static double bottomChromeHorizontalPadding(
-    BuildContext context, {
-    ImmersiveViewerStageLayoutSpec layoutSpec =
-        ImmersiveViewerStageLayoutSpec.feedRail,
-  }) {
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    return horizontalPadding(context, layoutSpec: layoutSpec) +
-        AppSpacing.appChromeBottomSafeSideInset(context, bottomInset);
-  }
-
   static double railWidthForViewport(
     BuildContext context,
     double viewportWidth, {
     ImmersiveViewerStageLayoutSpec layoutSpec =
         ImmersiveViewerStageLayoutSpec.feedRail,
-    bool includeBottomSafeSideInset = false,
   }) {
-    final inset = includeBottomSafeSideInset
-        ? bottomChromeHorizontalPadding(context, layoutSpec: layoutSpec)
-        : horizontalPadding(context, layoutSpec: layoutSpec);
+    final inset = horizontalPadding(context, layoutSpec: layoutSpec);
     final availableWidth = math.max(0.0, viewportWidth - (inset * 2));
     final constrainedMaxWidth = layoutSpec.maxContentWidth;
     if (constrainedMaxWidth == null) {
@@ -93,12 +79,9 @@ class ImmersiveViewerLayout {
     required Widget child,
     ImmersiveViewerStageLayoutSpec layoutSpec =
         ImmersiveViewerStageLayoutSpec.feedRail,
-    bool includeBottomSafeSideInset = false,
   }) {
     final maxContentWidth = layoutSpec.maxContentWidth;
-    final horizontal = includeBottomSafeSideInset
-        ? bottomChromeHorizontalPadding(context, layoutSpec: layoutSpec)
-        : horizontalPadding(context, layoutSpec: layoutSpec);
+    final horizontal = horizontalPadding(context, layoutSpec: layoutSpec);
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: horizontal),
       child: Align(
@@ -125,7 +108,7 @@ ArticleCanvasMetricsView resolveImmersiveArticleCanvasMetricsView(
   final height = constraints.maxHeight.isFinite
       ? constraints.maxHeight
       : MediaQuery.sizeOf(context).height;
-  final horizontalInset = ImmersiveViewerLayout.bottomChromeHorizontalPadding(
+  final horizontalInset = ImmersiveViewerLayout.horizontalPadding(
     context,
     layoutSpec: ImmersiveViewerStageLayoutSpec.articleStage,
   );

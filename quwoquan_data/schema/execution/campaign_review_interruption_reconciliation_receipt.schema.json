@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Create-once binding of a finished independent-review journal to the sole schema-valid response left pending by an interrupted campaign. This is retry feedback, not a replacement reviewer_result.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "rootExecutionId",
+    "executionId",
+    "carrier",
+    "objectRef",
+    "decision",
+    "issues",
+    "findings",
+    "bindingRule",
+    "campaignEvidence",
+    "executionEvidence",
+    "semanticEvidence",
+    "retryPolicy",
+    "recordedAt",
+    "receiptDigest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.campaign_review_interruption_reconciliation_receipt"
+    },
+    "rootExecutionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
+    },
+    "carrier": {
+      "enum": ["article", "image", "video"]
+    },
+    "objectRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision": {
+      "enum": ["revision_needed", "rejected"]
+    },
+    "issues": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "findings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "bindingRule": {
+      "const": "sole_unbound_finished_reviewer_work_unit_for_sole_pending_response"
+    },
+    "campaignEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan", "report", "claim", "capsule"],
+      "properties": {
+        "plan": {"$ref": "#/$defs/fileEvidence"},
+        "report": {"$ref": "#/$defs/fileEvidence"},
+        "claim": {"$ref": "#/$defs/fileEvidence"},
+        "capsule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ref",
+            "digest",
+            "manifest",
+            "treeDigest",
+            "gitCommitSha",
+            "sourceDigest"
+          ],
+          "properties": {
+            "ref": {"type": "string", "minLength": 1},
+            "digest": {"$ref": "#/$defs/sha256"},
+            "manifest": {"$ref": "#/$defs/fileEvidence"},
+            "treeDigest": {"$ref": "#/$defs/sha256"},
+            "gitCommitSha": {"type": "string", "minLength": 1},
+            "sourceDigest": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      }
+    },
+    "executionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest",
+        "state",
+        "objectIndex",
+        "pendingResponse",
+        "interruptedStatus",
+        "interruptReason"
+      ],
+      "properties": {
+        "manifest": {"$ref": "#/$defs/fileEvidence"},
+        "state": {"$ref": "#/$defs/fileEvidence"},
+        "objectIndex": {"$ref": "#/$defs/fileEvidence"},
+        "pendingResponse": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ref", "sha256", "responseDigest"],
+          "properties": {
+            "ref": {"type": "string", "minLength": 1},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "responseDigest": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "interruptedStatus": {"const": "manual_required"},
+        "interruptReason": {"type": "string", "minLength": 1}
+      }
+    },
+    "semanticEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workUnitId",
+        "request",
+        "requestDigest",
+        "promptSha256",
+        "attempt",
+        "attemptDigest",
+        "provider",
+        "model",
+        "modelFamily",
+        "runId",
+        "resultSha256",
+        "status"
+      ],
+      "properties": {
+        "workUnitId": {"$ref": "#/$defs/sha256"},
+        "request": {"$ref": "#/$defs/fileEvidence"},
+        "requestDigest": {"$ref": "#/$defs/sha256"},
+        "promptSha256": {"$ref": "#/$defs/sha256"},
+        "attempt": {"$ref": "#/$defs/fileEvidence"},
+        "attemptDigest": {"$ref": "#/$defs/sha256"},
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "modelFamily": {"const": "grok"},
+        "runId": {"type": "string", "minLength": 1},
+        "resultSha256": {"$ref": "#/$defs/sha256"},
+        "status": {"const": "finished"}
+      }
+    },
+    "retryPolicy": {
+      "const": "new_execution_with_retryOf_failed_objects_only"
+    },
+    "recordedAt": {"type": "string", "minLength": 1},
+    "receiptDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "fileEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "sha256"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "assets": [
+    {
+      "assetId": "泸沽湖_cover_俯瞰泸沽湖_四川_中国_334_b88a4c9e",
+      "bytes": 571121,
+      "sha256": "sha256:91a690ea650fc570f7c6b34d4d38b326c082c600babdce977e324386cd4f4771",
+      "objectKey": "media/objects/sha256/91/a6/91a690ea650fc570f7c6b34d4d38b326c082c600babdce977e324386cd4f4771.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "泸沽湖_detail_地理_334_18c24a11",
+      "bytes": 317506,
+      "sha256": "sha256:8c482200b11873a6b2bd28839008cf2da477d536f5d10a4ed86c7b3383b147bf",
+      "objectKey": "media/objects/sha256/8c/48/8c482200b11873a6b2bd28839008cf2da477d536f5d10a4ed86c7b3383b147bf.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "泸沽湖_detail_湖中的里格半岛_334_6a01229a",
+      "bytes": 747876,
+      "sha256": "sha256:c7774cedbd912e317b8208b744c05a06815b1947de33480c5ae27af25525c1b0",
+      "objectKey": "media/objects/sha256/c7/77/c7774cedbd912e317b8208b744c05a06815b1947de33480c5ae27af25525c1b0.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "泸沽湖_detail_中国一级保护动物_黑颈鹤_334_bf92ffc7",
+      "bytes": 290490,
+      "sha256": "sha256:1934922ff858b20b62f0fd64d5ed9f08aa2551c0099f007314627a541da77c77",
+      "objectKey": "media/objects/sha256/19/34/1934922ff858b20b62f0fd64d5ed9f08aa2551c0099f007314627a541da77c77.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "泸沽湖_detail_泸沽湖畔的猪槽船_334_fc010393",
+      "bytes": 408315,
+      "sha256": "sha256:1b197c4de8b0fad6b4ad89932f66574f8790057dbefe7dd1f27422c9a0064a13",
+      "objectKey": "media/objects/sha256/1b/19/1b197c4de8b0fad6b4ad89932f66574f8790057dbefe7dd1f27422c9a0064a13.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "泸沽湖_detail_生态优良的泸沽湖草海_334_756a2719",
+      "bytes": 454456,
+      "sha256": "sha256:bd26ddbea3de2953770111f8b4091d4a410ac2e790abef03242abe2840ffcb8d",
+      "objectKey": "media/objects/sha256/bd/26/bd26ddbea3de2953770111f8b4091d4a410ac2e790abef03242abe2840ffcb8d.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "泸沽湖_detail_摩梭男青年_334_f9e6bae6",
+      "bytes": 473810,
+      "sha256": "sha256:7c34328524db95fbc3b4ebed451ee6e9f85443334176efc36b254a93eeb63ecb",
+      "objectKey": "media/objects/sha256/7c/34/7c34328524db95fbc3b4ebed451ee6e9f85443334176efc36b254a93eeb63ecb.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "泸沽湖_detail_摩梭织女_334_ccee4ef9",
+      "bytes": 959190,
+      "sha256": "sha256:2f0ff47faabb82933e71cbaf9375b0f0cc1ba21f7fa44ba381771b6cca09ba85",
+      "objectKey": "media/objects/sha256/2f/0f/2f0ff47faabb82933e71cbaf9375b0f0cc1ba21f7fa44ba381771b6cca09ba85.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "泸沽湖_detail_摩梭人宗教儀式用服_攝於瀘沽湖摩_334_25d1fc1d",
+      "bytes": 517760,
+      "sha256": "sha256:93f250d9b9dd8f7db5f68981fa7ccc066e99bf50b709b1877cfb1a39d4d6c85e",
+      "objectKey": "media/objects/sha256/93/f2/93f250d9b9dd8f7db5f68981fa7ccc066e99bf50b709b1877cfb1a39d4d6c85e.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "泸沽湖_detail_湖岸风景_334_6bccb1d6",
+      "bytes": 338929,
+      "sha256": "sha256:d1849ea3cb83015c6915253eff0bd3021c313040950a3ed2a4acca7d73fdb1d4",
+      "objectKey": "media/objects/sha256/d1/84/d1849ea3cb83015c6915253eff0bd3021c313040950a3ed2a4acca7d73fdb1d4.jpg",
+      "kind": "image"
+    }
+  ]
+}

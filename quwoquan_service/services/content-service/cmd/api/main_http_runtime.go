@@ -1,119 +1,56 @@
 package bootstrap
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
-	"strconv"
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
-	runtimeconfig "quwoquan_service/runtime/config"
-	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/runtime/controlplane"
 	rtgov "quwoquan_service/runtime/governance"
-	rthealth "quwoquan_service/runtime/health"
-	rthttp "quwoquan_service/runtime/http"
-	rtmetrics "quwoquan_service/runtime/metrics"
-	robs "quwoquan_service/runtime/observability"
+	"quwoquan_service/runtime/servicekit"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	httpadapter "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 )
 
-// buildContentHTTPServer 装配内容服务的认证、操作授权、观测、跨域与限流中间件。
-// 业务 handler 的对象绑定仍由 main 负责，这里只收口传输层组合。
-func buildContentHTTPServer(
-	addr string,
-	instanceID string,
-	handler http.Handler,
-	internalGraphQLHandler http.Handler,
-	publicWebHandler http.Handler,
-	feedConfig feedRuntimeConfig,
-	healthChecker *rthealth.Checker,
-	accessTokenConfig rtauth.TokenConfig,
-	accountSecurityAuthority rtauth.AccountSecurityAuthority,
-	ioLogger *robs.IOAccessLogger,
-	processLogger *robs.ProcessTraceLogger,
-	exceptionLogger *robs.ExceptionLogger,
-) (*http.Server, error) {
-	if internalGraphQLHandler == nil {
-		return nil, fmt.Errorf("content-service internal GraphQL handler is not configured")
-	}
-	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
-	if err != nil {
-		return nil, fmt.Errorf("access token verifier invalid: %w", err)
-	}
-	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(
-		runtimeconfig.EnvRuntimeConfigProvider{},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("device ticket config invalid: %w", err)
-	}
-	deviceTicketVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
-	if err != nil {
-		return nil, fmt.Errorf("device ticket verifier invalid: %w", err)
-	}
+// contentAPIRuntime 把「只有装配期才知道的领域参数」交给声明式骨架在装配之后
+// 才调用的钩子。它存在的原因是两处签名约束：OperationGuard 只收进程身份、
+// ConfigSync 只收 options，而 feed 并发预算来自配置快照、交集文案解析器要和
+// config sync 共用同一个 HotConfigStore。骨架保证 Assemble 先于 guard 组装，
+// 因此这里不需要并发保护。
+type contentAPIRuntime struct {
+	// hotConfigStore 必须先于 Bootstrap 存在：领域装配注册交集文案解析器时
+	// 就要绑定与 config sync 循环同一个 store，否则运营态覆盖永远读不到。
+	hotConfigStore *controlplane.HotConfigStore
+	feed           feedRuntimeConfig
+	assembled      bool
+}
 
-	contentDescriptors := operationsecurity.ForDomain("content")
-	feedAdmissionPolicy := contentFeedAdmissionPolicy(
-		contentDescriptors,
-		feedConfig,
-	)
-	sensitiveOperationGuard := httpadapter.RequireSensitiveOperationPrincipal(handler)
-	admissionGuard := rtgov.OperationAdmissionMiddleware(
-		[]rtgov.OperationAdmissionPolicy{feedAdmissionPolicy},
-		writeContentFeedAdmissionRejection,
-	)(sensitiveOperationGuard)
-	generatedOperationGuard := rtauth.EnforceRuntimeOperationContract(
-		contentDescriptors,
-	)(admissionGuard)
+func newContentAPIRuntime() *contentAPIRuntime {
+	return &contentAPIRuntime{hotConfigStore: controlplane.NewHotConfigStore()}
+}
 
-	outerMux := http.NewServeMux()
-	outerMux.Handle("/metrics", rtmetrics.Handler())
-	outerMux.HandleFunc("/healthz", healthChecker.Handler())
-	// Liveness is intentionally process-only: a stale worker/dependency must
-	// remove this instance from traffic through readiness without triggering a
-	// restart storm that abandons FFmpeg work during a transient outage.
-	outerMux.HandleFunc("/livez", contentLivenessHandler)
-	outerMux.HandleFunc("/startupz", healthChecker.Handler())
-	// Owner-internal persisted GraphQL is deliberately outside the generated
-	// public REST operation router. It still traverses the credential verifier,
-	// and its handler requires the exact api-edge service subject, scope,
-	// persisted hash and ContractGraph digest before touching the read port.
-	outerMux.Handle("POST /internal/graphql", internalGraphQLHandler)
-	// 公开 SEO HTML 读面（public-content-web-entry 第一段）：匿名可读、
-	// 只输出公开已发布对象；未配置 CONTENT_PUBLIC_WEB_ORIGIN 时不挂载。
-	if publicWebHandler != nil {
-		outerMux.Handle("/public-web/", publicWebHandler)
+// guardOperations 是 content 的入站 operation 门：runtime boundary 契约判定 +
+// feed 并发预算 + 敏感 operation 的主体校验。content 用 runtime boundary 而非
+// public boundary——公共边界的商用状态拒绝归 api-edge。
+func (runtime *contentAPIRuntime) guardOperations(servicekit.Identity) (
+	func(handler http.Handler) http.Handler, error,
+) {
+	// 装配未跑过就没有 feed 并发预算，静默用零值等于把限流器关掉。
+	if !runtime.assembled {
+		return nil, errors.New(
+			"content operation guard requires the domain assembly to run first",
+		)
 	}
-	outerMux.Handle("/", generatedOperationGuard)
-
-	observedHandler := rthttp.NewHTTPServerMiddleware(
-		outerMux,
-		rthttp.HTTPServerMiddlewareConfig{
-			Service:           "content-service",
-			ServiceName:       "content-service",
-			ServiceInstanceID: instanceID,
-			Origin:            "service.http",
-			Direction:         robs.DirectionInbound,
-			SourceID:          "content-service",
-			Src:               "content-service",
-		},
-		ioLogger,
-		processLogger,
-		exceptionLogger,
-	)
-	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
-
-	timeouts := rtauth.ContractHTTPServerTimeouts(contentDescriptors)
-	return &http.Server{
-		Addr: addr,
-		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
-			AccessTokenVerifier:      accessVerifier,
-			DeviceTicketVerifier:     deviceTicketVerifier,
-			AccountSecurityAuthority: accountSecurityAuthority,
-		})(corsHandler),
-		ReadHeaderTimeout: timeouts.ReadHeader,
-		WriteTimeout:      timeouts.Write,
-		IdleTimeout:       timeouts.Idle,
+	descriptors := operationsecurity.ForDomain("content")
+	admissionPolicy := contentFeedAdmissionPolicy(descriptors, runtime.feed)
+	return func(handler http.Handler) http.Handler {
+		sensitiveOperationGuard := httpadapter.RequireSensitiveOperationPrincipal(handler)
+		admissionGuard := rtgov.OperationAdmissionMiddleware(
+			[]rtgov.OperationAdmissionPolicy{admissionPolicy},
+			httpadapter.WriteFeedAdmissionRejection,
+		)(sensitiveOperationGuard)
+		return rtauth.EnforceRuntimeOperationContract(descriptors)(admissionGuard)
 	}, nil
 }
 
@@ -139,42 +76,4 @@ func contentFeedAdmissionPolicy(
 		CanonicalOperationID: operationID,
 		InflightLimiter:      rtgov.NewInflightLimiter(feedConfig.MaxInflight),
 	}
-}
-
-func writeContentFeedAdmissionRejection(
-	w http.ResponseWriter,
-	r *http.Request,
-	reason rtgov.OperationAdmissionRejection,
-) {
-	const retryAfterSeconds = 1
-	w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
-	rterr.WriteHTTPError(
-		w,
-		contentgenerated.AppErrorFromFeedCapacityUnavailable(
-			"content feed owner concurrency exhausted: "+string(reason),
-		).WithRecoveryDirective("retry", "snackbar", retryAfterSeconds),
-		rterr.HTTPWriteOptionsFromRequest(r),
-	)
-}
-
-func contentLivenessHandler(w http.ResponseWriter, request *http.Request) {
-	if request.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
-		rterr.WriteHTTPError(
-			w,
-			rterr.NewInvalidArgument(
-				rterr.ModuleContent,
-				"仅支持 GET 健康检查",
-				"liveness endpoint only accepts GET",
-			).WithMetadata("invalid_argument", http.StatusMethodNotAllowed),
-			rterr.HTTPWriteOptions{
-				RequestID: request.Header.Get("X-Request-Id"),
-				TraceID:   request.Header.Get("X-Trace-Id"),
-			},
-		)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"live"}`))
 }

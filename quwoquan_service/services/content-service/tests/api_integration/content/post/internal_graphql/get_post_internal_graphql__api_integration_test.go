@@ -104,7 +104,7 @@ func TestInternalGraphQLRequiresVerifiedAPIEdgeCredentialAndReadsPostSlice(t *te
 	}
 }
 
-const basePersistedGraphQLRequest = `{"operationName":"ContentPostDetailBase","variables":{"postId":"post-1"},"extensions":{"persistedQuery":{"version":1,"sha256Hash":"3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110"}}}`
+const basePersistedGraphQLRequest = `{"operationName":"ContentPostDetailBase","variables":{"postId":"post-1"},"extensions":{"persistedQuery":{"version":1,"sha256Hash":"3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f"}}}`
 
 type apiPostDetailReader struct {
 	detail postports.PostDetailSlice

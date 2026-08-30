@@ -12,6 +12,7 @@ services:
       SERVICE_NAME: api-edge
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       CONFIG_VERSION: "${QWQ_COMPOSE_API_EDGE_CONFIG_VERSION:?api-edge config version is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       QWQ_RUNTIME_IDENTITY_SCHEMA: "${QWQ_RUNTIME_IDENTITY_SCHEMA:-}"
@@ -40,8 +41,13 @@ services:
         condition: service_healthy
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?config root is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18079/readyz >/dev/null 2>&1"]
+      # 本 healthcheck 经 service-core 投影成整个组合进程的 healthy，而
+      # gamma-proxy 用 depends_on: condition: service_healthy 消费它。探深层
+      # 就绪会让代理启动被 Redis/authority/registry 的收敛时间反向阻塞；
+      # 依赖就绪由 deploy/base 的 readinessProbe 指向 /readyz 承担。
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18079/healthz >/dev/null 2>&1"]
       interval: 10s
       timeout: 3s
       start_period: 10s

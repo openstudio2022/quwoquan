@@ -47,7 +47,7 @@
 - [`article-editor-refactor`](./article-editor-refactor/spec.md)：不可用时 **置灰**；可用时符合对比度与触控热区（≥44pt）。
 - [`cold-start-performance`](./cold-start-performance/spec.md)：正常启动优先进入安全 Shell，只有已确认的启动致命异常进入无重试恢复链路。
 - [`unrecoverable-runtime-recovery`](./unrecoverable-runtime-recovery/spec.md)：运行时根级不可恢复异常只允许一次主容器重建，失败后转入版本或网页版恢复且不得循环。
-- [`cross-platform-portability`](./cross-platform-portability/spec.md)：业务层不新增直接平台分支。
+- [`cross-platform-portability`](./cross-platform-portability/spec.md)：业务层不新增直接平台分支，iOS 可安装下限锁定 16.0，Android 跟随 Flutter `minSdk` 且对应系统须满五年。
 - [`dart-semantic-gate`](./dart-semantic-gate/spec.md)：**约束**：gate 必须调用 verify_dart_semantic，失败即阻塞。
 - [`dual-theme-page-coverage`](./dual-theme-page-coverage/spec.md)：优先 **替换为语义色 + 双模式分支**；能统一走 `Theme` / `CupertinoTheme.of(context)` 的 **不重复传 `isDark`**。
 - [`entity-link-templates-metadata`](./entity-link-templates-metadata/spec.md)：归因 query 解析单测覆盖注入与剥离两端。

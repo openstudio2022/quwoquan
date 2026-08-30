@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
+import tempfile
 from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,7 +18,10 @@ from quwoquan_ops.cli.lib.output_paths import repo_local_dir, safe_segment
 CommandRunner = Callable[[Sequence[str]], subprocess.CompletedProcess[str]]
 DEFAULT_BUILD_GRACE_SECONDS = 20 * 60
 MAX_LEASE_AGE_SECONDS = 12 * 60 * 60
-SUPPORTED_PLATFORMS = frozenset({"android", "ios-simulator"})
+SUPPORTED_PLATFORMS = frozenset({"android", "ios-simulator", "ios-physical"})
+# released 与 stale 都不占用运行时；前者是本代际已交回的证据，后者是失效残留。
+# 两者都必须允许其他消费方抢占，否则一次 UAT 之后本地运行时就锁死。
+OCCUPANCY_FREE_STATES = frozenset({"stale", "released"})
 
 
 def consumer_lease_dir() -> Path:
@@ -79,7 +84,7 @@ def acquire_consumer_lease(
         "startedAt": utc_now(),
         "buildGraceSeconds": max(0, int(build_grace_seconds)),
     }
-    if normalized_platform == "ios-simulator":
+    if normalized_platform.startswith("ios-"):
         payload["bundleId"] = package_name.strip()
     for key, value in (
         ("handoffDigest", handoff_digest),
@@ -94,10 +99,24 @@ def acquire_consumer_lease(
 
 
 def release_consumer_lease(*, target: str, device: str, consumer: str) -> bool:
+    """标记 released 并保留回执。
+
+    互斥由状态承担，代际证据由保留的 releaseId/manifestDigest/
+    readinessReceiptDigest 承担。删除文件会让 device_bound 永远拿不到与本次
+    运行同代际的 lease 证据。
+    """
+
     path = _lease_path(target=target, device=device, consumer=consumer)
     if not path.is_file():
         return False
-    path.unlink()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    payload["releasedAt"] = utc_now()
+    write_json(path, payload)
     return True
 
 
@@ -119,7 +138,7 @@ def list_consumer_leases(target: str | None = None) -> list[dict[str, Any]]:
     return leases
 
 
-def active_consumer_leases(
+def inspect_consumer_leases(
     target: str,
     *,
     runner: CommandRunner | None = None,
@@ -127,9 +146,11 @@ def active_consumer_leases(
     adb_path: str | None = None,
     xcrun_path: str | None = None,
 ) -> list[dict[str, Any]]:
+    """只读返回全部 lease，包括不会提升可用性的 stale 回执。"""
+
     current = now or datetime.now(timezone.utc)
     command_runner = runner or _run_command
-    active: list[dict[str, Any]] = []
+    inspected: list[dict[str, Any]] = []
     for lease in list_consumer_leases(target):
         state, detail = _inspect_lease(
             lease,
@@ -138,10 +159,29 @@ def active_consumer_leases(
             adb_path=adb_path,
             xcrun_path=xcrun_path,
         )
-        if state == "stale":
-            continue
-        active.append({**lease, "state": state, "detail": detail})
-    return active
+        inspected.append({**lease, "state": state, "detail": detail})
+    return inspected
+
+
+def active_consumer_leases(
+    target: str,
+    *,
+    runner: CommandRunner | None = None,
+    now: datetime | None = None,
+    adb_path: str | None = None,
+    xcrun_path: str | None = None,
+) -> list[dict[str, Any]]:
+    return [
+        lease
+        for lease in inspect_consumer_leases(
+            target,
+            runner=runner,
+            now=now,
+            adb_path=adb_path,
+            xcrun_path=xcrun_path,
+        )
+        if lease["state"] not in OCCUPANCY_FREE_STATES
+    ]
 
 
 def _inspect_lease(
@@ -156,13 +196,25 @@ def _inspect_lease(
     if started_at is None:
         return "stale", "invalid startedAt"
     age_seconds = max(0, int((now - started_at).total_seconds()))
+    released_at = _parse_time(str(lease.get("releasedAt") or ""))
+    if released_at is not None:
+        # 已交回的回执不再探测进程存活：进程本就应当退出，探测只会把它降级成
+        # stale 并丢掉本代际证据。超过最大寿命后按 stale 处理，避免无限累积。
+        if age_seconds > MAX_LEASE_AGE_SECONDS:
+            return "stale", "released lease exceeded maximum age"
+        return "released", "lease was explicitly released with generation evidence"
     grace = max(0, int(lease.get("buildGraceSeconds") or 0))
     if age_seconds <= grace and age_seconds <= MAX_LEASE_AGE_SECONDS:
         return "build_grace", f"build grace active ({age_seconds}s/{grace}s)"
 
     platform = str(lease.get("platform") or "android").strip().lower()
-    if platform == "ios-simulator":
-        state, detail = _inspect_ios_simulator_lease(
+    if platform in {"ios-simulator", "ios-physical"}:
+        inspector = (
+            _inspect_ios_simulator_lease
+            if platform == "ios-simulator"
+            else _inspect_ios_physical_lease
+        )
+        state, detail = inspector(
             lease,
             runner=runner,
             xcrun_path=xcrun_path,
@@ -287,6 +339,114 @@ def _inspect_ios_simulator_lease(
             "application service exists but executable path is not confirmed",
         )
     return "active", "Simulator application service and executable are active"
+
+
+def _inspect_ios_physical_lease(
+    lease: dict[str, Any],
+    *,
+    runner: CommandRunner,
+    xcrun_path: str | None,
+) -> tuple[str, str]:
+    executable = xcrun_path or shutil.which("xcrun")
+    if not executable:
+        return "active_unverified", "xcrun unavailable; lease retained safely"
+    device = str(lease.get("device") or "").strip()
+    bundle_id = str(
+        lease.get("bundleId") or lease.get("packageName") or ""
+    ).strip()
+    if not device or not bundle_id:
+        return "stale", "device or bundleId missing"
+
+    try:
+        apps = _read_devicectl_result(
+            runner,
+            [
+                executable,
+                "devicectl",
+                "device",
+                "info",
+                "apps",
+                "--device",
+                device,
+                "--bundle-id",
+                bundle_id,
+            ],
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        return "active_unverified", f"iPhone application state is unreadable: {exc}"
+    installed_apps = apps.get("apps")
+    if not isinstance(installed_apps, list):
+        return "active_unverified", "iPhone application listing is malformed"
+    matching_apps = [
+        app
+        for app in installed_apps
+        if isinstance(app, dict)
+        and str(app.get("bundleIdentifier") or "") == bundle_id
+    ]
+    if not matching_apps:
+        return "stale", "application is not installed"
+    app_url = str(matching_apps[0].get("url") or "").rstrip("/")
+    if not app_url:
+        return "active_unverified", "iPhone application URL is missing"
+
+    try:
+        processes = _read_devicectl_result(
+            runner,
+            [
+                executable,
+                "devicectl",
+                "device",
+                "info",
+                "processes",
+                "--device",
+                device,
+            ],
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        return "active_unverified", f"iPhone process state is unreadable: {exc}"
+    running_processes = processes.get("runningProcesses")
+    if not isinstance(running_processes, list):
+        return "active_unverified", "iPhone process listing is malformed"
+    if not any(
+        isinstance(process, dict)
+        and str(process.get("executable") or "").startswith(app_url + "/")
+        and isinstance(process.get("processIdentifier"), int)
+        and int(process["processIdentifier"]) > 0
+        for process in running_processes
+    ):
+        return "stale", "application process is not running"
+    return "active", "registered iPhone application executable is active"
+
+
+def _read_devicectl_result(
+    runner: CommandRunner,
+    command: list[str],
+) -> dict[str, Any]:
+    directory = repo_local_dir("local-runtime-consumer-probes")
+    directory.mkdir(parents=True, exist_ok=True)
+    descriptor, raw_path = tempfile.mkstemp(
+        prefix="devicectl-",
+        suffix=".json",
+        dir=directory,
+    )
+    os.close(descriptor)
+    output_path = Path(raw_path)
+    output_path.unlink(missing_ok=True)
+    try:
+        result = runner([*command, "--json-output", str(output_path)])
+        if result.returncode != 0:
+            raise RuntimeError(f"devicectl exited with code {result.returncode}")
+        if not output_path.is_file():
+            raise RuntimeError("devicectl did not create structured output")
+        try:
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError("devicectl structured output is invalid") from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("result"), dict):
+            raise ValueError("devicectl structured result is missing")
+        return payload["result"]
+    finally:
+        output_path.unlink(missing_ok=True)
 
 
 def _parse_time(raw: str) -> datetime | None:

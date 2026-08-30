@@ -90,10 +90,10 @@
 <a id="gwt-002"></a>
 ### GWT-002 三环境三层 conformance matrix 与 Prod Remote receipt 均有真实执行结果
 
-- GIVEN Alpha、Beta、Gamma Binding 已选择对应 Adapter，测试数据和 cleanup 合同完整。
+- GIVEN Alpha、Beta、Gamma 环境 artifact 已绑定对应 nonprod Provider Workload，Prod artifact 已绑定正式 Provider Workload，且测试数据与 cleanup 合同完整。
 - WHEN 对同一 Capability 执行 local_contract、api_integration 和 user_acceptance。
 - THEN 聚合报告恰含九个 required cell，且每格 Provider、网络边界、数据和环境语义匹配。
-- AND 每格由该环境 Binding 选中的 Adapter 实际执行，并可从 CaseResult 追溯命令、目标、契约、断言与测试 artifact digest。
+- AND 每格由该环境 artifact 封存的 Provider Workload 实际执行，并可从 CaseResult 追溯命令、目标、契约、断言、Workload image 与测试 artifact digest。
 - AND Alpha/Beta/Gamma Debug-local cell 均绑定各自目标的 Port 对等替代 Adapter；普通本地、dirty tree、未评审 commit 或 local key 生成的 cell 标记 `nonPromotable=true`。
 - AND 当前环境本次 invocation 的 42 格在 active immutable candidate、selected Binding、测试源、CaseResult、cleanup 和 observability 全部同源时，允许以 `local-sha256` 满足该环境 functional readiness，且无需 CI attestation key。
 - AND 三环境共 126 格与双模拟器 UAT 即使全部通过，也只能形成独立的 emulator-only non-promotable claim；正式准出仍等待 Android 真机、CI-attested 140 格与 Prod Remote receipt。
@@ -102,7 +102,7 @@
 - WHEN 对 Alpha/Beta/Gamma 执行商业 Provider readiness。
 - THEN 每个环境另有绑定 managed non-prod selected Adapter、不可变候选和真实 Remote 结果的 receipt，且不接受 Debug-local matrix 作为替代。
 - WHEN 执行生产商用准出。
-- THEN 每个 required Capability 另有一个绑定 Prod selected Adapter 与 hosted topology 的 Remote `user_acceptance` receipt，且不接受 Alpha/Beta/Gamma nonprod matrix 作为替代。
+- THEN 每个 required Capability 另有一个绑定 Prod Provider Workload、Prod environment artifact 与 hosted topology 的 Remote `user_acceptance` receipt，且不接受 Alpha/Beta/Gamma nonprod matrix 作为替代。
 - AND 正式 artifact 恰含 126 个 nonprod cell 与 14 个 Prod cell；`provider-conformance-readiness` 的 `issues/sourceCoverageIssues` 均为空、四环境同一 14 Capability 全部 `required=true/capability_ready=true`，140 个 raw evidence exact bytes 由 manifest/finalizer 收集并由 environment-stability final acceptance 重新推导验证。
 
 <a id="gwt-003"></a>
@@ -131,8 +131,8 @@
 - PublicProvider 的本地 TLS conformance 只证明 Nominatim/OSRM compatible wire，不构成真实公网或 Prod probe。
 - Open-Meteo 继续复用 Assistant owner 的 canonical `assistant.weather.forecast` binding，不在 Integration 复制 Adapter。
 - `location.poi.search` 与 `location.route.read` 的**真实公网 Provider**（`ext.map.nominatim` / `ext.route.osrm`）在四环境保持未绑定。绑定真实 endpoint 前必须由人工确认自托管/商用 endpoint、Nominatim 使用政策与可识别 User-Agent/联系策略、OSRM 容量与限流政策，并生成绑定 active candidate/config digest 的 Remote receipt。
-- Alpha 已将 `location.poi.search` 绑定到受管非生产协议替身 `ext.map.nominatim.protocol_substitute`（endpoint 为 `local_topology:provider-protocol-substitute` 的 `/nominatim` 协议兼容面），其三层自描述 conformance source 已登记且 `sourceCoverageIssues=[]`；UAT 层复用发布选点页真实 journey（`SearchLocations` 公开路径经 `LocationPoiSearchPort`）。替身启用不豁免上一条真实 Provider 政策。
-- `location.route.read` 四环境保持 `not_required`：App 当前无路线消费页面，`user_acceptance` 层无法提供真实 user journey，三层 source 无法闭环；替身 `/osrm` 协议兼容面与 `ext.route.osrm.protocol_substitute` adapter 契约已就绪，待 App 路线消费点落地后再启用并补齐三层 source。Beta/Gamma/Prod 的 POI 亦为 `not_required`。
+- `location.poi.search` 四环境保持 `not_required`：nonprod 三环境必须与 Prod 共享同一 binding 档（[云侧信任域裁决 DEC-005](../../deliver-deploy-prod-pipeline/design.md#dec-005)），因此不允许只在 Alpha 单独启用替身。受管非生产协议替身 `ext.map.nominatim.protocol_substitute`（`local_topology:provider-protocol-substitute` 的 `/nominatim` 协议兼容面）与其三层自描述 conformance source 已就绪，UAT 层可复用发布选点页真实 journey（`SearchLocations` 公开路径经 `LocationPoiSearchPort`），待四环境同步声明后翻牌。替身启用不豁免上一条真实 Provider 政策。
+- `location.route.read` 四环境保持 `not_required`：App 当前无路线消费页面，`user_acceptance` 层无法提供真实 user journey，三层 source 无法闭环；替身 `/osrm` 协议兼容面与 `ext.route.osrm.protocol_substitute` adapter 契约已就绪，待 App 路线消费点落地后再启用并补齐三层 source。
 - Open-Meteo 的真实 Remote receipt 同样由其 owner 环境人工政策确认后生成，禁止把公共 demo endpoint 或本地 conformance 结果写成 `passed`。
 - 完成判定：`GWT-002` 对应行为满足；每个实际 Capability/Adapter/layer 都有自描述原生 harness，14 个 Capability 在同一候选版本完成 Alpha/Beta/Gamma 九格 evidence 与 Prod Remote receipt，并通过 `--require-ready gamma` 与 `--require-ready prod`。
 - 依赖：不可变候选镜像 digest、CI attestation key、Alpha/Beta/Gamma 受管非生产 Provider 材料、Prod 生产厂商材料、受控测试数据与 cleanup/observability 回执，以及 Prod health/switch/rollback 回执。

@@ -36,6 +36,8 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
             "Strict-Transport-Security",
             "Content-Security-Policy",
             "try_files {path} /index.html",
+            'Cache-Control "no-cache, must-revalidate"',
+            'Cache-Control "no-cache, no-store, must-revalidate"',
         ):
             self.assertIn(token, caddy)
         for forbidden in ("local_certs", "tls internal", ".test", "\n:80 {"):
@@ -47,6 +49,29 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
             'header {\n\t\t\tContent-Type "text/html; charset=utf-8"',
             caddy,
         )
+        self.assertNotIn("@immutable path /assets/*", caddy)
+        self.assertIn(
+            "@runtime_config path /runtime-config-trust.json /runtime-config-package.json",
+            caddy,
+        )
+        runtime_config = caddy.index("@runtime_config path")
+        runtime_config_header = caddy.index(
+            'Cache-Control "no-store"', runtime_config
+        )
+        web_handle = caddy.index("\thandle {", runtime_config_header)
+        self.assertLess(runtime_config_header, web_handle)
+        web_start = caddy.index("\nquwoquan.com {")
+        web_site = caddy[web_start:]
+        rewrite = web_site.index("try_files {path} /index.html")
+        html_matcher = web_site.index("@html path /index.html")
+        html_header = web_site.index(
+            'Content-Type "text/html; charset=utf-8"',
+            html_matcher,
+        )
+        file_server = web_site.index("file_server", html_header)
+        self.assertLess(rewrite, html_matcher)
+        self.assertLess(html_matcher, html_header)
+        self.assertLess(html_header, file_server)
 
     def test_gray_caddy_is_private_http_upstream_without_certificate_issuance(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

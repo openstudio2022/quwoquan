@@ -91,7 +91,8 @@ void main() {
         ),
       );
 
-      expect(android.platform, 'android');
+      expect(android.platform, AppReleaseRecoveryPlatform.android);
+      expect(android.updateChannel, AppReleaseRecoveryChannel.nativeUpdate);
       expect(android.latestBuild, greaterThan(0));
       expect(android.minimumSupportedBuild, greaterThan(0));
       expect(
@@ -102,14 +103,16 @@ void main() {
       expect(android.latestVersion, isNotEmpty);
       expect(Uri.parse(android.recoveryUrl).scheme, 'https');
       expect(Uri.parse(android.updateUrl!).scheme, 'https');
-      expect(ios.platform, 'ios');
+      expect(ios.platform, AppReleaseRecoveryPlatform.ios);
+      expect(ios.updateChannel, AppReleaseRecoveryChannel.webOnly);
       expect(ios.latestBuild, greaterThan(0));
       expect(ios.minimumSupportedBuild, greaterThan(0));
       expect(ios.minimumSupportedBuild, lessThanOrEqualTo(ios.latestBuild));
       expect(ios.latestVersion, isNotEmpty);
       expect(Uri.parse(ios.recoveryUrl).scheme, 'https');
-      expect(Uri.parse(ios.updateUrl!).scheme, 'https');
-      expect(web.platform, 'web');
+      expect(ios.updateUrl, isNull);
+      expect(web.platform, AppReleaseRecoveryPlatform.web);
+      expect(web.updateChannel, AppReleaseRecoveryChannel.nativeUpdate);
       expect(web.latestBuild, greaterThan(0));
       expect(web.minimumSupportedBuild, greaterThan(0));
       expect(Uri.parse(web.updateUrl!).scheme, 'https');

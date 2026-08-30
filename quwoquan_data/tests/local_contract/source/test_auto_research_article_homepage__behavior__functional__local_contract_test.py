@@ -336,14 +336,19 @@ def test_parallel_image_auto_research_writes_availability_report():
     assert availability["readyTargets"] == ["可用景区", "缺源景区"], availability
     assert availability["ineligibleTargets"] == [], availability
     assert [row["entityId"] for row in availability["imageSoftWarnings"]] == ["缺源景区"]
-    assert report["throughput"]["maxWorkers"] == 2
+    # 冻结上限与实测峰值各自呈现，不合并成一个 worker 数。
+    assert report["throughput"]["frozenMaxConcurrentWorkers"] == 2
+    assert report["throughput"]["peakConcurrentWorkers"] <= 2
     assert progress_events[0]["status"] == "running"
     assert progress_events[-1]["status"] == "succeeded"
-    assert progress_events[-1]["completedCount"] == 2
+    assert progress_events[-1]["terminalEntityCount"] == 2
     progress = read_json(execution_root(task) / "_shared" / "auto_research_progress.json")
     assert progress["status"] == "succeeded"
-    assert progress["entityCount"] == 2
-    assert progress["workers"] == 2
+    assert progress["candidateEntityCount"] == 2
+    assert progress["terminalEntityCount"] == 2
+    assert progress["frozenMaxConcurrentWorkers"] == 2
+    # 终止后最后一次心跳的事实仍在文档里。
+    assert progress["lastHeartbeatEpochSeconds"] >= 1
     assert not (execution_root(task) / "_shared" / "source_unavailable_targets.json").exists()
     missing_image_plan = (
         resolve_entity_object_dir(task, "缺源景区", etype_hint="景区")
@@ -394,7 +399,14 @@ def test_parallel_auto_research_persists_incremental_report_on_interrupt(monkeyp
                 "ineligibleTargets": [],
                 "ineligibleTargetCount": 0,
             },
-            "throughput": {"maxWorkers": 2, "entityCount": 1, "elapsedSeconds": 10.0},
+            "throughput": {
+                "factKind": "single_run_observation",
+                "frozenMaxConcurrentWorkers": 2,
+                "peakConcurrentWorkers": 1,
+                "entityCount": 1,
+                "elapsedSeconds": 10.0,
+                "entitiesPerMinute": 6.0,
+            },
         },
     )
 
@@ -438,10 +450,16 @@ def test_parallel_auto_research_persists_incremental_report_on_interrupt(monkeyp
     assert [item["entityId"] for item in persisted["updated"]] == ["既有景区", "快景区"]
     progress = read_json(shared / "auto_research_progress.json")
     assert progress["status"] == "interrupted"
-    assert progress["completedCount"] == 1
+    assert progress["terminalEntityCount"] == 1
+    assert progress["candidateEntityCount"] == 2
 
 
-def test_commercial_article_rejects_legacy_qunar_and_related_encyclopedia_bases():
+def test_commercial_article_plans_only_registry_admitted_sources():
+    """文章载体的商用准入逐站由来源注册表裁定，不再由全局 closure 开关一刀切。
+
+    注册表接纳的站点（去哪儿攻略、中文维基）进计划并带上冻结的绑定身份；
+    注册表不接纳的 URL 根本不进计划，因为它的归属在交付期无从解析。
+    """
     import content.source.research.auto_plan_article as article_mod
     import content.source.research.auto_plan_writer as research_mod
 
@@ -489,7 +507,7 @@ def test_commercial_article_rejects_legacy_qunar_and_related_encyclopedia_bases(
         limit: int = 4,
     ):
         assert entity_id == entity
-        return [
+        admitted = [
             _source(
                 source_id=f"article_qunar_base_{index}",
                 platform="去哪儿攻略",
@@ -503,6 +521,19 @@ def test_commercial_article_rejects_legacy_qunar_and_related_encyclopedia_bases(
                 image_evidence_mode="same_source",
             )
             for index in range(1, 5)
+        ]
+        return admitted + [
+            _source(
+                source_id="article_unregistered_base",
+                platform="未登记游记站",
+                url="https://unregistered.example.test/youji/1",
+                category="travelogue",
+                discovery_provider="test",
+                match_confidence=0.95,
+                source_role="base",
+                images=[good_image],
+                image_evidence_mode="same_source",
+            )
         ]
 
     try:
@@ -549,13 +580,20 @@ def test_commercial_article_rejects_legacy_qunar_and_related_encyclopedia_bases(
         for name, value in article_originals.items():
             setattr(article_mod, name, value)
 
-    assert report["articleCommercialClosure"] is True
-    assert any("article base sources=0" in issue for issue in report["issues"])
-    candidate_ids = {
-        str(row.get("source_id") or "") for row in report["candidates"]
-    }
-    assert not any(source_id.startswith("article_qunar_base_") for source_id in candidate_ids)
-    assert not any("related_encyclopedia" in source_id for source_id in candidate_ids)
+    plan = (
+        resolve_entity_object_dir(task, entity, etype_hint="地点/景区")
+        / "1.download"
+        / "article_source_plan.json"
+    )
+    planned = read_json(plan)["payload"]["sources"]
+    planned_ids = {str(row.get("source_id") or "") for row in planned}
+    assert any(source_id.startswith("article_qunar_base_") for source_id in planned_ids)
+    assert "article_unregistered_base" not in planned_ids
+    for row in planned:
+        assert row["articleSiteId"], row["source_id"]
+        assert row["articleCommercialAdmission"] == "commercial_release"
+        assert row["policyRevision"] == "article-source-registry-v1"
+        assert row["extractor"] in {"qunar_html", "ctrip_sight_html", "wikipedia_api"}
 
 def test_homepage_only_auto_research_runs_media_but_skips_article_discovery():
     import content.source.research.auto_plan_writer as research_mod

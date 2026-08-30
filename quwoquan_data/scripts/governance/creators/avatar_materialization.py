@@ -18,6 +18,7 @@ from content.release.canonical.creator_avatar_quality import (
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
 )
+from core.content_library import MEDIA_KIND, admit_library_bytes, library_cas_path
 
 
 class CreatorAvatarError(ValueError):
@@ -137,8 +138,23 @@ def _assert_replaceable_projection(target: Path) -> None:
         relative = path.relative_to(target)
         if relative.parts[0] == "rights_snapshots" and path.suffix == ".json":
             continue
+        if (
+            len(relative.parts) == 3
+            and relative.parts[:2] == ("_pool", "versions")
+            and path.suffix == ".json"
+        ):
+            continue
         if len(relative.parts) != 1 or relative.name not in allowed:
             raise CreatorAvatarError(f"creator projection owns unexpected file: {path}")
+
+
+def _preserve_pool_history(target: Path, staging: Path) -> None:
+    """Carry append-only admission history through the projection swap unchanged."""
+
+    history = target / "_pool"
+    if not history.is_dir():
+        return
+    shutil.copytree(history, staging / "_pool")
 
 
 def _project_creator(creator_ref: str, *, publish_root: Path) -> bool:
@@ -154,6 +170,8 @@ def _project_creator(creator_ref: str, *, publish_root: Path) -> bool:
     had_target = target.is_dir()
     try:
         creator_projection.project_creator_object(creator_ref, staging)
+        if had_target:
+            _preserve_pool_history(target, staging)
         if had_target and _tree_digest(target) == _tree_digest(staging):
             return False
         if backup.exists() or failed.exists():
@@ -190,25 +208,30 @@ def persist_creator_avatar(
     profile_path: Path,
     publish_root: Path,
     creator_pool_root: Path,
-    object_key: str,
+    avatar_sha256: str,
     derivative_body: bytes,
     evidence_ref: str,
     evidence_document: Mapping[str, object],
     avatar_asset: Mapping[str, object],
 ) -> dict[str, bool]:
-    """Persist immutable bytes/evidence, then update and project one profile."""
+    """Admit the avatar body, persist its evidence, then project one profile.
 
-    cas_path = publish_root / object_key
+    The derived body is owned by the content library, not by canonical publish:
+    the projection records the digest that addresses it. An admitted entry is
+    never rolled back, because it is immutable, shared by digest with anything
+    else that derives the same bytes, and reclaimed by the collector once no
+    reference remains — undoing it here could pull bytes out from another owner.
+    """
+
+    cas_entry = library_cas_path(MEDIA_KIND, avatar_sha256)
+    cas_created = not cas_entry.exists()
     evidence_path = creator_pool_root / evidence_ref
     evidence_body = _json_bytes(evidence_document)
-    cas_created = False
     evidence_created = False
     try:
-        cas_created = _create_once(cas_path, derivative_body)
+        admit_library_bytes(derivative_body, kind=MEDIA_KIND)
         evidence_created = _create_once(evidence_path, evidence_body)
     except (OSError, ValueError) as exc:
-        if cas_created:
-            _remove_created(cas_path, derivative_body, stop=publish_root)
         if evidence_created:
             _remove_created(evidence_path, evidence_body, stop=creator_pool_root)
         if isinstance(exc, CreatorAvatarError):
@@ -227,8 +250,6 @@ def persist_creator_avatar(
     except (OSError, ValueError, ObjectTransactionError) as exc:
         if profile_changed and profile_path.read_bytes() == after:
             _replace_bytes_if_unchanged(profile_path, after, before)
-        if cas_created:
-            _remove_created(cas_path, derivative_body, stop=publish_root)
         if evidence_created:
             _remove_created(evidence_path, evidence_body, stop=creator_pool_root)
         if isinstance(exc, CreatorAvatarError):

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from core.data_issue import (
+    DataIssue,
     DataIssueCode,
     DataIssueLane,
     DataIssueStage,
@@ -38,6 +39,7 @@ class EntityMediaClosureInput:
     image_specs: tuple[Mapping[str, Any], ...]
     pending_images: tuple[dict[str, Any], ...]
     provider_asset_counts: tuple[Mapping[str, Any], ...]
+    professional_exclusions: tuple[DataIssue, ...]
     existing_image_source_dirs: frozenset[Path]
     written_source_dirs: frozenset[Path]
     written_rejected_source_dirs: frozenset[Path]
@@ -106,6 +108,16 @@ def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
         sorted(image_groups.items()), start=1
     ):
         first = group[0]
+        # 归因缺席与归因无效是两件事：可发布归因只由受审计采集铸造，检索阶段
+        # 手写的 collection 根本没有归因。塌陷成空对象会让 schema 报一串
+        # required 字段缺失，把读者引向补字段而不是补 acquisition receipt。
+        for row in group:
+            planned = row.get("sourceAttribution")
+            if not isinstance(planned, Mapping) or not planned:
+                raise ValueError(
+                    f"image collection 缺 sourceAttribution: {collection_id}；"
+                    "可发布归因只能由受审计采集铸造，请补该集合的 acquisition receipt"
+                )
         source_attribution = canonical_source_attribution(
             first.get("sourceAttribution")
         )
@@ -243,6 +255,9 @@ def _media_gate_issues(
             messages=remaining,
             recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
         ))
+    # 被排除的冻结专业作品单元是证据而非阻断：批次阻断仍只由最小张数门禁决定，
+    # 一个资产不能取消十个已接受的同胞。
+    typed_issues.extend(spec.professional_exclusions)
     return fetch_issues, blocking_issues, typed_issues
 
 

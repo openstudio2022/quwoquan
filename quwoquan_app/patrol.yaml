@@ -1,14 +1,16 @@
 # Patrol E2E 配置
 # 文档：https://patrol.leancode.co/patrol-cli/configuration
+#
+# App 身份（applicationId/bundle id）按环境 × BuildMode 由
+# quwoquan_ops/cli/lib/app_identity.py 派生，UAT runner 通过
+# --package-name / --bundle-id 逐次覆盖；此处不写身份字面值。
 app_name: quwoquan
 
 android:
-  app_id: com.quwoquan.quwoquan_app
   # 等待 app 启动（冷启动较慢，给足时间）
   wait_for_app_launch_timeout: 30
 
 ios:
-  bundle_id: com.example.quwoquanApp
   wait_for_app_launch_timeout: 30
 
 # 单个 patrolTest 超时（秒）

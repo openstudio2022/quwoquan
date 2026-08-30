@@ -16,39 +16,52 @@ class SynthesisReadinessResult {
   final ContextFillTask? replanTask;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'ready': ready,
-        'reason': reason,
-        'replanTask': replanTask?.toJson(),
-      };
+    'ready': ready,
+    'reason': reason,
+    'replanTask': replanTask?.toJson(),
+  };
 
   factory SynthesisReadinessResult.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'ready',
-      'reason',
-      'replanTask',
-    };
+    const allowedFields = <String>{'ready', 'reason', 'replanTask'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('SynthesisReadinessResult response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'SynthesisReadinessResult response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('ready') && json['ready'] != null && (json['ready'] is! bool)) {
-      throw const FormatException('SynthesisReadinessResult field ready has an invalid wire value');
+    if (json.containsKey('ready') &&
+        json['ready'] != null &&
+        (json['ready'] is! bool)) {
+      throw const FormatException(
+        'SynthesisReadinessResult field ready has an invalid wire value',
+      );
     }
-    if (json.containsKey('reason') && json['reason'] != null && (json['reason'] is! String)) {
-      throw const FormatException('SynthesisReadinessResult field reason has an invalid wire value');
+    if (json.containsKey('reason') &&
+        json['reason'] != null &&
+        (json['reason'] is! String)) {
+      throw const FormatException(
+        'SynthesisReadinessResult field reason has an invalid wire value',
+      );
     }
-    if (json.containsKey('replanTask') && json['replanTask'] != null && (json['replanTask'] is! Map)) {
-      throw const FormatException('SynthesisReadinessResult field replanTask has an invalid wire value');
+    if (json.containsKey('replanTask') &&
+        json['replanTask'] != null &&
+        (json['replanTask'] is! Map)) {
+      throw const FormatException(
+        'SynthesisReadinessResult field replanTask has an invalid wire value',
+      );
     }
     return SynthesisReadinessResult(
       ready: json['ready'] == true,
       reason: (json['reason'] as String?)?.trim() ?? "",
-      replanTask: json['replanTask'] is Map ? ContextFillTask.fromJson((json['replanTask'] as Map).cast<String, dynamic>()) : null,
+      replanTask: json['replanTask'] is Map
+          ? ContextFillTask.fromJson(
+              (json['replanTask'] as Map).cast<String, dynamic>(),
+            )
+          : null,
     );
   }
-
 }
 
 class SynthesisReadinessResultFields {

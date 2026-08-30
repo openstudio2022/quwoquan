@@ -7,6 +7,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _SCRIPTS_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -24,11 +26,10 @@ import sys
 
 ROOT = REPO_ROOT
 APP = ROOT / "quwoquan_app"
-DEVICE_SCRIPTS = APP / "scripts" / "device"
-if str(DEVICE_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(DEVICE_SCRIPTS))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-from launch_manifest_metadata import (  # noqa: E402
+from quwoquan_ops.cli.lib.app_launch_manifest_contract import (  # noqa: E402
     LaunchManifestContractError,
     load_launch_manifest_contract,
 )

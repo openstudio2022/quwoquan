@@ -12,8 +12,10 @@ final class ContentMediaUploadTypePolicy {
 
 abstract final class ContentMediaUploadPolicy {
   static const bool streamingRequired = true;
-  static const String fileTooLargeErrorCode = "CONTENT.USER.media_file_too_large";
-  static const String unsupportedTypeErrorCode = "CONTENT.USER.media_type_unsupported";
+  static const String fileTooLargeErrorCode =
+      "CONTENT.USER.media_file_too_large";
+  static const String unsupportedTypeErrorCode =
+      "CONTENT.USER.media_type_unsupported";
   static const Map<String, ContentMediaUploadTypePolicy> mediaTypes = {
     "audio": ContentMediaUploadTypePolicy(
       maxFileSizeBytes: 10485760,
@@ -27,9 +29,7 @@ abstract final class ContentMediaUploadPolicy {
     ),
     "file": ContentMediaUploadTypePolicy(
       maxFileSizeBytes: 104857600,
-      allowedContentTypes: {
-        "*/*",
-      },
+      allowedContentTypes: {"*/*"},
     ),
     "image": ContentMediaUploadTypePolicy(
       maxFileSizeBytes: 52428800,

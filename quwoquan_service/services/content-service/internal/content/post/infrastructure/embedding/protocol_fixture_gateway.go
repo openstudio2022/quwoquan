@@ -21,10 +21,7 @@ func LoadEmbeddingGateway(
 			"embedding binding has no runtime config provider",
 		)
 	}
-	descriptor, found := contentgenerated.ExternalProviderBindingFor(
-		appEnv,
-		embeddingCapabilityID,
-	)
+	descriptor, found := contentgenerated.CompiledBindingFor(embeddingCapabilityID)
 	if !found || descriptor.State != "enabled" {
 		return nil, contentgenerated.AppErrorFromRequiredDependencyUnavailable(
 			"embedding binding is unavailable for the current environment",

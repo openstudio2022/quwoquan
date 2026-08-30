@@ -7,7 +7,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -24,7 +24,78 @@ from core.python_environment import (
 from core.runtime_policy import active_runtime_policy
 
 
-def cursor_model_catalog() -> dict:
+def _catalog_selection_support(
+    models: list[dict],
+    selection: CursorModelSelection | None,
+) -> dict:
+    """Prove one governed model/parameter binding exists in the account catalog.
+
+    Listing a model id is not enough: a reasoning tier such as ``effort=xhigh``
+    only exists on some model versions, so the requested parameters must match a
+    declared parameter value and a declared variant combination.
+    """
+    if selection is None:
+        return {"checked": False, "supported": True, "issues": []}
+    requested = {parameter.id: parameter.value for parameter in selection.parameters}
+    support: dict = {
+        "checked": True,
+        "supported": False,
+        "requestedModel": selection.model_id,
+        "requestedParameters": selection.parameters_document(),
+        "issues": [],
+    }
+    entry = next(
+        (row for row in models if str(row.get("id") or "") == selection.model_id),
+        None,
+    )
+    if entry is None:
+        support["issues"] = [
+            f"model {selection.model_id} is absent from the account model catalog"
+        ]
+        return support
+    declared = {
+        str(row.get("id") or ""): {str(value) for value in row.get("values") or []}
+        for row in entry.get("parameters") or []
+        if isinstance(row, Mapping)
+    }
+    issues: list[str] = []
+    for parameter_id, value in requested.items():
+        if parameter_id not in declared:
+            issues.append(
+                f"model {selection.model_id} does not declare parameter {parameter_id}"
+            )
+        elif value not in declared[parameter_id]:
+            issues.append(
+                f"model {selection.model_id} parameter {parameter_id} does not offer "
+                f"{value}; declared values are {sorted(declared[parameter_id])}"
+            )
+    variants = [row for row in entry.get("variants") or [] if isinstance(row, list)]
+    if not issues and variants:
+        matched = any(
+            all(
+                any(
+                    isinstance(pair, Mapping)
+                    and str(pair.get("id") or "") == parameter_id
+                    and str(pair.get("value") or "") == value
+                    for pair in variant
+                )
+                for parameter_id, value in requested.items()
+            )
+            for variant in variants
+        )
+        if not matched:
+            issues.append(
+                f"model {selection.model_id} does not declare a variant matching "
+                f"{selection.parameters_document()}"
+            )
+    support["issues"] = issues
+    support["supported"] = not issues
+    return support
+
+
+def cursor_model_catalog(
+    selection: CursorModelSelection | None = None,
+) -> dict:
     """Read the account-visible model catalog through the public Cursor facade."""
     try:
         from core.cursor_credentials import (
@@ -46,6 +117,16 @@ def cursor_model_catalog() -> dict:
             "ready": False,
             "issues": ["credential_not_ready"],
             "modelIds": [],
+            "models": [],
+            "selectionSupport": {
+                "checked": False,
+                "supported": False,
+                "requestedModel": selection.model_id if selection else None,
+                "requestedParameters": (
+                    selection.parameters_document() if selection else []
+                ),
+                "issues": ["credential_not_ready"],
+            },
         }
     catalog_python = resolve_data_agent_python(include_current=True) or Path(sys.executable)
     code = r'''
@@ -69,15 +150,39 @@ with os.fdopen(credential_fd, "r", encoding="utf-8", closefd=True) as credential
     api_key = credential_stream.readline().strip()
 try:
     models = Cursor().models.list(api_key=api_key)
-    model_ids = sorted({
-        str(getattr(model, "id", "") or "").strip()
-        for model in models
-        if str(getattr(model, "id", "") or "").strip()
-    })
+    rows = []
+    for model in models:
+        model_id = str(getattr(model, "id", "") or "").strip()
+        if not model_id:
+            continue
+        rows.append({
+            "id": model_id,
+            "parameters": [
+                {
+                    "id": str(getattr(parameter, "id", "") or ""),
+                    "values": [
+                        str(getattr(value, "value", "") or "")
+                        for value in getattr(parameter, "values", ())
+                    ],
+                }
+                for parameter in getattr(model, "parameters", ())
+            ],
+            "variants": [
+                [
+                    {
+                        "id": str(getattr(pair, "id", "") or ""),
+                        "value": str(getattr(pair, "value", "") or ""),
+                    }
+                    for pair in getattr(variant, "params", ())
+                ]
+                for variant in getattr(model, "variants", ())
+            ],
+        })
     print(json.dumps({
-        "ready": bool(model_ids),
+        "ready": bool(rows),
         "sdkVersion": importlib.metadata.version("cursor-sdk"),
-        "modelIds": model_ids,
+        "modelIds": sorted({row["id"] for row in rows}),
+        "models": rows,
     }, ensure_ascii=False))
 except Exception as exc:
     print(json.dumps({
@@ -112,11 +217,21 @@ except Exception as exc:
             for model_id in payload.get("modelIds") or []
             if str(model_id)
         ]
-        ready = bool(proc.returncode == 0 and payload.get("ready") and model_ids)
+        models = [row for row in payload.get("models") or [] if isinstance(row, Mapping)]
+        support = _catalog_selection_support([dict(row) for row in models], selection)
+        ready = bool(
+            proc.returncode == 0
+            and payload.get("ready")
+            and model_ids
+            and support["supported"]
+        )
         error = _redact_secret_text(
             str(payload.get("error") or proc.stderr or ""),
             secrets=(key,),
         )
+        issues = list(support["issues"])
+        if not ready and not issues:
+            issues = [error or "Cursor account model catalog request failed"]
         return {
             "schema": "quwoquan_data.cursor_model_catalog",
             "checked": True,
@@ -124,6 +239,8 @@ except Exception as exc:
             "sdkVersion": str(payload.get("sdkVersion") or ""),
             "modelCount": len(model_ids),
             "modelIds": model_ids,
+            "models": models,
+            "selectionSupport": support,
             "autoSelection": {
                 "requestedId": "auto",
                 "literalCatalogEntry": "auto" in model_ids,
@@ -131,11 +248,7 @@ except Exception as exc:
             },
             "errorClass": payload.get("errorClass"),
             "error": error or None,
-            "issues": (
-                []
-                if ready
-                else [error or "Cursor account model catalog request failed"]
-            ),
+            "issues": issues,
         }
     except (json.JSONDecodeError, OSError, subprocess.TimeoutExpired, ValueError) as exc:
         return {
@@ -145,6 +258,16 @@ except Exception as exc:
             "sdkVersion": "",
             "modelCount": 0,
             "modelIds": [],
+            "models": [],
+            "selectionSupport": {
+                "checked": False,
+                "supported": False,
+                "requestedModel": selection.model_id if selection else None,
+                "requestedParameters": (
+                    selection.parameters_document() if selection else []
+                ),
+                "issues": ["Cursor account model catalog request failed"],
+            },
             "errorClass": type(exc).__name__,
             "error": _redact_secret_text(str(exc), secrets=(key,)),
             "issues": ["Cursor account model catalog request failed"],
@@ -170,7 +293,9 @@ def cursor_workspace_probe_suite(
 
     policy = active_runtime_policy()
     selection = CursorModelSelection.from_value(model)
-    worker_limit = min(len(resolved), policy.campaign_lane_workers)
+    # workspaces 已经是调用方选择后的 exact workload；全部尝试启动，结果仅作
+    # 观测，不用静态 campaign worker 配置制造本机容量结论。
+    worker_limit = len(resolved)
     effective_timeout_seconds = float(
         timeout_seconds
         if timeout_seconds is not None
@@ -239,7 +364,7 @@ def cursor_workspace_probe_suite(
         )
     if maximum_active_workers < worker_limit:
         issues.append(
-            "Cursor workspace smoke did not realize configured parallelism: "
+            "Cursor workspace smoke did not realize requested parallelism: "
             f"{maximum_active_workers}<{worker_limit}"
         )
     if any(not value for value in (*agent_ids, *run_ids)):

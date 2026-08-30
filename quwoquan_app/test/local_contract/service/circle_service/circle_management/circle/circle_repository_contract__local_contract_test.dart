@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
 
 const _fixtureCircleId = 'fixture_circle_photo';
@@ -95,10 +96,7 @@ void main() {
     });
 
     test('list 空参数不崩溃', () async {
-      expect(
-        () async => await reader.list(CircleListQuery()),
-        returnsNormally,
-      );
+      expect(() async => await reader.list(CircleListQuery()), returnsNormally);
     });
 
     test('get 不存在的 ID 抛出异常', () async {

@@ -1,5 +1,4 @@
 """Closed vocabularies shared by data execution and release control flow."""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -41,8 +40,8 @@ class ImageAssetStrategy(StrEnum):
     OPEN_LICENSE_PUBLISH = "open_license_publish"
     LICENSED_PROVIDER_PUBLISH = "licensed_provider_publish"
     AI_GENERATED_ORIGINAL = "ai_generated_original"
-    ATTRIBUTION_AUDITED_PUBLISH = "attribution_audited_publish"
     REFERENCE_ONLY_NO_IMAGE_RELEASE = "reference_only_no_image_release"
+    ATTRIBUTION_AUDITED_PUBLISH = "attribution_audited_publish"
 
 
 class ImageCountPolicy(StrEnum):
@@ -72,9 +71,9 @@ class ReleaseRunKind(StrEnum):
 
 
 class ReleaseRunStatus(StrEnum):
+    PREPARED = "prepared"
     COMPLETED = "completed"
     DRY_RUN = "dry_run"
-    PREPARED = "prepared"
     FAILED = "failed"
 
 
@@ -142,6 +141,7 @@ class QueueFailureKind(StrEnum):
     GOVERNANCE = "governance"
     STARTUP = "startup"
     RESULT_ENVELOPE = "result_envelope"
+    BUDGET = "budget"
     TIMEOUT = "timeout"
 
 
@@ -229,10 +229,17 @@ class AgentRunStatus(StrEnum):
 
 
 class ManagedAgentCheckpointStatus(StrEnum):
-    """Lifecycle state of the persisted checkpoint record."""
+    """Lifecycle state of the persisted checkpoint record.
+
+    ``PARTIAL`` and ``BLOCKED`` name a run that reached its own end with a
+    shortfall: the checkpoint is complete as a record, so downstream stages read
+    the excluded refs from it instead of inferring exclusion from absence.
+    """
 
     COMPLETED = "completed"
     INTERRUPTED = "interrupted"
+    PARTIAL = "partial"
+    BLOCKED = "blocked"
 
 
 class AgentFailureKind(StrEnum):
@@ -241,6 +248,7 @@ class AgentFailureKind(StrEnum):
     SDK_UNAVAILABLE = "sdk_unavailable"
     CREDENTIAL_INVALID = "credential_invalid"
     PROVIDER_REJECTED = "provider_rejected"
+    BUDGET_EXCEEDED = "budget_exceeded"
     BRIDGE_UNAVAILABLE = "bridge_unavailable"
     SDK_EXECUTION_FAILED = "sdk_execution_failed"
     NO_RESULT = "no_result"
@@ -302,27 +310,162 @@ class PostStage(StrEnum):
     REVIEW = "review"
 
 
-EXECUTION_PHASES = tuple(ExecutionPhase)
+class ReceiptStage(StrEnum):
+    """十阶段 receipt 协议的阶段闭集（DEC-005）。
+
+    对象目录下的过程阶段是本闭集的一个连续子段，不是另一份枚举。receipt CLI、
+    工作包目录契约与 layout 门禁都从这里取值——同一个阶段名在三处各写一遍时，
+    改名只改了其中一处不会被任何判据发现。
+    """
+
+    PLAN = "0.plan"
+    SOURCES = "sources"
+    DOWNLOAD = "1.download"
+    QUALITY = "2.quality"
+    COMPOSE = "3.compose"
+    DRAFT = "4.draft"
+    REVIEW = "5.review"
+    PUBLISH = "publish"
+    RELEASE = "release"
+    SHIP = "ship"
+
+
+RECEIPT_STAGE_SEQUENCE: tuple[ReceiptStage, ...] = (
+    ReceiptStage.PLAN,
+    ReceiptStage.SOURCES,
+    ReceiptStage.DOWNLOAD,
+    ReceiptStage.QUALITY,
+    ReceiptStage.COMPOSE,
+    ReceiptStage.DRAFT,
+    ReceiptStage.REVIEW,
+    ReceiptStage.PUBLISH,
+    ReceiptStage.RELEASE,
+    ReceiptStage.SHIP,
+)
+
+# 逐对象推进、在对象目录下留痕的阶段。显式列出而不是对上面的序列切片：切片会让
+# 「哪几个阶段落在对象目录下」变成一个要靠索引数出来的事实。
+OBJECT_STAGE_SEQUENCE: tuple[ReceiptStage, ...] = (
+    ReceiptStage.DOWNLOAD,
+    ReceiptStage.QUALITY,
+    ReceiptStage.COMPOSE,
+    ReceiptStage.DRAFT,
+    ReceiptStage.REVIEW,
+)
+
+
+class RecoveryNextAction(StrEnum):
+    """按需入池链路上非成功终态的恢复动作闭集。
+
+    编译截面与 drain 截面共用同一闭集：运营者读到的恢复动作词元不随截面变化，
+    否则同一个「补输入」在两处会有两个名字，读者得先知道自己在读哪个截面。
+    schema 侧真相源是 `schema/execution/recovery_next_action.schema.json`。
+    """
+
+    SUPPLY_INPUT = "supply_input"
+    RECOMPILE_INTENT = "recompile_intent"
+    RETRY_SOURCE_DISCOVERY = "retry_source_discovery"
+    EXPAND_SCOPE = "expand_scope"
+    CHANGE_SOURCE_STRATEGY = "change_source_strategy"
+    ACQUIRE_OR_RETRY = "acquire_or_retry"
+    REPAIR_EVIDENCE = "repair_evidence"
+    REPAIR_IDENTITY = "repair_identity"
+    SELECT_NEW_IDENTITY = "select_new_identity"
+    RESUME_DELIVERY = "resume_delivery"
+    NONE = "none"
+
+
+class MediaHoldingState(StrEnum):
+    """一条媒体引用在 content library 上的兑现终态闭集。
+
+    三种不可兑现互不塌陷。库整体不可达是一个库级事实，不得展开成逐条引用缺席：
+    展开后读到的是「全部引用缺席」，指向逐对象排查，而真实故障是一次卷掉线或一次
+    目录迁移。缺席与漂移也不合并——缺席说明字节从未入库或已被回收，漂移说明库里
+    那份字节不是记录里那份，两者的恢复动作不同。
+    """
+
+    HONOURED = "honoured"
+    ABSENT = "absent"
+    DRIFTED = "drifted"
+    LIBRARY_UNREACHABLE = "library_unreachable"
+
+
+class MediaClosureVerdict(StrEnum):
+    """一个 release 的媒体闭包判定终态闭集。
+
+    `LIBRARY_UNREACHABLE` 与 `REFERENCES_UNHONOURED` 是两个可区分的终态，前者不得
+    展开成后者：库不可达时判定连一条引用都查不了，因此它给出的不是「每条都缺席」
+    这个逐对象结论，而是「无法逐条判」这个库级结论，恢复动作也落在库上。
+    """
+
+    HONOURED = "honoured"
+    REFERENCES_UNHONOURED = "references_unhonoured"
+    LIBRARY_UNREACHABLE = "library_unreachable"
+
+
+class MediaDurabilityState(StrEnum):
+    """release 媒体字节的耐久性状态闭集。
+
+    `NOT_ESTABLISHED` 是默认取值，也是闭包判定唯一能得出的取值：库当前可读、
+    配置里写着备份目标，都只说明控制面在场，不说明字节有第二个持有方。置位到
+    `VERIFIED` 需要一次在隔离恢复目标上的真实恢复证据，那条路径不由本判定给出
+    ——本判定只保证耐久性不被默认宣称。
+    """
+
+    NOT_ESTABLISHED = "not_established"
+    VERIFIED = "verified"
+
+
+class MediaHoldingRecoveryAction(StrEnum):
+    """媒体引用不可兑现时的恢复动作闭集。
+
+    闭集里没有「重新采集原始素材」。交付副本经过重编码、取封面帧与格式转换，没有
+    上游能逐字节复现，而原始采集素材在对象产出后已被回收；把重采写进恢复路径等于
+    给出一条走不通的出路，读者会据此以为字节还有退路。
+    """
+
+    RESTORE_FROM_INDEPENDENT_HOLDER = "restore_from_independent_holder"
+    ADMIT_CARRIED_BYTES = "admit_carried_bytes"
+    REATTACH_LIBRARY = "reattach_library"
+    NONE = "none"
+
+
+class PoolObjectRetirementReason(StrEnum):
+    """canonical 池内历史对象逐对象退役的原因闭集。
+
+    每个成员绑定一条 discovery 层已经在产出的 typed 不可准入判据，退役请求必须
+    观测到该判据才成立；成员不表达「操作者想下架」，因此本闭集不能用来把合格
+    对象移出可选集。schema 侧真相源是
+    `schema/release/pool_object_retirement_receipt.schema.json`。
+    """
+
+    HISTORICAL_GENERATOR_NOT_AGENT = "historical_generator_not_agent"
 
 
 __all__ = [
-    "EXECUTION_PHASES",
     "AgentFailureKind",
     "AgentProvider",
     "AgentRunStatus",
     "ManagedAgentCheckpointStatus",
     "AppUatDataSource",
     "AppUatStatus",
-    "ContentGenerator",
     "ContentImportStatus",
     "ContentType",
     "DeploymentEnvironment",
-    "ExecutionPhase",
     "ExecutionStage",
     "ExecutionStateStatus",
     "ImageSafetyReviewStatus",
+    "MediaClosureVerdict",
+    "MediaDurabilityState",
+    "MediaHoldingRecoveryAction",
+    "MediaHoldingState",
+    "PoolObjectRetirementReason",
     "PostStage",
+    "OBJECT_STAGE_SEQUENCE",
+    "RECEIPT_STAGE_SEQUENCE",
     "ReadinessMode",
+    "ReceiptStage",
+    "RecoveryNextAction",
     "QueueBackend",
     "QueueFailureKind",
     "QueueJobStage",
@@ -344,5 +487,4 @@ __all__ = [
     "SourcePolicyRevision",
     "StageKind",
     "StageStatus",
-    "expected_content_generator",
 ]

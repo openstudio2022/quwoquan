@@ -33,7 +33,13 @@ class GovernedConfigAckWorkloadContractTest(unittest.TestCase):
                 source_text = "\n".join(path.read_text(encoding="utf-8") for path in sources)
                 self.assertTrue(
                     "StartReleaseConfigAttestation" in source_text
-                    or "RunConfigSyncLoop" in source_text,
+                    or "RunConfigSyncLoop" in source_text
+                    # servicekit.RegisterConfigSync 内部注册同一持续同步/ACK
+                    # 循环 worker，是迁移到 servicekit 后的等价合规形态。
+                    or "servicekit.RegisterConfigSync" in source_text
+                    # servicekit.Bootstrap 契约内置同一注册（DEC-028），其必然性
+                    # 由 servicekit 同包白盒测试锁定，调用字面量即审计锚点。
+                    or "servicekit.Bootstrap(" in source_text,
                     f"{service} is rendered as governed but does not start machine config ACK",
                 )
 

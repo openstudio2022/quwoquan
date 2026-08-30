@@ -1,13 +1,52 @@
 """工程归属解析与领域服务归属校验。"""
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 from . import context
 from .nodes import Node, node_for_spec
-from .parsing import app_journey_engineering_roots, engineering_claims, engineering_roots
-from .patterns import APP_TEST_LAYERS
+from .parsing import (
+    app_journey_engineering_roots,
+    engineering_claims,
+    engineering_roots,
+    headings,
+)
+from .patterns import APP_TEST_LAYERS, PATH_RE
+
+_DEC_BLOCK_RE = re.compile(
+    r'<a\s+id=["\'](dec-\d{3,})["\']\s*></a>([\s\S]*?)'
+    r'(?=<a\s+id=["\']dec-\d{3,}["\']\s*></a>|\Z)',
+    re.IGNORECASE,
+)
+_STORY_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)#]+/spec\.md)(?:#[^)]+)?\)")
+_REQ_RE = re.compile(r"\bREQ-\d{3,}\b")
+_ACCEPTANCE_RE = re.compile(r"\b(?:UAT|DOM|SIT|GWT)-\d{3,}\b")
+
+
+@dataclass(frozen=True)
+class DesignOwnership:
+    """L2 DEC 对工程根和唯一 Story 的精确归属。"""
+
+    l2: Node
+    anchor: str
+    roots: tuple[str, ...]
+    story: Node
+    requirement_anchors: tuple[str, ...]
+    acceptance_anchors: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TargetResolution:
+    """owner resolver 的单一结果，供开发与 Review 共用。"""
+
+    node: Node
+    l1_owner: Node | None
+    target: Path
+    ownership_target: Path
+    design_ownership: DesignOwnership | None = None
 
 
 def domain_service_roots() -> list[Path]:
@@ -95,7 +134,8 @@ def owners_for_path(target: Path, nodes: Iterable[Node]) -> list[Node]:
     for node in nodes:
         for root in engineering_roots(node):
             root = root.rstrip("/")
-            if rel == root or rel.startswith(root + "/"):
+            exact_singleton = root == "Makefile"
+            if rel == root or (not exact_singleton and rel.startswith(root + "/")):
                 matches.append((len(root), node))
     if not matches:
         return []
@@ -122,9 +162,10 @@ def canonical_app_test_owner_target(target: Path) -> Path | None:
         or parts[3] == "journeys"
     ):
         return None
-    if len(parts) >= 7 and parts[3] == "service":
-        return context.REPO_ROOT / "quwoquan_app" / "lib" / Path(*parts[3:7])
-    return context.REPO_ROOT / "quwoquan_app" / "lib" / parts[3]
+    # 保留 domain 后的完整对象路径，否则
+    # ``test/<layer>/design_system/pageflip/**`` 会被折叠为
+    # ``lib/design_system``，L2 DEC 就无法和 production path 共用同一 owner。
+    return context.REPO_ROOT / "quwoquan_app" / "lib" / Path(*parts[3:])
 
 
 def owners_for_app_test_path(target: Path, nodes: Iterable[Node]) -> list[Node] | None:
@@ -166,23 +207,243 @@ def owners_for_app_test_path(target: Path, nodes: Iterable[Node]) -> list[Node] 
     ]
 
 
-def resolve_target(raw: str, nodes: list[Node]) -> Node:
-    target = Path(raw)
+def _field(block: str, label: str) -> str:
+    match = re.search(
+        rf"^-\s+{re.escape(label)}：(.+?)\s*$",
+        block,
+        re.MULTILINE,
+    )
+    return match.group(1).strip() if match else ""
+
+
+def _anchor_references(
+    field: str,
+    pattern: re.Pattern[str],
+    *,
+    story_id: str,
+) -> tuple[str, ...]:
+    """解析显式锚点及同类 ``A 至 B`` 范围，并稳定去重。"""
+
+    matches = list(pattern.finditer(field))
+    qualified = [
+        (match, match.start() - len(story_id) - 1)
+        for match in matches
+        if field[max(0, match.start() - len(story_id) - 1) : match.start()]
+        == f"{story_id}/"
+    ]
+    if qualified and "至" in field[qualified[0][0].start() :]:
+        start = qualified[0][1]
+        tail = field[qualified[0][0].end() :]
+        next_qualified_story = next(
+            (
+                match
+                for match in re.finditer(
+                    r"(?P<story>[A-Za-z0-9_.-]+)/"
+                    r"(?=(?:REQ|UAT|DOM|SIT|GWT)-\d{3,}\b)",
+                    tail,
+                )
+                if match.group("story") != story_id
+            ),
+            None,
+        )
+        end = (
+            qualified[0][0].end() + next_qualified_story.start()
+            if next_qualified_story is not None
+            else len(field)
+        )
+        field = field[start:end]
+        matches = list(pattern.finditer(field))
+
+    anchors: list[str] = []
+    previous: re.Match[str] | None = None
+    for match in matches:
+        kind, raw_number = match.group(0).split("-", 1)
+        anchor = match.group(0).lower()
+        if previous is not None:
+            previous_kind, previous_number = previous.group(0).split("-", 1)
+            separator = field[previous.end() : match.start()]
+            if (
+                kind == previous_kind
+                and "至" in separator
+                and int(previous_number) <= int(raw_number)
+            ):
+                width = max(len(previous_number), len(raw_number), 3)
+                anchors.extend(
+                    f"{kind.lower()}-{number:0{width}d}"
+                    for number in range(int(previous_number) + 1, int(raw_number) + 1)
+                )
+                previous = match
+                continue
+        anchors.append(anchor)
+        previous = match
+    return tuple(dict.fromkeys(anchors))
+
+
+def _design_ownerships(
+    nodes: Iterable[Node],
+    l1_owner: Node | None = None,
+) -> list[DesignOwnership]:
+    """从 L2 design 直接解析 DEC 工程归属，不维护第二份 registry。"""
+
+    result: list[DesignOwnership] = []
+    all_nodes = list(nodes)
+    for l2 in (
+        item
+        for item in all_nodes
+        if item.level == 2
+        and item.design.is_file()
+        and (l1_owner is None or item.directory.parent == l1_owner.directory)
+    ):
+        text = l2.design.read_text(encoding="utf-8")
+        for match in _DEC_BLOCK_RE.finditer(text):
+            anchor = match.group(1).lower()
+            block = match.group(2)
+            root_field = _field(block, "适用工程根")
+            if not root_field:
+                continue
+            roots = tuple(sorted({root.rstrip("/") for root in PATH_RE.findall(root_field)}))
+            if not roots:
+                raise ValueError(
+                    f"GATE_BLOCK: {l2.design.relative_to(context.REPO_ROOT)}#{anchor} "
+                    "声明了适用工程根，但未包含 canonical 仓库路径"
+                )
+
+            story_nodes: set[Node] = set()
+            for raw_link in _STORY_LINK_RE.findall(_field(block, "影响 Story")):
+                story = node_for_spec((l2.directory / raw_link).resolve(), all_nodes)
+                if (
+                    story is not None
+                    and story.level == 3
+                    and story.directory.parent == l2.directory
+                ):
+                    story_nodes.add(story)
+            if len(story_nodes) != 1:
+                story_ids = sorted(item.node_id for item in story_nodes)
+                raise ValueError(
+                    f"GATE_BLOCK: {l2.design.relative_to(context.REPO_ROOT)}#{anchor} "
+                    "的适用工程根必须指向唯一直属 Story；"
+                    f"当前={story_ids or '无'}"
+                )
+            story = next(iter(story_nodes))
+            requirement_anchors = _anchor_references(
+                _field(block, "关联要求"),
+                _REQ_RE,
+                story_id=story.node_id,
+            )
+            acceptance_anchors = _anchor_references(
+                _field(block, "关联验收"),
+                _ACCEPTANCE_RE,
+                story_id=story.node_id,
+            )
+            story_anchors = headings(story.spec)
+            missing = sorted(
+                (set(requirement_anchors) | set(acceptance_anchors)) - story_anchors
+            )
+            if missing:
+                raise ValueError(
+                    f"GATE_BLOCK: {l2.design.relative_to(context.REPO_ROOT)}#{anchor} "
+                    f"引用了 {story.rel} 不存在的锚点：{', '.join(missing)}"
+                )
+            result.append(
+                DesignOwnership(
+                    l2=l2,
+                    anchor=anchor,
+                    roots=roots,
+                    story=story,
+                    requirement_anchors=requirement_anchors,
+                    acceptance_anchors=acceptance_anchors,
+                )
+            )
+    return result
+
+
+def _design_owner_for_path(
+    target: Path,
+    l1_owner: Node,
+    nodes: list[Node],
+) -> DesignOwnership | None:
+    try:
+        rel = target.resolve().relative_to(context.REPO_ROOT.resolve()).as_posix()
+    except ValueError:
+        return None
+    matches: list[tuple[int, DesignOwnership]] = []
+    for owner in _design_ownerships(nodes, l1_owner):
+        for root in owner.roots:
+            if rel == root or rel.startswith(root + "/"):
+                matches.append((len(root), owner))
+    if not matches:
+        return None
+    longest = max(length for length, _ in matches)
+    owners = sorted(
+        {owner for length, owner in matches if length == longest},
+        key=lambda item: (item.l2.node_id, item.anchor),
+    )
+    if len(owners) != 1:
+        labels = ", ".join(f"{item.l2.node_id}#{item.anchor}" for item in owners)
+        raise ValueError(
+            f"GATE_BLOCK: {rel} 被多个 L2 DEC 同优先级认领：{labels}"
+        )
+    return owners[0]
+
+
+def resolve_target_details(raw: str | Path, nodes: list[Node]) -> TargetResolution:
+    """解析唯一 L1 后再按 L2 DEC 工程根收窄到唯一 Story。"""
+
+    raw_path = str(raw).partition("#")[0]
+    target = Path(raw_path)
     if not target.is_absolute():
         target = context.REPO_ROOT / target
     if target.is_dir() and (target / "spec.md").is_file():
         target = target / "spec.md"
+    if target.name == "design.md" and (target.parent / "spec.md").is_file():
+        target = target.parent / "spec.md"
     direct = node_for_spec(target, nodes)
     if direct:
-        return direct
+        l1_owner = next(
+            (
+                item
+                for item in nodes
+                if item.level == 1
+                and (
+                    direct == item
+                    or direct.directory.resolve().is_relative_to(item.directory.resolve())
+                )
+            ),
+            None,
+        )
+        return TargetResolution(
+            node=direct,
+            l1_owner=l1_owner,
+            target=target,
+            ownership_target=target,
+        )
     app_test_owners = owners_for_app_test_path(target, nodes)
+    projected = canonical_app_test_owner_target(target)
+    ownership_target = projected if projected is not None else target
     owners = (
         app_test_owners
         if app_test_owners is not None
         else owners_for_path(target, nodes)
     )
     if len(owners) == 1:
-        return owners[0]
+        l1_owner = owners[0]
+        design_owner = _design_owner_for_path(ownership_target, l1_owner, nodes)
+        return TargetResolution(
+            node=design_owner.story if design_owner else l1_owner,
+            l1_owner=l1_owner,
+            target=target,
+            ownership_target=ownership_target,
+            design_ownership=design_owner,
+        )
     if not owners:
         raise ValueError(f"GATE_BLOCK: {raw} 未被任何 L1 工程归属认领")
-    raise ValueError(f"GATE_BLOCK: {raw} 被多个 L1 同优先级认领：{', '.join(item.node_id for item in owners)}")
+    raise ValueError(
+        f"GATE_BLOCK: {raw} 被多个 L1 同优先级认领："
+        f"{', '.join(item.node_id for item in owners)}"
+    )
+
+
+def resolve_target(raw: str | Path, nodes: list[Node]) -> Node:
+    """兼容旧调用方的 Node 返回值，实际语义由共享 resolver 提供。"""
+
+    return resolve_target_details(raw, nodes).node

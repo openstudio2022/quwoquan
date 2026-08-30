@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
+// ContractGraph SHA256: cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f
 
 part of '../../../chat/chat_operation_contracts.g.dart';
 
@@ -29,7 +29,6 @@ Map<String, Object?> _generatedRequestObject(Object? value, String path) {
   throw FormatException('$path must be an object');
 }
 
-
 void _generatedRequestRejectUnknownFields(
   Map<String, Object?> map,
   Set<String> allowed,
@@ -42,30 +41,25 @@ void _generatedRequestRejectUnknownFields(
   }
 }
 
-
 String _generatedRequestString(Object? value, String path) {
   if (value is String) return value;
   throw FormatException('$path must be a string');
 }
-
 
 int _generatedRequestInt(Object? value, String path) {
   if (value is int) return value;
   throw FormatException('$path must be an integer');
 }
 
-
 double _generatedRequestDouble(Object? value, String path) {
   if (value is num) return value.toDouble();
   throw FormatException('$path must be a number');
 }
 
-
 bool _generatedRequestBool(Object? value, String path) {
   if (value is bool) return value;
   throw FormatException('$path must be a boolean');
 }
-
 
 List<Object?> _generatedRequestList(Object? value, String path) {
   if (value is List) return List<Object?>.from(value);
@@ -79,7 +73,11 @@ final class ChatAddConversationMembersCommand {
   }) : conversationId = conversationId.trim(),
        userIds = _normalizeGeneratedTextList(userIds, deduplicate: false) {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.userIds.isEmpty) {
       throw ArgumentError.value(this.userIds, "userIds", 'must not be blank');
@@ -89,11 +87,30 @@ final class ChatAddConversationMembersCommand {
   final String conversationId;
   final List<String> userIds;
 
-  factory ChatAddConversationMembersCommand.fromWire(Map<String, Object?> map, [String path = "ChatAddConversationMembersCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "userIds"}, path);
+  factory ChatAddConversationMembersCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatAddConversationMembersCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "userIds",
+    }, path);
     return ChatAddConversationMembersCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
-      userIds: List<String>.unmodifiable(_generatedRequestList(map["userIds"], '$path.userIds').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.userIds' + '[${entry.key}]'))),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
+      userIds: List<String>.unmodifiable(
+        _generatedRequestList(
+          map["userIds"],
+          '$path.userIds',
+        ).asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.userIds' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -104,20 +121,36 @@ final class ChatAddConversationMembersCommand {
 }
 
 final class ChatBatchGetConversationsQuery {
-  ChatBatchGetConversationsQuery({
-    required Iterable<String> conversationIds,
-  }) : conversationIds = _normalizeGeneratedTextList(conversationIds, deduplicate: false) {
+  ChatBatchGetConversationsQuery({required Iterable<String> conversationIds})
+    : conversationIds = _normalizeGeneratedTextList(
+        conversationIds,
+        deduplicate: false,
+      ) {
     if (this.conversationIds.isEmpty) {
-      throw ArgumentError.value(this.conversationIds, "conversationIds", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationIds,
+        "conversationIds",
+        'must not be blank',
+      );
     }
   }
 
   final List<String> conversationIds;
 
-  factory ChatBatchGetConversationsQuery.fromWire(Map<String, Object?> map, [String path = "ChatBatchGetConversationsQuery"]) {
+  factory ChatBatchGetConversationsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatBatchGetConversationsQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"ids"}, path);
     return ChatBatchGetConversationsQuery(
-      conversationIds: List<String>.unmodifiable(_generatedRequestList(map["ids"], '$path.ids').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.ids' + '[${entry.key}]'))),
+      conversationIds: List<String>.unmodifiable(
+        _generatedRequestList(map["ids"], '$path.ids').asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.ids' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -135,7 +168,10 @@ final class ChatCreateConversationCommand {
   }) : type = type.trim(),
        title = _normalizeGeneratedOptionalText(title),
        maxGroupSize = maxGroupSize,
-       initialMemberIds = _normalizeGeneratedTextList(initialMemberIds, deduplicate: false) {
+       initialMemberIds = _normalizeGeneratedTextList(
+         initialMemberIds,
+         deduplicate: false,
+       ) {
     if (this.type.isEmpty) {
       throw ArgumentError.value(this.type, "type", 'must not be blank');
     }
@@ -146,13 +182,37 @@ final class ChatCreateConversationCommand {
   final int? maxGroupSize;
   final List<String> initialMemberIds;
 
-  factory ChatCreateConversationCommand.fromWire(Map<String, Object?> map, [String path = "ChatCreateConversationCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"type", "title", "maxGroupSize", "initialMemberIds"}, path);
+  factory ChatCreateConversationCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatCreateConversationCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "type",
+      "title",
+      "maxGroupSize",
+      "initialMemberIds",
+    }, path);
     return ChatCreateConversationCommand(
       type: _generatedRequestString(map["type"], '$path.type'),
-      title: map["title"] == null ? null : _generatedRequestString(map["title"], '$path.title'),
-      maxGroupSize: map["maxGroupSize"] == null ? null : _generatedRequestInt(map["maxGroupSize"], '$path.maxGroupSize'),
-      initialMemberIds: map.containsKey("initialMemberIds") ? List<String>.unmodifiable(_generatedRequestList(map["initialMemberIds"], '$path.initialMemberIds').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.initialMemberIds' + '[${entry.key}]'))) : const <String>[],
+      title: map["title"] == null
+          ? null
+          : _generatedRequestString(map["title"], '$path.title'),
+      maxGroupSize: map["maxGroupSize"] == null
+          ? null
+          : _generatedRequestInt(map["maxGroupSize"], '$path.maxGroupSize'),
+      initialMemberIds: map.containsKey("initialMemberIds")
+          ? List<String>.unmodifiable(
+              _generatedRequestList(
+                map["initialMemberIds"],
+                '$path.initialMemberIds',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.initialMemberIds' + '[${entry.key}]',
+                ),
+              ),
+            )
+          : const <String>[],
     );
   }
 
@@ -160,25 +220,39 @@ final class ChatCreateConversationCommand {
     "type": this.type,
     if (this.title != null) "title": this.title!,
     if (this.maxGroupSize != null) "maxGroupSize": this.maxGroupSize!,
-    if (this.initialMemberIds.isNotEmpty) "initialMemberIds": this.initialMemberIds.map((value) => value).toList(growable: false),
+    if (this.initialMemberIds.isNotEmpty)
+      "initialMemberIds": this.initialMemberIds
+          .map((value) => value)
+          .toList(growable: false),
   };
 }
 
 final class ChatDissolveConversationCommand {
-  ChatDissolveConversationCommand({
-    required String conversationId,
-  }) : conversationId = conversationId.trim() {
+  ChatDissolveConversationCommand({required String conversationId})
+    : conversationId = conversationId.trim() {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
 
-  factory ChatDissolveConversationCommand.fromWire(Map<String, Object?> map, [String path = "ChatDissolveConversationCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId"}, path);
+  factory ChatDissolveConversationCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatDissolveConversationCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+    }, path);
     return ChatDissolveConversationCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
     );
   }
 
@@ -188,20 +262,31 @@ final class ChatDissolveConversationCommand {
 }
 
 final class ChatGetConversationQuery {
-  ChatGetConversationQuery({
-    required String conversationId,
-  }) : conversationId = conversationId.trim() {
+  ChatGetConversationQuery({required String conversationId})
+    : conversationId = conversationId.trim() {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
 
-  factory ChatGetConversationQuery.fromWire(Map<String, Object?> map, [String path = "ChatGetConversationQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId"}, path);
+  factory ChatGetConversationQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatGetConversationQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+    }, path);
     return ChatGetConversationQuery(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
     );
   }
 
@@ -211,20 +296,31 @@ final class ChatGetConversationQuery {
 }
 
 final class ChatGetGroupHomeQuery {
-  ChatGetGroupHomeQuery({
-    required String conversationId,
-  }) : conversationId = conversationId.trim() {
+  ChatGetGroupHomeQuery({required String conversationId})
+    : conversationId = conversationId.trim() {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
 
-  factory ChatGetGroupHomeQuery.fromWire(Map<String, Object?> map, [String path = "ChatGetGroupHomeQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId"}, path);
+  factory ChatGetGroupHomeQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatGetGroupHomeQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+    }, path);
     return ChatGetGroupHomeQuery(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
     );
   }
 
@@ -240,20 +336,37 @@ final class ChatGetMessageReceiptsQuery {
   }) : conversationId = conversationId.trim(),
        messageId = messageId.trim() {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.messageId.isEmpty) {
-      throw ArgumentError.value(this.messageId, "messageId", 'must not be blank');
+      throw ArgumentError.value(
+        this.messageId,
+        "messageId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
   final String messageId;
 
-  factory ChatGetMessageReceiptsQuery.fromWire(Map<String, Object?> map, [String path = "ChatGetMessageReceiptsQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "messageId"}, path);
+  factory ChatGetMessageReceiptsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatGetMessageReceiptsQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "messageId",
+    }, path);
     return ChatGetMessageReceiptsQuery(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       messageId: _generatedRequestString(map["messageId"], '$path.messageId'),
     );
   }
@@ -265,20 +378,31 @@ final class ChatGetMessageReceiptsQuery {
 }
 
 final class ChatInviteConversationAssistantCommand {
-  ChatInviteConversationAssistantCommand({
-    required String conversationId,
-  }) : conversationId = conversationId.trim() {
+  ChatInviteConversationAssistantCommand({required String conversationId})
+    : conversationId = conversationId.trim() {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
 
-  factory ChatInviteConversationAssistantCommand.fromWire(Map<String, Object?> map, [String path = "ChatInviteConversationAssistantCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId"}, path);
+  factory ChatInviteConversationAssistantCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatInviteConversationAssistantCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+    }, path);
     return ChatInviteConversationAssistantCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
     );
   }
 
@@ -288,20 +412,31 @@ final class ChatInviteConversationAssistantCommand {
 }
 
 final class ChatLeaveConversationCommand {
-  ChatLeaveConversationCommand({
-    required String conversationId,
-  }) : conversationId = conversationId.trim() {
+  ChatLeaveConversationCommand({required String conversationId})
+    : conversationId = conversationId.trim() {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
 
-  factory ChatLeaveConversationCommand.fromWire(Map<String, Object?> map, [String path = "ChatLeaveConversationCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId"}, path);
+  factory ChatLeaveConversationCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatLeaveConversationCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+    }, path);
     return ChatLeaveConversationCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
     );
   }
 
@@ -311,20 +446,28 @@ final class ChatLeaveConversationCommand {
 }
 
 final class ChatListContactHomeQuery {
-  const ChatListContactHomeQuery({
-    String filter = 'all',
-    int limit = 50,
-  }) : filter = filter,
-       limit = limit;
+  const ChatListContactHomeQuery({String filter = 'all', int limit = 50})
+    : filter = filter,
+      limit = limit;
 
   final String filter;
   final int limit;
 
-  factory ChatListContactHomeQuery.fromWire(Map<String, Object?> map, [String path = "ChatListContactHomeQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"filter", "limit"}, path);
+  factory ChatListContactHomeQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatListContactHomeQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "filter",
+      "limit",
+    }, path);
     return ChatListContactHomeQuery(
-      filter: map.containsKey("filter") ? _generatedRequestString(map["filter"], '$path.filter') : 'all',
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 50,
+      filter: map.containsKey("filter")
+          ? _generatedRequestString(map["filter"], '$path.filter')
+          : 'all',
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 50,
     );
   }
 
@@ -338,11 +481,9 @@ final class ChatListContactsQuery {
   static const int defaultLimit = 20;
   static const int maximumLimit = 100;
 
-  ChatListContactsQuery({
-    String? cursor,
-    int limit = 20,
-  }) : cursor = cursor,
-       limit = limit {
+  ChatListContactsQuery({String? cursor, int limit = 20})
+    : cursor = cursor,
+      limit = limit {
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
     }
@@ -354,11 +495,21 @@ final class ChatListContactsQuery {
   final String? cursor;
   final int limit;
 
-  factory ChatListContactsQuery.fromWire(Map<String, Object?> map, [String path = "ChatListContactsQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"cursor", "limit"}, path);
+  factory ChatListContactsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatListContactsQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "cursor",
+      "limit",
+    }, path);
     return ChatListContactsQuery(
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -369,6 +520,9 @@ final class ChatListContactsQuery {
 }
 
 final class ChatListConversationAssetsQuery {
+  static const int defaultLimit = 60;
+  static const int maximumLimit = 200;
+
   ChatListConversationAssetsQuery({
     required String conversationId,
     required String kind,
@@ -379,10 +533,20 @@ final class ChatListConversationAssetsQuery {
        beforeSeq = beforeSeq,
        limit = limit {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.kind.isEmpty) {
       throw ArgumentError.value(this.kind, "kind", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 200) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 200");
     }
   }
 
@@ -391,13 +555,28 @@ final class ChatListConversationAssetsQuery {
   final int? beforeSeq;
   final int limit;
 
-  factory ChatListConversationAssetsQuery.fromWire(Map<String, Object?> map, [String path = "ChatListConversationAssetsQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "kind", "beforeSeq", "limit"}, path);
+  factory ChatListConversationAssetsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatListConversationAssetsQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "kind",
+      "beforeSeq",
+      "limit",
+    }, path);
     return ChatListConversationAssetsQuery(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       kind: _generatedRequestString(map["kind"], '$path.kind'),
-      beforeSeq: map["beforeSeq"] == null ? null : _generatedRequestInt(map["beforeSeq"], '$path.beforeSeq'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 60,
+      beforeSeq: map["beforeSeq"] == null
+          ? null
+          : _generatedRequestInt(map["beforeSeq"], '$path.beforeSeq'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 60,
     );
   }
 
@@ -427,7 +606,11 @@ final class ChatListConversationMembersQuery {
        sort = sort,
        query = query {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
@@ -444,15 +627,44 @@ final class ChatListConversationMembersQuery {
   final MemberListSort sort;
   final String? query;
 
-  factory ChatListConversationMembersQuery.fromWire(Map<String, Object?> map, [String path = "ChatListConversationMembersQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "cursor", "limit", "role", "sort", "query"}, path);
+  factory ChatListConversationMembersQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatListConversationMembersQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "cursor",
+      "limit",
+      "role",
+      "sort",
+      "query",
+    }, path);
     return ChatListConversationMembersQuery(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
-      role: map["role"] == null ? null : _generatedRequestString(map["role"], '$path.role'),
-      sort: map.containsKey("sort") ? switch (map["sort"]) { "joined_asc" => MemberListSort.joinedAsc, "display_name_asc" => MemberListSort.displayNameAsc, _ => throw FormatException('$path.sort' + ' has an invalid enum value'), } : MemberListSort.joinedAsc,
-      query: map["query"] == null ? null : _generatedRequestString(map["query"], '$path.query'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
+      role: map["role"] == null
+          ? null
+          : _generatedRequestString(map["role"], '$path.role'),
+      sort: map.containsKey("sort")
+          ? switch (map["sort"]) {
+              "joined_asc" => MemberListSort.joinedAsc,
+              "display_name_asc" => MemberListSort.displayNameAsc,
+              _ => throw FormatException(
+                '$path.sort' + ' has an invalid enum value',
+              ),
+            }
+          : MemberListSort.joinedAsc,
+      query: map["query"] == null
+          ? null
+          : _generatedRequestString(map["query"], '$path.query'),
     );
   }
 
@@ -471,20 +683,28 @@ final class ChatListConversationTimestampsQuery {
 }
 
 final class ChatListConversationsQuery {
-  const ChatListConversationsQuery({
-    String? cursor,
-    int limit = 20,
-  }) : cursor = cursor,
-       limit = limit;
+  const ChatListConversationsQuery({String? cursor, int limit = 20})
+    : cursor = cursor,
+      limit = limit;
 
   final String? cursor;
   final int limit;
 
-  factory ChatListConversationsQuery.fromWire(Map<String, Object?> map, [String path = "ChatListConversationsQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"cursor", "limit"}, path);
+  factory ChatListConversationsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatListConversationsQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "cursor",
+      "limit",
+    }, path);
     return ChatListConversationsQuery(
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -498,11 +718,9 @@ final class ChatListGroupCandidatesQuery {
   static const int defaultLimit = 100;
   static const int maximumLimit = 100;
 
-  ChatListGroupCandidatesQuery({
-    String? conversationId,
-    int limit = 100,
-  }) : conversationId = conversationId,
-       limit = limit {
+  ChatListGroupCandidatesQuery({String? conversationId, int limit = 100})
+    : conversationId = conversationId,
+      limit = limit {
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
     }
@@ -514,11 +732,24 @@ final class ChatListGroupCandidatesQuery {
   final String? conversationId;
   final int limit;
 
-  factory ChatListGroupCandidatesQuery.fromWire(Map<String, Object?> map, [String path = "ChatListGroupCandidatesQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "limit"}, path);
+  factory ChatListGroupCandidatesQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatListGroupCandidatesQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "limit",
+    }, path);
     return ChatListGroupCandidatesQuery(
-      conversationId: map["conversationId"] == null ? null : _generatedRequestString(map["conversationId"], '$path.conversationId'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 100,
+      conversationId: map["conversationId"] == null
+          ? null
+          : _generatedRequestString(
+              map["conversationId"],
+              '$path.conversationId',
+            ),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 100,
     );
   }
 
@@ -532,11 +763,9 @@ final class ChatListInboxQuery {
   static const int defaultLimit = 50;
   static const int maximumLimit = 50;
 
-  ChatListInboxQuery({
-    String? cursor,
-    int limit = 50,
-  }) : cursor = cursor,
-       limit = limit {
+  ChatListInboxQuery({String? cursor, int limit = 50})
+    : cursor = cursor,
+      limit = limit {
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
     }
@@ -548,11 +777,21 @@ final class ChatListInboxQuery {
   final String? cursor;
   final int limit;
 
-  factory ChatListInboxQuery.fromWire(Map<String, Object?> map, [String path = "ChatListInboxQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"cursor", "limit"}, path);
+  factory ChatListInboxQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatListInboxQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "cursor",
+      "limit",
+    }, path);
     return ChatListInboxQuery(
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 50,
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 50,
     );
   }
 
@@ -575,12 +814,25 @@ final class ChatListMessageHomeQuery {
   final String? cursor;
   final int limit;
 
-  factory ChatListMessageHomeQuery.fromWire(Map<String, Object?> map, [String path = "ChatListMessageHomeQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"filter", "cursor", "limit"}, path);
+  factory ChatListMessageHomeQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatListMessageHomeQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "filter",
+      "cursor",
+      "limit",
+    }, path);
     return ChatListMessageHomeQuery(
-      filter: map.containsKey("filter") ? _generatedRequestString(map["filter"], '$path.filter') : 'all',
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      filter: map.containsKey("filter")
+          ? _generatedRequestString(map["filter"], '$path.filter')
+          : 'all',
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -602,7 +854,11 @@ final class ChatListMessagesQuery {
        beforeSeq = beforeSeq,
        limit = limit {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
   }
 
@@ -611,13 +867,30 @@ final class ChatListMessagesQuery {
   final int? beforeSeq;
   final int limit;
 
-  factory ChatListMessagesQuery.fromWire(Map<String, Object?> map, [String path = "ChatListMessagesQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "afterSeq", "beforeSeq", "limit"}, path);
+  factory ChatListMessagesQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatListMessagesQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "afterSeq",
+      "beforeSeq",
+      "limit",
+    }, path);
     return ChatListMessagesQuery(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
-      afterSeq: map["afterSeq"] == null ? null : _generatedRequestInt(map["afterSeq"], '$path.afterSeq'),
-      beforeSeq: map["beforeSeq"] == null ? null : _generatedRequestInt(map["beforeSeq"], '$path.beforeSeq'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
+      afterSeq: map["afterSeq"] == null
+          ? null
+          : _generatedRequestInt(map["afterSeq"], '$path.afterSeq'),
+      beforeSeq: map["beforeSeq"] == null
+          ? null
+          : _generatedRequestInt(map["beforeSeq"], '$path.beforeSeq'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
     );
   }
 
@@ -643,7 +916,11 @@ final class ChatListSelectableGroupContactMembersQuery {
        cursor = cursor,
        limit = limit {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
@@ -658,13 +935,30 @@ final class ChatListSelectableGroupContactMembersQuery {
   final String? cursor;
   final int limit;
 
-  factory ChatListSelectableGroupContactMembersQuery.fromWire(Map<String, Object?> map, [String path = "ChatListSelectableGroupContactMembersQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "query", "cursor", "limit"}, path);
+  factory ChatListSelectableGroupContactMembersQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatListSelectableGroupContactMembersQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "query",
+      "cursor",
+      "limit",
+    }, path);
     return ChatListSelectableGroupContactMembersQuery(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
-      query: map["query"] == null ? null : _generatedRequestString(map["query"], '$path.query'),
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 100,
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
+      query: map["query"] == null
+          ? null
+          : _generatedRequestString(map["query"], '$path.query'),
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 100,
     );
   }
 
@@ -702,13 +996,35 @@ final class ChatListSelectableGroupConversationsQuery {
   final String? cursor;
   final int limit;
 
-  factory ChatListSelectableGroupConversationsQuery.fromWire(Map<String, Object?> map, [String path = "ChatListSelectableGroupConversationsQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"query", "source", "cursor", "limit"}, path);
+  factory ChatListSelectableGroupConversationsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatListSelectableGroupConversationsQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "query",
+      "source",
+      "cursor",
+      "limit",
+    }, path);
     return ChatListSelectableGroupConversationsQuery(
-      query: map["query"] == null ? null : _generatedRequestString(map["query"], '$path.query'),
-      source: map["source"] == null ? null : switch (map["source"]) { "group" => SelectableGroupConversationSource.group, "circle" => SelectableGroupConversationSource.circle, _ => throw FormatException('$path.source' + ' has an invalid enum value'), },
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 50,
+      query: map["query"] == null
+          ? null
+          : _generatedRequestString(map["query"], '$path.query'),
+      source: map["source"] == null
+          ? null
+          : switch (map["source"]) {
+              "group" => SelectableGroupConversationSource.group,
+              "circle" => SelectableGroupConversationSource.circle,
+              _ => throw FormatException(
+                '$path.source' + ' has an invalid enum value',
+              ),
+            },
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 50,
     );
   }
 
@@ -727,20 +1043,37 @@ final class ChatMarkConversationMessageReadCommand {
   }) : conversationId = conversationId.trim(),
        messageId = messageId.trim() {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.messageId.isEmpty) {
-      throw ArgumentError.value(this.messageId, "messageId", 'must not be blank');
+      throw ArgumentError.value(
+        this.messageId,
+        "messageId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
   final String messageId;
 
-  factory ChatMarkConversationMessageReadCommand.fromWire(Map<String, Object?> map, [String path = "ChatMarkConversationMessageReadCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "messageId"}, path);
+  factory ChatMarkConversationMessageReadCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatMarkConversationMessageReadCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "messageId",
+    }, path);
     return ChatMarkConversationMessageReadCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       messageId: _generatedRequestString(map["messageId"], '$path.messageId'),
     );
   }
@@ -758,20 +1091,37 @@ final class ChatRecallMessageCommand {
   }) : conversationId = conversationId.trim(),
        messageId = messageId.trim() {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.messageId.isEmpty) {
-      throw ArgumentError.value(this.messageId, "messageId", 'must not be blank');
+      throw ArgumentError.value(
+        this.messageId,
+        "messageId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
   final String messageId;
 
-  factory ChatRecallMessageCommand.fromWire(Map<String, Object?> map, [String path = "ChatRecallMessageCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "messageId"}, path);
+  factory ChatRecallMessageCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatRecallMessageCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "messageId",
+    }, path);
     return ChatRecallMessageCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       messageId: _generatedRequestString(map["messageId"], '$path.messageId'),
     );
   }
@@ -783,20 +1133,31 @@ final class ChatRecallMessageCommand {
 }
 
 final class ChatRemoveConversationAssistantCommand {
-  ChatRemoveConversationAssistantCommand({
-    required String conversationId,
-  }) : conversationId = conversationId.trim() {
+  ChatRemoveConversationAssistantCommand({required String conversationId})
+    : conversationId = conversationId.trim() {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
 
-  factory ChatRemoveConversationAssistantCommand.fromWire(Map<String, Object?> map, [String path = "ChatRemoveConversationAssistantCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId"}, path);
+  factory ChatRemoveConversationAssistantCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatRemoveConversationAssistantCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+    }, path);
     return ChatRemoveConversationAssistantCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
     );
   }
 
@@ -812,7 +1173,11 @@ final class ChatRemoveConversationMemberCommand {
   }) : conversationId = conversationId.trim(),
        userId = userId.trim() {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.userId.isEmpty) {
       throw ArgumentError.value(this.userId, "userId", 'must not be blank');
@@ -822,10 +1187,19 @@ final class ChatRemoveConversationMemberCommand {
   final String conversationId;
   final String userId;
 
-  factory ChatRemoveConversationMemberCommand.fromWire(Map<String, Object?> map, [String path = "ChatRemoveConversationMemberCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "userId"}, path);
+  factory ChatRemoveConversationMemberCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatRemoveConversationMemberCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "userId",
+    }, path);
     return ChatRemoveConversationMemberCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       userId: _generatedRequestString(map["userId"], '$path.userId'),
     );
   }
@@ -858,62 +1232,132 @@ final class ChatSendMessageCommand {
        mediaAssetId = _normalizeGeneratedOptionalText(mediaAssetId),
        card = card,
        audioDurationMs = audioDurationMs,
-       audioWaveform = audioWaveform == null ? null : List.unmodifiable(audioWaveform),
+       audioWaveform = audioWaveform == null
+           ? null
+           : List.unmodifiable(audioWaveform),
        replyToMessageId = _normalizeGeneratedOptionalText(replyToMessageId),
        mentions = _normalizeGeneratedTextList(mentions, deduplicate: false),
-       senderDisplayNameSnapshot = _normalizeGeneratedOptionalText(senderDisplayNameSnapshot),
-       senderAvatarUrlSnapshot = _normalizeGeneratedOptionalText(senderAvatarUrlSnapshot),
+       senderDisplayNameSnapshot = _normalizeGeneratedOptionalText(
+         senderDisplayNameSnapshot,
+       ),
+       senderAvatarUrlSnapshot = _normalizeGeneratedOptionalText(
+         senderAvatarUrlSnapshot,
+       ),
        personaContextVersion = personaContextVersion {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.type.isEmpty) {
       throw ArgumentError.value(this.type, "type", 'must not be blank');
     }
     if (this.clientMsgId.isEmpty) {
-      throw ArgumentError.value(this.clientMsgId, "clientMsgId", 'must not be blank');
+      throw ArgumentError.value(
+        this.clientMsgId,
+        "clientMsgId",
+        'must not be blank',
+      );
     }
     if (this.audioDurationMs != null && this.audioDurationMs! <= 0) {
-      throw ArgumentError.value(this.audioDurationMs, "audioDurationMs", "must be positive");
+      throw ArgumentError.value(
+        this.audioDurationMs,
+        "audioDurationMs",
+        "must be positive",
+      );
     }
     if (this.audioWaveform != null && this.audioWaveform!.length > 128) {
-      throw ArgumentError.value(this.audioWaveform, "audioWaveform", "item count exceeds 128");
+      throw ArgumentError.value(
+        this.audioWaveform,
+        "audioWaveform",
+        "item count exceeds 128",
+      );
     }
     if (this.type == "image" && this.mediaAssetId == null) {
-      throw ArgumentError.value(this.mediaAssetId, "mediaAssetId", "is required when type is image");
+      throw ArgumentError.value(
+        this.mediaAssetId,
+        "mediaAssetId",
+        "is required when type is image",
+      );
     }
     if (this.type == "video" && this.mediaAssetId == null) {
-      throw ArgumentError.value(this.mediaAssetId, "mediaAssetId", "is required when type is video");
+      throw ArgumentError.value(
+        this.mediaAssetId,
+        "mediaAssetId",
+        "is required when type is video",
+      );
     }
     if (this.type == "audio" && this.mediaAssetId == null) {
-      throw ArgumentError.value(this.mediaAssetId, "mediaAssetId", "is required when type is audio");
+      throw ArgumentError.value(
+        this.mediaAssetId,
+        "mediaAssetId",
+        "is required when type is audio",
+      );
     }
     if (this.type == "file" && this.mediaAssetId == null) {
-      throw ArgumentError.value(this.mediaAssetId, "mediaAssetId", "is required when type is file");
+      throw ArgumentError.value(
+        this.mediaAssetId,
+        "mediaAssetId",
+        "is required when type is file",
+      );
     }
     if (this.type == "text" && this.mediaAssetId != null) {
-      throw ArgumentError.value(this.mediaAssetId, "mediaAssetId", "is forbidden when type is text");
+      throw ArgumentError.value(
+        this.mediaAssetId,
+        "mediaAssetId",
+        "is forbidden when type is text",
+      );
     }
     if (this.type == "card" && this.mediaAssetId != null) {
-      throw ArgumentError.value(this.mediaAssetId, "mediaAssetId", "is forbidden when type is card");
+      throw ArgumentError.value(
+        this.mediaAssetId,
+        "mediaAssetId",
+        "is forbidden when type is card",
+      );
     }
     if (this.type == "system_call_log" && this.mediaAssetId != null) {
-      throw ArgumentError.value(this.mediaAssetId, "mediaAssetId", "is forbidden when type is system_call_log");
+      throw ArgumentError.value(
+        this.mediaAssetId,
+        "mediaAssetId",
+        "is forbidden when type is system_call_log",
+      );
     }
     if (this.type == "system_announcement" && this.mediaAssetId != null) {
-      throw ArgumentError.value(this.mediaAssetId, "mediaAssetId", "is forbidden when type is system_announcement");
+      throw ArgumentError.value(
+        this.mediaAssetId,
+        "mediaAssetId",
+        "is forbidden when type is system_announcement",
+      );
     }
     if (this.type == "card" && this.card == null) {
-      throw ArgumentError.value(this.card, "card", "is required when type is card");
+      throw ArgumentError.value(
+        this.card,
+        "card",
+        "is required when type is card",
+      );
     }
     if (this.type != "card" && this.card != null) {
-      throw ArgumentError.value(this.card, "card", "is forbidden unless type is card");
+      throw ArgumentError.value(
+        this.card,
+        "card",
+        "is forbidden unless type is card",
+      );
     }
     if (this.type != "audio" && this.audioDurationMs != null) {
-      throw ArgumentError.value(this.audioDurationMs, "audioDurationMs", "is forbidden unless type is audio");
+      throw ArgumentError.value(
+        this.audioDurationMs,
+        "audioDurationMs",
+        "is forbidden unless type is audio",
+      );
     }
     if (this.type != "audio" && this.audioWaveform != null) {
-      throw ArgumentError.value(this.audioWaveform, "audioWaveform", "is forbidden unless type is audio");
+      throw ArgumentError.value(
+        this.audioWaveform,
+        "audioWaveform",
+        "is forbidden unless type is audio",
+      );
     }
   }
 
@@ -931,22 +1375,101 @@ final class ChatSendMessageCommand {
   final String? senderAvatarUrlSnapshot;
   final int? personaContextVersion;
 
-  factory ChatSendMessageCommand.fromWire(Map<String, Object?> map, [String path = "ChatSendMessageCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "type", "content", "clientMsgId", "mediaAssetId", "card", "audioDurationMs", "audioWaveform", "replyToMessageId", "mentions", "senderDisplayNameSnapshot", "senderAvatarUrlSnapshot", "personaContextVersion"}, path);
+  factory ChatSendMessageCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatSendMessageCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "type",
+      "content",
+      "clientMsgId",
+      "mediaAssetId",
+      "card",
+      "audioDurationMs",
+      "audioWaveform",
+      "replyToMessageId",
+      "mentions",
+      "senderDisplayNameSnapshot",
+      "senderAvatarUrlSnapshot",
+      "personaContextVersion",
+    }, path);
     return ChatSendMessageCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       type: _generatedRequestString(map["type"], '$path.type'),
       content: _generatedRequestString(map["content"], '$path.content'),
-      clientMsgId: _generatedRequestString(map["clientMsgId"], '$path.clientMsgId'),
-      mediaAssetId: map["mediaAssetId"] == null ? null : _generatedRequestString(map["mediaAssetId"], '$path.mediaAssetId'),
-      card: map["card"] == null ? null : MessageCard.fromWire(_generatedRequestObject(map["card"], '$path.card'), '$path.card'),
-      audioDurationMs: map["audioDurationMs"] == null ? null : _generatedRequestInt(map["audioDurationMs"], '$path.audioDurationMs'),
-      audioWaveform: map["audioWaveform"] == null ? null : List<double>.unmodifiable(_generatedRequestList(map["audioWaveform"], '$path.audioWaveform').asMap().entries.map((entry) => _generatedRequestDouble(entry.value, '$path.audioWaveform' + '[${entry.key}]'))),
-      replyToMessageId: map["replyToMessageId"] == null ? null : _generatedRequestString(map["replyToMessageId"], '$path.replyToMessageId'),
-      mentions: map.containsKey("mentions") ? List<String>.unmodifiable(_generatedRequestList(map["mentions"], '$path.mentions').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.mentions' + '[${entry.key}]'))) : const <String>[],
-      senderDisplayNameSnapshot: map["senderDisplayNameSnapshot"] == null ? null : _generatedRequestString(map["senderDisplayNameSnapshot"], '$path.senderDisplayNameSnapshot'),
-      senderAvatarUrlSnapshot: map["senderAvatarUrlSnapshot"] == null ? null : _generatedRequestString(map["senderAvatarUrlSnapshot"], '$path.senderAvatarUrlSnapshot'),
-      personaContextVersion: map["personaContextVersion"] == null ? null : _generatedRequestInt(map["personaContextVersion"], '$path.personaContextVersion'),
+      clientMsgId: _generatedRequestString(
+        map["clientMsgId"],
+        '$path.clientMsgId',
+      ),
+      mediaAssetId: map["mediaAssetId"] == null
+          ? null
+          : _generatedRequestString(map["mediaAssetId"], '$path.mediaAssetId'),
+      card: map["card"] == null
+          ? null
+          : MessageCard.fromWire(
+              _generatedRequestObject(map["card"], '$path.card'),
+              '$path.card',
+            ),
+      audioDurationMs: map["audioDurationMs"] == null
+          ? null
+          : _generatedRequestInt(
+              map["audioDurationMs"],
+              '$path.audioDurationMs',
+            ),
+      audioWaveform: map["audioWaveform"] == null
+          ? null
+          : List<double>.unmodifiable(
+              _generatedRequestList(
+                map["audioWaveform"],
+                '$path.audioWaveform',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestDouble(
+                  entry.value,
+                  '$path.audioWaveform' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      replyToMessageId: map["replyToMessageId"] == null
+          ? null
+          : _generatedRequestString(
+              map["replyToMessageId"],
+              '$path.replyToMessageId',
+            ),
+      mentions: map.containsKey("mentions")
+          ? List<String>.unmodifiable(
+              _generatedRequestList(
+                map["mentions"],
+                '$path.mentions',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.mentions' + '[${entry.key}]',
+                ),
+              ),
+            )
+          : const <String>[],
+      senderDisplayNameSnapshot: map["senderDisplayNameSnapshot"] == null
+          ? null
+          : _generatedRequestString(
+              map["senderDisplayNameSnapshot"],
+              '$path.senderDisplayNameSnapshot',
+            ),
+      senderAvatarUrlSnapshot: map["senderAvatarUrlSnapshot"] == null
+          ? null
+          : _generatedRequestString(
+              map["senderAvatarUrlSnapshot"],
+              '$path.senderAvatarUrlSnapshot',
+            ),
+      personaContextVersion: map["personaContextVersion"] == null
+          ? null
+          : _generatedRequestInt(
+              map["personaContextVersion"],
+              '$path.personaContextVersion',
+            ),
     );
   }
 
@@ -958,12 +1481,20 @@ final class ChatSendMessageCommand {
     if (this.mediaAssetId != null) "mediaAssetId": this.mediaAssetId!,
     if (this.card != null) "card": this.card!.toWire(),
     if (this.audioDurationMs != null) "audioDurationMs": this.audioDurationMs!,
-    if (this.audioWaveform != null) "audioWaveform": this.audioWaveform!.map((value) => value).toList(growable: false),
-    if (this.replyToMessageId != null) "replyToMessageId": this.replyToMessageId!,
-    if (this.mentions.isNotEmpty) "mentions": this.mentions.map((value) => value).toList(growable: false),
-    if (this.senderDisplayNameSnapshot != null) "senderDisplayNameSnapshot": this.senderDisplayNameSnapshot!,
-    if (this.senderAvatarUrlSnapshot != null) "senderAvatarUrlSnapshot": this.senderAvatarUrlSnapshot!,
-    if (this.personaContextVersion != null) "personaContextVersion": this.personaContextVersion!,
+    if (this.audioWaveform != null)
+      "audioWaveform": this.audioWaveform!
+          .map((value) => value)
+          .toList(growable: false),
+    if (this.replyToMessageId != null)
+      "replyToMessageId": this.replyToMessageId!,
+    if (this.mentions.isNotEmpty)
+      "mentions": this.mentions.map((value) => value).toList(growable: false),
+    if (this.senderDisplayNameSnapshot != null)
+      "senderDisplayNameSnapshot": this.senderDisplayNameSnapshot!,
+    if (this.senderAvatarUrlSnapshot != null)
+      "senderAvatarUrlSnapshot": this.senderAvatarUrlSnapshot!,
+    if (this.personaContextVersion != null)
+      "personaContextVersion": this.personaContextVersion!,
   };
 }
 
@@ -979,7 +1510,11 @@ final class ChatSyncMessagesQuery {
        lastSeq = lastSeq,
        limit = limit {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
@@ -993,12 +1528,24 @@ final class ChatSyncMessagesQuery {
   final int lastSeq;
   final int limit;
 
-  factory ChatSyncMessagesQuery.fromWire(Map<String, Object?> map, [String path = "ChatSyncMessagesQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "lastSeq", "limit"}, path);
+  factory ChatSyncMessagesQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatSyncMessagesQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "lastSeq",
+      "limit",
+    }, path);
     return ChatSyncMessagesQuery(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       lastSeq: _generatedRequestInt(map["lastSeq"], '$path.lastSeq'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 500,
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 500,
     );
   }
 
@@ -1016,21 +1563,41 @@ final class ChatTransferConversationOwnershipCommand {
   }) : conversationId = conversationId.trim(),
        newOwnerId = newOwnerId.trim() {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.newOwnerId.isEmpty) {
-      throw ArgumentError.value(this.newOwnerId, "newOwnerId", 'must not be blank');
+      throw ArgumentError.value(
+        this.newOwnerId,
+        "newOwnerId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
   final String newOwnerId;
 
-  factory ChatTransferConversationOwnershipCommand.fromWire(Map<String, Object?> map, [String path = "ChatTransferConversationOwnershipCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "newOwnerId"}, path);
+  factory ChatTransferConversationOwnershipCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatTransferConversationOwnershipCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "newOwnerId",
+    }, path);
     return ChatTransferConversationOwnershipCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
-      newOwnerId: _generatedRequestString(map["newOwnerId"], '$path.newOwnerId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
+      newOwnerId: _generatedRequestString(
+        map["newOwnerId"],
+        '$path.newOwnerId',
+      ),
     );
   }
 
@@ -1047,18 +1614,34 @@ final class ChatUpdateAnnouncementCommand {
   }) : conversationId = conversationId.trim(),
        announcement = announcement {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
   final String announcement;
 
-  factory ChatUpdateAnnouncementCommand.fromWire(Map<String, Object?> map, [String path = "ChatUpdateAnnouncementCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "announcement"}, path);
+  factory ChatUpdateAnnouncementCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatUpdateAnnouncementCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "announcement",
+    }, path);
     return ChatUpdateAnnouncementCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
-      announcement: _generatedRequestString(map["announcement"], '$path.announcement'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
+      announcement: _generatedRequestString(
+        map["announcement"],
+        '$path.announcement',
+      ),
     );
   }
 
@@ -1075,7 +1658,11 @@ final class ChatUpdateConversationAdminsCommand {
   }) : conversationId = conversationId.trim(),
        adminIds = _normalizeGeneratedTextList(adminIds, deduplicate: false) {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.adminIds.isEmpty) {
       throw ArgumentError.value(this.adminIds, "adminIds", 'must not be blank');
@@ -1085,11 +1672,30 @@ final class ChatUpdateConversationAdminsCommand {
   final String conversationId;
   final List<String> adminIds;
 
-  factory ChatUpdateConversationAdminsCommand.fromWire(Map<String, Object?> map, [String path = "ChatUpdateConversationAdminsCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "adminIds"}, path);
+  factory ChatUpdateConversationAdminsCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatUpdateConversationAdminsCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "adminIds",
+    }, path);
     return ChatUpdateConversationAdminsCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
-      adminIds: List<String>.unmodifiable(_generatedRequestList(map["adminIds"], '$path.adminIds').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.adminIds' + '[${entry.key}]'))),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
+      adminIds: List<String>.unmodifiable(
+        _generatedRequestList(
+          map["adminIds"],
+          '$path.adminIds',
+        ).asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.adminIds' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -1108,7 +1714,11 @@ final class ChatUpdateConversationSettingsCommand {
        muted = muted,
        pinned = pinned {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
   }
 
@@ -1116,12 +1726,26 @@ final class ChatUpdateConversationSettingsCommand {
   final bool? muted;
   final bool? pinned;
 
-  factory ChatUpdateConversationSettingsCommand.fromWire(Map<String, Object?> map, [String path = "ChatUpdateConversationSettingsCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "muted", "pinned"}, path);
+  factory ChatUpdateConversationSettingsCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatUpdateConversationSettingsCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "muted",
+      "pinned",
+    }, path);
     return ChatUpdateConversationSettingsCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
-      muted: map["muted"] == null ? null : _generatedRequestBool(map["muted"], '$path.muted'),
-      pinned: map["pinned"] == null ? null : _generatedRequestBool(map["pinned"], '$path.pinned'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
+      muted: map["muted"] == null
+          ? null
+          : _generatedRequestBool(map["muted"], '$path.muted'),
+      pinned: map["pinned"] == null
+          ? null
+          : _generatedRequestBool(map["pinned"], '$path.pinned'),
     );
   }
 
@@ -1139,7 +1763,11 @@ final class ChatUpdateConversationTitleCommand {
   }) : conversationId = conversationId.trim(),
        title = title.trim() {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
     if (this.title.isEmpty) {
       throw ArgumentError.value(this.title, "title", 'must not be blank');
@@ -1149,10 +1777,19 @@ final class ChatUpdateConversationTitleCommand {
   final String conversationId;
   final String title;
 
-  factory ChatUpdateConversationTitleCommand.fromWire(Map<String, Object?> map, [String path = "ChatUpdateConversationTitleCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "title"}, path);
+  factory ChatUpdateConversationTitleCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatUpdateConversationTitleCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "title",
+    }, path);
     return ChatUpdateConversationTitleCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       title: _generatedRequestString(map["title"], '$path.title'),
     );
   }
@@ -1170,18 +1807,34 @@ final class ChatUpdateGroupGovernanceSettingsCommand {
   }) : conversationId = conversationId.trim(),
        nameEditableByAdminOnly = nameEditableByAdminOnly {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
   final bool nameEditableByAdminOnly;
 
-  factory ChatUpdateGroupGovernanceSettingsCommand.fromWire(Map<String, Object?> map, [String path = "ChatUpdateGroupGovernanceSettingsCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "nameEditableByAdminOnly"}, path);
+  factory ChatUpdateGroupGovernanceSettingsCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatUpdateGroupGovernanceSettingsCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+      "nameEditableByAdminOnly",
+    }, path);
     return ChatUpdateGroupGovernanceSettingsCommand(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
-      nameEditableByAdminOnly: _generatedRequestBool(map["nameEditableByAdminOnly"], '$path.nameEditableByAdminOnly'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
+      nameEditableByAdminOnly: _generatedRequestBool(
+        map["nameEditableByAdminOnly"],
+        '$path.nameEditableByAdminOnly',
+      ),
     );
   }
 
@@ -1192,20 +1845,31 @@ final class ChatUpdateGroupGovernanceSettingsCommand {
 }
 
 final class GatheringChatBoardQuery {
-  GatheringChatBoardQuery({
-    required String conversationId,
-  }) : conversationId = conversationId {
+  GatheringChatBoardQuery({required String conversationId})
+    : conversationId = conversationId {
     if (this.conversationId.isEmpty) {
-      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+      throw ArgumentError.value(
+        this.conversationId,
+        "conversationId",
+        'must not be blank',
+      );
     }
   }
 
   final String conversationId;
 
-  factory GatheringChatBoardQuery.fromWire(Map<String, Object?> map, [String path = "GatheringChatBoardQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId"}, path);
+  factory GatheringChatBoardQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringChatBoardQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "conversationId",
+    }, path);
     return GatheringChatBoardQuery(
-      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      conversationId: _generatedRequestString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
     );
   }
 
@@ -1214,7 +1878,9 @@ final class GatheringChatBoardQuery {
   };
 }
 
-CloudOperationRequestPayload encodeChatChatInboxViewListInboxGeneratedRequest(ChatListInboxQuery request) {
+CloudOperationRequestPayload encodeChatChatInboxViewListInboxGeneratedRequest(
+  ChatListInboxQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "limit": (request.limit).toString(),
@@ -1223,58 +1889,75 @@ CloudOperationRequestPayload encodeChatChatInboxViewListInboxGeneratedRequest(Ch
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationBatchGetConversationsGeneratedRequest(ChatBatchGetConversationsQuery request) {
+CloudOperationRequestPayload
+encodeChatConversationBatchGetConversationsGeneratedRequest(
+  ChatBatchGetConversationsQuery request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
-      "ids": request.conversationIds.map((value) => value).toList(growable: false),
+      "ids": request.conversationIds
+          .map((value) => value)
+          .toList(growable: false),
     },
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationCreateConversationGeneratedRequest(ChatCreateConversationCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationCreateConversationGeneratedRequest(
+  ChatCreateConversationCommand request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "type": request.type,
       if (request.title != null) "title": request.title!,
       if (request.maxGroupSize != null) "maxGroupSize": request.maxGroupSize!,
-      if (request.initialMemberIds.isNotEmpty) "initialMemberIds": request.initialMemberIds.map((value) => value).toList(growable: false),
+      if (request.initialMemberIds.isNotEmpty)
+        "initialMemberIds": request.initialMemberIds
+            .map((value) => value)
+            .toList(growable: false),
     },
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationDissolveConversationGeneratedRequest(ChatDissolveConversationCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationDissolveConversationGeneratedRequest(
+  ChatDissolveConversationCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationGetConversationGeneratedRequest(ChatGetConversationQuery request) {
+CloudOperationRequestPayload
+encodeChatConversationGetConversationGeneratedRequest(
+  ChatGetConversationQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationGetGatheringChatBoardGeneratedRequest(GatheringChatBoardQuery request) {
+CloudOperationRequestPayload
+encodeChatConversationGetGatheringChatBoardGeneratedRequest(
+  GatheringChatBoardQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationGetGroupHomeGeneratedRequest(ChatGetGroupHomeQuery request) {
+CloudOperationRequestPayload encodeChatConversationGetGroupHomeGeneratedRequest(
+  ChatGetGroupHomeQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationListContactHomeGeneratedRequest(ChatListContactHomeQuery request) {
+CloudOperationRequestPayload
+encodeChatConversationListContactHomeGeneratedRequest(
+  ChatListContactHomeQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "filter": request.filter,
@@ -1283,7 +1966,9 @@ CloudOperationRequestPayload encodeChatConversationListContactHomeGeneratedReque
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationListContactsGeneratedRequest(ChatListContactsQuery request) {
+CloudOperationRequestPayload encodeChatConversationListContactsGeneratedRequest(
+  ChatListContactsQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "limit": (request.limit).toString(),
@@ -1292,12 +1977,17 @@ CloudOperationRequestPayload encodeChatConversationListContactsGeneratedRequest(
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationListConversationTimestampsGeneratedRequest(ChatListConversationTimestampsQuery request) {
-  return CloudOperationRequestPayload(
-  );
+CloudOperationRequestPayload
+encodeChatConversationListConversationTimestampsGeneratedRequest(
+  ChatListConversationTimestampsQuery request,
+) {
+  return CloudOperationRequestPayload();
 }
 
-CloudOperationRequestPayload encodeChatConversationListConversationsGeneratedRequest(ChatListConversationsQuery request) {
+CloudOperationRequestPayload
+encodeChatConversationListConversationsGeneratedRequest(
+  ChatListConversationsQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.cursor?.isNotEmpty == true) "cursor": request.cursor!,
@@ -1306,16 +1996,23 @@ CloudOperationRequestPayload encodeChatConversationListConversationsGeneratedReq
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationListGroupCandidatesGeneratedRequest(ChatListGroupCandidatesQuery request) {
+CloudOperationRequestPayload
+encodeChatConversationListGroupCandidatesGeneratedRequest(
+  ChatListGroupCandidatesQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "limit": (request.limit).toString(),
-      if (request.conversationId != null) "conversationId": request.conversationId!,
+      if (request.conversationId != null)
+        "conversationId": request.conversationId!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationListMessageHomeGeneratedRequest(ChatListMessageHomeQuery request) {
+CloudOperationRequestPayload
+encodeChatConversationListMessageHomeGeneratedRequest(
+  ChatListMessageHomeQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "filter": request.filter,
@@ -1325,11 +2022,12 @@ CloudOperationRequestPayload encodeChatConversationListMessageHomeGeneratedReque
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationListSelectableGroupContactMembersGeneratedRequest(ChatListSelectableGroupContactMembersQuery request) {
+CloudOperationRequestPayload
+encodeChatConversationListSelectableGroupContactMembersGeneratedRequest(
+  ChatListSelectableGroupContactMembersQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
     queryParameters: <String, String>{
       "limit": (request.limit).toString(),
       if (request.query != null) "query": request.query!,
@@ -1338,82 +2036,89 @@ CloudOperationRequestPayload encodeChatConversationListSelectableGroupContactMem
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationListSelectableGroupConversationsGeneratedRequest(ChatListSelectableGroupConversationsQuery request) {
+CloudOperationRequestPayload
+encodeChatConversationListSelectableGroupConversationsGeneratedRequest(
+  ChatListSelectableGroupConversationsQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "limit": (request.limit).toString(),
       if (request.query != null) "query": request.query!,
-      if (request.source != null) "source": (request.source!.wireName).toString(),
+      if (request.source != null)
+        "source": (request.source!.wireName).toString(),
       if (request.cursor != null) "cursor": request.cursor!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationUpdateAnnouncementGeneratedRequest(ChatUpdateAnnouncementCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationUpdateAnnouncementGeneratedRequest(
+  ChatUpdateAnnouncementCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
-    body: <String, Object?>{
-      "announcement": request.announcement,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
+    body: <String, Object?>{"announcement": request.announcement},
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationUpdateConversationTitleGeneratedRequest(ChatUpdateConversationTitleCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationUpdateConversationTitleGeneratedRequest(
+  ChatUpdateConversationTitleCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
-    body: <String, Object?>{
-      "title": request.title,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
+    body: <String, Object?>{"title": request.title},
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationUpdateGroupGovernanceSettingsGeneratedRequest(ChatUpdateGroupGovernanceSettingsCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationUpdateGroupGovernanceSettingsGeneratedRequest(
+  ChatUpdateGroupGovernanceSettingsCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
     body: <String, Object?>{
       "nameEditableByAdminOnly": request.nameEditableByAdminOnly,
     },
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationMembershipAddMembersGeneratedRequest(ChatAddConversationMembersCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationMembershipAddMembersGeneratedRequest(
+  ChatAddConversationMembersCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
     body: <String, Object?>{
       "userIds": request.userIds.map((value) => value).toList(growable: false),
     },
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationMembershipInviteAssistantGeneratedRequest(ChatInviteConversationAssistantCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationMembershipInviteAssistantGeneratedRequest(
+  ChatInviteConversationAssistantCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationMembershipLeaveConversationGeneratedRequest(ChatLeaveConversationCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationMembershipLeaveConversationGeneratedRequest(
+  ChatLeaveConversationCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationMembershipListMembersGeneratedRequest(ChatListConversationMembersQuery request) {
+CloudOperationRequestPayload
+encodeChatConversationMembershipListMembersGeneratedRequest(
+  ChatListConversationMembersQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
     queryParameters: <String, String>{
       if (request.cursor != null) "cursor": request.cursor!,
       "limit": (request.limit).toString(),
@@ -1424,15 +2129,19 @@ CloudOperationRequestPayload encodeChatConversationMembershipListMembersGenerate
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationMembershipRemoveAssistantGeneratedRequest(ChatRemoveConversationAssistantCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationMembershipRemoveAssistantGeneratedRequest(
+  ChatRemoveConversationAssistantCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationMembershipRemoveMemberGeneratedRequest(ChatRemoveConversationMemberCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationMembershipRemoveMemberGeneratedRequest(
+  ChatRemoveConversationMemberCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "conversationId": request.conversationId,
@@ -1441,29 +2150,34 @@ CloudOperationRequestPayload encodeChatConversationMembershipRemoveMemberGenerat
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationMembershipTransferOwnershipGeneratedRequest(ChatTransferConversationOwnershipCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationMembershipTransferOwnershipGeneratedRequest(
+  ChatTransferConversationOwnershipCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
+    body: <String, Object?>{"newOwnerId": request.newOwnerId},
+  );
+}
+
+CloudOperationRequestPayload
+encodeChatConversationMembershipUpdateGroupAdminsGeneratedRequest(
+  ChatUpdateConversationAdminsCommand request,
+) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{"conversationId": request.conversationId},
     body: <String, Object?>{
-      "newOwnerId": request.newOwnerId,
+      "adminIds": request.adminIds
+          .map((value) => value)
+          .toList(growable: false),
     },
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationMembershipUpdateGroupAdminsGeneratedRequest(ChatUpdateConversationAdminsCommand request) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
-    body: <String, Object?>{
-      "adminIds": request.adminIds.map((value) => value).toList(growable: false),
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeChatConversationUserStateMarkAsReadGeneratedRequest(ChatMarkConversationMessageReadCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationUserStateMarkAsReadGeneratedRequest(
+  ChatMarkConversationMessageReadCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "conversationId": request.conversationId,
@@ -1472,11 +2186,12 @@ CloudOperationRequestPayload encodeChatConversationUserStateMarkAsReadGeneratedR
   );
 }
 
-CloudOperationRequestPayload encodeChatConversationUserStateUpdateConversationSettingsGeneratedRequest(ChatUpdateConversationSettingsCommand request) {
+CloudOperationRequestPayload
+encodeChatConversationUserStateUpdateConversationSettingsGeneratedRequest(
+  ChatUpdateConversationSettingsCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
     body: <String, Object?>{
       if (request.muted != null) "muted": request.muted!,
       if (request.pinned != null) "pinned": request.pinned!,
@@ -1484,33 +2199,38 @@ CloudOperationRequestPayload encodeChatConversationUserStateUpdateConversationSe
   );
 }
 
-CloudOperationRequestPayload encodeChatMessageListConversationAssetsGeneratedRequest(ChatListConversationAssetsQuery request) {
+CloudOperationRequestPayload
+encodeChatMessageListConversationAssetsGeneratedRequest(
+  ChatListConversationAssetsQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
     queryParameters: <String, String>{
       "kind": request.kind,
       "limit": (request.limit).toString(),
-      if (request.beforeSeq != null) "beforeSeq": (request.beforeSeq!).toString(),
+      if (request.beforeSeq != null)
+        "beforeSeq": (request.beforeSeq!).toString(),
     },
   );
 }
 
-CloudOperationRequestPayload encodeChatMessageListMessagesGeneratedRequest(ChatListMessagesQuery request) {
+CloudOperationRequestPayload encodeChatMessageListMessagesGeneratedRequest(
+  ChatListMessagesQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
     queryParameters: <String, String>{
       "limit": (request.limit).toString(),
       if (request.afterSeq != null) "afterSeq": (request.afterSeq!).toString(),
-      if (request.beforeSeq != null) "beforeSeq": (request.beforeSeq!).toString(),
+      if (request.beforeSeq != null)
+        "beforeSeq": (request.beforeSeq!).toString(),
     },
   );
 }
 
-CloudOperationRequestPayload encodeChatMessageRecallMessageGeneratedRequest(ChatRecallMessageCommand request) {
+CloudOperationRequestPayload encodeChatMessageRecallMessageGeneratedRequest(
+  ChatRecallMessageCommand request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "conversationId": request.conversationId,
@@ -1519,41 +2239,52 @@ CloudOperationRequestPayload encodeChatMessageRecallMessageGeneratedRequest(Chat
   );
 }
 
-CloudOperationRequestPayload encodeChatMessageSendMessageGeneratedRequest(ChatSendMessageCommand request) {
+CloudOperationRequestPayload encodeChatMessageSendMessageGeneratedRequest(
+  ChatSendMessageCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
     body: <String, Object?>{
       "type": request.type,
       "content": request.content,
       "clientMsgId": request.clientMsgId,
       if (request.mediaAssetId != null) "mediaAssetId": request.mediaAssetId!,
       if (request.card != null) "card": request.card!.toWire(),
-      if (request.audioDurationMs != null) "audioDurationMs": request.audioDurationMs!,
-      if (request.audioWaveform != null) "audioWaveform": request.audioWaveform!.map((value) => value).toList(growable: false),
-      if (request.replyToMessageId != null) "replyToMessageId": request.replyToMessageId!,
-      if (request.mentions.isNotEmpty) "mentions": request.mentions.map((value) => value).toList(growable: false),
-      if (request.senderDisplayNameSnapshot != null) "senderDisplayNameSnapshot": request.senderDisplayNameSnapshot!,
-      if (request.senderAvatarUrlSnapshot != null) "senderAvatarUrlSnapshot": request.senderAvatarUrlSnapshot!,
-      if (request.personaContextVersion != null) "personaContextVersion": request.personaContextVersion!,
+      if (request.audioDurationMs != null)
+        "audioDurationMs": request.audioDurationMs!,
+      if (request.audioWaveform != null)
+        "audioWaveform": request.audioWaveform!
+            .map((value) => value)
+            .toList(growable: false),
+      if (request.replyToMessageId != null)
+        "replyToMessageId": request.replyToMessageId!,
+      if (request.mentions.isNotEmpty)
+        "mentions": request.mentions
+            .map((value) => value)
+            .toList(growable: false),
+      if (request.senderDisplayNameSnapshot != null)
+        "senderDisplayNameSnapshot": request.senderDisplayNameSnapshot!,
+      if (request.senderAvatarUrlSnapshot != null)
+        "senderAvatarUrlSnapshot": request.senderAvatarUrlSnapshot!,
+      if (request.personaContextVersion != null)
+        "personaContextVersion": request.personaContextVersion!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeChatMessageSyncMessagesGeneratedRequest(ChatSyncMessagesQuery request) {
+CloudOperationRequestPayload encodeChatMessageSyncMessagesGeneratedRequest(
+  ChatSyncMessagesQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "conversationId": request.conversationId,
-    },
-    body: <String, Object?>{
-      "lastSeq": request.lastSeq,
-      "limit": request.limit,
-    },
+    pathParameters: <String, String>{"conversationId": request.conversationId},
+    body: <String, Object?>{"lastSeq": request.lastSeq, "limit": request.limit},
   );
 }
 
-CloudOperationRequestPayload encodeChatMessageReceiptFactGetReceiptsGeneratedRequest(ChatGetMessageReceiptsQuery request) {
+CloudOperationRequestPayload
+encodeChatMessageReceiptFactGetReceiptsGeneratedRequest(
+  ChatGetMessageReceiptsQuery request,
+) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
       "conversationId": request.conversationId,
@@ -1561,4 +2292,3 @@ CloudOperationRequestPayload encodeChatMessageReceiptFactGetReceiptsGeneratedReq
     },
   );
 }
-

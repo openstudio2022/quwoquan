@@ -49,7 +49,10 @@ class VerifyMetadataAppContractGatesTest(unittest.TestCase):
         self.assertTrue(generated_domains.issubset(routed_domains))
         self.assertTrue(all(routes[domain] for domain in generated_domains))
         self.assertIn("gateway", routes)
-        self.assertEqual(routes["gateway"], {})
+        self.assertEqual(
+            routes["gateway"]["ExecutePersistedGraphQLQuery"], "/graphql"
+        )
+        self.assertEqual(routes["gateway"]["SearchPage"], "/graphql")
 
     def test_response_gate_scans_current_canonical_declarations(self) -> None:
         declarations = self.responses.collect_response_decls()

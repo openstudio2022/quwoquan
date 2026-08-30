@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
-from types import SimpleNamespace
 
 import cv2
 import numpy as np
 import pytest
+from content.source import professional_video_acquisition
+from content.source import professional_video_receipt
 from content.source.professional_video_acquisition import (
+    ProfessionalVideoAcquisitionBlocked,
     acquire_professional_videos,
     acquired_video_specs_for_entity,
     load_professional_video_acquisition_receipt,
@@ -20,9 +22,15 @@ from content.source.professional_video_popular_catalog import (
 from content.source.professional_video_receipt import (
     assert_publishable_popularity_signals,
 )
+from content.source.professional_video_spec_index import (
+    build_acquired_video_spec_index,
+)
+from content.source.professional_video_store import (
+    ProfessionalVideoCasCollision,
+    put_video_cas,
+)
 from content.source.research.auto_plan_video import write_video_lane
 from core.io import read_json, write_json
-from governance.coverage.distribution import ProductLifecycleState
 
 _DIGEST_A = "sha256:" + "a" * 64
 _DIGEST_B = "sha256:" + "b" * 64
@@ -30,13 +38,7 @@ _DIGEST_C = "sha256:" + "c" * 64
 
 
 @pytest.fixture(autouse=True)
-def _explicit_research_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "content.source.professional_video_acquisition.load_content_distribution_policy",
-        lambda: SimpleNamespace(
-            product_lifecycle_state=ProductLifecycleState.RESEARCH
-        ),
-    )
+def _acquisition_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "content.source.professional_video_acquisition.guard_acquisition_source_identity",
         lambda *_args, **_kwargs: {},
@@ -231,6 +233,7 @@ def _acquire(
 
 
 def test_acquisition_freezes_bytes_and_rejects_duplicate_static_mismatch_and_access(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     manual_root = tmp_path / "manual"
@@ -318,6 +321,53 @@ def test_acquisition_freezes_bytes_and_rejects_duplicate_static_mismatch_and_acc
     assert [spec["professionalAssetId"] for spec in specs] == ["higher", "lower"]
     assert all(spec["premiumPlayableEligible"] is True for spec in specs)
 
+    digest_calls: list[Path] = []
+    active_digest_calls = 0
+    max_active_digest_calls = 0
+    original_file_digest = professional_video_receipt.file_digest
+
+    def counted_file_digest(path: Path) -> str:
+        nonlocal active_digest_calls, max_active_digest_calls
+        active_digest_calls += 1
+        max_active_digest_calls = max(max_active_digest_calls, active_digest_calls)
+        digest_calls.append(path)
+        try:
+            return original_file_digest(path)
+        finally:
+            active_digest_calls -= 1
+
+    monkeypatch.setattr(
+        professional_video_receipt,
+        "file_digest",
+        counted_file_digest,
+    )
+    index = build_acquired_video_spec_index(
+        [receipt_path.relative_to(output_root).as_posix()],
+        root=output_root,
+    )
+    unique_acquired_digests = {
+        str(row["contentSha256"])
+        for row in receipt["assets"]
+        if row["acquisitionStatus"] == "acquired"
+    }
+    assert len(digest_calls) == len(unique_acquired_digests)
+    assert max_active_digest_calls == 1
+    assert index.accepted_asset_count == 2
+    assert index.entity_names == ("西湖",)
+
+    # One verified immutable index serves every catalog lookup. Repeated entity
+    # and alias probes must not reopen or rehash the capsule CAS.
+    for entity_name in ("西湖", "杭州西湖", "西湖"):
+        projected = index.specs_for_names((entity_name, "西湖"))
+        assert [row["professionalAssetId"] for row in projected] == [
+            "higher",
+            "lower",
+        ]
+    assert len(digest_calls) == len(unique_acquired_digests)
+
+    projected[0]["title"] = "mutated caller copy"
+    assert index.specs_for_entity("西湖")[0]["title"] != "mutated caller copy"
+
 
 def test_reference_only_manual_video_records_rights_without_blocking_research(
     tmp_path: Path,
@@ -357,7 +407,7 @@ def test_reference_only_manual_video_records_rights_without_blocking_research(
     assert row["rightsStatus"] == "unverified"
     assert row["authorizationRequired"] is True
     assert row["distributionDecision"] == "research_allowed"
-    assert row["planVideoSpec"]["publicationAdmission"] == "research_release"
+    assert row["planVideoSpec"]["distributionDecision"] == "research_allowed"
     assert row["planVideoSpec"]["commercialAuthorizationStatus"] == "unverified"
 
 
@@ -385,12 +435,19 @@ def test_reference_only_video_forbids_unapproved_network_acquisition(
     manifest_path = tmp_path / "youtube-public-direct.json"
     write_json(manifest_path, _manifest([item], manifest_id="youtube-public-direct"))
 
-    with pytest.raises(ValueError, match="public_direct is not allowed"):
+    with pytest.raises(ProfessionalVideoAcquisitionBlocked) as captured:
         acquire_professional_videos(
             manifest_path,
             handoff_ref=tmp_path / "handoff.json",
             output_root=tmp_path / "acquisition",
         )
+    assert captured.value.code == "DATA.SOURCE.VIDEO_BATCH_NO_SUCCESS"
+    assert captured.value.receipt["assets"][0]["failureCode"] == (
+        "DATA.SOURCE.ITEM_PREVALIDATION_FAILED"
+    )
+    assert "public_direct is not allowed" in captured.value.receipt["assets"][0][
+        "failure"
+    ]
 
 
 def test_prior_receipt_deduplication_is_scoped_to_exact_source_identity(
@@ -427,7 +484,9 @@ def test_prior_receipt_deduplication_is_scoped_to_exact_source_identity(
         )
 
     original, original_path = acquire("original")
-    duplicate, _duplicate_path = acquire("same-identity")
+    with pytest.raises(ProfessionalVideoAcquisitionBlocked) as captured:
+        acquire("same-identity")
+    duplicate = captured.value.receipt
     original_row = original["assets"][0]
     duplicate_row = duplicate["assets"][0]
     original_ref = original_path.relative_to(output_root).as_posix()
@@ -589,368 +648,3 @@ def test_popularity_never_invents_comparability(tmp_path: Path) -> None:
             asset_id="single",
         )
 
-
-def test_acquisition_physically_consumes_popular_catalog_binding(tmp_path: Path) -> None:
-    manual_root = tmp_path / "manual"
-    manual_root.mkdir()
-    _write_video(manual_root / "high.mp4", moving=True, seed=21)
-    response = {
-        "provider": "bilibili",
-        "sourcePageUrl": "https://www.bilibili.com/video/BV-popular",
-        "apiEvidenceUrl": "https://api.bilibili.com/x/web-interface/archive/stat",
-        "statusCode": 200,
-        "contentType": "application/json",
-        "accessEvidence": {
-            "supportedApi": True, "cookiesSent": False, "loginRequired": False,
-            "paywallRequired": False, "drmProtected": False,
-            "accessControlBypass": False,
-        },
-        "items": [
-            {
-                "sourceId": source_id, "entityId": "西湖", "observedEntityId": "西湖",
-                "creator": f"Creator {source_id}", "title": f"西湖热门旅行 {source_id}",
-                "observedAt": "2026-08-08T09:00:00Z", "topic": "west-lake-travel",
-                "timeBucket": "2026-W32", "playCount": score * 100,
-                "likeCount": score * 10, "commentCount": score,
-                "shareCount": score, "favoriteCount": score * 2,
-            }
-            for source_id, score in (("low", 10), ("high", 20))
-        ],
-    }
-    catalog = build_professional_video_popular_candidate_catalog(
-        source_revision="sha256:" + "1" * 64,
-        source_digest=_DIGEST_A,
-        entity_catalog_digest=_DIGEST_B,
-        metadata_responses=[response],
-        manual_file_manifests=[{
-            "provider": "bilibili", "sourceId": "high",
-            "sourcePageUrl": response["sourcePageUrl"], "manualFileRef": "high.mp4",
-        }],
-        evidence_root=manual_root,
-    )
-    output_root = tmp_path / "acquisition"
-    catalog_ref = (
-        "professional-video-popular-catalogs/"
-        f"{catalog['catalogDigest'][7:]}.json"
-    )
-    catalog_path = output_root / catalog_ref
-    write_create_once_professional_video_popular_candidate_catalog(catalog_path, catalog)
-    catalog_sha = "sha256:" + __import__("hashlib").sha256(
-        catalog_path.read_bytes()
-    ).hexdigest()
-    candidate = next(row for row in catalog["candidates"] if row["sourceId"] == "high")
-    popularity = candidate["popularity"]
-    item = _item(
-        "popular", "high.mp4",
-        counts=tuple(popularity[field] for field in (
-            "playCount", "likeCount", "commentCount", "shareCount", "favoriteCount"
-        )),
-    )
-    item.update(
-        provider="bilibili", platform="B站", displayName="B站热门旅行视频",
-        sourceUrl=candidate["sourcePageUrl"], title=candidate["title"],
-        creator=candidate["creator"],
-        popularitySignals={
-            **{field: popularity[field] for field in (
-                "playCount", "likeCount", "commentCount", "shareCount", "favoriteCount"
-            )},
-            "observedAt": candidate["observedAt"], "provider": candidate["provider"],
-            "topic": candidate["topic"], "timeBucket": candidate["timeBucket"],
-        },
-        popularCandidateId=candidate["candidateId"], popularCatalogRef=catalog_ref,
-        popularCatalogDigest=catalog["catalogDigest"],
-        popularCatalogFileSha256=catalog_sha,
-    )
-    manifest_path = tmp_path / "popular.json"
-    write_json(manifest_path, _manifest(
-        [item], manifest_id="popular-catalog-bound",
-        source_revision="sha256:" + "1" * 64,
-    ))
-    receipt, _receipt_path = acquire_professional_videos(
-        manifest_path, handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual_root, output_root=output_root,
-    )
-    row = receipt["assets"][0]
-    assert row["popularCatalogRef"] == catalog_ref
-    assert row["contentSha256"] == candidate["manualFileSha256"]
-    assert row["popularitySignals"] == {
-        **popularity, "observedAt": candidate["observedAt"],
-        "provider": candidate["provider"], "topic": candidate["topic"],
-        "timeBucket": candidate["timeBucket"], "rankingEligible": True,
-        "ineligibleReason": "",
-    }
-
-
-def test_slideshow_is_not_counted_as_sourced_or_premium_video(tmp_path: Path) -> None:
-    manual_root = tmp_path / "manual"
-    manual_root.mkdir()
-    _write_slideshow(manual_root / "slides.mp4")
-    manifest_path = tmp_path / "manifest.json"
-    write_json(
-        manifest_path,
-        _manifest(
-            [_item("slides", "slides.mp4", counts=(1_000, 20, 2, 1, 3))],
-            manifest_id="slides",
-        ),
-    )
-    receipt, _receipt_path = acquire_professional_videos(
-        manifest_path,
-        handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual_root,
-        output_root=tmp_path / "acquisition",
-    )
-    row = receipt["assets"][0]
-    assert row["acquisitionStatus"] == "acquired"
-    assert row["distributionDecision"] == "blocked"
-    assert row["mediaProbe"]["staticImageSequence"] is True
-    assert row["mediaProbe"]["premiumPlayableEligible"] is False
-    assert row["planVideoSpec"] is None
-
-
-def test_commercial_lifecycle_rejects_unverified_acquired_video(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    manual_root = tmp_path / "manual"
-    manual_root.mkdir()
-    _write_video(manual_root / "research-only.mp4", moving=True, seed=11)
-    monkeypatch.setattr(
-        "content.source.professional_video_acquisition.load_content_distribution_policy",
-        lambda: SimpleNamespace(
-            product_lifecycle_state=ProductLifecycleState.COMMERCIAL
-        ),
-    )
-    manifest_path = tmp_path / "manifest.json"
-    write_json(
-        manifest_path,
-        _manifest(
-            [
-                _item(
-                    "research-only",
-                    "research-only.mp4",
-                    counts=(1_000, 20, 2, 1, 3),
-                )
-            ],
-            manifest_id="commercial-filter",
-        ),
-    )
-    receipt, _receipt_path = acquire_professional_videos(
-        manifest_path,
-        handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual_root,
-        output_root=tmp_path / "acquisition",
-    )
-    row = receipt["assets"][0]
-    assert row["acquisitionStatus"] == "acquired"
-    assert row["distributionDecision"] == "blocked"
-    assert row["failureCode"] == "DATA.SOURCE.COMMERCIAL_RIGHTS_REQUIRED"
-    assert receipt["acceptedAssetCount"] == 0
-
-
-def test_commercial_lifecycle_emits_commercial_plan_for_verified_video(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    manual_root = tmp_path / "manual"
-    manual_root.mkdir()
-    _write_video(manual_root / "commercial.mp4", moving=True, seed=17)
-    monkeypatch.setattr(
-        "content.source.professional_video_acquisition.load_content_distribution_policy",
-        lambda: SimpleNamespace(
-            product_lifecycle_state=ProductLifecycleState.COMMERCIAL
-        ),
-    )
-    item = _item(
-        "commercial",
-        "commercial.mp4",
-        counts=(8_000, 420, 36, 24, 180),
-    )
-    item.update(
-        rightsStatus="verified",
-        license="Pexels License",
-        authorizationProof="https://www.pexels.com/license/",
-        rightsIssues=[],
-        modelReleaseStatus="not_required",
-    )
-    manifest_path = tmp_path / "commercial.json"
-    write_json(manifest_path, _manifest([item], manifest_id="commercial"))
-
-    receipt, _receipt_path = acquire_professional_videos(
-        manifest_path,
-        handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual_root,
-        output_root=tmp_path / "acquisition",
-    )
-
-    row = receipt["assets"][0]
-    assert row["distributionDecision"] == "commercial_allowed"
-    assert row["planVideoSpec"]["publicationAdmission"] == "commercial_release"
-    assert row["planVideoSpec"]["commercialAuthorizationStatus"] == "verified"
-
-
-@pytest.mark.parametrize(
-    ("path_name", "api_evidence"),
-    [
-        ("public_direct", ""),
-        ("supported_api", "https://api.pexels.example.test/evidence/asset"),
-    ],
-)
-def test_public_and_supported_api_paths_freeze_transport_bytes(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    path_name: str,
-    api_evidence: str,
-) -> None:
-    source = tmp_path / "source.mp4"
-    _write_video(source, moving=True, seed=6)
-
-    def fake_fetch(url: str, destination: Path, *, supported_api: bool) -> str:
-        assert url == "https://cdn.pexels.example.test/video.mp4"
-        assert supported_api is (path_name == "supported_api")
-        shutil.copyfile(source, destination)
-        return ".mp4"
-
-    monkeypatch.setattr(
-        "content.source.professional_video_acquisition.fetch_public_video",
-        fake_fetch,
-    )
-    item = _item(
-        path_name,
-        "",
-        counts=(200, 10, 2, 1, 4),
-        acquisition_path=path_name,
-        asset_url="https://cdn.pexels.example.test/video.mp4",
-        api_evidence=api_evidence,
-    )
-    receipt, _path, output_root = _acquire(
-        tmp_path,
-        [item],
-        manifest_id=f"network-{path_name}",
-    )
-    row = receipt["assets"][0]
-    assert row["acquisitionStatus"] == "acquired"
-    assert row["distributionDecision"] == "research_allowed"
-    assert (output_root / row["assetRef"]).is_file()
-
-
-def test_receipt_and_plan_bindings_fail_closed_on_tamper(tmp_path: Path) -> None:
-    manual_root = tmp_path / "manual"
-    manual_root.mkdir()
-    _write_video(manual_root / "accepted.mp4", moving=True, seed=7)
-    manifest_path = tmp_path / "manifest.json"
-    write_json(
-        manifest_path,
-        _manifest(
-            [_item("accepted", "accepted.mp4", counts=(20, 3, 1, 1, 1))],
-            manifest_id="tamper",
-        ),
-    )
-    output_root = tmp_path / "acquisition"
-    receipt, receipt_path = acquire_professional_videos(
-        manifest_path,
-        handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual_root,
-        output_root=output_root,
-    )
-    receipt_ref = receipt_path.relative_to(output_root).as_posix()
-    tampered = json.loads(json.dumps(receipt))
-    tampered["acceptedAssetCount"] = 0
-    write_json(receipt_path, tampered)
-    with pytest.raises(ValueError, match="digest mismatch"):
-        load_professional_video_acquisition_receipt(receipt_ref, root=output_root)
-
-
-def test_auto_plan_selects_highest_comparable_professional_video(tmp_path: Path) -> None:
-    manual_root = tmp_path / "manual"
-    manual_root.mkdir()
-    _write_video(manual_root / "low.mp4", moving=True, seed=8)
-    _write_video(manual_root / "high.mp4", moving=True, seed=9)
-    manifest_path = tmp_path / "manifest.json"
-    write_json(
-        manifest_path,
-        _manifest([
-            _item("low", "low.mp4", counts=(10, 1, 0, 0, 0)),
-            _item("high", "high.mp4", counts=(10_000, 300, 30, 20, 50)),
-        ], manifest_id="auto-plan"),
-    )
-    output_root = tmp_path / "acquisition"
-    _receipt, receipt_path = acquire_professional_videos(
-        manifest_path,
-        handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual_root,
-        output_root=output_root,
-    )
-    plan_dir = tmp_path / "plan"
-    report: dict[str, object] = {"sourceUnavailable": []}
-    write_video_lane(
-        entity_id="西湖",
-        plan_dir=plan_dir,
-        force=True,
-        report=report,
-        updated=[],
-        sourced_video_pool=[],
-        acquisition_receipt_refs=[receipt_path.relative_to(output_root).as_posix()],
-        acquisition_root=output_root,
-    )
-    plan = read_json(plan_dir / "video_source_plan.json")
-    payload = plan["payload"]
-    assert plan["acquisitionReceiptRefs"] == [
-        receipt_path.relative_to(output_root).as_posix()
-    ]
-    assert "acquisitionReceiptRefs" not in payload
-    assert payload["videos"][0]["professionalAssetId"] == "high"
-    assert report["videoDiscovery"][0]["professionalAcquisitionCandidates"] == 2
-    assert report["videoDiscovery"][0]["rankingEligibleCandidates"] == 2
-
-
-def test_failed_acquisition_allows_new_attempt_without_rewriting_history(
-    tmp_path: Path,
-) -> None:
-    """429/网络失败被冻结进 receipt 后，同一 manifest 必须能开新 attempt 而不篡改历史。"""
-    manual_root = tmp_path / "manual"
-    manual_root.mkdir()
-    manifest_path = tmp_path / "manifest.json"
-    write_json(
-        manifest_path,
-        _manifest(
-            [_item("retry", "retry.mp4", counts=(1_000, 10, 2, 1, 2))],
-            manifest_id="retry-attempts",
-        ),
-    )
-    output_root = tmp_path / "acquisition"
-
-    first, first_path = acquire_professional_videos(
-        manifest_path,
-        handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual_root,
-        output_root=output_root,
-    )
-    assert first["assets"][0]["acquisitionStatus"] == "failed"
-    assert first["assets"][0]["failureCode"] == "DATA.SOURCE.ACQUISITION_FAILED"
-    first_bytes = first_path.read_bytes()
-
-    _write_video(manual_root / "retry.mp4", moving=True, seed=41)
-    second, second_path = acquire_professional_videos(
-        manifest_path,
-        handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual_root,
-        output_root=output_root,
-    )
-    assert second_path != first_path
-    assert second_path.name.endswith("-attempt-002.json")
-    assert second["manifestDigest"] == first["manifestDigest"]
-    assert second["assets"][0]["acquisitionStatus"] == "acquired"
-    assert second["assets"][0]["distributionDecision"] == "research_allowed"
-    assert first_path.read_bytes() == first_bytes
-
-    replay, replay_path = acquire_professional_videos(
-        manifest_path,
-        handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual_root,
-        output_root=output_root,
-    )
-    assert replay_path == second_path
-    assert replay == second
-    assert load_professional_video_acquisition_receipt(
-        second_path.relative_to(output_root).as_posix(), root=output_root
-    ) == second

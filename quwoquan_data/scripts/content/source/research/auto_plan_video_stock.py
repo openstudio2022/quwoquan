@@ -220,7 +220,7 @@ def discover_pexels_sourced_videos(
                     "rightsIssues": [
                         "downloaded bytes have not yet completed media and rights admission"
                     ],
-                    "publicationAdmission": "research_release",
+                    "distributionDecision": "research_allowed",
                     "modelReleaseStatus": "not_required",
                     "propertyReleaseStatus": "not_required",
                     "takedownPolicy": "quwoquan_standard_notice_and_takedown",
@@ -350,7 +350,7 @@ def discover_pixabay_sourced_videos(
                     "rightsIssues": [
                         "downloaded bytes have not yet completed media and rights admission"
                     ],
-                    "publicationAdmission": "research_release",
+                    "distributionDecision": "research_allowed",
                     "modelReleaseStatus": "not_required",
                     "propertyReleaseStatus": "not_required",
                     "takedownPolicy": "quwoquan_standard_notice_and_takedown",

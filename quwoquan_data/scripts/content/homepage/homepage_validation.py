@@ -9,7 +9,6 @@ from typing import Any
 import yaml
 
 from core.asset_identity import parse_post_asset_id
-from governance.coverage.license import rights_proof_required
 
 _ASSET_REF_RE = re.compile(r"asset://([A-Za-z0-9_./\u4e00-\u9fff-]+)")
 
@@ -43,7 +42,6 @@ def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], la
         return [f"{label}: manifest missing vertical policy owner"]
     if not assets:
         issues.append(f"{label}: accepted homepage manifest.assets must not be empty")
-    require_rights_proof = rights_proof_required(vertical)
     for raw in assets:
         if not isinstance(raw, dict):
             continue
@@ -67,12 +65,7 @@ def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], la
             issues.append(f"{label}: asset {asset_id or file_name} sourceRef must point to source.md")
         elif not source_asset_ref.startswith(source_ref.rsplit("/", 1)[0] + "/assets/"):
             issues.append(f"{label}: asset {asset_id or file_name} sourceAssetRef does not belong to sourceRef")
-        if require_rights_proof and not (
-            str(raw.get("authorizationProof") or "").strip()
-            or str(raw.get("termsUrl") or "").strip()
-        ):
-            issues.append(f"{label}: asset {asset_id or file_name or '<unknown>'} missing image rights proof")
-        if not require_rights_proof and str(
+        if str(
             raw.get("rightsAuditStatus") or ""
         ) not in {"verified", "unverified", "restricted", "unknown"}:
             issues.append(

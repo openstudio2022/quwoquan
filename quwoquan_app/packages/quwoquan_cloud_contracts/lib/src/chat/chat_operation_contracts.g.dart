@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
+// ContractGraph SHA256: cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f
 
 library;
 
@@ -171,7 +171,10 @@ enum SelectableGroupConversationSource {
 
   final String wireName;
 
-  static SelectableGroupConversationSource fromWire(Object? value, String path) {
+  static SelectableGroupConversationSource fromWire(
+    Object? value,
+    String path,
+  ) {
     return switch (value) {
       "group" => SelectableGroupConversationSource.group,
       "circle" => SelectableGroupConversationSource.circle,
@@ -215,8 +218,27 @@ final class ChatContactListRow {
   final String source;
   final bool isStarred;
 
-  factory ChatContactListRow.fromWire(Map<String, Object?> map, [String path = "ChatContactListRow"]) {
-    _rejectUnknownFields(map, const <String>{"userId", "userHandle", "displayName", "avatarUrl", "bio", "metFrom", "lastInteraction", "relationState", "conversationId", "conversationType", "subtitle", "highlightText", "matchedField", "source", "isStarred"}, path);
+  factory ChatContactListRow.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatContactListRow",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "userId",
+      "userHandle",
+      "displayName",
+      "avatarUrl",
+      "bio",
+      "metFrom",
+      "lastInteraction",
+      "relationState",
+      "conversationId",
+      "conversationType",
+      "subtitle",
+      "highlightText",
+      "matchedField",
+      "source",
+      "isStarred",
+    }, path);
     return ChatContactListRow(
       userId: _requiredString(map["userId"], '$path.userId'),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
@@ -224,12 +246,27 @@ final class ChatContactListRow {
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
       bio: _requiredString(map["bio"], '$path.bio'),
       metFrom: _requiredString(map["metFrom"], '$path.metFrom'),
-      lastInteraction: _requiredString(map["lastInteraction"], '$path.lastInteraction'),
-      relationState: _requiredString(map["relationState"], '$path.relationState'),
-      conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
-      conversationType: _requiredString(map["conversationType"], '$path.conversationType'),
+      lastInteraction: _requiredString(
+        map["lastInteraction"],
+        '$path.lastInteraction',
+      ),
+      relationState: _requiredString(
+        map["relationState"],
+        '$path.relationState',
+      ),
+      conversationId: _requiredString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
+      conversationType: _requiredString(
+        map["conversationType"],
+        '$path.conversationType',
+      ),
       subtitle: _requiredString(map["subtitle"], '$path.subtitle'),
-      highlightText: _requiredString(map["highlightText"], '$path.highlightText'),
+      highlightText: _requiredString(
+        map["highlightText"],
+        '$path.highlightText',
+      ),
       matchedField: _requiredString(map["matchedField"], '$path.matchedField'),
       source: _requiredString(map["source"], '$path.source'),
       isStarred: _requiredBool(map["isStarred"], '$path.isStarred'),
@@ -332,41 +369,157 @@ final class ChatConversation {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  factory ChatConversation.fromWire(Map<String, Object?> map, [String path = "ChatConversation"]) {
-    _rejectUnknownFields(map, const <String>{"id", "conversationId", "type", "title", "avatarUrl", "groupAvatarVersion", "groupAvatarSourceHash", "creatorId", "circleId", "circleGroupId", "gatheringId", "gatheringSourceVersion", "gatheringSourceEventId", "accessMode", "postingPolicy", "entityId", "originType", "originIntersectionSnapshot", "intersectionFacts", "maxSeq", "memberCount", "membersRosterRevision", "maxGroupSize", "receiptEnabled", "announcement", "announcementUpdatedBy", "announcementUpdatedAt", "nameEditableByAdminOnly", "lastMessageId", "lastMessagePreview", "lastMessageType", "lastMessageTime", "messageCount", "status", "createdAt", "updatedAt"}, path);
+  factory ChatConversation.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatConversation",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "conversationId",
+      "type",
+      "title",
+      "avatarUrl",
+      "groupAvatarVersion",
+      "groupAvatarSourceHash",
+      "creatorId",
+      "circleId",
+      "circleGroupId",
+      "gatheringId",
+      "gatheringSourceVersion",
+      "gatheringSourceEventId",
+      "accessMode",
+      "postingPolicy",
+      "entityId",
+      "originType",
+      "originIntersectionSnapshot",
+      "intersectionFacts",
+      "maxSeq",
+      "memberCount",
+      "membersRosterRevision",
+      "maxGroupSize",
+      "receiptEnabled",
+      "announcement",
+      "announcementUpdatedBy",
+      "announcementUpdatedAt",
+      "nameEditableByAdminOnly",
+      "lastMessageId",
+      "lastMessagePreview",
+      "lastMessageType",
+      "lastMessageTime",
+      "messageCount",
+      "status",
+      "createdAt",
+      "updatedAt",
+    }, path);
     return ChatConversation(
       id: _requiredString(map["id"], '$path.id'),
-      conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
+      conversationId: _requiredString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       type: _requiredString(map["type"], '$path.type'),
       title: _requiredString(map["title"], '$path.title'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      groupAvatarVersion: _requiredInt(map["groupAvatarVersion"], '$path.groupAvatarVersion'),
-      groupAvatarSourceHash: map["groupAvatarSourceHash"] == null ? null : _requiredString(map["groupAvatarSourceHash"], '$path.groupAvatarSourceHash'),
+      groupAvatarVersion: _requiredInt(
+        map["groupAvatarVersion"],
+        '$path.groupAvatarVersion',
+      ),
+      groupAvatarSourceHash: map["groupAvatarSourceHash"] == null
+          ? null
+          : _requiredString(
+              map["groupAvatarSourceHash"],
+              '$path.groupAvatarSourceHash',
+            ),
       creatorId: _requiredString(map["creatorId"], '$path.creatorId'),
       circleId: _requiredString(map["circleId"], '$path.circleId'),
-      circleGroupId: _requiredString(map["circleGroupId"], '$path.circleGroupId'),
+      circleGroupId: _requiredString(
+        map["circleGroupId"],
+        '$path.circleGroupId',
+      ),
       gatheringId: _requiredString(map["gatheringId"], '$path.gatheringId'),
-      gatheringSourceVersion: _requiredInt(map["gatheringSourceVersion"], '$path.gatheringSourceVersion'),
-      gatheringSourceEventId: _requiredString(map["gatheringSourceEventId"], '$path.gatheringSourceEventId'),
-      accessMode: ConversationAccessMode.fromWire(map["accessMode"], '$path.accessMode'),
-      postingPolicy: ConversationPostingPolicy.fromWire(map["postingPolicy"], '$path.postingPolicy'),
+      gatheringSourceVersion: _requiredInt(
+        map["gatheringSourceVersion"],
+        '$path.gatheringSourceVersion',
+      ),
+      gatheringSourceEventId: _requiredString(
+        map["gatheringSourceEventId"],
+        '$path.gatheringSourceEventId',
+      ),
+      accessMode: ConversationAccessMode.fromWire(
+        map["accessMode"],
+        '$path.accessMode',
+      ),
+      postingPolicy: ConversationPostingPolicy.fromWire(
+        map["postingPolicy"],
+        '$path.postingPolicy',
+      ),
       entityId: _requiredString(map["entityId"], '$path.entityId'),
       originType: _requiredString(map["originType"], '$path.originType'),
-      originIntersectionSnapshot: map["originIntersectionSnapshot"] == null ? null : GreetingIntersectionSnapshot.fromWire(_requiredObject(map["originIntersectionSnapshot"], '$path.originIntersectionSnapshot'), '$path.originIntersectionSnapshot'),
-      intersectionFacts: List<ContactIntersectionFact>.unmodifiable(_requiredList(map["intersectionFacts"], '$path.intersectionFacts').asMap().entries.map((entry) => ContactIntersectionFact.fromWire(_requiredObject(entry.value, '$path.intersectionFacts' + '[${entry.key}]'), '$path.intersectionFacts' + '[${entry.key}]'))),
+      originIntersectionSnapshot: map["originIntersectionSnapshot"] == null
+          ? null
+          : GreetingIntersectionSnapshot.fromWire(
+              _requiredObject(
+                map["originIntersectionSnapshot"],
+                '$path.originIntersectionSnapshot',
+              ),
+              '$path.originIntersectionSnapshot',
+            ),
+      intersectionFacts: List<ContactIntersectionFact>.unmodifiable(
+        _requiredList(
+          map["intersectionFacts"],
+          '$path.intersectionFacts',
+        ).asMap().entries.map(
+          (entry) => ContactIntersectionFact.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.intersectionFacts' + '[${entry.key}]',
+            ),
+            '$path.intersectionFacts' + '[${entry.key}]',
+          ),
+        ),
+      ),
       maxSeq: _requiredInt(map["maxSeq"], '$path.maxSeq'),
       memberCount: _requiredInt(map["memberCount"], '$path.memberCount'),
-      membersRosterRevision: _requiredInt(map["membersRosterRevision"], '$path.membersRosterRevision'),
+      membersRosterRevision: _requiredInt(
+        map["membersRosterRevision"],
+        '$path.membersRosterRevision',
+      ),
       maxGroupSize: _requiredInt(map["maxGroupSize"], '$path.maxGroupSize'),
-      receiptEnabled: _requiredBool(map["receiptEnabled"], '$path.receiptEnabled'),
+      receiptEnabled: _requiredBool(
+        map["receiptEnabled"],
+        '$path.receiptEnabled',
+      ),
       announcement: _requiredString(map["announcement"], '$path.announcement'),
-      announcementUpdatedBy: _requiredString(map["announcementUpdatedBy"], '$path.announcementUpdatedBy'),
-      announcementUpdatedAt: map["announcementUpdatedAt"] == null ? null : _requiredTimestamp(map["announcementUpdatedAt"], '$path.announcementUpdatedAt'),
-      nameEditableByAdminOnly: _requiredBool(map["nameEditableByAdminOnly"], '$path.nameEditableByAdminOnly'),
-      lastMessageId: _requiredString(map["lastMessageId"], '$path.lastMessageId'),
-      lastMessagePreview: _requiredString(map["lastMessagePreview"], '$path.lastMessagePreview'),
-      lastMessageType: MessageType.fromWire(map["lastMessageType"], '$path.lastMessageType'),
-      lastMessageTime: _requiredTimestamp(map["lastMessageTime"], '$path.lastMessageTime'),
+      announcementUpdatedBy: _requiredString(
+        map["announcementUpdatedBy"],
+        '$path.announcementUpdatedBy',
+      ),
+      announcementUpdatedAt: map["announcementUpdatedAt"] == null
+          ? null
+          : _requiredTimestamp(
+              map["announcementUpdatedAt"],
+              '$path.announcementUpdatedAt',
+            ),
+      nameEditableByAdminOnly: _requiredBool(
+        map["nameEditableByAdminOnly"],
+        '$path.nameEditableByAdminOnly',
+      ),
+      lastMessageId: _requiredString(
+        map["lastMessageId"],
+        '$path.lastMessageId',
+      ),
+      lastMessagePreview: _requiredString(
+        map["lastMessagePreview"],
+        '$path.lastMessagePreview',
+      ),
+      lastMessageType: MessageType.fromWire(
+        map["lastMessageType"],
+        '$path.lastMessageType',
+      ),
+      lastMessageTime: _requiredTimestamp(
+        map["lastMessageTime"],
+        '$path.lastMessageTime',
+      ),
       messageCount: _requiredInt(map["messageCount"], '$path.messageCount'),
       status: _requiredString(map["status"], '$path.status'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
@@ -381,7 +534,8 @@ final class ChatConversation {
     "title": title,
     "avatarUrl": avatarUrl,
     "groupAvatarVersion": groupAvatarVersion,
-    if (groupAvatarSourceHash != null) "groupAvatarSourceHash": groupAvatarSourceHash!,
+    if (groupAvatarSourceHash != null)
+      "groupAvatarSourceHash": groupAvatarSourceHash!,
     "creatorId": creatorId,
     "circleId": circleId,
     "circleGroupId": circleGroupId,
@@ -392,8 +546,11 @@ final class ChatConversation {
     "postingPolicy": postingPolicy.wireName,
     "entityId": entityId,
     "originType": originType,
-    if (originIntersectionSnapshot != null) "originIntersectionSnapshot": originIntersectionSnapshot!.toWire(),
-    "intersectionFacts": intersectionFacts.map((value) => value.toWire()).toList(growable: false),
+    if (originIntersectionSnapshot != null)
+      "originIntersectionSnapshot": originIntersectionSnapshot!.toWire(),
+    "intersectionFacts": intersectionFacts
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "maxSeq": maxSeq,
     "memberCount": memberCount,
     "membersRosterRevision": membersRosterRevision,
@@ -401,7 +558,8 @@ final class ChatConversation {
     "receiptEnabled": receiptEnabled,
     "announcement": announcement,
     "announcementUpdatedBy": announcementUpdatedBy,
-    if (announcementUpdatedAt != null) "announcementUpdatedAt": announcementUpdatedAt!.toUtc().toIso8601String(),
+    if (announcementUpdatedAt != null)
+      "announcementUpdatedAt": announcementUpdatedAt!.toUtc().toIso8601String(),
     "nameEditableByAdminOnly": nameEditableByAdminOnly,
     "lastMessageId": lastMessageId,
     "lastMessagePreview": lastMessagePreview,
@@ -435,16 +593,43 @@ final class ChatConversationTimestamp {
   final String lastMessagePreview;
   final int unreadCount;
 
-  factory ChatConversationTimestamp.fromWire(Map<String, Object?> map, [String path = "ChatConversationTimestamp"]) {
-    _rejectUnknownFields(map, const <String>{"conversationId", "type", "updatedAt", "settingsUpdatedAt", "lastMessageAt", "lastMessageTime", "lastMessagePreview", "unreadCount"}, path);
+  factory ChatConversationTimestamp.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatConversationTimestamp",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "conversationId",
+      "type",
+      "updatedAt",
+      "settingsUpdatedAt",
+      "lastMessageAt",
+      "lastMessageTime",
+      "lastMessagePreview",
+      "unreadCount",
+    }, path);
     return ChatConversationTimestamp(
-      conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
+      conversationId: _requiredString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       type: _requiredString(map["type"], '$path.type'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
-      settingsUpdatedAt: _requiredTimestamp(map["settingsUpdatedAt"], '$path.settingsUpdatedAt'),
-      lastMessageAt: _requiredTimestamp(map["lastMessageAt"], '$path.lastMessageAt'),
-      lastMessageTime: _requiredTimestamp(map["lastMessageTime"], '$path.lastMessageTime'),
-      lastMessagePreview: _requiredString(map["lastMessagePreview"], '$path.lastMessagePreview'),
+      settingsUpdatedAt: _requiredTimestamp(
+        map["settingsUpdatedAt"],
+        '$path.settingsUpdatedAt',
+      ),
+      lastMessageAt: _requiredTimestamp(
+        map["lastMessageAt"],
+        '$path.lastMessageAt',
+      ),
+      lastMessageTime: _requiredTimestamp(
+        map["lastMessageTime"],
+        '$path.lastMessageTime',
+      ),
+      lastMessagePreview: _requiredString(
+        map["lastMessagePreview"],
+        '$path.lastMessagePreview',
+      ),
       unreadCount: _requiredInt(map["unreadCount"], '$path.unreadCount'),
     );
   }
@@ -494,23 +679,58 @@ final class ChatInboxItemView {
   final bool pinned;
   final String? circleId;
 
-  factory ChatInboxItemView.fromWire(Map<String, Object?> map, [String path = "ChatInboxItemView"]) {
-    _rejectUnknownFields(map, const <String>{"id", "type", "title", "avatarUrl", "groupAvatarVersion", "lastMessagePreview", "lastMessageType", "lastMessageTime", "lastSeq", "unreadCount", "mentionUnreadCount", "muted", "pinned", "circleId"}, path);
+  factory ChatInboxItemView.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatInboxItemView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "type",
+      "title",
+      "avatarUrl",
+      "groupAvatarVersion",
+      "lastMessagePreview",
+      "lastMessageType",
+      "lastMessageTime",
+      "lastSeq",
+      "unreadCount",
+      "mentionUnreadCount",
+      "muted",
+      "pinned",
+      "circleId",
+    }, path);
     return ChatInboxItemView(
       id: _requiredString(map["id"], '$path.id'),
       type: _requiredString(map["type"], '$path.type'),
       title: _requiredString(map["title"], '$path.title'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      groupAvatarVersion: _requiredInt(map["groupAvatarVersion"], '$path.groupAvatarVersion'),
-      lastMessagePreview: _requiredString(map["lastMessagePreview"], '$path.lastMessagePreview'),
-      lastMessageType: MessageType.fromWire(map["lastMessageType"], '$path.lastMessageType'),
-      lastMessageTime: _requiredTimestamp(map["lastMessageTime"], '$path.lastMessageTime'),
+      groupAvatarVersion: _requiredInt(
+        map["groupAvatarVersion"],
+        '$path.groupAvatarVersion',
+      ),
+      lastMessagePreview: _requiredString(
+        map["lastMessagePreview"],
+        '$path.lastMessagePreview',
+      ),
+      lastMessageType: MessageType.fromWire(
+        map["lastMessageType"],
+        '$path.lastMessageType',
+      ),
+      lastMessageTime: _requiredTimestamp(
+        map["lastMessageTime"],
+        '$path.lastMessageTime',
+      ),
       lastSeq: _requiredInt(map["lastSeq"], '$path.lastSeq'),
       unreadCount: _requiredInt(map["unreadCount"], '$path.unreadCount'),
-      mentionUnreadCount: _requiredInt(map["mentionUnreadCount"], '$path.mentionUnreadCount'),
+      mentionUnreadCount: _requiredInt(
+        map["mentionUnreadCount"],
+        '$path.mentionUnreadCount',
+      ),
       muted: _requiredBool(map["muted"], '$path.muted'),
       pinned: _requiredBool(map["pinned"], '$path.pinned'),
-      circleId: map["circleId"] == null ? null : _requiredString(map["circleId"], '$path.circleId'),
+      circleId: map["circleId"] == null
+          ? null
+          : _requiredString(map["circleId"], '$path.circleId'),
     );
   }
 
@@ -533,19 +753,28 @@ final class ChatInboxItemView {
 }
 
 final class ChatInboxPageSlice {
-  const ChatInboxPageSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const ChatInboxPageSlice({required this.items, this.nextCursor});
 
   final List<ChatInboxItemView> items;
   final String? nextCursor;
 
-  factory ChatInboxPageSlice.fromWire(Map<String, Object?> map, [String path = "ChatInboxPageSlice"]) {
+  factory ChatInboxPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatInboxPageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return ChatInboxPageSlice(
-      items: List<ChatInboxItemView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ChatInboxItemView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<ChatInboxItemView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ChatInboxItemView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -570,12 +799,24 @@ final class ChatMessageReceipt {
   final String userId;
   final DateTime readAt;
 
-  factory ChatMessageReceipt.fromWire(Map<String, Object?> map, [String path = "ChatMessageReceipt"]) {
-    _rejectUnknownFields(map, const <String>{"id", "messageId", "conversationId", "userId", "readAt"}, path);
+  factory ChatMessageReceipt.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatMessageReceipt",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "messageId",
+      "conversationId",
+      "userId",
+      "readAt",
+    }, path);
     return ChatMessageReceipt(
       id: _requiredString(map["id"], '$path.id'),
       messageId: _requiredString(map["messageId"], '$path.messageId'),
-      conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
+      conversationId: _requiredString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       userId: _requiredString(map["userId"], '$path.userId'),
       readAt: _requiredTimestamp(map["readAt"], '$path.readAt'),
     );
@@ -591,18 +832,25 @@ final class ChatMessageReceipt {
 }
 
 final class ChatMessageSyncSlice {
-  const ChatMessageSyncSlice({
-    required this.messages,
-    required this.hasMore,
-  });
+  const ChatMessageSyncSlice({required this.messages, required this.hasMore});
 
   final List<ChatMessageView> messages;
   final bool hasMore;
 
-  factory ChatMessageSyncSlice.fromWire(Map<String, Object?> map, [String path = "ChatMessageSyncSlice"]) {
+  factory ChatMessageSyncSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatMessageSyncSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"messages", "hasMore"}, path);
     return ChatMessageSyncSlice(
-      messages: List<ChatMessageView>.unmodifiable(_requiredList(map["messages"], '$path.messages').asMap().entries.map((entry) => ChatMessageView.fromWire(_requiredObject(entry.value, '$path.messages' + '[${entry.key}]'), '$path.messages' + '[${entry.key}]'))),
+      messages: List<ChatMessageView>.unmodifiable(
+        _requiredList(map["messages"], '$path.messages').asMap().entries.map(
+          (entry) => ChatMessageView.fromWire(
+            _requiredObject(entry.value, '$path.messages' + '[${entry.key}]'),
+            '$path.messages' + '[${entry.key}]',
+          ),
+        ),
+      ),
       hasMore: _requiredBool(map["hasMore"], '$path.hasMore'),
     );
   }
@@ -662,30 +910,110 @@ final class ChatMessageView {
   final DateTime? recalledAt;
   final DateTime timestamp;
 
-  factory ChatMessageView.fromWire(Map<String, Object?> map, [String path = "ChatMessageView"]) {
-    _rejectUnknownFields(map, const <String>{"id", "conversationId", "seq", "clientMsgId", "senderId", "senderName", "senderAvatar", "type", "content", "mediaAssetId", "mediaDeliveryUrl", "mediaType", "mediaContentType", "mediaFileSizeBytes", "audioDurationMs", "audioWaveform", "card", "replyToMessageId", "mentions", "status", "recalledAt", "timestamp"}, path);
+  factory ChatMessageView.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatMessageView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "conversationId",
+      "seq",
+      "clientMsgId",
+      "senderId",
+      "senderName",
+      "senderAvatar",
+      "type",
+      "content",
+      "mediaAssetId",
+      "mediaDeliveryUrl",
+      "mediaType",
+      "mediaContentType",
+      "mediaFileSizeBytes",
+      "audioDurationMs",
+      "audioWaveform",
+      "card",
+      "replyToMessageId",
+      "mentions",
+      "status",
+      "recalledAt",
+      "timestamp",
+    }, path);
     return ChatMessageView(
       id: _requiredString(map["id"], '$path.id'),
-      conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
+      conversationId: _requiredString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       seq: _requiredInt(map["seq"], '$path.seq'),
       clientMsgId: _requiredString(map["clientMsgId"], '$path.clientMsgId'),
       senderId: _requiredString(map["senderId"], '$path.senderId'),
-      senderName: map["senderName"] == null ? null : _requiredString(map["senderName"], '$path.senderName'),
-      senderAvatar: map["senderAvatar"] == null ? null : _requiredString(map["senderAvatar"], '$path.senderAvatar'),
+      senderName: map["senderName"] == null
+          ? null
+          : _requiredString(map["senderName"], '$path.senderName'),
+      senderAvatar: map["senderAvatar"] == null
+          ? null
+          : _requiredString(map["senderAvatar"], '$path.senderAvatar'),
       type: MessageType.fromWire(map["type"], '$path.type'),
-      content: map["content"] == null ? null : _requiredString(map["content"], '$path.content'),
-      mediaAssetId: map["mediaAssetId"] == null ? null : _requiredString(map["mediaAssetId"], '$path.mediaAssetId'),
-      mediaDeliveryUrl: map["mediaDeliveryUrl"] == null ? null : _requiredString(map["mediaDeliveryUrl"], '$path.mediaDeliveryUrl'),
-      mediaType: map["mediaType"] == null ? null : _requiredString(map["mediaType"], '$path.mediaType'),
-      mediaContentType: map["mediaContentType"] == null ? null : _requiredString(map["mediaContentType"], '$path.mediaContentType'),
-      mediaFileSizeBytes: map["mediaFileSizeBytes"] == null ? null : _requiredInt(map["mediaFileSizeBytes"], '$path.mediaFileSizeBytes'),
-      audioDurationMs: map["audioDurationMs"] == null ? null : _requiredInt(map["audioDurationMs"], '$path.audioDurationMs'),
-      audioWaveform: map["audioWaveform"] == null ? null : List<double>.unmodifiable(_requiredList(map["audioWaveform"], '$path.audioWaveform').asMap().entries.map((entry) => _requiredDouble(entry.value, '$path.audioWaveform' + '[${entry.key}]'))),
-      card: map["card"] == null ? null : MessageCard.fromWire(_requiredObject(map["card"], '$path.card'), '$path.card'),
-      replyToMessageId: map["replyToMessageId"] == null ? null : _requiredString(map["replyToMessageId"], '$path.replyToMessageId'),
-      mentions: map["mentions"] == null ? null : List<String>.unmodifiable(_requiredList(map["mentions"], '$path.mentions').asMap().entries.map((entry) => _requiredString(entry.value, '$path.mentions' + '[${entry.key}]'))),
+      content: map["content"] == null
+          ? null
+          : _requiredString(map["content"], '$path.content'),
+      mediaAssetId: map["mediaAssetId"] == null
+          ? null
+          : _requiredString(map["mediaAssetId"], '$path.mediaAssetId'),
+      mediaDeliveryUrl: map["mediaDeliveryUrl"] == null
+          ? null
+          : _requiredString(map["mediaDeliveryUrl"], '$path.mediaDeliveryUrl'),
+      mediaType: map["mediaType"] == null
+          ? null
+          : _requiredString(map["mediaType"], '$path.mediaType'),
+      mediaContentType: map["mediaContentType"] == null
+          ? null
+          : _requiredString(map["mediaContentType"], '$path.mediaContentType'),
+      mediaFileSizeBytes: map["mediaFileSizeBytes"] == null
+          ? null
+          : _requiredInt(map["mediaFileSizeBytes"], '$path.mediaFileSizeBytes'),
+      audioDurationMs: map["audioDurationMs"] == null
+          ? null
+          : _requiredInt(map["audioDurationMs"], '$path.audioDurationMs'),
+      audioWaveform: map["audioWaveform"] == null
+          ? null
+          : List<double>.unmodifiable(
+              _requiredList(
+                map["audioWaveform"],
+                '$path.audioWaveform',
+              ).asMap().entries.map(
+                (entry) => _requiredDouble(
+                  entry.value,
+                  '$path.audioWaveform' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      card: map["card"] == null
+          ? null
+          : MessageCard.fromWire(
+              _requiredObject(map["card"], '$path.card'),
+              '$path.card',
+            ),
+      replyToMessageId: map["replyToMessageId"] == null
+          ? null
+          : _requiredString(map["replyToMessageId"], '$path.replyToMessageId'),
+      mentions: map["mentions"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["mentions"],
+                '$path.mentions',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.mentions' + '[${entry.key}]',
+                ),
+              ),
+            ),
       status: MessageStatus.fromWire(map["status"], '$path.status'),
-      recalledAt: map["recalledAt"] == null ? null : _requiredTimestamp(map["recalledAt"], '$path.recalledAt'),
+      recalledAt: map["recalledAt"] == null
+          ? null
+          : _requiredTimestamp(map["recalledAt"], '$path.recalledAt'),
       timestamp: _requiredTimestamp(map["timestamp"], '$path.timestamp'),
     );
   }
@@ -706,10 +1034,14 @@ final class ChatMessageView {
     if (mediaContentType != null) "mediaContentType": mediaContentType!,
     if (mediaFileSizeBytes != null) "mediaFileSizeBytes": mediaFileSizeBytes!,
     if (audioDurationMs != null) "audioDurationMs": audioDurationMs!,
-    if (audioWaveform != null) "audioWaveform": audioWaveform!.map((value) => value).toList(growable: false),
+    if (audioWaveform != null)
+      "audioWaveform": audioWaveform!
+          .map((value) => value)
+          .toList(growable: false),
     if (card != null) "card": card!.toWire(),
     if (replyToMessageId != null) "replyToMessageId": replyToMessageId!,
-    if (mentions != null) "mentions": mentions!.map((value) => value).toList(growable: false),
+    if (mentions != null)
+      "mentions": mentions!.map((value) => value).toList(growable: false),
     "status": status.wireName,
     if (recalledAt != null) "recalledAt": recalledAt!.toUtc().toIso8601String(),
     "timestamp": timestamp.toUtc().toIso8601String(),
@@ -727,8 +1059,15 @@ final class ChatSendMessageResult {
   final int seq;
   final DateTime timestamp;
 
-  factory ChatSendMessageResult.fromWire(Map<String, Object?> map, [String path = "ChatSendMessageResult"]) {
-    _rejectUnknownFields(map, const <String>{"messageId", "seq", "timestamp"}, path);
+  factory ChatSendMessageResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "ChatSendMessageResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "messageId",
+      "seq",
+      "timestamp",
+    }, path);
     return ChatSendMessageResult(
       messageId: _requiredString(map["messageId"], '$path.messageId'),
       seq: _requiredInt(map["seq"], '$path.seq'),
@@ -744,16 +1083,24 @@ final class ChatSendMessageResult {
 }
 
 final class ContactHomePageSlice {
-  const ContactHomePageSlice({
-    required this.items,
-  });
+  const ContactHomePageSlice({required this.items});
 
   final List<ContactHomeRow> items;
 
-  factory ContactHomePageSlice.fromWire(Map<String, Object?> map, [String path = "ContactHomePageSlice"]) {
+  factory ContactHomePageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContactHomePageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items"}, path);
     return ContactHomePageSlice(
-      items: List<ContactHomeRow>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ContactHomeRow.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<ContactHomeRow>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ContactHomeRow.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -809,30 +1156,96 @@ final class ContactHomeRow {
   final String sortKey;
   final bool? isStarred;
 
-  factory ContactHomeRow.fromWire(Map<String, Object?> map, [String path = "ContactHomeRow"]) {
-    _rejectUnknownFields(map, const <String>{"id", "kind", "objectId", "userId", "userHandle", "conversationId", "circleId", "circleGroupId", "entityId", "title", "subtitle", "avatarUrl", "relationState", "intersectionFacts", "sourceEntityTitle", "sourceCircleTitle", "memberCount", "contactCount", "lastActiveAt", "sortKey", "isStarred"}, path);
+  factory ContactHomeRow.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContactHomeRow",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "kind",
+      "objectId",
+      "userId",
+      "userHandle",
+      "conversationId",
+      "circleId",
+      "circleGroupId",
+      "entityId",
+      "title",
+      "subtitle",
+      "avatarUrl",
+      "relationState",
+      "intersectionFacts",
+      "sourceEntityTitle",
+      "sourceCircleTitle",
+      "memberCount",
+      "contactCount",
+      "lastActiveAt",
+      "sortKey",
+      "isStarred",
+    }, path);
     return ContactHomeRow(
       id: _requiredString(map["id"], '$path.id'),
       kind: _requiredString(map["kind"], '$path.kind'),
       objectId: _requiredString(map["objectId"], '$path.objectId'),
-      userId: map["userId"] == null ? null : _requiredString(map["userId"], '$path.userId'),
+      userId: map["userId"] == null
+          ? null
+          : _requiredString(map["userId"], '$path.userId'),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
-      conversationId: map["conversationId"] == null ? null : _requiredString(map["conversationId"], '$path.conversationId'),
-      circleId: map["circleId"] == null ? null : _requiredString(map["circleId"], '$path.circleId'),
-      circleGroupId: map["circleGroupId"] == null ? null : _requiredString(map["circleGroupId"], '$path.circleGroupId'),
-      entityId: map["entityId"] == null ? null : _requiredString(map["entityId"], '$path.entityId'),
+      conversationId: map["conversationId"] == null
+          ? null
+          : _requiredString(map["conversationId"], '$path.conversationId'),
+      circleId: map["circleId"] == null
+          ? null
+          : _requiredString(map["circleId"], '$path.circleId'),
+      circleGroupId: map["circleGroupId"] == null
+          ? null
+          : _requiredString(map["circleGroupId"], '$path.circleGroupId'),
+      entityId: map["entityId"] == null
+          ? null
+          : _requiredString(map["entityId"], '$path.entityId'),
       title: _requiredString(map["title"], '$path.title'),
       subtitle: _requiredString(map["subtitle"], '$path.subtitle'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      relationState: map["relationState"] == null ? null : _requiredString(map["relationState"], '$path.relationState'),
-      intersectionFacts: List<ContactIntersectionFact>.unmodifiable(_requiredList(map["intersectionFacts"], '$path.intersectionFacts').asMap().entries.map((entry) => ContactIntersectionFact.fromWire(_requiredObject(entry.value, '$path.intersectionFacts' + '[${entry.key}]'), '$path.intersectionFacts' + '[${entry.key}]'))),
-      sourceEntityTitle: map["sourceEntityTitle"] == null ? null : _requiredString(map["sourceEntityTitle"], '$path.sourceEntityTitle'),
-      sourceCircleTitle: map["sourceCircleTitle"] == null ? null : _requiredString(map["sourceCircleTitle"], '$path.sourceCircleTitle'),
-      memberCount: map["memberCount"] == null ? null : _requiredInt(map["memberCount"], '$path.memberCount'),
+      relationState: map["relationState"] == null
+          ? null
+          : _requiredString(map["relationState"], '$path.relationState'),
+      intersectionFacts: List<ContactIntersectionFact>.unmodifiable(
+        _requiredList(
+          map["intersectionFacts"],
+          '$path.intersectionFacts',
+        ).asMap().entries.map(
+          (entry) => ContactIntersectionFact.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.intersectionFacts' + '[${entry.key}]',
+            ),
+            '$path.intersectionFacts' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      sourceEntityTitle: map["sourceEntityTitle"] == null
+          ? null
+          : _requiredString(
+              map["sourceEntityTitle"],
+              '$path.sourceEntityTitle',
+            ),
+      sourceCircleTitle: map["sourceCircleTitle"] == null
+          ? null
+          : _requiredString(
+              map["sourceCircleTitle"],
+              '$path.sourceCircleTitle',
+            ),
+      memberCount: map["memberCount"] == null
+          ? null
+          : _requiredInt(map["memberCount"], '$path.memberCount'),
       contactCount: _requiredInt(map["contactCount"], '$path.contactCount'),
-      lastActiveAt: map["lastActiveAt"] == null ? null : _requiredTimestamp(map["lastActiveAt"], '$path.lastActiveAt'),
+      lastActiveAt: map["lastActiveAt"] == null
+          ? null
+          : _requiredTimestamp(map["lastActiveAt"], '$path.lastActiveAt'),
       sortKey: _requiredString(map["sortKey"], '$path.sortKey'),
-      isStarred: map["isStarred"] == null ? null : _requiredBool(map["isStarred"], '$path.isStarred'),
+      isStarred: map["isStarred"] == null
+          ? null
+          : _requiredBool(map["isStarred"], '$path.isStarred'),
     );
   }
 
@@ -850,12 +1263,15 @@ final class ContactHomeRow {
     "subtitle": subtitle,
     "avatarUrl": avatarUrl,
     if (relationState != null) "relationState": relationState!,
-    "intersectionFacts": intersectionFacts.map((value) => value.toWire()).toList(growable: false),
+    "intersectionFacts": intersectionFacts
+        .map((value) => value.toWire())
+        .toList(growable: false),
     if (sourceEntityTitle != null) "sourceEntityTitle": sourceEntityTitle!,
     if (sourceCircleTitle != null) "sourceCircleTitle": sourceCircleTitle!,
     if (memberCount != null) "memberCount": memberCount!,
     "contactCount": contactCount,
-    if (lastActiveAt != null) "lastActiveAt": lastActiveAt!.toUtc().toIso8601String(),
+    if (lastActiveAt != null)
+      "lastActiveAt": lastActiveAt!.toUtc().toIso8601String(),
     "sortKey": sortKey,
     if (isStarred != null) "isStarred": isStarred!,
   };
@@ -876,14 +1292,32 @@ final class ContactIntersectionFact {
   final String intersectionClass;
   final String primaryText;
 
-  factory ContactIntersectionFact.fromWire(Map<String, Object?> map, [String path = "ContactIntersectionFact"]) {
-    _rejectUnknownFields(map, const <String>{"intersectionId", "kind", "dimension", "intersectionClass", "primaryText"}, path);
+  factory ContactIntersectionFact.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContactIntersectionFact",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "intersectionId",
+      "kind",
+      "dimension",
+      "intersectionClass",
+      "primaryText",
+    }, path);
     return ContactIntersectionFact(
-      intersectionId: _requiredNonBlankString(map["intersectionId"], '$path.intersectionId'),
+      intersectionId: _requiredNonBlankString(
+        map["intersectionId"],
+        '$path.intersectionId',
+      ),
       kind: _requiredNonBlankString(map["kind"], '$path.kind'),
       dimension: _requiredNonBlankString(map["dimension"], '$path.dimension'),
-      intersectionClass: _requiredNonBlankString(map["intersectionClass"], '$path.intersectionClass'),
-      primaryText: _requiredNonBlankString(map["primaryText"], '$path.primaryText'),
+      intersectionClass: _requiredNonBlankString(
+        map["intersectionClass"],
+        '$path.intersectionClass',
+      ),
+      primaryText: _requiredNonBlankString(
+        map["primaryText"],
+        '$path.primaryText',
+      ),
     );
   }
 
@@ -897,19 +1331,28 @@ final class ContactIntersectionFact {
 }
 
 final class ContactPageSlice {
-  const ContactPageSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const ContactPageSlice({required this.items, this.nextCursor});
 
   final List<ChatContactListRow> items;
   final String? nextCursor;
 
-  factory ContactPageSlice.fromWire(Map<String, Object?> map, [String path = "ContactPageSlice"]) {
+  factory ContactPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContactPageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return ContactPageSlice(
-      items: List<ChatContactListRow>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ChatContactListRow.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<ChatContactListRow>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ChatContactListRow.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -920,19 +1363,28 @@ final class ContactPageSlice {
 }
 
 final class ConversationAssetPage {
-  const ConversationAssetPage({
-    required this.items,
-    this.nextBeforeSeq,
-  });
+  const ConversationAssetPage({required this.items, this.nextBeforeSeq});
 
   final List<ConversationAssetView> items;
   final int? nextBeforeSeq;
 
-  factory ConversationAssetPage.fromWire(Map<String, Object?> map, [String path = "ConversationAssetPage"]) {
+  factory ConversationAssetPage.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConversationAssetPage",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextBeforeSeq"}, path);
     return ConversationAssetPage(
-      items: List<ConversationAssetView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ConversationAssetView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextBeforeSeq: map["nextBeforeSeq"] == null ? null : _requiredInt(map["nextBeforeSeq"], '$path.nextBeforeSeq'),
+      items: List<ConversationAssetView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ConversationAssetView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextBeforeSeq: map["nextBeforeSeq"] == null
+          ? null
+          : _requiredInt(map["nextBeforeSeq"], '$path.nextBeforeSeq'),
     );
   }
 
@@ -969,19 +1421,50 @@ final class ConversationAssetView {
   final int? mediaFileSizeBytes;
   final DateTime createdAt;
 
-  factory ConversationAssetView.fromWire(Map<String, Object?> map, [String path = "ConversationAssetView"]) {
-    _rejectUnknownFields(map, const <String>{"messageId", "seq", "mediaAssetId", "messageType", "senderId", "senderName", "fileName", "mediaDeliveryUrl", "mediaContentType", "mediaFileSizeBytes", "createdAt"}, path);
+  factory ConversationAssetView.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConversationAssetView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "messageId",
+      "seq",
+      "mediaAssetId",
+      "messageType",
+      "senderId",
+      "senderName",
+      "fileName",
+      "mediaDeliveryUrl",
+      "mediaContentType",
+      "mediaFileSizeBytes",
+      "createdAt",
+    }, path);
     return ConversationAssetView(
       messageId: _requiredNonBlankString(map["messageId"], '$path.messageId'),
       seq: _requiredInt(map["seq"], '$path.seq'),
-      mediaAssetId: _requiredNonBlankString(map["mediaAssetId"], '$path.mediaAssetId'),
-      messageType: _requiredNonBlankString(map["messageType"], '$path.messageType'),
+      mediaAssetId: _requiredNonBlankString(
+        map["mediaAssetId"],
+        '$path.mediaAssetId',
+      ),
+      messageType: _requiredNonBlankString(
+        map["messageType"],
+        '$path.messageType',
+      ),
       senderId: _requiredNonBlankString(map["senderId"], '$path.senderId'),
-      senderName: map["senderName"] == null ? null : _requiredString(map["senderName"], '$path.senderName'),
-      fileName: map["fileName"] == null ? null : _requiredString(map["fileName"], '$path.fileName'),
-      mediaDeliveryUrl: map["mediaDeliveryUrl"] == null ? null : _requiredString(map["mediaDeliveryUrl"], '$path.mediaDeliveryUrl'),
-      mediaContentType: map["mediaContentType"] == null ? null : _requiredString(map["mediaContentType"], '$path.mediaContentType'),
-      mediaFileSizeBytes: map["mediaFileSizeBytes"] == null ? null : _requiredInt(map["mediaFileSizeBytes"], '$path.mediaFileSizeBytes'),
+      senderName: map["senderName"] == null
+          ? null
+          : _requiredString(map["senderName"], '$path.senderName'),
+      fileName: map["fileName"] == null
+          ? null
+          : _requiredString(map["fileName"], '$path.fileName'),
+      mediaDeliveryUrl: map["mediaDeliveryUrl"] == null
+          ? null
+          : _requiredString(map["mediaDeliveryUrl"], '$path.mediaDeliveryUrl'),
+      mediaContentType: map["mediaContentType"] == null
+          ? null
+          : _requiredString(map["mediaContentType"], '$path.mediaContentType'),
+      mediaFileSizeBytes: map["mediaFileSizeBytes"] == null
+          ? null
+          : _requiredInt(map["mediaFileSizeBytes"], '$path.mediaFileSizeBytes'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
     );
   }
@@ -1002,16 +1485,24 @@ final class ConversationAssetView {
 }
 
 final class ConversationBatchSlice {
-  const ConversationBatchSlice({
-    required this.items,
-  });
+  const ConversationBatchSlice({required this.items});
 
   final List<ChatConversation> items;
 
-  factory ConversationBatchSlice.fromWire(Map<String, Object?> map, [String path = "ConversationBatchSlice"]) {
+  factory ConversationBatchSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConversationBatchSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items"}, path);
     return ConversationBatchSlice(
-      items: List<ChatConversation>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ChatConversation.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<ChatConversation>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ChatConversation.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -1021,22 +1512,21 @@ final class ConversationBatchSlice {
 }
 
 final class ConversationCommandAck {
-  const ConversationCommandAck({
-    required this.status,
-  });
+  const ConversationCommandAck({required this.status});
 
   final String status;
 
-  factory ConversationCommandAck.fromWire(Map<String, Object?> map, [String path = "ConversationCommandAck"]) {
+  factory ConversationCommandAck.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConversationCommandAck",
+  ]) {
     _rejectUnknownFields(map, const <String>{"status"}, path);
     return ConversationCommandAck(
       status: _requiredString(map["status"], '$path.status'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "status": status,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"status": status};
 }
 
 final class ConversationMemberListRow {
@@ -1060,8 +1550,20 @@ final class ConversationMemberListRow {
   final DateTime? joinedAt;
   final bool isCurrentUser;
 
-  factory ConversationMemberListRow.fromWire(Map<String, Object?> map, [String path = "ConversationMemberListRow"]) {
-    _rejectUnknownFields(map, const <String>{"userId", "userHandle", "displayName", "avatarUrl", "role", "memberType", "joinedAt", "isCurrentUser"}, path);
+  factory ConversationMemberListRow.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConversationMemberListRow",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "userId",
+      "userHandle",
+      "displayName",
+      "avatarUrl",
+      "role",
+      "memberType",
+      "joinedAt",
+      "isCurrentUser",
+    }, path);
     return ConversationMemberListRow(
       userId: _requiredString(map["userId"], '$path.userId'),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
@@ -1069,7 +1571,9 @@ final class ConversationMemberListRow {
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
       role: _requiredString(map["role"], '$path.role'),
       memberType: _requiredString(map["memberType"], '$path.memberType'),
-      joinedAt: map["joinedAt"] == null ? null : _requiredTimestamp(map["joinedAt"], '$path.joinedAt'),
+      joinedAt: map["joinedAt"] == null
+          ? null
+          : _requiredTimestamp(map["joinedAt"], '$path.joinedAt'),
       isCurrentUser: _requiredBool(map["isCurrentUser"], '$path.isCurrentUser'),
     );
   }
@@ -1087,19 +1591,28 @@ final class ConversationMemberListRow {
 }
 
 final class ConversationMemberPageSlice {
-  const ConversationMemberPageSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const ConversationMemberPageSlice({required this.items, this.nextCursor});
 
   final List<ConversationMemberListRow> items;
   final String? nextCursor;
 
-  factory ConversationMemberPageSlice.fromWire(Map<String, Object?> map, [String path = "ConversationMemberPageSlice"]) {
+  factory ConversationMemberPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConversationMemberPageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return ConversationMemberPageSlice(
-      items: List<ConversationMemberListRow>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ConversationMemberListRow.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<ConversationMemberListRow>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ConversationMemberListRow.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -1110,38 +1623,46 @@ final class ConversationMemberPageSlice {
 }
 
 final class ConversationMembershipCommandAck {
-  const ConversationMembershipCommandAck({
-    required this.status,
-  });
+  const ConversationMembershipCommandAck({required this.status});
 
   final String status;
 
-  factory ConversationMembershipCommandAck.fromWire(Map<String, Object?> map, [String path = "ConversationMembershipCommandAck"]) {
+  factory ConversationMembershipCommandAck.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConversationMembershipCommandAck",
+  ]) {
     _rejectUnknownFields(map, const <String>{"status"}, path);
     return ConversationMembershipCommandAck(
       status: _requiredString(map["status"], '$path.status'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "status": status,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"status": status};
 }
 
 final class ConversationPageSlice {
-  const ConversationPageSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const ConversationPageSlice({required this.items, this.nextCursor});
 
   final List<ChatConversation> items;
   final String? nextCursor;
 
-  factory ConversationPageSlice.fromWire(Map<String, Object?> map, [String path = "ConversationPageSlice"]) {
+  factory ConversationPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConversationPageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return ConversationPageSlice(
-      items: List<ChatConversation>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ChatConversation.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<ChatConversation>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ChatConversation.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -1152,16 +1673,24 @@ final class ConversationPageSlice {
 }
 
 final class ConversationTimestampIndexSlice {
-  const ConversationTimestampIndexSlice({
-    required this.items,
-  });
+  const ConversationTimestampIndexSlice({required this.items});
 
   final List<ChatConversationTimestamp> items;
 
-  factory ConversationTimestampIndexSlice.fromWire(Map<String, Object?> map, [String path = "ConversationTimestampIndexSlice"]) {
+  factory ConversationTimestampIndexSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConversationTimestampIndexSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items"}, path);
     return ConversationTimestampIndexSlice(
-      items: List<ChatConversationTimestamp>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ChatConversationTimestamp.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<ChatConversationTimestamp>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ChatConversationTimestamp.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -1171,22 +1700,21 @@ final class ConversationTimestampIndexSlice {
 }
 
 final class ConversationUserStateCommandAck {
-  const ConversationUserStateCommandAck({
-    required this.status,
-  });
+  const ConversationUserStateCommandAck({required this.status});
 
   final String status;
 
-  factory ConversationUserStateCommandAck.fromWire(Map<String, Object?> map, [String path = "ConversationUserStateCommandAck"]) {
+  factory ConversationUserStateCommandAck.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConversationUserStateCommandAck",
+  ]) {
     _rejectUnknownFields(map, const <String>{"status"}, path);
     return ConversationUserStateCommandAck(
       status: _requiredString(map["status"], '$path.status'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "status": status,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"status": status};
 }
 
 final class GatheringAssetIndexItem {
@@ -1204,13 +1732,28 @@ final class GatheringAssetIndexItem {
   final String messageType;
   final DateTime createdAt;
 
-  factory GatheringAssetIndexItem.fromWire(Map<String, Object?> map, [String path = "GatheringAssetIndexItem"]) {
-    _rejectUnknownFields(map, const <String>{"messageId", "seq", "mediaAssetId", "messageType", "createdAt"}, path);
+  factory GatheringAssetIndexItem.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringAssetIndexItem",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "messageId",
+      "seq",
+      "mediaAssetId",
+      "messageType",
+      "createdAt",
+    }, path);
     return GatheringAssetIndexItem(
       messageId: _requiredNonBlankString(map["messageId"], '$path.messageId'),
       seq: _requiredInt(map["seq"], '$path.seq'),
-      mediaAssetId: _requiredNonBlankString(map["mediaAssetId"], '$path.mediaAssetId'),
-      messageType: _requiredNonBlankString(map["messageType"], '$path.messageType'),
+      mediaAssetId: _requiredNonBlankString(
+        map["mediaAssetId"],
+        '$path.mediaAssetId',
+      ),
+      messageType: _requiredNonBlankString(
+        map["messageType"],
+        '$path.messageType',
+      ),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
     );
   }
@@ -1241,13 +1784,35 @@ final class GatheringChatAccessSummary {
   final String viewerRole;
   final bool canPost;
 
-  factory GatheringChatAccessSummary.fromWire(Map<String, Object?> map, [String path = "GatheringChatAccessSummary"]) {
-    _rejectUnknownFields(map, const <String>{"gatheringId", "conversationId", "accessMode", "postingPolicy", "viewerRole", "canPost"}, path);
+  factory GatheringChatAccessSummary.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringChatAccessSummary",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "gatheringId",
+      "conversationId",
+      "accessMode",
+      "postingPolicy",
+      "viewerRole",
+      "canPost",
+    }, path);
     return GatheringChatAccessSummary(
-      gatheringId: _requiredNonBlankString(map["gatheringId"], '$path.gatheringId'),
-      conversationId: _requiredNonBlankString(map["conversationId"], '$path.conversationId'),
-      accessMode: ConversationAccessMode.fromWire(map["accessMode"], '$path.accessMode'),
-      postingPolicy: ConversationPostingPolicy.fromWire(map["postingPolicy"], '$path.postingPolicy'),
+      gatheringId: _requiredNonBlankString(
+        map["gatheringId"],
+        '$path.gatheringId',
+      ),
+      conversationId: _requiredNonBlankString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
+      accessMode: ConversationAccessMode.fromWire(
+        map["accessMode"],
+        '$path.accessMode',
+      ),
+      postingPolicy: ConversationPostingPolicy.fromWire(
+        map["postingPolicy"],
+        '$path.postingPolicy',
+      ),
       viewerRole: _requiredString(map["viewerRole"], '$path.viewerRole'),
       canPost: _requiredBool(map["canPost"], '$path.canPost'),
     );
@@ -1274,18 +1839,44 @@ final class GatheringChatBoardSlice {
   final GatheringPinnedAnnouncement? pinnedAnnouncement;
   final List<GatheringAssetIndexItem> assets;
 
-  factory GatheringChatBoardSlice.fromWire(Map<String, Object?> map, [String path = "GatheringChatBoardSlice"]) {
-    _rejectUnknownFields(map, const <String>{"access", "pinnedAnnouncement", "assets"}, path);
+  factory GatheringChatBoardSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringChatBoardSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "access",
+      "pinnedAnnouncement",
+      "assets",
+    }, path);
     return GatheringChatBoardSlice(
-      access: GatheringChatAccessSummary.fromWire(_requiredObject(map["access"], '$path.access'), '$path.access'),
-      pinnedAnnouncement: map["pinnedAnnouncement"] == null ? null : GatheringPinnedAnnouncement.fromWire(_requiredObject(map["pinnedAnnouncement"], '$path.pinnedAnnouncement'), '$path.pinnedAnnouncement'),
-      assets: List<GatheringAssetIndexItem>.unmodifiable(_requiredList(map["assets"], '$path.assets').asMap().entries.map((entry) => GatheringAssetIndexItem.fromWire(_requiredObject(entry.value, '$path.assets' + '[${entry.key}]'), '$path.assets' + '[${entry.key}]'))),
+      access: GatheringChatAccessSummary.fromWire(
+        _requiredObject(map["access"], '$path.access'),
+        '$path.access',
+      ),
+      pinnedAnnouncement: map["pinnedAnnouncement"] == null
+          ? null
+          : GatheringPinnedAnnouncement.fromWire(
+              _requiredObject(
+                map["pinnedAnnouncement"],
+                '$path.pinnedAnnouncement',
+              ),
+              '$path.pinnedAnnouncement',
+            ),
+      assets: List<GatheringAssetIndexItem>.unmodifiable(
+        _requiredList(map["assets"], '$path.assets').asMap().entries.map(
+          (entry) => GatheringAssetIndexItem.fromWire(
+            _requiredObject(entry.value, '$path.assets' + '[${entry.key}]'),
+            '$path.assets' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "access": access.toWire(),
-    if (pinnedAnnouncement != null) "pinnedAnnouncement": pinnedAnnouncement!.toWire(),
+    if (pinnedAnnouncement != null)
+      "pinnedAnnouncement": pinnedAnnouncement!.toWire(),
     "assets": assets.map((value) => value.toWire()).toList(growable: false),
   };
 }
@@ -1301,8 +1892,15 @@ final class GatheringPinnedAnnouncement {
   final String updatedBy;
   final DateTime updatedAt;
 
-  factory GatheringPinnedAnnouncement.fromWire(Map<String, Object?> map, [String path = "GatheringPinnedAnnouncement"]) {
-    _rejectUnknownFields(map, const <String>{"content", "updatedBy", "updatedAt"}, path);
+  factory GatheringPinnedAnnouncement.fromWire(
+    Map<String, Object?> map, [
+    String path = "GatheringPinnedAnnouncement",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "content",
+      "updatedBy",
+      "updatedAt",
+    }, path);
     return GatheringPinnedAnnouncement(
       content: _requiredNonBlankString(map["content"], '$path.content'),
       updatedBy: _requiredNonBlankString(map["updatedBy"], '$path.updatedBy'),
@@ -1318,16 +1916,24 @@ final class GatheringPinnedAnnouncement {
 }
 
 final class GroupCandidatePageSlice {
-  const GroupCandidatePageSlice({
-    required this.items,
-  });
+  const GroupCandidatePageSlice({required this.items});
 
   final List<GroupCandidateRow> items;
 
-  factory GroupCandidatePageSlice.fromWire(Map<String, Object?> map, [String path = "GroupCandidatePageSlice"]) {
+  factory GroupCandidatePageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "GroupCandidatePageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items"}, path);
     return GroupCandidatePageSlice(
-      items: List<GroupCandidateRow>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => GroupCandidateRow.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<GroupCandidateRow>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => GroupCandidateRow.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -1361,8 +1967,22 @@ final class GroupCandidateRow {
   final ChatContactSource source;
   final bool isStarred;
 
-  factory GroupCandidateRow.fromWire(Map<String, Object?> map, [String path = "GroupCandidateRow"]) {
-    _rejectUnknownFields(map, const <String>{"userId", "userHandle", "displayName", "avatarUrl", "bio", "metFrom", "lastInteraction", "relationState", "source", "isStarred"}, path);
+  factory GroupCandidateRow.fromWire(
+    Map<String, Object?> map, [
+    String path = "GroupCandidateRow",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "userId",
+      "userHandle",
+      "displayName",
+      "avatarUrl",
+      "bio",
+      "metFrom",
+      "lastInteraction",
+      "relationState",
+      "source",
+      "isStarred",
+    }, path);
     return GroupCandidateRow(
       userId: _requiredString(map["userId"], '$path.userId'),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
@@ -1370,8 +1990,14 @@ final class GroupCandidateRow {
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
       bio: _requiredString(map["bio"], '$path.bio'),
       metFrom: _requiredString(map["metFrom"], '$path.metFrom'),
-      lastInteraction: _requiredString(map["lastInteraction"], '$path.lastInteraction'),
-      relationState: RelationshipState.fromWire(map["relationState"], '$path.relationState'),
+      lastInteraction: _requiredString(
+        map["lastInteraction"],
+        '$path.lastInteraction',
+      ),
+      relationState: RelationshipState.fromWire(
+        map["relationState"],
+        '$path.relationState',
+      ),
       source: ChatContactSource.fromWire(map["source"], '$path.source'),
       isStarred: _requiredBool(map["isStarred"], '$path.isStarred'),
     );
@@ -1432,26 +2058,82 @@ final class GroupHome {
   final bool canManageMembers;
   final bool canDissolve;
 
-  factory GroupHome.fromWire(Map<String, Object?> map, [String path = "GroupHome"]) {
-    _rejectUnknownFields(map, const <String>{"conversationId", "title", "avatarUrl", "groupAvatarVersion", "circleId", "circleGroupId", "gatheringId", "entityId", "sourceEntityTitle", "sourceCircleTitle", "memberCount", "announcement", "capabilities", "originType", "accessMode", "postingPolicy", "canManageMembers", "canDissolve"}, path);
+  factory GroupHome.fromWire(
+    Map<String, Object?> map, [
+    String path = "GroupHome",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "conversationId",
+      "title",
+      "avatarUrl",
+      "groupAvatarVersion",
+      "circleId",
+      "circleGroupId",
+      "gatheringId",
+      "entityId",
+      "sourceEntityTitle",
+      "sourceCircleTitle",
+      "memberCount",
+      "announcement",
+      "capabilities",
+      "originType",
+      "accessMode",
+      "postingPolicy",
+      "canManageMembers",
+      "canDissolve",
+    }, path);
     return GroupHome(
-      conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
+      conversationId: _requiredString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       title: _requiredString(map["title"], '$path.title'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      groupAvatarVersion: _requiredInt(map["groupAvatarVersion"], '$path.groupAvatarVersion'),
+      groupAvatarVersion: _requiredInt(
+        map["groupAvatarVersion"],
+        '$path.groupAvatarVersion',
+      ),
       circleId: _requiredString(map["circleId"], '$path.circleId'),
-      circleGroupId: _requiredString(map["circleGroupId"], '$path.circleGroupId'),
+      circleGroupId: _requiredString(
+        map["circleGroupId"],
+        '$path.circleGroupId',
+      ),
       gatheringId: _requiredString(map["gatheringId"], '$path.gatheringId'),
       entityId: _requiredString(map["entityId"], '$path.entityId'),
-      sourceEntityTitle: _requiredString(map["sourceEntityTitle"], '$path.sourceEntityTitle'),
-      sourceCircleTitle: _requiredString(map["sourceCircleTitle"], '$path.sourceCircleTitle'),
+      sourceEntityTitle: _requiredString(
+        map["sourceEntityTitle"],
+        '$path.sourceEntityTitle',
+      ),
+      sourceCircleTitle: _requiredString(
+        map["sourceCircleTitle"],
+        '$path.sourceCircleTitle',
+      ),
       memberCount: _requiredInt(map["memberCount"], '$path.memberCount'),
       announcement: _requiredString(map["announcement"], '$path.announcement'),
-      capabilities: List<String>.unmodifiable(_requiredList(map["capabilities"], '$path.capabilities').asMap().entries.map((entry) => _requiredString(entry.value, '$path.capabilities' + '[${entry.key}]'))),
+      capabilities: List<String>.unmodifiable(
+        _requiredList(
+          map["capabilities"],
+          '$path.capabilities',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.capabilities' + '[${entry.key}]',
+          ),
+        ),
+      ),
       originType: _requiredString(map["originType"], '$path.originType'),
-      accessMode: ConversationAccessMode.fromWire(map["accessMode"], '$path.accessMode'),
-      postingPolicy: ConversationPostingPolicy.fromWire(map["postingPolicy"], '$path.postingPolicy'),
-      canManageMembers: _requiredBool(map["canManageMembers"], '$path.canManageMembers'),
+      accessMode: ConversationAccessMode.fromWire(
+        map["accessMode"],
+        '$path.accessMode',
+      ),
+      postingPolicy: ConversationPostingPolicy.fromWire(
+        map["postingPolicy"],
+        '$path.postingPolicy',
+      ),
+      canManageMembers: _requiredBool(
+        map["canManageMembers"],
+        '$path.canManageMembers',
+      ),
       canDissolve: _requiredBool(map["canDissolve"], '$path.canDissolve'),
     );
   }
@@ -1503,19 +2185,60 @@ final class MessageCard {
   final String? message;
   final List<MessageCardAttribute> attributes;
 
-  factory MessageCard.fromWire(Map<String, Object?> map, [String path = "MessageCard"]) {
-    _rejectUnknownFields(map, const <String>{"kind", "title", "objectRef", "subtitle", "thumbnailUrl", "deeplink", "landingUrl", "shareText", "message", "attributes"}, path);
+  factory MessageCard.fromWire(
+    Map<String, Object?> map, [
+    String path = "MessageCard",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "kind",
+      "title",
+      "objectRef",
+      "subtitle",
+      "thumbnailUrl",
+      "deeplink",
+      "landingUrl",
+      "shareText",
+      "message",
+      "attributes",
+    }, path);
     return MessageCard(
       kind: MessageCardKind.fromWire(map["kind"], '$path.kind'),
       title: _requiredString(map["title"], '$path.title'),
-      objectRef: map["objectRef"] == null ? null : MessageCardObjectRef.fromWire(_requiredObject(map["objectRef"], '$path.objectRef'), '$path.objectRef'),
-      subtitle: map["subtitle"] == null ? null : _requiredString(map["subtitle"], '$path.subtitle'),
-      thumbnailUrl: map["thumbnailUrl"] == null ? null : _requiredString(map["thumbnailUrl"], '$path.thumbnailUrl'),
-      deeplink: map["deeplink"] == null ? null : _requiredString(map["deeplink"], '$path.deeplink'),
-      landingUrl: map["landingUrl"] == null ? null : _requiredString(map["landingUrl"], '$path.landingUrl'),
-      shareText: map["shareText"] == null ? null : _requiredString(map["shareText"], '$path.shareText'),
-      message: map["message"] == null ? null : _requiredString(map["message"], '$path.message'),
-      attributes: List<MessageCardAttribute>.unmodifiable(_requiredList(map["attributes"], '$path.attributes').asMap().entries.map((entry) => MessageCardAttribute.fromWire(_requiredObject(entry.value, '$path.attributes' + '[${entry.key}]'), '$path.attributes' + '[${entry.key}]'))),
+      objectRef: map["objectRef"] == null
+          ? null
+          : MessageCardObjectRef.fromWire(
+              _requiredObject(map["objectRef"], '$path.objectRef'),
+              '$path.objectRef',
+            ),
+      subtitle: map["subtitle"] == null
+          ? null
+          : _requiredString(map["subtitle"], '$path.subtitle'),
+      thumbnailUrl: map["thumbnailUrl"] == null
+          ? null
+          : _requiredString(map["thumbnailUrl"], '$path.thumbnailUrl'),
+      deeplink: map["deeplink"] == null
+          ? null
+          : _requiredString(map["deeplink"], '$path.deeplink'),
+      landingUrl: map["landingUrl"] == null
+          ? null
+          : _requiredString(map["landingUrl"], '$path.landingUrl'),
+      shareText: map["shareText"] == null
+          ? null
+          : _requiredString(map["shareText"], '$path.shareText'),
+      message: map["message"] == null
+          ? null
+          : _requiredString(map["message"], '$path.message'),
+      attributes: List<MessageCardAttribute>.unmodifiable(
+        _requiredList(
+          map["attributes"],
+          '$path.attributes',
+        ).asMap().entries.map(
+          (entry) => MessageCardAttribute.fromWire(
+            _requiredObject(entry.value, '$path.attributes' + '[${entry.key}]'),
+            '$path.attributes' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -1529,20 +2252,22 @@ final class MessageCard {
     if (landingUrl != null) "landingUrl": landingUrl!,
     if (shareText != null) "shareText": shareText!,
     if (message != null) "message": message!,
-    "attributes": attributes.map((value) => value.toWire()).toList(growable: false),
+    "attributes": attributes
+        .map((value) => value.toWire())
+        .toList(growable: false),
   };
 }
 
 final class MessageCardAttribute {
-  const MessageCardAttribute({
-    required this.name,
-    required this.value,
-  });
+  const MessageCardAttribute({required this.name, required this.value});
 
   final String name;
   final String value;
 
-  factory MessageCardAttribute.fromWire(Map<String, Object?> map, [String path = "MessageCardAttribute"]) {
+  factory MessageCardAttribute.fromWire(
+    Map<String, Object?> map, [
+    String path = "MessageCardAttribute",
+  ]) {
     _rejectUnknownFields(map, const <String>{"name", "value"}, path);
     return MessageCardAttribute(
       name: _requiredString(map["name"], '$path.name'),
@@ -1567,10 +2292,20 @@ final class MessageCardObjectRef {
   final String objectId;
   final String routeId;
 
-  factory MessageCardObjectRef.fromWire(Map<String, Object?> map, [String path = "MessageCardObjectRef"]) {
-    _rejectUnknownFields(map, const <String>{"objectTypeRef", "objectId", "routeId"}, path);
+  factory MessageCardObjectRef.fromWire(
+    Map<String, Object?> map, [
+    String path = "MessageCardObjectRef",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "objectTypeRef",
+      "objectId",
+      "routeId",
+    }, path);
     return MessageCardObjectRef(
-      objectTypeRef: _requiredString(map["objectTypeRef"], '$path.objectTypeRef'),
+      objectTypeRef: _requiredString(
+        map["objectTypeRef"],
+        '$path.objectTypeRef',
+      ),
       objectId: _requiredString(map["objectId"], '$path.objectId'),
       routeId: _requiredString(map["routeId"], '$path.routeId'),
     );
@@ -1584,38 +2319,46 @@ final class MessageCardObjectRef {
 }
 
 final class MessageCommandAck {
-  const MessageCommandAck({
-    required this.status,
-  });
+  const MessageCommandAck({required this.status});
 
   final String status;
 
-  factory MessageCommandAck.fromWire(Map<String, Object?> map, [String path = "MessageCommandAck"]) {
+  factory MessageCommandAck.fromWire(
+    Map<String, Object?> map, [
+    String path = "MessageCommandAck",
+  ]) {
     _rejectUnknownFields(map, const <String>{"status"}, path);
     return MessageCommandAck(
       status: _requiredString(map["status"], '$path.status'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "status": status,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"status": status};
 }
 
 final class MessageHomePageSlice {
-  const MessageHomePageSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const MessageHomePageSlice({required this.items, this.nextCursor});
 
   final List<MessageHomeRow> items;
   final String? nextCursor;
 
-  factory MessageHomePageSlice.fromWire(Map<String, Object?> map, [String path = "MessageHomePageSlice"]) {
+  factory MessageHomePageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "MessageHomePageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return MessageHomePageSlice(
-      items: List<MessageHomeRow>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => MessageHomeRow.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<MessageHomeRow>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => MessageHomeRow.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -1662,24 +2405,64 @@ final class MessageHomeRow {
   final String notificationType;
   final bool read;
 
-  factory MessageHomeRow.fromWire(Map<String, Object?> map, [String path = "MessageHomeRow"]) {
-    _rejectUnknownFields(map, const <String>{"id", "kind", "conversationId", "notificationId", "conversationType", "title", "summary", "avatarUrl", "groupAvatarVersion", "lastActiveAt", "unreadCount", "mentionUnreadCount", "muted", "pinned", "notificationType", "read"}, path);
+  factory MessageHomeRow.fromWire(
+    Map<String, Object?> map, [
+    String path = "MessageHomeRow",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "kind",
+      "conversationId",
+      "notificationId",
+      "conversationType",
+      "title",
+      "summary",
+      "avatarUrl",
+      "groupAvatarVersion",
+      "lastActiveAt",
+      "unreadCount",
+      "mentionUnreadCount",
+      "muted",
+      "pinned",
+      "notificationType",
+      "read",
+    }, path);
     return MessageHomeRow(
       id: _requiredString(map["id"], '$path.id'),
       kind: _requiredString(map["kind"], '$path.kind'),
-      conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
-      notificationId: _requiredString(map["notificationId"], '$path.notificationId'),
-      conversationType: _requiredString(map["conversationType"], '$path.conversationType'),
+      conversationId: _requiredString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
+      notificationId: _requiredString(
+        map["notificationId"],
+        '$path.notificationId',
+      ),
+      conversationType: _requiredString(
+        map["conversationType"],
+        '$path.conversationType',
+      ),
       title: _requiredString(map["title"], '$path.title'),
       summary: _requiredString(map["summary"], '$path.summary'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      groupAvatarVersion: _requiredInt(map["groupAvatarVersion"], '$path.groupAvatarVersion'),
-      lastActiveAt: map["lastActiveAt"] == null ? null : _requiredTimestamp(map["lastActiveAt"], '$path.lastActiveAt'),
+      groupAvatarVersion: _requiredInt(
+        map["groupAvatarVersion"],
+        '$path.groupAvatarVersion',
+      ),
+      lastActiveAt: map["lastActiveAt"] == null
+          ? null
+          : _requiredTimestamp(map["lastActiveAt"], '$path.lastActiveAt'),
       unreadCount: _requiredInt(map["unreadCount"], '$path.unreadCount'),
-      mentionUnreadCount: _requiredInt(map["mentionUnreadCount"], '$path.mentionUnreadCount'),
+      mentionUnreadCount: _requiredInt(
+        map["mentionUnreadCount"],
+        '$path.mentionUnreadCount',
+      ),
       muted: _requiredBool(map["muted"], '$path.muted'),
       pinned: _requiredBool(map["pinned"], '$path.pinned'),
-      notificationType: _requiredString(map["notificationType"], '$path.notificationType'),
+      notificationType: _requiredString(
+        map["notificationType"],
+        '$path.notificationType',
+      ),
       read: _requiredBool(map["read"], '$path.read'),
     );
   }
@@ -1694,7 +2477,8 @@ final class MessageHomeRow {
     "summary": summary,
     "avatarUrl": avatarUrl,
     "groupAvatarVersion": groupAvatarVersion,
-    if (lastActiveAt != null) "lastActiveAt": lastActiveAt!.toUtc().toIso8601String(),
+    if (lastActiveAt != null)
+      "lastActiveAt": lastActiveAt!.toUtc().toIso8601String(),
     "unreadCount": unreadCount,
     "mentionUnreadCount": mentionUnreadCount,
     "muted": muted,
@@ -1705,19 +2489,28 @@ final class MessageHomeRow {
 }
 
 final class MessagePageSlice {
-  const MessagePageSlice({
-    required this.items,
-    this.nextBeforeSeq,
-  });
+  const MessagePageSlice({required this.items, this.nextBeforeSeq});
 
   final List<ChatMessageView> items;
   final int? nextBeforeSeq;
 
-  factory MessagePageSlice.fromWire(Map<String, Object?> map, [String path = "MessagePageSlice"]) {
+  factory MessagePageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "MessagePageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextBeforeSeq"}, path);
     return MessagePageSlice(
-      items: List<ChatMessageView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ChatMessageView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextBeforeSeq: map["nextBeforeSeq"] == null ? null : _requiredInt(map["nextBeforeSeq"], '$path.nextBeforeSeq'),
+      items: List<ChatMessageView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ChatMessageView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextBeforeSeq: map["nextBeforeSeq"] == null
+          ? null
+          : _requiredInt(map["nextBeforeSeq"], '$path.nextBeforeSeq'),
     );
   }
 
@@ -1728,16 +2521,24 @@ final class MessagePageSlice {
 }
 
 final class MessageReceiptPageSlice {
-  const MessageReceiptPageSlice({
-    required this.items,
-  });
+  const MessageReceiptPageSlice({required this.items});
 
   final List<ChatMessageReceipt> items;
 
-  factory MessageReceiptPageSlice.fromWire(Map<String, Object?> map, [String path = "MessageReceiptPageSlice"]) {
+  factory MessageReceiptPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "MessageReceiptPageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items"}, path);
     return MessageReceiptPageSlice(
-      items: List<ChatMessageReceipt>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ChatMessageReceipt.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<ChatMessageReceipt>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ChatMessageReceipt.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -1763,14 +2564,27 @@ final class SelectableGroupContactMemberRow {
   final RelationshipState relationState;
   final ChatContactSource source;
 
-  factory SelectableGroupContactMemberRow.fromWire(Map<String, Object?> map, [String path = "SelectableGroupContactMemberRow"]) {
-    _rejectUnknownFields(map, const <String>{"userId", "userHandle", "displayName", "avatarUrl", "relationState", "source"}, path);
+  factory SelectableGroupContactMemberRow.fromWire(
+    Map<String, Object?> map, [
+    String path = "SelectableGroupContactMemberRow",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "userId",
+      "userHandle",
+      "displayName",
+      "avatarUrl",
+      "relationState",
+      "source",
+    }, path);
     return SelectableGroupContactMemberRow(
       userId: _requiredString(map["userId"], '$path.userId'),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      relationState: RelationshipState.fromWire(map["relationState"], '$path.relationState'),
+      relationState: RelationshipState.fromWire(
+        map["relationState"],
+        '$path.relationState',
+      ),
       source: ChatContactSource.fromWire(map["source"], '$path.source'),
     );
   }
@@ -1786,19 +2600,28 @@ final class SelectableGroupContactMemberRow {
 }
 
 final class SelectableGroupContactPageSlice {
-  const SelectableGroupContactPageSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const SelectableGroupContactPageSlice({required this.items, this.nextCursor});
 
   final List<SelectableGroupContactMemberRow> items;
   final String? nextCursor;
 
-  factory SelectableGroupContactPageSlice.fromWire(Map<String, Object?> map, [String path = "SelectableGroupContactPageSlice"]) {
+  factory SelectableGroupContactPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "SelectableGroupContactPageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return SelectableGroupContactPageSlice(
-      items: List<SelectableGroupContactMemberRow>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => SelectableGroupContactMemberRow.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<SelectableGroupContactMemberRow>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => SelectableGroupContactMemberRow.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -1817,11 +2640,23 @@ final class SelectableGroupConversationPageSlice {
   final List<SelectableGroupConversationRow> items;
   final String? nextCursor;
 
-  factory SelectableGroupConversationPageSlice.fromWire(Map<String, Object?> map, [String path = "SelectableGroupConversationPageSlice"]) {
+  factory SelectableGroupConversationPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "SelectableGroupConversationPageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return SelectableGroupConversationPageSlice(
-      items: List<SelectableGroupConversationRow>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => SelectableGroupConversationRow.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<SelectableGroupConversationRow>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => SelectableGroupConversationRow.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -1848,14 +2683,30 @@ final class SelectableGroupConversationRow {
   final int friendMemberCount;
   final int memberCount;
 
-  factory SelectableGroupConversationRow.fromWire(Map<String, Object?> map, [String path = "SelectableGroupConversationRow"]) {
-    _rejectUnknownFields(map, const <String>{"conversationId", "title", "avatarUrl", "circleId", "friendMemberCount", "memberCount"}, path);
+  factory SelectableGroupConversationRow.fromWire(
+    Map<String, Object?> map, [
+    String path = "SelectableGroupConversationRow",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "conversationId",
+      "title",
+      "avatarUrl",
+      "circleId",
+      "friendMemberCount",
+      "memberCount",
+    }, path);
     return SelectableGroupConversationRow(
-      conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
+      conversationId: _requiredString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       title: _requiredString(map["title"], '$path.title'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
       circleId: _requiredString(map["circleId"], '$path.circleId'),
-      friendMemberCount: _requiredInt(map["friendMemberCount"], '$path.friendMemberCount'),
+      friendMemberCount: _requiredInt(
+        map["friendMemberCount"],
+        '$path.friendMemberCount',
+      ),
       memberCount: _requiredInt(map["memberCount"], '$path.memberCount'),
     );
   }
@@ -1871,73 +2722,145 @@ final class SelectableGroupConversationRow {
 }
 
 ChatConversation decodeChatConversation(Object? response) =>
-    ChatConversation.fromWire(_requiredObject(response, "ChatConversation"), "ChatConversation");
+    ChatConversation.fromWire(
+      _requiredObject(response, "ChatConversation"),
+      "ChatConversation",
+    );
 
 ChatInboxPageSlice decodeChatInboxPageSlice(Object? response) =>
-    ChatInboxPageSlice.fromWire(_requiredObject(response, "ChatInboxPageSlice"), "ChatInboxPageSlice");
+    ChatInboxPageSlice.fromWire(
+      _requiredObject(response, "ChatInboxPageSlice"),
+      "ChatInboxPageSlice",
+    );
 
 ChatMessageSyncSlice decodeChatMessageSyncSlice(Object? response) =>
-    ChatMessageSyncSlice.fromWire(_requiredObject(response, "ChatMessageSyncSlice"), "ChatMessageSyncSlice");
+    ChatMessageSyncSlice.fromWire(
+      _requiredObject(response, "ChatMessageSyncSlice"),
+      "ChatMessageSyncSlice",
+    );
 
 ChatSendMessageResult decodeChatSendMessageResult(Object? response) =>
-    ChatSendMessageResult.fromWire(_requiredObject(response, "ChatSendMessageResult"), "ChatSendMessageResult");
+    ChatSendMessageResult.fromWire(
+      _requiredObject(response, "ChatSendMessageResult"),
+      "ChatSendMessageResult",
+    );
 
 ContactHomePageSlice decodeContactHomePageSlice(Object? response) =>
-    ContactHomePageSlice.fromWire(_requiredObject(response, "ContactHomePageSlice"), "ContactHomePageSlice");
+    ContactHomePageSlice.fromWire(
+      _requiredObject(response, "ContactHomePageSlice"),
+      "ContactHomePageSlice",
+    );
 
 ContactPageSlice decodeContactPageSlice(Object? response) =>
-    ContactPageSlice.fromWire(_requiredObject(response, "ContactPageSlice"), "ContactPageSlice");
+    ContactPageSlice.fromWire(
+      _requiredObject(response, "ContactPageSlice"),
+      "ContactPageSlice",
+    );
 
 ConversationAssetPage decodeConversationAssetPage(Object? response) =>
-    ConversationAssetPage.fromWire(_requiredObject(response, "ConversationAssetPage"), "ConversationAssetPage");
+    ConversationAssetPage.fromWire(
+      _requiredObject(response, "ConversationAssetPage"),
+      "ConversationAssetPage",
+    );
 
 ConversationBatchSlice decodeConversationBatchSlice(Object? response) =>
-    ConversationBatchSlice.fromWire(_requiredObject(response, "ConversationBatchSlice"), "ConversationBatchSlice");
+    ConversationBatchSlice.fromWire(
+      _requiredObject(response, "ConversationBatchSlice"),
+      "ConversationBatchSlice",
+    );
 
 ConversationCommandAck decodeConversationCommandAck(Object? response) =>
-    ConversationCommandAck.fromWire(_requiredObject(response, "ConversationCommandAck"), "ConversationCommandAck");
+    ConversationCommandAck.fromWire(
+      _requiredObject(response, "ConversationCommandAck"),
+      "ConversationCommandAck",
+    );
 
-ConversationMemberPageSlice decodeConversationMemberPageSlice(Object? response) =>
-    ConversationMemberPageSlice.fromWire(_requiredObject(response, "ConversationMemberPageSlice"), "ConversationMemberPageSlice");
+ConversationMemberPageSlice decodeConversationMemberPageSlice(
+  Object? response,
+) => ConversationMemberPageSlice.fromWire(
+  _requiredObject(response, "ConversationMemberPageSlice"),
+  "ConversationMemberPageSlice",
+);
 
-ConversationMembershipCommandAck decodeConversationMembershipCommandAck(Object? response) =>
-    ConversationMembershipCommandAck.fromWire(_requiredObject(response, "ConversationMembershipCommandAck"), "ConversationMembershipCommandAck");
+ConversationMembershipCommandAck decodeConversationMembershipCommandAck(
+  Object? response,
+) => ConversationMembershipCommandAck.fromWire(
+  _requiredObject(response, "ConversationMembershipCommandAck"),
+  "ConversationMembershipCommandAck",
+);
 
 ConversationPageSlice decodeConversationPageSlice(Object? response) =>
-    ConversationPageSlice.fromWire(_requiredObject(response, "ConversationPageSlice"), "ConversationPageSlice");
+    ConversationPageSlice.fromWire(
+      _requiredObject(response, "ConversationPageSlice"),
+      "ConversationPageSlice",
+    );
 
-ConversationTimestampIndexSlice decodeConversationTimestampIndexSlice(Object? response) =>
-    ConversationTimestampIndexSlice.fromWire(_requiredObject(response, "ConversationTimestampIndexSlice"), "ConversationTimestampIndexSlice");
+ConversationTimestampIndexSlice decodeConversationTimestampIndexSlice(
+  Object? response,
+) => ConversationTimestampIndexSlice.fromWire(
+  _requiredObject(response, "ConversationTimestampIndexSlice"),
+  "ConversationTimestampIndexSlice",
+);
 
-ConversationUserStateCommandAck decodeConversationUserStateCommandAck(Object? response) =>
-    ConversationUserStateCommandAck.fromWire(_requiredObject(response, "ConversationUserStateCommandAck"), "ConversationUserStateCommandAck");
+ConversationUserStateCommandAck decodeConversationUserStateCommandAck(
+  Object? response,
+) => ConversationUserStateCommandAck.fromWire(
+  _requiredObject(response, "ConversationUserStateCommandAck"),
+  "ConversationUserStateCommandAck",
+);
 
 GatheringChatBoardSlice decodeGatheringChatBoardSlice(Object? response) =>
-    GatheringChatBoardSlice.fromWire(_requiredObject(response, "GatheringChatBoardSlice"), "GatheringChatBoardSlice");
+    GatheringChatBoardSlice.fromWire(
+      _requiredObject(response, "GatheringChatBoardSlice"),
+      "GatheringChatBoardSlice",
+    );
 
 GroupCandidatePageSlice decodeGroupCandidatePageSlice(Object? response) =>
-    GroupCandidatePageSlice.fromWire(_requiredObject(response, "GroupCandidatePageSlice"), "GroupCandidatePageSlice");
+    GroupCandidatePageSlice.fromWire(
+      _requiredObject(response, "GroupCandidatePageSlice"),
+      "GroupCandidatePageSlice",
+    );
 
 GroupHome decodeGroupHome(Object? response) =>
     GroupHome.fromWire(_requiredObject(response, "GroupHome"), "GroupHome");
 
 MessageCommandAck decodeMessageCommandAck(Object? response) =>
-    MessageCommandAck.fromWire(_requiredObject(response, "MessageCommandAck"), "MessageCommandAck");
+    MessageCommandAck.fromWire(
+      _requiredObject(response, "MessageCommandAck"),
+      "MessageCommandAck",
+    );
 
 MessageHomePageSlice decodeMessageHomePageSlice(Object? response) =>
-    MessageHomePageSlice.fromWire(_requiredObject(response, "MessageHomePageSlice"), "MessageHomePageSlice");
+    MessageHomePageSlice.fromWire(
+      _requiredObject(response, "MessageHomePageSlice"),
+      "MessageHomePageSlice",
+    );
 
 MessagePageSlice decodeMessagePageSlice(Object? response) =>
-    MessagePageSlice.fromWire(_requiredObject(response, "MessagePageSlice"), "MessagePageSlice");
+    MessagePageSlice.fromWire(
+      _requiredObject(response, "MessagePageSlice"),
+      "MessagePageSlice",
+    );
 
 MessageReceiptPageSlice decodeMessageReceiptPageSlice(Object? response) =>
-    MessageReceiptPageSlice.fromWire(_requiredObject(response, "MessageReceiptPageSlice"), "MessageReceiptPageSlice");
+    MessageReceiptPageSlice.fromWire(
+      _requiredObject(response, "MessageReceiptPageSlice"),
+      "MessageReceiptPageSlice",
+    );
 
-SelectableGroupContactPageSlice decodeSelectableGroupContactPageSlice(Object? response) =>
-    SelectableGroupContactPageSlice.fromWire(_requiredObject(response, "SelectableGroupContactPageSlice"), "SelectableGroupContactPageSlice");
+SelectableGroupContactPageSlice decodeSelectableGroupContactPageSlice(
+  Object? response,
+) => SelectableGroupContactPageSlice.fromWire(
+  _requiredObject(response, "SelectableGroupContactPageSlice"),
+  "SelectableGroupContactPageSlice",
+);
 
-SelectableGroupConversationPageSlice decodeSelectableGroupConversationPageSlice(Object? response) =>
-    SelectableGroupConversationPageSlice.fromWire(_requiredObject(response, "SelectableGroupConversationPageSlice"), "SelectableGroupConversationPageSlice");
+SelectableGroupConversationPageSlice decodeSelectableGroupConversationPageSlice(
+  Object? response,
+) => SelectableGroupConversationPageSlice.fromWire(
+  _requiredObject(response, "SelectableGroupConversationPageSlice"),
+  "SelectableGroupConversationPageSlice",
+);
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {
@@ -1962,7 +2885,9 @@ void _rejectUnknownFields(
   final unknown = value.keys.where((key) => !allowed.contains(key)).toList()
     ..sort();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }
 

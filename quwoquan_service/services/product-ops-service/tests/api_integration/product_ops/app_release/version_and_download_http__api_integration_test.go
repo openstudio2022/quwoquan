@@ -23,7 +23,7 @@ func TestAppReleaseHTTPUsesOneValidatedReleaseCatalog(t *testing.T) {
 			RecoveryURL:                 "https://download.quwoquan.example/download",
 			APKURL:                      "https://cdn.quwoquan.example/releases/quwoquan-18201.apk",
 			APKHostAllowlist:            []string{"cdn.quwoquan.example"},
-			APKPackageName:              "com.quwoquan.quwoquan_app",
+			APKPackageName:              "com.leadwise.quwoquan",
 			APKSHA256:                   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 			APKSizeBytes:                42,
 			APKSigningCertificateSHA256: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
@@ -69,6 +69,25 @@ func TestAppReleaseHTTPUsesOneValidatedReleaseCatalog(t *testing.T) {
 		payload["updateState"] != "available" || payload["platform"] != "android" ||
 		payload["updateUrl"] != "https://download.quwoquan.example/download/android" {
 		t.Fatalf("version payload=%v", payload)
+	}
+
+	iosVersion := httptest.NewRecorder()
+	mux.ServeHTTP(iosVersion, httptest.NewRequest(
+		http.MethodGet,
+		"/ops/app-recovery/version?platform=ios&appVersion=1.8.1&buildNumber=18100",
+		nil,
+	))
+	if iosVersion.Code != http.StatusOK {
+		t.Fatalf("ios version status=%d body=%s", iosVersion.Code, iosVersion.Body.String())
+	}
+	payload = nil
+	if err := json.Unmarshal(iosVersion.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["platform"] != "ios" || payload["updateState"] != "available" ||
+		payload["updateUrl"] != nil ||
+		payload["recoveryUrl"] != "https://download.quwoquan.example/download/ios" {
+		t.Fatalf("ios version payload=%v", payload)
 	}
 
 	webVersion := httptest.NewRecorder()

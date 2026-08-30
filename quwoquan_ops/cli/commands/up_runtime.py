@@ -115,9 +115,35 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
     target = _stackctl.get_target(topology, requested_target)
     env_name = str(target["env"])
     report_target = args.env or requested_target
-    report_dir = _stackctl.resolve_report_dir(args, env_name, report_target)
+    try:
+        report_dir = _stackctl.validate_up_report_dir(
+            _stackctl.resolve_report_dir(args, env_name, report_target),
+            env_name=env_name,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        timing = _stackctl._finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl up is GATE_BLOCK for {report_target}",
+            "details": [f"unsafe up report directory: {exc}"],
+            **timing,
+        }
+    # 容量先于一切：数据盘写满时构建、启动与 healthcheck 都会以互不相干的
+    # 形态失败，先判容量才能让失败消息指向真正的原因。
+    capacity = _stackctl.local_runtime_capacity_evidence(target)
+    if capacity["issues"]:
+        timing = _stackctl._finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl up is GATE_BLOCK for {report_target}",
+            "details": capacity["issues"],
+            "firstBlocker": capacity["blocker"],
+            "capacity": capacity["evidence"],
+            "reportDir": str(report_dir.resolve()),
+            **timing,
+        }
     fixed_candidate_snapshot: dict[str, Any] | None = None
-    if requested_target in {"alpha-local", "beta-local", "gamma-local"}:
+    if requested_target in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
         if build_only:
             timing = _stackctl._finish_timing(started_monotonic, started_at)
             return {
@@ -126,7 +152,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                 "details": [
                     "up only consumes a fixed candidate; run stackctl package explicitly"
                 ],
-                "reportDir": _stackctl.relpath(report_dir),
+                "reportDir": str(report_dir.resolve()),
                 **timing,
             }
         try:
@@ -157,7 +183,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                 "exitCode": 2,
                 "summary": f"stackctl up GATE_BLOCK: fixed package missing for {requested_target}",
                 "details": [package_detail, "run stackctl package explicitly"],
-                "reportDir": _stackctl.relpath(report_dir),
+                "reportDir": str(report_dir.resolve()),
                 **timing,
             }
         # Local start scripts must never compile or re-package the workspace.
@@ -201,7 +227,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                     f"stackctl up GATE_BLOCK: migration drift on {requested_target}"
                 ),
                 "details": details,
-                "reportDir": _stackctl.relpath(report_dir),
+                "reportDir": str(report_dir.resolve()),
                 **timing,
             }
     # A content release starts only the import/consumer data plane. Device
@@ -241,7 +267,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
     )
 
     def assert_fixed_candidate_selected() -> None:
-        if requested_target not in {"alpha-local", "beta-local", "gamma-local"}:
+        if requested_target not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
             return
         if fixed_candidate_snapshot is None:
             raise ValueError("fixed immutable candidate snapshot is missing")
@@ -333,19 +359,38 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             label="[stackctl up]",
         )
 
-    def start_app_process(env_key: str, device_id: str) -> dict[str, Any]:
+    def start_app_process(
+        env_key: str,
+        device_id: str,
+        *,
+        launch_bundle: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         nonlocal stage_index
         launch_log = report_dir / f"app-launch-{device_id.replace('/', '_')}.log"
         stage_index += 1
         stage_header = _stackctl._format_stage_header(stage_index, expected_stage_total, "app-launch")
         announce(stage_header, f"starting for {env_key}/{device_id}", numbered=True)
         try:
+            bundle = dict(launch_bundle or {})
             process = _stackctl.launch_app(
                 env_key,
                 device_id,
                 topology=topology,
                 rollout_mode=args.rollout_mode,
                 log_path=launch_log,
+                artifact_manifest=(
+                    Path(str(bundle["artifactManifestPath"])) if bundle else None
+                ),
+                launcher_handoff=(
+                    Path(str(bundle["launcherHandoffPath"])) if bundle else None
+                ),
+                candidate_digest=str(bundle.get("candidateDigest") or ""),
+                artifact_manifest_digest=str(
+                    bundle.get("artifactManifestDigest") or ""
+                ),
+                launcher_handoff_digest=str(
+                    bundle.get("launcherHandoffDigest") or ""
+                ),
             )
         except RuntimeError as exc:
             raise RuntimeError(f"app launch failed for {env_key}/{device_id}: {exc}") from exc
@@ -356,6 +401,20 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                 device_id,
                 topology=topology,
                 rollout_mode=args.rollout_mode,
+                app_mode=("release-artifact" if bundle else "content-live"),
+                artifact_manifest=(
+                    Path(str(bundle["artifactManifestPath"])) if bundle else None
+                ),
+                launcher_handoff=(
+                    Path(str(bundle["launcherHandoffPath"])) if bundle else None
+                ),
+                candidate_digest=str(bundle.get("candidateDigest") or ""),
+                artifact_manifest_digest=str(
+                    bundle.get("artifactManifestDigest") or ""
+                ),
+                launcher_handoff_digest=str(
+                    bundle.get("launcherHandoffDigest") or ""
+                ),
             ),
             "log_path": launch_log,
             "stageHeader": stage_header,
@@ -418,6 +477,9 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
         env[_stackctl.RUNTIME_CANDIDATE_ROOT_ENV] = str(
             (fixed_candidate_snapshot or {}).get("candidateDir") or ""
         )
+        # Skill package trust must come from the capsule that this candidate
+        # sealed; re-issuing keys at up time would rebind a frozen release.
+        env["QWQ_FIXED_CANDIDATE_ROOT"] = env[_stackctl.RUNTIME_CANDIDATE_ROOT_ENV]
         env["QWQ_RUN_ROOT"] = str(report_dir.resolve())
         env["QWQ_OBSERVABILITY_RUN_ROOT"] = str(
             _stackctl.env_observability_run_dir(env_name, report_dir.name).resolve()
@@ -557,6 +619,9 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
         env[_stackctl.RUNTIME_CANDIDATE_ROOT_ENV] = str(
             (fixed_candidate_snapshot or {}).get("candidateDir") or ""
         )
+        # Skill package trust must come from the capsule that this candidate
+        # sealed; re-issuing keys at up time would rebind a frozen release.
+        env["QWQ_FIXED_CANDIDATE_ROOT"] = env[_stackctl.RUNTIME_CANDIDATE_ROOT_ENV]
         env["QWQ_RUN_ROOT"] = str(report_dir.resolve())
         env["QWQ_OBSERVABILITY_RUN_ROOT"] = str(
             _stackctl.env_observability_run_dir(env_name, report_dir.name).resolve()
@@ -697,6 +762,8 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             announce=announce,
             maybe_resolve_device_id=maybe_resolve_device_id,
             start_app_process=start_app_process,
+            candidate_snapshot=fixed_candidate_snapshot,
+            assert_fixed_candidate_selected=assert_fixed_candidate_selected,
         )
     elif requested_target == "prod-hosted":
         early_result, hosted_result, cmd = _up_app_launch._launch_prod_hosted_session(
@@ -722,7 +789,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             **timing,
         }
 
-    if requested_target in {"alpha-local", "beta-local", "gamma-local"}:
+    if requested_target in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
         try:
             assert_fixed_candidate_selected()
         except (OSError, TypeError, ValueError) as exc:
@@ -909,7 +976,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
         "exitCode": result.returncode,
         "summary": terminal_summary,
         "details": _stackctl._command_details(result),
-        "reportDir": _stackctl.relpath(report_dir),
+        "reportDir": str(report_dir.resolve()),
         **release_input_report,
         "logSink": log_sink_receipt,
         "startupHealthFailure": startup_health_failure,

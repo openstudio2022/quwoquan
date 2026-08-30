@@ -82,7 +82,7 @@ QWQStartup: startup_welcome_sequence phase=safe_recovery_shown result=failed
         )
         flutter_visible_slow_raw = """
 QWQStartup android_startup_safe_terminal_slow elapsedMs=6001
-QWQStartup android_startup_safe_terminal elapsedMs=6004
+QWQStartup android_startup_safe_terminal surface=router_shell elapsedMs=6004
 QWQStartup: startup_probe phase=finished welcomeExitMs=2410 exitReason=ready_primary
 QWQStartup: startup_probe phase=main_shell_first_paint shellFirstPaintMs=2530
 QWQStartup: startup_probe phase=welcome_overlay_removed overlayRemovedMs=2650
@@ -118,7 +118,7 @@ I/QWQStartup: startup_event {"eventName":"startup_welcome_sequence","phase":"wel
     def test_extracts_renderer_watchdog_and_canonical_terminal_evidence(self) -> None:
         raw = """
 I/QWQStartup: android_flutter_first_frame elapsedMs=1210 source=renderer
-I/QWQStartup: android_startup_safe_terminal elapsedMs=1450
+I/QWQStartup: android_startup_safe_terminal surface=router_shell elapsedMs=1450
 I/QWQStartup: startup_event {"attemptId":"attempt_123"}
 """
         evidence = extract_startup_watchdog_evidence(raw)
@@ -130,9 +130,9 @@ I/QWQStartup: startup_event {"attemptId":"attempt_123"}
     def test_extracts_native_attempt_id_from_structured_log_suffix(self) -> None:
         digest = "sha256:" + "a" * 64
         raw = f"""
-I/QWQStartup: ios_dart_startup_attempt attemptId=attempt_ios_1 launchMode=canonical_launcher hotRestart=false configurationState=complete effectiveLaunchManifestDigest={digest}
+I/QWQStartup: ios_dart_startup_attempt attemptId=attempt_ios_1 launchProvenance=canonical_launcher runtimeConfigSupplyMode=external_runtime_package hotRestart=false configurationState=complete effectiveLaunchManifestDigest={digest}
 I/QWQStartup: ios_flutter_first_frame elapsedMs=980 source=renderer attemptId=attempt_ios_1
-I/QWQStartup: ios_startup_safe_terminal reportedElapsedMs=1220 receivedMs=1240 attemptId=attempt_ios_1
+I/QWQStartup: ios_startup_safe_terminal surface=router_shell reportedElapsedMs=1220 receivedMs=1240 attemptId=attempt_ios_1
 I/QWQStartup: startup_telemetry_ack attemptId=attempt_ios_1 acceptedCount=4 duplicateCount=0
 """
         evidence = extract_startup_watchdog_evidence(raw)
@@ -141,7 +141,10 @@ I/QWQStartup: startup_telemetry_ack attemptId=attempt_ios_1 acceptedCount=4 dupl
         self.assertEqual(evidence["safeTerminalMs"], 1220)
         self.assertEqual(evidence["reportedSafeTerminalMs"], 1220)
         self.assertEqual(evidence["nativeReceivedSafeTerminalMs"], 1240)
-        self.assertEqual(evidence["launchMode"], "canonical_launcher")
+        self.assertEqual(evidence["launchProvenance"], "canonical_launcher")
+        self.assertEqual(
+            evidence["runtimeConfigSupplyMode"], "external_runtime_package"
+        )
         self.assertFalse(evidence["hotRestart"])
         self.assertEqual(evidence["runtimeConfigurationState"], "complete")
         self.assertEqual(evidence["effectiveLaunchManifestDigest"], digest)
@@ -150,7 +153,7 @@ I/QWQStartup: startup_telemetry_ack attemptId=attempt_ios_1 acceptedCount=4 dupl
 
         failure_evidence = extract_startup_watchdog_evidence(
             "QWQStartup ios_startup_bootstrap_failure "
-            "attemptId=attempt_ios_1 launchMode=canonical_launcher "
+            "attemptId=attempt_ios_1 launchProvenance=canonical_launcher "
             "failureCode=OPS.SYSTEM.startup_configuration_invalid"
         )
         self.assertEqual(

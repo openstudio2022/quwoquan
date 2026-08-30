@@ -8,11 +8,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 import stat
 import subprocess
 import tempfile
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 import quwoquan_ops.cli.lib.package_reuse as _pkg
@@ -22,6 +22,14 @@ from .constants import (
     _CAPSULE_FIELDS,
     PACKAGE_INPUT_CAPSULE_SCHEMA,
 )
+from .dependency_bundle_capsule import (
+    VerifiedDependencySnapshots,
+    copy_dependency_bundle_to_capsule,
+    load_managed_dependency_snapshots,
+    verify_dependency_bundle_capsule,
+)
+from .dependency_fs import remove_private_tree
+from .pub_cache_capsule import dependency_required
 
 
 def _digest_record(
@@ -71,9 +79,7 @@ def _enumerated_deployment_inputs(
     roots: Sequence[str],
 ) -> tuple[list[str], list[tuple[str, Path, str]]]:
     normalized_roots = _normalized_input_roots(roots)
-    repo_roots = [
-        value for value in normalized_roots if not Path(value).is_absolute()
-    ]
+    repo_roots = [value for value in normalized_roots if not Path(value).is_absolute()]
     external_roots = [
         Path(value) for value in normalized_roots if Path(value).is_absolute()
     ]
@@ -137,7 +143,9 @@ def _safe_capsule_source(path: Path, *, logical_path: str) -> os.stat_result:
                 f"external deployment input symlink is forbidden: {logical_path}"
             )
         if not resolved.is_relative_to(_pkg.ROOT.resolve()):
-            raise ValueError(f"deployment input symlink escapes repository: {logical_path}")
+            raise ValueError(
+                f"deployment input symlink escapes repository: {logical_path}"
+            )
         return metadata
     if not stat.S_ISREG(metadata.st_mode):
         raise ValueError(
@@ -174,11 +182,15 @@ def _copy_regular_capsule_input(
                 break
             content.extend(chunk)
         after = os.fstat(descriptor)
-        if (
-            (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
-            != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+        if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
         ):
-            raise ValueError(f"deployment input changed during capsule copy: {logical_path}")
+            raise ValueError(
+                f"deployment input changed during capsule copy: {logical_path}"
+            )
     finally:
         os.close(descriptor)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -233,8 +245,17 @@ def materialize_package_input_capsule(
     """Copy one source closure into a read-only, content-addressed capsule."""
 
     normalized_roots, source_entries = _enumerated_deployment_inputs(roots)
+    dependency_snapshots = (
+        load_managed_dependency_snapshots(repo_root=_pkg.ROOT)
+        if dependency_required(_pkg.ROOT, normalized_roots)
+        else None
+    )
     capsule_root = capsule_root.expanduser()
-    if not capsule_root.is_absolute() or capsule_root.exists() or capsule_root.is_symlink():
+    if (
+        not capsule_root.is_absolute()
+        or capsule_root.exists()
+        or capsule_root.is_symlink()
+    ):
         raise ValueError("package input capsule root must be a new absolute path")
     capsule_root.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(
@@ -272,6 +293,16 @@ def materialize_package_input_capsule(
                     "mode": mode,
                 }
             )
+        if dependency_snapshots is not None:
+            dependency_records = copy_dependency_bundle_to_capsule(
+                snapshots=dependency_snapshots,
+                capsule_root=staging,
+            )
+            for record in dependency_records:
+                marker_path = staging / str(record["capsulePath"])
+                content = marker_path.read_bytes()
+                digest_entries.append((str(record["logicalPath"]), "file", content))
+                records.append(record)
         input_digest, input_count = _digest_record(digest_entries)
         revision = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -326,7 +357,11 @@ def materialize_package_input_capsule(
         head.write_text(source_revision + "\n", encoding="ascii")
         os.chmod(head, 0o444)
         for directory in sorted(
-            (path for path in staging.rglob("*") if path.is_dir() and not path.is_symlink()),
+            (
+                path
+                for path in staging.rglob("*")
+                if path.is_dir() and not path.is_symlink()
+            ),
             key=lambda path: len(path.parts),
             reverse=True,
         ):
@@ -338,7 +373,7 @@ def materialize_package_input_capsule(
         return {**manifest, "capsuleRoot": str(capsule_root)}
     finally:
         if not published and staging.exists():
-            shutil.rmtree(staging, ignore_errors=True)
+            remove_private_tree(staging)
 
 
 def _read_capsule_manifest(capsule_root: Path) -> dict[str, object]:
@@ -355,12 +390,18 @@ def _read_capsule_manifest(capsule_root: Path) -> dict[str, object]:
     return value
 
 
-def verify_package_input_capsule(
+@dataclass(frozen=True, slots=True)
+class VerifiedPackageInputCapsule:
+    manifest: dict[str, object]
+    dependency_snapshots: VerifiedDependencySnapshots | None
+
+
+def _verify_package_input_capsule(
     capsule_root: Path,
     *,
     expected_snapshot: dict[str, object] | None = None,
-) -> dict[str, object]:
-    """Verify capsule bytes only; never re-read the mutable workspace."""
+) -> VerifiedPackageInputCapsule:
+    """Verify capsule bytes once and retain current-process dependency CAS."""
 
     manifest = _read_capsule_manifest(capsule_root)
     raw_entries = manifest.get("entries")
@@ -371,18 +412,30 @@ def verify_package_input_capsule(
         if not isinstance(raw, dict) or set(raw) != _CAPSULE_ENTRY_FIELDS:
             raise ValueError("package input capsule entry fields mismatch")
         relative = Path(str(raw.get("capsulePath") or ""))
-        if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+        if relative.is_absolute() or any(
+            part in {"", ".", ".."} for part in relative.parts
+        ):
             raise ValueError("package input capsule path is unsafe")
         path = capsule_root / relative
         kind = str(raw.get("kind") or "")
+        declared_mode = raw.get("mode")
+        if declared_mode.__class__ is not int:
+            raise ValueError("package input capsule entry mode is invalid")
+        if kind == "file":
+            if declared_mode not in {0o444, 0o555}:
+                raise ValueError("package input capsule entry mode is invalid")
+        elif kind == "symlink":
+            if declared_mode != 0:
+                raise ValueError("package input capsule entry mode is invalid")
+        else:
+            raise ValueError("package input capsule entry kind is invalid")
         metadata = path.lstat()
         if kind == "file":
             if not stat.S_ISREG(metadata.st_mode) or path.is_symlink():
                 raise ValueError("package input capsule file kind drifted")
             content = path.read_bytes()
-            mode = 0o555 if metadata.st_mode & 0o111 else 0o444
-            if metadata.st_mode & 0o222 or int(raw.get("mode") or -1) != mode:
-                raise ValueError("package input capsule file is writable or mode drifted")
+            if stat.S_IMODE(metadata.st_mode) != declared_mode:
+                raise ValueError("package input capsule file mode drifted")
         elif kind == "symlink":
             if not stat.S_ISLNK(metadata.st_mode):
                 raise ValueError("package input capsule symlink kind drifted")
@@ -390,19 +443,36 @@ def verify_package_input_capsule(
             if not resolved.is_relative_to(capsule_root.resolve()):
                 raise ValueError("package input capsule symlink escapes capsule")
             content = os.readlink(path).encode("utf-8")
-        else:
-            raise ValueError("package input capsule entry kind is invalid")
+        declared_size = raw.get("size")
         if (
-            int(raw.get("size") or -1) != len(content)
+            isinstance(declared_size, bool)
+            or not isinstance(declared_size, int)
+            or declared_size < 0
+        ):
+            raise ValueError("package input capsule entry size is invalid")
+        if (
+            declared_size != len(content)
             or raw.get("digest") != "sha256:" + hashlib.sha256(content).hexdigest()
         ):
             raise ValueError("package input capsule entry CAS mismatch")
         entries.append((str(raw.get("logicalPath") or ""), kind, content))
+    app_lock = capsule_root / "repo/quwoquan_app/pubspec.lock"
+    dependency_entries = [
+        item
+        for item in raw_entries
+        if str(item.get("logicalPath") or "").startswith("dependency:")
+    ]
+    dependency_snapshots: VerifiedDependencySnapshots | None = None
+    if app_lock.exists():
+        dependency_snapshots = verify_dependency_bundle_capsule(
+            capsule_root=capsule_root,
+            manifest_entries=raw_entries,
+        )
+    elif dependency_entries or (capsule_root / "dependencies").exists():
+        raise ValueError("App dependency capsule exists without App pubspec.lock")
     digest, count = _digest_record(entries)
     identity = _capsule_identity_payload(
-        roots=_normalized_input_roots(
-            list(manifest.get("deploymentInputRoots") or [])
-        ),
+        roots=_normalized_input_roots(list(manifest.get("deploymentInputRoots") or [])),
         input_digest=digest,
         input_count=count,
     )
@@ -423,4 +493,33 @@ def verify_package_input_capsule(
         ):
             if expected_snapshot.get(field) != manifest.get(field):
                 raise ValueError(f"package input capsule {field} mismatch")
-    return manifest
+    return VerifiedPackageInputCapsule(
+        manifest=manifest,
+        dependency_snapshots=dependency_snapshots,
+    )
+
+
+def verify_package_input_capsule(
+    capsule_root: Path,
+    *,
+    expected_snapshot: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Verify capsule bytes only; never re-read the mutable workspace."""
+
+    return _verify_package_input_capsule(
+        capsule_root,
+        expected_snapshot=expected_snapshot,
+    ).manifest
+
+
+def verify_package_input_capsule_with_dependencies(
+    capsule_root: Path,
+    *,
+    expected_snapshot: dict[str, object] | None = None,
+) -> VerifiedPackageInputCapsule:
+    """Verify once and expose fresh dependency snapshots to the same process."""
+
+    return _verify_package_input_capsule(
+        capsule_root,
+        expected_snapshot=expected_snapshot,
+    )

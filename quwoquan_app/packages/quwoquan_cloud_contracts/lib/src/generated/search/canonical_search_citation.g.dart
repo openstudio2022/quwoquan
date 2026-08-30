@@ -104,41 +104,85 @@ void _validateCanonicalSearchCitationWire(Map<String, dynamic> m) {
     'sourceDomain',
     'score',
   };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('CanonicalSearchCitation contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'CanonicalSearchCitation contains unknown fields: ${unknown.join(',')}',
+    );
   }
-  if (!m.containsKey('citationId') || m['citationId'] == null || (m['citationId'] is! String)) {
-    throw FormatException('CanonicalSearchCitation.citationId has an invalid wire value');
+  if (!m.containsKey('citationId') ||
+      m['citationId'] == null ||
+      (m['citationId'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchCitation.citationId has an invalid wire value',
+    );
   }
-  if (!m.containsKey('objectType') || m['objectType'] == null || (m['objectType'] is! String)) {
-    throw FormatException('CanonicalSearchCitation.objectType has an invalid wire value');
+  if (!m.containsKey('objectType') ||
+      m['objectType'] == null ||
+      (m['objectType'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchCitation.objectType has an invalid wire value',
+    );
   }
-  if (!m.containsKey('objectId') || m['objectId'] == null || (m['objectId'] is! String)) {
-    throw FormatException('CanonicalSearchCitation.objectId has an invalid wire value');
+  if (!m.containsKey('objectId') ||
+      m['objectId'] == null ||
+      (m['objectId'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchCitation.objectId has an invalid wire value',
+    );
   }
-  if (!m.containsKey('title') || m['title'] == null || (m['title'] is! String)) {
-    throw FormatException('CanonicalSearchCitation.title has an invalid wire value');
+  if (!m.containsKey('title') ||
+      m['title'] == null ||
+      (m['title'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchCitation.title has an invalid wire value',
+    );
   }
-  if (m.containsKey('contentType') && m['contentType'] != null && (m['contentType'] is! String)) {
-    throw FormatException('CanonicalSearchCitation.contentType has an invalid wire value');
+  if (m.containsKey('contentType') &&
+      m['contentType'] != null &&
+      (m['contentType'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchCitation.contentType has an invalid wire value',
+    );
   }
-  if (m.containsKey('snippet') && m['snippet'] != null && (m['snippet'] is! String)) {
-    throw FormatException('CanonicalSearchCitation.snippet has an invalid wire value');
+  if (m.containsKey('snippet') &&
+      m['snippet'] != null &&
+      (m['snippet'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchCitation.snippet has an invalid wire value',
+    );
   }
   if (m.containsKey('url') && m['url'] != null && (m['url'] is! String)) {
-    throw FormatException('CanonicalSearchCitation.url has an invalid wire value');
+    throw FormatException(
+      'CanonicalSearchCitation.url has an invalid wire value',
+    );
   }
-  if (m.containsKey('deepLink') && m['deepLink'] != null && (m['deepLink'] is! String)) {
-    throw FormatException('CanonicalSearchCitation.deepLink has an invalid wire value');
+  if (m.containsKey('deepLink') &&
+      m['deepLink'] != null &&
+      (m['deepLink'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchCitation.deepLink has an invalid wire value',
+    );
   }
-  if (m.containsKey('badgeLabel') && m['badgeLabel'] != null && (m['badgeLabel'] is! String)) {
-    throw FormatException('CanonicalSearchCitation.badgeLabel has an invalid wire value');
+  if (m.containsKey('badgeLabel') &&
+      m['badgeLabel'] != null &&
+      (m['badgeLabel'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchCitation.badgeLabel has an invalid wire value',
+    );
   }
-  if (m.containsKey('sourceDomain') && m['sourceDomain'] != null && (m['sourceDomain'] is! String)) {
-    throw FormatException('CanonicalSearchCitation.sourceDomain has an invalid wire value');
+  if (m.containsKey('sourceDomain') &&
+      m['sourceDomain'] != null &&
+      (m['sourceDomain'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchCitation.sourceDomain has an invalid wire value',
+    );
   }
   if (!m.containsKey('score') || m['score'] == null || (m['score'] is! num)) {
-    throw FormatException('CanonicalSearchCitation.score has an invalid wire value');
+    throw FormatException(
+      'CanonicalSearchCitation.score has an invalid wire value',
+    );
   }
 }

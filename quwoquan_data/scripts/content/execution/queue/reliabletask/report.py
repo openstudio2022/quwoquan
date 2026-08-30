@@ -5,6 +5,12 @@ import math
 from dataclasses import dataclass
 from typing import Mapping
 
+from content.execution.closure.zero_qualified_reason import (
+    ZeroQualifiedReason,
+    ZeroQualifiedReasonError,
+    parse_zero_qualified_reason,
+)
+
 _FLEET_TASK_STATUSES = frozenset(
     {"ready", "processing", "retry_wait", "succeeded", "dead"}
 )
@@ -65,6 +71,10 @@ class ReliableTaskFleetReport:
     manual_recovered_count: int = 0
     automatic_recovery_status: str = "NOT_EXERCISED"
     automatic_recovery_rate: float = 0.0
+    fleet_peak_concurrent_workers: int = 0
+    fleet_wave_count: int = 0
+    fleet_batch_deadline_epoch_seconds: int = 0
+    zero_qualified_reason: ZeroQualifiedReason | None = None
 
     @classmethod
     def from_document(cls, value: object) -> "ReliableTaskFleetReport":
@@ -108,6 +118,13 @@ class ReliableTaskFleetReport:
             automatic_recovered_count = int(value.get("automaticRecoveredCount"))
             manual_recovered_count = int(value.get("manualRecoveredCount"))
             automatic_recovery_rate = float(value.get("automaticRecoveryRate"))
+            fleet_peak_concurrent_workers = int(
+                value.get("fleetPeakConcurrentWorkers")
+            )
+            fleet_wave_count = int(value.get("fleetWaveCount"))
+            fleet_batch_deadline_epoch_seconds = int(
+                value.get("fleetBatchDeadlineEpochSeconds")
+            )
         except (TypeError, ValueError) as exc:
             raise ValueError("ReliableTask fleet report counts must be integers") from exc
         raw_outcomes = value.get("taskOutcomes")
@@ -153,6 +170,16 @@ class ReliableTaskFleetReport:
             raise ValueError(
                 "ReliableTask fleet publish pass differs from canonical acceptance"
             )
+        # DEC-003: 三个 fleet 事实由 Service 侧从冻结口径回写，缺一即判为
+        # 无法归属的运行回执，不接受 0 或缺省填充。
+        if (
+            fleet_peak_concurrent_workers < 1
+            or fleet_wave_count < 1
+            or fleet_batch_deadline_epoch_seconds < 1
+        ):
+            raise ValueError(
+                "ReliableTask fleet report is missing frozen fleet capacity facts"
+            )
         if (
             recovery_eligible_count < 0
             or automatic_recovered_count < 0
@@ -185,6 +212,32 @@ class ReliableTaskFleetReport:
                 f"{expected_recovery_status!r} expectedRate="
                 f"{expected_recovery_rate}"
             )
+        # 零合格原因是闭集 typed 值：字段缺席表示本批次不是零合格终态，
+        # 在场则必须整体落在 canonical 闭集内，闭集外取值在此判否而不是
+        # 退化成「没有原因的 blocked」。
+        raw_reason = value.get("zeroQualifiedReason")
+        if raw_reason is None:
+            zero_qualified_reason = None
+        else:
+            try:
+                zero_qualified_reason = parse_zero_qualified_reason(
+                    raw_reason,
+                    label=f"ReliableTask fleet report:{execution_id}",
+                )
+            except ZeroQualifiedReasonError as exc:
+                raise ValueError(
+                    f"ReliableTask fleet report zeroQualifiedReason is invalid: {exc}"
+                ) from exc
+            if canonical_accepted_count >= 1:
+                raise ValueError(
+                    "ReliableTask fleet report carries a zeroQualifiedReason while "
+                    "canonical acceptance is non-zero"
+                )
+            if passed:
+                raise ValueError(
+                    "ReliableTask fleet report carries a zeroQualifiedReason while "
+                    "passed is true"
+                )
         outcomes = tuple(
             ReliableTaskFleetOutcome.from_document(item) for item in raw_outcomes
         )
@@ -214,6 +267,10 @@ class ReliableTaskFleetReport:
             manual_recovered_count=manual_recovered_count,
             automatic_recovery_status=automatic_recovery_status,
             automatic_recovery_rate=automatic_recovery_rate,
+            fleet_peak_concurrent_workers=fleet_peak_concurrent_workers,
+            fleet_wave_count=fleet_wave_count,
+            fleet_batch_deadline_epoch_seconds=fleet_batch_deadline_epoch_seconds,
+            zero_qualified_reason=zero_qualified_reason,
         )
 
 

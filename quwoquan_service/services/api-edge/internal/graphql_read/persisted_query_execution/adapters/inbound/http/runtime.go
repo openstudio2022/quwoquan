@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
@@ -23,6 +24,8 @@ import (
 )
 
 var sha256ReferencePattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+const executePersistedGraphQLQueryOperationID = "gateway.persisted_query_execution.ExecutePersistedGraphQLQuery"
 
 // Config is the release-bound GraphQL read configuration owned by the
 // persisted-query execution object. The API process only composes this facet;
@@ -87,8 +90,12 @@ func ValidateAndResolveConfig(
 		config.TrustedPublicKeysJSON == "" {
 		return errors.New("GraphQL read registry, schema, and trusted public keys are required")
 	}
-	if config.OwnerTimeoutMS < 100 || config.OwnerTimeoutMS > 5000 {
-		return errors.New("GraphQL owner timeout must be within 100..5000ms")
+	// ExecutePersistedGraphQLQuery owns 3000ms while the SearchPage owner
+	// operation owns 1500ms. The HTTP client is the single 2000ms transport
+	// boundary between them; an arbitrary environment value recreates the
+	// equal-deadline race that discarded a valid owner response at the edge.
+	if config.OwnerTimeoutMS != 2000 {
+		return errors.New("GraphQL owner timeout must be exactly 2000ms")
 	}
 	if rolloutEnabled && config.CandidateDigest != strings.ToLower(strings.TrimSpace(rolloutCandidateDigest)) {
 		return errors.New("GraphQL registry candidate digest must match rollout candidate")
@@ -168,7 +175,36 @@ func NewRuntime(ctx context.Context, options Options) (*Runtime, error) {
 	if err != nil {
 		return nil, fmt.Errorf("GraphQL application service invalid: %w", err)
 	}
-	return &Runtime{handler: NewHandler(service), registry: registry}, nil
+	requestTimeout, err := canonicalGraphQLRequestTimeout()
+	if err != nil {
+		return nil, err
+	}
+	return &Runtime{
+		handler:  withGraphQLRequestDeadline(NewHandler(service), requestTimeout),
+		registry: registry,
+	}, nil
+}
+
+func canonicalGraphQLRequestTimeout() (time.Duration, error) {
+	for _, descriptor := range operationsecurity.ForDomain("gateway") {
+		if descriptor.CanonicalOperationID != executePersistedGraphQLQueryOperationID {
+			continue
+		}
+		if descriptor.Method != http.MethodPost || descriptor.PathTemplate != "/graphql" ||
+			descriptor.OperationKind != "query" || descriptor.TimeoutMilliseconds <= 0 {
+			return 0, errors.New("canonical GraphQL request descriptor is invalid")
+		}
+		return time.Duration(descriptor.TimeoutMilliseconds) * time.Millisecond, nil
+	}
+	return 0, errors.New("canonical GraphQL request descriptor is unavailable")
+}
+
+func withGraphQLRequestDeadline(next http.Handler, timeout time.Duration) http.Handler {
+	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		ctx, cancel := context.WithTimeout(request.Context(), timeout)
+		defer cancel()
+		next.ServeHTTP(response, request.WithContext(ctx))
+	})
 }
 
 func (runtime *Runtime) Handler() http.Handler {
@@ -251,7 +287,11 @@ func (authorizer *registryAuthorizer) validateEntry(entry graphdomain.Entry) err
 		return fmt.Errorf("operation %s authorization binding drifted", entry.CanonicalOperationID)
 	}
 	if err := authorizer.entryValidator(entry); err != nil {
-		return fmt.Errorf("registry executor %s has no composition binding", entry.ExecutorKey)
+		return fmt.Errorf(
+			"registry executor %s composition binding is invalid: %w",
+			entry.ExecutorKey,
+			err,
+		)
 	}
 	return nil
 }

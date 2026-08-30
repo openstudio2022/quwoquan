@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -45,6 +46,64 @@ func (reader integrationAssetReader) ReadAsset(
 		return nil, fmt.Errorf("asset %q not found", locator)
 	}
 	return append([]byte(nil), value...), nil
+}
+
+func TestSkillPackageStageCommandCannotAliasDifferentRelease(
+	t *testing.T,
+) {
+	if skillPackageDB == nil {
+		t.Fatal("skill package MongoDB was not initialized")
+	}
+	if err := skillPackageDB.Drop(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assets := integrationAssetReader{}
+	first := integrationRelease(t, assets, "2.0.0", privateKey)
+	second := integrationRelease(t, assets, "2.0.1", privateKey)
+	store := skillpackagepersistence.NewMongoStore(skillPackageDB)
+	if err := store.EnsureIndexes(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	service := application.NewService(
+		store,
+		store,
+		assets,
+		application.NewEd25519Verifier(
+			map[string]ed25519.PublicKey{"integration-key": publicKey},
+		),
+		application.RuntimeIdentity{
+			APIVersion: "assistant-skill/v1",
+			Version:    "1.4.0",
+		},
+		time.Now,
+	)
+	if _, err := service.Stage(t.Context(), "official-bootstrap:stage", first); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Stage(
+		t.Context(),
+		"official-bootstrap:stage",
+		second,
+	); !errors.Is(err, model.ErrInvalidRelease) {
+		t.Fatalf("same command with a different release error = %v", err)
+	}
+	if _, err := service.Stage(
+		t.Context(),
+		"official-bootstrap:"+second.ReleaseDigest+":stage",
+		second,
+	); err != nil {
+		t.Fatalf("release-bound command did not stage the next release: %v", err)
+	}
+	assertSkillPackageDocumentCount(
+		t,
+		"assistant_skill_package_releases",
+		bson.M{"packageId": integrationSkillPackageID},
+		2,
+	)
 }
 
 func TestSkillPackageMongoActivationSurvivesRestartAndRollsBackAtomically(

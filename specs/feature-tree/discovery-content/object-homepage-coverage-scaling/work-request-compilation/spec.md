@@ -1,0 +1,120 @@
+# L3 Story：按需意图编译为载体 demand (`work-request-compilation`)
+
+> 所属能力：[对象主页覆盖扩展](../spec.md)
+>
+> Journey / Scenario：[`JNY-014 / SCN-035`](../../../spec.md#scn-035)
+>
+> 设计归属：[L2 DEC-020](../design.md#dec-020)、[L2 DEC-024](../design.md#dec-024)、[L2 DEC-025](../design.md#dec-025)
+
+## 1. 用户价值
+
+作为内容运营者，我希望用一份可修改、可取消、可确认的按需请求声明范围、载体组合、逐载体数量与来源策略，得到无副作用的 typed preview，并在显式确认后确定性编译为 confirmed carrier demand，从而不写任何执行事实就能复核意图，失败时零写入并可直接修复输入。
+
+## 2. 范围与非目标
+
+### In Scope
+
+- confirmed pre-acquisition handoff 作为来源发现前按需 demand 的唯一 owner：lifecycle、严格 discriminated scope、canonical topic refs 与按载体 sourceSelection。
+- WorkRequest 只从 confirmed handoff 派生，并把 source intent 投影为后续 candidate query 条件；它不持有或暴露 SourcePool/execution/campaign/provider/model 身份。
+- preview / needs_input / blocked / confirmed / canceled 五态互斥；确认前零 carrier demand 与零工作包写入。
+- candidate-backed work package 的中性初始化边界已实现：`task init` 只原子物化三份 `0.plan` 输入，不推进 stage；它是唯一正式初始化命令。
+
+### Out of Scope
+
+- 来源发现执行、载体生产、review 与 canonical 池准入（归 [`on-demand-content-pool-admission`](../on-demand-content-pool-admission/spec.md)）。
+- immutable release、环境导入与 App 消费（归 [`multi-carrier-release`](../multi-carrier-release/spec.md)）。
+- 由自然语言静默猜测缺失数量、未知区域、载体、lifecycle、provider、来源策略或 retry 依据；resolver 可以在 preview 中提出显式默认建议，但确认前不得写 carrier demand 或执行。
+- 新建或调用 Campaign、仓内 Agent/controller/queue/recovery、managed SDK/provider 路径、第二套 Execution/SourcePool/发布台账或运行生命周期；意图请求只编译 confirmed carrier demand，执行由宿主 Agent 进入十阶段。
+
+## 3. 行为要求
+
+<a id="req-001"></a>
+### REQ-001 用户意图只编译为现有四载体请求信封
+
+- WorkRequest 只表达内容运营者确认的范围、active carrier、每载体对象数量、`research|commercial` lifecycle、`fresh|retry` 意图与显式依赖引用；它不拥有 Campaign、Execution、Reconciliation、SourcePool、release、环境状态或 provider/model 选择。
+- preview 必须回显解析出的输入、每个 active carrier 的对象数量、提出的默认建议、依赖 identity/digest 与 typed outcome。缺数量、未知或冲突的范围/载体/lifecycle、无效 retry 引用返回 `needs_input`；confirmed handoff 或其它必需依赖缺失、依赖 digest 漂移返回 `blocked`。两类结果的新 carrier demand 与工作包写入数均为零。
+- 内容运营者可以确认、修改或取消 preview。修改回到新的 preview。取消不写 WorkRequest 或 carrier demand。只有确认才进入编译。宿主 Agent 不运行仓内 Cursor key/model/SDK semantic preflight；来源访问与素材 rights 分别在 source admission 与对象 admission 返回 typed 失败，不得塌陷为空结果。
+- 同一已确认 WorkRequest、resolver policy/catalog digest 与全部依赖 ref/digest 必须生成相同 WorkRequest digest 与每 carrier demand digest。每个 active carrier 恰好生成一个 demand record；编译器不得直写 execution work package、Campaign plan/report、reconciliation receipt、SourcePool 或 pool record。
+- 多 carrier 编译采用全有或全无语义：任一 carrier 无法形成合法 carrier demand 时，本次不发布任何新 carrier demand，已存在的 create-once artifact 保持不变并回到可修改 preview。同 ID 同 bytes 重放幂等；同 ID 不同 bytes、policy/receipt/source digest 漂移必须在写前失败。
+- `fresh` 不得携带 `retryOf`。`retry` 必须绑定 exact predecessor terminal receipt。网络、来源访问、rights、候选为空、执行中断或批次截止分别保留自身 typed 终态和下一动作。修复输入后回到 preview；已经产生 execution 事实的恢复只能创建新的 `executionId + retryOf` 并由宿主 Agent进入同一十阶段。
+
+<a id="req-002"></a>
+### REQ-002 confirmed handoff 是按需 demand 的唯一 owner 且输入不静默默认
+
+- 来源发现之前的按需 demand 事实（lifecycle、scope、canonical topic refs、按载体 sourceSelection、逐载体数量意图）只由 confirmed pre-acquisition handoff 拥有；WorkRequest 只能持有 handoff ref+digest 与确定性投影。下游 release consumer 只能读 canonical object package + append-only pool record 的白名单 handoff projection，不得读 handoff 的生产字段。
+- scope 是严格 discriminated 值，四类条件必填互斥：`vertical` 不携带 region/topic，`region` 只需 region，`topic` 只需 primary topic，`region_topic` 两者都需。`relatedTopicRefs` 只允许 canonical taxonomy 引用、不含 primary、不由同义展开自动生成。未知或歧义映射返回 `needs_input`，不得合成自由文本主题身份。
+- vertical 是显式输入：缺失时只允许 preview 给出显式建议并要求确认，任何路径不得静默默认到固定垂类。
+- `sourceSelection` 只引用现有 content source registry 的闭集标识，闭集按 `(lane, vertical)` 取。声明的 provider 在 handoff 冻结与 preview/confirm 阶段点名 fail closed，不得推迟到执行阶段才校验；执行阶段不得携带针对另一份闭集的第二次 provider 判定。
+- WorkRequest 的 source intent 只是 `handoff.sourceSelection` 的逐载体确定性投影；编译输入不接受 provider 列表。SourcePool、execution/campaign/provider/model 只可留在 producer 审计事实，均不得进入 consumer identity、eligibility、release handoff 或 App DTO。
+
+<a id="req-003"></a>
+### REQ-003 数量三轴单义与 candidate-backed `task init`
+
+- 三个数量各自单义且不得互相派生或反推：用户 `workload/quota` 是不可下调的对象下限，候选查询的 `candidateCount` 由 source policy 与实际候选决定，工作包 `workUnitCount` 只由 accepted candidates 派生。编译不得以 quota 冒充候选数。
+- 新任务初始化的目标契约为中性 `task init`：输入 confirmed carrier demand 与 immutable candidate bindings，只原子物化 `execution_manifest.json`、`0.plan/request.json`、`0.plan/target_set.json`，不运行 semantic preflight、不推进 `0.plan` 或任何后继 stage，也不创建 pool/release/environment 事实。
+- 当前 `task init --carrier-demand <path> --candidate-bindings <path>` 已符合该边界；`task execute`（含 `--stage plan-only`）、pool-dispatch/campaign 与人工手写三文件仍不是合法入口。真实宿主消费证据由 `OPEN-001` 追踪。
+- 同 identity 同 bytes 初始化幂等；candidate ref/digest 缺失、accepted count 与 target set 不一致、同 identity 异 bytes 或任一 schema 失败时零工作包可见。
+
+## 4. 契约引用
+
+- demand handoff：`quwoquan_data/schema/execution/content_pre_acquisition_handoff.schema.json`
+- WorkRequest：`quwoquan_data/schema/execution/work_request.schema.json`
+- compile result：`quwoquan_data/schema/execution/work_request_compile_result.schema.json`
+- carrier demand / candidate bindings / init request：`quwoquan_data/schema/execution/carrier_demand.schema.json`、`immutable_candidate_bindings.schema.json`、`task_init_request.schema.json`
+- execution manifest / target set：`quwoquan_data/schema/execution/content_execution_manifest.schema.json`、`quwoquan_data/schema/execution/target_set.schema.json`
+- source registry：`quwoquan_data/control_plane/_shared/catalogs/content_source_registry.yaml`
+
+## 5. 验收场景
+
+<a id="gwt-001"></a>
+### GWT-001 意图 preview 经确认后确定性编译且失败零写入
+
+- GIVEN 内容运营者输入范围、homepage/article/image/video 中的 active carrier、每载体正整数对象数量、lifecycle、fresh/retry 与显式依赖引用。
+- WHEN resolver 生成 preview，运营者依次选择修改、取消或确认。
+- THEN 修改只生成反映新输入的新 preview，取消不写 WorkRequest/carrier demand。
+- THEN 缺数量、未知或冲突输入、无效 retry 返回 typed `needs_input`；confirmed handoff 或其它必需依赖缺失、依赖 digest 漂移返回 typed `blocked`。两类结果的新 carrier demand 数均为零。
+- THEN 只有确认生成稳定 WorkRequest digest，并为每个 active carrier 恰好生成一个 confirmed demand；相同输入、policy/catalog digest 与依赖 ref/digest 重放得到相同摘要，同 ID 异字节在写前失败。
+- THEN 编译结果可读出 WorkRequest、resolver policy/catalog、全部 dependency 与 carrier demand ref/digest；execution work package、Campaign plan/report、reconciliation receipt、SourcePool 与 pool record 均未由编译器写入。
+- THEN 任一 carrier 编译失败时全批零发布，已存在的 create-once artifact 不变；修复输入后回到 preview。
+- THEN 已实现的 candidate-backed `task init` 之后，confirmed demand 只由宿主 Agent 十阶段消费；source access、rights、空候选、中断或截止失败保留真实 stage 终态。恢复只能由新 `executionId + retryOf` 消费精确 receipt，且其它 carrier 的既有合格对象不被撤销。
+- THEN 同一 immutable candidate 对 1-carrier 与 4-carrier 的 success、blocked、collision 各形成可重放 benchmark；成功场景满足 preview/confirm p95 预算，blocked/collision 新 carrier demand 数为零，样本不足或超预算不得形成性能达标结论。
+
+<a id="gwt-002"></a>
+### GWT-002 confirmed handoff 承载四类 scope 且输入缺口不静默
+
+- GIVEN 内容运营者分别以 `vertical`、`region`、`topic`、`region_topic` 四类 scope 提交按需请求，其中一份缺 vertical、一份携带无法映射 canonical taxonomy 的相关主题、一份声明了垂类 provider 闭集之外的来源。
+- WHEN preview 解析输入并等待显式确认。
+- THEN 四类 scope 分别按各自的条件必填校验通过或返回 `needs_input`，不存在同时携带互斥维度仍通过的路径。
+- THEN 缺 vertical 的请求得到显式建议并要求确认，任何阶段不出现静默默认垂类；未确认前 handoff revision 数为零。
+- THEN 无法映射 canonical taxonomy 的相关主题返回 `needs_input` 并点名该主题，不合成自由文本主题身份。
+- THEN 闭集之外的来源在 handoff 冻结与 preview/confirm 即 fail closed 并点名该 provider，不推迟到执行阶段；跨 lane 借用另一 lane 的闭集同样判否。
+- THEN confirmed handoff 的 ref+digest 是 WorkRequest 派生的唯一 demand 输入；对同一字段的独立调用方输入路径为零。SourcePool/execution/campaign/provider/model 不出现在 consumer handoff projection 或 App DTO。
+
+## 6. 依赖
+
+- 前置要求：confirmed handoff、create-once WorkRequest 与 carrier demand 语义。
+- 上游事实：content source registry 闭集、垂类 provider 闭集、canonical taxonomy 与（retry 时的）reconciliation receipt。
+- 下游结果：confirmed WorkRequest、compile receipt 与逐载体 demand；已实现的 candidate-backed `task init` 由 [`on-demand-content-pool-admission`](../on-demand-content-pool-admission/spec.md) 的宿主 execution 消费。
+- 父级设计：`DEC-020`、`DEC-024`、`DEC-025`
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 confirmed 请求到宿主 execution 的真实消费证据未闭合
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：canonical WorkRequest、`compile-intent` typed port/CLI 与整批原子 writer 已实现，preview/修改/取消/needs_input/blocked/确定性摘要/all-or-nothing 已由 local_contract 覆盖；但真实 confirmed demand 尚未通过中性 `task init` 形成 candidate-backed 工作包并由宿主 Agent 走到真实 stage terminal，因此不能证明一份意图沿目标单轨推进。
+- 完成判定：[`GWT-001`](#gwt-001) 的 confirmed demand 原子性与 [`GWT-002`](#gwt-002) 的只读 handoff 边界保持成立；保持编译面既有 local_contract；api_integration 以真实 confirmed demand 调用已实现的 `task init`，由宿主 Agent 产生真实 stage terminal，并证明新 `retryOf` 精确消费 predecessor receipt、其它 carrier 既有合格对象不被撤销。专项性能仍归 [`OPEN-002`](#open-002)。
+- 依赖：deterministic `task init` 已实现；尚缺真实宿主消费。入池与环境后缀分别由 [`on-demand-content-pool-admission`](../on-demand-content-pool-admission/spec.md) 与 [`multi-carrier-release`](../multi-carrier-release/spec.md) 的 OPEN 承接。
+
+<a id="open-002"></a>
+### OPEN-002 WorkRequest 专项性能与成本实测缺失
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 2 秒 preview、5 秒 confirm 的 p95 仍是设计 SLO，通用性能门禁没有覆盖 WorkRequest；每日 1,000 次确认、平均每份 artifact 16 KiB 与 180 天保留也是容量基线而非实测，不能据此宣称编译面已稳定或成本已闭合。
+- 完成判定：`GWT-001.t13..t14` 由同一 immutable candidate 的专项 benchmark 直接覆盖。1-carrier 与 4-carrier 每个成功场景至少 20 个样本并证明 preview/confirm p95 分别不超过 2,000/5,000 ms，blocked/collision 全部零 carrier demand 发布。报告同时给出 WorkRequest/compile receipt 的 p50/p95 bytes、每日 1,000 请求的 30/180 天未压缩投影，并验证 schema 256 KiB 单 artifact 上限与引用保护归档。
+- 依赖：Data owner 在编译面契约收敛后补 benchmark runner 与 canonical report；缺样本、候选 SHA/源摘要漂移或任一场景失败均保持本 OPEN，不得用通用 App/feed 性能门禁替代。

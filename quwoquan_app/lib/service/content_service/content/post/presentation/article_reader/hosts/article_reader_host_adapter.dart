@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_asset.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_presentation_values.dart';
@@ -15,8 +16,8 @@ class ArticleReaderHostConfig {
     required this.metrics,
     required this.initialPage,
     required this.coverUrl,
+    required this.enablePageCurl,
     this.pagePadding = EdgeInsets.zero,
-    this.enablePageCurl = true,
     this.forceDegradedPager = false,
     this.headerLabel,
     this.showFooterPageLabel = true,
@@ -31,6 +32,7 @@ class ArticleReaderHostConfig {
     this.onSceneChanged,
     this.onDebugStateChanged,
     this.onEntityTap,
+    this.onImageTap,
     this.gestureIntentController,
     this.debugPageSurfaceBuilder,
     this.debugBackPageSurfaceBuilder,
@@ -58,6 +60,7 @@ class ArticleReaderHostConfig {
   final ValueChanged<StPageFlipScene>? onSceneChanged;
   final ValueChanged<ArticleReadOnlyBookDebugState>? onDebugStateChanged;
   final ValueChanged<ArticleInlineSpan>? onEntityTap;
+  final ValueChanged<ArticleDocumentAsset>? onImageTap;
   final ImmersiveGestureIntentController? gestureIntentController;
   final Widget Function(BuildContext context, int pageIndex, Size pageSize)?
   debugPageSurfaceBuilder;

@@ -12,6 +12,10 @@ from content.execution.campaign import orchestrator as campaign_orchestrator
 from content.execution.campaign import plan as campaign_plan
 from content.execution.campaign.workspace import CampaignRuntimePaths
 from core.io import write_json
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from support.campaign_lanes_fixture import (  # noqa: F401
     CARRIERS,
     ROOT_ID,
@@ -107,9 +111,7 @@ def test_campaign_lane_argv_binds_audited_stage_recovery() -> None:
         "selector": "named-targets",
         "quota": 1,
         "count": 1,
-        "requiredWorkers": 1,
-        "partitionCount": 16,
-        "capacityPlanDigest": "sha256:" + "1" * 64,
+        "executionAuthority": synthetic_governed_execution_authority(),
         "semanticSelectionId": "cursor_auto",
         "targetNames": ["都江堰"],
     }
@@ -185,7 +187,7 @@ def test_lane_runner_resumes_controller_yields_in_one_create_once_claim(
         tmp_path,
         {},
         tmp_path / "lane.log",
-        30,
+        None,
         run_session=session,
         workspace=workspace,
         execution_id="20260807--travel-article-m100--china--scale-001",
@@ -364,6 +366,154 @@ def test_sigkill_termination_evidence_does_not_falsely_claim_oom() -> None:
     assert signal_name == "SIGKILL"
 
 
+def test_process_evidence_sampling_timeout_does_not_become_lane_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def sampling_timeout(*_args, **_kwargs):
+        raise campaign_lane_execution.subprocess.TimeoutExpired(["ps"], 0.01)
+
+    monkeypatch.setattr(campaign_lane_execution.subprocess, "run", sampling_timeout)
+
+    assert campaign_lane_execution._process_group_rss_bytes(1234) == 0
+
+
+def test_lane_runner_continues_when_process_evidence_sample_times_out(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    class FakeProcess:
+        pid = 9100
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            self.wait_calls = 0
+
+        def wait(self, timeout=None):
+            self.wait_calls += 1
+            if self.wait_calls == 1:
+                raise campaign_lane_execution.subprocess.TimeoutExpired(
+                    ["python", "cli.py"], timeout
+                )
+            return 0
+
+    checkpoints: list[dict[str, object]] = []
+    session = SimpleNamespace(
+        process_termination_timeout_seconds=1,
+        lane_checkpoint=lambda **kwargs: checkpoints.append(kwargs),
+    )
+    workspace = SimpleNamespace(
+        carrier="video",
+        ref="data/local/cache/capsule/video",
+        execution_root=tmp_path / "execution",
+    )
+    workspace.execution_root.mkdir()
+    monkeypatch.setattr(campaign_lane_execution.subprocess, "Popen", FakeProcess)
+    monkeypatch.setattr(campaign_lane_execution.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(
+        campaign_lane_execution.subprocess,
+        "run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            campaign_lane_execution.subprocess.TimeoutExpired(["ps"], 0.01)
+        ),
+    )
+    monkeypatch.setattr(
+        campaign_lane_execution,
+        "terminate_lane_process",
+        lambda *_args, **_kwargs: pytest.fail(
+            "diagnostic process sampling must never terminate the lane"
+        ),
+    )
+
+    code = campaign_lane_execution._default_lane_runner(
+        ["python", "cli.py"],
+        tmp_path,
+        {},
+        tmp_path / "lane.log",
+        None,
+        run_session=session,
+        workspace=workspace,
+        execution_id="20260814--travel-video-workload-video-15--china--scale-002",
+        stage="review-only",
+    )
+
+    assert code == 0
+    assert checkpoints[-1]["status"] == "running"
+    assert checkpoints[-1]["return_code"] == 0
+    assert checkpoints[-1]["process_evidence"]["maxRssBytes"] == 0
+
+
+def test_lane_without_deadline_does_not_report_monitor_timeout_as_campaign_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    execution_id = "20260814--travel-video-workload-video-15--china--scale-002"
+    execution_root = tmp_path / "output" / "data" / "tasks" / execution_id
+    execution_root.mkdir(parents=True)
+    capsule = tmp_path / "capsule"
+    capsule.mkdir()
+    workspace = SimpleNamespace(
+        carrier="video",
+        path=capsule,
+        ref="data/local/cache/content-campaign-workspaces/capsule",
+        execution_root=execution_root,
+        capsule=SimpleNamespace(git_branch="main", commit_sha="a" * 40),
+    )
+    runtime = CampaignRuntimePaths(
+        repo_root=tmp_path,
+        output_root=tmp_path / "output",
+        publish_root=tmp_path / "publish",
+        campaigns_root=tmp_path / "campaigns",
+        workspaces_root=tmp_path / "workspaces",
+    )
+    checkpoints: list[dict[str, object]] = []
+    session = SimpleNamespace(
+        run_id="campaign-run",
+        generation=1,
+        fencing_token="sha256:" + "1" * 64,
+        plan_digest="sha256:" + "2" * 64,
+        lane_checkpoint=lambda **kwargs: checkpoints.append(kwargs),
+    )
+
+    def monitor_failed(*_args, **_kwargs):
+        raise campaign_lane_execution.subprocess.TimeoutExpired(["ps"], 0.01)
+
+    monkeypatch.setattr(
+        campaign_lane_execution,
+        "_verify_workspace_external_inputs",
+        lambda _workspace: None,
+    )
+    code, error = campaign_lane_execution.run_lane(
+        workspace,
+        {
+            "executionId": execution_id,
+            "sourceDigest": {"digest": "sha256:" + "3" * 64},
+            "sourceRevision": "sha256:" + "4" * 64,
+            "entityCatalogDigest": "sha256:" + "5" * 64,
+            "semanticSelectionId": "cursor_grok",
+            "rootExecutionId": execution_id,
+            "familyRef": "content/travel/video/video",
+            "regionRef": "china",
+            "selector": "source-ready-priority",
+            "quota": 15,
+            "count": 27,
+            "executionAuthority": synthetic_governed_execution_authority(),
+        },
+        stage="review-only",
+        runtime=runtime,
+        root_execution_id=execution_id,
+        timeout_seconds=None,
+        lane_runner=monitor_failed,
+        run_session=session,
+        observer_binary_binding=None,
+        fleet_transport_binding=None,
+    )
+
+    assert code == 2
+    assert error is not None
+    assert "after Nones" not in error
+    assert checkpoints[-1]["status"] == "failed"
+    assert checkpoints[-1]["return_code"] == 2
+
+
 @pytest.mark.parametrize("terminal_source", ("execution_state", "command_packet"))
 def test_failed_lane_prefers_typed_terminal_cause_over_truncated_log_tail(
     monkeypatch: pytest.MonkeyPatch,
@@ -381,6 +531,7 @@ def test_failed_lane_prefers_typed_terminal_cause_over_truncated_log_tail(
         path=capsule,
         ref="data/local/cache/content-campaign-workspaces/capsule",
         execution_root=execution_root,
+        capsule=SimpleNamespace(git_branch="main", commit_sha="a" * 40),
     )
     runtime = CampaignRuntimePaths(
         repo_root=tmp_path,
@@ -474,9 +625,7 @@ def test_failed_lane_prefers_typed_terminal_cause_over_truncated_log_tail(
             "selector": "source-ready-priority",
                 "quota": 1,
                 "count": 1,
-                "requiredWorkers": 1,
-                "partitionCount": 16,
-                "capacityPlanDigest": "sha256:" + "6" * 64,
+                "executionAuthority": synthetic_governed_execution_authority(),
         },
         stage="review-only",
         runtime=runtime,

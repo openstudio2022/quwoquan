@@ -119,9 +119,13 @@ List<ContentPostViewData> contentPostListBuilder({
 }
 
 /// 构造一个 typed GetPost payload；文章正文只由本用例传入的 Markdown 决定。
+///
+/// [articleAssets] 供 canonical `asset://` 引用的用例注入 manifest 资产
+/// （对齐真实发布物形态：assetId + publicSliceKey）。
 ContentPostDetailPayload contentPostDetailPayloadBuilder({
   required ContentPostViewData post,
   String? articleMarkdown,
+  List<PostArticleAsset> articleAssets = const <PostArticleAsset>[],
 }) {
   final markdown = articleMarkdown?.trim();
   final hasMarkdown = markdown != null && markdown.isNotEmpty;
@@ -152,13 +156,13 @@ ContentPostDetailPayload contentPostDetailPayloadBuilder({
       markdownDialect: hasMarkdown ? 'qwq-rich-md' : null,
       articleMarkdownDigest: hasMarkdown ? _testArticleDigest : null,
       articleAssetManifest: hasMarkdown
-          ? const PostArticleAssetManifest(
+          ? PostArticleAssetManifest(
               schema: 'article-asset-manifest',
               articleMarkdownDigest: _testArticleDigest,
               documentSha256: _testArticleDigest,
               assetManifestSha256: _testArticleDigest,
               documentVersionSha256: _testArticleDigest,
-              assets: <PostArticleAsset>[],
+              assets: articleAssets,
             )
           : null,
       articleRenderProfile: post.type == 'article'

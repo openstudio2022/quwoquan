@@ -7,9 +7,12 @@ from typing import Any
 from ..api import BusinessObjectRef, CapabilityRequest
 from ..capabilities.circle_service import (
     CIRCLE_GATHERING,
+    CIRCLE_GATHERING_PLAN,
     CIRCLE_PENDING_APPROVAL,
     CIRCLE_WITH_MEMBERS,
     CircleGatheringParams,
+    CircleGatheringPlanParams,
+    CircleGatheringPlanResult,
     CircleGatheringResult,
     CirclePendingApprovalParams,
     CirclePendingApprovalResult,
@@ -51,6 +54,16 @@ _GATHERING = CapabilityDefinition(
         "circle.gathering.CancelGathering",
     ),
 )
+_GATHERING_PLAN = CapabilityDefinition(
+    capability=CIRCLE_GATHERING_PLAN,
+    operations=(
+        "circle.gathering_plan.CreateGatheringPlan",
+        "circle.gathering_plan.GetGatheringPlan",
+        "circle.gathering_plan.ProposeGatheringPlan",
+        "circle.gathering_plan.CommitGatheringPlanProposal",
+        "circle.gathering_plan.ListGatheringPlanRevisions",
+    ),
+)
 _PENDING_APPROVAL = CapabilityDefinition(
     capability=CIRCLE_PENDING_APPROVAL,
     operations=(
@@ -67,7 +80,7 @@ _ROOM_READY_INTERVAL_SECONDS = 3.0
 
 class CircleAcceptanceDataProvider:
     def describe(self) -> tuple[CapabilityDefinition, ...]:
-        return (_CIRCLE, _GATHERING, _PENDING_APPROVAL)
+        return (_CIRCLE, _GATHERING, _GATHERING_PLAN, _PENDING_APPROVAL)
 
     def plan(
         self,
@@ -77,10 +90,14 @@ class CircleAcceptanceDataProvider:
     ) -> ProviderPlan:
         if request.capability == CIRCLE_WITH_MEMBERS:
             definition = _CIRCLE
+        elif request.capability == CIRCLE_GATHERING:
+            definition = _GATHERING
+        elif request.capability == CIRCLE_GATHERING_PLAN:
+            definition = _GATHERING_PLAN
         elif request.capability == CIRCLE_PENDING_APPROVAL:
             definition = _PENDING_APPROVAL
         else:
-            definition = _GATHERING
+            raise TypeError("Circle Provider received an unknown capability")
         return plan_for(definition, request, resolved_params)
 
     def provision(
@@ -90,6 +107,8 @@ class CircleAcceptanceDataProvider:
     ) -> ProvisionedCapability:
         if isinstance(plan.resolved_params, CircleGatheringParams):
             return self._provision_gathering(context, plan.resolved_params)
+        if isinstance(plan.resolved_params, CircleGatheringPlanParams):
+            return self._provision_gathering_plan(context, plan.resolved_params)
         if isinstance(plan.resolved_params, CirclePendingApprovalParams):
             return self._provision_pending_approval(context, plan.resolved_params)
         if not isinstance(plan.resolved_params, CircleWithMembersParams):
@@ -278,6 +297,59 @@ class CircleAcceptanceDataProvider:
             operation_count=executor.operation_count,
         )
 
+    def _provision_gathering_plan(
+        self,
+        context: TestDataContext,
+        params: CircleGatheringPlanParams,
+    ) -> ProvisionedCapability:
+        gathering = params.gathering
+        if not isinstance(gathering, CircleGatheringResult):
+            raise TypeError("gathering dependency was not resolved")
+        if not isinstance(params.actors, AcceptanceActorSet):
+            raise TypeError("actors dependency was not resolved")
+        organizer = params.actors.require(params.organizer_role)
+        executor = _executor(context, CIRCLE_GATHERING_PLAN.key.value)
+        created = executor.call(
+            "circle.gathering_plan.CreateGatheringPlan",
+            actor=organizer,
+            step_id="create-gathering-plan",
+            bindings={"gatheringId": gathering.gathering.object_id},
+            body={
+                "items": [
+                    {
+                        "itemId": "agenda-1",
+                        "kind": "agenda",
+                        "order": 0,
+                        "agenda": {"content": "集合与出发"},
+                        "sourceRefs": [],
+                    }
+                ],
+                "acknowledgementPolicy": {"mode": "none"},
+                "affectedParticipationRefs": [],
+            },
+        )
+        plan = BusinessObjectRef("GatheringPlan", required_id(created, "planId"))
+        current_revision = BusinessObjectRef(
+            "PlanRevision",
+            required_id(created, "currentRevisionId"),
+        )
+        result = CircleGatheringPlanResult(
+            plan=plan,
+            gathering=gathering.gathering,
+            current_revision=current_revision,
+            current_revision_number=int(created.get("currentRevisionNumber") or 0),
+            current_revision_digest=required_id(created, "currentRevisionDigest"),
+            plan_version=int(created.get("planVersion") or 0),
+            organizer_role=params.organizer_role,
+            participant_role=params.participant_role,
+        )
+        return ProvisionedCapability(
+            value=result,
+            cleanup_handle=(plan,),
+            cleanup_context=organizer,
+            operation_count=executor.operation_count,
+        )
+
     def _provision_pending_approval(
         self,
         context: TestDataContext,
@@ -382,6 +454,50 @@ class CircleAcceptanceDataProvider:
         context: TestDataContext,
         provisioned: ProvisionedCapability,
     ) -> ReadbackResult:
+        if isinstance(provisioned.value, CircleGatheringPlanResult):
+            executor = _executor(
+                context,
+                CIRCLE_GATHERING_PLAN.key.value + ".readback",
+            )
+            response = executor.call(
+                "circle.gathering_plan.GetGatheringPlan",
+                actor=provisioned.cleanup_context,
+                step_id="get-gathering-plan",
+                bindings={
+                    "gatheringId": provisioned.value.gathering.object_id,
+                },
+            )
+            observed_plan = required_id(response, "id", "planId")
+            observed_gathering = required_id(response, "gatheringId")
+            observed_revision = required_id(response, "currentRevisionId")
+            observed_revision_number = int(
+                response.get("currentRevisionNumber") or 0
+            )
+            observed_revision_digest = required_id(
+                response,
+                "currentRevisionDigest",
+            )
+            return ReadbackResult(
+                passed=(
+                    observed_plan == provisioned.value.plan.object_id
+                    and observed_gathering
+                    == provisioned.value.gathering.object_id
+                    and observed_revision
+                    == provisioned.value.current_revision.object_id
+                    and observed_revision_number
+                    == provisioned.value.current_revision_number
+                    and observed_revision_digest
+                    == provisioned.value.current_revision_digest
+                ),
+                operation_count=executor.operation_count,
+                details={
+                    "planId": observed_plan,
+                    "gatheringId": observed_gathering,
+                    "currentRevisionId": observed_revision,
+                    "currentRevisionNumber": observed_revision_number,
+                    "currentRevisionDigest": observed_revision_digest,
+                },
+            )
         if isinstance(provisioned.value, CirclePendingApprovalResult):
             executor = _executor(
                 context,
@@ -447,6 +563,14 @@ class CircleAcceptanceDataProvider:
         context: TestDataContext,
         provisioned: ProvisionedCapability,
     ) -> CleanupResult:
+        if isinstance(provisioned.value, CircleGatheringPlanResult):
+            return CleanupResult(
+                state="released",
+                details={
+                    "planId": provisioned.value.plan.object_id,
+                    "releaseMode": "gathering-owner-cascade",
+                },
+            )
         if isinstance(provisioned.value, CirclePendingApprovalResult):
             executor = _executor(
                 context,

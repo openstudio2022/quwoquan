@@ -12,6 +12,7 @@ from typing import Any
 
 from core.io import read_json
 from core.schema import assert_valid, load_schema, validate_strict
+from content.execution.campaign.lane import normalize_workloads
 
 from content.source.research.scale_source_pool import (
     SOURCE_POOL_CREATE_ONCE_COLLISION,
@@ -122,13 +123,14 @@ def _validate_candidates(candidates: Sequence[Mapping[str, Any]]) -> None:
 
 def build_scale_source_pool_candidates(
     *,
-    target_scale: str,
+    target_scale: str | None,
     source_revision: str,
     source_digest: str,
     entity_catalog_digest: str,
     homepage_article_projection: Mapping[str, Any] | None,
     image_video_projection: Mapping[str, Any] | None,
     active_carriers: Sequence[str] = _CARRIERS,
+    workload_targets: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     """Merge the physical projections required by one carrier-selective wave."""
 
@@ -140,6 +142,9 @@ def build_scale_source_pool_candidates(
         or active != tuple(carrier for carrier in _CARRIERS if carrier in active)
     ):
         _fail("activeCarriers must be a non-empty canonical carrier subset")
+    scale_descriptor = str(target_scale or "").strip() or "WORKLOAD"
+    if scale_descriptor == "WORKLOAD" and workload_targets is None:
+        _fail("WORKLOAD projection requires explicit workloadTargets")
     expected_identity = (source_revision, source_digest, entity_catalog_digest)
     homepage_article: list[Any] = []
     image_video: list[Any] = []
@@ -177,7 +182,7 @@ def build_scale_source_pool_candidates(
         )
         if _identity(image_video_projection) != expected_identity:
             _fail("projection source identity drift")
-        if image_video_projection.get("targetScale") != target_scale:
+        if image_video_projection.get("targetScale") != scale_descriptor:
             _fail("image/video projection targetScale drift")
         raw_candidates = image_video_projection.get("candidates")
         if not isinstance(raw_candidates, list):
@@ -229,13 +234,31 @@ def build_scale_source_pool_candidates(
     counts = Counter(str(item["carrier"]) for item in candidates)
     if any(counts[carrier] < 1 for carrier in active):
         _fail("every active carrier requires at least one physical candidate")
+    try:
+        workloads = (
+            {carrier: counts[carrier] for carrier in active}
+            if workload_targets is None
+            else normalize_workloads(
+                workload_targets, active_carriers=active
+            )
+        )
+    except (TypeError, ValueError) as exc:
+        _fail(str(exc))
+    if any(counts[carrier] < workloads[carrier] for carrier in active):
+        _fail("physical candidate count is below workloadTargets")
     stable: dict[str, Any] = {
         "schema": CANDIDATES_SCHEMA,
-        "targetScale": target_scale,
+        "targetScale": scale_descriptor,
+        "workloadMode": (
+            "milestone_preset"
+            if scale_descriptor != "WORKLOAD" and active == _CARRIERS
+            else "explicit"
+        ),
         "sourceRevision": source_revision,
         "sourceDigest": source_digest,
         "entityCatalogDigest": entity_catalog_digest,
         "activeCarriers": list(active),
+        "workloadTargets": workloads,
         "projectionBindings": projection_bindings,
         "candidateCounts": [
             {"carrier": carrier, "candidateCount": counts[carrier]}
@@ -265,6 +288,14 @@ def validate_scale_source_pool_candidates(
     }
     if document.get("candidatesDigest") != _digest(stable):
         _fail("candidatesDigest drift")
+    expected_mode = (
+        "milestone_preset"
+        if document["targetScale"] != "WORKLOAD"
+        and tuple(document["activeCarriers"]) == _CARRIERS
+        else "explicit"
+    )
+    if document["workloadMode"] != expected_mode:
+        _fail("workloadMode drifts from targetScale adapter")
     candidates = document.get("candidates")
     if not isinstance(candidates, list):
         _fail("candidates must be an array")
@@ -273,15 +304,23 @@ def validate_scale_source_pool_candidates(
     if any(_identity(candidate) != expected_identity for candidate in candidates):
         _fail("candidate source identity drift")
     counts = Counter(str(item["carrier"]) for item in candidates)
+    active = tuple(str(carrier) for carrier in document["activeCarriers"])
+    try:
+        workloads = normalize_workloads(
+            document["workloadTargets"], active_carriers=active
+        )
+    except (TypeError, ValueError) as exc:
+        _fail(str(exc))
     declared = {
         str(item["carrier"]): int(item["candidateCount"])
         for item in document["candidateCounts"]
     }
     if declared != {carrier: counts[carrier] for carrier in _CARRIERS}:
         _fail("candidateCounts drift")
-    active = tuple(str(carrier) for carrier in document["activeCarriers"])
     if active != tuple(carrier for carrier in _CARRIERS if counts[carrier] > 0):
         _fail("activeCarriers drift from physical candidates")
+    if any(counts[carrier] < workloads[carrier] for carrier in active):
+        _fail("physical candidate count is below workloadTargets")
     binding_kinds = [str(item["kind"]) for item in document["projectionBindings"]]
     if len(binding_kinds) != len(set(binding_kinds)):
         _fail("duplicate projection binding kind")

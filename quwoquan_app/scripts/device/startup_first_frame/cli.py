@@ -266,7 +266,10 @@ def main() -> int:
                     ),
                     "watchdogOutcome": result.get("watchdogOutcome"),
                     "canonicalTerminal": result.get("canonicalTerminal"),
-                    "launchMode": result.get("launchMode"),
+                    "launchProvenance": result.get("launchProvenance"),
+                    "runtimeConfigSupplyMode": result.get(
+                        "runtimeConfigSupplyMode"
+                    ),
                     "hotRestart": result.get("hotRestart"),
                     "runtimeConfigurationState": result.get(
                         "runtimeConfigurationState"

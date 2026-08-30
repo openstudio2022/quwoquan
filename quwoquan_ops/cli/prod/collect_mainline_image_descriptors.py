@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
-"""Resolve pushed GHCR tags into immutable image descriptors.
+"""Resolve four-environment GHCR tags into immutable image descriptors."""
 
-The Service Pipeline uses this after every image matrix entry has completed.  It
-rebuilds no image and stores no credential; Docker/Buildx owns registry auth.
-"""
 from __future__ import annotations
 
 import argparse
@@ -15,6 +12,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -22,6 +21,7 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
 from quwoquan_ops.cli.prod.oci_supply_chain import verify_oci_supply_chain
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+    ENVIRONMENTS,
     validate_manifest,
     validate_manifest_files,
 )
@@ -70,23 +70,31 @@ def resolve_registry_digest(ref: str) -> str:
     raise RuntimeError(f"registry digest lookup returned no immutable digest: {ref}")
 
 
-def collect(manifest: dict[str, Any], output_dir: Path) -> dict[str, dict[str, Any]]:
+def collect(
+    manifest: dict[str, Any], output_dir: Path
+) -> dict[str, dict[str, dict[str, Any]]]:
     validate_manifest(manifest, allowed_statuses={"build-input"})
-    required = manifest["requiredEvidence"]["images"]
-    images = manifest["images"]
+    artifacts = manifest["environmentArtifacts"]
+    required = manifest["requiredEvidence"]["environmentArtifacts"]
 
-    inputs: list[tuple[str, str, str]] = []
-    for service in required:
-        image = images[service]
-        repository = str(image.get("repository") or "").strip()
-        transport_ref = str(image.get("transportRef") or "").strip()
-        if not repository.startswith("ghcr.io/"):
-            raise ValueError(f"release image repository is not GHCR: {service}")
-        if not transport_ref.startswith(repository + ":") or transport_ref.endswith(
-            ":latest"
-        ):
-            raise ValueError(f"release image transport ref is not fixed: {service}")
-        inputs.append((str(service), repository, transport_ref))
+    inputs: list[tuple[str, str, str, str]] = []
+    for environment in ENVIRONMENTS:
+        images = artifacts[environment]["images"]
+        for owner in required[environment]:
+            image = images[owner]
+            repository = str(image.get("repository") or "").strip()
+            transport_ref = str(image.get("transportRef") or "").strip()
+            if not repository.startswith("ghcr.io/"):
+                raise ValueError(
+                    f"release image repository is not GHCR: {environment}/{owner}"
+                )
+            if not transport_ref.startswith(repository + ":") or transport_ref.endswith(
+                ":latest"
+            ):
+                raise ValueError(
+                    f"release image transport ref is not fixed: {environment}/{owner}"
+                )
+            inputs.append((environment, str(owner), repository, transport_ref))
 
     source = manifest.get("source")
     source_repository = (
@@ -94,7 +102,10 @@ def collect(manifest: dict[str, Any], output_dir: Path) -> dict[str, dict[str, A
     )
 
     def resolve_and_verify(
-        service: str, repository: str, transport_ref: str
+        environment: str,
+        owner: str,
+        repository: str,
+        transport_ref: str,
     ) -> dict[str, Any]:
         digest = resolve_registry_digest(transport_ref)
         ref = f"{repository}@{digest}"
@@ -106,7 +117,8 @@ def collect(manifest: dict[str, Any], output_dir: Path) -> dict[str, dict[str, A
             ),
         )
         return {
-            "service": service,
+            "environment": environment,
+            "runtimeImageOwner": owner,
             "repository": repository,
             "transportRef": transport_ref,
             "digest": digest,
@@ -117,34 +129,61 @@ def collect(manifest: dict[str, Any], output_dir: Path) -> dict[str, dict[str, A
             },
         }
 
-    descriptors: dict[str, dict[str, Any]] = {}
+    descriptors: dict[tuple[str, str], dict[str, Any]] = {}
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=min(8, max(1, len(inputs))),
         thread_name_prefix="release-image-descriptor",
     ) as executor:
         futures = {
-            executor.submit(resolve_and_verify, *item): item[0] for item in inputs
+            executor.submit(resolve_and_verify, *item): (item[0], item[1])
+            for item in inputs
         }
         for future in concurrent.futures.as_completed(futures):
-            service = futures[future]
+            key = futures[future]
             try:
-                descriptors[service] = future.result()
+                descriptors[key] = future.result()
             except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                environment, owner = key
                 raise RuntimeError(
-                    f"release image descriptor collection failed for {service}: {error}"
+                    "release image descriptor collection failed for "
+                    f"{environment}/{owner}: {error}"
                 ) from error
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    ordered_descriptors: dict[str, dict[str, Any]] = {}
-    for service in required:
-        descriptor = descriptors[service]
-        output_dir.joinpath(f"{service}.json").write_text(
-            json.dumps(descriptor, ensure_ascii=False, indent=2, sort_keys=True)
-            + "\n",
-            encoding="utf-8",
-        )
-        ordered_descriptors[service] = descriptor
-    return ordered_descriptors
+    ordered: dict[str, dict[str, dict[str, Any]]] = {}
+    # DEC-005 信任域裁决：alpha/beta/gamma 必须复用同一 nonprod digest，
+    # prod 属于独立信任域（编译期 Provider binding 不同），digest 必须分叉。
+    nonprod_digests: dict[str, str] = {}
+    prod_digests: dict[str, str] = {}
+    for environment in ENVIRONMENTS:
+        ordered[environment] = {}
+        environment_dir = output_dir / environment
+        environment_dir.mkdir(parents=True, exist_ok=True)
+        for owner in required[environment]:
+            descriptor = descriptors[(environment, owner)]
+            digest = str(descriptor["digest"])
+            if environment == "prod":
+                prod_digests[str(owner)] = digest
+            else:
+                previous = nonprod_digests.setdefault(str(owner), digest)
+                if previous != digest:
+                    raise ValueError(
+                        "nonprod release images must share one digest per owner: "
+                        f"{owner} diverges at {environment}"
+                    )
+            environment_dir.joinpath(f"{owner}.json").write_text(
+                json.dumps(descriptor, ensure_ascii=False, indent=2, sort_keys=True)
+                + "\n",
+                encoding="utf-8",
+            )
+            ordered[environment][owner] = descriptor
+    for owner, digest in prod_digests.items():
+        if nonprod_digests.get(owner) == digest:
+            raise ValueError(
+                "prod release images must not reuse the nonprod trust-domain "
+                f"digest: {owner}"
+            )
+    return ordered
 
 
 def main() -> int:
@@ -158,8 +197,11 @@ def main() -> int:
         json.dumps(
             {
                 "status": "ok",
-                "services": sorted(descriptors),
-                "count": len(descriptors),
+                "environments": {
+                    environment: sorted(images)
+                    for environment, images in descriptors.items()
+                },
+                "count": sum(len(images) for images in descriptors.values()),
             },
             ensure_ascii=False,
         )

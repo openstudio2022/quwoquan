@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/content_item_version_view.schema.json",
+  "title": "Projection-only content item version query view",
+  "x-spec-ref": "specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-003",
+  "type": "object",
+  "required": [
+    "schema", "projectorVersion", "specRef", "identity", "version", "quality",
+    "eligibility", "delivery", "usageScope", "holder"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.content_item_version_view"},
+    "projectorVersion": {"const": "operation_views_v1"},
+    "specRef": {"const": "specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-003"},
+    "identity": {
+      "type": "object",
+      "required": ["contentId", "objectRef", "sourceExecutionId", "sourceIdentityDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "contentId": {"type": "string", "minLength": 1},
+        "objectRef": {"type": "string", "minLength": 1},
+        "sourceExecutionId": {"type": "string", "minLength": 1},
+        "sourceIdentityDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "version": {
+      "type": "object",
+      "required": ["contentVersion", "recordSequence", "payloadDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "contentVersion": {"type": "integer", "minimum": 1},
+        "recordSequence": {"type": "integer", "minimum": 1},
+        "payloadDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "quality": {
+      "type": "object",
+      "required": ["result", "evidenceRef", "evidenceDigest"],
+      "additionalProperties": false,
+      "properties": {
+        "result": {"enum": ["passed", "failed"]},
+        "evidenceRef": {"type": "string", "minLength": 1},
+        "evidenceDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "eligibility": {
+      "type": "object",
+      "required": ["result", "processResult", "objectStatus"],
+      "additionalProperties": false,
+      "properties": {
+        "result": {"enum": ["passed", "pending", "failed"]},
+        "processResult": {"enum": ["completed", "failed"]},
+        "objectStatus": {"enum": ["active", "retired", "deleted"]}
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "required": ["contentLibrary", "source", "publish", "releases", "media"],
+      "additionalProperties": false,
+      "properties": {
+        "contentLibrary": {"$ref": "#/$defs/ref"},
+        "source": {"$ref": "#/$defs/ref"},
+        "publish": {
+          "type": "object",
+          "required": ["ref", "digest", "verdict"],
+          "additionalProperties": false,
+          "properties": {
+            "ref": {"type": "string", "minLength": 1},
+            "digest": {"$ref": "#/$defs/digest"},
+            "verdict": {"enum": ["passed", "failed", "not_observed"]}
+          }
+        },
+        "releases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["releaseId", "ref", "digest", "verdict"],
+            "additionalProperties": false,
+            "properties": {
+              "releaseId": {"type": "string", "minLength": 1},
+              "ref": {"type": "string", "minLength": 1},
+              "digest": {"$ref": "#/$defs/digest"},
+              "verdict": {"enum": ["included", "excluded"]}
+            }
+          }
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["assetId", "ref", "digest"],
+            "additionalProperties": false,
+            "properties": {
+              "assetId": {"type": "string", "minLength": 1},
+              "ref": {"type": "string", "minLength": 1},
+              "digest": {"$ref": "#/$defs/digest"}
+            }
+          }
+        }
+      }
+    },
+    "usageScope": {"enum": ["research", "commercial", null]},
+    "holder": {"const": "content_library"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "ref": {
+      "type": "object",
+      "required": ["ref", "digest"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

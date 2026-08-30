@@ -71,7 +71,7 @@ api_routes:
       token_transport: bearer
       anonymous_policy: deny
       visibility: private
-    description: 校验 MediaAsset named Reader、引用 Post named visibility reader 与资产策略后，在 viewer/media/purpose 窗口内原子预留一次额度并签发短时原图访问授权。
+    description: 校验 MediaAsset named Reader 与资产策略后，在 viewer/media/purpose 窗口内原子预留一次额度并签发短时访问授权。准入按已验签 principal 分流（DEC-031）：普通会话保持 ready image、引用 Post named visibility reader 与 view|save；research principal 只允许 purpose=view，可为当前 active Research release 闭包内 ready 的 avatar|image|video 资产签发，release membership 缺失即拒绝。
     request_body_kind: object
   - method: GET
     path: /content/media/original-access-audits/{auditId}

@@ -23,7 +23,6 @@ from core.paths import (
     STAGE_COMPOSE,
     STAGE_DRAFT,
     STAGE_QUALITY,
-    STAGE_REVIEW,
     ensure_object_stages,
     execution_entity_object_dir,
     execution_entity_stage_dir,
@@ -73,9 +72,8 @@ from content.homepage.homepage_assets import (
     _asset_wiki_filename,
     _normalize_wiki_filename,
     copy_homepage_asset,
-    select_homepage_assets,
-    write_homepage_media_dispositions,
 )
+from content.homepage.homepage_media_freeze import frozen_publishable_images
 from content.homepage.homepage_media_contract import (
     write_homepage_source_asset_receipt,
 )
@@ -252,16 +250,8 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
     )
     if gate_issues:
         return gate_issues
-    selection = select_homepage_assets(
-        execution_id,
-        domain,
-        etype,
-        name,
-        primary_ref=str(
-            base.get("primaryEvidenceRef") or base.get("sourceRef") or ""
-        ).strip(),
-    )
-    images = [dict(image) for image in selection.publishable]
+    # 处置在 `1.download` 已冻结（DEC-029）：物化只兑现那份结论，不再裁决一次。
+    images = frozen_publishable_images(execution_id, domain, etype, name)
     if not images:
         return [
             f"{label}: DATA.MEDIA.HOMEPAGE_ASSET_SHORTFALL: "
@@ -269,20 +259,17 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         ]
     obj = execution_entity_object_dir(execution_id, domain, etype, name)
     obj.mkdir(parents=True, exist_ok=True)
-    ensure_object_stages(obj, through_stage=STAGE_REVIEW)
+    ensure_object_stages(obj)
     assets: list[dict[str, Any]] = []
-    for index, image in enumerate(images):
-        # 三段角色契约（cover/inline/related）：初始非封面图默认 related，
-        # place_homepage_assets_in_markdown 按锚点+原图注裁决是否提升为 inline。
-        manifest_role = "cover" if index == 0 else "related"
-        # assetId 仅接受 cover/closing/detail；inline/related 语义写入 manifest.role。
-        asset_role = "cover" if index == 0 else "detail"
+    for image in images:
+        manifest_role = str(image.get("role") or "")
         asset = copy_homepage_asset(
             execution_id,
             obj,
             name,
             image,
-            role=asset_role,
+            asset_id=str(image.get("assetId") or ""),
+            role=manifest_role,
         )
         if asset:
             asset["role"] = manifest_role
@@ -308,17 +295,17 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         except (OSError, ValueError, TypeError):
             image_placements = []
     _homepage_layout_assets(assets)
-    from core.asset_placement import _caption_is_degraded
+    from core.asset_placement import caption_is_degraded
     for asset in assets:
         caption = str(asset.get("caption") or "")
         file_name = str(asset.get("fileName") or "")
         if str(asset.get("role") or "") == "cover":
-            if _caption_is_degraded(caption, file_name=file_name):
+            if caption_is_degraded(caption, file_name=file_name):
                 # 封面退化 caption 回退到原文标题（实体名），禁止任何领域硬编码补全。
                 asset["caption"] = name
             else:
                 asset["caption"] = fold_to_simplified(caption)
-        elif _caption_is_degraded(caption, file_name=file_name):
+        elif caption_is_degraded(caption, file_name=file_name):
             # 非封面图退化 caption 一律清空：无原图注不加说明、禁止虚构或文件名占位。
             asset["caption"] = ""
         else:
@@ -358,25 +345,6 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
     )
     final_text = _ensure_homepage_cover_frontmatter(final_text, cover_asset_id)
     final_text = fold_to_simplified(final_text)
-    from core.page_media import HomepageAssetDisposition, HomepageMediaDisposition
-
-    media_dispositions = list(selection.excluded)
-    media_dispositions.extend(
-        HomepageMediaDisposition(
-            source_asset_ref=str(asset.get("sourceAssetRef") or "").strip(),
-            source_asset_id=str(asset.get("sourceAssetId") or "").strip(),
-            asset_id=str(asset.get("assetId") or "").strip(),
-            disposition=HomepageAssetDisposition(str(asset.get("role") or "")),
-            reason="published",
-        )
-        for asset in assets
-    )
-    write_homepage_media_dispositions(
-        entity_dir=obj,
-        execution_id=execution_id,
-        object_ref=entity_ref(domain, etype, name),
-        records=media_dispositions,
-    )
     _fold_homepage_manifest_assets(assets, obj / "assets", execution_id=execution_id)
     (obj / "page.md").write_text(final_text, encoding="utf-8")
     facts = _split_fact_sentences(gate_body, entity_name=name) or _split_fact_sentences(base_text_for_gate, entity_name=name)

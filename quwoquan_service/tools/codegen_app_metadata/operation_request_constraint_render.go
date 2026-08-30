@@ -613,6 +613,44 @@ func loadCanonicalRequestEnumValues() (map[string][]string, error) {
 	return result, nil
 }
 
+func loadCanonicalRequestEnumUnknownMembers() (map[string]string, error) {
+	if activeMetadataSource == nil {
+		return nil, fmt.Errorf("ContractGraph is not initialized")
+	}
+	result := map[string]string{}
+	seen := map[string]struct{}{}
+	for _, relative := range activeMetadataSource.Paths("", ".yaml") {
+		var document struct {
+			Enums any `yaml:"enums"`
+		}
+		if err := activeMetadataSource.Decode(relative, &document); err != nil {
+			return nil, fmt.Errorf("decode enum catalog %s: %w", relative, err)
+		}
+		for name, raw := range normalizeRequestEnumCatalog(document.Enums) {
+			unknownMember := normalizeRequestEnumUnknownMember(raw)
+			if _, exists := seen[name]; exists && result[name] != unknownMember {
+				return nil, fmt.Errorf(
+					"canonical enum %s has conflicting client_unknown_member declarations",
+					name,
+				)
+			}
+			seen[name] = struct{}{}
+			if unknownMember == "" {
+				continue
+			}
+			if !isDartIdentifier(unknownMember) {
+				return nil, fmt.Errorf(
+					"canonical enum %s has invalid client_unknown_member %q",
+					name,
+					unknownMember,
+				)
+			}
+			result[name] = unknownMember
+		}
+	}
+	return result, nil
+}
+
 func restrictCanonicalSearchModeToAppExposure(
 	values map[string][]string,
 	appModes []string,
@@ -671,6 +709,18 @@ func normalizeRequestEnumCatalog(raw any) map[string]any {
 		}
 	}
 	return result
+}
+
+func normalizeRequestEnumUnknownMember(raw any) string {
+	definition, ok := raw.(map[string]any)
+	if !ok {
+		return ""
+	}
+	value, declared := definition["client_unknown_member"]
+	if !declared || value == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
 }
 
 func normalizeRequestEnumValues(raw any) []string {

@@ -1,1 +1,18 @@
-{"assets":[{"assetId":"峨眉山_cover_日出金顶_275_57047c39","bytes":1419739,"objectKey":"media/objects/sha256/d1/f0/d1f08a13dda7433b59818341f5a70393ce2e2eedd7ab620eecfc9fc23c440e83.jpg","sha256":"sha256:d1f08a13dda7433b59818341f5a70393ce2e2eedd7ab620eecfc9fc23c440e83"}]}
+{
+  "assets": [
+    {
+      "assetId": "峨眉山_cover_日出金顶_328_a476df03",
+      "bytes": 232641,
+      "sha256": "sha256:7c3c4f725d7ac9af9f301c8d705e42b583d8754bfec55090619e7a84af0991d0",
+      "objectKey": "media/objects/sha256/7c/3c/7c3c4f725d7ac9af9f301c8d705e42b583d8754bfec55090619e7a84af0991d0.jpg",
+      "kind": "image"
+    },
+    {
+      "assetId": "峨眉山_detail_经清音阁的线路_328_1138423b",
+      "bytes": 166522,
+      "sha256": "sha256:c3853a7901860c6387b721a13a6ba0dc912770cc370c6fa1dd55ef075037c9c9",
+      "objectKey": "media/objects/sha256/c3/85/c3853a7901860c6387b721a13a6ba0dc912770cc370c6fa1dd55ef075037c9c9.jpg",
+      "kind": "image"
+    }
+  ]
+}

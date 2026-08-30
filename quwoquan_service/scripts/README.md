@@ -59,7 +59,7 @@ make -C quwoquan_service verify-domain-model-compatibility \
 ## 领域服务脚本示例
 
 - `search-service/tools/search_load_benchmark.py`
-- `content-service/content/post/verify_daily_metrics_dimension_consistency.py`
+- `content-service/content/content_behavior_fact/verify_daily_metrics_dimension_consistency.py`
 - `entity-service/entity_homepage/homepage/verify_entity_homepage_object_mainline.py`
 - `assistant-service/assistant/assistant_run/verify_assistant_context_contract.py`
 - `product-ops-service/tools/rec_policy_advisor.py` — 建议-only，不自动激活策略

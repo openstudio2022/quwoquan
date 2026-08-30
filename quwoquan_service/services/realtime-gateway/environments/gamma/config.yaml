@@ -1,6 +1,6 @@
 overrides:
-  sys.realtime-gateway.user_service.account_security.base_url: http://user-service:18081
-  sys.realtime-gateway.user_service.account_security.timeout_ms: 500
+  sys.realtime-gateway.user_account_security_authority.base_url: http://user-service:18081
+  sys.realtime-gateway.user_account_security_authority.timeout_ms: 500
 secretRefs:
   sys.realtime-gateway.redis.realtime.password: REALTIME_REDIS_PASSWORD
 externalBindings:

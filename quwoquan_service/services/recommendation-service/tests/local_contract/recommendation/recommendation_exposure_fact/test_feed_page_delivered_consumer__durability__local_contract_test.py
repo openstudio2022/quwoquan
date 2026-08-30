@@ -33,6 +33,7 @@ def _fields(*, valid_digest: bool = True) -> dict[bytes, bytes]:
         "personaId": "persona-viewer",
         "scenario": "content_feed",
         "windowId": "window-001",
+        "experimentBucket": "model",
         "modelBucket": "model",
         "modelChannel": "champion",
         "modelReleaseId": "release-001",
@@ -171,6 +172,7 @@ def test_consumer_persists_exposure_and_projects_before_ack() -> None:
     fact = next(iter(store.facts.values()))
     assert fact.window_id == "window-001"
     assert fact.target_id == "post-001"
+    assert fact.experiment_bucket == "model"
     assert projector.calls[0]["exposure_fact_id"] == fact.exposure_id
     assert redis.acked == [(FEED_PAGE_DELIVERED_STREAM, CONSUMER_GROUP, "1000-0")]
 

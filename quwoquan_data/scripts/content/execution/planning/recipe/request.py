@@ -19,169 +19,21 @@ from content.execution.planning.retry_unfinished_scope import (
 )
 
 
-def resolve_frozen_selection(
-    recipe: dict[str, Any],
-    request: Any,
-    *,
-    repo_root: Path,
-    vertical: str,
-    content_type: str,
-    intent: str,
-) -> dict[str, Any]:
-    """Project runtime-only scope into one execution selection."""
-    selection = dict(recipe.get("selection") or {})
-    discovery = (
-        repo_root
-        / "quwoquan_data/reference"
-        / vertical
-        / "entities"
-        / request.region_ref
-    )
-    name = request.topic or f"{request.region_ref.rsplit('/', 1)[-1]}-{content_type}"
-    selection.update(
-        {
-            "region": request.region_ref,
-            "discovery": discovery.relative_to(repo_root).as_posix(),
-            "name": name,
-            "title": name,
-            "intentLabel": intent,
-            "limit": request.count,
-            "approvedQuota": request.quota,
-            "requiredWorkers": request.required_workers,
-            "partitionCount": request.partition_count,
-            "capacityPlanDigest": request.capacity_plan_digest,
-            "workerHostSetBinding": (
-                dict(request.worker_host_set_binding)
-                if request.worker_host_set_binding is not None
-                else None
-            ),
-            "scaleSourcePool": (
-                dict(request.scale_source_pool)
-                if request.scale_source_pool is not None
-                else None
-            ),
-            "sourcePoolEvidenceRootRef": request.source_pool_evidence_root_ref,
-            "sourcePoolSelection": (
-                dict(request.source_pool_selection)
-                if request.source_pool_selection is not None
-                else None
-            ),
-        }
-    )
-    return selection
-
-
-def predecessor_target_names_without_target_set(
-    retry_of: str | None,
-) -> tuple[str, ...] | None:
-    return submission_only_predecessor_target_names(
-        retry_of
-    ) or terminal_campaign_predecessor_target_names(retry_of)
-
-
-def retry_target_names(
-    retry_of: str | None,
-    *,
-    count: int,
-    quota: int,
-    requested_target_names: tuple[str, ...],
-    load_frozen_target_set: Callable[[str], dict[str, Any]],
-) -> tuple[str, ...]:
-    """Keep a retry on the exact immutable target set of its predecessor."""
-
-    if not retry_of:
-        return requested_target_names
-    try:
-        target_set = load_frozen_target_set(retry_of)
-    except FileNotFoundError as exc:
-        reconciled_names = predecessor_target_names_without_target_set(retry_of)
-        if reconciled_names is not None:
-            if not quota <= len(reconciled_names) <= count:
-                raise SystemExit(
-                    f"[task execute] GATE_BLOCK retryOf={retry_of}: "
-                    f"reconciled candidate pool {len(reconciled_names)} must stay "
-                    f"inside [--quota {quota}, --count {count}]"
-                ) from exc
-            if requested_target_names and requested_target_names != reconciled_names:
-                raise SystemExit(
-                    f"[task execute] GATE_BLOCK retryOf={retry_of}: "
-                    "--target must match reconciled predecessor targetNames exactly"
-                ) from exc
-            return reconciled_names
-        if requested_target_names:
-            return requested_target_names
-        raise SystemExit(
-            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
-            "previous frozen target set is unavailable; provide every exact --target"
-        ) from exc
-    except ValueError as exc:
-        raise SystemExit(
-            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
-            "previous frozen target set is invalid"
-        ) from exc
-    targets = target_set.get("targets")
-    if not isinstance(targets, list):
-        raise SystemExit(
-            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
-            "previous frozen target set is invalid"
-        )
-    inherited_names = tuple(
-        str(target.get("name") or "").strip()
-        for target in targets
-        if isinstance(target, dict)
-    )
-    if (
-        len(inherited_names) != len(targets)
-        or any(not name for name in inherited_names)
-        or len(set(inherited_names)) != len(inherited_names)
-    ):
-        raise SystemExit(
-            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
-            "previous frozen target names are invalid"
-        )
-    if not quota <= len(inherited_names) <= count:
-        raise SystemExit(
-            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
-            f"inherited candidate pool {len(inherited_names)} must stay inside "
-            f"[--quota {quota}, --count {count}]"
-        )
-    if requested_target_names and requested_target_names != inherited_names:
-        raise SystemExit(
-            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
-            "--target must match the previous frozen target order exactly"
-        )
-    return inherited_names
-
-
-def retry_target_rows(
-    retry_of: str | None,
-    *,
-    target_names: tuple[str, ...],
-    load_frozen_target_set: Callable[[str], dict[str, Any]],
-) -> tuple[dict[str, Any], ...]:
-    """Load predecessor rows so retries retain source-qualification evidence."""
-    if not retry_of:
-        return ()
-    try:
-        target_set = load_frozen_target_set(retry_of)
-    except FileNotFoundError:
-        return ()
-    targets = target_set.get("targets")
-    if not isinstance(targets, list) or any(
-        not isinstance(row, dict) for row in targets
-    ):
-        raise SystemExit(
-            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
-            "previous frozen target rows are invalid"
-        )
-    rows = tuple(dict(row) for row in targets)
-    inherited_names = tuple(str(row.get("name") or "").strip() for row in rows)
-    if inherited_names != target_names:
-        raise SystemExit(
-            f"[task execute] GATE_BLOCK retryOf={retry_of}: "
-            "previous frozen target rows must match the requested target order exactly"
-        )
-    return rows
+from content.execution.planning.recipe.request_retry_scope import (
+    EXTERNAL_MEDIA_CARRIERS,
+    _external_media_scope_block,
+    _frozen_campaign_target_names,
+    _reconciled_scope_block,
+    external_media_retry_scope_names,
+    external_media_retry_target_names,
+    frozen_campaign_retry_request,
+    predecessor_target_names_without_target_set,
+    reconciled_campaign_retry_scope_names,
+    reconciled_campaign_retry_target_names,
+    resolve_frozen_selection,
+    retry_target_names,
+    retry_target_rows,
+)
 
 
 def retry_unfinished_scope(
@@ -207,6 +59,9 @@ def retry_unfinished_scope(
             f"[task execute] GATE_BLOCK retryOf={retry_of}: "
             f"invalid unfinished retry scope: {exc}"
         ) from exc
+
+
+
 
 
 def handle_execute(
@@ -378,6 +233,36 @@ def handle_execute(
             publish_root=PUBLISH_ROOT,
         )
     requested_target_names = tuple(getattr(args, "target_names", ()) or ())
+    carrier = identity.content_type.value
+    campaign_envelope_ref = (
+        str(getattr(args, "campaign_envelope", "") or "").strip() or None
+    )
+    campaign_root_ref = (
+        str(getattr(args, "campaign_root_execution_id", "") or "").strip() or None
+    )
+    campaign_retry_request: dict[str, Any] | None = None
+    if (
+        retry_of
+        and not execution_exists
+        and rewrite_binding is None
+        and unfinished_scope is None
+        and (campaign_envelope_ref or carrier in EXTERNAL_MEDIA_CARRIERS)
+        and (campaign_envelope_ref or campaign_root_ref)
+    ):
+        campaign_retry_request = frozen_campaign_retry_request(
+            retry_of,
+            carrier=carrier,
+            campaign_envelope=campaign_envelope_ref,
+            campaign_root_execution_id=campaign_root_ref,
+        )
+    retry_external_media_scope = (
+        campaign_retry_request is not None and carrier in EXTERNAL_MEDIA_CARRIERS
+    )
+    reconciled_campaign_retry_scope = (
+        campaign_retry_request is not None
+        and not retry_external_media_scope
+        and isinstance(campaign_retry_request.get("predecessorReconciliation"), dict)
+    )
     if rewrite_binding is not None:
         if identity.content_type.value == "homepage":
             raise SystemExit(
@@ -403,6 +288,26 @@ def handle_execute(
                 load_frozen_target_set=owner.load_frozen_target_set,
             )
         )
+    elif retry_external_media_scope:
+        target_names = external_media_retry_scope_names(
+            campaign_retry_request or {},
+            retry_of or "",
+            execution_id=execution_id,
+            carrier=identity.content_type.value,
+            requested_target_names=requested_target_names,
+        )
+        inherited_targets = ()
+    elif reconciled_campaign_retry_scope:
+        target_names = reconciled_campaign_retry_scope_names(
+            campaign_retry_request or {},
+            retry_of or "",
+            execution_id=execution_id,
+            carrier=identity.content_type.value,
+            count=count,
+            quota=quota,
+            requested_target_names=requested_target_names,
+        )
+        inherited_targets = ()
     else:
         if unfinished_scope is not None:
             if count != len(unfinished_scope.target_names) or quota != count:
@@ -439,6 +344,7 @@ def handle_execute(
     submission_only_predecessor = bool(
         retry_of
         and not execution_exists
+        and campaign_retry_request is None
         and not inherited_targets
         and predecessor_target_names_without_target_set(retry_of) is not None
     )
@@ -477,6 +383,7 @@ def handle_execute(
             target_names=target_names,
             inherited_targets=inherited_targets,
             retry_submission_only_predecessor=submission_only_predecessor,
+            retry_external_media_scope=retry_external_media_scope,
             topic=getattr(args, "topic", None),
             source_providers=tuple(getattr(args, "source_providers", ()) or ()),
             vertical=identity.vertical,
@@ -484,9 +391,9 @@ def handle_execute(
             intent=identity.intent,
             count=count,
             quota=quota,
-            required_workers=getattr(args, "required_workers", None),
-            partition_count=getattr(args, "partition_count", None),
-            capacity_plan_digest=getattr(args, "capacity_plan_digest", None),
+            capacity_calibration_receipt=getattr(
+                args, "capacity_calibration_receipt", None
+            ),
             scale_source_pool_id=getattr(args, "scale_source_pool_id", None),
             scale_source_pool_target_scale=getattr(
                 args, "scale_source_pool_target_scale", None

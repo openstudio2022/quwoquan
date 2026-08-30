@@ -6,14 +6,17 @@ class HomepageIdentityHeader extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.metaLine,
-    this.coverUrl,
+    this.coverBinding = const MediaDeliveryBinding.absent(),
     this.trailing,
   });
 
   final String title;
   final String subtitle;
   final String metaLine;
-  final String? coverUrl;
+
+  /// 对象主页 hero 封面的 typed 交付绑定（DEC-033）。绑定由投影的
+  /// coverAssetId/coverAccessMode 交出，本组件不从 URL 形态推断交付形态。
+  final MediaDeliveryBinding coverBinding;
   final Widget? trailing;
 
   static const double _coverBorder = AppSpacing.three;
@@ -37,14 +40,20 @@ class HomepageIdentityHeader extends StatelessWidget {
       ),
     );
 
-    final image = (coverUrl ?? '').trim().isEmpty
-        ? fallback
-        : AppMediaImage(
-            imageSource: coverUrl!,
-            fit: BoxFit.cover,
-            placeholder: fallback,
-            errorWidget: fallback,
-          );
+    final image = mediaDeliveryImage(
+      binding: coverBinding,
+      kind: MediaDeliveryKind.image,
+      fit: BoxFit.cover,
+      placeholder: fallback,
+      errorWidget: fallback,
+      absentWidget: fallback,
+      publicBuilder: (context, publicUrl) => AppMediaImage(
+        imageSource: publicUrl,
+        fit: BoxFit.cover,
+        placeholder: fallback,
+        errorWidget: fallback,
+      ),
+    );
 
     return Container(
       decoration: BoxDecoration(

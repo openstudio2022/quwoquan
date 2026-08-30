@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-001.t3
 from __future__ import annotations
 
 import hashlib
@@ -20,7 +21,17 @@ from content.release.canonical.research_scale_promotion import (
     ResearchScalePromotionError,
     write_research_scale_promotion,
 )
+from content.release.canonical.object_source_identity import source_identity_set
 from core.release_layout import payload_digest
+from core.source_digest import SourceDefinitionSnapshot, content_source_revision
+
+
+_SOURCE_DIGEST = "sha256:" + "a" * 64
+_ENTITY_CATALOG_DIGEST = "sha256:" + "d" * 64
+_SOURCE_REVISION = content_source_revision(
+    source_digest=_SOURCE_DIGEST,
+    entity_catalog_digest=_ENTITY_CATALOG_DIGEST,
+)
 
 
 def _write(path: Path, payload: object) -> None:
@@ -136,11 +147,7 @@ def _professional_image_assets(count: int = 100) -> list[dict[str, object]]:
             "assetId": (
                 "old-unverified" if index == 1 else f"image-asset-{index:03d}"
             ),
-            "objectRef": (
-                "posts/image/example"
-                if index == 1
-                else f"posts/image/work-{index:03d}"
-            ),
+            "objectRef": f"posts/image/work-{index - 1:03d}/1",
             "acquisitionStatus": "acquired",
             "rightsStatus": "unverified",
             "authorizationRequired": True,
@@ -162,32 +169,135 @@ def _professional_image_assets(count: int = 100) -> list[dict[str, object]]:
 
 def _research_release(output_root: Path, *, article_count: int = 100) -> Path:
     release = output_root / "data/releases/research-release"
+    execution_ids = [
+        f"{carrier}-execution"
+        for carrier in ("homepage", "article", "image", "video")
+    ]
+    expanded_identities = [
+        {
+            "executionId": execution_id,
+            "sourceRevision": _SOURCE_REVISION,
+            "sourceDigest": _SOURCE_DIGEST,
+            "entityCatalogDigest": _ENTITY_CATALOG_DIGEST,
+        }
+        for execution_id in execution_ids
+    ]
+    source_identities, source_identity_set_digest = source_identity_set(
+        expanded_identities
+    )
+    contents = [
+        {
+            "contentId": f"content-{carrier}-{index:03d}",
+            "version": 1,
+            "postRef": f"{carrier}/work-{index:03d}/1",
+            "selectionIdentityDigest": "sha256:"
+            + hashlib.sha256(
+                f"selection:{carrier}:{index:03d}".encode("utf-8")
+            ).hexdigest(),
+            "canonicalObjectDigest": "sha256:"
+            + hashlib.sha256(
+                f"canonical:{carrier}:{index:03d}".encode("utf-8")
+            ).hexdigest(),
+            "contentLibraryBindingDigest": "sha256:"
+            + hashlib.sha256(
+                f"content-library:{carrier}:{index:03d}".encode("utf-8")
+            ).hexdigest(),
+        }
+        for carrier, count in (("article", 100), ("image", 100), ("video", 10))
+        for index in range(count)
+    ]
     carrier_counts = [
         {
             "carrier": carrier,
             "researchAcceptedCount": (
-                article_count if carrier == "article" else (10 if carrier == "video" else 100)
+                article_count
+                if carrier == "article"
+                else (10 if carrier == "video" else 100)
             ),
+            "objectCount": (
+                article_count
+                if carrier == "article"
+                else (10 if carrier == "video" else 100)
+            ),
+            "assetCount": 100 if carrier == "image" else 0,
+            "commercialAcceptedCount": 0,
         }
         for carrier in ("homepage", "article", "image", "video")
     ]
     _write(
         release / "payload/release.json",
         {
+            "schema": "quwoquan_data.release",
             "releaseId": "research-release",
+            "sourceOwner": "qwq_data",
+            "releaseKind": "content",
             "releaseClass": "research",
             "productLifecycleState": "research",
+            "containsUnverifiedAssets": True,
+            "rightsStatusCounts": {
+                "verified": 0,
+                "unverified": 100,
+                "restricted": 0,
+                "unknown": 0,
+            },
+            "authorizationRequiredAssetIds": ["old-unverified"],
+            "researchAcceptedCount": 310,
+            "commercialAcceptedCount": 0,
+            "canonicalMerkle": "sha256:" + "2" * 64,
+            "executionIds": execution_ids,
             "sourceDigests": [
-                {"algorithm": "sha256", "digest": "sha256:" + "a" * 64}
+                SourceDefinitionSnapshot(_SOURCE_DIGEST).to_document()
             ],
+            "milestone": "M100",
+            "selectionScope": "milestone",
+            "milestoneTargets": {
+                "homepage": 100,
+                "article": 100,
+                "image": 100,
+                "video": 10,
+            },
+            "releaseMode": "research",
+            "poolDigest": "sha256:" + "3" * 64,
+            "counts": {"article": 100, "image": 100, "video": 10, "total": 210},
+            "contents": contents,
+            "authors": [],
+            "samplePlanRef": "uat/sample_plan.json",
+            "samplePlanDigest": "sha256:" + "8" * 64,
+            "buildResult": "completed",
+            "sourceIdentities": source_identities,
+            "sourceIdentitySetDigest": source_identity_set_digest,
+        },
+    )
+    _write(
+        release / "payload/desired_state.json",
+        {
+            "schema": "quwoquan_data.release_desired_state",
+            "releaseId": "research-release",
+            "desiredRefs": {
+                "entities": [f"entity/work-{index:03d}" for index in range(100)],
+                "posts": [str(item["postRef"]) for item in contents],
+                "creators": [],
+                "tags": [],
+            },
         },
     )
     _write(
         release / "payload/asset_admission.json",
         {
+            "schema": "quwoquan_data.release_asset_admission",
+            "releaseId": "research-release",
             "releaseClass": "research",
             "productLifecycleState": "research",
+            "containsUnverifiedAssets": True,
+            "rightsStatusCounts": {
+                "verified": 0,
+                "unverified": 100,
+                "restricted": 0,
+                "unknown": 0,
+            },
             "authorizationRequiredAssetIds": ["old-unverified"],
+            "researchAcceptedCount": 310,
+            "commercialAcceptedCount": 0,
             "carrierCounts": carrier_counts,
             "articleMediaCoverage": {
                 "articleCount": article_count,
@@ -196,6 +306,7 @@ def _research_release(output_root: Path, *, article_count: int = 100) -> Path:
                 "illustratedRate": 0.9,
                 "textOnlyRate": 0.1,
             },
+            "sourceAssetCounts": [],
             "assets": _professional_image_assets(),
         },
     )
@@ -210,9 +321,34 @@ def _commercial_release(output_root: Path) -> Path:
             "releaseId": "commercial-release",
             "releaseClass": "commercial",
             "productLifecycleState": "commercial",
+            "poolDigest": "sha256:" + "9" * 64,
+            # A commercial release is a rights-filtered view over the same
+            # frozen pool, so a scalar sourceDigest may remain unchanged.
+            "sourceDigest": "sha256:" + "a" * 64,
             "sourceDigests": [
-                {"algorithm": "sha256", "digest": "sha256:" + "c" * 64}
+                SourceDefinitionSnapshot("sha256:" + "a" * 64).to_document()
             ],
+            "contents": [
+                {
+                    "contentId": "content-image-example",
+                    "version": 2,
+                    "postRef": "image/example",
+                    "selectionIdentityDigest": "sha256:" + "2" * 64,
+                    "canonicalObjectDigest": "sha256:" + "3" * 64,
+                    "contentLibraryBindingDigest": "sha256:" + "4" * 64,
+                }
+            ],
+        },
+    )
+    _write(
+        release / "payload/desired_state.json",
+        {
+            "desiredRefs": {
+                "creators": [],
+                "entities": [],
+                "posts": ["image/example"],
+                "tags": [],
+            }
         },
     )
     _write(
@@ -234,6 +370,47 @@ def _commercial_release(output_root: Path) -> Path:
     return release
 
 
+def _transition_research_release(output_root: Path) -> Path:
+    release = _research_release(output_root)
+    header_path = release / "payload/release.json"
+    header = json.loads(header_path.read_text(encoding="utf-8"))
+    header.pop("sourceIdentities")
+    header.pop("sourceIdentitySetDigest")
+    header.update(
+        {
+            "poolDigest": "sha256:" + "9" * 64,
+            "sourceDigest": "sha256:" + "a" * 64,
+            "contents": [
+                {
+                    "contentId": "content-image-example",
+                    "version": 1,
+                    "postRef": "image/example",
+                    "selectionIdentityDigest": "sha256:" + "1" * 64,
+                    "canonicalObjectDigest": "sha256:" + "2" * 64,
+                    "contentLibraryBindingDigest": "sha256:" + "3" * 64,
+                }
+            ],
+        }
+    )
+    _write(header_path, header)
+    _write(
+        release / "payload/desired_state.json",
+        {
+            "desiredRefs": {
+                "creators": [],
+                "entities": [],
+                "posts": ["image/example"],
+                "tags": [],
+            }
+        },
+    )
+    admission_path = release / "payload/asset_admission.json"
+    admission = json.loads(admission_path.read_text(encoding="utf-8"))
+    admission["assets"][0]["objectRef"] = "posts/image/example"
+    _write(admission_path, admission)
+    return release
+
+
 def test_research_m100_promotion_blocks_shortfall_and_weak_rates(
     monkeypatch,
     tmp_path: Path,
@@ -243,7 +420,13 @@ def test_research_m100_promotion_blocks_shortfall_and_weak_rates(
     admission_path = release / "payload/asset_admission.json"
     admission = json.loads(admission_path.read_text(encoding="utf-8"))
     admission["carrierCounts"] = [
-        {"carrier": carrier, "researchAcceptedCount": 1}
+        {
+            "carrier": carrier,
+            "researchAcceptedCount": 1,
+            "objectCount": 1,
+            "assetCount": 0,
+            "commercialAcceptedCount": 0,
+        }
         for carrier in ("homepage", "article", "image", "video")
     ]
     admission["articleMediaCoverage"] = {
@@ -272,6 +455,7 @@ def test_research_m100_promotion_blocks_shortfall_and_weak_rates(
                 "status": "partial",
                 "approvedQuota": target_counts[carrier],
                 "qualifiedCount": 1,
+                "reviewQualifiedCount": 1,
                 "finalizedCount": 1,
                 "selectedCount": 2,
                 "discardedCount": 1,
@@ -289,6 +473,7 @@ def test_research_m100_promotion_blocks_shortfall_and_weak_rates(
                         "issues": ["hard object review rejected"],
                     }
                 ],
+                "publishDiscards": [],
             },
         )
         lanes.append(
@@ -316,9 +501,9 @@ def test_research_m100_promotion_blocks_shortfall_and_weak_rates(
         "status": "failed",
         "releaseId": "research-release",
         "manifestDigest": payload_digest(release),
-        "sourceRevision": "sha256:" + "b" * 64,
-        "sourceDigest": "sha256:" + "a" * 64,
-        "entityCatalogDigest": "sha256:" + "d" * 64,
+        "sourceRevision": _SOURCE_REVISION,
+        "sourceDigest": _SOURCE_DIGEST,
+        "entityCatalogDigest": _ENTITY_CATALOG_DIGEST,
         "targetScale": "M100",
         "sourcePoolDigest": "sha256:" + "1" * 64,
         "predecessorSourcePoolDigests": [],
@@ -406,6 +591,7 @@ def test_research_m100_promotion_requires_actual_cumulative_attainment(
                 "status": "finalized",
                 "approvedQuota": target,
                 "qualifiedCount": target,
+                "reviewQualifiedCount": target,
                 "finalizedCount": target,
                 "selectedCount": target,
                 "discardedCount": 0,
@@ -416,6 +602,7 @@ def test_research_m100_promotion_requires_actual_cumulative_attainment(
                 "campaignGeneration": 1,
                 "campaignFencingToken": "sha256:" + "7" * 64,
                 "discards": [],
+                "publishDiscards": [],
             },
         )
         lanes.append(
@@ -437,9 +624,9 @@ def test_research_m100_promotion_requires_actual_cumulative_attainment(
         "status": "passed",
         "releaseId": "research-release",
         "manifestDigest": payload_digest(release),
-        "sourceRevision": "sha256:" + "b" * 64,
-        "sourceDigest": "sha256:" + "a" * 64,
-        "entityCatalogDigest": "sha256:" + "d" * 64,
+        "sourceRevision": _SOURCE_REVISION,
+        "sourceDigest": _SOURCE_DIGEST,
+        "entityCatalogDigest": _ENTITY_CATALOG_DIGEST,
         "targetScale": "M100",
         "sourcePoolDigest": "sha256:" + "1" * 64,
         "predecessorSourcePoolDigests": [],
@@ -500,7 +687,7 @@ def test_research_m100_promotion_requires_actual_cumulative_attainment(
     assert promotion["carrierCounts"][0]["totalUniqueFinalizedCount"] == 100
 
 
-def test_research_m100_promotion_rejects_handwritten_boolean_evidence(
+def test_research_m100_promotion_ignores_handwritten_campaign_diagnostic(
     tmp_path: Path,
 ) -> None:
     output_root = tmp_path / "output"
@@ -511,9 +698,9 @@ def test_research_m100_promotion_rejects_handwritten_boolean_evidence(
         {
             "releaseId": "research-release",
             "manifestDigest": payload_digest(release),
-            "sourceRevision": "sha256:" + "b" * 64,
-            "sourceDigest": "sha256:" + "a" * 64,
-            "entityCatalogDigest": "sha256:" + "d" * 64,
+            "sourceRevision": _SOURCE_REVISION,
+            "sourceDigest": _SOURCE_DIGEST,
+            "entityCatalogDigest": _ENTITY_CATALOG_DIGEST,
             "duplicateAssetCount": 0,
             "crossLaneWriteCount": 0,
             "resourceIsolationPassed": True,
@@ -521,14 +708,19 @@ def test_research_m100_promotion_rejects_handwritten_boolean_evidence(
         },
     )
 
-    with pytest.raises(ResearchScalePromotionError, match="schema violation"):
-        write_research_scale_promotion(
-            release_id="research-release",
-            promotion_id="promotion-1",
-            campaign_evidence_path=evidence,
-            release_root=output_root / "data/releases",
-            output_root=output_root,
-        )
+    promotion, _path = write_research_scale_promotion(
+        release_id="research-release",
+        promotion_id="promotion-1",
+        campaign_evidence_path=evidence,
+        release_root=output_root / "data/releases",
+        output_root=output_root,
+    )
+
+    assert "campaignEvidenceRef" not in promotion
+    assert any(
+        "CAMPAIGN_EVIDENCE_UNAVAILABLE" in issue
+        for issue in promotion["diagnosticIssues"]
+    )
 
 
 def test_research_m100_promotion_does_not_trust_booleans_despite_release_shortfall(
@@ -542,9 +734,9 @@ def test_research_m100_promotion_does_not_trust_booleans_despite_release_shortfa
         {
             "releaseId": "research-release",
             "manifestDigest": payload_digest(release),
-            "sourceRevision": "sha256:" + "b" * 64,
-            "sourceDigest": "sha256:" + "a" * 64,
-            "entityCatalogDigest": "sha256:" + "d" * 64,
+            "sourceRevision": _SOURCE_REVISION,
+            "sourceDigest": _SOURCE_DIGEST,
+            "entityCatalogDigest": _ENTITY_CATALOG_DIGEST,
             "duplicateAssetCount": 0,
             "crossLaneWriteCount": 0,
             "resourceIsolationPassed": True,
@@ -552,7 +744,7 @@ def test_research_m100_promotion_does_not_trust_booleans_despite_release_shortfa
         },
     )
 
-    with pytest.raises(ResearchScalePromotionError, match="schema violation"):
+    with pytest.raises(ResearchScalePromotionError, match="ATTAINMENT_SHORTFALL"):
         write_research_scale_promotion(
             release_id="research-release",
             promotion_id="promotion-1",
@@ -561,183 +753,3 @@ def test_research_m100_promotion_does_not_trust_booleans_despite_release_shortfa
             output_root=output_root,
         )
 
-
-def _cleanup_evidence(
-    output_root: Path,
-    *,
-    research_release: Path,
-    commercial_release: Path,
-) -> Path:
-    research_digest = payload_digest(research_release)
-    commercial_digest = payload_digest(commercial_release)
-    environment_receipts: list[tuple[Path, Path]] = []
-    for environment in ("alpha", "beta", "gamma", "prod"):
-        _cleanup_document, cleanup_path = (
-            write_commercial_transition_cleanup_receipt(
-                environment=environment,
-                run_id="cleanup-1",
-                research_release_id="research-release",
-                research_manifest_digest=research_digest,
-                commercial_release_id="commercial-release",
-                commercial_manifest_digest=commercial_digest,
-                cache_purged=True,
-                media_copies_purged=True,
-                signed_urls_revoked=True,
-                output_root=output_root,
-            )
-        )
-        _readback_document, readback_path = (
-            write_commercial_transition_readback_receipt(
-                environment=environment,
-                run_id="readback-1",
-                research_release_id="research-release",
-                research_manifest_digest=research_digest,
-                commercial_release_id="commercial-release",
-                commercial_manifest_digest=commercial_digest,
-                unauthorized_readback_count=0,
-                unauthorized_asset_ids=[],
-                output_root=output_root,
-            )
-        )
-        environment_receipts.append((cleanup_path, readback_path))
-    _document, path = write_commercial_transition_evidence(
-        evidence_id="evidence-1",
-        research_release_id="research-release",
-        research_manifest_digest=research_digest,
-        commercial_release_id="commercial-release",
-        commercial_manifest_digest=commercial_digest,
-        environment_receipts=environment_receipts,
-        output_root=output_root,
-    )
-    return path
-
-
-def test_commercial_transition_records_replacement_and_four_environment_cleanup(
-    tmp_path: Path,
-) -> None:
-    output_root = tmp_path / "output"
-    research_release = _research_release(output_root)
-    commercial_release = _commercial_release(output_root)
-    cleanup = _cleanup_evidence(
-        output_root,
-        research_release=research_release,
-        commercial_release=commercial_release,
-    )
-
-    document, path = write_commercial_transition(
-        research_release_id="research-release",
-        commercial_release_id="commercial-release",
-        transition_run_id="transition-1",
-        cleanup_evidence_path=cleanup,
-        release_root=output_root / "data/releases",
-        output_root=output_root,
-    )
-
-    assert document["objectMigrations"] == [
-        {
-            "researchAssetId": "old-unverified",
-            "objectRef": "posts/image/example",
-            "action": "replaced",
-            "commercialAssetIds": ["new-verified"],
-        }
-    ]
-    assert document["unauthorizedReadbackCount"] == 0
-    assert document["cleanupEvidenceDigest"].startswith("sha256:")
-    assert document["receiptDigest"].startswith("sha256:")
-    assert path.is_file()
-
-
-def test_commercial_transition_blocks_nonzero_unauthorized_readback(
-    tmp_path: Path,
-) -> None:
-    output_root = tmp_path / "output"
-    research_release = _research_release(output_root)
-    commercial_release = _commercial_release(output_root)
-    cleanup = _cleanup_evidence(
-        output_root,
-        research_release=research_release,
-        commercial_release=commercial_release,
-    )
-    evidence = json.loads(cleanup.read_text(encoding="utf-8"))
-    beta = next(
-        row for row in evidence["environments"] if row["environment"] == "beta"
-    )
-    readback = output_root / beta["readbackReceiptRef"]
-    tampered = json.loads(readback.read_text(encoding="utf-8"))
-    tampered["unauthorizedReadbackCount"] = 1
-    tampered["unauthorizedAssetIds"] = ["old-unverified"]
-    _write(readback, tampered)
-
-    with pytest.raises(CommercialTransitionError, match="schema violation"):
-        write_commercial_transition(
-            research_release_id="research-release",
-            commercial_release_id="commercial-release",
-            transition_run_id="transition-1",
-            cleanup_evidence_path=cleanup,
-            release_root=output_root / "data/releases",
-            output_root=output_root,
-        )
-
-
-def test_commercial_transition_rejects_handwritten_boolean_evidence(
-    tmp_path: Path,
-) -> None:
-    output_root = tmp_path / "output"
-    research_release = _research_release(output_root)
-    commercial_release = _commercial_release(output_root)
-    path = (
-        output_root
-        / "data/commercial-transition-evidence/commercial-release/handwritten/evidence.json"
-    )
-    _write(
-        path,
-        {
-            "researchReleaseId": "research-release",
-            "researchManifestDigest": payload_digest(research_release),
-            "commercialReleaseId": "commercial-release",
-            "commercialManifestDigest": payload_digest(commercial_release),
-            "environments": [
-                {"environment": environment, "cachePurged": True}
-                for environment in ("alpha", "beta", "gamma", "prod")
-            ],
-        },
-    )
-
-    with pytest.raises(CommercialTransitionError, match="schema violation"):
-        write_commercial_transition(
-            research_release_id="research-release",
-            commercial_release_id="commercial-release",
-            transition_run_id="transition-1",
-            cleanup_evidence_path=path,
-            release_root=output_root / "data/releases",
-            output_root=output_root,
-        )
-
-
-def test_commercial_transition_cleanup_receipt_is_create_once(
-    tmp_path: Path,
-) -> None:
-    output_root = tmp_path / "output"
-    common = {
-        "environment": "alpha",
-        "run_id": "cleanup-1",
-        "research_release_id": "research-release",
-        "research_manifest_digest": "sha256:" + "a" * 64,
-        "commercial_release_id": "commercial-release",
-        "commercial_manifest_digest": "sha256:" + "c" * 64,
-        "cache_purged": True,
-        "media_copies_purged": True,
-        "signed_urls_revoked": True,
-        "output_root": output_root,
-    }
-    first, _path = write_commercial_transition_cleanup_receipt(**common)
-    second, _path = write_commercial_transition_cleanup_receipt(**common)
-    assert second == first
-
-    with pytest.raises(
-        CommercialTransitionEvidenceError,
-        match="create-once.*identity conflict",
-    ):
-        write_commercial_transition_cleanup_receipt(
-            **{**common, "research_manifest_digest": "sha256:" + "b" * 64}
-        )

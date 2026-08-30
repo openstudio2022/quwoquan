@@ -20,12 +20,15 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/adapters/gathering_remote.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_plan_remote.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as cloud;
 
 import '../../../../../support/runtime/api_contract/production_cloud_operation_telemetry_evidence.dart';
 import '../../../../../support/runtime/api_contract/user_api_contract_harness.dart';
+
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering_plan/adapters/gathering_board_plan_reader.dart';
 
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
@@ -34,97 +37,94 @@ const _apiContractEnv = String.fromEnvironment(
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 
 void main() {
-  test(
-    'production Remote lists source public gatherings as a typed honest page',
-    () async {
-      UserApiContractHarness? accountHarness;
-      _BySourceHarness? sourceHarness;
-      final suffix = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
+  test('production Remote lists source public gatherings as a typed honest page', () async {
+    UserApiContractHarness? accountHarness;
+    _BySourceHarness? sourceHarness;
+    final suffix = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
 
-      try {
-        accountHarness = await UserApiContractHarness.create();
-        final session = await accountHarness.loginDisposableAccount(
-          'gathering-by-source-$suffix',
-        );
-        final personaId = session.activePersona?.personaId.trim() ?? '';
-        if (personaId.isEmpty) {
-          throw StateError('by-source readback requires an active persona');
-        }
-        sourceHarness = await _BySourceHarness.create(
-          session: session,
-          personaId: personaId,
-        );
+    try {
+      accountHarness = await UserApiContractHarness.create();
+      final session = await accountHarness.loginDisposableAccount(
+        'gathering-by-source-$suffix',
+      );
+      final personaId = session.activePersona?.personaId.trim() ?? '';
+      if (personaId.isEmpty) {
+        throw StateError('by-source readback requires an active persona');
+      }
+      sourceHarness = await _BySourceHarness.create(
+        session: session,
+        personaId: personaId,
+      );
 
-        // 形状合法但必然无匹配的一次性 source identity：typed empty page，
-        // 不合成失败也不借用其他来源结果（GWT-007.t3）。
-        final page = await sourceHarness.remote.listBySource(
+      // 形状合法但必然无匹配的一次性 source identity：typed empty page，
+      // 不合成失败也不借用其他来源结果（GWT-007.t3）。
+      final page = await sourceHarness.remote.listBySource(
+        GatheringBySourceListQuery(
+          sourceObjectTypeRef: 'homepage',
+          sourceObjectId: 'homepage-by-source-runner-$suffix',
+        ),
+      );
+      if (page.isNotEmpty) {
+        throw StateError(
+          'unmatched source identity returned non-empty public gathering page',
+        );
+      }
+
+      // 受管 release 实体（可选注入）：验证非空 typed 卡片的公开事实字段齐备。
+      final managedHomepageId =
+          Platform.environment['QWQ_GATHERING_SOURCE_HOMEPAGE_ID']?.trim() ??
+          '';
+      if (managedHomepageId.isNotEmpty) {
+        final managedPage = await sourceHarness.remote.listBySource(
           GatheringBySourceListQuery(
             sourceObjectTypeRef: 'homepage',
-            sourceObjectId: 'homepage-by-source-runner-$suffix',
+            sourceObjectId: managedHomepageId,
           ),
         );
-        if (page.isNotEmpty) {
-          throw StateError(
-            'unmatched source identity returned non-empty public gathering page',
-          );
+        if (managedPage.isEmpty) {
+          throw StateError('managed source returned no public gatherings');
         }
+        for (final card in managedPage) {
+          if (card.gatheringId.trim().isEmpty ||
+              card.title.trim().isEmpty ||
+              card.lifecycleStatusWire.trim().isEmpty) {
+            throw StateError('by-source card misses public facts');
+          }
+        }
+      }
 
-        // 受管 release 实体（可选注入）：验证非空 typed 卡片的公开事实字段齐备。
-        final managedHomepageId =
-            Platform.environment['QWQ_GATHERING_SOURCE_HOMEPAGE_ID']?.trim() ??
-            '';
-        if (managedHomepageId.isNotEmpty) {
-          final managedPage = await sourceHarness.remote.listBySource(
-            GatheringBySourceListQuery(
-              sourceObjectTypeRef: 'homepage',
-              sourceObjectId: managedHomepageId,
+      final events = await sourceHarness.telemetry.waitForEvents(
+        minimumCount: 1,
+      );
+      final bySourceReads = events.where(
+        (event) =>
+            event.canonicalOperationId ==
+            cloud.AppCloudOperationIds.circleGatheringListGatheringsBySource,
+      );
+      if (bySourceReads.isEmpty ||
+          bySourceReads.any((event) => !event.succeeded)) {
+        throw StateError(
+          'by-source readback did not emit the canonical production operation',
+        );
+      }
+    } finally {
+      try {
+        if (accountHarness != null) {
+          await accountHarness.accountLifecycle.closeAccount(
+            cloud.CloseAccountCommand(
+              clientRequestId: 'gathering-by-source-cleanup-$suffix',
             ),
-          );
-          if (managedPage.isEmpty) {
-            throw StateError('managed source returned no public gatherings');
-          }
-          for (final card in managedPage) {
-            if (card.gatheringId.trim().isEmpty ||
-                card.title.trim().isEmpty ||
-                card.lifecycleStatusWire.trim().isEmpty) {
-              throw StateError('by-source card misses public facts');
-            }
-          }
-        }
-
-        final events = await sourceHarness.telemetry.waitForEvents(
-          minimumCount: 1,
-        );
-        final bySourceReads = events.where(
-          (event) =>
-              event.canonicalOperationId ==
-              cloud.AppCloudOperationIds.circleGatheringListGatheringsBySource,
-        );
-        if (bySourceReads.isEmpty ||
-            bySourceReads.any((event) => !event.succeeded)) {
-          throw StateError(
-            'by-source readback did not emit the canonical production operation',
           );
         }
       } finally {
         try {
-          if (accountHarness != null) {
-            await accountHarness.accountLifecycle.closeAccount(
-              cloud.CloseAccountCommand(
-                clientRequestId: 'gathering-by-source-cleanup-$suffix',
-              ),
-            );
-          }
+          await sourceHarness?.close();
         } finally {
-          try {
-            await sourceHarness?.close();
-          } finally {
-            await accountHarness?.close();
-          }
+          await accountHarness?.close();
         }
       }
-    },
-  );
+    }
+  });
 }
 
 final class _BySourceHarness {
@@ -171,21 +171,30 @@ final class _BySourceHarness {
           gatewayBaseUri: gateway,
         ),
       );
+      cloud.CloudOperationInvocationContext invocationContext(
+        String clientPageId, {
+        String? idempotencyKey,
+      }) => cloud.CloudOperationInvocationContext(
+        surfaceId: AppUiSurfaces.homepageDetail.id,
+        routeId: AppUiSurfaces.homepageDetail.routeId,
+        clientPageId: clientPageId,
+        idempotencyKey: idempotencyKey,
+        actor: cloud.CloudOperationActorContext(
+          accountId: session.ownerId,
+          personaId: personaId,
+          deviceActorId: 'gathering-by-source-api-runner',
+        ),
+      );
       return _BySourceHarness(
         remote: RemoteGatheringFacet(
           client: client,
-          invocationContext: (clientPageId, {idempotencyKey}) =>
-              cloud.CloudOperationInvocationContext(
-                surfaceId: AppUiSurfaces.homepageDetail.id,
-                routeId: AppUiSurfaces.homepageDetail.routeId,
-                clientPageId: clientPageId,
-                idempotencyKey: idempotencyKey,
-                actor: cloud.CloudOperationActorContext(
-                  accountId: session.ownerId,
-                  personaId: personaId,
-                  deviceActorId: 'gathering-by-source-api-runner',
-                ),
-              ),
+          invocationContext: invocationContext,
+          planReader: GatheringBoardPlanReaderFacade(
+            RemoteGatheringPlanFacet(
+              client: client,
+              invocationContext: invocationContext,
+            ),
+          ),
         ),
         telemetry: telemetry,
         httpClient: httpClient,

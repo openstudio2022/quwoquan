@@ -190,7 +190,7 @@ api_routes:
   telemetry: {metric: ops_platform_triage_summary, trace: true, attributes: [operation, outcome]}
   slo: {latency_p95_ms: 1500, availability_percent: 99.9}
   commercial: {status: ready}
-  response_fields: [projectionSummary, backlogCandidates, runtimeReady, source]
+  response_fields: [scope, projectionSummary, configDrift, serviceDrift, outOfSyncInstances, staleInstances, backlogCandidates, runtimeReady, source]
   application: {kind: query, facet: ConfigInstanceReportJournalQueryFacade, method: getPlatformTriageSummary, reader: PlatformTriageSummaryReader, slice: PlatformTriageSummary}
 consumers:
 - name: platform-ops

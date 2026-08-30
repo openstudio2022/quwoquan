@@ -10,6 +10,7 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_presenter.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
+import 'package:quwoquan_app/l10n/copy/assistant_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
@@ -17,7 +18,16 @@ import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/di/conversation_members_provider.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/skill_surface_placement/application/public/assistant_skill_placement_open_request.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show SkillSurfaceKind;
 import 'package:uuid/uuid.dart';
+
+typedef AssistantSkillPlacementPresenter =
+    Future<void> Function(
+      BuildContext context,
+      AssistantSkillPlacementOpenRequest request,
+    );
 
 /// 群管理页 — 群主/管理员专属管理入口
 class GroupManagePage extends ConsumerStatefulWidget {
@@ -25,10 +35,12 @@ class GroupManagePage extends ConsumerStatefulWidget {
     super.key,
     required this.conversationId,
     required this.conversationDissolver,
+    required this.assistantSkillPlacementPresenter,
   });
 
   final String conversationId;
   final ConversationDissolver conversationDissolver;
+  final AssistantSkillPlacementPresenter assistantSkillPlacementPresenter;
 
   @override
   ConsumerState<GroupManagePage> createState() => _GroupManagePageState();
@@ -337,6 +349,28 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                                   isDark,
                                 ),
                           ),
+                        ),
+                        SettingsInsetFormSectionDivider(isDark: isDark),
+                        SettingsInsetFormRow(
+                          key: const ValueKey<String>(
+                            'assistant_skill_surface_placement_entry',
+                          ),
+                          isDark: isDark,
+                          label: AssistantText.assistantSkillPlacementTitle,
+                          trailing: Icon(
+                            CupertinoIcons.chevron_forward,
+                            size: AppSpacing.iconMedium,
+                            color: chevronColor,
+                          ),
+                          onTap: membersState.isLoading
+                              ? null
+                              : () => widget.assistantSkillPlacementPresenter(
+                                  context,
+                                  AssistantSkillPlacementOpenRequest(
+                                    surfaceKind: SkillSurfaceKind.conversation,
+                                    surfaceId: widget.conversationId,
+                                  ),
+                                ),
                         ),
                       ],
                     ),

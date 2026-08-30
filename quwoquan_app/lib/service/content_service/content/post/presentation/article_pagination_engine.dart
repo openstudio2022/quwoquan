@@ -4,6 +4,7 @@ import 'package:flutter/painting.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_font_stack.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_asset.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_rich_block_chrome.dart';
@@ -54,15 +55,16 @@ class ArticlePaginationEngine {
             }
             return left.id.compareTo(right.id);
           });
-    final assets =
-        document.assets.where((asset) => asset.hasImage).toList(growable: false)
-          ..sort((left, right) {
-            final offsetCompare = left.offset.compareTo(right.offset);
-            if (offsetCompare != 0) {
-              return offsetCompare;
-            }
-            return left.id.compareTo(right.id);
-          });
+    // 缺席图片（imageUrl 未解析）同样进入分页资产序列（GWT-016）：
+    // 渲染端呈现缺席态框，分页必须在源头保留其占位，禁止静默剔除。
+    final assets = document.assets.toList(growable: false)
+      ..sort((left, right) {
+        final offsetCompare = left.offset.compareTo(right.offset);
+        if (offsetCompare != 0) {
+          return offsetCompare;
+        }
+        return left.id.compareTo(right.id);
+      });
     final wrapGroupsByAssetId = buildArticleWrapNodeGroupsByAssetId(
       document.nodes,
     );
@@ -558,9 +560,8 @@ class ArticlePaginationEngine {
     }
     if (pageAssets.isNotEmpty) {
       for (final pa in pageAssets) {
-        if (!pa.hasImage) {
-          continue;
-        }
+        // 缺席图片不跳过（GWT-016）：fullWidth 缺席产出占位 fragment，
+        // wrap 缺席由 flow 引擎与渲染端降级为全宽顺序正文。
         if (pa.usesWrappedLayout) {
           final explicitGroup = wrapGroupsByAssetId[pa.id];
           final wrap = resolveArticleWrapLayout(
@@ -577,6 +578,10 @@ class ArticlePaginationEngine {
               ),
               captionPlaceholderWhenEmpty: false,
               imageLayout: pa.imageLayout,
+              figureAspectRatio: resolveArticleFigureAspectRatio(
+                metrics: metrics,
+                asset: pa,
+              ),
               metrics: metrics,
             ),
           );
@@ -600,9 +605,7 @@ class ArticlePaginationEngine {
           );
         }
       }
-      final hasFullWidthStack = pageAssets.any(
-        (a) => a.hasImage && !a.usesWrappedLayout,
-      );
+      final hasFullWidthStack = pageAssets.any((a) => !a.usesWrappedLayout);
       if (hasFullWidthStack && bodyText.trim().isNotEmpty) {
         fragments.add(
           ArticleLayoutFragment(
@@ -668,6 +671,10 @@ class ArticlePaginationEngine {
         ),
         captionPlaceholderWhenEmpty: false,
         imageLayout: asset.imageLayout,
+        figureAspectRatio: resolveArticleFigureAspectRatio(
+          metrics: metrics,
+          asset: asset,
+        ),
         metrics: metrics,
       ),
     );
@@ -798,6 +805,10 @@ class ArticlePaginationEngine {
           ),
           captionPlaceholderWhenEmpty: false,
           imageLayout: asset.imageLayout,
+          figureAspectRatio: resolveArticleFigureAspectRatio(
+            metrics: metrics,
+            asset: asset,
+          ),
           metrics: metrics,
         ),
       );
@@ -808,10 +819,9 @@ class ArticlePaginationEngine {
           wrap.layout.trailingSpacing +
           lineHeight;
     }
-    final aspectRatio = asset.imageLayout == 'journalCard'
-        ? metrics.journalImageAspectRatio
-        : metrics.fullWidthImageAspectRatio;
-    return contentWidth / aspectRatio;
+    // 比例经唯一决定函数（REQ-017）：元数据优先并 clamp，缺席走 4:3 后备。
+    return contentWidth /
+        resolveArticleFigureAspectRatio(metrics: metrics, asset: asset);
   }
 }
 

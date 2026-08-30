@@ -10,14 +10,14 @@ library;
 
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/di/chat_message_application_dependencies.dart';
-import 'package:quwoquan_app/runtime/observability/app_observability_ports.dart';
-import 'package:quwoquan_runtime_errors/runtime_errors.dart' show RuntimeFailureBase;
+import 'package:quwoquan_runtime_errors/runtime_errors.dart'
+    show RuntimeFailureBase;
 import 'package:quwoquan_app/service/chat_service/chat/conversation/adapters/conversation_sync_service.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_media_view_data.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_timeline.dart';
@@ -44,12 +44,19 @@ ChatMessageViewData _message(int seq) => ChatMessageViewData(
 
 final class _FakeConversationSync extends Fake
     implements ConversationSyncService {
+  _FakeConversationSync({this.syncCompleter});
+
+  final Completer<bool>? syncCompleter;
   int syncCalls = 0;
   int avatarPatchCalls = 0;
 
   @override
   Future<bool> sync({bool force = false}) async {
     syncCalls += 1;
+    final completer = syncCompleter;
+    if (completer != null) {
+      return completer.future;
+    }
     return true;
   }
 
@@ -78,6 +85,7 @@ final class _RecordingTimelineController extends Fake
     implements ChatMessageTimelineController {
   final List<int> syncFromSeqCalls = <int>[];
   int loadMessagesCalls = 0;
+  void Function()? onLoadMessages;
 
   @override
   Future<void> syncFromSeq(int lastSeq) async {
@@ -87,6 +95,7 @@ final class _RecordingTimelineController extends Fake
   @override
   Future<void> loadMessages({int? maxSeq}) async {
     loadMessagesCalls += 1;
+    onLoadMessages?.call();
   }
 
   @override
@@ -103,6 +112,8 @@ final class _RecordingTimelineController extends Fake
 
 final class _FakeExceptionTelemetry extends Fake
     implements ExceptionTelemetryPort {
+  int calls = 0;
+
   @override
   Future<void> recordGlobalException({
     required String source,
@@ -115,7 +126,9 @@ final class _FakeExceptionTelemetry extends Fake
     String operationId = 'app.runtime.capture_exception',
     RuntimeFailureBase? runtimeFailure,
     String exceptionType = '',
-  }) async {}
+  }) async {
+    calls += 1;
+  }
 }
 
 /// 记录型 read：只解析恢复链路真实消费的 provider，其余一律拒绝。
@@ -123,25 +136,41 @@ final class _ReconnectReadScope {
   _ReconnectReadScope({
     required this.snapshot,
     required this.controller,
-  });
+    _FakeConversationSync? conversationSync,
+  }) : conversationSync = conversationSync ?? _FakeConversationSync() {
+    controller.onLoadMessages = () {
+      snapshot = const ChatMessageTimelineSnapshot(
+        source: ChatTimelineContentSource.remoteSynced,
+      );
+    };
+  }
 
-  final ChatMessageTimelineSnapshot snapshot;
+  ChatMessageTimelineSnapshot snapshot;
   final _RecordingTimelineController controller;
-  final _FakeConversationSync conversationSync = _FakeConversationSync();
+  final _FakeConversationSync conversationSync;
   final _FakeLocalChatSearchSync searchSync = _FakeLocalChatSearchSync();
   final _FakeExceptionTelemetry telemetry = _FakeExceptionTelemetry();
+  bool _readsClosed = false;
+
+  void closeReads() {
+    _readsClosed = true;
+  }
 
   T read<T>(ProviderListenable<T> listenable) {
+    if (_readsClosed) {
+      throw StateError('provider scope disposed');
+    }
     if (identical(listenable, conversationSyncProvider)) {
       return conversationSync as T;
     }
     if (identical(listenable, localChatSearchSyncProvider)) {
       return searchSync as T;
     }
-    if (listenable == chatMessageTimelineProvider(_conversationId)) {
+    final candidate = listenable as Object;
+    if (candidate == chatMessageTimelineProvider(_conversationId)) {
       return snapshot as T;
     }
-    if (listenable == chatMessageTimelineControllerProvider(_conversationId)) {
+    if (candidate == chatMessageTimelineControllerProvider(_conversationId)) {
       return controller as T;
     }
     if (identical(listenable, exceptionTelemetryPortProvider)) {
@@ -193,16 +222,30 @@ class _TokenProvider implements CloudAuthTokenProvider {
   Future<String?> getAccessToken() async => 'jwt-token';
 }
 
-/// 不发起真实网络的 LongPoll double（降级路径只验证恢复事件语义）。
-final class _InertLongPollTransport extends LongPollTransport {
-  _InertLongPollTransport({
+/// 不发起真实网络、但确认 transport resume 的 LongPoll typed double。
+final class _ResumingLongPollTransport extends LongPollTransport {
+  _ResumingLongPollTransport({
     required super.config,
     required super.authTokenProvider,
+    required super.activeConversationIdResolver,
     required super.onEvents,
   });
 
+  Future<void>? recovery;
+
   @override
-  void start() {}
+  void start() {
+    final conversationId = activeConversationIdResolver()?.trim();
+    recovery = Future<void>.sync(
+      () => onEvents(<Map<String, dynamic>>[
+        <String, dynamic>{
+          'type': 'Reconnected',
+          if (conversationId != null && conversationId.isNotEmpty)
+            'conversationId': conversationId,
+        },
+      ]),
+    );
+  }
 
   @override
   void dispose() {}
@@ -265,11 +308,9 @@ void main() {
     }
     await _drainRecoveryTimers();
 
-    expect(
-      scope.controller.syncFromSeqCalls,
-      [3],
-      reason: '恢复事件必须以端侧已持有的最大 seq 为起点补齐缺口',
-    );
+    expect(scope.controller.syncFromSeqCalls, [
+      3,
+    ], reason: '恢复事件必须以端侧已持有的最大 seq 为起点补齐缺口');
     expect(scope.conversationSync.syncCalls, greaterThan(0));
     expect(scope.searchSync.syncCalls, greaterThan(0));
   });
@@ -370,11 +411,9 @@ void main() {
     }
     await _drainRecoveryTimers();
 
-    expect(
-      scope.controller.syncFromSeqCalls,
-      [3],
-      reason: '后台窗口的消息必须以本地最大 seq 为起点补齐',
-    );
+    expect(scope.controller.syncFromSeqCalls, [
+      3,
+    ], reason: '后台窗口的消息必须以本地最大 seq 为起点补齐');
   });
 
   test('WS 重试预算耗尽降级 LongPoll 时同样触发恢复补洞', () async {
@@ -412,12 +451,17 @@ void main() {
             );
           },
       longPollFactory:
-          ({required config, required authTokenProvider, required onEvents}) =>
-              _InertLongPollTransport(
-                config: config,
-                authTokenProvider: authTokenProvider,
-                onEvents: onEvents,
-              ),
+          ({
+            required config,
+            required authTokenProvider,
+            required activeConversationIdResolver,
+            required onEvents,
+          }) => _ResumingLongPollTransport(
+            config: config,
+            authTokenProvider: authTokenProvider,
+            activeConversationIdResolver: activeConversationIdResolver,
+            onEvents: onEvents,
+          ),
     );
     addTearDown(delegate.dispose);
 
@@ -433,10 +477,138 @@ void main() {
     }
     await _drainRecoveryTimers();
 
+    expect(scope.controller.syncFromSeqCalls, [
+      3,
+    ], reason: '降级 LongPoll 不承载断连窗口回放，必须由 seq 补洞收敛');
+  });
+
+  test('delegate dispose 取消 handler 延迟任务且不再读取 provider', () {
+    fakeAsync((clock) {
+      final scope = _ReconnectReadScope(
+        snapshot: ChatMessageTimelineSnapshot(
+          messages: [_message(1), _message(2), _message(3)],
+        ),
+        controller: _RecordingTimelineController(),
+      );
+      _ConnectableWebSocketTransport? ws;
+      final delegate = RemoteRealtimeConnectionDelegate(
+        read: scope.read,
+        currentUserIdResolver: () => 'user-42',
+        authTokenProvider: const _TokenProvider(),
+        config: const RealtimeConfig(
+          wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
+          gatewayBaseUrl: 'http://127.0.0.1:17000',
+          longPollHoldSec: 1,
+        ),
+        webSocketFactory:
+            ({
+              required config,
+              required authTokenProvider,
+              required onEvent,
+              required onDisconnect,
+            }) {
+              return ws = _ConnectableWebSocketTransport(
+                config: config,
+                authTokenProvider: authTokenProvider,
+                onEvent: onEvent,
+                onDisconnect: onDisconnect,
+              );
+            },
+      );
+
+      delegate.onEnterConversation(_conversationId);
+      clock.flushMicrotasks();
+      ws!.onEvent(<String, dynamic>{
+        'type': 'Reconnected',
+        'conversationId': _conversationId,
+      });
+      clock.flushMicrotasks();
+
+      expect(clock.pendingTimers, hasLength(1));
+      delegate.dispose();
+      expect(clock.pendingTimers, isEmpty);
+      clock.elapse(const Duration(milliseconds: 200));
+      expect(scope.conversationSync.avatarPatchCalls, 0);
+    });
+  });
+
+  test('reconnect await 期间 dispose 不再读取已销毁 provider 且传播停机', () async {
+    final syncCompleter = Completer<bool>();
+    final scope = _ReconnectReadScope(
+      snapshot: ChatMessageTimelineSnapshot(
+        messages: [_message(1), _message(2), _message(3)],
+      ),
+      controller: _RecordingTimelineController(),
+      conversationSync: _FakeConversationSync(syncCompleter: syncCompleter),
+    );
+    _ConnectableWebSocketTransport? ws;
+    _ResumingLongPollTransport? longPoll;
+    final delegate = RemoteRealtimeConnectionDelegate(
+      read: scope.read,
+      currentUserIdResolver: () => 'user-42',
+      authTokenProvider: const _TokenProvider(),
+      config: const RealtimeConfig(
+        wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
+        gatewayBaseUrl: 'http://127.0.0.1:17000',
+        longPollHoldSec: 1,
+        maxReconnectAttempts: 0,
+      ),
+      webSocketFactory:
+          ({
+            required config,
+            required authTokenProvider,
+            required onEvent,
+            required onDisconnect,
+          }) {
+            return ws = _ConnectableWebSocketTransport(
+              config: config,
+              authTokenProvider: authTokenProvider,
+              onEvent: onEvent,
+              onDisconnect: onDisconnect,
+            );
+          },
+      longPollFactory:
+          ({
+            required config,
+            required authTokenProvider,
+            required activeConversationIdResolver,
+            required onEvents,
+          }) {
+            return longPoll = _ResumingLongPollTransport(
+              config: config,
+              authTokenProvider: authTokenProvider,
+              activeConversationIdResolver: activeConversationIdResolver,
+              onEvents: onEvents,
+            );
+          },
+    );
+
+    delegate.onEnterConversation(_conversationId);
+    await Future<void>.delayed(Duration.zero);
+    ws!.simulateDisconnect();
+    await Future<void>.delayed(Duration.zero);
+    expect(scope.conversationSync.syncCalls, 1);
+    final recovery = longPoll!.recovery!;
+    final recoveryExpectation = expectLater(
+      recovery,
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'realtime message handler is disposed',
+        ),
+      ),
+    );
+
+    delegate.dispose();
+    scope.closeReads();
+    syncCompleter.complete(true);
+    await recoveryExpectation;
+
     expect(
-      scope.controller.syncFromSeqCalls,
-      [3],
-      reason: '降级 LongPoll 不承载断连窗口回放，必须由 seq 补洞收敛',
+      scope.telemetry.calls,
+      0,
+      reason: 'dispose 后不得再读取或写入 telemetry provider',
     );
   });
 }

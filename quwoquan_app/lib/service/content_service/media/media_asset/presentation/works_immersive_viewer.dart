@@ -1,6 +1,12 @@
 import 'dart:async';
+
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_asset.dart';
+import 'package:quwoquan_app/runtime/di/content_post_media_binding.dart';
+
 import 'dart:math' show max;
 import 'dart:ui' show FontFeature, ImageFilter;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Theme;
 import 'package:flutter/rendering.dart'
@@ -15,6 +21,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/runtime/di/content_media_viewer_policy_dependencies.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_pages.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
@@ -70,6 +77,7 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart'
     show AuthSessionState, authSessionControllerProvider;
 import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
+import 'package:quwoquan_app/runtime/di/signed_media_delivery_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/video_preview_track_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/article_reader_observability.dart';
@@ -115,6 +123,7 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 part 'works_immersive_viewer_controls.dart';
 part 'works_immersive_viewer_canvas.dart';
 part 'works_immersive_viewer_engagement_actions.dart';
+part 'works_immersive_viewer_feed_terminal.dart';
 part 'works_immersive_viewer_intersection_actions.dart';
 part 'works_immersive_viewer_social_actions.dart';
 part 'works_immersive_viewer_video_chrome.dart';

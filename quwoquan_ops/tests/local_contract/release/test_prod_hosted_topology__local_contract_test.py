@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import inspect
 import json
 import subprocess
 import tempfile
@@ -253,17 +254,21 @@ class ProdHostedTopologyContractTest(unittest.TestCase):
             [f"host coverage check not passed: {failed_name} status=failed"],
         )
 
-        stackctl_source = (
-            ROOT / "quwoquan_ops/cli/stackctl.py"
-        ).read_text(encoding="utf-8")
+        # 通过 stackctl 命名空间取真实实现源码：rollout / finalize 已迁往
+        # quwoquan_ops/cli/commands/**，只靠 stackctl.py 文本扫描会随再导出失效。
+        rollout_source = inspect.getsource(stackctl._command_deploy_with_lock)
+        finalize_source = inspect.getsource(stackctl._deploy_prod_hosted_finalize)
         deploy_source = (
             ROOT / "quwoquan_ops/cli/prod/deploy_to_prod.sh"
         ).read_text(encoding="utf-8")
         self.assertIn(
             "production apply failed; stackctl will rollback every plane",
-            stackctl_source,
+            rollout_source,
         )
-        self.assertGreaterEqual(stackctl_source.count('"PROD_SSH_HOST": ""'), 2)
+        # apply 与 rollback 两条 plane 编排都必须把 PROD_SSH_HOST 留空，
+        # 由 access-isolation 策略重新解析完整 host/replica 放置。
+        self.assertIn('"PROD_SSH_HOST": ""', rollout_source)
+        self.assertIn('"PROD_SSH_HOST": ""', finalize_source)
         self.assertIn(
             "while IFS=$'\\t' read -r plane account compose_root",
             deploy_source,

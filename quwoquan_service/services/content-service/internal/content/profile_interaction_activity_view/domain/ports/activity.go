@@ -37,9 +37,21 @@ type PostSlice struct {
 	Summary                   string
 	CoverURL                  string
 	MediaURLs                 []string
-	Status                    string
-	Visibility                string
-	DeletedAt                 time.Time
+	// 媒体条目的 typed 交付声明（DEC-033）：预览图在 research 相位是相对私有
+	// CAS 引用，投影必须把配对的资产标识与访问模式一并交出。
+	MediaItems []PostMediaSlice
+	Status     string
+	Visibility string
+	DeletedAt  time.Time
+}
+
+// PostMediaSlice 是投影所需的媒体条目最小事实：URL 与其配对的交付声明。
+type PostMediaSlice struct {
+	URL          string
+	CoverURL     string
+	MediaAssetID string
+	CoverAssetID string
+	AccessMode   string
 }
 
 type CommentSlice struct {

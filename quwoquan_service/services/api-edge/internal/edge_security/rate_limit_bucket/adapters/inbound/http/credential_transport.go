@@ -9,6 +9,7 @@ import (
 )
 
 type credentialContextKey struct{}
+type ownerProxyCancellationContextKey struct{}
 
 type verifiedCredential struct {
 	authorization string
@@ -30,8 +31,25 @@ func PreserveCredentialTransport(next http.Handler) http.Handler {
 			credentialContextKey{},
 			credential,
 		)
-		next.ServeHTTP(response, request.WithContext(contextWithCredential))
+		// Save the request cancellation source before the generated operation
+		// guard adds the owner's reliability deadline. The public edge proxy owns
+		// a wider network budget, but must still stop immediately when the client
+		// disconnects or the HTTP server shuts down.
+		contextWithProxyCancellation := context.WithValue(
+			contextWithCredential,
+			ownerProxyCancellationContextKey{},
+			request.Context(),
+		)
+		next.ServeHTTP(response, request.WithContext(contextWithProxyCancellation))
 	})
+}
+
+func ownerProxyCancellationContext(ctx context.Context) (context.Context, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	parent, ok := ctx.Value(ownerProxyCancellationContextKey{}).(context.Context)
+	return parent, ok && parent != nil
 }
 
 func restoreVerifiedCredential(request *http.Request) {

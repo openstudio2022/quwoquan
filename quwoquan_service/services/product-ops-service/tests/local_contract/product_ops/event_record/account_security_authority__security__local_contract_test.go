@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/spec.md#sit-003
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t5
 package local_contract
 
 import (
@@ -349,8 +350,8 @@ func TestProductOpsAccountSecurityAuthorityConfigurationIsExplicitInEveryEnviron
 		definitions[key] = definition
 	}
 	for _, key := range []string{
-		"sys.product-ops-service.account_security_authority.base_url",
-		"sys.product-ops-service.account_security_authority.timeout_ms",
+		"sys.product-ops-service.user_account_security_authority.base_url",
+		"sys.product-ops-service.user_account_security_authority.timeout_ms",
 	} {
 		definition, exists := definitions[key]
 		if !exists {
@@ -360,7 +361,7 @@ func TestProductOpsAccountSecurityAuthorityConfigurationIsExplicitInEveryEnviron
 			t.Fatalf("authority setting %q must not have a fallback default", key)
 		}
 	}
-	if definitions["sys.product-ops-service.account_security_authority.timeout_ms"]["type"] != "int" {
+	if definitions["sys.product-ops-service.user_account_security_authority.timeout_ms"]["type"] != "int" {
 		t.Fatal("authority timeout must be an integer config value")
 	}
 
@@ -380,10 +381,10 @@ func TestProductOpsAccountSecurityAuthorityConfigurationIsExplicitInEveryEnviron
 				filepath.Join(root, "environments", environment, "config.yaml"),
 				&environmentConfig,
 			)
-			if got := environmentConfig.Overrides["sys.product-ops-service.account_security_authority.base_url"]; got != wantBaseURL {
+			if got := environmentConfig.Overrides["sys.product-ops-service.user_account_security_authority.base_url"]; got != wantBaseURL {
 				t.Fatalf("base URL=%#v, want=%q", got, wantBaseURL)
 			}
-			if got := environmentConfig.Overrides["sys.product-ops-service.account_security_authority.timeout_ms"]; got != 1500 {
+			if got := environmentConfig.Overrides["sys.product-ops-service.user_account_security_authority.timeout_ms"]; got != 1500 {
 				t.Fatalf("timeout=%#v, want=1500ms (hot-swap persist; thrash-tolerant authority probe)", got)
 			}
 		})
@@ -392,26 +393,37 @@ func TestProductOpsAccountSecurityAuthorityConfigurationIsExplicitInEveryEnviron
 
 func TestProductOpsAPIWiresAccountSecurityAuthorityAndNoPIISLO(t *testing.T) {
 	root := productOpsServiceRoot(t)
-	mainSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "main.go"))
+	bootstrapSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "bootstrap.go"))
 	if err != nil {
 		t.Fatalf("read API composition: %v", err)
 	}
-	source := string(mainSource)
+	source := string(bootstrapSource)
+	// authority 客户端、凭据与健康检查由 servicekit.Bootstrap 统一装配
+	// （DEC-028）；本服务只声明最小 scope 与配置来源，装配语义由
+	// runtime/servicekit 的白盒测试锁定。
 	for _, required := range []string{
-		"rtauth.NewHS256ServiceAuthorizationProvider(",
+		"servicekit.Bootstrap(serviceName",
+		"AuthorityScopes:",
 		`"user.account.security.read"`,
-		"rtauth.NewHTTPAccountSecurityAuthority(",
-		"BaseURL:     cfg.AccountSecurityAuthority.BaseURL",
-		"Timeout:     accountSecurityAuthorityTimeout",
-		`healthChecker.Register("account-security-authority"`,
-		"return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)",
-		"AccountSecurityAuthority: accountSecurityAuthority",
 	} {
 		if !strings.Contains(source, required) {
 			t.Fatalf("product-ops API composition is missing %q", required)
 		}
 	}
-	if strings.Contains(source, "PRODUCT_OPS_ACCOUNT_SECURITY_AUTHORITY") {
+	configSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "runtime_config.go"))
+	if err != nil {
+		t.Fatalf("read runtime config: %v", err)
+	}
+	for _, required := range []string{
+		"servicekit.BaseConfig",
+		"user_account_security_authority.timeout_ms must be within 1..5000",
+	} {
+		if !strings.Contains(string(configSource), required) {
+			t.Fatalf("product-ops runtime config is missing %q", required)
+		}
+	}
+	if strings.Contains(source, "PRODUCT_OPS_ACCOUNT_SECURITY_AUTHORITY") ||
+		strings.Contains(string(configSource), "PRODUCT_OPS_ACCOUNT_SECURITY_AUTHORITY") {
 		t.Fatal("account security authority must not use an environment fallback")
 	}
 

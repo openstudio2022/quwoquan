@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-001.t3
 """Environment manifests select stable, balanced prefixes from one content pool."""
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from content.release.canonical.content_pool_record import (  # noqa: E402
     build_canonical_pool_record,
 )
 from core.io import write_json  # noqa: E402
-from core.source_digest import SourceDigest, content_source_revision  # noqa: E402
+from core.source_digest import SourceDefinitionSnapshot, content_source_revision  # noqa: E402
 
 
 def _source_attribution() -> dict[str, object]:
@@ -42,10 +43,13 @@ def _source_attribution() -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-11T00:00:00Z",
         "takedownPolicy": "remove on substantiated request",
+        "derivedModifications": [],
     }
 
 
-def _source_identity(execution_id: str = "execution-a") -> tuple[dict[str, object], SourceDigest]:
+def _source_identity(
+    execution_id: str = "execution-a",
+) -> tuple[dict[str, object], SourceDefinitionSnapshot]:
     source_digest = "sha256:" + "1" * 64
     entity_catalog_digest = "sha256:" + "2" * 64
     identity: dict[str, object] = {
@@ -58,7 +62,7 @@ def _source_identity(execution_id: str = "execution-a") -> tuple[dict[str, objec
         "entityCatalogDigest": entity_catalog_digest,
     }
     identity["identityDigest"] = source_identity_digest(identity)
-    return identity, SourceDigest(source_digest)
+    return identity, SourceDefinitionSnapshot(source_digest)
 
 
 def _post(
@@ -71,6 +75,7 @@ def _post(
     usage_scope: str = "research",
     variant_purpose: str = "original",
     status: str = "active",
+    generator: str = "agent",
     entity_refs: list[str] | None = None,
 ) -> str:
     post_ref = f"{content_type}/{work}/{version}"
@@ -99,6 +104,7 @@ def _post(
             "sourceDigest": source_digest.to_document(),
             "sourceIdentity": source_identity,
             "contentType": content_type,
+            "generator": generator,
             "authorId": author_id,
             "entityRefs": list(entity_refs or []),
             "variantPurpose": variant_purpose,
@@ -176,21 +182,31 @@ def test_environment_release_selection__nested_balanced_prefix_and_versions__loc
         publish_root=publish_root,
         post_refs=refs,
         environment="alpha",
+        release_class="research",
     )
     beta = subject.select_environment_release_posts(
         publish_root=publish_root,
         post_refs=refs,
         environment="beta",
+        release_class="research",
     )
     gamma = subject.select_environment_release_posts(
         publish_root=publish_root,
         post_refs=refs,
         environment="gamma",
+        release_class="research",
     )
     prod = subject.select_environment_release_posts(
         publish_root=publish_root,
         post_refs=refs,
         environment="prod",
+        release_class="research",
+    )
+    commercial = subject.select_environment_release_posts(
+        publish_root=publish_root,
+        post_refs=refs,
+        environment="prod",
+        release_class="commercial",
     )
 
     assert alpha.post_refs == beta.post_refs[:4]
@@ -203,6 +219,39 @@ def test_environment_release_selection__nested_balanced_prefix_and_versions__loc
     assert commercial_original_ref in prod.post_refs
     assert commercial_ref not in prod.post_refs
     assert alpha.pool_digest == beta.pool_digest == gamma.pool_digest == prod.pool_digest
+    assert commercial.release_mode == "commercial"
+    assert commercial.pool_digest == prod.pool_digest
+    assert commercial.post_refs == (commercial_ref, commercial_original_ref)
+    assert original_ref not in commercial.post_refs
+    assert {
+        row.code for row in commercial.excluded
+    } == {"DATA.POOL.COMMERCIAL_RIGHTS_REQUIRED"}
+
+
+def test_all_publishable_selection__excludes_internal_image_generator_from_delivery_wire__local_contract(
+    tmp_path: Path,
+) -> None:
+    publish_root = tmp_path / "publish"
+    post_ref = _post(
+        publish_root,
+        content_type="image",
+        work="legacy-image-evidence-pack",
+        version=1,
+        author_id="author-image",
+        generator="image_evidence_pack",
+    )
+
+    selection = subject.select_all_publishable_release_posts(
+        publish_root=publish_root,
+        post_refs=[post_ref],
+        release_class="research",
+        strict_admission=False,
+    )
+
+    assert selection.post_refs == ()
+    assert [row.code for row in selection.excluded] == [
+        "DATA.POOL.GENERATOR_PROVENANCE_INVALID"
+    ]
 
 
 def test_environment_release_selection__legacy_requires_explicit_admission__local_contract(
@@ -234,11 +283,13 @@ def test_environment_release_selection__legacy_requires_explicit_admission__loca
         publish_root=publish_root,
         post_refs=[post_ref],
         environment="alpha",
+        release_class="research",
     )
     prod = subject.select_environment_release_posts(
         publish_root=publish_root,
         post_refs=[post_ref],
         environment="prod",
+        release_class="research",
     )
 
     assert alpha.post_refs == ()
@@ -283,6 +334,7 @@ def test_explicit_sidecar_cannot_supply_missing_manifest_content_identity(
         publish_root=publish_root,
         post_refs=[post_ref],
         environment="alpha",
+        release_class="research",
     )
 
     assert selection.post_refs == ()
@@ -310,6 +362,7 @@ def test_environment_release_selection__research_keeps_all_twenty_videos__local_
         publish_root=publish_root,
         post_refs=refs,
         environment="alpha",
+        release_class="research",
     )
 
     assert selected.counts == {
@@ -345,6 +398,7 @@ def test_environment_release_selection__retired_version_is_not_released__local_c
         publish_root=publish_root,
         post_refs=[active_ref, retired_ref],
         environment="alpha",
+        release_class="research",
     )
 
     assert selected.post_refs == (active_ref,)
@@ -430,6 +484,7 @@ def test_strict_pool_selection_excludes_only_object_with_missing_entity(
         publish_root=publish_root,
         post_refs=[ready_ref, pending_ref],
         environment="alpha",
+        release_class="research",
         strict_admission=True,
     )
 
@@ -485,3 +540,8 @@ def test_m100_selector_builds_exact_deterministic_research_cohort(
         "total": 210,
     }
     assert first.post_refs == second.post_refs
+    assert first.eligible_counts == {
+        "article": 105,
+        "image": 105,
+        "video": 15,
+    }

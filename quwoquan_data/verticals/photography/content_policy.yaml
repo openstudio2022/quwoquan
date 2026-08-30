@@ -13,6 +13,9 @@ quality:
   homepageMinimumFactChars: 180
   homepageMinimumSectionChars: 40
   homepageSourceOutlineSectionChars: 120
+  homepageMaxSourceParagraphOverlap: 0.7
+  homepageMaxIntraBodyParagraphSimilarity: 0.7
+  homepageDerivationParagraphMinimumChars: 60
 mediaSubject:
   representativeIndicators:
     - photograph

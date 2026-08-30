@@ -21,6 +21,8 @@ relationships:
 local_identity_reasons:
   canonicalEntityId: external data-catalog entity key resolved only through the EntityHomepage external
     projection port
+  coverAssetId: immutable release MediaAsset authority reference; validated against the homepage
+    semantic/media manifest and never used as a HomepageSearchItemView identity or Store lookup
 search_policy:
   exposed: remote_index
   eligibility_ref: quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration/homepage_search_projection.go#HomepageSearchEligible

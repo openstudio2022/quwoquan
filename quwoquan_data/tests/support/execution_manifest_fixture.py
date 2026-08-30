@@ -13,6 +13,9 @@ from content.execution.queue.backend import (
 )
 from content.execution.spec_contract import ExecutionSpec
 from content.execution.store import save_spec
+from content.execution.planning.capacity_policy import (
+    derive_workload_capacity_fields,
+)
 from content.execution.workspace import (
     TARGET_SET_REF,
     create_execution_manifest,
@@ -23,10 +26,15 @@ from content.source.contracts import (
     HomepageAuthorityProvider,
     QualifiedHomepageSource,
 )
+from quwoquan_data.tests.support.capacity_calibration_fixture import (
+    SYNTHETIC_FROZEN_AT_EPOCH_SECONDS,
+    synthetic_capacity_source_binding,
+)
 from core.control_types import (
     ContentType,
     ExecutionStage,
     ExecutionStateStatus,
+    QueueBackend,
     SelectionPolicy,
 )
 
@@ -52,6 +60,7 @@ class ExecutionFixtureBuilder:
     semantic_preflight_binding: Mapping[str, object] | None = None
     # 过采场景：候选池大于准出配额。省略时候选池与配额相同（不过采）。
     approved_quota: int | None = None
+    queue_backend: QueueBackend = QueueBackend.RELIABLE_TASK
 
     def _normalized_targets(self) -> list[dict[str, object]]:
         identity = parse_execution_id(self.execution_id)
@@ -84,6 +93,9 @@ class ExecutionFixtureBuilder:
             source_ref="quwoquan_data/tests/support/execution_manifest_fixture.py",
         )
         save_spec(self.spec_payload())
+        capacity_source = synthetic_capacity_source_binding(
+            provider_tier=self.semantic_selection_id,
+        )
         manifest = create_execution_manifest(
             execution_id=identity.execution_id,
             recipe_ref=recipe_ref,
@@ -92,8 +104,19 @@ class ExecutionFixtureBuilder:
                 "regionRef": identity.scope,
                 "selector": "all",
                 "count": len(normalized),
+                "quota": (
+                    self.approved_quota
+                    if self.approved_quota is not None
+                    else len(normalized)
+                ),
+                "executionAuthority": {
+                    "mode": "governed_calibration",
+                    "calibration": capacity_source,
+                },
+                "workerHostSetBinding": None,
                 "topic": None,
                 "sourceProviders": [],
+                "targetNames": [],
             },
             selection_policy=SelectionPolicy.FROZEN,
             target_set_ref=TARGET_SET_REF,
@@ -134,6 +157,16 @@ class ExecutionFixtureBuilder:
         quota = self.approved_quota if self.approved_quota is not None else len(targets)
         entity_types = tuple(
             dict.fromkeys(str(item["entityType"]) for item in targets)
+        )
+        capacity_source = synthetic_capacity_source_binding(
+            provider_tier=self.semantic_selection_id,
+        )
+        capacity = derive_workload_capacity_fields(
+            target_scale=identity.phase.value,
+            carrier=identity.content_type.value,
+            work_unit_count=len(targets),
+            capacity_calibration=capacity_source,
+            frozen_at_epoch_seconds=SYNTHETIC_FROZEN_AT_EPOCH_SECONDS,
         )
         return {
             "schema": "quwoquan.content.execution_spec",
@@ -176,10 +209,7 @@ class ExecutionFixtureBuilder:
                 "targetObjectCount": len(targets),
                 "approvedQuota": quota,
                 "oversampleFactor": len(targets) / quota,
-                "requiredWorkers": 1,
-                "partitionCount": 16,
-                "capacityPlanDigest": "sha256:" + "1" * 64,
-                "workerHostSetBinding": None,
+                **capacity,
                 "articleCommercialClosure": (
                     identity.content_type is ContentType.ARTICLE
                 ),
@@ -187,7 +217,7 @@ class ExecutionFixtureBuilder:
                 "gitCommitSha": "local-contract-fixture",
             },
             "queuePolicy": {
-                "backend": "reliabletask",
+                "backend": self.queue_backend.value,
                 "reliableTask": {
                     "taskType": "data.content_object.execute",
                     "queue": "reliabletask.data.content_supply",

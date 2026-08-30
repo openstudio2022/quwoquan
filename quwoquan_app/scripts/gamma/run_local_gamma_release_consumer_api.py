@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Run Gamma release-consumer as a read-only immutable-release consumer verification."""
+"""Run Gamma release-consumer checks without minting an aggregate raw verdict."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 
+sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -18,12 +19,12 @@ if str(ROOT) not in sys.path:
 from quwoquan_app.scripts.gamma.gamma_case_result import (
     GammaCaseResultError,
     load_gamma_execution_identity,
+    load_target_uat_binding,
     require_unchanged_identity,
     resolve_gamma_evidence_path,
-    write_blocked_case_result,
-    write_passed_case_result,
 )
 from quwoquan_ops.cli.lib.output_paths import output_root
+from quwoquan_ops.cli.lib.target_uat_binding import target_uat_binding_digest
 from quwoquan_ops.cli.lib.release_video_delivery import (
     ReleaseVideoDeliveryError,
     load_release_content_identity,
@@ -42,23 +43,13 @@ def default_release_consumer_report_path() -> Path:
     )
 
 
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
 def resolve_release_consumer_report_path(raw_value: str) -> Path:
-    """Keep release-consumer evidence in the immutable-run evidence plane."""
+    return resolve_gamma_evidence_path(
+        raw_value, label="Gamma release-consumer diagnostic report"
+    )
 
-    return resolve_gamma_evidence_path(raw_value, label="Gamma release-consumer CaseResult")
 
-
-def run_release_consumer(
-    *,
-    identity: dict[str, object],
-) -> dict[str, object]:
-    release_id = str(identity["releaseId"])
-    import_run_id = str(identity["importRunId"])
-    verification_run_id = str(identity["verifyRunId"])
+def run_release_consumer(*, identity: dict[str, object]) -> dict[str, object]:
     command = [
         sys.executable,
         "-B",
@@ -66,13 +57,14 @@ def run_release_consumer(
         "ship",
         "verify",
         "--release-id",
-        release_id,
+        str(identity["releaseId"]),
         "--env",
         "gamma",
         "--import-run-id",
-        import_run_id,
+        str(identity["importRunId"]),
+        "--run-id",
+        str(identity["verifyRunId"]),
     ]
-    command.extend(["--run-id", verification_run_id])
     result = subprocess.run(
         command,
         cwd=ROOT,
@@ -95,108 +87,54 @@ def main() -> int:
     parser.add_argument(
         "--release-readiness",
         default=os.environ.get("DATA_RELEASE_READINESS_RECEIPT", "").strip(),
-        help=(
-            "canonical Gamma Data release-readiness.json; release/import/verify "
-            "identity may not be supplied independently"
-        ),
     )
+    parser.add_argument("--target-uat-binding", required=True)
     parser.add_argument("--report", default=str(default_release_consumer_report_path()))
     args = parser.parse_args()
-
     try:
         report_path = resolve_release_consumer_report_path(args.report)
-    except ValueError as exc:
-        print(f"Gamma release-consumer GATE_BLOCK: {exc}", file=sys.stderr)
-        return 2
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-
-    started_at = utc_now()
-    execution_identity: dict[str, str] | None = None
-    try:
+        binding_path = resolve_gamma_evidence_path(
+            args.target_uat_binding, label="Gamma TargetUatBinding"
+        )
         execution_identity = load_gamma_execution_identity()
-        write_blocked_case_result(
-            report_path=report_path,
-            phase="release_consumer",
-            reason="Gamma release-consumer execution has not completed",
-            identity=execution_identity,
-        )
-    except GammaCaseResultError as exc:
-        write_blocked_case_result(
-            report_path=report_path,
-            phase="release_consumer",
-            reason=str(exc),
-        )
-        print(f"Gamma release-consumer GATE_BLOCK report written: {report_path}", file=sys.stderr)
-        return 2
-
-    try:
-        identity = load_release_content_identity(
+        binding, _ = load_target_uat_binding(binding_path)
+        release_identity = load_release_content_identity(
             resolve_readiness_path(args.release_readiness),
             expected_environment="gamma",
         )
-    except (ReleaseVideoDeliveryError, ValueError) as exc:
-        write_blocked_case_result(
-            report_path=report_path,
-            phase="release_consumer",
-            reason=str(exc),
-            identity=execution_identity,
-        )
-        print(f"Gamma release-consumer GATE_BLOCK report written: {report_path}", file=sys.stderr)
-        return 2
-
-    consumer = run_release_consumer(identity=identity)
-    ended_at = utc_now()
-    if consumer.get("mutationPolicy") != "read_only":
-        write_blocked_case_result(
-            report_path=report_path,
-            phase="release_consumer",
-            reason="Gamma release-consumer did not prove a read-only mutation policy",
-            identity=execution_identity,
-            executed=1,
-        )
-        print(
-            f"Gamma release-consumer GATE_BLOCK report written: {report_path}",
-            file=sys.stderr,
-        )
-        return 2
-    if consumer["status"] != "passed":
-        write_blocked_case_result(
-            report_path=report_path,
-            phase="release_consumer",
-            reason="Gamma release-consumer release consumer verification failed",
-            identity=execution_identity,
-            status="failed",
-            executed=1,
-            failed=1,
-        )
-        print(f"Gamma release-consumer failed CaseResult written: {report_path}", file=sys.stderr)
-        return 1
-
-    try:
+        if (
+            binding.get("releaseId") != release_identity.get("releaseId")
+            or binding.get("releaseDigest") != release_identity.get("manifestDigest")
+        ):
+            raise GammaCaseResultError(
+                "release-consumer identity differs from exact TargetUatBinding"
+            )
+        consumer = run_release_consumer(identity=release_identity)
         require_unchanged_identity(execution_identity)
-        write_passed_case_result(
-            report_path=report_path,
-            phase="release_consumer",
-            identity=execution_identity,
-            executed=1,
-            skipped=0,
-            failed=0,
-            executed_at=ended_at,
-        )
-    except GammaCaseResultError as exc:
-        write_blocked_case_result(
-            report_path=report_path,
-            phase="release_consumer",
-            reason=str(exc),
-            identity=execution_identity,
-            executed=1,
-        )
-        print(f"Gamma release-consumer GATE_BLOCK report written: {report_path}", file=sys.stderr)
+    except (GammaCaseResultError, ReleaseVideoDeliveryError, ValueError) as exc:
+        print(f"Gamma release-consumer GATE_BLOCK: {exc}", file=sys.stderr)
         return 2
 
-    print(f"Gamma release-consumer CaseResult written: {report_path}")
-    print(f"Gamma release-consumer execution window: {started_at} -> {ended_at}")
-    return 0
+    # This phase is a prerequisite diagnostic only. It cannot mint a raw App UAT
+    # cell because it has no device, entry surface, carrier, or App artifact
+    # readback. The Patrol phase owns the only canonical raw result.
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(
+        json.dumps(
+            {
+                "schema": "quwoquan.gamma-release-consumer-diagnostic.v1",
+                "mutationPolicy": consumer["mutationPolicy"],
+                "exitCode": consumer["exitCode"],
+                "releaseId": binding["releaseId"],
+                "targetUatBindingDigest": target_uat_binding_digest(binding_path.read_bytes()),
+                "providerIdentity": binding["provider"]["identity"],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return 0 if consumer["status"] == "passed" else 1
 
 
 if __name__ == "__main__":

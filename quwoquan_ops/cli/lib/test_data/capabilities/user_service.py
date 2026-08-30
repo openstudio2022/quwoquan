@@ -13,12 +13,45 @@ from .common import AcceptanceActorSet, ActorRole, ImmutableReleaseHandle
 
 
 @dataclass(frozen=True)
+class MutualActorRelationship:
+    """A mutual-follow topology requested for one isolated actor set."""
+
+    source_role: ActorRole
+    target_role: ActorRole
+
+    def __post_init__(self) -> None:
+        if self.source_role is self.target_role:
+            raise ValueError("mutual relationship roles must differ")
+
+    @property
+    def identity(self) -> tuple[str, str]:
+        source = self.source_role.value
+        target = self.target_role.value
+        return (source, target) if source < target else (target, source)
+
+
+@dataclass(frozen=True)
 class AuthenticatedActorsParams:
     roles: tuple[ActorRole, ...]
+    mutual_relationships: tuple[MutualActorRelationship, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.roles or len(set(self.roles)) != len(self.roles):
             raise ValueError("actor roles must be non-empty and unique")
+        role_set = set(self.roles)
+        if any(
+            relationship.source_role not in role_set
+            or relationship.target_role not in role_set
+            for relationship in self.mutual_relationships
+        ):
+            raise ValueError(
+                "authenticated actor relationships must reference requested roles"
+            )
+        identities = tuple(
+            relationship.identity for relationship in self.mutual_relationships
+        )
+        if len(identities) != len(set(identities)):
+            raise ValueError("authenticated actor relationships must be unique")
 
 
 @dataclass(frozen=True)
@@ -113,6 +146,7 @@ __all__ = (
     "FollowingSubjectsResult",
     "GreetingInboxParams",
     "GreetingInboxResult",
+    "MutualActorRelationship",
     "RelationshipParams",
     "RelationshipResult",
 )

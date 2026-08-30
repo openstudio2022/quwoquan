@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
+// ContractGraph SHA256: cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f
 
 library;
 
@@ -168,18 +168,42 @@ final class CallParticipant {
   final CallInviteStatus? inviteStatus;
   final String? invitedBy;
 
-  factory CallParticipant.fromWire(Map<String, Object?> map, [String path = "CallParticipant"]) {
-    _rejectUnknownFields(map, const <String>{"userId", "role", "status", "isMuted", "isCameraOn", "joinedAt", "leftAt", "inviteStatus", "invitedBy"}, path);
+  factory CallParticipant.fromWire(
+    Map<String, Object?> map, [
+    String path = "CallParticipant",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "userId",
+      "role",
+      "status",
+      "isMuted",
+      "isCameraOn",
+      "joinedAt",
+      "leftAt",
+      "inviteStatus",
+      "invitedBy",
+    }, path);
     return CallParticipant(
       userId: _requiredString(map["userId"], '$path.userId'),
       role: ParticipantRole.fromWire(map["role"], '$path.role'),
       status: ParticipantStatus.fromWire(map["status"], '$path.status'),
       isMuted: _requiredBool(map["isMuted"], '$path.isMuted'),
       isCameraOn: _requiredBool(map["isCameraOn"], '$path.isCameraOn'),
-      joinedAt: map["joinedAt"] == null ? null : _requiredTimestamp(map["joinedAt"], '$path.joinedAt'),
-      leftAt: map["leftAt"] == null ? null : _requiredTimestamp(map["leftAt"], '$path.leftAt'),
-      inviteStatus: map["inviteStatus"] == null ? null : CallInviteStatus.fromWire(map["inviteStatus"], '$path.inviteStatus'),
-      invitedBy: map["invitedBy"] == null ? null : _requiredString(map["invitedBy"], '$path.invitedBy'),
+      joinedAt: map["joinedAt"] == null
+          ? null
+          : _requiredTimestamp(map["joinedAt"], '$path.joinedAt'),
+      leftAt: map["leftAt"] == null
+          ? null
+          : _requiredTimestamp(map["leftAt"], '$path.leftAt'),
+      inviteStatus: map["inviteStatus"] == null
+          ? null
+          : CallInviteStatus.fromWire(
+              map["inviteStatus"],
+              '$path.inviteStatus',
+            ),
+      invitedBy: map["invitedBy"] == null
+          ? null
+          : _requiredString(map["invitedBy"], '$path.invitedBy'),
     );
   }
 
@@ -239,26 +263,95 @@ final class CallSession {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  factory CallSession.fromWire(Map<String, Object?> map, [String path = "CallSession"]) {
-    _rejectUnknownFields(map, const <String>{"id", "callType", "status", "initiatorId", "initiatorRingtoneId", "conversationId", "circleId", "roomId", "maxParticipants", "participantCount", "participants", "isScreenSharing", "screenShareUserId", "endReason", "durationMs", "startedAt", "endedAt", "createdAt", "updatedAt"}, path);
+  factory CallSession.fromWire(
+    Map<String, Object?> map, [
+    String path = "CallSession",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "callType",
+      "status",
+      "initiatorId",
+      "initiatorRingtoneId",
+      "conversationId",
+      "circleId",
+      "roomId",
+      "maxParticipants",
+      "participantCount",
+      "participants",
+      "isScreenSharing",
+      "screenShareUserId",
+      "endReason",
+      "durationMs",
+      "startedAt",
+      "endedAt",
+      "createdAt",
+      "updatedAt",
+    }, path);
     return CallSession(
       id: _requiredString(map["id"], '$path.id'),
       callType: CallType.fromWire(map["callType"], '$path.callType'),
       status: CallStatus.fromWire(map["status"], '$path.status'),
       initiatorId: _requiredString(map["initiatorId"], '$path.initiatorId'),
-      initiatorRingtoneId: map["initiatorRingtoneId"] == null ? null : _requiredString(map["initiatorRingtoneId"], '$path.initiatorRingtoneId'),
-      conversationId: map["conversationId"] == null ? null : _requiredString(map["conversationId"], '$path.conversationId'),
-      circleId: map["circleId"] == null ? null : _requiredString(map["circleId"], '$path.circleId'),
+      initiatorRingtoneId: map["initiatorRingtoneId"] == null
+          ? null
+          : _requiredString(
+              map["initiatorRingtoneId"],
+              '$path.initiatorRingtoneId',
+            ),
+      conversationId: map["conversationId"] == null
+          ? null
+          : _requiredString(map["conversationId"], '$path.conversationId'),
+      circleId: map["circleId"] == null
+          ? null
+          : _requiredString(map["circleId"], '$path.circleId'),
       roomId: _requiredString(map["roomId"], '$path.roomId'),
-      maxParticipants: _requiredInt(map["maxParticipants"], '$path.maxParticipants'),
-      participantCount: _requiredInt(map["participantCount"], '$path.participantCount'),
-      participants: map["participants"] == null ? null : List<CallParticipant>.unmodifiable(_requiredList(map["participants"], '$path.participants').asMap().entries.map((entry) => CallParticipant.fromWire(_requiredObject(entry.value, '$path.participants' + '[${entry.key}]'), '$path.participants' + '[${entry.key}]'))),
-      isScreenSharing: _requiredBool(map["isScreenSharing"], '$path.isScreenSharing'),
-      screenShareUserId: map["screenShareUserId"] == null ? null : _requiredString(map["screenShareUserId"], '$path.screenShareUserId'),
-      endReason: map["endReason"] == null ? null : EndReason.fromWire(map["endReason"], '$path.endReason'),
-      durationMs: map["durationMs"] == null ? null : _requiredInt(map["durationMs"], '$path.durationMs'),
-      startedAt: map["startedAt"] == null ? null : _requiredTimestamp(map["startedAt"], '$path.startedAt'),
-      endedAt: map["endedAt"] == null ? null : _requiredTimestamp(map["endedAt"], '$path.endedAt'),
+      maxParticipants: _requiredInt(
+        map["maxParticipants"],
+        '$path.maxParticipants',
+      ),
+      participantCount: _requiredInt(
+        map["participantCount"],
+        '$path.participantCount',
+      ),
+      participants: map["participants"] == null
+          ? null
+          : List<CallParticipant>.unmodifiable(
+              _requiredList(
+                map["participants"],
+                '$path.participants',
+              ).asMap().entries.map(
+                (entry) => CallParticipant.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.participants' + '[${entry.key}]',
+                  ),
+                  '$path.participants' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      isScreenSharing: _requiredBool(
+        map["isScreenSharing"],
+        '$path.isScreenSharing',
+      ),
+      screenShareUserId: map["screenShareUserId"] == null
+          ? null
+          : _requiredString(
+              map["screenShareUserId"],
+              '$path.screenShareUserId',
+            ),
+      endReason: map["endReason"] == null
+          ? null
+          : EndReason.fromWire(map["endReason"], '$path.endReason'),
+      durationMs: map["durationMs"] == null
+          ? null
+          : _requiredInt(map["durationMs"], '$path.durationMs'),
+      startedAt: map["startedAt"] == null
+          ? null
+          : _requiredTimestamp(map["startedAt"], '$path.startedAt'),
+      endedAt: map["endedAt"] == null
+          ? null
+          : _requiredTimestamp(map["endedAt"], '$path.endedAt'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
@@ -269,13 +362,17 @@ final class CallSession {
     "callType": callType.wireName,
     "status": status.wireName,
     "initiatorId": initiatorId,
-    if (initiatorRingtoneId != null) "initiatorRingtoneId": initiatorRingtoneId!,
+    if (initiatorRingtoneId != null)
+      "initiatorRingtoneId": initiatorRingtoneId!,
     if (conversationId != null) "conversationId": conversationId!,
     if (circleId != null) "circleId": circleId!,
     "roomId": roomId,
     "maxParticipants": maxParticipants,
     "participantCount": participantCount,
-    if (participants != null) "participants": participants!.map((value) => value.toWire()).toList(growable: false),
+    if (participants != null)
+      "participants": participants!
+          .map((value) => value.toWire())
+          .toList(growable: false),
     "isScreenSharing": isScreenSharing,
     if (screenShareUserId != null) "screenShareUserId": screenShareUserId!,
     if (endReason != null) "endReason": endReason!.wireName,
@@ -288,19 +385,25 @@ final class CallSession {
 }
 
 final class RtcAnswerCallResult {
-  const RtcAnswerCallResult({
-    required this.session,
-    required this.mediaAccess,
-  });
+  const RtcAnswerCallResult({required this.session, required this.mediaAccess});
 
   final CallSession session;
   final RtcMediaSessionAccess mediaAccess;
 
-  factory RtcAnswerCallResult.fromWire(Map<String, Object?> map, [String path = "RtcAnswerCallResult"]) {
+  factory RtcAnswerCallResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "RtcAnswerCallResult",
+  ]) {
     _rejectUnknownFields(map, const <String>{"session", "mediaAccess"}, path);
     return RtcAnswerCallResult(
-      session: CallSession.fromWire(_requiredObject(map["session"], '$path.session'), '$path.session'),
-      mediaAccess: RtcMediaSessionAccess.fromWire(_requiredObject(map["mediaAccess"], '$path.mediaAccess'), '$path.mediaAccess'),
+      session: CallSession.fromWire(
+        _requiredObject(map["session"], '$path.session'),
+        '$path.session',
+      ),
+      mediaAccess: RtcMediaSessionAccess.fromWire(
+        _requiredObject(map["mediaAccess"], '$path.mediaAccess'),
+        '$path.mediaAccess',
+      ),
     );
   }
 
@@ -311,19 +414,28 @@ final class RtcAnswerCallResult {
 }
 
 final class RtcCallHistoryPage {
-  const RtcCallHistoryPage({
-    required this.items,
-    this.nextCursor,
-  });
+  const RtcCallHistoryPage({required this.items, this.nextCursor});
 
   final List<CallSession> items;
   final String? nextCursor;
 
-  factory RtcCallHistoryPage.fromWire(Map<String, Object?> map, [String path = "RtcCallHistoryPage"]) {
+  factory RtcCallHistoryPage.fromWire(
+    Map<String, Object?> map, [
+    String path = "RtcCallHistoryPage",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return RtcCallHistoryPage(
-      items: List<CallSession>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => CallSession.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<CallSession>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => CallSession.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -342,11 +454,20 @@ final class RtcInitiateCallResult {
   final CallSession session;
   final RtcMediaSessionAccess mediaAccess;
 
-  factory RtcInitiateCallResult.fromWire(Map<String, Object?> map, [String path = "RtcInitiateCallResult"]) {
+  factory RtcInitiateCallResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "RtcInitiateCallResult",
+  ]) {
     _rejectUnknownFields(map, const <String>{"session", "mediaAccess"}, path);
     return RtcInitiateCallResult(
-      session: CallSession.fromWire(_requiredObject(map["session"], '$path.session'), '$path.session'),
-      mediaAccess: RtcMediaSessionAccess.fromWire(_requiredObject(map["mediaAccess"], '$path.mediaAccess'), '$path.mediaAccess'),
+      session: CallSession.fromWire(
+        _requiredObject(map["session"], '$path.session'),
+        '$path.session',
+      ),
+      mediaAccess: RtcMediaSessionAccess.fromWire(
+        _requiredObject(map["mediaAccess"], '$path.mediaAccess'),
+        '$path.mediaAccess',
+      ),
     );
   }
 
@@ -357,19 +478,25 @@ final class RtcInitiateCallResult {
 }
 
 final class RtcJoinCredentials {
-  const RtcJoinCredentials({
-    required this.session,
-    required this.mediaAccess,
-  });
+  const RtcJoinCredentials({required this.session, required this.mediaAccess});
 
   final CallSession session;
   final RtcMediaSessionAccess mediaAccess;
 
-  factory RtcJoinCredentials.fromWire(Map<String, Object?> map, [String path = "RtcJoinCredentials"]) {
+  factory RtcJoinCredentials.fromWire(
+    Map<String, Object?> map, [
+    String path = "RtcJoinCredentials",
+  ]) {
     _rejectUnknownFields(map, const <String>{"session", "mediaAccess"}, path);
     return RtcJoinCredentials(
-      session: CallSession.fromWire(_requiredObject(map["session"], '$path.session'), '$path.session'),
-      mediaAccess: RtcMediaSessionAccess.fromWire(_requiredObject(map["mediaAccess"], '$path.mediaAccess'), '$path.mediaAccess'),
+      session: CallSession.fromWire(
+        _requiredObject(map["session"], '$path.session'),
+        '$path.session',
+      ),
+      mediaAccess: RtcMediaSessionAccess.fromWire(
+        _requiredObject(map["mediaAccess"], '$path.mediaAccess'),
+        '$path.mediaAccess',
+      ),
     );
   }
 
@@ -380,16 +507,20 @@ final class RtcJoinCredentials {
 }
 
 final class RtcMediaSessionAccess {
-  const RtcMediaSessionAccess({
-    required this.accessToken,
-  });
+  const RtcMediaSessionAccess({required this.accessToken});
 
   final String accessToken;
 
-  factory RtcMediaSessionAccess.fromWire(Map<String, Object?> map, [String path = "RtcMediaSessionAccess"]) {
+  factory RtcMediaSessionAccess.fromWire(
+    Map<String, Object?> map, [
+    String path = "RtcMediaSessionAccess",
+  ]) {
     _rejectUnknownFields(map, const <String>{"accessToken"}, path);
     return RtcMediaSessionAccess(
-      accessToken: _requiredNonBlankString(map["accessToken"], '$path.accessToken'),
+      accessToken: _requiredNonBlankString(
+        map["accessToken"],
+        '$path.accessToken',
+      ),
     );
   }
 
@@ -398,20 +529,34 @@ final class RtcMediaSessionAccess {
   };
 }
 
-CallSession decodeCallSession(Object? response) =>
-    CallSession.fromWire(_requiredObject(response, "CallSession"), "CallSession");
+CallSession decodeCallSession(Object? response) => CallSession.fromWire(
+  _requiredObject(response, "CallSession"),
+  "CallSession",
+);
 
 RtcAnswerCallResult decodeRtcAnswerCallResult(Object? response) =>
-    RtcAnswerCallResult.fromWire(_requiredObject(response, "RtcAnswerCallResult"), "RtcAnswerCallResult");
+    RtcAnswerCallResult.fromWire(
+      _requiredObject(response, "RtcAnswerCallResult"),
+      "RtcAnswerCallResult",
+    );
 
 RtcCallHistoryPage decodeRtcCallHistoryPage(Object? response) =>
-    RtcCallHistoryPage.fromWire(_requiredObject(response, "RtcCallHistoryPage"), "RtcCallHistoryPage");
+    RtcCallHistoryPage.fromWire(
+      _requiredObject(response, "RtcCallHistoryPage"),
+      "RtcCallHistoryPage",
+    );
 
 RtcInitiateCallResult decodeRtcInitiateCallResult(Object? response) =>
-    RtcInitiateCallResult.fromWire(_requiredObject(response, "RtcInitiateCallResult"), "RtcInitiateCallResult");
+    RtcInitiateCallResult.fromWire(
+      _requiredObject(response, "RtcInitiateCallResult"),
+      "RtcInitiateCallResult",
+    );
 
 RtcJoinCredentials decodeRtcJoinCredentials(Object? response) =>
-    RtcJoinCredentials.fromWire(_requiredObject(response, "RtcJoinCredentials"), "RtcJoinCredentials");
+    RtcJoinCredentials.fromWire(
+      _requiredObject(response, "RtcJoinCredentials"),
+      "RtcJoinCredentials",
+    );
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {
@@ -436,7 +581,9 @@ void _rejectUnknownFields(
   final unknown = value.keys.where((key) => !allowed.contains(key)).toList()
     ..sort();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }
 

@@ -393,6 +393,407 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /control-plane/platform/human-authority/decision-units:
+        get:
+            operationId: ListHumanDecisionUnits
+            x-contract-operation-id: ops.human_authority.ListHumanDecisionUnits
+            x-object-id: ops.human_authority
+            x-actor: account
+            x-application:
+                kind: query
+                facet: HumanAuthorityFacade
+                method: listDecisionUnits
+                reader: HumanAuthorityReader
+                slice: DecisionUnitSlice
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DecisionUnitSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+        post:
+            operationId: CreateHumanDecisionUnit
+            x-contract-operation-id: ops.human_authority.CreateHumanDecisionUnit
+            x-object-id: ops.human_authority
+            x-actor: account
+            x-application:
+                kind: command
+                facet: HumanAuthorityFacade
+                method: createDecisionUnit
+                aggregateOwner: HumanAuthority
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateHumanDecisionUnitRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/human-authority/decision-units/{decisionUnitId}:
+        get:
+            operationId: ReadHumanDecisionUnit
+            x-contract-operation-id: ops.human_authority.ReadHumanDecisionUnit
+            x-object-id: ops.human_authority
+            x-actor: account
+            x-application:
+                kind: query
+                facet: HumanAuthorityFacade
+                method: readDecisionUnit
+                reader: HumanAuthorityReader
+                slice: DecisionUnit
+            parameters:
+                - name: decisionUnitId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReadHumanDecisionUnitResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/human-authority/decision-units/{decisionUnitId}/rounds/{round}:seal:
+        post:
+            operationId: SealHumanDecisionRound
+            x-contract-operation-id: ops.human_authority.SealHumanDecisionRound
+            x-object-id: ops.human_authority
+            x-actor: account
+            x-application:
+                kind: command
+                facet: HumanAuthorityFacade
+                method: sealRound
+                aggregateOwner: HumanAuthority
+            parameters:
+                - name: decisionUnitId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: round
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SealHumanDecisionRoundRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/human-authority/decision-units/{decisionUnitId}/submissions:
+        post:
+            operationId: SubmitHumanRoleEvidence
+            x-contract-operation-id: ops.human_authority.SubmitHumanRoleEvidence
+            x-object-id: ops.human_authority
+            x-actor: account
+            x-application:
+                kind: command
+                facet: HumanAuthorityFacade
+                method: submitRoleEvidence
+                aggregateOwner: HumanAuthority
+            parameters:
+                - name: decisionUnitId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SubmitHumanRoleEvidenceRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/human-authority/decision-units/{decisionUnitId}:finalize:
+        post:
+            operationId: FinalizeHumanDecision
+            x-contract-operation-id: ops.human_authority.FinalizeHumanDecision
+            x-object-id: ops.human_authority
+            x-actor: account
+            x-application:
+                kind: command
+                facet: HumanAuthorityFacade
+                method: finalizeDecision
+                aggregateOwner: HumanAuthority
+            parameters:
+                - name: decisionUnitId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/FinalizeHumanDecisionRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/human-authority/receipts/{decisionId}:
+        get:
+            operationId: ReadHumanAuthorizationReceipt
+            x-contract-operation-id: ops.human_authority.ReadHumanAuthorizationReceipt
+            x-object-id: ops.human_authority
+            x-actor: account
+            x-application:
+                kind: query
+                facet: HumanAuthorityFacade
+                method: readReceiptExact
+                reader: HumanAuthorityReader
+                slice: AuthorizationReceipt
+            parameters:
+                - name: decisionId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReadHumanAuthorizationReceiptResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/human-authority/receipts/{decisionId}:consume:
+        post:
+            operationId: ConsumeHumanAuthorizationReceipt
+            x-contract-operation-id: ops.human_authority.ConsumeHumanAuthorizationReceipt
+            x-object-id: ops.human_authority
+            x-actor: account
+            x-application:
+                kind: command
+                facet: HumanAuthorityFacade
+                method: consumeReceipt
+                aggregateOwner: HumanAuthority
+            parameters:
+                - name: decisionId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ConsumeHumanAuthorizationReceiptRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthorizationReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/human-authority/receipts/{decisionId}:revoke:
+        post:
+            operationId: RevokeHumanAuthorizationReceipt
+            x-contract-operation-id: ops.human_authority.RevokeHumanAuthorizationReceipt
+            x-object-id: ops.human_authority
+            x-actor: account
+            x-application:
+                kind: command
+                facet: HumanAuthorityFacade
+                method: revokeReceipt
+                aggregateOwner: HumanAuthority
+            parameters:
+                - name: decisionId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RevokeHumanAuthorizationReceiptRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthorizationReceipt'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/human-authority/signing-keys/{keyId}:
+        get:
+            operationId: ReadHumanAuthoritySigningPublicKey
+            x-contract-operation-id: ops.human_authority.ReadHumanAuthoritySigningPublicKey
+            x-object-id: ops.human_authority
+            x-actor: account
+            x-application:
+                kind: query
+                facet: HumanAuthorityFacade
+                method: readSigningPublicKey
+                reader: HumanAuthorityReader
+                slice: SigningPublicKey
+            parameters:
+                - name: keyId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReadHumanAuthoritySigningPublicKeyResponse'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/platform/human-authority/webhooks/github:
+        post:
+            operationId: IngestGitHubHumanAuthorityWebhook
+            x-contract-operation-id: ops.human_authority.IngestGitHubHumanAuthorityWebhook
+            x-object-id: ops.human_authority
+            x-actor: none
+            x-application:
+                kind: command
+                facet: HumanAuthorityFacade
+                method: ingestGitHubWebhook
+                aggregateOwner: HumanAuthority
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/IngestGitHubHumanAuthorityWebhookRequest'
+            responses:
+                "204":
+                    description: No Content
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /control-plane/platform/projections/summary:
         get:
             operationId: GetPlatformProjectionSummary
@@ -2130,6 +2531,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AppReleaseRecoveryView
             x-contract-placeholder: true
+        AuthorizationReceipt:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AuthorizationReceipt
+            x-contract-placeholder: true
         ConfigDomainSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2155,6 +2561,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ConfigSnapshotView
             x-contract-placeholder: true
+        ConsumeHumanAuthorizationReceiptRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConsumeHumanAuthorizationReceiptRequest
+            x-contract-placeholder: true
         CreateExperimentRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2164,6 +2575,16 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CreateExperimentResult
+            x-contract-placeholder: true
+        CreateHumanDecisionUnitRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CreateHumanDecisionUnitRequest
+            x-contract-placeholder: true
+        DecisionUnitSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: DecisionUnitSlice
             x-contract-placeholder: true
         EffectiveConfigSlice:
             type: object
@@ -2199,6 +2620,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ExperimentStatsSlice
+            x-contract-placeholder: true
+        FinalizeHumanDecisionRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: FinalizeHumanDecisionRequest
             x-contract-placeholder: true
         GetEventSummaryResponse:
             type: object
@@ -2269,6 +2695,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: IngestAlertmanagerWebhookRequest
+            x-contract-placeholder: true
+        IngestGitHubHumanAuthorityWebhookRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: IngestGitHubHumanAuthorityWebhookRequest
             x-contract-placeholder: true
         ListActiveAlertsResponse:
             type: object
@@ -2365,6 +2796,21 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PremiumPoolEntryTakedownResult
             x-contract-placeholder: true
+        ReadHumanAuthoritySigningPublicKeyResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReadHumanAuthoritySigningPublicKeyResponse
+            x-contract-placeholder: true
+        ReadHumanAuthorizationReceiptResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReadHumanAuthorizationReceiptResponse
+            x-contract-placeholder: true
+        ReadHumanDecisionUnitResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReadHumanDecisionUnitResponse
+            x-contract-placeholder: true
         RecordVisitReceipt:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2400,6 +2846,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReviewAccountEnforcementCaseRequest
             x-contract-placeholder: true
+        RevokeHumanAuthorizationReceiptRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RevokeHumanAuthorizationReceiptRequest
+            x-contract-placeholder: true
         RollbackPremiumPoolEntryRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -2415,10 +2866,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RuntimeLogBatchRequest
             x-contract-placeholder: true
+        SealHumanDecisionRoundRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SealHumanDecisionRoundRequest
+            x-contract-placeholder: true
         StartupTelemetryBatchReceipt:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: StartupTelemetryBatchReceipt
+            x-contract-placeholder: true
+        SubmitHumanRoleEvidenceRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SubmitHumanRoleEvidenceRequest
             x-contract-placeholder: true
         TakedownPremiumPoolEntryRequest:
             type: object

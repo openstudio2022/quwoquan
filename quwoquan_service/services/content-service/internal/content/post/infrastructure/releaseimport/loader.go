@@ -31,8 +31,15 @@ const (
 var sha256Pattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 type AssetManifestItem struct {
-	AssetID              string   `json:"assetId" bson:"assetId"`
-	Kind                 string   `json:"kind,omitempty" bson:"kind,omitempty"`
+	AssetID string `json:"assetId" bson:"assetId"`
+	Kind    string `json:"kind,omitempty" bson:"kind,omitempty"`
+	// AccessMode 是媒体交付访问模式（DEC-033，契约 PostArticleAsset.accessMode，
+	// enum 唯一真相源 contracts/metadata/_shared/types.yaml
+	// MediaDeliveryAccessMode）。由 release header 的 releaseClass 单点映射写入，
+	// signed_grant 时 App 必须按 assetId 换取短签。新 immutable release 必须
+	// 显式 public|signed_grant；空串只属于具名 legacy-public migration 边界，
+	// 不得进入本 importer。
+	AccessMode           string   `json:"accessMode,omitempty" bson:"accessMode,omitempty"`
 	ObjectKey            string   `json:"objectKey,omitempty" bson:"-"`
 	Version              int64    `json:"version,omitempty" bson:"version,omitempty"`
 	PublicSliceKey       string   `json:"publicSliceKey,omitempty" bson:"publicSliceKey,omitempty"`
@@ -84,27 +91,30 @@ type IntersectionHintDoc struct {
 
 // PostDoc 是灌入运行库的文章文档（与 publish post manifest + article.md 对齐）。
 type PostDoc struct {
-	PostRef               string                             `json:"postRef" bson:"postRef"`
-	ContentID             string                             `json:"contentId" bson:"contentId"`
-	ContentVersion        int64                              `json:"contentVersion" bson:"contentVersion"`
-	PoolSourceType        string                             `json:"poolSourceType" bson:"poolSourceType"`
-	VariantPurpose        string                             `json:"variantPurpose" bson:"variantPurpose"`
-	Admission             ContentAdmission                   `json:"admission" bson:"admission"`
-	PoolStatus            string                             `json:"poolStatus" bson:"poolStatus"`
-	ContentType           string                             `json:"contentType" bson:"contentType"`
-	ContentIdentity       string                             `json:"contentIdentity" bson:"contentIdentity"`
-	Title                 string                             `json:"title" bson:"title"`
-	Body                  string                             `json:"body" bson:"body"`
-	Angle                 string                             `json:"angle" bson:"angle"`
-	Seq                   int                                `json:"seq" bson:"seq"`
-	EntityRefs            []string                           `json:"entityRefs" bson:"entityRefs"`
-	NormalizedEntityRefs  []string                           `json:"normalizedEntityRefs" bson:"normalizedEntityRefs"`
-	TagRefs               []string                           `json:"tagRefs" bson:"tagRefs"`
-	IntersectionHints     []IntersectionHintDoc              `json:"intersectionHints" bson:"intersectionHints"`
-	SemanticMentions      []postmodel.PostSemanticMention    `json:"semanticMentions" bson:"semanticMentions"`
-	AuthorID              string                             `json:"authorId" bson:"authorId"`
-	AuthorDisplayName     string                             `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
-	AuthorAvatarURL       string                             `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
+	PostRef              string                          `json:"postRef" bson:"postRef"`
+	ContentID            string                          `json:"contentId" bson:"contentId"`
+	ContentVersion       int64                           `json:"contentVersion" bson:"contentVersion"`
+	PoolSourceType       string                          `json:"poolSourceType" bson:"poolSourceType"`
+	VariantPurpose       string                          `json:"variantPurpose" bson:"variantPurpose"`
+	Admission            ContentAdmission                `json:"admission" bson:"admission"`
+	PoolStatus           string                          `json:"poolStatus" bson:"poolStatus"`
+	ContentType          string                          `json:"contentType" bson:"contentType"`
+	ContentIdentity      string                          `json:"contentIdentity" bson:"contentIdentity"`
+	Title                string                          `json:"title" bson:"title"`
+	Body                 string                          `json:"body" bson:"body"`
+	Angle                string                          `json:"angle" bson:"angle"`
+	Seq                  int                             `json:"seq" bson:"seq"`
+	EntityRefs           []string                        `json:"entityRefs" bson:"entityRefs"`
+	NormalizedEntityRefs []string                        `json:"normalizedEntityRefs" bson:"normalizedEntityRefs"`
+	TagRefs              []string                        `json:"tagRefs" bson:"tagRefs"`
+	IntersectionHints    []IntersectionHintDoc           `json:"intersectionHints" bson:"intersectionHints"`
+	SemanticMentions     []postmodel.PostSemanticMention `json:"semanticMentions" bson:"semanticMentions"`
+	AuthorID             string                          `json:"authorId" bson:"authorId"`
+	AuthorDisplayName    string                          `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
+	AuthorAvatarURL      string                          `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
+	// AuthorAvatarAssetID 作者头像的媒体资产标识（DEC-033），来源是 release
+	// creator profile 的 avatarAsset.assetId；头像缺席时为空串（落库时写 null）。
+	AuthorAvatarAssetID   string                             `json:"authorAvatarAssetId" bson:"authorAvatarAssetId"`
 	CreatorProfileID      string                             `json:"creatorProfileId" bson:"creatorProfileId"`
 	CreatorArchetype      string                             `json:"creatorArchetype" bson:"creatorArchetype"`
 	CreatorProfileVersion string                             `json:"creatorProfileVersion" bson:"creatorProfileVersion"`
@@ -119,11 +129,9 @@ type PostDoc struct {
 	Page                  any                                `json:"page" bson:"page"`
 	LicenseProof          any                                `json:"licenseProof" bson:"licenseProof"`
 	Template              string                             `json:"template" bson:"template"`
-	GeneratorModel        string                             `json:"generatorModel" bson:"generatorModel"`
 	ArticleMarkdown       string                             `json:"articleMarkdown" bson:"articleMarkdown"`
 	ArticleDigest         string                             `json:"articleDigest" bson:"articleDigest"`
 	ArticleAssetManifest  *ArticleAssetManifestDoc           `json:"articleAssetManifest" bson:"articleAssetManifest"`
-	SourceTaskId          string                             `json:"sourceTaskId" bson:"sourceTaskId"`
 	CreatedAt             time.Time                          `json:"createdAt" bson:"createdAt"`
 	UpdatedAt             time.Time                          `json:"updatedAt" bson:"updatedAt"`
 	PublishedAt           time.Time                          `json:"publishedAt" bson:"publishedAt"`
@@ -142,7 +150,6 @@ type EntityDoc struct {
 	AssetManifest *EntityAssetManifestDoc `json:"assetManifest" bson:"assetManifest"`
 	// ConditionProfile 条件画像（L3 实体级 {regions/seasons/altitudeMeters}），从 _entity.json 透传到运行库。
 	ConditionProfile map[string]any `json:"conditionProfile" bson:"conditionProfile"`
-	SourceTaskId     string         `json:"sourceTaskId" bson:"sourceTaskId"`
 }
 
 type ReleaseDesiredState struct {
@@ -162,6 +169,7 @@ type ReleaseBinding struct {
 	ReleaseID      string
 	SourceOwner    string
 	ReleaseKind    string
+	ReleaseClass   string
 	ManifestDigest string
 }
 
@@ -170,10 +178,11 @@ func LoadReleaseBinding(releaseRoot string) (ReleaseBinding, error) {
 	headerPath := filepath.Join(releaseRoot, "payload", "release.json")
 	attestationPath := filepath.Join(releaseRoot, "attestations", "release.json")
 	var header struct {
-		Schema      string `json:"schema"`
-		ReleaseID   string `json:"releaseId"`
-		SourceOwner string `json:"sourceOwner"`
-		ReleaseKind string `json:"releaseKind"`
+		Schema       string `json:"schema"`
+		ReleaseID    string `json:"releaseId"`
+		SourceOwner  string `json:"sourceOwner"`
+		ReleaseKind  string `json:"releaseKind"`
+		ReleaseClass string `json:"releaseClass"`
 	}
 	if err := loadReleaseJSON(headerPath, &header); err != nil {
 		return empty, fmt.Errorf("load release header: %w", err)
@@ -235,6 +244,7 @@ func LoadReleaseBinding(releaseRoot string) (ReleaseBinding, error) {
 		ReleaseID:      headerReleaseID,
 		SourceOwner:    "qwq_data",
 		ReleaseKind:    headerReleaseKind,
+		ReleaseClass:   strings.TrimSpace(header.ReleaseClass),
 		ManifestDigest: manifestDigest,
 	}, nil
 }
@@ -282,6 +292,9 @@ type CreatorAuthorSnapshot struct {
 	AuthorID    string
 	DisplayName string
 	AvatarURL   string
+	// AvatarAssetID 头像的媒体资产标识（creator profile avatarAsset.assetId）；
+	// 无头像时为空串，表示缺席。
+	AvatarAssetID string
 }
 
 type creatorImportReceipt struct {
@@ -338,8 +351,8 @@ func LoadReleaseDesiredState(releaseRoot string) (*ReleaseDesiredState, error) {
 	return &desired, nil
 }
 
-func LoadReleaseMediaAssets(releaseRoot, expectedReleaseID string) (map[string]ReleaseMediaAsset, error) {
-	return runtimemedia.LoadReleaseMediaAssets(releaseRoot, expectedReleaseID)
+func LoadReleaseMediaAssets(releaseRoot, expectedReleaseID, releaseClass string) (map[string]ReleaseMediaAsset, error) {
+	return runtimemedia.LoadReleaseMediaAssets(releaseRoot, expectedReleaseID, releaseClass)
 }
 
 // LoadCreatorAuthorSnapshots makes the release's public-author closure,
@@ -373,6 +386,7 @@ func LoadCreatorAuthorSnapshots(
 			return nil, fmt.Errorf("creator authorId is duplicated: %s", profile.AuthorID)
 		}
 		avatarURL := ""
+		avatarAssetID := ""
 		if profile.AvatarAsset != nil {
 			resolved, err := runtimemedia.ResolveReleaseMediaAsset(
 				releaseAssets,
@@ -385,12 +399,14 @@ func LoadCreatorAuthorSnapshots(
 			if err != nil {
 				return nil, fmt.Errorf("creator %s avatar differs from release media authority: %w", ref, err)
 			}
-			avatarURL = resolved.PublicURL
+			avatarURL = resolved.DeliveryRef
+			avatarAssetID = strings.TrimSpace(profile.AvatarAsset.AssetID)
 		}
 		authors[profile.AuthorID] = CreatorAuthorSnapshot{
-			AuthorID:    profile.AuthorID,
-			DisplayName: profile.DisplayName,
-			AvatarURL:   avatarURL,
+			AuthorID:      profile.AuthorID,
+			DisplayName:   profile.DisplayName,
+			AvatarURL:     avatarURL,
+			AvatarAssetID: avatarAssetID,
 		}
 	}
 	return authors, nil
@@ -472,7 +488,11 @@ func missingDesiredRefs(filter map[string]bool, loadedRefs []string) []string {
 }
 
 // LoadPosts 从对象闭包的 posts/ 加载内容；filter 使用相对 posts/ 的对象引用。
-func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
+// LoadPosts 校验并装载 release 对象闭包内的 post 文档。releaseClass 是 release
+// header 声明的发布类别（"research"/"commercial"）；空值只保留给 pre-pool
+// fixture 的 rights 校验。新 release 的媒体交付判据在 Bind +
+// ValidateImportedPostMediaBindings 边界显式收敛。
+func LoadPosts(publishRoot string, filter map[string]bool, releaseClass string) ([]PostDoc, error) {
 	postsRoot := filepath.Join(publishRoot, "posts")
 	var docs []PostDoc
 	var loadedObjectRefs []string
@@ -511,7 +531,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			return err
 		}
 		if strings.EqualFold(strings.TrimSpace(m.ContentType), "image") {
-			if err := validateImageAssets(m.Assets, m.SourceCollectionID, postRef); err != nil {
+			if err := validateImageAssets(m.Assets, m.SourceCollectionID, postRef, releaseClass); err != nil {
 				return err
 			}
 		}
@@ -627,11 +647,9 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			Page:                  firstSourceFact(m.Page, m.SourceCollectionURL),
 			LicenseProof:          firstSourceFact(m.LicenseProof, m.LicenseProofRef),
 			Template:              m.Template,
-			GeneratorModel:        m.GeneratorModel,
 			ArticleMarkdown:       article,
 			ArticleDigest:         m.ArticleDigest,
 			ArticleAssetManifest:  m.ArticleAssetManifest,
-			SourceTaskId:          m.SourceTaskId,
 			CreatedAt:             createdAt,
 			UpdatedAt:             updatedAt,
 			PublishedAt:           publishedAt,
@@ -686,7 +704,6 @@ type entityFile struct {
 	Type             string         `json:"type"`
 	TagRefs          []string       `json:"tagRefs"`
 	ConditionProfile map[string]any `json:"conditionProfile"`
-	SourceTaskId     string         `json:"sourceTaskId"`
 }
 
 // LoadEntities 从 publish/entities 加载实体；filter 非空时只保留其中的 entityRef。
@@ -762,7 +779,6 @@ func LoadEntities(publishRoot string, filter map[string]bool) ([]EntityDoc, erro
 			HasPage:          hasPage,
 			AssetManifest:    assetManifest,
 			ConditionProfile: ef.ConditionProfile,
-			SourceTaskId:     ef.SourceTaskId,
 		})
 		return nil
 	})

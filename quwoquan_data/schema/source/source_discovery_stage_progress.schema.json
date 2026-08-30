@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/source_discovery_stage_progress.schema.json",
+  "title": "Source discovery stage progress and liveness surface",
+  "description": "来源发现阶段运行期的统一进度面。运营者只读本文件即可区分「仍在推进」「已停止推进」「已终止」，不需要连接数、CPU 占用、进程表、文件 mtime 或日志尾部等进程外旁证。写入时机由冻结的心跳间隔决定，独立于任何单个实体是否得出终态。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "executionId",
+    "stageId",
+    "status",
+    "updatedAt",
+    "lastHeartbeatAt",
+    "lastHeartbeatEpochSeconds",
+    "heartbeatIntervalSeconds",
+    "heartbeatStaleAfterSeconds",
+    "candidateEntityCount",
+    "terminalEntityCount",
+    "runningEntityIds",
+    "frozenMaxConcurrentWorkers",
+    "runFacts",
+    "message"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan.content.source.auto_research_progress"},
+    "executionId": {"type": "string", "minLength": 1},
+    "stageId": {"const": "source_discovery"},
+    "status": {
+      "enum": ["running", "succeeded", "interrupted"],
+      "description": "阶段是否还可能再心跳。running 表示仍可能再心跳；succeeded 与 interrupted 都表示已终止不会再心跳。闭集之外的取值由读取面判为 typed 失败，不得被读成存活。"
+    },
+    "updatedAt": {"type": "string", "format": "date-time"},
+    "lastHeartbeatAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "最近一次运行中心跳的时刻。阶段终止时保留终止前最后一次心跳的事实，不被清零或覆盖为空。"
+    },
+    "lastHeartbeatEpochSeconds": {"type": "integer", "minimum": 1},
+    "heartbeatIntervalSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "本 execution 冻结的心跳间隔，来自 calibration receipt 的 frozenLiveness。"
+    },
+    "heartbeatStaleAfterSeconds": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "本 execution 冻结的过期阈值，来自 calibration receipt 的 frozenLiveness，严格大于心跳间隔。"
+    },
+    "candidateEntityCount": {"type": "integer", "minimum": 0},
+    "terminalEntityCount": {"type": "integer", "minimum": 0},
+    "runningEntityIds": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "description": "该时刻仍在运行的实体身份。「尚未有任何实体得出终态」是在场为空：总数已知、终态数为 0 且状态为 running。"
+    },
+    "lastTerminalEntityId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "最近一个得出终态的实体。尚未有任何实体得出终态时省略该键，不写空字符串。"
+    },
+    "frozenMaxConcurrentWorkers": {"type": "integer", "minimum": 1},
+    "runFacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["factKind", "elapsedSeconds", "entitiesPerMinute"],
+      "properties": {
+        "factKind": {
+          "const": "single_run_observation",
+          "description": "声明位：elapsed 与每分钟实体数只是本次运行事实，不是已测得的稳态吞吐或容量结论。"
+        },
+        "elapsedSeconds": {"type": "number", "minimum": 0},
+        "entitiesPerMinute": {"type": "number", "minimum": 0}
+      }
+    },
+    "message": {"type": "string"}
+  }
+}

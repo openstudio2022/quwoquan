@@ -45,6 +45,13 @@
 - 视觉约束：主操作与强调色使用蓝色主题（`AppColors.primaryColor`），禁止橘色动作色。
 - 稳定性约束：一级 tab 在滚动、切换、面板展开/收起过程中不得出现位置跳变。
 
+<a id="req-004"></a>
+### REQ-004 响应式断点与页面 surface 分型单轨
+
+- 断点固定为 compact `<360`、regular `360..599`、expanded `>=600`，组件只消费 `AppSpacing.compactBreakpoint`、`expandedBreakpoint` 与 responsive helper。断点只改变密度、导航壳和列数，不改变 IA、终态、触控热区或几何锚点。
+- 全局搜索使用全屏 surface；创作、更多、评论和联系人选择使用保留上方上下文的贴底 surface。选项/说明 sheet 复用 `AppBottomModalSurface`、`ConversationSheet*` 或 `showAppActionSheet`，不得裸建第二套 modal popup。
+- 设置/表单页复用 Settings inset scaffold，成员选择页复用 member-picker scaffold；新增或移动受控页同步 canonical settings manifest。Modal leading 使用关闭语义，Stack 子页使用返回语义。
+
 ## 4. 契约引用
 
 - 父能力公开契约：[`L2 spec`](../spec.md)。
@@ -58,6 +65,13 @@
 - WHEN 参与者执行“页面布局语义”对应的公开行为。
 - THEN Cupertino 场景不混用 Material 交互组件（Checkbox/SnackBar），选择态统一 iOS 语义。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
+
+<a id="gwt-002"></a>
+### GWT-002 响应式断点与页面 surface 分型单轨
+
+- GIVEN 用户在 compact、regular 或 expanded 宽度打开搜索、设置或贴底操作面。
+- WHEN 页面选择布局断点、导航 leading 与 surface scaffold。
+- THEN 页面只消费 canonical token/scaffold/manifest，且宽度变化不复制产品流程、不破坏上下文或返回语义。
 
 ## 6. 依赖
 
@@ -75,3 +89,12 @@
 - 准出影响：`track`
 - 影响或价值：尚缺少能够证明“页面布局语义”已满足当前规格的真实测试证据。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 响应式断点与 surface 分型尚缺统一合同
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：尚缺同时覆盖 360/600 断点、canonical settings manifest、Modal/Stack leading 与贴底 surface 分型的直接合同；实现扫描不能代替用户可观察布局证据。
+- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。

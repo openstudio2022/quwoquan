@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, Iterable, Mapping
 
 from core.codec import JsonObject, JsonObjectDecodeError
 from core.control_types import (
@@ -42,6 +42,17 @@ def _required_boolean(value: object, *, field_name: str) -> bool:
     return value
 
 
+def _managed_agent_repair_issues(
+    outcomes: tuple[ManagedAgentJobOutcome, ...],
+) -> tuple[Mapping[str, object], ...]:
+    issues: list[Mapping[str, object]] = []
+    for outcome in outcomes:
+        issue = outcome.outcome.issue(ref=outcome.ref)
+        if issue is not None:
+            issues.append(issue.as_dict())
+    return tuple(issues)
+
+
 @dataclass(frozen=True, slots=True)
 class ManagedAgentScheduler:
     requested_max_workers: int
@@ -78,8 +89,10 @@ class ManagedAgentScheduler:
     def from_document(cls, value: object, *, label: str) -> "ManagedAgentScheduler":
         try:
             doc = JsonObject.from_value(value, label=label)
-            lane_values = doc.value("laneLimits")
-            lane_doc = JsonObject.from_value(lane_values, label=f"{label}.laneLimits")
+            lane_doc = JsonObject.from_value(
+                doc.value("laneLimits"),
+                label=f"{label}.laneLimits",
+            )
             lane_limits = tuple(
                 sorted(
                     (
@@ -146,6 +159,10 @@ class ManagedAgentRunRecord:
     started_count: int
     finished_count: int
     infrastructure_failures: int
+    successful_refs: tuple[str, ...]
+    excluded_refs: tuple[str, ...]
+    shortfall_count: int
+    repair_issue_records: tuple[Mapping[str, object], ...]
     outcomes: tuple[ManagedAgentJobOutcome, ...]
     finished_at: str
     recovered: bool = False
@@ -164,14 +181,58 @@ class ManagedAgentRunRecord:
             "started_count",
             "finished_count",
             "infrastructure_failures",
+            "shortfall_count",
             "cancelled_queued_job_count",
             "cancelled_active_job_count",
         ):
             _non_negative_int(getattr(self, field_name), field_name=field_name)
         if self.finished_count > self.job_count or self.started_count > self.job_count:
             raise ValueError("managed agent run counts cannot exceed job_count")
+        if self.shortfall_count != max(0, self.planned_job_count - self.finished_count):
+            raise ValueError("managed agent run shortfall_count must be derived from planned/finished")
+        if self.scheduler.prompt_count != self.planned_job_count:
+            raise ValueError("managed agent scheduler prompt_count must match planned_job_count")
         if len(self.outcomes) != self.job_count:
             raise ValueError("managed agent run outcomes must match job_count")
+        expected_started = sum(outcome.outcome.started for outcome in self.outcomes)
+        expected_finished = sum(outcome.succeeded for outcome in self.outcomes)
+        expected_infrastructure_failures = sum(
+            not outcome.outcome.started for outcome in self.outcomes
+        )
+        if self.started_count != expected_started:
+            raise ValueError("managed agent run started_count must be derived from outcomes")
+        if self.finished_count != expected_finished:
+            raise ValueError("managed agent run finished_count must be derived from outcomes")
+        if self.infrastructure_failures != expected_infrastructure_failures:
+            raise ValueError(
+                "managed agent run infrastructure_failures must be derived from outcomes"
+            )
+        expected_refs = tuple(outcome.ref for outcome in self.outcomes if outcome.ref)
+        expected_successful = tuple(
+            outcome.ref for outcome in self.outcomes if outcome.succeeded and outcome.ref
+        )
+        expected_excluded = tuple(
+            outcome.ref for outcome in self.outcomes if not outcome.succeeded and outcome.ref
+        )
+        expected_issues = _managed_agent_repair_issues(self.outcomes)
+        if self.refs != expected_refs:
+            raise ValueError("managed agent run refs must be derived from outcomes")
+        if self.successful_refs != expected_successful:
+            raise ValueError("managed agent run successful_refs must be derived from outcomes")
+        if self.excluded_refs != expected_excluded:
+            raise ValueError("managed agent run excluded_refs must be derived from outcomes")
+        if self.repair_issue_records != expected_issues:
+            raise ValueError("managed agent run repair_issue_records must be derived from outcomes")
+        if any(not ref.strip() for ref in (*self.successful_refs, *self.excluded_refs)):
+            raise ValueError("managed agent run evidence refs must be non-empty")
+        if len(set(self.successful_refs)) != len(self.successful_refs):
+            raise ValueError("managed agent run successful_refs must be unique")
+        if len(set(self.excluded_refs)) != len(self.excluded_refs):
+            raise ValueError("managed agent run excluded_refs must be unique")
+        if set(self.successful_refs).intersection(self.excluded_refs):
+            raise ValueError("managed agent run successful/excluded refs must be disjoint")
+        if any(not isinstance(issue, Mapping) for issue in self.repair_issue_records):
+            raise TypeError("managed agent run repair_issue_records must be objects")
         if not self.finished_at:
             raise ValueError("managed agent run finished_at is required")
         if self.recovered and not (self.recovered_at and self.recovery_reason):
@@ -182,6 +243,14 @@ class ManagedAgentRunRecord:
             self.interrupt_reason
         ):
             raise ValueError("interrupted managed agent run requires an interrupt reason")
+        if self.status is ManagedAgentCheckpointStatus.COMPLETED and self.shortfall_count:
+            raise ValueError("completed managed agent run cannot have shortfall")
+        if self.status is ManagedAgentCheckpointStatus.PARTIAL and not (
+            0 < self.finished_count < self.planned_job_count
+        ):
+            raise ValueError("partial managed agent run requires success and shortfall")
+        if self.status is ManagedAgentCheckpointStatus.BLOCKED and self.finished_count:
+            raise ValueError("blocked managed agent run cannot contain successful jobs")
         if any(pid < 1 for pid in self.terminated_subprocess_pids):
             raise ValueError("terminated subprocess pids must be positive")
 
@@ -195,6 +264,11 @@ class ManagedAgentRunRecord:
             raw_pids = doc.value("terminatedSubprocessPids")
             if not isinstance(raw_pids, list):
                 raise ValueError("terminatedSubprocessPids must be an array")
+            raw_repair_issues = doc.value("repairIssueRecords")
+            if not isinstance(raw_repair_issues, list) or not all(
+                isinstance(item, Mapping) for item in raw_repair_issues
+            ):
+                raise ValueError("repairIssueRecords must be an object array")
             return cls(
                 stage=ExecutionStage(doc.string("stage")),
                 job_count=_non_negative_int(doc.value("jobCount"), field_name="jobCount"),
@@ -213,6 +287,13 @@ class ManagedAgentRunRecord:
                     doc.value("infrastructureFailures"),
                     field_name="infrastructureFailures",
                 ),
+                successful_refs=doc.string_sequence("successfulRefs"),
+                excluded_refs=doc.string_sequence("excludedRefs"),
+                shortfall_count=_non_negative_int(
+                    doc.value("shortfallCount"),
+                    field_name="shortfallCount",
+                ),
+                repair_issue_records=tuple(dict(item) for item in raw_repair_issues),
                 outcomes=tuple(
                     ManagedAgentJobOutcome.from_document(
                         item,
@@ -252,6 +333,10 @@ class ManagedAgentRunRecord:
             "startedCount": self.started_count,
             "finishedCount": self.finished_count,
             "infrastructureFailures": self.infrastructure_failures,
+            "successfulRefs": list(self.successful_refs),
+            "excludedRefs": list(self.excluded_refs),
+            "shortfallCount": self.shortfall_count,
+            "repairIssueRecords": [dict(issue) for issue in self.repair_issue_records],
             "outcomes": [outcome.to_document() for outcome in self.outcomes],
             "finishedAt": self.finished_at,
             "recovered": self.recovered,
@@ -271,6 +356,62 @@ class ManagedAgentRunRecord:
             recovered_at=recovered_at.strip(),
             recovery_reason=recovery_reason.strip(),
         )
+
+
+def build_managed_agent_run_record(
+    *,
+    stage: ExecutionStage,
+    planned_job_count: int,
+    scheduler: ManagedAgentScheduler,
+    outcomes: tuple[ManagedAgentJobOutcome, ...],
+    finished_at: str,
+    status: ManagedAgentCheckpointStatus | None = None,
+    interrupt_reason: str = "",
+    cancelled_queued_job_count: int = 0,
+    cancelled_active_job_count: int = 0,
+    terminated_subprocess_pids: tuple[int, ...] = (),
+) -> ManagedAgentRunRecord:
+    typed_outcomes = tuple(outcomes)
+    finished_count = sum(outcome.succeeded for outcome in typed_outcomes)
+    resolved_status = status
+    if resolved_status is None:
+        if finished_count == planned_job_count:
+            resolved_status = ManagedAgentCheckpointStatus.COMPLETED
+        elif finished_count:
+            resolved_status = ManagedAgentCheckpointStatus.PARTIAL
+        else:
+            resolved_status = ManagedAgentCheckpointStatus.BLOCKED
+    return ManagedAgentRunRecord(
+        stage=stage,
+        job_count=len(typed_outcomes),
+        planned_job_count=planned_job_count,
+        scheduler=scheduler,
+        refs=tuple(outcome.ref for outcome in typed_outcomes if outcome.ref),
+        started_count=sum(outcome.outcome.started for outcome in typed_outcomes),
+        finished_count=finished_count,
+        infrastructure_failures=sum(
+            not outcome.outcome.started for outcome in typed_outcomes
+        ),
+        successful_refs=tuple(
+            outcome.ref
+            for outcome in typed_outcomes
+            if outcome.succeeded and outcome.ref
+        ),
+        excluded_refs=tuple(
+            outcome.ref
+            for outcome in typed_outcomes
+            if not outcome.succeeded and outcome.ref
+        ),
+        shortfall_count=max(0, planned_job_count - finished_count),
+        repair_issue_records=_managed_agent_repair_issues(typed_outcomes),
+        outcomes=typed_outcomes,
+        finished_at=finished_at,
+        status=resolved_status,
+        interrupt_reason=interrupt_reason,
+        cancelled_queued_job_count=cancelled_queued_job_count,
+        cancelled_active_job_count=cancelled_active_job_count,
+        terminated_subprocess_pids=tuple(terminated_subprocess_pids),
+    )
 
 
 def dedupe_managed_agent_runs(
@@ -336,6 +477,7 @@ def save_managed_agent_run(
 __all__ = [
     "ManagedAgentRunRecord",
     "ManagedAgentScheduler",
+    "build_managed_agent_run_record",
     "dedupe_managed_agent_runs",
     "last_managed_agent_run",
     "save_managed_agent_run",

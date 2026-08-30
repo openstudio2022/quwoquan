@@ -6,10 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
-    show
-        gatheringDetailGatheringPostsReaderProvider,
-        gatheringDetailSocialProofReaderProvider;
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_detail_page.dart';
@@ -76,12 +72,10 @@ Future<void> _pumpDetail(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        ...gatheringBoundaryOverrides(port),
-        gatheringDetailGatheringPostsReaderProvider.overrideWithValue(
-          _EmptyRecapReader(),
-        ),
-        gatheringDetailSocialProofReaderProvider.overrideWithValue(
-          socialProof,
+        ...gatheringBoundaryOverrides(
+          port,
+          gatheringPostsReader: _EmptyRecapReader(),
+          socialProofReader: socialProof,
         ),
       ],
       child: CupertinoApp(
@@ -111,10 +105,7 @@ void main() {
 
       expect(reader.lastAnchorKind, 'organizer');
       expect(reader.lastObjectId, 'host-persona');
-      expect(
-        find.byKey(GatheringDetailPage.organizerStatsKey),
-        findsOneWidget,
-      );
+      expect(find.byKey(GatheringDetailPage.organizerStatsKey), findsOneWidget);
       expect(
         find.text(GatheringText.detailOrganizerStats(5, 3, 2)),
         findsOneWidget,

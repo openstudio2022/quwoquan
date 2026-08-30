@@ -14,12 +14,13 @@ services:
       SERVICE_NAME: rtc-service
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       CONFIG_VERSION: "${QWQ_COMPOSE_RTC_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_RTC_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       RTC_SERVICE_ADDR: ":18083"
-      MONGO_URI: mongodb://mongodb:27017
-      MONGO_DATABASE: quwoquan_rtc
-      REDIS_ADDR: redis:6379
+      RTC_MONGO_URI: mongodb://mongodb:27017
+      RTC_MONGO_DATABASE: quwoquan_rtc
+      RTC_REDIS_ADDR: redis:6379
       USER_SERVICE_BASE_URL: http://user-service:18081
       RTC_MEDIA_CONNECTION_URL: "${RTC_MEDIA_CONNECTION_URL:-}"
       RTC_MEDIA_API_KEY: "${RTC_MEDIA_API_KEY:-}"
@@ -39,10 +40,15 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    # provider 已通过 Compose health 门后，仍可能在开发机拥塞窗口出现一次 TCP
+    # connect/ping 超时。仅对非零退出做有界编排重试；配置错误等永久故障在 5 次后
+    # 保持退出，且不会把正常停止或 one-shot 语义伪装成可恢复。
+    restart: "on-failure:5"
     ports:
       - "${QWQ_COMPOSE_RTC_PORT:-19350}:18083"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18083/healthz >/dev/null 2>&1"]
       interval: 10s

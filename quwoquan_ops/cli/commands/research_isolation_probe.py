@@ -1,6 +1,6 @@
 """stackctl `research-isolation-probe` 子命令域。
 
-从 stackctl.py 逐字迁出 argparse 表面与编排胶水；12 个 research
+从 stackctl.py 逐字迁出 argparse 表面与编排胶水；15 个 research
 isolation 真实 HTTP 探针与 create-once runtime proof 逻辑保持在
 `quwoquan_ops/cli/lib/research_isolation_runtime_probe.py`。stackctl
 命名空间符号一律经函数内延迟导入 `_stackctl` 属性访问，保持
@@ -19,7 +19,7 @@ def register_parser(
     research_isolation_probe_parser = subparsers.add_parser(
         "research-isolation-probe",
         help=(
-            "对本地环境执行 12 个 research isolation 真实 HTTP 探针并写入 "
+            "对本地环境执行 15 个 research isolation 真实 HTTP 探针并写入 "
             "create-once runtime proof"
         ),
     )
@@ -38,7 +38,7 @@ def register_parser(
 
 
 def command_research_isolation_probe(args: argparse.Namespace) -> dict[str, Any]:
-    """执行 12 个 research isolation 真实探针并冻结 create-once runtime proof。"""
+    """执行 15 个 research isolation 真实探针并冻结 create-once runtime proof。"""
     import quwoquan_ops.cli.stackctl as _stackctl
 
     env_name = str(args.env)

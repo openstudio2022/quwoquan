@@ -2,7 +2,14 @@ name: Domain governance
 
 on:
   workflow_dispatch:
+    inputs:
+      applyProductionRecords:
+        description: >-
+          确认写入生产 DNS 记录（破坏性动作）。留空时本次只做 plan 与漂移核对。
+        type: boolean
+        default: false
   schedule:
+    # 定时触发只做漂移检测，从不写入生产记录。
     - cron: "17 3 * * 1"
 
 permissions:
@@ -21,17 +28,31 @@ jobs:
       - name: Apply canonical DNS records
         env:
           QWQ_DNS_PROVISIONING_API_TOKEN: ${{ secrets.QWQ_DNS_PROVISIONING_API_TOKEN }}
-          QWQ_DNS_ZONE_ID: ${{ secrets.QWQ_DNS_ZONE_ID }}
+          QWQ_PROD_EDGE_IPV4: ${{ secrets.QWQ_PROD_EDGE_IPV4 }}
+          APPLY_PRODUCTION_RECORDS: ${{ inputs.applyProductionRecords }}
         run: |
-          python3 quwoquan_ops/cli/domain_governance.py apply \
-            --report .qwq_output/domain/dns-apply-receipt.json
+          python3 quwoquan_ops/gate/require_ci_inputs.py \
+            --scope domain-governance \
+            QWQ_DNS_PROVISIONING_API_TOKEN \
+            QWQ_PROD_EDGE_IPV4
+          python3 quwoquan_ops/cli/domain_governance.py plan \
+            --report .qwq_output/env/repo/runs/domain/dns-plan.json
+          if [ "$APPLY_PRODUCTION_RECORDS" = "true" ]; then
+            python3 quwoquan_ops/cli/domain_governance.py apply \
+              --allow-production-mutation \
+              --report .qwq_output/env/repo/runs/domain/dns-apply-receipt.json
+          else
+            echo "[domain-governance] plan-only run; production records untouched."
+          fi
+          # verify 的退出码三分：0 全部核对通过，2 现网与计划不一致，3 有 scope 未被
+          # 核对（本 job 强制注入 edge 地址，因此 3 意味着接线本身出了问题）。
           python3 quwoquan_ops/cli/domain_governance.py verify \
             --skip-tls \
-            --report .qwq_output/domain/dns-live-evidence.json
+            --report .qwq_output/env/repo/runs/domain/dns-live-evidence.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: domain-dns-evidence
-          path: .qwq_output/domain/*.json
+          path: .qwq_output/env/repo/runs/domain/dns-*.json
           retention-days: 30
 
   certificate:
@@ -41,7 +62,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [alpha-local, beta-local, gamma-local, prod-sim]
+        target: [alpha-local, beta-local, gamma-local, prod-sim, prod-hosted]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Setup Go without implicit cache
@@ -51,32 +72,38 @@ jobs:
           cache: false
       - name: Install pinned DNS-01 and encryption clients
         run: |
-          go install github.com/go-acme/lego/v4/cmd/lego@v4.25.2
+          go install github.com/go-acme/lego/v5/cmd/lego@v5.3.1
           go install filippo.io/age/cmd/age@v1.2.1
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Issue and encrypt wildcard certificate
         env:
           QWQ_ACME_DNS_API_TOKEN: ${{ secrets.QWQ_ACME_DNS_API_TOKEN }}
-          QWQ_ACME_ACCOUNT_EMAIL: ${{ secrets.QWQ_ACME_ACCOUNT_EMAIL }}
           QWQ_TLS_AGE_RECIPIENT: ${{ secrets.QWQ_TLS_AGE_RECIPIENT }}
           TARGET: ${{ matrix.target }}
         run: |
-          test -n "$QWQ_TLS_AGE_RECIPIENT"
-          mkdir -p .qwq_output
+          python3 quwoquan_ops/gate/require_ci_inputs.py \
+            --scope domain-governance \
+            QWQ_ACME_DNS_API_TOKEN \
+            QWQ_TLS_AGE_RECIPIENT
+          evidence_dir=".qwq_output/env/repo/runs/domain"
+          mkdir -p "$evidence_dir"
           python3 quwoquan_ops/cli/lib/public_domain_tls.py issue \
             --target "$TARGET" \
-            > ".qwq_output/${TARGET}-tls-evidence.json"
+            > "${evidence_dir}/${TARGET}-tls-evidence.json"
           tls_exports="$(python3 quwoquan_ops/cli/lib/public_domain_tls.py paths \
             --target "$TARGET" --format shell)"
           eval "$tls_exports"
+          # 加密证书包是 deployment payload，只落仓外受限部署工作区。
+          mkdir -p "$QWQ_PUBLIC_TLS_BUNDLE_DIR"
+          bundle="${QWQ_PUBLIC_TLS_BUNDLE_DIR}/${TARGET}-tls-bundle.tar.age"
           tar -C "$(dirname "$QWQ_PUBLIC_TLS_CERT_FILE")" \
             -cf - fullchain.pem privkey.pem \
-            | age -r "$QWQ_TLS_AGE_RECIPIENT" \
-              -o ".qwq_output/${TARGET}-tls-bundle.tar.age"
+            | age -r "$QWQ_TLS_AGE_RECIPIENT" -o "$bundle"
+          echo "QWQ_TLS_BUNDLE_PATH=$bundle" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: domain-tls-${{ matrix.target }}
           path: |
-            .qwq_output/${{ matrix.target }}-tls-evidence.json
-            .qwq_output/${{ matrix.target }}-tls-bundle.tar.age
+            .qwq_output/env/repo/runs/domain/${{ matrix.target }}-tls-evidence.json
+            ${{ env.QWQ_TLS_BUNDLE_PATH }}
           retention-days: 7

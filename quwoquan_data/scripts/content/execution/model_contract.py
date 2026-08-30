@@ -13,7 +13,11 @@ from typing import Any, Mapping
 from core.control_types import AgentProvider
 from core.cursor_model import CursorModelParameter, CursorModelSelection
 from core.control_types import RuntimeEnvironment
-from core.runtime_policy import load_runtime_policy, runtime_profile_digest
+from core.runtime_policy import (
+    active_runtime_policy,
+    load_runtime_policy,
+    runtime_profile_digest,
+)
 
 
 DEFAULT_SEMANTIC_SELECTION_ID = "default"
@@ -183,6 +187,58 @@ def semantic_execution_binding(
     )
 
 
+def cursor_grok_binding_mismatch(
+    binding: SemanticExecutionBinding,
+    *,
+    role: str = "author",
+) -> str | None:
+    """Return a mismatch reason unless this is the frozen cursor_grok binding.
+
+    The model version lives in the runtime profile, so moving between grok
+    versions is a profile edit rather than a code edit. Precision is unchanged:
+    the selection id, provider and model family are still exact, and manifest
+    identity drift against the profile digest is still enforced upstream by
+    ``semantic_execution_binding_for_execution``.
+    """
+    if binding.selection_id != CURSOR_GROK_SEMANTIC_SELECTION_ID:
+        return (
+            f"{role} requires the {CURSOR_GROK_SEMANTIC_SELECTION_ID} selection, "
+            f"got {binding.selection_id}"
+        )
+    model = binding.pair.reviewer if role == "reviewer" else binding.pair.author
+    if model.provider is not AgentProvider.CURSOR_SDK:
+        return (
+            f"{role} provider must be {AgentProvider.CURSOR_SDK.value}, "
+            f"got {model.provider.value}"
+        )
+    if model.family is not ModelFamily.GROK or not model.model_id.startswith("grok"):
+        return f"{role} model must be a grok model, got {model.model_id}"
+    return None
+
+
+def governed_cursor_grok_model(runtime_profile: str | None = None) -> str:
+    """Return the grok model id frozen by one runtime profile."""
+    policy = (
+        load_runtime_policy(runtime_profile)
+        if runtime_profile
+        else active_runtime_policy()
+    )
+    binding = policy.explicit_semantic_selection(
+        CURSOR_GROK_SEMANTIC_SELECTION_ID
+    ).binding
+    if binding.provider is not AgentProvider.CURSOR_SDK:
+        raise ValueError(
+            f"{CURSOR_GROK_SEMANTIC_SELECTION_ID} must bind "
+            f"{AgentProvider.CURSOR_SDK.value}"
+        )
+    if not binding.model.startswith("grok"):
+        raise ValueError(
+            f"{CURSOR_GROK_SEMANTIC_SELECTION_ID} must bind a grok model, "
+            f"got {binding.model}"
+        )
+    return binding.model
+
+
 def execution_model_pair(
     recipe: Mapping[str, Any],
     semantic_selection_id: object = DEFAULT_SEMANTIC_SELECTION_ID,
@@ -257,6 +313,8 @@ __all__ = [
     "CURSOR_AUTO_SEMANTIC_SELECTION_ID",
     "SEMANTIC_SELECTION_IDS",
     "ModelFamily",
+    "cursor_grok_binding_mismatch",
+    "governed_cursor_grok_model",
     "execution_model_pair",
     "execution_model_pair_for_execution",
     "normalize_semantic_selection_id",

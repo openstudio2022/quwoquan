@@ -1,3 +1,6 @@
+import 'article_document_asset.dart';
+
+
 enum ArticleDocumentNodeType {
   documentTitle,
   headingMajor,
@@ -44,9 +47,12 @@ class ArticleDocumentNode {
     required this.type,
     this.text = '',
     this.assetId = '',
+    this.accessMode = '',
     this.imageUrl = '',
     this.imageLayout = 'fullWidth',
     this.caption = '',
+    this.imageWidth,
+    this.imageHeight,
     this.textAlign = '',
     this.listDepth = 0,
     this.codeLanguage = '',
@@ -82,9 +88,12 @@ class ArticleDocumentNode {
       type: type,
       text: (map['text'] ?? '').toString(),
       assetId: (map['assetId'] ?? '').toString(),
+      accessMode: (map['accessMode'] ?? '').toString(),
       imageUrl: (map['imageUrl'] ?? '').toString(),
       imageLayout: (map['imageLayout'] ?? 'fullWidth').toString(),
       caption: (map['caption'] ?? '').toString(),
+      imageWidth: (map['imageWidth'] as num?)?.toInt(),
+      imageHeight: (map['imageHeight'] as num?)?.toInt(),
       textAlign: (map['textAlign'] ?? '').toString(),
       listDepth: (map['listDepth'] as num?)?.toInt() ?? 0,
       codeLanguage: (map['codeLanguage'] ?? '').toString(),
@@ -96,9 +105,16 @@ class ArticleDocumentNode {
   final ArticleDocumentNodeType type;
   final String text;
   final String assetId;
+  /// 交付访问模式（PostArticleAsset.accessMode，DEC-033）；空串为契约缺席。
+  final String accessMode;
   final String imageUrl;
   final String imageLayout;
   final String caption;
+
+  /// figure 资产声明的像素宽高（manifest `PostArticleAsset.width/height`）；
+  /// 元数据缺席保持 null（REQ-017），不得塌陷为 0 或默认值。
+  final int? imageWidth;
+  final int? imageHeight;
   final String textAlign;
   final int listDepth;
 
@@ -131,9 +147,12 @@ class ArticleDocumentNode {
     ArticleDocumentNodeType? type,
     String? text,
     String? assetId,
+    String? accessMode,
     String? imageUrl,
     String? imageLayout,
     String? caption,
+    int? imageWidth,
+    int? imageHeight,
     String? textAlign,
     int? listDepth,
     String? codeLanguage,
@@ -144,9 +163,12 @@ class ArticleDocumentNode {
       type: type ?? this.type,
       text: text ?? this.text,
       assetId: assetId ?? this.assetId,
+      accessMode: accessMode ?? this.accessMode,
       imageUrl: imageUrl ?? this.imageUrl,
       imageLayout: imageLayout ?? this.imageLayout,
       caption: caption ?? this.caption,
+      imageWidth: imageWidth ?? this.imageWidth,
+      imageHeight: imageHeight ?? this.imageHeight,
       textAlign: textAlign ?? this.textAlign,
       listDepth: listDepth ?? this.listDepth,
       codeLanguage: codeLanguage ?? this.codeLanguage,
@@ -160,9 +182,12 @@ class ArticleDocumentNode {
       'type': type.name,
       if (hasText) 'text': text,
       if (assetId.trim().isNotEmpty) 'assetId': assetId,
+      if (accessMode.trim().isNotEmpty) 'accessMode': accessMode,
       if (hasImage) 'imageUrl': imageUrl,
       if (isFigure) 'imageLayout': imageLayout,
       if (caption.trim().isNotEmpty) 'caption': caption,
+      if (imageWidth != null) 'imageWidth': imageWidth,
+      if (imageHeight != null) 'imageHeight': imageHeight,
       if (textAlign.trim().isNotEmpty) 'textAlign': textAlign,
       if (listDepth > 0) 'listDepth': listDepth,
       if (codeLanguage.trim().isNotEmpty) 'codeLanguage': codeLanguage,
@@ -486,9 +511,13 @@ class ArticleDocumentBlock {
     required this.type,
     this.offset = 0,
     this.text = '',
+    this.assetId = '',
+    this.accessMode = '',
     this.imageUrl = '',
     this.imageLayout = 'fullWidth',
     this.caption = '',
+    this.imageWidth,
+    this.imageHeight,
     this.orderedIndex,
     this.textAlign = '',
     this.listDepth = 0,
@@ -500,9 +529,18 @@ class ArticleDocumentBlock {
   final ArticleDocumentBlockType type;
   final int offset;
   final String text;
+
+  /// figure 节点绑定的 manifest 资产身份；非图片块保持空字符串。
+  final String assetId;
+  /// 交付访问模式（PostArticleAsset.accessMode，DEC-033）；空串为契约缺席。
+  final String accessMode;
   final String imageUrl;
   final String imageLayout;
   final String caption;
+
+  /// image 块资产声明的像素宽高；缺席保持 null（REQ-017）。
+  final int? imageWidth;
+  final int? imageHeight;
   final int? orderedIndex;
 
   /// start | center | end | justify（空表示默认）
@@ -520,26 +558,17 @@ class ArticleDocumentBlock {
   bool get hasImage => imageUrl.trim().isNotEmpty;
   bool get usesWrappedLayout =>
       imageLayout == 'wrapLeft' || imageLayout == 'wrapRight';
-}
 
-class ArticleDocumentAsset {
-  const ArticleDocumentAsset({
-    required this.id,
-    required this.offset,
-    this.imageUrl = '',
-    this.imageLayout = 'fullWidth',
-    this.caption = '',
-  });
-
-  final String id;
-  final int offset;
-  final String imageUrl;
-  final String imageLayout;
-  final String caption;
-
-  bool get hasImage => imageUrl.trim().isNotEmpty;
-  bool get usesWrappedLayout =>
-      imageLayout == 'wrapLeft' || imageLayout == 'wrapRight';
+  /// 元数据派生的宽高比；任一维缺席或非正即整体缺席（null），
+  /// 与 [ArticleDocumentAsset.metadataAspectRatio] 同判。
+  double? get metadataAspectRatio {
+    final w = imageWidth;
+    final h = imageHeight;
+    if (w == null || h == null || w <= 0 || h <= 0) {
+      return null;
+    }
+    return w / h;
+  }
 }
 
 class ArticleDocumentData {
@@ -567,6 +596,9 @@ class ArticleDocumentData {
               node.id.trim().isNotEmpty &&
               (node.hasText ||
                   node.hasImage ||
+                  // 缺席的 figure（引用未解析出交付 URL）保留资产身份，
+                  // 供缺席态渲染与序列化写回（GWT-016）。
+                  (node.isFigure && node.assetId.trim().isNotEmpty) ||
                   node.isDocumentTitle ||
                   node.type == ArticleDocumentNodeType.divider ||
                   node.type == ArticleDocumentNodeType.paragraph),
@@ -712,6 +744,8 @@ List<ArticleDocumentNode> _normalizeDocumentNodes(
             node.id.trim().isNotEmpty &&
             (node.hasText ||
                 node.hasImage ||
+                // 缺席的 figure 保留资产身份（GWT-016），与 fromMap 同判。
+                (node.isFigure && node.assetId.trim().isNotEmpty) ||
                 node.isDocumentTitle ||
                 node.type == ArticleDocumentNodeType.divider ||
                 node.type == ArticleDocumentNodeType.paragraph),
@@ -763,9 +797,10 @@ _ArticleDocumentProjection _projectArticleDocument(
   final blocks = <ArticleDocumentBlock>[];
   final allBlocks = <ArticleDocumentBlock>[];
   var orderedIndex = 0;
-  final joinedWrapBelowParagraphIds = resolveArticleWrapNodeGroups(
-    nodes,
-  ).map((group) => group.belowParagraph?.id).whereType<String>().toSet();
+  final joinedWrapBelowParagraphIds = resolveArticleWrapNodeGroups(nodes)
+      .map((group) => group.belowParagraph?.id)
+      .whereType<String>()
+      .toSet();
 
   void appendBodyText(String line, {bool separateLine = true}) {
     final normalized = line.trim();
@@ -893,7 +928,10 @@ _ArticleDocumentProjection _projectArticleDocument(
             offset: bodyBuffer.length,
             imageUrl: node.imageUrl,
             imageLayout: node.imageLayout,
+            accessMode: node.accessMode,
             caption: node.caption,
+            width: node.imageWidth,
+            height: node.imageHeight,
           ),
         );
         {
@@ -901,9 +939,13 @@ _ArticleDocumentProjection _projectArticleDocument(
             id: node.id,
             type: ArticleDocumentBlockType.image,
             offset: bodyBuffer.length,
+            assetId: node.assetId.trim().isNotEmpty ? node.assetId : node.id,
             imageUrl: node.imageUrl,
             imageLayout: node.imageLayout,
+            accessMode: node.accessMode,
             caption: node.caption,
+            imageWidth: node.imageWidth,
+            imageHeight: node.imageHeight,
           );
           blocks.add(b);
           allBlocks.add(b);

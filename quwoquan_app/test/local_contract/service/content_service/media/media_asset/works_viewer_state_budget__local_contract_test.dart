@@ -61,7 +61,9 @@ void main() {
     );
     expect(source, contains('_maxOriginalImageAccessEntriesPerPost = 12'));
     expect(presentationSource, contains('isUsableAt(now)'));
-    expect(engagementSource, contains('expiresAt: grant.expiresAt'));
+    // 原图换签已收敛到 SignedMediaDeliveryCoordinator（DEC-033）：到期时间
+    // 取自租约而非自建 grant 直调，淘汰仍按同一到期语义。
+    expect(engagementSource, contains('expiresAt: lease.expiresAt'));
     expect(
       hydrationSource.indexOf(
         "if (!mounted || !_postStateWindow.contains(post.id))",

@@ -27,6 +27,11 @@ ALLOWED_TOP_LEVEL = frozenset(
         ".gitignore",
         ".dockerignore",
         ".cursor",
+        ".cursorignore",
+        # Agent harness 入口：技能与 Reviewer 中性定义只有
+        # .agents/ 一处真相源，.cursor/.codex 仅保留生成 adapter。
+        ".agents",
+        ".codex",
         # 本地 IDE 配置：不入库，但开发机上必然存在
         ".vscode",
         # 唯一允许的运行输出根
@@ -45,12 +50,19 @@ ALLOWED_TOP_LEVEL = frozenset(
         # 构建入口与工作区
         "Makefile",
         "quwoquan-workspace.code-workspace",
+        # 开发机本地归档：由 .gitignore 挡在版本控制之外，只在这台机器上存在。
+        # 登记它是为了让根布局门禁保持封闭且不因它长期假红；它不承载任何仓库
+        # 职责，被移走后这两行可以直接删除。
+        "cursor（重置额度）",
+        "cursor（重置额度）.zip",
     }
 )
 
 #: 曾经出现过并已明确退役的根条目。白名单已经能拦下它们，这里只用于给出比
 #: 「未登记条目」更具体的处置提示，避免重复走一遍归属排查。
 RETIRED_TOP_LEVEL = {
+    ".claude": "Claude Code harness support is retired; use Cursor or Codex adapters",
+    "CLAUDE.md": "Claude Code harness support is retired; use AGENTS.md",
     "agent_ops": "moved into quwoquan_ops",
     "deploy": "moved into per-service deploy/base",
     "artifacts": "runtime output belongs under .qwq_output",

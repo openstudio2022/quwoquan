@@ -34,7 +34,6 @@ def bind_semantic_preflight_receipt(
     *,
     semantic_selection_id: str,
     output_root: Path = paths.OUTPUT_ROOT,
-    require_fresh: bool = True,
 ) -> dict[str, str]:
     root = output_root.expanduser().resolve()
     path = receipt_path.expanduser().resolve()
@@ -49,7 +48,6 @@ def bind_semantic_preflight_receipt(
     validate_semantic_preflight_receipt(
         receipt,
         expected_selection=selection,
-        require_semantic_execution_ready=require_fresh,
     )
     binding = {
         "receiptRef": path.relative_to(root).as_posix(),
@@ -71,7 +69,6 @@ def validate_semantic_preflight_binding(
     *,
     semantic_selection_id: str,
     output_root: Path = paths.OUTPUT_ROOT,
-    require_fresh: bool = True,
 ) -> tuple[dict[str, Any], Path]:
     binding = dict(value)
     assert_valid(
@@ -90,10 +87,7 @@ def validate_semantic_preflight_binding(
     validate_semantic_preflight_receipt(
         receipt,
         expected_selection=selection,
-        require_semantic_execution_ready=require_fresh,
     )
-    if not bool(receipt.get("semanticExecutionReady")):
-        raise ValueError("semantic provider preflight is not execution-ready")
     if (
         receipt.get("receiptId") != binding["receiptId"]
         or receipt.get("selectionDigest") != binding["selectionDigest"]
@@ -125,14 +119,12 @@ def validate_semantic_preflight_binding_at(
         value,
         semantic_selection_id=semantic_selection_id,
         output_root=output_root,
-        require_fresh=False,
     )
     frozen_at = _timestamp(admitted_at, label="admission timestamp")
     recorded_at = _timestamp(receipt["recordedAt"], label="recordedAt")
-    valid_until = _timestamp(receipt["validUntil"], label="validUntil")
-    if frozen_at < recorded_at or frozen_at > valid_until:
+    if frozen_at < recorded_at:
         raise ValueError(
-            "semantic preflight admission timestamp is outside its validity window"
+            "semantic preflight receipt was recorded after the admission timestamp"
         )
     return receipt, path
 
@@ -143,7 +135,6 @@ def resolve_manifest_preflight_binding(
     requested_binding: Mapping[str, Any] | None,
     semantic_selection_id: str,
     output_root: Path = paths.OUTPUT_ROOT,
-    require_requested_fresh: bool | None = None,
 ) -> dict[str, Any] | None:
     frozen = (
         dict(existing_manifest["semanticPreflightReceipt"])
@@ -158,31 +149,19 @@ def resolve_manifest_preflight_binding(
             frozen,
             semantic_selection_id=semantic_selection_id,
             output_root=output_root,
-            require_fresh=False,
         )
     requested = dict(requested_binding) if requested_binding is not None else None
     if requested is not None:
-        requested_fresh = (
-            existing_manifest is None
-            if require_requested_fresh is None
-            else require_requested_fresh
-        )
         validate_semantic_preflight_binding(
             requested,
             semantic_selection_id=semantic_selection_id,
             output_root=output_root,
-            require_fresh=requested_fresh,
         )
     if frozen is not None and requested is not None and frozen != requested:
         raise ValueError(
             "resume may not change the frozen semantic preflight receipt; create retryOf"
         )
     selected = requested or frozen
-    selection = resolve_semantic_preflight_selection(semantic_selection_id)
-    if selection.provider.value == "cursor_sdk" and selected is None:
-        raise ValueError(
-            f"{semantic_selection_id} requires a fresh semantic preflight/soak receipt"
-        )
     return selected
 
 
@@ -203,14 +182,12 @@ def resolve_cli_preflight_binding(
             receipt_path,
             semantic_selection_id=semantic_selection_id,
             output_root=output_root,
-            require_fresh=existing_manifest is None,
         )
     return resolve_manifest_preflight_binding(
         existing_manifest=existing_manifest,
         requested_binding=requested_binding,
         semantic_selection_id=semantic_selection_id,
         output_root=output_root,
-        require_requested_fresh=existing_manifest is None,
     )
 
 

@@ -11,7 +11,11 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+    require_formal_release_compose_project,
+)
 from quwoquan_ops.cli.lib.startup_attempt_receipt import load_startup_attempt
 
 
@@ -73,8 +77,12 @@ def _runtime_binding(target_name: str) -> dict[str, Any]:
     if receipt.get("workload") != "full":
         raise ValueError("controlled edge fault requires the full App runtime workload")
     project = str(receipt.get("composeProject") or "").strip()
-    if re.fullmatch(rf"quwoquan_{re.escape(environment)}_release(?:_[A-Za-z0-9_-]+)?", project) is None:
-        raise ValueError("controlled edge fault runtime receipt Compose project mismatch")
+    try:
+        require_formal_release_compose_project(target_name, project)
+    except ValueError as exc:
+        raise ValueError(
+            "controlled edge fault runtime receipt Compose project mismatch"
+        ) from exc
     configuration_digest = str(receipt.get("configurationDigest") or "").strip()
     if _DIGEST.fullmatch(configuration_digest) is None:
         raise ValueError("controlled edge fault runtime receipt has no configuration digest")

@@ -40,6 +40,9 @@ AssistantTurnOutput? tryParseAssistantTurnOutput(Map<String, dynamic> json) {
   try {
     return AssistantTurnOutput.fromJson(json);
   } catch (_) {
+    // 解码异常在这里就是形状判定的一部分（与上面各 return null 同义）：
+    // 「这段 JSON 不是一个 assistant turn」。它是缺席而不是失败，调用方据此
+    // 把该消息按非结构化内容渲染，没有任何动作因此没做成。
     return null;
   }
 }

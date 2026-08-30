@@ -90,6 +90,11 @@ final class _ProductOpsRecoveryRuntimeOperations
       ),
     );
     return RecoveryVersionResponse(
+      platform: switch (facts.platform) {
+        AppReleaseRecoveryPlatform.android => RecoveryVersionPlatform.android,
+        AppReleaseRecoveryPlatform.ios => RecoveryVersionPlatform.ios,
+        AppReleaseRecoveryPlatform.web => RecoveryVersionPlatform.web,
+      },
       latestVersion: facts.latestVersion,
       latestBuild: facts.latestBuild,
       minimumSupportedVersion: facts.minimumSupportedVersion,
@@ -99,7 +104,12 @@ final class _ProductOpsRecoveryRuntimeOperations
         AppReleaseUpdateState.available => RecoveryUpdateState.available,
         AppReleaseUpdateState.required => RecoveryUpdateState.required,
       },
-      updateUrl: facts.updateUrl ?? '',
+      updateChannel: switch (facts.updateChannel) {
+        AppReleaseRecoveryChannel.nativeUpdate =>
+          RecoveryVersionChannel.nativeUpdate,
+        AppReleaseRecoveryChannel.webOnly => RecoveryVersionChannel.webOnly,
+      },
+      updateUrl: facts.updateUrl,
       recoveryUrl: facts.recoveryUrl,
     );
   }

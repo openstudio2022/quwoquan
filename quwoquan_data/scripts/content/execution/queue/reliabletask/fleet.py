@@ -7,6 +7,7 @@ import subprocess
 import time
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from core.control_types import QueueBackend, QueueJobStage, QueueJobState
 from core.io import read_json, write_json
@@ -44,6 +45,7 @@ from content.execution.runtime_evidence.reliabletask_process import (
     OBSERVER_BINARY_SHA256_ENV,
     load_frozen_campaign_worker_binary_binding,
     load_frozen_observer_binary_binding,
+    validate_frozen_observer_binary,
 )
 
 _RECOVERY_EXECUTION_STAGES_BY_QUEUE_STAGE = {
@@ -52,98 +54,22 @@ _RECOVERY_EXECUTION_STAGES_BY_QUEUE_STAGE = {
 }
 
 
-def _has_audited_remote_recovery(
-    execution_id: str,
-    stage: QueueJobStage,
-) -> bool:
-    """Permit DLQ revival only after the controller recorded recovery evidence."""
-    from content.execution.support import load_execution_state
-
-    accepted_stages = _RECOVERY_EXECUTION_STAGES_BY_QUEUE_STAGE.get(
-        stage,
-        frozenset({stage.value}),
-    )
-    state = load_execution_state(execution_id)
-    for action in reversed(tuple(state.recovery_actions or ())):
-        if not isinstance(action, Mapping):
-            continue
-        if str(action.get("stage") or "").strip() not in accepted_stages:
-            continue
-        if str(action.get("recoveredAt") or "").strip():
-            return True
-    return False
+from content.execution.queue.reliabletask.fleet_recovery import (
+    _has_audited_remote_recovery,
+    _object_timeout_seconds,
+)
 
 
-def _object_timeout_seconds(jobs: list[object]) -> int:
-    from content.execution.queue.model import QueueJob
-
-    if not jobs or not all(isinstance(job, QueueJob) for job in jobs):
-        raise ValueError("ReliableTask fleet requires declared QueueJob values")
-    values = {job.max_wall_clock_seconds for job in jobs}
-    if len(values) != 1:
-        raise ValueError("ReliableTask fleet jobs must share one object timeout")
-    timeout_seconds = next(iter(values))
-    if timeout_seconds < 1:
-        raise ValueError("ReliableTask object timeout must be positive")
-    return timeout_seconds
-
-
-def _attempt_request_name(*, recover_dead_tasks: bool) -> str:
-    """Keep audited recovery input separate from the immutable first attempt."""
-
-    return "recovery-request.json" if recover_dead_tasks else "request.json"
-
-
-def _remaining_quota(
-    execution_id: str,
-    stage: QueueJobStage,
-    active_job_count: int,
-) -> int:
-    """Remaining approved quota this fleet invocation must still deliver.
-
-    The batch gate admits on quota, never on全量成功, so the request carries the
-    quota that is still outstanding for this stage.  Objects already accepted in
-    an earlier invocation are subtracted; the oversampled surplus is free to fail.
-    """
-    from content.execution import store
-
-    policy = store.load_spec(execution_id).get("executionPolicy") or {}
-    approved = policy.get("approvedQuota")
-    if isinstance(approved, bool) or not isinstance(approved, int) or approved < 1:
-        raise ValueError(
-            f"execution {execution_id} executionPolicy.approvedQuota is required"
-        )
-    already_accepted = sum(
-        1
-        for job in _load_jobs(execution_id)
-        if job.backend is QueueBackend.RELIABLE_TASK
-        and job.stage is stage
-        and job.state is QueueJobState.SUCCEEDED
-    )
-    remaining = approved - already_accepted
-    if remaining < 1:
-        raise ValueError(
-            f"execution {execution_id} 已达 {stage.value} 准出配额 "
-            f"{approved}（已接受 {already_accepted}），无需再派发 fleet"
-        )
-    if remaining > active_job_count and stage is not QueueJobStage.PUBLISH:
-        raise ValueError(
-            f"候选池耗尽，区域实体供给不足：{stage.value} 剩余配额 {remaining} "
-            f"超过待执行 job 数 {active_job_count}"
-        )
-    # Publication consumes the immutable review-qualified closure.  The
-    # semantic approvedQuota is a milestone target, not authority to suppress
-    # already qualified objects when the reviewed closure is partial.  Deliver
-    # every frozen publish job and leave the remaining milestone gap to a new
-    # source/semantic wave; author acquisition remains strict above.
-    return min(remaining, active_job_count)
+from content.execution.queue.reliabletask.fleet_quota import (
+    _attempt_request_name,
+    _remaining_quota,
+)
 
 
 def build_fleet_request(
     execution_id: str,
     stage: QueueJobStage,
     *,
-    required_workers: int,
     host_scope_id: str | None = None,
 ) -> dict[str, object]:
     recover_dead_tasks = _has_audited_remote_recovery(execution_id, stage)
@@ -173,18 +99,33 @@ def build_fleet_request(
     job_set_envelope = select_or_freeze_job_set_attempt(
         execution_id,
         stage.value,
-        required_workers=required_workers,
         active_tasks=active_documents,
     )
     frozen_tasks = job_set_envelope.get("expectedTasks")
     if not isinstance(frozen_tasks, list):
         raise TypeError("ReliableTask frozen expectedTasks is invalid")
-    request_jobs, worker_host_binding, request_workers = select_worker_host_slice(
+    # 三个事实分属三处：工作单元数在 targetObjectCount，进程并行上限在
+    # calibration 的 frozenCapacity，批次绝对截止在同一 calibration 冻结时算定。
+    # 主机切片的默认 worker 数只能取并行上限，不得取工作单元数。
+    calibration = job_set_envelope["capacityCalibration"]
+    fleet_max_concurrent_workers = int(
+        calibration["frozenCapacity"]["fleetMaxConcurrentWorkers"]
+    )
+    request_jobs, worker_host_binding, _host_slice_workers = select_worker_host_slice(
         frozen_tasks,
         job_set_envelope.get("workerHostSetBinding"),
         host_scope_id=host_scope_id,
-        default_workers=int(job_set_envelope["requiredWorkers"]),
+        default_workers=fleet_max_concurrent_workers,
     )
+    # ``partitionCount`` is the hash topology of the whole frozen job set, so
+    # every consumer derives it from ``jobs``.  A host slice that dropped frozen
+    # work units would silently make that derivation unverifiable, so refuse the
+    # dispatch instead of shipping a request whose partition input is partial.
+    if len(request_jobs) != len(frozen_tasks):
+        raise ValueError(
+            "ReliableTask fleet request must carry the complete frozen job set: "
+            f"host slice has {len(request_jobs)} of {len(frozen_tasks)} work units"
+        )
     global_required_quota = _remaining_quota(
         execution_id,
         stage,
@@ -234,7 +175,14 @@ def build_fleet_request(
         "jobSetEnvelopeDigest": job_set_envelope["envelopeDigest"],
         "jobSetDigest": job_set_envelope["jobSetDigest"],
         "actualTaskDigest": actual_task_digest,
-        "requiredWorkers": request_workers,
+        "capacityPlanDigest": job_set_envelope["capacityPlanDigest"],
+        "calibrationReceiptDigest": calibration["calibrationReceiptDigest"],
+        "targetObjectCount": job_set_envelope["targetObjectCount"],
+        "fleetMaxConcurrentWorkers": fleet_max_concurrent_workers,
+        "fleetWaveCount": int(calibration["waveCount"]),
+        "fleetBatchDeadlineEpochSeconds": int(
+            calibration["fleetBatchDeadlineEpochSeconds"]
+        ),
         "partitionCount": job_set_envelope["partitionCount"],
         "partitionAlgorithm": job_set_envelope["partitionAlgorithm"],
         "checkpointPolicy": job_set_envelope["checkpointPolicy"],
@@ -282,7 +230,6 @@ def _fleet_command(
         )
         from content.execution.runtime_evidence.reliabletask_process import (
             ReliableTaskObserverBinaryBinding,
-            validate_frozen_observer_binary,
         )
 
         receipt, _path = load_current_pool_delivery_preflight_receipt(execution_id)
@@ -326,19 +273,26 @@ def _fleet_agent_python() -> Path:
 
 
 def fleet_batch_timeout_seconds(
+    request: Mapping[str, Any],
     *,
-    job_count: int,
-    workers: int,
-    object_timeout_seconds: int,
-    completion_grace_seconds: int,
+    now_epoch_seconds: int,
 ) -> int:
-    """Derive one bounded fleet deadline from immutable object budgets."""
-    if job_count < 1 or workers < 1:
-        raise ValueError("ReliableTask fleet job_count and workers must be positive")
-    if object_timeout_seconds < 1 or completion_grace_seconds < 1:
-        raise ValueError("ReliableTask fleet time budgets must be positive")
-    waves = (job_count + workers - 1) // workers
-    return waves * object_timeout_seconds + completion_grace_seconds
+    """Project the batch budget from the frozen absolute deadline.
+
+    `DEC-003` retired the per-run relative budget: a restarted process must not
+    be able to re-derive `wave 数 × 单对象上限 + 宽限` and thereby renew the
+    batch. The only legal projection is `max(0, deadline - now)`, and a spent
+    window fails closed instead of starting another wave.
+    """
+    from content.execution.planning.capacity_calibration import remaining_batch_seconds
+
+    remaining = remaining_batch_seconds(request, now_epoch_seconds=now_epoch_seconds)
+    if remaining < 1:
+        raise ValueError(
+            "ReliableTask fleet batch deadline is spent"
+            f"（fleetBatchDeadlineEpochSeconds={request.get('fleetBatchDeadlineEpochSeconds')}）"
+        )
+    return remaining
 
 
 def _terminate_fleet_process(process: subprocess.Popen[object]) -> None:
@@ -414,29 +368,20 @@ def _run_reliabletask_host(
     execution_id: str,
     stage: QueueJobStage,
     *,
-    workers: int,
-    completion_grace_seconds: int,
     host_scope_id: str | None = None,
 ) -> ReliableTaskFleetReport:
-    if workers < 1:
-        raise ValueError("ReliableTask workers 必须为正整数")
-    if completion_grace_seconds < 1:
-        raise ValueError("ReliableTask completion grace 必须为正整数")
     transport = resolve_reliabletask_fleet_transport()
     request = build_fleet_request(
         execution_id,
         stage,
-        required_workers=workers,
         host_scope_id=host_scope_id,
     )
     object_timeout_milliseconds = request["objectTimeoutMilliseconds"]
     if not isinstance(object_timeout_milliseconds, int):
         raise TypeError("ReliableTask fleet request object timeout is invalid")
     batch_timeout_seconds = fleet_batch_timeout_seconds(
-        job_count=len(request["jobs"]),
-        workers=int(request["requiredWorkers"]),
-        object_timeout_seconds=object_timeout_milliseconds // 1000,
-        completion_grace_seconds=completion_grace_seconds,
+        request,
+        now_epoch_seconds=int(time.time()),
     )
     evidence_dir = attempt_evidence_dir(execution_id, {
         "stage": stage.value,
@@ -492,19 +437,14 @@ def _run_reliabletask_host(
         "QWQ_DATA_FLEET_WORK_DIR": str(REPO_ROOT / "quwoquan_data"),
         "QWQ_DATA_FLEET_PUBLISH_ROOT": str(PUBLISH_ROOT),
         "QWQ_DATA_FLEET_EVIDENCE_ROOT": str(OUTPUT_ROOT),
-        "QWQ_DATA_FLEET_WORKERS": str(request["requiredWorkers"]),
+        "QWQ_DATA_FLEET_WORKERS": str(request["fleetMaxConcurrentWorkers"]),
         "QWQ_DATA_FLEET_BATCH_TIMEOUT_MS": str(batch_timeout_seconds * 1000),
     }
     from core.runtime_policy import active_runtime_policy
 
     policy = active_runtime_policy()
     startup_failure_limit = policy.queue_max_startup_failures
-    restart_deadline = time.monotonic() + min(
-        batch_timeout_seconds,
-        policy.campaign_lane_timeout_seconds_for_scale(
-            str(request["campaignScale"])
-        ),
-    )
+    restart_deadline = time.monotonic() + batch_timeout_seconds
 
     def wait_for_backend(startup_failures: int) -> None:
         print(
@@ -596,20 +536,17 @@ def _run_reliabletask_host(
 def run_reliabletask_fleet(
     execution_id: str,
     stage: QueueJobStage,
-    *,
-    workers: int,
-    completion_grace_seconds: int,
 ) -> ReliableTaskFleetReport:
+    """Run one fleet stage under the capacity the execution already froze.
+
+    `DEC-002` makes the frozen `executionPolicy` the only capacity authority, so
+    no caller may hand the fleet a worker ceiling or a time budget here.
+    """
     from content.execution.queue.reliabletask.fleet_multi_host import (
         run_multi_host_fleet,
     )
 
-    return run_multi_host_fleet(
-        execution_id,
-        stage,
-        workers=workers,
-        completion_grace_seconds=completion_grace_seconds,
-    )
+    return run_multi_host_fleet(execution_id, stage)
 
 
 __all__ = [

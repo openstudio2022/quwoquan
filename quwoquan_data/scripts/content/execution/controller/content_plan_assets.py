@@ -120,20 +120,7 @@ def article_asset_claims(
             shas.append(sha)
         if collection_id:
             collection_ids.append(collection_id)
-    if len(refs) < 2:
-        return [], [], [], []
     return refs, shas, collection_ids, refs
-
-
-def normalize_article_media_claims(
-    claims: tuple[list[str], list[str], list[str], list[str]],
-) -> tuple[list[str], list[str], list[str], list[str], str]:
-    """Keep an illustrated closure or atomically downgrade it to text-only."""
-
-    refs, shas, collections, asset_refs = claims
-    if len(asset_refs) < 2:
-        return [], [], [], [], "text_only"
-    return refs, shas, collections, asset_refs, "illustrated"
 
 
 def claims_conflict(

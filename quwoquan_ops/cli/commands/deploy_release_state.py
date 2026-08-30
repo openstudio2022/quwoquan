@@ -78,9 +78,19 @@ def _validate_release_transition(
     from_candidate_digest: str,
     to_candidate_digest: str,
     stage: str,
+    acceptance_digest: str = "",
+    engineering_eligibility_digest: str = "",
+    durable_approval_digest: str = "",
 ) -> tuple[str, int]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    requested_authorities = {
+        "environment_acceptance_digest": acceptance_digest,
+        "engineering_eligibility_digest": engineering_eligibility_digest,
+        "durable_approval_digest": durable_approval_digest,
+    }
+    if any(requested_authorities.values()) and not all(requested_authorities.values()):
+        raise RuntimeError("release authority bindings must be complete")
     if not state:
         if stage != "canary":
             raise RuntimeError("release ledger must start at canary")
@@ -88,6 +98,12 @@ def _validate_release_transition(
 
     generation = int(state.get("generation") or 0)
     current_stage = _stackctl._release_stage_from_state(state)
+    if any(requested_authorities.values()):
+        for field, value in requested_authorities.items():
+            if state.get(field) != value:
+                raise RuntimeError(
+                    f"release ledger authority drift: {field} does not match"
+                )
     same_target = (
         state.get("from_candidate_digest") == from_candidate_digest
         and state.get("to_candidate_digest") == to_candidate_digest
@@ -142,7 +158,9 @@ def _required_release_candidate_digests(
     if not graph_path.is_file():
         raise RuntimeError("hosted release receipt requires generated ContractGraph")
     graph_digest = "sha256:" + hashlib.sha256(graph_path.read_bytes()).hexdigest()
-    images = manifest.get("images")
+    artifacts = manifest.get("environmentArtifacts")
+    prod_artifact = artifacts.get("prod") if isinstance(artifacts, dict) else None
+    images = prod_artifact.get("images") if isinstance(prod_artifact, dict) else None
     rtc_image = images.get("rtc-service") if isinstance(images, dict) else None
     image_digest = str(rtc_image.get("digest") or "") if isinstance(rtc_image, dict) else ""
     governance = _stackctl._external_provider_governance()
@@ -368,6 +386,15 @@ def _validate_hosted_release_readback(
         or payload.get("receiptRef") != f"receipt:hosted:{receipt_id}"
         or str(receipt.get("committedGeneration")) != state.get("generation")
         or receipt.get("artifactDigest") != state.get("artifact_digest")
+        or receipt.get("environmentAcceptanceRef") != state.get("environment_acceptance_ref")
+        or receipt.get("environmentAcceptanceDigest") != state.get("environment_acceptance_digest")
+        or receipt.get("environmentAcceptanceFactId") != state.get("environment_acceptance_fact_id")
+        or receipt.get("gammaPredecessorFactId") != state.get("gamma_predecessor_fact_id")
+        or receipt.get("gammaPredecessorDigest") != state.get("gamma_predecessor_digest")
+        or receipt.get("engineeringEligibilityRef") != state.get("engineering_eligibility_ref")
+        or receipt.get("engineeringEligibilityDigest") != state.get("engineering_eligibility_digest")
+        or receipt.get("durableApprovalRef") != state.get("durable_approval_ref")
+        or receipt.get("durableApprovalDigest") != state.get("durable_approval_digest")
         or receipt.get("fromCandidateDigest")
         != state.get("from_candidate_digest")
         or receipt.get("toCandidateDigest") != state.get("to_candidate_digest")
@@ -590,6 +617,7 @@ def _commit_hosted_release_transition(
     to_release_evidence_ref: str,
     from_image_transport_tag: str,
     to_image_transport_tag: str,
+    environment_acceptance: dict[str, str] | None = None,
     deadline_epoch: int = 0,
     trigger_stage: str = "",
 ) -> tuple[dict[str, str], Path]:
@@ -612,6 +640,15 @@ def _commit_hosted_release_transition(
         "rollbackOutcome": rollback_outcome,
         "rollbackEvidence": rollback_evidence,
         "artifactDigest": artifact_digest,
+        "environmentAcceptanceRef": (environment_acceptance or {}).get("ref", ""),
+        "environmentAcceptanceDigest": (environment_acceptance or {}).get("digest", ""),
+        "environmentAcceptanceFactId": (environment_acceptance or {}).get("factId", ""),
+        "gammaPredecessorFactId": (environment_acceptance or {}).get("gammaPredecessorFactId", ""),
+        "gammaPredecessorDigest": (environment_acceptance or {}).get("gammaPredecessorDigest", ""),
+        "engineeringEligibilityRef": (environment_acceptance or {}).get("engineeringEligibilityRef", ""),
+        "engineeringEligibilityDigest": (environment_acceptance or {}).get("engineeringEligibilityDigest", ""),
+        "durableApprovalRef": (environment_acceptance or {}).get("durableApprovalRef", ""),
+        "durableApprovalDigest": (environment_acceptance or {}).get("durableApprovalDigest", ""),
         "imageDigest": candidate_digests["imageDigest"],
         "configDigest": candidate_digests["configDigest"],
         "contractGraphDigest": candidate_digests["contractGraphDigest"],

@@ -16,6 +16,34 @@ from support.campaign_request_envelope_fixture import (
     _expected_count,
     _wave_targets,
 )
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
+
+
+_M100_WORKLOADS = {
+    "homepage": 100,
+    "article": 100,
+    "image": 100,
+    "video": 10,
+}
+
+
+_M100_WORKLOADS = {
+    "homepage": 100,
+    "article": 100,
+    "image": 100,
+    "video": 10,
+}
+
+
+_M100_WORKLOADS = {
+    "homepage": 100,
+    "article": 100,
+    "image": 100,
+    "video": 10,
+}
 
 
 def _approved_video_promotion() -> dict[str, object]:
@@ -222,6 +250,9 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
         predecessor_envelope={
             "schema": "quwoquan_data.content_campaign_request_envelope",
             "scale": "M100",
+            "workloadMode": "milestone_preset",
+            "activeCarriers": list(_M100_WORKLOADS),
+            "workloads": dict(_M100_WORKLOADS),
             "carrier": "video",
             "operation": "video.generate",
             "vertical": "travel",
@@ -230,13 +261,14 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
             "selector": "priority",
             "quota": 10,
             "count": _expected_count(10),
-            "requiredWorkers": 1,
-            "partitionCount": 16,
-            "capacityPlanDigest": "sha256:" + "7" * 64,
+            "executionAuthority": synthetic_governed_execution_authority(),
             "workerHostSetBinding": None,
             "scaleSourcePool": {
                 "poolId": "pool-local-contract",
                 "targetScale": "M100",
+                "workloadMode": "milestone_preset",
+                "activeCarriers": list(_M100_WORKLOADS),
+                "workloadTargets": dict(_M100_WORKLOADS),
                 "sourceRevision": content_source_revision(
                     source_digest=str(approved["sourceDigest"]["digest"]),
                     entity_catalog_digest=str(approved["entityCatalogDigest"]),
@@ -266,6 +298,11 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
             "gitBranch": approved["gitBranch"],
             "gitCommitSha": approved["gitCommitSha"],
             "sourceDigest": approved["sourceDigest"],
+            "executionBundle": {
+                "algorithm": "sha256",
+                "digest": "sha256:" + "e" * 64,
+                "inputs": ["quwoquan_data/scripts"],
+            },
             "sourceRevision": content_source_revision(
                 source_digest=str(approved["sourceDigest"]["digest"]),
                 entity_catalog_digest=str(approved["entityCatalogDigest"]),
@@ -302,6 +339,9 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
             predecessor_envelope={
                 "schema": "quwoquan_data.content_campaign_request_envelope",
                 "scale": "M100",
+                "workloadMode": "milestone_preset",
+                "activeCarriers": list(_M100_WORKLOADS),
+                "workloads": dict(_M100_WORKLOADS),
                 "carrier": "video",
                 "operation": "video.generate",
                 "vertical": "travel",
@@ -310,13 +350,14 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
                 "selector": "priority",
                 "quota": 10,
                 "count": _expected_count(10),
-                "requiredWorkers": 1,
-                "partitionCount": 16,
-                "capacityPlanDigest": "sha256:" + "7" * 64,
+                "executionAuthority": synthetic_governed_execution_authority(),
                 "workerHostSetBinding": None,
                 "scaleSourcePool": {
                     "poolId": "pool-local-contract",
                     "targetScale": "M100",
+                    "workloadMode": "milestone_preset",
+                    "activeCarriers": list(_M100_WORKLOADS),
+                    "workloadTargets": dict(_M100_WORKLOADS),
                     "sourceRevision": content_source_revision(
                         source_digest=str(approved["sourceDigest"]["digest"]),
                         entity_catalog_digest=str(approved["entityCatalogDigest"]),
@@ -346,6 +387,11 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
                 "gitBranch": approved["gitBranch"],
                 "gitCommitSha": approved["gitCommitSha"],
                 "sourceDigest": approved["sourceDigest"],
+                "executionBundle": {
+                    "algorithm": "sha256",
+                    "digest": "sha256:" + "e" * 64,
+                    "inputs": ["quwoquan_data/scripts"],
+                },
                 "sourceRevision": content_source_revision(
                     source_digest=str(approved["sourceDigest"]["digest"]),
                     entity_catalog_digest=str(

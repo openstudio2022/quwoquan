@@ -1,6 +1,7 @@
 package local_contract
 
 import (
+	"reflect"
 	"testing"
 
 	recommendation "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
@@ -20,10 +21,9 @@ func TestBuildRecommendationProjectionFields_DataEngineeringTravelQuality(t *tes
 			{"dimension": "content", "source": "entityRef", "actionType": "view_object", "actionTargetId": "entity:景区:甲居藏寨"},
 			{"dimension": "interest", "source": "tagRef", "actionType": "join", "actionTargetId": "Topic/旅行"},
 		},
-		"sourceTaskId": "旅行/环线/川西环线",
-		"coverUrl":     "https://img.example.com/cover.jpg",
-		"status":       "published",
-		"visibility":   "public",
+		"coverUrl":   "https://img.example.com/cover.jpg",
+		"status":     "published",
+		"visibility": "public",
 	})
 
 	if got := fields["supplySource"]; got != recommendation.SupplySourceDataEngineering {
@@ -56,6 +56,21 @@ func TestBuildRecommendationProjectionFields_DataEngineeringTravelQuality(t *tes
 	}
 	if got := fields["intersectionSourceRefTop"]; got != "entity:景区:甲居藏寨" {
 		t.Fatalf("intersectionSourceRefTop=%v want entity target", got)
+	}
+}
+
+func TestBuildRecommendationProjectionFields_IgnoresProducerLineage(t *testing.T) {
+	base := map[string]any{
+		"authorId": "user_123", "contentType": "micro",
+		"status": "published", "visibility": "public",
+	}
+	withLineage := map[string]any{
+		"authorId": "user_123", "contentType": "micro",
+		"status": "published", "visibility": "public",
+		"sourceTaskId": "producer-task", "generatorModel": "provider/model",
+	}
+	if got, want := recommendation.BuildRecommendationProjectionFields(withLineage), recommendation.BuildRecommendationProjectionFields(base); !reflect.DeepEqual(got, want) {
+		t.Fatalf("producer lineage changed recommendation projection: got=%v want=%v", got, want)
 	}
 }
 

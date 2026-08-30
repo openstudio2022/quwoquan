@@ -18,9 +18,6 @@ from core.runtime_policy_types import (
     RuntimeEvidencePolicy,
     SemanticAgentBinding,
     SemanticCalibrationPolicy,
-    SemanticCapacityPolicy,
-    campaign_lane_timeout_map as _campaign_lane_timeout_map,
-    campaign_lane_timeout_seconds_for_scale as _campaign_lane_timeout_seconds_for_scale,
     explicit_semantic_selections as _explicit_semantic_selections,
     mapping as _mapping,
     non_empty_string as _non_empty_string,
@@ -32,38 +29,44 @@ DEFAULT_RUNTIME_PROFILE_ID = "semantic_agent_local_calibrated"
 
 
 @dataclass(frozen=True, slots=True)
+class QuotaPursuitPolicy:
+    """Governed bounds for the quota-driven candidate pursuit loop."""
+
+    replenish_factor: float
+    max_rounds: int
+    stall_rounds: int
+
+    def __post_init__(self) -> None:
+        if self.replenish_factor < 1:
+            raise ValueError("quotaPursuit.replenishFactor must be >= 1")
+        if self.max_rounds < 1:
+            raise ValueError("quotaPursuit.maxRounds must be >= 1")
+        if self.stall_rounds < 1:
+            raise ValueError("quotaPursuit.stallRounds must be >= 1")
+        if self.stall_rounds > self.max_rounds:
+            raise ValueError("quotaPursuit.stallRounds cannot exceed maxRounds")
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimePolicy:
     profile_id: str
     semantic_author: SemanticAgentBinding
     semantic_reviewer: SemanticAgentBinding
     semantic_calibration: SemanticCalibrationPolicy
-    semantic_capacity: SemanticCapacityPolicy
     runtime_evidence: RuntimeEvidencePolicy
     explicit_semantic_selections: tuple[ExplicitSemanticSelection, ...]
     semantic_fallback_policy: str
     semantic_agent_runtime: RuntimeEnvironment
-    author_workers: int
-    reviewer_workers: int
-    research_workers: int
-    research_wave_size: int
-    campaign_lane_workers: int
-    partitions_per_worker: int
-    research_max_waves_per_run: int
     source_plan_recovery_passes: int
-    source_plan_recovery_workers: int
-    download_concurrency: int
-    cursor_bridge_instances: int
     oversample_factor: float
+    quota_pursuit: QuotaPursuitPolicy
     startup_timeout_seconds: int
     campaign_submission_timeout_seconds: int
-    campaign_lane_timeout_seconds_by_scale: tuple[tuple[str, int], ...]
     preflight_network_timeout_seconds: int
     agent_timeout_seconds: int
     auth_retry_limit: int
     auth_retry_delay_seconds: int
     no_progress_round_limit: int
-    cold_start_max_workers: int
-    worker_stagger_seconds: float
     managed_future_grace_seconds: int
     scheduler_stale_seconds: int
     controller_lease_stale_seconds: int
@@ -84,12 +87,12 @@ class RuntimePolicy:
     download_text_timeout_seconds: int
     download_bytes_timeout_seconds: int
     stage_no_progress_timeout_seconds: int
-    research_wave_budget_seconds: int
     network_breaker_threshold: int
     local_process_probe_timeout_seconds: int
     process_termination_timeout_seconds: int
     agent_future_poll_timeout_seconds: int
     api_request_timeout_seconds: int
+    research_credential_issuance_timeout_seconds: int
     direct_fetch_timeout_seconds: int
     source_fetch_timeout_seconds: int
     source_video_read_timeout_seconds: int
@@ -99,6 +102,7 @@ class RuntimePolicy:
     video_transcode_timeout_seconds: int
     mediawiki_fallback_retries: int
     mediawiki_wikitext_max_retries: int
+    mediawiki_inter_request_delay_seconds: float
     queue_lease_ttl_seconds: int
     queue_heartbeat_seconds: int
     queue_max_attempts: int
@@ -121,10 +125,6 @@ class RuntimePolicy:
     curl_retries: int
     curl_retry_delay_seconds: int
 
-    def campaign_lane_timeout_seconds_for_scale(self, scale: str) -> int:
-        return _campaign_lane_timeout_seconds_for_scale(
-            self.campaign_lane_timeout_seconds_by_scale, scale
-        )
     provider_timeouts: ProviderTimeouts
     coverage_discovery: CoverageDiscoveryPolicy
 
@@ -168,12 +168,8 @@ class RuntimePolicy:
             "QWQ_SEMANTIC_REVIEWER_MODEL": self.semantic_reviewer.model,
             "QWQ_SEMANTIC_CALIBRATION_PROVIDER": self.semantic_calibration.binding.provider.value,
             "QWQ_SEMANTIC_CALIBRATION_MODEL": self.semantic_calibration.binding.model,
-            "QWQ_MANAGED_LOCAL_SEMANTIC_AGENT_MAX_WORKERS": str(self.author_workers),
-            "QWQ_CURSOR_BRIDGE_INSTANCES": str(self.cursor_bridge_instances),
             "QWQ_MANAGED_AGENT_TIMEOUT_SECONDS": str(self.agent_timeout_seconds),
             "QWQ_ORCHESTRATE_AGENT_TIMEOUT_SECONDS": str(self.agent_timeout_seconds),
-            "QWQ_FANOUT_COLD_START_MAX_WORKERS": str(self.cold_start_max_workers),
-            "QWQ_FANOUT_WORKER_STAGGER_SECONDS": str(self.worker_stagger_seconds),
             "QWQ_AUTO_RESEARCH_CURL_RETRIES": str(self.curl_retries),
             "QWQ_AUTO_RESEARCH_CURL_RETRY_DELAY_SECONDS": str(self.curl_retry_delay_seconds),
             "QWQ_MANAGED_AGENT_FUTURE_GRACE_SECONDS": str(self.managed_future_grace_seconds),
@@ -220,6 +216,24 @@ def _oversample_factor(value: object, *, label: str) -> float:
     return float(value)
 
 
+def _quota_pursuit_policy(value: object) -> QuotaPursuitPolicy:
+    section = _mapping(value, label="policy.selection.quotaPursuit")
+    return QuotaPursuitPolicy(
+        replenish_factor=_oversample_factor(
+            section.get("replenishFactor"),
+            label="selection.quotaPursuit.replenishFactor",
+        ),
+        max_rounds=_positive_int(
+            section.get("maxRounds"),
+            label="selection.quotaPursuit.maxRounds",
+        ),
+        stall_rounds=_positive_int(
+            section.get("stallRounds"),
+            label="selection.quotaPursuit.stallRounds",
+        ),
+    )
+
+
 def runtime_profile_path(profile_id: str) -> Path:
     normalized = str(profile_id or "").strip()
     if not normalized or not normalized.replace("_", "").isalnum():
@@ -260,11 +274,6 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         semantic_agent.get("calibration"),
         label="policy.semanticAgent.calibration",
     )
-    capacity = _mapping(
-        semantic_agent.get("capacity"),
-        label="policy.semanticAgent.capacity",
-    )
-    workers = _mapping(policy.get("workers"), label="policy.workers")
     selection = _mapping(policy.get("selection"), label="policy.selection")
     budgets = _mapping(policy.get("budgets"), label="policy.budgets")
     network = _mapping(policy.get("network"), label="policy.network")
@@ -275,7 +284,6 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
     timeouts = _mapping(network.get("providerTimeoutSeconds"), label="policy.network.providerTimeoutSeconds")
     expected_top = {
         "semanticAgent",
-        "workers",
         "selection",
         "budgets",
         "network",
@@ -306,32 +314,6 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
                 label="semanticAgent.calibration.smallBatchPolicy",
             ),
         ),
-        semantic_capacity=SemanticCapacityPolicy(
-            account_scope_id=_non_empty_string(
-                capacity.get("accountScopeId"),
-                label="semanticAgent.capacity.accountScopeId",
-            ),
-            host_scope_id=_non_empty_string(
-                capacity.get("hostScopeId"),
-                label="semanticAgent.capacity.hostScopeId",
-            ),
-            requests_per_minute=_positive_int(
-                capacity.get("requestsPerMinute"),
-                label="semanticAgent.capacity.requestsPerMinute",
-            ),
-            burst_limit=_positive_int(
-                capacity.get("burstLimit"),
-                label="semanticAgent.capacity.burstLimit",
-            ),
-            lane_concurrency_limit=_positive_int(
-                capacity.get("laneConcurrencyLimit"),
-                label="semanticAgent.capacity.laneConcurrencyLimit",
-            ),
-            receipt_ttl_seconds=_positive_int(
-                capacity.get("receiptTtlSeconds"),
-                label="semanticAgent.capacity.receiptTtlSeconds",
-            ),
-        ),
         runtime_evidence=RuntimeEvidencePolicy(
             process_inspection_timeout_seconds=_positive_float(
                 runtime_evidence.get("processInspectionTimeoutSeconds"),
@@ -340,6 +322,10 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
             queue_fault_event_timeout_seconds=_positive_float(
                 runtime_evidence.get("queueFaultEventTimeoutSeconds"),
                 label="runtimeEvidence.queueFaultEventTimeoutSeconds",
+            ),
+            semantic_preflight_receipt_ttl_seconds=_positive_int(
+                runtime_evidence.get("semanticPreflightReceiptTtlSeconds"),
+                label="runtimeEvidence.semanticPreflightReceiptTtlSeconds",
             ),
         ),
         explicit_semantic_selections=_explicit_semantic_selections(
@@ -356,43 +342,19 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
                 label="semanticAgent.runtime",
             )
         ),
-        author_workers=_positive_int(workers.get("author"), label="workers.author"),
-        reviewer_workers=_positive_int(workers.get("reviewer"), label="workers.reviewer"),
-        research_workers=_positive_int(workers.get("research"), label="workers.research"),
-        campaign_lane_workers=_positive_int(
-            workers.get("campaignLaneWorkers"),
-            label="workers.campaignLaneWorkers",
-        ),
-        partitions_per_worker=_positive_int(workers.get("partitionsPerWorker"), label="workers.partitionsPerWorker"),
-        research_wave_size=_positive_int(budgets.get("researchWaveSize"), label="budgets.researchWaveSize"),
-        research_max_waves_per_run=_non_negative_int(
-            budgets.get("researchMaxWavesPerRun"),
-            label="budgets.researchMaxWavesPerRun",
-        ),
         source_plan_recovery_passes=_non_negative_int(
             budgets.get("sourcePlanRecoveryPasses"),
             label="budgets.sourcePlanRecoveryPasses",
-        ),
-        source_plan_recovery_workers=_positive_int(
-            budgets.get("sourcePlanRecoveryWorkers"),
-            label="budgets.sourcePlanRecoveryWorkers",
-        ),
-        download_concurrency=_positive_int(workers.get("download"), label="workers.download"),
-        cursor_bridge_instances=_positive_int(
-            workers.get("cursorBridgeInstances"),
-            label="workers.cursorBridgeInstances",
         ),
         oversample_factor=_oversample_factor(
             selection.get("oversampleFactor"),
             label="selection.oversampleFactor",
         ),
+        quota_pursuit=_quota_pursuit_policy(selection.get("quotaPursuit")),
         startup_timeout_seconds=_positive_int(budgets.get("startupTimeoutSeconds"), label="budgets.startupTimeoutSeconds"),
         campaign_submission_timeout_seconds=_positive_int(
             budgets.get("campaignSubmissionTimeoutSeconds"),
             label="budgets.campaignSubmissionTimeoutSeconds",
-        ),
-        campaign_lane_timeout_seconds_by_scale=_campaign_lane_timeout_map(
-            budgets.get("campaignLaneTimeoutSeconds")
         ),
         preflight_network_timeout_seconds=_positive_int(
             budgets.get("preflightNetworkTimeoutSeconds"),
@@ -402,8 +364,6 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         auth_retry_limit=_positive_int(budgets.get("authRetryLimit"), label="budgets.authRetryLimit"),
         auth_retry_delay_seconds=_positive_int(budgets.get("authRetryDelaySeconds"), label="budgets.authRetryDelaySeconds"),
         no_progress_round_limit=_positive_int(budgets.get("noProgressRoundLimit"), label="budgets.noProgressRoundLimit"),
-        cold_start_max_workers=_positive_int(budgets.get("coldStartMaxWorkers"), label="budgets.coldStartMaxWorkers"),
-        worker_stagger_seconds=_positive_float(budgets.get("workerStaggerSeconds"), label="budgets.workerStaggerSeconds"),
         managed_future_grace_seconds=_positive_int(budgets.get("managedFutureGraceSeconds"), label="budgets.managedFutureGraceSeconds"),
         scheduler_stale_seconds=_positive_int(budgets.get("schedulerStaleSeconds"), label="budgets.schedulerStaleSeconds"),
         controller_lease_stale_seconds=_positive_int(
@@ -430,12 +390,12 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         download_text_timeout_seconds=_positive_int(budgets.get("downloadTextTimeoutSeconds"), label="budgets.downloadTextTimeoutSeconds"),
         download_bytes_timeout_seconds=_positive_int(budgets.get("downloadBytesTimeoutSeconds"), label="budgets.downloadBytesTimeoutSeconds"),
         stage_no_progress_timeout_seconds=_positive_int(budgets.get("stageNoProgressTimeoutSeconds"), label="budgets.stageNoProgressTimeoutSeconds"),
-        research_wave_budget_seconds=_positive_int(budgets.get("researchWaveBudgetSeconds"), label="budgets.researchWaveBudgetSeconds"),
         network_breaker_threshold=_positive_int(budgets.get("networkBreakerThreshold"), label="budgets.networkBreakerThreshold"),
         local_process_probe_timeout_seconds=_positive_int(budgets.get("localProcessProbeTimeoutSeconds"), label="budgets.localProcessProbeTimeoutSeconds"),
         process_termination_timeout_seconds=_positive_int(budgets.get("processTerminationTimeoutSeconds"), label="budgets.processTerminationTimeoutSeconds"),
         agent_future_poll_timeout_seconds=_positive_int(budgets.get("agentFuturePollTimeoutSeconds"), label="budgets.agentFuturePollTimeoutSeconds"),
         api_request_timeout_seconds=_positive_int(budgets.get("apiRequestTimeoutSeconds"), label="budgets.apiRequestTimeoutSeconds"),
+        research_credential_issuance_timeout_seconds=_positive_int(budgets.get("researchCredentialIssuanceTimeoutSeconds"), label="budgets.researchCredentialIssuanceTimeoutSeconds"),
         direct_fetch_timeout_seconds=_positive_int(budgets.get("directFetchTimeoutSeconds"), label="budgets.directFetchTimeoutSeconds"),
         source_fetch_timeout_seconds=_positive_int(budgets.get("sourceFetchTimeoutSeconds"), label="budgets.sourceFetchTimeoutSeconds"),
         source_video_read_timeout_seconds=_positive_int(
@@ -454,6 +414,7 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
         ),
         mediawiki_fallback_retries=_positive_int(budgets.get("mediawikiFallbackRetries"), label="budgets.mediawikiFallbackRetries"),
         mediawiki_wikitext_max_retries=_positive_int(budgets.get("mediawikiWikitextMaxRetries"), label="budgets.mediawikiWikitextMaxRetries"),
+        mediawiki_inter_request_delay_seconds=_non_negative_float(budgets.get("mediawikiInterRequestDelaySeconds"), label="budgets.mediawikiInterRequestDelaySeconds"),
         queue_lease_ttl_seconds=_positive_int(budgets.get("queueLeaseTtlSeconds"), label="budgets.queueLeaseTtlSeconds"),
         queue_heartbeat_seconds=_positive_int(budgets.get("queueHeartbeatSeconds"), label="budgets.queueHeartbeatSeconds"),
         queue_max_attempts=_positive_int(budgets.get("queueMaxAttempts"), label="budgets.queueMaxAttempts"),
@@ -545,10 +506,6 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
                 coverage.get("wikidataResultLimit"),
                 label="coverageDiscovery.wikidataResultLimit",
             ),
-            overpass_concurrency=_positive_int(
-                coverage.get("overpassConcurrency"),
-                label="coverageDiscovery.overpassConcurrency",
-            ),
             overpass_result_limit=_positive_int(
                 coverage.get("overpassResultLimit"),
                 label="coverageDiscovery.overpassResultLimit",
@@ -559,14 +516,6 @@ def load_runtime_policy(profile_id: str) -> RuntimePolicy:
             ),
         ),
     )
-    global_research_concurrency = runtime_policy.campaign_lane_workers * runtime_policy.research_workers
-    if global_research_concurrency > runtime_policy.semantic_capacity.burst_limit:
-        raise ValueError(
-            "runtime policy over-provisions global research concurrency: "
-            f"campaignLaneWorkers({runtime_policy.campaign_lane_workers}) * "
-            f"researchWorkers({runtime_policy.research_workers}) > "
-            f"semanticAgent.capacity.burstLimit({runtime_policy.semantic_capacity.burst_limit})"
-        )
     return runtime_policy
 
 
@@ -582,11 +531,11 @@ __all__ = [
     "CoverageDiscoveryPolicy",
     "ExplicitSemanticSelection",
     "ProviderTimeouts",
+    "QuotaPursuitPolicy",
     "RuntimeEvidencePolicy",
     "RuntimePolicy",
     "SemanticAgentBinding",
     "SemanticCalibrationPolicy",
-    "SemanticCapacityPolicy",
     "active_runtime_policy",
     "apply_runtime_policy",
     "load_runtime_policy",

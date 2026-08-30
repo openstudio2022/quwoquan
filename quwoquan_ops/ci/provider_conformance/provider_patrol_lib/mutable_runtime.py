@@ -14,6 +14,7 @@ from typing import Any
 from quwoquan_ops.ci.provider_conformance import (
     run_provider_patrol_uat as _rppu,
 )
+from quwoquan_ops.cli.lib.data_execution_fleet import require_published_endpoint_port
 from quwoquan_ops.ci.provider_conformance.provider_patrol_lib.runtime_identity import (
     ROOT,
     _NONPROD_ENVIRONMENTS,
@@ -27,7 +28,8 @@ _MUTABLE_PLAN_FIELDS = frozenset({
     "portBlock", "publishedPorts", "composeFiles", "executionComposeFiles",
     "composeProfiles", "composeDigest", "configurationDigest",
     "providerRuntimeDigest", "mediaLocalRef", "mediaRoot", "tlsProfile",
-    "resolverHandoffDigest", "workspaceIdentity",
+    "resolverHandoffDigest", "publicWebPackage", "workspaceIdentity",
+    "graphqlReadRegistry", "serviceCoreModules",
 })
 
 
@@ -88,6 +90,7 @@ def _load_mutable_runtime_plan(
         "environment", "target", "composeProject", "portProfile", "portBlock",
         "publishedPorts", "composeDigest", "configurationDigest",
         "providerRuntimeDigest", "tlsProfile", "resolverHandoffDigest",
+        "publicWebPackage",
     )
     for field in receipt_fields:
         if plan.get(field) != receipt.get(field):
@@ -241,7 +244,6 @@ def _load_mutable_test_live_runtime_identity(
         receipt.get("schema") != "stackctl.mutable_test_live_startup_attempt"
         or receipt.get("launchPolicy") != "test_live"
         or receipt.get("nonPromotable") is not True
-        or receipt.get("contentBindingState") != "unbound"
         or receipt.get("status") != "running"
         or receipt.get("workload") != "full"
         or receipt.get("environment") != environment
@@ -299,14 +301,16 @@ def _load_mutable_test_live_runtime_identity(
     )
     if not local_capture_sms_enabled:
         raise ValueError("mutable test-live SMS local-capture Binding is unavailable")
-    published_ports = receipt.get("publishedPorts")
-    sms_port = (
-        published_ports.get("sms-provider-substitute")
-        if isinstance(published_ports, dict)
-        else None
-    )
-    if not isinstance(sms_port, int) or isinstance(sms_port, bool):
-        raise ValueError("mutable test-live SMS published port is invalid")
+    try:
+        sms_port = require_published_endpoint_port(
+            receipt.get("publishedPorts"),
+            role="sms-provider-substitute",
+            protocol="tcp",
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"mutable test-live SMS published port is invalid: {exc}"
+        ) from exc
 
     public_bases = target.get("publicBases") if isinstance(target, dict) else None
     if not isinstance(public_bases, dict):

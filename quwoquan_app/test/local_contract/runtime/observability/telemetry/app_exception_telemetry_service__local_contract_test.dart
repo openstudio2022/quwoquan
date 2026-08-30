@@ -35,8 +35,7 @@ void main() {
     await service.recordGlobalException(
       source: 'widget_test',
       exceptionText: 'boom',
-      stackText:
-          'Widget.build (/Users/test/private.dart:1)\n#1 token_12345678901234567890',
+      stackText: 'Widget.build (/Users/test/private.dart:1)\n#1 token_12345678901234567890',
     );
 
     final record = (await buffer.pending()).single;
@@ -71,6 +70,29 @@ void main() {
     expect(record.fingerprint, isNot(contains('/private/')));
     expect(record.attributes.toWire()['stackFrameCount'], '10');
     expect(service.lastFlushFailure, isNull);
+  });
+
+  test('已捕获异常指纹按异常类型与失败码聚合，不受动态对象引用影响', () async {
+    final buffer = InMemoryRuntimeLogBuffer();
+    final service = AppExceptionTelemetryService(logger: logger(buffer));
+    final stack = StackTrace.fromString(
+      '#0 ArticleAdaptiveImage.build (article_content_block_renderer.dart:668)',
+    );
+
+    await service.recordHandledException(
+      source: 'content.post.article_adaptive_image',
+      error: StateError('article image source absent: asset://asset-42'),
+      stackTrace: stack,
+      operationId: 'app.content.article_image_resolve',
+    );
+    await service.recordHandledException(
+      source: 'content.post.article_adaptive_image',
+      error: StateError('article image source absent: asset://asset-99'),
+      stackTrace: stack,
+      operationId: 'app.content.article_image_resolve',
+    );
+
+    expect(await buffer.pending(), hasLength(1));
   });
 
   test('已捕获异常携带结构化 RuntimeFailure 语义', () async {

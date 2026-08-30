@@ -66,6 +66,8 @@ App `debugCode`（见 `four-environment-commercial-login-maturity` L3 spec）。
 
    ```bash
    python3 quwoquan_ops/cli/stackctl.py provider-debug otp-read --target gamma-local
+   # 或使用等价的 Make 快捷入口
+   make stackctl-otp-read TARGET=gamma-local
    ```
 
 3. 按提示输入同一手机号（隐藏输入；`180xxxxxxxx` 或 `+86180xxxxxxxx` 均可）。

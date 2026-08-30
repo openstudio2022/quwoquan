@@ -23,6 +23,15 @@ const (
 var (
 	canonicalSliceSegment     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 	publicSliceVersionSegment = regexp.MustCompile(`^v([1-9][0-9]*)$`)
+	// Grammar of a Data post asset ID: entity_role_caption_sequence_digest8.
+	// Entity and caption may contain underscores, so role is matched lazily and
+	// sequence/digest are right-anchored. Kept byte-identical to the Python
+	// owner in quwoquan_data/scripts/core/asset_identity.py; the shared cases in
+	// contracts/media/media_asset/public_slice_derivation_cases.json lock both.
+	postAssetIdentity = regexp.MustCompile(
+		`^(.+?)_(cover|closing|detail)_(.+)_([0-9]+)_([0-9a-f]{8})$`,
+	)
+	canonicalDecimal = regexp.MustCompile(`^(?:0|[1-9][0-9]*)$`)
 )
 
 // DeliveryReference is the only public-safe media projection. Object storage
@@ -158,8 +167,12 @@ func cleanContentAssetIdentity(raw string) string {
 	if canonicalSliceSegment.MatchString(value) {
 		return value
 	}
+	match := postAssetIdentity.FindStringSubmatch(value)
+	if match == nil || !canonicalDecimal.MatchString(match[4]) {
+		return ""
+	}
 	sum := sha256.Sum256([]byte(value))
-	return fmt.Sprintf("unicode-%x", sum[:16])
+	return fmt.Sprintf("%s-%s-%x", match[2], match[4], sum[:16])
 }
 
 func contentMediaPublicExtension(contentType string) string {

@@ -9,7 +9,6 @@ import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/discovery_feed_load_result.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/di/feed_session_provider.dart';
@@ -59,13 +58,9 @@ bool _isCanonicalInitialEmptyPage(String channelId, DiscoveryFeedPage page) {
   if (!page.isCanonicalEmpty) {
     return false;
   }
-  final requiresActiveRelease =
-      CloudRuntimeConfig.requiresReleaseBoundContent ||
-      CloudRuntimeConfig.hasCompleteContentBinding;
   return switch (page.emptyReason!) {
     ContentFeedEmptyReason.followingEmpty => channelId == 'following',
-    ContentFeedEmptyReason.noActiveRelease =>
-      channelId != 'following' && !requiresActiveRelease,
+    ContentFeedEmptyReason.noActiveRelease => channelId != 'following',
     ContentFeedEmptyReason.noEligibleContent => channelId != 'following',
     ContentFeedEmptyReason.continuationEnd => false,
   };

@@ -97,7 +97,7 @@ func resolveRuntimeBinding(
 			capabilityID,
 		)
 	}
-	descriptor, found := usergenerated.ExternalProviderBindingFor(appEnv, capabilityID)
+	descriptor, found := usergenerated.CompiledBindingFor(capabilityID)
 	if !found {
 		return RuntimeBinding{}, fmt.Errorf(
 			"%s binding is missing for environment=%s",

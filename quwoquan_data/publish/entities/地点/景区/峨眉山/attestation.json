@@ -1,7 +1,7 @@
 {
   "schema": "quwoquan_data.review_attestation",
   "stage": "5.review",
-  "executionId": "20260812--travel-homepage-m100--china--scale-011",
+  "executionId": "20260817--travel-homepage-fourcarrier--china-sichuan--pilot-001",
   "executionBinding": "frozen",
   "objectRef": "/entity/地点/景区/峨眉山",
   "decision": "approved",
@@ -11,11 +11,11 @@
   },
   "independentReviewer": {
     "status": "passed",
-    "provider": "cursor_sdk",
-    "model": "grok-4.5",
-    "modelFamily": "grok",
-    "runId": "run-dadb7b36-5448-4548-b906-b367c5082a1d",
-    "resultHash": "sha256:2e35163975aa7362f9e992a4c19e54a8078503d031631e6d2815cb1e5be259dd"
+    "provider": "codex_sdk",
+    "model": "gpt-5.6-terra",
+    "modelFamily": "gpt",
+    "runId": "01a00ea2-ef0c-7142-9b29-346ce098ac46",
+    "resultHash": "sha256:ca30bb1d953d9424f5eccce080f8b7d069b08fb5ed44a23ddf54fafa9c56975d"
   },
   "mediaRefReview": {
     "status": "passed",

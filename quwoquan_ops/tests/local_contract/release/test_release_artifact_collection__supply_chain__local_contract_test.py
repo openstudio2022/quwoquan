@@ -13,6 +13,10 @@ from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.prod import collect_release_artifact_descriptors as collector
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib.app_identity import resolve_build_product
+from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
+    app_artifact_manifest,
+)
 
 
 DIGEST = "sha256:" + ("a" * 64)
@@ -53,6 +57,7 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
         manifest = finalizer.seal_manifest(
             {
                 "schema": finalizer.SCHEMA,
+                "releaseTrainId": None,
                 "candidateId": None,
                 "status": "component-ready",
                 "generatedAt": "2026-07-28T00:00:00Z",
@@ -64,33 +69,75 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                     "sourceArchiveDigest": None,
                 },
                 "artifactDigest": None,
-                "images": {
-                    "content-service": {
-                        "repository": repository,
-                        "transportRef": repository + ":sha-candidate",
-                        "digest": DIGEST,
-                        "ref": ref,
-                        "attestations": {
-                            "spdxSbom": f"oci://{ref}#spdxSbom",
-                            "slsaProvenance": f"oci://{ref}#slsaProvenance",
+                "environmentArtifacts": {
+                    environment: {
+                        "environment": environment,
+                        "environmentArtifactDigest": None,
+                        "images": {
+                            "content-service": {
+                                "repository": (
+                                    repository
+                                    + "-"
+                                    + ("prod" if environment == "prod" else "nonprod")
+                                ),
+                                "transportRef": (
+                                    repository
+                                    + "-"
+                                    + ("prod" if environment == "prod" else "nonprod")
+                                    + ":sha-candidate"
+                                ),
+                                "digest": f"sha256:{(2 if environment == 'prod' else 1):064x}",
+                                "ref": (
+                                    repository
+                                    + "-"
+                                    + ("prod" if environment == "prod" else "nonprod")
+                                    + "@"
+                                    + f"sha256:{(2 if environment == 'prod' else 1):064x}"
+                                ),
+                                "attestations": {
+                                    "spdxSbom": (
+                                        "oci://"
+                                        + repository
+                                        + "-"
+                                        + ("prod" if environment == "prod" else "nonprod")
+                                        + "@"
+                                        + f"sha256:{(2 if environment == 'prod' else 1):064x}"
+                                        + "#spdxSbom"
+                                    ),
+                                    "slsaProvenance": (
+                                        "oci://"
+                                        + repository
+                                        + "-"
+                                        + ("prod" if environment == "prod" else "nonprod")
+                                        + "@"
+                                        + f"sha256:{(2 if environment == 'prod' else 1):064x}"
+                                        + "#slsaProvenance"
+                                    ),
+                                },
+                            }
                         },
+                        "configurationPackages": configuration_packages[environment],
                     }
+                    for index, environment in enumerate(
+                        finalizer.ENVIRONMENTS, start=1
+                    )
                 },
-                "configurationPackages": configuration_packages,
-                "applicationPackages": {
-                    environment: {} for environment in finalizer.ENVIRONMENTS
-                },
+                "applicationPackages": {},
+                "publicWeb": None,
+                "androidOfficialRelease": None,
+                "opsPortal": None,
                 "contractGraphDigest": None,
                 "requiredEvidence": {
-                    "images": ["content-service"],
+                    "environmentArtifacts": {
+                        environment: ["content-service"]
+                        for environment in finalizer.ENVIRONMENTS
+                    },
                     "configurationPackages": {
                         environment: ["content-service"]
                         for environment in finalizer.ENVIRONMENTS
                     },
-                    "applicationPackages": {
-                        environment: list(finalizer.APPLICATION_PACKAGES[environment])
-                        for environment in finalizer.ENVIRONMENTS
-                    },
+                    "applicationPackages": list(finalizer.APPLICATION_PACKAGES),
+                    "opsPortal": True,
                     "contractGraphDigest": True,
                     "providerEvidence": True,
                     "testEvidence": list(finalizer.TEST_LAYERS),
@@ -106,10 +153,12 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                 "blockers": ["whole-application-evidence-pending"],
                 "missingEvidence": [
                     *(
-                        f"applicationPackages.{environment}.{surface}"
-                        for environment in finalizer.ENVIRONMENTS
-                        for surface in finalizer.APPLICATION_PACKAGES[environment]
+                        f"applicationPackages.{build_product_id}"
+                        for build_product_id in finalizer.APPLICATION_PACKAGES
                     ),
+                    "publicWeb",
+                    "androidOfficialRelease",
+                    "opsPortal",
                     "contractGraphDigest",
                     "providerEvidence",
                     "testEvidence",
@@ -204,9 +253,6 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                     "schema": "client-app.web.official-release",
                     "sourceGitSha": source_identity["gitSha"],
                     "sourceTreeDigest": source_identity["treeDigest"],
-                    "contentSHA256": finalizer.sha256_tree(
-                        payloads / "prod/web"
-                    ).removeprefix("sha256:"),
                 },
             ),
             "androidOfficialRelease": self._write_json(
@@ -215,10 +261,6 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                     "schema": "client-app.android.official-release",
                     "sourceGitSha": source_identity["gitSha"],
                     "sourceTreeDigest": source_identity["treeDigest"],
-                    "packagedAPK": "quwoquan.apk",
-                    "apkSHA256": finalizer.sha256_file(
-                        payloads / "prod/android/quwoquan.apk"
-                    ).removeprefix("sha256:"),
                 },
             ),
             "opsPortal": self._write_json(
@@ -228,14 +270,14 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                     "sourceGitSha": source_identity["gitSha"],
                     "sourceTreeDigest": source_identity["treeDigest"],
                     "packageDigest": finalizer.sha256_ops_portal_tree(
-                        payloads / "prod/opsPortal/dist"
+                        payloads / "opsPortal/dist"
                     ),
                     "digests": {
                         "manifest": finalizer.sha256_file(
-                            payloads / "prod/opsPortal/manifest.json"
+                            payloads / "opsPortal/manifest.json"
                         ),
                         "distTree": finalizer.sha256_ops_portal_tree(
-                            payloads / "prod/opsPortal/dist"
+                            payloads / "opsPortal/dist"
                         ),
                     },
                 },
@@ -257,9 +299,19 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                         )
                     },
                     "candidateMaterial": {
-                        "images": {
-                            service: descriptor["digest"]
-                            for service, descriptor in manifest["images"].items()
+                        "environmentArtifacts": {
+                            environment: {
+                                "environmentArtifactDigest": artifact[
+                                    "environmentArtifactDigest"
+                                ],
+                                "images": {
+                                    owner: descriptor["digest"]
+                                    for owner, descriptor in artifact["images"].items()
+                                },
+                            }
+                            for environment, artifact in manifest[
+                                "environmentArtifacts"
+                            ].items()
                         },
                         "contractGraphDigest": finalizer.sha256_file(contract_graph),
                     },
@@ -292,45 +344,38 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
             ),
         }
         application_sources = self._application_package_sources(root, artifact)
-        application_material: dict[str, dict[str, str]] = {
-            environment: {} for environment in finalizer.ENVIRONMENTS
+        application_material = {
+            build_product_id: finalizer.application_package_digest(
+                json.loads(source_path.read_text(encoding="utf-8"))
+            )
+            for build_product_id, source_path in application_sources.items()
         }
-        special_sources = {
-            target: artifact_id
-            for artifact_id, target in collector.APPLICATION_SOURCE_TARGETS.items()
-        }
-        for environment in finalizer.ENVIRONMENTS:
-            for surface in finalizer.APPLICATION_PACKAGES[environment]:
-                key = (environment, surface)
-                artifact_id = special_sources.get(key)
-                source_path = (
-                    sources[artifact_id]
-                    if artifact_id is not None
-                    else application_sources[key]
-                )
-                application_material[environment][surface] = (
-                    finalizer.application_package_digest(
-                        json.loads(source_path.read_text(encoding="utf-8")),
-                        environment=environment,
-                        surface=surface,
-                    )
-                )
         test_payload = json.loads(sources["testEvidence"].read_text(encoding="utf-8"))
         test_payload["layers"]["user_acceptance"]["candidateMaterial"] = {
-            "images": {
-                service: descriptor["digest"]
-                for service, descriptor in manifest["images"].items()
-            },
-            "configurationPackages": {
+            "environmentArtifacts": {
                 environment: {
-                    service: descriptor["digest"]
-                    for service, descriptor in packages.items()
+                    "environmentArtifactDigest": artifact[
+                        "environmentArtifactDigest"
+                    ],
+                    "images": {
+                        owner: descriptor["digest"]
+                        for owner, descriptor in artifact["images"].items()
+                    },
+                    "configurationPackages": {
+                        service: descriptor["digest"]
+                        for service, descriptor in artifact[
+                            "configurationPackages"
+                        ].items()
+                    },
                 }
-                for environment, packages in manifest[
-                    "configurationPackages"
+                for environment, artifact in manifest[
+                    "environmentArtifacts"
                 ].items()
             },
             "applicationPackages": application_material,
+            "opsPortal": finalizer.application_package_digest(
+                json.loads(sources["opsPortal"].read_text(encoding="utf-8"))
+            ),
             "contractGraphDigest": finalizer.sha256_file(contract_graph),
         }
         self._write_json(sources["testEvidence"], test_payload)
@@ -338,50 +383,49 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
 
     def _application_package_payloads(self, root: Path) -> Path:
         payloads = root / "application-payloads"
-        for environment in finalizer.ENVIRONMENTS:
-            for surface in finalizer.APPLICATION_PACKAGES[environment]:
-                package = payloads / environment / surface
-                package.mkdir(parents=True, exist_ok=True)
-                if environment == "prod" and surface == "android":
-                    (package / "quwoquan.apk").write_bytes(b"signed-apk")
-                elif environment == "prod" and surface == "opsPortal":
-                    self._write_json(package / "manifest.json", {"name": "ops"})
-                    (package / "dist").mkdir(exist_ok=True)
-                    (package / "dist/index.html").write_text(
-                        "ops portal", encoding="utf-8"
-                    )
-                else:
-                    (package / "payload.bin").write_bytes(
-                        f"{environment}/{surface}".encode("utf-8")
-                    )
+        for build_product_id in finalizer.APPLICATION_PACKAGES:
+            package = payloads / build_product_id
+            package.mkdir(parents=True, exist_ok=True)
+            (package / "payload.bin").write_bytes(build_product_id.encode("utf-8"))
+        portal = payloads / "opsPortal"
+        self._write_json(portal / "manifest.json", {"name": "ops"})
+        (portal / "dist").mkdir(exist_ok=True)
+        (portal / "dist/index.html").write_text("ops portal", encoding="utf-8")
         return payloads
 
     def _application_package_sources(
         self, root: Path, artifact: Path
-    ) -> dict[tuple[str, str], Path]:
+    ) -> dict[str, Path]:
         manifest = json.loads(
             (artifact / "manifest.json").read_text(encoding="utf-8")
         )
         source = manifest["source"]
         payloads = self._application_package_payloads(root)
-        return {
-            (environment, surface): self._write_json(
-                root / "application-sources" / f"{environment}--{surface}.json",
+        result: dict[str, Path] = {}
+        for build_product_id in sorted(collector.GENERIC_APPLICATION_KEYS):
+            package_digest = finalizer.sha256_tree(payloads / build_product_id)
+            product = resolve_build_product(build_product_id)
+            result[build_product_id] = self._write_json(
+                root / "application-sources" / f"{build_product_id}.json",
                 {
                     "schema": collector.GENERIC_APPLICATION_SCHEMA,
-                    "environment": environment,
-                    "surface": surface,
+                    "buildProductId": build_product_id,
+                    "buildProfile": product.build_profile,
+                    "platform": product.platform,
                     "sourceGitSha": source["gitSha"],
                     "sourceTreeDigest": source["treeDigest"],
-                    "packageDigest": finalizer.sha256_tree(
-                        payloads / environment / surface
+                    "packageDigest": package_digest,
+                    "artifactManifest": app_artifact_manifest(
+                        build_product_id=build_product_id,
+                        source_git_sha=source["gitSha"],
+                        source_tree_digest=source["treeDigest"],
+                        artifact_digest=package_digest,
                     ),
                 },
             )
-            for environment, surface in sorted(collector.GENERIC_APPLICATION_KEYS)
-        }
+        return result
 
-    def test_collects_complete_four_environment_evidence_and_is_idempotent(self) -> None:
+    def test_collects_complete_five_product_evidence_and_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             artifact, sources = self._fixture(root)
@@ -417,7 +461,9 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
                 set(first),
                 {
                     *finalizer.REQUIRED_RELEASE_EVIDENCE,
-                    *(f"{environment}/{surface}" for environment in finalizer.ENVIRONMENTS for surface in finalizer.APPLICATION_PACKAGES[environment]),
+                    *finalizer.OPTIONAL_RELEASE_EVIDENCE,
+                    *finalizer.APPLICATION_PACKAGES,
+                    "opsPortal",
                 },
             )
             for artifact_id, descriptor in first.items():
@@ -433,8 +479,10 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
             self.assertEqual(finalized["status"], "candidate-ready")
             self.assertEqual(
                 set(finalized["applicationPackages"]),
-                set(finalizer.ENVIRONMENTS),
+                set(finalizer.APPLICATION_PACKAGES),
             )
+            self.assertNotIn("opsPortal", finalized["applicationPackages"])
+            self.assertIn("opsPortal", finalized)
             green_matrix = (
                 artifact / collector.RELEASE_CLOSURE_PATHS["green-matrix"]
             )
@@ -496,10 +544,10 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
             root = Path(temporary)
             artifact, sources = self._fixture(root)
             application_sources = self._application_package_sources(root, artifact)
-            missing_key = ("beta", "ios")
+            missing_key = "ios-nonprod-app"
             missing_source = application_sources.pop(missing_key)
             with self.assertRaisesRegex(
-                ValueError, "generic application package set mismatch"
+                ValueError, "App build product package set mismatch"
             ):
                 collector.collect(
                     artifact_dir=artifact,
@@ -516,7 +564,7 @@ class ReleaseArtifactCollectionContractTest(unittest.TestCase):
             payload = json.loads(missing_source.read_text(encoding="utf-8"))
             payload["sourceTreeDigest"] = "sha1:" + ("d" * 40)
             self._write_json(missing_source, payload)
-            with self.assertRaisesRegex(ValueError, "tree mismatch"):
+            with self.assertRaisesRegex(ValueError, "sourceTreeDigest mismatch"):
                 collector.collect(
                     artifact_dir=artifact,
                     descriptors_dir=root / "descriptors",

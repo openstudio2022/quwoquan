@@ -104,8 +104,10 @@ void main() {
     final client = _FakeFirebasePushMessagingClient(initialToken: 'fcm-1');
     final runtime = FirebaseIncomingCallRuntime(
       pushEndpointGateway: gateway,
-      messagingClient: client,
-      platformReader: () => AppPlatform.android,
+      messagingRuntime: FirebasePushMessagingRuntime(
+        client: client,
+        platformReader: () => AppPlatform.android,
+      ),
     );
     final foregroundEnvelopes = <IncomingCallEnvelope>[];
     final foregroundSubscription = runtime.foregroundIncomingCalls.listen(
@@ -170,8 +172,10 @@ void main() {
     final webClient = _FakeFirebasePushMessagingClient(initialToken: 'unused');
     final webRuntime = FirebaseIncomingCallRuntime(
       pushEndpointGateway: gateway,
-      messagingClient: webClient,
-      platformReader: () => AppPlatform.web,
+      messagingRuntime: FirebasePushMessagingRuntime(
+        client: webClient,
+        platformReader: () => AppPlatform.web,
+      ),
     );
     expect((await webRuntime.start()).supported, isFalse);
     expect(webClient.initializeCount, 0);
@@ -181,17 +185,65 @@ void main() {
     final gateway = _RecordingPushEndpointGateway();
     final runtime = FirebaseIncomingCallRuntime(
       pushEndpointGateway: gateway,
-      messagingClient: _FakeFirebasePushMessagingClient(
-        initialToken: null,
-        initializationError: PlatformException(code: 'missing-config'),
+      messagingRuntime: FirebasePushMessagingRuntime(
+        client: _FakeFirebasePushMessagingClient(
+          initialToken: null,
+          initializationError: PlatformException(code: 'missing-config'),
+        ),
+        platformReader: () => AppPlatform.android,
       ),
-      platformReader: () => AppPlatform.android,
     );
 
     final state = await runtime.start();
     expect(state.supported, isTrue);
     expect(state.configured, isFalse);
     expect(gateway.upserts, isEmpty);
+  });
+
+  test('tap 与来电共享同一 Firebase owner 且缺配置时零 SDK 访问', () async {
+    final client = _FakeFirebasePushMessagingClient(
+      initialToken: null,
+      initializationError: PlatformException(code: 'missing-config'),
+    );
+    final messagingRuntime = FirebasePushMessagingRuntime(
+      client: client,
+      platformReader: () => AppPlatform.android,
+    );
+    final incomingRuntime = FirebaseIncomingCallRuntime(
+      pushEndpointGateway: _RecordingPushEndpointGateway(),
+      messagingRuntime: messagingRuntime,
+    );
+    final taps = <PushTapIntent>[];
+
+    await messagingRuntime.start(taps.add);
+    final incomingState = await incomingRuntime.start();
+
+    expect(
+      incomingState.availability,
+      FirebasePushMessagingRuntimeAvailability.notConfigured,
+    );
+    expect(client.initializeCount, 1);
+    expect(client.openedMessagesReadCount, 0);
+    expect(client.initialMessageReadCount, 0);
+    expect(client.tokenReadCount, 0);
+    expect(taps, isEmpty);
+  });
+
+  test('非配置类 Firebase 初始化失败表达 unavailable 而非 notConfigured', () async {
+    final runtime = FirebasePushMessagingRuntime(
+      client: _FakeFirebasePushMessagingClient(
+        initialToken: null,
+        initializationError: PlatformException(code: 'runtime-failure'),
+      ),
+      platformReader: () => AppPlatform.android,
+    );
+
+    final state = await runtime.initialize();
+
+    expect(
+      state.availability,
+      FirebasePushMessagingRuntimeAvailability.unavailable,
+    );
   });
 
   test('原生 pending action 以 typed action 消费', () async {
@@ -418,7 +470,6 @@ void main() {
     final capability = await bridge.readCapability();
 
     expect(capability.nativeUiAvailable, isFalse);
-    expect(capability.backgroundPushConfigured, isFalse);
     expect(await bridge.readPendingEnvelopes(), isEmpty);
   });
 }
@@ -437,6 +488,9 @@ final class _FakeFirebasePushMessagingClient
     sync: true,
   );
   int initializeCount = 0;
+  int openedMessagesReadCount = 0;
+  int initialMessageReadCount = 0;
+  int tokenReadCount = 0;
   bool notificationPermissionRequested = false;
 
   void emitToken(String token) => _refreshes.add(token);
@@ -454,7 +508,10 @@ final class _FakeFirebasePushMessagingClient
   }
 
   @override
-  Future<String?> readToken() async => initialToken;
+  Future<String?> readToken() async {
+    tokenReadCount += 1;
+    return initialToken;
+  }
 
   @override
   Stream<String> get tokenRefreshes => _refreshes.stream;
@@ -463,10 +520,16 @@ final class _FakeFirebasePushMessagingClient
   Stream<RemoteMessage> get foregroundMessages => _foregroundMessages.stream;
 
   @override
-  Stream<RemoteMessage> get openedMessages => const Stream.empty();
+  Stream<RemoteMessage> get openedMessages {
+    openedMessagesReadCount += 1;
+    return const Stream.empty();
+  }
 
   @override
-  Future<RemoteMessage?> readInitialMessage() async => null;
+  Future<RemoteMessage?> readInitialMessage() async {
+    initialMessageReadCount += 1;
+    return null;
+  }
 
   @override
   Future<bool> readNotificationAuthorization() async => false;

@@ -1,0 +1,97 @@
+{
+  "label": "泸沽湖",
+  "domain": "地点",
+  "type": "景区",
+  "executionId": "20260817--travel-homepage-closure--china-sichuan--pilot-001",
+  "entityRef": "/entity/地点/景区/泸沽湖",
+  "summary": "泸沽湖（普米语：loltsriipkhwep、彝语北部方言：ꇈꈬꎿ，罗马化：LoxgguShur），亦称永宁海、左所海、勒得海、落水海子、谢纳米，是一个高原淡水湖，位于中华人民共和国云南省北部、四川省西南部，即四川省凉山彝族自治州盐源县与云。",
+  "sourceRefs": [
+    "sources/泸沽湖__wikipedia__baa9fc88/source.md"
+  ],
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E6%B3%B8%E6%B2%BD%E6%B9%96"
+  ],
+  "primarySource": {
+    "entityName": "泸沽湖",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E6%B3%B8%E6%B2%BD%E6%B9%96",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E6%B3%B8%E6%B2%BD%E6%B9%96",
+    "title": "泸沽湖",
+    "fetchedAt": "2026-08-17T11:16:21Z",
+    "snapshotHash": "sha256:dddc3df5879ae35cd10627e1aba588316318f4d919b46745217de1ad6d849fcd",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "licensed_adaptation"
+  },
+  "sourceAttribution": {
+    "isOriginal": false,
+    "originalCreatorId": null,
+    "originalCreatorName": "维基百科贡献者",
+    "originalCreatorProfileUrl": null,
+    "platform": "维基百科",
+    "sourcePostUrl": "https://zh.wikipedia.org/wiki/%E6%B3%B8%E6%B2%BD%E6%B9%96",
+    "originalAssetUrl": "https://zh.wikipedia.org/wiki/%E6%B3%B8%E6%B2%BD%E6%B9%96",
+    "attributionText": "正文事实来源：维基百科（维基百科贡献者）",
+    "rightsBasis": "CC BY-SA 4.0",
+    "commercialAuthorizationStatus": "verified",
+    "publicationAdmission": "research_release",
+    "authorizationProofUrl": "https://zh.wikipedia.org/wiki/%E6%B3%B8%E6%B2%BD%E6%B9%96",
+    "termsUrl": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+    "riskAcceptanceId": null,
+    "watermarkStatus": "absent",
+    "audioRightsStatus": "no_audio",
+    "modelReleaseStatus": "not_required",
+    "propertyReleaseStatus": "not_required",
+    "collectedAt": "2026-08-17T11:16:21Z",
+    "takedownPolicy": "remove_on_verified_rights_or_source_dispute"
+  },
+  "textSourceRefs": [
+    "sources/泸沽湖__wikipedia__baa9fc88/source.md"
+  ],
+  "imageSourceRefs": [
+    "sources/泸沽湖__wikipedia__baa9fc88/source.md"
+  ],
+  "heroAssetId": "泸沽湖_cover_俯瞰泸沽湖_四川_中国_334_b88a4c9e",
+  "mediaAssetIds": [
+    "泸沽湖_cover_俯瞰泸沽湖_四川_中国_334_b88a4c9e",
+    "泸沽湖_detail_地理_334_18c24a11",
+    "泸沽湖_detail_湖中的里格半岛_334_6a01229a",
+    "泸沽湖_detail_中国一级保护动物_黑颈鹤_334_bf92ffc7",
+    "泸沽湖_detail_泸沽湖畔的猪槽船_334_fc010393",
+    "泸沽湖_detail_生态优良的泸沽湖草海_334_756a2719",
+    "泸沽湖_detail_摩梭男青年_334_f9e6bae6",
+    "泸沽湖_detail_摩梭织女_334_ccee4ef9",
+    "泸沽湖_detail_摩梭人宗教儀式用服_攝於瀘沽湖摩_334_25d1fc1d",
+    "泸沽湖_detail_湖岸风景_334_6bccb1d6"
+  ],
+  "tagRefs": [
+    "Entity/地点/景区",
+    "Topic/地理/行政区/中国/四川省/凉山彝族自治州/盐源县",
+    "Topic/地理/行政区/中国/云南省/丽江市/宁蒗彝族自治县",
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "geoTagRef": "Topic/地理/行政区/中国/四川省/凉山彝族自治州/盐源县",
+  "geoTagRefs": [
+    "Topic/地理/行政区/中国/四川省/凉山彝族自治州/盐源县",
+    "Topic/地理/行政区/中国/云南省/丽江市/宁蒗彝族自治县"
+  ],
+  "aliases": [
+    "泸沽湖风景区"
+  ],
+  "authorId": "builtin_travel_geo_editor",
+  "creatorProfileId": "qwq_creator_geo_editor_001",
+  "creatorArchetype": "geo_editor",
+  "creatorProfileDigest": "sha256:1ae1b5e97d6aca2bea11652dfb07fcf4746ce904ec07b25dd022631eda751e75",
+  "creatorDisclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "experienceClaimMode": "editorial_synthesis",
+  "authorQualitySignals": {
+    "qualityScore": 0.9,
+    "fatigueScore": 0.2,
+    "riskTier": "low"
+  }
+}

@@ -4,7 +4,6 @@ class LoginFrame extends StatelessWidget {
   const LoginFrame({
     super.key,
     required this.state,
-    required this.phoneEntryHasParent,
     required this.socialMethodAvailability,
     required this.onAgreementToggle,
     required this.onNavigate,
@@ -31,7 +30,6 @@ class LoginFrame extends StatelessWidget {
   });
 
   final LoginFlowState state;
-  final bool phoneEntryHasParent;
   final Map<String, NativeAuthCapability> socialMethodAvailability;
   final VoidCallback onAgreementToggle;
   final VoidCallback onNavigate;
@@ -69,8 +67,10 @@ class LoginFrame extends StatelessWidget {
                   maxWidth: AppSpacing.loginFrameMaxWidth,
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
+                  // 左侧收窄到光学对齐 inset，使图标视觉左缘与正文左边距对齐。
+                  padding: const EdgeInsets.only(
+                    left: AppSpacing.loginTopBarLeadingInset,
+                    right: AppSpacing.lg,
                   ),
                   child: _LoginTopBar(
                     onNavigate: onNavigate,
@@ -139,16 +139,9 @@ class LoginFrame extends StatelessWidget {
     );
   }
 
-  bool get _showsBackNavigation => switch (state.step) {
-    LoginStep.phoneEntry => phoneEntryHasParent,
-    LoginStep.otp ||
-    LoginStep.socialAuthorizing ||
-    LoginStep.socialFailed ||
-    LoginStep.socialPhoneEntry ||
-    LoginStep.socialPhoneOtp ||
-    LoginStep.blocked => true,
-    _ => false,
-  };
+  // REQ-012：仅 blocked 终态显示关闭（X）并执行宿主关闭策略；其余全部步骤
+  // （含根步骤）统一显示返回箭头，根步骤箭头即按宿主 LoginDismissPolicy 关闭。
+  bool get _showsBackNavigation => state.step != LoginStep.blocked;
 
   String get _disabledFooterProvider => switch (state.step) {
     LoginStep.socialAuthorizing ||
@@ -317,7 +310,7 @@ class _OneTapLoginStep extends StatelessWidget {
     final phone = state.maskedPhone;
     return Column(
       children: <Widget>[
-        const SizedBox(height: AppSpacing.twenty),
+        const SizedBox(height: AppSpacing.forty),
         _LoginHeading(
           title: FoundationText.loginReturningDefaultName,
           subtitle: phone.isEmpty
@@ -339,11 +332,9 @@ class _OneTapLoginStep extends StatelessWidget {
           enabled: !state.isBusy,
           onPressed: onOtherPhone,
         ),
-        if (state.feedback case final feedback?) ...<Widget>[
-          const SizedBox(height: AppSpacing.md),
-          _LoginFeedbackText(feedback: feedback),
-        ],
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.sm),
+        _LoginFeedbackSlot(feedback: state.feedback),
+        const SizedBox(height: AppSpacing.sm),
         LoginAgreementRow(
           accepted: state.consentState == LoginConsentState.accepted,
           onToggle: onAgreementToggle,
@@ -408,7 +399,7 @@ class _PhoneEntryLoginStep extends StatelessWidget {
         : state.feedback;
     return Column(
       children: <Widget>[
-        const SizedBox(height: AppSpacing.twenty),
+        const SizedBox(height: AppSpacing.forty),
         _LoginHeading(
           title: binding
               ? FoundationText.loginBindPhoneTitle
@@ -425,11 +416,9 @@ class _PhoneEntryLoginStep extends StatelessWidget {
           onChanged: onChanged,
           onEditingComplete: onEditingComplete,
         ),
-        if (visibleFeedback case final feedback?) ...<Widget>[
-          const SizedBox(height: AppSpacing.md),
-          _LoginFeedbackText(feedback: feedback),
-        ],
-        const SizedBox(height: AppSpacing.twenty),
+        const SizedBox(height: AppSpacing.sm),
+        _LoginFeedbackSlot(feedback: visibleFeedback),
+        const SizedBox(height: AppSpacing.sm),
         LoginActionButton(
           key: const ValueKey<String>('loginPhonePrimary'),
           label: state.operation == LoginOperation.sendingOtp
@@ -489,28 +478,19 @@ class _OtpLoginStep extends StatelessWidget {
     final presentation = OtpPagePresentation.fromState(state, DateTime.now());
     return Column(
       children: <Widget>[
-        const SizedBox(height: AppSpacing.twenty),
+        const SizedBox(height: AppSpacing.forty),
         _LoginHeading(
           title: FoundationText.loginOtpTitle,
           subtitle: '',
           provider: showProvider ? state.provider : '',
         ),
-        const SizedBox(height: AppSpacing.md),
-        _OtpPhoneRow(
-          maskedPhone: state.maskedPhone,
+        const SizedBox(height: AppSpacing.sm),
+        _OtpSubtitleRow(
+          subtitle: presentation.subtitle,
           enabled: !state.isBusy,
           onChangePhone: onChangePhone,
         ),
-        const SizedBox(height: AppSpacing.md),
-        if (presentation.tone == OtpPresentationTone.neutral &&
-            presentation.message.isNotEmpty) ...<Widget>[
-          AnimatedSize(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            child: _OtpStatusRegion(presentation: presentation),
-          ),
-          const SizedBox(height: AppSpacing.md),
-        ],
+        const SizedBox(height: AppSpacing.lg),
         OtpCodeBoxes(
           controller: controller,
           enabled: state.canEditOtp,
@@ -518,15 +498,9 @@ class _OtpLoginStep extends StatelessWidget {
           focusRequestSerial: state.otpFocusSerial,
           shakeSerial: state.otpShakeSerial,
         ),
-        if (presentation.tone == OtpPresentationTone.error) ...<Widget>[
-          const SizedBox(height: AppSpacing.sm),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            child: _OtpStatusRegion(presentation: presentation),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.sm),
+        _OtpStatusRegion(presentation: presentation),
+        const SizedBox(height: AppSpacing.sm),
         AnimatedSize(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
@@ -549,37 +523,45 @@ class _OtpLoginStep extends StatelessWidget {
   }
 }
 
-class _OtpPhoneRow extends StatelessWidget {
-  const _OtpPhoneRow({
-    required this.maskedPhone,
+/// OTP 步副标题区：承载验证码发送状态与脱敏手机号，「更换手机号」为行内
+/// 动作（REQ-003）。文案只反映发送事实，用户输入时不清空、不移位。
+class _OtpSubtitleRow extends StatelessWidget {
+  const _OtpSubtitleRow({
+    required this.subtitle,
     required this.enabled,
     required this.onChangePhone,
   });
 
-  final String maskedPhone;
+  final String subtitle;
   final bool enabled;
   final VoidCallback onChangePhone;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: AppSpacing.xs,
       children: <Widget>[
-        Expanded(
-          child: Text(
-            maskedPhone,
-            style: TextStyle(
-              color: AppColors.iosSecondaryLabel(context),
-              fontSize: AppTypography.base,
-            ),
+        Text(
+          subtitle,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AppColors.iosSecondaryLabel(context),
+            fontSize: AppTypography.base,
+            height: AppTypography.lineHeightCompact,
           ),
         ),
         SizedBox(
           height: AppSpacing.minInteractiveSize,
           child: CupertinoButton(
             key: const ValueKey<String>('loginChangePhone'),
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
             onPressed: enabled ? onChangePhone : null,
-            child: Text(FoundationText.loginPhoneChange),
+            child: Text(
+              FoundationText.loginPhoneChange,
+              style: const TextStyle(fontSize: AppTypography.base),
+            ),
           ),
         ),
       ],
@@ -587,6 +569,8 @@ class _OtpPhoneRow extends StatelessWidget {
   }
 }
 
+/// 输入格下方唯一的反馈/状态占位区（REQ-006）：固定最小高度，错误与
+/// 「正在验证」只出现在这里；出现、消失或切换不移动输入格及其上方内容。
 class _OtpStatusRegion extends StatelessWidget {
   const _OtpStatusRegion({required this.presentation});
 
@@ -594,39 +578,73 @@ class _OtpStatusRegion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (presentation.message.isEmpty) return const SizedBox.shrink();
-    final color = presentation.tone == OtpPresentationTone.error
-        ? AppColors.errorForeground(context)
-        : AppColors.iosSecondaryLabel(context);
-    return Semantics(
-      key: ValueKey<String>(presentation.announceKey),
-      liveRegion: true,
-      label: presentation.message,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          if (presentation.showDeliveryProgress) ...<Widget>[
-            AppRequestFeedback.inline(
-              indicatorColor: AppColors.iosAccent(context),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-          ],
-          Flexible(
-            child: Text(
-              presentation.message,
-              key: const ValueKey<String>('loginOtpStatusMessage'),
-              maxLines: 2,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: color,
-                fontSize: AppTypography.inlineError,
-                fontWeight: presentation.tone == OtpPresentationTone.error
-                    ? AppTypography.inlineErrorWeight
-                    : AppTypography.regular,
+    final Widget content;
+    if (presentation.message.isEmpty) {
+      content = const SizedBox.shrink();
+    } else {
+      final color = presentation.tone == OtpPresentationTone.error
+          ? AppColors.errorForeground(context)
+          : AppColors.iosSecondaryLabel(context);
+      content = Semantics(
+        key: ValueKey<String>(presentation.announceKey),
+        liveRegion: true,
+        label: presentation.message,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            if (presentation.showDeliveryProgress) ...<Widget>[
+              AppRequestFeedback.inline(
+                indicatorColor: AppColors.iosAccent(context),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+            ],
+            Flexible(
+              child: Text(
+                presentation.message,
+                key: const ValueKey<String>('loginOtpStatusMessage'),
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: color,
+                  fontSize: AppTypography.inlineError,
+                  fontWeight: presentation.tone == OtpPresentationTone.error
+                      ? AppTypography.inlineErrorWeight
+                      : AppTypography.regular,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
+      );
+    }
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minHeight: AppSpacing.loginFeedbackSlotMinHeight,
+      ),
+      child: Center(child: content),
+    );
+  }
+}
+
+/// 一键登录与手机号步骤的反馈固定占位区：空态保留最小高度，反馈出现或
+/// 消失不移动输入框、主按钮与协议行（REQ-003）。
+class _LoginFeedbackSlot extends StatelessWidget {
+  const _LoginFeedbackSlot({required this.feedback});
+
+  final LoginFeedback? feedback;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minHeight: AppSpacing.loginFeedbackSlotMinHeight,
+      ),
+      child: Center(
+        child: switch (feedback) {
+          final present? => _LoginFeedbackText(feedback: present),
+          null => const SizedBox.shrink(),
+        },
       ),
     );
   }
@@ -732,7 +750,11 @@ class _OtpResendPrompt extends StatelessWidget {
               key: const ValueKey<String>('loginOtpResend'),
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
               onPressed: onResend,
-              child: Text(FoundationText.loginOtpResend),
+              child: Text(
+                FoundationText.loginOtpResend,
+                // 与前面「未收到验证码？」正文字号一致，避免行内字阶跳跃。
+                style: const TextStyle(fontSize: AppTypography.base),
+              ),
             ),
           )
         else
@@ -862,6 +884,9 @@ class _BlockedLoginStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final isAccountSuspended =
         state.feedback?.sourceCode == UserErrorCode.accountSuspended.code;
+    final subtitle = isAccountSuspended
+        ? FoundationText.loginAccountSuspensionSubtitle
+        : FoundationText.loginServiceUnavailable;
     return Column(
       children: <Widget>[
         const SizedBox(height: AppSpacing.forty),
@@ -869,12 +894,11 @@ class _BlockedLoginStep extends StatelessWidget {
           title: isAccountSuspended
               ? FoundationText.loginAccountSuspensionTitle
               : FoundationText.login,
-          subtitle: isAccountSuspended
-              ? FoundationText.loginAccountSuspensionSubtitle
-              : FoundationText.loginServiceUnavailable,
+          subtitle: subtitle,
         ),
         const SizedBox(height: AppSpacing.lg),
-        if (state.feedback case final feedback?)
+        // 具体错误原因与副标题同句时不重复渲染，避免同屏两遍同一句话。
+        if (state.feedback case final feedback? when feedback.message != subtitle)
           _LoginFeedbackText(feedback: feedback),
         const SizedBox(height: AppSpacing.lg),
         if (isAccountSuspended) ...<Widget>[

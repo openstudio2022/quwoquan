@@ -19,7 +19,7 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
 from core.io import read_json, write_json  # noqa: E402
 from core import paths as _paths_mod  # noqa: E402
 from core.paths import execution_root, release_root  # noqa: E402
-from core.release_layout import object_closure_digest, payload_file  # noqa: E402
+from core.release_layout import objects_merkle, payload_file  # noqa: E402
 from content.release.canonical.integrity import scan_release_integrity  # noqa: E402
 from content.release.canonical.runtime_integrity import scan_runtime_batch_integrity  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
@@ -27,6 +27,7 @@ from content.homepage.homepage import _entity_base_draft  # noqa: E402
 from content.release.canonical.assemble import assemble_release  # noqa: E402
 from content.release.canonical.gate import _quota_issues  # noqa: E402
 from support.media_fixture import tiny_png_bytes  # noqa: E402
+from support.article_source_registry_fixture import article_source_registry_binding  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
 from content.execution.production_contracts import sha256_bytes  # noqa: E402
 
@@ -99,10 +100,33 @@ def _seed_source(
         "今日头条百科": ("toutiao_baike", "toutiao_baike_html", f"https://www.baike.com/wiki/{entity}"),
         "百度百科": ("baidu_baike", "baidu_baike_html", f"https://baike.baidu.com/item/{entity}"),
     }
-    source_kind, extractor, canonical_url = identities.get(
-        kind,
-        ("web", "generic_html", f"https://example.test/{entity}/{source_id}"),
-    )
+    if kind in identities:
+        source_kind, extractor, canonical_url = identities[kind]
+        identity = {
+            "source_kind": source_kind,
+            "extractor": extractor,
+            "policy_revision": "encyclopedia-primary",
+            "source_use_mode": source_use_mode,
+        }
+        registry_fields: dict[str, object] = {}
+    else:
+        # 攻略站没有百科映射，唯一可准入的身份来自文章来源注册表绑定。
+        canonical_url = f"https://example.com/{entity}/{source_id}"
+        identity = {
+            "source_kind": "travelogue",
+            "extractor": "qunar_html",
+            "policy_revision": "article-source-registry-v1",
+            "source_use_mode": "factual_reference_only",
+            "rights_mode": "factual_reference_only",
+        }
+        registry_fields = {
+            "publish_media_mode": "illustrated",
+            "source_role": "base",
+            "source": article_source_registry_binding(
+                platform=kind,
+                url=canonical_url,
+            ),
+        }
     manifest = write_source_unit(
         object_dir,
         ordinal=int(unit.split(".", 1)[0]) if unit.split(".", 1)[0].isdigit() else 1,
@@ -112,12 +136,8 @@ def _seed_source(
         quality={"sourceId": source_id, "quality": "B-fact", "score": 5},
         platform=kind,
         source_category=kind,
-        source_kind=source_kind,
-        extractor=extractor,
-        policy_revision=(
-            "encyclopedia-primary" if research_lane == "homepage" else ""
-        ),
-        source_use_mode=source_use_mode,
+        **identity,
+        **registry_fields,
         research_lane=research_lane,
         license_value="fixture-license",
         url=canonical_url,
@@ -176,8 +196,8 @@ def _seed_execution_post(
                 "entityCoverage", "provenanceRewrite", "evidenceQuality", "carrierConsistency",
                 "proseStyle", "imageGate", "travelogueDensity", "crossArticleSimilarity",
                 "sectionShape", "generatorProvenance", "factTraceability", "baseDraftFidelity",
-                "writingIntentConsistency", "registerMismatch", "contactInfo", "mechanicalHeading",
-                "sectionBalance", "timelineOrder",
+                "commercialNearCopy", "writingIntentConsistency", "registerMismatch",
+                "contactInfo", "mechanicalHeading", "sectionBalance", "timelineOrder",
             ]},
         },
     )
@@ -280,7 +300,7 @@ def _seed_v3_creator_only_release(*, broken_profile_ref: bool = False) -> None:
     root = release_root(RELEASE)
     release_creator = payload_file(root, f"objects/creators/{creator_id}")
     shutil.copytree(creator, release_creator)
-    canonical_merkle = object_closure_digest(root)
+    canonical_merkle = objects_merkle(root)
     desired = {
         "schema": "quwoquan_data.release_desired_state",
         "releaseId": RELEASE,

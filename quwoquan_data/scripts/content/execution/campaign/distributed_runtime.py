@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import normalize_active_carriers
 from content.execution.campaign.runtime import (
     CampaignRunSession,
     read_lane_checkpoint,
@@ -126,7 +126,7 @@ def finalize_distributed_runtime(
         _finished=terminal,
     )
     snapshot_lanes = snapshot.get("lanes")
-    for carrier in CAMPAIGN_CARRIERS:
+    for carrier in normalize_active_carriers(plan["activeCarriers"]):
         lane = lanes.get(carrier)
         if not isinstance(lane, Mapping):
             raise ValueError(f"{carrier} distributed finalized lane is missing")

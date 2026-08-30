@@ -193,7 +193,7 @@
         "assetUrl", "originalAssetUrl", "sourcePostUrl", "authorizationProofUrl",
         "termsUrl", "rightsBasis", "originalCreatorName", "attributionText",
         "commercialAuthorizationStatus", "rightsStatus", "rightsIssues",
-        "publicationAdmission", "modelReleaseStatus", "propertyReleaseStatus",
+        "distributionDecision", "modelReleaseStatus", "propertyReleaseStatus",
         "takedownPolicy", "durationSeconds", "sizeBytes", "mediaProbe",
         "popularitySignals",
         "professionalAcquisitionReceiptRef", "professionalAssetId",
@@ -203,8 +203,8 @@
       "allOf": [
         {
           "if": {
-            "required": ["publicationAdmission"],
-            "properties": {"publicationAdmission": {"const": "commercial_release"}}
+            "required": ["distributionDecision"],
+            "properties": {"distributionDecision": {"const": "commercial_allowed"}}
           },
           "then": {
             "properties": {
@@ -235,7 +235,7 @@
         "commercialAuthorizationStatus": {"enum": ["verified", "unverified"]},
         "rightsStatus": {"enum": ["verified", "unverified", "unknown"]},
         "rightsIssues": {"type": "array", "items": {"type": "string", "minLength": 1}},
-        "publicationAdmission": {"enum": ["research_release", "commercial_release"]},
+        "distributionDecision": {"enum": ["research_allowed", "commercial_allowed"]},
         "modelReleaseStatus": {"enum": ["verified", "not_required", "unverified"]},
         "propertyReleaseStatus": {"enum": ["verified", "not_required", "unverified"]},
         "takedownPolicy": {"type": "string", "minLength": 1},

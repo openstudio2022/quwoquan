@@ -117,7 +117,12 @@ def _baseline_with(unit: str, metrics: dict, **policy_overrides) -> dict:
     policy.update(policy_overrides)
     receipts = _receipts_for_unit(unit)
     baseline = {
-        "_governance": {"owner": "o", "reason": "r", "expires_when": "w"},
+        "_governance": {
+            "owner": "o",
+            "reason": "r",
+            "expires_when": "w",
+            "measure": "m",
+        },
         "schema": vcr.BASELINE_SCHEMA,
         "ruleId": vcr.RULE_ID,
         "policy": policy,

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart' show kProfileMode, kReleaseMode;
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/runtime/observability/analytics.dart';
 import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
@@ -32,12 +33,9 @@ final class StartupPhaseSnapshot {
     required this.phase,
     required this.attemptId,
     required this.runtimeEnv,
-    required this.launchMode,
+    required this.launchProvenance,
+    required this.runtimeConfigSupplyMode,
     required this.configurationState,
-    required this.contentBindingState,
-    required this.contentReleaseId,
-    required this.contentManifestDigest,
-    required this.contentReadinessReceiptDigest,
     required this.missingDefineKeys,
     required this.runAppMs,
     required this.firstFrameMs,
@@ -59,12 +57,9 @@ final class StartupPhaseSnapshot {
   final String phase;
   final String attemptId;
   final String? runtimeEnv;
-  final String? launchMode;
+  final String? launchProvenance;
+  final String? runtimeConfigSupplyMode;
   final String? configurationState;
-  final String? contentBindingState;
-  final String contentReleaseId;
-  final String contentManifestDigest;
-  final String contentReadinessReceiptDigest;
   final String missingDefineKeys;
   final int? runAppMs;
   final int? firstFrameMs;
@@ -87,20 +82,14 @@ final class StartupPhaseSnapshot {
     'phase': phase,
     if (attemptId.isNotEmpty) 'attemptId': attemptId,
     'runtimeEnv': runtimeEnv,
-    'launchMode': launchMode,
+    'launchProvenance': launchProvenance,
+    'runtimeConfigSupplyMode': runtimeConfigSupplyMode,
     'configurationState': configurationState,
-    'contentBindingState': contentBindingState,
-    if (contentReleaseId.isNotEmpty) 'contentReleaseId': contentReleaseId,
-    if (contentManifestDigest.isNotEmpty)
-      'contentManifestDigest': contentManifestDigest,
-    if (contentReadinessReceiptDigest.isNotEmpty)
-      'contentReadinessReceiptDigest': contentReadinessReceiptDigest,
     if (missingDefineKeys.isNotEmpty) 'missingDefineKeys': missingDefineKeys,
     if (runAppMs != null) 'runAppMs': runAppMs,
     if (firstFrameMs != null) 'firstFrameMs': firstFrameMs,
     if (welcomeShownMs != null) 'welcomeShownMs': welcomeShownMs,
-    if (welcomeWindowInitMs != null)
-      'welcomeWindowInitMs': welcomeWindowInitMs,
+    if (welcomeWindowInitMs != null) 'welcomeWindowInitMs': welcomeWindowInitMs,
     if (welcomeCompletedMs != null) 'welcomeCompletedMs': welcomeCompletedMs,
     if (shellFirstPaintMs != null) 'shellFirstPaintMs': shellFirstPaintMs,
     if (androidActivityOnCreateMs != null)
@@ -213,7 +202,7 @@ final class AppStartupRuntime {
     _bootstrapStarted = true;
     _startupAttemptId = StartupTelemetrySupport.randomUrlSafeToken(24);
     _stopwatch.start();
-    final platformElapsed = readPlatformStartupElapsedMs();
+    final platformElapsed = tryReadPlatformStartupElapsedMs();
     _dartElapsedAtDeadlineArmMs = _elapsedMs;
     if (platformElapsed != null) {
       _nativeElapsedSinceProcessStartMs = platformElapsed;
@@ -695,6 +684,15 @@ final class AppStartupRuntime {
     }
     _productStartupReported = true;
     final hasError = _startupFailureCode.isNotEmpty;
+    // 启动身份维度只携带运行时真实在场的值；缺席以不发送表达，
+    // 不得用零值/unknown 冒充（catalog enum 之外的值会被 ingest 拒绝）。
+    final environment = CloudRuntimeConfig.appRuntimeEnv;
+    final launchProvenance = CloudRuntimeConfig.launchProvenance;
+    final launchManifestDigest =
+        CloudRuntimeConfig.effectiveLaunchManifestDigest;
+    const buildMode = kReleaseMode
+        ? 'release'
+        : (kProfileMode ? 'profile' : 'debug');
     unawaited(
       recorder.record(
         AppTelemetryPayload.appStartup(
@@ -705,6 +703,13 @@ final class AppStartupRuntime {
           tShellToContentMs: (contentMs - shellMs).clamp(0, contentMs).toInt(),
           tClickToContentMs: contentMs,
           hasError: hasError,
+          environment: environment.isEmpty ? null : environment,
+          buildMode: buildMode,
+          launchProvenance: launchProvenance,
+          launchManifestDigest:
+              launchManifestDigest == null || launchManifestDigest.isEmpty
+              ? null
+              : launchManifestDigest,
         ),
       ),
     );
@@ -792,13 +797,9 @@ final class AppStartupRuntime {
       phase: phase,
       attemptId: _startupAttemptId,
       runtimeEnv: runtimeSummary['runtimeEnv'],
-      launchMode: runtimeSummary['launchMode'],
+      launchProvenance: runtimeSummary['launchProvenance'],
+      runtimeConfigSupplyMode: runtimeSummary['runtimeConfigSupplyMode'],
       configurationState: runtimeSummary['configurationState'],
-      contentBindingState: runtimeSummary['contentBindingState'],
-      contentReleaseId: runtimeSummary['contentReleaseId'] ?? '',
-      contentManifestDigest: runtimeSummary['contentManifestDigest'] ?? '',
-      contentReadinessReceiptDigest:
-          runtimeSummary['contentReadinessReceiptDigest'] ?? '',
       missingDefineKeys: runtimeSummary['missingKeys'] ?? '',
       runAppMs: _runAppMs,
       firstFrameMs: _firstFrameMs,

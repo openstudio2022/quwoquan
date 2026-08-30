@@ -26,7 +26,18 @@ from content.release.environment.topology import (
 from content.release.model import DeploymentEnvironment, ReleaseKind
 from core.io import read_json, write_json
 from core.release_layout import payload_digest
-from core.source_digest import SourceDigest, content_source_revision
+from core.source_digest import SourceDefinitionSnapshot, content_source_revision
+
+# The coverage receipt cross-checks the importer's own environment against the
+# release run's, so a stub report has to name the environment it ran against.
+HOMEPAGE_IMPORTER_REPORT = {
+    "releaseId": "release-a",
+    "env": "gamma",
+    "dryRun": False,
+    "issues": [],
+    "skipped": [],
+    "entityRefToHomepageId": {},
+}
 
 
 def _stub_tag_consumer_verification(**kwargs: object) -> Path:
@@ -72,7 +83,9 @@ def _release(
             if is_empty
             else ["20260715--travel-homepage-coverage--test-region-a--scale-001"]
         ),
-        "sourceDigests": [SourceDigest(digest=source_digest).to_document()],
+        "sourceDigests": [
+            SourceDefinitionSnapshot(digest=source_digest).to_document()
+        ],
     }
     if not is_empty:
         header.update(
@@ -236,14 +249,7 @@ def test_apply_import_enforces_release_desired_state(
         "_run_homepage_importer",
         lambda **kwargs: (
             calls.append({"kind": "homepage", **kwargs})
-            or {
-                "releaseId": "release-a",
-                "env": "gamma",
-                "dryRun": False,
-                "issues": [],
-                "skipped": [],
-                "entityRefToHomepageId": {},
-            }
+            or dict(HOMEPAGE_IMPORTER_REPORT)
         ),
     )
 
@@ -477,12 +483,12 @@ def test_rollback_import_applies_all_release_owners_and_binds_homepage_cases(
     monkeypatch.setattr(
         handler,
         "_run_homepage_importer",
-        lambda **_kwargs: calls.append("homepage") or {"entities": 1},
+        lambda **_kwargs: calls.append("homepage") or dict(HOMEPAGE_IMPORTER_REPORT),
     )
 
     def _write_homepage_cases(**kwargs: object) -> Path:
         calls.append("homepage-cases")
-        assert kwargs["importer_report"] == {"entities": 1}
+        assert kwargs["importer_report"] == HOMEPAGE_IMPORTER_REPORT
         output = Path(str(kwargs["run_root"])) / "homepage_verification_cases.json"
         write_json(output, {"schema": "test.homepage_cases"})
         return output

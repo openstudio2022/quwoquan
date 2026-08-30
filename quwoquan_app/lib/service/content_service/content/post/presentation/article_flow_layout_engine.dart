@@ -3,8 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_asset.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
-import 'package:quwoquan_app/service/content_service/content/post/presentation/article_image_intrinsic_registry.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_pagination_engine.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_rich_block_chrome.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
@@ -57,7 +57,6 @@ class ArticleFlowLayoutEngine {
     required double stageWidth,
     required TextStyle titleStyle,
     required TextStyle bodyStyle,
-    Map<String, double>? intrinsicAspectByAssetId,
   }) {
     final pages = buildStructuralPages(
       document: document,
@@ -73,7 +72,6 @@ class ArticleFlowLayoutEngine {
       stageWidth: stageWidth,
       titleStyle: titleStyle,
       bodyStyle: bodyStyle,
-      intrinsicAspectByAssetId: intrinsicAspectByAssetId,
     );
   }
 
@@ -84,7 +82,6 @@ class ArticleFlowLayoutEngine {
     required double stageWidth,
     required TextStyle titleStyle,
     required TextStyle bodyStyle,
-    Map<String, double>? intrinsicAspectByAssetId,
   }) {
     final contentSize = metrics.contentSizeForStageWidth(stageWidth);
     final contentWidth = math.max(0.0, contentSize.width);
@@ -133,7 +130,6 @@ class ArticleFlowLayoutEngine {
               titleStyle: titleStyle,
               bodyStyle: bodyStyle,
               metrics: metrics,
-              intrinsicAspectByAssetId: intrinsicAspectByAssetId,
             );
         runs.add(
           ArticleFlowRun(
@@ -401,7 +397,6 @@ class ArticleFlowLayoutEngine {
     required TextStyle titleStyle,
     required TextStyle bodyStyle,
     required double viewportSliceHeight,
-    Map<String, double>? intrinsicAspectByAssetId,
   }) {
     final structuralPages = buildStructuralPages(
       document: document,
@@ -417,7 +412,6 @@ class ArticleFlowLayoutEngine {
       stageWidth: stageWidth,
       titleStyle: titleStyle,
       bodyStyle: bodyStyle,
-      intrinsicAspectByAssetId: intrinsicAspectByAssetId,
     );
     final slices = sliceForViewport(runs, viewportSliceHeight, runGap: 0);
     final pages = pagesFromSlices(slices, document: document);
@@ -435,7 +429,6 @@ class ArticleFlowLayoutEngine {
     required TextStyle titleStyle,
     required TextStyle bodyStyle,
     required double viewportSliceHeight,
-    Map<String, double>? intrinsicAspectByAssetId,
   }) {
     return buildPageSlicesForViewport(
       document: document,
@@ -444,7 +437,6 @@ class ArticleFlowLayoutEngine {
       titleStyle: titleStyle,
       bodyStyle: bodyStyle,
       viewportSliceHeight: viewportSliceHeight,
-      intrinsicAspectByAssetId: intrinsicAspectByAssetId,
     );
   }
 
@@ -761,8 +753,7 @@ class ArticleFlowLayoutEngine {
       );
     }
     for (final block in page.contentBlocks) {
-      if (block.type == ArticleDocumentBlockType.image &&
-          block.imageUrl.trim().isNotEmpty) {
+      if (block.type == ArticleDocumentBlockType.image) {
         fragments.add(
           ArticleLayoutFragment(
             kind:
@@ -772,11 +763,14 @@ class ArticleFlowLayoutEngine {
                 : ArticleLayoutFragmentKind.fullWidthImage,
             text: page.body.trim(),
             asset: ArticleDocumentAsset(
-              id: block.id,
+              id: block.assetId.trim().isNotEmpty ? block.assetId : block.id,
               offset: block.offset,
               imageUrl: block.imageUrl,
               imageLayout: block.imageLayout,
+              accessMode: block.accessMode,
               caption: block.caption,
+              width: block.imageWidth,
+              height: block.imageHeight,
             ),
           ),
         );
@@ -825,7 +819,6 @@ class ArticleFlowLayoutEngine {
     required TextStyle titleStyle,
     required TextStyle bodyStyle,
     required ArticleCanvasMetrics metrics,
-    Map<String, double>? intrinsicAspectByAssetId,
   }) {
     switch (fragment.kind) {
       case ArticleLayoutFragmentKind.title:
@@ -859,17 +852,16 @@ class ArticleFlowLayoutEngine {
             );
       case ArticleLayoutFragmentKind.fullWidthImage:
         final asset = fragment.asset;
-        if (asset == null || !asset.hasImage) {
+        if (asset == null) {
           return 0;
         }
-        final keyAspect =
-            intrinsicAspectByAssetId?[asset.id] ??
-            ArticleImageIntrinsicRegistry.aspectRatioFor(asset.id);
-        final aspect =
-            keyAspect ??
-            (asset.imageLayout == 'journalCard'
-                ? metrics.journalImageAspectRatio
-                : metrics.fullWidthImageAspectRatio);
+        // 缺席图片（imageUrl 未解析）同样预留占位框（GWT-016）：渲染端呈现
+        // 缺席态框，分页必须同源预留，禁止测成 0 高造成两侧几何分歧。
+        // 比例经唯一决定函数（REQ-017），运行时解码尺寸不得进入分页输入。
+        final aspect = resolveArticleFigureAspectRatio(
+          metrics: metrics,
+          asset: asset,
+        );
         var h = contentWidth / aspect;
         final cap = asset.caption.trim();
         if (cap.isNotEmpty) {
@@ -887,8 +879,21 @@ class ArticleFlowLayoutEngine {
         return h;
       case ArticleLayoutFragmentKind.wrapContent:
         final asset = fragment.asset;
-        if (asset == null || !asset.hasImage) {
+        if (asset == null) {
           return 0;
+        }
+        if (!asset.hasImage) {
+          // wrap 图缺席：降级为全宽顺序正文（GWT-016），文字不得随图丢失；
+          // 渲染端同用 articleWrapAbsentFallbackText，两侧几何一致。
+          final fallbackText = articleWrapAbsentFallbackText(fragment);
+          if (fallbackText.isEmpty) {
+            return 0;
+          }
+          return measureArticleTextHeight(
+            fallbackText,
+            bodyStyle,
+            contentWidth,
+          );
         }
         final wrap = resolveArticleWrapLayout(
           ArticleWrapLayoutInput(
@@ -908,6 +913,10 @@ class ArticleFlowLayoutEngine {
             ),
             captionPlaceholderWhenEmpty: false,
             imageLayout: asset.imageLayout,
+            figureAspectRatio: resolveArticleFigureAspectRatio(
+              metrics: metrics,
+              asset: asset,
+            ),
             metrics: metrics,
           ),
         );

@@ -2,7 +2,12 @@
 // Source: recommendation/recommendation/recommendation_model_release/intersection_kind_registry.yaml
 
 /// 负反馈闭集；端上报与云侧降权/冷却同源。
-const List<String> intersectionFeedbackKinds = <String>["notInterested", "dismiss", "rejectGreeting", "leaveCircle"];
+const List<String> intersectionFeedbackKinds = <String>[
+  "notInterested",
+  "dismiss",
+  "rejectGreeting",
+  "leaveCircle",
+];
 
 const String intersectionFeedbackKindNotInterested = "notInterested";
 const String intersectionFeedbackKindDismiss = "dismiss";

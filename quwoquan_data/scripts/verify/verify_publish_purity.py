@@ -10,9 +10,13 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core.paths import PUBLISH_ROOT
 from content.release.canonical.object_transaction_audit import validate_publish_invariants
+from content.release.canonical.object_transaction_contract import (
+    ALLOWED_CANONICAL_ROOTS,
+    is_canonical_document,
+)
 
 
-ALLOWED_ROOTS = {"creators", "entities", "posts", "tags", "media"}
+ALLOWED_ROOTS = ALLOWED_CANONICAL_ROOTS
 FORBIDDEN_PARTS = {"sources", "draft", "drafts", "prompt", "prompts", "reports", "logs", "evidence", "receipt", "receipts", "review"}
 FORBIDDEN_SUFFIXES = (".log", ".jsonl")
 
@@ -24,18 +28,24 @@ def publish_structure_issues(publish_root: Path = PUBLISH_ROOT) -> list[str]:
     for entry in sorted(publish_root.iterdir()):
         if entry.name not in ALLOWED_ROOTS:
             issues.append(f"{entry}: publish root only permits {', '.join(sorted(ALLOWED_ROOTS))}")
-    media_root = publish_root / "media"
-    if media_root.is_dir():
-        for entry in sorted(media_root.iterdir()):
-            if entry.name != "objects":
-                issues.append(f"{entry}: publish/media only permits content-addressed objects")
     for path in sorted(publish_root.rglob("*")):
-        parts = {part.casefold() for part in path.relative_to(publish_root).parts}
+        relative = path.relative_to(publish_root)
+        parts = {part.casefold() for part in relative.parts}
         if parts & FORBIDDEN_PARTS:
             issues.append(f"{path}: intermediate source/draft/evidence must not enter publish")
             continue
-        if path.is_file() and path.name.casefold().endswith(FORBIDDEN_SUFFIXES):
+        if not path.is_file():
+            continue
+        if path.name.casefold().endswith(FORBIDDEN_SUFFIXES):
             issues.append(f"{path}: logs are runtime evidence, not publish objects")
+            continue
+        # Same rule the transaction enforces on the way in, asked here of what is
+        # already on disk: a file that is not a document is a media body that the
+        # content library should own, and no transaction could have put it here.
+        if not is_canonical_document(relative):
+            issues.append(
+                f"{path}: publish carries documents only; media bodies stay in the content library"
+            )
     return issues
 
 

@@ -98,7 +98,6 @@ class EnvironmentPatrolSmokeCaseBase(unittest.TestCase):
         self,
         args: argparse.Namespace,
         *,
-        bound: bool = True,
         android_transport: bool = True,
     ) -> dict[str, object]:
         environment = args.runtime_env
@@ -107,31 +106,20 @@ class EnvironmentPatrolSmokeCaseBase(unittest.TestCase):
             smoke.load_environment_topology(),
             target,
         )["publicBases"]
-        content = {
-            "contentReleaseId": "release-current" if bound else "",
-            "contentManifestDigest": (
-                "sha256:" + "4" * 64 if bound else ""
-            ),
-            "contentReadinessReceiptDigest": (
-                "sha256:" + "5" * 64 if bound else ""
-            ),
-        }
-        defines = {
-            "APP_RUNTIME_ENV": environment,
-            "QWQ_APP_LAUNCH_MODE": "canonical_launcher",
-            "APP_LAUNCH_POLICY": "test_live",
-            "CONTENT_BINDING_STATE": "bound" if bound else "unbound",
-            "CLOUD_GATEWAY_BASE_URL": args.gateway_base_url,
-            "APP_LEGAL_BASE_URL": public_bases["legal"],
-            "PUBLIC_WEB_BASE_URL": public_bases["publicWeb"],
-            "APP_DOWNLOAD_BASE_URL": public_bases["appDownload"],
-            "MEDIA_AVATAR_CDN_BASE_URL": args.media_avatar_base_url,
-            "MEDIA_IMAGE_CDN_BASE_URL": args.media_image_base_url,
-            "MEDIA_VIDEO_CDN_BASE_URL": args.media_video_base_url,
-            "MEDIA_UPLOAD_BASE_URL": args.media_upload_base_url,
-            "RTC_MEDIA_CONNECTION_URL": args.rtc_media_connection_url,
-            "REALTIME_CONNECTION_URL": public_bases["realtime"],
-            "CURRENT_USER_ID": args.current_owner_id,
+        # endpoint 取值只由 handoff 携带的签名 runtime package 表达；编译期
+        # define 已随 executor cutover 退役，替身不得再自持一份 define 投影。
+        runtime_values = {
+            "appRuntimeEnv": environment,
+            "gatewayBaseUrl": args.gateway_base_url,
+            "legalBaseUrl": public_bases["legal"],
+            "publicWebBaseUrl": public_bases["publicWeb"],
+            "appDownloadBaseUrl": public_bases["appDownload"],
+            "realtimeBaseUrl": public_bases["realtime"],
+            "mediaAvatarCdnBaseUrl": args.media_avatar_base_url,
+            "mediaImageCdnBaseUrl": args.media_image_base_url,
+            "mediaVideoCdnBaseUrl": args.media_video_base_url,
+            "mediaUploadBaseUrl": args.media_upload_base_url,
+            "rtcMediaConnectionUrl": args.rtc_media_connection_url,
         }
         transport = {
             "required": android_transport,
@@ -151,24 +139,30 @@ class EnvironmentPatrolSmokeCaseBase(unittest.TestCase):
         effective = {
             "schema": "app-effective-launch-manifest",
             "environment": environment,
+            "buildProfile": "nonprod",
             "target": target,
             "entrypoint": "lib/main_prod.dart",
-            "launchMode": "canonical_launcher",
+            "launchProvenance": "canonical_launcher",
+            "runtimeConfigSupplyMode": "external_runtime_package",
             "launchPolicy": "test_live",
-            "contentBindingState": "bound" if bound else "unbound",
-            "dartDefinesDigest": "sha256:" + "1" * 64,
-            "runtimeConfigDigest": "sha256:" + "1" * 64,
-            **content,
-            "recoveryBaseUrl": args.gateway_base_url,
-            "publicWebBaseUrl": public_bases["publicWeb"],
-            "appDownloadBaseUrl": public_bases["appDownload"],
+            "runtimeConfigPackageDigest": "sha256:" + "1" * 64,
+            "runtimeConfigTrustEnvelopeDigest": "sha256:" + "3" * 64,
             "requiresLocalTransport": True,
             "transport": transport,
         }
         return {
             **effective,
             "schema": "app-launcher-handoff",
-            "dartDefines": defines,
+            "compileDiagnostics": {
+                "launchProvenance": "canonical_launcher",
+                "runtimeConfigSupplyMode": "external_runtime_package",
+            },
+            "runtimeConfigPackage": {
+                "schema": "app-runtime-config-package",
+                "environment": environment,
+                "target": target,
+                "runtime": runtime_values,
+            },
             "effectiveLaunchManifest": effective,
             "effectiveLaunchManifestDigest": "sha256:" + "2" * 64,
         }
@@ -202,6 +196,12 @@ class EnvironmentPatrolSmokeCaseBase(unittest.TestCase):
                     "providerRuntimeDigest": provider_runtime_digest,
                 },
             ),
+            # 角色闭包现在会同时读 test-live 回执来裁决两栈互斥，这里显式声明「没有
+            # test-live 栈」，否则断言会随开发机上残留的回执飘。
+            mock.patch.object(
+                stackctl,
+                "load_test_live_startup_attempt",
+                return_value=None,
+            ),
         ):
             return stackctl._expected_local_roles(target_name)
-

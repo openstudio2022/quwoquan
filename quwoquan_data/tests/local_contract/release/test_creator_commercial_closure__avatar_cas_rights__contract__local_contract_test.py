@@ -7,6 +7,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[4]
 SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
@@ -15,6 +17,20 @@ if str(SCRIPTS) not in sys.path:
 from content.release.canonical.creator_avatar_quality import (  # noqa: E402
     creator_avatar_quality_issues,
 )
+from core import content_library  # noqa: E402
+from support.media_fixture import admit_media_body  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _isolated_media_library(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(
+        content_library.LIBRARY_CAS_ROOT_BY_KIND,
+        content_library.MEDIA_KIND,
+        tmp_path / "content-library" / "_media_cas",
+    )
 
 
 def _write(path: Path, document: dict) -> None:
@@ -83,9 +99,7 @@ def _traceable_creator(tmp_path: Path) -> tuple[Path, dict]:
         f"media/objects/sha256/{digest_hex[:2]}/{digest_hex[2:4]}/"
         f"{digest_hex}.jpg"
     )
-    physical = tmp_path / object_key
-    physical.parent.mkdir(parents=True, exist_ok=True)
-    physical.write_bytes(content)
+    admit_media_body(content)
     _write(creator / "_creator.json", {"creatorId": "creator-a"})
     _write(
         creator / "profile.json",

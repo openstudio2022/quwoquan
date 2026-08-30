@@ -612,6 +612,86 @@ def _typed_profile_actor_context(
     )
 
 
+def _link_profile_preparation_to_page_report(
+    profile_command: Mapping[str, Any],
+    provision_receipt: Any,
+) -> dict[str, Any]:
+    """Keep prepared receipts separate from, and linked to, the page CaseResult."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    raw_report_path = str(profile_command.get("reportPath") or "")
+    if not raw_report_path:
+        return {}
+    report_path = Path(raw_report_path)
+    if not report_path.is_absolute():
+        report_path = _stackctl.ROOT / report_path
+    page_report = _stackctl._read_json_object(str(report_path))
+    if not page_report or not isinstance(page_report.get("caseResults"), list):
+        raise RuntimeError("typed profile page CaseResult is unavailable")
+
+    receipt_root = Path(provision_receipt.path).parent
+    rows = [
+        (path, _stackctl._read_json_object(str(path)))
+        for path in sorted(receipt_root.glob("*.json"))
+    ]
+
+    def links(kind: str) -> list[dict[str, str]]:
+        return [
+            {
+                "ref": _stackctl.relpath(path),
+                "digest": str(document.get("receiptDigest") or ""),
+            }
+            for path, document in rows
+            if document.get("kind") == kind
+        ]
+
+    root_document = _stackctl._read_json_object(str(provision_receipt.path))
+    summaries = [
+        document.get("payload")
+        for _path, document in rows
+        if document.get("kind") == "run-summary"
+    ]
+    cleanup = [
+        document.get("payload")
+        for _path, document in rows
+        if document.get("kind") == "cleanup"
+    ]
+    if (
+        len(summaries) != 1
+        or not isinstance(summaries[0], Mapping)
+        or summaries[0].get("status") != "prepared"
+        or summaries[0].get("baselineEligible") is not False
+        or not links("readback")
+        or not cleanup
+        or any(
+            not isinstance(item, Mapping) or item.get("state") != "released"
+            for item in cleanup
+        )
+    ):
+        raise RuntimeError("typed profile preparation did not finish prepared and cleaned")
+    preparation = {
+        "status": "prepared-cleaned",
+        "baselineEligible": False,
+        "testDataInstanceId": str(root_document.get("testDataInstanceId") or ""),
+        "rootProvisionReceipt": {
+            "ref": _stackctl.relpath(provision_receipt.path),
+            "digest": str(provision_receipt.digest),
+        },
+        "readbackReceipts": links("readback"),
+        "cleanupReceipts": links("cleanup"),
+        "runSummaryReceipt": links("run-summary")[0],
+        "pageCaseResult": {
+            "reportRef": _stackctl.relpath(report_path),
+            "status": str(page_report.get("status") or ""),
+        },
+    }
+    page_report["testDataPreparation"] = {
+        key: value for key, value in preparation.items() if key != "pageCaseResult"
+    }
+    _stackctl.write_json(report_path, page_report)
+    return preparation
+
+
 def _run_profile_command(
     profile_command: Mapping[str, Any],
     *,
@@ -651,7 +731,9 @@ def _run_profile_command(
         _stackctl.AuthenticatedActorsParams(roles=roles)
     )
     session = _stackctl.TestDataSession.for_case(case_id, context=actor_context)
+    provision_receipt = None
     with session.provision(request) as provisioned:
+        provision_receipt = provisioned.receipt
         for role in roles:
             actor_handle = provisioned.value.require(role)
             actor = runtime.actor(actor_handle)
@@ -673,11 +755,20 @@ def _run_profile_command(
                         "QWQ_TEST_DATA_PERSONA_ID": actor.session.persona_id,
                     }
                 )
-        return _stackctl.run(
+        result = _stackctl.run(
             list(profile_command["argv"]),
             cwd=profile_command.get("cwd"),
             env=_stackctl._verify_child_environment(target_name, command_environment),
         )
+    if (
+        provision_receipt is not None
+        and profile_command.get("linkTestDataPreparationToPageReport") is True
+    ):
+        _stackctl._link_profile_preparation_to_page_report(
+            profile_command,
+            provision_receipt,
+        )
+    return result
 
 
 def _run_static_verify_wave(

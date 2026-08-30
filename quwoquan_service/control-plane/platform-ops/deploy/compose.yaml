@@ -14,12 +14,13 @@ services:
       # 环境身份只允许四环境；本地组合方式不得伪造第五环境名。
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       CONFIG_VERSION: "${QWQ_COMPOSE_PLATFORM_OPS_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_PLATFORM_OPS_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       RELEASE_MANIFEST_DIGEST: "${QWQ_COMPOSE_RELEASE_MANIFEST_DIGEST:-}"
       PLATFORM_OPS_SERVICE_ADDR: ":18088"
       REPO_ROOT: /app
-      POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
+      PLATFORM_OPS_POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
       # ConfigInstanceReport transactional outbox 的 typed event 总线。
       PLATFORM_OPS_REDIS_GENERAL_ADDR: redis:6379
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
@@ -35,6 +36,9 @@ services:
       - "${QWQ_COMPOSE_PLATFORM_OPS_SERVICE_PORT:-19260}:18088"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
+      # 单环境 runtime facts 树由部署面材料化并挂载（DEC-005：环境配置树不烤入镜像）。
+      - ${QWQ_COMPOSE_PLATFORM_OPS_FACTS_ROOT:?platform-ops runtime facts mount is required}:/app:ro
       - ${QWQ_OUTPUT_ROOT:?QWQ_OUTPUT_ROOT is required}/env/repo/local/control-plane/process/platform-ops-service:/app/.qwq_output/env/repo/local/control-plane/process/platform-ops-service
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18088/healthz >/dev/null 2>&1"]

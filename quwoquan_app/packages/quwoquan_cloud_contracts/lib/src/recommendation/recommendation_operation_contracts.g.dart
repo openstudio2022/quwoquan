@@ -1,8 +1,7 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
+// ContractGraph SHA256: cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f
 
 library;
-
 
 final class IntersectionActionHint {
   const IntersectionActionHint({
@@ -25,16 +24,43 @@ final class IntersectionActionHint {
   final List<String> requiredGates;
   final String dispatch;
 
-  factory IntersectionActionHint.fromWire(Map<String, Object?> map, [String path = "IntersectionActionHint"]) {
-    _rejectUnknownFields(map, const <String>{"actionKey", "label", "target", "isPrimary", "priority", "actionTier", "requiredGates", "dispatch"}, path);
+  factory IntersectionActionHint.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionActionHint",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "actionKey",
+      "label",
+      "target",
+      "isPrimary",
+      "priority",
+      "actionTier",
+      "requiredGates",
+      "dispatch",
+    }, path);
     return IntersectionActionHint(
       actionKey: _requiredString(map["actionKey"], '$path.actionKey'),
       label: _requiredString(map["label"], '$path.label'),
-      target: map["target"] == null ? null : IntersectionTarget.fromWire(_requiredObject(map["target"], '$path.target'), '$path.target'),
+      target: map["target"] == null
+          ? null
+          : IntersectionTarget.fromWire(
+              _requiredObject(map["target"], '$path.target'),
+              '$path.target',
+            ),
       isPrimary: _requiredBool(map["isPrimary"], '$path.isPrimary'),
       priority: _requiredInt(map["priority"], '$path.priority'),
       actionTier: _requiredString(map["actionTier"], '$path.actionTier'),
-      requiredGates: List<String>.unmodifiable(_requiredList(map["requiredGates"], '$path.requiredGates').asMap().entries.map((entry) => _requiredString(entry.value, '$path.requiredGates' + '[${entry.key}]'))),
+      requiredGates: List<String>.unmodifiable(
+        _requiredList(
+          map["requiredGates"],
+          '$path.requiredGates',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.requiredGates' + '[${entry.key}]',
+          ),
+        ),
+      ),
       dispatch: _requiredString(map["dispatch"], '$path.dispatch'),
     );
   }
@@ -46,7 +72,9 @@ final class IntersectionActionHint {
     "isPrimary": isPrimary,
     "priority": priority,
     "actionTier": actionTier,
-    "requiredGates": requiredGates.map((value) => value).toList(growable: false),
+    "requiredGates": requiredGates
+        .map((value) => value)
+        .toList(growable: false),
     "dispatch": dispatch,
   };
 }
@@ -92,26 +120,74 @@ final class IntersectionActorEvidence {
   final String snapshotVersion;
   final int sortKey;
 
-  factory IntersectionActorEvidence.fromWire(Map<String, Object?> map, [String path = "IntersectionActorEvidence"]) {
-    _rejectUnknownFields(map, const <String>{"actorId", "displayName", "avatarUrl", "relationLabel", "relationSourceRef", "relationObjectId", "relationObjectName", "sourcePointId", "sourceRef", "actionSummaryText", "likeCount", "commentCount", "shareCount", "privacyState", "target", "evidenceRank", "snapshotVersion", "sortKey"}, path);
+  factory IntersectionActorEvidence.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionActorEvidence",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "actorId",
+      "displayName",
+      "avatarUrl",
+      "relationLabel",
+      "relationSourceRef",
+      "relationObjectId",
+      "relationObjectName",
+      "sourcePointId",
+      "sourceRef",
+      "actionSummaryText",
+      "likeCount",
+      "commentCount",
+      "shareCount",
+      "privacyState",
+      "target",
+      "evidenceRank",
+      "snapshotVersion",
+      "sortKey",
+    }, path);
     return IntersectionActorEvidence(
       actorId: _requiredString(map["actorId"], '$path.actorId'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      relationLabel: _requiredString(map["relationLabel"], '$path.relationLabel'),
-      relationSourceRef: _requiredString(map["relationSourceRef"], '$path.relationSourceRef'),
-      relationObjectId: _requiredString(map["relationObjectId"], '$path.relationObjectId'),
-      relationObjectName: _requiredString(map["relationObjectName"], '$path.relationObjectName'),
-      sourcePointId: _requiredString(map["sourcePointId"], '$path.sourcePointId'),
+      relationLabel: _requiredString(
+        map["relationLabel"],
+        '$path.relationLabel',
+      ),
+      relationSourceRef: _requiredString(
+        map["relationSourceRef"],
+        '$path.relationSourceRef',
+      ),
+      relationObjectId: _requiredString(
+        map["relationObjectId"],
+        '$path.relationObjectId',
+      ),
+      relationObjectName: _requiredString(
+        map["relationObjectName"],
+        '$path.relationObjectName',
+      ),
+      sourcePointId: _requiredString(
+        map["sourcePointId"],
+        '$path.sourcePointId',
+      ),
       sourceRef: _requiredString(map["sourceRef"], '$path.sourceRef'),
-      actionSummaryText: _requiredString(map["actionSummaryText"], '$path.actionSummaryText'),
+      actionSummaryText: _requiredString(
+        map["actionSummaryText"],
+        '$path.actionSummaryText',
+      ),
       likeCount: _requiredInt(map["likeCount"], '$path.likeCount'),
       commentCount: _requiredInt(map["commentCount"], '$path.commentCount'),
       shareCount: _requiredInt(map["shareCount"], '$path.shareCount'),
       privacyState: _requiredString(map["privacyState"], '$path.privacyState'),
-      target: map["target"] == null ? null : IntersectionTarget.fromWire(_requiredObject(map["target"], '$path.target'), '$path.target'),
+      target: map["target"] == null
+          ? null
+          : IntersectionTarget.fromWire(
+              _requiredObject(map["target"], '$path.target'),
+              '$path.target',
+            ),
       evidenceRank: _requiredInt(map["evidenceRank"], '$path.evidenceRank'),
-      snapshotVersion: _requiredString(map["snapshotVersion"], '$path.snapshotVersion'),
+      snapshotVersion: _requiredString(
+        map["snapshotVersion"],
+        '$path.snapshotVersion',
+      ),
       sortKey: _requiredInt(map["sortKey"], '$path.sortKey'),
     );
   }
@@ -169,8 +245,25 @@ final class IntersectionDimensionTally {
   final int reactivatedCount;
   final String iconKey;
 
-  factory IntersectionDimensionTally.fromWire(Map<String, Object?> map, [String path = "IntersectionDimensionTally"]) {
-    _rejectUnknownFields(map, const <String>{"dimension", "label", "count", "newCount", "briefText", "subtitleText", "briefSpans", "sampleVisuals", "sourceRef", "countObjectKind", "strengthenedCount", "reactivatedCount", "iconKey"}, path);
+  factory IntersectionDimensionTally.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionDimensionTally",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "dimension",
+      "label",
+      "count",
+      "newCount",
+      "briefText",
+      "subtitleText",
+      "briefSpans",
+      "sampleVisuals",
+      "sourceRef",
+      "countObjectKind",
+      "strengthenedCount",
+      "reactivatedCount",
+      "iconKey",
+    }, path);
     return IntersectionDimensionTally(
       dimension: _requiredString(map["dimension"], '$path.dimension'),
       label: _requiredString(map["label"], '$path.label'),
@@ -178,12 +271,44 @@ final class IntersectionDimensionTally {
       newCount: _requiredInt(map["newCount"], '$path.newCount'),
       briefText: _requiredString(map["briefText"], '$path.briefText'),
       subtitleText: _requiredString(map["subtitleText"], '$path.subtitleText'),
-      briefSpans: List<IntersectionTextSpan>.unmodifiable(_requiredList(map["briefSpans"], '$path.briefSpans').asMap().entries.map((entry) => IntersectionTextSpan.fromWire(_requiredObject(entry.value, '$path.briefSpans' + '[${entry.key}]'), '$path.briefSpans' + '[${entry.key}]'))),
-      sampleVisuals: List<IntersectionVisual>.unmodifiable(_requiredList(map["sampleVisuals"], '$path.sampleVisuals').asMap().entries.map((entry) => IntersectionVisual.fromWire(_requiredObject(entry.value, '$path.sampleVisuals' + '[${entry.key}]'), '$path.sampleVisuals' + '[${entry.key}]'))),
+      briefSpans: List<IntersectionTextSpan>.unmodifiable(
+        _requiredList(
+          map["briefSpans"],
+          '$path.briefSpans',
+        ).asMap().entries.map(
+          (entry) => IntersectionTextSpan.fromWire(
+            _requiredObject(entry.value, '$path.briefSpans' + '[${entry.key}]'),
+            '$path.briefSpans' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      sampleVisuals: List<IntersectionVisual>.unmodifiable(
+        _requiredList(
+          map["sampleVisuals"],
+          '$path.sampleVisuals',
+        ).asMap().entries.map(
+          (entry) => IntersectionVisual.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.sampleVisuals' + '[${entry.key}]',
+            ),
+            '$path.sampleVisuals' + '[${entry.key}]',
+          ),
+        ),
+      ),
       sourceRef: _requiredString(map["sourceRef"], '$path.sourceRef'),
-      countObjectKind: _requiredString(map["countObjectKind"], '$path.countObjectKind'),
-      strengthenedCount: _requiredInt(map["strengthenedCount"], '$path.strengthenedCount'),
-      reactivatedCount: _requiredInt(map["reactivatedCount"], '$path.reactivatedCount'),
+      countObjectKind: _requiredString(
+        map["countObjectKind"],
+        '$path.countObjectKind',
+      ),
+      strengthenedCount: _requiredInt(
+        map["strengthenedCount"],
+        '$path.strengthenedCount',
+      ),
+      reactivatedCount: _requiredInt(
+        map["reactivatedCount"],
+        '$path.reactivatedCount',
+      ),
       iconKey: _requiredString(map["iconKey"], '$path.iconKey'),
     );
   }
@@ -195,8 +320,12 @@ final class IntersectionDimensionTally {
     "newCount": newCount,
     "briefText": briefText,
     "subtitleText": subtitleText,
-    "briefSpans": briefSpans.map((value) => value.toWire()).toList(growable: false),
-    "sampleVisuals": sampleVisuals.map((value) => value.toWire()).toList(growable: false),
+    "briefSpans": briefSpans
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    "sampleVisuals": sampleVisuals
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "sourceRef": sourceRef,
     "countObjectKind": countObjectKind,
     "strengthenedCount": strengthenedCount,
@@ -222,22 +351,50 @@ final class IntersectionInboxSummary {
   final int totalStrengthenedCount;
   final int totalReactivatedCount;
 
-  factory IntersectionInboxSummary.fromWire(Map<String, Object?> map, [String path = "IntersectionInboxSummary"]) {
-    _rejectUnknownFields(map, const <String>{"totalCount", "totalNewCount", "dimensions", "generatedAt", "totalStrengthenedCount", "totalReactivatedCount"}, path);
+  factory IntersectionInboxSummary.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionInboxSummary",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "totalCount",
+      "totalNewCount",
+      "dimensions",
+      "generatedAt",
+      "totalStrengthenedCount",
+      "totalReactivatedCount",
+    }, path);
     return IntersectionInboxSummary(
       totalCount: _requiredInt(map["totalCount"], '$path.totalCount'),
       totalNewCount: _requiredInt(map["totalNewCount"], '$path.totalNewCount'),
-      dimensions: List<IntersectionDimensionTally>.unmodifiable(_requiredList(map["dimensions"], '$path.dimensions').asMap().entries.map((entry) => IntersectionDimensionTally.fromWire(_requiredObject(entry.value, '$path.dimensions' + '[${entry.key}]'), '$path.dimensions' + '[${entry.key}]'))),
+      dimensions: List<IntersectionDimensionTally>.unmodifiable(
+        _requiredList(
+          map["dimensions"],
+          '$path.dimensions',
+        ).asMap().entries.map(
+          (entry) => IntersectionDimensionTally.fromWire(
+            _requiredObject(entry.value, '$path.dimensions' + '[${entry.key}]'),
+            '$path.dimensions' + '[${entry.key}]',
+          ),
+        ),
+      ),
       generatedAt: _requiredString(map["generatedAt"], '$path.generatedAt'),
-      totalStrengthenedCount: _requiredInt(map["totalStrengthenedCount"], '$path.totalStrengthenedCount'),
-      totalReactivatedCount: _requiredInt(map["totalReactivatedCount"], '$path.totalReactivatedCount'),
+      totalStrengthenedCount: _requiredInt(
+        map["totalStrengthenedCount"],
+        '$path.totalStrengthenedCount',
+      ),
+      totalReactivatedCount: _requiredInt(
+        map["totalReactivatedCount"],
+        '$path.totalReactivatedCount',
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "totalCount": totalCount,
     "totalNewCount": totalNewCount,
-    "dimensions": dimensions.map((value) => value.toWire()).toList(growable: false),
+    "dimensions": dimensions
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "generatedAt": generatedAt,
     "totalStrengthenedCount": totalStrengthenedCount,
     "totalReactivatedCount": totalReactivatedCount,
@@ -271,8 +428,23 @@ final class IntersectionPoint {
   final List<String> sampleAvatarUrls;
   final List<IntersectionVisual> sampleVisuals;
 
-  factory IntersectionPoint.fromWire(Map<String, Object?> map, [String path = "IntersectionPoint"]) {
-    _rejectUnknownFields(map, const <String>{"pointId", "pointClass", "dimension", "label", "displayText", "sourceRef", "visibility", "count", "sampleText", "sampleAvatarUrls", "sampleVisuals"}, path);
+  factory IntersectionPoint.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionPoint",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "pointId",
+      "pointClass",
+      "dimension",
+      "label",
+      "displayText",
+      "sourceRef",
+      "visibility",
+      "count",
+      "sampleText",
+      "sampleAvatarUrls",
+      "sampleVisuals",
+    }, path);
     return IntersectionPoint(
       pointId: _requiredString(map["pointId"], '$path.pointId'),
       pointClass: _requiredString(map["pointClass"], '$path.pointClass'),
@@ -283,8 +455,31 @@ final class IntersectionPoint {
       visibility: _requiredString(map["visibility"], '$path.visibility'),
       count: _requiredInt(map["count"], '$path.count'),
       sampleText: _requiredString(map["sampleText"], '$path.sampleText'),
-      sampleAvatarUrls: List<String>.unmodifiable(_requiredList(map["sampleAvatarUrls"], '$path.sampleAvatarUrls').asMap().entries.map((entry) => _requiredString(entry.value, '$path.sampleAvatarUrls' + '[${entry.key}]'))),
-      sampleVisuals: List<IntersectionVisual>.unmodifiable(_requiredList(map["sampleVisuals"], '$path.sampleVisuals').asMap().entries.map((entry) => IntersectionVisual.fromWire(_requiredObject(entry.value, '$path.sampleVisuals' + '[${entry.key}]'), '$path.sampleVisuals' + '[${entry.key}]'))),
+      sampleAvatarUrls: List<String>.unmodifiable(
+        _requiredList(
+          map["sampleAvatarUrls"],
+          '$path.sampleAvatarUrls',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.sampleAvatarUrls' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      sampleVisuals: List<IntersectionVisual>.unmodifiable(
+        _requiredList(
+          map["sampleVisuals"],
+          '$path.sampleVisuals',
+        ).asMap().entries.map(
+          (entry) => IntersectionVisual.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.sampleVisuals' + '[${entry.key}]',
+            ),
+            '$path.sampleVisuals' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -298,8 +493,12 @@ final class IntersectionPoint {
     "visibility": visibility,
     "count": count,
     "sampleText": sampleText,
-    "sampleAvatarUrls": sampleAvatarUrls.map((value) => value).toList(growable: false),
-    "sampleVisuals": sampleVisuals.map((value) => value.toWire()).toList(growable: false),
+    "sampleAvatarUrls": sampleAvatarUrls
+        .map((value) => value)
+        .toList(growable: false),
+    "sampleVisuals": sampleVisuals
+        .map((value) => value.toWire())
+        .toList(growable: false),
   };
 }
 
@@ -320,15 +519,40 @@ final class IntersectionPropagationPath {
   final IntersectionTarget? summaryTarget;
   final List<IntersectionVisual> nodes;
 
-  factory IntersectionPropagationPath.fromWire(Map<String, Object?> map, [String path = "IntersectionPropagationPath"]) {
-    _rejectUnknownFields(map, const <String>{"pathKind", "hopCount", "secondarySpreadCount", "summaryText", "summaryTarget", "nodes"}, path);
+  factory IntersectionPropagationPath.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionPropagationPath",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "pathKind",
+      "hopCount",
+      "secondarySpreadCount",
+      "summaryText",
+      "summaryTarget",
+      "nodes",
+    }, path);
     return IntersectionPropagationPath(
       pathKind: _requiredString(map["pathKind"], '$path.pathKind'),
       hopCount: _requiredInt(map["hopCount"], '$path.hopCount'),
-      secondarySpreadCount: _requiredInt(map["secondarySpreadCount"], '$path.secondarySpreadCount'),
+      secondarySpreadCount: _requiredInt(
+        map["secondarySpreadCount"],
+        '$path.secondarySpreadCount',
+      ),
       summaryText: _requiredString(map["summaryText"], '$path.summaryText'),
-      summaryTarget: map["summaryTarget"] == null ? null : IntersectionTarget.fromWire(_requiredObject(map["summaryTarget"], '$path.summaryTarget'), '$path.summaryTarget'),
-      nodes: List<IntersectionVisual>.unmodifiable(_requiredList(map["nodes"], '$path.nodes').asMap().entries.map((entry) => IntersectionVisual.fromWire(_requiredObject(entry.value, '$path.nodes' + '[${entry.key}]'), '$path.nodes' + '[${entry.key}]'))),
+      summaryTarget: map["summaryTarget"] == null
+          ? null
+          : IntersectionTarget.fromWire(
+              _requiredObject(map["summaryTarget"], '$path.summaryTarget'),
+              '$path.summaryTarget',
+            ),
+      nodes: List<IntersectionVisual>.unmodifiable(
+        _requiredList(map["nodes"], '$path.nodes').asMap().entries.map(
+          (entry) => IntersectionVisual.fromWire(
+            _requiredObject(entry.value, '$path.nodes' + '[${entry.key}]'),
+            '$path.nodes' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -461,66 +685,297 @@ final class IntersectionReason {
   final String subjectId;
   final String subjectContext;
 
-  factory IntersectionReason.fromWire(Map<String, Object?> map, [String path = "IntersectionReason"]) {
-    _rejectUnknownFields(map, const <String>{"kind", "vertical", "dimension", "tagRefs", "relationKind", "objectKind", "relationObjectId", "strength", "primaryText", "primaryTextL10nKey", "displayBinding", "secondaryText", "weightTier", "actionType", "actionTargetId", "source", "intersectionId", "intersectionClass", "avatarUrl", "displayName", "confidenceLabel", "modelReasonBucket", "freshAt", "expiresAt", "intersectionPoints", "pointSummarySnapshotId", "actorEvidenceTotalCount", "actorEvidenceCompleteness", "actorEvidence", "factPointCount", "recommendedPointCount", "totalPointCount", "dimensionPointSummary", "pointClassLabel", "connectionSummary", "lastRecommendedAt", "seenAt", "rankState", "primarySpans", "sampleVisuals", "representativeActor", "actionHints", "lifecycleState", "previousStrength", "strengthDelta", "edgeWeight", "iconKey", "tone", "typeVisual", "objectVisual", "timeBucket", "dedupeKey", "anchorUserWeight", "mutualCount", "moment", "subjectId", "subjectContext"}, path);
+  factory IntersectionReason.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionReason",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "kind",
+      "vertical",
+      "dimension",
+      "tagRefs",
+      "relationKind",
+      "objectKind",
+      "relationObjectId",
+      "strength",
+      "primaryText",
+      "primaryTextL10nKey",
+      "displayBinding",
+      "secondaryText",
+      "weightTier",
+      "actionType",
+      "actionTargetId",
+      "source",
+      "intersectionId",
+      "intersectionClass",
+      "avatarUrl",
+      "displayName",
+      "confidenceLabel",
+      "modelReasonBucket",
+      "freshAt",
+      "expiresAt",
+      "intersectionPoints",
+      "pointSummarySnapshotId",
+      "actorEvidenceTotalCount",
+      "actorEvidenceCompleteness",
+      "actorEvidence",
+      "factPointCount",
+      "recommendedPointCount",
+      "totalPointCount",
+      "dimensionPointSummary",
+      "pointClassLabel",
+      "connectionSummary",
+      "lastRecommendedAt",
+      "seenAt",
+      "rankState",
+      "primarySpans",
+      "sampleVisuals",
+      "representativeActor",
+      "actionHints",
+      "lifecycleState",
+      "previousStrength",
+      "strengthDelta",
+      "edgeWeight",
+      "iconKey",
+      "tone",
+      "typeVisual",
+      "objectVisual",
+      "timeBucket",
+      "dedupeKey",
+      "anchorUserWeight",
+      "mutualCount",
+      "moment",
+      "subjectId",
+      "subjectContext",
+    }, path);
     return IntersectionReason(
       kind: _requiredString(map["kind"], '$path.kind'),
       vertical: _requiredString(map["vertical"], '$path.vertical'),
       dimension: _requiredString(map["dimension"], '$path.dimension'),
-      tagRefs: List<String>.unmodifiable(_requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'))),
+      tagRefs: List<String>.unmodifiable(
+        _requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map(
+          (entry) =>
+              _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'),
+        ),
+      ),
       relationKind: _requiredString(map["relationKind"], '$path.relationKind'),
       objectKind: _requiredString(map["objectKind"], '$path.objectKind'),
-      relationObjectId: _requiredString(map["relationObjectId"], '$path.relationObjectId'),
+      relationObjectId: _requiredString(
+        map["relationObjectId"],
+        '$path.relationObjectId',
+      ),
       strength: _requiredDouble(map["strength"], '$path.strength'),
       primaryText: _requiredString(map["primaryText"], '$path.primaryText'),
-      primaryTextL10nKey: _requiredString(map["primaryTextL10nKey"], '$path.primaryTextL10nKey'),
-      displayBinding: _requiredString(map["displayBinding"], '$path.displayBinding'),
-      secondaryText: _requiredString(map["secondaryText"], '$path.secondaryText'),
+      primaryTextL10nKey: _requiredString(
+        map["primaryTextL10nKey"],
+        '$path.primaryTextL10nKey',
+      ),
+      displayBinding: _requiredString(
+        map["displayBinding"],
+        '$path.displayBinding',
+      ),
+      secondaryText: _requiredString(
+        map["secondaryText"],
+        '$path.secondaryText',
+      ),
       weightTier: _requiredString(map["weightTier"], '$path.weightTier'),
       actionType: _requiredString(map["actionType"], '$path.actionType'),
-      actionTargetId: _requiredString(map["actionTargetId"], '$path.actionTargetId'),
+      actionTargetId: _requiredString(
+        map["actionTargetId"],
+        '$path.actionTargetId',
+      ),
       source: _requiredString(map["source"], '$path.source'),
-      intersectionId: _requiredString(map["intersectionId"], '$path.intersectionId'),
-      intersectionClass: _requiredString(map["intersectionClass"], '$path.intersectionClass'),
+      intersectionId: _requiredString(
+        map["intersectionId"],
+        '$path.intersectionId',
+      ),
+      intersectionClass: _requiredString(
+        map["intersectionClass"],
+        '$path.intersectionClass',
+      ),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      confidenceLabel: _requiredString(map["confidenceLabel"], '$path.confidenceLabel'),
-      modelReasonBucket: _requiredString(map["modelReasonBucket"], '$path.modelReasonBucket'),
+      confidenceLabel: _requiredString(
+        map["confidenceLabel"],
+        '$path.confidenceLabel',
+      ),
+      modelReasonBucket: _requiredString(
+        map["modelReasonBucket"],
+        '$path.modelReasonBucket',
+      ),
       freshAt: _requiredString(map["freshAt"], '$path.freshAt'),
       expiresAt: _requiredString(map["expiresAt"], '$path.expiresAt'),
-      intersectionPoints: List<IntersectionPoint>.unmodifiable(_requiredList(map["intersectionPoints"], '$path.intersectionPoints').asMap().entries.map((entry) => IntersectionPoint.fromWire(_requiredObject(entry.value, '$path.intersectionPoints' + '[${entry.key}]'), '$path.intersectionPoints' + '[${entry.key}]'))),
-      pointSummarySnapshotId: _requiredString(map["pointSummarySnapshotId"], '$path.pointSummarySnapshotId'),
-      actorEvidenceTotalCount: _requiredInt(map["actorEvidenceTotalCount"], '$path.actorEvidenceTotalCount'),
-      actorEvidenceCompleteness: _requiredString(map["actorEvidenceCompleteness"], '$path.actorEvidenceCompleteness'),
-      actorEvidence: List<IntersectionActorEvidence>.unmodifiable(_requiredList(map["actorEvidence"], '$path.actorEvidence').asMap().entries.map((entry) => IntersectionActorEvidence.fromWire(_requiredObject(entry.value, '$path.actorEvidence' + '[${entry.key}]'), '$path.actorEvidence' + '[${entry.key}]'))),
-      factPointCount: _requiredInt(map["factPointCount"], '$path.factPointCount'),
-      recommendedPointCount: _requiredInt(map["recommendedPointCount"], '$path.recommendedPointCount'),
-      totalPointCount: _requiredInt(map["totalPointCount"], '$path.totalPointCount'),
-      dimensionPointSummary: List<IntersectionDimensionTally>.unmodifiable(_requiredList(map["dimensionPointSummary"], '$path.dimensionPointSummary').asMap().entries.map((entry) => IntersectionDimensionTally.fromWire(_requiredObject(entry.value, '$path.dimensionPointSummary' + '[${entry.key}]'), '$path.dimensionPointSummary' + '[${entry.key}]'))),
-      pointClassLabel: _requiredString(map["pointClassLabel"], '$path.pointClassLabel'),
-      connectionSummary: _requiredString(map["connectionSummary"], '$path.connectionSummary'),
-      lastRecommendedAt: _requiredString(map["lastRecommendedAt"], '$path.lastRecommendedAt'),
+      intersectionPoints: List<IntersectionPoint>.unmodifiable(
+        _requiredList(
+          map["intersectionPoints"],
+          '$path.intersectionPoints',
+        ).asMap().entries.map(
+          (entry) => IntersectionPoint.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.intersectionPoints' + '[${entry.key}]',
+            ),
+            '$path.intersectionPoints' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      pointSummarySnapshotId: _requiredString(
+        map["pointSummarySnapshotId"],
+        '$path.pointSummarySnapshotId',
+      ),
+      actorEvidenceTotalCount: _requiredInt(
+        map["actorEvidenceTotalCount"],
+        '$path.actorEvidenceTotalCount',
+      ),
+      actorEvidenceCompleteness: _requiredString(
+        map["actorEvidenceCompleteness"],
+        '$path.actorEvidenceCompleteness',
+      ),
+      actorEvidence: List<IntersectionActorEvidence>.unmodifiable(
+        _requiredList(
+          map["actorEvidence"],
+          '$path.actorEvidence',
+        ).asMap().entries.map(
+          (entry) => IntersectionActorEvidence.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.actorEvidence' + '[${entry.key}]',
+            ),
+            '$path.actorEvidence' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      factPointCount: _requiredInt(
+        map["factPointCount"],
+        '$path.factPointCount',
+      ),
+      recommendedPointCount: _requiredInt(
+        map["recommendedPointCount"],
+        '$path.recommendedPointCount',
+      ),
+      totalPointCount: _requiredInt(
+        map["totalPointCount"],
+        '$path.totalPointCount',
+      ),
+      dimensionPointSummary: List<IntersectionDimensionTally>.unmodifiable(
+        _requiredList(
+          map["dimensionPointSummary"],
+          '$path.dimensionPointSummary',
+        ).asMap().entries.map(
+          (entry) => IntersectionDimensionTally.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.dimensionPointSummary' + '[${entry.key}]',
+            ),
+            '$path.dimensionPointSummary' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      pointClassLabel: _requiredString(
+        map["pointClassLabel"],
+        '$path.pointClassLabel',
+      ),
+      connectionSummary: _requiredString(
+        map["connectionSummary"],
+        '$path.connectionSummary',
+      ),
+      lastRecommendedAt: _requiredString(
+        map["lastRecommendedAt"],
+        '$path.lastRecommendedAt',
+      ),
       seenAt: _requiredString(map["seenAt"], '$path.seenAt'),
       rankState: _requiredString(map["rankState"], '$path.rankState'),
-      primarySpans: List<IntersectionTextSpan>.unmodifiable(_requiredList(map["primarySpans"], '$path.primarySpans').asMap().entries.map((entry) => IntersectionTextSpan.fromWire(_requiredObject(entry.value, '$path.primarySpans' + '[${entry.key}]'), '$path.primarySpans' + '[${entry.key}]'))),
-      sampleVisuals: List<IntersectionVisual>.unmodifiable(_requiredList(map["sampleVisuals"], '$path.sampleVisuals').asMap().entries.map((entry) => IntersectionVisual.fromWire(_requiredObject(entry.value, '$path.sampleVisuals' + '[${entry.key}]'), '$path.sampleVisuals' + '[${entry.key}]'))),
-      representativeActor: map["representativeActor"] == null ? null : IntersectionRepresentativeActor.fromWire(_requiredObject(map["representativeActor"], '$path.representativeActor'), '$path.representativeActor'),
-      actionHints: List<IntersectionActionHint>.unmodifiable(_requiredList(map["actionHints"], '$path.actionHints').asMap().entries.map((entry) => IntersectionActionHint.fromWire(_requiredObject(entry.value, '$path.actionHints' + '[${entry.key}]'), '$path.actionHints' + '[${entry.key}]'))),
-      lifecycleState: _requiredString(map["lifecycleState"], '$path.lifecycleState'),
-      previousStrength: _requiredDouble(map["previousStrength"], '$path.previousStrength'),
-      strengthDelta: _requiredDouble(map["strengthDelta"], '$path.strengthDelta'),
+      primarySpans: List<IntersectionTextSpan>.unmodifiable(
+        _requiredList(
+          map["primarySpans"],
+          '$path.primarySpans',
+        ).asMap().entries.map(
+          (entry) => IntersectionTextSpan.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.primarySpans' + '[${entry.key}]',
+            ),
+            '$path.primarySpans' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      sampleVisuals: List<IntersectionVisual>.unmodifiable(
+        _requiredList(
+          map["sampleVisuals"],
+          '$path.sampleVisuals',
+        ).asMap().entries.map(
+          (entry) => IntersectionVisual.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.sampleVisuals' + '[${entry.key}]',
+            ),
+            '$path.sampleVisuals' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      representativeActor: map["representativeActor"] == null
+          ? null
+          : IntersectionRepresentativeActor.fromWire(
+              _requiredObject(
+                map["representativeActor"],
+                '$path.representativeActor',
+              ),
+              '$path.representativeActor',
+            ),
+      actionHints: List<IntersectionActionHint>.unmodifiable(
+        _requiredList(
+          map["actionHints"],
+          '$path.actionHints',
+        ).asMap().entries.map(
+          (entry) => IntersectionActionHint.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.actionHints' + '[${entry.key}]',
+            ),
+            '$path.actionHints' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      lifecycleState: _requiredString(
+        map["lifecycleState"],
+        '$path.lifecycleState',
+      ),
+      previousStrength: _requiredDouble(
+        map["previousStrength"],
+        '$path.previousStrength',
+      ),
+      strengthDelta: _requiredDouble(
+        map["strengthDelta"],
+        '$path.strengthDelta',
+      ),
       edgeWeight: _requiredDouble(map["edgeWeight"], '$path.edgeWeight'),
       iconKey: _requiredString(map["iconKey"], '$path.iconKey'),
       tone: _requiredString(map["tone"], '$path.tone'),
-      typeVisual: map["typeVisual"] == null ? null : IntersectionVisual.fromWire(_requiredObject(map["typeVisual"], '$path.typeVisual'), '$path.typeVisual'),
-      objectVisual: map["objectVisual"] == null ? null : IntersectionVisual.fromWire(_requiredObject(map["objectVisual"], '$path.objectVisual'), '$path.objectVisual'),
+      typeVisual: map["typeVisual"] == null
+          ? null
+          : IntersectionVisual.fromWire(
+              _requiredObject(map["typeVisual"], '$path.typeVisual'),
+              '$path.typeVisual',
+            ),
+      objectVisual: map["objectVisual"] == null
+          ? null
+          : IntersectionVisual.fromWire(
+              _requiredObject(map["objectVisual"], '$path.objectVisual'),
+              '$path.objectVisual',
+            ),
       timeBucket: _requiredString(map["timeBucket"], '$path.timeBucket'),
       dedupeKey: _requiredString(map["dedupeKey"], '$path.dedupeKey'),
-      anchorUserWeight: _requiredDouble(map["anchorUserWeight"], '$path.anchorUserWeight'),
+      anchorUserWeight: _requiredDouble(
+        map["anchorUserWeight"],
+        '$path.anchorUserWeight',
+      ),
       mutualCount: _requiredInt(map["mutualCount"], '$path.mutualCount'),
       moment: _requiredString(map["moment"], '$path.moment'),
       subjectId: _requiredString(map["subjectId"], '$path.subjectId'),
-      subjectContext: _requiredString(map["subjectContext"], '$path.subjectContext'),
+      subjectContext: _requiredString(
+        map["subjectContext"],
+        '$path.subjectContext',
+      ),
     );
   }
 
@@ -549,24 +1004,37 @@ final class IntersectionReason {
     "modelReasonBucket": modelReasonBucket,
     "freshAt": freshAt,
     "expiresAt": expiresAt,
-    "intersectionPoints": intersectionPoints.map((value) => value.toWire()).toList(growable: false),
+    "intersectionPoints": intersectionPoints
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "pointSummarySnapshotId": pointSummarySnapshotId,
     "actorEvidenceTotalCount": actorEvidenceTotalCount,
     "actorEvidenceCompleteness": actorEvidenceCompleteness,
-    "actorEvidence": actorEvidence.map((value) => value.toWire()).toList(growable: false),
+    "actorEvidence": actorEvidence
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "factPointCount": factPointCount,
     "recommendedPointCount": recommendedPointCount,
     "totalPointCount": totalPointCount,
-    "dimensionPointSummary": dimensionPointSummary.map((value) => value.toWire()).toList(growable: false),
+    "dimensionPointSummary": dimensionPointSummary
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "pointClassLabel": pointClassLabel,
     "connectionSummary": connectionSummary,
     "lastRecommendedAt": lastRecommendedAt,
     "seenAt": seenAt,
     "rankState": rankState,
-    "primarySpans": primarySpans.map((value) => value.toWire()).toList(growable: false),
-    "sampleVisuals": sampleVisuals.map((value) => value.toWire()).toList(growable: false),
-    if (representativeActor != null) "representativeActor": representativeActor!.toWire(),
-    "actionHints": actionHints.map((value) => value.toWire()).toList(growable: false),
+    "primarySpans": primarySpans
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    "sampleVisuals": sampleVisuals
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    if (representativeActor != null)
+      "representativeActor": representativeActor!.toWire(),
+    "actionHints": actionHints
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "lifecycleState": lifecycleState,
     "previousStrength": previousStrength,
     "strengthDelta": strengthDelta,
@@ -606,17 +1074,40 @@ final class IntersectionRepresentativeActor {
   final int evidenceRank;
   final String snapshotVersion;
 
-  factory IntersectionRepresentativeActor.fromWire(Map<String, Object?> map, [String path = "IntersectionRepresentativeActor"]) {
-    _rejectUnknownFields(map, const <String>{"actorId", "displayName", "avatarUrl", "relationLabel", "privacyState", "target", "evidenceRank", "snapshotVersion"}, path);
+  factory IntersectionRepresentativeActor.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionRepresentativeActor",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "actorId",
+      "displayName",
+      "avatarUrl",
+      "relationLabel",
+      "privacyState",
+      "target",
+      "evidenceRank",
+      "snapshotVersion",
+    }, path);
     return IntersectionRepresentativeActor(
       actorId: _requiredString(map["actorId"], '$path.actorId'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      relationLabel: _requiredString(map["relationLabel"], '$path.relationLabel'),
+      relationLabel: _requiredString(
+        map["relationLabel"],
+        '$path.relationLabel',
+      ),
       privacyState: _requiredString(map["privacyState"], '$path.privacyState'),
-      target: map["target"] == null ? null : IntersectionTarget.fromWire(_requiredObject(map["target"], '$path.target'), '$path.target'),
+      target: map["target"] == null
+          ? null
+          : IntersectionTarget.fromWire(
+              _requiredObject(map["target"], '$path.target'),
+              '$path.target',
+            ),
       evidenceRank: _requiredInt(map["evidenceRank"], '$path.evidenceRank'),
-      snapshotVersion: _requiredString(map["snapshotVersion"], '$path.snapshotVersion'),
+      snapshotVersion: _requiredString(
+        map["snapshotVersion"],
+        '$path.snapshotVersion',
+      ),
     );
   }
 
@@ -645,8 +1136,16 @@ final class IntersectionTarget {
   final String objectKind;
   final String routeId;
 
-  factory IntersectionTarget.fromWire(Map<String, Object?> map, [String path = "IntersectionTarget"]) {
-    _rejectUnknownFields(map, const <String>{"objectType", "objectId", "objectKind", "routeId"}, path);
+  factory IntersectionTarget.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionTarget",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "objectType",
+      "objectId",
+      "objectKind",
+      "routeId",
+    }, path);
     return IntersectionTarget(
       objectType: _requiredString(map["objectType"], '$path.objectType'),
       objectId: _requiredString(map["objectId"], '$path.objectId'),
@@ -676,13 +1175,31 @@ final class IntersectionTextSpan {
   final IntersectionTarget? target;
   final IntersectionVisual? visual;
 
-  factory IntersectionTextSpan.fromWire(Map<String, Object?> map, [String path = "IntersectionTextSpan"]) {
-    _rejectUnknownFields(map, const <String>{"text", "role", "target", "visual"}, path);
+  factory IntersectionTextSpan.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionTextSpan",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "text",
+      "role",
+      "target",
+      "visual",
+    }, path);
     return IntersectionTextSpan(
       text: _requiredString(map["text"], '$path.text'),
       role: _requiredString(map["role"], '$path.role'),
-      target: map["target"] == null ? null : IntersectionTarget.fromWire(_requiredObject(map["target"], '$path.target'), '$path.target'),
-      visual: map["visual"] == null ? null : IntersectionVisual.fromWire(_requiredObject(map["visual"], '$path.visual'), '$path.visual'),
+      target: map["target"] == null
+          ? null
+          : IntersectionTarget.fromWire(
+              _requiredObject(map["target"], '$path.target'),
+              '$path.target',
+            ),
+      visual: map["visual"] == null
+          ? null
+          : IntersectionVisual.fromWire(
+              _requiredObject(map["visual"], '$path.visual'),
+              '$path.visual',
+            ),
     );
   }
 
@@ -707,13 +1224,26 @@ final class IntersectionVisual {
   final String displayName;
   final IntersectionTarget? target;
 
-  factory IntersectionVisual.fromWire(Map<String, Object?> map, [String path = "IntersectionVisual"]) {
-    _rejectUnknownFields(map, const <String>{"assetKind", "imageUrl", "displayName", "target"}, path);
+  factory IntersectionVisual.fromWire(
+    Map<String, Object?> map, [
+    String path = "IntersectionVisual",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "assetKind",
+      "imageUrl",
+      "displayName",
+      "target",
+    }, path);
     return IntersectionVisual(
       assetKind: _requiredString(map["assetKind"], '$path.assetKind'),
       imageUrl: _requiredString(map["imageUrl"], '$path.imageUrl'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      target: map["target"] == null ? null : IntersectionTarget.fromWire(_requiredObject(map["target"], '$path.target'), '$path.target'),
+      target: map["target"] == null
+          ? null
+          : IntersectionTarget.fromWire(
+              _requiredObject(map["target"], '$path.target'),
+              '$path.target',
+            ),
     );
   }
 
@@ -748,7 +1278,9 @@ void _rejectUnknownFields(
   final unknown = value.keys.where((key) => !allowed.contains(key)).toList()
     ..sort();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }
 

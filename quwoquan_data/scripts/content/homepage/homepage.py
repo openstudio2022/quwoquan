@@ -91,11 +91,6 @@ from content.homepage.homepage_refs import (
     same_source_unit as _same_source_unit,
 )
 from content.homepage.homepage_tags import homepage_tag_refs as _homepage_tag_refs
-from content.homepage.homepage_assets import (
-    copy_homepage_asset,
-    select_homepage_assets,
-    write_homepage_media_dispositions,
-)
 from content.homepage.homepage_prompt import (
     _entity_available_images_block,
     _entity_base_draft_block,

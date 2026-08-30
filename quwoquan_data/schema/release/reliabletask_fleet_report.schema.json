@@ -33,6 +33,9 @@
     "requiredQuota",
     "finalizedObjectCount",
     "idempotencyKey",
+    "fleetPeakConcurrentWorkers",
+    "fleetWaveCount",
+    "fleetBatchDeadlineEpochSeconds",
     "taskOutcomes",
     "executionCreatedAt",
     "fleetStartedAt",
@@ -168,6 +171,25 @@
     "idempotencyKey": {
       "const": "executionId+entity+carrier+sourceRevision+stage"
     },
+    "fleetPeakConcurrentWorkers": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "本次交付阶段实测的同时运行 worker 进程峰值。只作观测：不得超过 executionPolicy 冻结的 fleetMaxConcurrentWorkers，也不得被回写成新的上限。"
+    },
+    "fleetWaveCount": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "job 数与冻结并行上限决定的 wave 数。规模增长只增加 wave 数，不增加同时运行的进程数。按 DEC-002/DEC-003 与 requiredWorkers 的退役同批成为必填：唯一合法来源是 executionPolicy 冻结的 calibration 绑定，随该 OPEN 关闭同批提为 required。"
+    },
+    "fleetBatchDeadlineEpochSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "executionPolicy 冻结的批次绝对截止，绝对纪元秒。与执行策略中的冻结值相同，进程重启与 lease 续租都不得改写。按 DEC-002/DEC-003 与 requiredWorkers 的退役同批成为必填：唯一合法来源是 executionPolicy 冻结的 calibration 绑定，随该 OPEN 关闭同批提为 required。"
+    },
+    "zeroQualifiedReason": {
+      "description": "本批次零合格时的唯一 typed 原因，取自 _common/zero_qualified_reason.schema.json 的同一定义，不做任何转换映射。存在任一合格对象时不得携带它——那时批次按合格对象数进入 partial，而不是带原因的零合格终态。",
+      "$ref": "../_common/zero_qualified_reason.schema.json#/$defs/zeroQualifiedReason"
+    },
     "taskOutcomes": {
       "type": "array",
       "items": {
@@ -231,6 +253,24 @@
           "automaticRecoveryStatus": {"const": "MEASURED"}
         }
       }
+    },
+    {
+      "if": {
+        "required": ["researchAcceptedCount"],
+        "properties": {"researchAcceptedCount": {"minimum": 1}}
+      },
+      "then": {"not": {"required": ["zeroQualifiedReason"]}}
+    },
+    {
+      "if": {
+        "required": ["commercialAcceptedCount"],
+        "properties": {"commercialAcceptedCount": {"minimum": 1}}
+      },
+      "then": {"not": {"required": ["zeroQualifiedReason"]}}
+    },
+    {
+      "if": {"required": ["zeroQualifiedReason"]},
+      "then": {"properties": {"passed": {"const": false}}}
     }
   ]
 }

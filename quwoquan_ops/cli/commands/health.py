@@ -18,8 +18,11 @@ import argparse
 import concurrent.futures
 import hashlib
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+
+from quwoquan_ops.cli.lib import read_only_user_availability as _read_only_user_availability
 
 
 def register_parser(
@@ -110,11 +113,15 @@ def _script_probes_for_target(
     report_dir: Path,
     *,
     require_non_empty_content_feed: bool = False,
+    research_anonymous_convergence: bool = False,
     deadline_epoch: int = 0,
 ) -> tuple[list[dict[str, Any]], list[tuple[str, str]], list[str]]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    if scope != "full" and not require_non_empty_content_feed:
+    feed_semantics_selected = (
+        require_non_empty_content_feed or research_anonymous_convergence
+    )
+    if scope != "full" and not feed_semantics_selected:
         return [], [], []
     statuses: list[dict[str, Any]] = []
     stdout_sections: list[tuple[str, str]] = []
@@ -129,7 +136,7 @@ def _script_probes_for_target(
         # content-consumer / content-release must not require search or other
         # full-stack commercial probes; those belong to scope=full only.
         only_checks: tuple[str, ...] = ()
-        if require_non_empty_content_feed and scope != "full":
+        if feed_semantics_selected and scope != "full":
             only_checks = (
                 "content_feed",
                 "video_book_feed",
@@ -139,15 +146,62 @@ def _script_probes_for_target(
             target_name,
             report_dir,
             require_non_empty_content_feed=require_non_empty_content_feed,
+            research_anonymous_convergence=research_anonymous_convergence,
             only_checks=only_checks,
             timeout_seconds=probe_timeout,
         )
-        if require_non_empty_content_feed and scope != "full":
+        if feed_semantics_selected and scope != "full":
             status["scope"] = scope
         statuses.append(status)
         stdout_sections.append((status["name"], output))
         findings.extend(probe_findings)
     return statuses, stdout_sections, findings
+
+
+def _surface_health(statuses: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Report the API plane and the static recovery Web plane independently.
+
+    两个面各自只由自己的探针决定：API 全停不得把静态恢复面标成 failed，
+    静态面缺失也不得被 API 的绿色掩盖。
+    """
+    from quwoquan_ops.cli.commands.diagnostics_shared import (
+        PUBLIC_WEB_STATIC_SCOPE,
+    )
+
+    def summarize(
+        selected: list[dict[str, Any]],
+        *,
+        blocker: str,
+    ) -> dict[str, Any]:
+        observed = [item for item in selected if not item.get("skipped")]
+        if not observed:
+            return {"status": "not_observed", "firstBlocker": "", "checks": []}
+        failed = [item for item in observed if not item.get("ok")]
+        return {
+            "status": "failed" if failed else "ok",
+            "firstBlocker": blocker if failed else "",
+            "checks": [str(item.get("name") or "") for item in observed],
+        }
+
+    return {
+        "api": summarize(
+            [
+                item
+                for item in statuses
+                if item.get("scope") == "edge" and item.get("name") == "api-health"
+            ],
+            # API 面没有 launcher typed blocker，沿用 findings 的探针命名。
+            blocker="edge/api-health",
+        ),
+        "publicWeb": summarize(
+            [
+                item
+                for item in statuses
+                if item.get("scope") == PUBLIC_WEB_STATIC_SCOPE
+            ],
+            blocker="APP.WEB.recovery_unavailable",
+        ),
+    }
 
 
 def command_health(args: argparse.Namespace) -> dict[str, Any]:
@@ -329,6 +383,9 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
                 require_non_empty_content_feed=bool(
                     getattr(args, "require_non_empty_content_feed", False)
                 ),
+                research_anonymous_convergence=bool(
+                    getattr(args, "research_anonymous_convergence", False)
+                ),
                 deadline_epoch=deadline_epoch,
             )
         except RuntimeError as error:
@@ -350,41 +407,176 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         statuses.extend(script_statuses)
         stdout_sections.extend(script_stdout_sections)
         findings.extend(script_findings)
+    try:
+        user_availability = _stackctl._read_only_user_availability_report(args.target)
+    except (
+        AttributeError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as error:
+        detail = f"read-only availability aggregation failed: {error}"
+        layers = [
+            {
+                "name": name,
+                "status": "blocked",
+                "issues": [detail],
+            }
+            for name in (
+                "build_ready",
+                "runtime_full_ready",
+                "provider_ready",
+                "release_active",
+                "content_exact_queries_ready",
+                "device_bound",
+                "content_live_passed",
+            )
+        ]
+        user_availability = {
+            "schema": _read_only_user_availability.SCHEMA,
+            "target": args.target,
+            "environment": env_name,
+            "observedAt": _stackctl.utc_now(),
+            "status": "failed",
+            "firstBlockerClass": "startup_identity",
+            "firstBlocker": detail,
+            "userAvailability": layers,
+            "metrics": [
+                {
+                    "name": "stackctl_user_availability",
+                    "labels": {
+                        "target": args.target,
+                        "layer": layer["name"],
+                        "status": layer["status"],
+                    },
+                    "value": 1,
+                }
+                for layer in layers
+            ]
+            + [
+                {
+                    "name": "stackctl_first_blocker",
+                    "labels": {
+                        "target": args.target,
+                        "status": "failed",
+                        "firstBlockerClass": "startup_identity",
+                    },
+                    "value": 1,
+                }
+            ],
+            "evidence": {},
+        }
+        statuses.append(
+            {
+                "name": "user-availability",
+                "scope": "config",
+                "type": "aggregate",
+                "url": f"availability://{args.target}",
+                "ok": False,
+                "statusCode": None,
+                "bodyPreview": detail,
+                "skipped": False,
+            }
+        )
+        findings.append(detail)
     ok_count = sum(1 for item in statuses if item["ok"])
     timing = _stackctl._finish_timing(started_monotonic, started_at)
+    surfaces = _surface_health(statuses)
+    candidate_snapshot: Mapping[str, Any] | None = None
+    startup_receipt: Mapping[str, Any] | None = None
+    generation_issues: list[str] = []
+    try:
+        candidate_snapshot = _stackctl.active_deployment_candidate_snapshot(args.target)
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
+        generation_issues.append(f"active candidate readback failed: {error}")
+    try:
+        startup_receipt = _stackctl.read_startup_attempt(args.target)
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
+        generation_issues.append(f"startup receipt readback failed: {error}")
+    candidate_digest = str((candidate_snapshot or {}).get("baselineId") or "")
+    startup_candidate = str((startup_receipt or {}).get("candidateDigest") or "")
+    if candidate_digest and startup_candidate and candidate_digest != startup_candidate:
+        generation_issues.append(
+            "startup receipt candidateDigest does not match the active candidate"
+        )
+    from quwoquan_ops.cli.lib.evidence_generation import (
+        build_evidence_generation_envelope,
+    )
+    evidence_envelope = build_evidence_generation_envelope(
+        command="health",
+        candidate_snapshot=candidate_snapshot,
+        startup_receipt=startup_receipt,
+        startup_status=(
+            "executed" if isinstance(startup_receipt, Mapping) else "not_executed"
+        ),
+        startup_reason="no startup receipt is available for health",
+        upstream_status="not_applicable",
+        upstream_reason="health probes the active runtime directly",
+    )
     payload = {
         "command": "health",
         "target": args.target,
+        "evidenceEnvelope": evidence_envelope,
+        "generationIssues": generation_issues,
         "scope": args.scope,
         "requestTimeoutSeconds": timeout_seconds,
         "retryAttempts": retry_attempts,
         "retrySleepSeconds": retry_sleep_seconds,
         "httpProbeConcurrency": probe_concurrency,
         "checks": statuses,
+        "surfaces": surfaces,
         "findings": findings,
         "timestamp": _stackctl.utc_now(),
         "scriptProbes": _stackctl._script_probe_plan_for_target(topology, args.target),
         "readOnly": read_only,
+        "userAvailabilityReport": user_availability,
+        "userAvailability": user_availability["userAvailability"],
+        "firstBlockerClass": user_availability["firstBlockerClass"],
+        "observabilityMetrics": user_availability["metrics"],
         **timing,
     }
     _stackctl.write_json(report_dir / "report.json", payload)
     _stackctl.write_json(report_dir / "health.json", {"target": args.target, "scope": args.scope, "checks": statuses})
     _stackctl.write_json(report_dir / "findings.json", {"target": args.target, "scope": args.scope, "issues": findings})
+    availability_failed = user_availability.get("status") != "ready"
     _stackctl._write_summary_bundle(
         report_dir,
         command="health",
         target=args.target,
-        status="ok" if not findings else "failed",
+        status="ok" if not findings and not availability_failed else "failed",
         summary=f"stackctl health {args.target}: {ok_count}/{len(statuses)} healthy",
-        details=findings or [f"scope={args.scope}", f"healthy checks={ok_count}/{len(statuses)}"],
+        details=findings
+        or (
+            [
+                "user availability/"
+                + str(user_availability.get("firstBlockerClass") or "unknown")
+                + " failed: "
+                + str(user_availability.get("firstBlocker") or "required evidence is unavailable")
+            ]
+            if availability_failed
+            else [f"scope={args.scope}", f"healthy checks={ok_count}/{len(statuses)}"]
+        ),
         extra={"scope": args.scope},
         timing=timing,
     )
     _stackctl._write_stdout_markdown(report_dir, stdout_sections)
+    availability_details = (
+        [
+            "user availability/"
+            + str(user_availability.get("firstBlockerClass") or "unknown")
+            + " failed: "
+            + str(user_availability.get("firstBlocker") or "required evidence is unavailable")
+        ]
+        if availability_failed
+        else []
+    )
     return {
-        "exitCode": 0 if not findings else 1,
+        "exitCode": 0 if not findings and not availability_failed else 1,
         "summary": f"stackctl health {args.target}: {ok_count}/{len(statuses)} healthy",
         "details": findings
+        or availability_details
         or [
             "{name} -> {status} {target}".format(
                 name=item["name"],
@@ -394,5 +586,8 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
             for item in statuses
         ],
         "reportDir": _stackctl.relpath(report_dir),
+        "userAvailability": user_availability["userAvailability"],
+        "firstBlockerClass": user_availability["firstBlockerClass"],
+        "evidenceEnvelope": evidence_envelope,
         **timing,
     }

@@ -3,7 +3,6 @@ package http
 import (
 	"net/http"
 
-	rterrors "quwoquan_service/runtime/errors"
 	rtgov "quwoquan_service/runtime/governance"
 	"quwoquan_service/services/search-service/internal/search/search_index_view/application"
 )
@@ -24,9 +23,11 @@ func MaxInflightMiddleware(
 				if observer != nil {
 					observer.ObserveLoadShed("inflight_full")
 				}
-				w.Header().Set("Retry-After", "1")
-				writeErr(w, requestIDFrom(r), rterrors.NewUnavailable(
-					moduleSearch, "搜索繁忙，请稍后再试。", "search inflight limit reached"))
+				writeSearchUnavailable(
+					w,
+					requestIDFrom(r),
+					"search inflight limit reached",
+				)
 				return
 			}
 			defer func() {

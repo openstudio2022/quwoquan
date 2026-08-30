@@ -87,42 +87,39 @@ void main() {
     );
   });
 
-  test(
-    'CircleFile contracts reject child aliases, storage keys and invalid ownership',
-    () {
-      expect(
-        () => CreateCircleFileCommand(
-          circleId: 'circle-1',
-          name: 'missing-asset.pdf',
-          fileType: CircleFileType.file,
-        ),
-        throwsArgumentError,
-      );
-      expect(
-        () => CreateCircleFileCommand(
-          circleId: 'circle-1',
-          name: 'folder',
-          fileType: CircleFileType.folder,
-          assetId: 'asset-1',
-        ),
-        throwsArgumentError,
-      );
-      expect(
-        () => decodeCircleFileSlice(
-          _fileSlice()..['objectKey'] = 'forbidden/storage/key',
-        ),
-        throwsFormatException,
-      );
-      expect(
-        () => decodeCircleFileSlice(
-          _fileSlice()
-            ..remove('uploaderPersonaId')
-            ..['uploaderId'] = 'unexpected-user',
-        ),
-        throwsFormatException,
-      );
-    },
-  );
+  test('CircleFile contracts reject child aliases, storage keys and invalid ownership', () {
+    expect(
+      () => CreateCircleFileCommand(
+        circleId: 'circle-1',
+        name: 'missing-asset.pdf',
+        fileType: CircleFileType.file,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => CreateCircleFileCommand(
+        circleId: 'circle-1',
+        name: 'folder',
+        fileType: CircleFileType.folder,
+        assetId: 'asset-1',
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => decodeCircleFileSlice(
+        _fileSlice()..['objectKey'] = 'forbidden/storage/key',
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => decodeCircleFileSlice(
+        _fileSlice()
+          ..remove('uploaderPersonaId')
+          ..['uploaderId'] = 'unexpected-user',
+      ),
+      throwsFormatException,
+    );
+  });
 
   test('CircleFile only uses If-Match for multi-writer snapshot updates', () {
     final update = encodeCircleCircleFileUpdateCircleFileGeneratedRequest(

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/carrier_demand.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "status", "executionId", "carrier", "familyRef", "quota", "workRequestRef", "workRequestDigest", "sourceDigest", "executionBundle", "entityCatalogDigest", "retryOf"],
+  "properties": {
+    "schema": {"const": "quwoquan_data.carrier_demand"},
+    "status": {"const": "confirmed"},
+    "executionId": {"type": "string", "minLength": 1},
+    "carrier": {"enum": ["homepage", "article", "image", "video"]},
+    "familyRef": {"type": "string", "minLength": 1},
+    "quota": {"type": "integer", "minimum": 1},
+    "workRequestRef": {"type": "string", "minLength": 1},
+    "workRequestDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "sourceDigest": {"$ref": "content_execution_manifest.schema.json#/properties/sourceDigest"},
+    "executionBundle": {"$ref": "content_execution_manifest.schema.json#/properties/executionBundle"},
+    "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "retryOf": {"type": ["string", "null"]}
+  }
+}

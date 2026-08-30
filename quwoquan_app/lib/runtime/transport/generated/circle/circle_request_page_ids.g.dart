@@ -29,7 +29,8 @@ class CircleRequestPageIds {
     'DeclineGatheringInvitation': 'circle.decline.gathering.invitation',
     'DeleteCircleFile': 'circle.files.delete',
     'EndGatheringEarly': 'circle.end.gathering.early',
-    'EvaluateCircleGatheringHostAuthority': 'circle.evaluate.circle.gathering.host.authority',
+    'EvaluateCircleGatheringHostAuthority':
+        'circle.evaluate.circle.gathering.host.authority',
     'FeatureCirclePost': 'circle.post.feature',
     'GetCircle': 'circle.get',
     'GetCircleFeed': 'circle.feed.list',
@@ -38,7 +39,8 @@ class CircleRequestPageIds {
     'GetCircleImpact': 'circle.get.circle.impact',
     'GetCircleStats': 'circle.stats',
     'GetGathering': 'circle.get.gathering',
-    'GetGatheringParticipationStatus': 'circle.get.gathering.participation.status',
+    'GetGatheringParticipationStatus':
+        'circle.get.gathering.participation.status',
     'GetGatheringPlan': 'circle.get.gathering.plan',
     'GetMyCircleGroupMembership': 'circle.get.my.circle.group.membership',
     'GetMyCircleMembership': 'circle.members.self',
@@ -68,7 +70,8 @@ class CircleRequestPageIds {
     'PlacePostInCircle': 'circle.place.post.in.circle',
     'ProposeGatheringPlan': 'circle.propose.gathering.plan',
     'PublishGathering': 'circle.publish.gathering',
-    'RecoverCircleAccountClosureDeadLetter': 'circle.recover.circle.account.closure.dead.letter',
+    'RecoverCircleAccountClosureDeadLetter':
+        'circle.recover.circle.account.closure.dead.letter',
     'ReinstateGatheringParticipant': 'circle.reinstate.gathering.participant',
     'RejectCircleGroupMember': 'circle.reject.circle.group.member',
     'RejectCircleMember': 'circle.reject.circle.member',
@@ -96,18 +99,23 @@ class CircleRequestPageIds {
     'WithdrawGatheringApplication': 'circle.withdraw.gathering.application',
   };
 
-  static const String acceptGatheringInvitation = 'circle.accept.gathering.invitation';
-  static const String acknowledgeGatheringRevision = 'circle.acknowledge.gathering.revision';
+  static const String acceptGatheringInvitation =
+      'circle.accept.gathering.invitation';
+  static const String acknowledgeGatheringRevision =
+      'circle.acknowledge.gathering.revision';
   static const String applyJoinCircleGroup = 'circle.apply.join.circle.group';
   static const String applyToGathering = 'circle.apply.to.gathering';
-  static const String approveCircleGroupMember = 'circle.approve.circle.group.member';
+  static const String approveCircleGroupMember =
+      'circle.approve.circle.group.member';
   static const String approveCircleMember = 'circle.approve.circle.member';
   static const String archiveCircle = 'circle.archive';
   static const String archiveCircleGroup = 'circle.archive.circle.group';
   static const String assignGatheringCoHost = 'circle.assign.gathering.co.host';
   static const String cancelGathering = 'circle.cancel.gathering';
-  static const String changeGatheringCapacity = 'circle.change.gathering.capacity';
-  static const String commitGatheringPlanProposal = 'circle.commit.gathering.plan.proposal';
+  static const String changeGatheringCapacity =
+      'circle.change.gathering.capacity';
+  static const String commitGatheringPlanProposal =
+      'circle.commit.gathering.plan.proposal';
   static const String completeGathering = 'circle.complete.gathering';
   static const String completeGatheringSelf = 'circle.complete.gathering.self';
   static const String createCircle = 'circle.create';
@@ -115,12 +123,16 @@ class CircleRequestPageIds {
   static const String createCircleGroup = 'circle.create.circle.group';
   static const String createGatheringDraft = 'circle.create.gathering.draft';
   static const String createGatheringPlan = 'circle.create.gathering.plan';
-  static const String declareGatheringArrival = 'circle.declare.gathering.arrival';
-  static const String declareGatheringLeaveEarly = 'circle.declare.gathering.leave.early';
-  static const String declineGatheringInvitation = 'circle.decline.gathering.invitation';
+  static const String declareGatheringArrival =
+      'circle.declare.gathering.arrival';
+  static const String declareGatheringLeaveEarly =
+      'circle.declare.gathering.leave.early';
+  static const String declineGatheringInvitation =
+      'circle.decline.gathering.invitation';
   static const String deleteCircleFile = 'circle.files.delete';
   static const String endGatheringEarly = 'circle.end.gathering.early';
-  static const String evaluateCircleGatheringHostAuthority = 'circle.evaluate.circle.gathering.host.authority';
+  static const String evaluateCircleGatheringHostAuthority =
+      'circle.evaluate.circle.gathering.host.authority';
   static const String featureCirclePost = 'circle.post.feature';
   static const String getCircle = 'circle.get';
   static const String getCircleFeed = 'circle.feed.list';
@@ -129,9 +141,11 @@ class CircleRequestPageIds {
   static const String getCircleImpact = 'circle.get.circle.impact';
   static const String getCircleStats = 'circle.stats';
   static const String getGathering = 'circle.get.gathering';
-  static const String getGatheringParticipationStatus = 'circle.get.gathering.participation.status';
+  static const String getGatheringParticipationStatus =
+      'circle.get.gathering.participation.status';
   static const String getGatheringPlan = 'circle.get.gathering.plan';
-  static const String getMyCircleGroupMembership = 'circle.get.my.circle.group.membership';
+  static const String getMyCircleGroupMembership =
+      'circle.get.my.circle.group.membership';
   static const String getMyCircleMembership = 'circle.members.self';
   static const String getPublicGathering = 'circle.get.public.gathering';
   static const String inviteToGathering = 'circle.invite.to.gathering';
@@ -142,47 +156,68 @@ class CircleRequestPageIds {
   static const String leaveGathering = 'circle.leave.gathering';
   static const String listCircleDiscoveryFeed = 'circle.discovery.feed.list';
   static const String listCircleFiles = 'circle.files.list';
-  static const String listCircleGroupMemberships = 'circle.list.circle.group.memberships';
+  static const String listCircleGroupMemberships =
+      'circle.list.circle.group.memberships';
   static const String listCircleGroups = 'circle.list.circle.groups';
   static const String listCircleMemberships = 'circle.members.list';
   static const String listCircles = 'circle.list';
-  static const String listGatheringApplications = 'circle.list.gathering.applications';
-  static const String listGatheringPlanRevisions = 'circle.list.gathering.plan.revisions';
+  static const String listGatheringApplications =
+      'circle.list.gathering.applications';
+  static const String listGatheringPlanRevisions =
+      'circle.list.gathering.plan.revisions';
   static const String listGatheringRoster = 'circle.list.gathering.roster';
   static const String listGatheringsByHost = 'circle.list.gatherings.by.host';
-  static const String listGatheringsBySource = 'circle.list.gatherings.by.source';
-  static const String listMyHostedGatherings = 'circle.list.my.hosted.gatherings';
-  static const String listPendingCircleMemberships = 'circle.list.pending.circle.memberships';
+  static const String listGatheringsBySource =
+      'circle.list.gatherings.by.source';
+  static const String listMyHostedGatherings =
+      'circle.list.my.hosted.gatherings';
+  static const String listPendingCircleMemberships =
+      'circle.list.pending.circle.memberships';
   static const String listPersonaCircles = 'circle.user.list';
-  static const String pauseGatheringAdmission = 'circle.pause.gathering.admission';
+  static const String pauseGatheringAdmission =
+      'circle.pause.gathering.admission';
   static const String pinCirclePost = 'circle.post.pin';
   static const String placePostInCircle = 'circle.place.post.in.circle';
   static const String proposeGatheringPlan = 'circle.propose.gathering.plan';
   static const String publishGathering = 'circle.publish.gathering';
-  static const String recoverCircleAccountClosureDeadLetter = 'circle.recover.circle.account.closure.dead.letter';
-  static const String reinstateGatheringParticipant = 'circle.reinstate.gathering.participant';
-  static const String rejectCircleGroupMember = 'circle.reject.circle.group.member';
+  static const String recoverCircleAccountClosureDeadLetter =
+      'circle.recover.circle.account.closure.dead.letter';
+  static const String reinstateGatheringParticipant =
+      'circle.reinstate.gathering.participant';
+  static const String rejectCircleGroupMember =
+      'circle.reject.circle.group.member';
   static const String rejectCircleMember = 'circle.reject.circle.member';
-  static const String removeCircleGroupMember = 'circle.remove.circle.group.member';
-  static const String removeGatheringParticipant = 'circle.remove.gathering.participant';
+  static const String removeCircleGroupMember =
+      'circle.remove.circle.group.member';
+  static const String removeGatheringParticipant =
+      'circle.remove.gathering.participant';
   static const String removePostFromCircle = 'circle.remove.post.from.circle';
   static const String reportCircleBehavior = 'circle.behaviors.report';
-  static const String resumeGatheringAdmission = 'circle.resume.gathering.admission';
-  static const String reviewGatheringApplication = 'circle.review.gathering.application';
+  static const String resumeGatheringAdmission =
+      'circle.resume.gathering.admission';
+  static const String reviewGatheringApplication =
+      'circle.review.gathering.application';
   static const String revokeGatheringCoHost = 'circle.revoke.gathering.co.host';
-  static const String revokeGatheringInvitation = 'circle.revoke.gathering.invitation';
-  static const String safetyTerminateGathering = 'circle.safety.terminate.gathering';
+  static const String revokeGatheringInvitation =
+      'circle.revoke.gathering.invitation';
+  static const String safetyTerminateGathering =
+      'circle.safety.terminate.gathering';
   static const String searchCircleGroups = 'circle.search.circle.groups';
   static const String searchCircles = 'circle.search';
-  static const String transferGatheringOrganizer = 'circle.transfer.gathering.organizer';
-  static const String unwatchGatheringAvailability = 'circle.unwatch.gathering.availability';
+  static const String transferGatheringOrganizer =
+      'circle.transfer.gathering.organizer';
+  static const String unwatchGatheringAvailability =
+      'circle.unwatch.gathering.availability';
   static const String updateCircle = 'circle.update';
   static const String updateCircleFile = 'circle.files.update';
   static const String updateCircleGroup = 'circle.update.circle.group';
-  static const String updateCircleGroupMemberRole = 'circle.update.circle.group.member.role';
+  static const String updateCircleGroupMemberRole =
+      'circle.update.circle.group.member.role';
   static const String updateCircleMembershipRole = 'circle.members.updateRole';
   static const String updateCircleSections = 'circle.sections.update';
   static const String updateGathering = 'circle.update.gathering';
-  static const String watchGatheringAvailability = 'circle.watch.gathering.availability';
-  static const String withdrawGatheringApplication = 'circle.withdraw.gathering.application';
+  static const String watchGatheringAvailability =
+      'circle.watch.gathering.availability';
+  static const String withdrawGatheringApplication =
+      'circle.withdraw.gathering.application';
 }

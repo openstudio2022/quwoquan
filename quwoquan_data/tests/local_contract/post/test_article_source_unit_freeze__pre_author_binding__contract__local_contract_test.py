@@ -264,8 +264,8 @@ def test_freeze_rejects_incomplete_unified_asset_contract(
 @pytest.mark.parametrize(
     ("entity_name", "source_page"),
     (
-        ("西湖", "https://zh.wikivoyage.org/wiki/杭州"),
-        ("成都大熊猫繁育研究基地", "https://zh.wikivoyage.org/wiki/成都"),
+        ("西湖", "https://zh.wikipedia.org/wiki/杭州"),
+        ("成都大熊猫繁育研究基地", "https://zh.wikipedia.org/wiki/成都"),
     ),
 )
 def test_wikimedia_same_source_download_writer_freezes_cover_and_body(
@@ -359,11 +359,15 @@ def test_wikimedia_same_source_download_writer_freezes_cover_and_body(
         }
 
     source = {
-        "source_id": f"article_wikivoyage_{entity_name}",
-        "platform": "Wikivoyage",
+        "source_id": f"article_wikipedia_{entity_name}",
+        "platform": "Wikipedia",
         "url": source_page,
         "fetchedAt": "2026-08-06T01:02:03Z",
         "imageUrls": [_candidate("cover", 1), _candidate("body", 2)],
+        # article lane 的可交付来源单元必须能解析 attribution，站点身份是解析键。
+        "articleSiteId": "wikipedia_zh",
+        "sourceDiscoveryProfileDigest": "sha256:" + "b" * 64,
+        "articleCommercialAdmission": "commercial_release",
     }
     images, issues, funnel = image_download._download_source_unit_images(
         source,
@@ -372,6 +376,7 @@ def test_wikimedia_same_source_download_writer_freezes_cover_and_body(
         object_dir=root / "entities" / "地点" / "景区" / entity_name,
         ordinal=1,
         vertical="travel",
+        research_lane="article",
     )
     assert issues == []
     assert funnel["keptCount"] == 2
@@ -416,11 +421,14 @@ def test_wikimedia_same_source_download_writer_freezes_cover_and_body(
         ordinal=1,
         source_id=str(source["source_id"]),
         source_md=f"# {entity_name}同页底稿\n\n覆盖交通、季节与现场游览顺序。",
-        platform="Wikivoyage",
-        source_kind="wikivoyage",
+        platform="Wikipedia",
+        source_kind="encyclopedia",
+        extractor="wikipedia_api",
+        policy_revision="article-source-registry-v1",
         source_use_mode="factual_reference_only",
-        rights_mode="rights_audit_only",
+        rights_mode="factual_reference_only",
         publish_media_mode="illustrated",
+        source_role="base",
         image_evidence_mode="same_source",
         research_lane="article",
         license_value="CC BY-SA 4.0",
@@ -497,6 +505,7 @@ def test_text_only_plan_item_does_not_create_an_image_freeze(
                 "sourceDir": Path("unused"),
                 "sourceRef": "sources/article-source-text-only/source.md",
                 "sourceUseMode": "factual_reference_only",
+                "publishMediaMode": "text_only",
                 "assetRefs": [],
             }
         ],
@@ -540,6 +549,7 @@ def test_broad_source_title_freezes_exact_article_target_coordinate(
                 "sourceDir": Path("unused"),
                 "sourceRef": "sources/article/source.md",
                 "sourceUseMode": "factual_reference_only",
+                "publishMediaMode": "text_only",
                 "assetRefs": [],
             }
         ],

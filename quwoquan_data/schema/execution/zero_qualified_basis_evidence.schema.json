@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/zero_qualified_basis_evidence.schema.json",
+  "title": "Zero-qualified basis evidence",
+  "description": "lane 判定零合格时观测到的逐对象排除台账，是 zeroQualifiedReason.nonResumableBasis 所引用的那份证据。它只持久化 lane 已经做出的观测，不新增判定；路径由同一 lane 回执的 nonResumableBasis.evidenceRef 以 campaign 根为基准引用，摘要由 evidenceDigest 绑定。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "rootExecutionId",
+    "executionId",
+    "carrier",
+    "phase",
+    "evaluatedObjectCount",
+    "admittedObjectCount",
+    "objectExclusions"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.zero_qualified_basis_evidence"},
+    "rootExecutionId": {"type": "string", "minLength": 1},
+    "executionId": {"type": "string", "minLength": 1},
+    "carrier": {"enum": ["homepage", "article", "image", "video"]},
+    "phase": {"enum": ["review", "publish"]},
+    "evaluatedObjectCount": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "该阶段实际判定过的对象数：review 是被选中的候选对象数，publish 是进入 publish 准入的评审合格对象数。"
+    },
+    "admittedObjectCount": {
+      "type": "integer",
+      "const": 0,
+      "description": "该阶段准入通过的对象数。本证据只在该数为零时成立。"
+    },
+    "objectExclusions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["objectRef", "issues"],
+        "properties": {
+          "objectRef": {"type": "string", "minLength": 1},
+          "issues": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    }
+  }
+}

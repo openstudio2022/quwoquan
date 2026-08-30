@@ -4,42 +4,36 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	configrelease "quwoquan_service/runtime/configrelease"
-	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
 	"quwoquan_service/runtime/reliabletask"
-	"quwoquan_service/runtime/servicehost"
+	"quwoquan_service/runtime/servicekit"
 	pushapp "quwoquan_service/services/integration-service/internal/external_integration/push_delivery/application"
 )
 
+// Config 是 integration-service 的声明式运行配置：通用段由内嵌
+// servicekit.BaseConfig 单点声明，Mongo 与 Redis scene 按「声明即装配」
+// 交给骨架发现，env 覆盖键由 env/envPrefix tag 派生（DEC-028）。
 type Config struct {
-	Environment string `yaml:"-"`
-	Service     struct {
-		Name string `yaml:"name"`
-		HTTP struct {
-			Addr string `yaml:"addr"`
-		} `yaml:"http"`
-	} `yaml:"service"`
-	AccountSecurityAuthority AccountSecurityAuthorityConfig `yaml:"account_security_authority"`
-	MongoDB                  struct {
-		URI      string `yaml:"uri"`
-		Database string `yaml:"database"`
-	} `yaml:"mongodb"`
+	servicekit.BaseConfig `yaml:",inline"`
+
+	MongoDB servicekit.MongoConfig `yaml:"mongodb"`
+
 	Redis struct {
-		General RedisSceneConfig `yaml:"general"`
-		Rec     RedisSceneConfig `yaml:"rec"`
-	} `yaml:"redis"`
+		General RedisSceneConfig `yaml:"general" envPrefix:"GENERAL"`
+		Rec     RedisSceneConfig `yaml:"rec" envPrefix:"REC"`
+	} `yaml:"redis" envPrefix:"REDIS"`
+
 	Integration struct {
 		Location struct {
 			NearbyDefaultRadiusMeters int     `yaml:"nearby_default_radius_meters"`
 			NearbyDefaultLimit        int     `yaml:"nearby_default_limit"`
 			SearchDefaultLimit        int     `yaml:"search_default_limit"`
-			DefaultLatitude           float64 `yaml:"default_latitude"`
-			DefaultLongitude          float64 `yaml:"default_longitude"`
-		} `yaml:"location"`
+			DefaultLatitude           float64 `yaml:"default_latitude" env:"DEFAULT_LATITUDE"`
+			DefaultLongitude          float64 `yaml:"default_longitude" env:"DEFAULT_LONGITUDE"`
+		} `yaml:"location" envPrefix:"LOCATION"`
 		PublicProvider struct {
 			POI   PublicProviderPolicyConfig `yaml:"poi"`
 			Route PublicProviderPolicyConfig `yaml:"route"`
@@ -51,6 +45,9 @@ type Config struct {
 	} `yaml:"integration"`
 }
 
+// RedisSceneConfig 沿用 servicekit 的统一 scene 结构。
+type RedisSceneConfig = servicekit.RedisSceneConfig
+
 type PublicProviderPolicyConfig struct {
 	ProbePassed             bool `yaml:"probe_passed"`
 	RateLimitPerSecond      int  `yaml:"rate_limit_per_second"`
@@ -58,11 +55,6 @@ type PublicProviderPolicyConfig struct {
 	RetryBackoffMs          int  `yaml:"retry_backoff_ms"`
 	CircuitFailureThreshold int  `yaml:"circuit_failure_threshold"`
 	CircuitResetTimeoutMs   int  `yaml:"circuit_reset_timeout_ms"`
-}
-
-type AccountSecurityAuthorityConfig struct {
-	BaseURL   string `yaml:"base_url"`
-	TimeoutMs int    `yaml:"timeout_ms"`
 }
 
 type ExternalProviderConfig struct {
@@ -93,94 +85,13 @@ type PushDeliveryProviderConfig struct {
 	} `yaml:"fcm"`
 }
 
-type RedisSceneConfig struct {
-	Mode     string   `yaml:"mode"`
-	Addr     string   `yaml:"addr"`
-	Addrs    []string `yaml:"addrs"`
-	Password string   `yaml:"password"`
-	DB       int      `yaml:"db"`
-	TLS      bool     `yaml:"tls"`
-	Pool     struct {
-		Size           int `yaml:"size"`
-		MinIdle        int `yaml:"min_idle"`
-		ReadTimeoutMs  int `yaml:"read_timeout_ms"`
-		WriteTimeoutMs int `yaml:"write_timeout_ms"`
-		DialTimeoutMs  int `yaml:"dial_timeout_ms"`
-	} `yaml:"pool"`
-}
-
-func Load() (Config, error) {
-	cfg := Config{}
-	serviceName := strings.TrimSpace(
-		servicehost.ModuleEnvironmentValue("integration-service", "SERVICE_NAME"),
-	)
-	if serviceName == "" {
-		serviceName = "integration-service"
-	}
-	appEnv := getenvOrDefault("APP_ENV", "alpha")
-	configRoot := strings.TrimSpace(os.Getenv("CONFIG_ROOT"))
-	configVersion := strings.TrimSpace(
-		servicehost.ModuleEnvironmentValue(
-			"integration-service",
-			"CONFIG_VERSION",
-		),
-	)
-	if !isValidAppEnv(appEnv) {
-		return Config{}, fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
-	}
-	cfg.Environment = appEnv
-	if requiresConfigVersion(appEnv) && configVersion == "" {
-		return Config{}, fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
-	}
-	path, err := configrelease.File(configRoot, serviceName, appEnv)
-	if err != nil {
-		return Config{}, err
-	}
-	if err := MergeFile(&cfg, path); err != nil {
-		return Config{}, fmt.Errorf("read generated runtime config: %w", err)
-	}
-	return cfg, nil
-}
-
-func isValidAppEnv(env string) bool {
-	switch env {
-	case "alpha", "beta", "gamma", "prod":
-		return true
-	default:
-		return false
-	}
-}
-
-func requiresConfigVersion(env string) bool {
-	switch env {
-	case "gamma", "prod":
-		return true
-	default:
-		return false
-	}
-}
-
-func MergeFile(cfg *Config, path string) error {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	if err := rejectRetiredLocationProviderConfig(raw, path); err != nil {
-		return err
-	}
-	if err := rejectRetiredExternalInteractionConfig(raw, path); err != nil {
-		return err
-	}
-	if err := yaml.Unmarshal(raw, cfg); err != nil {
-		return fmt.Errorf("parse %s: %w", path, err)
-	}
-	return nil
-}
-
-func rejectRetiredLocationProviderConfig(raw []byte, path string) error {
+// SnapshotGuard 拒收已退役的配置段：provider 选择与外部交互开关只能来自
+// 生成的 external provider binding，出现在配置快照里即启动失败。它作为
+// servicekit.BootstrapSpec.SnapshotGuard 挂接在反序列化之后。
+func SnapshotGuard(raw []byte) error {
 	var document map[string]any
 	if err := yaml.Unmarshal(raw, &document); err != nil {
-		return fmt.Errorf("parse %s for location provider validation: %w", path, err)
+		return fmt.Errorf("parse config snapshot for retired section validation: %w", err)
 	}
 	integration, _ := document["integration"].(map[string]any)
 	location, _ := integration["location"].(map[string]any)
@@ -196,27 +107,16 @@ func rejectRetiredLocationProviderConfig(raw []byte, path string) error {
 	} {
 		if _, found := location[key]; found {
 			return fmt.Errorf(
-				"%s: integration.location.%s is retired; use the generated external provider binding",
-				path,
+				"integration.location.%s is retired; use the generated external provider binding",
 				key,
 			)
 		}
 	}
-	return nil
-}
-
-func rejectRetiredExternalInteractionConfig(raw []byte, path string) error {
-	var document map[string]any
-	if err := yaml.Unmarshal(raw, &document); err != nil {
-		return fmt.Errorf("parse %s for external interaction validation: %w", path, err)
-	}
-	integration, _ := document["integration"].(map[string]any)
 	externalInteraction, _ := integration["external_interaction"].(map[string]any)
 	for _, key := range []string{"sms", "push"} {
 		if _, found := externalInteraction[key]; found {
 			return fmt.Errorf(
-				"%s: integration.external_interaction.%s is retired; use the generated external provider binding",
-				path,
+				"integration.external_interaction.%s is retired; use the generated external provider binding",
 				key,
 			)
 		}
@@ -224,10 +124,26 @@ func rejectRetiredExternalInteractionConfig(raw []byte, path string) error {
 	return nil
 }
 
-func NormalizeDefaults(cfg *Config) {
-	if strings.TrimSpace(cfg.Service.HTTP.Addr) == "" {
-		cfg.Service.HTTP.Addr = ":18086"
+// RetiredEnvKeys 列出被生成的 external provider binding 取代的环境变量键。
+// 任一键被注入即启动失败，交由 servicekit.RejectRetiredEnvKeys 执行。
+func RetiredEnvKeys() []string {
+	return []string{
+		"INTEGRATION_LOCATION_PROVIDER",
+		"INTEGRATION_LOCATION_PRIMARY_PROVIDER",
+		"INTEGRATION_LOCATION_BACKUP_PROVIDER",
+		"INTEGRATION_LOCATION_TIMEOUT_MS",
+		"INTEGRATION_SMS_ENABLED",
+		"INTEGRATION_SMS_PROVIDER",
+		"INTEGRATION_SMS_TIMEOUT_MS",
+		"INTEGRATION_PUSH_ENABLED",
+		"INTEGRATION_PUSH_MODE",
+		"INTEGRATION_PUSH_TIMEOUT_MS",
 	}
+}
+
+// NormalizeDefaults 补齐 integration 领域策略的下界。监听地址不在此列：
+// 它由配置快照与 BaseConfig 的 required 声明 fail-closed，不接受代码兜底。
+func NormalizeDefaults(cfg *Config) {
 	if cfg.Integration.Location.NearbyDefaultRadiusMeters <= 0 {
 		cfg.Integration.Location.NearbyDefaultRadiusMeters = 3000
 	}
@@ -253,16 +169,6 @@ func NormalizeDefaults(cfg *Config) {
 	)
 	if cfg.Integration.ExternalInteraction.Push.TimeoutMs <= 0 {
 		cfg.Integration.ExternalInteraction.Push.TimeoutMs = 5000
-	}
-	if strings.TrimSpace(cfg.Redis.General.Mode) == "" {
-		if cfg.Environment == "alpha" {
-			cfg.Redis.General.Mode = "memory"
-		} else {
-			cfg.Redis.General.Mode = "standalone"
-		}
-	}
-	if strings.TrimSpace(cfg.Redis.Rec.Mode) == "" {
-		cfg.Redis.Rec.Mode = "standalone"
 	}
 }
 
@@ -293,18 +199,16 @@ func Validate(cfg Config) error {
 	// the same fail-closed Redis policy.
 	NormalizeDefaults(&cfg)
 	if invalidRequiredConfigValue(cfg.MongoDB.URI) {
-		return fmt.Errorf("mongodb.uri is required (INTEGRATION_MONGO_URI or MONGO_URI)")
+		return fmt.Errorf("mongodb.uri is required (INTEGRATION_MONGO_URI)")
 	}
 	if invalidRequiredConfigValue(cfg.MongoDB.Database) {
-		return fmt.Errorf(
-			"mongodb.database is required (INTEGRATION_MONGO_DATABASE or MONGO_DATABASE)",
-		)
+		return fmt.Errorf("mongodb.database is required (INTEGRATION_MONGO_DATABASE)")
 	}
-	if invalidRequiredConfigValue(cfg.AccountSecurityAuthority.BaseURL) {
-		return fmt.Errorf("account_security_authority.base_url is required")
+	if invalidRequiredConfigValue(cfg.UserAccountSecurityAuthority.BaseURL) {
+		return fmt.Errorf("user_account_security_authority.base_url is required")
 	}
-	if cfg.AccountSecurityAuthority.TimeoutMs <= 0 {
-		return fmt.Errorf("account_security_authority.timeout_ms must be positive")
+	if cfg.UserAccountSecurityAuthority.TimeoutMs <= 0 {
+		return fmt.Errorf("user_account_security_authority.timeout_ms must be positive")
 	}
 	for operation, providerCfg := range map[string]ExternalProviderConfig{
 		reliabletask.ExternalInteractionOperationSmsOTP: cfg.Integration.ExternalInteraction.SMS,
@@ -466,133 +370,4 @@ func invalidRequiredConfigValue(value string) bool {
 	normalized := strings.TrimSpace(value)
 	return normalized == "" ||
 		(strings.HasPrefix(normalized, "${") && strings.HasSuffix(normalized, "}"))
-}
-
-func ApplyEnvOverrides(cfg *Config) error {
-	if err := rejectRetiredLocationProviderEnvOverrides(); err != nil {
-		return err
-	}
-	if err := rejectRetiredExternalProviderEnvOverrides(); err != nil {
-		return err
-	}
-	if value := strings.TrimSpace(os.Getenv("MONGO_URI")); value != "" {
-		cfg.MongoDB.URI = value
-	}
-	if value := strings.TrimSpace(os.Getenv("MONGO_DATABASE")); value != "" {
-		cfg.MongoDB.Database = value
-	}
-	if value := strings.TrimSpace(os.Getenv("INTEGRATION_MONGO_URI")); value != "" {
-		cfg.MongoDB.URI = value
-	}
-	if value := strings.TrimSpace(os.Getenv("INTEGRATION_MONGO_DATABASE")); value != "" {
-		cfg.MongoDB.Database = value
-	}
-	if err := applyRedisSceneEnv(
-		"INTEGRATION_REDIS_GENERAL",
-		&cfg.Redis.General,
-	); err != nil {
-		return err
-	}
-	if err := applyRedisSceneEnv(
-		"INTEGRATION_REDIS_REC",
-		&cfg.Redis.Rec,
-	); err != nil {
-		return err
-	}
-	if value := os.Getenv("INTEGRATION_SERVICE_ADDR"); value != "" {
-		cfg.Service.HTTP.Addr = value
-	}
-	if value := os.Getenv("INTEGRATION_LOCATION_DEFAULT_LATITUDE"); value != "" {
-		latitude, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			return fmt.Errorf("INTEGRATION_LOCATION_DEFAULT_LATITUDE must be numeric: %w", err)
-		}
-		cfg.Integration.Location.DefaultLatitude = latitude
-	}
-	if value := os.Getenv("INTEGRATION_LOCATION_DEFAULT_LONGITUDE"); value != "" {
-		longitude, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			return fmt.Errorf("INTEGRATION_LOCATION_DEFAULT_LONGITUDE must be numeric: %w", err)
-		}
-		cfg.Integration.Location.DefaultLongitude = longitude
-	}
-	return nil
-}
-
-func applyRedisSceneEnv(prefix string, cfg *RedisSceneConfig) error {
-	if value := strings.TrimSpace(os.Getenv(prefix + "_MODE")); value != "" {
-		cfg.Mode = value
-	}
-	if value := strings.TrimSpace(os.Getenv(prefix + "_ADDR")); value != "" {
-		cfg.Addr = value
-	}
-	if value := strings.TrimSpace(os.Getenv(prefix + "_ADDRS")); value != "" {
-		cfg.Addrs = nil
-		for _, raw := range strings.Split(value, ",") {
-			if addr := strings.TrimSpace(raw); addr != "" {
-				cfg.Addrs = append(cfg.Addrs, addr)
-			}
-		}
-	}
-	if value := strings.TrimSpace(os.Getenv(prefix + "_PASSWORD")); value != "" {
-		cfg.Password = value
-	}
-	if value := strings.TrimSpace(os.Getenv(prefix + "_DB")); value != "" {
-		parsed, err := strconv.Atoi(value)
-		if err != nil || parsed < 0 {
-			return fmt.Errorf("%s_DB must be a non-negative integer", prefix)
-		}
-		cfg.DB = parsed
-	}
-	if value := strings.TrimSpace(os.Getenv(prefix + "_TLS")); value != "" {
-		parsed, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("%s_TLS must be boolean", prefix)
-		}
-		cfg.TLS = parsed
-	}
-	return nil
-}
-
-func rejectRetiredLocationProviderEnvOverrides() error {
-	for _, key := range []string{
-		"INTEGRATION_LOCATION_PROVIDER",
-		"INTEGRATION_LOCATION_PRIMARY_PROVIDER",
-		"INTEGRATION_LOCATION_BACKUP_PROVIDER",
-		"INTEGRATION_LOCATION_TIMEOUT_MS",
-	} {
-		if _, found := os.LookupEnv(key); found {
-			return fmt.Errorf(
-				"%s is retired; use the generated external provider binding",
-				key,
-			)
-		}
-	}
-	return nil
-}
-
-func rejectRetiredExternalProviderEnvOverrides() error {
-	for _, key := range []string{
-		"INTEGRATION_SMS_ENABLED",
-		"INTEGRATION_SMS_PROVIDER",
-		"INTEGRATION_SMS_TIMEOUT_MS",
-		"INTEGRATION_PUSH_ENABLED",
-		"INTEGRATION_PUSH_MODE",
-		"INTEGRATION_PUSH_TIMEOUT_MS",
-	} {
-		if _, found := os.LookupEnv(key); found {
-			return fmt.Errorf(
-				"%s is retired; use the generated external provider binding",
-				key,
-			)
-		}
-	}
-	return nil
-}
-
-func getenvOrDefault(key, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-		return value
-	}
-	return fallback
 }

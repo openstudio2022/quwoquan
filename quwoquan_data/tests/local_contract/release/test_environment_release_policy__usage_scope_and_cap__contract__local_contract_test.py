@@ -20,7 +20,15 @@ def _release(
     *,
     target_environment: str = "",
     milestone: str = "",
+    lifecycle: str | None = None,
 ) -> Path:
+    """One immutable release header carrying its own usage authorization.
+
+    ``lifecycle`` defaults to ``release_class`` because the header is the authorization:
+    the pair is what the policy reads, and a release that declares only one half of it
+    is refused rather than assumed. Tests that need the drift pass them apart.
+    """
+
     release = tmp_path / "release"
     payload = release / "payload"
     payload.mkdir(parents=True)
@@ -28,6 +36,9 @@ def _release(
         json.dumps(
             {
                 "releaseClass": release_class,
+                "productLifecycleState": (
+                    release_class if lifecycle is None else lifecycle
+                ),
                 **(
                     {"targetEnvironment": target_environment}
                     if target_environment
@@ -53,13 +64,31 @@ def test_research_environments_accept_research_release(
     )
 
 
-def test_prod_requires_commercial_release(tmp_path: Path) -> None:
-    release = _release(tmp_path, "research")
+def test_a_release_declaring_half_its_authorization_is_refused(tmp_path: Path) -> None:
+    """Authorization comes from the header pair, not from the environment it targets.
+
+    `prod` does not by itself mean commercial — an environment-neutral research
+    milestone activates there. What is refused is a header whose releaseClass and
+    lifecycle disagree, because then no single answer to "may this be used
+    commercially" exists and the environment name would have to invent one.
+    """
+
+    release = _release(tmp_path, "research", lifecycle="commercial")
     with pytest.raises(SystemExit, match="DATA.RELEASE.USAGE_SCOPE_MISMATCH"):
         assert_environment_release_policy(
             release=release,
             contract={"desiredRefs": {"posts": ["article/a"]}},
             environment="prod",
+        )
+
+
+def test_a_release_without_a_lifecycle_cannot_borrow_one(tmp_path: Path) -> None:
+    release = _release(tmp_path, "research", lifecycle="")
+    with pytest.raises(SystemExit, match="DATA.RELEASE.USAGE_SCOPE_MISMATCH"):
+        assert_environment_release_policy(
+            release=release,
+            contract={"desiredRefs": {"posts": ["article/a"]}},
+            environment="alpha",
         )
 
 

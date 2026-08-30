@@ -7,17 +7,16 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from content.execution.campaign.lane import normalize_workloads
 from content.release.canonical.aggregate_release_pool import pool_post_refs
 from content.release.canonical.aggregate_release_pool_closure import (
     entity_candidate_closure,
 )
-from content.release.canonical.content_pool_record import (
-    is_pool_record_admitted,
+from content.release.canonical.canonical_identity_state import (
+    CanonicalIdentityStateQuery,
 )
 from content.release.canonical.effective_admission import (
-    EffectiveAdmission,
     effective_source_attribution_ready,
-    resolve_effective_admission,
 )
 from content.release.canonical.environment_release_selection import (
     DATA_POST_CAPS,
@@ -31,217 +30,25 @@ from content.release.canonical.object_transaction_contract import (
 from content.release.canonical.pool_delivery_intent_inspection import (
     inspect_pool_delivery_intents,
 )
+from content.release.canonical.pool_inspection_support import (
+    _SUPPLY_TYPES,
+    M100_TARGETS,
+    _admission_record,
+    _author_admitted,
+    _author_closure_ready,
+    _content_admitted,
+    _eligibility_passed,
+    _entity_closure_ready,
+    _issue,
+    _manifest_refs,
+    _not_admitted_issue,
+    _reason_summary,
+    _resolved_admission,
+    _retirement_reported,
+)
 from content.release.canonical.pool_semantic_scheduling import (
     semantic_scheduling_projection,
 )
-
-_SUPPLY_TYPES = ("homepage", "article", "image", "video")
-M100_TARGETS = MILESTONE_TARGETS["M100"]
-_NEXT_WAVE_SIZE = 12
-_USAGE_SCOPES = {"research", "commercial"}
-_REASON_MESSAGES = {
-    "DATA.POOL.EMPTY": "池中还没有可发布的 Homepage 或 Post",
-    "DATA.POOL.EXPLICIT_ADMISSION_MISSING": "对象缺少显式准入记录，需要补录",
-    "DATA.POOL.OBJECT_NOT_ADMITTED": "对象尚未完成生成、质量或授权准入",
-    "DATA.POOL.AUTHOR_NOT_ADMITTED": "对象引用的作者尚未准入",
-    "DATA.POOL.REFERENCE_MISSING": "对象缺少可交付引用",
-    "DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE": "对象缺少完整来源署名与权利归因",
-}
-
-
-def _manifest_refs(root: Path) -> list[tuple[str, Path]]:
-    if not root.is_dir():
-        return []
-    return [
-        (path.parent.relative_to(root).as_posix(), path)
-        for path in sorted(root.rglob("manifest.json"))
-    ]
-
-
-def _resolved_admission(
-    object_root: Path,
-    document: Mapping[str, Any],
-    *,
-    object_type: str,
-) -> EffectiveAdmission:
-    try:
-        return resolve_effective_admission(
-            object_root,
-            object_type=object_type,
-            document=document,
-        )
-    except (OSError, RuntimeError, TypeError, ValueError):
-        # Malformed explicit or historical evidence stays one object-level
-        # eligibility failure and is never hidden by another fallback.
-        # 占位 evidenceDigest 故意保持非 canonical 形态（无 sha256: 前缀），
-        # 使 `_evidence_bound` 与 admitted 判定都无法把它当作合法证据。
-        return EffectiveAdmission(
-            record={
-                "status": "active",
-                "contentVersion": 0,
-                "processResult": "failed",
-                "qualityResult": "passed",
-                "eligibilityResult": "failed",
-                "usageScope": None,
-                "evidenceRef": "invalid-pool-record",
-                "evidenceDigest": "invalid-pool-record-digest",
-            },
-            source="invalid",
-        )
-
-
-def _admission_record(
-    object_root: Path,
-    document: Mapping[str, Any],
-    *,
-    object_type: str,
-) -> Mapping[str, Any] | None:
-    return _resolved_admission(
-        object_root,
-        document,
-        object_type=object_type,
-    ).record
-
-
-def _active(record: Mapping[str, Any]) -> bool:
-    return str(record.get("status") or "active").strip() == "active"
-
-
-def _quality_passed(record: Mapping[str, Any]) -> bool:
-    return record.get("qualityResult") == "passed"
-
-
-def _valid_version(record: Mapping[str, Any]) -> bool:
-    value = record.get("contentVersion")
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
-
-
-def _evidence_bound(record: Mapping[str, Any]) -> bool:
-    return bool(
-        str(record.get("evidenceRef") or "").strip()
-        and str(record.get("evidenceDigest") or "").startswith("sha256:")
-    )
-
-
-def _eligibility_passed(record: Mapping[str, Any]) -> bool:
-    return record.get("eligibilityResult") == "passed"
-
-
-def _author_admitted(record: Mapping[str, Any] | None) -> bool:
-    return bool(
-        is_pool_record_admitted(record)
-        and isinstance(record, Mapping)
-        and _active(record)
-        and _valid_version(record)
-        and _evidence_bound(record)
-        and record.get("processResult") == "completed"
-        and _quality_passed(record)
-        and _eligibility_passed(record)
-        and record.get("usageScope") in {None, ""}
-    )
-
-
-def _content_admitted(record: Mapping[str, Any] | None) -> bool:
-    return bool(
-        is_pool_record_admitted(record)
-        and isinstance(record, Mapping)
-        and _active(record)
-        and _valid_version(record)
-        and _evidence_bound(record)
-        and record.get("processResult") == "completed"
-        and _quality_passed(record)
-        and _eligibility_passed(record)
-        and record.get("usageScope") in _USAGE_SCOPES
-    )
-
-
-def _issue(
-    issues: list[dict[str, str]],
-    *,
-    gate: str,
-    code: str,
-    ref: str,
-) -> None:
-    issues.append({"gate": gate, "code": code, "ref": ref})
-
-
-def _not_admitted_issue(
-    issues: list[dict[str, str]],
-    *,
-    record: Mapping[str, Any] | None,
-    admission_missing: bool,
-    ref: str,
-) -> None:
-    if admission_missing:
-        _issue(
-            issues,
-            gate="eligibility",
-            code="DATA.POOL.EXPLICIT_ADMISSION_MISSING",
-            ref=ref,
-        )
-        return
-    gate = (
-        "quality"
-        if isinstance(record, Mapping) and record.get("qualityResult") == "failed"
-        else "eligibility"
-    )
-    _issue(
-        issues,
-        gate=gate,
-        code="DATA.POOL.OBJECT_NOT_ADMITTED",
-        ref=ref,
-    )
-
-
-def _creator_refs(object_root: Path, document: Mapping[str, Any]) -> list[str]:
-    path = object_root / "creator.refs.json"
-    if path.is_file():
-        raw = _read_json(path).get("creatorRefs")
-        if isinstance(raw, list):
-            return [str(value).strip() for value in raw if str(value).strip()]
-    author_id = str(document.get("authorId") or "").strip()
-    return [author_id] if author_id else []
-
-
-def _author_closure_ready(
-    *,
-    object_root: Path,
-    document: Mapping[str, Any],
-    author_admission: Mapping[str, bool],
-) -> bool:
-    refs = _creator_refs(object_root, document)
-    return bool(refs) and all(author_admission.get(ref, False) for ref in refs)
-
-
-def _entity_closure_ready(
-    *,
-    publish_root: Path,
-    raw_refs: Any,
-) -> bool:
-    if not isinstance(raw_refs, list) or not raw_refs:
-        return False
-    for raw_ref in raw_refs:
-        value = str(raw_ref or "").strip()
-        if not value.startswith("/entity/"):
-            return False
-        if not (
-            publish_root / "entities" / value.removeprefix("/entity/") / "manifest.json"
-        ).is_file():
-            return False
-    return True
-
-
-def _reason_summary(issues: list[dict[str, str]]) -> list[dict[str, Any]]:
-    counts = Counter((row["gate"], row["code"]) for row in issues)
-    return [
-        {
-            "gate": gate,
-            "code": code,
-            "count": count,
-            "message": _REASON_MESSAGES.get(code, code),
-        }
-        for (gate, code), count in sorted(counts.items())
-    ]
 
 
 def inspect_pool(
@@ -251,21 +58,61 @@ def inspect_pool(
     strict_delivery: bool = True,
     include_batches: bool = False,
     output_root: Path | None = None,
-    milestone: str = "M100",
+    milestone: str | None = None,
     execution_ids: Sequence[str] = (),
     source_ready_backlog: Mapping[str, int] | None = None,
     p10_per_slot_throughput: Mapping[str, float] | None = None,
     source_ready_candidates: Mapping[str, list[Mapping[str, Any]]] | None = None,
     source_ready_input: Mapping[str, Any] | None = None,
     throughput_input: Mapping[str, str] | None = None,
+    workload_targets: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     """Report quality, eligibility and delivery without mutating pool facts."""
 
-    milestone_name = str(milestone).strip()
+    source_scale = (
+        str(source_ready_input.get("targetScale") or "").strip()
+        if isinstance(source_ready_input, Mapping)
+        else ""
+    )
+    milestone_name = str(milestone or "").strip() or (
+        "WORKLOAD" if workload_targets is not None else source_scale or "M100"
+    )
     targets = MILESTONE_TARGETS.get(milestone_name)
-    if targets is None:
+    if targets is None and milestone_name != "WORKLOAD":
         raise ValueError(f"unsupported milestone: {milestone_name!r}")
+    requested_workloads = (
+        normalize_workloads(workload_targets) if workload_targets is not None else None
+    )
+    source_workloads = None
+    if (
+        isinstance(source_ready_input, Mapping)
+        and source_ready_input.get("status") == "validated"
+    ):
+        source_workloads = normalize_workloads(
+            source_ready_input.get("workloadTargets", {})
+        )
+    if (
+        requested_workloads is not None
+        and source_workloads is not None
+        and requested_workloads != source_workloads
+    ):
+        raise ValueError("pool inspection workloadTargets drift from source pool")
+    explicit_workloads = source_workloads or requested_workloads
+    if milestone_name == "WORKLOAD" and explicit_workloads is None:
+        raise ValueError("WORKLOAD inspection requires explicit workloadTargets")
+    effective_targets = explicit_workloads or dict(targets or {})
+    active_carriers = tuple(effective_targets)
+    workload_mode = (
+        str(source_ready_input["workloadMode"])
+        if source_workloads is not None
+        else ("explicit" if requested_workloads is not None else "milestone_preset")
+    )
     issues: list[dict[str, str]] = []
+    # 已退役对象既不进入可选集，也不再计入 quality/eligibility 判否；它与「未准入」
+    # 是两个独立结论，因此单独成一行报告而不是并进 issues。
+    retired: list[dict[str, str]] = []
+    identity_query = CanonicalIdentityStateQuery(publish_root=publish_root)
+    canonical_identity_states: list[dict[str, Any]] = []
     author_admission: dict[str, bool] = {}
     creators_root = publish_root / "creators"
     if creators_root.is_dir():
@@ -281,6 +128,8 @@ def inspect_pool(
             )
             admitted = _author_admitted(record)
             author_admission[creator_root.name] = admitted
+            # 作者不在退役回执的 objectType 闭集内（`homepage|content`），因此
+            # 这里没有退役分支：作者未准入只有「补录准入」一条出路。
             if not admitted:
                 _not_admitted_issue(
                     issues,
@@ -307,6 +156,27 @@ def inspect_pool(
     for entity_ref, path in _manifest_refs(publish_root / "entities"):
         observed["homepage"] += 1
         manifest = _read_json(path)
+        identity_state = identity_query.get(
+            object_type="homepage",
+            object_ref=f"entities/{entity_ref}",
+        )
+        canonical_identity_states.append(identity_state)
+        if identity_state["state"].startswith("invalid_"):
+            _issue(
+                issues,
+                gate="eligibility",
+                code=str(identity_state["deepestError"]),
+                ref=f"entities/{entity_ref}",
+            )
+            continue
+        if identity_state["state"] == "terminated":
+            _issue(
+                issues,
+                gate="eligibility",
+                code="DATA.POOL.IDENTITY_TERMINATED",
+                ref=f"entities/{entity_ref}",
+            )
+            continue
         entity_admission = _resolved_admission(
             path.parent,
             manifest,
@@ -318,12 +188,19 @@ def inspect_pool(
                 record is None and (path.parent / "attestation.json").is_file()
             )
             admission_missing["homepage"] += int(record_missing)
-            _not_admitted_issue(
+            if not _retirement_reported(
                 issues,
-                record=record,
-                admission_missing=record_missing,
-                ref=f"entities/{entity_ref}",
-            )
+                retired,
+                object_root=path.parent,
+                object_type="homepage",
+                object_ref=f"entities/{entity_ref}",
+            ):
+                _not_admitted_issue(
+                    issues,
+                    record=record,
+                    admission_missing=record_missing,
+                    ref=f"entities/{entity_ref}",
+                )
             continue
         admitted["homepage"] += 1
         scopes[str(record["usageScope"])] += 1
@@ -341,10 +218,7 @@ def inspect_pool(
             continue
         if strict_delivery:
             try:
-                if not effective_source_attribution_ready(
-                    entity_admission,
-                    release_mode="research",
-                ):
+                if not effective_source_attribution_ready(entity_admission):
                     raise ObjectTransactionError(
                         "DATA.POOL.SOURCE_ATTRIBUTION_INCOMPLETE"
                     )
@@ -378,6 +252,27 @@ def inspect_pool(
             )
             continue
         observed[carrier] += 1
+        identity_state = identity_query.get(
+            object_type="content",
+            object_ref=f"posts/{post_ref}",
+        )
+        canonical_identity_states.append(identity_state)
+        if identity_state["state"].startswith("invalid_"):
+            _issue(
+                issues,
+                gate="eligibility",
+                code=str(identity_state["deepestError"]),
+                ref=f"posts/{post_ref}",
+            )
+            continue
+        if identity_state["state"] == "terminated":
+            _issue(
+                issues,
+                gate="eligibility",
+                code="DATA.POOL.IDENTITY_TERMINATED",
+                ref=f"posts/{post_ref}",
+            )
+            continue
         post_admission = _resolved_admission(
             path.parent,
             manifest,
@@ -389,12 +284,19 @@ def inspect_pool(
                 record is None and manifest.get("reviewDecision") == "approved"
             )
             admission_missing[carrier] += int(record_missing)
-            _not_admitted_issue(
+            if not _retirement_reported(
                 issues,
-                record=record,
-                admission_missing=record_missing,
-                ref=f"posts/{post_ref}",
-            )
+                retired,
+                object_root=path.parent,
+                object_type="content",
+                object_ref=f"posts/{post_ref}",
+            ):
+                _not_admitted_issue(
+                    issues,
+                    record=record,
+                    admission_missing=record_missing,
+                    ref=f"posts/{post_ref}",
+                )
             continue
         admitted[carrier] += 1
         scopes[str(record["usageScope"])] += 1
@@ -410,10 +312,7 @@ def inspect_pool(
                 ref=f"posts/{post_ref}",
             )
             continue
-        if strict_delivery and not effective_source_attribution_ready(
-            post_admission,
-            release_mode="research",
-        ):
+        if strict_delivery and not effective_source_attribution_ready(post_admission):
             _issue(
                 issues,
                 gate="delivery",
@@ -445,6 +344,7 @@ def inspect_pool(
                     publish_root=publish_root,
                     post_refs=post_refs,
                     environment=environment,
+                    release_class="research",
                     strict_admission=True,
                 )
                 strict_capacity[environment] = selections[environment].counts["total"]
@@ -470,6 +370,16 @@ def inspect_pool(
             for excluded in research_selection.excluded:
                 ref = f"posts/{excluded.post_ref}"
                 if any(row["ref"].split(":", 1)[0] == ref for row in issues):
+                    continue
+                if any(row["objectRef"] == ref for row in retired):
+                    continue
+                if _retirement_reported(
+                    issues,
+                    retired,
+                    object_root=publish_root / "posts" / excluded.post_ref,
+                    object_type="content",
+                    object_ref=ref,
+                ):
                     continue
                 _issue(
                     issues,
@@ -499,10 +409,10 @@ def inspect_pool(
             )
             + pending_by_carrier[supply_type],
             "explicitAdmissionPending": admission_missing[supply_type],
-            "target": targets[supply_type],
-            "gap": max(0, targets[supply_type] - publishable[supply_type]),
+            "target": effective_targets[supply_type],
+            "gap": max(0, effective_targets[supply_type] - publishable[supply_type]),
         }
-        for supply_type in _SUPPLY_TYPES
+        for supply_type in active_carriers
     }
     research_post_count = sum(publishable[carrier] for carrier in _SUPPLY_TYPES[1:])
     # Environment capacity is a delivery estimate for Posts only. Homepage,
@@ -525,19 +435,19 @@ def inspect_pool(
     next_wave = [
         {
             "carrier": supply_type,
-            "requestedCandidateCount": min(
-                _NEXT_WAVE_SIZE,
-                max(0, targets[supply_type] - publishable[supply_type]),
+            "requestedCandidateCount": max(
+                0,
+                effective_targets[supply_type] - publishable[supply_type],
             ),
         }
         for supply_type in sorted(
-            _SUPPLY_TYPES,
+            active_carriers,
             key=lambda item: (
-                -max(0, targets[item] - publishable[item]),
+                -max(0, effective_targets[item] - publishable[item]),
                 _SUPPLY_TYPES.index(item),
             ),
         )
-        if publishable[supply_type] < targets[supply_type]
+        if publishable[supply_type] < effective_targets[supply_type]
     ]
     target_attained = not next_wave
     result = (
@@ -547,6 +457,9 @@ def inspect_pool(
         "schema": "quwoquan_data.pool_inspection",
         "result": result,
         "milestone": milestone_name,
+        "workloadMode": workload_mode,
+        "activeCarriers": list(active_carriers),
+        "workloadTargets": effective_targets,
         "targetAttained": target_attained,
         "checks": checks,
         "authors": {
@@ -561,7 +474,15 @@ def inspect_pool(
         "environmentCapacity": environment_capacity,
         "reasons": _reason_summary(issues),
         "issueCount": len(issues),
+        "retired": {
+            "objectCount": len(retired),
+            "objects": sorted(
+                retired,
+                key=lambda row: (row["objectType"], row["objectRef"]),
+            ),
+        },
         "nextWave": next_wave,
+        "canonicalIdentityStates": canonical_identity_states,
         "pendingDelivery": pending_delivery,
         "semanticScheduling": semantic_scheduling_projection(
             milestone=milestone_name,
@@ -571,19 +492,7 @@ def inspect_pool(
             source_ready_candidates=source_ready_candidates,
             source_ready_input=source_ready_input,
             throughput_input=throughput_input,
-        ),
-        "nextAction": (
-            (
-                "build Research milestone release; repair excluded objects independently"
-                if issues
-                else "build Research milestone release"
-            )
-            if target_attained
-            else (
-                "build with publishable objects and repair pending objects in parallel"
-                if result == "partial"
-                else "complete admission or delivery dependencies"
-            )
+            workload_targets=explicit_workloads,
         ),
     }
     if include_issues:
@@ -607,4 +516,4 @@ def inspect_pool(
     return report
 
 
-__all__ = ["M100_TARGETS", "inspect_pool"]
+__all__ = ["M100_TARGETS", "_eligibility_passed", "inspect_pool"]

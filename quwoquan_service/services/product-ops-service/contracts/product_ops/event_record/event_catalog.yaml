@@ -33,6 +33,40 @@ extension_fields:
   result:
     type: string
     max_length: 128
+  mediaType:
+    type: string
+    enum:
+    - image
+    - video
+  candidatesTried:
+    type: int
+    minimum: 0
+  mediaFailureKind:
+    type: string
+    enum:
+    - networkUnavailable
+    - dnsNxdomain
+    - handshakeTerminated
+    - certificateVerifyFailed
+    - connectionRefused
+    - noPlayableSource
+    - controllerSlotTimeout
+    - initializationTimeout
+    - decoderInitialization
+    - http404
+    - http4xx
+    - http5xx
+    - other
+  userScene:
+    type: string
+    enum:
+    - network
+    - temporary
+    - busy
+    - unavailable
+    - unsupported
+  retryable:
+    type: bool
   failReasonCode:
     type: string
     max_length: 128
@@ -60,6 +94,41 @@ extension_fields:
     max_items: 10
     item_max_length: 256
     sensitive: true
+  # 启动身份维度（deliver-deploy-prod-pipeline DEC-004）：只记录身份枚举与
+  # digest，不记录 URL、token、用户内容或商店凭据。
+  buildMode:
+    type: string
+    enum:
+    - debug
+    - profile
+    - release
+  distributionClass:
+    type: string
+    enum:
+    - dev_direct
+    - simulator
+    - registered_device
+    - store
+    - official_web
+    - hosted_web
+  # canonical 安装启动来源见 app_artifact_manifest.launch_provenances；
+  # 开发/巡检入口另有诊断值（如 xcode_build），故不做闭集枚举。
+  launchProvenance:
+    type: string
+    max_length: 64
+  buildNumber:
+    type: string
+    max_length: 32
+  launchManifestDigest:
+    type: string
+    max_length: 80
+  contentIdentityOutcome:
+    type: string
+    enum:
+    - bound
+    - absent
+    - protocol_failure
+    - unavailable
   tClickToFirstFrameMs:
     type: int
     minimum: 0
@@ -577,7 +646,17 @@ events:
   - tShellToContentMs
   - tClickToContentMs
   - hasError
-  optional_extensions: []
+  # 身份维度为 optional：已安装商店客户端不可强制升级，服务保留 N/N-1
+  # 兼容面；新客户端在值真实在场时必须携带，缺席以不发送表达。
+  optional_extensions:
+  - environment
+  - buildMode
+  - distributionClass
+  - launchProvenance
+  - buildNumber
+  - launchManifestDigest
+  - terminalState
+  - contentIdentityOutcome
   normal_sample_rate: 1.0
   slow_threshold_ms: 3000
   internal_priority: critical
@@ -800,6 +879,33 @@ events:
   - failReasonCode
   normal_sample_rate: 1.0
   internal_priority: critical
+- event_type: media_load_state
+  log_type: event
+  required_extensions:
+  - mediaType
+  - result
+  - durationMs
+  - candidatesTried
+  optional_extensions:
+  - surfaceId
+  - objectType
+  - objectId
+  - copyKey
+  - failReasonCode
+  - recoveryAction
+  - requestId
+  - traceId
+  - mediaFailureKind
+  - userScene
+  - retryable
+  normal_sample_rate: 0.1
+  slow_threshold_ms: 3000
+  always_keep_results:
+  - failure
+  - timeout
+  - retry
+  - absent
+  internal_priority: normal
 - event_type: rtc_call_outcome
   log_type: event
   required_extensions:

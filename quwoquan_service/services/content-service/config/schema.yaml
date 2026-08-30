@@ -4,15 +4,15 @@ configs:
   type: string
   scope: workload
   reload: restart
-  rollout: replace
+  rollout: progressive
   sensitive: true
-- key: sys.content-service.accountSecurityAuthority.baseUrl
+- key: sys.content-service.user_account_security_authority.base_url
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
-- key: sys.content-service.accountSecurityAuthority.timeoutMs
+- key: sys.content-service.user_account_security_authority.timeout_ms
   type: int
   scope: workload
   reload: restart
@@ -224,7 +224,7 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: '2026-07-09'
+  default: '2026-08-14'
 - key: sys.content-service.ip_location.ipv4_database_path
   type: string
   scope: workload
@@ -468,7 +468,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.content-service.redis.general.password
   type: string
   scope: workload
@@ -545,7 +544,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.content-service.redis.realtime.password
   type: string
   scope: workload
@@ -621,7 +619,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.content-service.redis.rec.password
   type: string
   scope: workload

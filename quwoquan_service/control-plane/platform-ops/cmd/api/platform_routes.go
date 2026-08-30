@@ -1,122 +1,41 @@
 package main
 
-import (
-	"net/http"
-	"os"
+import "net/http"
 
-	rtmetrics "quwoquan_service/runtime/metrics"
-)
-
+// newServerMux 只挂领域路由。/healthz、/readyz 与 /metrics 由骨架统一装配，
+// 服务侧不得覆盖（覆盖会把浅存活与深就绪重新混成一件事）。
 func newServerMux(service *platformService) *http.ServeMux {
-	if service.configInstanceReports == nil {
-		handler, err := composeConfigInstanceReportHandler(service)
-		if err != nil {
-			panic(err)
-		}
-		service.configInstanceReports = handler
-	}
-	if service.configTopology == nil {
-		handler, err := composeConfigSnapshotTopologyHandler(service)
-		if err != nil {
-			panic(err)
-		}
-		service.configTopology = handler
-	}
-	if service.configInstanceRuntime == nil {
-		handler, err := composeConfigInstanceRuntimeHandler(service)
-		if err != nil {
-			panic(err)
-		}
-		service.configInstanceRuntime = handler
-	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		if service.health == nil || service.health(r.Context()) != nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
-				"status": "degraded",
-				"error":  "postgres unavailable",
-			})
-			return
-		}
-		if _, err := os.Stat(service.repoRoot); err != nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
-				"status": "degraded",
-				"error":  "repo root inaccessible",
-			})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-	})
-	mux.Handle("/metrics", rtmetrics.Handler())
-	mux.HandleFunc("/readyz/config-convergence", service.handleConfigAckConvergence)
-	mux.HandleFunc("/control-plane/platform/catalog/services", func(w http.ResponseWriter, r *http.Request) {
-		service.configTopology.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/topology/planes", func(w http.ResponseWriter, r *http.Request) {
-		service.configTopology.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/topology/prod-plane-access-isolation", func(w http.ResponseWriter, r *http.Request) {
-		service.configTopology.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/topology/environments", func(w http.ResponseWriter, r *http.Request) {
-		service.configTopology.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/topology/clusters", func(w http.ResponseWriter, r *http.Request) {
-		service.configTopology.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/topology/services", func(w http.ResponseWriter, r *http.Request) {
-		service.configInstanceRuntime.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/topology/instances", func(w http.ResponseWriter, r *http.Request) {
-		service.configInstanceRuntime.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/configs", func(w http.ResponseWriter, r *http.Request) {
-		service.configLayers.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/configs/resolve", func(w http.ResponseWriter, r *http.Request) {
-		service.configLayers.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/configs/resolve-for-instance", func(w http.ResponseWriter, r *http.Request) {
-		service.configLayers.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/configs/snapshot", func(w http.ResponseWriter, r *http.Request) {
-		service.configLayers.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/configs/domains", func(w http.ResponseWriter, r *http.Request) {
-		service.configLayers.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/configs/instances", func(w http.ResponseWriter, r *http.Request) {
-		service.configInstanceReports.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/configs/instances/", func(w http.ResponseWriter, r *http.Request) {
-		service.configInstanceReports.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/alerts/ingest", func(w http.ResponseWriter, r *http.Request) {
-		service.configInstanceRuntime.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/alerts/active", func(w http.ResponseWriter, r *http.Request) {
-		service.configInstanceRuntime.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/alerts/", func(w http.ResponseWriter, r *http.Request) {
-		service.configInstanceRuntime.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/audits", func(w http.ResponseWriter, r *http.Request) {
-		service.configInstanceRuntime.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/approvals", func(w http.ResponseWriter, r *http.Request) {
-		service.configInstanceRuntime.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/projections/summary", func(w http.ResponseWriter, r *http.Request) {
-		service.configInstanceRuntime.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/triage/summary", func(w http.ResponseWriter, r *http.Request) {
-		service.configInstanceRuntime.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/releases", func(w http.ResponseWriter, r *http.Request) {
-		service.configInstanceRuntime.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/control-plane/platform/rollout/routing-policy", func(w http.ResponseWriter, r *http.Request) {
-		service.configTopology.ServeHTTP(w, r)
-	})
+	mux.HandleFunc(configAckConvergencePath, service.handleConfigAckConvergence)
+	for _, route := range []struct {
+		path    string
+		handler http.Handler
+	}{
+		{"/control-plane/platform/catalog/services", service.configTopology},
+		{"/control-plane/platform/topology/planes", service.configTopology},
+		{"/control-plane/platform/topology/prod-plane-access-isolation", service.configTopology},
+		{"/control-plane/platform/topology/environments", service.configTopology},
+		{"/control-plane/platform/topology/clusters", service.configTopology},
+		{"/control-plane/platform/rollout/routing-policy", service.configTopology},
+		{"/control-plane/platform/topology/services", service.configInstanceRuntime},
+		{"/control-plane/platform/topology/instances", service.configInstanceRuntime},
+		{alertIngestPath, service.configInstanceRuntime},
+		{"/control-plane/platform/alerts/active", service.configInstanceRuntime},
+		{"/control-plane/platform/alerts/", service.configInstanceRuntime},
+		{"/control-plane/platform/audits", service.configInstanceRuntime},
+		{"/control-plane/platform/approvals", service.configInstanceRuntime},
+		{"/control-plane/platform/projections/summary", service.configInstanceRuntime},
+		{"/control-plane/platform/triage/summary", service.configInstanceRuntime},
+		{"/control-plane/platform/releases", service.configInstanceRuntime},
+		{"/control-plane/platform/configs", service.configLayers},
+		{"/control-plane/platform/configs/resolve", service.configLayers},
+		{resolveForInstancePath, service.configLayers},
+		{"/control-plane/platform/configs/snapshot", service.configLayers},
+		{"/control-plane/platform/configs/domains", service.configLayers},
+		{"/control-plane/platform/configs/instances", service.configInstanceReports},
+		{"/control-plane/platform/configs/instances/", service.configInstanceReports},
+	} {
+		mux.Handle(route.path, route.handler)
+	}
 	return mux
 }

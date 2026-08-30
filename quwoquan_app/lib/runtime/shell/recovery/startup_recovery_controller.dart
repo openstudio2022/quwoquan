@@ -80,10 +80,12 @@ final class StartupRecoveryController extends ChangeNotifier {
         buildNumber: nativeContext.buildNumber,
       );
       if (_stateMachine.confirmVersion(
+        platform: result.platform,
         currentBuild: nativeContext.buildNumber,
         latestBuild: result.latestBuild,
         minimumSupportedBuild: result.minimumSupportedBuild,
         updateState: result.updateState,
+        updateChannel: result.updateChannel,
         requiredUpdateOnly: requiredUpdateOnly,
         updateUrl: result.updateUrl,
         recoveryUrl: result.recoveryUrl,
@@ -132,17 +134,25 @@ final class StartupRecoveryController extends ChangeNotifier {
     if (_openingExternalTarget) return false;
     _setOpeningExternalTarget(true);
     try {
-      final context = _nativeContext ?? await _nativeBridge.context();
-      final webUrl = context?.publicWebUrl ?? '';
-      if (await _nativeBridge.openTrustedExternalUrl(webUrl)) {
-        return true;
-      }
-      final fallback = snapshot.recoveryUrl;
-      return fallback.isNotEmpty &&
-          await _nativeBridge.openTrustedExternalUrl(fallback);
+      return switch (snapshot.webTargetSource) {
+        RecoveryWebTargetSource.confirmedRecoveryUrl =>
+          await _nativeBridge.openTrustedExternalUrl(
+            snapshot.recoveryUrl.trim(),
+          ),
+        RecoveryWebTargetSource.nativePublicWebUrl =>
+          await _openNativePublicWeb(),
+        RecoveryWebTargetSource.none => false,
+      };
     } finally {
       _setOpeningExternalTarget(false);
     }
+  }
+
+  Future<bool> _openNativePublicWeb() async {
+    final context = _nativeContext ?? await _nativeBridge.context();
+    final publicWebUrl = context?.publicWebUrl.trim() ?? '';
+    return publicWebUrl.isNotEmpty &&
+        await _nativeBridge.openTrustedExternalUrl(publicWebUrl);
   }
 
   void _setOpeningExternalTarget(bool value) {

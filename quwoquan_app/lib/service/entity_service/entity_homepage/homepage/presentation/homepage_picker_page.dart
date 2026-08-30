@@ -1,4 +1,8 @@
 import 'dart:async';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
+
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
+    show MediaDeliveryKind;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -334,7 +338,14 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
     return IosSelectionOptionTile(
       backgroundColor: AppColors.iosSystemBackground(context),
       pressedColor: AppColors.iosSecondaryFill(context),
-      leading: _buildHomepageCover(selected.coverUrl),
+      // canonical reference 只携带公开取值，投影未在此交出资产身份。
+      leading: _buildHomepageCover(
+        MediaDeliveryBinding(
+          assetId: '',
+          accessMode: null,
+          publicUrl: selected.coverUrl ?? '',
+        ),
+      ),
       title: Text(
         selected.title,
         maxLines: 1,
@@ -373,7 +384,13 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
       key: ValueKey<String>('homepage_picker_result_${summary.id}'),
       backgroundColor: AppColors.iosSystemBackground(context),
       pressedColor: AppColors.iosSecondaryFill(context),
-      leading: _buildHomepageCover(summary.coverUrl),
+      leading: _buildHomepageCover(
+        MediaDeliveryBinding(
+          assetId: summary.coverAssetId?.trim() ?? '',
+          accessMode: summary.coverAccessMode,
+          publicUrl: summary.coverUrl ?? '',
+        ),
+      ),
       title: Text(
         summary.title,
         maxLines: 1,
@@ -402,7 +419,7 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
     );
   }
 
-  Widget _buildHomepageCover(String? coverUrl) {
+  Widget _buildHomepageCover(MediaDeliveryBinding binding) {
     final fallback = _buildPlaceholderCover(
       icon: CupertinoIcons.photo_fill_on_rectangle_fill,
     );
@@ -413,14 +430,21 @@ class _HomepagePickerPageState extends ConsumerState<HomepagePickerPage> {
       child: SizedBox(
         width: AppSpacing.avatarUserLg,
         height: AppSpacing.avatarUserLg,
-        child: (coverUrl ?? '').trim().isEmpty
-            ? fallback
-            : AppMediaImage(
-                imageSource: coverUrl!,
-                fit: BoxFit.cover,
-                placeholder: fallback,
-                errorWidget: fallback,
-              ),
+        // 交付形态取自搜索投影声明（DEC-033），不从 URL 形态反推。
+        child: mediaDeliveryImage(
+          binding: binding,
+          kind: MediaDeliveryKind.image,
+          fit: BoxFit.cover,
+          placeholder: fallback,
+          errorWidget: fallback,
+          absentWidget: fallback,
+          publicBuilder: (context, publicUrl) => AppMediaImage(
+            imageSource: publicUrl,
+            fit: BoxFit.cover,
+            placeholder: fallback,
+            errorWidget: fallback,
+          ),
+        ),
       ),
     );
   }

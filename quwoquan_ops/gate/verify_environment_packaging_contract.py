@@ -8,6 +8,8 @@ import re
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -51,6 +53,7 @@ RUNTIME_SHARED_SOURCE_PREFIXES = {
 }
 RUNTIME_SHARED_EXTRA_TOP_LEVEL = frozenset(
     {
+        "compiled-provider-bindings",
         "oci-images.json",
         "observability-log-sink",
         "provider-runtime",

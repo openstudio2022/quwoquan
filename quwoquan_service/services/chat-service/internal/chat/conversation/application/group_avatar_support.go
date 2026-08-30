@@ -158,7 +158,7 @@ func RecomputeGroupAvatar(
 	if !IsGroupConversation(*conv) {
 		return nil
 	}
-	if strings.TrimSpace(string(conv.Status)) != "active" {
+	if conv.Status != model.ConversationStatusActive {
 		return nil
 	}
 

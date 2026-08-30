@@ -1,3 +1,11 @@
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-017
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-017.t4
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-019
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-019.t1
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-019.t2
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-019.t3
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-019.t4
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-019.t5
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -10,12 +18,27 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/image_book_page_surface.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_page_flip_book.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_media_failure_content.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_image.dart'
+    show MediaDeliveryBinding;
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/design_system/spacing/immersive_media_wait_motion.dart';
 
 Widget _host(Widget child) => ProviderScope(
   child: CupertinoApp(home: CupertinoPageScaffold(child: child)),
 );
+
+/// 公开交付页序：本文件的主题是解码/等待/翻页编排，交付形态固定为公开。
+/// 私有交付分流由 image_book_signed_delivery 锚点覆盖。
+List<MediaDeliveryBinding> _publicPages(List<String> urls) => urls
+    .map(
+      (url) => MediaDeliveryBinding(
+        assetId: '',
+        accessMode: null,
+        publicUrl: url,
+      ),
+    )
+    .toList(growable: false);
 
 void _consumeImageExceptions(WidgetTester tester) {
   while (tester.takeException() != null) {
@@ -121,24 +144,69 @@ Future<double> _averageSaturation(ui.Image image) async {
   return total / count;
 }
 
-class _ControlledImageLoader {
-  final Map<int, List<Completer<ui.Image>>> attempts =
-      <int, List<Completer<ui.Image>>>{};
+class _ControlledImageLoadOperation implements ImageBookImageLoadOperation {
+  _ControlledImageLoadOperation()
+    : _completer = Completer<ImageBookImageLoadResult>();
 
-  Future<ui.Image> call({
+  final Completer<ImageBookImageLoadResult> _completer;
+  int _candidatesTried = 1;
+  bool cancelled = false;
+
+  @override
+  Future<ImageBookImageLoadResult> get result => _completer.future;
+
+  @override
+  int get candidatesTried => _candidatesTried;
+
+  void complete(ui.Image image, {int candidatesTried = 1}) {
+    _candidatesTried = candidatesTried;
+    _completer.complete(
+      ImageBookImageLoadResult(image: image, candidatesTried: candidatesTried),
+    );
+  }
+
+  void completeError(Object error, {int candidatesTried = 1}) {
+    _candidatesTried = candidatesTried;
+    _completer.completeError(error);
+  }
+
+  @override
+  void cancel() {
+    cancelled = true;
+    if (!_completer.isCompleted) {
+      _completer.completeError(const _ControlledImageLoadCancelled());
+    }
+  }
+}
+
+class _ControlledImageLoadCancelled implements Exception {
+  const _ControlledImageLoadCancelled();
+}
+
+class _ControlledImageLoader {
+  final Map<int, List<_ControlledImageLoadOperation>> attempts =
+      <int, List<_ControlledImageLoadOperation>>{};
+  final Map<int, List<List<String>>> candidateAttempts =
+      <int, List<List<String>>>{};
+
+  ImageBookImageLoadOperation call({
     required BuildContext context,
     required int pageIndex,
     required List<String> candidates,
     required Size pageSize,
   }) {
-    final completer = Completer<ui.Image>();
+    final operation = _ControlledImageLoadOperation();
     attempts
-        .putIfAbsent(pageIndex, () => <Completer<ui.Image>>[])
-        .add(completer);
-    return completer.future;
+        .putIfAbsent(pageIndex, () => <_ControlledImageLoadOperation>[])
+        .add(operation);
+    candidateAttempts
+        .putIfAbsent(pageIndex, () => <List<String>>[])
+        .add(List<String>.unmodifiable(candidates));
+    return operation;
   }
 
-  Completer<ui.Image> latest(int pageIndex) => attempts[pageIndex]!.last;
+  _ControlledImageLoadOperation latest(int pageIndex) =>
+      attempts[pageIndex]!.last;
 }
 
 void main() {
@@ -267,6 +335,55 @@ void main() {
     quadrantImage.dispose();
   });
 
+  testWidgets('ImageBookCanvas 保留缺席图片页位并呈现独立不可重试状态', (tester) async {
+    final loader = _ControlledImageLoader();
+    final mediaEvents = <ImageBookMediaLoadEvent>[];
+
+    await tester.pumpWidget(
+      _host(
+        SizedBox(
+          width: 320,
+          height: 480,
+          child: ImageBookCanvas(
+            deliveries: _publicPages(const <String>[
+              'media/image/s/fixture/v1/book-1.jpg',
+              'asset://unresolved-article-image',
+              'media/image/s/fixture/v1/book-3.jpg',
+            ]),
+            initialIndex: 1,
+            imageLoader: loader.call,
+            onMediaLoad: mediaEvents.add,
+            onImageChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+
+    final book = tester.widget<MediaPageFlipBook>(
+      find.byType(MediaPageFlipBook),
+    );
+    expect(book.pageCount, 3);
+    expect(
+      loader.attempts.containsKey(1),
+      isFalse,
+      reason: 'Unresolved asset identities must not enter the network loader.',
+    );
+    expect(
+      find.byKey(const ValueKey<String>('image-book-status-absent')),
+      findsOneWidget,
+    );
+    expect(find.text(ContentText.imageLoadFailed), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('image-book-retry')),
+      findsNothing,
+    );
+    expect(mediaEvents.map((event) => event.result), <String>['absent']);
+
+    await tester.pumpWidget(_host(const SizedBox()));
+  });
+
   testWidgets('ImageBookCanvas 接入公共翻书宿主并上报初始页', (tester) async {
     final changed = <int>[];
 
@@ -276,10 +393,10 @@ void main() {
           width: 320,
           height: 480,
           child: ImageBookCanvas(
-            imageUrls: const <String>[
-              'media/image/s/fixture/book-1.jpg',
-              'media/image/s/fixture/book-2.jpg',
-            ],
+            deliveries: _publicPages(const <String>[
+              'media/image/s/fixture/v1/book-1.jpg',
+              'media/image/s/fixture/v1/book-2.jpg',
+            ]),
             onImageChanged: changed.add,
           ),
         ),
@@ -350,10 +467,10 @@ void main() {
           width: 320,
           height: 480,
           child: ImageBookCanvas(
-            imageUrls: const <String>[
-              'media/image/s/fixture/book-1.jpg',
-              'media/image/s/fixture/book-2.jpg',
-            ],
+            deliveries: _publicPages(const <String>[
+              'media/image/s/fixture/v1/book-1.jpg',
+              'media/image/s/fixture/v1/book-2.jpg',
+            ]),
             onImageChanged: changed.add,
           ),
         ),
@@ -398,10 +515,10 @@ void main() {
           width: 320,
           height: 480,
           child: ImageBookCanvas(
-            imageUrls: const <String>[
-              'media/image/s/fixture/book-1.jpg',
-              'media/image/s/fixture/book-2.jpg',
-            ],
+            deliveries: _publicPages(const <String>[
+              'media/image/s/fixture/v1/book-1.jpg',
+              'media/image/s/fixture/v1/book-2.jpg',
+            ]),
             onImageChanged: (_) {},
           ),
         ),
@@ -444,10 +561,10 @@ void main() {
           width: 320,
           height: 480,
           child: ImageBookCanvas(
-            imageUrls: const <String>[
-              'media/image/s/fixture/pending-0.jpg',
-              'media/image/s/fixture/pending-1.jpg',
-            ],
+            deliveries: _publicPages(const <String>[
+              'media/image/s/fixture/v1/pending-0.jpg',
+              'media/image/s/fixture/v1/pending-1.jpg',
+            ]),
             imageLoader: loader.call,
             onImageChanged: (_) {},
           ),
@@ -547,8 +664,11 @@ void main() {
             find.byKey(const ValueKey<String>('image-book-ready-fade')),
           )
           .duration,
-      const Duration(milliseconds: 160),
+      ImmersiveMediaWaitMotion.quickReveal,
+      reason: '等待指示未出现过的完成走快速淡入，感知为瞬时。',
     );
+    // 卸载画布，回收首页仍在等待的 3s/6s 定时器。
+    await tester.pumpWidget(_host(const SizedBox()));
   });
 
   testWidgets('ImageBookCanvas loading 延迟、失败静态提示、翻动退出与重试成功', (tester) async {
@@ -561,10 +681,10 @@ void main() {
           width: 320,
           height: 480,
           child: ImageBookCanvas(
-            imageUrls: const <String>[
-              'media/image/s/fixture/failure-0.jpg',
-              'media/image/s/fixture/failure-1.jpg',
-            ],
+            deliveries: _publicPages(const <String>[
+              'media/image/s/fixture/v1/failure-0.jpg',
+              'media/image/s/fixture/v1/failure-1.jpg',
+            ]),
             imageLoader: loader.call,
             onMediaLoad: mediaEvents.add,
             onImageChanged: (_) {},
@@ -573,10 +693,11 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(milliseconds: 450));
     expect(
       find.byKey(const ValueKey<String>('image-book-loading-overlay')),
       findsNothing,
+      reason: '延迟阈值内不得出现任何等待指示。',
     );
     await tester.pump(const Duration(milliseconds: 70));
     expect(
@@ -588,7 +709,33 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
     expect(
       find.byKey(const ValueKey<String>('image-book-failure-overlay')),
+      findsNothing,
+      reason: 'A visible indicator must complete its minimum display window.',
+    );
+    expect(
+      find.byKey(const ValueKey<String>('image-book-loading-overlay')),
       findsOneWidget,
+    );
+    await tester.pump(ImmersiveMediaWaitMotion.indicatorMinDisplay);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-failure-overlay')),
+      findsOneWidget,
+    );
+    final failureEvent = mediaEvents.singleWhere(
+      (event) => event.result == 'failure',
+    );
+    expect(failureEvent.durationMs, isNotNull);
+    expect(failureEvent.durationMs, greaterThanOrEqualTo(0));
+    expect(
+      failureEvent.candidatesTried,
+      loader.candidateAttempts[0]!.first.length,
+    );
+    // 交叉淡出退场的 loading 指示走完转场后彻底移除。
+    await tester.pump(ImmersiveMediaWaitMotion.crossFade);
+    expect(
+      find.byKey(const ValueKey<String>('image-book-loading-overlay')),
+      findsNothing,
     );
     expect(find.byType(ImmersiveMediaFailureContent), findsOneWidget);
     expect(find.byIcon(Icons.image_not_supported_outlined), findsNothing);
@@ -626,6 +773,20 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('image-book-retry')));
     await tester.pump();
     expect(loader.attempts[0], hasLength(2));
+    expect(loader.candidateAttempts[0], hasLength(2));
+    expect(
+      loader.candidateAttempts[0]![1],
+      orderedEquals(loader.candidateAttempts[0]![0]),
+      reason: 'Retry must replay the exact same canonical candidate chain.',
+    );
+    // 重试跳过延迟阈值：指示立即出现，用户主动动作即时反馈。
+    expect(
+      find.byKey(const ValueKey<String>('image-book-loading-overlay')),
+      findsOneWidget,
+    );
+    // 失败面走完交叉淡出后移除（动画完成后的下一帧摘除退场层）。
+    await tester.pump(ImmersiveMediaWaitMotion.crossFade);
+    await tester.pump(const Duration(milliseconds: 16));
     expect(
       find.byKey(const ValueKey<String>('image-book-failure-overlay')),
       findsNothing,
@@ -635,12 +796,198 @@ void main() {
     await tester.pump(const Duration(milliseconds: 16));
     expect(
       find.byKey(const ValueKey<String>('image-book-decoded-surface')),
+      findsNothing,
+      reason: '指示出现后必须保持满最短展示窗口，不得闪现。',
+    );
+    await tester.pump(ImmersiveMediaWaitMotion.indicatorMinDisplay);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-decoded-surface')),
       findsOneWidget,
     );
     expect(
       mediaEvents.map((event) => event.result),
       containsAllInOrder(<String>['failure', 'retry', 'success']),
     );
+    expect(
+      mediaEvents.singleWhere((event) => event.result == 'retry').durationMs,
+      0,
+      reason: 'retry 是用户触发重放链的即时动作，后续加载耗时由终态事件记录。',
+    );
+    final successEvent = mediaEvents.singleWhere(
+      (event) => event.result == 'success',
+    );
+    expect(successEvent.durationMs, isNotNull);
+    expect(successEvent.durationMs, greaterThanOrEqualTo(0));
+    expect(
+      successEvent.candidatesTried,
+      loader.candidateAttempts[0]!.last.length,
+    );
+    // 卸载画布，回收另一页仍在等待的 3s/6s 定时器。
+    await tester.pumpWidget(_host(const SizedBox()));
+  });
+
+  testWidgets('ImageBookCanvas 阈值边界完成时指示保持满最短展示窗口再交叉淡出', (tester) async {
+    final loader = _ControlledImageLoader();
+    final image = await _solidImage(240, 360, const Color(0xFF38A169));
+
+    await tester.pumpWidget(
+      _host(
+        SizedBox(
+          width: 320,
+          height: 480,
+          child: ImageBookCanvas(
+            deliveries: _publicPages(const <String>[
+              'media/image/s/fixture/v1/hysteresis.jpg',
+            ]),
+            imageLoader: loader.call,
+            onImageChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 520));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-loading-overlay')),
+      findsOneWidget,
+    );
+
+    // 图片在指示刚出现后就绪（最差闪烁场景）。
+    loader.latest(0).complete(image);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-decoded-surface')),
+      findsNothing,
+      reason: '滞回下界：指示出现后即使图片就绪也保持满最短展示，不得闪现。',
+    );
+    expect(
+      find.byKey(const ValueKey<String>('image-book-loading-overlay')),
+      findsOneWidget,
+    );
+
+    await tester.pump(ImmersiveMediaWaitMotion.indicatorMinDisplay);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-decoded-surface')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(const ValueKey<String>('image-book-ready-fade')),
+          )
+          .duration,
+      ImmersiveMediaWaitMotion.crossFade,
+      reason: '指示出现过的完成必须经交叉淡出呈现，不得硬切。',
+    );
+    await tester.pump(ImmersiveMediaWaitMotion.crossFade);
+    expect(
+      find.byKey(const ValueKey<String>('image-book-loading-overlay')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('ImageBookCanvas 3s 慢提示淡入且不引起指示布局重排', (tester) async {
+    final loader = _ControlledImageLoader();
+
+    await tester.pumpWidget(
+      _host(
+        SizedBox(
+          width: 320,
+          height: 480,
+          child: ImageBookCanvas(
+            deliveries: _publicPages(const <String>['media/image/s/fixture/v1/slow.jpg']),
+            imageLoader: loader.call,
+            onImageChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    final slowHint = find.byKey(const ValueKey<String>('image-book-slow-hint'));
+    expect(tester.widget<AnimatedOpacity>(slowHint).opacity, 0);
+    final indicatorCenterBefore = tester.getCenter(
+      find.byKey(const ValueKey<String>('image-book-loading-overlay')),
+    );
+
+    await tester.pump(const Duration(milliseconds: 2500));
+    expect(
+      tester.widget<AnimatedOpacity>(slowHint).opacity,
+      1,
+      reason: '3 秒（全站 blockedSlowHint 节奏）必须出现慢提示文案。',
+    );
+    expect(find.text(FoundationText.requestWaitSlow), findsOneWidget);
+    expect(
+      tester.getCenter(
+        find.byKey(const ValueKey<String>('image-book-loading-overlay')),
+      ),
+      indicatorCenterBefore,
+      reason: '慢提示槽位常驻，文字出现不得移动指示位置。',
+    );
+
+    await tester.pumpWidget(_host(const SizedBox()));
+  });
+
+  testWidgets('ImageBookCanvas 6s 未完成进入失败终态、上报 timeout、重试即时指示', (tester) async {
+    final loader = _ControlledImageLoader();
+    final mediaEvents = <ImageBookMediaLoadEvent>[];
+
+    await tester.pumpWidget(
+      _host(
+        SizedBox(
+          width: 320,
+          height: 480,
+          child: ImageBookCanvas(
+            deliveries: _publicPages(const <String>['media/image/s/fixture/v1/deadline.jpg']),
+            imageLoader: loader.call,
+            onMediaLoad: mediaEvents.add,
+            onImageChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(
+      find.byKey(const ValueKey<String>('image-book-failure-overlay')),
+      findsOneWidget,
+      reason: '6 秒（全站 foregroundReadDeadline）必须进入唯一恢复组失败终态。',
+    );
+    final timeoutEvent = mediaEvents.singleWhere(
+      (event) => event.result == 'timeout',
+    );
+    expect(timeoutEvent.durationMs, 6000);
+    expect(timeoutEvent.candidatesTried, 1);
+    expect(
+      loader.attempts[0]!.first.cancelled,
+      isTrue,
+      reason: 'The deadline must cancel the active load operation.',
+    );
+
+    await tester.pump(ImmersiveMediaWaitMotion.crossFade);
+    await tester.tap(find.byKey(const ValueKey<String>('image-book-retry')));
+    await tester.pump();
+    expect(loader.attempts[0], hasLength(2));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-loading-overlay')),
+      findsOneWidget,
+      reason: '重试必须跳过延迟阈值即时出现指示。',
+    );
+    expect(
+      mediaEvents.map((event) => event.result),
+      containsAllInOrder(<String>['timeout', 'retry']),
+    );
+    expect(
+      mediaEvents.singleWhere((event) => event.result == 'retry').durationMs,
+      0,
+    );
+
+    await tester.pumpWidget(_host(const SizedBox()));
   });
 
   testWidgets('ImageBookCanvas 等值 URL List 重建不释放已解码图片', (tester) async {
@@ -653,7 +1000,7 @@ void main() {
           width: 320,
           height: 480,
           child: ImageBookCanvas(
-            imageUrls: urls,
+            deliveries: _publicPages(urls),
             imageLoader: loader.call,
             onImageChanged: (_) {},
           ),
@@ -662,7 +1009,7 @@ void main() {
     }
 
     await tester.pumpWidget(
-      buildBook(<String>['media/image/s/fixture/stable-list.jpg']),
+      buildBook(<String>['media/image/s/fixture/v1/stable-list.jpg']),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
@@ -675,7 +1022,7 @@ void main() {
     expect(loader.attempts[0], hasLength(1));
 
     await tester.pumpWidget(
-      buildBook(<String>['media/image/s/fixture/stable-list.jpg']),
+      buildBook(<String>['media/image/s/fixture/v1/stable-list.jpg']),
     );
     await tester.pump(const Duration(milliseconds: 16));
 
@@ -699,7 +1046,7 @@ void main() {
             width: 320,
             height: 480,
             child: ImageBookCanvas(
-              imageUrls: const <String>['media/image/s/fixture/reduced.jpg'],
+              deliveries: _publicPages(const <String>['media/image/s/fixture/v1/reduced.jpg']),
               imageLoader: loader.call,
               onImageChanged: (_) {},
             ),

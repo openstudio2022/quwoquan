@@ -58,11 +58,23 @@ errors:
   user_message:
     zh: 外部供应商暂时拒绝请求，请稍后重试
     en: External provider rejected the request
+- code: INTEGRATION.USER.external_interaction_readiness_forbidden
+  reason: forbidden
+  http_status: 403
+  emitted_by:
+  - {surface: http, operations: [GetSmsOtpDeliveryReadiness]}
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: externalInteractionReadinessForbidden
+  go_const: ErrExternalInteractionReadinessForbidden
+  user_message:
+    zh: 当前服务无权读取短信投递就绪状态
+    en: The calling service cannot read SMS delivery readiness
 - code: INTEGRATION.SYSTEM.external_interaction_internal_error
   reason: internal_error
   http_status: 500
   emitted_by:
-  - {surface: http, operations: [SubmitExternalInteractionRequest, GetExternalInteractionRequest, ListExternalInteractionAttempts, ListExternalInteractionDeadLetters, RecoverExternalInteractionDeadLetter, GetExternalInteractionMetricsSnapshot]}
+  - {surface: http, operations: [GetSmsOtpDeliveryReadiness, SubmitExternalInteractionRequest, GetExternalInteractionRequest, ListExternalInteractionAttempts, ListExternalInteractionDeadLetters, RecoverExternalInteractionDeadLetter, GetExternalInteractionMetricsSnapshot]}
   recovery_action: retry
   disruption_level: snackbar
   recovery_after_seconds: 5

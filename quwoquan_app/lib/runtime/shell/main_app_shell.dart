@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/runtime/observability/app_log_service.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -23,7 +24,6 @@ import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/navigation/push_tap_navigation.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/runtime/shell/navigation/main_tab_activation.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/page_access_log_util.dart';
 import 'package:quwoquan_app/runtime/shell/shell_immersive_providers.dart';
@@ -143,7 +143,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       );
       _syncIncomingCallCoordinator();
       final pushTapNavigator = PushTapNavigator(
-        messagingClient: ref.read(pushTapMessagingClientProvider),
+        intentSource: ref.read(pushTapIntentSourceProvider),
         push: (location) {
           if (mounted) {
             context.push(location);
@@ -260,25 +260,15 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         );
       },
     );
-    // 视频书已退出底栏：首页顶部固定入口经激活信号请求壳切换到 featured
-    // 内存态目的地（避免页面直接持有壳内部 tab 状态）。
-    ref.listen<int>(featuredImmersiveActivationProvider, (previous, next) {
-      if (!mounted || next == (previous ?? 0)) {
-        return;
-      }
-      _selectMainTab(MainTabDestination.featured);
-    });
     final themeDark = ref.watch(isDarkProvider);
-    final isFeaturedActive = _currentDestination == MainTabDestination.featured;
     final forceDark = ref.watch(videoForceDarkProvider).forceDark;
-    final effectiveForceDark = forceDark || isFeaturedActive;
+    final effectiveForceDark = forceDark;
     final isDark = themeDark || effectiveForceDark;
     final shellBackground = effectiveForceDark
         ? AppColors.worksBackground
         : SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final bottomNavHidden =
         ref.watch(bottomNavHiddenProvider).hidden ||
-        isFeaturedActive ||
         !_currentDestination.isBottomNavDestination ||
         widget.currentLocation == AppRoutePaths.createEntry ||
         widget.currentLocation.startsWith(AppRoutePaths.createPathTemplate);
@@ -353,16 +343,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                                     ),
                                   ),
                                   _buildTabBody(
-                                    destination: MainTabDestination.featured,
-                                    child: shellBindings.buildFeatured(
-                                      onExitToHome: () => _selectMainTab(
-                                        MainTabDestination.home,
-                                      ),
-                                    ),
-                                  ),
-                                  _buildTabBody(
                                     destination: MainTabDestination.actions,
-                                    child: shellBindings.buildActionsDiscovery(),
+                                    child: shellBindings
+                                        .buildActionsDiscovery(),
                                   ),
                                   const SizedBox.shrink(),
                                   _buildTabBody(
@@ -502,10 +485,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         break;
       case MainTabDestination.create:
         break;
-      case MainTabDestination.featured:
-        ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
-        ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
-        break;
       case MainTabDestination.actions:
         // 线下行动与发现：壳内存态 tab（无独立路由），保留底栏与常规明暗。
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
@@ -552,7 +531,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     }
     // 强入口未登录：先把底层归位到首页（底栏第一项），再上推全屏登录页。
     // 这样无论登录成功（按 redirect 跳目标）还是关闭 / 稍后登录（回首页或原路返回），
-    // 都稳定回到首页，避免从 premium/featured 等内存态 tab 进入后关闭仍停留在原 tab。
+    // 都稳定回到首页，避免关闭登录后仍停留在受限入口。
     if (_currentDestination != MainTabDestination.home) {
       _selectMainTab(MainTabDestination.home);
     }

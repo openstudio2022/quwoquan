@@ -10,6 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from content.execution.closure.publish_outcome import (
+    OBJECT_ASSET_OVER_BUDGET,
+    OBJECT_CLOSURE_OVER_BUDGET,
+    TypedPublishExclusion,
+)
 from content.release.canonical.object_transaction_bindings import (
     collect_object_keys,
     verify_entity_manifest_asset_binding,
@@ -31,7 +36,16 @@ LAYOUT_SCHEMA = "quwoquan_data.canonical_publish"
 RELEASE_SCHEMA = "quwoquan_data.release"
 REQUIRED_SOURCE_POLICY = SourcePolicyRevision.ENCYCLOPEDIA_PRIMARY.value
 ALLOWED_OBJECT_KINDS = {"creators", "entities", "posts"}
-ALLOWED_CANONICAL_ROOTS = {"creators", "entities", "posts", "tags", "media"}
+# Canonical publish holds the documents that describe a work, never the bytes it
+# shows: media bodies are owned once by the content library and reached by the
+# digests those documents record.
+#
+# Roots alone cannot express that. A body nested at `posts/<ref>/assets/x.jpg`
+# has a canonical root and would pass a root-only check, so the rule that keeps
+# the versioned tree free of bodies is stated over the whole path: a canonical
+# destination is a document, wherever it sits.
+ALLOWED_CANONICAL_ROOTS = {"creators", "entities", "posts", "tags"}
+CANONICAL_DOCUMENT_SUFFIXES = frozenset({".json", ".md", ".ndjson", ".vtt"})
 EXPECTED_OBJECT_SCHEMAS = {
     "creators": "quwoquan_data.creator_object",
     "entities": "quwoquan_data.entity_object",
@@ -60,6 +74,17 @@ def assert_environment_neutral(root: Path) -> None:
 
 class ObjectTransactionError(RuntimeError):
     """对象发布事务的输入、闭包或原子切换失败。"""
+
+
+class ObjectStorageBudgetExceeded(ObjectTransactionError, TypedPublishExclusion):
+    """对象闭包超出单对象存储预算，整对象 blocked。
+
+    发布侧不裁剪资产、不丢弃正文已引用的图、不生成降级衍生体：前两者会在正文里
+    留下悬挂引用，后者需要尚未冻结的重编码参数。对象因此整体不出包。
+    """
+
+    def __init__(self, issue_code: str, message: str) -> None:
+        TypedPublishExclusion.__init__(self, issue_code, message)
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -121,6 +146,48 @@ def _safe_rel(value: str, *, label: str) -> Path:
         raise ObjectTransactionError(f"{label} 路径逃逸：{value!r}")
     return candidate
 
+
+def is_canonical_document(relative: Path) -> bool:
+    """Whether one relative path names a document canonical publish may hold."""
+
+    return relative.suffix.casefold() in CANONICAL_DOCUMENT_SUFFIXES
+
+
+def object_lineage(manifest_path: str) -> str:
+    """The object a canonical manifest path belongs to, version stripped.
+
+    Canonical objects are versioned in place (``posts/<carrier>/<topic>/<title>/2``)
+    and a successor coexists with the version it supersedes, so identity questions
+    asked per manifest path would read one object's own next version as a second
+    object holding the same content.
+    """
+
+    parts = [part for part in manifest_path.split("/") if part]
+    if len(parts) >= 3 and parts[-1] == "manifest.json" and parts[-2].isdigit():
+        return "/".join(parts[:-2])
+    return "/".join(parts[:-1]) if parts[-1:] == ["manifest.json"] else manifest_path
+
+
+def canonical_destination(value: str, *, label: str) -> Path:
+    """Return the canonical publish path ``value`` names, or refuse it.
+
+    Every write into the versioned tree passes here, so this is the one place
+    that decides what canonical publish may contain: a document under a known
+    root. A media body reaching this point means some producer tried to make the
+    tree the owner of bytes the content library already owns, and failing here is
+    what keeps that from becoming permanent Git history.
+    """
+
+    relative = _safe_rel(value, label=label)
+    if relative.parts[0] not in ALLOWED_CANONICAL_ROOTS:
+        raise ObjectTransactionError(f"{label} is outside canonical roots: {value}")
+    if not is_canonical_document(relative):
+        raise ObjectTransactionError(
+            f"{label} is a media body, which canonical publish never owns: {value}"
+        )
+    return relative
+
+
 def _files(root: Path) -> Iterable[Path]:
     if not root.is_dir():
         return ()
@@ -138,8 +205,8 @@ def _copy_tree(source: Path, target: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, destination)
 
-def _tree_digest(root: Path) -> str:
-    rows = [
+def _tree_rows(root: Path) -> list[dict[str, Any]]:
+    return [
         {
             "path": path.relative_to(root).as_posix(),
             "sha256": _digest_file(path),
@@ -147,7 +214,31 @@ def _tree_digest(root: Path) -> str:
         }
         for path in _files(root)
     ]
-    return _digest_bytes(_json_bytes(rows))
+
+
+def _tree_digest(root: Path) -> str:
+    return _digest_bytes(_json_bytes(_tree_rows(root)))
+
+
+def _document_tree_digest(root: Path) -> str:
+    """Digest only the files canonical publish can hold.
+
+    A transaction package carries both the documents describing an object and the
+    bodies those documents point at, and applying it puts the bodies in the
+    content library rather than the tree. The two trees are therefore only ever
+    equal on their document projection, so a readback that compares whole trees
+    would read a correct apply as drift.
+    """
+
+    return _digest_bytes(
+        _json_bytes(
+            [
+                row
+                for row in _tree_rows(root)
+                if is_canonical_document(Path(str(row["path"])))
+            ]
+        )
+    )
 
 def _tag_exists(ref: str) -> bool:
     root = Path(os.environ.get("QWQ_TAGS_ROOT") or CONTROL_PLANE_TAXONOMY_ROOT)
@@ -347,6 +438,48 @@ def _rights_binding(
     }
 
 
+def _admit_object_storage_budget(object_root: Path, *, object_kind: str, object_ref: str) -> None:
+    """Refuse to seal a closure that does not fit the single-object storage budget.
+
+    This is the one boundary both carriers must cross to obtain an
+    ``objectClosureDigest``, so binding admission here is what makes "a new
+    carrier forgot to call it" structurally impossible rather than a convention.
+    The measurement and the per-carrier budget numbers stay owned by the gate
+    that also scans canonical publish, so admission and that gate cannot reach
+    different conclusions about the same object.
+    """
+
+    from verify.verify_object_size_budget import (
+        ObjectBudgetVerdict,
+        budget_verdict,
+        describe_closure,
+        object_carrier,
+        object_closure,
+    )
+
+    closure, issues = object_closure(
+        object_root,
+        ref=f"{object_kind}/{object_ref}",
+        carrier=object_carrier(object_kind, object_ref),
+    )
+    if issues:
+        raise ObjectTransactionError(
+            "object closure could not be measured: " + "; ".join(sorted(issues))
+        )
+    verdict = budget_verdict(closure)
+    if verdict is ObjectBudgetVerdict.WITHIN_BUDGET:
+        return
+    code = (
+        OBJECT_ASSET_OVER_BUDGET
+        if verdict is ObjectBudgetVerdict.SINGLE_ASSET_OVER_BUDGET
+        else OBJECT_CLOSURE_OVER_BUDGET
+    )
+    raise ObjectStorageBudgetExceeded(
+        code,
+        f"{code}: object exceeds its storage budget: {describe_closure(closure)}",
+    )
+
+
 def _closure_digest(
     *,
     object_root: Path,
@@ -357,7 +490,27 @@ def _closure_digest(
     closure: Mapping[str, Any],
     cas_rows: list[dict[str, Any]],
     review: Mapping[str, Any],
+    metadata_adoption: Mapping[str, Any] | None = None,
 ) -> str:
+    """Digest everything an object's identity may not silently change.
+
+    An adopted successor differs from a freshly authored object only by the
+    adoption receipt that authorizes it, so that binding has to be inside the
+    digest: otherwise a v2 could be re-pointed at a different source review and
+    still present the same closure digest. Objects with no adoption keep their
+    digest input shape unchanged, so already-sealed digests stay reproducible.
+    """
+
+    _admit_object_storage_budget(
+        object_root,
+        object_kind=object_kind,
+        object_ref=object_ref,
+    )
+    adoption = (
+        {"metadataAdoption": dict(metadata_adoption)}
+        if metadata_adoption is not None
+        else {}
+    )
     return _digest_bytes(
         _json_bytes(
             {
@@ -394,6 +547,7 @@ def _closure_digest(
                 },
                 "cas": sorted(cas_rows, key=lambda row: row["objectKey"]),
                 "review": dict(review),
+                **adoption,
             }
         )
     )

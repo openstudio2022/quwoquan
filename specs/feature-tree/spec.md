@@ -59,7 +59,8 @@
 - 启动前发生已确认的根级致命异常时停止后续初始化，静默保存脱敏异常，并进入不依赖业务框架的恢复页；启动阶段不提供重复重试。
 - 运行中发生根级不可恢复异常时只允许一次受控主容器重建；成功直接替换路由进入首页，失败后不得形成恢复循环。
 - 恢复页在全部状态提供官方网页版。
-- 版本服务确认有新版且存在当前平台可安装通道后，Android 进入趣我圈官网受信 APK 下载通道；公众 iOS 进入趣我圈 PWA 安装指引，已登记测试设备才可使用受控 Ad Hoc 通道。只有版本服务确认后才能显示“需要更新”或“已是最新版本”。
+- 版本服务确认有新版且存在当前平台可安装通道后，Android 进入趣我圈官网受信 APK 下载通道或引导到本机来源的已登记受信应用市场（华为、小米、OPPO、vivo、应用宝）；公众 iOS 进入 App Store 官方更新通道，PWA 与网页版继续作为无原生通道时的恢复兜底，已登记测试设备才可使用受控 Ad Hoc 通道。只有版本服务确认后才能显示“需要更新”或“已是最新版本”。
+- 同一环境与同一服务端状态下，所有受支持的构建、安装与启动路径必须进入同一业务行为：同一配置完成态、同一首个安全终态、同一路由与登录态、同一内容 outcome 与 release identity、同一恢复动作。有效路径集合（含经工作区 facade 的字面 `flutter run`）与等价指纹定义由 [`environment-topology-and-packaging` REQ-004](./runtime/runtime-config/environment-topology-and-packaging/spec.md#req-004) 唯一拥有，本条只引用不复制。BuildMode、启动来源（launch provenance）与安装渠道（install channel）只允许作为观测事实记录，不得改变任何用户可见行为。
 - 页面只表达已确认事实、恢复状态和当前动作，不显示技术原因、诊断编号、日志进度、错误码或缺乏操作价值的不确定描述。
 
 <a id="req-004"></a>
@@ -86,7 +87,7 @@
 
 - 5 类对象都能从统一分享面板分享到微信会话/朋友圈，并生成站外可点击的 HTTPS 落地链接。
 - 已安装用户在微信内（Android/鸿蒙用 wx-open-launch-app、iOS 用 Universal Link）、在浏览器内（Universal Link/App Links/scheme）点击后回流到 App 对应详情页。
-- 未安装用户进入趣我圈官网；Android 可明确点击下载正式签名 APK，iOS 可添加 PWA 到主屏幕，原生安装完成后的首启再通过延迟深链还原原始目标对象。
+- 未安装用户进入趣我圈官网；Android 可明确点击下载正式签名 APK，iOS 展示 App Store 链接与 PWA 添加主屏指引，原生安装完成后的首启再通过延迟深链还原原始目标对象。
 - 公开 Web 内容/主页可被搜索引擎索引（canonical/OG/JSON-LD/robots/sitemap），并提供安装转化入口。
 - 一键海报（含二维码与口令）可投放到不支持外链的 UGC 平台，扫码或口令识别后回流到目标对象。
 - 全链路携带 referralSource/share_id/UTM/口令归因，可在指标大盘按渠道与对象类型统计转化。
@@ -122,7 +123,7 @@
 - 每条 Journey 至少跨两个真实业务对象，并验证权限、错误恢复、幂等、副作用、投影收敛和推荐/运营回流。
 - 所有页面通过 light/dark、多屏、无障碍、语义 token、性能、弱网和 capability 降级检查。
 - alpha/beta/gamma/prod 均使用同一个 production Remote composition。Alpha/Beta/Gamma test-live 允许在无 active content release 时编译启动并只呈现 canonical `no_active_release`/typed unavailable，不注入 Mock、fixture 或 seed。凡宣称内容、Creator、实体或发布媒体可用的验收仍必须来自 canonical immutable release。Prod 只接受 immutable release、真实用户或正式运营行为。
-- 环境名不再隐含内容分发成熟度；`productLifecycleState=research|commercial` 必须由受治理配置、immutable release、activation receipt 与 App readback 同源显式声明。
+- 环境名不再隐含内容分发成熟度；acquisition、semantic、review 与 canonical pool 不读取全局 `productLifecycleState/releaseClass`。两字段只由显式 immutable release selection 冻结，并由 release header、activation receipt 与 App readback 同源声明。
 - `research` 可在内部四环境消费权利尚未验证但可合法取得的素材，前提是身份白名单、匿名访问关闭、私有短签媒体、禁止分享/导出/索引与审计日志全部有证据。
 - `commercial` 只接受逐资产商业分发授权闭合的独立新 release。
 - Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
@@ -222,14 +223,14 @@
 
 - 场景目标：游客完成欢迎、同意、商业登录、Persona 选择与账号安全后，登录成功继续原动作，关闭登录则回到安全状态且不循环。
 - 领域交接：user-identity-profile-relationship → runtime
-- 对应验收：`UAT-009`
+- 对应验收：`UAT-014`（跨 Journey 总准出仍由 `UAT-009` 汇总）
 
 <a id="jny-002"></a>
 ### JNY-002 应用安全进入与不可恢复异常恢复
 
 - 用户目标：应用能够安全运行时进入登录页、首页、新用户流程或降级 Shell；无法安全启动或继续使用时，用户获得确定、无技术暴露且始终可执行的更新、网页版或一次性重新进入动作。
 - 起点：用户从应用或外部入口发起旅程。
-- 成功终态：用户进入安全 Shell、一次性重新进入后的首页、iOS PWA、Android 官网下载或官方网页版。
+- 成功终态：用户进入安全 Shell、一次性重新进入后的首页、iOS App Store 更新或 PWA、Android 官网下载或受信市场更新、或官方网页版。
 - 失败恢复：外部通道打开失败仅显示短暂系统提示并恢复按钮；异常日志、版本服务或授权交换失败不得阻塞仍可用的恢复动作。
 - 参与领域：
   - [runtime](./runtime/spec.md)
@@ -384,9 +385,9 @@
 <a id="scn-012"></a>
 #### SCN-012 1v1 私信与打招呼升级
 
-- 场景目标：用户能从主页、联系人、搜索、圈子、组织节点、相关群组和会话内小趣入口，清晰进入 1v1、请求箱、群聊与助手参与的消息路径。
+- 场景目标：互关用户可创建或复用 1v1 会话并可靠收发；非互关用户先经打招呼请求，对方回复后升级为正式 1v1 会话。群聊、助手参与与 RTC 分别由后续 Scenario 承接，不作为本 Scenario 的完成条件。
 - 领域交接：global-search-experience → chat-conversation → user-identity-profile-relationship
-- 对应验收：`UAT-007`
+- 对应验收：`UAT-007` 的 1v1/打招呼结果子句与 `UAT-010` 的 1v1 可靠性结果子句
 
 <a id="scn-013"></a>
 #### SCN-013 私建群、圈子群、组织节点群与主页相关群入口
@@ -615,6 +616,23 @@
 - 领域交接：circle-community → travel-journey → assistant-run-learning → discovery-content → user-identity-profile-relationship → chat-conversation
 - 对应验收：`UAT-012`
 
+<a id="jny-014"></a>
+### JNY-014 内容运营者按需生成内容并入池
+
+- 用户目标：内容运营者用一份可确认的按需请求声明范围（垂类/区域/主题及相关主题）、载体组合与逐载体数量，让系统经真实来源发现与生产审核，把合格唯一对象幂等增量写入 canonical 内容池，并能按 typed 终态恢复失败。
+- 起点：内容运营者通过受治理 Data CLI 或 typed preview 入口提交按需内容请求。
+- 成功终态：同一已确认请求的每个 active 载体各有可复核的池内 canonical record，数量、来源、权利、review 与实体/标签引用全部闭合；未达数量部分保留 typed shortfall 与可执行恢复动作。
+- 失败恢复：任一阶段失败停在 typed 终态并携带 nextAction 与 reentry 引用；已入池对象不被撤销，修复输入或引擎再资格化后凭同一请求身份恢复或重放。
+- 参与领域：
+  - [discovery-content](./discovery-content/spec.md)
+
+<a id="scn-035"></a>
+#### SCN-035 按需请求经来源发现与四载体生产入池
+
+- 场景目标：内容运营者确认按需请求后，系统依次完成来源发现、SourcePool 固化、WorkRequest 派生编译、所选载体生产与独立审核，把合格对象经唯一 reviewed delivery 路径原子入池，运营者只读 typed 终态即可复核数量与恢复方式。
+- 领域交接：discovery-content
+- 对应验收：`UAT-013`
+
 ## 5. 全局验收
 
 <a id="uat-001"></a>
@@ -647,11 +665,13 @@
 - GIVEN Android 或 iPhone 正常启动、发生明确启动致命异常，或在安全 Shell 后发生根级不可恢复异常。
 - WHEN 应用执行启动交接、版本确认、一次性运行时重建、更新、官网 APK 下载或网页版恢复。
 - THEN 正常或可降级故障进入安全 Shell，单纯等待超时不进入恢复页；启动致命异常进入无重试的版本检查页，运行时重建最多一次且失败后不循环。
-- THEN 版本服务确认有新版且存在可安装通道时，Android 从趣我圈官方 HTTPS 通道下载已签名 APK。
-- THEN 公众 iOS 使用官方 PWA，已登记测试设备才可使用受控 Ad Hoc 通道。
+- THEN 版本服务确认有新版且存在可安装通道时，Android 从趣我圈官方 HTTPS 通道下载已签名 APK 或经本机来源的已登记受信市场更新。
+- THEN 公众 iOS 经 App Store 官方通道更新，无原生通道时使用官方 PWA/网页版，已登记测试设备才可使用受控 Ad Hoc 通道。
 - THEN 确认已最新、地址不可用或检查未完成时仍可进入官方网页版。
 - THEN 页面不存在技术原因、诊断编号或日志状态；脱敏异常先保存后异步上报，上报失败不影响任何恢复动作。
 - THEN Android/iOS 安装包、原生身份、runtime probe 与发布 provenance 绑定同一 effective launch manifest；package-only 编译不得替代真实 launcher/scene、safe terminal、motion、非 `unknown` attempt 与 telemetry readback 证据。
+- THEN <a id="install-launch-equivalence"></a>同一环境与同一服务端状态下，[`environment-topology-and-packaging` REQ-004](./runtime/runtime-config/environment-topology-and-packaging/spec.md#req-004) 所列全部有效路径——含经工作区 facade 的字面 `flutter run`（launch provenance=`workspace_flutter_run`）与受控制 IDE profile（`workspace_ide_debug`）——的规范化启动行为指纹一致：配置完成态、首个安全终态、路由/登录态、内容 outcome 与 release identity、恢复动作均相同，且无 fatal recovery 差异；BuildMode、launch provenance 与 install channel 仅出现在观测事实中。
+- THEN 应用市场与官网 APK 安装的验收各自绑定真实下载/安装回执与安装后冷启动 telemetry 回读，package-only、side-load 或另一渠道的回执不得互相替代。
 
 <a id="uat-004"></a>
 ### UAT-004 我的主页转发互动双向历史
@@ -683,7 +703,7 @@
 - WHEN 参与者发起“对外引流与深链回流端到端价值闭环”对应动作。
 - THEN 5 类对象都能从统一分享面板分享到微信会话/朋友圈，并生成站外可点击的 HTTPS 落地链接。
 - THEN 已安装用户在微信内（Android/鸿蒙用 wx-open-launch-app、iOS 用 Universal Link）、在浏览器内（Universal Link/App Links/scheme）点击后回流到 App 对应详情页。
-- THEN 未安装用户进入趣我圈官网；Android 可下载正式签名 APK，iOS 可安装 PWA，原生安装后的首启通过延迟深链还原原始目标对象。
+- THEN 未安装用户进入趣我圈官网；Android 可下载正式签名 APK，iOS 可经 App Store 链接安装或添加 PWA，原生安装后的首启通过延迟深链还原原始目标对象。
 - THEN 公开 Web 内容/主页可被搜索引擎索引（canonical/OG/JSON-LD/robots/sitemap），并提供安装转化入口。
 - THEN 一键海报（含二维码与口令）可投放到不支持外链的 UGC 平台，扫码或口令识别后回流到目标对象。
 - THEN 全链路携带 referralSource/share_id/UTM/口令归因，可在指标大盘按渠道与对象类型统计转化。
@@ -729,6 +749,8 @@
 - AND 用户、评论、圈子、会话与消息只经所属领域公开 command/event 生效，Alpha/Beta/Gamma 验收数据绑定候选并可受控清理，Prod 不创建测试业务对象。
 - AND Alpha/Beta/Gamma required 验收绑定受管非生产租户的非内存 Provider，Prod 完成正式 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
 - THEN local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
+- AND 本次商用准出只接受一个 create-once `ResultBundle`：[`UAT-001`](#uat-001)、[`UAT-003`](#uat-003)、[`UAT-007`](#uat-007)、[`UAT-010`](#uat-010) 与 [`UAT-014`](#uat-014) 的子结果必须绑定同一 `sourceRevision + sourceTreeDigest + releaseTrainId`、同一 Android/iOS `packageDigests` 集合和同一 release identity。Alpha/Beta/Gamma 各自持有独立 target package，不要求跨 target 的 `candidateDigest`、`candidatePackageDigest` 或 `runtimeConfigPackageDigest` 相等；同一 target 内的全部子结果必须逐字段等于 `runtimeBindings[target].candidateDigest` 以及 `launchBindings[target].candidatePackageDigest/runtimeConfigPackageDigest`。任一子结果来自另一轮、另一 candidate、另一 package 或旧 receipt 时，整个聚合 fail closed，不得跨轮拼接补绿。
+- AND Simulator/Emulator 只可形成标记 `nonPromotable=true` 的启动、内容与受管替代 Provider 功能子集。最终准出必须由同一 ResultBundle 内的 Android 物理设备与 iPhone、双真实账号、真实飞行模式/杀进程以及目标环境真实 Provider 回执完成；simulator、protected harness、package-only 或单设备结果均不能关闭物理设备单元。
 
 <a id="uat-010"></a>
 ### UAT-010 消息可靠可达与离线可读
@@ -769,6 +791,26 @@
 - THEN 行程结束生成可编辑 LocalPostDraft；发布与分段分享均经所属领域公开 command，公开结果不包含私人住宿、联系人、参与者名单或实时精确位置。
 - AND Android/iPhone 真机完成日历确认、地图跳转、Adaptive Presentation、离线降级、后台恢复与变化通知，所有结果绑定同一候选、Skill package digest、Gathering 与 Plan revision。
 
+<a id="uat-013"></a>
+### UAT-013 内容运营者按需生成内容并入池
+
+- GIVEN 内容运营者持有可确认的按需请求：范围为 `vertical | region | topic | region_topic` 之一、canonical 主题引用、`homepage|article|image|video` 的非空载体组合与逐载体正整数数量，以及已声明的来源策略。
+- WHEN 运营者确认请求，系统依次执行来源发现、SourcePool 固化、WorkRequest 派生编译、载体生产、独立审核与 canonical 池准入。
+- THEN 每个 active 载体的合格对象经唯一 reviewed delivery 路径以单对象事务幂等入池，池 record 可沿同一 execution 身份回溯到 confirmed 请求，来源、权利、review、实体与标签引用全部闭合。
+- THEN 同一已冻结请求 exact replay 时池增量为零、既有 record 字节不变；漂移返回 typed conflict 且零写入。
+- THEN 任一非成功终态（needs_input、blocked、partial、pending）携带结构化 nextAction 与绑定原请求摘要的 reentry 引用，运营者只读终态即可决定补输入、修来源、恢复交付或换载体，已入池对象不被撤销。
+- THEN 数量语义为「至少 N 个合格唯一对象」；未达数量时如实报告 shortfall 与原因分布，不静默下调、不以重复或未审核对象凑数。
+
+<a id="uat-014"></a>
+### UAT-014 双端真实账号商业登录与安全恢复
+
+- GIVEN Android 与 iOS 安装的是同一候选对应的 production App，目标环境的 Remote user-service 与 capability-scoped SMS Provider Workload 已就绪；Alpha/Beta/Gamma 只使用受管 `local_capture` 的随机 OTP，Prod 只使用正式 Provider。
+- WHEN 一个全新真实测试账号请求 OTP、输入错误或过期 OTP 后重试、使用正确 OTP 完成登录、选择 Persona、杀进程重启、退出登录并再次登录。
+- THEN 发码前 readiness、发码、验证和失败恢复都经公开 Remote operation；App、日志、回执和客户端状态不含固定码、OTP 明文、手机号明文、Mock/Memory/Noop 数据源或端侧认证旁路。
+- THEN 错误、过期、网络中断与 Provider 不可用各自只显示一个可执行恢复动作，不进入重复提交、登录回环或伪成功 Persona；关闭登录回到安全来源，成功后只续接一次原动作。
+- THEN 正确 OTP 原子形成 canonical UserAccount、AccountSession 与选定 Persona；杀进程冷启动后恢复同一登录态与 Persona，退出后旧 session 不再进入已登录页面，再次登录复用原账号而不重复创建。
+- AND Android/iOS CaseResult 分别回读同一候选、target、build profile、真实 account/session/persona 身份与 Provider binding；Alpha/Beta/Gamma 的 `local_capture` 结果标记 `nonPromotable=true`，Prod 结果必须绑定正式 Provider 回执且需独立 rollout 授权。
+
 ## 6. 开放事项
 
 <a id="open-001"></a>
@@ -787,11 +829,11 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前已有 Android 原生 Gate instrumentation、iOS pre-engine recovery scene 模拟器证据和 immutable effective launch manifest 门禁，但尚缺 Alpha/Beta/Gamma Remote canonical release 的双端安装启动、Android 真机 20-run、iPhone 真机 20-run、四环境正式 Web DNS/TLS、Android/IPA 生产签名发布，以及 Prod 故障注入、telemetry/恢复 API 与媒体读回的共同闭合。
+- 影响或价值：尚无与修复后同一候选绑定的三类开发启动面、Alpha/Beta/Gamma 双端安装启动、release-bound 首页/媒体及 Prod readiness 共同证据。现有原生 Gate、pre-engine recovery 与历史 runtime 回执只证明各自窄层；真实登录由 `OPEN-013`、1v1 消息由 `OPEN-008` 在各自最低 owner 独立关闭，回执与当前 source identity 漂移时不得复用。
 - 完成判定：以下三层 release-bound 证据同时通过。
   - 仓内 local_contract 继续证明启动/运行时状态机、一次性根容器重建、静默异常队列和恢复页语义。
   - Alpha/Beta/Gamma 的双模拟器与 Android 真机读取同一 release-bound 首页、实体主页、文章、图片、视频和头像。
-  - Prod Android/iPhone 以同一签名候选完成启动、故障恢复与媒体读回；每个 runtime CaseResult 绑定内嵌 effective launch manifest 摘要、非 `unknown` attempt、motion/safe terminal 与 telemetry readback，并直接引用 `UAT-003`。
+  - Prod Android/iPhone 以同一签名候选完成启动、故障恢复与媒体读回；每个 runtime CaseResult 绑定内嵌 AppArtifact identity/build-profile trust、安装后 active effective manifest 摘要、非 `unknown` attempt、motion/safe terminal 与 telemetry readback，并直接引用 `UAT-003`。
 - 依赖：[`cold-start-performance`](./runtime/runtime-client-foundation/cold-start-performance/spec.md)、[`unrecoverable-runtime-recovery`](./runtime/runtime-client-foundation/unrecoverable-runtime-recovery/spec.md) 与 [`app-release-recovery-routing`](./product-ops-growth/product-control-plane-foundation/app-release-recovery-routing/spec.md) 的正式回执。
 
 <a id="open-003"></a>
@@ -850,9 +892,9 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前消息时间线不落盘、历史分页无调用方、会话事件只做即时广播且不进推送通道，冷启动、离线、断连与杀进程四类场景下消息均不可读或不可达。消息域的差异化体验建立在这条链路之上，链路不成立时任何上层能力都不可商用。
-- 完成判定：双账号真机在冷启动、断网、杀进程、弱网与离线推送矩阵下执行同一批断言，CaseResult 直接引用 `UAT-010`
-- 依赖：[`chat-conversation`](./chat-conversation/spec.md) 的 `message-reliability-foundation`，以及与 `media-infrastructure` 共用的受控推送凭据。
+- 影响或价值：仍缺同一候选的双真实账号 Android/iOS 设备矩阵、真实飞行模式与杀进程 readback，以及 APNs/FCM 正式投递端点和 Provider 回执。消息时间线本地持久化、历史游标调用、重连补齐与 outbox 去重已有实现和局部测试，但源码或局部测试存在不得冒充真机可达。
+- 完成判定：双账号真机在冷启动、飞行模式、分页、单侧断网补齐、杀进程 outbox 恢复、弱网性能与离线真推送矩阵下执行 `UAT-010`；1v1 子句逐项 CaseResult 绑定同一候选，群会话分发与扩缩子句由其所属 Scenario 独立关闭。
+- 依赖：[`chat-conversation`](./chat-conversation/spec.md) 的 `message-reliability-foundation` `OPEN-001/OPEN-002`，以及与 `media-infrastructure` 共用的受控推送凭据。
 
 <a id="open-009"></a>
 ### OPEN-009 内容驱动 Gathering、活动群聊与跨主题复用闭环
@@ -883,3 +925,33 @@
 - 影响或价值：尚缺验收证据：alpha、beta、gamma、prod 真实历史 Trip 对象的 source inventory、canonical owner import/readback、parity、cutover 与 target-only rollback receipt。服务源码、契约、生成客户端、路由和运行拓扑已归零，现有仓内证据只验证合成快照上的迁移控制面合同。
 - 完成判定：四环境分别完成真实 source inventory、owner-command import、target readback、100% parity 与永久 target-only cutover；Prod 另有目标备份和不恢复源服务的 rollback 演练。全部历史对象计数守恒、orphan/collision 为零、原始 PII 零输出，receipt 绑定同一 crosswalk、ContractGraph、mapping、候选、审批和配置激活摘要。切流后 `UAT-012` 的「旅行能力不创建长期公共独立 Trip 根，也不复制成员或会话」结果在真实环境仍成立。
 - 依赖：[`travel-journey OPEN-001`](./travel-journey/spec.md#open-001)、Circle/Chat/Content target owner、四环境受保护 inventory 与审批证据。
+
+<a id="open-012"></a>
+### OPEN-012 内容运营者按需入池旅程尚无端到端真实证据
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前从未有一份按需请求经来源发现、四载体任选生产与审核后可复证地进入 canonical 内容池；意图入口、来源发现、数量守恒、恢复面与入池单轨的契约阻断由 `discovery-content` 下 `object-homepage-coverage-scaling` 的各 Story OPEN 分别承接。
+- 完成判定：`UAT-013` 全部结果子句由真实 Data operator 旅程 user_acceptance 直接 `spec_ref`：先以 typed 单载体 M1 首次真实入池与 exact replay 零增量，再以同一 confirmed 请求完成四载体 M1 各一入池；证据不得使用 fixture、seed 或旧 receipt 冒充。
+- 依赖：[`work-request-compilation`](./discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md)、[`on-demand-content-pool-admission`](./discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md)、[`canonical-content-identity-recovery`](./discovery-content/object-homepage-coverage-scaling/canonical-content-identity-recovery/spec.md) 与收窄后 [`multi-carrier-release`](./discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md) 的最低节点 OPEN。
+
+<a id="open-013"></a>
+### OPEN-013 双端真实账号商业登录与安全恢复证据
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚无修复后同一候选绑定的 Alpha/Beta/Gamma 双真实设备账号矩阵，Prod 正式 Provider、物理纯度和授权 canary 也未关闭。登录 contracts、Provider binding、局部 API/UI 测试与 harness 已存在，但固定码、local harness 或单端 session 恢复不得代替真实账号端云证据。
+- 完成判定：[`UAT-014`](#uat-014) 的全部结果子句由 Android 物理真机与 iPhone 的逐环境 CaseResult 直接 `spec_ref`；Alpha/Beta/Gamma 使用受管随机 OTP 并标记 `nonPromotable=true`，Prod 使用正式 Provider且绑定独立 rollout 授权。Simulator/Emulator、protected harness、package-only 或单设备结果均不能关闭本 OPEN。
+- 依赖：[`four-environment-commercial-login-maturity`](./user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md) `OPEN-003` 与 runtime 候选/启动矩阵。
+
+<a id="open-014"></a>
+### OPEN-014 当前全部跨对象 Journey 同候选商用聚合证据
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前各 Journey 的局部源码、测试与历史回执分属不同 source、candidate、package、环境轮次和设备层，尚无一份 create-once ResultBundle 能证明当前全部跨对象 Journey 同轮成立。Simulator/Emulator 可证明的功能子集也不能替代双真实账号、双物理设备和正式 Provider 单元。
+- 完成判定：[`UAT-009`](#uat-009) 的全部结果子句由同一 `sourceRevision + sourceTreeDigest + releaseTrainId`、同一 Android/iOS `packageDigests` 集合和同一 release identity 的 ResultBundle 逐项直接 `spec_ref`。Alpha/Beta/Gamma 的 target package 独立，逐 target 的全部子结果必须与 `runtimeBindings[target].candidateDigest` 及 `launchBindings[target].candidatePackageDigest/runtimeConfigPackageDigest` 完全一致，不要求跨 target 摘要相等。其中 `UAT-001/UAT-003/UAT-007/UAT-010/UAT-014` 不得跨轮或复用旧 receipt 拼接，物理设备与真实 Provider 单元只能由 Android 物理设备和 iPhone 的当前 ResultBundle 机器回执关闭。
+- 依赖：各 AppRoot Journey 的最低节点 block OPEN、runtime 候选/启动矩阵、双真实账号与双物理设备，以及目标环境正式 Provider/rollout 授权。

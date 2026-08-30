@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 import quwoquan_ops.cli.lib.external_provider_governance as _entry
@@ -229,7 +230,11 @@ def _binding_record(
 
 
 def binding_issues(
-    registry: Mapping[str, Any], bindings: Mapping[str, Any]
+    registry: Mapping[str, Any],
+    bindings: Mapping[str, Any],
+    *,
+    source_root: Path | None = None,
+    environments_to_validate: tuple[str, ...] = ENVIRONMENTS,
 ) -> list[ProviderGovernanceIssue]:
     issues: list[ProviderGovernanceIssue] = []
     environments = bindings.get("environments")
@@ -240,8 +245,20 @@ def binding_issues(
                 "must be service-local-external-provider-bindings",
             )
         )
-    if not isinstance(environments, Mapping) or set(environments) != set(ENVIRONMENTS):
-        return [*issues, ProviderGovernanceIssue("bindings.environments", "must be exactly alpha/beta/gamma/prod")]
+    expected_environments = set(environments_to_validate)
+    if (
+        not expected_environments
+        or expected_environments - set(ENVIRONMENTS)
+        or not isinstance(environments, Mapping)
+        or set(environments) != expected_environments
+    ):
+        return [
+            *issues,
+            ProviderGovernanceIssue(
+                "bindings.environments",
+                "must exactly match the requested Provider environments",
+            ),
+        ]
 
     expected_by_service: dict[str, dict[str, set[str]]] = {}
     for capability in registry.get("capabilities", []):
@@ -268,16 +285,18 @@ def binding_issues(
         for item in registry.get("capabilities", [])
         if isinstance(item, Mapping)
     }
-    for env in ENVIRONMENTS:
+    for env in environments_to_validate:
         scope = environments.get(env)
         location = f"bindings.environments.{env}"
         if not isinstance(scope, Mapping):
             issues.append(ProviderGovernanceIssue(location, "must be a service mapping"))
             continue
-        if set(scope) != {
-            service_root.name
-            for service_root in _entry._service_roots()
-        }:
+        service_roots = (
+            _entry._service_roots()
+            if source_root is None
+            else _entry._service_roots(source_root)
+        )
+        if set(scope) != {service_root.name for service_root in service_roots}:
             issues.append(
                 ProviderGovernanceIssue(
                     location,

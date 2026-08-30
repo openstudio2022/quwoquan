@@ -22,6 +22,24 @@ import json
 from pathlib import Path
 from typing import Any
 
+from quwoquan_ops.cli.lib.read_only_user_availability import (
+    read_only_user_availability_report as _read_only_user_availability_report,
+    validate_read_only_user_availability_report,
+)
+from quwoquan_ops.cli.lib.service_runtime_probes import service_probe_matrix
+from quwoquan_ops.cli.lib.currentness import CURRENTNESS_TIMEOUT_DETAIL_PREFIX
+from quwoquan_ops.cli.lib.openssl3_resolver import (
+    OpenSSL3CapabilityError,
+    openssl3_identity_report,
+    resolve_openssl3,
+)
+
+
+def _diagnostic_aggregation_boundary() -> None:
+    """保留 health/inspect/status 共享聚合符号的显式归属。"""
+
+
+
 
 def _script_probe_plan_for_target(
     topology: dict[str, Any],
@@ -53,6 +71,56 @@ def _media_edge_health_url(public_bases: dict[str, Any]) -> str:
     return f"{_stackctl._public_url_origin(str(public_bases['mediaImage'])).rstrip('/')}/healthz"
 
 
+PUBLIC_WEB_STATIC_SCOPE = "public-web"
+
+# 恢复面是纯静态资源，必须与 API 平面独立观测：API 全停时 Shell、脚本、
+# Service Worker、hosting runtime config 与中文字体仍须 200，否则「使用网页版」
+# 这条恢复路径就是断的。
+_PUBLIC_WEB_STATIC_PROBES = (
+    ("public-web-shell", "/index.html", 200, "text/html"),
+    ("public-web-main", "/main.dart.js", 200, ""),
+    ("public-web-service-worker", "/flutter_service_worker.js", 200, ""),
+    (
+        "public-web-runtime-config-trust",
+        "/runtime-config-trust.json",
+        200,
+        "application/json",
+    ),
+    (
+        "public-web-runtime-config-package",
+        "/runtime-config-package.json",
+        200,
+        "application/json",
+    ),
+    (
+        "public-web-font",
+        "/assets/assets/fonts/noto_sans_sc/NotoSansSC-wght.ttf",
+        200,
+        "font/ttf",
+    ),
+)
+
+
+def _public_web_static_health_checks(
+    public_bases: dict[str, Any],
+) -> list[dict[str, Any]]:
+    origin = str(public_bases.get("publicWeb") or "").rstrip("/")
+    if not origin:
+        return []
+    checks: list[dict[str, Any]] = []
+    for name, path, expected_status, content_type in _PUBLIC_WEB_STATIC_PROBES:
+        check: dict[str, Any] = {
+            "name": name,
+            "scope": PUBLIC_WEB_STATIC_SCOPE,
+            "url": f"{origin}{path}",
+            "expectedStatus": expected_status,
+        }
+        if content_type:
+            check["expectedContentTypePrefix"] = content_type
+        checks.append(check)
+    return checks
+
+
 def _health_checks_for_target(
     topology: dict[str, Any],
     target_name: str,
@@ -67,6 +135,7 @@ def _health_checks_for_target(
     env_cfg = topology["environments"][env_name]
     public_bases = target.get("publicBases") or {}
     checks: list[dict[str, Any]] = []
+    edge_probes = service_probe_matrix()
     if scope in {
         "edge",
         "full",
@@ -74,21 +143,43 @@ def _health_checks_for_target(
         "content-consumer",
         "content-commercial",
     }:
+        api_base = str(public_bases["api"]).rstrip("/")
+        api_edge = edge_probes["api-edge"]
         checks.append(
             {
                 "name": "api-health",
                 "scope": "edge",
-                "url": f"{str(public_bases['api']).rstrip('/')}/healthz",
+                "url": f"{api_base}{api_edge.liveness}",
             }
         )
+        if api_edge.readiness_is_distinct:
+            # api-edge 承载 App 全部流量，且声明了独立就绪探针：存活 200
+            # 只说明网关进程活着，上游依赖断裂只在就绪端点上可见。
+            checks.append(
+                {
+                    "name": "api-readiness",
+                    "scope": "edge",
+                    "url": f"{api_base}{api_edge.readiness}",
+                }
+            )
     if scope in {"edge", "full", "content-commercial"}:
+        product_ops_base = str(public_bases["productOps"]).rstrip("/")
+        product_ops = edge_probes["product-ops-service"]
         checks.append(
             {
                 "name": "product-ops-health",
                 "scope": "edge",
-                "url": f"{str(public_bases['productOps']).rstrip('/')}/healthz",
+                "url": f"{product_ops_base}{product_ops.liveness}",
             }
         )
+        if product_ops.readiness_is_distinct:
+            checks.append(
+                {
+                    "name": "product-ops-readiness",
+                    "scope": "edge",
+                    "url": f"{product_ops_base}{product_ops.readiness}",
+                }
+            )
     if scope in {
         "media",
         "full",
@@ -103,6 +194,8 @@ def _health_checks_for_target(
                 "url": _stackctl._media_edge_health_url(public_bases),
             }
         )
+    if scope in {"edge", "full"} and "publicWeb" in public_bases:
+        checks.extend(_public_web_static_health_checks(public_bases))
     if scope in {"service", "full"}:
         checks.extend(_stackctl._service_health_checks_for_target(target_name))
     if scope in {"content-import", "content-consumer", "content-commercial", "full"}:
@@ -255,6 +348,25 @@ def _service_health_checks_for_target(target_name: str) -> list[dict[str, Any]]:
         "livekit-http": "/",
         "livekit-metrics": "/metrics",
     }
+    probe_matrix = service_probe_matrix()
+
+    def _probe_check(name: str, role: str, port: int, path: str) -> dict[str, Any]:
+        check: dict[str, Any] = {
+            "name": name,
+            "scope": "service",
+            "url": f"http://127.0.0.1:{port}{path}",
+            # service-core 虚拟 HTTP 路由按 Host 头分发合并模块;独立监听的
+            # 服务忽略该头,因此对全部 service 角色统一携带服务名 Host。
+            "headers": {"Host": role},
+        }
+        if role in provider_roles:
+            check["url"] = f"https://127.0.0.1:{port}{path}"
+            try:
+                check["caFile"] = str(_stackctl.root_certificate_path(target_name))
+            except _stackctl.PublicDomainTlsError:
+                check["caFile"] = ""
+        return check
+
     for role_name in _stackctl._expected_local_roles(target_name):
         if (
             not role_name.endswith("-service")
@@ -263,24 +375,26 @@ def _service_health_checks_for_target(target_name: str) -> list[dict[str, Any]]:
         ):
             continue
         port = _stackctl.canonical_port(manifest, str(profile_name), role_name)
-        path = non_service_paths.get(role_name, "/healthz")
-        if role_name == "recommendation-service":
-            path = "/health"
-        check = {
-            "name": role_name,
-            "scope": "service",
-            "url": f"http://127.0.0.1:{port}{path}",
-            # service-core 虚拟 HTTP 路由按 Host 头分发合并模块;独立监听的
-            # 服务忽略该头,因此对全部 service 角色统一携带服务名 Host。
-            "headers": {"Host": role_name},
-        }
-        if role_name in provider_roles:
-            check["url"] = f"https://127.0.0.1:{port}{path}"
-            try:
-                check["caFile"] = str(_stackctl.root_certificate_path(target_name))
-            except _stackctl.PublicDomainTlsError:
-                check["caFile"] = ""
-        checks.append(check)
+        # 第一方服务的探针形态由其 deploy 清单声明；Provider 与外部
+        # workload 不拥有该声明，沿用本地拓扑的固定路径。
+        probes = probe_matrix.get(role_name)
+        liveness_path = (
+            probes.liveness
+            if probes is not None
+            else non_service_paths.get(role_name, "/healthz")
+        )
+        checks.append(_probe_check(role_name, role_name, port, liveness_path))
+        if probes is not None and probes.readiness_is_distinct:
+            # 存活与就绪独立上报：进程活着但依赖断裂时，失败必须能定位到
+            # 具体服务的就绪端点，而不是被存活探针的 200 掩盖。
+            checks.append(
+                _probe_check(
+                    f"{role_name}-readiness",
+                    role_name,
+                    port,
+                    probes.readiness,
+                )
+            )
     return checks
 
 
@@ -306,30 +420,29 @@ def _full_scope_health_checks(
                 "url": f"{str(public_bases['api']).rstrip('/')}/config/app",
             }
         )
+        # 全量探针只能打 contract_graph 里 anonymous_policy=allow 的路由:
+        # /chat/contacts 与 /content/intersections* 均为 auth_mode=required 的
+        # private 路由,匿名探针必然 401,不能作为健康信号。
+        # Ranked feeds require sessionId; bare /content/feed is
+        # CONTENT.USER.invalid_argument.
+        beta_feed_smoke = (
+            f"{str(public_bases['api']).rstrip('/')}/content/feed?limit=1"
+            "&sessionId=stackctl-beta-route-smoke"
+        )
         checks.extend(
             [
                 {
                     "name": "content-feed",
                     "scope": "full",
-                    "url": f"{str(public_bases['api']).rstrip('/')}/content/feed",
-                },
-                {
-                    "name": "chat-contacts",
-                    "scope": "full",
-                    "url": f"{str(public_bases['api']).rstrip('/')}/chat/contacts",
+                    "url": beta_feed_smoke,
                 },
                 {
                     "name": "notification-service-health",
                     "scope": "full",
                     "url": f"http://127.0.0.1:{notification_port}/healthz",
-                },
-                {
-                    "name": "feed-intersections",
-                    "scope": "full",
-                    "url": (
-                        f"{str(public_bases['api']).rstrip('/')}"
-                        "/content/feed/intersections?limit=4&channel=recommend"
-                    ),
+                    # 与 service 域探针同源:service-core 的虚拟 HTTP 路由按 Host
+                    # 头分发合并模块,缺该头会被投递到错误模块。
+                    "headers": {"Host": "notification-service"},
                 },
             ]
         )
@@ -404,6 +517,8 @@ def _candidate_workspace_report(
         "mismatchedFields": [],
         "issues": [],
         "warnings": [],
+        "firstBlockerClass": "none",
+        "opensslIdentity": None,
     }
     if purpose not in {"self_verify", "currentness"}:
         report["issues"] = ["candidate validation purpose is invalid"]
@@ -421,6 +536,8 @@ def _candidate_workspace_report(
                 }
             )
             return report
+        openssl = resolve_openssl3()
+        report["opensslIdentity"] = dict(openssl3_identity_report(openssl))
         candidate_root = Path(str(active["candidateDir"]))
         self_verified, self_verify_detail = _stackctl.can_reuse_package(
             environment,
@@ -428,6 +545,11 @@ def _candidate_workspace_report(
             include_services=True,
             purpose="self_verify",
             candidate_root=candidate_root,
+            # Runtime diagnostics verify every runnable package byte and all
+            # candidate cross-bindings. The immutable source/dependency capsule
+            # is App/package reconstruction evidence, not a runtime input; its
+            # identity manifest remains cross-bound without rereading 5+ GiB.
+            verify_source_capsule=False,
         )
         if not self_verified:
             raise ValueError(self_verify_detail)
@@ -438,8 +560,18 @@ def _candidate_workspace_report(
             require_full=True,
             purpose="self_verify",
         )
-    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+    except OpenSSL3CapabilityError as exc:
+        report["firstBlockerClass"] = "toolchain_capability"
         report["issues"] = ["candidate self-verify is unavailable: " + str(exc)]
+        return report
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+        detail = str(exc)
+        report["firstBlockerClass"] = (
+            "signature_invalid"
+            if "signature" in detail.lower()
+            else "candidate_invalid"
+        )
+        report["issues"] = ["candidate self-verify is unavailable: " + detail]
         return report
 
     candidate_identity = {
@@ -463,12 +595,24 @@ def _candidate_workspace_report(
             purpose="currentness",
             candidate_root=candidate_root,
         )
-        status = "current" if current else "drifted"
-        current_source_claim = status
-        non_promotable = not current
-        drifted = not current
         current_identity = {"detail": detail}
-        if not current:
+        if current:
+            status = "current"
+            current_source_claim = "current"
+            non_promotable = False
+            drifted = False
+        elif detail.startswith(CURRENTNESS_TIMEOUT_DETAIL_PREFIX):
+            status = "currentness_unavailable"
+            current_source_claim = "not_evaluated"
+            non_promotable = True
+            drifted = None
+            report["firstBlockerClass"] = "verification_timeout"
+            warnings.append(detail)
+        else:
+            status = "drifted"
+            current_source_claim = "drifted"
+            non_promotable = True
+            drifted = True
             mismatched = ["deploymentInputClosure"]
             warnings.append(detail)
     report.update(

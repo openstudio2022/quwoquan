@@ -11,13 +11,14 @@ from content.execution.planning.semantic_preflight_admission import (
     bind_semantic_preflight_receipt,
     validate_semantic_preflight_binding,
 )
-from content.execution.preflight.selection import CALIBRATION_SEMANTIC_SELECTION_ID
+from content.execution.preflight.selection import (
+    CALIBRATION_SEMANTIC_SELECTION_ID,
+)
 from content.execution.scale.semantic_promotion import (
     ScaleSemanticPromotionError,
     build_scale_semantic_calibration,
 )
 from content.release.canonical import campaign_scale_object_closure as object_closure
-from content.release.canonical import runtime_scale_evidence_binding as runtime_binding
 from content.release.canonical.campaign_scale_contract import (
     CARRIERS,
     CampaignScaleEvidenceError,
@@ -35,9 +36,12 @@ from content.release.canonical.campaign_scale_cumulative import (
     SCALE_INTENTS,
     release_refs_by_carrier,
     scale_context,
-    scale_timing_fields,
     validate_cumulative_lanes,
     validate_recorded_scale_context,
+)
+from content.release.canonical.campaign_scale_diagnostics import (
+    derive_runtime_diagnostic_fields,
+    load_campaign_diagnostics,
 )
 from content.release.canonical.campaign_scale_source_pool import (
     campaign_source_pool_fields,
@@ -48,7 +52,6 @@ from content.release.canonical.fault_injection_evidence import (
 )
 from content.release.canonical.release_header import validate_release_header
 from content.release.canonical.resource_soak_evidence import (
-    _derive_resource_soak_stable,
     write_resource_soak_evidence,
 )
 from core.paths import campaign_scale_evidence_root
@@ -60,7 +63,7 @@ def write_campaign_scale_evidence(
     evidence_id: str,
     release_id: str,
     campaign_plan_path: Path,
-    runtime_session_path: Path,
+    runtime_session_path: Path | None,
     calibration_preflight_receipt_path: Path,
     tasks_root: Path,
     release_root: Path,
@@ -69,6 +72,7 @@ def write_campaign_scale_evidence(
     predecessor_promotion_path: Path | None = None,
 ) -> tuple[dict[str, Any], Path]:
     """Derive the sole promotion evidence from frozen canonical truth sources."""
+
     plan = _load_plan(campaign_plan_path)
     source_revision = campaign_source_revision(plan)
     try:
@@ -85,29 +89,6 @@ def write_campaign_scale_evidence(
         campaign_scale_evidence_root(output_root=output_root)
         / release_id
         / evidence_id
-    )
-    session, raw_samples_path, raw_fault_cases_path = (
-        runtime_binding.materialize_bound_runtime_inputs(
-            runtime_session_path=runtime_session_path, campaign_plan_path=campaign_plan_path,
-            evidence_root=evidence_root, output_root=output_root,
-        )
-    )
-    resource, resource_path = write_resource_soak_evidence(
-        evidence_id=evidence_id,
-        campaign_plan_path=campaign_plan_path,
-        raw_samples_path=raw_samples_path,
-        tasks_root=tasks_root,
-        release_root=release_root / release_id,
-        output_root=output_root,
-        evidence_root=evidence_root,
-    )
-    fault, fault_path = write_fault_injection_evidence(
-        evidence_id=evidence_id,
-        campaign_plan_path=campaign_plan_path,
-        raw_cases_path=raw_fault_cases_path,
-        tasks_root=tasks_root,
-        output_root=output_root,
-        evidence_root=evidence_root,
     )
     release = release_root / release_id
     header = _validated(
@@ -134,11 +115,22 @@ def write_campaign_scale_evidence(
         or admission.get("productLifecycleState") != "research"
     ):
         raise CampaignScaleEvidenceError("campaign evidence requires one research release")
+    source_digests = header.get("sourceDigests")
+    if (
+        not isinstance(source_digests, list)
+        or len(source_digests) != 1
+        or not isinstance(source_digests[0], Mapping)
+        or source_digests[0].get("digest") != plan.get("sourceDigest")
+    ):
+        raise CampaignScaleEvidenceError("release sourceDigest differs from campaign plan")
+    current_execution_ids = [str(plan["executionIds"][carrier]) for carrier in CARRIERS]
+    if set(header.get("executionIds") or []) != set(current_execution_ids):
+        raise CampaignScaleEvidenceError("release executionIds differ from exact campaign lanes")
     (
-        target_scale,
+        scale,
         predecessor_promotion,
         predecessor_counts,
-        predecessor_execution_ids,
+        predecessor_carried_execution_ids,
         release_execution_ids,
         predecessor_refs,
     ) = scale_context(
@@ -150,8 +142,11 @@ def write_campaign_scale_evidence(
         output_root=output_root,
     )
     source_pool_fields = campaign_source_pool_fields(
-        plan=plan, campaign_plan_path=campaign_plan_path, target_scale=target_scale,
-        predecessor_promotion_path=predecessor_promotion_path, output_root=output_root,
+        plan=plan,
+        campaign_plan_path=campaign_plan_path,
+        target_scale=scale,
+        predecessor_promotion_path=predecessor_promotion_path,
+        output_root=output_root,
     )
     carrier_admission = {
         str(row.get("carrier")): row
@@ -165,10 +160,8 @@ def write_campaign_scale_evidence(
     for carrier in CARRIERS:
         execution_id = str(plan["executionIds"][carrier])
         identity = parse_execution_id(execution_id)
-        if identity.intent != SCALE_INTENTS[target_scale] or identity.phase.value != "scale":
-            raise CampaignScaleEvidenceError(
-                f"{carrier} is not one {target_scale} scale execution"
-            )
+        if identity.intent != "m100" or identity.phase.value != "scale":
+            raise CampaignScaleEvidenceError(f"{carrier} is not one M100 scale execution")
         chain = _execution_chain(
             execution_id=execution_id,
             carrier=carrier,
@@ -203,13 +196,10 @@ def write_campaign_scale_evidence(
             raise CampaignScaleEvidenceError(f"{carrier} publish closure count drift")
         refs_by_lane[carrier] = refs
         admission_row = carrier_admission[carrier]
-        carried_count = predecessor_counts[carrier]
+        carried_count = int(predecessor_counts[carrier])
         total_count = int(admission_row.get("objectCount") or 0)
         accepted_total = int(admission_row.get("researchAcceptedCount") or 0)
-        if (
-            set(refs) & predecessor_refs[carrier]
-            or accepted_total != total_count
-        ):
+        if set(refs) & predecessor_refs[carrier] or accepted_total != total_count:
             raise CampaignScaleEvidenceError(
                 f"{carrier} rolling-wave/release cohort closure drift"
             )
@@ -265,16 +255,18 @@ def write_campaign_scale_evidence(
     )
     cross_lane_write_count = duplicate_publish_refs + wrong_lane_refs
     duplicate_asset_count = object_closure.duplicate_asset_count(admission)
+    published_closure = {
+        ref for lane_refs in refs_by_lane.values() for ref in lane_refs
+    }
     admission_object_refs = {
         str(row.get("objectRef") or "")
         for row in admission.get("assets") or []
         if isinstance(row, Mapping)
         and str(row.get("objectRef") or "").startswith(("entities/", "posts/"))
     }
-    release_object_refs = set().union(*release_refs_by_carrier(release).values())
-    if not admission_object_refs.issubset(release_object_refs):
+    if not admission_object_refs.issubset(published_closure):
         raise CampaignScaleEvidenceError(
-            "release asset admission references objects outside release closure"
+            "release asset admission references objects outside campaign publish closure"
         )
     article_coverage = admission.get("articleMediaCoverage")
     illustrated_rate = float(
@@ -283,16 +275,23 @@ def write_campaign_scale_evidence(
         else 0.0
     )
     passed = duplicate_asset_count == 0 and cross_lane_write_count == 0
-    timing_fields = scale_timing_fields(target_scale=target_scale, plan=plan, predecessor_promotion_path=predecessor_promotion_path, resource=resource)
+    diagnostic_fields = derive_runtime_diagnostic_fields(
+        evidence_id=evidence_id,
+        runtime_session_path=runtime_session_path,
+        campaign_plan_path=campaign_plan_path,
+        tasks_root=tasks_root,
+        release=release,
+        output_root=output_root,
+        evidence_root=evidence_root,
+        target_scale=target_scale,
+        predecessor_promotion_path=predecessor_promotion_path,
+    )
     stable = {
         "schema": "quwoquan_data.campaign_scale_evidence",
         "evidenceId": evidence_id,
         "rootExecutionId": plan["rootExecutionId"],
-        **runtime_binding.runtime_binding_fields(
-            session, session_path=runtime_session_path, output_root=output_root
-        ),
         "status": "passed" if passed else "failed",
-        "targetScale": target_scale,
+        "targetScale": scale,
         "releaseId": release_id,
         "manifestDigest": manifest_digest,
         "sourceRevision": source_revision,
@@ -307,48 +306,36 @@ def write_campaign_scale_evidence(
             label="release asset admission",
         ),
         "releaseAssetAdmissionSha256": _file_sha256(admission_path),
-        "predecessorCarriedExecutionIds": predecessor_execution_ids,
+        **(
+            {"predecessorPromotion": predecessor_promotion}
+            if predecessor_promotion is not None
+            else {}
+        ),
+        "predecessorCarriedExecutionIds": predecessor_carried_execution_ids,
         "releaseExecutionIds": release_execution_ids,
         **source_pool_fields,
         "lanes": lane_rows,
         "duplicateAssetCount": duplicate_asset_count,
         "crossLaneWriteCount": cross_lane_write_count,
         "articleIllustratedRate": illustrated_rate,
-        "fourLaneOverlapDurationSeconds": int(
-            resource["fourLaneOverlapDurationSeconds"]
-        ),
-        "fourLaneLongestContinuousOverlapSeconds": int(
-            resource["fourLaneLongestContinuousOverlapSeconds"]
-        ),
-        "allSemanticJobsTerminalAt": resource["allSemanticJobsTerminalAt"],
-        "terminalResidualSampleAt": resource["terminalResidualSampleAt"],
-        **timing_fields,
-        "resourceSoakEvidenceRef": _safe_ref(
-            resource_path,
-            output_root=output_root,
-            label="resource soak evidence",
-        ),
-        "resourceSoakEvidenceDigest": resource["evidenceDigest"],
-        "faultInjectionEvidenceRef": _safe_ref(
-            fault_path,
-            output_root=output_root,
-            label="fault injection evidence",
-        ),
-        "faultInjectionEvidenceDigest": fault["evidenceDigest"],
+        **diagnostic_fields,
     }
-    if predecessor_promotion is not None:
-        stable["predecessorPromotion"] = predecessor_promotion
     return _write_create_once(
         path=evidence_root / "campaign-scale.json",
         stable=stable,
         schema_name="campaign_scale_evidence",
     )
+
+
 def load_campaign_scale_evidence(
     path: Path,
     *,
     output_root: Path,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Load and rebind canonical aggregate/subordinate evidence for promotion."""
+    diagnostics_required: bool = False,
+) -> tuple[
+    dict[str, Any], dict[str, Any] | None, dict[str, Any] | None
+]:
+    """Load exact promotion closure plus optional runtime diagnostics."""
     _safe_ref(path, output_root=output_root, label="canonical campaign scale evidence")
     campaign = _validated(
         path,
@@ -357,40 +344,6 @@ def load_campaign_scale_evidence(
         label="canonical campaign scale evidence",
     )
     _verify_evidence_digest(campaign, label="campaign scale")
-    resource_path = _resolve_ref(
-        str(campaign["resourceSoakEvidenceRef"]),
-        output_root=output_root,
-        label="resource soak evidence ref",
-    )
-    fault_path = _resolve_ref(
-        str(campaign["faultInjectionEvidenceRef"]),
-        output_root=output_root,
-        label="fault injection evidence ref",
-    )
-    resource = _validated(
-        resource_path,
-        "release",
-        "resource_soak_evidence",
-        label="canonical resource soak evidence",
-    )
-    fault = _validated(
-        fault_path,
-        "release",
-        "fault_injection_evidence",
-        label="canonical fault injection evidence",
-    )
-    resource_digest = _verify_evidence_digest(resource, label="resource soak")
-    fault_digest = _verify_evidence_digest(fault, label="fault injection")
-    raw_samples_path = _resolve_ref(
-        str(resource["rawSamplesRef"]),
-        output_root=output_root,
-        label="resource raw samples ref",
-    )
-    raw_faults_path = _resolve_ref(
-        str(fault["rawCasesRef"]),
-        output_root=output_root,
-        label="fault raw cases ref",
-    )
     plan_path = _resolve_ref(
         str(campaign["campaignPlanRef"]),
         output_root=output_root,
@@ -412,28 +365,11 @@ def load_campaign_scale_evidence(
             calibration_preflight,
             semantic_selection_id=CALIBRATION_SEMANTIC_SELECTION_ID,
             output_root=output_root,
-            require_fresh=False,
         )
     except (OSError, TypeError, ValueError) as exc:
         raise CampaignScaleEvidenceError(
             f"bound Sol calibration preflight receipt is invalid: {exc}"
         ) from exc
-    runtime_session_path = _resolve_ref(
-        str(campaign["runtimeSessionRef"]),
-        output_root=output_root,
-        label="runtime session ref",
-    )
-    session, bound_samples_path, bound_faults_path = runtime_binding.materialize_bound_runtime_inputs(
-        runtime_session_path=runtime_session_path,
-        campaign_plan_path=plan_path,
-        evidence_root=path.parent,
-        output_root=output_root,
-    )
-    if (
-        raw_samples_path.resolve() != bound_samples_path.resolve()
-        or raw_faults_path.resolve() != bound_faults_path.resolve()
-    ):
-        raise CampaignScaleEvidenceError("campaign runtime input projection drift")
     admission = _validated(
         admission_path,
         "release",
@@ -453,13 +389,24 @@ def load_campaign_scale_evidence(
         label=f"bound research release header:{release_id}",
     )
     validate_release_header(header, label=f"bound research release header:{release_id}")
-    if campaign.get("manifestDigest") != payload_digest(release):
-        raise CampaignScaleEvidenceError("campaign release manifest digest drift")
+    if (
+        campaign.get("manifestDigest") != payload_digest(release)
+        or plan.get("planDigest") != campaign.get("campaignPlanDigest")
+        or _file_sha256(admission_path)
+        != campaign.get("releaseAssetAdmissionSha256")
+    ):
+        raise CampaignScaleEvidenceError("campaign immutable source digest drift")
+    release_source_digests = header.get("sourceDigests")
     if (
         header.get("releaseId") != release_id
         or admission.get("releaseId") != release_id
         or header.get("releaseClass") != "research"
         or admission.get("releaseClass") != "research"
+        or set(header.get("executionIds") or [])
+        != set(plan.get("executionIds", {}).values())
+        or not isinstance(release_source_digests, list)
+        or len(release_source_digests) != 1
+        or release_source_digests[0].get("digest") != plan.get("sourceDigest")
     ):
         raise CampaignScaleEvidenceError("campaign release identity drift")
     (
@@ -475,42 +422,12 @@ def load_campaign_scale_evidence(
         output_root=output_root,
     )
     validate_recorded_source_pool_fields(
-        campaign=campaign, plan=plan, campaign_plan_path=plan_path,
-        predecessor_promotion_path=predecessor_path, output_root=output_root,
-    )
-    expected_resource = _derive_resource_soak_stable(
-        evidence_id=str(resource["evidenceId"]),
+        campaign=campaign,
+        plan=plan,
         campaign_plan_path=plan_path,
-        raw_samples_path=raw_samples_path,
-        tasks_root=output_root / "data/tasks",
-        release_root=release,
+        predecessor_promotion_path=predecessor_path,
         output_root=output_root,
     )
-    resource_stable = {
-        key: value
-        for key, value in resource.items()
-        if key not in {"recordedAt", "evidenceDigest"}
-    }
-    if resource_stable != expected_resource:
-        raise CampaignScaleEvidenceError("resource soak derived evidence drift")
-    if fault_path.name != "fault-injection.json":
-        raise CampaignScaleEvidenceError("fault injection evidence path is non-canonical")
-    write_fault_injection_evidence(
-        evidence_id=str(fault["evidenceId"]),
-        campaign_plan_path=plan_path,
-        raw_cases_path=raw_faults_path,
-        tasks_root=output_root / "data/tasks",
-        output_root=output_root,
-        evidence_root=fault_path.parent,
-    )
-    if (
-        _file_sha256(raw_samples_path) != resource.get("rawSamplesSha256")
-        or _file_sha256(raw_faults_path) != fault.get("rawCasesSha256")
-        or plan.get("planDigest") != campaign.get("campaignPlanDigest")
-        or _file_sha256(admission_path)
-        != campaign.get("releaseAssetAdmissionSha256")
-    ):
-        raise CampaignScaleEvidenceError("campaign source evidence file digest drift")
     refs_by_lane = validate_cumulative_lanes(
         campaign=campaign,
         plan=plan,
@@ -534,12 +451,14 @@ def load_campaign_scale_evidence(
         for ref in refs
     )
     duplicate_assets = object_closure.duplicate_asset_count(admission)
+    published_closure = {ref for refs in refs_by_lane.values() for ref in refs}
     admission_refs = {
-        str(row.get("objectRef") or "") for row in admission.get("assets") or []
-        if isinstance(row, Mapping) and str(row.get("objectRef") or "").startswith(("entities/", "posts/"))
+        str(row.get("objectRef") or "")
+        for row in admission.get("assets") or []
+        if isinstance(row, Mapping)
+        and str(row.get("objectRef") or "").startswith(("entities/", "posts/"))
     }
-    release_object_refs = set().union(*release_refs_by_carrier(release).values())
-    if not admission_refs.issubset(release_object_refs):
+    if not admission_refs.issubset(published_closure):
         raise CampaignScaleEvidenceError("campaign admission object closure drift")
     article_coverage = admission.get("articleMediaCoverage")
     illustrated_rate = float(
@@ -547,31 +466,23 @@ def load_campaign_scale_evidence(
         if isinstance(article_coverage, Mapping)
         else 0.0
     )
-    derived_status = (
-        "passed"
-        if duplicate_assets == 0
-        and duplicate_publish_refs + wrong_lane_refs == 0
-        else "failed"
-    )
-    timing_fields = scale_timing_fields(target_scale=target_scale, plan=plan, predecessor_promotion_path=predecessor_path, resource=resource)
     derived_campaign_fields = {
-        "status": derived_status,
+        "status": (
+            "passed"
+            if duplicate_assets == 0
+            and duplicate_publish_refs + wrong_lane_refs == 0
+            else "failed"
+        ),
         "duplicateAssetCount": duplicate_assets,
         "crossLaneWriteCount": duplicate_publish_refs + wrong_lane_refs,
         "articleIllustratedRate": illustrated_rate,
-        "fourLaneOverlapDurationSeconds": resource[
-            "fourLaneOverlapDurationSeconds"
-        ],
-        "fourLaneLongestContinuousOverlapSeconds": resource[
-            "fourLaneLongestContinuousOverlapSeconds"
-        ],
-        "allSemanticJobsTerminalAt": resource["allSemanticJobsTerminalAt"],
-        "terminalResidualSampleAt": resource["terminalResidualSampleAt"],
-        **timing_fields,
     }
-    if any(campaign.get(key) != value for key, value in derived_campaign_fields.items()):
-        raise CampaignScaleEvidenceError("campaign aggregate derived evidence drift")
-    identity_keys = ("rootExecutionId", "sourceRevision", "sourceDigest", "entityCatalogDigest")
+    identity_keys = (
+        "rootExecutionId",
+        "sourceRevision",
+        "sourceDigest",
+        "entityCatalogDigest",
+    )
     plan_execution_ids = plan.get("executionIds")
     campaign_execution_ids = {
         str(lane.get("carrier")): str(lane.get("executionId"))
@@ -579,19 +490,33 @@ def load_campaign_scale_evidence(
         if isinstance(lane, Mapping)
     }
     if (
-        campaign.get("resourceSoakEvidenceDigest") != resource_digest
-        or campaign.get("faultInjectionEvidenceDigest") != fault_digest
-        or resource.get("evidenceId") != campaign.get("evidenceId")
-        or fault.get("evidenceId") != campaign.get("evidenceId")
+        any(
+            campaign.get(key) != value
+            for key, value in derived_campaign_fields.items()
+        )
         or any(plan.get(key) != campaign.get(key) for key in identity_keys)
         or campaign_execution_ids != plan_execution_ids
-        or any(resource.get(key) != campaign.get(key) for key in identity_keys)
-        or any(fault.get(key) != campaign.get(key) for key in identity_keys)
-        or not runtime_binding.documents_match_runtime_binding(
-            (campaign, resource, fault), session,
-            session_path=runtime_session_path, output_root=output_root
-        )
     ):
-        raise CampaignScaleEvidenceError("campaign subordinate evidence binding drift")
+        raise CampaignScaleEvidenceError("campaign exact promotion closure drift")
+    try:
+        resource, fault = load_campaign_diagnostics(
+            campaign=campaign,
+            campaign_path=path,
+            plan=plan,
+            plan_path=plan_path,
+            predecessor_path=predecessor_path,
+            release=release,
+            output_root=output_root,
+        )
+        if diagnostics_required and resource is None and fault is None:
+            raise CampaignScaleEvidenceError(
+                "campaign runtime diagnostics are unavailable"
+            )
+    except (CampaignScaleEvidenceError, OSError, TypeError, ValueError):
+        if diagnostics_required:
+            raise
+        resource, fault = None, None
     return campaign, resource, fault
+
+
 __all__ = ["CampaignScaleEvidenceError", "campaign_source_revision", "load_campaign_scale_evidence", "write_campaign_scale_evidence", "write_fault_injection_evidence", "write_resource_soak_evidence"]

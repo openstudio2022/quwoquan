@@ -5,6 +5,7 @@ class UserProfileTabConfig {
   final String id;
   final String labelKey;
   final bool isDefault;
+
   /// 限制该一级 Tab 仅在指定主页模式（mine/other）可见；空表示全模式可见。
   final List<String> modes;
 
@@ -25,6 +26,7 @@ class UserProfileSubTabConfig {
   final String? contentType;
   final String? lifeCategory;
   final bool isDefault;
+
   /// 限制该二级 Tab 仅在指定主页模式（mine/other）可见；空表示全模式可见。
   final List<String> modes;
 
@@ -103,42 +105,186 @@ class UserProfileUIConfig {
 
   static const String defaultTabId = "creations";
 
-  static const UserProfileHeaderLayoutConfig headerLayout = UserProfileHeaderLayoutConfig(baseHeightRatio: 0.25, maxStretchHeightRatio: 0.333, avatarOverlapRatio: 0.333);
+  static const UserProfileHeaderLayoutConfig headerLayout =
+      UserProfileHeaderLayoutConfig(
+        baseHeightRatio: 0.25,
+        maxStretchHeightRatio: 0.333,
+        avatarOverlapRatio: 0.333,
+      );
 
-  static const UserProfileScrollMotionConfig scrollMotion = UserProfileScrollMotionConfig(compactIdentityBar: true, primaryTabStickyBelowToolbar: true, secondaryTabInlineScroll: true, reboundCurve: "easeOutBack", collapseCurve: "easeOutCubic");
+  static const UserProfileScrollMotionConfig scrollMotion =
+      UserProfileScrollMotionConfig(
+        compactIdentityBar: true,
+        primaryTabStickyBelowToolbar: true,
+        secondaryTabInlineScroll: true,
+        reboundCurve: "easeOutBack",
+        collapseCurve: "easeOutCubic",
+      );
 
-  static const UserCareerInterestCatalogConfig careerInterestCatalog = UserCareerInterestCatalogConfig(occupationRootRef: "Audience/用户/职业", interestRootRef: "Audience/用户/兴趣偏好", maxInterestCount: 30, defaultInterestCategoryId: "all", occupationCategories: <UserCareerInterestCategoryConfig>[UserCareerInterestCategoryConfig(id: "product_ops", tagRef: "Audience/用户/职业/产品运营", labelKey: "career_occupation_category_product_ops"), UserCareerInterestCategoryConfig(id: "engineering", tagRef: "Audience/用户/职业/研发技术", labelKey: "career_occupation_category_engineering"), UserCareerInterestCategoryConfig(id: "design", tagRef: "Audience/用户/职业/设计创意", labelKey: "career_occupation_category_design"), UserCareerInterestCategoryConfig(id: "student", tagRef: "Audience/用户/职业/学生", labelKey: "career_occupation_category_student"), UserCareerInterestCategoryConfig(id: "freelance", tagRef: "Audience/用户/职业/自由职业", labelKey: "career_occupation_category_freelance")], interestCategories: <UserCareerInterestCategoryConfig>[UserCareerInterestCategoryConfig(id: "all", tagRef: "", labelKey: "career_interest_category_all"), UserCareerInterestCategoryConfig(id: "travel_photo", tagRef: "Audience/用户/兴趣偏好/旅行摄影", labelKey: "career_interest_category_travel_photo"), UserCareerInterestCategoryConfig(id: "campus", tagRef: "Audience/用户/兴趣偏好/校园", labelKey: "career_interest_category_campus"), UserCareerInterestCategoryConfig(id: "life", tagRef: "Audience/用户/兴趣偏好/生活", labelKey: "career_interest_category_life"), UserCareerInterestCategoryConfig(id: "art", tagRef: "Audience/用户/兴趣偏好/艺术", labelKey: "career_interest_category_art"), UserCareerInterestCategoryConfig(id: "tech", tagRef: "Audience/用户/兴趣偏好/科技", labelKey: "career_interest_category_tech")]);
+  static const UserCareerInterestCatalogConfig careerInterestCatalog =
+      UserCareerInterestCatalogConfig(
+        occupationRootRef: "Audience/用户/职业",
+        interestRootRef: "Audience/用户/兴趣偏好",
+        maxInterestCount: 30,
+        defaultInterestCategoryId: "all",
+        occupationCategories: <UserCareerInterestCategoryConfig>[
+          UserCareerInterestCategoryConfig(
+            id: "product_ops",
+            tagRef: "Audience/用户/职业/产品运营",
+            labelKey: "career_occupation_category_product_ops",
+          ),
+          UserCareerInterestCategoryConfig(
+            id: "engineering",
+            tagRef: "Audience/用户/职业/研发技术",
+            labelKey: "career_occupation_category_engineering",
+          ),
+          UserCareerInterestCategoryConfig(
+            id: "design",
+            tagRef: "Audience/用户/职业/设计创意",
+            labelKey: "career_occupation_category_design",
+          ),
+          UserCareerInterestCategoryConfig(
+            id: "student",
+            tagRef: "Audience/用户/职业/学生",
+            labelKey: "career_occupation_category_student",
+          ),
+          UserCareerInterestCategoryConfig(
+            id: "freelance",
+            tagRef: "Audience/用户/职业/自由职业",
+            labelKey: "career_occupation_category_freelance",
+          ),
+        ],
+        interestCategories: <UserCareerInterestCategoryConfig>[
+          UserCareerInterestCategoryConfig(
+            id: "all",
+            tagRef: "",
+            labelKey: "career_interest_category_all",
+          ),
+          UserCareerInterestCategoryConfig(
+            id: "travel_photo",
+            tagRef: "Audience/用户/兴趣偏好/旅行摄影",
+            labelKey: "career_interest_category_travel_photo",
+          ),
+          UserCareerInterestCategoryConfig(
+            id: "campus",
+            tagRef: "Audience/用户/兴趣偏好/校园",
+            labelKey: "career_interest_category_campus",
+          ),
+          UserCareerInterestCategoryConfig(
+            id: "life",
+            tagRef: "Audience/用户/兴趣偏好/生活",
+            labelKey: "career_interest_category_life",
+          ),
+          UserCareerInterestCategoryConfig(
+            id: "art",
+            tagRef: "Audience/用户/兴趣偏好/艺术",
+            labelKey: "career_interest_category_art",
+          ),
+          UserCareerInterestCategoryConfig(
+            id: "tech",
+            tagRef: "Audience/用户/兴趣偏好/科技",
+            labelKey: "career_interest_category_tech",
+          ),
+        ],
+      );
 
   static const List<UserProfileTabConfig> profileTabs = <UserProfileTabConfig>[
-    UserProfileTabConfig(id: "creations", labelKey: "profile_tab_creations", isDefault: true, modes: <String>[]),
-    UserProfileTabConfig(id: "interaction", labelKey: "profile_tab_interaction", isDefault: false, modes: <String>[]),
-    UserProfileTabConfig(id: "footprint", labelKey: "profile_tab_footprint", isDefault: false, modes: <String>["mine"]),
+    UserProfileTabConfig(
+      id: "creations",
+      labelKey: "profile_tab_creations",
+      isDefault: true,
+      modes: <String>[],
+    ),
+    UserProfileTabConfig(
+      id: "interaction",
+      labelKey: "profile_tab_interaction",
+      isDefault: false,
+      modes: <String>[],
+    ),
+    UserProfileTabConfig(
+      id: "footprint",
+      labelKey: "profile_tab_footprint",
+      isDefault: false,
+      modes: <String>["mine"],
+    ),
   ];
 
-  static const List<UserProfileSubTabConfig> creationSubTabs = <UserProfileSubTabConfig>[
-    UserProfileSubTabConfig(id: "all", labelKey: "creation_sub_all", contentType: null, lifeCategory: null, isDefault: false, modes: <String>[]),
-    UserProfileSubTabConfig(id: "image", labelKey: "creation_sub_image", contentType: "image", lifeCategory: null, isDefault: false, modes: <String>[]),
-    UserProfileSubTabConfig(id: "video", labelKey: "creation_sub_video", contentType: "video", lifeCategory: null, isDefault: false, modes: <String>[]),
-    UserProfileSubTabConfig(id: "article", labelKey: "creation_sub_text", contentType: "article", lifeCategory: null, isDefault: false, modes: <String>[]),
-  ];
+  static const List<UserProfileSubTabConfig> creationSubTabs =
+      <UserProfileSubTabConfig>[
+        UserProfileSubTabConfig(
+          id: "all",
+          labelKey: "creation_sub_all",
+          contentType: null,
+          lifeCategory: null,
+          isDefault: false,
+          modes: <String>[],
+        ),
+        UserProfileSubTabConfig(
+          id: "image",
+          labelKey: "creation_sub_image",
+          contentType: "image",
+          lifeCategory: null,
+          isDefault: false,
+          modes: <String>[],
+        ),
+        UserProfileSubTabConfig(
+          id: "video",
+          labelKey: "creation_sub_video",
+          contentType: "video",
+          lifeCategory: null,
+          isDefault: false,
+          modes: <String>[],
+        ),
+        UserProfileSubTabConfig(
+          id: "article",
+          labelKey: "creation_sub_text",
+          contentType: "article",
+          lifeCategory: null,
+          isDefault: false,
+          modes: <String>[],
+        ),
+      ];
 
-  static const Map<String, List<String>> creationVisibilityFiltersByMode = <String, List<String>>{
-    'mine': <String>["all", "public", "private"],
-    'other': <String>["all", "public"],
-  };
+  static const Map<String, List<String>> creationVisibilityFiltersByMode =
+      <String, List<String>>{
+        'mine': <String>["all", "public", "private"],
+        'other': <String>["all", "public"],
+      };
 
-  static const List<UserProfileSubTabConfig> interactionSubTabs = <UserProfileSubTabConfig>[
-    UserProfileSubTabConfig(id: "likes", labelKey: "interaction_sub_likes", contentType: null, lifeCategory: null, isDefault: true, modes: <String>[]),
-    UserProfileSubTabConfig(id: "comments", labelKey: "interaction_sub_comments", contentType: null, lifeCategory: null, isDefault: false, modes: <String>[]),
-    UserProfileSubTabConfig(id: "shares", labelKey: "interaction_sub_shares", contentType: null, lifeCategory: null, isDefault: false, modes: <String>["mine"]),
-  ];
+  static const List<UserProfileSubTabConfig> interactionSubTabs =
+      <UserProfileSubTabConfig>[
+        UserProfileSubTabConfig(
+          id: "likes",
+          labelKey: "interaction_sub_likes",
+          contentType: null,
+          lifeCategory: null,
+          isDefault: true,
+          modes: <String>[],
+        ),
+        UserProfileSubTabConfig(
+          id: "comments",
+          labelKey: "interaction_sub_comments",
+          contentType: null,
+          lifeCategory: null,
+          isDefault: false,
+          modes: <String>[],
+        ),
+        UserProfileSubTabConfig(
+          id: "shares",
+          labelKey: "interaction_sub_shares",
+          contentType: null,
+          lifeCategory: null,
+          isDefault: false,
+          modes: <String>["mine"],
+        ),
+      ];
 
-  static const Map<String, List<String>> interactionDirectionFiltersByMode = <String, List<String>>{
-    'mine': <String>["received", "sent"],
-    'other': <String>["received"],
-  };
+  static const Map<String, List<String>> interactionDirectionFiltersByMode =
+      <String, List<String>>{
+        'mine': <String>["received", "sent"],
+        'other': <String>["received"],
+      };
 
-  static const List<UserProfileSubTabConfig> lifestyleSubTabs = <UserProfileSubTabConfig>[
-  ];
-
+  static const List<UserProfileSubTabConfig> lifestyleSubTabs =
+      <UserProfileSubTabConfig>[];
 }

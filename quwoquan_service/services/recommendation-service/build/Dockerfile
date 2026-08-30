@@ -8,6 +8,8 @@ ARG PIP_INDEX_URL
 ARG PIP_TRUSTED_HOST
 ARG PIP_FALLBACK_INDEX_URL
 
+# 环境身份不烤入镜像：artifact-identity.json 由部署面挂载（DEC-005 信任域裁决），
+# 启动时经 QWQ_ARTIFACT_IDENTITY_FILE 读取并用 APP_ENV 断言校验。
 WORKDIR /app
 
 # lightgbm loads libgomp at runtime; python slim images do not ship it by default.
@@ -62,6 +64,7 @@ COPY services/recommendation-service/internal/recommendation/recommendation_mode
 COPY services/recommendation-service/contracts/recommendation/recommendation_model_release/intersection_kind_registry.yaml ./contracts/recommendation/recommendation_model_release/intersection_kind_registry.yaml
 COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/runtime_contract.py ./
 COPY services/recommendation-service/cmd/api/main.py ./
+COPY services/recommendation-service/cmd/api/artifact_identity.py ./
 COPY services/recommendation-service/cmd/api/stream_redis.py ./
 
 COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/artifact_store.py ./scripts/artifact_store.py

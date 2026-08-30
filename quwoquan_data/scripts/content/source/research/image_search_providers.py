@@ -7,10 +7,14 @@ from typing import Any
 
 from core.runtime_policy import active_runtime_policy
 
+from content.source.professional_image_openverse_contract import (
+    ANONYMOUS_MAX_PAGE_SIZE,
+    openverse_search_url,
+)
 from content.source.research import network_io
 from content.source.research.source_quality import (
     _image_pixel_issue,
-    _license_allows_app_publish,
+    license_allows_commercial_distribution,
 )
 from content.source.research.text_match import (
     _dedupe_terms,
@@ -18,7 +22,7 @@ from content.source.research.text_match import (
     _normalized_title,
     _text_mentions_entity,
 )
-from content.source.research.wiki_common import _OPENVERSE_API, _strip_html
+from content.source.research.wiki_common import _strip_html
 from content.source.research.wiki_core import (
     _claim_string_values,
     _wikidata_claims,
@@ -87,7 +91,7 @@ def _commons_images(
             meta = info.get("extmetadata") or {}
             license_name = _strip_html((meta.get("LicenseShortName") or {}).get("value") or "")
             license_url = _strip_html((meta.get("LicenseUrl") or {}).get("value") or "")
-            if not license_url or not _license_allows_app_publish(license_name, license_url):
+            if not license_url or not license_allows_commercial_distribution(license_name, license_url):
                 continue
             width = int(info.get("width") or 0)
             height = int(info.get("height") or 0)
@@ -208,7 +212,7 @@ def commons_images_for_titles(
         meta = info.get("extmetadata") or {}
         license_name = _strip_html((meta.get("LicenseShortName") or {}).get("value") or "")
         license_url = _strip_html((meta.get("LicenseUrl") or {}).get("value") or "")
-        if not _license_allows_app_publish(license_name, license_url):
+        if not license_allows_commercial_distribution(license_name, license_url):
             continue
         width = int(info.get("width") or 0)
         height = int(info.get("height") or 0)
@@ -362,9 +366,11 @@ def _openverse_images(
     images: list[dict[str, Any]] = []
     seen: set[str] = set()
     for term in _image_search_terms(entity_id, entity_aliases, limit=4):
-        params = urllib.parse.urlencode({"q": term, "page_size": min(max(limit * 3, 5), 50)})
         data = network_io.curl_json(
-            f"{_OPENVERSE_API}?{params}",
+            openverse_search_url(
+                term,
+                page_size=min(max(limit * 3, 5), ANONYMOUS_MAX_PAGE_SIZE),
+            ),
             timeout=_OPENVERSE_HTTP_TIMEOUT_SECONDS,
         )
         rows = data.get("results") if isinstance(data.get("results"), list) else []
@@ -380,7 +386,7 @@ def _openverse_images(
             attribution = str(row.get("attribution") or "")
             if not url or url in seen or not landing:
                 continue
-            if not _license_allows_app_publish(license_slug, license_url):
+            if not license_allows_commercial_distribution(license_slug, license_url):
                 continue
             if bool(row.get("mature")):
                 continue

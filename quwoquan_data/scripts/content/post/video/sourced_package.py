@@ -17,6 +17,7 @@ from content.post.video.source_video import SourcedVideoAsset
 from content.execution.identity import parse_execution_id
 from core.asset_identity import compute_post_asset_id
 from core.io import write_json
+from core.media_source_provenance import DerivedModification
 from core.runtime_policy import active_runtime_policy
 from core.schema import validate_result
 from governance.content_supply_policy import VideoDeliveryPolicy
@@ -171,6 +172,15 @@ def render_sourced_video_package(
     ):
         raise ValueError("transcoded sourced video duration violates policy")
     _poster(video_path, poster_path)
+    # 衍生修改从本次真实做过的操作派生，不是无条件写死：`_transcode` 每次都把来源
+    # 重编码为 policy 声明的容器与编码，`_poster` 每次都从转码结果取一帧做封面，
+    # 而 `-t` 只在来源长于交付上限时真的截断时间轴。
+    performed_modifications = {
+        DerivedModification.FORMAT_CONVERSION,
+        DerivedModification.VIDEO_FRAME_EXTRACTION,
+    }
+    if source_duration_ms > policy.maximum_duration_seconds * 1000:
+        performed_modifications.add(DerivedModification.CROP)
     subtitles_path.write_text(
         subtitles(request.script_lines, duration_ms / 1000),
         encoding="utf-8",
@@ -225,7 +235,9 @@ def render_sourced_video_package(
         "entityRefs": [request.entity_ref],
         "tagRefs": list(request.tag_refs),
         "sourceUrls": [evidence.source_post_url],
-        "sourceAttribution": evidence.attribution_dict(),
+        "sourceAttribution": evidence.post_attribution_dict(
+            derived_modifications=performed_modifications
+        ),
         "authorId": request.author_id,
         "creatorProfileId": request.creator_profile_id,
         "generator": "agent",

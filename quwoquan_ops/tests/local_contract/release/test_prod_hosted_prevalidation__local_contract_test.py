@@ -9,9 +9,13 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib.app_identity import resolve_build_product
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.cli.prod import inspect_prod_plane_runtime as inspect_runtime
 from quwoquan_ops.cli.prod import prevalidate_prod_hosted as prevalidate
+from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
+    app_artifact_manifest,
+)
 
 
 APP_EVIDENCE_REF = (
@@ -56,64 +60,89 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                     "digest": "sha256:"
                     + hashlib.sha256(path.read_bytes()).hexdigest(),
                 }
-        digest = "sha256:" + ("c" * 64)
-        images = {
-            service: {
-                "repository": f"ghcr.io/owner/repo/{service}",
-                "transportRef": f"ghcr.io/owner/repo/{service}:{image_version}",
-                "digest": digest,
-                "ref": f"ghcr.io/owner/repo/{service}@{digest}",
-                "attestations": {
-                    "spdxSbom": f"oci://ghcr.io/owner/repo/{service}@{digest}#spdxSbom",
-                    "slsaProvenance": f"oci://ghcr.io/owner/repo/{service}@{digest}#slsaProvenance",
-                },
-            }
-            for service in services
-        }
-        application_packages: dict[str, dict[str, dict[str, str]]] = {
-            environment: {} for environment in finalizer.ENVIRONMENTS
-        }
+        # DEC-005：alpha/beta/gamma 共享 nonprod 镜像，prod 使用独立信任域。
+        # 环境差异只存在于 configurationPackages。
+        environment_images: dict[str, dict[str, dict[str, object]]] = {}
         for environment in finalizer.ENVIRONMENTS:
-            for surface in finalizer.APPLICATION_PACKAGES[environment]:
-                relative = (
-                    f"packages/applications/{environment}/{surface}/manifest.json"
-                )
-                package_path = root / relative
-                package_path.parent.mkdir(parents=True, exist_ok=True)
-                if environment == "prod" and surface in {
-                    "web",
-                    "android",
-                    "opsPortal",
-                }:
-                    schema = finalizer.PROD_APPLICATION_SOURCE_SCHEMAS[surface]
-                    package_payload = {
-                        "schema": schema,
-                        "sourceGitSha": "a" * 40,
-                        "sourceTreeDigest": "sha1:" + ("b" * 40),
-                    }
-                    if surface == "web":
-                        package_payload["contentSHA256"] = "d" * 64
-                    elif surface == "android":
-                        package_payload["apkSHA256"] = "d" * 64
-                    else:
-                        package_payload["packageDigest"] = "sha256:" + ("d" * 64)
-                else:
-                    package_payload = {
-                        "schema": finalizer.APPLICATION_PACKAGE_SCHEMA,
-                        "environment": environment,
-                        "surface": surface,
-                        "sourceGitSha": "a" * 40,
-                        "sourceTreeDigest": "sha1:" + ("b" * 40),
-                        "packageDigest": "sha256:" + ("d" * 64),
-                    }
-                package_path.write_text(json.dumps(package_payload), encoding="utf-8")
-                application_packages[environment][surface] = {
-                    "path": relative,
-                    "digest": "sha256:"
-                    + hashlib.sha256(package_path.read_bytes()).hexdigest(),
-                    "packageDigest": "sha256:" + ("d" * 64),
-                    "sourceRef": APP_EVIDENCE_REF,
+            trust_domain = "prod" if environment == "prod" else "nonprod"
+            digest = (
+                "sha256:"
+                + hashlib.sha256(f"image-{trust_domain}".encode("utf-8")).hexdigest()
+            )
+            environment_images[environment] = {
+                service: {
+                    "repository": f"ghcr.io/owner/repo/{service}-{trust_domain}",
+                    "transportRef": (
+                        f"ghcr.io/owner/repo/{service}-{trust_domain}:{image_version}"
+                    ),
+                    "digest": digest,
+                    "ref": f"ghcr.io/owner/repo/{service}-{trust_domain}@{digest}",
+                    "attestations": {
+                        "spdxSbom": (
+                            f"oci://ghcr.io/owner/repo/{service}-{trust_domain}"
+                            f"@{digest}#spdxSbom"
+                        ),
+                        "slsaProvenance": (
+                            f"oci://ghcr.io/owner/repo/{service}-{trust_domain}"
+                            f"@{digest}#slsaProvenance"
+                        ),
+                    },
                 }
+                for service in services
+            }
+        # App 包按 canonical build product 编址，四环境共用同一批产品；
+        # opsPortal 不是 build product，它是 ReleaseEvidence 的独立顶层证据。
+        application_packages: dict[str, dict[str, str]] = {}
+        for build_product_id in finalizer.APPLICATION_PACKAGES:
+            relative = f"packages/applications/{build_product_id}/manifest.json"
+            package_path = root / relative
+            package_path.parent.mkdir(parents=True, exist_ok=True)
+            product = resolve_build_product(build_product_id)
+            package_payload = {
+                "schema": finalizer.APPLICATION_PACKAGE_SCHEMA,
+                "buildProductId": product.build_product_id,
+                "buildProfile": product.build_profile,
+                "platform": product.platform,
+                "sourceGitSha": "a" * 40,
+                "sourceTreeDigest": "sha1:" + ("b" * 40),
+                "packageDigest": "sha256:" + ("d" * 64),
+                "artifactManifest": app_artifact_manifest(
+                    build_product_id=build_product_id,
+                    source_git_sha="a" * 40,
+                    source_tree_digest="sha1:" + ("b" * 40),
+                    artifact_digest="sha256:" + ("d" * 64),
+                ),
+            }
+            package_path.write_text(json.dumps(package_payload), encoding="utf-8")
+            application_packages[build_product_id] = {
+                "path": relative,
+                "digest": "sha256:"
+                + hashlib.sha256(package_path.read_bytes()).hexdigest(),
+                "packageDigest": "sha256:" + ("d" * 64),
+                "sourceRef": APP_EVIDENCE_REF,
+            }
+
+        ops_portal_relative = "packages/opsPortal/manifest.json"
+        ops_portal_path = root / ops_portal_relative
+        ops_portal_path.parent.mkdir(parents=True, exist_ok=True)
+        ops_portal_path.write_text(
+            json.dumps(
+                {
+                    "schema": finalizer.OPS_PORTAL_SCHEMA,
+                    "sourceGitSha": "a" * 40,
+                    "sourceTreeDigest": "sha1:" + ("b" * 40),
+                    "packageDigest": "sha256:" + ("d" * 64),
+                }
+            ),
+            encoding="utf-8",
+        )
+        ops_portal_package = {
+            "path": ops_portal_relative,
+            "digest": "sha256:"
+            + hashlib.sha256(ops_portal_path.read_bytes()).hexdigest(),
+            "packageDigest": "sha256:" + ("d" * 64),
+            "sourceRef": APP_EVIDENCE_REF,
+        }
         evidence_root = root / "evidence"
         evidence_root.mkdir(parents=True, exist_ok=True)
         contract_graph = evidence_root / "contractGraph.json"
@@ -174,19 +203,44 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "path": relative,
                 "digest": "sha256:" + hashlib.sha256(source.read_bytes()).hexdigest(),
             }
+        evidence_layer_digest = "sha256:" + ("c" * 64)
         test_evidence = {
             "schema": "qwq.three-layer-case-results",
             "status": "passed",
             "layers": {
-                layer: {"status": "passed", "artifactDigest": digest}
+                layer: {"status": "passed", "artifactDigest": evidence_layer_digest}
                 for layer in finalizer.TEST_LAYERS
             },
             "evidence": {"files": test_evidence_files},
         }
         test = evidence_root / "testEvidence.json"
         test.write_text(json.dumps(test_evidence), encoding="utf-8")
+        distribution_descriptors: dict[str, dict[str, str]] = {}
+        distribution_schemas = {
+            "publicWeb": "client-app.web.official-release",
+            "androidOfficialRelease": "client-app.android.official-release",
+        }
+        for evidence_key, relative in finalizer.DISTRIBUTION_EVIDENCE_PATHS.items():
+            distribution_path = root / relative
+            distribution_path.parent.mkdir(parents=True, exist_ok=True)
+            distribution_path.write_text(
+                json.dumps(
+                    {
+                        "schema": distribution_schemas[evidence_key],
+                        "sourceGitSha": "a" * 40,
+                        "sourceTreeDigest": "sha1:" + ("b" * 40),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            distribution_descriptors[evidence_key] = {
+                "path": relative,
+                "digest": "sha256:"
+                + hashlib.sha256(distribution_path.read_bytes()).hexdigest(),
+            }
         payload = finalizer.seal_manifest({
             "schema": finalizer.SCHEMA,
+            "releaseTrainId": None,
             "candidateId": None,
             "status": "candidate-ready",
             "generatedAt": "2026-07-28T00:00:00Z",
@@ -198,20 +252,32 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "sourceArchiveDigest": None,
             },
             "artifactDigest": None,
-            "images": images,
-            "configurationPackages": configuration_packages,
+            "environmentArtifacts": {
+                environment: {
+                    "environment": environment,
+                    "environmentArtifactDigest": None,
+                    "images": environment_images[environment],
+                    "configurationPackages": configuration_packages[environment],
+                }
+                for environment in finalizer.ENVIRONMENTS
+            },
             "applicationPackages": application_packages,
+            "publicWeb": distribution_descriptors["publicWeb"],
+            "androidOfficialRelease": distribution_descriptors[
+                "androidOfficialRelease"
+            ],
+            "opsPortal": ops_portal_package,
             "contractGraphDigest": "sha256:"
             + hashlib.sha256(contract_graph.read_bytes()).hexdigest(),
             "requiredEvidence": {
-                "images": services,
+                "environmentArtifacts": {
+                    environment: services for environment in finalizer.ENVIRONMENTS
+                },
                 "configurationPackages": {
                     environment: services for environment in finalizer.ENVIRONMENTS
                 },
-                "applicationPackages": {
-                    environment: list(finalizer.APPLICATION_PACKAGES[environment])
-                    for environment in finalizer.ENVIRONMENTS
-                },
+                "applicationPackages": list(finalizer.APPLICATION_PACKAGES),
+                "opsPortal": True,
                 "contractGraphDigest": True,
                 "providerEvidence": True,
                 "testEvidence": list(finalizer.TEST_LAYERS),
@@ -224,7 +290,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "digest": "sha256:" + hashlib.sha256(test.read_bytes()).hexdigest(),
                 "status": "passed",
                 "layers": {
-                    layer: {"status": "passed", "artifactDigest": digest}
+                    layer: {"status": "passed", "artifactDigest": evidence_layer_digest}
                     for layer in finalizer.TEST_LAYERS
                 },
                 "evidence": test_evidence["evidence"],
@@ -326,7 +392,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                 "--mode",
                 "prevalidate",
                 "--ssh-host",
-                "118.31.239.122",
+                "192.0.2.10",
                 "--data-mode",
                 "isolated",
                 "--prevalidate-scope",
@@ -334,7 +400,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             ]
         )
         self.assertEqual(args.mode, "prevalidate")
-        self.assertEqual(args.ssh_host, "118.31.239.122")
+        self.assertEqual(args.ssh_host, "192.0.2.10")
         self.assertEqual(args.data_mode, "isolated")
 
     def test_projection_is_pinned_empty_and_excludes_external_providers(self) -> None:
@@ -527,7 +593,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                     "--mode",
                     "prevalidate",
                     "--ssh-host",
-                    "118.31.239.122",
+                    "192.0.2.10",
                     "--data-mode",
                     "isolated",
                     "--prevalidate-scope",
@@ -572,7 +638,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
                     "--stage",
                     "canary",
                     "--ssh-host",
-                    "118.31.239.122",
+                    "192.0.2.10",
                     "--data-mode",
                     "isolated",
                     "--prevalidate-scope",
@@ -604,7 +670,7 @@ class ProdHostedPrevalidationContractTest(unittest.TestCase):
             mock.patch.object(
                 stackctl,
                 "get_target",
-                return_value={"publicBases": {"api": "https://118.31.239.122"}},
+                return_value={"publicBases": {"api": "https://192.0.2.10"}},
             ),
         ):
             with self.assertRaisesRegex(RuntimeError, "canonical public HTTPS DNS"):

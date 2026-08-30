@@ -5,24 +5,25 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from quwoquan_ops.ci.render_release_application_package import validate_package
 from quwoquan_ops.ci.render_provider_conformance_source import (
     expected_required_cell_count_from_readiness,
 )
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
-    APPLICATION_PACKAGE_FIELDS,
-    APPLICATION_PACKAGE_SCHEMA,
     APPLICATION_PACKAGES,
+    APPLICATION_SOURCE_DESCRIPTOR_FIELDS,
     DIGEST_PATTERN,
+    DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENTS,
     OCI_DIGEST_REF_PATTERN,
-    PROD_APPLICATION_SOURCE_SCHEMAS,
+    OPS_PORTAL_SOURCE_DESCRIPTOR_FIELDS,
+    OPTIONAL_RELEASE_EVIDENCE,
     RECEIPT_SOURCE_FIELDS,
     REQUIRED_RELEASE_EVIDENCE,
 )
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact_lib.canonical_digests import (
     load_json,
     sha256_file,
-    sha256_ops_portal_tree,
     sha256_tree,
 )
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact_lib.manifest_validation import (
@@ -32,56 +33,73 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact_lib.manifest_valid
 )
 
 
-def load_image_descriptors(directory: Path) -> dict[str, dict[str, Any]]:
-    descriptors: dict[str, dict[str, Any]] = {}
-    for path in sorted(directory.glob("*.json")):
+def load_image_descriptors(
+    directory: Path,
+) -> dict[str, dict[str, dict[str, Any]]]:
+    descriptors: dict[str, dict[str, dict[str, Any]]] = {
+        environment: {} for environment in ENVIRONMENTS
+    }
+    for path in sorted(directory.glob("*/*.json")):
         descriptor = load_json(path)
-        service = str(descriptor.get("service") or "").strip()
-        if not service:
-            raise ValueError(f"{path} missing service")
-        if service in descriptors:
-            raise ValueError(f"duplicate image descriptor for {service}")
-        descriptors[service] = descriptor
+        environment = str(descriptor.get("environment") or "").strip()
+        owner = str(descriptor.get("runtimeImageOwner") or "").strip()
+        if environment not in ENVIRONMENTS or not owner:
+            raise ValueError(f"{path} missing environment/runtimeImageOwner")
+        if path.parent.name != environment:
+            raise ValueError(f"{path} descriptor path environment mismatch")
+        if owner in descriptors[environment]:
+            raise ValueError(
+                f"duplicate image descriptor for {environment}/{owner}"
+            )
+        descriptors[environment][owner] = descriptor
     return descriptors
 
 
 def validate_descriptor(
-    service: str,
+    environment: str,
+    owner: str,
     descriptor: dict[str, Any],
     *,
     expected_repository: str,
     expected_transport_ref: str,
 ) -> dict[str, Any]:
+    label = f"{environment}/{owner}"
     if set(descriptor) != {
-        "service",
+        "environment",
+        "runtimeImageOwner",
         "repository",
         "transportRef",
         "digest",
         "ref",
         "attestations",
     }:
-        raise ValueError(f"{service} image descriptor fields are not canonical")
+        raise ValueError(f"{label} image descriptor fields are not canonical")
+    if (
+        descriptor.get("environment") != environment
+        or descriptor.get("runtimeImageOwner") != owner
+    ):
+        raise ValueError(f"{label} image descriptor identity mismatch")
     repository = str(descriptor.get("repository") or "").strip()
     transport_ref = str(descriptor.get("transportRef") or "").strip()
     digest = str(descriptor.get("digest") or "").strip()
     if repository != expected_repository:
         raise ValueError(
-            f"{service} repository mismatch: {repository!r} != {expected_repository!r}"
+            f"{label} repository mismatch: {repository!r} != {expected_repository!r}"
         )
     if transport_ref != expected_transport_ref:
-        raise ValueError(f"{service} transport ref mismatch")
+        raise ValueError(f"{label} transport ref mismatch")
     if DIGEST_PATTERN.fullmatch(digest) is None:
-        raise ValueError(f"{service} missing immutable OCI digest")
+        raise ValueError(f"{label} missing immutable OCI digest")
     expected_ref = f"{repository}@{digest}"
     if str(descriptor.get("ref") or "") != expected_ref:
-        raise ValueError(f"{service} digest ref mismatch")
+        raise ValueError(f"{label} digest ref mismatch")
     attestations = descriptor.get("attestations")
     if not isinstance(attestations, dict):
-        raise ValueError(f"{service} missing attestations")
+        raise ValueError(f"{label} missing attestations")
     for attestation_type in ("spdxSbom", "slsaProvenance"):
         value = str(attestations.get(attestation_type) or "").strip()
         if value != f"oci://{expected_ref}#{attestation_type}":
-            raise ValueError(f"{service} missing {attestation_type} attestation reference")
+            raise ValueError(f"{label} missing {attestation_type} attestation reference")
     return {
         "repository": repository,
         "transportRef": transport_ref,
@@ -99,47 +117,50 @@ def load_release_evidence(
     descriptors_dir: Path,
 ) -> dict[str, Any]:
     evidence: dict[str, dict[str, Any]] = {}
-    application_packages: dict[str, dict[str, dict[str, str]]] = {
-        environment: {} for environment in ENVIRONMENTS
-    }
+    application_packages: dict[str, dict[str, str]] = {}
+    ops_portal: dict[str, str] | None = None
     for descriptor_path in sorted(descriptors_dir.glob("*.json")):
         descriptor = load_json(descriptor_path)
-        if set(descriptor) == {
-            "applicationEnvironment",
-            "applicationSurface",
-            "path",
-            "digest",
-            "packageDigest",
-            "sourceRef",
-        }:
-            environment = str(descriptor["applicationEnvironment"])
-            surface = str(descriptor["applicationSurface"])
-            if (
-                environment not in ENVIRONMENTS
-                or surface not in APPLICATION_PACKAGES[environment]
-            ):
+        if set(descriptor) == APPLICATION_SOURCE_DESCRIPTOR_FIELDS:
+            build_product_id = str(descriptor.get("buildProductId") or "")
+            if build_product_id not in APPLICATION_PACKAGES:
                 raise ValueError(
-                    f"unsupported application package descriptor: {environment}/{surface}"
+                    f"unsupported App build product descriptor: {build_product_id}"
                 )
-            if surface in application_packages[environment]:
+            if build_product_id in application_packages:
                 raise ValueError(
-                    f"duplicate application package descriptor: {environment}/{surface}"
+                    f"duplicate App build product descriptor: {build_product_id}"
                 )
             relative = _validate_relative_path(
-                descriptor["path"],
-                f"application package {environment}/{surface}",
+                descriptor["path"], f"application package {build_product_id}"
             )
             artifact_path = _bound_file(
-                artifact_dir,
-                relative,
-                f"application package {environment}/{surface}",
+                artifact_dir, relative, f"application package {build_product_id}"
             )
             actual_digest = sha256_file(artifact_path)
             if descriptor["digest"] != actual_digest:
                 raise ValueError(
-                    f"application package {environment}/{surface} digest mismatch"
+                    f"application package {build_product_id} digest mismatch"
                 )
-            application_packages[environment][surface] = {
+            application_packages[build_product_id] = {
+                "path": relative,
+                "digest": actual_digest,
+                "packageDigest": descriptor["packageDigest"],
+                "sourceRef": descriptor["sourceRef"],
+            }
+            continue
+        key = str(descriptor.get("evidenceKey") or "").strip()
+        if key == "opsPortal":
+            if set(descriptor) != OPS_PORTAL_SOURCE_DESCRIPTOR_FIELDS:
+                raise ValueError("opsPortal evidence descriptor is not canonical")
+            if ops_portal is not None:
+                raise ValueError("duplicate opsPortal evidence descriptor")
+            relative = _validate_relative_path(descriptor["path"], "opsPortal evidence")
+            artifact_path = _bound_file(artifact_dir, relative, "opsPortal evidence")
+            actual_digest = sha256_file(artifact_path)
+            if descriptor["digest"] != actual_digest:
+                raise ValueError("opsPortal evidence digest mismatch")
+            ops_portal = {
                 "path": relative,
                 "digest": actual_digest,
                 "packageDigest": descriptor["packageDigest"],
@@ -150,12 +171,11 @@ def load_release_evidence(
             raise ValueError(
                 f"{descriptor_path} release evidence descriptor is not canonical"
             )
-        key = str(descriptor.get("evidenceKey") or "").strip()
         relative = _validate_relative_path(
             descriptor.get("path"), f"release evidence {key or '<missing>'}"
         )
         declared_digest = str(descriptor.get("digest") or "").strip()
-        if key not in REQUIRED_RELEASE_EVIDENCE:
+        if key not in (*REQUIRED_RELEASE_EVIDENCE, *OPTIONAL_RELEASE_EVIDENCE):
             raise ValueError(f"unsupported release evidence key: {key!r}")
         if key in evidence:
             raise ValueError(f"duplicate release evidence descriptor: {key}")
@@ -168,29 +188,36 @@ def load_release_evidence(
             "digest": actual_digest,
             "payload": load_json(artifact_path),
         }
-    if set(evidence) != set(REQUIRED_RELEASE_EVIDENCE):
-        missing = sorted(set(REQUIRED_RELEASE_EVIDENCE) - set(evidence))
-        extra = sorted(set(evidence) - set(REQUIRED_RELEASE_EVIDENCE))
+    missing = sorted(set(REQUIRED_RELEASE_EVIDENCE) - set(evidence))
+    extra = sorted(
+        set(evidence)
+        - set(REQUIRED_RELEASE_EVIDENCE)
+        - set(OPTIONAL_RELEASE_EVIDENCE)
+    )
+    if missing or extra:
         raise ValueError(
             f"release evidence descriptor set mismatch: missing={missing}, extra={extra}"
         )
-    for environment in ENVIRONMENTS:
-        if set(application_packages[environment]) != set(
-            APPLICATION_PACKAGES[environment]
-        ):
-            raise ValueError(
-                f"application package descriptor set mismatch: {environment}"
-            )
+    if set(application_packages) != set(APPLICATION_PACKAGES):
+        missing = sorted(set(APPLICATION_PACKAGES) - set(application_packages))
+        extra = sorted(set(application_packages) - set(APPLICATION_PACKAGES))
+        raise ValueError(
+            f"App build product descriptor set mismatch: missing={missing}, extra={extra}"
+        )
+    if ops_portal is None:
+        raise ValueError("opsPortal evidence descriptor is missing")
     evidence["applicationPackages"] = application_packages
+    evidence["opsPortal"] = ops_portal
     return evidence
 
 
 def _verify_configuration_packages(artifact_dir: Path, manifest: dict[str, Any]) -> None:
-    for environment, packages in manifest["configurationPackages"].items():
+    for environment, artifact in manifest["environmentArtifacts"].items():
+        packages = artifact["configurationPackages"]
         for service, descriptor in packages.items():
             relative = _validate_relative_path(
                 descriptor.get("path"),
-                f"configurationPackages.{environment}.{service}",
+                f"environmentArtifacts.{environment}.configurationPackages.{service}",
             )
             path = _bound_file(
                 artifact_dir,
@@ -260,49 +287,16 @@ def validate_application_package_evidence(
     payload: dict[str, Any],
     *,
     manifest: dict[str, Any],
-    environment: str,
-    surface: str,
+    build_product_id: str,
 ) -> str:
-    expected_prod_schema = (
-        PROD_APPLICATION_SOURCE_SCHEMAS.get(surface)
-        if environment == "prod"
-        else None
-    )
-    if expected_prod_schema is not None:
-        if payload.get("schema") != expected_prod_schema:
-            raise ValueError(
-                f"application package schema mismatch for {environment}/{surface}"
-            )
-        source = manifest["source"]
-        if (
-            payload.get("sourceGitSha") != source["gitSha"]
-            or payload.get("sourceTreeDigest") != source["treeDigest"]
-        ):
-            raise ValueError(
-                f"application package source binding mismatch for {environment}/{surface}"
-            )
-    else:
-        if set(payload) != APPLICATION_PACKAGE_FIELDS:
-            raise ValueError(
-                "application package evidence fields are not canonical: "
-                f"{environment}/{surface}"
-            )
-        source = manifest["source"]
-        if (
-            payload.get("schema") != APPLICATION_PACKAGE_SCHEMA
-            or payload.get("environment") != environment
-            or payload.get("surface") != surface
-            or payload.get("sourceGitSha") != source["gitSha"]
-            or payload.get("sourceTreeDigest") != source["treeDigest"]
-        ):
-            raise ValueError(
-                f"application package evidence binding mismatch: {environment}/{surface}"
-            )
-    return application_package_digest(
+    source = manifest["source"]
+    validate_package(
         payload,
-        environment=environment,
-        surface=surface,
+        build_product_id=build_product_id,
+        source_git_sha=str(source["gitSha"]),
+        source_tree_digest=str(source["treeDigest"]),
     )
+    return application_package_digest(payload)
 
 
 def validate_application_package_payload(
@@ -310,68 +304,23 @@ def validate_application_package_payload(
     *,
     payload_root: Path,
     manifest: dict[str, Any],
-    environment: str,
-    surface: str,
+    build_product_id: str,
 ) -> None:
     declared_digest = validate_application_package_evidence(
         payload,
         manifest=manifest,
-        environment=environment,
-        surface=surface,
+        build_product_id=build_product_id,
     )
-    if environment == "prod" and surface == "web":
-        if sha256_tree(payload_root) != declared_digest:
-            raise ValueError("prod web payload digest mismatch")
-        return
-    if environment == "prod" and surface == "android":
-        packaged = _validate_relative_path(
-            payload.get("packagedAPK"), "prod android packagedAPK"
-        )
-        apk = _bound_file(payload_root, packaged, "prod android APK")
-        entries = sorted(payload_root.rglob("*"))
-        if any(path.is_symlink() for path in entries):
-            raise ValueError("prod android payload must not contain symlinks")
-        files = [path for path in entries if path.is_file()]
-        if files != [apk] or sha256_file(apk) != declared_digest:
-            raise ValueError("prod android payload digest mismatch")
-        return
-    if environment == "prod" and surface == "opsPortal":
-        manifest_path = _bound_file(
-            payload_root, "manifest.json", "prod opsPortal manifest"
-        )
-        dist = payload_root / "dist"
-        digests = payload.get("digests")
-        if not isinstance(digests, dict):
-            raise ValueError("prod opsPortal provenance digests are missing")
-        if (
-            sha256_file(manifest_path) != digests.get("manifest")
-            or sha256_ops_portal_tree(dist) != digests.get("distTree")
-            or declared_digest != digests.get("distTree")
-        ):
-            raise ValueError("prod opsPortal payload digest mismatch")
-        return
     if sha256_tree(payload_root) != declared_digest:
         raise ValueError(
-            f"application package payload digest mismatch: {environment}/{surface}"
+            f"application package payload digest mismatch: {build_product_id}"
         )
 
 
-def application_package_digest(
-    payload: dict[str, Any],
-    *,
-    environment: str,
-    surface: str,
-) -> str:
-    if environment == "prod" and surface == "web":
-        digest = "sha256:" + str(payload.get("contentSHA256") or "")
-    elif environment == "prod" and surface == "android":
-        digest = "sha256:" + str(payload.get("apkSHA256") or "")
-    else:
-        digest = str(payload.get("packageDigest") or "")
+def application_package_digest(payload: dict[str, Any]) -> str:
+    digest = str(payload.get("packageDigest") or "")
     if DIGEST_PATTERN.fullmatch(digest) is None:
-        raise ValueError(
-            f"application package digest is not immutable: {environment}/{surface}"
-        )
+        raise ValueError("application package digest is not immutable")
     return digest
 
 
@@ -382,31 +331,44 @@ def validate_manifest_files(artifact_dir: Path, manifest: dict[str, Any]) -> Non
     _verify_configuration_packages(artifact_dir, manifest)
     if manifest["status"] in {"build-input", "component-ready"}:
         return
-    for environment, packages in manifest["applicationPackages"].items():
-        for surface, descriptor in packages.items():
-            relative = _validate_relative_path(
-                descriptor.get("path"),
-                f"applicationPackages.{environment}.{surface}",
+    for build_product_id, descriptor in manifest["applicationPackages"].items():
+        relative = _validate_relative_path(
+            descriptor.get("path"),
+            f"applicationPackages.{build_product_id}",
+        )
+        path = _bound_file(
+            artifact_dir,
+            relative,
+            f"application package {build_product_id}",
+        )
+        if sha256_file(path) != descriptor.get("digest"):
+            raise ValueError(
+                f"application package digest mismatch for {build_product_id}"
             )
-            path = _bound_file(
-                artifact_dir,
-                relative,
-                f"application package {environment}/{surface}",
+        package_digest = validate_application_package_evidence(
+            load_json(path),
+            manifest=manifest,
+            build_product_id=build_product_id,
+        )
+        if package_digest != descriptor.get("packageDigest"):
+            raise ValueError(
+                f"application package content binding mismatch for {build_product_id}"
             )
-            if sha256_file(path) != descriptor.get("digest"):
-                raise ValueError(
-                    f"application package digest mismatch for {environment}/{surface}"
-                )
-            package_digest = validate_application_package_evidence(
-                load_json(path),
-                manifest=manifest,
-                environment=environment,
-                surface=surface,
-            )
-            if package_digest != descriptor.get("packageDigest"):
-                raise ValueError(
-                    f"application package content binding mismatch for {environment}/{surface}"
-                )
+    for evidence_key, canonical_path in DISTRIBUTION_EVIDENCE_PATHS.items():
+        descriptor = manifest[evidence_key]
+        path = _bound_file(artifact_dir, canonical_path, evidence_key)
+        if descriptor.get("path") != canonical_path:
+            raise ValueError(f"{evidence_key} path is not canonical")
+        if sha256_file(path) != descriptor.get("digest"):
+            raise ValueError(f"{evidence_key} digest mismatch")
+    ops_portal = manifest["opsPortal"]
+    relative = _validate_relative_path(ops_portal.get("path"), "opsPortal")
+    path = _bound_file(artifact_dir, relative, "opsPortal")
+    if sha256_file(path) != ops_portal.get("digest"):
+        raise ValueError("opsPortal evidence digest mismatch")
+    payload = load_json(path)
+    if payload.get("packageDigest") != ops_portal.get("packageDigest"):
+        raise ValueError("opsPortal package digest mismatch")
     contract_graph = artifact_dir / "evidence/contractGraph.json"
     if (
         contract_graph.is_symlink()

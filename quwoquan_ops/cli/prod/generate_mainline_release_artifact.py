@@ -16,12 +16,15 @@ from typing import Any
 
 import yaml
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.immutable_image_composition import (
     first_party_service_names,
+    runtime_image_owner_names,
 )
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
@@ -35,10 +38,7 @@ from quwoquan_ops.cli.render_runtime_config import render_workload
 
 
 RELEASE_SERVICES = first_party_service_names(ROOT)
-DOMAIN_SERVICES = tuple(
-    service for service in RELEASE_SERVICES if service != "platform-ops-service"
-)
-DEPLOYED_SERVICES = RELEASE_SERVICES
+DEPLOYED_SERVICES = runtime_image_owner_names(ROOT)
 TRANSPORT_TAG_PATTERN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
 
 
@@ -132,17 +132,21 @@ def write_summary(path: Path, manifest: dict[str, Any]) -> None:
     lines = [
         "## Release Evidence Manifest",
         "",
+        f"- `releaseTrainId`: `{manifest['releaseTrainId']}`",
         f"- `candidateId`: `{manifest['candidateId']}`",
         f"- `artifactDigest`: `{manifest['artifactDigest']}`",
         "- `status`: `build-input`（全部不可变摘要与证据收齐后才可部署）",
         "",
-        "### Image transport references",
-        *[
-            f"- `{service}`: `{descriptor['transportRef']}`"
-            for service, descriptor in manifest["images"].items()
-        ],
-        "",
+        "### Environment image transport references",
     ]
+    for environment in ENVIRONMENTS:
+        for owner, descriptor in manifest["environmentArtifacts"][environment][
+            "images"
+        ].items():
+            lines.append(
+                f"- `{environment}/{owner}`: `{descriptor['transportRef']}`"
+            )
+    lines.append("")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -180,22 +184,35 @@ def main() -> int:
 
     registry = args.registry.rstrip("/")
     repository = args.repository.strip("/")
-    images = {
-        service: {
-            "repository": f"{registry}/{repository}/{service}",
-            "transportRef": f"{registry}/{repository}/{service}:{transport_tag}",
+    environment_artifacts: dict[str, dict[str, Any]] = {}
+    for environment in ENVIRONMENTS:
+        # DEC-005 信任域裁决：镜像按 nonprod/prod 两档构建，alpha/beta/gamma
+        # 复用同一 nonprod 镜像 repo 与 digest，环境差异只存在于配置包。
+        trust_domain = "prod" if environment == "prod" else "nonprod"
+        images = {
+            owner: {
+                "repository": f"{registry}/{repository}/{owner}-{trust_domain}",
+                "transportRef": (
+                    f"{registry}/{repository}/{owner}-{trust_domain}:{transport_tag}"
+                ),
+            }
+            for owner in DEPLOYED_SERVICES
         }
-        for service in DEPLOYED_SERVICES
-    }
+        environment_artifacts[environment] = {
+            "environment": environment,
+            "environmentArtifactDigest": None,
+            "images": images,
+            "configurationPackages": configuration_packages[environment],
+        }
     required_evidence = {
-        "images": list(DEPLOYED_SERVICES),
+        "environmentArtifacts": {
+            environment: list(DEPLOYED_SERVICES) for environment in ENVIRONMENTS
+        },
         "configurationPackages": {
             environment: list(RELEASE_SERVICES) for environment in ENVIRONMENTS
         },
-        "applicationPackages": {
-            environment: list(APPLICATION_PACKAGES[environment])
-            for environment in ENVIRONMENTS
-        },
+        "applicationPackages": list(APPLICATION_PACKAGES),
+        "opsPortal": True,
         "contractGraphDigest": True,
         "providerEvidence": True,
         "testEvidence": list(TEST_LAYERS),
@@ -206,6 +223,7 @@ def main() -> int:
     manifest = seal_manifest(
         {
             "schema": SCHEMA,
+            "releaseTrainId": None,
             "candidateId": None,
             "status": "build-input",
             "generatedAt": utc_now(),
@@ -217,9 +235,11 @@ def main() -> int:
                 "sourceArchiveDigest": None,
             },
             "artifactDigest": None,
-            "images": images,
-            "configurationPackages": configuration_packages,
-            "applicationPackages": {environment: {} for environment in ENVIRONMENTS},
+            "environmentArtifacts": environment_artifacts,
+            "applicationPackages": {},
+            "publicWeb": None,
+            "androidOfficialRelease": None,
+            "opsPortal": None,
             "contractGraphDigest": None,
             "requiredEvidence": required_evidence,
             "testEvidence": {},
@@ -232,12 +252,18 @@ def main() -> int:
                 "whole-application-evidence-pending",
             ],
             "missingEvidence": [
-                *(f"images.{service}.digest" for service in DEPLOYED_SERVICES),
                 *(
-                    f"applicationPackages.{environment}.{surface}"
+                    f"environmentArtifacts.{environment}.images.{owner}.digest"
                     for environment in ENVIRONMENTS
-                    for surface in APPLICATION_PACKAGES[environment]
+                    for owner in DEPLOYED_SERVICES
                 ),
+                *(
+                    f"applicationPackages.{build_product_id}"
+                    for build_product_id in APPLICATION_PACKAGES
+                ),
+                "publicWeb",
+                "androidOfficialRelease",
+                "opsPortal",
                 "contractGraphDigest",
                 "providerEvidence",
                 "testEvidence",

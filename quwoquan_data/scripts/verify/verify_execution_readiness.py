@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -19,14 +20,13 @@ from content.execution.workspace import load_execution_manifest
 from core.article_package import compute_document_sha256
 from core.control_types import ContentType, expected_content_generator
 from core.io import read_json
-from core.paths import DATA_EXECUTIONS_ROOT, is_execution_id
+from core.paths import DATA_EXECUTIONS_ROOT, OBJECT_STAGES, is_execution_id
 from core.schema import assert_valid
 from verify.verify_content_execution_layout import content_execution_layout_issues
 from verify.verify_homepage_media_completeness import homepage_media_completeness_report
 from verify.verify_execution_readiness_assets import _asset_admission_issues
 
 
-_STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
 READINESS_MODES = ("calibration", "research", "commercial")
 _LIFECYCLE_MODES = frozenset({"research", "commercial"})
 
@@ -51,8 +51,9 @@ def _rate(numerator: int, denominator: int) -> float:
 def _normalize_model_id(model: object) -> str:
     text = str(model or "").strip().lower().replace("_", "-")
     text = text.removeprefix("cursor-")
-    text = text.replace("grok-4-5", "grok-4.5")
-    return text
+    # `grok-4-6` and `grok-4.6` name the same model; normalize every version
+    # rather than one pinned release.
+    return re.sub(r"^(grok)-(\d+)-(\d+)", r"\1-\2.\3", text)
 
 
 def _read_valid_json(path: Path, schema_group: str, schema_name: str, issues: list[str]) -> dict:
@@ -164,7 +165,7 @@ def _reviewed_object_issues(
 ) -> list[str]:
     rel = object_root.relative_to(root)
     issues: list[str] = []
-    missing = [stage for stage in _STAGES if not (object_root / stage).is_dir()]
+    missing = [stage for stage in OBJECT_STAGES if not (object_root / stage).is_dir()]
     if missing:
         return [f"{rel}: missing stages {', '.join(missing)}"]
 
@@ -316,7 +317,10 @@ def execution_readiness_outcome(
 
     合格率与配图率只作为持续改进的统计量随 outcome 返回，不参与判定。
     """
-    issues = content_execution_layout_issues(execution_id=execution_id)
+    issues = content_execution_layout_issues(
+        execution_id=execution_id,
+        allow_succeeded_terminal=True,
+    )
     if mode not in READINESS_MODES:
         return _blocked(issues, f"readiness mode is invalid: {mode}")
     if mode in _LIFECYCLE_MODES and not require_reviewed:

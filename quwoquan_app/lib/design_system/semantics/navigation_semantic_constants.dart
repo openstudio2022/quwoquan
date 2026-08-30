@@ -10,6 +10,14 @@ enum AppChromeSurface { standard, immersive, overlay }
 ///
 /// 图标使用主标签色，**禁止**默认 Cupertino 强调蓝；尺寸与 [AppNavigationBarIconButton] 一致。
 class AppNavigationSemanticConstants {
+  /// Product-level accessibility identity for the canonical home surface.
+  ///
+  /// Flutter projects this value to Android's view resource name and iOS's
+  /// accessibility identifier. External accessibility clients can therefore
+  /// prove that the already-running production App reached the home surface
+  /// without depending on test-only widget keys or translated copy.
+  static const String homeSurfaceIdentifier = 'qwq.surface.home';
+
   AppNavigationSemanticConstants._();
 
   /// 顶栏 leading/trailing 图标边长（与 [GlobalTopBarIconButton] 一致）。
@@ -35,8 +43,10 @@ class AppNavigationSemanticConstants {
 
   /// 应用 chrome 操作按钮背景。
   ///
-  /// - `immersive`：半透明暗色圆底（iOS Photos 沉浸惯例），保证媒体加载失败
-  ///   退到浅色背景时白色返回/操作图标仍然可见，用户不会被困在失败页。
+  /// - `immersive`：透明——沉浸导航钮不使用暗色圆底或毛玻璃（REQ-019），
+  ///   浅色媒体上的可见性由 [chromeActionIconShadows] 的柔和投影承接。
+  ///   相机取景壳等**操作钮**是独立语义，需要暗底时由调用方显式声明，
+  ///   不走本导航语义。
   /// - `overlay`：封面壳保持透明——其前景色已随封面亮度自适应
   ///   （见 profile/circle shell 的 compactForeground），不叠加圆底避免漂移。
   /// - `standard`：透明。
@@ -45,10 +55,36 @@ class AppNavigationSemanticConstants {
   }) {
     switch (surface) {
       case AppChromeSurface.immersive:
-        return AppColors.overlayLight;
       case AppChromeSurface.overlay:
       case AppChromeSurface.standard:
         return AppColors.transparent;
+    }
+  }
+
+  /// 应用 chrome 操作图标投影：沉浸面白色图标的唯一可见性保护。
+  ///
+  /// 双层投影：近距细投影提供图标轮廓对比，远距柔投影在雪山/白云等
+  /// 浅色媒体与失败面浅背景上衬出图标，返回出路永不消失。
+  /// standard/overlay 表面不加投影。
+  static List<Shadow> chromeActionIconShadows({
+    AppChromeSurface surface = AppChromeSurface.standard,
+  }) {
+    switch (surface) {
+      case AppChromeSurface.immersive:
+        return <Shadow>[
+          Shadow(
+            color: AppColors.black.withValues(alpha: 0.55),
+            offset: const Offset(0, AppSpacing.one),
+            blurRadius: AppSpacing.two,
+          ),
+          Shadow(
+            color: AppColors.black.withValues(alpha: 0.35),
+            blurRadius: AppSpacing.sm,
+          ),
+        ];
+      case AppChromeSurface.overlay:
+      case AppChromeSurface.standard:
+        return const <Shadow>[];
     }
   }
 

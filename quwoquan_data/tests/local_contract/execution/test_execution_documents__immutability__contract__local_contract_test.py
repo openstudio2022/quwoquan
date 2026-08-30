@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import pytest
 
-from core.runtime_policy import active_runtime_policy
 from content.execution.agent.managed_checkpoint import _managed_checkpoint_worker_count
 from content.execution.agent.managed_checkpoint import _managed_checkpoint_ref
-from content.execution.context import ExecutionContext, _managed_local_cursor_worker_cap
+from content.execution.context import ExecutionContext
 from content.execution.controller import homepage_review_stage
 from content.execution.spec_contract import ExecutionSpec
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
+from content.execution.model_contract import governed_cursor_grok_model
 
 
 def test_execution_context_snapshots_spec_and_returns_defensive_values() -> None:
@@ -26,20 +26,16 @@ def test_execution_context_snapshots_spec_and_returns_defensive_values() -> None
     assert context.spec.content.quotas.entity_homepages_per_target == 1
 
 
-def test_managed_checkpoint_worker_cap_comes_only_from_runtime_policy() -> None:
-    policy = active_runtime_policy()
+def test_managed_checkpoint_submits_every_prompt_without_static_worker_cap() -> None:
     context = ExecutionContext(
         execution_id="20260716--travel-homepage-coverage--test-region-a--pilot-902",
         entity_ids=("测试实体乙",),
         spec=ExecutionFixtureBuilder(
             "20260716--travel-homepage-coverage--test-region-a--pilot-902"
         ).spec(),
-        max_workers=policy.author_workers,
+        max_workers=1,
     )
-    expected = min(policy.author_workers, policy.cursor_bridge_instances)
-
-    assert _managed_local_cursor_worker_cap(context) == expected
-    assert _managed_checkpoint_worker_count(context, policy.author_workers + 1) == expected
+    assert _managed_checkpoint_worker_count(context, 7) == 7
 
 
 def test_execution_context_rejects_spec_identity_drift() -> None:
@@ -139,10 +135,10 @@ def test_homepage_review_preserves_full_governed_entity_type(
     issues = homepage_review_stage._review_homepage_target(
         context,
         target,
-        review_model="grok-4.5",
+        review_model=governed_cursor_grok_model(),
         review_model_family="grok",
         review_parameters=(),
-        reviewer_workers=1,
+        reviewer_workers=context.spec.execution_policy.fleet_max_concurrent_workers,
     )
 
     assert captured == {

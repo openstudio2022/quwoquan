@@ -56,6 +56,7 @@ def _fact(*, ordinal: int = 0, subject_id: str = "account-001") -> ExposureFact:
         target_type="post",
         target_id="post-001",
         ordinal=ordinal,
+        experiment_bucket="model",
         model_bucket="model",
         model_channel="champion",
         model_release_id="release-001",

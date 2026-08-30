@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/release/research_scale_promotion.schema.json",
   "title": "Research cumulative scale promotion receipt",
-  "description": "Create-once cumulative milestone receipt. Counts, immutable closure, uniqueness and source identity are gates; quality-rate, mix, popularity, recovery, concurrency, timing and resource fields are truthful non-blocking statistics.",
+  "description": "Create-once cumulative milestone receipt. The environment-neutral immutable Research release owns counts, object closure and source identity; campaign, lane, calibration, timing and resource evidence are optional diagnostics.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,33 +14,11 @@
     "manifestDigest",
     "targetScale",
     "sourcePoolDigest",
-    "predecessorSourcePoolDigests",
-    "scaleStartedAt",
-    "scaleCompletedAt",
-    "wallClockBudgetSeconds",
-    "wallClockSeconds",
-    "capacityThroughputByCarrier",
     "carrierCounts",
-    "campaignWaveStatistics",
     "statistics",
     "professionalImageSourceMix",
     "duplicateAssetCount",
     "crossLaneWriteCount",
-    "resourceIsolationPassed",
-    "soakDurationSeconds",
-    "semanticJobsByLane",
-    "semanticCalibrationByLane",
-    "fourLaneOverlapSampleCount",
-    "fourLaneOverlapDurationSeconds",
-    "fourLaneLongestContinuousOverlapSeconds",
-    "allSemanticJobsTerminalAt",
-    "terminalResidualSampleAt",
-    "campaignEvidenceRef",
-    "campaignEvidenceDigest",
-    "resourceSoakEvidenceRef",
-    "resourceSoakEvidenceDigest",
-    "faultInjectionEvidenceRef",
-    "faultInjectionEvidenceDigest",
     "nextScaleEligible",
     "recordedAt"
   ],
@@ -61,7 +39,12 @@
     "sourceIdentitySetDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "targetScale": {"enum": ["M100", "M1000", "M10000"]},
     "sourcePoolDigest": {
-      "description": "Current campaign-wave source-pool observation; milestone identity is sourceIdentitySetDigest.",
+      "description": "Exact poolDigest from the promoted immutable milestone release header.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "campaignSourcePoolDigest": {
+      "description": "Optional campaign-wave source-pool diagnostic; never milestone identity.",
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
@@ -86,6 +69,18 @@
       "items": false
     },
     "predecessorPromotion": {"$ref": "#/$defs/predecessorPromotion"},
+    "m100AlphaAcceptanceBinding": {
+      "$ref": "../execution/m100_alpha_acceptance_binding.schema.json"
+    },
+    "m100AlphaAcceptanceBindingDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "m100AlphaAcceptanceBindingRef": {"type": "string", "minLength": 1},
+    "m100AlphaAcceptanceBindingFileSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "carrierCounts": {
       "type": "array",
       "minItems": 4,
@@ -171,8 +166,33 @@
     "resourceSoakEvidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "faultInjectionEvidenceRef": {"type": "string", "minLength": 1},
     "faultInjectionEvidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "diagnosticIssues": {
+      "description": "Non-blocking resource, fault, timing or capacity observations that require human review.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
     "nextScaleEligible": {"enum": ["M1000", "M10000", "COMPLETE"]},
     "recordedAt": {"type": "string", "minLength": 1}
+  },
+  "dependentRequired": {
+    "campaignEvidenceRef": ["campaignEvidenceDigest"],
+    "campaignEvidenceDigest": ["campaignEvidenceRef"],
+    "scaleStartedAt": ["scaleCompletedAt", "wallClockBudgetSeconds", "wallClockSeconds"],
+    "scaleCompletedAt": ["scaleStartedAt", "wallClockBudgetSeconds", "wallClockSeconds"],
+    "wallClockBudgetSeconds": ["scaleStartedAt", "scaleCompletedAt", "wallClockSeconds"],
+    "wallClockSeconds": ["scaleStartedAt", "scaleCompletedAt", "wallClockBudgetSeconds"],
+    "resourceSoakEvidenceRef": [
+      "resourceSoakEvidenceDigest", "resourceIsolationPassed", "soakDurationSeconds",
+      "semanticJobsByLane", "fourLaneOverlapSampleCount",
+      "fourLaneOverlapDurationSeconds", "fourLaneLongestContinuousOverlapSeconds",
+      "allSemanticJobsTerminalAt", "terminalResidualSampleAt"
+    ],
+    "resourceSoakEvidenceDigest": ["resourceSoakEvidenceRef"],
+    "faultInjectionEvidenceRef": ["faultInjectionEvidenceDigest"],
+    "faultInjectionEvidenceDigest": ["faultInjectionEvidenceRef"],
+    "m100AlphaAcceptanceBindingRef": ["m100AlphaAcceptanceBindingFileSha256"],
+    "m100AlphaAcceptanceBindingFileSha256": ["m100AlphaAcceptanceBindingRef"]
   },
   "allOf": [
     {
@@ -192,34 +212,44 @@
       "then": {
         "properties": {
           "nextScaleEligible": {"const": "M1000"},
-          "predecessorSourcePoolDigests": {"maxItems": 0},
           "wallClockBudgetSeconds": {"type": "null"},
           "carrierCounts": {
             "prefixItems": [
-              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"const": 100}, "researchAcceptedCount": {"const": 100}}},
-              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"const": 100}, "researchAcceptedCount": {"const": 100}}},
-              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"const": 100}, "researchAcceptedCount": {"const": 100}}},
-              {"properties": {"targetCount": {"const": 10}, "totalUniqueFinalizedCount": {"const": 10}, "researchAcceptedCount": {"const": 10}}}
+              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"minimum": 100}, "researchAcceptedCount": {"minimum": 100}}},
+              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"minimum": 100}, "researchAcceptedCount": {"minimum": 100}}},
+              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"minimum": 100}, "researchAcceptedCount": {"minimum": 100}}},
+              {"properties": {"targetCount": {"const": 10}, "totalUniqueFinalizedCount": {"minimum": 10}, "researchAcceptedCount": {"minimum": 10}}}
             ]
           }
+        },
+        "not": {
+          "anyOf": [
+            {"required": ["m100AlphaAcceptanceBinding"]},
+            {"required": ["m100AlphaAcceptanceBindingDigest"]},
+            {"required": ["m100AlphaAcceptanceBindingRef"]},
+            {"required": ["m100AlphaAcceptanceBindingFileSha256"]}
+          ]
         }
       }
     },
     {
       "if": {"properties": {"targetScale": {"const": "M1000"}}, "required": ["targetScale"]},
       "then": {
-        "required": ["predecessorPromotion"],
+        "required": [
+          "predecessorPromotion",
+          "m100AlphaAcceptanceBinding",
+          "m100AlphaAcceptanceBindingDigest"
+        ],
         "properties": {
           "nextScaleEligible": {"const": "M10000"},
-          "predecessorSourcePoolDigests": {"minItems": 1},
           "predecessorPromotion": {"properties": {"targetScale": {"const": "M100"}}},
           "wallClockBudgetSeconds": {"type": "null"},
           "carrierCounts": {
             "prefixItems": [
-              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"const": 1000}, "researchAcceptedCount": {"const": 1000}}},
-              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"const": 1000}, "researchAcceptedCount": {"const": 1000}}},
-              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"const": 1000}, "researchAcceptedCount": {"const": 1000}}},
-              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"const": 100}, "researchAcceptedCount": {"const": 100}}}
+              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"minimum": 1000}, "researchAcceptedCount": {"minimum": 1000}}},
+              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"minimum": 1000}, "researchAcceptedCount": {"minimum": 1000}}},
+              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"minimum": 1000}, "researchAcceptedCount": {"minimum": 1000}}},
+              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"minimum": 100}, "researchAcceptedCount": {"minimum": 100}}}
             ]
           }
         }
@@ -231,10 +261,7 @@
         "required": ["predecessorPromotion"],
         "properties": {
           "nextScaleEligible": {"const": "COMPLETE"},
-          "predecessorSourcePoolDigests": {"minItems": 2},
           "predecessorPromotion": {"properties": {"targetScale": {"const": "M1000"}}},
-          "wallClockBudgetSeconds": {"const": 604800},
-          "wallClockSeconds": {"maximum": 604800},
           "carrierCounts": {
             "prefixItems": [
               {"properties": {"targetCount": {"const": 10000}, "totalUniqueFinalizedCount": {"minimum": 10000}, "researchAcceptedCount": {"minimum": 10000}}},
@@ -243,6 +270,14 @@
               {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"minimum": 1000}, "researchAcceptedCount": {"minimum": 1000}}}
             ]
           }
+        },
+        "not": {
+          "anyOf": [
+            {"required": ["m100AlphaAcceptanceBinding"]},
+            {"required": ["m100AlphaAcceptanceBindingDigest"]},
+            {"required": ["m100AlphaAcceptanceBindingRef"]},
+            {"required": ["m100AlphaAcceptanceBindingFileSha256"]}
+          ]
         }
       }
     }
@@ -649,16 +684,11 @@
         "illustratedRate",
         "textOnlyRate",
         "videoPopularity",
-        "automaticRecoveryRate",
-        "capacityPlanning",
-        "resourceSoak",
-        "firstPassRate",
-        "discardRate",
         "quotaAttainmentByCarrier"
       ],
       "properties": {
         "objectPassRate": {
-          "description": "Sum of qualifiedCount / sum of selectedCount across the four lanes.",
+          "description": "Immutable release accepted object closure / immutable release object closure.",
           "$ref": "#/$defs/rateStatistic"
         },
         "illustratedRate": {

@@ -12,6 +12,7 @@ from typing import Any
 
 from core.io import read_json
 from core.schema import assert_valid
+from core.source_attribution import derived_modifications_value
 
 from content.source.professional_safety_evidence import file_sha256
 from content.source.professional_image_openverse_contract import (
@@ -235,6 +236,8 @@ def source_attribution(
         "propertyReleaseStatus": "unverified",
         "collectedAt": observed_at,
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        # 采集把 provider 原图逐字节存入 CAS，没有任何衍生修改。
+        "derivedModifications": derived_modifications_value(),
     }
 
 
@@ -254,149 +257,54 @@ def load_reviewer_results(
     execution_source_identity: Mapping[str, Any] | None = None,
     source_review_identity: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
+    """Load only validated host-source-review/v1 results for new source writes."""
+    del catalog, digest, execution_source_identity
+    from content.source.host_source_review import read_host_source_review_result
+
     results: dict[str, dict[str, Any]] = {}
     resolved_root = root.resolve()
-
-    def resolve_ref(value: object) -> Path:
-        relative = Path(str(value or ""))
-        candidate = (resolved_root / relative).resolve()
+    for ref in refs:
+        relative = Path(str(ref or ""))
+        path = (resolved_root / relative).resolve()
         if (
             relative.is_absolute() or ".." in relative.parts
-            or resolved_root not in candidate.parents
-            or not candidate.is_file() or candidate.is_symlink()
+            or resolved_root not in path.parents or not path.is_file() or path.is_symlink()
         ):
             raise ValueError("reviewer evidence ref is unsafe or missing")
-        return candidate
-
-    for ref in refs:
-        path = resolve_ref(ref)
-        result = load_document(
-            path, group="source", name="professional_image_supported_api_reviewer_result"
+        raw = read_json(path)
+        if not isinstance(raw, Mapping) or raw.get("schema") != "quwoquan_data.host_source_review_result":
+            raise ValueError("new image source review requires host-source-review/v1 result")
+        result = read_host_source_review_result(
+            evidence_root=resolved_root,
+            request_ref=str(raw.get("requestRef") or ""),
+            result_ref=relative.as_posix(),
         )
-        review_request_path = resolve_ref(result["reviewRequestRef"])
-        review_request = read_json(review_request_path)
-        if not isinstance(review_request, Mapping):
-            raise TypeError("supported API review request must be an object")
-        common_checks = {
-            "reviewRequestSha256": file_sha256(review_request_path) == result["reviewRequestSha256"],
-            "reviewCandidateId": review_request.get("candidateId") == result["candidateId"],
-            "reviewContentSha256": review_request.get("contentSha256") == result["contentSha256"],
-            "judgmentDigest": result["judgmentDigest"] == _canonical_document_digest(result["judgment"]),
-        }
-        if "sourceReview" in result:
-            request_path = resolve_ref(result["sourceReviewRequestRef"])
-            attempt_path = resolve_ref(result["sourceReviewAttemptRef"])
-            capacity_path = resolve_ref(result["sourceCapacityReceiptRef"])
-            request = read_json(request_path)
-            attempt = read_json(attempt_path)
-            capacity = load_document(
-                capacity_path, group="execution", name="semantic_capacity_receipt"
+        asset = result["assetBinding"]
+        if asset.get("assetKind") != "image":
+            raise ValueError("image source review result assetKind drift")
+        if source_review_identity is not None and any(
+            result["sourceIdentity"].get(key) != source_review_identity.get(key)
+            for key in (
+                "sourceRevision", "sourceDigest", "entityCatalogDigest",
+                "executionBundleDigest", "handoffDigest",
             )
-            if not isinstance(request, Mapping) or not isinstance(attempt, Mapping):
-                raise TypeError("source review journal documents must be objects")
-            source = result["sourceReview"]
-            request_stable = {key: value for key, value in request.items() if key != "journalDigest"}
-            attempt_stable = {key: value for key, value in attempt.items() if key != "attemptDigest"}
-            source_digest = lambda value: "sha256:" + hashlib.sha256(
-                json.dumps(
-                    dict(value), ensure_ascii=False, sort_keys=True, separators=(",", ":")
-                ).encode("utf-8")
-            ).hexdigest()
-            checks = {
-                **common_checks,
-                "sourceRequestSha256": file_sha256(request_path) == result["sourceReviewRequestSha256"],
-                "sourceAttemptSha256": file_sha256(attempt_path) == result["sourceReviewAttemptSha256"],
-                "sourceCapacitySha256": file_sha256(capacity_path) == result["sourceCapacityReceiptSha256"],
-                "journalSourceIdentity": request.get("sourceReview") == source,
-                "sourceReviewRequestDigest": source.get("requestDigest") == review_request.get("requestDigest"),
-                "journalDigest": request.get("journalDigest") == source_digest(request_stable),
-                "attemptRequestDigest": attempt.get("requestDigest") == request.get("journalDigest"),
-                "attemptDigest": attempt.get("attemptDigest") == source_digest(attempt_stable),
-                "attemptFinished": attempt.get("status") == "finished",
-                "attemptProviderRun": attempt.get("runId") == result["runId"],
-                "attemptResultSha256": attempt.get("resultSha256") == result["resultSha256"],
-                "capacitySourceIdentity": capacity.get("sourceReview") == source,
-                "capacityProviderModel": capacity.get("provider") == result["provider"] and capacity.get("model") == result["model"],
-                "capacityRunResult": capacity.get("runId") == result["runId"] and capacity.get("resultSha256") == result["resultSha256"],
-                "capacityPrompt": capacity.get("promptSha256") == result["reviewRequestSha256"],
-            }
-            execution_binding: dict[str, Any] | None = None
-        else:
-            request_path = resolve_ref(result["semanticTaskRequestRef"])
-            attempt_path = resolve_ref(result["semanticTaskAttemptRef"])
-            request = load_document(
-                request_path, group="execution", name="semantic_task_journal_request"
-            )
-            attempt = load_document(
-                attempt_path, group="execution", name="semantic_task_journal_attempt"
-            )
-            source = request["sourceIdentity"]
-            execution_manifest_path = resolve_ref(
-                f"data/tasks/{request['executionId']}/execution_manifest.json"
-            )
-            execution_manifest = read_json(execution_manifest_path)
-            if not isinstance(execution_manifest, Mapping):
-                raise TypeError("review execution manifest must be an object")
-            request_stable = {key: value for key, value in request.items() if key != "requestDigest"}
-            attempt_stable = {key: value for key, value in attempt.items() if key != "attemptDigest"}
-            checks = {
-            **common_checks,
-            "taskRequestSha256": file_sha256(request_path) == result["semanticTaskRequestSha256"],
-            "taskAttemptSha256": file_sha256(attempt_path) == result["semanticTaskAttemptSha256"],
-            "taskRequestDigest": request["requestDigest"] == _journal_digest(request_stable),
-            "taskAttemptDigest": attempt["attemptDigest"] == _journal_digest(attempt_stable),
-            "carrierStage": request["carrier"] == "image" and request["stage"] == "reviewer",
-            "promptSha256": request["promptSha256"] == result["reviewRequestSha256"],
-            "providerModel": request["provider"] == result["provider"] and request["model"] == result["model"],
-            "workUnitId": request["workUnitId"] == attempt["workUnitId"],
-            "attemptRequestDigest": request["requestDigest"] == attempt["requestDigest"],
-            "attemptFinished": attempt["status"] == "finished",
-            "attemptProviderRun": attempt["provider"] == result["provider"] and attempt["runId"] == result["runId"],
-            "attemptResultSha256": attempt["resultSha256"] == result["resultSha256"],
-            "executionId": execution_manifest["executionId"] == request["executionId"],
-            "executionSourceDigest": execution_manifest["sourceDigest"]["digest"] == source["sourceDigest"],
-            }
-            execution_binding = {
-                "executionId": request["executionId"],
-                "executionBundle": dict(execution_manifest["executionBundle"]),
-                "executionManifestRef": execution_manifest_path.relative_to(resolved_root).as_posix(),
-                "executionManifestSha256": file_sha256(execution_manifest_path),
-            }
-        failed = [name for name, passed in checks.items() if not passed]
-        if failed:
-            raise ValueError(
-                "semantic reviewer journal/result binding drift: " + ", ".join(failed)
-            )
-        if execution_source_identity is not None and any(
-            str(source.get(key) or "") != str(execution_source_identity.get(key) or "")
-            for key in ("sourceRevision", "sourceDigest", "entityCatalogDigest")
         ):
-            raise ValueError("semantic reviewer source identity differs from handoff")
-        if "sourceReview" in result:
-            if source_review_identity is None or any(
-                str(source.get(key) or "") != str(source_review_identity.get(key) or "")
-                for key in (
-                    "sourceRevision", "sourceDigest", "entityCatalogDigest",
-                    "executionBundleDigest", "handoffDigest",
-                )
-            ):
-                raise ValueError("source reviewer identity differs from handoff")
-            for field in (
-                "originalAssetRef", "apiResponseRef", "machineAssessmentRef",
-            ):
-                dependency_path = resolve_ref(review_request[field])
-                expected_sha = review_request[field.removesuffix("Ref") + "Sha256"]
-                if file_sha256(dependency_path) != expected_sha:
-                    raise ValueError(f"source reviewer attachment digest drift: {field}")
-        candidate_id = str(result["candidateId"])
+            raise ValueError("source reviewer identity differs from handoff")
+        candidate_id = str(asset["assetId"])
         if candidate_id in results:
             raise ValueError(f"duplicate reviewer result: {candidate_id}")
         results[candidate_id] = {
-            **result,
-            "evidenceRef": ref,
+            "candidateId": candidate_id,
+            "contentSha256": str(asset["contentSha256"]),
+            "judgment": dict(result["verdict"]),
+            "reviewedAt": str(result["reviewedAt"]),
+            "runId": str(result["actor"]["auditRunId"]),
+            "evidenceRef": relative.as_posix(),
             "evidencePath": path,
-            "sourceIdentity": dict(source),
-            **(execution_binding or {}),
+            "sourceIdentity": dict(result["sourceIdentity"]),
+            "requestDigest": str(result["requestDigest"]),
+            "resultDigest": str(result["resultDigest"]),
+            "actor": dict(result["actor"]),
         }
     return results
 

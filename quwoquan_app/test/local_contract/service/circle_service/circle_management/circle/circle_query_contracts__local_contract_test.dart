@@ -6,11 +6,7 @@ void main() {
     test('encodes list, search and object query parameters', () {
       expect(
         encodeCircleCircleListCirclesGeneratedRequest(
-          CircleListQuery(
-            category: 'interest',
-            cursor: 'next',
-            limit: 50,
-          ),
+          CircleListQuery(category: 'interest', cursor: 'next', limit: 50),
         ).queryParameters,
         <String, String>{
           'category': 'interest',
@@ -122,9 +118,7 @@ void main() {
         'circleId': 'circle-1',
         'total': 1,
         'items': <Object?>[
-          <String, Object?>{
-            ..._impactItemWire(),
-          },
+          <String, Object?>{..._impactItemWire()},
         ],
       });
 
@@ -138,12 +132,8 @@ void main() {
 
     test('decodes aggregate discovery feed into circles and typed posts', () {
       final feed = decodeCircleDiscoveryFeedPageSlice(<String, Object?>{
-        'circles': <Object?>[
-          _circleWire(),
-        ],
-        'items': <Object?>[
-          _feedItemWire(contentType: 'image'),
-        ],
+        'circles': <Object?>[_circleWire()],
+        'items': <Object?>[_feedItemWire(contentType: 'image')],
         'cursor': 'next',
       });
 

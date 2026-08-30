@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,18 @@ from content.execution.queue.reliabletask.transport import (  # noqa: E402
 )
 from core.control_types import QueueJobStage  # noqa: E402
 from core.io import write_json  # noqa: E402
+
+
+def _unspent_batch_deadline_epoch_seconds() -> int:
+    """A frozen absolute deadline that still has budget left at run time.
+
+    `DEC-003` makes `fleetBatchDeadlineEpochSeconds` the single time authority,
+    so the fleet projects `deadline - now` and fails closed once it is spent.  A
+    literal epoch constant would therefore turn these behaviour cases into
+    date-dependent failures.
+    """
+
+    return int(time.time()) + 3_600
 
 
 @pytest.fixture(autouse=True)
@@ -99,6 +112,10 @@ def _report(
             if passed
             else "GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH"
         ),
+        # DEC-002/DEC-003：fleet 级并发与批次时间事实落在回执顶层必填位。
+        "fleetPeakConcurrentWorkers": 3,
+        "fleetWaveCount": 4,
+        "fleetBatchDeadlineEpochSeconds": 1_784_696_400,
         "recoveryEligibleCount": 0,
         "automaticRecoveredCount": 0,
         "manualRecoveredCount": 0,
@@ -360,10 +377,13 @@ def test_failed_publish_fleet_report_remains_projectable(
     monkeypatch.setattr(
         reliabletask_fleet,
         "build_fleet_request",
-        lambda _execution_id, _stage, *, required_workers, host_scope_id=None: {
+        lambda _execution_id, _stage, *, host_scope_id=None: {
             "campaignScale": "M1",
             "objectTimeoutMilliseconds": 1_000,
-            "requiredWorkers": required_workers,
+            "targetObjectCount": 10,
+            "fleetMaxConcurrentWorkers": 2,
+            "fleetWaveCount": 5,
+            "fleetBatchDeadlineEpochSeconds": _unspent_batch_deadline_epoch_seconds(),
             "jobSetEnvelopeDigest": "sha256:" + "a" * 64,
             "jobSetDigest": "sha256:" + "b" * 64,
             "actualTaskDigest": "sha256:" + "b" * 64,
@@ -390,8 +410,6 @@ def test_failed_publish_fleet_report_remains_projectable(
     decoded = reliabletask_fleet.run_reliabletask_fleet(
         "20260728--travel-video-supply--test-region-a--pilot-001",
         QueueJobStage.PUBLISH,
-        workers=2,
-        completion_grace_seconds=1,
     )
 
     assert decoded.passed is False
@@ -448,10 +466,13 @@ def test_nonterminal_fleet_receipt_restarts_after_backend_interruption(
     monkeypatch.setattr(
         reliabletask_fleet,
         "build_fleet_request",
-        lambda _execution_id, _stage, *, required_workers, host_scope_id=None: {
+        lambda _execution_id, _stage, *, host_scope_id=None: {
             "campaignScale": "M1",
             "objectTimeoutMilliseconds": 1_000,
-            "requiredWorkers": required_workers,
+            "targetObjectCount": 10,
+            "fleetMaxConcurrentWorkers": 2,
+            "fleetWaveCount": 5,
+            "fleetBatchDeadlineEpochSeconds": _unspent_batch_deadline_epoch_seconds(),
             "jobSetEnvelopeDigest": "sha256:" + "a" * 64,
             "jobSetDigest": "sha256:" + "b" * 64,
             "actualTaskDigest": "sha256:" + "b" * 64,
@@ -486,8 +507,6 @@ def test_nonterminal_fleet_receipt_restarts_after_backend_interruption(
     decoded = reliabletask_fleet.run_reliabletask_fleet(
         "20260728--travel-homepage-supply--test-region-a--pilot-001",
         QueueJobStage.AUTHOR,
-        workers=1,
-        completion_grace_seconds=1,
     )
 
     assert invocations == [1, 2]
@@ -535,7 +554,10 @@ def test_audited_dead_task_recovery_does_not_reuse_terminal_report(
     request = {
         "campaignScale": "M1",
         "objectTimeoutMilliseconds": 1_000,
-        "requiredWorkers": 1,
+        "targetObjectCount": 10,
+        "fleetMaxConcurrentWorkers": 2,
+        "fleetWaveCount": 5,
+        "fleetBatchDeadlineEpochSeconds": _unspent_batch_deadline_epoch_seconds(),
         "jobSetEnvelopeDigest": "sha256:" + "a" * 64,
         "jobSetDigest": "sha256:" + "b" * 64,
         "actualTaskDigest": "sha256:" + "b" * 64,
@@ -578,8 +600,6 @@ def test_audited_dead_task_recovery_does_not_reuse_terminal_report(
     decoded = reliabletask_fleet.run_reliabletask_fleet(
         execution_id,
         QueueJobStage.PUBLISH,
-        workers=1,
-        completion_grace_seconds=1,
     )
 
     assert decoded.passed is True
@@ -636,10 +656,13 @@ def test_runtime_interruptions_do_not_exhaust_startup_failure_budget(
     monkeypatch.setattr(
         reliabletask_fleet,
         "build_fleet_request",
-        lambda _execution_id, _stage, *, required_workers, host_scope_id=None: {
+        lambda _execution_id, _stage, *, host_scope_id=None: {
             "campaignScale": "M1",
             "objectTimeoutMilliseconds": 1_000,
-            "requiredWorkers": required_workers,
+            "targetObjectCount": 10,
+            "fleetMaxConcurrentWorkers": 2,
+            "fleetWaveCount": 5,
+            "fleetBatchDeadlineEpochSeconds": _unspent_batch_deadline_epoch_seconds(),
             "jobSetEnvelopeDigest": "sha256:" + "a" * 64,
             "jobSetDigest": "sha256:" + "b" * 64,
             "actualTaskDigest": "sha256:" + "b" * 64,
@@ -680,8 +703,6 @@ def test_runtime_interruptions_do_not_exhaust_startup_failure_budget(
     decoded = reliabletask_fleet.run_reliabletask_fleet(
         "20260728--travel-homepage-supply--test-region-a--pilot-001",
         QueueJobStage.AUTHOR,
-        workers=1,
-        completion_grace_seconds=1,
     )
 
     assert invocations == [1, 2, 3, 4, 5]
@@ -733,10 +754,13 @@ def test_zero_exit_nonterminal_receipt_is_not_false_completion(
     monkeypatch.setattr(
         reliabletask_fleet,
         "build_fleet_request",
-        lambda _execution_id, _stage, *, required_workers, host_scope_id=None: {
+        lambda _execution_id, _stage, *, host_scope_id=None: {
             "campaignScale": "M1",
             "objectTimeoutMilliseconds": 1_000,
-            "requiredWorkers": required_workers,
+            "targetObjectCount": 10,
+            "fleetMaxConcurrentWorkers": 2,
+            "fleetWaveCount": 5,
+            "fleetBatchDeadlineEpochSeconds": _unspent_batch_deadline_epoch_seconds(),
             "jobSetEnvelopeDigest": "sha256:" + "a" * 64,
             "jobSetDigest": "sha256:" + "b" * 64,
             "actualTaskDigest": "sha256:" + "b" * 64,
@@ -770,8 +794,6 @@ def test_zero_exit_nonterminal_receipt_is_not_false_completion(
     decoded = reliabletask_fleet.run_reliabletask_fleet(
         "20260728--travel-homepage-supply--test-region-a--pilot-001",
         QueueJobStage.AUTHOR,
-        workers=1,
-        completion_grace_seconds=1,
     )
 
     assert invocations == [1, 2]

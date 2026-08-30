@@ -33,20 +33,21 @@ func (r *MongoProjectionSourceReader) FindPost(
 	postID string,
 ) (activityports.PostSlice, bool, error) {
 	var document struct {
-		ID                        string    `bson:"_id"`
-		Version                   int64     `bson:"version"`
-		AuthorPersonaID           string    `bson:"authorId"`
-		AuthorDisplayNameSnapshot string    `bson:"authorDisplayNameSnapshot"`
-		AuthorAvatarURLSnapshot   string    `bson:"authorAvatarUrlSnapshot"`
-		ContentType               string    `bson:"contentType"`
-		Title                     string    `bson:"title"`
-		Body                      string    `bson:"body"`
-		Summary                   string    `bson:"summary"`
-		CoverURL                  string    `bson:"coverUrl"`
-		MediaURLs                 []string  `bson:"mediaUrls"`
-		Status                    string    `bson:"status"`
-		Visibility                string    `bson:"visibility"`
-		DeletedAt                 time.Time `bson:"deletedAt"`
+		ID                        string              `bson:"_id"`
+		Version                   int64               `bson:"version"`
+		AuthorPersonaID           string              `bson:"authorId"`
+		AuthorDisplayNameSnapshot string              `bson:"authorDisplayNameSnapshot"`
+		AuthorAvatarURLSnapshot   string              `bson:"authorAvatarUrlSnapshot"`
+		ContentType               string              `bson:"contentType"`
+		Title                     string              `bson:"title"`
+		Body                      string              `bson:"body"`
+		Summary                   string              `bson:"summary"`
+		CoverURL                  string              `bson:"coverUrl"`
+		MediaURLs                 []string            `bson:"mediaUrls"`
+		MediaItems                []postMediaDocument `bson:"mediaItems"`
+		Status                    string              `bson:"status"`
+		Visibility                string              `bson:"visibility"`
+		DeletedAt                 time.Time           `bson:"deletedAt"`
 	}
 	err := r.posts.FindOne(
 		ctx,
@@ -63,6 +64,7 @@ func (r *MongoProjectionSourceReader) FindPost(
 			"summary":                   1,
 			"coverUrl":                  1,
 			"mediaUrls":                 1,
+			"mediaItems":                1,
 			"status":                    1,
 			"visibility":                1,
 			"deletedAt":                 1,
@@ -86,6 +88,7 @@ func (r *MongoProjectionSourceReader) FindPost(
 		Summary:                   document.Summary,
 		CoverURL:                  document.CoverURL,
 		MediaURLs:                 document.MediaURLs,
+		MediaItems:                mediaSlices(document.MediaItems),
 		Status:                    document.Status,
 		Visibility:                document.Visibility,
 		DeletedAt:                 document.DeletedAt,
@@ -151,3 +154,30 @@ func (r *MongoProjectionSourceReader) FindComment(
 }
 
 var _ activityports.ProjectionSourceReader = (*MongoProjectionSourceReader)(nil)
+
+// postMediaDocument 是 Post 文档里投影所需的媒体条目最小字段集。
+type postMediaDocument struct {
+	URL          string `bson:"url"`
+	CoverURL     string `bson:"coverUrl"`
+	MediaAssetID string `bson:"mediaAssetId"`
+	CoverAssetID string `bson:"coverAssetId"`
+	AccessMode   string `bson:"accessMode"`
+}
+
+// mediaSlices 把 Post 文档的媒体条目收敛成投影所需的交付事实。
+func mediaSlices(items []postMediaDocument) []activityports.PostMediaSlice {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]activityports.PostMediaSlice, 0, len(items))
+	for _, item := range items {
+		out = append(out, activityports.PostMediaSlice{
+			URL:          item.URL,
+			CoverURL:     item.CoverURL,
+			MediaAssetID: item.MediaAssetID,
+			CoverAssetID: item.CoverAssetID,
+			AccessMode:   item.AccessMode,
+		})
+	}
+	return out
+}

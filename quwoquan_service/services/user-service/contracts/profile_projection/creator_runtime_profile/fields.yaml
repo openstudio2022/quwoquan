@@ -86,11 +86,12 @@ fields:
   type: string
   constraints:
   - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: none
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
   ops_exposure: read
   role: projection
+  description: 头像的媒体资产标识；DEC-033 要求随 App 读面下发，signed_grant 交付时端侧以此换取短签
 - name: avatarVersion
   source: avatarVersion
   type: int

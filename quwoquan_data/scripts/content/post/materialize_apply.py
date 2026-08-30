@@ -162,9 +162,9 @@ def materialize_posts(
         )
         seq = int(coords.get("seq") or 1)
         post_dir = content_object.content_object_dir(execution_id, ref)
-        from core.paths import STAGE_REVIEW, ensure_object_stages
+        from core.paths import ensure_object_stages
 
-        ensure_object_stages(post_dir, through_stage=STAGE_REVIEW)
+        ensure_object_stages(post_dir)
         post_dir.mkdir(parents=True, exist_ok=True)
         assets_dir = post_dir / "assets"
         # 成品 assets 全量重建（仅清成品，过程阶段证据保留）。
@@ -349,9 +349,7 @@ def materialize_posts(
             ],
             "template": template,
             "carrier": "image" if is_image else compose_payload.get("carrier", "article"),
-            "generator": compose_payload.get(
-                "generator", ContentGenerator.AGENT.value
-            ),
+            "generator": ContentGenerator.AGENT.value,
             "generatorModel": compose_payload.get("generatorModel"),
             "citedSourceRefs": [
                 _relativize_ref(r, execution_id)
@@ -378,10 +376,16 @@ def materialize_posts(
             # 溯源：内容来自哪个 execution，供 trace/hydrate 与推荐归因消费。
             "executionId": execution_id,
         }
+        # 文章底稿来源单元的真相源是 writing_pack.baseSourceRef，compose 载荷只在
+        # 未冻结 pack 的旧执行里携带它，故这里以 pack 为准回填。
         attribution = source_unit_attribution(
             execution_id,
             content_type,
-            compose_payload=compose_payload,
+            compose_payload=(
+                {**compose_payload, "baseSourceRef": writing_pack["baseSourceRef"]}
+                if writing_pack.get("baseSourceRef")
+                else compose_payload
+            ),
             assets=assets,
         )
         if attribution is not None:

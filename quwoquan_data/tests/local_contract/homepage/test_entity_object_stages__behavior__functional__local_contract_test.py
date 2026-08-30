@@ -65,6 +65,8 @@ def test_entity_page_input__uses_execution_object_root_without_retired_sop__cont
     assert payload["executionId"] == _EXECUTION_ID
     assert not {"sopDir", "sopTemplate", "sopGuide", "sopExample"} & payload.keys()
     assert "SOP" not in payload["editingInstruction"]
-    assert "改写约 20%-30%" in payload["editingInstruction"]
-    assert "先按原顺序恢复完整底稿" in payload["editingInstruction"]
-    assert "每个底稿段落至少保留三分之二原句骨架" in payload["editingInstruction"]
+    # 无底稿时按 factual_reference_only fail-closed：指令必须与压缩/保真门同源，
+    # 「保留原句骨架」只属于 licensed_adaptation（见 editing_instruction 契约测试）。
+    assert "sourceUseMode=factual_reference_only" in payload["editingInstruction"]
+    assert "事实抽取" in payload["editingInstruction"]
+    assert "每个底稿段落至少保留三分之二原句骨架" not in payload["editingInstruction"]

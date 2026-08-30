@@ -8,6 +8,10 @@ from typing import Any
 from core.io import read_json
 from core.schema import assert_valid
 
+from content.source.media_source_admission import (
+    MediaSourceAdmissionQuery,
+    canonical_digest,
+)
 from content.source.research.scale_source_pool_evidence_path import (
     compute_evidence_file_sha256,
     resolve_evidence_file,
@@ -22,7 +26,7 @@ def _materialize_frozen_image_source_unit(
     entity_type: str,
     row: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Project one reviewed professional image without provider rediscovery."""
+    """Project one source-admitted professional image without provider rediscovery."""
 
     # 对象目录解析与 source unit 写入必须经 scale_source_pool_runtime 命名空间
     # 延迟查找：既有 local_contract 测试通过 patch runtime 模块属性隔离文件系统
@@ -33,12 +37,33 @@ def _materialize_frozen_image_source_unit(
     if not isinstance(evidence_root, Path):
         raise _fail("selected image candidate lacks frozen evidence root")
     try:
+        admission_result = MediaSourceAdmissionQuery(evidence_root).require_accepted(
+            str(row["sourceAdmissionRef"])
+        )
+        admission = admission_result["receipt"]
+        if (
+            admission_result["receiptDigest"] != row["sourceAdmissionDigest"]
+            or admission["assetKind"] != "image"
+            or admission["objectRef"] != row["objectRef"]
+        ):
+            raise ValueError("image source admission projection drift")
+        acquisition_bindings = [
+            binding
+            for binding in admission["evidenceBindings"]
+            if binding.get("role") == "acquisition"
+        ]
+        if len(acquisition_bindings) != 1:
+            raise ValueError("image source admission lacks one acquisition binding")
+        acquisition_binding = acquisition_bindings[0]
         receipt_path = resolve_evidence_file(
             evidence_root,
-            row["acquisitionRef"],
+            acquisition_binding["ref"],
             label="image acquisition receipt",
         )
-        if compute_evidence_file_sha256(receipt_path) != row["acquisitionFileSha256"]:
+        if (
+            compute_evidence_file_sha256(receipt_path)
+            != acquisition_binding["fileSha256"]
+        ):
             raise ValueError("image acquisition receipt file SHA drift")
         receipt = read_json(receipt_path)
         if not isinstance(receipt, Mapping):
@@ -49,9 +74,9 @@ def _materialize_frozen_image_source_unit(
             "professional_image_acquisition_receipt",
             label="frozen image acquisition receipt",
         )
-        if receipt.get("receiptDigest") != row.get("acquisitionDigest"):
-            raise ValueError("image acquisition receipt digest drift")
-        asset_id = str(row["objectRef"]).removeprefix("posts/image/")
+        if canonical_digest(receipt) != acquisition_binding["documentDigest"]:
+            raise ValueError("image acquisition receipt document digest drift")
+        asset_id = str(admission["assetSnapshot"]["assetId"])
         assets = [
             asset
             for asset in receipt.get("assets") or []
@@ -72,7 +97,7 @@ def _materialize_frozen_image_source_unit(
         ):
             raise ValueError("image candidate acquisition binding drift")
         asset_path = resolve_evidence_file(
-            receipt_path.parent.parent,
+            evidence_root,
             asset["assetRef"],
             label="image acquisition CAS asset",
         )
@@ -85,7 +110,7 @@ def _materialize_frozen_image_source_unit(
         raise _fail(f"frozen image acquisition is invalid: {exc}") from exc
 
     collection_id = f"acquisition:{receipt['manifestId']}:{asset_id}"
-    acquisition_ref = Path(str(row["acquisitionRef"]))
+    acquisition_ref = Path(str(acquisition_binding["ref"]))
     acquisition_prefix = ("local", "workspace", "source-acquisition")
     if acquisition_ref.parts[: len(acquisition_prefix)] == acquisition_prefix:
         acquisition_ref = Path(*acquisition_ref.parts[len(acquisition_prefix) :])
@@ -133,7 +158,7 @@ def _materialize_frozen_image_source_unit(
             "entity": entity_id,
             "quality": "High",
             "score": 100,
-            "reasons": ["frozen_scale_source_pool", "independent_asset_review"],
+            "reasons": ["frozen_scale_source_pool", "media_source_admission"],
             "url": str(asset["sourceUrl"]),
             "statusCode": 200,
             "fetchSucceeded": True,

@@ -28,14 +28,14 @@ from content.release.canonical.release_identity_incident import (
 from content.release.model import DataSourceOwner, ReleaseKind
 from core.release_layout import (
     attestation_root,
-    object_closure_digest,
+    objects_merkle,
     payload_digest,
     payload_file,
     payload_root,
 )
 from core.schema import assert_valid
-from core.source_digest import current_source_digest
-from governance.coverage.distribution import load_content_distribution_policy
+from core.source_digest import current_source_definition_snapshot
+from governance.coverage.distribution import ProductLifecycleState, ReleaseClass
 
 _EMPTY_DESIRED_REFS = {"creators": [], "entities": [], "posts": [], "tags": []}
 
@@ -45,6 +45,7 @@ def _build_empty_baseline_release(
     publish_root: Path,
     release_root: Path,
     release_id: str,
+    release_class: str,
 ) -> dict[str, Any]:
     """Create one immutable empty desired state for data-owned rollback.
 
@@ -54,8 +55,12 @@ def _build_empty_baseline_release(
     """
     del publish_root
     release_id = _safe_id(release_id, label="releaseId")
-    distribution_policy = load_content_distribution_policy()
-    source_digest = current_source_digest()
+    release_mode = str(release_class or "").strip()
+    if release_mode not in {"research", "commercial"}:
+        raise ObjectTransactionError(
+            f"DATA.RELEASE.CLASS_INVALID: {release_mode!r}"
+        )
+    source_digest = current_source_definition_snapshot()
     final_root = release_root / release_id
     if final_root.exists():
         header = _read_json(payload_file(final_root, "release.json"))
@@ -64,11 +69,10 @@ def _build_empty_baseline_release(
         if (
             header.get("releaseId") == release_id
             and header.get("releaseKind") == ReleaseKind.EMPTY_BASELINE
-            and header.get("releaseClass") == distribution_policy.release_class.value
-            and header.get("productLifecycleState")
-            == distribution_policy.product_lifecycle_state.value
+            and header.get("releaseClass") == release_mode
+            and header.get("productLifecycleState") == release_mode
             and header.get("sourceOwner") == DataSourceOwner.QWQ_DATA
-            and header.get("canonicalMerkle") == object_closure_digest(final_root)
+            and header.get("canonicalMerkle") == objects_merkle(final_root)
             and header.get("executionIds") == []
             and header.get("sourceDigests") == [source_digest.to_document()]
             and aggregate.get("sourceDigests") == [source_digest.to_document()]
@@ -93,7 +97,7 @@ def _build_empty_baseline_release(
             release_id=release_id,
             objects_root=payload / "objects",
             desired=_EMPTY_DESIRED_REFS,
-            policy=distribution_policy,
+            release_class=release_mode,
         )
         assert_valid(
             asset_admission,
@@ -102,16 +106,14 @@ def _build_empty_baseline_release(
             label=f"release_asset_admission:{release_id}",
         )
         _write_json(payload / "asset_admission.json", asset_admission)
-        canonical_merkle = object_closure_digest(staging, create=True)
+        canonical_merkle = objects_merkle(staging, create=True)
         release_header = {
             "schema": RELEASE_SCHEMA,
             "releaseId": release_id,
             "sourceOwner": DataSourceOwner.QWQ_DATA,
             "releaseKind": ReleaseKind.EMPTY_BASELINE,
-            "releaseClass": distribution_policy.release_class.value,
-            "productLifecycleState": (
-                distribution_policy.product_lifecycle_state.value
-            ),
+            "releaseClass": release_mode,
+            "productLifecycleState": release_mode,
             "containsUnverifiedAssets": False,
             "rightsStatusCounts": asset_admission["rightsStatusCounts"],
             "authorizationRequiredAssetIds": [],
@@ -166,8 +168,8 @@ def _build_empty_baseline_release(
             release_id=release_id,
             source_owner=DataSourceOwner.QWQ_DATA,
             release_kind=ReleaseKind.EMPTY_BASELINE,
-            release_class=distribution_policy.release_class,
-            product_lifecycle_state=distribution_policy.product_lifecycle_state,
+            release_class=ReleaseClass(release_mode),
+            product_lifecycle_state=ProductLifecycleState(release_mode),
             contains_unverified_assets=False,
             rights_status_counts=dict(asset_admission["rightsStatusCounts"]),
             authorization_required_asset_ids=(),
@@ -212,6 +214,7 @@ def build_empty_baseline_release(
     publish_root: Path,
     release_root: Path,
     release_id: str,
+    release_class: str,
 ) -> dict[str, Any]:
     """Guard empty-baseline creation against a collided content identity."""
 
@@ -223,4 +226,5 @@ def build_empty_baseline_release(
             publish_root=publish_root,
             release_root=release_root,
             release_id=release_id,
+            release_class=release_class,
         )

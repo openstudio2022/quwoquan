@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_asset.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_presentation_values.dart';
@@ -275,6 +276,7 @@ class ArticleWrapLayoutInput {
     this.trailingText,
     this.captionPlaceholderWhenEmpty = true,
     this.imageLayout = 'wrapLeft',
+    this.figureAspectRatio,
     this.metrics = const ArticleCanvasMetrics(
       aspectRatio: 0.72,
       outerPadding: EdgeInsets.zero,
@@ -309,6 +311,10 @@ class ArticleWrapLayoutInput {
   final String? trailingText;
   final bool captionPlaceholderWhenEmpty;
   final String imageLayout;
+
+  /// 图片占位比例（REQ-017）：由调用方经 resolveArticleFigureAspectRatio
+  /// 决定后传入；null 时回退 metrics.fullWidthImageAspectRatio（旧行为）。
+  final double? figureAspectRatio;
   final ArticleCanvasMetrics metrics;
 }
 
@@ -372,7 +378,9 @@ ArticleWrapLayoutResult resolveArticleWrapLayout(ArticleWrapLayoutInput input) {
   final rowContentWidth = input.rowContentWidth;
   final gap = input.metrics.wrapImageGap;
   final imageWidth = input.metrics.wrapImageWidthForContent(rowContentWidth);
-  final baseImageHeight = imageWidth / input.metrics.fullWidthImageAspectRatio;
+  final baseImageHeight =
+      imageWidth /
+      (input.figureAspectRatio ?? input.metrics.fullWidthImageAspectRatio);
   const wrapBesideMinPreferred = 120.0;
   final rawBesideWidth = rowContentWidth - imageWidth - gap;
   // `clamp(lower, upper)` 要求 lower≤upper；窄版心（如排版缩略图 ~100pt）时不得用 min=120 且 max<120。

@@ -73,8 +73,7 @@ func (v DataContentFilesystemEvidenceVerifier) VerifyDataContentResult(
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if result.AcceptanceClass != DataContentAcceptanceCommercialCanonical &&
-		result.AcceptanceClass != DataContentAcceptanceResearchCanonical {
+	if result.AcceptanceClass != DataContentAcceptanceCanonicalPool {
 		return nil
 	}
 	publishRoot, err := existingDataContentRoot(v.PublishRoot, "publishRoot")

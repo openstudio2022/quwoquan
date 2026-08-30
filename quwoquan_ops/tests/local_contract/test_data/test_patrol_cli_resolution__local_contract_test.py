@@ -7,7 +7,11 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan")
+REPO_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if (parent / "quwoquan_ops").is_dir() and (parent / "quwoquan_app").is_dir()
+)
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -94,6 +98,31 @@ class PatrolCliResolutionTest(unittest.TestCase):
 
         self.assertIsNone(result.executable)
         self.assertIn(REQUIRED_PATROL_CLI_VERSION, result.error)
+
+    def test_transient_version_failure_is_retried(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            patrol = root / "pub-cache" / "bin" / "patrol"
+            marker = root / "first-version-attempt"
+            patrol.parent.mkdir(parents=True, exist_ok=True)
+            patrol.write_text(
+                "#!/usr/bin/env sh\n"
+                f"if [ ! -f '{marker}' ]; then touch '{marker}'; exit 75; fi\n"
+                f"echo 'patrol_cli v{REQUIRED_PATROL_CLI_VERSION}'\n",
+                encoding="utf-8",
+            )
+            patrol.chmod(patrol.stat().st_mode | stat.S_IXUSR)
+
+            result = resolve_patrol_cli(
+                {
+                    "PATROL_CLI": str(patrol),
+                    "PATH": str(root / "empty-bin"),
+                    "HOME": str(root / "home"),
+                }
+            )
+
+        self.assertEqual(result.executable, str(patrol))
+        self.assertEqual(result.version, REQUIRED_PATROL_CLI_VERSION)
 
     def test_invalid_explicit_patrol_cli_reports_gate_block_cause(self) -> None:
         result = resolve_patrol_cli({"PATROL_CLI": "/missing/patrol", "PATH": "", "HOME": "/tmp/no-home"})

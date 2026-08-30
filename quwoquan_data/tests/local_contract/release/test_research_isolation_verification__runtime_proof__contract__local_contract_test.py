@@ -1,7 +1,7 @@
 """Research isolation runtime-proof contracts for multi-carrier release.
 
-spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/
-multi-carrier-release/spec.md#gwt-002
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-026
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ import copy
 import hashlib
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -35,7 +36,7 @@ from content.release.environment.research_isolation_verification import (
 from core.io import read_json, write_json
 from core.release_layout import payload_digest
 from core.schema import load_schema
-from core.source_digest import SourceDigest, content_source_revision
+from core.source_digest import SourceDefinitionSnapshot, content_source_revision
 
 RELEASE_ID = "research-isolation-a"
 VERIFY_RUN_ID = "verify-research-a"
@@ -46,7 +47,7 @@ SOURCE_REVISION = content_source_revision(
     source_digest=SOURCE_DIGEST,
     entity_catalog_digest=ENTITY_CATALOG_DIGEST,
 )
-SOURCE_DIGEST_DOCUMENT = SourceDigest(SOURCE_DIGEST).to_document()
+SOURCE_DIGEST_DOCUMENT = SourceDefinitionSnapshot(SOURCE_DIGEST).to_document()
 
 
 def _checksum(value: dict[str, object]) -> str:
@@ -132,6 +133,9 @@ def _positive_proof(
             "auditEventId": "audit-a",
             "issuanceOperation": _operation(9),
             "accessOperation": _operation(10, status=206),
+            "rangeAccessOperation": _operation(13, status=206),
+            "forgedSignatureOperation": _operation(14, status=403),
+            "tamperedExpiryOperation": _operation(15, status=403),
             "auditReadbackOperation": _operation(11),
         },
         "positiveReadback": {
@@ -181,6 +185,7 @@ def _release(output_root: Path) -> Path:
 def _output_path(
     output_root: Path,
     environment: str = ENVIRONMENT,
+    verify_run_id: str = VERIFY_RUN_ID,
 ) -> Path:
     return (
         output_root
@@ -188,7 +193,7 @@ def _output_path(
         / environment
         / "runs/data-release"
         / RELEASE_ID
-        / VERIFY_RUN_ID
+        / verify_run_id
         / "research-isolation-verification.json"
     )
 
@@ -196,8 +201,9 @@ def _output_path(
 def _runtime_proof_path(
     output_root: Path,
     environment: str = ENVIRONMENT,
+    verify_run_id: str = VERIFY_RUN_ID,
 ) -> Path:
-    return _output_path(output_root, environment).with_name(
+    return _output_path(output_root, environment, verify_run_id).with_name(
         "research-isolation-runtime-proof.json"
     )
 
@@ -206,6 +212,8 @@ def _runtime_proof_document(
     release: Path,
     *,
     environment: str = ENVIRONMENT,
+    verify_run_id: str = VERIFY_RUN_ID,
+    verified_at: str = "2026-08-05T00:00:01Z",
 ) -> dict[str, object]:
     identity_contract = (
         ROOT / "quwoquan_service/services/user-service/contracts/account/"
@@ -222,23 +230,36 @@ def _runtime_proof_document(
         "environment": environment,
         "releaseClass": "research",
         "productLifecycleState": "research",
-        "verifyRunId": VERIFY_RUN_ID,
+        "verifyRunId": verify_run_id,
         "policyRef": (f"quwoquan_ops/environments/{environment}/runtime.yaml"),
         "policySha256": "sha256:"
         + hashlib.sha256(policy_path.read_bytes()).hexdigest(),
         "outcome": "PASS",
-        "verifiedAt": "2026-08-05T00:00:01Z",
+        "verifiedAt": verified_at,
         **proof,
     }
     document["verificationChecksum"] = _checksum(document)
     return document
 
 
+def _fresh_verified_at() -> str:
+    """A verifiedAt inside the DEC-034 reuse max-age window."""
+    return datetime.now(timezone.utc).isoformat()
+
+
 @pytest.mark.parametrize("environment", ["alpha", "beta", "gamma", "prod"])
-def test_writer_freezes_typed_identity_adapter_blocker_without_secrets(
+def test_writer_freezes_the_furthest_typed_blocker_without_secrets(
     tmp_path: Path,
     environment: str,
 ) -> None:
+    """The frozen blocker names the first unmet precondition, not a generic refusal.
+
+    The chain walks policy, then the identity operation, then signed media, then the
+    runtime probes. Both adapter contracts now exist, so the block has moved to the
+    probes; a receipt that still named an adapter would be telling an operator to go
+    build something that is already there.
+    """
+
     release = _release(tmp_path)
     path = write_research_isolation_verification(
         environment=environment,
@@ -251,7 +272,7 @@ def test_writer_freezes_typed_identity_adapter_blocker_without_secrets(
 
     receipt = read_json(path)
     assert receipt["outcome"] == "GATE_BLOCK"
-    assert receipt["blocker"]["code"] == "DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE"
+    assert receipt["blocker"]["code"] == "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE"
     assert receipt["manifestDigest"] == payload_digest(release)
     assert receipt["policyRef"] == (
         f"quwoquan_ops/environments/{environment}/runtime.yaml"
@@ -270,7 +291,7 @@ def test_writer_freezes_typed_identity_adapter_blocker_without_secrets(
     )
     with pytest.raises(
         ResearchIsolationVerificationError,
-        match="DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE",
+        match="DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE",
     ):
         load_research_isolation_verification(
             path,
@@ -412,13 +433,187 @@ def test_writer_freezes_only_an_explicit_complete_runtime_proof(
                     receipt["deniedCapabilities"]["export"]["operation"],
                     receipt["signedMedia"]["issuanceOperation"],
                     receipt["signedMedia"]["accessOperation"],
+                    receipt["signedMedia"]["rangeAccessOperation"],
+                    receipt["signedMedia"]["forgedSignatureOperation"],
+                    receipt["signedMedia"]["tamperedExpiryOperation"],
                     receipt["signedMedia"]["auditReadbackOperation"],
                     receipt["positiveReadback"]["operation"],
                 )
             }
         )
-        == 12
+        == 15
     )
+
+
+def test_writer_reuses_prior_run_pass_proof_rebound_to_current_run(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A verify retry must not force a probe rerun for an unchanged release.
+
+    The prior PASS proof stays create-once in its own run directory; the new
+    run freezes a rebound verification whose only difference is the run id
+    plus provenance, with a recomputed checksum, so downstream run-bound
+    loads still succeed.
+
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-026.t1
+    """
+
+    release = _release(tmp_path)
+    prior_run = "verify-research-prior"
+    prior_proof_path = _runtime_proof_path(tmp_path, verify_run_id=prior_run)
+    prior_proof = _runtime_proof_document(
+        release,
+        verify_run_id=prior_run,
+        verified_at=_fresh_verified_at(),
+    )
+    write_json(prior_proof_path, prior_proof)
+    prior_bytes = prior_proof_path.read_bytes()
+    monkeypatch.setattr(isolation, "_identity_contract_available", lambda: True)
+    monkeypatch.setattr(isolation, "_signed_media_contract_available", lambda: True)
+
+    path = write_research_isolation_verification(
+        environment=ENVIRONMENT,
+        release_id=RELEASE_ID,
+        verify_run_id=VERIFY_RUN_ID,
+        release_root=release,
+        output_root=tmp_path,
+        output_path=_output_path(tmp_path),
+        runtime_proof_path=_runtime_proof_path(tmp_path),
+    )
+
+    receipt = load_research_isolation_verification(
+        path,
+        environment=ENVIRONMENT,
+        release_id=RELEASE_ID,
+        verify_run_id=VERIFY_RUN_ID,
+        manifest_digest=payload_digest(release),
+        require_pass=True,
+    )
+    assert receipt["outcome"] == "PASS"
+    assert receipt["verifyRunId"] == VERIFY_RUN_ID
+    # DEC-034：复用产物与本 run 实测在证据形态上单义可区分。
+    assert receipt["reusedFromVerifyRunId"] == prior_run
+    assert receipt["signedMedia"] == prior_proof["signedMedia"]
+    assert prior_proof_path.read_bytes() == prior_bytes
+    assert not _runtime_proof_path(tmp_path).exists()
+
+
+def test_writer_ignores_drifted_prior_proof_and_stays_gate_block(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """manifest digest 漂移的 prior proof 在复用前重验中被拒绝。
+
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-026.t2
+    """
+
+    release = _release(tmp_path)
+    prior_run = "verify-research-prior"
+    drifted = _runtime_proof_document(
+        release,
+        verify_run_id=prior_run,
+        verified_at=_fresh_verified_at(),
+    )
+    drifted["manifestDigest"] = "sha256:" + "9" * 64
+    drifted.pop("verificationChecksum")
+    drifted["verificationChecksum"] = _checksum(drifted)
+    write_json(_runtime_proof_path(tmp_path, verify_run_id=prior_run), drifted)
+    monkeypatch.setattr(isolation, "_identity_contract_available", lambda: True)
+    monkeypatch.setattr(isolation, "_signed_media_contract_available", lambda: True)
+
+    path = write_research_isolation_verification(
+        environment=ENVIRONMENT,
+        release_id=RELEASE_ID,
+        verify_run_id=VERIFY_RUN_ID,
+        release_root=release,
+        output_root=tmp_path,
+        output_path=_output_path(tmp_path),
+        runtime_proof_path=_runtime_proof_path(tmp_path),
+    )
+
+    receipt = read_json(path)
+    assert receipt["outcome"] == "GATE_BLOCK"
+    assert receipt["blocker"]["code"] == "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE"
+    # 被跳过候选进入阻断诊断，运营者可见拒绝原因。
+    assert "skipped 1 prior proof candidate" in receipt["blocker"]["message"]
+
+
+def test_writer_rejects_policy_snapshot_drifted_prior_proof(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """runtime.yaml 策略快照漂移时 prior PASS proof 不得复用（DEC-034）。
+
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-026.t2
+    """
+
+    release = _release(tmp_path)
+    prior_run = "verify-research-prior"
+    drifted = _runtime_proof_document(
+        release,
+        verify_run_id=prior_run,
+        verified_at=_fresh_verified_at(),
+    )
+    drifted["policySha256"] = "sha256:" + "8" * 64
+    drifted.pop("verificationChecksum")
+    drifted["verificationChecksum"] = _checksum(drifted)
+    write_json(_runtime_proof_path(tmp_path, verify_run_id=prior_run), drifted)
+    monkeypatch.setattr(isolation, "_identity_contract_available", lambda: True)
+    monkeypatch.setattr(isolation, "_signed_media_contract_available", lambda: True)
+
+    path = write_research_isolation_verification(
+        environment=ENVIRONMENT,
+        release_id=RELEASE_ID,
+        verify_run_id=VERIFY_RUN_ID,
+        release_root=release,
+        output_root=tmp_path,
+        output_path=_output_path(tmp_path),
+        runtime_proof_path=_runtime_proof_path(tmp_path),
+    )
+
+    receipt = read_json(path)
+    assert receipt["outcome"] == "GATE_BLOCK"
+    assert receipt["blocker"]["code"] == "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE"
+
+
+def test_writer_rejects_stale_prior_proof_past_reuse_max_age(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """超过 24 小时时效的 PASS proof 必须重新实测，不得复用（DEC-034）。
+
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-026.t3
+    """
+
+    release = _release(tmp_path)
+    prior_run = "verify-research-prior"
+    stale_at = (
+        datetime.now(timezone.utc) - timedelta(hours=25)
+    ).isoformat()
+    stale = _runtime_proof_document(
+        release,
+        verify_run_id=prior_run,
+        verified_at=stale_at,
+    )
+    write_json(_runtime_proof_path(tmp_path, verify_run_id=prior_run), stale)
+    monkeypatch.setattr(isolation, "_identity_contract_available", lambda: True)
+    monkeypatch.setattr(isolation, "_signed_media_contract_available", lambda: True)
+
+    path = write_research_isolation_verification(
+        environment=ENVIRONMENT,
+        release_id=RELEASE_ID,
+        verify_run_id=VERIFY_RUN_ID,
+        release_root=release,
+        output_root=tmp_path,
+        output_path=_output_path(tmp_path),
+        runtime_proof_path=_runtime_proof_path(tmp_path),
+    )
+
+    receipt = read_json(path)
+    assert receipt["outcome"] == "GATE_BLOCK"
+    assert receipt["blocker"]["code"] == "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE"
+    assert "stale" in receipt["blocker"]["message"]
 
 
 def test_writer_rejects_noncanonical_drifted_or_secret_runtime_proof(
@@ -600,12 +795,14 @@ def test_positive_proof_validator_requires_all_twelve_unique_live_operations(
 
 
 def test_signed_media_detector_tracks_canonical_original_access_quota_owner() -> None:
-    assert isolation._SIGNED_MEDIA_CONTRACT == (
+    from content.release.environment import research_isolation_policy as policy
+
+    assert policy.SIGNED_MEDIA_CONTRACT == (
         ROOT
         / "quwoquan_service/services/content-service/contracts/media/"
         "original_access_quota/operations.yaml"
     )
-    assert isolation._SIGNED_MEDIA_POLICY == (
+    assert policy.SIGNED_MEDIA_POLICY == (
         ROOT
         / "quwoquan_service/services/content-service/contracts/media/"
         "original_access_quota/original_access_policy.yaml"

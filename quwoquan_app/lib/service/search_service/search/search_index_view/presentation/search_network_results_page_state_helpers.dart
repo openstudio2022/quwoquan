@@ -400,6 +400,12 @@ extension _SearchNetworkResultsPageStateHelpers
           targetType: _IntersectionTargetType.post,
           targetId: item.postId,
           coverUrl: item.coverUrl ?? '',
+          // 交付形态取自搜索投影声明（DEC-033），不从 URL 形态反推。
+          coverBinding: MediaDeliveryBinding(
+            assetId: item.coverAssetId?.trim() ?? '',
+            accessMode: item.coverAccessMode,
+            publicUrl: item.coverUrl ?? '',
+          ),
           categoryLabel: isVideo
               ? SearchText.searchCategoryVideo
               : SearchText.searchCategoryImage,
@@ -451,6 +457,10 @@ extension _SearchNetworkResultsPageStateHelpers
               title: card.title,
               supportingText: supportingText,
               coverUrl: card.coverUrl,
+              mediaContent: mediaDeliveryCoverSlot(
+                binding: card.coverBinding,
+                placeholderColor: AppColors.primaryColor.withValues(alpha: 0.08),
+              ),
               showVideoBadge: card.showVideoBadge,
               mediaAspectRatio: aspectRatio,
               footer: Row(

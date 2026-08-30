@@ -12,17 +12,21 @@ from pathlib import Path
 import sys
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
-    ENVIRONMENTS,
+    DISTRIBUTION_EVIDENCE_PATHS,
     OCI_DIGEST_REF_PATTERN,
+    OPS_PORTAL_SCHEMA,
     RELEASE_CLOSURE_PATHS,
     TEST_RELEASE_CLOSURE_LABELS,
     application_package_digest,
+    sha256_ops_portal_tree,
     sha256_tree,
     validate_application_package_payload,
     validate_manifest,
@@ -31,43 +35,26 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
 from quwoquan_ops.ci.render_provider_conformance_source import (
     expected_required_cell_count_from_readiness,
 )
+from quwoquan_ops.ci.render_release_application_package import (
+    GENERIC_FIELDS as GENERIC_APPLICATION_FIELDS,
+    SCHEMA as GENERIC_APPLICATION_SCHEMA,
+    validate_package as validate_release_application_package,
+)
 
 EVIDENCE_SOURCE_SCHEMAS = {
     "publicWeb": "client-app.web.official-release",
     "androidOfficialRelease": "client-app.android.official-release",
-    "opsPortal": "qwq.ops_portal_package",
+    "opsPortal": OPS_PORTAL_SCHEMA,
     "contractGraph": "qwq.contract-graph",
     "providerEvidence": "provider-conformance-readiness",
     "testEvidence": "qwq.three-layer-case-results",
 }
-APPLICATION_SOURCE_TARGETS = {
-    "publicWeb": ("prod", "web"),
-    "androidOfficialRelease": ("prod", "android"),
-    "opsPortal": ("prod", "opsPortal"),
-}
-GENERIC_APPLICATION_SCHEMA = "release-application-package"
-GENERIC_APPLICATION_FIELDS = frozenset(
-    {
-        "schema",
-        "environment",
-        "surface",
-        "sourceGitSha",
-        "sourceTreeDigest",
-        "packageDigest",
-    }
-)
-ALL_APPLICATION_KEYS = frozenset(
-    (environment, surface)
-    for environment in ENVIRONMENTS
-    for surface in APPLICATION_PACKAGES[environment]
-)
-GENERIC_APPLICATION_KEYS = ALL_APPLICATION_KEYS - frozenset(
-    APPLICATION_SOURCE_TARGETS.values()
-)
+APPLICATION_SOURCE_TARGETS: dict[str, str] = {}
+APPLICATION_PACKAGE_KEYS = frozenset(APPLICATION_PACKAGES)
+GENERIC_APPLICATION_KEYS = APPLICATION_PACKAGE_KEYS
 EVIDENCE_DESTINATIONS = {
-    "publicWeb": "packages/applications/prod/web/manifest.json",
-    "androidOfficialRelease": "packages/applications/prod/android/manifest.json",
-    "opsPortal": "packages/applications/prod/opsPortal/provenance.json",
+    **DISTRIBUTION_EVIDENCE_PATHS,
+    "opsPortal": "packages/opsPortal/provenance.json",
     "contractGraph": "evidence/contractGraph.json",
     "providerEvidence": "evidence/providerEvidence.json",
     "testEvidence": "evidence/testEvidence.json",
@@ -281,12 +268,20 @@ def _validate_provider_evidence(
         if _sha256(source_path) != digest:
             raise ValueError(f"providerEvidence raw file digest mismatch: {relative}")
     material = payload.get("candidateMaterial")
-    expected_images = {
-        service: descriptor["digest"]
-        for service, descriptor in sorted(manifest["images"].items())
+    expected_environment_artifacts = {
+        environment: {
+            "environmentArtifactDigest": artifact["environmentArtifactDigest"],
+            "images": {
+                owner: descriptor["digest"]
+                for owner, descriptor in sorted(artifact["images"].items())
+            },
+        }
+        for environment, artifact in sorted(
+            manifest["environmentArtifacts"].items()
+        )
     }
     if material != {
-        "images": expected_images,
+        "environmentArtifacts": expected_environment_artifacts,
         "contractGraphDigest": contract_graph_digest,
     }:
         raise ValueError("providerEvidence candidate material binding mismatch")
@@ -295,8 +290,8 @@ def _validate_user_acceptance_candidate_material(
     test_evidence: dict[str, Any],
     manifest: dict[str, Any],
     contract_graph_path: Path,
-    source_payloads: dict[str, dict[str, Any]],
-    generic_payloads: dict[tuple[str, str], dict[str, Any]],
+    ops_portal_digest: str,
+    generic_payloads: dict[str, dict[str, Any]],
 ) -> None:
     layers = test_evidence.get("layers")
     user_acceptance = (
@@ -309,50 +304,40 @@ def _validate_user_acceptance_candidate_material(
     )
     if not isinstance(material, dict):
         raise ValueError("user_acceptance candidate material is missing")
-    images = manifest.get("images")
-    configurations = manifest.get("configurationPackages")
-    if not isinstance(images, dict) or not isinstance(configurations, dict):
-        raise ValueError("component manifest candidate material is incomplete")
-    expected_images = {
-        service: str(descriptor.get("digest") or "")
-        for service, descriptor in sorted(images.items())
-        if isinstance(descriptor, dict)
-    }
-    expected_configurations = {
+    artifacts = manifest.get("environmentArtifacts")
+    if not isinstance(artifacts, dict):
+        raise ValueError("component manifest environment artifact material is incomplete")
+    expected_environment_artifacts = {
         environment: {
-            service: str(descriptor.get("digest") or "")
-            for service, descriptor in sorted(packages.items())
-            if isinstance(descriptor, dict)
+            "environmentArtifactDigest": artifact.get("environmentArtifactDigest"),
+            "images": {
+                owner: str(descriptor.get("digest") or "")
+                for owner, descriptor in sorted(images.items())
+                if isinstance(descriptor, dict)
+            },
+            "configurationPackages": {
+                service: str(descriptor.get("digest") or "")
+                for service, descriptor in sorted(configurations.items())
+                if isinstance(descriptor, dict)
+            },
         }
-        for environment, packages in sorted(configurations.items())
-        if isinstance(packages, dict)
+        for environment, artifact in sorted(artifacts.items())
+        if isinstance(artifact, dict)
+        for images, configurations in [
+            (artifact.get("images"), artifact.get("configurationPackages"))
+        ]
+        if isinstance(images, dict) and isinstance(configurations, dict)
     }
-    expected_applications: dict[str, dict[str, str]] = {
-        environment: {} for environment in ENVIRONMENTS
+    if len(expected_environment_artifacts) != len(artifacts):
+        raise ValueError("component manifest environment artifact material is invalid")
+    expected_applications = {
+        build_product_id: application_package_digest(payload)
+        for build_product_id, payload in sorted(generic_payloads.items())
     }
-    for environment, surface in sorted(ALL_APPLICATION_KEYS):
-        special_source = next(
-            (
-                artifact_id
-                for artifact_id, target in APPLICATION_SOURCE_TARGETS.items()
-                if target == (environment, surface)
-            ),
-            None,
-        )
-        payload = (
-            source_payloads[special_source]
-            if special_source is not None
-            else generic_payloads[(environment, surface)]
-        )
-        expected_applications[environment][surface] = application_package_digest(
-            payload,
-            environment=environment,
-            surface=surface,
-        )
     expected = {
-        "images": expected_images,
-        "configurationPackages": expected_configurations,
+        "environmentArtifacts": expected_environment_artifacts,
         "applicationPackages": expected_applications,
+        "opsPortal": ops_portal_digest,
         "contractGraphDigest": _sha256(contract_graph_path),
     }
     if material != expected:
@@ -364,30 +349,25 @@ def _validate_user_acceptance_candidate_material(
 def _validate_generic_application_source(
     payload: dict[str, Any],
     *,
-    expected_key: tuple[str, str],
+    expected_key: str,
     manifest: dict[str, Any],
 ) -> None:
     if set(payload) != GENERIC_APPLICATION_FIELDS:
-        raise ValueError(f"generic application evidence fields are not canonical: {expected_key}")
-    environment, surface = expected_key
-    if payload.get("schema") != GENERIC_APPLICATION_SCHEMA:
-        raise ValueError(f"generic application evidence schema mismatch: {expected_key}")
-    if payload.get("environment") != environment or payload.get("surface") != surface:
-        raise ValueError(f"generic application evidence target mismatch: {expected_key}")
+        raise ValueError(f"application evidence fields are not canonical: {expected_key}")
     source = manifest["source"]
-    if payload.get("sourceGitSha") != source["gitSha"]:
-        raise ValueError(f"generic application evidence git mismatch: {expected_key}")
-    if payload.get("sourceTreeDigest") != source["treeDigest"]:
-        raise ValueError(f"generic application evidence tree mismatch: {expected_key}")
-    if DIGEST_PATTERN.fullmatch(str(payload.get("packageDigest") or "")) is None:
-        raise ValueError(f"generic application package digest is invalid: {expected_key}")
+    validate_release_application_package(
+        payload,
+        build_product_id=expected_key,
+        source_git_sha=str(source["gitSha"]),
+        source_tree_digest=str(source["treeDigest"]),
+    )
 
 
-def load_application_package_sources(directory: Path) -> dict[tuple[str, str], Path]:
-    sources: dict[tuple[str, str], Path] = {}
+def load_application_package_sources(directory: Path) -> dict[str, Path]:
+    sources: dict[str, Path] = {}
     for path in sorted(directory.glob("*.json")):
         payload = _load_json(path, f"application package {path.name}")
-        key = (str(payload.get("environment") or ""), str(payload.get("surface") or ""))
+        key = str(payload.get("buildProductId") or "")
         if key in sources:
             raise ValueError(f"duplicate application package evidence: {key}")
         sources[key] = path
@@ -395,46 +375,31 @@ def load_application_package_sources(directory: Path) -> dict[tuple[str, str], P
     extra = sorted(set(sources) - GENERIC_APPLICATION_KEYS)
     if missing or extra:
         raise ValueError(
-            f"generic application package set mismatch: missing={missing}, extra={extra}"
+            f"App build product package set mismatch: missing={missing}, extra={extra}"
         )
     return sources
 
 
-def load_application_package_payloads(
-    directory: Path,
-) -> dict[tuple[str, str], Path]:
+def load_application_package_payloads(directory: Path) -> dict[str, Path]:
     root = directory.expanduser().resolve()
     if directory.is_symlink() or not root.is_dir():
         raise ValueError("application package payload root is missing or unsafe")
-    expected_environments = set(ENVIRONMENTS)
-    actual_environments = {path.name for path in root.iterdir()}
-    if actual_environments != expected_environments or any(
-        not path.is_dir() or path.is_symlink() for path in root.iterdir()
+    children = list(root.iterdir())
+    actual_products = {path.name for path in children}
+    expected_entries = APPLICATION_PACKAGE_KEYS | {"opsPortal"}
+    if actual_products != expected_entries or any(
+        not path.is_dir() or path.is_symlink() for path in children
     ):
         raise ValueError(
-            "application package payload environment set mismatch: "
-            f"missing={sorted(expected_environments - actual_environments)}, "
-            f"extra={sorted(actual_environments - expected_environments)}"
+            "App/opsPortal payload set mismatch: "
+            f"missing={sorted(expected_entries - actual_products)}, "
+            f"extra={sorted(actual_products - expected_entries)}"
         )
-
-    payloads: dict[tuple[str, str], Path] = {}
-    for environment in ENVIRONMENTS:
-        environment_root = root / environment
-        expected_surfaces = set(APPLICATION_PACKAGES[environment])
-        children = list(environment_root.iterdir())
-        actual_surfaces = {path.name for path in children}
-        if actual_surfaces != expected_surfaces or any(
-            not path.is_dir() or path.is_symlink() for path in children
-        ):
-            raise ValueError(
-                f"application package payload set mismatch for {environment}: "
-                f"missing={sorted(expected_surfaces - actual_surfaces)}, "
-                f"extra={sorted(actual_surfaces - expected_surfaces)}"
-            )
-        for surface in APPLICATION_PACKAGES[environment]:
-            payload = environment_root / surface
-            sha256_tree(payload)
-            payloads[(environment, surface)] = payload
+    payloads: dict[str, Path] = {}
+    for build_product_id in APPLICATION_PACKAGES:
+        payload = root / build_product_id
+        sha256_tree(payload)
+        payloads[build_product_id] = payload
     return payloads
 
 
@@ -462,8 +427,8 @@ def collect(
     artifact_dir: Path,
     descriptors_dir: Path,
     sources: dict[str, Path],
-    application_package_sources: dict[tuple[str, str], Path],
-    application_package_payloads: dict[tuple[str, str], Path],
+    application_package_sources: dict[str, Path],
+    application_package_payloads: dict[str, Path],
     application_evidence_ref: str,
     provider_raw_dir: Path,
 ) -> dict[str, dict[str, Any]]:
@@ -479,13 +444,13 @@ def collect(
         missing = sorted(GENERIC_APPLICATION_KEYS - set(application_package_sources))
         extra = sorted(set(application_package_sources) - GENERIC_APPLICATION_KEYS)
         raise ValueError(
-            f"generic application package set mismatch: missing={missing}, extra={extra}"
+            f"App build product package set mismatch: missing={missing}, extra={extra}"
         )
-    if set(application_package_payloads) != ALL_APPLICATION_KEYS:
-        missing = sorted(ALL_APPLICATION_KEYS - set(application_package_payloads))
-        extra = sorted(set(application_package_payloads) - ALL_APPLICATION_KEYS)
+    if set(application_package_payloads) != APPLICATION_PACKAGE_KEYS:
+        missing = sorted(APPLICATION_PACKAGE_KEYS - set(application_package_payloads))
+        extra = sorted(set(application_package_payloads) - APPLICATION_PACKAGE_KEYS)
         raise ValueError(
-            f"application package payload set mismatch: missing={missing}, extra={extra}"
+            f"App build product payload set mismatch: missing={missing}, extra={extra}"
         )
     manifest = _load_json(artifact_dir / "manifest.json", "service component manifest")
     validate_manifest(manifest, allowed_statuses={"component-ready"})
@@ -508,42 +473,49 @@ def collect(
         payload=source_payloads["testEvidence"],
         source_path=sources["testEvidence"],
     )
-    generic_payloads: dict[tuple[str, str], dict[str, Any]] = {}
-    for key, source_value in application_package_sources.items():
+    generic_payloads: dict[str, dict[str, Any]] = {}
+    for build_product_id, source_value in application_package_sources.items():
         payload = _load_json(
             source_value.expanduser().resolve(),
-            f"application package {key[0]}/{key[1]}",
+            f"application package {build_product_id}",
         )
-        _validate_generic_application_source(payload, expected_key=key, manifest=manifest)
-        generic_payloads[key] = payload
+        _validate_generic_application_source(
+            payload,
+            expected_key=build_product_id,
+            manifest=manifest,
+        )
+        generic_payloads[build_product_id] = payload
+    for build_product_id, payload_root in application_package_payloads.items():
+        validate_application_package_payload(
+            generic_payloads[build_product_id],
+            payload_root=payload_root.expanduser().resolve(),
+            manifest=manifest,
+            build_product_id=build_product_id,
+        )
+
+    ops_portal_payload_root = (
+        next(iter(application_package_payloads.values())).parent / "opsPortal"
+    )
+    if ops_portal_payload_root.is_symlink() or not ops_portal_payload_root.is_dir():
+        raise ValueError("opsPortal payload root is missing or unsafe")
+    ops_portal_digest = application_package_digest(source_payloads["opsPortal"])
+    manifest_path = ops_portal_payload_root / "manifest.json"
+    dist = ops_portal_payload_root / "dist"
+    digests = source_payloads["opsPortal"].get("digests")
+    if (
+        not isinstance(digests, dict)
+        or _sha256(manifest_path) != digests.get("manifest")
+        or sha256_ops_portal_tree(dist) != digests.get("distTree")
+        or ops_portal_digest != digests.get("distTree")
+    ):
+        raise ValueError("opsPortal payload digest mismatch")
     _validate_user_acceptance_candidate_material(
         test_evidence=source_payloads["testEvidence"],
         manifest=manifest,
         contract_graph_path=sources["contractGraph"].expanduser().resolve(),
-        source_payloads=source_payloads,
+        ops_portal_digest=ops_portal_digest,
         generic_payloads=generic_payloads,
     )
-    for key, payload_root in application_package_payloads.items():
-        special_source = next(
-            (
-                artifact_id
-                for artifact_id, target in APPLICATION_SOURCE_TARGETS.items()
-                if target == key
-            ),
-            None,
-        )
-        payload = (
-            source_payloads[special_source]
-            if special_source is not None
-            else generic_payloads[key]
-        )
-        validate_application_package_payload(
-            payload,
-            payload_root=payload_root.expanduser().resolve(),
-            manifest=manifest,
-            environment=key[0],
-            surface=key[1],
-        )
 
     descriptors_dir.mkdir(parents=True, exist_ok=True)
     result: dict[str, dict[str, Any]] = {}
@@ -552,30 +524,22 @@ def collect(
         destination = artifact_dir / EVIDENCE_DESTINATIONS[artifact_id]
         digest = _copy_immutable(source, destination, artifact_id)
         relative = destination.relative_to(artifact_dir).as_posix()
-        if artifact_id in APPLICATION_SOURCE_TARGETS:
-            environment, surface = APPLICATION_SOURCE_TARGETS[artifact_id]
+        if artifact_id == "opsPortal":
             descriptor = {
-                "applicationEnvironment": environment,
-                "applicationSurface": surface,
+                "evidenceKey": "opsPortal",
                 "path": relative,
                 "digest": digest,
-                "packageDigest": application_package_digest(
-                    source_payloads[artifact_id],
-                    environment=environment,
-                    surface=surface,
-                ),
+                "packageDigest": ops_portal_digest,
                 "sourceRef": application_evidence_ref,
             }
-            descriptor_name = f"application--{environment}--{surface}.json"
-            result[f"{environment}/{surface}"] = descriptor
         else:
             descriptor = {
                 "evidenceKey": artifact_id,
                 "path": relative,
                 "digest": digest,
             }
-            descriptor_name = f"{artifact_id}.json"
-            result[artifact_id] = descriptor
+        descriptor_name = f"{artifact_id}.json"
+        result[artifact_id] = descriptor
         _write_descriptor(descriptors_dir / descriptor_name, descriptor, artifact_id)
 
     provider_files = source_payloads["providerEvidence"]["sourceEvidence"]["files"]
@@ -599,47 +563,38 @@ def collect(
             label
         ]["digest"]
         if copied_digest != expected_digest:
-            raise ValueError(
-                f"test evidence release closure digest drift: {label}"
-            )
+            raise ValueError(f"test evidence release closure digest drift: {label}")
 
-    for key, source_value in sorted(application_package_sources.items()):
-        environment, surface = key
+    for build_product_id, source_value in sorted(application_package_sources.items()):
         source = source_value.expanduser().resolve()
         destination = (
             artifact_dir
             / "packages/applications"
-            / environment
-            / surface
+            / build_product_id
             / "evidence.json"
         )
-        digest = _copy_immutable(source, destination, f"{environment}/{surface}")
+        digest = _copy_immutable(source, destination, build_product_id)
         descriptor = {
-            "applicationEnvironment": environment,
-            "applicationSurface": surface,
+            "buildProductId": build_product_id,
             "path": destination.relative_to(artifact_dir).as_posix(),
             "digest": digest,
-            "packageDigest": application_package_digest(
-                generic_payloads[key],
-                environment=environment,
-                surface=surface,
-            ),
+            "packageDigest": application_package_digest(generic_payloads[build_product_id]),
             "sourceRef": application_evidence_ref,
         }
         _write_descriptor(
-            descriptors_dir / f"application--{environment}--{surface}.json",
+            descriptors_dir / f"application--{build_product_id}.json",
             descriptor,
-            f"{environment}/{surface}",
+            build_product_id,
         )
-        result[f"{environment}/{surface}"] = descriptor
+        result[build_product_id] = descriptor
 
     application_keys = {
-        (item["applicationEnvironment"], item["applicationSurface"])
+        str(item["buildProductId"])
         for item in result.values()
-        if "applicationEnvironment" in item
+        if "buildProductId" in item
     }
-    if application_keys != ALL_APPLICATION_KEYS:
-        raise ValueError("collected application package set is not four-environment")
+    if application_keys != APPLICATION_PACKAGE_KEYS:
+        raise ValueError("collected App build product set is not canonical")
     return result
 
 

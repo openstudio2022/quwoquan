@@ -13,5 +13,5 @@ collections:
     - name: idx_tag_taxonomy_release_digest
       keys:
         canonicalDigest: 1
-      unique: true
+      unique: false
 role: authoritative

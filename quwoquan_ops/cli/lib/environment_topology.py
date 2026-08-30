@@ -78,6 +78,42 @@ LOCAL_TLS_PROFILE_BY_TARGET = {
     "prod-sim": "acme-dns01-sim",
 }
 PROD_TLS_PROFILE = "public-ca-prod"
+_FORMAL_LOCAL_TARGETS = frozenset({"alpha-local", "beta-local", "gamma-local"})
+_FORMAL_PROJECT_RUN_NUMBER = r"[1-9][0-9]*"
+
+
+def formal_release_compose_project_name(
+    target_name: str,
+    *,
+    run_id: str = "",
+    run_attempt: str = "",
+) -> str:
+    if target_name not in _FORMAL_LOCAL_TARGETS:
+        raise ValueError("formal release Compose project requires a local target")
+    normalized_run_id = str(run_id).strip()
+    normalized_attempt = str(run_attempt).strip()
+    if not normalized_run_id and not normalized_attempt:
+        suffix = ""
+    elif (
+        re.fullmatch(_FORMAL_PROJECT_RUN_NUMBER, normalized_run_id) is None
+        or re.fullmatch(_FORMAL_PROJECT_RUN_NUMBER, normalized_attempt) is None
+    ):
+        raise ValueError("formal release Compose project run identity is invalid")
+    else:
+        suffix = f"_{normalized_run_id}_{normalized_attempt}"
+    environment = target_name.removesuffix("-local")
+    return f"quwoquan_{environment}_release{suffix}"
+
+
+def require_formal_release_compose_project(target_name: str, value: object) -> str:
+    project = str(value or "").strip()
+    base = formal_release_compose_project_name(target_name)
+    pattern = re.compile(
+        rf"{re.escape(base)}(?:_{_FORMAL_PROJECT_RUN_NUMBER}_{_FORMAL_PROJECT_RUN_NUMBER})?"
+    )
+    if pattern.fullmatch(project) is None:
+        raise ValueError("formal release Compose project identity mismatch")
+    return project
 
 
 @dataclass(frozen=True)

@@ -16,5 +16,6 @@ abstract final class ContentPublicationPolicy {
   static const Duration personaRateWindow = Duration(seconds: 60);
   static const int personaMaxPublications = 5;
   static const String rejectErrorCode = "CONTENT.USER.publication_rejected";
-  static const String unavailableErrorCode = "CONTENT.SYSTEM.required_dependency_unavailable";
+  static const String unavailableErrorCode =
+      "CONTENT.SYSTEM.required_dependency_unavailable";
 }

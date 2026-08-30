@@ -20,7 +20,16 @@
 说明旧口径是什么、为什么换、以及**旧口径下的实测值**。没有这句话，换口径就等于
 无痕销账。
 
+治理留痕齐备并不等于债务在下降，所以本门禁还直接比对 HEAD：**债务计数型基线的
+任何条目变大、或出现新条目，一律失败。** 只有这一条是机械判定的，写得再完整的
+`reason` 也不能替代它。
+
+「债务计数型」按键的形状识别：顶层键是文件路径（含 `/`）时，值里的整数是违规处数，
+只能减少；键是场景名的耗时预算不在其列——预算随机器和产品形态变化，它的正当性由
+`superseded_measure` 承载，不该被当成债务。
+
 spec_ref: specs/feature-tree/runtime/runtime-client-foundation/spec.md#sit-001
+spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/absent-empty-failure-nullability/spec.md#req-004
 """
 from __future__ import annotations
 
@@ -40,6 +49,7 @@ BASELINE_PATHS = (
     "quwoquan_ops/policies/gates",
     "quwoquan_app/scripts/runtime/page",
     "quwoquan_app/scripts/runtime/observability",
+    "quwoquan_service/scripts/verify/structure",
     "quwoquan_ops/environments",
 )
 BASELINE_SUFFIXES = {".json", ".yaml"}
@@ -144,6 +154,50 @@ def head_revision(relative: str) -> str | None:
     return result.stdout if result.returncode == 0 else None
 
 
+def debt_entries(document: object) -> dict[str, int]:
+    """债务计数型条目，展平成 `身份 -> 计数`。
+
+    键含 `/` 才算——债务基线的键是文件路径，耗时预算的键是场景名。值支持两种形状：
+    直接是计数，或是 `{identity -> count}`（细到函数/字段，使同文件内的位置替换也
+    藏不住）。
+    """
+    if not isinstance(document, dict):
+        return {}
+    entries: dict[str, int] = {}
+    for key, value in document.items():
+        if key == "_governance" or not isinstance(key, str) or "/" not in key:
+            continue
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            entries[key] = value
+        elif isinstance(value, dict):
+            for identity, count in value.items():
+                if isinstance(count, int) and not isinstance(count, bool):
+                    entries[f"{key}::{identity}"] = count
+    return entries
+
+
+def debt_growth(path: Path, relative: str) -> list[str]:
+    """相对 HEAD 变大或新增的债务条目。文件在 HEAD 不存在时无从比较。"""
+    body = head_revision(relative)
+    if body is None or path.suffix != ".json":
+        return []
+    try:
+        before = debt_entries(json.loads(body))
+        after = debt_entries(json.loads(path.read_text(encoding="utf-8")))
+    except (json.JSONDecodeError, UnicodeError):
+        return []
+    if not before and not after:
+        return []
+    growth: list[str] = []
+    for identity in sorted(after):
+        was = before.get(identity, 0)
+        if after[identity] > was:
+            growth.append(f"{identity}: {was} -> {after[identity]}")
+    return growth
+
+
 def measure_of_head(path: Path, relative: str) -> str | None:
     """取 HEAD 版本的 measure，用于判断本次是否换了口径。"""
     body = head_revision(relative)
@@ -200,6 +254,15 @@ def main() -> int:
                     f"{relative}: measure 相对 HEAD 已变更，但没有 superseded_measure；"
                     "换度量口径必须同批写下旧口径是什么、为什么换、旧口径下的实测值"
                 )
+
+        growth = debt_growth(path, relative)
+        if growth:
+            listed = "；".join(growth[:5])
+            more = f"（另有 {len(growth) - 5} 项）" if len(growth) > 5 else ""
+            failures.append(
+                f"{relative}: {len(growth)} 处债务条目相对 HEAD 变大或新增 —— "
+                f"{listed}{more}；棘轮只能下降，先消化债务再谈基线"
+            )
 
     if failures:
         print(f"[ratchet-baseline-governance] FAIL: {len(failures)} 项")

@@ -2,6 +2,7 @@
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001.t1
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001.t2
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001.t3
+// spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-002.t2
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-003
 package api_integration
 
@@ -253,46 +254,71 @@ func TestGreeting_MutualSenderRejected(t *testing.T) {
 	}
 }
 
-func TestGreeting_BlockedSenderRejected(t *testing.T) {
+func TestGreeting_BlockedEitherDirectionRejected(t *testing.T) {
 	requireMongoBackedRuntime(t)
-	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "gr3_req", "req3")
-	createTestProfile(t, "gr3_tgt", "tgt3")
-	createTestPersonaFull(t, "gr3_req_p", "gr3_req", "sa_gr3_req", "req3", "default", true)
-	createTestPersonaFull(t, "gr3_tgt_p", "gr3_tgt", "sa_gr3_tgt", "tgt3", "default", true)
+	for _, testCase := range []struct {
+		name                 string
+		blockTargetPersonaID string
+		blockerUserID        string
+		blockerPersonaID     string
+	}{
+		{
+			name:                 "target_blocks_requester",
+			blockTargetPersonaID: "sa_gr3_req",
+			blockerUserID:        "gr3_tgt",
+			blockerPersonaID:     "sa_gr3_tgt",
+		},
+		{
+			name:                 "requester_blocks_target",
+			blockTargetPersonaID: "sa_gr3_tgt",
+			blockerUserID:        "gr3_req",
+			blockerPersonaID:     "sa_gr3_req",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Cleanup(func() { cleanAll(t) })
+			createTestProfile(t, "gr3_req", "req3")
+			createTestProfile(t, "gr3_tgt", "tgt3")
+			createTestPersonaFull(t, "gr3_req_p", "gr3_req", "sa_gr3_req", "req3", "default", true)
+			createTestPersonaFull(t, "gr3_tgt_p", "gr3_tgt", "sa_gr3_tgt", "tgt3", "default", true)
 
-	doRequest(
-		t,
-		http.MethodPost,
-		"/user/personas/sa_gr3_req/block",
-		"",
-		authHeadersForPersona("gr3_tgt", "sa_gr3_tgt"),
-	)
+			blockRec := doRequest(
+				t,
+				http.MethodPost,
+				"/user/personas/"+testCase.blockTargetPersonaID+"/block",
+				"",
+				authHeadersForPersona(testCase.blockerUserID, testCase.blockerPersonaID),
+			)
+			if blockRec.Code != http.StatusOK {
+				t.Fatalf("block should succeed, got %d: %s", blockRec.Code, blockRec.Body.String())
+			}
 
-	sendRec := doRequest(
-		t,
-		http.MethodPost,
-		"/user/greeting-request",
-		`{"targetPersonaId":"sa_gr3_tgt","requestMessage":"blocked","source":"profile"}`,
-		authHeadersForPersona("gr3_req", "sa_gr3_req"),
-	)
-	if sendRec.Code != http.StatusForbidden {
-		t.Fatalf("blocked greeting should be rejected, got %d: %s", sendRec.Code, sendRec.Body.String())
-	}
-	body := parseJSON(t, sendRec)
-	if body["code"] != "USER.GREETING.target_blocked_sender" {
-		t.Fatalf("expected blocked greeting code, got %#v", body)
-	}
+			sendRec := doRequest(
+				t,
+				http.MethodPost,
+				"/user/greeting-request",
+				`{"targetPersonaId":"sa_gr3_tgt","requestMessage":"blocked","source":"profile"}`,
+				authHeadersForPersona("gr3_req", "sa_gr3_req"),
+			)
+			if sendRec.Code != http.StatusForbidden {
+				t.Fatalf("blocked greeting should be rejected, got %d: %s", sendRec.Code, sendRec.Body.String())
+			}
+			body := parseJSON(t, sendRec)
+			if body["code"] != "USER.GREETING.target_blocked_sender" {
+				t.Fatalf("expected blocked greeting code, got %#v", body)
+			}
 
-	var count int
-	err := pgPool.QueryRow(context.Background(), `
-		SELECT COUNT(*) FROM greeting_requests
-		WHERE requester_persona_id = $1 AND target_persona_id = $2`,
-		"sa_gr3_req", "sa_gr3_tgt").Scan(&count)
-	if err != nil {
-		t.Fatalf("query greeting: %v", err)
-	}
-	if count != 0 {
-		t.Fatalf("expected no greeting row, got %d", count)
+			var count int
+			err := pgPool.QueryRow(context.Background(), `
+				SELECT COUNT(*) FROM greeting_requests
+				WHERE requester_persona_id = $1 AND target_persona_id = $2`,
+				"sa_gr3_req", "sa_gr3_tgt").Scan(&count)
+			if err != nil {
+				t.Fatalf("query greeting: %v", err)
+			}
+			if count != 0 {
+				t.Fatalf("expected no greeting row, got %d", count)
+			}
+		})
 	}
 }

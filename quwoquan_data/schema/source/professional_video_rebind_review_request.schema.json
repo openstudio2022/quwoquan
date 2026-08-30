@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_video_rebind_review_request.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "assetId", "entityId", "contentSha256", "bytes",
+    "frozenAssetRef", "sourceReceiptRef", "sourceReceiptDigest",
+    "sourceReceiptFileSha256", "preflightRef", "preflightSha256",
+    "sourceAttribution", "rightsSnapshot", "sourceIdentity",
+    "reviewInstruction", "requestDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_video_rebind_review_request"},
+    "assetId": {"type": "string", "minLength": 1},
+    "entityId": {"type": "string", "minLength": 1},
+    "contentSha256": {"$ref": "#/$defs/sha256"},
+    "bytes": {"type": "integer", "minimum": 1},
+    "frozenAssetRef": {"$ref": "#/$defs/safeRef"},
+    "sourceReceiptRef": {"$ref": "#/$defs/safeRef"},
+    "sourceReceiptDigest": {"$ref": "#/$defs/sha256"},
+    "sourceReceiptFileSha256": {"$ref": "#/$defs/sha256"},
+    "preflightRef": {"$ref": "#/$defs/safeRef"},
+    "preflightSha256": {"$ref": "#/$defs/sha256"},
+    "sourceAttribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider", "sourcePostUrl", "originalAssetUrl", "creator",
+        "license", "termsUrl", "authorizationProof"
+      ],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "sourcePostUrl": {"type": "string", "pattern": "^https://"},
+        "originalAssetUrl": {"type": "string"},
+        "creator": {"type": "string", "minLength": 1},
+        "license": {"type": "string", "minLength": 1},
+        "termsUrl": {"type": "string"},
+        "authorizationProof": {"type": "string"}
+      }
+    },
+    "rightsSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rightsStatus", "authorizationRequired", "distributionDecision",
+        "rightsIssues", "modelReleaseStatus", "propertyReleaseStatus"
+      ],
+      "properties": {
+        "rightsStatus": {"enum": ["verified", "unverified", "restricted", "unknown"]},
+        "authorizationRequired": {"type": "boolean"},
+        "distributionDecision": {"enum": ["research_allowed", "commercial_allowed"]},
+        "rightsIssues": {
+          "type": "array", "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "modelReleaseStatus": {"enum": ["verified", "not_required", "unverified"]},
+        "propertyReleaseStatus": {"enum": ["verified", "not_required", "unverified"]}
+      }
+    },
+    "sourceIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceRevision", "sourceDigest", "entityCatalogDigest",
+        "executionBundleDigest", "handoffDigest"
+      ],
+      "properties": {
+        "sourceRevision": {"type": "string", "minLength": 1},
+        "sourceDigest": {"$ref": "#/$defs/sha256"},
+        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "executionBundleDigest": {"$ref": "#/$defs/sha256"},
+        "handoffDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "reviewInstruction": {"type": "string", "minLength": 1},
+    "requestDigest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {
+      "type": "string", "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    }
+  }
+}

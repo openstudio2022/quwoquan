@@ -43,6 +43,24 @@ ENDPOINT_DEFINE_KEYS = frozenset(
     - {"APP_RUNTIME_ENV", "RTC_MEDIA_CONNECTION_URL"}
 )
 WEBSOCKET_ENDPOINT_DEFINE_KEYS = frozenset({"RTC_MEDIA_CONNECTION_URL"})
+# runtime config 的 canonical 取值键到 define 键的唯一映射。App 运行时本身不读
+# 编译期 define——runtime config 走签名 package 的安装后激活——只有 Flutter
+# 测试宿主需要在 kernel 里知道该打哪个 endpoint。
+RUNTIME_VALUE_DEFINE_KEYS = {
+    "appRuntimeEnv": "APP_RUNTIME_ENV",
+    "gatewayBaseUrl": "CLOUD_GATEWAY_BASE_URL",
+    "legalBaseUrl": "APP_LEGAL_BASE_URL",
+    "publicWebBaseUrl": "PUBLIC_WEB_BASE_URL",
+    "mediaAvatarCdnBaseUrl": "MEDIA_AVATAR_CDN_BASE_URL",
+    "mediaImageCdnBaseUrl": "MEDIA_IMAGE_CDN_BASE_URL",
+    "mediaVideoCdnBaseUrl": "MEDIA_VIDEO_CDN_BASE_URL",
+    "mediaUploadBaseUrl": "MEDIA_UPLOAD_BASE_URL",
+    "rtcMediaConnectionUrl": "RTC_MEDIA_CONNECTION_URL",
+}
+if frozenset(RUNTIME_VALUE_DEFINE_KEYS.values()) != REQUIRED_DEFINE_KEYS:
+    raise ImportError(
+        "RUNTIME_VALUE_DEFINE_KEYS must cover exactly REQUIRED_DEFINE_KEYS"
+    )
 
 
 def parse_dart_define_args(args: Sequence[str]) -> dict[str, str]:

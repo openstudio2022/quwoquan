@@ -120,18 +120,25 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 if target == smoke.CORE_READBACK_TARGET:
                     for destination, _ in smoke.RELEASE_APP_UAT_DEFINES:
                         setattr(args, destination, "canonical-release-value")
-                command = smoke.patrol_command(
-                    {
-                        "id": "sim-1",
-                        "targetPlatform": "ios",
-                        "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
-                        "emulator": True,
-                    },
-                    args,
-                    "patrol",
-                    dart_define_file=None,
-                    typed_test_data_session_handoff=True,
-                )
+                elif target == smoke.HOME_VIDEO_PLAYBACK_TARGET:
+                    args.data_release_id = "canonical-release-value"
+                with mock.patch.dict(
+                    os.environ,
+                    {smoke.APP_CONTENT_VIDEO_PAGE_COUNT_ENV: "1"},
+                    clear=False,
+                ):
+                    command = smoke.patrol_command(
+                        {
+                            "id": "sim-1",
+                            "targetPlatform": "ios",
+                            "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+                            "emulator": True,
+                        },
+                        args,
+                        "patrol",
+                        dart_define_file=None,
+                        typed_test_data_session_handoff=True,
+                    )
                 joined = "\n".join(command)
                 self.assertNotIn("--dart-define-from-file=", joined)
                 self.assertNotIn("runtime_anonymous_session", joined)
@@ -167,34 +174,160 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
     def test_beta_gamma_core_readback_remains_protected(self) -> None:
         for environment in ("beta", "gamma"):
-            with self.subTest(environment=environment):
-                args = self._args(
-                    env_name=f"{environment}-local",
-                    runtime_env=environment,
-                    api_contract_env=environment,
-                    target=smoke.CORE_READBACK_TARGET,
-                    test_auth_token="",
-                    test_refresh_token="",
-                    current_owner_id="",
-                    current_persona_id="",
-                )
-                with mock.patch.dict(
-                    os.environ,
-                    {
-                        "QWQ_TEST_DATA_ACCESS_TOKEN": "typed-access",
-                        "QWQ_TEST_DATA_REFRESH_TOKEN": "typed-refresh",
-                        "QWQ_TEST_DATA_OWNER_ID": "typed-owner",
-                        "QWQ_TEST_DATA_PERSONA_ID": "typed-persona",
-                    },
-                    clear=False,
-                ):
-                    source = smoke._prepare_execution_session(args)
+            for target in (
+                smoke.CORE_READBACK_TARGET,
+                smoke.PROFILE_JOURNEY_TARGET,
+            ):
+                with self.subTest(environment=environment, target=target):
+                    args = self._args(
+                        env_name=f"{environment}-local",
+                        runtime_env=environment,
+                        api_contract_env=environment,
+                        target=target,
+                        test_auth_token="",
+                        test_refresh_token="",
+                        current_owner_id="",
+                        current_persona_id="",
+                    )
+                    with mock.patch.dict(
+                        os.environ,
+                        {
+                            "QWQ_TEST_DATA_ACCESS_TOKEN": "typed-access",
+                            "QWQ_TEST_DATA_REFRESH_TOKEN": "typed-refresh",
+                            "QWQ_TEST_DATA_OWNER_ID": "typed-owner",
+                            "QWQ_TEST_DATA_PERSONA_ID": "typed-persona",
+                        },
+                        clear=False,
+                    ):
+                        source = smoke._prepare_execution_session(args)
 
-                self.assertEqual(
-                    source,
-                    "test_data_protected_authenticated_session",
-                )
-                self.assertEqual(smoke._missing_required_args(args), [])
+                    self.assertEqual(
+                        source,
+                        "test_data_protected_authenticated_session",
+                    )
+                    self.assertEqual(smoke._missing_required_args(args), [])
+
+    def test_profile_uat_actor_handoff_stays_out_of_command_and_report(
+        self,
+    ) -> None:
+        actor_environment = {
+            "QWQ_TEST_DATA_ACCESS_TOKEN": "profile-access-secret",
+            "QWQ_TEST_DATA_REFRESH_TOKEN": "profile-refresh-secret",
+            "QWQ_TEST_DATA_OWNER_ID": "profile-owner-secret",
+            "QWQ_TEST_DATA_PERSONA_ID": "profile-persona-secret",
+        }
+        args = self._args(
+            env_name="alpha-local",
+            runtime_env="alpha",
+            api_contract_env="alpha",
+            target=smoke.PROFILE_JOURNEY_TARGET,
+            test_auth_token="",
+            test_refresh_token="",
+            current_owner_id="",
+            current_persona_id="",
+        )
+        with mock.patch.dict(os.environ, actor_environment, clear=False):
+            source = smoke._prepare_execution_session(args)
+
+        self.assertEqual(source, "test_data_protected_authenticated_session")
+        self.assertEqual(smoke._missing_required_args(args), [])
+        actor = args._typed_test_data_actor
+        command = smoke.patrol_command(
+            {
+                "id": "sim-1",
+                "targetPlatform": "ios",
+                "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+                "emulator": True,
+            },
+            args,
+            "patrol",
+            dart_define_file=None,
+            typed_test_data_session_handoff=True,
+        )
+        command_report = json.dumps(smoke._redact_command(command))
+        output_report = smoke._redact_text(
+            " ".join(actor.secret_values()),
+            actor.secret_values(),
+        )
+
+        self.assertNotIn("--test-auth-token", command_report)
+        self.assertNotIn("--dart-define-from-file=", command_report)
+        self.assertNotIn("APP_CONTENT_PROFILE_P0_ONLY", command_report)
+        for secret in actor.secret_values():
+            self.assertNotIn(secret, command_report)
+            self.assertNotIn(secret, output_report)
+        self.assertEqual(output_report, "<redacted> <redacted> <redacted> <redacted>")
+
+    def test_app_content_profile_p0_define_is_exact_target_only(self) -> None:
+        device = {
+            "id": "sim-1",
+            "targetPlatform": "ios",
+            "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+            "emulator": True,
+        }
+        args = self._args(
+            env_name="gamma-local",
+            runtime_env="gamma",
+            api_contract_env="gamma",
+            target=smoke.PROFILE_JOURNEY_TARGET,
+        )
+        with mock.patch.dict(os.environ, {}, clear=True):
+            gamma_p1_command = smoke.patrol_command(
+                device,
+                args,
+                "patrol",
+                dart_define_file=None,
+                typed_test_data_session_handoff=True,
+            )
+        self.assertNotIn(
+            "--dart-define=APP_CONTENT_PROFILE_P0_ONLY=true",
+            gamma_p1_command,
+        )
+
+        with mock.patch.dict(
+            os.environ,
+            {"QWQ_APP_CONTENT_PROFILE_P0_ONLY": "true"},
+            clear=False,
+        ):
+            command = smoke.patrol_command(
+                device,
+                args,
+                "patrol",
+                dart_define_file=None,
+                typed_test_data_session_handoff=True,
+            )
+        self.assertIn("--dart-define=APP_CONTENT_PROFILE_P0_ONLY=true", command)
+
+        args.target = smoke.CORE_READBACK_TARGET
+        with mock.patch.dict(
+            os.environ,
+            {"QWQ_APP_CONTENT_PROFILE_P0_ONLY": "true"},
+            clear=False,
+        ), self.assertRaisesRegex(
+            ValueError,
+            "only valid for the profile journey",
+        ):
+            smoke.patrol_command(
+                device,
+                args,
+                "patrol",
+                dart_define_file=None,
+                typed_test_data_session_handoff=True,
+            )
+
+        args.target = smoke.PROFILE_JOURNEY_TARGET
+        with mock.patch.dict(
+            os.environ,
+            {"QWQ_APP_CONTENT_PROFILE_P0_ONLY": "false"},
+            clear=False,
+        ), self.assertRaisesRegex(ValueError, "must equal true"):
+            smoke.patrol_command(
+                device,
+                args,
+                "patrol",
+                dart_define_file=None,
+                typed_test_data_session_handoff=True,
+            )
 
     def test_typed_core_uat_rejects_missing_or_incomplete_actor_handoff(self) -> None:
         def args() -> argparse.Namespace:
@@ -236,7 +369,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self,
     ) -> None:
         args = self._args(
-            target=smoke.BASIC_VIABILITY_TARGET,
+            target=smoke.MESSAGE_HOME_TARGET,
             test_auth_token="",
             test_refresh_token="",
             current_owner_id="",
@@ -248,11 +381,16 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             owner_id="typed-owner",
             persona_id="typed-persona",
         )
+        conversation = smoke.TypedTestDataConversation(
+            conversation_id="typed-conversation",
+            message_ids=("typed-message-a", "typed-message-b"),
+        )
 
         with tempfile.TemporaryDirectory() as temporary_dir:
             app_dir = Path(temporary_dir) / "quwoquan_app"
-            wrapper_directory = app_dir / smoke.PATROL_TEST_DIRECTORY
-            target_path = app_dir / smoke.BASIC_VIABILITY_TARGET
+            patrol_host_dir = app_dir / "test_host/patrol"
+            wrapper_directory = patrol_host_dir / smoke.PATROL_TEST_DIRECTORY
+            target_path = app_dir / smoke.MESSAGE_HOME_TARGET
             wrapper_directory.mkdir(parents=True)
             target_path.parent.mkdir(parents=True)
             target_path.write_text("void main() {}\n", encoding="utf-8")
@@ -261,12 +399,18 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 encoding="utf-8",
             )
             cleanup = None
-            with mock.patch.object(smoke_wrapper, "APP_DIR", app_dir):
+            with (
+                mock.patch.object(smoke_wrapper, "APP_DIR", app_dir),
+                mock.patch.object(
+                    smoke_wrapper, "PATROL_HOST_DIR", patrol_host_dir
+                ),
+            ):
                 try:
                     wrapper_path, wrapper_target, cleanup = (
                         smoke._create_patrol_target_wrapper(
-                            smoke.BASIC_VIABILITY_TARGET,
+                            smoke.MESSAGE_HOME_TARGET,
                             typed_actor=actor,
+                            typed_conversation=conversation,
                         )
                     )
                     source = wrapper_path.read_text(encoding="utf-8")
@@ -289,6 +433,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                         "typed-refresh",
                         "typed-owner",
                         "typed-persona",
+                        "typed-conversation",
+                        "typed-message-a",
+                        "typed-message-b",
                     ):
                         self.assertNotIn(secret, joined)
                         self.assertNotIn(secret, source)
@@ -303,9 +450,80 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                         "installPatrolAcceptanceSessionForRunner",
                         source,
                     )
+                    self.assertIn(
+                        "installPatrolTestDataConversationForRunner",
+                        source,
+                    )
+                    self.assertTrue(
+                        tuple(
+                            wrapper_directory.glob(
+                                "qwq_typed_test_data_conversation_*.dart"
+                            )
+                        )
+                    )
                 finally:
                     smoke._cleanup_patrol_target_wrapper(cleanup)
             self.assertFalse(wrapper_path.exists())
+            self.assertFalse(
+                tuple(
+                    wrapper_directory.glob(
+                        "qwq_typed_test_data_conversation_*.dart"
+                    )
+                )
+            )
+
+    def test_message_target_requires_complete_typed_conversation_handoff(self) -> None:
+        args = self._args(target=smoke.MESSAGE_HOME_TARGET)
+        self.assertTrue(smoke._requires_typed_test_data_conversation(args))
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(
+                smoke._typed_test_data_conversation_from_environment()
+            )
+        with mock.patch.dict(
+            os.environ,
+            {"QWQ_TEST_DATA_CONVERSATION_ID": "conversation-a"},
+            clear=True,
+        ), self.assertRaisesRegex(ValueError, "handoff is incomplete"):
+            smoke._typed_test_data_conversation_from_environment()
+        with mock.patch.dict(
+            os.environ,
+            {
+                "QWQ_TEST_DATA_CONVERSATION_ID": "conversation-a",
+                "QWQ_TEST_DATA_MESSAGE_IDS_JSON": '["message-a","message-b"]',
+            },
+            clear=True,
+        ):
+            handoff = smoke._typed_test_data_conversation_from_environment()
+        self.assertEqual(handoff.conversation_id, "conversation-a")
+        self.assertEqual(handoff.message_ids, ("message-a", "message-b"))
+
+    def test_typed_conversation_wrapper_and_dart_consumer_are_isomorphic(self) -> None:
+        wrapper_source = Path(smoke_wrapper.__file__).read_text(encoding="utf-8")
+        support_source = (
+            ROOT
+            / "quwoquan_app/test/support/runtime/patrol_acceptance_session.dart"
+        ).read_text(encoding="utf-8")
+        target_source = (
+            ROOT / "quwoquan_app" / smoke.MESSAGE_HOME_TARGET
+        ).read_text(
+            encoding="utf-8"
+        )
+
+        method = "installPatrolTestDataConversationForRunner"
+        self.assertIn(method, wrapper_source)
+        self.assertIn(method, support_source)
+        for field, dart_type in (
+            ("conversationId", "String"),
+            ("initialMessageIds", "List<String>"),
+        ):
+            self.assertIn(f"{field}:", wrapper_source)
+            self.assertIn(f"required {dart_type} {field}", support_source)
+        self.assertLess(
+            wrapper_source.index("installPatrolAcceptanceSessionForRunner"),
+            wrapper_source.index(method),
+        )
+        self.assertIn("requirePatrolTestDataConversationForRunner", target_source)
+        self.assertIn("initialMessageIds", target_source)
 
     def test_typed_actor_generated_artifact_cleanup_is_exact_and_converges(
         self,
@@ -486,6 +704,48 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             smoke._missing_required_args(args),
         )
 
+    def test_release_bound_core_readback_requires_explicit_positive_video_page_count(
+        self,
+    ) -> None:
+        args = self._args(
+            target=smoke.CORE_READBACK_TARGET,
+            video_playback_canary_work_id="video-a",
+        )
+        for destination, _ in smoke.RELEASE_APP_UAT_DEFINES:
+            setattr(args, destination, "canonical-release-value")
+        device = {
+            "id": "sim-1",
+            "targetPlatform": "ios",
+            "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+            "emulator": True,
+        }
+        for value in ("", "0", "many"):
+            with self.subTest(value=value), mock.patch.dict(
+                os.environ,
+                {smoke.APP_CONTENT_VIDEO_PAGE_COUNT_ENV: value},
+                clear=False,
+            ), self.assertRaisesRegex(ValueError, "positive release video page count"):
+                smoke.patrol_command(
+                    device,
+                    args,
+                    "patrol",
+                    dart_define_file=None,
+                    typed_test_data_session_handoff=True,
+                )
+        with mock.patch.dict(
+            os.environ,
+            {smoke.APP_CONTENT_VIDEO_PAGE_COUNT_ENV: "1"},
+            clear=False,
+        ):
+            command = smoke.patrol_command(
+                device,
+                args,
+                "patrol",
+                dart_define_file=None,
+                typed_test_data_session_handoff=True,
+            )
+        self.assertIn("--dart-define=DATA_RELEASE_VIDEO_PAGE_COUNT=1", command)
+
     def test_release_bound_home_video_still_requires_video_canary(self) -> None:
         args = self._args(
             env_name="alpha-local",
@@ -501,6 +761,47 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             smoke._missing_required_args(args),
         )
         self.assertTrue(smoke._requires_typed_authenticated_session(args))
+
+    def test_release_bound_home_video_binds_exact_release_identity(self) -> None:
+        args = self._args(
+            env_name="alpha-local",
+            runtime_env="alpha",
+            api_contract_env="alpha",
+            target=smoke.HOME_VIDEO_PLAYBACK_TARGET,
+            data_release_id="release-a",
+        )
+        command = smoke.patrol_command(
+            {
+                "id": "sim-1",
+                "targetPlatform": "ios",
+                "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+                "emulator": True,
+            },
+            args,
+            "patrol",
+            dart_define_file=None,
+            typed_test_data_session_handoff=True,
+        )
+
+        self.assertIn("--dart-define=DATA_RELEASE_ID=release-a", command)
+
+        args.data_release_id = ""
+        with self.assertRaisesRegex(
+            ValueError,
+            "home video playback requires one immutable release identity",
+        ):
+            smoke.patrol_command(
+                {
+                    "id": "sim-1",
+                    "targetPlatform": "ios",
+                    "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+                    "emulator": True,
+                },
+                args,
+                "patrol",
+                dart_define_file=None,
+                typed_test_data_session_handoff=True,
+            )
 
     def test_release_bound_dry_run_does_not_touch_ios_device_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:

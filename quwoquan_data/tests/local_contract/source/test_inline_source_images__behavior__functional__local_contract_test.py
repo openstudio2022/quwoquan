@@ -176,7 +176,6 @@ def test_inline_candidate_flows_through_gates_with_placeholder():
         setattr(hi, name, value)
 
     try:
-        patch("validate_image_rights", lambda spec, vertical: [])
         patch("_cached_source_image_payload", lambda *a, **k: None)
         patch(
             "fetch_image_payload",
@@ -211,6 +210,7 @@ def test_inline_candidate_flows_through_gates_with_placeholder():
             object_dir=Path(tempfile.mkdtemp(prefix="inline_obj_")),
             ordinal=1,
             vertical="travel",
+            research_lane="article",
             extra_candidates=build_inline_image_candidates(
                 [
                     {

@@ -60,6 +60,9 @@ if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
     os.environ["QWQ_DATA_ROOT"] = _ISOLATED_ROOT
     os.environ["QWQ_OUTPUT_ROOT"] = str(Path(_ISOLATED_ROOT) / "output")
     os.environ["QWQ_PUBLISH_ROOT"] = str(Path(_ISOLATED_ROOT) / "publish")
+    # 随体媒体根是发布事务的写入目标，且按设计落在仓内受版本控制目录。任何执行
+    # apply 的测试都会往那里写字节，因此隔离与 publish 根同级必需。
+    os.environ["QWQ_CARRIED_MEDIA_ROOT"] = str(Path(_ISOLATED_ROOT) / "carried_media")
     # startup probe cache 是运行期降本缓存；pytest 默认关闭，避免环境预检类测试
     # 误把 cache 写入真实 .qwq_output/data/local/workspace/runtime/env。
     os.environ.setdefault("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "0")
@@ -68,6 +71,7 @@ _ROOT_ENV_KEYS = (
     "QWQ_DATA_ROOT",
     "QWQ_OUTPUT_ROOT",
     "QWQ_PUBLISH_ROOT",
+    "QWQ_CARRIED_MEDIA_ROOT",
 )
 _ISOLATED_ROOT_ENV = {
     key: os.environ[key]
@@ -139,6 +143,9 @@ def pytest_configure(config):
         str(root): _snapshot_files(root) for root in _REAL_DATA_OUTPUT_ROOTS
     }
     config._qwq_publish_baseline = _snapshot_files(DATA_ROOT / "publish")
+    config._qwq_carried_media_baseline = _snapshot_files(
+        DATA_ROOT / "reference" / "golden_media"
+    )
 
 
 _PATHS_ROOT_CONSTANTS = ("DATA_ROOT", "OUTPUT_ROOT", "PUBLISH_ROOT")
@@ -176,7 +183,45 @@ def _isolation_breach_evidence(paths_module, isolated_env: dict) -> list[str]:
         value = Path(getattr(paths_module, name)).resolve()
         if not value.is_relative_to(isolated_base):
             breaches.append(f"core.paths.{name} escaped the isolated root: {value}")
+    carried = Path(paths_module.carried_media_root()).resolve()
+    if not carried.is_relative_to(isolated_base):
+        breaches.append(f"carried media root escaped the isolated root: {carried}")
     return breaches
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """把只读的 capsule / library 目录交还为可删除状态。
+
+    冻结后的 capsule 与 content_library 条目按设计是只读的，这是防篡改语义的一
+    部分，不能在生产路径上放宽。但只读**目录**会让 pytest 下一次会话启动时的
+    basetemp 清理失败（`rm_rf` 报 `Directory not empty`），临时目录因此逐次累积。
+    因此在会话结束时统一恢复写位：只读语义在被测树内已经被断言过，此时它只剩
+    妨碍回收的作用。
+    """
+    factory = getattr(session.config, "_tmp_path_factory", None)
+    basetemp = getattr(factory, "_basetemp", None)
+    if basetemp is None:
+        return
+    # 同时放宽同级的 garbage-* 残留：那是前几次会话留下的、pytest 已放弃回收的
+    # 目录，恢复写位后下一次会话的清理才能真正删掉它们。
+    roots = [Path(basetemp)]
+    roots.extend(sorted(Path(basetemp).parent.glob("garbage-*")))
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*"), reverse=True):
+            if path.is_symlink() or not path.is_dir():
+                continue
+            try:
+                path.chmod(path.stat().st_mode | 0o700)
+            except OSError:
+                # 回收是尽力而为：无法放宽的目录留给下一次会话，不能让清理动作
+                # 反过来决定测试会话的成败。
+                continue
+        try:
+            root.chmod(root.stat().st_mode | 0o700)
+        except OSError:
+            continue
 
 
 def pytest_unconfigure(config):
@@ -219,6 +264,18 @@ def pytest_unconfigure(config):
     if publish_details:
         failures.append(
             f"{DATA_ROOT / 'publish'} changed files ({', '.join(publish_details)})"
+        )
+
+    # 随体媒体根与 publish 同为仓内受版本控制真相源：发布事务按契约往那里落字节，
+    # 因此一次测试运行留下的字节会被误当成生产资产提交。
+    carried_root = DATA_ROOT / "reference" / "golden_media"
+    carried_details = _snapshot_diff(
+        _snapshot_files(carried_root),
+        getattr(config, "_qwq_carried_media_baseline", {}),
+    )
+    if carried_details:
+        failures.append(
+            f"{carried_root} changed files ({', '.join(carried_details)})"
         )
 
     for message in warnings:

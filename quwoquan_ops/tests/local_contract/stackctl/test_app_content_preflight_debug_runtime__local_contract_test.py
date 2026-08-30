@@ -42,66 +42,57 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 {},
             )
 
-    def test_app_uat_envelope_requires_release_bound_exact_queries(self) -> None:
+    def test_preflight_drops_retired_readiness_fields_before_planner(
+        self,
+    ) -> None:
         readiness = {
             "releaseId": "release-a",
-            "releaseClass": "commercial",
-            "productLifecycleState": "commercial",
             "readinessPhase": "commercial",
-            "feedQueries": [
-                {"name": "typed_article", "matchedPostIds": ["article-a"]},
-                {"name": "typed_image", "matchedPostIds": ["image-a"]},
-                {"name": "typed_video", "matchedPostIds": ["video-a"]},
-                {"name": "homepage_recommend", "matchedPostIds": ["article-a"]},
-                {"name": "premium_stream", "matchedPostIds": []},
-            ],
             "appUatEnvelope": {
-                "releaseId": "release-a",
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
-                "homepageId": "homepage-a",
-                "homepageTitle": "首页 A",
-                "articleWorkId": "article-a",
-                "articleTitle": "文章 A",
-                "imageWorkId": "image-a",
-                "imageTitle": "图片 A",
-                "videoWorkId": "video-a",
-                "creatorName": "创作者 A",
-                "creatorUserHandle": "creator-a",
-                "creatorPersonaId": "persona-a",
-                "creatorAvatarAssetId": "avatar-a",
-                "tagLabel": "标签 A",
-                "videoAttribution": "来源 A",
+                "releaseId": "release-other",
+                "videoWorkId": "legacy-video",
             },
+            "appUatEnvelopeDigest": "sha256:" + "0" * 64,
         }
-
-        with self.assertRaisesRegex(ValueError, "Premium-query bound"):
-            stackctl._app_content_uat_envelope(readiness)
-        readiness["feedQueries"][-1]["matchedPostIds"] = ["video-a"]
-        envelope = stackctl._app_content_uat_envelope(readiness)
-        self.assertEqual(envelope["videoWorkId"], "video-a")
-        self.assertEqual(envelope["creatorUserHandle"], "creator-a")
-        self.assertEqual(envelope["creatorPersonaId"], "persona-a")
-        self.assertEqual(envelope["creatorAvatarAssetId"], "avatar-a")
-
-        consumer = json.loads(json.dumps(readiness))
-        consumer["readinessPhase"] = "consumer"
-        consumer["feedQueries"] = [
-            item
-            for item in consumer["feedQueries"]
-            if item["name"] != "premium_stream"
-        ]
+        release_contract = {
+            "releaseHeader": {"releaseId": "release-a"},
+            "releaseUatSamplePlan": {
+                "releaseId": "release-a",
+                "samples": [
+                    {
+                        "sampleId": "canary-video-001",
+                        "carrier": "video",
+                        "objectId": "release-video",
+                        "objectRef": "objects/posts/video/release-video",
+                        "objectDigest": "sha256:" + "7" * 64,
+                    }
+                ],
+            },
+            "releaseUatSamplePlanDigest": "sha256:" + "1" * 64,
+        }
+        projected_plan = {
+            "releaseIdentity": {"releaseId": "release-a"},
+            "carrierIdentities": {"video": "release-video"},
+        }
+        with patch.object(
+            stackctl,
+            "build_app_content_uat_plan",
+            return_value=projected_plan,
+        ) as build_plan:
+            self.assertEqual(
+                stackctl.app_preflight_commands._app_content_uat_sample_plan(
+                    release_contract=release_contract,
+                    readiness=readiness,
+                ),
+                projected_plan,
+            )
+        self.assertIsNot(build_plan.call_args.args[0], readiness)
+        self.assertNotIn("appUatEnvelope", build_plan.call_args.args[0])
+        self.assertNotIn("appUatEnvelopeDigest", build_plan.call_args.args[0])
         self.assertEqual(
-            stackctl._app_content_uat_envelope(consumer)["videoWorkId"],
-            "video-a",
+            build_plan.call_args.kwargs["release_uat_sample_plan"],
+            release_contract["releaseUatSamplePlan"],
         )
-        next(
-            item
-            for item in consumer["feedQueries"]
-            if item["name"] == "typed_video"
-        )["matchedPostIds"] = []
-        with self.assertRaisesRegex(ValueError, "typed_video is not exact-query bound"):
-            stackctl._app_content_uat_envelope(consumer)
 
     def test_live_uat_holds_runtime_use_lock_while_preflighting(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -209,6 +200,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                         "workload": "full",
                         "configurationDigest": "sha256:" + "1" * 64,
                         "providerRuntimeDigest": provider_runtime_digest,
+                        "observabilityLogSinkDigest": "sha256:" + "7" * 64,
                     },
                 ),
                 patch.object(
@@ -231,6 +223,16 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                     "verify_certificate",
                     return_value={"profile": "local-managed", "status": "ready"},
                 ),
+                patch.object(
+                    stackctl,
+                    "local_runtime_capacity_evidence",
+                    return_value={
+                        "issues": [],
+                        "warnings": [],
+                        "blocker": "",
+                        "evidence": {"status": "ready"},
+                    },
+                ),
                 patch.object(stackctl, "fetch_url", side_effect=fetch),
                 patch.object(
                     stackctl,
@@ -249,10 +251,6 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                         "readinessReceiptRef": "receipt:readiness:release-a",
                         "readinessReceiptDigest": "sha256:" + "4" * 64,
                         "lifecycleExitRef": "receipt:lifecycle:release-a",
-                        "appUatEnvelope": {
-                            "schema": "quwoquan_data.app_uat_envelope",
-                            "releaseId": "release-a",
-                        },
                         "contentReadback": {
                             "homepagePostIds": ["post-a"],
                         },
@@ -307,6 +305,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                     "workload": "full",
                     "configurationDigest": "sha256:" + "1" * 64,
                     "providerRuntimeDigest": provider_runtime_digest,
+                    "observabilityLogSinkDigest": "sha256:" + "7" * 64,
                 },
             ), patch.object(
                 stackctl,
@@ -324,6 +323,15 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 stackctl,
                 "verify_certificate",
                 return_value={"profile": "local-managed", "status": "ready"},
+            ), patch.object(
+                stackctl,
+                "local_runtime_capacity_evidence",
+                return_value={
+                    "issues": [],
+                    "warnings": [],
+                    "blocker": "",
+                    "evidence": {"status": "ready"},
+                },
             ), patch.object(stackctl, "fetch_url", side_effect=fetch), patch.object(
                 stackctl,
                 "_execute_otp_login_journey",
@@ -359,6 +367,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                     "workload": "full",
                     "configurationDigest": "sha256:" + "1" * 64,
                     "providerRuntimeDigest": provider_runtime_digest,
+                    "observabilityLogSinkDigest": "sha256:" + "7" * 64,
                 },
             ), patch.object(
                 stackctl,
@@ -378,6 +387,15 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 stackctl,
                 "verify_certificate",
                 return_value={"profile": "local-managed", "status": "ready"},
+            ), patch.object(
+                stackctl,
+                "local_runtime_capacity_evidence",
+                return_value={
+                    "issues": [],
+                    "warnings": [],
+                    "blocker": "",
+                    "evidence": {"status": "ready"},
+                },
             ), patch.object(stackctl, "fetch_url", side_effect=fetch), patch.object(
                 stackctl,
                 "_execute_otp_login_journey",
@@ -428,6 +446,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 "candidateDigest": baseline_id,
                 "configurationDigest": configuration_digest,
                 "providerRuntimeDigest": provider_digest,
+                "observabilityLogSinkDigest": "sha256:" + "7" * 64,
             }
             login_receipt = {
                 "schema": "otp-local-capture-live-journey",
@@ -483,6 +502,16 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                     stackctl,
                     "verify_certificate",
                     return_value={"profile": "local-managed", "status": "ready"},
+                ),
+                patch.object(
+                    stackctl,
+                    "local_runtime_capacity_evidence",
+                    return_value={
+                        "issues": [],
+                        "warnings": [],
+                        "blocker": "",
+                        "evidence": {"status": "ready"},
+                    },
                 ),
                 patch.object(stackctl, "fetch_url", side_effect=fetch),
                 patch.object(
@@ -583,24 +612,6 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                     },
                     {"name": "premium_stream", "matchedPostIds": ["video-a"]},
                 ],
-                "appUatEnvelope": {
-                    "releaseId": "release-a",
-                    "releaseClass": "commercial",
-                    "productLifecycleState": "commercial",
-                    "homepageId": "homepage-a",
-                    "homepageTitle": "首页 A",
-                    "articleWorkId": "article-a",
-                    "articleTitle": "文章 A",
-                    "imageWorkId": "image-a",
-                    "imageTitle": "图片 A",
-                    "videoWorkId": "video-a",
-                    "creatorName": "创作者 A",
-                    "creatorUserHandle": "creator-a",
-                    "creatorPersonaId": "persona-a",
-                    "creatorAvatarAssetId": "avatar-a",
-                    "tagLabel": "标签 A",
-                    "videoAttribution": "来源 A",
-                },
             }
 
             with (
@@ -641,49 +652,198 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 resolved[3],
             )
 
+    def test_active_release_uat_contract_rejects_digest_drift_and_escape(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            release_root = root / "release"
+            header_path = release_root / "payload/release.json"
+            sample_path = release_root / "payload/uat/sample_plan.json"
+            attestation_path = release_root / "attestations/release.json"
+            sample_path.parent.mkdir(parents=True)
+            attestation_path.parent.mkdir(parents=True)
+            sample_path.write_text(
+                json.dumps({"schema": "quwoquan_data.release_uat_sample_plan"}),
+                encoding="utf-8",
+            )
+            sample_digest = "sha256:" + hashlib.sha256(sample_path.read_bytes()).hexdigest()
+            header_path.write_text(json.dumps({
+                "releaseId": "release-a",
+                "releaseClass": "research",
+                "productLifecycleState": "research",
+                "samplePlanRef": "uat/sample_plan.json",
+                "samplePlanDigest": sample_digest,
+            }), encoding="utf-8")
+            attestation_path.write_text(json.dumps({
+                "schema": "quwoquan_data.release_attestation",
+                "releaseId": "release-a",
+                "releaseClass": "research",
+                "productLifecycleState": "research",
+                "payloadSha256": "sha256:" + "3" * 64,
+            }), encoding="utf-8")
+            candidate = {
+                "releaseId": "release-a",
+                "releaseDigest": "sha256:" + "3" * 64,
+                "attestationRef": str(attestation_path),
+                "attestationDigest": "sha256:" + hashlib.sha256(attestation_path.read_bytes()).hexdigest(),
+            }
+            with self.assertRaisesRegex(ValueError, "payload digest drifted"):
+                stackctl.app_preflight_commands._load_active_release_uat_contract(candidate)
+
+            with patch(
+                "quwoquan_ops.cli.commands.app_preflight_evidence._payload_tree_digest",
+                return_value=candidate["releaseDigest"],
+            ):
+                loaded = stackctl.app_preflight_commands._load_active_release_uat_contract(candidate)
+            self.assertEqual(loaded["releaseUatSamplePlanDigest"], sample_digest)
+
+            sample_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "quwoquan_data.release_uat_sample_plan",
+                        "releaseId": "release-drift",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                patch(
+                    "quwoquan_ops.cli.commands.app_preflight_evidence._payload_tree_digest",
+                    return_value=candidate["releaseDigest"],
+                ),
+                self.assertRaisesRegex(ValueError, "digest drifted"),
+            ):
+                stackctl.app_preflight_commands._load_active_release_uat_contract(candidate)
+
+            sample_path.unlink()
+            outside = root / "outside.json"
+            outside.write_text(
+                json.dumps({"schema": "quwoquan_data.release_uat_sample_plan"}),
+                encoding="utf-8",
+            )
+            sample_path.symlink_to(outside)
+            escaped_digest = "sha256:" + hashlib.sha256(outside.read_bytes()).hexdigest()
+            header_path.write_text(json.dumps({
+                "releaseId": "release-a",
+                "releaseClass": "research",
+                "productLifecycleState": "research",
+                "samplePlanRef": "uat/sample_plan.json",
+                "samplePlanDigest": escaped_digest,
+            }), encoding="utf-8")
+            with (
+                patch(
+                    "quwoquan_ops.cli.commands.app_preflight_evidence._payload_tree_digest",
+                    return_value=candidate["releaseDigest"],
+                ),
+                self.assertRaisesRegex(ValueError, "must not be a symlink"),
+            ):
+                stackctl.app_preflight_commands._load_active_release_uat_contract(candidate)
+
     def test_preflight_returns_release_bound_machine_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
-            report_dir = Path(temporary_directory) / "report"
+            root = Path(temporary_directory)
+            report_dir = root / "report"
+            release_id = "release-a"
+            release_root = root / "data/releases" / release_id
+            readiness_path = root / "release-readiness.json"
+            sample_plan = {
+                "schema": "quwoquan_data.release_uat_sample_plan",
+                "releaseId": release_id,
+                "milestone": "M100",
+                "sampleCases": [
+                    {"sampleId": "homepage-1", "carrier": "homepage", "objectId": "entity-a"},
+                    {"sampleId": "article-1", "carrier": "article", "objectId": "article-a"},
+                    {"sampleId": "image-1", "carrier": "image", "objectId": "image-a"},
+                    {"sampleId": "video-1", "carrier": "video", "objectId": "video-a"},
+                ],
+            }
+            sample_path = release_root / "payload/uat/sample_plan.json"
+            sample_path.parent.mkdir(parents=True)
+            sample_path.write_text(json.dumps(sample_plan), encoding="utf-8")
+            sample_digest = "sha256:" + hashlib.sha256(sample_path.read_bytes()).hexdigest()
+            header = {
+                "releaseId": release_id,
+                "releaseClass": "commercial",
+                "productLifecycleState": "commercial",
+                "selectionScope": "milestone",
+                "milestone": "M100",
+                "poolDigest": "sha256:" + "2" * 64,
+                "samplePlanRef": "uat/sample_plan.json",
+                "samplePlanDigest": sample_digest,
+                "contents": [
+                    {"contentId": "article-a", "postRef": "article/a"},
+                    {"contentId": "image-a", "postRef": "image/a"},
+                    {"contentId": "video-a", "postRef": "video/a"},
+                ],
+                "authors": [],
+            }
+            header_path = release_root / "payload/release.json"
+            header_path.write_text(json.dumps(header), encoding="utf-8")
+            for ref, content_type, title, extra in (
+                ("article/a", "article", "文章 A", {"creatorProfileId": "creator-a", "tagRefs": ["Topic/a"]}),
+                ("image/a", "image", "图片 A", {}),
+                ("video/a", "video", "视频 A", {"sourceAttribution": {"attributionText": "来源 A"}}),
+            ):
+                post_path = release_root / "payload/objects/posts" / ref / "manifest.json"
+                post_path.parent.mkdir(parents=True)
+                post_path.write_text(json.dumps({"contentType": content_type, "title": title, **extra}), encoding="utf-8")
+            entity_path = release_root / "payload/objects/entities/entity-a/_entity.json"
+            entity_path.parent.mkdir(parents=True)
+            entity_path.write_text(json.dumps({"label": "首页 A"}), encoding="utf-8")
+            creator_path = release_root / "payload/objects/creators/creator-a/profile.json"
+            creator_path.parent.mkdir(parents=True)
+            creator_path.write_text(json.dumps({
+                "displayName": "创作者 A",
+                "userHandle": "creator-a",
+                "personaId": "persona-a",
+                "avatarAsset": {"assetId": "avatar-a"},
+            }), encoding="utf-8")
+            tag_path = release_root / "payload/objects/tags/Topic/a/_definition.json"
+            tag_path.parent.mkdir(parents=True)
+            tag_path.write_text(json.dumps({"label": "标签 A"}), encoding="utf-8")
             manifest_digest = "sha256:" + "3" * 64
-            readiness_path = Path(temporary_directory) / "release-readiness.json"
+            attestation = {
+                "schema": "quwoquan_data.release_attestation",
+                "releaseId": release_id,
+                "releaseClass": "commercial",
+                "productLifecycleState": "commercial",
+                "payloadSha256": manifest_digest,
+            }
+            attestation_path = release_root / "attestations/release.json"
+            attestation_path.parent.mkdir(parents=True)
+            attestation_path.write_text(json.dumps(attestation), encoding="utf-8")
+            candidate = {
+                "releaseId": release_id,
+                "releaseDigest": manifest_digest,
+                "attestationRef": str(attestation_path),
+                "attestationDigest": "sha256:" + hashlib.sha256(attestation_path.read_bytes()).hexdigest(),
+            }
+            homepage_report_path = root / "homepage.json"
+            homepage_report_path.write_text(json.dumps({
+                "entities": [{"entityRef": "entity-a", "homepageId": "homepage-a"}],
+            }), encoding="utf-8")
             readiness = {
-                "releaseId": "release-a",
+                "releaseId": release_id,
                 "releaseClass": "commercial",
                 "productLifecycleState": "commercial",
                 "readinessPhase": "commercial",
                 "verifyRunId": "verify-a",
                 "manifestDigest": manifest_digest,
-                "counts": {"posts": 3, "creators": 1},
+                "homepageApiVerificationRef": str(homepage_report_path),
                 "postIds": ["article-a", "image-a", "video-a"],
-                "creatorIds": ["creator-a"],
                 "feedQueries": [
                     {"name": "typed_article", "matchedPostIds": ["article-a"]},
                     {"name": "typed_image", "matchedPostIds": ["image-a"]},
                     {"name": "typed_video", "matchedPostIds": ["video-a"]},
-                    {
-                        "name": "homepage_recommend",
-                        "matchedPostIds": ["article-a", "image-a", "video-a"],
-                    },
+                    {"name": "homepage_recommend", "matchedPostIds": ["article-a"]},
                     {"name": "premium_stream", "matchedPostIds": ["video-a"]},
                 ],
-                "appUatEnvelope": {
-                    "releaseId": "release-a",
-                    "releaseClass": "commercial",
-                    "productLifecycleState": "commercial",
-                    "homepageId": "homepage-a",
-                    "homepageTitle": "首页 A",
-                    "articleWorkId": "article-a",
-                    "articleTitle": "文章 A",
-                    "imageWorkId": "image-a",
-                    "imageTitle": "图片 A",
-                    "videoWorkId": "video-a",
-                    "creatorName": "创作者 A",
-                    "creatorUserHandle": "creator-a",
-                    "creatorPersonaId": "persona-a",
-                    "creatorAvatarAssetId": "avatar-a",
-                    "tagLabel": "标签 A",
-                    "videoAttribution": "来源 A",
-                },
+            }
+            readiness_path.write_text(json.dumps(readiness), encoding="utf-8")
+            projected_plan = {
+                "releaseId": release_id,
+                "releaseUatSamplePlanRef": "uat/sample_plan.json",
+                "releaseUatSamplePlanDigest": sample_digest,
+                "videoPagination": {"pageSize": 20, "expectedWorkIds": ["video-a"]},
             }
             with (
                 patch.object(
@@ -693,12 +853,21 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                         {
                             "baselineId": "sha256:" + "4" * 64,
                             "sourceRevision": "revision-a",
+                            "release": {"candidate": candidate},
                         },
                         readiness,
                         readiness_path,
-                        "env/alpha/runs/release-lifecycle-exit/"
-                        "release-a/exit-a/lifecycle-exit.json",
+                        "env/alpha/runs/release-lifecycle-exit/release-a/exit-a/lifecycle-exit.json",
                     ),
+                ),
+                patch.object(
+                    stackctl,
+                    "build_app_content_uat_plan",
+                    return_value=projected_plan,
+                ) as build_plan,
+                patch(
+                    "quwoquan_ops.cli.commands.app_preflight_evidence._payload_tree_digest",
+                    return_value=manifest_digest,
                 ),
                 patch.object(
                     stackctl,
@@ -713,66 +882,49 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                     )
                 )
 
-            self.assertEqual(result["exitCode"], 0)
+            self.assertEqual(result["exitCode"], 0, result)
             self.assertEqual(result["status"], "passed")
-            self.assertEqual(result["releaseId"], "release-a")
-            self.assertEqual(result["appUatEnvelope"]["videoWorkId"], "video-a")
+            self.assertEqual(result["releaseId"], release_id)
+            self.assertNotIn("appUatEnvelope", result)
+            self.assertNotIn("appUatEnvelopeDigest", result)
+            self.assertEqual(result["releaseUatSamplePlan"], sample_plan)
+            self.assertEqual(result["releaseUatSamplePlanDigest"], sample_digest)
+            self.assertEqual(result["releaseHeader"], header)
             self.assertEqual(
-                result["contentReadback"]["postIds"],
-                ["article-a", "image-a", "video-a"],
+                build_plan.call_args.kwargs["release_uat_sample_plan"],
+                sample_plan,
             )
-            self.assertRegex(
-                result["readinessReceiptDigest"],
-                r"^sha256:[0-9a-f]{64}$",
+            self.assertEqual(
+                build_plan.call_args.kwargs["release_payload_sha256"],
+                manifest_digest,
             )
-            persisted = json.loads(
-                (report_dir / "report.json").read_text(encoding="utf-8")
-            )
-            self.assertEqual(persisted["manifestDigest"], manifest_digest)
 
-    def test_test_live_preflight_resolves_binding_without_active_candidate(self) -> None:
+    def test_test_live_preflight_consumes_only_validated_plan_binding(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             report_dir = Path(temporary_directory) / "test-live-report"
             readiness_path = Path(temporary_directory) / "release-readiness.json"
             readiness = {
                 "releaseId": "release-test-live-a",
-                "releaseClass": "research",
-                "productLifecycleState": "research",
                 "readinessPhase": "consumer",
                 "verifyRunId": "verify-test-live-a",
                 "manifestDigest": "sha256:" + "3" * 64,
-                "postIds": ["article-a", "image-a", "video-a"],
-                "creatorIds": ["creator-a"],
-                "feedQueries": [
-                    {"name": "typed_article", "matchedPostIds": ["article-a"]},
-                    {"name": "typed_image", "matchedPostIds": ["image-a"]},
-                    {"name": "typed_video", "matchedPostIds": ["video-a"]},
-                    {
-                        "name": "homepage_recommend",
-                        "matchedPostIds": ["article-a", "image-a", "video-a"],
-                    },
-                ],
-                "appUatEnvelope": {
-                    "releaseId": "release-test-live-a",
-                    "releaseClass": "research",
-                    "productLifecycleState": "research",
-                    "homepageId": "homepage-a",
-                    "homepageTitle": "首页 A",
-                    "articleWorkId": "article-a",
-                    "articleTitle": "文章 A",
-                    "imageWorkId": "image-a",
-                    "imageTitle": "图片 A",
-                    "videoWorkId": "video-a",
-                    "creatorName": "创作者 A",
-                    "creatorUserHandle": "creator-a",
-                    "creatorPersonaId": "persona-a",
-                    "creatorAvatarAssetId": "avatar-a",
-                    "tagLabel": "标签 A",
-                    "videoAttribution": "来源 A",
-                },
+            }
+            sample_plan_digest = "sha256:" + "8" * 64
+            app_uat_plan = {
+                "releaseIdentity": {"releaseId": "release-test-live-a"},
+                "releaseUatSamplePlanRef": "uat/sample_plan.json",
+                "releaseUatSamplePlanDigest": sample_plan_digest,
             }
             binding = {
+                "releaseHeader": {},
+                "releaseHeaderRef": "",
+                "releaseHeaderDigest": "",
+                "releaseUatSamplePlanRef": "uat/sample_plan.json",
+                "releaseUatSamplePlanDigest": sample_plan_digest,
+                "appUatPlan": app_uat_plan,
+                "appUatPlanDigest": stackctl._canonical_document_checksum(app_uat_plan),
                 "readinessReceiptDigest": "sha256:" + "4" * 64,
+                "readinessReceiptRef": "env/alpha/release-readiness.json",
             }
             mutable_resolver = unittest.mock.Mock(
                 return_value=(
@@ -792,7 +944,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                     stackctl,
                     "_resolve_active_app_content_evidence",
                     side_effect=AssertionError("must not read active candidate"),
-                ),
+                ) as active_resolver,
                 patch.object(
                     stackctl,
                     "command_content_readiness",
@@ -809,10 +961,12 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 )
 
             self.assertEqual(result["exitCode"], 0, result)
-            self.assertEqual(result["packageBaseline"], "")
+            self.assertEqual(result["appUatPlan"], app_uat_plan)
             self.assertEqual(
-                result["readinessReceiptDigest"],
-                binding["readinessReceiptDigest"],
+                result["releaseUatSamplePlanDigest"], sample_plan_digest
             )
+            self.assertNotIn("appUatEnvelope", result)
+            self.assertNotIn("releaseHeader", result)
+            self.assertNotIn("releaseUatSamplePlan", result)
             mutable_resolver.assert_called_once_with("alpha-local", binding)
-
+            active_resolver.assert_not_called()

@@ -82,3 +82,14 @@
 - 影响或价值：当前 Circle 的 GatheringPlan target contracts/runtime 与 Mongo API 不能替代用户体验；不存在可复用的旧 Travel 页面或 generated Facade。尚缺实现：App production Remote、Chat Board 读写、可恢复 durable consumer 与并发 diff/冲突展示。尚缺验收证据：Chat/Assistant 跨域 API integration 和 Android/iPhone 结果。
 - 完成判定：`GWT-001`、`GWT-002` 由 Circle object local_contract、真实 Mongo 与 Chat/Assistant 跨域 api_integration、Android/iPhone user_acceptance 直接覆盖；同一 Plan revision/digest 在 owner、Board 与 Assistant 一致，且 event publication/retry/checkpoint 可恢复。
 - 依赖：Circle GatheringPlan production Remote、Gathering delegated owner port、Chat Board 与 Assistant consumer。
+- 端侧布局现状：App 侧 `gathering_plan` 对象已有 `adapters/` 与
+  `application/public/` 两层，`domain` 与 `presentation` 尚缺。
+- 已有构件：`adapters/` 下是 wire codec 与 `RemoteGatheringPlanFacet`，
+  `application/public/` 下是 `GatheringBoardPlanReader` port。
+- 棘轮影响：该缺层使 `verify_app_cohesion_ratchet` 的 `objects_missing_layer`
+  实测 63、上限 62。
+- 布局约束：codec 不能迁到 `gathering/adapters/` 规避，否则该 capability object
+  失去 owned production coverage unit，`canonical_coverage` 直接 FAIL；
+  `gathering` 也不得私有导入它，只能经上述 public port 消费。
+- 收敛条件：本 OPEN 落地 Plan domain 模型与 Board presentation 后该对象四层齐全，
+  棘轮实测回到 62 以内。

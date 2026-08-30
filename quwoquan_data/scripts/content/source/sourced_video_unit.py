@@ -17,11 +17,6 @@ from core.video_source_admission import (
     VIDEO_SOURCE_KINDS,
     assert_video_distribution_use_allowed,
 )
-from governance.coverage.distribution import (
-    ProductLifecycleState,
-    load_content_distribution_policy,
-)
-
 from content.post.video.package_common import sha256_file
 from content.post.video.source_video import SourcedVideoEvidence
 from content.source.professional_video_receipt import (
@@ -36,18 +31,16 @@ from content.source.sourced_video_admission import (
 )
 
 
+DISTRIBUTION_DECISIONS = ("research_allowed", "commercial_allowed")
+
+
 def _commercial_source_use_mode(
     *,
-    publication_admission: str,
     commercial_authorization_status: str,
     rights_basis: str,
     authorization_proof_url: str | None,
 ) -> str:
     """Derive a commercial use mode only from verified rights."""
-    if publication_admission != "commercial_release":
-        raise ValueError(
-            "risk-only sourced video is not eligible for canonical commercial publish"
-        )
     if commercial_authorization_status != "verified":
         raise ValueError(
             "commercial sourced video requires verified authorization"
@@ -77,21 +70,20 @@ def _commercial_source_use_mode(
 
 def _source_use_mode(
     *,
-    publication_admission: str,
+    distribution_decision: str,
     commercial_authorization_status: str,
     rights_basis: str,
     authorization_proof_url: str | None,
 ) -> str:
-    """Derive an explicit research/commercial mode from governed lifecycle."""
-    policy = load_content_distribution_policy()
-    if policy.product_lifecycle_state is ProductLifecycleState.RESEARCH:
-        if publication_admission != "research_release":
-            raise ValueError(
-                "research lifecycle requires publicationAdmission=research_release"
-            )
+    """Derive the use mode from the explicit per-asset distribution decision."""
+    if distribution_decision not in DISTRIBUTION_DECISIONS:
+        raise ValueError(
+            "sourced video distributionDecision is not admissible: "
+            f"{distribution_decision}"
+        )
+    if distribution_decision == "research_allowed":
         return "rights_audit_only"
     return _commercial_source_use_mode(
-        publication_admission=publication_admission,
         commercial_authorization_status=commercial_authorization_status,
         rights_basis=rights_basis,
         authorization_proof_url=authorization_proof_url,
@@ -119,48 +111,85 @@ def write_admitted_sourced_video_unit(
     attribution_text: str,
     rights_basis: str,
     commercial_authorization_status: str,
-    publication_admission: str,
+    distribution_decision: str,
     authorization_proof_url: str | None,
     terms_url: str | None,
-    risk_acceptance_id: str | None,
     audio_rights_status: str,
     audio_authorization_proof_url: str | None,
     model_release_status: str,
     property_release_status: str,
     takedown_policy: str,
     entity_type: str | None = None,
+    object_dir: Path | None = None,
+    frozen_source_unit_id: str = "",
 ) -> Path:
-    """Materialize one source unit only when every admission fact passes."""
+    """Materialize one source unit only when every admission fact passes.
+
+    receipt 协议 execution 的 video 对象根在 `posts/video/**`（载体分根布局），
+    此时调用方显式传 object_dir；缺省仍按 entityRef 解析 entities 对象目录。
+    """
     if not source_video_path.is_file():
         raise FileNotFoundError(source_video_path)
-    object_dir = resolve_entity_object_dir(
-        execution_id,
-        object_ref,
-        etype_hint=entity_type,
-    )
+    if object_dir is None:
+        object_dir = resolve_entity_object_dir(
+            execution_id,
+            object_ref,
+            etype_hint=entity_type,
+        )
     source_kind = str(source_unit.get("sourceKind") or "").strip()
     if source_kind not in VIDEO_SOURCE_KINDS:
         raise ValueError(f"unsupported sourced video sourceKind: {source_kind}")
     source_id = str(source_unit.get("sourceId") or "").strip()
+    source_use_mode = _source_use_mode(
+        distribution_decision=distribution_decision,
+        commercial_authorization_status=commercial_authorization_status,
+        rights_basis=rights_basis,
+        authorization_proof_url=authorization_proof_url,
+    )
+    research_release = source_use_mode == "rights_audit_only"
+    publication_admission = (
+        "research_release" if research_release else "commercial_release"
+    )
     assert_video_distribution_use_allowed(
         load_content_source_registry(),
         source_id=source_id,
         source_kind=source_kind,
         publication_admission=publication_admission,
     )
-    source_use_mode = _source_use_mode(
-        publication_admission=publication_admission,
-        commercial_authorization_status=commercial_authorization_status,
-        rights_basis=rights_basis,
-        authorization_proof_url=authorization_proof_url,
-    )
-    research_release = source_use_mode == "rights_audit_only"
+    from core.source_layout import build_layout
+
+    entity_name = str(object_ref or "").strip("/").rsplit("/", 1)[-1]
     manifest = write_source_unit(
         object_dir,
         ordinal=int(source_unit.get("ordinal") or 1),
         source_id=source_id,
         source_md=attribution_text,
         clean_md=attribution_text,
+        quality={
+            "sourceId": source_id,
+            "entity": entity_name,
+            "quality": "High",
+            "score": 100,
+            "reasons": [
+                "sourced_video_admission",
+                "acquisition_receipt_binding",
+            ],
+            "url": source_post_url,
+            "statusCode": 200,
+            "fetchSucceeded": True,
+        },
+        layout=build_layout(
+            source_kind=source_kind,
+            extractor="sourced_video_direct_download",
+            title=str(source_unit.get("title") or attribution_text),
+            blocks=[
+                {
+                    "type": "paragraph",
+                    "text": attribution_text,
+                    "sectionSlug": "",
+                }
+            ],
+        ),
         platform=platform,
         source_category="tourism_video",
         source_kind=source_kind,
@@ -186,6 +215,7 @@ def write_admitted_sourced_video_unit(
             "canonicalUrl": source_post_url,
             "finalUrl": source_post_url,
         },
+        frozen_source_unit_id=frozen_source_unit_id,
     )
     unit_dir = execution_source_unit_dir(
         execution_id,
@@ -322,6 +352,7 @@ def write_admitted_sourced_video_unit(
                     ),
                     "rightsAuditStatus": rights_status,
                     "rightsAuditIssues": rights_issues,
+                    "distributionDecision": distribution_decision,
                     "modelReleaseStatus": model_release_status,
                     "propertyReleaseStatus": property_release_status,
                     "fetchedAt": collected_at,
@@ -339,14 +370,12 @@ def write_admitted_sourced_video_unit(
         "rightsBasis": rights_basis,
         "commercialAuthorizationStatus": commercial_authorization_status,
         "publicationAdmission": publication_admission,
-        "productLifecycleState": (
-            "research" if research_release else "commercial"
-        ),
+        "distributionDecision": distribution_decision,
         "authorizationRequired": rights_status != "verified",
         "rightsIssues": rights_issues,
         "authorizationProofUrl": authorization_proof_url,
         "termsUrl": terms_url,
-        "riskAcceptanceId": risk_acceptance_id,
+        "riskAcceptanceId": None,
         "sourcePostUrl": source_post_url,
         "originalAssetUrl": original_asset_url,
         "audioAuthorizationProofUrl": audio_authorization_proof_url,
@@ -377,9 +406,9 @@ def write_admitted_sourced_video_unit(
         rights_basis=rights_basis,
         commercial_authorization_status=commercial_authorization_status,
         publication_admission=publication_admission,
+        distribution_decision=distribution_decision,
         authorization_proof_url=authorization_proof_url,
         terms_url=terms_url,
-        risk_acceptance_id=risk_acceptance_id,
         watermark_status="absent",
         audio_rights_status=str(audio["status"]),
         model_release_status=model_release_status,

@@ -53,9 +53,11 @@ spec:
               mountPath: /etc/qwq/config/platform-ops-service.yaml
               subPath: platform-ops-service.yaml
               readOnly: true
+          # 就绪探针必须打深层 /readyz：它跑 Postgres/Redis/仓库树/config sync
+          # 就绪检查。用浅层 /healthz 判就绪会让依赖断裂时仍然报绿。
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10

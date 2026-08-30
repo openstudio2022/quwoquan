@@ -363,7 +363,7 @@ def prepare(
             object_issues={},
         )
     )
-    for relative in ("creators", "entities", "posts", "tags", "media/objects"):
+    for relative in ("creators", "entities", "posts", "tags"):
         (publish_root / relative).mkdir(parents=True, exist_ok=True)
 
     job = enqueue_ref_job(
@@ -393,7 +393,6 @@ def prepare(
     fleet_request = build_fleet_request(
         EXECUTION_ID,
         QueueJobStage.PUBLISH,
-        required_workers=2,
     )
     request_jobs = fleet_request.get("jobs")
     if not isinstance(request_jobs, list) or len(request_jobs) != 1:

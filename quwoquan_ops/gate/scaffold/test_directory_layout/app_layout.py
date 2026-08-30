@@ -188,7 +188,15 @@ def verify_app_python_evidence_boundaries(failures: Failures) -> None:
 
 
 def verify_app(failures: Failures) -> None:
-    ensure_allowed_children(APP_ROOT, APP_TEST_ROOT_DIRS, failures)
+    # flutter_test_config.dart 是 Flutter SDK 约定的树级前置入口，必须位于 test
+    # 根才会被 test runner 识别；它不是测试用例，因此显式列入允许文件而不是
+    # 让它伪装成某一层的 suite。
+    ensure_allowed_children(
+        APP_ROOT,
+        APP_TEST_ROOT_DIRS,
+        failures,
+        allow_files={"flutter_test_config.dart"},
+    )
     verify_support_has_no_tests(APP_ROOT / "support", failures)
     roster = app_object_roster()
     verify_app_support_layout(roster, failures)

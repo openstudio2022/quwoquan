@@ -136,6 +136,14 @@ def test_retry_lineage_stops_at_mixed_terminal_without_carrying_old_objects(
         plan,
         failed_carrier=failed_carrier,
     )
+    for carrier, row in receipt["submissions"].items():
+        _write(
+            campaign_root.parent
+            / predecessor_ids["homepage"]
+            / "submissions"
+            / f"{predecessor_ids[carrier]}.json",
+            row,
+        )
     receipt_path = roots.output_root / "data/local/reconciliation/mixed.json"
     monkeypatch.setattr(
         campaign_release_selection_mixed,

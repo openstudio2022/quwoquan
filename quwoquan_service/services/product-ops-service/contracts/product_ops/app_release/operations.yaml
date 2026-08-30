@@ -50,7 +50,7 @@ api_routes:
     - name: buildNumber
       field: buildNumber
       required: true
-  description: 按 Android、iOS 或 Web 读取当前已发布版本与平台级 minimumSupportedBuild；服务端仅根据 Build 派生 none/available/required，不从缓存或失败响应推断版本状态。
+  description: 按 Android、iOS 或 Web 读取当前已发布版本与平台级 minimumSupportedBuild；服务端仅根据 Build 派生 none/available/required，不从缓存或失败响应推断版本状态；公众 iOS 只返回官方 Web/PWA recoveryUrl，updateUrl 为 null。
   security:
     auth_mode: optional
     principal: public
@@ -72,7 +72,7 @@ contract_test:
         assertions: [official_https_download_page, current_release_build, minimum_supported_build, derived_update_state, neutral_artifact_headers]
       - name: ios_pwa_recovery
         command: GetAppRecoveryVersion platform=ios
-        assertions: [official_app_store_update_url, official_web_recovery_url, minimum_supported_build, derived_update_state]
+        assertions: [no_native_update_url, official_web_recovery_url, minimum_supported_build, derived_update_state]
       - name: web_refresh_recovery
         command: GetAppRecoveryVersion platform=web
         assertions: [official_web_update_url, official_web_recovery_url, minimum_supported_build, derived_update_state]

@@ -10,17 +10,19 @@ import (
 )
 
 var (
-	inlineMentionPattern = regexp.MustCompile(`@\[(.+?)\]\((?:entity|tag):[A-Za-z0-9_:/-]+\)`)
-	orderedItemPattern   = regexp.MustCompile(`^\d+\.\s+`)
-	inlineStrongEmPattern = regexp.MustCompile(`\*{1,3}([^*]+)\*{1,3}`)
+	inlineMentionPattern   = regexp.MustCompile(`@\[(.+?)\]\((?:entity|tag):[A-Za-z0-9_:/-]+\)`)
+	orderedItemPattern     = regexp.MustCompile(`^\d+\.\s+`)
+	inlineStrongEmPattern  = regexp.MustCompile(`\*{1,3}([^*]+)\*{1,3}`)
 	inlineUnderlinePattern = regexp.MustCompile(`\+\+([^+]+)\+\+`)
 	inlineStrikePattern    = regexp.MustCompile(`~~([^~]+)~~`)
 	inlineLinkPattern      = regexp.MustCompile(`\[([^\]]+)\]\((https?://[^)\s]+)\)`)
 	// 站内相对链接（数据工程供稿 `/entity/...` 等）：实体落地页 SEO 未上线
 	// 前渲染纯文本，fail-closed 不产生死链。
 	inlineInternalLinkPattern = regexp.MustCompile(`\[([^\]]+)\]\(/[^)\s]*\)`)
-	directiveCaptionPattern = regexp.MustCompile(`caption="((?:[^"\\]|\\.)*)"`)
-	horizontalRulePattern   = regexp.MustCompile(`^-{3,}$`)
+	directiveNamePattern      = regexp.MustCompile(`^:::([A-Za-z][A-Za-z0-9_-]*)`)
+	directiveCaptionPattern   = regexp.MustCompile(`caption="((?:[^"\\]|\\.)*)"`)
+	directiveIDsPattern       = regexp.MustCompile(`ids="((?:[^"\\]|\\.)*)"`)
+	horizontalRulePattern     = regexp.MustCompile(`^-{3,}$`)
 )
 
 // BodyAsset 是正文图片的公网渲染输入（articleAssetManifest 派生）。
@@ -61,6 +63,7 @@ func RenderQwqMarkdownBodyHTML(markdown string, assets map[string]BodyAsset) str
 		listKind = ""
 	}
 	inDirective := false
+	directiveName := ""
 	directiveCaption := ""
 	inCode := false
 	var codeLines []string
@@ -84,13 +87,33 @@ func RenderQwqMarkdownBodyHTML(markdown string, assets map[string]BodyAsset) str
 		if strings.HasPrefix(line, ":::") {
 			closeList()
 			entering := line != ":::" && !inDirective
-			inDirective = entering
-			directiveCaption = ""
 			if entering {
+				inDirective = true
+				directiveName = ""
+				directiveCaption = ""
+				if match := directiveNamePattern.FindStringSubmatch(line); match != nil {
+					directiveName = match[1]
+				}
 				if match := directiveCaptionPattern.FindStringSubmatch(line); match != nil {
 					directiveCaption = strings.ReplaceAll(match[1], `\"`, `"`)
 				}
+				if directiveName == "gallery" {
+					if match := directiveIDsPattern.FindStringSubmatch(line); match != nil {
+						for _, assetID := range strings.Split(match[1], ",") {
+							renderBodyAsset(&b, strings.TrimSpace(assetID), directiveCaption, assets)
+						}
+					}
+				} else if directiveName == "callout" {
+					b.WriteString(`<aside class="qwq-callout">`)
+				}
+				continue
 			}
+			if inDirective && directiveName == "callout" {
+				b.WriteString("</aside>")
+			}
+			inDirective = false
+			directiveName = ""
+			directiveCaption = ""
 			continue
 		}
 		if line == "" {
@@ -98,19 +121,16 @@ func RenderQwqMarkdownBodyHTML(markdown string, assets map[string]BodyAsset) str
 			continue
 		}
 		if inDirective && strings.HasPrefix(line, "asset://") {
-			// 正文图片：只渲染 manifest 给出公网 URL 的 asset；其余跳过。
-			assetID := strings.TrimPrefix(line, "asset://")
-			asset, ok := assets[strings.TrimSpace(assetID)]
-			if !ok || strings.TrimSpace(asset.URL) == "" {
-				continue
-			}
-			caption := firstNonEmpty(asset.Caption, directiveCaption)
-			b.WriteString(`<figure><img src="` + html.EscapeString(asset.URL) +
-				`" alt="` + html.EscapeString(caption) + `" loading="lazy">`)
-			if caption != "" {
-				b.WriteString("<figcaption>" + html.EscapeString(caption) + "</figcaption>")
-			}
-			b.WriteString("</figure>")
+			renderBodyAsset(
+				&b,
+				strings.TrimSpace(strings.TrimPrefix(line, "asset://")),
+				directiveCaption,
+				assets,
+			)
+			continue
+		}
+		if inDirective && directiveName == "callout" {
+			b.WriteString(`<p>` + renderInlineText(line) + `</p>`)
 			continue
 		}
 		switch {
@@ -152,7 +172,31 @@ func RenderQwqMarkdownBodyHTML(markdown string, assets map[string]BodyAsset) str
 	if inCode && len(codeLines) > 0 {
 		b.WriteString("<pre><code>" + html.EscapeString(strings.Join(codeLines, "\n")) + "</code></pre>")
 	}
+	if inDirective && directiveName == "callout" {
+		b.WriteString("</aside>")
+	}
 	return b.String()
+}
+
+func renderBodyAsset(
+	b *strings.Builder,
+	assetID string,
+	directiveCaption string,
+	assets map[string]BodyAsset,
+) {
+	// 正文图片只渲染 manifest 给出公网 URL 的 asset；其余跳过。
+	asset, ok := assets[assetID]
+	if !ok || strings.TrimSpace(asset.URL) == "" {
+		return
+	}
+	caption := firstNonEmpty(asset.Caption, directiveCaption)
+	b.WriteString(`<figure><img src="` + html.EscapeString(asset.URL) +
+		`" alt="` + html.EscapeString(caption) + `" loading="lazy" data-asset-id="` +
+		html.EscapeString(assetID) + `">`)
+	if caption != "" {
+		b.WriteString("<figcaption>" + html.EscapeString(caption) + "</figcaption>")
+	}
+	b.WriteString("</figure>")
 }
 
 // renderInlineText 先转义全部文本，再把 qwq 行内记号还原为语义标签。

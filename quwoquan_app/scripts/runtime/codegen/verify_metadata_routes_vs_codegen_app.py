@@ -14,6 +14,8 @@ import re
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _SCRIPTS_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -74,6 +76,7 @@ def collect_yaml_routes_by_domain() -> dict[str, dict[str, str]]:
             routes = data.get("api_routes")
             if not isinstance(routes, list):
                 continue
+            declared_paths: set[str] = set()
             for route in routes:
                 if not isinstance(route, dict):
                     continue
@@ -81,6 +84,7 @@ def collect_yaml_routes_by_domain() -> dict[str, dict[str, str]]:
                 route_path = str(route.get("path") or "").strip()
                 if not op or not route_path:
                     continue
+                declared_paths.add(route_path)
                 previous = bucket.get(op)
                 if previous is not None and previous != route_path:
                     raise SystemExit(
@@ -88,6 +92,35 @@ def collect_yaml_routes_by_domain() -> dict[str, dict[str, str]]:
                         f"{previous!r} vs {route_path!r} in {path}"
                     )
                 bucket[op] = route_path
+
+            graphql_queries = data.get("graphql_queries")
+            if not isinstance(graphql_queries, list) or not graphql_queries:
+                continue
+            app_boundary_queries = [
+                query
+                for query in graphql_queries
+                if isinstance(query, dict)
+                and str(query.get("request_entity") or "").strip()
+            ]
+            if not app_boundary_queries:
+                continue
+            if len(declared_paths) != 1:
+                raise SystemExit(
+                    "FAIL: App-bound graphql_queries must share exactly one canonical "
+                    f"api_routes path in {path}; found {sorted(declared_paths)!r}"
+                )
+            graphql_path = next(iter(declared_paths))
+            for query in app_boundary_queries:
+                op = str(query.get("operation") or "").strip()
+                if not op:
+                    continue
+                previous = bucket.get(op)
+                if previous is not None and previous != graphql_path:
+                    raise SystemExit(
+                        f"FAIL: duplicate operation {domain}.{op!r} paths "
+                        f"{previous!r} vs {graphql_path!r} in {path}"
+                    )
+                bucket[op] = graphql_path
     return by_domain
 
 

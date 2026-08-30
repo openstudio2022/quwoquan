@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
+from core.paths import now_iso
 from core.source_catalog import ARTICLE_BASE_SOURCE_CATEGORIES
 from content.source.research.plan_state import (
     _accept_source,
@@ -16,6 +17,19 @@ from content.source.research.plan_state import (
 )
 from content.source.research.reject_memory import _url_in_memory
 from content.source.research.plan_reuse import _homepage_urls_from_current_plan
+from content.source.research.article_frontier_contract import (
+    public_article_source_attribution,
+)
+from content.source.research.article_frontier_profile import (
+    article_profile_digest,
+    article_search_sites,
+    article_url_allowed,
+    resolve_article_source_binding,
+)
+from content.source.research.article_source_unit_catalog import (
+    ARTICLE_SOURCE_POLICY_REVISION,
+)
+from content.source.source_unit_attribution import registered_attribution_kind
 from content.source.research.source_quality import (
     _article_base_candidate_limit,
     _evidence_reason,
@@ -34,6 +48,106 @@ from content.source.research.qunar_sources import (
     _qunar_travelogue_sources,
 )
 from content.source.research.public_search import discover_article_source_frontier
+
+
+def _bind_article_source_identity(source: dict[str, Any]) -> dict[str, Any]:
+    """Project the frozen registry binding into the source-unit wire identity."""
+    projected = dict(source)
+    site = resolve_article_source_binding(
+        str(projected.get("url") or ""),
+        site_id=str(projected.get("articleSiteId") or ""),
+        profile_digest=str(projected.get("sourceDiscoveryProfileDigest") or ""),
+    )
+    profile = site.get("siteCrawlProfile")
+    profile = profile if isinstance(profile, dict) else {}
+    source_kind = str(site.get("category") or "").strip()
+    extractor = str(profile.get("extractor") or site.get("extractor") or "").strip()
+    if not source_kind or not extractor:
+        raise ValueError("article source registry binding lacks sourceKind/extractor")
+    projected.update(
+        {
+            "sourceKind": source_kind,
+            "extractor": extractor,
+            "policyRevision": ARTICLE_SOURCE_POLICY_REVISION,
+        }
+    )
+    return projected
+
+
+def _bind_external_article_source_identity(
+    source: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Admit a discovered external URL only through one current crawl profile."""
+    url = str(source.get("url") or "").strip()
+    matches = [
+        site for site in article_search_sites() if article_url_allowed(url, site)
+    ]
+    if len(matches) != 1:
+        return None
+    site = matches[0]
+    profile = site.get("siteCrawlProfile")
+    profile = profile if isinstance(profile, dict) else {}
+    projected = dict(source)
+    projected.update(
+        {
+            "articleSiteId": str(site.get("siteId") or "").strip(),
+            "sourceDiscoveryProfileDigest": article_profile_digest(site),
+            "articleCommercialAdmission": str(
+                profile.get("articleCommercialAdmission") or ""
+            ).strip(),
+            "sourceUseMode": "factual_reference_only",
+        }
+    )
+    return _bind_article_source_identity(projected)
+
+
+def registry_bound_article_source(
+    source: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Bind a bespoke article source to its registry admission and attribution.
+
+    Sources minted outside ``discover_article_source_frontier`` used to reach the
+    source unit with no ``articleSiteId``, ``sourceKind`` or ``sourceAttribution``.
+    The article carrier inherits attribution from its source unit, so such a
+    source cannot be delivered — and before per-source isolation existed it took
+    its whole entity down at write time. Admission, identity and attribution now
+    come from the same registry entry the frontier uses, and a URL the registry
+    does not admit for the article lane is not planned at all.
+    """
+    bound = _bind_external_article_source_identity(source)
+    if bound is None:
+        return None
+    url = str(bound.get("url") or "").strip()
+    site = resolve_article_source_binding(
+        url,
+        site_id=str(bound.get("articleSiteId") or ""),
+        profile_digest=str(bound.get("sourceDiscoveryProfileDigest") or ""),
+    )
+    profile = site.get("siteCrawlProfile")
+    profile = profile if isinstance(profile, dict) else {}
+    if not str(bound.get("publishMediaMode") or "").strip():
+        has_same_source_images = str(
+            bound.get("imageEvidenceMode") or ""
+        ).strip() == "same_source" and bool(bound.get("imageUrls"))
+        bound["publishMediaMode"] = (
+            "illustrated" if has_same_source_images else "text_only"
+        )
+    if (
+        registered_attribution_kind(
+            bound,
+            resolved_source_kind=str(bound.get("sourceKind") or ""),
+        )
+        is None
+    ):
+        # 百科站有登记的 attribution 映射，来源单元写盘时自行解析；其余公开站点没有
+        # 映射，attribution 必须在这里由同一条注册表记录铸出，否则交付期无从归属。
+        bound["sourceAttribution"] = public_article_source_attribution(
+            platform=str(bound.get("platform") or site.get("platform") or ""),
+            canonical_url=url,
+            terms_url=str(profile.get("termsUrl") or site.get("termsUrl") or ""),
+            captured_at=now_iso(),
+        )
+    return bound
 
 
 def write_article_lane(
@@ -57,7 +171,6 @@ def write_article_lane(
     prior_article_sources: list[dict[str, Any]],
     homepage_sources: list[dict[str, Any]],
     required_article_bases: int,
-    article_commercial_mode: bool,
     force: bool,
 ) -> None:
     article_sources: list[dict[str, Any]] = []
@@ -72,6 +185,7 @@ def write_article_lane(
             frontier_outcome.as_evidence()
         )
         for source in frontier_outcome.source_documents():
+            source = _bind_article_source_identity(source)
             source = _hydrate_mediawiki_same_source_images(
                 source,
                 entity_id=entity_id,
@@ -90,15 +204,18 @@ def write_article_lane(
         frontier_base_count = sum(
             1 for source in article_sources if source.get("sourceRole") == "base"
         )
-        if not article_commercial_mode and frontier_base_count < required_article_bases:
+        if frontier_base_count < required_article_bases:
             for source in _qunar_travelogue_sources(
                 entity_id,
                 entity_aliases=entity_aliases,
                 limit=_article_base_candidate_limit(required_article_bases),
             ):
+                bound_source = registry_bound_article_source(source)
+                if bound_source is None:
+                    continue
                 accepted = _accept_source(
                     report,
-                    source,
+                    bound_source,
                     entity_id=entity_id,
                     lane="article",
                     vertical=vertical,
@@ -106,21 +223,21 @@ def write_article_lane(
                 )
                 if accepted:
                     article_sources.append(accepted)
-            accepted = _accept_source(
-                report,
-                _qunar_review_support_source(entity_id),
-                entity_id=entity_id,
-                lane="article",
-                vertical=vertical,
-                entity_aliases=entity_aliases,
+            review_support = registry_bound_article_source(
+                _qunar_review_support_source(entity_id)
             )
-            if accepted:
-                article_sources.append(accepted)
-        for related_index, related_title in (
-            enumerate(related_wiki_titles, start=1)
-            if not article_commercial_mode
-            else ()
-        ):
+            if review_support is not None:
+                accepted = _accept_source(
+                    report,
+                    review_support,
+                    entity_id=entity_id,
+                    lane="article",
+                    vertical=vertical,
+                    entity_aliases=entity_aliases,
+                )
+                if accepted:
+                    article_sources.append(accepted)
+        for related_index, related_title in enumerate(related_wiki_titles, start=1):
             related_url = _wiki_url("zh.wikipedia.org", related_title)
             if not related_url:
                 continue
@@ -130,8 +247,7 @@ def write_article_lane(
                 entity_id=entity_id,
                 limit=2,
             )
-            accepted = _accept_source(
-                report,
+            related_source = registry_bound_article_source(
                 _source(
                     source_id=f"article_related_encyclopedia_support_{related_index}",
                     platform="维基百科",
@@ -146,7 +262,13 @@ def write_article_lane(
                     source_role="supporting",
                     images=_image_window(related_images, 0, count=2),
                     image_evidence_mode="same_source" if related_images else "",
-                ),
+                )
+            )
+            if related_source is None:
+                continue
+            accepted = _accept_source(
+                report,
+                related_source,
                 entity_id=entity_id,
                 lane="article",
                 vertical=vertical,
@@ -154,10 +276,9 @@ def write_article_lane(
             )
             if accepted:
                 article_sources.append(accepted)
-        if voyage_url and not article_commercial_mode:
+        if voyage_url:
             voyage_images = voyage_page_images
-            accepted = _accept_source(
-                report,
+            voyage_source = registry_bound_article_source(
                 _source(
                     source_id="article_wikivoyage_base",
                     platform="维基导游",
@@ -173,26 +294,26 @@ def write_article_lane(
                     image_evidence_mode=(
                         "same_source" if voyage_page_images else ""
                     ) if voyage_images else "",
-                ),
-                entity_id=entity_id,
-                lane="article",
-                vertical=vertical,
-                entity_aliases=entity_aliases,
+                )
             )
-            if accepted:
-                article_sources.append(accepted)
-        for index, link in (
-            enumerate(external_links, start=1)
-            if not article_commercial_mode
-            else ()
-        ):
+            if voyage_source is not None:
+                accepted = _accept_source(
+                    report,
+                    voyage_source,
+                    entity_id=entity_id,
+                    lane="article",
+                    vertical=vertical,
+                    entity_aliases=entity_aliases,
+                )
+                if accepted:
+                    article_sources.append(accepted)
+        for index, link in enumerate(external_links, start=1):
             if _url_in_memory(link, rejected_source_urls):
                 continue
             platform = _external_platform(link)
             category = _external_article_category(link, platform)
             source_role = "base" if category in ARTICLE_BASE_SOURCE_CATEGORIES else "supporting"
-            accepted = _accept_source(
-                report,
+            external_source = registry_bound_article_source(
                 _source(
                     source_id=(
                         f"article_external_base_{index}"
@@ -210,7 +331,13 @@ def write_article_lane(
                     source_role=source_role,
                     images=[],
                     image_evidence_mode="",
-                ),
+                )
+            )
+            if external_source is None:
+                continue
+            accepted = _accept_source(
+                report,
+                external_source,
                 entity_id=entity_id,
                 lane="article",
                 vertical=vertical,
@@ -218,41 +345,45 @@ def write_article_lane(
             )
             if accepted:
                 article_sources.append(accepted)
-        if not article_commercial_mode:
-            for index, known in enumerate(_known_article_sources(entity_id), start=1):
-                if _url_in_memory(str(known.get("url") or ""), rejected_source_urls):
-                    continue
-                category = str(known.get("category") or "travelogue").strip()
-                source_role = "base" if category in ARTICLE_BASE_SOURCE_CATEGORIES else "supporting"
-                accepted = _accept_source(
-                    report,
-                    _source(
-                        source_id=known["source_id"] or f"article_registry_base_{index}",
-                        platform=known["platform"] or "垂类专业站",
-                        url=known["url"],
-                        category=category,
-                        discovery_provider="travel_source_registry",
-                        match_confidence=0.88,
-                        evidence_reason=_evidence_reason(
-                            entity_id,
-                            "article",
-                            "Travel source registry known article source",
-                            category,
-                        ),
-                        source_role=source_role,
-                        images=[],
-                        image_evidence_mode="",
-                        fetchable_override=bool(known.get("fetchable")),
+        for index, known in enumerate(_known_article_sources(entity_id), start=1):
+            if _url_in_memory(str(known.get("url") or ""), rejected_source_urls):
+                continue
+            category = str(known.get("category") or "travelogue").strip()
+            source_role = "base" if category in ARTICLE_BASE_SOURCE_CATEGORIES else "supporting"
+            known_source = registry_bound_article_source(
+                _source(
+                    source_id=known["source_id"] or f"article_registry_base_{index}",
+                    platform=known["platform"] or "垂类专业站",
+                    url=known["url"],
+                    category=category,
+                    discovery_provider="travel_source_registry",
+                    match_confidence=0.88,
+                    evidence_reason=_evidence_reason(
+                        entity_id,
+                        "article",
+                        "Travel source registry known article source",
+                        category,
                     ),
-                    entity_id=entity_id,
-                    lane="article",
-                    vertical=vertical,
-                    entity_aliases=entity_aliases,
+                    source_role=source_role,
+                    images=[],
+                    image_evidence_mode="",
+                    fetchable_override=bool(known.get("fetchable")),
                 )
-                if accepted:
-                    if known.get("title"):
-                        accepted["title"] = known["title"]
-                    article_sources.append(accepted)
+            )
+            if known_source is None:
+                continue
+            accepted = _accept_source(
+                report,
+                known_source,
+                entity_id=entity_id,
+                lane="article",
+                vertical=vertical,
+                entity_aliases=entity_aliases,
+            )
+            if accepted:
+                if known.get("title"):
+                    accepted["title"] = known["title"]
+                article_sources.append(accepted)
         seen_article_urls = {
             str(source.get("url") or "").strip()
             for source in article_sources

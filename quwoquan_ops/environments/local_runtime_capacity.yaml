@@ -1,0 +1,29 @@
+schema: local-runtime-capacity
+
+# 本地容器运行时的容量水位阈值。字段与 prod
+# quwoquan_ops/environments/prod/access-isolation.yaml 的 minimumHostResources
+# 同构：prod 管远端主机，本文件管开发机的宿主盘与 Docker 数据盘。
+#
+# 为什么需要两个 scope：macOS 的 Docker 数据盘是宿主上的独立配额镜像，
+# 宿主盘尚有余量时数据盘可以先写满（2026-08-20 的 mongodb Exited(133)
+# 与 postgres `no space left on device` 就是这条路径）。只看任一侧都会漏。
+thresholds:
+  # 宿主盘可用空间下限：Flutter 构建产物、候选包与 Docker 数据盘镜像的增长都落在宿主盘。
+  hostFreeBytes: 10737418240
+  # Docker 数据盘可用空间下限：一次 package + up 需要构建并落地服务镜像层。
+  containerFreeBytes: 8589934592
+  # 回收后应达到的 Docker 数据盘可用空间，用于判定回收动作是否真正解决问题。
+  postReclaimContainerFreeBytes: 15032385536
+
+# Docker 数据盘可用量只能从容器内观测（`docker system df` 只报占用与可回收，不报剩余）。
+# 探针只允许使用本地已存在的镜像，绝不为了体检去拉镜像；候选全部缺失时该 scope
+# 判为未观测并显式报出，不冒充通过。
+containerStoreProbe:
+  candidateImages:
+    - caddy:2.8.4-alpine
+  mountPath: /
+
+# 触发阈值时报告要给出的精确回收命令，避免把「怎么恢复」留给人去回忆。
+reclaimCommands:
+  containerStore: python3 quwoquan_ops/cli/stackctl.py repair --target gamma-local --fix reclaim-build-cache --confirm-global-build-cache-reclaim
+  host: python3 quwoquan_ops/cli/stackctl.py repair --target repo --fix reconcile-output-layout --output-layout-action plan

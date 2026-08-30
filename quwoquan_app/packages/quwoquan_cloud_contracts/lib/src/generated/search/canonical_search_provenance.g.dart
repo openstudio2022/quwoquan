@@ -37,18 +37,28 @@ class CanonicalSearchProvenance {
 }
 
 void _validateCanonicalSearchProvenanceWire(Map<String, dynamic> m) {
-  const allowed = <String>{
-    'provider',
-    'generatedAt',
-  };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  const allowed = <String>{'provider', 'generatedAt'};
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('CanonicalSearchProvenance contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'CanonicalSearchProvenance contains unknown fields: ${unknown.join(',')}',
+    );
   }
-  if (!m.containsKey('provider') || m['provider'] == null || (m['provider'] is! String)) {
-    throw FormatException('CanonicalSearchProvenance.provider has an invalid wire value');
+  if (!m.containsKey('provider') ||
+      m['provider'] == null ||
+      (m['provider'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchProvenance.provider has an invalid wire value',
+    );
   }
-  if (!m.containsKey('generatedAt') || m['generatedAt'] == null || (m['generatedAt'] is! String || DateTime.tryParse(m['generatedAt'] as String) == null)) {
-    throw FormatException('CanonicalSearchProvenance.generatedAt has an invalid wire value');
+  if (!m.containsKey('generatedAt') ||
+      m['generatedAt'] == null ||
+      (m['generatedAt'] is! String ||
+          DateTime.tryParse(m['generatedAt'] as String) == null)) {
+    throw FormatException(
+      'CanonicalSearchProvenance.generatedAt has an invalid wire value',
+    );
   }
 }

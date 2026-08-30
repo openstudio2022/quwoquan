@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/governed_capacity_fleet_observation.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "sourceDigest", "executionId", "total",
+    "fleetPeakConcurrentWorkers", "fleetWallClockMilliseconds", "snapshotDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.governed_capacity_fleet_observation"},
+    "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "executionId": {"type": "string", "minLength": 1},
+    "total": {"type": "integer", "minimum": 1},
+    "fleetPeakConcurrentWorkers": {"type": "integer", "minimum": 1},
+    "fleetWallClockMilliseconds": {"type": "integer", "minimum": 1},
+    "snapshotDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

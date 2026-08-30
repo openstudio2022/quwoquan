@@ -1,4 +1,9 @@
 .PHONY: gate
+.PHONY: local-readiness-plan local-readiness-run local-readiness-inspect verify-local-readiness test-local-readiness
+.PHONY: verify-workflow-resolution test-workflow-resolution
+.PHONY: verify-governance-pipeline-admission test-governance-pipeline-admission
+.PHONY: verify-review-dispatch test-review-dispatch verify-review-consolidation test-review-consolidation test-named-evidence test-evidence-fingerprint test-handoff-contracts verify-review-evidence-handoff
+.PHONY: verify-knowledge-asset-s0-migration
 .PHONY: gate-local-gamma
 .PHONY: gate-runtime-media
 .PHONY: gate-runtime-media-full
@@ -45,7 +50,7 @@
 .PHONY: verify-retired-terms-zero
 .PHONY: verify-app-production-data-source-single-path
 .PHONY: verify-production-wiring-purity
-.PHONY: verify-provider-substitute-prod-purity
+.PHONY: verify-provider-substitute-prod-purity verify-cloud-environment-artifact-binding
 .PHONY: verify-test-data-architecture
 .PHONY: verify-test-data-environment-results
 .PHONY: verify-test-data-performance
@@ -61,7 +66,7 @@
 .PHONY: verify-local-port-manifest
 .PHONY: verify-public-vs-upstream-url-contract
 .PHONY: verify-domain-governance
-.PHONY: verify-python-script-governance
+.PHONY: verify-python-script-governance verify-service-probe-homology
 .PHONY: verify-vertical-architecture-ratchet
 .PHONY: test-vertical-architecture-ratchet-local-contract
 .PHONY: sync-page-object-source-paths verify-page-object-source-paths
@@ -71,6 +76,8 @@
 .PHONY: verify-emitted-error-code-declaration
 .PHONY: verify-login-dependency-config
 .PHONY: verify-env-packaging
+.PHONY: verify-prod-packaging-contract
+.PHONY: verify-prod-hosted-runtime-readiness
 .PHONY: verify-env-instance-isolation
 .PHONY: observability-es-up
 .PHONY: observability-es-down
@@ -102,7 +109,11 @@
 .PHONY: beta-status
 .PHONY: verify
 .PHONY: verify-global-increment-constraints
-.PHONY: verify-agent-context-contract
+.PHONY: verify-agent-context-budget feature-context feature-tree-overview feature-tree-change-report feature-tree-content-review verify-feature-tree
+.PHONY: verify-human-agent-delivery-eval
+.PHONY: verify-objective-execution
+.PHONY: verify-hotl-admission
+.PHONY: review-dispatch-plan review-run-evidence produce-handoff-manifest
 .PHONY: verify-retired-runtime-architecture
 .PHONY: verify-service-ddd-cqrs-baseline
 .PHONY: verify-commercial-contract-generation
@@ -130,9 +141,10 @@
 .PHONY: verify-observability-catalog
 .PHONY: verify-runtime-log-governance
 .PHONY: codegen-app
-.PHONY: codegen-app-shell-navigation
+.PHONY: codegen-app-shell-navigation codegen-app-identity verify-app-identity verify-app-identity-state-isolation
 .PHONY: codegen-ops-portal
 .PHONY: codegen-control-plane-runtime
+.PHONY: verify-hosted-human-authority test-hosted-authority-adapter-local-contract test-hosted-human-authority-local-contract test-hosted-human-authority-api-integration test-ops-portal build-ops-portal gate-ops-portal
 .PHONY: codegen-content-service
 .PHONY: codegen-chat-service
 .PHONY: new-service
@@ -140,6 +152,7 @@
 .PHONY: stackctl-package
 .PHONY: stackctl-verify
 .PHONY: dev-session
+.PHONY: app-dev app-uat
 .PHONY: stackctl-up
 .PHONY: stackctl-down
 .PHONY: stackctl-status
@@ -173,6 +186,7 @@ export PYTHONPYCACHEPREFIX := $(QWQ_OUTPUT_ROOT)/env/repo/local/test-runtime/cac
 .PHONY: stackctl-doctor
 .PHONY: stackctl-repair
 .PHONY: stackctl-deploy
+.PHONY: stackctl-otp-read
 
 # 客户端：production lib、pubspec、Patrol/UAT 不得直连 Mock/fixture。
 verify-app-mock-isolation:
@@ -211,6 +225,10 @@ verify-app-behavior-error-stack-convergence:
 verify-app-catch-swallow-budget:
 	@python3 quwoquan_app/scripts/runtime/observability/verify_catch_swallow_budget.py
 
+# 空引用与失败隔离：catch 内 return null 必须是 try 前缀解析器或留有观测证据
+verify-app-null-failure-isolation:
+	@python3 quwoquan_app/scripts/runtime/observability/verify_null_failure_isolation.py
+
 # 主题绑定门禁：业务层禁硬绑 AppColors.light/dark，isDark 三元只减不增
 verify-app-theme-binding-ratchet:
 	@python3 quwoquan_app/scripts/runtime/observability/verify_theme_binding_ratchet.py
@@ -226,6 +244,10 @@ verify-app-component-reuse-ratchet:
 # recovery 对齐：errors.yaml recovery_action -> 生成 Go .WithRecovery（factory 风格域）
 verify-service-error-recovery-alignment:
 	@python3 quwoquan_service/scripts/verify/consistency/verify_error_recovery_alignment.py
+
+# nil 语义：wire 边界禁止值类型 bool+omitempty；领域端口空返回兼作未命中信号只减不增
+verify-service-nil-semantics:
+	@python3 quwoquan_service/scripts/verify/structure/verify_nil_semantics.py
 
 # API 鉴权契约：security.auth_mode 真相源与端侧鉴权快照一致，核心受限入口必须 required
 verify-app-auth-policy:
@@ -256,10 +278,15 @@ verify-app-startup-ttid:
 verify-app-startup-environment-pr:
 	@python3 quwoquan_ops/gate/verify_python_syntax.py \
 		quwoquan_app/scripts/device/verify_flutter_run_defines.py \
-		quwoquan_app/scripts/device/verify_ios_hot_restart.py
+		quwoquan_app/scripts/device/verify_ios_hot_restart.py \
+		quwoquan_app/scripts/device/hot_restart_resident_observation.py
 	@python3 quwoquan_app/scripts/runtime/platform/verify_startup_environment_matrix.py
 	@python3 quwoquan_app/test/local_contract/runtime/ios_runtime_dart_defines__local_contract_test.py
 	@python3 quwoquan_app/test/local_contract/runtime/ios_runtime_dart_defines__direct_debug__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/flutter_facade_command__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/workspace_flutter_facade_projection__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/workspace_flutter_facade_terminal_receipt__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/workspace_flutter_facade_zsh_startup__local_contract_test.py
 	@python3 quwoquan_app/test/local_contract/runtime/ios_hot_restart_launcher__local_contract_test.py
 	@python3 quwoquan_app/test/local_contract/runtime/startup_probe_parser__local_contract_test.py
 	@python3 quwoquan_app/test/local_contract/runtime/startup_probe_parser__environment_matrix__local_contract_test.py
@@ -272,6 +299,10 @@ verify-app-ios-hot-restart:
 	@PYTHONPATH=. python3 quwoquan_app/scripts/device/verify_ios_hot_restart.py \
 		--env alpha \
 		--device-id "$(IOS_SIMULATOR_ID)"
+
+# 把仓库级 flutter facade 注入当前 Cursor 工作区 PATH（FACADE_ACTION=--deactivate|--status 可逆/查询）
+app-activate-flutter-facade:
+	@python3 quwoquan_app/scripts/tools/flutter_facade/activate_cursor_workspace.py $(FACADE_ACTION)
 
 verify-app-startup-environment-uat:
 	@test -n "$(STARTUP_EVIDENCE_ROOT)" || { echo "GATE_BLOCK: STARTUP_EVIDENCE_ROOT is required"; exit 2; }
@@ -350,7 +381,11 @@ verify-app-production-data-source-single-path:
 	@python3 -m unittest \
 		quwoquan_app.test.local_contract.runtime.production_release_artifact__local_contract_test
 
-verify-production-wiring-purity: verify-app-mock-isolation verify-app-lib-test-only-symbols verify-app-production-data-source-single-path verify-app-cloud-package-boundaries verify-provider-substitute-prod-purity
+verify-production-wiring-purity: verify-app-mock-isolation verify-app-lib-test-only-symbols verify-app-production-data-source-single-path verify-app-cloud-package-boundaries verify-provider-substitute-prod-purity verify-cloud-environment-artifact-binding
+
+verify-cloud-environment-artifact-binding:
+	@PYTHONPATH="$(REPO_ROOT)" PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_cloud_environment_artifact_binding.py
+	@PYTHONPATH="$(REPO_ROOT)" PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/tests/local_contract/gate/test_cloud_environment_artifact_binding__gate__local_contract_test.py
 
 verify-provider-substitute-prod-purity:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_provider_substitute_prod_purity.py
@@ -388,7 +423,7 @@ verify-data-control-literals:
 
 verify-data-release-consistency:
 	@if [ -z "$(RELEASE_FILE)" ]; then \
-		echo "FAIL: RELEASE_FILE is required. Example: make verify-data-release-consistency RELEASE_FILE=quwoquan_data/publish/env_releases/<releaseId>/gamma.json"; \
+		echo "FAIL: RELEASE_FILE is required. Example: make verify-data-release-consistency RELEASE_FILE=.qwq_output/data/releases/<releaseId>/payload/desired_state.json"; \
 		exit 2; \
 	fi
 	@python3 quwoquan_data/scripts/cli.py verify \
@@ -409,10 +444,19 @@ verify-article-contract-purity:
 	@python3 quwoquan_app/scripts/content_service/content/post/verify_article_contract_purity.py
 
 verify-app-env-package:
-	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env alpha >/dev/null
-	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env beta >/dev/null
-	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env gamma >/dev/null
-	@python3 quwoquan_ops/cli/stackctl.py --output-format json package --env prod >/dev/null
+	@deploy_work_root="$$(mktemp -d "$${TMPDIR:-/tmp}/quwoquan-deploy.XXXXXX")"; \
+	set -eu; \
+	trap 'python3 quwoquan_ops/gate/cleanup_deployment_test_workspace.py "$$deploy_work_root"' EXIT; \
+	python3 quwoquan_ops/gate/prepare_environment_packaging_contract_inputs.py "$$deploy_work_root"; \
+	export QWQ_GRAPHQL_READ_REGISTRY_SIGNING_KEY_ID="packaging-contract"; \
+	export QWQ_GRAPHQL_READ_REGISTRY_SIGNING_PRIVATE_KEY_FILE="$$deploy_work_root/graphql-signing-private.pem"; \
+	export QWQ_GRAPHQL_READ_REGISTRY_TRUSTED_PUBLIC_KEYS_FILE="$$deploy_work_root/graphql-trusted-public-keys.json"; \
+	for env_name in alpha beta gamma prod; do \
+		env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py \
+			--output-format json package --env "$$env_name" \
+			--release-attestation "$$deploy_work_root/candidate-release.json" \
+			--rollback-release-attestation "$$deploy_work_root/rollback-release.json" >/dev/null; \
+	done
 
 verify-service-env-package:
 	@if [ -z "$(SERVICE)" ]; then \
@@ -441,6 +485,10 @@ verify-domain-governance:
 
 verify-python-script-governance:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_python_script_governance.py --scope all --mode check
+
+# 服务端就绪路由与 deploy readinessProbe 同源：探针错配会让依赖断裂报绿。
+verify-service-probe-homology:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_service_probe_homology.py
 
 # 垂类架构静态防回退：存量债务只减不增，已退役 travel-service 永久零缺口。
 verify-vertical-architecture-ratchet:
@@ -476,21 +524,75 @@ verify-emitted-error-code-declaration:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_emitted_error_code_declaration.py
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declaration__contract__local_contract_test.py
 
+# 三个环境包彼此不共享中间态：每个 env 的 package/contract/isolation 只读自己的产物，
+# 越权 token 集合来自环境配置而非兄弟环境的落盘结果。因此 CI 可按 env 拆成并行作业，
+# 本地默认仍一次跑全三环境。prod 永远不在这里打包，走 verify-prod-packaging-contract。
 verify-env-packaging:
-	@deploy_work_root="$$(mktemp -d "$${TMPDIR:-/tmp}/quwoquan-deploy.XXXXXX")"; \
-	trap 'rm -rf "$$deploy_work_root"' EXIT; \
+	@set -eu; \
+	packaging_envs="$${QWQ_PACKAGING_ENVS:-alpha beta gamma}"; \
+	for env_name in $$packaging_envs; do \
+		case "$$env_name" in \
+			alpha|beta|gamma) ;; \
+			*) \
+				echo "[env-packaging] GATE_BLOCK: QWQ_PACKAGING_ENVS 只接受 alpha|beta|gamma，收到 $$env_name" >&2; \
+				echo "[env-packaging] FIX: repair the first typed blocker above, then rerun make verify-env-packaging" >&2; \
+				exit 2 ;; \
+		esac; \
+	done; \
+	deploy_work_root="$$(mktemp -d "$${TMPDIR:-/tmp}/quwoquan-deploy.XXXXXX")"; \
+	run_phase() { \
+		phase_name="$$1"; shift; \
+		phase_started_at="$$(date +%s)"; \
+		echo "[env-packaging] START phase=$$phase_name"; \
+		if "$$@"; then \
+			phase_status=0; \
+		else \
+			phase_status="$$?"; \
+			echo "[env-packaging] GATE_BLOCK phase=$$phase_name status=$$phase_status" >&2; \
+			echo "[env-packaging] FIX: repair the first typed blocker above, then rerun make verify-env-packaging" >&2; \
+			return "$$phase_status"; \
+		fi; \
+		echo "[env-packaging] DONE phase=$$phase_name durationSeconds=$$(( $$(date +%s) - phase_started_at ))"; \
+	}; \
+	cleanup_deploy_work_root() { \
+		command_status="$$1"; \
+		trap - EXIT; \
+		python3 quwoquan_ops/gate/cleanup_deployment_test_workspace.py "$$deploy_work_root"; \
+		cleanup_status="$$?"; \
+		if [ "$$command_status" -ne 0 ]; then exit "$$command_status"; fi; \
+		exit "$$cleanup_status"; \
+	}; \
+	trap 'cleanup_deploy_work_root "$$?"' EXIT; \
+	run_phase prepare python3 quwoquan_ops/gate/prepare_environment_packaging_contract_inputs.py "$$deploy_work_root"; \
 	candidate="$$deploy_work_root/candidate-release.json"; \
 	rollback="$$deploy_work_root/rollback-release.json"; \
-	printf '%s\n' '{"schema":"quwoquan_data.release_attestation","releaseId":"packaging-contract-candidate","payloadSha256":"sha256:1111111111111111111111111111111111111111111111111111111111111111"}' >"$$candidate"; \
-	printf '%s\n' '{"schema":"quwoquan_data.release_attestation","releaseId":"packaging-contract-rollback","payloadSha256":"sha256:2222222222222222222222222222222222222222222222222222222222222222"}' >"$$rollback"; \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env alpha --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback" >/dev/null && \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env beta --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback" >/dev/null && \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env gamma --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback" >/dev/null && \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env prod --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback" >/dev/null && \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_environment_packaging_contract.py && \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_env_artifact_isolation.py && \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_app/scripts/env/verify_prod_package_purity.py && \
-	python3 quwoquan_ops/environments/verify/verify_gamma_local_prod_isomorphism.py
+	export QWQ_GRAPHQL_READ_REGISTRY_SIGNING_KEY_ID="packaging-contract"; \
+	export QWQ_GRAPHQL_READ_REGISTRY_SIGNING_PRIVATE_KEY_FILE="$$deploy_work_root/graphql-signing-private.pem"; \
+	export QWQ_GRAPHQL_READ_REGISTRY_TRUSTED_PUBLIC_KEYS_FILE="$$deploy_work_root/graphql-trusted-public-keys.json"; \
+	for env_name in $$packaging_envs; do \
+		run_phase "package-$$env_name" env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env "$$env_name" --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback"; \
+	done; \
+	for env_name in $$packaging_envs; do \
+		run_phase "contract-$$env_name" env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_environment_packaging_contract.py --env "$$env_name"; \
+		run_phase "isolation-$$env_name" env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_env_artifact_isolation.py --env "$$env_name"; \
+	done; \
+	case " $$packaging_envs " in \
+		*" gamma "*) run_phase gamma-prod-isomorphism python3 quwoquan_ops/environments/verify/verify_gamma_local_prod_isomorphism.py ;; \
+	esac
+
+verify-prod-packaging-contract: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/release/test_prod_target_app_package__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/release/test_prod_hosted_package_oci_manifest__contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/environment/test_environment_package_entrypoints__local_contract_test.py \
+		-q
+	@deploy_work_root="$$(mktemp -d "$${TMPDIR:-/tmp}/quwoquan-deploy.XXXXXX")"; \
+	trap 'python3 quwoquan_ops/gate/cleanup_deployment_test_workspace.py "$$deploy_work_root"' EXIT; \
+	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" \
+		python3 quwoquan_app/scripts/env/verify_prod_package_purity.py --target prod-hosted
+
+verify-prod-hosted-runtime-readiness:
+	@python3 quwoquan_ops/cli/stackctl.py --output-format json doctor --target prod-hosted
 
 OBSERVABILITY_TARGET ?= alpha-local
 
@@ -543,6 +645,38 @@ write-canonical-coverage-baseline:
 
 verify-metadata:
 	@$(MAKE) -C quwoquan_service verify-metadata
+
+# Hosted Human Authority 唯一公开接线：metadata/codegen drift、Go 本地契约与
+# PostgreSQL API integration 分层执行；缺 embedded PostgreSQL 前置时公开入口返回 typed GATE_BLOCK。
+verify-hosted-human-authority:
+	@$(MAKE) -C quwoquan_service verify-platform-ops-human-contract-binding
+
+test-hosted-authority-adapter-local-contract: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/gate/test_hosted_authority_adapter__local_contract_test.py -q
+
+test-hosted-human-authority-local-contract: test-hosted-authority-adapter-local-contract
+	@$(MAKE) -C quwoquan_service test-platform-ops-local-contract
+
+test-hosted-human-authority-api-integration:
+	@$(MAKE) -C quwoquan_service test-platform-ops-api-integration
+
+# Portal direct targets 与 local-readiness / gate_repo 使用同一 npm scripts，不复制测试清单。
+test-ops-portal:
+	@npm --prefix quwoquan_ops/portal test
+
+build-ops-portal:
+	@portal_build_root="$$(mktemp -d "$${TMPDIR:-/tmp}/qwq-portal-build.XXXXXX")"; \
+	cleanup_portal_build() { \
+		rm -rf "$$portal_build_root" quwoquan_ops/portal/dist quwoquan_ops/portal/.test-dist; \
+		rm -f quwoquan_ops/portal/*.tsbuildinfo quwoquan_ops/portal/vite.config.js quwoquan_ops/portal/vite.config.d.ts; \
+	}; \
+	trap cleanup_portal_build EXIT; \
+	QWQ_DEPLOY_WORK_ROOT="$$portal_build_root" QWQ_DEPLOY_TARGET=prod-hosted \
+		npm --prefix quwoquan_ops/portal run build
+
+gate-ops-portal:
+	@bash quwoquan_ops/gate/gate_repo.sh --scope portal
 
 # append_only_fact 的公开 command 不得承载实例级不变式，追加语义必须保持不可变。
 verify-append-only-fact-command-admission:
@@ -627,6 +761,24 @@ dev-session:
 		$(if $(DEVICE_ID),--device-id "$(DEVICE_ID)",) \
 		$(if $(LAUNCH_APP),--launch-app,)
 
+# 人类一键启动：仅映射公开参数，设备发现、状态机与 receipt 均由 stackctl 拥有。
+app-dev:
+	@python3 quwoquan_ops/cli/stackctl.py dev-session \
+		--env "$(or $(ENV),alpha)" \
+		--launch-app \
+		--app-mode "$(or $(MODE),content-live)" \
+		$(if $(DEVICE_ID),--device-id "$(DEVICE_ID)",)
+
+# AI/自动化内容验收：显式输入原样交给 stackctl；本层不扩展 target 或生成 receipt。
+app-uat:
+	@test -n "$(TARGETS)" || { echo "FAIL: TARGETS is required. Example: make app-uat TARGETS=alpha-local PLATFORM=ios-simulator DEVICE_ID=<id>"; exit 2; }
+	@test -n "$(PLATFORM)" || { echo "FAIL: PLATFORM is required. Example: ios-simulator|android|android-physical|ios-physical"; exit 2; }
+	@test -n "$(DEVICE_ID)" || { echo "FAIL: DEVICE_ID is required"; exit 2; }
+	@python3 quwoquan_ops/cli/stackctl.py --output-format json app-content-uat \
+		--targets "$(TARGETS)" \
+		--platform "$(PLATFORM)" \
+		--device-id "$(DEVICE_ID)"
+
 stackctl-up:
 	@if [ -z "$(TARGET)" ]; then \
 		echo "FAIL: TARGET is required. Example: make stackctl-up TARGET=beta-local"; \
@@ -676,6 +828,15 @@ stackctl-repair:
 	fi
 	@python3 quwoquan_ops/cli/stackctl.py repair --target "$(TARGET)" --fix "$(FIX)"
 
+# 测试环境真机登录取验证码：交互 TTY 隐藏输入手机号，OTP 只写 /dev/tty。
+# 用法见 quwoquan_ops/environments/gamma/local/README.md「真机登录取验证码（OTP）」。
+stackctl-otp-read:
+	@if [ -z "$(TARGET)" ]; then \
+		echo "FAIL: TARGET is required. Example: make stackctl-otp-read TARGET=gamma-local"; \
+		exit 2; \
+	fi
+	@python3 quwoquan_ops/cli/stackctl.py provider-debug otp-read --target "$(TARGET)"
+
 stackctl-deploy:
 	@if [ -z "$(TARGET)" ]; then \
 		echo "FAIL: TARGET is required. Example: make stackctl-deploy TARGET=prod-hosted SERVICE=prod-stack FROM_CANDIDATE_DIGEST=sha256:... TO_CANDIDATE_DIGEST=sha256:... RELEASE_MANIFEST=/path/manifest.json RELEASE_EVIDENCE_REF=ghcr.io/...@sha256:... STEP=25"; \
@@ -712,13 +873,18 @@ verify-app-page-object-contract:
 	@python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py --check --fail-on-review
 	@python3 quwoquan_app/scripts/runtime/page/verify_page_object_contract.py
 
+# UAT 断言的 Widget key 必须能在 lib 找到产出方：实现侧删掉 key 而 UAT 仍引用
+# 旧字面量时，find.byKey 只会永远 findsNothing，把删除锁成「正确行为」。
+verify-app-uat-widget-key-references:
+	@python3 quwoquan_ops/gate/verify_app_uat_widget_key_references.py
+
 verify-app-native-edge-navigation:
 	@python3 quwoquan_app/scripts/runtime/page/verify_native_edge_navigation.py
 
 verify-app-pageflip-backward-tests:
 	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/design_system/pageflip/pageflip_contract__local_contract_test.dart test/local_contract/design_system/pageflip/pageflip_diagnostics_visual__local_contract_test.dart test/local_contract/design_system/pageflip/pageflip_widget__local_contract_test.dart
 
-# 后翻路线 B 主线静态门禁（见 .cursor/rules/12-pageflip-backward-mainline.mdc）。
+# 后翻路线 B 主线静态证据（见 dual-rail-discovery-redesign DEC-002）。
 verify-app-pageflip-backward-static:
 	@python3 quwoquan_app/scripts/content_service/content/post/verify_pageflip_backward_mainline.py
 
@@ -759,8 +925,57 @@ verify-app-cloud-tag-strict-typing:
 verify-global-increment-constraints:
 	@bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
 
-verify-agent-context-contract:
-	@python3 quwoquan_ops/gate/verify_agent_context_contract.py
+# S0 知识资产迁移：从 tracked fixture 与冻结 Git object 重算 53 files / 333 rows。
+verify-knowledge-asset-s0-migration:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_knowledge_asset_s0_migration.py
+
+# Agent 上下文治理：Cursor/Codex 预算、渐进载体、Review v2 与 adapter 一致性。
+verify-agent-context-budget:
+	@python3 quwoquan_ops/gate/verify_agent_context_budget.py
+
+# Human-Agent 角色交互代表路径：固定样本分母、硬不变量 100% 阈值、机器报告落 .qwq_output。
+verify-human-agent-delivery-eval:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_human_agent_delivery_eval.py
+
+# Objective/Increment execution：契约、动态 S4 准入、薄 CLI 与 local contract。
+verify-objective-execution: prepare-test-python
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_objective_execution.py
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/gate/test_objective_execution__journal_authority__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_objective_execution__journal_security__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_objective_execution__executor_admission__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_objective_execution__gate__local_contract_test.py -q
+
+# S6 HOTL expansion：只读 contract/evaluator、动态 S4、external activation 与 fail-closed 控制。
+verify-hotl-admission: prepare-test-python
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_hotl_admission.py
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/gate/test_hotl_admission__contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_hotl_admission__evaluator__local_contract_test.py -q
+
+# 校验轮次交接单（HANDOFF 物理形态）：四项齐全、三向裁决零悬空、证据字段完整。
+# 不带参数校验最新轮次；MANIFEST=<path> 校验指定文件。
+verify-handoff-manifest:
+	@python3 quwoquan_ops/gate/verify_handoff_manifest.py $(MANIFEST)
+
+# 生成 Review Board v2 计划：共享 owner contexts、去重命名 evidence 与有界 Reviewer；ARGS 透传。
+review-dispatch-plan:
+	@python3 quwoquan_ops/cli/review_dispatch.py $(ARGS)
+
+review-run-evidence:
+	@python3 quwoquan_ops/cli/evidence_runner.py $(ARGS)
+
+produce-handoff-manifest:
+	@python3 quwoquan_ops/cli/handoff_manifest.py $(ARGS)
+
+# Promotion PR 只读验签同 SHA push-owned App 证据；ARGS 传入 repository/head/run/timing。
+verify-delivery-app-evidence:
+	@python3 -B quwoquan_ops/ci/verify_delivery_app_evidence.py $(ARGS)
+
+# 资产垃圾回收报告（僵尸 reference / harness 分叉 / AGENTS.md 与特性树重复正文），
+# 报告型不阻断，落 .qwq_output/env/repo/runs/asset-gc/report.md。
+asset-gc-report:
+	@python3 quwoquan_ops/tools/report_asset_gc.py
 
 verify-retired-runtime-architecture:
 	@python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
@@ -911,10 +1126,12 @@ verify-assistant-agent-replay-evaluation:
 
 gate:
 	@$(MAKE) verify-global-increment-constraints
-	@$(MAKE) verify-agent-context-contract
+	@$(MAKE) verify-local-worktree-lifecycle
+	@$(MAKE) verify-agent-context-budget
 	@$(MAKE) verify-retired-runtime-architecture
 	@$(MAKE) verify-service-ddd-cqrs-baseline
 	@$(MAKE) verify-service-architecture
+	@$(MAKE) verify-service-probe-homology
 	@$(MAKE) verify-commercial-contract-generation
 	@$(MAKE) verify-behavior-event-type-contract
 	@$(MAKE) verify-object-relation-edge-type-contract
@@ -987,7 +1204,7 @@ verify-chat-avatar-commercial-matrix:
 
 feature-context:
 	@if [ -z "$(TARGET)" ]; then echo "GATE_BLOCK: 请设置 TARGET=<spec-or-code-path>"; exit 2; fi
-	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py context --target "$(TARGET)"
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py context --target "$(TARGET)" --format "$(if $(FORMAT),$(FORMAT),manifest)"
 
 feature-tree-overview:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py overview
@@ -1004,7 +1221,7 @@ verify-feature-tree:
 
 verify:
 	@$(MAKE) verify-global-increment-constraints
-	@$(MAKE) verify-agent-context-contract
+	@$(MAKE) verify-agent-context-budget
 	@$(MAKE) verify-retired-runtime-architecture
 	@$(MAKE) verify-service-ddd-cqrs-baseline
 	@$(MAKE) verify-service-architecture
@@ -1040,10 +1257,24 @@ verify-runtime-log-governance:
 
 codegen-app:
 	@$(MAKE) verify-app-contract-handoff
+	@$(MAKE) codegen-app-identity
 	@$(MAKE) -C quwoquan_service codegen-app
 	@$(MAKE) -C quwoquan_service codegen-graphql-app-client
 	@$(MAKE) codegen-app-shell-navigation
 	@$(MAKE) verify-app-generated-manifest
+
+# App identity gate contract:
+# - Trigger: app_artifact_manifest、identity codegen/native 配置与 App 启动入口发生变化。
+# - Block: 生成投影陈旧、共享可写 identity 状态、未 flavor 化入口或默认 Alpha 缺失。
+# - Repair: 运行 make codegen-app-identity，删除退役状态并恢复静态 flavor/scheme 后重跑两道 verify。
+codegen-app-identity:
+	@$(MAKE) -C quwoquan_service codegen-app-identity
+
+verify-app-identity:
+	@$(MAKE) -C quwoquan_service verify-app-identity
+
+verify-app-identity-state-isolation:
+	@python3 quwoquan_app/scripts/runtime/platform/verify_app_identity_state_isolation.py
 
 codegen-app-shell-navigation:
 	@$(MAKE) -C quwoquan_service codegen-app-shell-navigation
@@ -1087,13 +1318,23 @@ config-slo-gate:
 	@python3 quwoquan_ops/cli/stackctl.py verify --kind config-slo --profile baseline --prometheus-url "$(PROMETHEUS_URL)"
 
 .PHONY: commit-gate gate-smoke gate-integration gate-release test-api-contract test-api-contract-chat
+.PHONY: install-hooks verify-local-worktree-lifecycle
 
 # L0 本地入库门禁（pre-commit 同源）：并行静态 + 影响面测试，目标 ≤10m / 硬顶 15m。
 commit-gate:
 	@bash quwoquan_ops/gate/commit_gate.sh
+
+# 安装仓内 git hooks（core.hooksPath）。幂等，回读校验通过才算成功。
+install-hooks:
+	@bash quwoquan_ops/hooks/run_install_hooks.sh
+
+# 本地工作副本生命周期：hooks 安装自检 + 未合入滞留识别。
+# 必须留在 gate 链上：hooks 失效时 pre-commit 恰好不会运行，自检不能只挂在 pre-commit。
+verify-local-worktree-lifecycle:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_local_worktree_lifecycle.py
 .PHONY: prepare-test-python verify-test-no-fake verify-test-nonfunctional-coverage verify-test-directory-layout verify-test-coverage-map
 .PHONY: verify-execution-profiles
-.PHONY: test-local-contract test-app-python-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance verify-homepage-performance-evidence
+.PHONY: test-local-contract test-app-python-local-contract test-runtime-local-contract test-api-integration test-runtime-api-integration test-runtime-api-integration-gamma test-user-acceptance verify-homepage-performance-evidence test-delivery-ci-local-contract
 
 prepare-test-python:
 	@python3 quwoquan_ops/cli/prepare_test_python.py
@@ -1120,7 +1361,7 @@ test-app-python-local-contract: prepare-test-python
 # 门禁配套 local_contract：这些测试锁定 gate 链上门禁自身的判据，必须与门禁同进同退。
 # 缺口清单由 verify_gate_local_contract_execution.py 实时派生，本目标必须与之保持零缺口；
 # 新增门禁时把它的配套测试补进这里，不要重新引入 allowance 基线。
-test-gate-companion-local-contract: prepare-test-python
+test-gate-companion-local-contract: test-review-dispatch test-review-consolidation test-named-evidence test-evidence-fingerprint test-handoff-contracts test-hosted-authority-adapter-local-contract test-governance-pipeline-admission test-delivery-ci-local-contract prepare-test-python
 	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
 		quwoquan_ops/tests/local_contract/provider/test_external_provider_governance__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/provider/test_provider_conformance_evidence__contract__local_contract_test.py \
@@ -1128,9 +1369,25 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/provider/test_provider_conformance_evidence_two_device_remote__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/provider/test_provider_conformance_evidence_source_coverage__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/provider/test_provider_conformance_evidence_attestation_promotion__contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_knowledge_asset_s0_migration__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_agent_context_budget__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_human_agent_delivery_eval__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_objective_execution__journal_authority__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_objective_execution__journal_security__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_objective_execution__executor_admission__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_objective_execution__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_hotl_admission__contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_hotl_admission__evaluator__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_workflow_resolution__resolver__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_workflow_resolution__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_handoff_manifest__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_local_env_port_manifest__reverse_closure__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_gate_repo_summary__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_api_path_unversioned__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_app_architecture__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_app_client_contract_kind_alignment__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_app_uat_widget_key_references__dangling_reference__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_domain_governance__authority_and_trust__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_behavior_event_type_contract__shared_enum_parity__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_canonical_recommendation_policy__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/ci/test_ci_cd_evidence_contracts__canonical__local_contract_test.py \
@@ -1142,10 +1399,14 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/gate/test_canonical_coverage_baseline_provenance__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_canonical_coverage_no_escape__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_canonical_coverage_app_sharding__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/test_data/test_delivery_gate_data_shard__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_python_script_governance__bytecode_guard__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_api_integration_direct_storage__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_error_code_assertion_coverage__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_ratchet_baseline_governance__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_ratchet_baseline_io__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_nil_semantics__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_null_failure_isolation__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_service_contract_view_pruning__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_object_evidence_work_root_pruning__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_app_network_image_baseline_monotonicity__local_contract_test.py \
@@ -1155,8 +1416,11 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/gate/test_directory_layout__canonical_service_tests__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/environment/test_env_artifact_isolation__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_git_branch_policy__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_github_supply_chain__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_homepage_type_contract__shared_enum_parity__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/environment/test_local_dependency_purity__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/environment/test_local_dependency_purity_uat_analysis__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/environment/test_local_dependency_purity__command_flow__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_data/test_test_data_architecture_gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_data/test_test_data_environment_results__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_data/test_test_data_performance__local_contract_test.py \
@@ -1166,6 +1430,7 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/gate/test_object_search_policy_closure__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_readiness_case_coverage__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_readiness_result_bundle_collector__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_runtime_host_literals__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_search_index_field_drift__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_stage_name_identifiers__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_retired_runtime_architecture__local_contract_test.py \
@@ -1174,6 +1439,56 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/gate/test_tag_collection_wiring__unwired_channel_baseline__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_test_coverage_map__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_verifier_root_discovery__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_metadata_routes_vs_codegen_app__canonical_contracts__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_metadata_response_body_vs_codegen_app__canonical_contracts__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_dual_platform_usability_baseline__content_free_readback__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_observability_coverage__repo_gate_run__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_dev_up_cli_surface__public_web_owner__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_observability_layout__repo_gate_run__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_metadata_service_entities_vs_fields__dart_class__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_chat_group_roster_consistency__builder_contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_article_contract_purity__canonical_builder__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_post_view_projection_wire_keys__canonical_keys__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_ios_hot_restart__launcher__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_cloud_runtime_single_path__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_cleanup_deployment_test_workspace__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_prepare_environment_packaging_contract_inputs__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_require_ci_inputs__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_lib_no_test_only_symbols__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_performance_budget__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_domain_model_storage_governance__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_media_delivery_contract__public_slice__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_prod_rollout_stackctl_contract__workflow__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_runtime_config_release_layout__single_track__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_api_edge_rate_limit_single_track__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_graphql_read_rest_command_single_track__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_app_generated_manifest__contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_cloud_environment_artifact_binding__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_local_worktree_lifecycle__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_service_probe_homology__gate__local_contract_test.py \
+		quwoquan_data/tests/local_contract/release/test_execution_readiness__behavior__functional__local_contract_test.py \
+		quwoquan_data/tests/local_contract/release/test_pool_precheck__handoff_gate__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/release/test_publish_fail_closed__carried_media__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/release/test_publish_execution__homepage_carrier__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/release/test_publish_purity__canonical_media__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/release/test_publish_purity__committed_transaction_holds_no_media__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/execution/test_content_execution_layout__identity_keys__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/execution/test_scale_parameterization__single_source__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/execution/test_script_architecture__retired_module_names__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/execution/test_source_digest__execution_release__contract__local_contract_test.py \
+		quwoquan_data/tests/local_contract/release/test_source_digest__immutable_identity_generations__contract__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_environment_assembly__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_environment_packaging_contract__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_execution_profiles__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_root_layout__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_acceptance_freeze__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_content_library_addressing__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_object_size_budget__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_pageflip_backward_mainline__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_app_identity_state_isolation__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_media_release_contract__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_publish_closure__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_reusable_data_contract__gate__local_contract_test.py \
 		-q
 
 verify-test-no-fake:
@@ -1421,3 +1736,77 @@ gate-release:
 .PHONY: deploy-beta-k8s
 deploy-beta-k8s:
 	@python3 quwoquan_ops/cli/stackctl.py deploy --env beta --mode environment-assembly
+
+# 本地优先 CI/readiness：显式 producer，不在 pre-commit 内自动跑全面测试。
+local-readiness-plan:
+	@python3 -B quwoquan_ops/cli/local_readiness.py plan $(ARGS)
+
+local-readiness-run:
+	@python3 -B quwoquan_ops/cli/local_readiness.py run $(ARGS)
+
+local-readiness-inspect:
+	@python3 -B quwoquan_ops/cli/local_readiness.py inspect
+
+test-local-readiness: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/ci/test_local_readiness__core__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_commit_gate_select__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/ci/test_commit_gate_fast_path__local_contract_test.py -q
+
+verify-local-readiness: test-local-readiness
+	@python3 -B quwoquan_ops/cli/local_readiness.py inspect >/dev/null
+
+# 显式命令与自然语言同轨；真实 Cursor/Codex discovery 仍由外部 smoke 证明。
+test-workflow-resolution: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/gate/test_workflow_resolution__resolver__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_workflow_resolution__gate__local_contract_test.py -q
+
+verify-workflow-resolution: test-workflow-resolution
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_workflow_resolution.py
+
+# 只读 admission；成功只表示 contract/evaluator 自洽，不签发外部 authority。
+test-governance-pipeline-admission: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/gate/test_governance_pipeline_admission__evaluator__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_governance_pipeline_admission__contract_cli_gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_governance_pipeline_admission__evidence_bundle__local_contract_test.py -q
+
+verify-governance-pipeline-admission: test-governance-pipeline-admission
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_governance_pipeline_admission.py
+
+# Review plan/profile 选路的公开 local contract；只生成计划，不启动 Reviewer。
+test-review-dispatch: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py -q
+
+verify-review-dispatch: test-review-dispatch
+
+# Delivery CI bootstrap 与 hosted timing authority 的本地契约；不触发外部 CI/live readback。
+test-delivery-ci-local-contract: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/ci/test_delivery_gate_ci_bootstrap__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/ci/test_hosted_ci_timing_ledger__local_contract_test.py -q
+
+# Review consolidation 的唯一公开 focused verify/test 入口；不自行启动 Reviewer。
+test-review-consolidation: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/gate/test_review_consolidator__local_contract_test.py -q
+
+verify-review-consolidation: test-review-consolidation
+
+# Review named evidence / fingerprint / handoff 行为的公开 focused targets。
+test-named-evidence: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/gate/test_named_evidence_runner__local_contract_test.py -q
+
+test-evidence-fingerprint: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/gate/test_evidence_fingerprint__contract__local_contract_test.py -q
+
+test-handoff-contracts: prepare-test-python
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_ops/tests/local_contract/gate/test_handoff_manifest_producer__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_handoff_manifest__gate__local_contract_test.py -q
+
+verify-review-evidence-handoff: test-review-dispatch test-review-consolidation test-named-evidence test-evidence-fingerprint test-handoff-contracts

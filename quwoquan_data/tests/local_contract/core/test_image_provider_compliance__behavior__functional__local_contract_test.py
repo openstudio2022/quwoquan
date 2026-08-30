@@ -13,10 +13,7 @@ from __future__ import annotations
 import copy
 import sys
 import tempfile
-from dataclasses import replace
 from pathlib import Path
-
-import pytest
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
@@ -34,9 +31,8 @@ from content.source.research.image_provider_compliance import (  # noqa: E402
     professional_library_compliance_summary,
 )
 from content.source.research.source_quality import _collection_gate  # noqa: E402
-from core.asset_placement import _caption_is_degraded, caption_semantic_issues  # noqa: E402
+from core.asset_placement import caption_is_degraded, caption_semantic_issues  # noqa: E402
 from core.localization import simplified_chinese_publish_issues  # noqa: E402
-from governance.coverage import distribution  # noqa: E402
 
 
 # ---------------------------------------------------------------- P4a 分级 + 受限如实标注
@@ -109,22 +105,6 @@ def _tuchong_collection() -> dict:
     }
 
 
-def _use_research_distribution(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    policy = distribution.load_content_distribution_policy()
-    research_policy = replace(
-        policy,
-        product_lifecycle_state=distribution.ProductLifecycleState.RESEARCH,
-        release_class=distribution.ReleaseClass.RESEARCH,
-    )
-    monkeypatch.setattr(
-        distribution,
-        "load_content_distribution_policy",
-        lambda: research_policy,
-    )
-
-
 def test_p4b_full_per_image_authorization_passes_gate():
     verdict = _collection_gate(
         _tuchong_collection(), entity_id="九寨沟", vertical="travel"
@@ -132,10 +112,7 @@ def test_p4b_full_per_image_authorization_passes_gate():
     assert verdict["passed"], verdict["issues"]
 
 
-def test_p4b_research_missing_authorization_is_audited_not_blocked(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    _use_research_distribution(monkeypatch)
+def test_p4b_missing_authorization_is_audited_not_blocked_during_acquisition():
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0].pop("authorizationProof")
     verdict = _collection_gate(bad, entity_id="九寨沟", vertical="travel")
@@ -144,10 +121,7 @@ def test_p4b_research_missing_authorization_is_audited_not_blocked(
     assert any("authorizationProof" in issue for issue in verdict["rightsAuditIssues"])
 
 
-def test_p4b_research_unsupported_license_is_audited_not_blocked(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    _use_research_distribution(monkeypatch)
+def test_p4b_unsupported_license_is_audited_not_blocked_during_acquisition():
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0]["license"] = "CC BY-NC 4.0"
     bad["images"][0]["termsUrl"] = "https://creativecommons.org/licenses/by-nc/4.0/"
@@ -157,10 +131,7 @@ def test_p4b_research_unsupported_license_is_audited_not_blocked(
     assert verdict["rightsAuditIssues"]
 
 
-def test_p4b_research_lifecycle_is_not_inferred_from_vertical_name(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    _use_research_distribution(monkeypatch)
+def test_p4b_release_class_is_not_inferred_from_vertical_name():
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0].pop("authorizationProof")
     verdict = _collection_gate(bad, entity_id="九寨沟", vertical="photography")
@@ -173,9 +144,9 @@ def test_p4b_research_lifecycle_is_not_inferred_from_vertical_name(
 
 def test_p4c_non_chinese_image_caption_blocked():
     # 英文/拉丁主导 caption 退化（须先译简体中文）。
-    assert _caption_is_degraded("Jiuzhaigou Valley National Park scenic area")
+    assert caption_is_degraded("Jiuzhaigou Valley National Park scenic area")
     # 中文 caption 合格。
-    assert not _caption_is_degraded("九寨沟五花海清晨的倒影")
+    assert not caption_is_degraded("九寨沟五花海清晨的倒影")
 
     issues = caption_semantic_issues(
         [{"assetId": "a1", "caption": "Jiuzhaigou Valley National Park", "fileName": "x.jpg"}]

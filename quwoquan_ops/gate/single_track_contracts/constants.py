@@ -411,5 +411,8 @@ TEXT_SUFFIXES = {
     ".sh",
     ".java",
     ".kt",
+    # Gradle 构建脚本同样声明契约校验：Android 打包期的 trust envelope 断言就写在
+    # `build.gradle.kts` 里。少扫这个后缀，版本信封可以在构建脚本里长期存活。
+    ".kts",
     ".swift",
 }

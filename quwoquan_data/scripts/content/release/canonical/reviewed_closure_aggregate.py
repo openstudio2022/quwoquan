@@ -20,9 +20,10 @@ from content.release.canonical.object_transaction_contract import (
     _safe_id,
     _safe_rel,
 )
-from core.media_asset_url import sha256_file
+from core.content_library import MEDIA_KIND, admit_library_entry
+from core.media_asset_url import release_media_delivery_key, sha256_file
 from core.release_layout import payload_file, payload_root
-from core.source_digest import SourceDigest
+from core.source_digest import SourceDefinitionSnapshot
 
 OBJECT_KINDS = ("creators", "entities", "posts", "tags")
 
@@ -36,7 +37,7 @@ class ReviewedClosureSelection:
     object_root: Path
     source_release_root: Path
     media_manifest: dict[str, Any]
-    source_digest: SourceDigest
+    source_digest: SourceDefinitionSnapshot
 
 
 def _normalized_refs(value: object, *, label: str) -> tuple[str, ...]:
@@ -171,11 +172,19 @@ def copy_reviewed_closure_media(
             raise ObjectTransactionError(
                 f"reviewed closure adoption media asset {index} is invalid"
             )
+        try:
+            delivery_key = release_media_delivery_key(row)
+        except ValueError as exc:
+            raise ObjectTransactionError(
+                f"reviewed closure adoption media asset {index} is invalid: {exc}"
+            ) from exc
         public_slice = _safe_rel(
-            str(row.get("publicSliceKey") or ""),
-            label=f"mediaAssets[{index}].publicSliceKey",
+            delivery_key,
+            label=f"mediaAssets[{index}].deliveryKey",
         ).as_posix()
-        if public_slice in expected_slices:
+        # Research CAS keys are content-addressed and may be shared by several
+        # assets; derived public slices stay exclusive (DEC-031).
+        if public_slice in expected_slices and "publicSliceKey" in row:
             raise ObjectTransactionError(
                 f"reviewed closure adoption media slice duplicated: {public_slice}"
             )
@@ -197,6 +206,10 @@ def copy_reviewed_closure_media(
             raise ObjectTransactionError(
                 f"reviewed closure adoption media copy drifted: {public_slice}"
             )
+        # 采纳出的 release 自己声明这些 holding，所以字节必须同时进入 content
+        # library：否则新 release 一被复核就会因 holding 不可达而失败，而它引用的
+        # 恰恰是刚刚验证过的同一份字节。
+        admit_library_entry(target, kind=MEDIA_KIND, sha256=expected)
     source_payload = payload_root(source_release_root)
     source_media_root = source_payload / "media"
     actual_source_slices = {

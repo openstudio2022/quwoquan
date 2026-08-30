@@ -10,32 +10,57 @@ import (
 
 const dataContentResultSchema = "quwoquan.data_content_object_result"
 
+// data_content_worker_response.schema.json 只声明这三个验收类；canonical 验收统一
+// 走 canonical_pool，调用方自造的类别必须 fail closed。
 const (
-	DataContentAcceptanceCommercialCanonical = "commercial_canonical"
-	DataContentAcceptanceResearchCanonical   = "research_canonical"
-	DataContentAcceptanceStageCompleted      = "stage_completed"
-	DataContentAcceptanceContractFixture     = "contract_fixture"
+	DataContentAcceptanceCanonicalPool   = "canonical_pool"
+	DataContentAcceptanceStageCompleted  = "stage_completed"
+	DataContentAcceptanceContractFixture = "contract_fixture"
 )
 
 var dataContentPayloadFields = map[string]struct{}{
-	"schema":               {},
-	"jobId":                {},
-	"executionId":          {},
-	"ref":                  {},
-	"stage":                {},
-	"partitionKey":         {},
-	"entityRef":            {},
-	"carrier":              {},
-	"sourceRevision":       {},
-	"idempotencyKey":       {},
-	"jobSetEnvelopeDigest": {},
-	"jobSetDigest":         {},
-	"actualTaskDigest":     {},
-	"maxAttempts":          {},
-	"workerHostSetDigest":  {},
-	"workerHostGeneration": {},
-	"workerFencingToken":   {},
-	"workerHostScopeId":    {},
+	"schema":                      {},
+	"jobId":                       {},
+	"executionId":                 {},
+	"ref":                         {},
+	"stage":                       {},
+	"partitionKey":                {},
+	"entityRef":                   {},
+	"carrier":                     {},
+	"sourceRevision":              {},
+	"idempotencyKey":              {},
+	"jobSetEnvelopeDigest":        {},
+	"jobSetDigest":                {},
+	"actualTaskDigest":            {},
+	"maxAttempts":                 {},
+	"workerHostSetDigest":         {},
+	"workerHostGeneration":        {},
+	"workerFencingToken":          {},
+	"workerHostScopeId":           {},
+	"executionEnvelopeDigest":     {},
+	"campaignRootExecutionId":     {},
+	"campaignRunId":               {},
+	"campaignGeneration":          {},
+	"campaignFencingToken":        {},
+	"campaignPlanDigest":          {},
+	"campaignSourceRevision":      {},
+	"campaignSourceDigest":        {},
+	"campaignEntityCatalogDigest": {},
+}
+
+// dataContentCampaignPayloadFields are written as one closed set by
+// DataContentCampaignBinding.payload, so a worker may only observe all of them
+// or none of them.
+var dataContentCampaignPayloadFields = []string{
+	"executionEnvelopeDigest",
+	"campaignRootExecutionId",
+	"campaignRunId",
+	"campaignGeneration",
+	"campaignFencingToken",
+	"campaignPlanDigest",
+	"campaignSourceRevision",
+	"campaignSourceDigest",
+	"campaignEntityCatalogDigest",
 }
 
 // DataContentWorkItem is the single-track worker input decoded from object_job.
@@ -59,6 +84,11 @@ type DataContentWorkItem struct {
 	WorkerHostGeneration int    `json:"workerHostGeneration,omitempty"`
 	WorkerFencingToken   string `json:"workerFencingToken,omitempty"`
 	WorkerHostScopeID    string `json:"workerHostScopeId,omitempty"`
+	// ExecutionEnvelopeDigest and Campaign are present only for a campaign-owned
+	// execution. A standalone dispatch carries neither, and a partial binding is
+	// rejected rather than silently narrowed to a standalone one.
+	ExecutionEnvelopeDigest string                     `json:"executionEnvelopeDigest,omitempty"`
+	Campaign                DataContentCampaignBinding `json:"campaignBinding,omitempty"`
 }
 
 func DecodeDataContentWorkItem(task ReliableAsyncTask) (DataContentWorkItem, error) {
@@ -107,6 +137,39 @@ func DecodeDataContentWorkItem(task ReliableAsyncTask) (DataContentWorkItem, err
 			)
 		}
 	}
+	campaignFieldCount := 0
+	for _, field := range dataContentCampaignPayloadFields {
+		if strings.TrimSpace(task.Payload[field]) != "" {
+			campaignFieldCount++
+		}
+	}
+	if campaignFieldCount != 0 &&
+		campaignFieldCount != len(dataContentCampaignPayloadFields) {
+		return DataContentWorkItem{}, fmt.Errorf(
+			"reliabletask data worker campaign binding is incomplete",
+		)
+	}
+	campaign := DataContentCampaignBinding{}
+	if campaignFieldCount == len(dataContentCampaignPayloadFields) {
+		generation, err := strconv.Atoi(
+			strings.TrimSpace(task.Payload["campaignGeneration"]),
+		)
+		if err != nil || generation < 1 {
+			return DataContentWorkItem{}, fmt.Errorf(
+				"reliabletask data worker campaign generation is invalid",
+			)
+		}
+		campaign = DataContentCampaignBinding{
+			RootExecutionID:     strings.TrimSpace(task.Payload["campaignRootExecutionId"]),
+			RunID:               strings.TrimSpace(task.Payload["campaignRunId"]),
+			Generation:          generation,
+			FencingToken:        strings.TrimSpace(task.Payload["campaignFencingToken"]),
+			PlanDigest:          strings.TrimSpace(task.Payload["campaignPlanDigest"]),
+			SourceRevision:      strings.TrimSpace(task.Payload["campaignSourceRevision"]),
+			SourceDigest:        strings.TrimSpace(task.Payload["campaignSourceDigest"]),
+			EntityCatalogDigest: strings.TrimSpace(task.Payload["campaignEntityCatalogDigest"]),
+		}
+	}
 	maxAttempts, err := strconv.Atoi(strings.TrimSpace(task.Payload["maxAttempts"]))
 	if err != nil || maxAttempts < 1 {
 		return DataContentWorkItem{}, fmt.Errorf(
@@ -133,21 +196,27 @@ func DecodeDataContentWorkItem(task ReliableAsyncTask) (DataContentWorkItem, err
 		WorkerHostGeneration: hostGeneration,
 		WorkerFencingToken:   strings.TrimSpace(task.Payload["workerFencingToken"]),
 		WorkerHostScopeID:    strings.TrimSpace(task.Payload["workerHostScopeId"]),
+		ExecutionEnvelopeDigest: strings.TrimSpace(
+			task.Payload["executionEnvelopeDigest"],
+		),
+		Campaign: campaign,
 	}
 	job := DataContentJob{
-		EntityRef:            item.EntityRef,
-		Carrier:              item.Carrier,
-		SourceRevision:       item.SourceRevision,
-		JobID:                item.JobID,
-		ExecutionID:          item.ExecutionID,
-		Ref:                  item.Ref,
-		Stage:                item.Stage,
-		PartitionKey:         item.PartitionKey,
-		IdempotencyKey:       item.IdempotencyKey,
-		JobSetEnvelopeDigest: item.JobSetEnvelopeDigest,
-		JobSetDigest:         item.JobSetDigest,
-		ActualTaskDigest:     item.ActualTaskDigest,
-		MaxAttempts:          item.MaxAttempts,
+		EntityRef:               item.EntityRef,
+		Carrier:                 item.Carrier,
+		SourceRevision:          item.SourceRevision,
+		JobID:                   item.JobID,
+		ExecutionID:             item.ExecutionID,
+		Ref:                     item.Ref,
+		Stage:                   item.Stage,
+		PartitionKey:            item.PartitionKey,
+		IdempotencyKey:          item.IdempotencyKey,
+		JobSetEnvelopeDigest:    item.JobSetEnvelopeDigest,
+		JobSetDigest:            item.JobSetDigest,
+		ActualTaskDigest:        item.ActualTaskDigest,
+		MaxAttempts:             item.MaxAttempts,
+		ExecutionEnvelopeDigest: item.ExecutionEnvelopeDigest,
+		Campaign:                item.Campaign,
 	}
 	if hostFieldCount == 4 {
 		job.WorkerFence = &DataContentWorkerFence{
@@ -209,8 +278,7 @@ func (r DataContentExecutionResult) validate(item DataContentWorkItem) error {
 		}
 	}
 	switch r.AcceptanceClass {
-	case DataContentAcceptanceCommercialCanonical,
-		DataContentAcceptanceResearchCanonical:
+	case DataContentAcceptanceCanonicalPool:
 		if item.Stage != "publish" {
 			return fmt.Errorf(
 				"reliabletask canonical data result requires publish stage",
@@ -263,8 +331,7 @@ func (r DataContentExecutionResult) validate(item DataContentWorkItem) error {
 func (r DataContentExecutionResult) document() map[string]string {
 	status := "contract_fixture"
 	switch r.AcceptanceClass {
-	case DataContentAcceptanceCommercialCanonical,
-		DataContentAcceptanceResearchCanonical:
+	case DataContentAcceptanceCanonicalPool:
 		status = "accepted"
 	case DataContentAcceptanceStageCompleted:
 		status = "stage_completed"
@@ -322,8 +389,7 @@ func (f DataContentFleet) ProcessOneContent(
 		if err := result.validate(item); err != nil {
 			return err
 		}
-		if (result.AcceptanceClass == DataContentAcceptanceCommercialCanonical ||
-			result.AcceptanceClass == DataContentAcceptanceResearchCanonical) &&
+		if result.AcceptanceClass == DataContentAcceptanceCanonicalPool &&
 			f.ResultVerifier == nil {
 			return fmt.Errorf(
 				"reliabletask canonical data result requires evidence verifier",

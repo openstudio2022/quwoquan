@@ -9,11 +9,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
+
+from quwoquan_ops.cli.lib.feature_tree.evidence import extract_spec_refs
+from quwoquan_ops.cli.lib.feature_tree.patterns import ACCEPTANCE_ANCHOR_RE
+from quwoquan_ops.cli.lib.test_data.cases.ids import AcceptanceCaseId
 
 GOVERNED_DOMAINS = (
     "entity",
@@ -25,11 +32,10 @@ GOVERNED_DOMAINS = (
 CONTRACT_GRAPH_PATH = Path("quwoquan_service/generated/contract_graph.json")
 APP_API_TEST_PREFIX = "quwoquan_app/test/api_integration/service/"
 APP_API_TEST_SUFFIX = "__api_integration_test.dart"
-SPEC_REF = re.compile(
-    r"spec_ref:\s*specs/feature-tree/[^\s#]+/spec\.md#"
-    r"(?:uat|dom|sit|gwt)-\d+",
-    re.IGNORECASE,
-)
+# spec_ref 语法解析复用 feature-tree 库唯一 lexical 入口；本处只保留语义过滤：
+# 稳定证据必须至少有一个指向验收锚点（`.tN` 子句同样成立）的显式绑定。
+# 闭集与位数引用 feature-tree 库唯一定义点。
+_ACCEPTANCE_ANCHOR = ACCEPTANCE_ANCHOR_RE
 HARNESS_IMPORT = re.compile(
     r"import\s+'([^']*support/runtime/api_contract/"
     r"[a-z0-9_]+_api_contract_harness\.dart)';"
@@ -48,6 +54,17 @@ FORBIDDEN_TEST_ONLY_PATTERNS = {
     "platform environment": re.compile(r"\bPlatform\.environment\b"),
 }
 TYPED_ENVIRONMENT_RESOLVER = "api_contract_environment.dart"
+MANAGED_GATHERING_PLAN_DEFINE_KEYS = (
+    "QWQ_GATHERING_PLAN_ACCESS_TOKEN",
+    "QWQ_GATHERING_PLAN_ACCOUNT_ID",
+    "QWQ_GATHERING_PLAN_PERSONA_ID",
+    "QWQ_GATHERING_PLAN_GATHERING_ID",
+    "QWQ_GATHERING_PLAN_PLAN_ID",
+    "QWQ_GATHERING_PLAN_VERSION",
+    "QWQ_GATHERING_PLAN_CURRENT_REVISION_ID",
+    "QWQ_GATHERING_PLAN_CURRENT_REVISION_NUMBER",
+    "QWQ_GATHERING_PLAN_CURRENT_REVISION_DIGEST",
+)
 
 
 @dataclass(frozen=True)
@@ -57,6 +74,7 @@ class DomainRemoteApiCase:
     test_path: str
     test_sha256: str
     service_test_paths: tuple[str, ...]
+    readiness_case_ids: tuple[str, ...] = ()
     harness_path: str = ""
 
     @property
@@ -70,12 +88,137 @@ class DomainRemoteApiCase:
             "testPath": self.test_path,
             "testSha256": self.test_sha256,
             "serviceApiTestCount": self.service_api_test_count,
+            "readinessCaseIds": list(self.readiness_case_ids),
             "harnessPath": self.harness_path,
         }
 
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def managed_readiness_case_ids(
+    cases: list[DomainRemoteApiCase],
+) -> tuple[AcceptanceCaseId, ...]:
+    managed_case_id = AcceptanceCaseId.CIRCLE_GATHERING_PLAN
+    return (
+        (managed_case_id,)
+        if any(
+            case_id == managed_case_id.value
+            for case in cases
+            for case_id in case.readiness_case_ids
+        )
+        else ()
+    )
+
+
+def create_private_define_file(definitions: Mapping[str, object]) -> Path:
+    missing = [
+        key
+        for key in MANAGED_GATHERING_PLAN_DEFINE_KEYS
+        if not str(definitions.get(key) or "").strip()
+    ]
+    if missing:
+        raise ValueError(
+            "managed GatheringPlan definitions are incomplete: " + ", ".join(missing)
+        )
+    fd, raw_path = tempfile.mkstemp(prefix="qwq-gathering-plan-", suffix=".json")
+    path = Path(raw_path)
+    try:
+        os.fchmod(fd, 0o600)
+        handle = os.fdopen(fd, "w", encoding="utf-8")
+        fd = -1
+        with handle:
+            json.dump(
+                {key: definitions[key] for key in MANAGED_GATHERING_PLAN_DEFINE_KEYS},
+                handle,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            handle.write("\n")
+    except BaseException:
+        if fd >= 0:
+            os.close(fd)
+        path.unlink(missing_ok=True)
+        raise
+    return path
+
+
+def sanitized_flutter_argv(argv: list[str]) -> list[str]:
+    sanitized: list[str] = []
+    for item in argv:
+        if item.startswith("--dart-define-from-file="):
+            sanitized.append("--dart-define-from-file=<private>")
+        else:
+            sanitized.append(item)
+    return sanitized
+
+
+def _redact_private_flutter_output(
+    output: object,
+    *,
+    private_path: Path,
+    definitions: Mapping[str, object],
+) -> str:
+    redacted = str(output or "").replace(str(private_path), "<private>")
+    private_values = sorted(
+        {
+            str(definitions[key])
+            for key in MANAGED_GATHERING_PLAN_DEFINE_KEYS
+            if str(definitions.get(key) or "")
+        },
+        key=len,
+        reverse=True,
+    )
+    for value in private_values:
+        redacted = redacted.replace(value, "<private>")
+    return redacted
+
+
+def run_flutter_with_private_defines(
+    definitions: Mapping[str, object],
+    *,
+    command_prefix: list[str],
+    test_paths: list[str],
+    runner: Any,
+    cwd: Path,
+) -> tuple[Any, list[str]]:
+    define_path = create_private_define_file(definitions)
+    command = [
+        *command_prefix,
+        f"--dart-define-from-file={define_path}",
+        *test_paths,
+    ]
+    try:
+        result = runner(command, cwd=cwd)
+        sanitized_result = subprocess.CompletedProcess(
+            sanitized_flutter_argv(command),
+            result.returncode,
+            stdout=_redact_private_flutter_output(
+                result.stdout,
+                private_path=define_path,
+                definitions=definitions,
+            ),
+            stderr=_redact_private_flutter_output(
+                result.stderr,
+                private_path=define_path,
+                definitions=definitions,
+            ),
+        )
+    finally:
+        define_path.unlink(missing_ok=True)
+    if define_path.exists():
+        raise RuntimeError("managed GatheringPlan private define cleanup failed")
+    return sanitized_result, sanitized_flutter_argv(command)
+
+
+def has_stable_spec_ref(source: str) -> bool:
+    """源码是否声明了至少一个指向验收锚点的显式 spec_ref 绑定。"""
+    return any(
+        _ACCEPTANCE_ANCHOR.match(ref.partition("#")[2])
+        for ref in extract_spec_refs(source)
+    )
 
 
 def _graph_document(root: Path) -> dict[str, Any]:
@@ -119,6 +262,30 @@ def _discover_cases(
     required_test_paths: set[str] | None,
 ) -> tuple[list[DomainRemoteApiCase], list[str]]:
     document = _graph_document(root)
+    readiness_case_ids_by_path: dict[str, set[str]] = {}
+    for item in document.get("readinessCases", []):
+        if not isinstance(item, dict):
+            continue
+        runner_path = str(item.get("runnerSourcePath") or "").strip()
+        case_id = str(item.get("caseId") or "").strip()
+        executions = item.get("executions")
+        executions = executions if isinstance(executions, list) else []
+        app_gamma_runner = any(
+            isinstance(execution, dict)
+            and execution.get("environment") == "gamma"
+            and execution.get("platform") == "app"
+            and execution.get("deviceClass") == "runner"
+            for execution in executions
+        )
+        if (
+            item.get("producer") == "app"
+            and item.get("layer") == "api_integration"
+            and runner_path.startswith(APP_API_TEST_PREFIX)
+            and runner_path.endswith(APP_API_TEST_SUFFIX)
+            and case_id
+            and app_gamma_runner
+        ):
+            readiness_case_ids_by_path.setdefault(runner_path, set()).add(case_id)
     cases: list[DomainRemoteApiCase] = []
     issues: list[str] = []
     seen_paths: set[str] = set()
@@ -179,6 +346,9 @@ def _discover_cases(
                             }
                         )
                     ),
+                    readiness_case_ids=tuple(
+                        sorted(readiness_case_ids_by_path.get(test_path, set()))
+                    ),
                 )
             )
     cases.sort(key=lambda case: (case.domain, case.object_id, case.test_path))
@@ -212,7 +382,7 @@ def validate_cases(
             issues.append(
                 f"{case.domain}: ContractGraph digest is stale for {case.test_path}"
             )
-        if SPEC_REF.search(source) is None:
+        if not has_stable_spec_ref(source):
             issues.append(f"{case.domain}: test lacks stable spec_ref: {case.test_path}")
         for label, pattern in FORBIDDEN_SOURCE_PATTERNS.items():
             if pattern.search(source):
@@ -282,6 +452,7 @@ def validate_cases(
                 test_path=case.test_path,
                 test_sha256=case.test_sha256,
                 service_test_paths=case.service_test_paths,
+                readiness_case_ids=case.readiness_case_ids,
                 harness_path=harness_relative,
             )
         )

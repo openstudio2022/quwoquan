@@ -10,8 +10,10 @@ from core.io import read_json
 from core.paths import PUBLISH_ROOT, RELEASE_ROOT, execution_root
 from core.schema import assert_valid
 from core.stage_artifact_contract import (
+    COMMON_STAGE_ARTIFACTS,
     PROCESS_ARTIFACT_NAMES,
     SOURCE_UNIT_ARTIFACTS,
+    STAGES,
     required_final_artifacts,
     required_stage_artifacts,
 )
@@ -27,6 +29,7 @@ class ArtifactSchema:
 _SCHEMA_FILES = {
     "2.quality/quality_analysis.json": ArtifactSchema("content", "quality_analysis", True),
     "3.compose/entity_page_input.json": ArtifactSchema("content", "entity_page_input", True),
+    "3.compose/writing_pack.json": ArtifactSchema("content", "writing_pack", True),
     "4.draft/author_job_packet.json": ArtifactSchema("content", "author_job_packet", True),
     "4.draft/prompt_snapshot.json": ArtifactSchema("execution", "prompt_snapshot", True),
     "4.draft/draft_meta.json": ArtifactSchema("content", "draft_meta", True),
@@ -40,8 +43,9 @@ _SCHEMA_FILES = {
     "5.review/evidence_index.json": ArtifactSchema("content", "evidence_index"),
 }
 
-_FORBIDDEN_STAGE_DIRS = {"1.download", "2.quality", "3.compose", "4.draft", "5.review"}
 _IDENTITY_FIELDS = ("executionId",)
+_COMPOSE_HOMEPAGE_REL = "3.compose/entity_page_input.json"
+_COMPOSE_PACK_REL = "3.compose/writing_pack.json"
 
 
 def _validate_json(
@@ -66,7 +70,7 @@ def _boundary_issues(root: Path, *, root_kind: str) -> list[str]:
         return []
     issues: list[str] = []
     for path in root.rglob("*"):
-        if path.is_dir() and path.name in _FORBIDDEN_STAGE_DIRS:
+        if path.is_dir() and path.name in STAGES:
             issues.append(f"{root_kind}: process stage directory forbidden: {path}")
         if path.is_file() and path.name in PROCESS_ARTIFACT_NAMES:
             issues.append(f"{root_kind}: process artifact forbidden: {path}")
@@ -81,9 +85,9 @@ def _boundary_issues(root: Path, *, root_kind: str) -> list[str]:
 
 
 def _object_lane(object_root: Path) -> str:
-    if (object_root / "3.compose/entity_page_input.json").is_file():
+    if (object_root / _COMPOSE_HOMEPAGE_REL).is_file():
         return "homepage"
-    writing_pack = read_json(object_root / "3.compose/writing_pack.json")
+    writing_pack = read_json(object_root / _COMPOSE_PACK_REL)
     carrier = str(writing_pack.get("carrier") or "").lower()
     if carrier == "image":
         return "image"
@@ -109,37 +113,65 @@ def object_stage_contract_issues(object_root: Path, lane: str) -> list[str]:
     return issues
 
 
+def _object_roots(root: Path, through: str | None) -> list[Path]:
+    """对象发现锚点。默认（完成型）只认 compose 产物，行为与历史一致；
+    进行式 `--through 1.download/2.quality` 额外用更早阶段产物发现对象，
+    否则中期阶段的对象不可见、门恒假绿。"""
+    anchors = {
+        *root.glob(f"**/{_COMPOSE_HOMEPAGE_REL}"),
+        *root.glob(f"**/{_COMPOSE_PACK_REL}"),
+    }
+    if through in ("1.download", "2.quality"):
+        anchors |= {
+            *root.glob("**/1.download/source_refs.json"),
+            *root.glob("**/2.quality/quality_analysis.json"),
+        }
+    return sorted({path.parent.parent for path in anchors})
+
+
 def verify_stage_artifacts(
     *,
     execution_id: str,
     publish_root: Path = PUBLISH_ROOT,
     release_root: Path = RELEASE_ROOT,
     commercial: bool = True,
+    through: str | None = None,
 ) -> dict[str, Any]:
+    if through is not None and through not in STAGES:
+        raise ValueError(f"unsupported --through stage: {through}")
     root = execution_root(execution_id)
     issues: list[str] = []
     object_count = 0
     checked_artifacts = 0
+    stage_cut = (
+        tuple(STAGES)
+        if through is None
+        else tuple(STAGES[: STAGES.index(through) + 1])
+    )
 
-    compose_paths = {
-        *root.glob("**/3.compose/entity_page_input.json"),
-        *root.glob("**/3.compose/writing_pack.json"),
-    }
-    for compose_path in sorted(compose_paths):
+    for obj in _object_roots(root, through):
         object_count += 1
-        obj = compose_path.parent.parent
         rel = obj.relative_to(root)
-        lane = _object_lane(obj)
-        for stage, names in required_stage_artifacts(lane).items():
-            for name in names:
+        has_compose = (obj / _COMPOSE_HOMEPAGE_REL).is_file() or (
+            obj / _COMPOSE_PACK_REL
+        ).is_file()
+        lane = _object_lane(obj) if has_compose else None
+        required = (
+            required_stage_artifacts(lane)
+            if lane is not None
+            else {stage: COMMON_STAGE_ARTIFACTS.get(stage, ()) for stage in STAGES}
+        )
+        for stage in stage_cut:
+            for name in required.get(stage, ()):
                 path = obj / stage / name
                 if not path.is_file():
                     issues.append(f"{rel}: missing {stage}/{name}")
                 else:
                     checked_artifacts += 1
-        for final_rel in required_final_artifacts(lane):
-            if not (obj / final_rel).is_file():
-                issues.append(f"{rel}: missing final/{final_rel}")
+        if through is None:
+            for final_rel in required_final_artifacts(lane):
+                if not (obj / final_rel).is_file():
+                    issues.append(f"{rel}: missing final/{final_rel}")
         for relative, schema in _SCHEMA_FILES.items():
             path = obj / relative
             if not path.is_file():
@@ -206,8 +238,10 @@ def verify_stage_artifacts(
                 actual_unit_id = str(meta.get("sourceUnitId") or "").strip()
                 if not expected_unit_id or expected_unit_id != actual_unit_id:
                     issues.append(f"{rel}: source unit identity drift: {meta_ref}")
+        # review 通过性是完成型断言：--through 截止在 5.review 之前时，
+        # 磁盘上可能留有上一轮 reject 产物（return_to_stage 回退中），不适用。
         attestation_path = obj / "5.review/attestation.json"
-        if commercial and attestation_path.is_file():
+        if commercial and "5.review" in stage_cut and attestation_path.is_file():
             attestation = read_json(attestation_path)
             reviewer_status = str((attestation.get("independentReviewer") or {}).get("status") or "")
             if reviewer_status != "passed":
@@ -224,6 +258,7 @@ def verify_stage_artifacts(
         "objectCount": object_count,
         "checkedArtifacts": checked_artifacts,
         "commercial": commercial,
+        "through": through,
         "issues": issues,
         "passed": not issues,
     }

@@ -12,6 +12,8 @@ import re
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -19,6 +21,7 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.ci.render_provider_conformance_source import (  # noqa: F401
     expected_required_cell_count_from_readiness,
 )
+from quwoquan_ops.cli.lib.app_identity import supported_build_products
 
 
 SCHEMA = "release-evidence-manifest"
@@ -38,15 +41,18 @@ STATUSES = frozenset(
         "rollback-failed",
     }
 )
-APPLICATION_PLATFORMS = ("android", "ios", "web", "macos")
-APPLICATION_PACKAGES = {
-    environment: (
-        *APPLICATION_PLATFORMS,
-        *(("opsPortal",) if environment == "prod" else ()),
-    )
-    for environment in ENVIRONMENTS
-}
+APPLICATION_BUILD_PRODUCTS = supported_build_products()
+APPLICATION_PACKAGES = tuple(
+    product.build_product_id for product in APPLICATION_BUILD_PRODUCTS
+)
+if len(APPLICATION_PACKAGES) != 5 or len(set(APPLICATION_PACKAGES)) != 5:
+    raise ValueError("ReleaseEvidence App baseline must contain exactly five products")
 REQUIRED_RELEASE_EVIDENCE = ("contractGraph", "providerEvidence", "testEvidence")
+OPTIONAL_RELEASE_EVIDENCE = ("publicWeb", "androidOfficialRelease")
+DISTRIBUTION_EVIDENCE_PATHS = {
+    "publicWeb": "evidence/distribution/public-web-manifest.json",
+    "androidOfficialRelease": "evidence/distribution/android-release-manifest.json",
+}
 TEST_LAYERS = ("local_contract", "api_integration", "user_acceptance")
 RELEASE_CLOSURE_PATHS = {
     "pilot-release": "evidence/release/pilot-release-attestation.json",
@@ -63,14 +69,17 @@ ROLLBACK_RECEIPT_SCHEMA = "release-rollback-receipt"
 ROOT_FIELDS = frozenset(
     {
         "schema",
+        "releaseTrainId",
         "candidateId",
         "status",
         "generatedAt",
         "source",
         "artifactDigest",
-        "images",
-        "configurationPackages",
+        "environmentArtifacts",
         "applicationPackages",
+        "publicWeb",
+        "androidOfficialRelease",
+        "opsPortal",
         "contractGraphDigest",
         "requiredEvidence",
         "testEvidence",
@@ -115,24 +124,27 @@ APPLICATION_PACKAGE_SCHEMA = "release-application-package"
 APPLICATION_PACKAGE_FIELDS = frozenset(
     {
         "schema",
-        "environment",
-        "surface",
+        "buildProductId",
+        "buildProfile",
+        "platform",
         "sourceGitSha",
         "sourceTreeDigest",
         "packageDigest",
+        "artifactManifest",
     }
 )
 APPLICATION_DESCRIPTOR_FIELDS = frozenset(
     {"path", "digest", "packageDigest", "sourceRef"}
 )
+DISTRIBUTION_DESCRIPTOR_FIELDS = frozenset({"path", "digest"})
+APPLICATION_SOURCE_DESCRIPTOR_FIELDS = APPLICATION_DESCRIPTOR_FIELDS | {
+    "buildProductId"
+}
+OPS_PORTAL_SCHEMA = "qwq.ops_portal_package"
+OPS_PORTAL_SOURCE_DESCRIPTOR_FIELDS = APPLICATION_DESCRIPTOR_FIELDS | {"evidenceKey"}
 OCI_DIGEST_REF_PATTERN = re.compile(
     r"oci://ghcr\.io/[A-Za-z0-9._/-]+@sha256:[0-9a-f]{64}"
 )
-PROD_APPLICATION_SOURCE_SCHEMAS = {
-    "web": "client-app.web.official-release",
-    "android": "client-app.android.official-release",
-    "opsPortal": "qwq.ops_portal_package",
-}
 
 if __name__ == "__main__":
     # 直接以脚本运行时本模块名是 __main__；先把它注册为规范模块名，
@@ -147,7 +159,9 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact_lib.canonical_dige
     _candidate_projection,
     canonical_bytes,
     canonical_candidate_digest,
+    canonical_environment_artifact_digest,
     canonical_manifest_digest,
+    canonical_release_train_digest,
     load_json,
     seal_manifest,
     sha256_file,
@@ -164,7 +178,7 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact_lib.manifest_valid
     _require_string_list,
     _validate_application_packages,
     _validate_candidate_evidence,
-    _validate_configuration_packages,
+    _validate_environment_artifacts,
     _validate_images,
     _validate_packages,
     _validate_receipt_descriptor,

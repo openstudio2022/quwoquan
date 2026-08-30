@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/_common/zero_qualified_reason.schema.json",
+  "title": "Zero-qualified terminal reason",
+  "description": "`qualified == 0` 的唯一 typed 原因与其证据字段。lane 回执、campaign 报告与 fleet 运行回执引用同一定义，三层不各自声明枚举。原因由终结该终态的那一层观测者写一次，其余层只向上引用。原因值、观测阶段与运营动作是三个互相约束的闭集：每个原因值绑定唯一观测阶段与唯一运营动作，任一原因进入时三者同批扩容，新原因不得借用语义不符的既有阶段或既有动作。七个原因值各有一条条件分支，阶段与动作因此是全函数，闭集之外的取值没有可落的分支。外部引用的 $defs 不含内部 $ref，以便被任一消费者内联。",
+  "$defs": {
+    "zeroQualifiedReason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "observedStage", "determinedAt", "operatorAction"],
+      "properties": {
+        "code": {
+          "enum": [
+            "SOURCE_POOL_EMPTY",
+            "SOURCE_ACCESS_DENIED_OR_UNREACHABLE",
+            "BATCH_DEADLINE_EXHAUSTED",
+            "ALL_OBJECTS_QUALITY_REJECTED",
+            "RESUMABLE_INTERRUPTION",
+            "ALL_OBJECTS_OVER_PUBLISH_STORAGE_BUDGET",
+            "ALL_CANDIDATE_ENTITIES_SELECTOR_EXCLUDED"
+          ]
+        },
+        "observedStage": {
+          "enum": [
+            "source_discovery",
+            "review",
+            "delivery",
+            "publish_admission",
+            "selector_admission"
+          ]
+        },
+        "determinedAt": {
+          "type": "string",
+          "minLength": 1,
+          "format": "date-time"
+        },
+        "operatorAction": {
+          "enum": [
+            "resume",
+            "repair_source",
+            "refreeze_time_budget",
+            "reduce_object_footprint",
+            "broaden_candidate_scope"
+          ]
+        },
+        "resumableRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          }
+        },
+        "admissionExclusionRefs": {
+          "type": "array",
+          "description": "逐实体的选择器准入排除条目，指向选择器在冻结选择证据上已声明的排除条目。只属于 ALL_CANDIDATE_ENTITIES_SELECTOR_EXCLUDED，缺它该原因不成立。",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["entityRef", "exclusionRef"],
+            "properties": {
+              "entityRef": {"type": "string", "minLength": 1},
+              "exclusionRef": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+              }
+            }
+          }
+        },
+        "nonResumableBasis": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["summary", "evidenceRef", "evidenceDigest"],
+          "properties": {
+            "summary": {"type": "string", "minLength": 1, "maxLength": 2048},
+            "evidenceRef": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+            },
+            "evidenceDigest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["code"],
+            "properties": {"code": {"const": "SOURCE_POOL_EMPTY"}}
+          },
+          "then": {
+            "properties": {
+              "observedStage": {"const": "source_discovery"},
+              "operatorAction": {"const": "repair_source"}
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["code"],
+            "properties": {
+              "code": {"const": "SOURCE_ACCESS_DENIED_OR_UNREACHABLE"}
+            }
+          },
+          "then": {
+            "properties": {
+              "observedStage": {"const": "source_discovery"},
+              "operatorAction": {"const": "repair_source"}
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["code"],
+            "properties": {
+              "code": {"const": "ALL_OBJECTS_QUALITY_REJECTED"}
+            }
+          },
+          "then": {
+            "properties": {
+              "observedStage": {"const": "review"},
+              "operatorAction": {"const": "repair_source"}
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["code"],
+            "properties": {"code": {"const": "BATCH_DEADLINE_EXHAUSTED"}}
+          },
+          "then": {
+            "properties": {
+              "observedStage": {"const": "delivery"},
+              "operatorAction": {"const": "refreeze_time_budget"}
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["code"],
+            "properties": {"code": {"const": "RESUMABLE_INTERRUPTION"}}
+          },
+          "then": {
+            "required": ["resumableRefs"],
+            "properties": {
+              "observedStage": {"const": "delivery"},
+              "operatorAction": {"const": "resume"}
+            },
+            "not": {"required": ["nonResumableBasis"]}
+          },
+          "else": {
+            "required": ["nonResumableBasis"],
+            "not": {"required": ["resumableRefs"]}
+          }
+        },
+        {
+          "if": {
+            "required": ["code"],
+            "properties": {
+              "code": {"const": "ALL_OBJECTS_OVER_PUBLISH_STORAGE_BUDGET"}
+            }
+          },
+          "then": {
+            "properties": {
+              "observedStage": {"const": "publish_admission"},
+              "operatorAction": {"const": "reduce_object_footprint"}
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["code"],
+            "properties": {
+              "code": {"const": "ALL_CANDIDATE_ENTITIES_SELECTOR_EXCLUDED"}
+            }
+          },
+          "then": {
+            "required": ["admissionExclusionRefs"],
+            "properties": {
+              "observedStage": {"const": "selector_admission"},
+              "operatorAction": {"const": "broaden_candidate_scope"}
+            }
+          },
+          "else": {
+            "not": {"required": ["admissionExclusionRefs"]}
+          }
+        }
+      ]
+    }
+  }
+}

@@ -17,6 +17,10 @@ from content.execution.campaign.submission_reconciliation_contract import (
 from content.execution.identity import build_execution_id
 from core.io import read_json, write_json
 from core.source_digest import content_source_revision
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 
@@ -75,6 +79,9 @@ def _write_boundary(
         stable = {
             "schema": "quwoquan_data.content_execution_submission",
             "scale": "M1",
+            "workloadMode": "explicit",
+            "activeCarriers": list(CARRIERS),
+            "workloads": {item: 1 for item in CARRIERS},
             "rootExecutionId": ROOT_ID,
             "executionId": execution_ids[carrier],
             "operation": f"{carrier}.generate",
@@ -88,11 +95,17 @@ def _write_boundary(
             "targetNames": ["杭州西湖"],
             "sourceProviders": [],
             "semanticSelectionId": "default",
+            "executionAuthority": synthetic_governed_execution_authority(),
             "retryOf": execution_ids[carrier].replace("scale-016", "scale-015"),
             "gitBranch": "dev1.0",
             "gitCommitSha": "d" * 40,
             "sourceRevision": source_revision,
             "sourceDigest": source_document,
+            "executionBundle": {
+                "algorithm": "sha256",
+                "digest": "sha256:" + "e" * 64,
+                "inputs": ["quwoquan_data/scripts"],
+            },
             "entityCatalogDigest": CATALOG_DIGEST,
             "externalInputRefs": [],
             "externalInputsDigest": empty_external,
@@ -118,13 +131,22 @@ def _write_boundary(
         "rootExecutionId": ROOT_ID,
         "executionMode": "distributed",
         "scale": "M1",
+        "workloadMode": "explicit",
+        "activeCarriers": list(CARRIERS),
+        "workloads": {carrier: 1 for carrier in CARRIERS},
         "gitBranch": "dev1.0",
         "gitCommitSha": "d" * 40,
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "e" * 64,
+            "inputs": ["quwoquan_data/scripts"],
+        },
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": preflight_binding,
+        "executionAuthority": synthetic_governed_execution_authority(),
         "laneExternalInputs": lane_external_inputs,
         "externalInputsDigest": payload_digest(
             {
@@ -174,7 +196,7 @@ def _write_boundary(
     monkeypatch.setattr(controller_contract, "_pid_alive", lambda _pid: False)
     monkeypatch.setattr(
         reconciliation,
-        "current_source_digest",
+        "current_source_definition_snapshot",
         lambda **_kwargs: SimpleNamespace(
             to_document=lambda: {
                 "algorithm": "sha256",

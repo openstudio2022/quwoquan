@@ -18,7 +18,6 @@ import '../../../../../support/service/content_service/content/post/content_post
 import '../../../../../support/service/notification_service/notification_delivery/notification/app_message_test_builder.dart';
 import '../../../../../support/service/user_service/account/user_account/user_profile_test_builder.dart';
 
-
 BusinessFixtureSeeds businessFixtureSeeds() {
   final chatSeed = minimalChatStateSeed();
   return BusinessFixtureSeeds(

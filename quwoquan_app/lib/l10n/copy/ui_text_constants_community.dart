@@ -35,6 +35,7 @@ abstract final class CommunityText {
   static const String noData = '暂无数据';
   static const String noLikesRecord = '暂无获赞记录';
   static const String circleWorksTab = '创作';
+  static String circleWorkCount(int count) => '$count 创作';
   static const String circleInteractionTab = '互动';
   static const String circleAssetsTab = '资料', circleLifestyleTab = '生活';
   static const String circleSubAll = '全部', circleSubPhoto = '图片';

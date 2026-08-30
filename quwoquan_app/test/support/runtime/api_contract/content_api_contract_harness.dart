@@ -7,6 +7,9 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/post_
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_reader_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/adapters/profile_interaction_activity_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_read_fact/adapters/profile_interaction_read_fact_remote.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/media_asset_remote.dart';
+import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/media_upload_session_remote.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/adapters/original_access_quota_remote.dart';
 import 'package:quwoquan_app/service/content_service/trust_safety/report/adapters/report_command_remote.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
@@ -47,6 +50,9 @@ final class ContentApiContractHarness {
     required this.profileInteractionReads,
     required this.behaviors,
     required this.reports,
+    required this.mediaUploads,
+    required this.mediaAssets,
+    required this.originalAccess,
     required this.session,
   });
 
@@ -159,6 +165,11 @@ final class ContentApiContractHarness {
         String clientPageId,
       ) => harness._profileInteractionInvocationContext(clientPageId);
 
+      CloudOperationInvocationContext mediaContext(
+        String clientPageId, {
+        required bool command,
+      }) => harness._mediaInvocationContext(clientPageId, command: command);
+
       harness = ContentApiContractHarness._(
         httpClient: httpClient,
         telemetry: telemetry,
@@ -208,6 +219,18 @@ final class ContentApiContractHarness {
           client: client,
           invocationContext: queryContext,
         ),
+        mediaUploads: RemoteContentMediaUploadSessionAdapter(
+          client: client,
+          invocationContext: mediaContext,
+        ),
+        mediaAssets: RemoteContentMediaAssetAdapter(
+          client: client,
+          invocationContext: mediaContext,
+        ),
+        originalAccess: RemoteContentOriginalAccessQuotaWriter(
+          client: client,
+          invocationContext: mediaContext,
+        ),
         session: session,
       );
       return harness;
@@ -231,6 +254,9 @@ final class ContentApiContractHarness {
   final RemoteProfileInteractionReadFactWriter profileInteractionReads;
   final RemoteContentBehaviorCommandAdapter behaviors;
   final RemoteContentReportAdapter reports;
+  final RemoteContentMediaUploadSessionAdapter mediaUploads;
+  final RemoteContentMediaAssetAdapter mediaAssets;
+  final RemoteContentOriginalAccessQuotaWriter originalAccess;
   final AuthSessionGrant session;
   String? _activeIdempotencyKey;
   var _closed = false;
@@ -327,6 +353,41 @@ final class ContentApiContractHarness {
       routeId: AppUiSurfaces.settingsAccountSecurity.routeId,
       clientPageId: clientPageId,
       idempotencyKey: 'content-api-account-cleanup-${session.ownerId}',
+      actor: CloudOperationActorContext(
+        accountId: session.ownerId,
+        personaId: session.activePersona?.personaId,
+        deviceActorId: contentApiContractDeviceId,
+      ),
+    );
+  }
+
+  CloudOperationInvocationContext _mediaInvocationContext(
+    String clientPageId, {
+    required bool command,
+  }) {
+    final surface = switch (clientPageId) {
+      ContentRequestPageIds.initMediaUpload ||
+      ContentRequestPageIds.completeMediaUpload ||
+      ContentRequestPageIds.abortMediaUpload => AppUiSurfaces.createWorkspace,
+      ContentRequestPageIds.getMediaUploadSession ||
+      ContentRequestPageIds.getMediaAsset ||
+      ContentRequestPageIds.reserveOriginalImageAccessGrant =>
+        AppUiSurfaces.workBrowser,
+      _ => throw StateError(
+        'Unsupported Content media clientPageId: $clientPageId',
+      ),
+    };
+    final idempotencyKey = command ? _activeIdempotencyKey : null;
+    if (command && idempotencyKey == null) {
+      throw StateError(
+        'Content media command requires an explicit idempotency key',
+      );
+    }
+    return CloudOperationInvocationContext(
+      surfaceId: surface.id,
+      routeId: surface.routeId,
+      clientPageId: clientPageId,
+      idempotencyKey: idempotencyKey,
       actor: CloudOperationActorContext(
         accountId: session.ownerId,
         personaId: session.activePersona?.personaId,

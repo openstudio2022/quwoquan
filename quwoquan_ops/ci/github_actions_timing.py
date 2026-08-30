@@ -11,11 +11,22 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import urllib.parse
-import urllib.request
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+sys.dont_write_bytecode = True
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.ci.lib.github_actions_api import (
+    GithubActionsApiError,
+    load_run_and_jobs,
+    parse_timestamp,
+)
 
 
 APPROVAL_EVIDENCE_REASON = (
@@ -76,28 +87,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def parse_timestamp(value: object, label: str) -> datetime:
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"authoritative timestamp is missing: {label}")
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
-def _request_json(url: str, token: str) -> dict[str, Any]:
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        payload = json.load(response)
-    if not isinstance(payload, dict):
-        raise ValueError("GitHub API response must be an object")
-    return payload
-
-
 def load_api_evidence(args: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     if args.run_json or args.jobs_json:
         if not args.run_json or not args.jobs_json:
@@ -110,22 +99,7 @@ def load_api_evidence(args: argparse.Namespace) -> tuple[dict[str, Any], list[di
         return run, [item for item in jobs if isinstance(item, dict)]
     if not args.repository or not args.run_id or not args.token:
         raise ValueError("repository, run id and GitHub token are required")
-    run_url = f"https://api.github.com/repos/{args.repository}/actions/runs/{args.run_id}"
-    run = _request_json(run_url, args.token)
-    jobs: list[dict[str, Any]] = []
-    page = 1
-    while True:
-        query = urllib.parse.urlencode(
-            {"filter": "latest", "per_page": 100, "page": page}
-        )
-        payload = _request_json(f"{run_url}/jobs?{query}", args.token)
-        batch = payload.get("jobs") or []
-        if not isinstance(batch, list):
-            raise ValueError("GitHub jobs response is invalid")
-        jobs.extend(item for item in batch if isinstance(item, dict))
-        if len(batch) < 100:
-            break
-        page += 1
+    run, jobs, _ = load_run_and_jobs(args.repository, args.run_id, args.token)
     return run, jobs
 
 
@@ -349,7 +323,7 @@ def main() -> int:
             external_phases=_parse_pairs(args.external_phase, integer=True),
         )
         write_github_output(Path(args.github_output), values)
-    except (OSError, ValueError, json.JSONDecodeError) as error:
+    except (GithubActionsApiError, OSError, ValueError, json.JSONDecodeError) as error:
         print(f"github_actions_timing: FAIL: {error}")
         return 1
     print(json.dumps(values, ensure_ascii=False, sort_keys=True))

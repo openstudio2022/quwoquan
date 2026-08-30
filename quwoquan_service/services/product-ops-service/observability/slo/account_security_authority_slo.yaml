@@ -27,7 +27,7 @@ slis:
     objective: 0.999
   - id: account_security_authority_readiness
     description: scoped authority health 失败会使 /healthz 返回 503。
-    sli: runtime_health_check_status{check="account-security-authority"}
+    sli: runtime_health_check_status{check="account_security_authority"}
     objective: 1
 
 deadline_policy:

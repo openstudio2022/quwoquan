@@ -7,8 +7,11 @@ import sys
 from pathlib import Path
 
 from core.io import read_json
-from core.paths import DATA_EXECUTIONS_ROOT, REPO_ROOT
-from content.execution.execution_terminal import load_terminal_execution_evidence
+from core.paths import DATA_EXECUTIONS_ROOT, REPO_ROOT, is_execution_id
+from content.execution.execution_terminal import (
+    InvalidTerminalExecutionEvidenceError,
+    load_terminal_execution_evidence,
+)
 from content.execution.planning.recipe.model import RuntimeExecutionRequest
 from content.execution.workspace import orphaned_transaction_workspaces
 
@@ -26,6 +29,12 @@ _RUN_VALUE_PATTERNS = (
 )
 _REQUEST_REF = Path("0.plan/request.json")
 _TARGET_SET_REF = Path("0.plan/target_set.json")
+_EXECUTION_MANIFEST_NAME = "execution_manifest.json"
+
+
+def _is_execution_work_package_root(path: Path) -> bool:
+    """Use the canonical execution identity or manifest, not namespace names."""
+    return is_execution_id(path.name) or (path / _EXECUTION_MANIFEST_NAME).exists()
 
 
 def _is_static_input(path: Path) -> bool:
@@ -62,9 +71,20 @@ def _request_issues() -> list[str]:
     issues: list[str] = []
     if not DATA_EXECUTIONS_ROOT.is_dir():
         return issues
-    for execution_root in sorted(path for path in DATA_EXECUTIONS_ROOT.iterdir() if path.is_dir()):
+    for execution_root in sorted(
+        path
+        for path in DATA_EXECUTIONS_ROOT.iterdir()
+        if path.is_dir() and _is_execution_work_package_root(path)
+    ):
         try:
             terminal = load_terminal_execution_evidence(execution_root)
+        except InvalidTerminalExecutionEvidenceError as exc:
+            issues.append(
+                f"{execution_root.relative_to(REPO_ROOT)}: invalid terminal execution evidence: {exc}"
+            )
+            # 已出现但无效的 terminal candidate 拥有本 execution 首个 blocker；
+            # 不再用当前 schema 重释冻结 request，避免迁移噪声掩盖终态漂移。
+            continue
         except (OSError, TypeError, ValueError) as exc:
             issues.append(
                 f"{execution_root.relative_to(REPO_ROOT)}: invalid terminal execution evidence: {exc}"

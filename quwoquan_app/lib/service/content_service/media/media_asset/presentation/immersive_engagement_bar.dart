@@ -1,4 +1,9 @@
 import 'dart:math' as math;
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
+
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
+    show MediaDeliveryKind;
+
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
@@ -28,6 +33,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
   const ImmersiveEngagementBar({
     super.key,
     required this.avatarUrl,
+    this.avatarBinding = const MediaDeliveryBinding.absent(),
     required this.displayName,
     required this.likeCount,
     required this.shareCount,
@@ -50,6 +56,9 @@ class ImmersiveEngagementBar extends StatelessWidget {
   });
 
   final String avatarUrl;
+
+  /// 作者头像的 typed 交付绑定（DEC-033，kind=avatar）；缺席时退回公开路。
+  final MediaDeliveryBinding avatarBinding;
   final String displayName;
 
   /// 作者认证角标（云侧快照字段：头像 + 作者名 + 认证角标 + 关注）；
@@ -85,10 +94,12 @@ class ImmersiveEngagementBar extends StatelessWidget {
 
   static const double _kFollowBtnWidth = AppSpacing.followButtonWidthCompact;
 
-  /// 工具栏总占高（内容区 + 底部安全区）。
+  /// 工具栏总占高（内容区 + 底部安全区 + 垂直抬升，REQ-019）。
   static double reservedHeight(BuildContext context) {
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    return _contentHeight(context) + bottomInset;
+    return _contentHeight(context) +
+        bottomInset +
+        AppSpacing.immersiveBottomChromeLift;
   }
 
   /// 宿主内容位于底栏之上时使用的净空。
@@ -261,13 +272,33 @@ class ImmersiveEngagementBar extends StatelessWidget {
         GestureDetector(
           onTap: onUserTap,
           behavior: HitTestBehavior.opaque,
-          child: RoundedSquareAvatar(
-            size: avatarRadius * 2,
-            imageUrl: avatarUrl,
-            name: displayName,
-            borderRadius: avatarRadius,
-            backgroundColor: AppColors.worksCaption,
-            fallbackIcon: Icons.person,
+          child: mediaDeliveryImage(
+            binding: avatarBinding.hasRenderableSource
+                ? avatarBinding
+                : MediaDeliveryBinding(
+                    assetId: '',
+                    accessMode: null,
+                    publicUrl: avatarUrl,
+                  ),
+            kind: MediaDeliveryKind.avatar,
+            width: avatarRadius * 2,
+            height: avatarRadius * 2,
+            publicBuilder: (context, publicUrl) => RoundedSquareAvatar(
+              size: avatarRadius * 2,
+              imageUrl: publicUrl,
+              name: displayName,
+              borderRadius: avatarRadius,
+              backgroundColor: AppColors.worksCaption,
+              fallbackIcon: Icons.person,
+            ),
+            absentWidget: RoundedSquareAvatar(
+              size: avatarRadius * 2,
+              imageUrl: '',
+              name: displayName,
+              borderRadius: avatarRadius,
+              backgroundColor: AppColors.worksCaption,
+              fallbackIcon: Icons.person,
+            ),
           ),
         ),
         SizedBox(width: AppSpacing.intraGroupSm),
@@ -456,16 +487,20 @@ class ImmersiveEngagementBar extends StatelessWidget {
             sigmaY: AppSpacing.eighteen,
           ),
           child: Container(
-            padding: EdgeInsets.only(bottom: bottomInset),
+            // 底部安全区保护只走垂直方向（REQ-019）：内容在 home indicator
+            // 之上再抬升 lift，左右不向中间收拢。
+            padding: EdgeInsets.only(
+              bottom: bottomInset + AppSpacing.immersiveBottomChromeLift,
+            ),
             color: AppColors.worksBackground.withValues(alpha: 0.88),
             child: SizedBox(
               height: contentHeight,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   // Track 宽度 = rail。作者左锚 rail 左缘、动作右锚 rail 右缘。
-                  // 与 caption / 交集 / 文章正文共用 bottomChromeHorizontalPadding。
+                  // 与顶栏 / caption / 交集 / 文章正文共用同一对齐轨道。
                   final horizontalInset =
-                      ImmersiveViewerLayout.bottomChromeHorizontalPadding(
+                      ImmersiveViewerLayout.horizontalPadding(
                         context,
                         layoutSpec: layoutSpec,
                       );

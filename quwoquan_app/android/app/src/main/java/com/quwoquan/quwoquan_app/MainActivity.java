@@ -18,7 +18,7 @@ import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -74,13 +74,16 @@ public class MainActivity extends FlutterFragmentActivity {
   private FlutterUiDisplayListener flutterUiDisplayListener;
   private volatile boolean flutterFirstFrameConfirmed;
   private volatile boolean startupSafeTerminalConfirmed;
+  private volatile boolean canonicalStartupSafeTerminalConfirmed;
   private volatile boolean appInForeground;
   private volatile boolean nativeFirstFrameDeadlineReached;
   private volatile boolean dartStartupAttemptStarted;
   private volatile boolean currentDartAttemptIsHotRestart;
   private volatile String currentDartAttemptId = "";
-  private volatile String currentLaunchMode = "unknown";
+  private volatile String currentLaunchProvenance = "unknown";
+  private volatile String currentRuntimeConfigSupplyMode = "unknown";
   private volatile long currentDartAttemptStartedElapsedMs;
+  private RuntimeConfigMethodChannel runtimeConfigMethodChannel;
   private long firstFrameForegroundRemainingMs = FLUTTER_FIRST_FRAME_DEADLINE_MS;
   private long foregroundStartedElapsedMs;
 
@@ -136,8 +139,7 @@ public class MainActivity extends FlutterFragmentActivity {
     StartupEagerPluginRegistry.registerWith(flutterEngine);
     smsRetrieverOtpPlugin =
         new SmsRetrieverOtpPlugin(getApplicationContext(), flutterEngine);
-    IncomingCallNativeBridgePlugin.register(
-        flutterEngine, getApplicationContext());
+    IncomingCallNativeBridgePlugin.register(flutterEngine);
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
             "quwoquan/auth/native_bridge")
@@ -213,23 +215,55 @@ public class MainActivity extends FlutterFragmentActivity {
             (MethodCall call, MethodChannel.Result result) -> {
               switch (call.method) {
                 case "getRecoveryContext":
-                  Map<String, Object> context = new HashMap<>();
-                  context.put("platform", "android");
-                  context.put("appVersion", BuildConfig.VERSION_NAME);
-                  context.put("buildNumber", BuildConfig.VERSION_CODE);
-                  context.put("osVersion", Build.VERSION.RELEASE);
-                  context.put("deviceModel", Build.MANUFACTURER + " " + Build.MODEL);
-                  context.put("environment", BuildConfig.QWQ_RUNTIME_ENVIRONMENT);
-                  context.put("recoveryBaseUrl", BuildConfig.QWQ_RECOVERY_BASE_URL);
-                  context.put("runtimeConfigDigest", BuildConfig.QWQ_RUNTIME_CONFIG_DIGEST);
-                  context.put(
-                      "effectiveLaunchManifestDigest",
-                      BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST);
-                  context.put("publicWebUrl", BuildConfig.QWQ_PUBLIC_WEB_URL);
-                  context.put(
-                      "appDownloadBaseUrl",
-                      BuildConfig.QWQ_APP_DOWNLOAD_BASE_URL);
-                  result.success(context);
+                  startupWatchdogExecutor.execute(
+                      () -> {
+                        try {
+                          Map<String, Object> runtimeConfigEnvelope =
+                              readNativeRuntimeConfigPackage();
+                          Map<String, Object> packageDocument =
+                              runtimeConfigPackageFromEnvelope(runtimeConfigEnvelope);
+                          Map<String, Object> runtimeValues =
+                              runtimeValuesFromPackage(packageDocument);
+                          Map<String, Object> context = new HashMap<>();
+                          context.put("platform", "android");
+                          context.put("appVersion", BuildConfig.VERSION_NAME);
+                          context.put("buildNumber", BuildConfig.VERSION_CODE);
+                          context.put("osVersion", Build.VERSION.RELEASE);
+                          context.put(
+                              "deviceModel", Build.MANUFACTURER + " " + Build.MODEL);
+                          context.put(
+                              "environment",
+                              requireRuntimeConfigString(packageDocument, "environment"));
+                          context.put(
+                              "recoveryBaseUrl",
+                              requireRuntimeConfigString(runtimeValues, "gatewayBaseUrl"));
+                          context.put(
+                              "runtimeConfigDigest",
+                              requireRuntimeConfigString(
+                                  runtimeConfigEnvelope, "runtimeConfigPackageDigest"));
+                          context.put(
+                              "effectiveLaunchManifestDigest",
+                              requireRuntimeConfigString(
+                                  runtimeConfigEnvelope,
+                                  "effectiveLaunchManifestDigest"));
+                          context.put(
+                              "publicWebUrl",
+                              requireRuntimeConfigString(
+                                  runtimeValues, "publicWebBaseUrl"));
+                          context.put(
+                              "appDownloadBaseUrl",
+                              requireRuntimeConfigString(
+                                  runtimeValues, "appDownloadBaseUrl"));
+                          startupHandler.post(() -> result.success(context));
+                        } catch (RuntimeConfigPackageStore.RuntimeConfigException error) {
+                          startupHandler.post(
+                              () ->
+                                  result.error(
+                                      error.code,
+                                      "Native runtime recovery context is unavailable.",
+                                      null));
+                        }
+                      });
                   break;
                 case "openTrustedExternalUrl":
                   result.success(openTrustedRecoveryUrl(stringArgument(call, "url")));
@@ -312,51 +346,78 @@ public class MainActivity extends FlutterFragmentActivity {
   }
 
   private void registerNativeRuntimeConfigChannel(@NonNull FlutterEngine flutterEngine) {
-    new MethodChannel(
+    runtimeConfigMethodChannel()
+        .register(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
-            "quwoquan/runtime/config")
-        .setMethodCallHandler(
-            (MethodCall call, MethodChannel.Result result) -> {
-              if (!"readRuntimeConfig".equals(call.method)) {
-                result.notImplemented();
-                return;
-              }
-              Map<String, Object> values = new HashMap<>();
-              try {
-                JSONObject runtimeDefines =
-                    new JSONObject(BuildConfig.QWQ_RUNTIME_DART_DEFINES_JSON);
-                Iterator<String> names = runtimeDefines.keys();
-                while (names.hasNext()) {
-                  String name = names.next();
-                  String value = runtimeDefines.optString(name, "");
-                  if (!value.isEmpty()) {
-                    values.put(name, value);
-                  }
-                }
-              } catch (Exception ignored) {
-                // Dart 侧会把空配置收敛为既有 runtime configuration failure。
-              }
-              if (!BuildConfig.QWQ_CONTENT_RELEASE_ID.isEmpty()) {
-                values.put("contentReleaseId", BuildConfig.QWQ_CONTENT_RELEASE_ID);
-              }
-              if (!BuildConfig.QWQ_CONTENT_MANIFEST_DIGEST.isEmpty()) {
-                values.put("contentManifestDigest", BuildConfig.QWQ_CONTENT_MANIFEST_DIGEST);
-              }
-              if (!BuildConfig.QWQ_CONTENT_READINESS_RECEIPT_DIGEST.isEmpty()) {
-                values.put(
-                    "contentReadinessReceiptDigest",
-                    BuildConfig.QWQ_CONTENT_READINESS_RECEIPT_DIGEST);
-              }
-              if (!BuildConfig.QWQ_LAUNCH_TARGET.isEmpty()) {
-                values.put("launchTarget", BuildConfig.QWQ_LAUNCH_TARGET);
-              }
-              if (!BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST.isEmpty()) {
-                values.put(
-                    "effectiveLaunchManifestDigest",
-                    BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST);
-              }
-              result.success(values);
-            });
+            startupWatchdogExecutor,
+            startupHandler);
+  }
+
+  private RuntimeConfigMethodChannel runtimeConfigMethodChannel() {
+    if (runtimeConfigMethodChannel == null) {
+      runtimeConfigMethodChannel = RuntimeConfigMethodChannel.create(this);
+    }
+    return runtimeConfigMethodChannel;
+  }
+
+  private Map<String, Object> readNativeRuntimeConfigPackage()
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
+    return runtimeConfigMethodChannel().readVerifiedPackage();
+  }
+
+  private String readVerifiedEffectiveLaunchManifestDigest()
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
+    return runtimeConfigMethodChannel()
+        .coordinator()
+        .readEffectiveLaunchManifestDigest();
+  }
+
+  private Map<String, Object> runtimeConfigPackageFromEnvelope(
+      Map<String, Object> envelope)
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
+    Object rawPackage = envelope.get("package");
+    if (!(rawPackage instanceof Map)) {
+      throw new RuntimeConfigPackageStore.RuntimeConfigException(
+          "runtime_config_package_malformed");
+    }
+    Map<String, Object> packageDocument = new LinkedHashMap<>();
+    for (Map.Entry<?, ?> entry : ((Map<?, ?>) rawPackage).entrySet()) {
+      if (!(entry.getKey() instanceof String)) {
+        throw new RuntimeConfigPackageStore.RuntimeConfigException(
+            "runtime_config_package_malformed");
+      }
+      packageDocument.put((String) entry.getKey(), entry.getValue());
+    }
+    return packageDocument;
+  }
+
+  private Map<String, Object> runtimeValuesFromPackage(
+      Map<String, Object> packageDocument)
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
+    Object rawRuntime = packageDocument.get("runtime");
+    if (!(rawRuntime instanceof Map)) {
+      throw new RuntimeConfigPackageStore.RuntimeConfigException(
+          "runtime_config_package_malformed");
+    }
+    Map<String, Object> runtimeValues = new LinkedHashMap<>();
+    for (Map.Entry<?, ?> entry : ((Map<?, ?>) rawRuntime).entrySet()) {
+      if (!(entry.getKey() instanceof String)) {
+        throw new RuntimeConfigPackageStore.RuntimeConfigException(
+            "runtime_config_package_malformed");
+      }
+      runtimeValues.put((String) entry.getKey(), entry.getValue());
+    }
+    return runtimeValues;
+  }
+
+  private String requireRuntimeConfigString(Map<String, Object> values, String key)
+      throws RuntimeConfigPackageStore.RuntimeConfigException {
+    Object rawValue = values.get(key);
+    if (!(rawValue instanceof String) || ((String) rawValue).trim().isEmpty()) {
+      throw new RuntimeConfigPackageStore.RuntimeConfigException(
+          "runtime_config_package_malformed");
+    }
+    return ((String) rawValue).trim();
   }
 
   private void completeDeferredPluginRegistration(
@@ -372,7 +433,19 @@ public class MainActivity extends FlutterFragmentActivity {
   }
 
   private boolean openTrustedRecoveryUrl(String rawUrl) {
-    return TrustedRecoveryUrls.open(this, rawUrl, STARTUP_TAG);
+    try {
+      return TrustedRecoveryUrls.open(
+          this,
+          rawUrl,
+          runtimeConfigMethodChannel().store().readRecoveryRuntimeValues(),
+          STARTUP_TAG);
+    } catch (RuntimeConfigPackageStore.RuntimeConfigException error) {
+      Log.w(
+          STARTUP_TAG,
+          "android_recovery_runtime_config_unavailable code=" + error.code,
+          error);
+      return false;
+    }
   }
 
   private WechatSdkCoordinator wechatSdkCoordinator() {
@@ -598,7 +671,9 @@ public class MainActivity extends FlutterFragmentActivity {
                   confirmFlutterFirstFrame("dart_channel");
                 }
                 if (isStartupSafeTerminalEvent(event)) {
-                  confirmStartupSafeTerminal(startupEventElapsedMs(event));
+                  confirmStartupSafeTerminal(
+                      startupEventElapsedMs(event),
+                      StartupSafeTerminalSurface.fromEvent((String) event));
                 }
                 result.success(null);
                 return;
@@ -689,23 +764,31 @@ public class MainActivity extends FlutterFragmentActivity {
           Log.i(STARTUP_TAG, "android_dart_startup_attempt_invalid reason=attempt_mismatch");
           return;
         }
-        currentLaunchMode = safeStartupIdentifier(payload.optString("launchMode", ""));
+        currentLaunchProvenance =
+            safeLaunchProvenance(payload.optString("launchProvenance", ""));
+        currentRuntimeConfigSupplyMode =
+            safeRuntimeConfigSupplyMode(
+                payload.optString("runtimeConfigSupplyMode", ""));
         String configurationState =
             safeStartupIdentifier(payload.optString("configurationState", "unknown"));
+        String effectiveLaunchManifestDigest =
+            readVerifiedEffectiveLaunchManifestDigest();
         String missingDefineKeys =
             safeDefineKeyList(payload.optString("missingDefineKeys", ""));
         Log.i(
             STARTUP_TAG,
             "android_dart_startup_attempt attemptId="
                 + currentDartAttemptId
-                + " launchMode="
-                + currentLaunchMode
+                + " launchProvenance="
+                + currentLaunchProvenance
+                + " runtimeConfigSupplyMode="
+                + currentRuntimeConfigSupplyMode
                 + " hotRestart="
                 + currentDartAttemptIsHotRestart
                 + " configurationState="
                 + configurationState
                 + " effectiveLaunchManifestDigest="
-                + BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST
+                + effectiveLaunchManifestDigest
                 + (missingDefineKeys.isEmpty() ? "" : " missingDefineKeys=" + missingDefineKeys));
       } catch (Exception ignored) {
         Log.i(STARTUP_TAG, "android_dart_startup_attempt_invalid");
@@ -715,17 +798,21 @@ public class MainActivity extends FlutterFragmentActivity {
     if ("startup_runtime_configured".equals(eventName)) {
       try {
         JSONObject payload = new JSONObject(event);
-        currentLaunchMode = safeStartupIdentifier(payload.optString("launchMode", ""));
+        currentLaunchProvenance =
+            safeLaunchProvenance(payload.optString("launchProvenance", ""));
+        currentRuntimeConfigSupplyMode =
+            safeRuntimeConfigSupplyMode(
+                payload.optString("runtimeConfigSupplyMode", ""));
         String configurationState =
             safeStartupIdentifier(payload.optString("configurationState", "unknown"));
         Log.i(
             STARTUP_TAG,
-            "android_runtime_configured launchMode="
-                + currentLaunchMode
+            "android_runtime_configured launchProvenance="
+                + currentLaunchProvenance
+                + " runtimeConfigSupplyMode="
+                + currentRuntimeConfigSupplyMode
                 + " configurationState="
-                + configurationState
-                + " effectiveLaunchManifestDigest="
-                + BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST);
+                + configurationState);
       } catch (Exception ignored) {
         Log.i(STARTUP_TAG, "android_runtime_configured_invalid");
       }
@@ -868,6 +955,18 @@ public class MainActivity extends FlutterFragmentActivity {
     return value;
   }
 
+  private String safeLaunchProvenance(String value) {
+    String normalized = safeStartupIdentifier(value);
+    return AppLaunchContract.LAUNCH_PROVENANCES.contains(normalized) ? normalized : "unknown";
+  }
+
+  private String safeRuntimeConfigSupplyMode(String value) {
+    String normalized = safeStartupIdentifier(value);
+    return AppLaunchContract.RUNTIME_CONFIG_SUPPLY_MODES.contains(normalized)
+        ? normalized
+        : "unknown";
+  }
+
   private String safeStartupFailureCode(String value) {
     if (value == null || value.isEmpty() || value.length() > 128) {
       return "";
@@ -938,24 +1037,41 @@ public class MainActivity extends FlutterFragmentActivity {
             + startupAttemptLogSuffix());
   }
 
-  private void confirmStartupSafeTerminal(long reportedElapsedMs) {
-    // MethodChannel 可能比 watchdog 主线程任务晚几毫秒。只要 Flutter 已到
-    // routerShell / recovery 安全面，就必须取消看门狗并撤销竞态恢复层。
-    boolean firstNativeSafeTerminal = !startupSafeTerminalConfirmed;
-    if (firstNativeSafeTerminal) {
+  private void confirmStartupSafeTerminal(
+      long reportedElapsedMs, @NonNull StartupSafeTerminalSurface surface) {
+    // recovery surface 可取消 native watchdog，但只有 router_shell 才能成为
+    // strict canonical safe-terminal evidence 或把当前构建标记为 safe shell。
+    if (surface.isRecognizedSafeSurface() && !startupSafeTerminalConfirmed) {
       startupSafeTerminalConfirmed = true;
-      markCurrentBuildSafeShell();
       cancelFlutterFirstFrameWatchdog();
     }
     long receivedElapsedMs = StartupProcessClock.elapsedSinceProcessStartMs();
     long reportedMs = reportedElapsedMs >= 0L ? reportedElapsedMs : receivedElapsedMs;
+    if (!surface.isCanonical()) {
+      Log.w(
+          STARTUP_TAG,
+          "android_startup_safe_terminal_rejected surface="
+              + surface.markerValue()
+              + " reason=canonical_router_shell_required reportedElapsedMs="
+              + reportedMs
+              + " receivedMs="
+              + receivedElapsedMs
+              + startupAttemptLogSuffix());
+      return;
+    }
+    if (!canonicalStartupSafeTerminalConfirmed) {
+      canonicalStartupSafeTerminalConfirmed = true;
+      markCurrentBuildSafeShell();
+    }
     long effectiveBoundaryMs = Math.max(reportedMs, receivedElapsedMs);
     if (flutterFirstFrameConfirmed && effectiveBoundaryMs > FLUTTER_FIRST_FRAME_DEADLINE_MS) {
       recordStartupSafeTerminalSlow(effectiveBoundaryMs);
     }
     Log.i(
         STARTUP_TAG,
-        "android_startup_safe_terminal reportedElapsedMs="
+        "android_startup_safe_terminal surface="
+            + surface.markerValue()
+            + " reportedElapsedMs="
             + reportedMs
             + " receivedMs="
             + receivedElapsedMs
@@ -1072,8 +1188,10 @@ public class MainActivity extends FlutterFragmentActivity {
         + (startupTelemetryJournal == null
             ? ""
             : " nativeAttemptId=" + startupTelemetryJournal.attemptId())
-        + " launchMode="
-        + currentLaunchMode;
+        + " launchProvenance="
+        + currentLaunchProvenance
+        + " runtimeConfigSupplyMode="
+        + currentRuntimeConfigSupplyMode;
   }
 
   @Override

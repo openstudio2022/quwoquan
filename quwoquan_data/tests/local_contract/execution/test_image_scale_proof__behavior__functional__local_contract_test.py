@@ -5,11 +5,8 @@ import os
 import shutil
 import sys
 import tempfile
-from dataclasses import replace
 from itertools import count
 from pathlib import Path
-
-import pytest
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
@@ -33,11 +30,14 @@ from core.paths import STAGE_DOWNLOAD  # noqa: E402
 from content.source.source_unit import resolve_entity_object_dir  # noqa: E402
 from content.execution import store  # noqa: E402
 from content.execution.planning.selection import build_execution_spec  # noqa: E402
+from support.capacity_calibration_fixture import (  # noqa: E402
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from content.source.image_scale_proof import (  # noqa: E402
     build_open_license_scale_proof,
     write_open_license_scale_proof,
 )
-from governance.coverage import distribution  # noqa: E402
 
 _SEQUENCE = count(1)
 
@@ -75,9 +75,7 @@ def _make_task(
         video_works_per_target=0,
         approved_quota=len(targets),
         oversample_factor=1.0,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
         target_entity_count=len(targets),
     )
     spec["content"]["research"]["imageCountPolicy"] = image_count_policy
@@ -156,9 +154,7 @@ def _make_homepage_task(name: str, targets: list[str]) -> str:
         video_works_per_target=0,
         approved_quota=len(targets),
         oversample_factor=1.0,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
         target_entity_count=len(targets),
     )
     spec["status"] = "active"
@@ -263,20 +259,7 @@ def _remove_distribution_rights_fields(execution_id: str, entity_id: str) -> Non
     write_json(plan_path, plan)
 
 
-def test_media_scale_proof_audits_incomplete_travel_rights_in_research(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    policy = distribution.load_content_distribution_policy()
-    research_policy = replace(
-        policy,
-        product_lifecycle_state=distribution.ProductLifecycleState.RESEARCH,
-        release_class=distribution.ReleaseClass.RESEARCH,
-    )
-    monkeypatch.setattr(
-        distribution,
-        "load_content_distribution_policy",
-        lambda: research_policy,
-    )
+def test_media_scale_proof_audits_incomplete_travel_rights_without_filtering_pool():
     execution_id = _make_task("旅行图片授权强制门", ["景区甲"])
     _write_image_plan(execution_id, "景区甲", 2)
     _remove_distribution_rights_fields(execution_id, "景区甲")
@@ -291,28 +274,17 @@ def test_media_scale_proof_audits_incomplete_travel_rights_in_research(
     assert report["rightsAuditIssueSample"]
 
 
-def test_media_scale_proof_filters_incomplete_travel_rights_in_commercial(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    execution_id = _make_task("旅行图片商业授权强制门", ["景区甲"])
+def test_media_scale_proof_does_not_infer_release_class_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("QWQ_PRODUCT_LIFECYCLE_STATE", "commercial")
+    monkeypatch.setenv("QWQ_RELEASE_CLASS", "commercial")
+    execution_id = _make_task("旅行图片共享内容池", ["景区甲"])
     _write_image_plan(execution_id, "景区甲", 2)
     _remove_distribution_rights_fields(execution_id, "景区甲")
-    research_policy = distribution.load_content_distribution_policy()
-    commercial_policy = replace(
-        research_policy,
-        product_lifecycle_state=distribution.ProductLifecycleState.COMMERCIAL,
-        release_class=distribution.ReleaseClass.COMMERCIAL,
-    )
-    monkeypatch.setattr(
-        distribution,
-        "load_content_distribution_policy",
-        lambda: commercial_policy,
-    )
 
     report = build_open_license_scale_proof(execution_id)
 
     assert report["passed"] is True
-    assert report["proof"]["publishableImageAssets"] == 0
+    assert report["proof"]["publishableImageAssets"] == 2
     assert report["rightsAuditIssueCount"] > 0
 
 
@@ -376,9 +348,7 @@ def test_scale_proof_reads_each_target_from_its_declared_entity_type():
         target_entity_count=2,
         approved_quota=2,
         oversample_factor=1.0,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
     )
     spec["status"] = "active"
     store.save_spec(spec)

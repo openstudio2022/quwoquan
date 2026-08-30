@@ -20,11 +20,11 @@ from content.release.environment.release_readiness import (
     write_environment_release_readiness,
 )
 from core.io import write_json
-from core.release_layout import object_closure_digest, payload_digest
+from core.release_layout import objects_merkle, payload_digest
 from core.schema import assert_valid
 from core.source_digest import (
     content_source_revision,
-    current_source_digest,
+    current_source_definition_snapshot,
 )
 from verify.release_environment_readiness import (
     environment_release_readiness_issues,
@@ -35,6 +35,7 @@ ENVIRONMENT = "gamma"
 IMPORT_RUN_ID = "apply-001"
 VERIFY_RUN_ID = "verify-001"
 ENTITY_REF = "地点/景区/测试实体"
+NORMALIZED_ENTITY_REF = "entity:景区:测试实体"
 CREATOR_ID = "creator-a"
 TAG_REF = "Topic/旅行"
 POSTS = (
@@ -42,7 +43,7 @@ POSTS = (
     ("image/test-a", "post-image-a", "image"),
     ("video/test-a", "post-video-a", "video"),
 )
-SOURCE_DIGEST = current_source_digest()
+SOURCE_DIGEST = current_source_definition_snapshot()
 ENTITY_CATALOG_DIGEST = "sha256:" + "f" * 64
 SOURCE_REVISION = content_source_revision(
     source_digest=SOURCE_DIGEST.digest,
@@ -298,6 +299,8 @@ def _fixture(root: Path) -> dict[str, Path]:
             "contentIdentity": "work",
             "contentType": content_type,
             "publishTitle": post_titles[content_type],
+            "entityRefs": [f"/entity/{ENTITY_REF}"],
+            "normalizedEntityRefs": [NORMALIZED_ENTITY_REF],
             "authorId": "author-a",
             "creatorProfileId": CREATOR_ID,
             "tagRefs": [TAG_REF],
@@ -383,7 +386,7 @@ def _fixture(root: Path) -> dict[str, Path]:
             "assets": [],
         },
     )
-    canonical_merkle = object_closure_digest(release)
+    canonical_merkle = objects_merkle(release)
     release_header_path = release / "payload/release.json"
     release_header = json.loads(release_header_path.read_text(encoding="utf-8"))
     release_header["canonicalMerkle"] = canonical_merkle
@@ -576,11 +579,20 @@ def _fixture(root: Path) -> dict[str, Path]:
                     "query": post_id,
                     "status": 200,
                     "matchedObjectIds": [post_id],
-                    "request": _request_evidence(
-                        "/search",
-                        "search.global",
-                        suffix=f"search-{post_id}",
-                    ),
+                    "attempts": [
+                        {
+                            "attempt": 1,
+                            "canonicalErrorCode": "none",
+                            "recoveryAction": "none",
+                            "recoveryAfterSeconds": 0,
+                            "retryAfterSeconds": 0,
+                            "operation": _request_evidence(
+                                "/search",
+                                "search.global",
+                                suffix=f"search-{post_id}",
+                            ),
+                        }
+                    ],
                 }
                 for _post_ref, post_id, _content_type in POSTS
             ]
@@ -591,11 +603,20 @@ def _fixture(root: Path) -> dict[str, Path]:
                     "query": "creator-a",
                     "status": 200,
                     "matchedObjectIds": ["author-a"],
-                    "request": _request_evidence(
-                        "/search",
-                        "search.global",
-                        suffix="search-author-a",
-                    ),
+                    "attempts": [
+                        {
+                            "attempt": 1,
+                            "canonicalErrorCode": "none",
+                            "recoveryAction": "none",
+                            "recoveryAfterSeconds": 0,
+                            "retryAfterSeconds": 0,
+                            "operation": _request_evidence(
+                                "/search",
+                                "search.global",
+                                suffix="search-author-a",
+                            ),
+                        }
+                    ],
                 }
             ],
             "creators": [
@@ -650,7 +671,7 @@ def _fixture(root: Path) -> dict[str, Path]:
 
 def _resign_release(paths: dict[str, Path]) -> None:
     release = paths["release"]
-    canonical_merkle = object_closure_digest(release)
+    canonical_merkle = objects_merkle(release)
     header_path = release / "payload/release.json"
     header = json.loads(header_path.read_text(encoding="utf-8"))
     header["canonicalMerkle"] = canonical_merkle
@@ -681,20 +702,70 @@ def _convert_fixture_to_research(paths: dict[str, Path]) -> str:
         document["releaseClass"] = "research"
         document["productLifecycleState"] = "research"
         write_json(path, document)
+
+    media_path = release / "payload/media_manifest.json"
+    media_manifest = json.loads(media_path.read_text(encoding="utf-8"))
+    extension_by_content_type = {
+        "image/jpeg": "jpg",
+        "video/mp4": "mp4",
+    }
+    for asset in media_manifest["assets"]:
+        digest = str(asset["sha256"]).removeprefix("sha256:")
+        extension = extension_by_content_type[str(asset["contentType"])]
+        asset.pop("publicSliceKey")
+        asset["privateObjectKey"] = (
+            f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/"
+            f"{digest}.{extension}"
+        )
+    write_json(media_path, media_manifest)
+    media_by_id = {asset["assetId"]: asset for asset in media_manifest["assets"]}
+
+    homepage_path = paths["verify"] / "homepage-api-verification.json"
+    homepage_report = json.loads(homepage_path.read_text(encoding="utf-8"))
+    homepage_report["entities"][0]["coverUrl"] = media_by_id[
+        "entity-cover-a"
+    ]["privateObjectKey"]
+    write_json(homepage_path, homepage_report)
+
     post_path = paths["verify"] / "post-api-verification.json"
     post_report = json.loads(post_path.read_text(encoding="utf-8"))
     post_report["readinessPhase"] = "research"
     post_report["internalSubjectHash"] = subject_hash
     post_report.pop("guestActorHash", None)
     post_report.pop("guestLogin", None)
+    creator = post_report["creators"][0]
+    creator["avatarUrl"] = media_by_id["creator-avatar-a"]["privateObjectKey"]
+    creator["avatarProbeCount"] = 0
+    creator["avatarProbe"] = None
+    for post in post_report["posts"]:
+        post["mediaProbes"] = [
+            {
+                "assetId": probe["assetId"],
+                "kind": media_by_id[probe["assetId"]]["kind"],
+                "deliveryRef": media_by_id[probe["assetId"]][
+                    "privateObjectKey"
+                ],
+                "anonymousStatus": 403,
+                "expectedBytes": media_by_id[probe["assetId"]]["bytes"],
+                "expectedSha256": media_by_id[probe["assetId"]]["sha256"],
+                "signedProbe": None,
+            }
+            for probe in post["mediaProbes"]
+        ]
     write_json(post_path, post_report)
     _resign_release(paths)
     return subject_hash
 
 
 def _convert_fixture_to_consumer(paths: dict[str, Path]) -> None:
-    # consumer 与 commercial 一样必须携带 premium_stream 读回证据（App 视频书
-    # 唯一消费 premium 池），因此只翻转阶段、不剥离 premium query。
+    """Move the fixture to the consumer phase and nothing else.
+
+    Consumer readiness proves the same release-bound reads as commercial, because the
+    App video shelf consumes only ``premium_stream``: dropping that query here would
+    let a typed_video green stand in for a video shelf that has nothing to play
+    (`environment-topology-and-packaging` spec).
+    """
+
     post_path = paths["verify"] / "post-api-verification.json"
     post_report = json.loads(post_path.read_text(encoding="utf-8"))
     post_report["readinessPhase"] = "consumer"

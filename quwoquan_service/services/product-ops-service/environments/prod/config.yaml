@@ -1,13 +1,13 @@
 overrides:
-  sys.product-ops-service.account_security_authority.base_url: http://user-service:18081
-  sys.product-ops-service.account_security_authority.timeout_ms: 1500
+  sys.product-ops-service.user_account_security_authority.base_url: http://user-service:18081
+  sys.product-ops-service.user_account_security_authority.timeout_ms: 1500
   sys.product-ops-service.redis.general.mode: cluster
   sys.product-ops-service.redis.general.tls: true
   sys.product-ops-service.redis.rec.mode: cluster
   sys.product-ops-service.redis.rec.tls: true
 secretRefs:
-  sys.product-ops-service.mongodb.uri: MONGODB_URI
-  sys.product-ops-service.postgres.dsn: POSTGRES_DSN
+  sys.product-ops-service.mongodb.uri: PRODUCT_OPS_MONGO_URI
+  sys.product-ops-service.postgres.dsn: PRODUCT_OPS_POSTGRES_DSN
   sys.product-ops-service.redis.general.password: PRODUCT_OPS_REDIS_GENERAL_PASSWORD
   sys.product-ops-service.redis.rec.password: PRODUCT_OPS_REDIS_REC_PASSWORD
 externalBindings:

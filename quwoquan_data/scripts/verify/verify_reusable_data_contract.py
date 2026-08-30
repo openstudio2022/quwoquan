@@ -17,16 +17,14 @@ _STATIC_ROOTS = (
     "quwoquan_data/schema",
     "quwoquan_data/AGENTS.md",
     "quwoquan_data/README.md",
-    ".cursor/commands/crawl.md",
-    ".cursor/commands/crawl-topic.md",
-    ".cursor/skills/quwoquan-data-content/SKILL.md",
+    ".agents/skills/content-production/SKILL.md",
     "specs/feature-tree/discovery-content/object-homepage-coverage-scaling",
     "specs/feature-tree/runtime/runtime-data-engineering",
 )
 _REFERENCE_ROOT = "quwoquan_data/reference"
 _FIXTURE_ROOT = "quwoquan_data/tests/support"
 _FORBIDDEN = (
-    re.compile(r"\b(?:two[_ -]?province|canary|m[1-3]|h10k)\b", re.IGNORECASE),
+    re.compile(r"\b(?:two[_ -]?province|canary|h10k)\b", re.IGNORECASE),
     re.compile(r"(?:浙江|四川|普陀山|东钱湖|海螺沟)"),
     re.compile(r"\b(?:922|1977|2899)\b"),
 )

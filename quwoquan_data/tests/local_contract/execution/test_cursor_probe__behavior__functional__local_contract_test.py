@@ -89,7 +89,7 @@ def test_cursor_startup_probe_suite_classifies_auth_5xx_and_bridge(monkeypatch):
     assert "Cursor auth failures observed" in "\n".join(report["issues"])
 
 
-def test_cursor_startup_probe_suite_realizes_runtime_policy_concurrency(monkeypatch):
+def test_cursor_startup_probe_suite_observes_every_requested_attempt(monkeypatch):
     def _ready_probe(**_kwargs):
         time.sleep(0.02)
         return {"ready": True, "status": "finished", "attemptCount": 1}
@@ -99,21 +99,19 @@ def test_cursor_startup_probe_suite_realizes_runtime_policy_concurrency(monkeypa
     report = pr.cursor_startup_probe_suite(model="composer", attempts=6)
 
     assert report["successCount"] == 6
-    assert report["effectiveConcurrency"] == min(
-        6,
-        pr.active_runtime_policy().cursor_bridge_instances,
-    )
+    assert report["configuredConcurrency"] == 6
+    assert report["effectiveConcurrency"] == 6
     assert report["unrecoveredFailures"] == 0
     assert [row["attempt"] for row in report["results"]] == list(range(1, 7))
 
 
-def test_cursor_workspace_probe_suite_realizes_four_isolated_lanes(
+def test_cursor_workspace_probe_suite_observes_explicit_active_carriers(
     monkeypatch,
     tmp_path,
 ):
     workspaces = tuple(
         tmp_path / carrier
-        for carrier in ("homepage", "article", "image", "video")
+        for carrier in ("homepage", "video")
     )
     for workspace in workspaces:
         workspace.mkdir()
@@ -136,12 +134,12 @@ def test_cursor_workspace_probe_suite_realizes_four_isolated_lanes(
     )
 
     assert report["ready"] is True
-    assert report["successCount"] == 4
-    assert report["effectiveConcurrency"] == 4
+    assert report["workspaceCount"] == 2
+    assert report["successCount"] == 2
+    assert report["configuredConcurrency"] == 2
+    assert report["effectiveConcurrency"] == 2
     assert {row["workspace"] for row in report["runs"]} == {
         "homepage",
-        "article",
-        "image",
         "video",
     }
     assert all(row["agentId"] and row["runId"] for row in report["runs"])

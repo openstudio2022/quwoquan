@@ -254,6 +254,10 @@ final postObjectCacheProvider = Provider<PostObjectCacheService>((ref) {
 final contentQuerySnapshotStoreProvider = Provider<ContentQuerySnapshotStore>((
   ref,
 ) {
+  // 内容身份是服务端运行时事实（DEC-004）：快照逐条携带
+  // ContentActivationIdentity，store 在收到首个权威 Feed 响应后原子采纳
+  // 身份并只回放一致快照；权威身份到达前允许最大年龄内的 LKG 回放。
+  // 因此磁盘持久化不再依赖构建期 release namespace。
   return ContentQuerySnapshotStore(
     persistToPreferences: true,
     telemetrySink: ref.watch(cacheTelemetrySinkProvider),

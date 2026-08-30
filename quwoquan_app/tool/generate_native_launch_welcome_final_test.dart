@@ -25,7 +25,7 @@ void main() {
   setUpAll(() async {
     final loader = FontLoader(AppTypography.welcomeBrandFontFamily)
       ..addFont(
-        rootBundle.load('assets/fonts/noto_sans_sc/NotoSansSC[wght].ttf'),
+        rootBundle.load('assets/fonts/noto_sans_sc/NotoSansSC-wght.ttf'),
       );
     await loader.load();
   });

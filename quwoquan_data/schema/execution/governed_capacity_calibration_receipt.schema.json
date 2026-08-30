@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/governed_capacity_calibration_receipt.schema.json",
+  "title": "Create-once governed capacity calibration receipt",
+  "description": "两个并行上限、单对象 wall-clock 上限与完成宽限的唯一合法来源。receipt 由一次受治理 soak 产出且不可原地修改；改数值只能产出新的 create-once receipt，新 receipt 只影响此后冻结的 execution，回滚即让新 execution 重新绑定上一份仍有效的 receipt。execution 冻结时把取值与本 receipt 的摘要一并写进 executionPolicy，运行期不再按路径重读本文件。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "calibrationId",
+    "supersedesCalibrationId",
+    "soakEvidenceRef",
+    "soakEvidenceDigest",
+    "applicability",
+    "frozenCapacity",
+    "frozenLiveness",
+    "calibratedAt",
+    "receiptDigest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.governed_capacity_calibration_receipt"
+    },
+    "calibrationId": {"$ref": "#/$defs/calibrationId"},
+    "supersedesCalibrationId": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/calibrationId"}],
+      "description": "被本 receipt 取代的前驱标定。首份 receipt 显式为 null；取代只作 lineage，不撤销已冻结 execution 绑定的数值。"
+    },
+    "soakEvidenceRef": {"$ref": "#/$defs/safeRef"},
+    "soakEvidenceDigest": {"$ref": "#/$defs/digest"},
+    "applicability": {
+      "$ref": "capacity_calibration_values.schema.json#/$defs/applicabilityScope"
+    },
+    "frozenCapacity": {
+      "$ref": "capacity_calibration_values.schema.json#/$defs/frozenCapacity"
+    },
+    "frozenLiveness": {
+      "$ref": "capacity_calibration_values.schema.json#/$defs/frozenLiveness"
+    },
+    "frozenPrescreen": {
+      "$ref": "capacity_calibration_values.schema.json#/$defs/frozenPrescreen"
+    },
+    "calibratedAt": {
+      "type": "string",
+      "minLength": 1,
+      "format": "date-time"
+    },
+    "receiptDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "calibrationId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "safeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "sourceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "冻结之前的容量来源绑定：只声明选中了哪份 receipt 与其取值，不含冻结时刻、wave 数与批次绝对截止。请求与派发清单只能携带本形态；三个冻结项由 execution 冻结时一次算定。",
+      "required": [
+        "calibrationId",
+        "calibrationReceiptRef",
+        "calibrationReceiptDigest",
+        "applicability",
+        "frozenCapacity",
+        "frozenLiveness"
+      ],
+      "properties": {
+        "calibrationId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "calibrationReceiptRef": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "calibrationReceiptDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "applicability": {
+          "$ref": "capacity_calibration_values.schema.json#/$defs/applicabilityScope"
+        },
+        "frozenCapacity": {
+          "$ref": "capacity_calibration_values.schema.json#/$defs/frozenCapacity"
+        },
+        "frozenLiveness": {
+          "$ref": "capacity_calibration_values.schema.json#/$defs/frozenLiveness"
+        }
+      }
+    },
+    "executionPolicyBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "execution 冻结时写入 executionPolicy 的容量来源绑定。摘要漂移与超适用范围复用都能凭本对象在冻结处判定，无需运行期重读 receipt。",
+      "required": [
+        "calibrationId",
+        "calibrationReceiptRef",
+        "calibrationReceiptDigest",
+        "applicability",
+        "frozenCapacity",
+        "frozenLiveness",
+        "frozenAtEpochSeconds",
+        "waveCount",
+        "fleetBatchDeadlineEpochSeconds"
+      ],
+      "properties": {
+        "calibrationId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "calibrationReceiptRef": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "calibrationReceiptDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "applicability": {
+          "$ref": "capacity_calibration_values.schema.json#/$defs/applicabilityScope"
+        },
+        "frozenCapacity": {
+          "$ref": "capacity_calibration_values.schema.json#/$defs/frozenCapacity"
+        },
+        "frozenLiveness": {
+          "$ref": "capacity_calibration_values.schema.json#/$defs/frozenLiveness"
+        },
+        "frozenAtEpochSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "execution 冻结时刻，绝对纪元秒。批次绝对截止的推导起点。"
+        },
+        "waveCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "工作单元数与冻结并行上限决定的 wave 数，只服务于冻结时刻的一次截止计算与运行回执。"
+        },
+        "fleetBatchDeadlineEpochSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "本 execution 的唯一时间权威，绝对纪元秒。冻结后不接受任何恢复路径改写；需要更多时间只能由新的 retryOf 冻结新的绝对截止。"
+        }
+      }
+    }
+  }
+}

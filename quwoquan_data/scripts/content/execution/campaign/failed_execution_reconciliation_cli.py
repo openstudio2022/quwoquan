@@ -11,7 +11,6 @@ from core import paths
 from content.execution.campaign.failed_execution_reconciliation_common import (
     _ERROR_CODES,
 )
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 
 
 def _handle(args: argparse.Namespace) -> None:
@@ -34,7 +33,7 @@ def _handle(args: argparse.Namespace) -> None:
                 "reason": receipt["reason"],
                 "predecessorExecutionIds": {
                     carrier: receipt["submissions"][carrier]["executionId"]
-                    for carrier in CAMPAIGN_CARRIERS
+                    for carrier in receipt["activeCarriers"]
                 },
                 "receiptRef": path.relative_to(paths.OUTPUT_ROOT).as_posix(),
                 "receiptDigest": receipt["receiptDigest"],

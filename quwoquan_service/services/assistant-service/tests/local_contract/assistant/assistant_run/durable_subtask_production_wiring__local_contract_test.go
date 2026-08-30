@@ -57,7 +57,7 @@ func durableSubtaskProductionServiceRoot(t *testing.T) string {
 		t.Fatal("resolve durable subtask wiring test path")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", ".."))
-	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "main.go")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "bootstrap.go")); err != nil {
 		t.Fatalf("resolve assistant-service root: %v", err)
 	}
 	return root

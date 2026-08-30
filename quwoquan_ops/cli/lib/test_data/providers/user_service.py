@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
 from ...local_environment_auth import open_test_data_acceptance_session
@@ -8,6 +9,7 @@ from ..api import BusinessObjectRef, CapabilityRequest
 from ..capabilities.common import (
     AcceptanceActorSet,
     ActorHandle,
+    ActorRole,
     ImmutableReleaseHandle,
 )
 from ..capabilities.user_service import (
@@ -20,6 +22,7 @@ from ..capabilities.user_service import (
     FollowingSubjectsResult,
     GreetingInboxParams,
     GreetingInboxResult,
+    MutualActorRelationship,
     RelationshipParams,
     RelationshipResult,
 )
@@ -43,6 +46,9 @@ _ACTORS = CapabilityDefinition(
         "user.authentication_challenge.SendOtp",
         "user.account_session.LoginWithPhone",
         "user.user_account.GetActivePersonaContext",
+        "user.persona_relationship.FollowUser",
+        "user.persona_relationship.GetRelationship",
+        "user.persona_relationship.UnfollowUser",
         "user.user_account.CloseAccount",
     ),
 )
@@ -74,6 +80,12 @@ _GREETING_INBOX = CapabilityDefinition(
 _HOMEPAGE_SUBJECT_TYPE = "homepage"
 
 
+@dataclass(frozen=True)
+class _ActorTopologyState:
+    established_relationships: tuple[MutualActorRelationship, ...] = ()
+    followed_directions: tuple[tuple[ActorRole, ActorRole], ...] = ()
+
+
 class UserAcceptanceDataProvider:
     def describe(self) -> tuple[CapabilityDefinition, ...]:
         return (_ACTORS, _RELATIONSHIP, _FOLLOWING_SUBJECTS, _GREETING_INBOX)
@@ -100,10 +112,11 @@ class UserAcceptanceDataProvider:
         plan: ProviderPlan,
     ) -> ProvisionedCapability:
         if isinstance(plan.resolved_params, AuthenticatedActorsParams):
+            params = plan.resolved_params
             runtime = _runtime(context)
             handles: list[ActorHandle] = []
             try:
-                for index, role in enumerate(plan.resolved_params.roles):
+                for index, role in enumerate(params.roles):
                     actor = open_test_data_acceptance_session(
                         context.base_url,
                         environment=context.candidate.environment,
@@ -173,14 +186,70 @@ class UserAcceptanceDataProvider:
                             cleanup_handle=tuple(
                                 handle.account for handle in handles
                             ),
+                            cleanup_context=_ActorTopologyState(),
                             operation_count=2 * len(handles),
                         ),
                     ) from error
                 raise
+            actors = AcceptanceActorSet(tuple(handles))
+            relationship_executor = _executor(
+                context,
+                AUTHENTICATED_ACTORS.key.value,
+            )
+            established_relationships: list[MutualActorRelationship] = []
+            followed_directions: list[tuple[ActorRole, ActorRole]] = []
+            try:
+                for index, relationship in enumerate(params.mutual_relationships):
+                    source = actors.require(relationship.source_role)
+                    target = actors.require(relationship.target_role)
+                    relationship_executor.call(
+                        "user.persona_relationship.FollowUser",
+                        actor=source,
+                        step_id=f"follow-mutual-forward-{index:02d}",
+                        bindings={"targetPersonaId": target.persona.object_id},
+                        body={"source": "acceptance"},
+                    )
+                    followed_directions.append(
+                        (relationship.source_role, relationship.target_role)
+                    )
+                    relationship_executor.call(
+                        "user.persona_relationship.FollowUser",
+                        actor=target,
+                        step_id=f"follow-mutual-reverse-{index:02d}",
+                        bindings={"targetPersonaId": source.persona.object_id},
+                        body={"source": "acceptance"},
+                    )
+                    followed_directions.append(
+                        (relationship.target_role, relationship.source_role)
+                    )
+                    established_relationships.append(relationship)
+            except BaseException as error:
+                raise PartialProvisioningError(
+                    "User Provider actor topology stopped after a partial mutation",
+                    provisioned=ProvisionedCapability(
+                        value=actors,
+                        cleanup_handle=tuple(handle.account for handle in handles),
+                        cleanup_context=_ActorTopologyState(
+                            established_relationships=tuple(
+                                established_relationships
+                            ),
+                            followed_directions=tuple(followed_directions),
+                        ),
+                        operation_count=(
+                            2 * len(handles) + relationship_executor.operation_count
+                        ),
+                    ),
+                ) from error
             return ProvisionedCapability(
-                value=AcceptanceActorSet(tuple(handles)),
+                value=actors,
+                cleanup_context=_ActorTopologyState(
+                    established_relationships=params.mutual_relationships,
+                    followed_directions=tuple(followed_directions),
+                ),
                 cleanup_handle=tuple(handle.account for handle in handles),
-                operation_count=2 * len(handles),
+                operation_count=(
+                    2 * len(handles) + relationship_executor.operation_count
+                ),
             )
         if isinstance(plan.resolved_params, FollowingSubjectsParams):
             return self._provision_following_subject(context, plan.resolved_params)
@@ -353,6 +422,9 @@ class UserAcceptanceDataProvider:
             )
         if isinstance(provisioned.value, AcceptanceActorSet):
             executor = _executor(context, AUTHENTICATED_ACTORS.key.value + ".readback")
+            topology = provisioned.cleanup_context
+            if not isinstance(topology, _ActorTopologyState):
+                return ReadbackResult(passed=False)
             observed = 0
             for index, actor in enumerate(provisioned.value.actors):
                 active_context = executor.call(
@@ -371,10 +443,42 @@ class UserAcceptanceDataProvider:
                         operation_count=executor.operation_count,
                     )
                 observed += 1
+            observed_mutual = 0
+            for index, relationship in enumerate(
+                topology.established_relationships
+            ):
+                source = provisioned.value.require(relationship.source_role)
+                target = provisioned.value.require(relationship.target_role)
+                relationship_payload = executor.call(
+                    "user.persona_relationship.GetRelationship",
+                    actor=source,
+                    step_id=f"get-mutual-relationship-{index:02d}",
+                    bindings={"personaId": target.persona.object_id},
+                )
+                if relationship_payload.get("relationState") != "mutual":
+                    return ReadbackResult(
+                        passed=False,
+                        operation_count=executor.operation_count,
+                        details={
+                            "actorCount": observed,
+                            "mutualRelationshipCount": observed_mutual,
+                        },
+                    )
+                observed_mutual += 1
+            runtime = _runtime(context)
+            for relationship in topology.established_relationships:
+                runtime.register_verified_mutual_relationship(
+                    provisioned.value.require(relationship.source_role),
+                    provisioned.value.require(relationship.target_role),
+                    test_data_instance_id=context.test_data_instance_id,
+                )
             return ReadbackResult(
                 passed=observed == len(provisioned.value.actors) and observed > 0,
                 operation_count=executor.operation_count,
-                details={"actorCount": observed},
+                details={
+                    "actorCount": observed,
+                    "mutualRelationshipCount": observed_mutual,
+                },
             )
         result = provisioned.value
         if not isinstance(result, RelationshipResult):
@@ -481,17 +585,50 @@ class UserAcceptanceDataProvider:
         if not isinstance(provisioned.value, AcceptanceActorSet):
             return CleanupResult(state="quarantined")
         executor = _executor(context, AUTHENTICATED_ACTORS.key.value + ".cleanup")
-        for index, actor in enumerate(reversed(provisioned.value.actors)):
-            executor.call(
-                "user.user_account.CloseAccount",
-                actor=actor,
-                step_id=f"close-account-{index:02d}",
-                body={
-                    "clientRequestId": (
-                        f"{context.test_data_instance_id[:24]}-close-{index:02d}"
-                    )
-                },
+        topology = provisioned.cleanup_context
+        if not isinstance(topology, _ActorTopologyState):
+            topology = _ActorTopologyState()
+        runtime = _runtime(context)
+        for relationship in topology.established_relationships:
+            runtime.unregister_verified_mutual_relationship(
+                provisioned.value.require(relationship.source_role),
+                provisioned.value.require(relationship.target_role),
+                test_data_instance_id=context.test_data_instance_id,
             )
+        cleanup_errors: list[BaseException] = []
+        for index, (source_role, target_role) in enumerate(
+            reversed(topology.followed_directions)
+        ):
+            source = provisioned.value.require(source_role)
+            target = provisioned.value.require(target_role)
+            try:
+                executor.call(
+                    "user.persona_relationship.UnfollowUser",
+                    actor=source,
+                    step_id=f"unfollow-mutual-{index:02d}",
+                    bindings={"targetPersonaId": target.persona.object_id},
+                    body={},
+                )
+            except BaseException as error:
+                cleanup_errors.append(error)
+        for index, actor in enumerate(reversed(provisioned.value.actors)):
+            try:
+                executor.call(
+                    "user.user_account.CloseAccount",
+                    actor=actor,
+                    step_id=f"close-account-{index:02d}",
+                    body={
+                        "clientRequestId": (
+                            f"{context.test_data_instance_id[:24]}-close-{index:02d}"
+                        )
+                    },
+                )
+            except BaseException as error:
+                cleanup_errors.append(error)
+        if cleanup_errors:
+            raise RuntimeError(
+                "actor topology cleanup failed after all actions were attempted"
+            ) from cleanup_errors[0]
         return CleanupResult(state="released", operation_count=executor.operation_count)
 
 

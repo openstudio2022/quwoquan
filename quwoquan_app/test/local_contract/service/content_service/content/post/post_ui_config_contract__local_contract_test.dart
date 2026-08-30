@@ -10,18 +10,18 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 void main() {
   group('ContentUIConfig — home_channels contract', () {
     // 频道是运营资产：端 meta 默认（发布自带 fallback），云侧可远程覆盖。
-    // 本组锁定首发四频道默认集与有限模板类型，防止默认频道回归漂移。
-    test('home_channels — exactly 7 default channels', () {
-      expect(ContentUIConfig.homeChannels.length, equals(7));
+    // 本组锁定首页默认频道集与有限模板类型，防止视频书退回独立壳层入口。
+    test('home_channels — exactly 8 default channels', () {
+      expect(ContentUIConfig.homeChannels.length, equals(8));
     });
 
-    test('home_channels ids: 关注/推荐/校园/旅行/摄影/科技/车友', () {
-      final ids = ContentUIConfig.homeChannels.map((c) => c.id).toList();
+    test('home_channels ids: 关注/推荐/视频书/校园/旅行/摄影/科技/车友', () {
       expect(
-        ids,
-        containsAll(<String>[
+        ContentUIConfig.homeChannels.map((channel) => channel.id).toList(),
+        equals(<String>[
           'following',
           'recommend',
+          'featured',
           'campus',
           'travel',
           'photography',
@@ -32,13 +32,13 @@ void main() {
     });
 
     test(
-      'home_channels order is monotonic 0..6 matching declared sequence',
+      'home_channels order is monotonic 0..7 matching declared sequence',
       () {
         final ordered = <HomeChannelConfig>[...ContentUIConfig.homeChannels]
           ..sort((a, b) => a.order.compareTo(b.order));
         expect(
           ordered.map((c) => c.order).toList(),
-          equals(<int>[0, 1, 2, 3, 4, 5, 6]),
+          equals(<int>[0, 1, 2, 3, 4, 5, 6, 7]),
           reason: 'order 必须连续单调，运营调序仅改 order 即生效',
         );
         expect(
@@ -46,6 +46,7 @@ void main() {
           equals(<String>[
             'following',
             'recommend',
+            'featured',
             'campus',
             'travel',
             'photography',
@@ -61,6 +62,7 @@ void main() {
       const allowedTemplates = <String>{
         'single_column_relations',
         'single_column_multiform',
+        'premium_immersive',
       };
       for (final channel in ContentUIConfig.homeChannels) {
         expect(
@@ -77,6 +79,7 @@ void main() {
         const allowedLayoutTemplates = <String>{
           'singleColumnRelations',
           'singleColumnMultiForm',
+          'immersivePremiumStream',
         };
         const allowedIntersectionPolicies = <String>{
           'none',
@@ -90,6 +93,7 @@ void main() {
           'compactVisual',
           'articleFullSpan',
           'richMultiForm',
+          'premiumImmersive',
         };
 
         for (final channel in ContentUIConfig.homeChannels) {
@@ -122,6 +126,14 @@ void main() {
         );
         expect(following.phoneColumns, equals(1));
         expect(following.layoutTemplate, equals('singleColumnRelations'));
+
+        final featured = ContentUIConfig.homeChannels.firstWhere(
+          (channel) => channel.id == 'featured',
+        );
+        expect(featured.template, equals('premium_immersive'));
+        expect(featured.layoutTemplate, equals('immersivePremiumStream'));
+        expect(featured.contentCardPolicy, equals('premiumImmersive'));
+        expect(featured.feedQuery['channel'], equals('premium'));
 
         for (final id in <String>[
           'recommend',
@@ -267,8 +279,9 @@ void main() {
         isTrue,
       );
       expect(
-        ContentUIConfig.featureFlags.containsKey('enable_article_page_curl'),
+        ContentUIConfig.featureFlags['enable_article_page_curl'],
         isTrue,
+        reason: 'page curl 是文章阅读默认交互，禁用只能来自显式 runtime override',
       );
       expect(
         ContentUIConfig.featureFlags.containsKey(
@@ -385,26 +398,23 @@ void main() {
       },
     );
 
-    test(
-      'article reader profiles freeze full screen stage and top nav page fraction',
-      () {
-        final ids = ContentUIConfig.articleReaderProfiles
-            .map((profile) => profile.id)
-            .toList();
-        expect(
-          ids,
-          containsAll(<String>[
-            'full_screen_book_stage',
-            'top_nav_with_page_fraction',
-          ]),
-        );
-        final fullScreen = ContentUIConfig.articleReaderProfiles.firstWhere(
-          (profile) => profile.id == 'full_screen_book_stage',
-        );
-        expect(fullScreen.pageIndicatorAnchor, equals('top_after_back'));
-        expect(fullScreen.supportsPageCurl, isTrue);
-      },
-    );
+    test('article reader profiles freeze full screen stage and top nav page fraction', () {
+      final ids = ContentUIConfig.articleReaderProfiles
+          .map((profile) => profile.id)
+          .toList();
+      expect(
+        ids,
+        containsAll(<String>[
+          'full_screen_book_stage',
+          'top_nav_with_page_fraction',
+        ]),
+      );
+      final fullScreen = ContentUIConfig.articleReaderProfiles.firstWhere(
+        (profile) => profile.id == 'full_screen_book_stage',
+      );
+      expect(fullScreen.pageIndicatorAnchor, equals('top_after_back'));
+      expect(fullScreen.supportsPageCurl, isTrue);
+    });
 
     test('article template recommendations cover核心圈子频道', () {
       final tech = ContentUIConfig.articleTemplateRecommendations.firstWhere(

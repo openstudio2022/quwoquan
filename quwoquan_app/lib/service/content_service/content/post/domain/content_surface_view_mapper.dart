@@ -35,60 +35,70 @@ class ContentSurfaceViewMapper {
     final title = dto.normalizedTitle.isEmpty ? null : dto.normalizedTitle;
     final body = dto.normalizedBody.isEmpty ? null : dto.normalizedBody;
 
-    final projectedCover = resolver?.tryResolve(
-      dto.mediaCoverUrl,
-      kind: MediaDeliveryKind.image,
-      assetId: dto.id,
-    );
+    // 媒体交付绑定（DEC-033）：资产标识只取契约投影携带的真实媒体资产标识，
+    // 缺席时保持缺席（tryResolve 的 assetId 以 '' 表达缺席），禁止以
+    // postId/personaId 冒充。
+    final coverBinding = _coverBinding(dto, dto.mediaCoverUrl);
+    final thumbnailBinding = _coverBinding(dto, dto.mediaThumbnailUrl);
+    final videoItem = _mediaItemFor(dto, url: dto.mediaVideoUrl, kind: 'video');
+    // 顶层 mediaAssetId 是契约声明的主媒体资产标识，可作为单视频的真实绑定。
+    final videoAssetId = videoItem?.mediaAssetId ?? dto.mediaAssetId ?? '';
+    final videoAccessMode = videoItem?.accessMode;
+
     final mediaCover = resolver?.tryResolve(
       dto.mediaCoverUrl,
       kind: MediaDeliveryKind.image,
-      assetId: dto.id,
+      assetId: coverBinding.assetId,
     );
     final mediaThumbnail = resolver?.tryResolve(
       dto.mediaThumbnailUrl,
       kind: MediaDeliveryKind.image,
-      assetId: dto.id,
+      assetId: thumbnailBinding.assetId,
     );
     final mediaVideo = resolver?.tryResolve(
       dto.mediaVideoUrl,
       kind: MediaDeliveryKind.video,
-      assetId: dto.id,
+      assetId: videoAssetId,
     );
     final mediaVideoCover = mediaThumbnail ?? mediaCover;
-    final coverReference = dto.isVideoLike
-        ? mediaVideoCover
-        : (projectedCover ?? mediaCover);
+    final videoCoverAccessMode = mediaThumbnail != null
+        ? thumbnailBinding.accessMode
+        : coverBinding.accessMode;
+    final coverReference = dto.isVideoLike ? mediaVideoCover : mediaCover;
+    final coverAccessMode = dto.isVideoLike
+        ? videoCoverAccessMode
+        : coverBinding.accessMode;
     final cover = coverReference == null
         ? null
         : ContentCoverRef(
-            delivery: _contentDelivery(coverReference),
+            delivery: _contentDelivery(coverReference, coverAccessMode),
             aspectRatio: dto.aspectRatio,
           );
 
     final images = dto.mediaImageUrls
-        .map(
-          (raw) => resolver?.tryResolve(
+        .map((raw) {
+          final item = _mediaItemFor(dto, url: raw, kind: 'image');
+          final reference = resolver?.tryResolve(
             raw,
             kind: MediaDeliveryKind.image,
-            assetId: dto.id,
-          ),
-        )
-        .whereType<MediaDeliveryReference>()
-        .map(
-          (reference) => ContentImageRef(
-            delivery: _contentDelivery(reference),
-            aspectRatio: dto.aspectRatio,
-          ),
-        )
+            assetId: item?.mediaAssetId ?? '',
+          );
+          return reference == null
+              ? null
+              : ContentImageRef(
+                  delivery: _contentDelivery(reference, item?.accessMode),
+                  aspectRatio: dto.aspectRatio,
+                );
+        })
+        .whereType<ContentImageRef>()
         .toList(growable: false);
 
     final ContentVideoRef? video = mediaVideo != null
         ? ContentVideoRef(
-            delivery: _contentDelivery(mediaVideo),
+            delivery: _contentDelivery(mediaVideo, videoAccessMode),
             thumbnail: mediaVideoCover == null
                 ? null
-                : _contentDelivery(mediaVideoCover),
+                : _contentDelivery(mediaVideoCover, videoCoverAccessMode),
             durationMs: dto.durationMs,
             aspectRatio: dto.aspectRatio,
           )
@@ -97,12 +107,12 @@ class ContentSurfaceViewMapper {
     final authorAvatar = resolver?.tryResolve(
       dto.avatarUrl,
       kind: MediaDeliveryKind.avatar,
-      assetId: dto.personaId,
+      assetId: dto.authorAvatarAssetId ?? '',
     );
+    // 作者背景图契约未携带资产标识，保持缺席，不以 personaId 冒充。
     final authorBackground = resolver?.tryResolve(
       dto.authorBackgroundUrl,
       kind: MediaDeliveryKind.background,
-      assetId: dto.personaId,
     );
 
     return ContentSurfaceView(
@@ -113,10 +123,12 @@ class ContentSurfaceViewMapper {
       author: ContentAuthorRef(
         id: dto.personaId,
         displayName: dto.displayName,
-        avatar: authorAvatar == null ? null : _contentDelivery(authorAvatar),
+        avatar: authorAvatar == null
+            ? null
+            : _contentDelivery(authorAvatar, dto.authorAvatarAccessMode),
         background: authorBackground == null
             ? null
-            : _contentDelivery(authorBackground),
+            : _contentDelivery(authorBackground, null),
       ),
       stats: ContentStats(
         like: dto.likeCount,
@@ -183,12 +195,58 @@ class ContentSurfaceViewMapper {
     return const <String>[];
   }
 
-  static ContentDeliveryRef _contentDelivery(MediaDeliveryReference reference) {
+  static ContentDeliveryRef _contentDelivery(
+    MediaDeliveryReference reference,
+    MediaDeliveryAccessMode? accessMode,
+  ) {
     return ContentDeliveryRef(
       url: reference.url,
       assetId: reference.assetId,
       version: reference.version,
       sha256: reference.sha256,
+      accessMode: accessMode,
     );
+  }
+
+  /// 按 URL 在契约 `mediaItems` 中查找同 kind 的媒体条目；查不到即缺席。
+  static PostMediaItem? _mediaItemFor(
+    ContentPostViewData dto, {
+    required String url,
+    required String kind,
+  }) {
+    if (url.isEmpty) {
+      return null;
+    }
+    for (final item in dto.mediaItems) {
+      if (item.kind == kind && item.url == url) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  /// 封面/缩略图的交付绑定：优先匹配条目声明的 cover/thumbnail URL 取
+  /// `coverAssetId`；封面复用主图时按 image 条目取 `mediaAssetId`；
+  /// 均无匹配则缺席（assetId 为 ''、accessMode 为 null），不造值。
+  static ({String assetId, MediaDeliveryAccessMode? accessMode}) _coverBinding(
+    ContentPostViewData dto,
+    String url,
+  ) {
+    if (url.isNotEmpty) {
+      for (final item in dto.mediaItems) {
+        if (item.coverUrl == url || item.thumbnailUrl == url) {
+          return (assetId: item.coverAssetId ?? '', accessMode: item.accessMode);
+        }
+      }
+      for (final item in dto.mediaItems) {
+        if (item.kind == 'image' && item.url == url) {
+          return (
+            assetId: item.mediaAssetId ?? '',
+            accessMode: item.accessMode,
+          );
+        }
+      }
+    }
+    return (assetId: '', accessMode: null);
   }
 }

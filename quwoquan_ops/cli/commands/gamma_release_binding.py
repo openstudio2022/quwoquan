@@ -1,12 +1,15 @@
-"""stackctl gamma/beta 正式发布环境绑定域: packaged/release 镜像 refs、
-外部 Provider 环境、对象存储绑定与 release evidence 配置物化。
+"""stackctl gamma/beta 正式发布环境绑定域: 外部 Provider 环境、对象存储绑定
+与 release evidence 配置物化。
 
 从 stackctl.py 逐字迁出（改写规则与 down_domain 相同）:
-gamma packaged/release 镜像绑定家族、`_inspect_gamma_release_runtime`、
+`_inspect_gamma_release_runtime`、
 `_bind_formal_local_release_provider_environment`、beta/local 外部 Provider
 环境绑定、`_bind_package_provider_reference_environment`、
 `_sync_object_storage_binding_aliases`、`_gamma_start_command`、
 `_materialize_release_evidence_configuration`。
+
+packaged/release/teardown 镜像 refs 绑定族已迁往 `runtime_image_composition`，
+与该模块的 composition 加载合为同一责任。
 
 测试经 ``mock.patch.object(stackctl, ...)`` patch 本模块符号与协作符号，
 因此函数体内一律经函数内延迟导入 `_stackctl` 属性访问（含本模块符号互调），
@@ -20,226 +23,10 @@ import concurrent
 import concurrent.futures
 import json
 import os
-import re
-import subprocess
 
 from pathlib import Path
 from typing import Any
 from typing import Mapping
-
-
-def _bind_gamma_packaged_service_image_refs(
-    env_name: str,
-    environment: dict[str, str],
-    *,
-    candidate_snapshot: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Bind only exact OCI image IDs attested by the immutable package."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    target_name = str(environment.get("QWQ_LOCAL_RELEASE_TARGET") or "").strip()
-    if not target_name:
-        raise ValueError("package-bound runtime target is missing")
-    composition = _stackctl._load_package_bound_local_image_composition(
-        env_name,
-        target_name,
-        candidate_snapshot=candidate_snapshot,
-    )
-    _stackctl._apply_gamma_image_composition(composition, environment)
-    startup_manifest = str(
-        composition.get("startupImageCompositionFile") or ""
-    ).strip()
-    startup_transport_tag = str(
-        composition.get("startupImageTransportTag") or ""
-    ).strip()
-    if (
-        not startup_manifest
-        or re.fullmatch(r"sha256:[0-9a-f]{64}", startup_transport_tag) is None
-    ):
-        raise ValueError("package OCI startup identity is incomplete")
-    environment["QWQ_STARTUP_IMAGE_COMPOSITION_FILE"] = startup_manifest
-    environment["QWQ_STARTUP_IMAGE_TRANSPORT_TAG"] = startup_transport_tag
-    return composition
-
-
-def _bind_gamma_packaged_configuration_digest(
-    env_name: str,
-    environment: dict[str, str],
-    composition: dict[str, Any] | None = None,
-) -> str:
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    target_name = str(environment.get("QWQ_LOCAL_RELEASE_TARGET") or "").strip()
-    digest = _stackctl.packaged_configuration_digest(
-        env_name,
-        target=target_name,
-    )
-    environment["LOCAL_GAMMA_CONFIG_VERSION"] = digest
-    if composition is not None:
-        composition["configurationDigest"] = digest
-    return digest
-
-
-def _resolve_gamma_release_image_composition(
-    manifest_path: Path,
-) -> dict[str, Any]:
-    """Resolve one validated candidate manifest without mutating or pulling."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise ValueError(f"formal release manifest is unreadable: {error}") from error
-    if not isinstance(manifest, dict):
-        raise ValueError("formal release manifest must be an object")
-    _stackctl.finalize_mainline_release_artifact.validate_manifest(
-        manifest,
-        allowed_statuses={"candidate-ready", "deployable", "released"},
-    )
-    _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
-        manifest_path.parent,
-        manifest,
-    )
-    images = manifest.get("images")
-    if not isinstance(images, dict):
-        raise ValueError("formal release manifest has no images")
-    bound: dict[str, dict[str, str]] = {}
-    for service, _ in _stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
-        descriptor = images.get(service)
-        if not isinstance(descriptor, dict):
-            raise ValueError(f"formal release image is missing: {service}")
-        digest = str(descriptor.get("digest") or "")
-        ref = str(descriptor.get("ref") or "")
-        repository = str(descriptor.get("repository") or "")
-        if (
-            re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None
-            or ref != f"{repository}@{digest}"
-        ):
-            raise ValueError(f"formal release image is not exact: {service}")
-        bound[service] = {"ref": ref, "digest": digest}
-    composition_version = _stackctl.immutable_image_digest(
-        {service: descriptor["ref"] for service, descriptor in bound.items()}
-    )
-    return {
-        "candidateId": str(manifest["candidateId"]),
-        "artifactDigest": str(manifest["artifactDigest"]),
-        "contractGraphDigest": str(manifest["contractGraphDigest"]),
-        "imageVersion": composition_version,
-        "images": bound,
-    }
-
-
-def _apply_gamma_image_composition(
-    composition: dict[str, Any],
-    environment: dict[str, str],
-) -> None:
-    """Project one already-validated composition into both Compose aliases."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    configuration_digest = str(composition.get("configurationDigest") or "").strip()
-    if re.fullmatch(r"sha256:[0-9a-f]{64}", configuration_digest) is None:
-        raise ValueError("immutable runtime composition has no configuration digest")
-    environment["LOCAL_GAMMA_CONFIG_VERSION"] = configuration_digest
-    images = composition.get("images")
-    if not isinstance(images, dict) or not images:
-        raise ValueError("immutable image composition has no images")
-    refs: dict[str, str] = {}
-    for service, local_key in _stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
-        descriptor = images.get(service)
-        if not isinstance(descriptor, dict):
-            raise ValueError(f"immutable image composition is missing: {service}")
-        ref = str(descriptor.get("ref") or "")
-        refs[service] = ref
-        environment[local_key] = ref
-        environment[_stackctl.compose_image_environment_key(service)] = ref
-    actual_version = _stackctl.immutable_image_digest(refs)
-    expected_version = str(composition.get("imageVersion") or "")
-    if actual_version != expected_version:
-        raise ValueError("immutable image composition version mismatch")
-    environment["LOCAL_GAMMA_IMAGE_VERSION"] = actual_version
-    environment["QWQ_COMPOSE_IMAGE_VERSION"] = actual_version
-    environment["QWQ_COMPOSE_IMAGE_TAG"] = actual_version.removeprefix("sha256:")
-    candidate_id = str(composition.get("candidateId") or "")
-    artifact_digest = str(composition.get("artifactDigest") or "")
-    if candidate_id:
-        environment["QWQ_RELEASE_CANDIDATE_DIGEST"] = candidate_id
-    if artifact_digest:
-        environment["QWQ_RELEASE_ARTIFACT_DIGEST"] = artifact_digest
-
-
-def _bind_gamma_release_image_refs(
-    manifest_path: Path,
-    environment: dict[str, str],
-    *,
-    release_input_classification: str,
-    contract_graph_digest: str,
-) -> dict[str, Any]:
-    """Pull and bind exact candidate OCI refs for a formal local release."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    composition = _stackctl._resolve_gamma_release_image_composition(manifest_path)
-    if release_input_classification != "commercial_inputs":
-        raise ValueError("formal release requires commercial release inputs")
-    if composition.get("contractGraphDigest") != contract_graph_digest:
-        raise ValueError("formal release ContractGraph differs from the package")
-    planned: list[tuple[str, str, str, str]] = []
-    for service, environment_key in _stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
-        descriptor = composition["images"][service]
-        digest = descriptor["digest"]
-        ref = descriptor["ref"]
-        planned.append((service, environment_key, ref, digest))
-
-    def pull_exact_image(
-        item: tuple[str, str, str, str],
-    ) -> tuple[tuple[str, str, str, str], subprocess.CompletedProcess[str]]:
-        return item, _stackctl.run(["docker", "pull", "--platform", "linux/amd64", item[2]])
-
-    failures: list[str] = []
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=min(8, len(planned))
-    ) as executor:
-        futures = [executor.submit(pull_exact_image, item) for item in planned]
-        for future in concurrent.futures.as_completed(futures):
-            item, pull = future.result()
-            if pull.returncode != 0:
-                failures.append(
-                    f"{item[0]}: "
-                    + (pull.stderr.strip() or pull.stdout.strip() or "pull failed")
-                )
-    if failures:
-        raise ValueError(
-            "formal release exact OCI pull failed: " + "; ".join(sorted(failures))
-        )
-
-    _stackctl._bind_gamma_packaged_configuration_digest(
-        str(environment.get("QWQ_LOCAL_RELEASE_ENV") or ""),
-        environment,
-        composition,
-    )
-    _stackctl._apply_gamma_image_composition(composition, environment)
-    return composition
-
-
-def _bind_gamma_release_teardown_image_refs(
-    manifest_path: Path,
-    environment: dict[str, str],
-) -> dict[str, Any]:
-    """Bind the exact candidate identity for teardown without pulling images."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    composition = _stackctl._resolve_gamma_release_image_composition(manifest_path)
-    _stackctl._bind_gamma_packaged_configuration_digest(
-        str(environment.get("QWQ_LOCAL_RELEASE_ENV") or ""),
-        environment,
-        composition,
-    )
-    _stackctl._apply_gamma_image_composition(composition, environment)
-    return composition
 
 
 def _inspect_gamma_release_runtime(
@@ -481,18 +268,36 @@ def _bind_formal_local_release_provider_environment(
     environment["INTEGRATION_EXTERNAL_INTERACTION_BASE_URL"] = (
         "http://integration-service:18086"
     )
-    if workload == "full":
-        try:
+    # service-core 无条件把 assistant-service 模块并入单容器,因此 trust root
+    # 是容器级前置。immutable candidate 必须消费 capsule 内已封存 Skill
+    # release 携带的公钥材料,而不是在 up 时重新签发；mutable test_live 仍
+    # 由同一次实时发布物构建生成 target-scoped trust root。
+    try:
+        candidate_root_value = str(
+            environment.get("QWQ_FIXED_CANDIDATE_ROOT") or ""
+        ).strip()
+        if candidate_root_value:
+            public_keys_json = (
+                _stackctl.load_packaged_assistant_skill_package_trust(
+                    candidate_root=Path(candidate_root_value),
+                    environment=environment_name,
+                    target=target_name,
+                )
+            )
+            environment[
+                "ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON"
+            ] = public_keys_json
+        else:
             skill_keys = _stackctl.prepare_local_assistant_skill_package_keys(
                 environment_name,
                 target_name,
             )
-        except (OSError, RuntimeError, ValueError) as exc:
-            return (
-                f"{target_name} assistant Skill package key materialization "
-                f"failed: {exc}"
-            )
-        environment.update(skill_keys.environment)
+            environment.update(skill_keys.environment)
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        return (
+            f"{target_name} assistant Skill package trust materialization "
+            f"failed: {exc}"
+        )
     if workload in {"content-release", "content-commercial"}:
         # Bounded content workloads own release import/public read and the
         # optional Product Ops premium command. External
@@ -593,7 +398,11 @@ def _bind_formal_local_release_provider_environment(
     return None
 
 
-def _bind_gamma_down_parse_environment(environment: dict[str, str]) -> None:
+def _bind_gamma_down_parse_environment(
+    environment: dict[str, str],
+    *,
+    receipt_bound: bool = False,
+) -> None:
     """Satisfy non-identity Compose interpolation used only while tearing down."""
 
     storage_placeholders = {
@@ -652,8 +461,18 @@ def _bind_gamma_down_parse_environment(environment: dict[str, str]) -> None:
             "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_CA_FILE": "/tmp/down-not-used",
             "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_CERT_FILE": "/tmp/down-not-used",
             "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_KEY_FILE": "/tmp/down-not-used",
+            # DEC-005：环境身份与 platform-ops facts 是部署面挂载材料；down 只需
+            # 确定性插值，不生成材料。
+            "QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE": "/tmp/down-not-used",
+            "QWQ_COMPOSE_PLATFORM_OPS_FACTS_ROOT": "/tmp",
         }
     )
+    if receipt_bound:
+        if environment.get("LOCAL_GAMMA_SMS_SUBSTITUTE_PORT"):
+            environment["QWQ_COMPOSE_SMS_SUBSTITUTE_PORT"] = environment[
+                "LOCAL_GAMMA_SMS_SUBSTITUTE_PORT"
+            ]
+        return
     # compose 模板对每个服务强制声明 CONFIG_VERSION；down 只需确定性插值，
     # 优先取 active candidate provenance 真值，candidate 缺席时用占位。
     # 变量名以模板声明为准（目录名与变量名不同构，如 control-plane/platform-ops
@@ -691,66 +510,6 @@ def _bind_gamma_down_parse_environment(environment: dict[str, str]) -> None:
         environment["QWQ_COMPOSE_SMS_SUBSTITUTE_PORT"] = environment[
             "LOCAL_GAMMA_SMS_SUBSTITUTE_PORT"
         ]
-
-
-def _load_gamma_runtime_image_composition(
-    target_name: str,
-) -> tuple[dict[str, Any], str] | None:
-    """Read the canonical current runtime binding; absence permits package derivation."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    try:
-        receipt = _stackctl.load_startup_attempt(target_name)
-    except ValueError as exc:
-        raise ValueError(f"runtime image composition receipt is unreadable: {exc}") from exc
-    if receipt is None or receipt.get("status") == "stopped":
-        return None
-    if receipt.get("status") not in {"prepared", "partial", "running"}:
-        raise ValueError("runtime startup attempt has no resources to tear down")
-    expected_environment = target_name.removesuffix("-local")
-    if receipt.get("target") != target_name:
-        raise ValueError("runtime image composition receipt target mismatch")
-    receipt_environment = str(receipt.get("env") or "").strip()
-    if receipt_environment != expected_environment:
-        raise ValueError("runtime image composition receipt environment mismatch")
-    compose_project = str(receipt.get("composeProject") or "").strip()
-    if not compose_project:
-        raise ValueError("runtime image composition receipt has no Compose project")
-    expected_project_prefix = f"quwoquan_{expected_environment}_release"
-    if (
-        re.fullmatch(
-            re.escape(expected_project_prefix) + r"(?:_[a-zA-Z0-9_-]+)?",
-            compose_project,
-        )
-        is None
-    ):
-        raise ValueError("runtime image composition receipt Compose project mismatch")
-    composition = receipt.get("imageComposition")
-    if not isinstance(composition, dict):
-        raise ValueError("runtime image composition receipt has no image composition")
-    images = composition.get("images")
-    if not isinstance(images, dict):
-        raise ValueError("runtime image composition receipt has invalid images")
-    refs: dict[str, str] = {}
-    for service, _ in _stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
-        descriptor = images.get(service)
-        if not isinstance(descriptor, dict):
-            raise ValueError(f"runtime image composition is missing: {service}")
-        refs[service] = str(descriptor.get("ref") or "")
-    first_party_version = _stackctl.immutable_image_digest(refs)
-    configuration_digest = str(receipt.get("configurationDigest") or "").strip()
-    if re.fullmatch(r"sha256:[0-9a-f]{64}", configuration_digest) is None:
-        raise ValueError("runtime image composition receipt has no configuration digest")
-    teardown_composition = {
-        "imageVersion": first_party_version,
-        "images": {
-            service: {"ref": image_digest, "digest": image_digest}
-            for service, image_digest in sorted(refs.items())
-        },
-        "configurationDigest": configuration_digest,
-    }
-    return teardown_composition, compose_project
 
 
 def _bind_beta_external_provider_environment(
@@ -949,7 +708,9 @@ def _materialize_release_evidence_configuration(
         manifest,
     )
     candidate_id = str(manifest["candidateId"])
-    configuration_packages = manifest["configurationPackages"][env_name]
+    configuration_packages = manifest["environmentArtifacts"][env_name][
+        "configurationPackages"
+    ]
     package_root = _stackctl.deployment_target_path(
         _stackctl.deployment_target_for_env(env_name, target=target),
         "packages",

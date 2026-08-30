@@ -7,6 +7,10 @@ from typing import Any, Iterable, Mapping
 from core.io import read_json
 from core.image_asset_strategy import COMMERCIAL_SCALE_TARGET_THRESHOLD
 from core.paths import execution_root
+from content.execution.planning.source_ready_precheck import (
+    SourceReadyPrecheck,
+    precheck_source_ready_pool,
+)
 
 SOURCE_PRECHECK_MIN_ARTICLE_BASE_SOURCES = 4
 SOURCE_PRECHECK_MIN_IMAGE_SOURCE_COLLECTIONS = 2
@@ -76,6 +80,46 @@ def _source_precheck_major_off_entity_issues(source: Mapping[str, Any]) -> list[
             rows.append(text)
     return rows
 
+_ACQUIRED_STATUS = "acquired"
+
+
+def _graded_asset_row(image: Mapping[str, Any]) -> dict[str, Any] | None:
+    """把已取得的图片行投影成可分级资产；未取得的行还没有权利决策可分级。"""
+    if str(image.get("acquisitionStatus") or "").strip() != _ACQUIRED_STATUS:
+        return None
+    row: dict[str, Any] = {
+        "assetId": (
+            str(image.get("professionalAssetId") or "").strip()
+            or str(image.get("contentSha256") or "").strip()
+            or str(image.get("url") or "").strip()
+        )
+    }
+    # 键在场性本身就是证据：缺席与空串必须能被分级器区分开，
+    # 所以这里不给缺席的决策补默认值。
+    if "distributionDecision" in image:
+        row["distributionDecision"] = image["distributionDecision"]
+    return row
+
+
+def _grade_publishable_rights(
+    publishable_images: Sequence[Mapping[str, Any]],
+) -> SourceReadyPrecheck:
+    """按来源集合分级已取得图片的权利闭合，先于任何语义 Agent 消耗配额。"""
+    pool: dict[str, list[dict[str, Any]]] = {}
+    for image in publishable_images:
+        row = _graded_asset_row(image)
+        if row is None:
+            continue
+        collection = str(image.get("sourceCollectionId") or "").strip()
+        pool.setdefault(collection, []).append(row)
+    return precheck_source_ready_pool(
+        [
+            {"name": collection, "assets": rows}
+            for collection, rows in sorted(pool.items())
+        ]
+    )
+
+
 def _source_precheck_diag_off_entity_count(diagnostics: Mapping[str, Any], entity: str) -> int:
     targets = diagnostics.get("targets") if isinstance(diagnostics.get("targets"), Mapping) else {}
     row = targets.get(entity) if isinstance(targets.get(entity), Mapping) else {}
@@ -100,7 +144,6 @@ def source_precheck_report(
     homepage_failed_entities: set[str],
 ) -> dict[str, Any]:
     from content.source.source_inputs import curated_images_for_entity, curated_sources_for_entity
-    from governance.coverage.license import validate_image_rights
     from content.execution.coverage import coverage_entity_type_for_entity
     thresholds = _source_precheck_thresholds(spec)
     article_precheck_enabled = int(thresholds.get("minArticleBaseSources") or 0) > 0
@@ -146,8 +189,6 @@ def source_precheck_report(
             collection = str(image.get("sourceCollectionId") or "").strip()
             if not collection:
                 continue
-            if validate_image_rights(image, vertical=vertical):
-                continue
             publishable_images.append(image)
             publishable_collections.add(collection)
             category = _source_category(
@@ -158,6 +199,19 @@ def source_precheck_report(
             )
             if category:
                 source_categories.add(category)
+        # 权利未闭合的集合不能算进 publishable：让它在这里落榜，比让语义 Agent
+        # 先写完对象再在 pool admission 被拒便宜一整个 agent run。
+        source_ready = _grade_publishable_rights(publishable_images)
+        rights_rejected = tuple(row for row in source_ready.verdicts if not row.ready)
+        unclosed_collections = {row.name for row in rights_rejected}
+        if unclosed_collections:
+            publishable_collections -= unclosed_collections
+            publishable_images = [
+                image
+                for image in publishable_images
+                if str(image.get("sourceCollectionId") or "").strip()
+                not in unclosed_collections
+            ]
         off_entity_issues: list[str] = []
         for source in article_sources:
             off_entity_issues.extend(_source_precheck_major_off_entity_issues(source))
@@ -194,6 +248,12 @@ def source_precheck_report(
             issues_by_lane.setdefault("image", []).append(
                 "source precheck same-source publishable image is missing"
             )
+        for verdict in rights_rejected:
+            issues_by_lane.setdefault("image", []).append(
+                "source precheck rights closure "
+                f"{verdict.grade.value} for sourceCollectionId={verdict.name}: "
+                f"{verdict.reason}"
+            )
         row = {
             "entity": entity,
             "passed": not issues_by_lane,
@@ -205,6 +265,7 @@ def source_precheck_report(
             "sourceCategoryCount": len(source_categories),
             "sourceCategories": sorted(source_categories),
             "majorOffEntityNoAnchorRejectCount": len(off_entity_issues) + off_entity_diag_count,
+            "sourceReady": source_ready.report(),
             "issuesByLane": issues_by_lane,
         }
         rows.append(row)

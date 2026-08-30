@@ -227,6 +227,15 @@ def _validate_stage_receipt_history(
             or committed_generation > current_generation
             or not _history_receipt_matches_transaction(state, receipt)
             or receipt.get("artifactDigest") != state.get("artifact_digest")
+            or receipt.get("environmentAcceptanceRef") != state.get("environment_acceptance_ref")
+            or receipt.get("environmentAcceptanceDigest") != state.get("environment_acceptance_digest")
+            or receipt.get("environmentAcceptanceFactId") != state.get("environment_acceptance_fact_id")
+            or receipt.get("gammaPredecessorFactId") != state.get("gamma_predecessor_fact_id")
+            or receipt.get("gammaPredecessorDigest") != state.get("gamma_predecessor_digest")
+            or receipt.get("engineeringEligibilityRef") != state.get("engineering_eligibility_ref")
+            or receipt.get("engineeringEligibilityDigest") != state.get("engineering_eligibility_digest")
+            or receipt.get("durableApprovalRef") != state.get("durable_approval_ref")
+            or receipt.get("durableApprovalDigest") != state.get("durable_approval_digest")
             or receipt.get("imageDigest") != state.get("image_digest")
             or receipt.get("configDigest") != state.get("config_digest")
             or receipt.get("contractGraphDigest")
@@ -269,6 +278,15 @@ def _next_stage_receipt_history(
         if same_transaction or rollback_transaction:
             for state_field, request_field in (
                 ("artifact_digest", "artifactDigest"),
+                ("environment_acceptance_ref", "environmentAcceptanceRef"),
+                ("environment_acceptance_digest", "environmentAcceptanceDigest"),
+                ("environment_acceptance_fact_id", "environmentAcceptanceFactId"),
+                ("gamma_predecessor_fact_id", "gammaPredecessorFactId"),
+                ("gamma_predecessor_digest", "gammaPredecessorDigest"),
+                ("engineering_eligibility_ref", "engineeringEligibilityRef"),
+                ("engineering_eligibility_digest", "engineeringEligibilityDigest"),
+                ("durable_approval_ref", "durableApprovalRef"),
+                ("durable_approval_digest", "durableApprovalDigest"),
                 ("image_digest", "imageDigest"),
                 ("config_digest", "configDigest"),
                 ("contract_graph_digest", "contractGraphDigest"),
@@ -345,6 +363,15 @@ def _validated_readback(root: Path, service: str) -> dict[str, Any]:
         or state.get("service") != service
         or str(receipt.get("committedGeneration")) != state.get("generation")
         or receipt.get("artifactDigest") != state.get("artifact_digest")
+        or receipt.get("environmentAcceptanceRef") != state.get("environment_acceptance_ref")
+        or receipt.get("environmentAcceptanceDigest") != state.get("environment_acceptance_digest")
+        or receipt.get("environmentAcceptanceFactId") != state.get("environment_acceptance_fact_id")
+        or receipt.get("gammaPredecessorFactId") != state.get("gamma_predecessor_fact_id")
+        or receipt.get("gammaPredecessorDigest") != state.get("gamma_predecessor_digest")
+        or receipt.get("engineeringEligibilityRef") != state.get("engineering_eligibility_ref")
+        or receipt.get("engineeringEligibilityDigest") != state.get("engineering_eligibility_digest")
+        or receipt.get("durableApprovalRef") != state.get("durable_approval_ref")
+        or receipt.get("durableApprovalDigest") != state.get("durable_approval_digest")
         or receipt.get("fromCandidateDigest")
         != state.get("from_candidate_digest")
         or receipt.get("toCandidateDigest") != state.get("to_candidate_digest")

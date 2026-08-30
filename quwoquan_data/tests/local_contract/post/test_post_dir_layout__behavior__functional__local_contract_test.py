@@ -46,7 +46,7 @@ from content.post.materialize_residue_cleanup import (
     prune_materialized_post_refs,  # noqa: E402
 )
 from content.post.object_index import register_content_object  # noqa: E402
-from content.release.canonical import creator_projection, post_transaction  # noqa: E402
+from content.release.canonical import post_transaction  # noqa: E402
 from content.release.canonical.post_transaction import (  # noqa: E402
     build_post_object_transaction_package,
 )
@@ -60,9 +60,14 @@ from core.paths import (  # noqa: E402
     execution_entity_object_dir,
     execution_root,
 )
-from core.source_digest import current_source_digest  # noqa: E402
+from core.source_digest import current_source_definition_snapshot  # noqa: E402
 from governance.creators.assignment import creator_assignment_from_profile  # noqa: E402
+from support.article_source_registry_fixture import (  # noqa: E402
+    ARTICLE_SOURCE_UNIT_IDENTITY,
+    article_source_registry_binding,
+)
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
+from support.media_fixture import seed_system_creator_avatar_holding  # noqa: E402
 
 EXECUTION_ID = "20260711--travel-article-layout--test-region-b--pilot-001"
 ANGLE = "攻略"
@@ -72,10 +77,10 @@ ANGLE = "攻略"
 def _freeze_source_digest_during_one_test(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    frozen = current_source_digest()
+    frozen = current_source_definition_snapshot()
     monkeypatch.setattr(
         execution_workspace,
-        "current_source_digest",
+        "current_source_definition_snapshot",
         lambda: frozen,
     )
 
@@ -102,6 +107,7 @@ def _source_attribution() -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-07-11T00:00:00Z",
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        "derivedModifications": [],
     }
 
 
@@ -194,10 +200,17 @@ def _materialize() -> tuple[Path, list[Path]]:
         title="都江堰来源",
         target_ref="/entity/地点/景区/都江堰",
         execution_id=EXECUTION_ID,
-        source_use_mode="factual_reference_only",
         research_lane="article",
         publish_media_mode="text_only",
-        source={"sourceAttribution": _source_attribution()},
+        source_role="base",
+        **ARTICLE_SOURCE_UNIT_IDENTITY,
+        source={
+            **article_source_registry_binding(
+                platform="Curated Research",
+                url="https://example.com/dujiangyan",
+            ),
+            "sourceAttribution": _source_attribution(),
+        },
     )
     source_ref = str(source_manifest["sourceRef"])
     # 同一 (type,angle,title) 两篇（ref 排序 a<b → 1,2），另一标题一篇。
@@ -332,17 +345,7 @@ def test_materialize_review_intent_and_transaction_share_reserved_identity(
     publish_root = tmp_path / "canonical-publish"
     reservation_root = tmp_path / "delivery-reservations"
 
-    profile = TemplateRegistry.load().creators[
-        "qwq_creator_travel_blogger_001"
-    ]
-    avatar_object_key = str(profile["avatarAsset"]["objectKey"])
-    avatar_target = publish_root / avatar_object_key
-    avatar_target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(
-        DATA_ROOT / "publish" / avatar_object_key,
-        avatar_target,
-    )
-    monkeypatch.setattr(creator_projection, "PUBLISH_ROOT", publish_root)
+    seed_system_creator_avatar_holding("qwq_creator_travel_blogger_001")
     monkeypatch.setattr(post_transaction, "PUBLISH_ROOT", publish_root)
 
     intent, _intent_path = write_pool_delivery_intent(

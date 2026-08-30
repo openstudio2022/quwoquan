@@ -23,10 +23,18 @@ class OwnerSearchInterpretedQuery {
     return OwnerSearchInterpretedQuery(
       normalized: m['normalized'] as String,
       tokens: List<String>.unmodifiable(List<String>.from(m['tokens'] as List)),
-      variants: List<String>.unmodifiable(List<String>.from(m['variants'] as List)),
-      detectedEntities: List<String>.unmodifiable(List<String>.from(m['detectedEntities'] as List)),
-      detectedTags: List<String>.unmodifiable(List<String>.from(m['detectedTags'] as List)),
-      selectedObjectTypes: List<String>.unmodifiable(List<String>.from(m['selectedObjectTypes'] as List)),
+      variants: List<String>.unmodifiable(
+        List<String>.from(m['variants'] as List),
+      ),
+      detectedEntities: List<String>.unmodifiable(
+        List<String>.from(m['detectedEntities'] as List),
+      ),
+      detectedTags: List<String>.unmodifiable(
+        List<String>.from(m['detectedTags'] as List),
+      ),
+      selectedObjectTypes: List<String>.unmodifiable(
+        List<String>.from(m['selectedObjectTypes'] as List),
+      ),
     );
   }
 
@@ -69,26 +77,61 @@ void _validateOwnerSearchInterpretedQueryWire(Map<String, dynamic> m) {
     'detectedTags',
     'selectedObjectTypes',
   };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('OwnerSearchInterpretedQuery contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'OwnerSearchInterpretedQuery contains unknown fields: ${unknown.join(',')}',
+    );
   }
-  if (!m.containsKey('normalized') || m['normalized'] == null || (m['normalized'] is! String)) {
-    throw FormatException('OwnerSearchInterpretedQuery.normalized has an invalid wire value');
+  if (!m.containsKey('normalized') ||
+      m['normalized'] == null ||
+      (m['normalized'] is! String)) {
+    throw FormatException(
+      'OwnerSearchInterpretedQuery.normalized has an invalid wire value',
+    );
   }
-  if (!m.containsKey('tokens') || m['tokens'] == null || (m['tokens'] is! List || (m['tokens'] as List).any((value) => value is! String))) {
-    throw FormatException('OwnerSearchInterpretedQuery.tokens has an invalid wire value');
+  if (!m.containsKey('tokens') ||
+      m['tokens'] == null ||
+      (m['tokens'] is! List ||
+          (m['tokens'] as List).any((value) => value is! String))) {
+    throw FormatException(
+      'OwnerSearchInterpretedQuery.tokens has an invalid wire value',
+    );
   }
-  if (!m.containsKey('variants') || m['variants'] == null || (m['variants'] is! List || (m['variants'] as List).any((value) => value is! String))) {
-    throw FormatException('OwnerSearchInterpretedQuery.variants has an invalid wire value');
+  if (!m.containsKey('variants') ||
+      m['variants'] == null ||
+      (m['variants'] is! List ||
+          (m['variants'] as List).any((value) => value is! String))) {
+    throw FormatException(
+      'OwnerSearchInterpretedQuery.variants has an invalid wire value',
+    );
   }
-  if (!m.containsKey('detectedEntities') || m['detectedEntities'] == null || (m['detectedEntities'] is! List || (m['detectedEntities'] as List).any((value) => value is! String))) {
-    throw FormatException('OwnerSearchInterpretedQuery.detectedEntities has an invalid wire value');
+  if (!m.containsKey('detectedEntities') ||
+      m['detectedEntities'] == null ||
+      (m['detectedEntities'] is! List ||
+          (m['detectedEntities'] as List).any((value) => value is! String))) {
+    throw FormatException(
+      'OwnerSearchInterpretedQuery.detectedEntities has an invalid wire value',
+    );
   }
-  if (!m.containsKey('detectedTags') || m['detectedTags'] == null || (m['detectedTags'] is! List || (m['detectedTags'] as List).any((value) => value is! String))) {
-    throw FormatException('OwnerSearchInterpretedQuery.detectedTags has an invalid wire value');
+  if (!m.containsKey('detectedTags') ||
+      m['detectedTags'] == null ||
+      (m['detectedTags'] is! List ||
+          (m['detectedTags'] as List).any((value) => value is! String))) {
+    throw FormatException(
+      'OwnerSearchInterpretedQuery.detectedTags has an invalid wire value',
+    );
   }
-  if (!m.containsKey('selectedObjectTypes') || m['selectedObjectTypes'] == null || (m['selectedObjectTypes'] is! List || (m['selectedObjectTypes'] as List).any((value) => value is! String))) {
-    throw FormatException('OwnerSearchInterpretedQuery.selectedObjectTypes has an invalid wire value');
+  if (!m.containsKey('selectedObjectTypes') ||
+      m['selectedObjectTypes'] == null ||
+      (m['selectedObjectTypes'] is! List ||
+          (m['selectedObjectTypes'] as List).any(
+            (value) => value is! String,
+          ))) {
+    throw FormatException(
+      'OwnerSearchInterpretedQuery.selectedObjectTypes has an invalid wire value',
+    );
   }
 }

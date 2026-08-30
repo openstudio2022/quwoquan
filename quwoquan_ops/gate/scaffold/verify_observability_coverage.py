@@ -5,16 +5,22 @@ from __future__ import annotations
 
 import sys
 
+sys.dont_write_bytecode = True
+
 from nonfunctional_coverage_lib import Failures, ROOT
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.gate.verify_observability_envelope import envelope_issues
-from quwoquan_ops.gate.verify_observability_layout import layout_issues
+from quwoquan_ops.gate.verify_observability_layout import (
+    layout_issues,
+    materialize_repo_gate_observability_run,
+)
 
 
 def main() -> int:
+    materialize_repo_gate_observability_run()
     failures = Failures()
     failures.require_path(
         ROOT

@@ -434,11 +434,7 @@ def codex_startup_probe_suite(
         attempts=attempts,
         timeout_seconds=timeout_seconds,
         cwd=cwd,
-        concurrency=(
-            concurrency
-            if concurrency is not None
-            else active_runtime_policy().cursor_bridge_instances
-        ),
+        concurrency=attempts if concurrency is None else concurrency,
     )
 
 

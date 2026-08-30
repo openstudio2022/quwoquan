@@ -6,6 +6,11 @@ from pathlib import Path
 
 import yaml
 
+from quwoquan_ops.tests.support.contract_alert_coverage_test_support import (
+    availability_alert,
+    latency_p95_alert,
+)
+
 
 ROOT = Path(__file__).resolve().parents[4]
 ALERTS = ROOT / "quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml"
@@ -13,7 +18,7 @@ DASHBOARD = (
     ROOT / "quwoquan_ops/observability/monitoring/dashboards/l2_business_journey.json"
 )
 SYNC_METRICS = ROOT / "quwoquan_service/runtime/sync/metrics.go"
-CHAT_MAIN = ROOT / "quwoquan_service/services/chat-service/cmd/api/main.go"
+CHAT_MAIN = ROOT / "quwoquan_service/services/chat-service/cmd/api/bootstrap.go"
 CHAT_COMMERCIAL_METRICS = (
     ROOT
     / "quwoquan_service/services/chat-service/internal/chat/conversation/application/commercial_metrics.go"
@@ -33,25 +38,6 @@ class ChatGroupObservabilityLocalContractTest(unittest.TestCase):
             for rule in group.get("rules", [])
             if "alert" in rule
         }
-        create_latency = rules["ChatConversationCreateLatencyHigh"]
-        self.assertIn("> 0.5", create_latency["expr"])
-        self.assertIn("500ms", create_latency["annotations"]["summary"])
-
-        candidate_error_rate = rules["ChatGroupCandidateSourceErrorRateHigh"]
-        self.assertIn(
-            '/chat/selectable-group-conversations(/[^/]+/contact-members)?',
-            candidate_error_rate["expr"],
-        )
-        self.assertIn("> 0.02", candidate_error_rate["expr"])
-        self.assertEqual(candidate_error_rate["for"], "10m")
-        self.assertEqual(candidate_error_rate["labels"]["severity"], "critical")
-
-        candidate_latency = rules["ChatGroupCandidateSourceLatencyHigh"]
-        self.assertIn("histogram_quantile(0.95", candidate_latency["expr"])
-        self.assertIn("> 0.5", candidate_latency["expr"])
-        self.assertEqual(candidate_latency["for"], "10m")
-        self.assertEqual(candidate_latency["labels"]["severity"], "warning")
-
         for name in (
             "ChatSyncHintToPullLatencyHigh",
             "ChatSyncPatchFanoutFailureRateHigh",
@@ -75,6 +61,28 @@ class ChatGroupObservabilityLocalContractTest(unittest.TestCase):
             "chat_inbox_projection_event_lag_seconds_bucket",
             rules["ChatInboxProjectionLagHigh"]["expr"],
         )
+
+    def test_group_entry_operation_slo_is_carried_by_contract_coverage(self) -> None:
+        """建会话与群候选源的可用性/P95 口径由 ContractGraph 派生告警承载。
+
+        等价的手写 PromQL 会被 `verify_contract_alert_overlay.py` 判为可派生残留并 BLOCK，
+        因此这里断言的是契约声明的 SLO 档位确有派生告警，而不是某条手写告警名。
+        """
+
+        create_latency = latency_p95_alert("chat.conversation.CreateConversation")
+        self.assertIn("> 0.8", create_latency["expr"])
+        create_availability = availability_alert("chat.conversation.CreateConversation")
+        self.assertEqual(create_availability["labels"]["severity"], "critical")
+
+        for candidate_source in (
+            "chat.conversation.ListSelectableGroupConversations",
+            "chat.conversation.ListSelectableGroupContactMembers",
+        ):
+            self.assertIn("> 0.5", latency_p95_alert(candidate_source)["expr"])
+            availability = availability_alert(candidate_source)
+            self.assertIn("> 0.001", availability["expr"])
+            self.assertEqual(availability["for"], "10m")
+            self.assertEqual(availability["labels"]["severity"], "critical")
 
     def test_sync_alert_metrics_have_real_emitters_and_scrape_target(self) -> None:
         source = SYNC_METRICS.read_text(encoding="utf-8")

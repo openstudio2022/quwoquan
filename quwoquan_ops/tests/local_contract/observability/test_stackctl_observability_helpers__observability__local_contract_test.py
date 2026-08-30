@@ -17,8 +17,13 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 STACKCTL_PATH = REPO_ROOT / "quwoquan_ops/cli/stackctl.py"
+# 现场构建分支以真实 vite 可执行文件是否在仓内工具链上为前置：缺席只说明这台机器
+# 判不了 Portal 构建，不是物化契约漂移。占位分支不依赖工具链，始终逐条判。
+VITE_BINARY = REPO_ROOT / "quwoquan_ops/portal/node_modules/.bin/vite"
 
 
 def _load_stackctl():
@@ -57,6 +62,10 @@ def test_portal_root_falls_back_to_explicit_placeholder(monkeypatch, tmp_path):
     assert "不承载任何业务数据" in content
 
 
+@pytest.mark.skipif(
+    not VITE_BINARY.is_file(),
+    reason="仓内 portal node 工具链未安装（quwoquan_ops/portal/node_modules/.bin/vite）",
+)
 def test_portal_root_copies_vite_build_output(monkeypatch, tmp_path):
     deploy_root = tmp_path / "deploy"
     build_output = deploy_root / "gamma-local" / "build" / "ops-portal"

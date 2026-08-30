@@ -15,7 +15,6 @@ const Map<String, bool> contentStoryBootstrapFlags = <String, bool>{
   'enable_identity_based_surfaces': true,
   'enable_identity_share_template': true,
   'enable_article_book_reader': true,
-  'enable_article_page_curl': true,
   'enable_assistant_content_identity_index': true,
 };
 

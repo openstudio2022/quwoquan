@@ -187,7 +187,11 @@ def adopt_independent_asset_review(
         return None
     receipt_ref, acquisition_asset_id, acquired_sha256 = identity
     if asset_kind == "image" and acquired_sha256 != content_sha256:
-        raise ObjectTransactionError("professional asset bytes drift from acquisition CAS")
+        # 发布字节允许是执行内派生变体（如 WebP 压缩），但 asset 行必须显式声明
+        # 派生自这份采集 CAS 内容；否则按字节漂移拒绝。video 的 transcode 同理豁免。
+        declared = str(raw_asset.get("professionalContentSha256") or "").strip()
+        if declared != acquired_sha256:
+            raise ObjectTransactionError("professional asset bytes drift from acquisition CAS")
     output_root = _output_root(execution_root)
     acquisition_root_ref = "data/local/workspace/source-acquisition"
     expected_acquisition_ref = (
@@ -313,13 +317,11 @@ def validate_frozen_asset_review_binding(
         raise ObjectTransactionError(
             f"{object_ref}: execution asset review receipt is invalid"
         )
-    physical = rights_asset.get("asset")
-    physical = physical if isinstance(physical, Mapping) else {}
-    reviewed_content_sha256 = (
-        str(raw_binding.get("contentSha256") or "")
-        if raw_binding.get("assetKind") == "video"
-        else str(physical.get("sha256") or "")
-    )
+    # 复检对象是 receipt 冻结的采集内容（binding 与 receipt 的逐字段一致性在下方
+    # build_independent_asset_review_binding 比对里另行校验）。发布物理字节允许是
+    # 执行内派生（video transcode / image 变体），其完整性由 rights asset 的
+    # sha256 与 CAS 键约束，不在此处比对。
+    reviewed_content_sha256 = str(raw_binding.get("contentSha256") or "")
     try:
         assert_asset_review_accepted(
             receipt,

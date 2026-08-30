@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -163,9 +165,13 @@ def render_stack_bundle(
     if DIGEST_PATTERN.fullmatch(host_digest) is None:
         raise ValueError("Beta stack host digest is invalid")
     _empty_bundle(bundle_dir, "Beta stack")
-    manifest_images = manifest.get("images")
+    artifacts = manifest.get("environmentArtifacts")
+    beta_artifact = artifacts.get("beta") if isinstance(artifacts, dict) else None
+    manifest_images = (
+        beta_artifact.get("images") if isinstance(beta_artifact, dict) else None
+    )
     if not isinstance(manifest_images, dict) or not manifest_images:
-        raise ValueError("Beta stack requires immutable manifest images")
+        raise ValueError("Beta stack requires immutable Beta artifact images")
     expected_runtime_images: dict[str, dict[str, str]] = {}
     for service, descriptor in manifest_images.items():
         if not isinstance(service, str) or not isinstance(descriptor, dict):

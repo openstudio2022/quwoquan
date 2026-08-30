@@ -698,8 +698,9 @@ String _placeLabel(cloud.GatheringPlace place) {
 }
 
 GatheringBoardCircleSlice gatheringBoardCircleFromPrivateWire(
-  cloud.GatheringPrivateDetailSlice wire,
-) {
+  cloud.GatheringPrivateDetailSlice wire, {
+  required GatheringBoardPlanSlice plan,
+}) {
   final capacity = wire.capacity;
   return GatheringBoardCircleSlice(
     activity: GatheringBoardActivitySlice(
@@ -714,14 +715,7 @@ GatheringBoardCircleSlice gatheringBoardCircleFromPrivateWire(
       remainingSeats: capacity.remainingSeats,
       summaryLabel: '${capacity.activeSeatCount}/${capacity.maxParticipants}',
     ),
-    plan: const GatheringBoardPlanSlice(
-      capability: GatheringBoardCapabilitySummary(
-        state: GatheringBoardCapabilityState.unavailable,
-        summaryLabel: 'plan',
-        unavailableReason:
-            GatheringBoardCapabilityUnavailableReason.notConfigured,
-      ),
-    ),
+    plan: plan,
     mapCapability: const GatheringBoardCapabilitySummary(
       state: GatheringBoardCapabilityState.unavailable,
       summaryLabel: 'map',

@@ -83,6 +83,10 @@ enums:
   MediaImageReprocessRunStatus: [running, paused, rolling_back, completed, failed, rolled_back]
   MediaOriginalAccessPurpose: [view, save]
   MediaOriginalAccessOutcome: [granted, denied, rate_limited]
+  # 媒体交付访问模式（DEC-033）：public 走匿名公开 slice；signed_grant 必须经
+  # ReserveOriginalImageAccessGrant 换取短时签名 URL。App 只依此 typed 声明分流，
+  # 禁止从 CAS 前缀、URL 形态或 query 参数推断交付形态。
+  MediaDeliveryAccessMode: [public, signed_grant]
   Gender: [male, female, other, unspecified]
   # 个人主页「生活」Tab 子分类：足迹/书影音/味蕾/爱物
   ConversationType: [direct, group, encrypted]

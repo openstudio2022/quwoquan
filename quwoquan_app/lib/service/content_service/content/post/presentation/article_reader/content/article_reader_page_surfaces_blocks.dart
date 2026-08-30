@@ -16,10 +16,8 @@ class _ArticleSemanticBlock extends StatelessWidget {
     final titleFont = typography.titleStyle.fontSize ?? AppTypography.xl;
     final bodyFont = typography.bodyStyle.fontSize ?? AppTypography.base;
     if (block.type == ArticleDocumentBlockType.divider) {
-      final dividerColor =
-          (typography.bodyStyle.color ?? AppColors.worksTitle).withValues(
-        alpha: 0.18,
-      );
+      final dividerColor = (typography.bodyStyle.color ?? AppColors.worksTitle)
+          .withValues(alpha: 0.18);
       return Padding(
         key: const ValueKey<String>('article-divider'),
         padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -42,8 +40,10 @@ class _ArticleSemanticBlock extends StatelessWidget {
       ),
       ArticleDocumentBlockType.quote ||
       ArticleDocumentBlockType.callout ||
-      ArticleDocumentBlockType.codeBlock =>
-        ArticleRichBlockChrome.textStyleFor(block.type, typography.bodyStyle),
+      ArticleDocumentBlockType.codeBlock => ArticleRichBlockChrome.textStyleFor(
+        block.type,
+        typography.bodyStyle,
+      ),
       _ => typography.bodyStyle,
     };
     // 段落对齐（GWT-004）：textAlign 由 :::align 指令经模型贯通到渲染。
@@ -198,11 +198,19 @@ class _ArticlePageImage extends StatelessWidget {
     required this.imageUrl,
     required this.borderRadius,
     required this.aspectRatio,
+    this.binding = const MediaDeliveryBinding.absent(),
+    this.onTap,
   });
 
   final String imageUrl;
+
+  /// 文章内嵌图的 typed 交付绑定（DEC-033）。绑定由 articleAssetManifest 的
+  /// assetId/accessMode 交出；私有路经协调器换签后仍由 [ArticleAdaptiveImage]
+  /// 渲染，保住本面自带的静默占位与延迟指示体验。
+  final MediaDeliveryBinding binding;
   final double borderRadius;
   final double aspectRatio;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -210,7 +218,24 @@ class _ArticlePageImage extends StatelessWidget {
       borderRadius: BorderRadius.circular(borderRadius),
       child: AspectRatio(
         aspectRatio: aspectRatio,
-        child: ArticleAdaptiveImage(imageUrl: imageUrl),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: mediaDeliveryImage(
+            binding: binding.hasRenderableSource
+                ? binding
+                : MediaDeliveryBinding.legacyPublic(publicUrl: imageUrl),
+            kind: MediaDeliveryKind.image,
+            publicBuilder: (context, publicUrl) =>
+                ArticleAdaptiveImage(imageUrl: publicUrl),
+            signedReadyBuilder: (context, deliveryUrl, cacheIdentity) =>
+                ArticleAdaptiveImage(
+                  imageUrl: imageUrl,
+                  signedDeliveryUrl: deliveryUrl,
+                  signedCacheIdentity: cacheIdentity,
+                ),
+          ),
+        ),
       ),
     );
   }

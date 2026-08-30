@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
+// ContractGraph SHA256: cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f
 
 part of '../../../rtc/rtc_operation_contracts.g.dart';
 
@@ -18,7 +18,6 @@ List<String> _normalizeGeneratedTextList(
   return List<String>.unmodifiable(result);
 }
 
-
 void _generatedRequestRejectUnknownFields(
   Map<String, Object?> map,
   Set<String> allowed,
@@ -31,24 +30,20 @@ void _generatedRequestRejectUnknownFields(
   }
 }
 
-
 String _generatedRequestString(Object? value, String path) {
   if (value is String) return value;
   throw FormatException('$path must be a string');
 }
-
 
 int _generatedRequestInt(Object? value, String path) {
   if (value is int) return value;
   throw FormatException('$path must be an integer');
 }
 
-
 bool _generatedRequestBool(Object? value, String path) {
   if (value is bool) return value;
   throw FormatException('$path must be a boolean');
 }
-
 
 List<Object?> _generatedRequestList(Object? value, String path) {
   if (value is List) return List<Object?>.from(value);
@@ -56,9 +51,7 @@ List<Object?> _generatedRequestList(Object? value, String path) {
 }
 
 final class RtcCallIdCommand {
-  RtcCallIdCommand({
-    required String callId,
-  }) : callId = callId.trim() {
+  RtcCallIdCommand({required String callId}) : callId = callId.trim() {
     if (this.callId.isEmpty) {
       throw ArgumentError.value(this.callId, "callId", 'must not be blank');
     }
@@ -66,22 +59,21 @@ final class RtcCallIdCommand {
 
   final String callId;
 
-  factory RtcCallIdCommand.fromWire(Map<String, Object?> map, [String path = "RtcCallIdCommand"]) {
+  factory RtcCallIdCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "RtcCallIdCommand",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"callId"}, path);
     return RtcCallIdCommand(
       callId: _generatedRequestString(map["callId"], '$path.callId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "callId": this.callId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"callId": this.callId};
 }
 
 final class RtcGetCallQuery {
-  RtcGetCallQuery({
-    required String callId,
-  }) : callId = callId.trim() {
+  RtcGetCallQuery({required String callId}) : callId = callId.trim() {
     if (this.callId.isEmpty) {
       throw ArgumentError.value(this.callId, "callId", 'must not be blank');
     }
@@ -89,16 +81,17 @@ final class RtcGetCallQuery {
 
   final String callId;
 
-  factory RtcGetCallQuery.fromWire(Map<String, Object?> map, [String path = "RtcGetCallQuery"]) {
+  factory RtcGetCallQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "RtcGetCallQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"callId"}, path);
     return RtcGetCallQuery(
       callId: _generatedRequestString(map["callId"], '$path.callId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "callId": this.callId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"callId": this.callId};
 }
 
 final class RtcInitiateCallCommand {
@@ -112,8 +105,7 @@ final class RtcInitiateCallCommand {
        inviteeIds = _normalizeGeneratedTextList(inviteeIds, deduplicate: false),
        conversationId = conversationId,
        circleId = circleId,
-       maxParticipants = maxParticipants {
-  }
+       maxParticipants = maxParticipants {}
 
   final CallType callType;
   final List<String> inviteeIds;
@@ -121,14 +113,51 @@ final class RtcInitiateCallCommand {
   final String? circleId;
   final int maxParticipants;
 
-  factory RtcInitiateCallCommand.fromWire(Map<String, Object?> map, [String path = "RtcInitiateCallCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"callType", "inviteeIds", "conversationId", "circleId", "maxParticipants"}, path);
+  factory RtcInitiateCallCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "RtcInitiateCallCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "callType",
+      "inviteeIds",
+      "conversationId",
+      "circleId",
+      "maxParticipants",
+    }, path);
     return RtcInitiateCallCommand(
-      callType: switch (map["callType"]) { "audio" => CallType.audio, "video" => CallType.video, _ => throw FormatException('$path.callType' + ' has an invalid enum value'), },
-      inviteeIds: List<String>.unmodifiable(_generatedRequestList(map["inviteeIds"], '$path.inviteeIds').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.inviteeIds' + '[${entry.key}]'))),
-      conversationId: map["conversationId"] == null ? null : _generatedRequestString(map["conversationId"], '$path.conversationId'),
-      circleId: map["circleId"] == null ? null : _generatedRequestString(map["circleId"], '$path.circleId'),
-      maxParticipants: map.containsKey("maxParticipants") ? _generatedRequestInt(map["maxParticipants"], '$path.maxParticipants') : 32,
+      callType: switch (map["callType"]) {
+        "audio" => CallType.audio,
+        "video" => CallType.video,
+        _ => throw FormatException(
+          '$path.callType' + ' has an invalid enum value',
+        ),
+      },
+      inviteeIds: List<String>.unmodifiable(
+        _generatedRequestList(
+          map["inviteeIds"],
+          '$path.inviteeIds',
+        ).asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.inviteeIds' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      conversationId: map["conversationId"] == null
+          ? null
+          : _generatedRequestString(
+              map["conversationId"],
+              '$path.conversationId',
+            ),
+      circleId: map["circleId"] == null
+          ? null
+          : _generatedRequestString(map["circleId"], '$path.circleId'),
+      maxParticipants: map.containsKey("maxParticipants")
+          ? _generatedRequestInt(
+              map["maxParticipants"],
+              '$path.maxParticipants',
+            )
+          : 32,
     );
   }
 
@@ -146,7 +175,10 @@ final class RtcInviteToCallCommand {
     required String callId,
     required List<String> inviteeIds,
   }) : callId = callId.trim(),
-       inviteeIds = _normalizeGeneratedTextList(inviteeIds, deduplicate: false) {
+       inviteeIds = _normalizeGeneratedTextList(
+         inviteeIds,
+         deduplicate: false,
+       ) {
     if (this.callId.isEmpty) {
       throw ArgumentError.value(this.callId, "callId", 'must not be blank');
     }
@@ -155,11 +187,27 @@ final class RtcInviteToCallCommand {
   final String callId;
   final List<String> inviteeIds;
 
-  factory RtcInviteToCallCommand.fromWire(Map<String, Object?> map, [String path = "RtcInviteToCallCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"callId", "inviteeIds"}, path);
+  factory RtcInviteToCallCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "RtcInviteToCallCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "callId",
+      "inviteeIds",
+    }, path);
     return RtcInviteToCallCommand(
       callId: _generatedRequestString(map["callId"], '$path.callId'),
-      inviteeIds: List<String>.unmodifiable(_generatedRequestList(map["inviteeIds"], '$path.inviteeIds').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.inviteeIds' + '[${entry.key}]'))),
+      inviteeIds: List<String>.unmodifiable(
+        _generatedRequestList(
+          map["inviteeIds"],
+          '$path.inviteeIds',
+        ).asMap().entries.map(
+          (entry) => _generatedRequestString(
+            entry.value,
+            '$path.inviteeIds' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -195,13 +243,38 @@ final class RtcListCallsQuery {
   final CallStatus? status;
   final bool missedOnly;
 
-  factory RtcListCallsQuery.fromWire(Map<String, Object?> map, [String path = "RtcListCallsQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"cursor", "limit", "status", "missed"}, path);
+  factory RtcListCallsQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "RtcListCallsQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "cursor",
+      "limit",
+      "status",
+      "missed",
+    }, path);
     return RtcListCallsQuery(
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
-      status: map["status"] == null ? null : switch (map["status"]) { "initiated" => CallStatus.initiated, "ringing" => CallStatus.ringing, "connecting" => CallStatus.connecting, "in_call" => CallStatus.inCall, "ended" => CallStatus.ended, _ => throw FormatException('$path.status' + ' has an invalid enum value'), },
-      missedOnly: map.containsKey("missed") ? _generatedRequestBool(map["missed"], '$path.missed') : false,
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
+      status: map["status"] == null
+          ? null
+          : switch (map["status"]) {
+              "initiated" => CallStatus.initiated,
+              "ringing" => CallStatus.ringing,
+              "connecting" => CallStatus.connecting,
+              "in_call" => CallStatus.inCall,
+              "ended" => CallStatus.ended,
+              _ => throw FormatException(
+                '$path.status' + ' has an invalid enum value',
+              ),
+            },
+      missedOnly: map.containsKey("missed")
+          ? _generatedRequestBool(map["missed"], '$path.missed')
+          : false,
     );
   }
 
@@ -214,11 +287,9 @@ final class RtcListCallsQuery {
 }
 
 final class RtcToggleCameraCommand {
-  RtcToggleCameraCommand({
-    required String callId,
-    required bool cameraOn,
-  }) : callId = callId.trim(),
-       cameraOn = cameraOn {
+  RtcToggleCameraCommand({required String callId, required bool cameraOn})
+    : callId = callId.trim(),
+      cameraOn = cameraOn {
     if (this.callId.isEmpty) {
       throw ArgumentError.value(this.callId, "callId", 'must not be blank');
     }
@@ -227,8 +298,14 @@ final class RtcToggleCameraCommand {
   final String callId;
   final bool cameraOn;
 
-  factory RtcToggleCameraCommand.fromWire(Map<String, Object?> map, [String path = "RtcToggleCameraCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"callId", "cameraOn"}, path);
+  factory RtcToggleCameraCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "RtcToggleCameraCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "callId",
+      "cameraOn",
+    }, path);
     return RtcToggleCameraCommand(
       callId: _generatedRequestString(map["callId"], '$path.callId'),
       cameraOn: _generatedRequestBool(map["cameraOn"], '$path.cameraOn'),
@@ -242,11 +319,9 @@ final class RtcToggleCameraCommand {
 }
 
 final class RtcToggleMuteCommand {
-  RtcToggleMuteCommand({
-    required String callId,
-    required bool muted,
-  }) : callId = callId.trim(),
-       muted = muted {
+  RtcToggleMuteCommand({required String callId, required bool muted})
+    : callId = callId.trim(),
+      muted = muted {
     if (this.callId.isEmpty) {
       throw ArgumentError.value(this.callId, "callId", 'must not be blank');
     }
@@ -255,8 +330,14 @@ final class RtcToggleMuteCommand {
   final String callId;
   final bool muted;
 
-  factory RtcToggleMuteCommand.fromWire(Map<String, Object?> map, [String path = "RtcToggleMuteCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"callId", "muted"}, path);
+  factory RtcToggleMuteCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "RtcToggleMuteCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "callId",
+      "muted",
+    }, path);
     return RtcToggleMuteCommand(
       callId: _generatedRequestString(map["callId"], '$path.callId'),
       muted: _generatedRequestBool(map["muted"], '$path.muted'),
@@ -269,139 +350,143 @@ final class RtcToggleMuteCommand {
   };
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionAnswerCallGeneratedRequest(RtcCallIdCommand request) {
+CloudOperationRequestPayload encodeRtcCallSessionAnswerCallGeneratedRequest(
+  RtcCallIdCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionCancelCallGeneratedRequest(RtcCallIdCommand request) {
+CloudOperationRequestPayload encodeRtcCallSessionCancelCallGeneratedRequest(
+  RtcCallIdCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionGetCallGeneratedRequest(RtcGetCallQuery request) {
+CloudOperationRequestPayload encodeRtcCallSessionGetCallGeneratedRequest(
+  RtcGetCallQuery request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionHangupCallGeneratedRequest(RtcCallIdCommand request) {
+CloudOperationRequestPayload encodeRtcCallSessionHangupCallGeneratedRequest(
+  RtcCallIdCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionInitiateCallGeneratedRequest(RtcInitiateCallCommand request) {
+CloudOperationRequestPayload encodeRtcCallSessionInitiateCallGeneratedRequest(
+  RtcInitiateCallCommand request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "callType": request.callType.wireName,
-      "inviteeIds": request.inviteeIds.map((value) => value).toList(growable: false),
-      if (request.conversationId != null) "conversationId": request.conversationId!,
+      "inviteeIds": request.inviteeIds
+          .map((value) => value)
+          .toList(growable: false),
+      if (request.conversationId != null)
+        "conversationId": request.conversationId!,
       if (request.circleId != null) "circleId": request.circleId!,
       "maxParticipants": request.maxParticipants,
     },
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionInviteToCallGeneratedRequest(RtcInviteToCallCommand request) {
+CloudOperationRequestPayload encodeRtcCallSessionInviteToCallGeneratedRequest(
+  RtcInviteToCallCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
     body: <String, Object?>{
-      "inviteeIds": request.inviteeIds.map((value) => value).toList(growable: false),
+      "inviteeIds": request.inviteeIds
+          .map((value) => value)
+          .toList(growable: false),
     },
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionJoinCallGeneratedRequest(RtcCallIdCommand request) {
+CloudOperationRequestPayload encodeRtcCallSessionJoinCallGeneratedRequest(
+  RtcCallIdCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionLeaveCallGeneratedRequest(RtcCallIdCommand request) {
+CloudOperationRequestPayload encodeRtcCallSessionLeaveCallGeneratedRequest(
+  RtcCallIdCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionListCallsGeneratedRequest(RtcListCallsQuery request) {
+CloudOperationRequestPayload encodeRtcCallSessionListCallsGeneratedRequest(
+  RtcListCallsQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       "limit": (request.limit).toString(),
       if (request.cursor != null) "cursor": request.cursor!,
-      if (request.status != null) "status": (request.status!.wireName).toString(),
+      if (request.status != null)
+        "status": (request.status!.wireName).toString(),
       "missed": (request.missedOnly).toString(),
     },
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionRejectCallGeneratedRequest(RtcCallIdCommand request) {
+CloudOperationRequestPayload encodeRtcCallSessionRejectCallGeneratedRequest(
+  RtcCallIdCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionReportMediaConnectedGeneratedRequest(RtcCallIdCommand request) {
+CloudOperationRequestPayload
+encodeRtcCallSessionReportMediaConnectedGeneratedRequest(
+  RtcCallIdCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionStartScreenShareGeneratedRequest(RtcCallIdCommand request) {
+CloudOperationRequestPayload
+encodeRtcCallSessionStartScreenShareGeneratedRequest(RtcCallIdCommand request) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionStopScreenShareGeneratedRequest(RtcCallIdCommand request) {
+CloudOperationRequestPayload
+encodeRtcCallSessionStopScreenShareGeneratedRequest(RtcCallIdCommand request) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionToggleCameraGeneratedRequest(RtcToggleCameraCommand request) {
+CloudOperationRequestPayload encodeRtcCallSessionToggleCameraGeneratedRequest(
+  RtcToggleCameraCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
-    body: <String, Object?>{
-      "cameraOn": request.cameraOn,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
+    body: <String, Object?>{"cameraOn": request.cameraOn},
   );
 }
 
-CloudOperationRequestPayload encodeRtcCallSessionToggleMuteGeneratedRequest(RtcToggleMuteCommand request) {
+CloudOperationRequestPayload encodeRtcCallSessionToggleMuteGeneratedRequest(
+  RtcToggleMuteCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "callId": request.callId,
-    },
-    body: <String, Object?>{
-      "muted": request.muted,
-    },
+    pathParameters: <String, String>{"callId": request.callId},
+    body: <String, Object?>{"muted": request.muted},
   );
 }
-

@@ -30,17 +30,17 @@ class AssistantRunCheckpointWire {
   final String createdAt;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'checkpointId': checkpointId,
-        'revision': revision,
-        'goalSummary': goalSummary,
-        'decisionSummary': decisionSummary,
-        'completedTaskIds': completedTaskIds,
-        'openTaskIds': openTaskIds,
-        'evidenceRefs': evidenceRefs,
-        'pendingApprovalRef': pendingApprovalRef,
-        'remainingBudget': remainingBudget,
-        'createdAt': createdAt,
-      };
+    'checkpointId': checkpointId,
+    'revision': revision,
+    'goalSummary': goalSummary,
+    'decisionSummary': decisionSummary,
+    'completedTaskIds': completedTaskIds,
+    'openTaskIds': openTaskIds,
+    'evidenceRefs': evidenceRefs,
+    'pendingApprovalRef': pendingApprovalRef,
+    'remainingBudget': remainingBudget,
+    'createdAt': createdAt,
+  };
 
   factory AssistantRunCheckpointWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -59,37 +59,85 @@ class AssistantRunCheckpointWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantRunCheckpointWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantRunCheckpointWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('checkpointId') || json['checkpointId'] == null || (json['checkpointId'] is! String)) {
-      throw const FormatException('AssistantRunCheckpointWire field checkpointId has an invalid wire value');
+    if (!json.containsKey('checkpointId') ||
+        json['checkpointId'] == null ||
+        (json['checkpointId'] is! String)) {
+      throw const FormatException(
+        'AssistantRunCheckpointWire field checkpointId has an invalid wire value',
+      );
     }
-    if (!json.containsKey('revision') || json['revision'] == null || (json['revision'] is! num)) {
-      throw const FormatException('AssistantRunCheckpointWire field revision has an invalid wire value');
+    if (!json.containsKey('revision') ||
+        json['revision'] == null ||
+        (json['revision'] is! num)) {
+      throw const FormatException(
+        'AssistantRunCheckpointWire field revision has an invalid wire value',
+      );
     }
-    if (!json.containsKey('goalSummary') || json['goalSummary'] == null || (json['goalSummary'] is! String)) {
-      throw const FormatException('AssistantRunCheckpointWire field goalSummary has an invalid wire value');
+    if (!json.containsKey('goalSummary') ||
+        json['goalSummary'] == null ||
+        (json['goalSummary'] is! String)) {
+      throw const FormatException(
+        'AssistantRunCheckpointWire field goalSummary has an invalid wire value',
+      );
     }
-    if (json.containsKey('decisionSummary') && json['decisionSummary'] != null && (json['decisionSummary'] is! List || (json['decisionSummary'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantRunCheckpointWire field decisionSummary has an invalid wire value');
+    if (json.containsKey('decisionSummary') &&
+        json['decisionSummary'] != null &&
+        (json['decisionSummary'] is! List ||
+            (json['decisionSummary'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AssistantRunCheckpointWire field decisionSummary has an invalid wire value',
+      );
     }
-    if (json.containsKey('completedTaskIds') && json['completedTaskIds'] != null && (json['completedTaskIds'] is! List || (json['completedTaskIds'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantRunCheckpointWire field completedTaskIds has an invalid wire value');
+    if (json.containsKey('completedTaskIds') &&
+        json['completedTaskIds'] != null &&
+        (json['completedTaskIds'] is! List ||
+            (json['completedTaskIds'] as List).any(
+              (item) => item is! String,
+            ))) {
+      throw const FormatException(
+        'AssistantRunCheckpointWire field completedTaskIds has an invalid wire value',
+      );
     }
-    if (json.containsKey('openTaskIds') && json['openTaskIds'] != null && (json['openTaskIds'] is! List || (json['openTaskIds'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantRunCheckpointWire field openTaskIds has an invalid wire value');
+    if (json.containsKey('openTaskIds') &&
+        json['openTaskIds'] != null &&
+        (json['openTaskIds'] is! List ||
+            (json['openTaskIds'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AssistantRunCheckpointWire field openTaskIds has an invalid wire value',
+      );
     }
-    if (json.containsKey('evidenceRefs') && json['evidenceRefs'] != null && (json['evidenceRefs'] is! List || (json['evidenceRefs'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantRunCheckpointWire field evidenceRefs has an invalid wire value');
+    if (json.containsKey('evidenceRefs') &&
+        json['evidenceRefs'] != null &&
+        (json['evidenceRefs'] is! List ||
+            (json['evidenceRefs'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AssistantRunCheckpointWire field evidenceRefs has an invalid wire value',
+      );
     }
-    if (json.containsKey('pendingApprovalRef') && json['pendingApprovalRef'] != null && (json['pendingApprovalRef'] is! String)) {
-      throw const FormatException('AssistantRunCheckpointWire field pendingApprovalRef has an invalid wire value');
+    if (json.containsKey('pendingApprovalRef') &&
+        json['pendingApprovalRef'] != null &&
+        (json['pendingApprovalRef'] is! String)) {
+      throw const FormatException(
+        'AssistantRunCheckpointWire field pendingApprovalRef has an invalid wire value',
+      );
     }
-    if (json.containsKey('remainingBudget') && json['remainingBudget'] != null && (json['remainingBudget'] is! Map)) {
-      throw const FormatException('AssistantRunCheckpointWire field remainingBudget has an invalid wire value');
+    if (json.containsKey('remainingBudget') &&
+        json['remainingBudget'] != null &&
+        (json['remainingBudget'] is! Map)) {
+      throw const FormatException(
+        'AssistantRunCheckpointWire field remainingBudget has an invalid wire value',
+      );
     }
-    if (!json.containsKey('createdAt') || json['createdAt'] == null || (json['createdAt'] is! String)) {
-      throw const FormatException('AssistantRunCheckpointWire field createdAt has an invalid wire value');
+    if (!json.containsKey('createdAt') ||
+        json['createdAt'] == null ||
+        (json['createdAt'] is! String)) {
+      throw const FormatException(
+        'AssistantRunCheckpointWire field createdAt has an invalid wire value',
+      );
     }
     return AssistantRunCheckpointWire(
       checkpointId: (json['checkpointId'] as String?)?.trim() ?? "",
@@ -100,14 +148,19 @@ class AssistantRunCheckpointWire {
       openTaskIds: _assistantStringList(json['openTaskIds']),
       evidenceRefs: _assistantStringList(json['evidenceRefs']),
       pendingApprovalRef: (json['pendingApprovalRef'] as String?)?.trim() ?? "",
-      remainingBudget: (json['remainingBudget'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      remainingBudget:
+          (json['remainingBudget'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
       createdAt: (json['createdAt'] as String?)?.trim() ?? "",
     );
   }
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }
@@ -140,11 +193,11 @@ class AssistantDefinitionOfDoneWire {
   final String frozenAt;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'outcome': outcome,
-        'constraints': constraints,
-        'verificationRequirements': verificationRequirements,
-        'frozenAt': frozenAt,
-      };
+    'outcome': outcome,
+    'constraints': constraints,
+    'verificationRequirements': verificationRequirements,
+    'frozenAt': frozenAt,
+  };
 
   factory AssistantDefinitionOfDoneWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -157,31 +210,58 @@ class AssistantDefinitionOfDoneWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantDefinitionOfDoneWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantDefinitionOfDoneWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('outcome') || json['outcome'] == null || (json['outcome'] is! String)) {
-      throw const FormatException('AssistantDefinitionOfDoneWire field outcome has an invalid wire value');
+    if (!json.containsKey('outcome') ||
+        json['outcome'] == null ||
+        (json['outcome'] is! String)) {
+      throw const FormatException(
+        'AssistantDefinitionOfDoneWire field outcome has an invalid wire value',
+      );
     }
-    if (json.containsKey('constraints') && json['constraints'] != null && (json['constraints'] is! List || (json['constraints'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantDefinitionOfDoneWire field constraints has an invalid wire value');
+    if (json.containsKey('constraints') &&
+        json['constraints'] != null &&
+        (json['constraints'] is! List ||
+            (json['constraints'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AssistantDefinitionOfDoneWire field constraints has an invalid wire value',
+      );
     }
-    if (json.containsKey('verificationRequirements') && json['verificationRequirements'] != null && (json['verificationRequirements'] is! List || (json['verificationRequirements'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantDefinitionOfDoneWire field verificationRequirements has an invalid wire value');
+    if (json.containsKey('verificationRequirements') &&
+        json['verificationRequirements'] != null &&
+        (json['verificationRequirements'] is! List ||
+            (json['verificationRequirements'] as List).any(
+              (item) => item is! String,
+            ))) {
+      throw const FormatException(
+        'AssistantDefinitionOfDoneWire field verificationRequirements has an invalid wire value',
+      );
     }
-    if (!json.containsKey('frozenAt') || json['frozenAt'] == null || (json['frozenAt'] is! String)) {
-      throw const FormatException('AssistantDefinitionOfDoneWire field frozenAt has an invalid wire value');
+    if (!json.containsKey('frozenAt') ||
+        json['frozenAt'] == null ||
+        (json['frozenAt'] is! String)) {
+      throw const FormatException(
+        'AssistantDefinitionOfDoneWire field frozenAt has an invalid wire value',
+      );
     }
     return AssistantDefinitionOfDoneWire(
       outcome: (json['outcome'] as String?)?.trim() ?? "",
       constraints: _assistantStringList(json['constraints']),
-      verificationRequirements: _assistantStringList(json['verificationRequirements']),
+      verificationRequirements: _assistantStringList(
+        json['verificationRequirements'],
+      ),
       frozenAt: (json['frozenAt'] as String?)?.trim() ?? "",
     );
   }
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }
@@ -212,13 +292,13 @@ class AssistantRunBudgetWire {
   final int checkpointIntervalMs;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'maxDurationMs': maxDurationMs,
-        'maxTokens': maxTokens,
-        'maxToolCalls': maxToolCalls,
-        'maxSubagents': maxSubagents,
-        'maxCostMicros': maxCostMicros,
-        'checkpointIntervalMs': checkpointIntervalMs,
-      };
+    'maxDurationMs': maxDurationMs,
+    'maxTokens': maxTokens,
+    'maxToolCalls': maxToolCalls,
+    'maxSubagents': maxSubagents,
+    'maxCostMicros': maxCostMicros,
+    'checkpointIntervalMs': checkpointIntervalMs,
+  };
 
   factory AssistantRunBudgetWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -233,25 +313,51 @@ class AssistantRunBudgetWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantRunBudgetWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantRunBudgetWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('maxDurationMs') && json['maxDurationMs'] != null && (json['maxDurationMs'] is! num)) {
-      throw const FormatException('AssistantRunBudgetWire field maxDurationMs has an invalid wire value');
+    if (json.containsKey('maxDurationMs') &&
+        json['maxDurationMs'] != null &&
+        (json['maxDurationMs'] is! num)) {
+      throw const FormatException(
+        'AssistantRunBudgetWire field maxDurationMs has an invalid wire value',
+      );
     }
-    if (json.containsKey('maxTokens') && json['maxTokens'] != null && (json['maxTokens'] is! num)) {
-      throw const FormatException('AssistantRunBudgetWire field maxTokens has an invalid wire value');
+    if (json.containsKey('maxTokens') &&
+        json['maxTokens'] != null &&
+        (json['maxTokens'] is! num)) {
+      throw const FormatException(
+        'AssistantRunBudgetWire field maxTokens has an invalid wire value',
+      );
     }
-    if (json.containsKey('maxToolCalls') && json['maxToolCalls'] != null && (json['maxToolCalls'] is! num)) {
-      throw const FormatException('AssistantRunBudgetWire field maxToolCalls has an invalid wire value');
+    if (json.containsKey('maxToolCalls') &&
+        json['maxToolCalls'] != null &&
+        (json['maxToolCalls'] is! num)) {
+      throw const FormatException(
+        'AssistantRunBudgetWire field maxToolCalls has an invalid wire value',
+      );
     }
-    if (json.containsKey('maxSubagents') && json['maxSubagents'] != null && (json['maxSubagents'] is! num)) {
-      throw const FormatException('AssistantRunBudgetWire field maxSubagents has an invalid wire value');
+    if (json.containsKey('maxSubagents') &&
+        json['maxSubagents'] != null &&
+        (json['maxSubagents'] is! num)) {
+      throw const FormatException(
+        'AssistantRunBudgetWire field maxSubagents has an invalid wire value',
+      );
     }
-    if (json.containsKey('maxCostMicros') && json['maxCostMicros'] != null && (json['maxCostMicros'] is! num)) {
-      throw const FormatException('AssistantRunBudgetWire field maxCostMicros has an invalid wire value');
+    if (json.containsKey('maxCostMicros') &&
+        json['maxCostMicros'] != null &&
+        (json['maxCostMicros'] is! num)) {
+      throw const FormatException(
+        'AssistantRunBudgetWire field maxCostMicros has an invalid wire value',
+      );
     }
-    if (json.containsKey('checkpointIntervalMs') && json['checkpointIntervalMs'] != null && (json['checkpointIntervalMs'] is! num)) {
-      throw const FormatException('AssistantRunBudgetWire field checkpointIntervalMs has an invalid wire value');
+    if (json.containsKey('checkpointIntervalMs') &&
+        json['checkpointIntervalMs'] != null &&
+        (json['checkpointIntervalMs'] is! num)) {
+      throw const FormatException(
+        'AssistantRunBudgetWire field checkpointIntervalMs has an invalid wire value',
+      );
     }
     return AssistantRunBudgetWire(
       maxDurationMs: (json['maxDurationMs'] as num?)?.toInt() ?? 0,
@@ -259,7 +365,8 @@ class AssistantRunBudgetWire {
       maxToolCalls: (json['maxToolCalls'] as num?)?.toInt() ?? 0,
       maxSubagents: (json['maxSubagents'] as num?)?.toInt() ?? 0,
       maxCostMicros: (json['maxCostMicros'] as num?)?.toInt() ?? 0,
-      checkpointIntervalMs: (json['checkpointIntervalMs'] as num?)?.toInt() ?? 0,
+      checkpointIntervalMs:
+          (json['checkpointIntervalMs'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -299,17 +406,17 @@ class AssistantRunItemWire {
   final String completedAt;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'itemId': itemId,
-        'kind': kind.wireName,
-        'status': status.wireName,
-        'sequence': sequence,
-        'taskId': taskId,
-        'summary': summary,
-        'payload': payload,
-        'artifactRefs': artifactRefs,
-        'startedAt': startedAt,
-        'completedAt': completedAt,
-      };
+    'itemId': itemId,
+    'kind': kind.wireName,
+    'status': status.wireName,
+    'sequence': sequence,
+    'taskId': taskId,
+    'summary': summary,
+    'payload': payload,
+    'artifactRefs': artifactRefs,
+    'startedAt': startedAt,
+    'completedAt': completedAt,
+  };
 
   factory AssistantRunItemWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -328,46 +435,95 @@ class AssistantRunItemWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantRunItemWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantRunItemWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('itemId') || json['itemId'] == null || (json['itemId'] is! String)) {
-      throw const FormatException('AssistantRunItemWire field itemId has an invalid wire value');
+    if (!json.containsKey('itemId') ||
+        json['itemId'] == null ||
+        (json['itemId'] is! String)) {
+      throw const FormatException(
+        'AssistantRunItemWire field itemId has an invalid wire value',
+      );
     }
-    if (!json.containsKey('kind') || json['kind'] == null || (json['kind'] is! String)) {
-      throw const FormatException('AssistantRunItemWire field kind has an invalid wire value');
+    if (!json.containsKey('kind') ||
+        json['kind'] == null ||
+        (json['kind'] is! String)) {
+      throw const FormatException(
+        'AssistantRunItemWire field kind has an invalid wire value',
+      );
     }
-    if (!json.containsKey('status') || json['status'] == null || (json['status'] is! String)) {
-      throw const FormatException('AssistantRunItemWire field status has an invalid wire value');
+    if (!json.containsKey('status') ||
+        json['status'] == null ||
+        (json['status'] is! String)) {
+      throw const FormatException(
+        'AssistantRunItemWire field status has an invalid wire value',
+      );
     }
-    if (!json.containsKey('sequence') || json['sequence'] == null || (json['sequence'] is! num)) {
-      throw const FormatException('AssistantRunItemWire field sequence has an invalid wire value');
+    if (!json.containsKey('sequence') ||
+        json['sequence'] == null ||
+        (json['sequence'] is! num)) {
+      throw const FormatException(
+        'AssistantRunItemWire field sequence has an invalid wire value',
+      );
     }
-    if (json.containsKey('taskId') && json['taskId'] != null && (json['taskId'] is! String)) {
-      throw const FormatException('AssistantRunItemWire field taskId has an invalid wire value');
+    if (json.containsKey('taskId') &&
+        json['taskId'] != null &&
+        (json['taskId'] is! String)) {
+      throw const FormatException(
+        'AssistantRunItemWire field taskId has an invalid wire value',
+      );
     }
-    if (json.containsKey('summary') && json['summary'] != null && (json['summary'] is! String)) {
-      throw const FormatException('AssistantRunItemWire field summary has an invalid wire value');
+    if (json.containsKey('summary') &&
+        json['summary'] != null &&
+        (json['summary'] is! String)) {
+      throw const FormatException(
+        'AssistantRunItemWire field summary has an invalid wire value',
+      );
     }
-    if (json.containsKey('payload') && json['payload'] != null && (json['payload'] is! Map)) {
-      throw const FormatException('AssistantRunItemWire field payload has an invalid wire value');
+    if (json.containsKey('payload') &&
+        json['payload'] != null &&
+        (json['payload'] is! Map)) {
+      throw const FormatException(
+        'AssistantRunItemWire field payload has an invalid wire value',
+      );
     }
-    if (json.containsKey('artifactRefs') && json['artifactRefs'] != null && (json['artifactRefs'] is! List || (json['artifactRefs'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantRunItemWire field artifactRefs has an invalid wire value');
+    if (json.containsKey('artifactRefs') &&
+        json['artifactRefs'] != null &&
+        (json['artifactRefs'] is! List ||
+            (json['artifactRefs'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AssistantRunItemWire field artifactRefs has an invalid wire value',
+      );
     }
-    if (!json.containsKey('startedAt') || json['startedAt'] == null || (json['startedAt'] is! String)) {
-      throw const FormatException('AssistantRunItemWire field startedAt has an invalid wire value');
+    if (!json.containsKey('startedAt') ||
+        json['startedAt'] == null ||
+        (json['startedAt'] is! String)) {
+      throw const FormatException(
+        'AssistantRunItemWire field startedAt has an invalid wire value',
+      );
     }
-    if (json.containsKey('completedAt') && json['completedAt'] != null && (json['completedAt'] is! String)) {
-      throw const FormatException('AssistantRunItemWire field completedAt has an invalid wire value');
+    if (json.containsKey('completedAt') &&
+        json['completedAt'] != null &&
+        (json['completedAt'] is! String)) {
+      throw const FormatException(
+        'AssistantRunItemWire field completedAt has an invalid wire value',
+      );
     }
     return AssistantRunItemWire(
       itemId: (json['itemId'] as String?)?.trim() ?? "",
-      kind: parseAssistantRunItemKindStrict((json['kind'] as String?)?.trim() ?? ''),
-      status: parseAssistantRunItemStatusStrict((json['status'] as String?)?.trim() ?? ''),
+      kind: parseAssistantRunItemKindStrict(
+        (json['kind'] as String?)?.trim() ?? '',
+      ),
+      status: parseAssistantRunItemStatusStrict(
+        (json['status'] as String?)?.trim() ?? '',
+      ),
       sequence: (json['sequence'] as num?)?.toInt() ?? 0,
       taskId: (json['taskId'] as String?)?.trim() ?? "",
       summary: (json['summary'] as String?)?.trim() ?? "",
-      payload: (json['payload'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      payload:
+          (json['payload'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
       artifactRefs: _assistantStringList(json['artifactRefs']),
       startedAt: (json['startedAt'] as String?)?.trim() ?? "",
       completedAt: (json['completedAt'] as String?)?.trim() ?? "",
@@ -376,7 +532,10 @@ class AssistantRunItemWire {
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }
@@ -405,30 +564,47 @@ class AssistantTaskGraphWire {
   final List<AssistantTaskNodeWire> tasks;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'graphRevision': graphRevision,
-        'tasks': tasks.map((item) => item.toJson()).toList(growable: false),
-      };
+    'graphRevision': graphRevision,
+    'tasks': tasks.map((item) => item.toJson()).toList(growable: false),
+  };
 
   factory AssistantTaskGraphWire.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'graphRevision',
-      'tasks',
-    };
+    const allowedFields = <String>{'graphRevision', 'tasks'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantTaskGraphWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantTaskGraphWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('graphRevision') && json['graphRevision'] != null && (json['graphRevision'] is! num)) {
-      throw const FormatException('AssistantTaskGraphWire field graphRevision has an invalid wire value');
+    if (json.containsKey('graphRevision') &&
+        json['graphRevision'] != null &&
+        (json['graphRevision'] is! num)) {
+      throw const FormatException(
+        'AssistantTaskGraphWire field graphRevision has an invalid wire value',
+      );
     }
-    if (json.containsKey('tasks') && json['tasks'] != null && (json['tasks'] is! List || (json['tasks'] as List).any((item) => item is! Map))) {
-      throw const FormatException('AssistantTaskGraphWire field tasks has an invalid wire value');
+    if (json.containsKey('tasks') &&
+        json['tasks'] != null &&
+        (json['tasks'] is! List ||
+            (json['tasks'] as List).any((item) => item is! Map))) {
+      throw const FormatException(
+        'AssistantTaskGraphWire field tasks has an invalid wire value',
+      );
     }
     return AssistantTaskGraphWire(
       graphRevision: (json['graphRevision'] as num?)?.toInt() ?? 0,
-      tasks: (json['tasks'] as List?)?.whereType<Map>().map((item) => AssistantTaskNodeWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTaskNodeWire>[],
+      tasks:
+          (json['tasks'] as List?)
+              ?.whereType<Map>()
+              .map(
+                (item) => AssistantTaskNodeWire.fromJson(
+                  item.cast<String, dynamic>(),
+                ),
+              )
+              .toList(growable: false) ??
+          const <AssistantTaskNodeWire>[],
     );
   }
 }
@@ -464,17 +640,17 @@ class AssistantTaskNodeWire {
   final String blockReason;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'taskId': taskId,
-        'goal': goal,
-        'dependencies': dependencies,
-        'status': status.wireName,
-        'ownerAgent': ownerAgent,
-        'attempt': attempt,
-        'budget': budget,
-        'artifactRefs': artifactRefs,
-        'verification': verification,
-        'blockReason': blockReason,
-      };
+    'taskId': taskId,
+    'goal': goal,
+    'dependencies': dependencies,
+    'status': status.wireName,
+    'ownerAgent': ownerAgent,
+    'attempt': attempt,
+    'budget': budget,
+    'artifactRefs': artifactRefs,
+    'verification': verification,
+    'blockReason': blockReason,
+  };
 
   factory AssistantTaskNodeWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -493,55 +669,108 @@ class AssistantTaskNodeWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantTaskNodeWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantTaskNodeWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('taskId') || json['taskId'] == null || (json['taskId'] is! String)) {
-      throw const FormatException('AssistantTaskNodeWire field taskId has an invalid wire value');
+    if (!json.containsKey('taskId') ||
+        json['taskId'] == null ||
+        (json['taskId'] is! String)) {
+      throw const FormatException(
+        'AssistantTaskNodeWire field taskId has an invalid wire value',
+      );
     }
-    if (!json.containsKey('goal') || json['goal'] == null || (json['goal'] is! String)) {
-      throw const FormatException('AssistantTaskNodeWire field goal has an invalid wire value');
+    if (!json.containsKey('goal') ||
+        json['goal'] == null ||
+        (json['goal'] is! String)) {
+      throw const FormatException(
+        'AssistantTaskNodeWire field goal has an invalid wire value',
+      );
     }
-    if (json.containsKey('dependencies') && json['dependencies'] != null && (json['dependencies'] is! List || (json['dependencies'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantTaskNodeWire field dependencies has an invalid wire value');
+    if (json.containsKey('dependencies') &&
+        json['dependencies'] != null &&
+        (json['dependencies'] is! List ||
+            (json['dependencies'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AssistantTaskNodeWire field dependencies has an invalid wire value',
+      );
     }
-    if (json.containsKey('status') && json['status'] != null && (json['status'] is! String)) {
-      throw const FormatException('AssistantTaskNodeWire field status has an invalid wire value');
+    if (json.containsKey('status') &&
+        json['status'] != null &&
+        (json['status'] is! String)) {
+      throw const FormatException(
+        'AssistantTaskNodeWire field status has an invalid wire value',
+      );
     }
-    if (json.containsKey('ownerAgent') && json['ownerAgent'] != null && (json['ownerAgent'] is! String)) {
-      throw const FormatException('AssistantTaskNodeWire field ownerAgent has an invalid wire value');
+    if (json.containsKey('ownerAgent') &&
+        json['ownerAgent'] != null &&
+        (json['ownerAgent'] is! String)) {
+      throw const FormatException(
+        'AssistantTaskNodeWire field ownerAgent has an invalid wire value',
+      );
     }
-    if (json.containsKey('attempt') && json['attempt'] != null && (json['attempt'] is! num)) {
-      throw const FormatException('AssistantTaskNodeWire field attempt has an invalid wire value');
+    if (json.containsKey('attempt') &&
+        json['attempt'] != null &&
+        (json['attempt'] is! num)) {
+      throw const FormatException(
+        'AssistantTaskNodeWire field attempt has an invalid wire value',
+      );
     }
-    if (json.containsKey('budget') && json['budget'] != null && (json['budget'] is! Map)) {
-      throw const FormatException('AssistantTaskNodeWire field budget has an invalid wire value');
+    if (json.containsKey('budget') &&
+        json['budget'] != null &&
+        (json['budget'] is! Map)) {
+      throw const FormatException(
+        'AssistantTaskNodeWire field budget has an invalid wire value',
+      );
     }
-    if (json.containsKey('artifactRefs') && json['artifactRefs'] != null && (json['artifactRefs'] is! List || (json['artifactRefs'] as List).any((item) => item is! String))) {
-      throw const FormatException('AssistantTaskNodeWire field artifactRefs has an invalid wire value');
+    if (json.containsKey('artifactRefs') &&
+        json['artifactRefs'] != null &&
+        (json['artifactRefs'] is! List ||
+            (json['artifactRefs'] as List).any((item) => item is! String))) {
+      throw const FormatException(
+        'AssistantTaskNodeWire field artifactRefs has an invalid wire value',
+      );
     }
-    if (json.containsKey('verification') && json['verification'] != null && (json['verification'] is! Map)) {
-      throw const FormatException('AssistantTaskNodeWire field verification has an invalid wire value');
+    if (json.containsKey('verification') &&
+        json['verification'] != null &&
+        (json['verification'] is! Map)) {
+      throw const FormatException(
+        'AssistantTaskNodeWire field verification has an invalid wire value',
+      );
     }
-    if (json.containsKey('blockReason') && json['blockReason'] != null && (json['blockReason'] is! String)) {
-      throw const FormatException('AssistantTaskNodeWire field blockReason has an invalid wire value');
+    if (json.containsKey('blockReason') &&
+        json['blockReason'] != null &&
+        (json['blockReason'] is! String)) {
+      throw const FormatException(
+        'AssistantTaskNodeWire field blockReason has an invalid wire value',
+      );
     }
     return AssistantTaskNodeWire(
       taskId: (json['taskId'] as String?)?.trim() ?? "",
       goal: (json['goal'] as String?)?.trim() ?? "",
       dependencies: _assistantStringList(json['dependencies']),
-      status: parseAssistantTaskStatusStrict((json['status'] as String?)?.trim() ?? "pending"),
+      status: parseAssistantTaskStatusStrict(
+        (json['status'] as String?)?.trim() ?? "pending",
+      ),
       ownerAgent: (json['ownerAgent'] as String?)?.trim() ?? "root",
       attempt: (json['attempt'] as num?)?.toInt() ?? 0,
-      budget: (json['budget'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      budget:
+          (json['budget'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
       artifactRefs: _assistantStringList(json['artifactRefs']),
-      verification: (json['verification'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      verification:
+          (json['verification'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
       blockReason: (json['blockReason'] as String?)?.trim() ?? "",
     );
   }
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }
@@ -584,16 +813,16 @@ class AssistantRunRuntimeWire {
   final AssistantRunBudgetWire budget;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'runId': runId,
-        'state': state.wireName,
-        'revision': revision,
-        'reasoningProfile': reasoningProfile.wireName,
-        'definitionOfDone': definitionOfDone.toJson(),
-        'taskGraph': taskGraph.toJson(),
-        'checkpoint': checkpoint?.toJson(),
-        'items': items.map((item) => item.toJson()).toList(growable: false),
-        'budget': budget.toJson(),
-      };
+    'runId': runId,
+    'state': state.wireName,
+    'revision': revision,
+    'reasoningProfile': reasoningProfile.wireName,
+    'definitionOfDone': definitionOfDone.toJson(),
+    'taskGraph': taskGraph.toJson(),
+    'checkpoint': checkpoint?.toJson(),
+    'items': items.map((item) => item.toJson()).toList(growable: false),
+    'budget': budget.toJson(),
+  };
 
   factory AssistantRunRuntimeWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -611,48 +840,116 @@ class AssistantRunRuntimeWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantRunRuntimeWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantRunRuntimeWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('runId') || json['runId'] == null || (json['runId'] is! String)) {
-      throw const FormatException('AssistantRunRuntimeWire field runId has an invalid wire value');
+    if (!json.containsKey('runId') ||
+        json['runId'] == null ||
+        (json['runId'] is! String)) {
+      throw const FormatException(
+        'AssistantRunRuntimeWire field runId has an invalid wire value',
+      );
     }
-    if (!json.containsKey('state') || json['state'] == null || (json['state'] is! String)) {
-      throw const FormatException('AssistantRunRuntimeWire field state has an invalid wire value');
+    if (!json.containsKey('state') ||
+        json['state'] == null ||
+        (json['state'] is! String)) {
+      throw const FormatException(
+        'AssistantRunRuntimeWire field state has an invalid wire value',
+      );
     }
-    if (!json.containsKey('revision') || json['revision'] == null || (json['revision'] is! num)) {
-      throw const FormatException('AssistantRunRuntimeWire field revision has an invalid wire value');
+    if (!json.containsKey('revision') ||
+        json['revision'] == null ||
+        (json['revision'] is! num)) {
+      throw const FormatException(
+        'AssistantRunRuntimeWire field revision has an invalid wire value',
+      );
     }
-    if (json.containsKey('reasoningProfile') && json['reasoningProfile'] != null && (json['reasoningProfile'] is! String)) {
-      throw const FormatException('AssistantRunRuntimeWire field reasoningProfile has an invalid wire value');
+    if (json.containsKey('reasoningProfile') &&
+        json['reasoningProfile'] != null &&
+        (json['reasoningProfile'] is! String)) {
+      throw const FormatException(
+        'AssistantRunRuntimeWire field reasoningProfile has an invalid wire value',
+      );
     }
-    if (!json.containsKey('definitionOfDone') || json['definitionOfDone'] == null || (json['definitionOfDone'] is! Map)) {
-      throw const FormatException('AssistantRunRuntimeWire field definitionOfDone has an invalid wire value');
+    if (!json.containsKey('definitionOfDone') ||
+        json['definitionOfDone'] == null ||
+        (json['definitionOfDone'] is! Map)) {
+      throw const FormatException(
+        'AssistantRunRuntimeWire field definitionOfDone has an invalid wire value',
+      );
     }
-    if (json.containsKey('taskGraph') && json['taskGraph'] != null && (json['taskGraph'] is! Map)) {
-      throw const FormatException('AssistantRunRuntimeWire field taskGraph has an invalid wire value');
+    if (json.containsKey('taskGraph') &&
+        json['taskGraph'] != null &&
+        (json['taskGraph'] is! Map)) {
+      throw const FormatException(
+        'AssistantRunRuntimeWire field taskGraph has an invalid wire value',
+      );
     }
-    if (json.containsKey('checkpoint') && json['checkpoint'] != null && (json['checkpoint'] is! Map)) {
-      throw const FormatException('AssistantRunRuntimeWire field checkpoint has an invalid wire value');
+    if (json.containsKey('checkpoint') &&
+        json['checkpoint'] != null &&
+        (json['checkpoint'] is! Map)) {
+      throw const FormatException(
+        'AssistantRunRuntimeWire field checkpoint has an invalid wire value',
+      );
     }
-    if (json.containsKey('items') && json['items'] != null && (json['items'] is! List || (json['items'] as List).any((item) => item is! Map))) {
-      throw const FormatException('AssistantRunRuntimeWire field items has an invalid wire value');
+    if (json.containsKey('items') &&
+        json['items'] != null &&
+        (json['items'] is! List ||
+            (json['items'] as List).any((item) => item is! Map))) {
+      throw const FormatException(
+        'AssistantRunRuntimeWire field items has an invalid wire value',
+      );
     }
-    if (json.containsKey('budget') && json['budget'] != null && (json['budget'] is! Map)) {
-      throw const FormatException('AssistantRunRuntimeWire field budget has an invalid wire value');
+    if (json.containsKey('budget') &&
+        json['budget'] != null &&
+        (json['budget'] is! Map)) {
+      throw const FormatException(
+        'AssistantRunRuntimeWire field budget has an invalid wire value',
+      );
     }
     return AssistantRunRuntimeWire(
       runId: (json['runId'] as String?)?.trim() ?? "",
-      state: parseAssistantRunStateStrict((json['state'] as String?)?.trim() ?? ''),
+      state: parseAssistantRunStateStrict(
+        (json['state'] as String?)?.trim() ?? '',
+      ),
       revision: (json['revision'] as num?)?.toInt() ?? 0,
-      reasoningProfile: parseAssistantReasoningProfileStrict((json['reasoningProfile'] as String?)?.trim() ?? "balanced"),
-      definitionOfDone: json['definitionOfDone'] is Map ? AssistantDefinitionOfDoneWire.fromJson((json['definitionOfDone'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field definitionOfDone is missing')),
-      taskGraph: json['taskGraph'] is Map ? AssistantTaskGraphWire.fromJson((json['taskGraph'] as Map).cast<String, dynamic>()) : const AssistantTaskGraphWire(),
-      checkpoint: json['checkpoint'] is Map ? AssistantRunCheckpointWire.fromJson((json['checkpoint'] as Map).cast<String, dynamic>()) : null,
-      items: (json['items'] as List?)?.whereType<Map>().map((item) => AssistantRunItemWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantRunItemWire>[],
-      budget: json['budget'] is Map ? AssistantRunBudgetWire.fromJson((json['budget'] as Map).cast<String, dynamic>()) : const AssistantRunBudgetWire(),
+      reasoningProfile: parseAssistantReasoningProfileStrict(
+        (json['reasoningProfile'] as String?)?.trim() ?? "balanced",
+      ),
+      definitionOfDone: json['definitionOfDone'] is Map
+          ? AssistantDefinitionOfDoneWire.fromJson(
+              (json['definitionOfDone'] as Map).cast<String, dynamic>(),
+            )
+          : (throw FormatException(
+              'required object field definitionOfDone is missing',
+            )),
+      taskGraph: json['taskGraph'] is Map
+          ? AssistantTaskGraphWire.fromJson(
+              (json['taskGraph'] as Map).cast<String, dynamic>(),
+            )
+          : const AssistantTaskGraphWire(),
+      checkpoint: json['checkpoint'] is Map
+          ? AssistantRunCheckpointWire.fromJson(
+              (json['checkpoint'] as Map).cast<String, dynamic>(),
+            )
+          : null,
+      items:
+          (json['items'] as List?)
+              ?.whereType<Map>()
+              .map(
+                (item) =>
+                    AssistantRunItemWire.fromJson(item.cast<String, dynamic>()),
+              )
+              .toList(growable: false) ??
+          const <AssistantRunItemWire>[],
+      budget: json['budget'] is Map
+          ? AssistantRunBudgetWire.fromJson(
+              (json['budget'] as Map).cast<String, dynamic>(),
+            )
+          : const AssistantRunBudgetWire(),
     );
   }
-
 }
 
 class AssistantRunRuntimeWireFields {

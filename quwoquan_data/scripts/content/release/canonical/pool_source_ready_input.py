@@ -8,6 +8,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from content.release.canonical.canonical_identity_state import (
+    CanonicalIdentityStateQuery,
+    canonical_identity_is_consumed,
+)
 from content.release.canonical.object_transaction_contract import _read_json
 from content.source.research.scale_source_pool import (
     validate_scale_source_pool_evidence,
@@ -42,11 +46,43 @@ def _file_sha256(path: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 
+def physical_evidence_binding(
+    row: Mapping[str, Any], *, carrier: str
+) -> dict[str, Any]:
+    """The reference that proves one candidate has physical backing, by carrier.
+
+    homepage/article carry a source-ready capsule suite; image/video carry a media
+    source admission receipt instead, and the pool contract forbids the suite
+    fields on them. Demanding `sourceUnitRef` from every carrier therefore reads a
+    key that, for media candidates, is absent by contract — which took the whole
+    image lane out of dispatch rather than reporting anything about it.
+    """
+
+    if carrier in {"image", "video"}:
+        admission_ref = str(row.get("sourceAdmissionRef") or "").strip()
+        if not admission_ref:
+            raise ValueError(
+                f"media candidate lacks sourceAdmissionRef: {row.get('candidateId')}"
+            )
+        return {"sourceAdmissionRef": admission_ref}
+    source_unit_ref = str(row.get("sourceUnitRef") or "").strip()
+    if not source_unit_ref:
+        raise ValueError(
+            f"source-ready candidate lacks sourceUnitRef: {row.get('candidateId')}"
+        )
+    return {
+        "sourceUnitRef": source_unit_ref,
+        "sourceReadyEvidenceRootRef": str(
+            row.get("sourceReadyEvidenceRootRef") or "."
+        ),
+    }
+
+
 def load_source_ready_input(
     *,
     output_root: Path,
     publish_root: Path,
-    milestone: str,
+    milestone: str | None,
     source_pool_ref: str,
     evidence_root_ref: str,
     consumed_object_refs: frozenset[str] = frozenset(),
@@ -64,7 +100,7 @@ def load_source_ready_input(
         label="sourcePoolEvidenceRootRef",
     )
     plan = _read_json(pool_path)
-    if plan.get("targetScale") != milestone:
+    if milestone is not None and plan.get("targetScale") != milestone:
         raise ValueError(
             "source-ready pool milestone drift: "
             f"expected={milestone} actual={plan.get('targetScale')}"
@@ -74,16 +110,25 @@ def load_source_ready_input(
         evidence_root=evidence_root,
     )
     candidates = {carrier: [] for carrier in _CARRIERS}
+    identity_query = CanonicalIdentityStateQuery(publish_root=publish_root)
+    canonical_identity_states: list[dict[str, Any]] = []
     for raw in plan["candidates"]:
         row = dict(raw)
         carrier = str(row["carrier"])
         object_ref = str(row["objectRef"]).strip("/")
-        # Any existing canonical manifest owns this stable object identity.
-        # A later wave must not reinterpret it as fresh semantic work.
-        if (
-            object_ref in consumed_object_refs
-            or (publish_root / object_ref / "manifest.json").is_file()
-        ):
+        if object_ref in consumed_object_refs:
+            continue
+        identity_state = identity_query.get(
+            object_type="homepage" if carrier == "homepage" else "content",
+            object_ref=object_ref,
+        )
+        if identity_state["state"] != "absent":
+            canonical_identity_states.append(
+                {"carrier": carrier, "identityState": identity_state}
+            )
+        if canonical_identity_is_consumed(identity_state):
+            continue
+        if str(identity_state["state"]).startswith("invalid_"):
             continue
         candidates[carrier].append(
             {
@@ -91,10 +136,7 @@ def load_source_ready_input(
                 "candidateId": str(row["candidateId"]),
                 "objectRef": object_ref,
                 "entityRef": str(row["entityRef"]),
-                "sourceUnitRef": str(row["sourceUnitRef"]),
-                "sourceReadyEvidenceRootRef": str(
-                    row.get("sourceReadyEvidenceRootRef") or "."
-                ),
+                **physical_evidence_binding(row, carrier=carrier),
             }
         )
     for rows in candidates.values():
@@ -102,11 +144,16 @@ def load_source_ready_input(
     return (
         {
             "status": "validated",
+            "targetScale": str(plan["targetScale"]),
+            "workloadMode": str(plan["workloadMode"]),
+            "activeCarriers": list(plan["activeCarriers"]),
+            "workloadTargets": dict(plan["workloadTargets"]),
             "sourcePoolRef": normalized_pool_ref,
             "sourcePoolFileSha256": _file_sha256(pool_path),
             "sourcePoolDigest": str(plan["planDigest"]),
             "sourcePoolEvidenceRootRef": normalized_evidence_ref,
             "evidenceBindingCount": int(validation["evidenceBindingCount"]),
+            "canonicalIdentityStates": canonical_identity_states,
         },
         candidates,
     )

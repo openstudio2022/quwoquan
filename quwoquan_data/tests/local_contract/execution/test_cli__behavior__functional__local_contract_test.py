@@ -31,7 +31,9 @@ def test_task_help():
         text=True,
     )
     assert result.returncode == 0
-    assert "execute" in result.stdout
+    assert "init" in result.stdout
+    assert "stage-record" in result.stdout
+    assert "execute" not in result.stdout
 
 
 def test_ship_help_does_not_import_content_production_toolchain(tmp_path: Path):
@@ -65,25 +67,18 @@ sys.meta_path.insert(0, _BlockCanonicalRelease())
     assert "usage: qwq-data ship" in result.stdout
 
 
-def test_plan_images_help_has_side_effect_free_cold_start():
+@pytest.mark.parametrize("retired_command", ["execute", "recipe", "prepare-campaign", "preflight", "calibrate-capacity", "reconcile-stale", "runtime-evidence", "plan-images"])
+def test_retired_task_commands_are_rejected(retired_command: str):
     result = subprocess.run(
-        [
-            sys.executable,
-            "-B",
-            str(CLI_PATH),
-            "task",
-            "plan-images",
-            "--help",
-        ],
+        [sys.executable, "-B", str(CLI_PATH), "task", retired_command, "--help"],
         capture_output=True,
         text=True,
         check=False,
     )
-    assert result.returncode == 0, result.stderr
-    assert "usage: qwq-data task plan-images" in result.stdout
+    assert result.returncode == 2
+    assert "invalid choice" in result.stderr
 
-
-def test_campaign_parser_import_has_side_effect_free_cold_start():
+def test_host_only_task_parser_import_has_side_effect_free_cold_start():
     result = subprocess.run(
         [
             sys.executable,

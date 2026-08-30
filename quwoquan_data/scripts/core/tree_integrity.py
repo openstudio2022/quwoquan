@@ -65,6 +65,36 @@ def _merkle_root(entries: Sequence[Mapping[str, Any]]) -> str:
     return "sha256:" + level[0].hex()
 
 
+def tree_integrity_entries(root: Path) -> tuple[dict[str, Any], ...]:
+    """Return the per-file rows behind the tree digest, in Merkle leaf order."""
+    entries, _ = _entries(root)
+    return tuple(entries)
+
+
+def holdings_merkle(rows: Sequence[tuple[str, str, int]]) -> str:
+    """Return the tree digest of explicit ``(path, sha256, bytes)`` rows.
+
+    Lets a caller that already knows the addresses it claims derive the same
+    digest a walk of those files would produce, without needing the bodies to be
+    present locally.  Rows must already be in Merkle leaf order.
+    """
+    return _merkle_root(
+        [
+            {
+                "leafHash": _sha256(
+                    b"blob\0"
+                    + path.encode("utf-8")
+                    + b"\0"
+                    + digest.encode("ascii")
+                    + b"\0"
+                    + str(size).encode("ascii")
+                )
+            }
+            for path, digest, size in rows
+        ]
+    )
+
+
 def tree_integrity_stats(root: Path) -> dict[str, Any]:
     entries, redacted = _entries(root)
     inventory = json.dumps(entries, ensure_ascii=False, sort_keys=True, separators=(",", ":"))

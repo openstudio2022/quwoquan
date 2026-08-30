@@ -148,7 +148,7 @@ func (s *ConversationService) UpdateConversationTitle(ctx context.Context, req U
 			"operator is not a member of this conversation",
 		)
 	}
-	if conv.Status != "" && conv.Status != model.ConversationStatusActive {
+	if conv.Status != model.ConversationStatusActive {
 		return nil, chatConversationDissolved("conversation is not active")
 	}
 	// 治理开关消费点：仅当群开启 nameEditableByAdminOnly 时收紧为 owner/admin。
@@ -281,7 +281,7 @@ func (s *ConversationService) findDirectConversationBetween(
 	for index := range conversations {
 		conversation := conversations[index]
 		if (conversation.Type == conversationTypeDirect || conversation.Type == conversationTypeEncrypted) &&
-			(conversation.Status == "" || conversation.Status == model.ConversationStatusActive) {
+			conversation.Status == model.ConversationStatusActive {
 			return &conversation, nil
 		}
 	}

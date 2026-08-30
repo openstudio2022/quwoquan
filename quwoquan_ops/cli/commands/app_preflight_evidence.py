@@ -7,12 +7,12 @@
   Commercial 精确证据的解析;
 - `_resolve_test_live_app_content_evidence`:validated mutable binding 的
   test-live 证据解析(不询问 active candidate 状态);
-- `_app_content_uat_envelope`:release readiness canonical appUatEnvelope
-  的 fail-closed 校验;
+- `_app_content_uat_sample_plan`:immutable ReleaseUatSamplePlan 与 readiness
+  readback 的 fail-closed 消费;
 - `_app_content_readback_summary`:readiness feedQueries/counts 的 readback
   摘要投影;
-- `_run_app_content_release_probe`:Search、20 条视频页与 release media 的
-  release-bound live readback 探针。
+- `_run_app_content_release_probe`:按 readiness phase 执行 20 条视频页、
+  release media 与必需 Search 的 release-bound live readback 探针。
 
 `command_app_content_preflight` 等命令入口在 `commands/app_preflight.py`;
 data readiness 真相源家族在 `commands/app_preflight_shared.py` 与
@@ -25,10 +25,191 @@ data readiness 真相源家族在 `commands/app_preflight_shared.py` 与
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 from typing import Any, Mapping
 
 from quwoquan_ops.cli.lib.content_release_readiness import ReadinessPhase
+
+
+def _read_exact_json_object(path: Path, *, label: str) -> tuple[dict[str, Any], bytes]:
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f"{label} is missing or unsafe")
+    try:
+        raw = path.read_bytes()
+        value = json.loads(raw)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{label} is not readable JSON") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value, raw
+
+
+def _payload_tree_digest(payload_root: Path) -> str:
+    """Return Data's canonical sha256-path-blob-merkle for exact payload bytes."""
+
+    entries: list[bytes] = []
+    for path in sorted(payload_root.rglob("*")):
+        if path.is_symlink():
+            raise ValueError("active candidate Data release payload contains a symlink")
+        if not path.is_file():
+            continue
+        relative = path.relative_to(payload_root).as_posix()
+        raw = path.read_bytes()
+        blob_digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+        entries.append(
+            hashlib.sha256(
+                b"blob\0"
+                + relative.encode("utf-8")
+                + b"\0"
+                + blob_digest.encode("ascii")
+                + b"\0"
+                + str(len(raw)).encode("ascii")
+            ).digest()
+        )
+    if not entries:
+        return "sha256:" + hashlib.sha256(b"").hexdigest()
+    level = entries
+    while len(level) > 1:
+        if len(level) % 2:
+            level.append(level[-1])
+        level = [
+            hashlib.sha256(b"node\0" + level[index] + level[index + 1]).digest()
+            for index in range(0, len(level), 2)
+        ]
+    return "sha256:" + level[0].hex()
+
+
+def _load_active_release_uat_contract(
+    candidate: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Load the exact ReleaseUatSamplePlan owned by one candidate release."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.app_content_uat_plan import (
+        load_release_uat_sample_plan,
+    )
+
+    release_id = str(candidate.get("releaseId") or "").strip()
+    manifest_digest = str(candidate.get("releaseDigest") or "").strip()
+    attestation_ref = str(candidate.get("attestationRef") or "").strip()
+    attestation_digest = str(candidate.get("attestationDigest") or "").strip()
+    if (
+        not release_id
+        or _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(manifest_digest) is None
+        or not attestation_ref
+        or _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(attestation_digest) is None
+    ):
+        raise ValueError("active candidate Data release identity is incomplete")
+
+    attestation_source = Path(attestation_ref).expanduser()
+    if attestation_source.is_symlink():
+        raise ValueError("active candidate Data release attestation is unsafe")
+    attestation_path = attestation_source.resolve()
+    if (
+        attestation_path.name != "release.json"
+        or attestation_path.parent.name != "attestations"
+    ):
+        raise ValueError("active candidate Data release attestation path is not canonical")
+    release_root = attestation_path.parents[1]
+    if attestation_path != release_root / "attestations/release.json":
+        raise ValueError("active candidate Data release attestation path drifted")
+    attestation, attestation_raw = _read_exact_json_object(
+        attestation_path,
+        label="active candidate Data release attestation",
+    )
+    actual_attestation_digest = "sha256:" + hashlib.sha256(attestation_raw).hexdigest()
+    if actual_attestation_digest != attestation_digest:
+        raise ValueError("active candidate Data release attestation digest drifted")
+    if (
+        attestation.get("schema") != "quwoquan_data.release_attestation"
+        or attestation.get("releaseId") != release_id
+        or attestation.get("payloadSha256") != manifest_digest
+    ):
+        raise ValueError("active candidate Data release attestation identity drifted")
+
+    header_path = release_root / "payload/release.json"
+    release_header, release_header_raw = _read_exact_json_object(
+        header_path,
+        label="active candidate Data release header",
+    )
+    if (
+        release_header.get("releaseId") != release_id
+        or release_header.get("releaseClass") != attestation.get("releaseClass")
+        or release_header.get("productLifecycleState")
+        != attestation.get("productLifecycleState")
+        or (
+            "canonicalMerkle" in release_header
+            and release_header.get("canonicalMerkle")
+            != attestation.get("canonicalMerkle")
+        )
+    ):
+        raise ValueError("active candidate Data release header identity drifted")
+    if _payload_tree_digest(header_path.parent) != manifest_digest:
+        raise ValueError("active candidate Data release payload digest drifted")
+    sample_plan, sample_plan_ref, sample_plan_digest = load_release_uat_sample_plan(
+        release_root=header_path.parent,
+        release_header=release_header,
+    )
+    return {
+        "releaseRoot": str(release_root),
+        "releasePayloadSha256": manifest_digest,
+        "releaseHeader": release_header,
+        "releaseHeaderRef": str(header_path),
+        "releaseHeaderDigest": "sha256:"
+        + hashlib.sha256(release_header_raw).hexdigest(),
+        "releaseUatSamplePlan": sample_plan,
+        "releaseUatSamplePlanRef": sample_plan_ref,
+        "releaseUatSamplePlanDigest": sample_plan_digest,
+    }
+
+
+def _release_readback_path(readiness: Mapping[str, Any], field: str) -> Path:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    ref = str(readiness.get(field) or "").strip()
+    if not ref:
+        raise ValueError(f"release readiness {field} is missing")
+    evidence_root = _stackctl.output_root().expanduser().resolve()
+    candidate = Path(ref).expanduser()
+    path = candidate.resolve() if candidate.is_absolute() else (evidence_root / candidate).resolve()
+    try:
+        path.relative_to(evidence_root)
+    except ValueError as exc:
+        raise ValueError(f"release readiness {field} escapes QWQ_OUTPUT_ROOT") from exc
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f"release readiness {field} is missing or unsafe")
+    return path
+
+
+def _app_content_uat_sample_plan(
+    *,
+    release_contract: Mapping[str, Any],
+    readiness: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build the only Ops UAT plan from exact immutable Data bytes."""
+
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    header = release_contract.get("releaseHeader")
+    sample_plan = release_contract.get("releaseUatSamplePlan")
+    if not isinstance(header, Mapping) or not isinstance(sample_plan, Mapping):
+        raise ValueError("active release UAT contract is incomplete")
+    canonical_readiness = {
+        key: value
+        for key, value in readiness.items()
+        if key not in {"appUatEnvelope", "appUatEnvelopeDigest"}
+    }
+    return _stackctl.build_app_content_uat_plan(
+        canonical_readiness,
+        release_header=header,
+        release_uat_sample_plan=sample_plan,
+        release_uat_sample_plan_digest=str(
+            release_contract.get("releaseUatSamplePlanDigest") or ""
+        ),
+        release_payload_sha256=str(
+            release_contract.get("releasePayloadSha256") or ""
+        ),
+    )
 
 
 def _resolve_active_app_content_evidence(
@@ -59,6 +240,8 @@ def _resolve_active_app_content_evidence(
     attestation_path = Path(attestation_ref).expanduser().resolve()
     if not attestation_path.is_file():
         raise ValueError("active candidate Data release attestation is missing")
+    if attestation_path.is_symlink():
+        raise ValueError("active candidate Data release attestation is unsafe")
     actual_attestation_digest = "sha256:" + hashlib.sha256(
         attestation_path.read_bytes()
     ).hexdigest()
@@ -210,8 +393,6 @@ def _resolve_test_live_app_content_evidence(
         "readinessPhase",
         "activationEnvelope",
         "activationEnvelopeDigest",
-        "appUatEnvelope",
-        "appUatEnvelopeDigest",
     ):
         if binding.get(field) != readiness.get(field):
             raise ValueError(f"test_live content binding {field} drift")
@@ -227,69 +408,6 @@ def _resolve_test_live_app_content_evidence(
         readiness_path,
         str(binding.get("lifecycleExitRef") or "").strip(),
     )
-
-
-def _app_content_uat_envelope(readiness: dict[str, Any]) -> dict[str, str]:
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    raw = readiness.get("appUatEnvelope")
-    if not isinstance(raw, dict):
-        raise ValueError("release readiness is missing canonical appUatEnvelope")
-    required_fields = {
-        key for key, _argument in _stackctl.APP_CONTENT_UAT_ENVELOPE_ARGUMENTS
-    } | {"videoWorkId"}
-    envelope = {key: str(raw.get(key) or "").strip() for key in required_fields}
-    missing = sorted(key for key, value in envelope.items() if not value)
-    if missing:
-        raise ValueError(
-            "release readiness appUatEnvelope is incomplete: "
-            + ", ".join(missing)
-        )
-    if envelope["releaseId"] != str(readiness.get("releaseId") or "").strip():
-        raise ValueError("release readiness appUatEnvelope releaseId mismatch")
-    for key in ("releaseClass", "productLifecycleState"):
-        if envelope[key] != str(readiness.get(key) or "").strip():
-            raise ValueError(f"release readiness appUatEnvelope {key} mismatch")
-
-    query_matches: dict[str, set[str]] = {}
-    for query in readiness.get("feedQueries") or []:
-        if not isinstance(query, dict):
-            continue
-        name = str(query.get("name") or "").strip()
-        matches = query.get("matchedPostIds")
-        if name and isinstance(matches, list):
-            query_matches[name] = {
-                str(item).strip() for item in matches if str(item).strip()
-            }
-    expected_queries = {
-        "typed_article": envelope["articleWorkId"],
-        "typed_image": envelope["imageWorkId"],
-        "typed_video": envelope["videoWorkId"],
-    }
-    for query_name, work_id in expected_queries.items():
-        if work_id not in query_matches.get(query_name, set()):
-            raise ValueError(
-                f"release readiness appUatEnvelope {query_name} is not exact-query bound"
-            )
-    if not query_matches.get("homepage_recommend"):
-        raise ValueError("release readiness homepage recommendation is empty")
-    readiness_phase = str(readiness.get("readinessPhase") or "").strip()
-    if readiness_phase not in {
-        ReadinessPhase.CONSUMER.value,
-        ReadinessPhase.RESEARCH.value,
-        ReadinessPhase.COMMERCIAL.value,
-    }:
-        raise ValueError("release readiness appUatEnvelope readinessPhase is invalid")
-    if (
-        readiness_phase
-        in {ReadinessPhase.RESEARCH.value, ReadinessPhase.COMMERCIAL.value}
-        and envelope["videoWorkId"]
-        not in query_matches.get("premium_stream", set())
-    ):
-        raise ValueError(
-            "release readiness appUatEnvelope video is not Premium-query bound"
-        )
-    return envelope
 
 
 def _app_content_readback_summary(readiness: dict[str, Any]) -> dict[str, Any]:
@@ -335,16 +453,24 @@ def _run_app_content_release_probe(
     app_uat_plan: Mapping[str, Any],
     report_dir: Path,
 ) -> dict[str, Any]:
-    """Verify Search, a 20-video page, and release media before device UAT."""
+    """Verify the phase-scoped live content surface before device UAT."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    readiness = _stackctl._read_json_object(str(readiness_path))
+    readiness_phase = str(readiness.get("readinessPhase") or "").strip()
+    search_canaries_required = readiness_phase != ReadinessPhase.CONSUMER.value
     raw_search = app_uat_plan.get("searchCanaries")
     raw_pagination = app_uat_plan.get("videoPagination")
     raw_media = app_uat_plan.get("mediaChecks")
     if (
-        not isinstance(raw_search, list)
-        or len(raw_search) != 3
-        or not all(isinstance(item, Mapping) for item in raw_search)
+        (
+            search_canaries_required
+            and (
+                not isinstance(raw_search, list)
+                or len(raw_search) != 4
+                or not all(isinstance(item, Mapping) for item in raw_search)
+            )
+        )
         or not isinstance(raw_pagination, Mapping)
         or raw_pagination.get("pageSize") != 20
         or not isinstance(raw_pagination.get("expectedWorkIds"), list)
@@ -360,21 +486,110 @@ def _run_app_content_release_probe(
     }
     if len(video_work_ids) != len(raw_pagination["expectedWorkIds"]):
         raise ValueError("App content UAT video page identities are invalid")
-    sample_resolution: dict[str, Any] = {}
-    if isinstance(app_uat_plan.get("stratifiedSamples"), Mapping):
-        sample_resolution = _stackctl.resolve_release_sample_requests(
-            readiness_path=readiness_path,
-            app_uat_plan=app_uat_plan,
-            output_root=_stackctl.output_root(),
+    sample_resolution = _stackctl.resolve_release_sample_requests(
+        readiness_path=readiness_path,
+        app_uat_plan=app_uat_plan,
+        output_root=_stackctl.output_root(),
+    )
+    runtime_samples = {
+        str(item.get("carrier") or ""): item
+        for item in sample_resolution.get("samples") or []
+        if isinstance(item, Mapping)
+    }
+    def _consumer_search_query(item: Mapping[str, Any]) -> str:
+        kind = str(item.get("kind") or "")
+        sample = runtime_samples.get(kind)
+        if not isinstance(sample, Mapping):
+            return str(item.get("query") or "").strip()
+        object_ref = str(sample.get("objectRef") or "").strip("/")
+        segments = [segment for segment in object_ref.split("/") if segment]
+        if kind == "homepage":
+            return segments[-1] if segments else str(item.get("query") or "").strip()
+        return (
+            segments[-2]
+            if len(segments) >= 2
+            else str(item.get("query") or "").strip()
         )
+
+    search_canaries = (
+        [
+            {
+                **dict(item),
+                # Data owns immutable sample identities. Search consumes a
+                # human-facing title derived from the immutable objectRef and
+                # asserts the exact imported route identity separately.
+                "query": _consumer_search_query(item),
+                "expectedObjectId": str(
+                    runtime_samples.get(str(item.get("kind") or ""), {}).get(
+                        "readObjectId"
+                    )
+                    or item.get("expectedObjectId")
+                    or ""
+                ),
+            }
+            for item in raw_search
+        ]
+        if search_canaries_required and isinstance(raw_search, list)
+        else []
+    )
+    runtime_video_ids = {
+        str(item.get("readObjectId") or "")
+        for item in sample_resolution.get("samples") or []
+        if isinstance(item, Mapping)
+        and item.get("carrier") == "video"
+        and str(item.get("readObjectId") or "")
+    }
+    expected_video_count = sum(
+        1
+        for item in app_uat_plan.get("orderedSamples") or []
+        if isinstance(item, Mapping) and item.get("carrier") == "video"
+    )
+    if not runtime_video_ids or len(runtime_video_ids) != expected_video_count:
+        raise ValueError("App content UAT runtime video identities are invalid")
+    sample_resolution = {
+        **sample_resolution,
+        "samples": list(sample_resolution.get("samples") or []),
+    }
+    research = readiness_phase == ReadinessPhase.RESEARCH.value
+    research_consumer_token = ""
+    if research:
+        # research 相位匿名内容面已按 DEC-032 收敛为 no_active_release 空页，
+        # release-bound 非空读回必须以 research consumer 凭证消费（凭证只在
+        # 进程内存传递）。私有媒体没有匿名可采样的公开 slice，media_sample
+        # 与 feed_media_slices 的公开 URL 读回不适用：媒体可显示证据由
+        # isolation probe signedMedia 段与 App 端短签消费 CaseResult 承载。
+        from quwoquan_ops.cli.lib.research_consumer_credential import (
+            issue_research_consumer_credential,
+        )
+
+        environment = target.removesuffix("-local")
+        credential = issue_research_consumer_credential(
+            environment=environment,
+            release_id=str(readiness.get("releaseId") or ""),
+            verify_run_id=str(readiness.get("verifyRunId") or ""),
+        )
+        research_consumer_token = str(credential.get("bearerToken") or "")
+        if not research_consumer_token:
+            raise ValueError(
+                "research consumer credential issuance returned no bearer token"
+            )
     check, _output, findings = _stackctl._run_environment_integration_probe(
         _stackctl.load_environment_topology(),
         target,
         report_dir,
         require_non_empty_content_feed=True,
-        release_post_expectations={"video_book_feed": video_work_ids},
-        release_search_canaries=[dict(item) for item in raw_search],
-        release_samples=list(sample_resolution.get("samples") or []),
+        research_consumer_token=research_consumer_token,
+        release_post_expectations={"video_book_feed": runtime_video_ids},
+        release_search_canaries=search_canaries,
+        release_samples=[
+            {
+                key: value
+                for key, value in item.items()
+                if key not in {"objectRef", "objectDigest"}
+            }
+            for item in sample_resolution.get("samples") or []
+            if isinstance(item, Mapping)
+        ],
         release_readiness_path=readiness_path,
         video_page_size=20,
         only_checks=(
@@ -382,10 +597,11 @@ def _run_app_content_release_probe(
             # App 视频书页真实消费 premium_stream 频道；typed_video 绿不代表
             # 视频书绿，设备 UAT 前必须同时证明 premium 池非空。
             "premium_feed",
-            # feed items 非空不等于媒体可显示：设备 UAT 前逐 slice 字节读回。
-            "feed_media_slices",
-            "global_search",
-            "media_sample",
+            # feed items 非空不等于媒体可显示：设备 UAT 前逐 slice 字节读回
+            # （research 私有交付无公开 slice，由短签消费证据承载）。
+            *(("feed_media_slices",) if not research else ()),
+            *(("global_search",) if search_canaries_required else ()),
+            *(("media_sample",) if not research else ()),
             *(("release_sample",) if sample_resolution else ()),
         ),
         probe_name="app-content-release-bound-search-and-video-page",
@@ -397,7 +613,6 @@ def _run_app_content_release_probe(
         )
     sample_execution: dict[str, Any] = {}
     if sample_resolution:
-        readiness = _stackctl._read_json_object(str(readiness_path))
         sample_execution = _stackctl.validate_release_sample_probe(
             report=_stackctl._read_json_object(str(report_dir / "integration-probe.json")),
             resolved=sample_resolution,
@@ -409,7 +624,9 @@ def _run_app_content_release_probe(
         "suite": "release-bound-search-and-video-page",
         "exitCode": 0,
         "reportRef": str(check.get("reportPath") or ""),
-        "searchCanaries": [dict(item) for item in raw_search],
+        "readinessPhase": readiness_phase,
+        "searchCanariesRequired": search_canaries_required,
+        "searchCanaries": search_canaries,
         "videoPagination": dict(raw_pagination),
         "mediaChecks": dict(raw_media),
         "sampleExecution": sample_execution,

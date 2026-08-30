@@ -2,50 +2,135 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
-/// 读取平台构建阶段已经验证并写入 App 制品的 runtime package。
-final class NativeRuntimeConfigBridge {
-  const NativeRuntimeConfigBridge._();
+import 'native_runtime_config_bridge_stub.dart'
+    if (dart.library.js_interop) 'native_runtime_config_bridge_web.dart'
+    as platform_config;
 
-  static const int _maximumReadAttempts = 3;
-  static const Duration _readAttemptBudget = Duration(seconds: 2);
-  static const Duration _retryDelay = Duration(milliseconds: 200);
+const MethodChannel _runtimeConfigChannel = MethodChannel(
+  'quwoquan/runtime/config',
+);
 
-  static const MethodChannel _channel = MethodChannel(
-    'quwoquan/runtime/config',
-  );
+abstract interface class RuntimeConfigChannelClient {
+  Future<Object?> invokeMethod(String method);
+}
 
-  static Future<Map<String, String>> readRuntimePackage() async {
-    for (var attempt = 1; attempt <= _maximumReadAttempts; attempt += 1) {
-      final values = await _readRuntimePackageOnce();
-      if (values.isNotEmpty) {
-        return values;
-      }
-      if (attempt < _maximumReadAttempts) {
-        await Future<void>.delayed(_retryDelay);
-      }
-    }
-    return const <String, String>{};
+class MethodChannelRuntimeConfigClient implements RuntimeConfigChannelClient {
+  const MethodChannelRuntimeConfigClient();
+
+  @override
+  Future<Object?> invokeMethod(String method) {
+    return _runtimeConfigChannel.invokeMethod<Object?>(method);
   }
+}
 
-  static Future<Map<String, String>> _readRuntimePackageOnce() async {
-    try {
-      final values = await _channel
-          .invokeMapMethod<String, dynamic>('readRuntimeConfig')
-          .timeout(_readAttemptBudget);
-      if (values == null) {
-        return const <String, String>{};
+enum NativeRuntimeConfigReadFailureReason {
+  missingPlugin,
+  platform,
+  timeout,
+  emptyPackage,
+  malformedPackage,
+}
+
+class NativeRuntimeConfigReadException implements Exception {
+  const NativeRuntimeConfigReadException({
+    required this.reason,
+    required this.attempts,
+    this.platformCode,
+  });
+
+  final NativeRuntimeConfigReadFailureReason reason;
+  final int attempts;
+  final String? platformCode;
+
+  @override
+  String toString() =>
+      'NativeRuntimeConfigReadException(reason: ${reason.name}, '
+      'attempts: $attempts, platformCode: $platformCode)';
+}
+
+class NativeRuntimeConfigBridge {
+  const NativeRuntimeConfigBridge({
+    this.client,
+    this.maxAttempts = 3,
+    this.retryDelay = const Duration(milliseconds: 80),
+    this.attemptTimeout = const Duration(seconds: 2),
+  });
+
+  final RuntimeConfigChannelClient? client;
+  final int maxAttempts;
+  final Duration retryDelay;
+  final Duration attemptTimeout;
+
+  Future<Map<String, Object?>> readRuntimePackage() async {
+    final injectedClient = client;
+    if (injectedClient == null) {
+      try {
+        final webPackage = platform_config.readVerifiedRuntimeConfigPackage();
+        if (webPackage != null) {
+          return webPackage;
+        }
+      } on Object {
+        throw const NativeRuntimeConfigReadException(
+          reason: NativeRuntimeConfigReadFailureReason.malformedPackage,
+          attempts: 1,
+        );
       }
-      return <String, String>{
-        for (final entry in values.entries)
-          if (entry.value is String && (entry.value as String).isNotEmpty)
-            entry.key: entry.value as String,
-      };
-    } on MissingPluginException {
-      return const <String, String>{};
-    } on PlatformException {
-      return const <String, String>{};
-    } on TimeoutException {
-      return const <String, String>{};
     }
+    final channelClient =
+        injectedClient ?? const MethodChannelRuntimeConfigClient();
+    NativeRuntimeConfigReadException? lastFailure;
+    for (var attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        final raw = await channelClient
+            .invokeMethod('readRuntimeConfig')
+            .timeout(attemptTimeout);
+        if (raw is! Map) {
+          lastFailure = NativeRuntimeConfigReadException(
+            reason: NativeRuntimeConfigReadFailureReason.malformedPackage,
+            attempts: attempt,
+          );
+        } else {
+          try {
+            final package = Map<String, Object?>.from(raw);
+            if (package.isNotEmpty) {
+              return package;
+            }
+            lastFailure = NativeRuntimeConfigReadException(
+              reason: NativeRuntimeConfigReadFailureReason.emptyPackage,
+              attempts: attempt,
+            );
+          } on TypeError {
+            lastFailure = NativeRuntimeConfigReadException(
+              reason: NativeRuntimeConfigReadFailureReason.malformedPackage,
+              attempts: attempt,
+            );
+          }
+        }
+      } on MissingPluginException {
+        lastFailure = NativeRuntimeConfigReadException(
+          reason: NativeRuntimeConfigReadFailureReason.missingPlugin,
+          attempts: attempt,
+        );
+      } on PlatformException catch (error) {
+        lastFailure = NativeRuntimeConfigReadException(
+          reason: NativeRuntimeConfigReadFailureReason.platform,
+          attempts: attempt,
+          platformCode: error.code,
+        );
+      } on TimeoutException {
+        lastFailure = NativeRuntimeConfigReadException(
+          reason: NativeRuntimeConfigReadFailureReason.timeout,
+          attempts: attempt,
+        );
+      }
+      if (attempt < maxAttempts) {
+        await Future<void>.delayed(retryDelay);
+      }
+    }
+    throw lastFailure ??
+        NativeRuntimeConfigReadException(
+          reason: NativeRuntimeConfigReadFailureReason.emptyPackage,
+          attempts: maxAttempts,
+        );
   }
 }

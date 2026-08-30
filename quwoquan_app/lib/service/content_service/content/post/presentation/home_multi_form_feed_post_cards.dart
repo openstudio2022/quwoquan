@@ -5,6 +5,9 @@ const double _feedCardVerticalPadding = AppSpacing.fourteen;
 const double _feedCardSectionGap =
     DiscoveryFeedSpacing.homeFeedCardSectionGapCompact;
 
+/// 作者头像是否为 signedGrant 私有交付（DEC-033）：
+/// typed 声明 + 资产标识在场才分流，禁止从 URL 形态推断。
+
 class _HomeRelationPostCard extends ConsumerStatefulWidget {
   const _HomeRelationPostCard({
     required this.cardContainerKey,
@@ -158,13 +161,42 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                       padding: EdgeInsets.zero,
                       minimumSize: Size.zero,
                       onPressed: () => widget.onUserTap(profileSubjectId),
-                      child: RoundedSquareAvatar(
-                        size: AppSpacing.avatarUserSm,
-                        imageUrl: item.avatarUrl,
-                        name: item.displayName,
-                        borderRadius: AppSpacing.avatarUserSm / 2,
-                        backgroundColor: AppColors.iosSecondaryFill(context),
-                        fallbackIcon: CupertinoIcons.person_crop_circle_fill,
+                      // DEC-033：作者头像走唯一 typed 分流入口（kind=avatar），
+                      // 不在消费点手写第二份「什么算私有」的判据。
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.avatarUserSm / 2,
+                        ),
+                        child: mediaDeliveryImage(
+                          binding: contentPostAuthorAvatarBinding(item),
+                          kind: MediaDeliveryKind.avatar,
+                          width: AppSpacing.avatarUserSm,
+                          height: AppSpacing.avatarUserSm,
+                          fit: BoxFit.cover,
+                          publicBuilder: (context, publicUrl) =>
+                              RoundedSquareAvatar(
+                                size: AppSpacing.avatarUserSm,
+                                imageUrl: publicUrl,
+                                name: item.displayName,
+                                borderRadius: AppSpacing.avatarUserSm / 2,
+                                backgroundColor: AppColors.iosSecondaryFill(
+                                  context,
+                                ),
+                                fallbackIcon:
+                                    CupertinoIcons.person_crop_circle_fill,
+                              ),
+                          absentWidget: RoundedSquareAvatar(
+                            size: AppSpacing.avatarUserSm,
+                            imageUrl: '',
+                            name: item.displayName,
+                            borderRadius: AppSpacing.avatarUserSm / 2,
+                            backgroundColor: AppColors.iosSecondaryFill(
+                              context,
+                            ),
+                            fallbackIcon:
+                                CupertinoIcons.person_crop_circle_fill,
+                          ),
+                        ),
                       ),
                     ),
                     SizedBox(width: AppSpacing.intraGroupMd),
@@ -540,6 +572,16 @@ class _FollowingArticleCard extends StatelessWidget {
       supportingText: _supportingText,
       supportingTextMaxLines: summaryLineLimit,
       coverUrl: item.mediaCoverUrl,
+      // 交付形态取自投影 mediaItems 的同一条目（DEC-033）：发现流同型卡已走
+      // 该推导，关注流不另写一份「什么算私有」。
+      mediaContent: mediaDeliveryCoverSlot(
+        binding: _feedBinding(
+          item.mediaCoverUrl,
+          _feedImageDeliveryIndex(item)[item.mediaCoverUrl.trim()],
+        ),
+        placeholderColor: fgSecondary.withValues(alpha: 0.12),
+        cdnPreset: CdnImagePreset.thumbnail,
+      ),
       hideThumbnailWhenNoCover: true,
       thumbnailKey: item.mediaCoverUrl.isNotEmpty
           ? ValueKey<String>('following-article-thumbnail-${item.id}')

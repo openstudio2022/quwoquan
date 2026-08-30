@@ -17,6 +17,8 @@ from content.release.canonical.pool_delivery_intent_inspection import (
     inspect_pool_delivery_intents,
 )
 from content.release.canonical.pool_inspection import inspect_pool
+from content.release.canonical.pool_object_retirement import retire_pool_object
+from content.release.canonical.pool_precheck import precheck_pool_release
 from content.release.canonical.pool_source_ready_input import (
     load_p10_throughput,
     load_source_ready_input,
@@ -26,10 +28,35 @@ from content.release.canonical.semantic_wave_dispatch import (
     write_create_once_semantic_wave_dispatch,
 )
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
+from content.execution.campaign.lane import normalize_workloads
+
+
+def _workload_targets(values: tuple[str, ...]) -> dict[str, int] | None:
+    if not values:
+        return None
+    result: dict[str, int] = {}
+    for raw in values:
+        carrier, separator, quota = raw.partition("=")
+        carrier = carrier.strip()
+        if not separator or carrier in result:
+            raise ValueError("--workload must be unique CARRIER=QUOTA values")
+        result[carrier] = int(quota.strip())
+    return normalize_workloads(result)
 
 
 def handle_pool_release_build(args: argparse.Namespace) -> None:
     output_root = Path(OUTPUT_ROOT).resolve()
+    authority_values = (
+        getattr(args, "sampling_authority_artifact_root", None),
+        getattr(args, "sampling_authority_ref", None),
+        getattr(args, "sampling_authority_digest", None),
+    )
+    if any(authority_values) and not all(authority_values):
+        raise SystemExit(
+            "[release pool-build] GATE_BLOCK M1000 sampling authority requires "
+            "--sampling-authority-artifact-root, --sampling-authority-ref, and "
+            "--sampling-authority-digest together"
+        )
     publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
     release_root = Path(
         args.release_root or output_root / "data/releases"
@@ -44,14 +71,27 @@ def handle_pool_release_build(args: argparse.Namespace) -> None:
                 if getattr(args, "target_environment", None) is not None
                 else None
             ),
+            all_publishable=bool(getattr(args, "all_publishable", False)),
             milestone=(
                 str(args.milestone)
                 if getattr(args, "milestone", None) is not None
                 else None
             ),
-            release_class=(
-                str(args.release_class)
-                if getattr(args, "release_class", None) is not None
+            release_class=str(args.release_class),
+            sampling_authority_artifact_root=(
+                Path(args.sampling_authority_artifact_root).expanduser().resolve()
+                if getattr(args, "sampling_authority_artifact_root", None)
+                else None
+            ),
+            sampling_authority_binding=(
+                {
+                    "ref": str(args.sampling_authority_ref),
+                    "digest": str(args.sampling_authority_digest),
+                }
+                if (
+                    getattr(args, "sampling_authority_ref", None)
+                    and getattr(args, "sampling_authority_digest", None)
+                )
                 else None
             ),
         )
@@ -63,6 +103,23 @@ def handle_pool_release_build(args: argparse.Namespace) -> None:
     ) as exc:
         raise SystemExit(f"[release pool-build] GATE_BLOCK {exc}") from exc
     print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def handle_pool_precheck(args: argparse.Namespace) -> None:
+    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
+    try:
+        report = precheck_pool_release(
+            publish_root=publish_root,
+            milestone=str(args.milestone),
+            release_class=str(args.release_class),
+        )
+    except (FileNotFoundError, OSError, ObjectTransactionError, ValueError) as exc:
+        raise SystemExit(f"[release pool-precheck] GATE_BLOCK {exc}") from exc
+    document = report.as_document(details=bool(getattr(args, "details", False)))
+    print(json.dumps(document, ensure_ascii=False, indent=2))
+    if report.status != "passed":
+        codes = ",".join(sorted({blocker.code for blocker in report.blockers}))
+        raise SystemExit(f"[release pool-precheck] GATE_BLOCK {codes}")
 
 
 def handle_pool_inspect(args: argparse.Namespace) -> None:
@@ -88,6 +145,7 @@ def handle_pool_inspect(args: argparse.Namespace) -> None:
             "--source-pool-evidence-root-ref must be provided together"
         )
     try:
+        workloads = _workload_targets(tuple(getattr(args, "workload", ()) or ()))
         source_ready_input = None
         source_ready_candidates = None
         source_ready_backlog = None
@@ -106,7 +164,9 @@ def handle_pool_inspect(args: argparse.Namespace) -> None:
             source_ready_input, source_ready_candidates = load_source_ready_input(
                 output_root=output_root,
                 publish_root=publish_root,
-                milestone=str(getattr(args, "milestone", "M100")),
+                milestone=(
+                    str(args.milestone) if args.milestone is not None else None
+                ),
                 source_pool_ref=source_pool_ref,
                 evidence_root_ref=evidence_root_ref,
                 consumed_object_refs=consumed_object_refs,
@@ -130,13 +190,16 @@ def handle_pool_inspect(args: argparse.Namespace) -> None:
             include_issues=bool(getattr(args, "details", False)),
             include_batches=by_task,
             output_root=(output_root if by_task else None),
-            milestone=str(getattr(args, "milestone", "M100")),
+            milestone=(
+                str(args.milestone) if args.milestone is not None else None
+            ),
             execution_ids=execution_ids,
             source_ready_backlog=source_ready_backlog,
             p10_per_slot_throughput=p10_throughput,
             source_ready_candidates=source_ready_candidates,
             source_ready_input=source_ready_input,
             throughput_input=throughput_input,
+            workload_targets=workloads,
         )
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         raise SystemExit(f"[release pool-inspect] GATE_BLOCK {exc}") from exc
@@ -181,8 +244,13 @@ def handle_pool_dispatch(args: argparse.Namespace) -> None:
         document, path = write_create_once_semantic_wave_dispatch(
             dispatch_id=str(args.dispatch_id),
             pool_inspection_ref=str(args.pool_inspection_ref),
-            semantic_preflight_receipt_ref=str(
-                args.semantic_preflight_receipt
+            semantic_preflight_receipt_ref=(
+                str(args.semantic_preflight_receipt)
+                if args.semantic_preflight_receipt
+                else None
+            ),
+            capacity_calibration_receipt_ref=str(
+                args.capacity_calibration_receipt
             ),
             run_date=str(args.run_date),
             scope=str(args.scope),
@@ -198,9 +266,9 @@ def handle_pool_dispatch(args: argparse.Namespace) -> None:
                 slot_id: tuple(refs)
                 for slot_id, refs in predecessor_unfinished_refs.items()
             } or None,
-            required_workers=int(args.required_workers),
-            partition_count=int(args.partition_count),
-            capacity_plan_digest=str(args.capacity_plan_digest),
+            workload_targets=_workload_targets(
+                tuple(getattr(args, "workload", ()) or ())
+            ),
             output_root=output_root,
             publish_root=publish_root,
         )
@@ -267,6 +335,41 @@ def handle_pool_append(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
+def handle_pool_object_retire(args: argparse.Namespace) -> None:
+    """Write one create-once retirement receipt; never touch original evidence."""
+
+    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
+    try:
+        if bool(args.apply):
+            with canonical_publish_lock(publish_root):
+                report = retire_pool_object(
+                    publish_root=publish_root,
+                    object_type=str(args.object_type),
+                    object_ref=str(args.object_ref),
+                    reason=str(args.reason),
+                    retired_at=str(args.retired_at),
+                    apply=True,
+                )
+        else:
+            report = retire_pool_object(
+                publish_root=publish_root,
+                object_type=str(args.object_type),
+                object_ref=str(args.object_ref),
+                reason=str(args.reason),
+                retired_at=str(args.retired_at),
+                apply=False,
+            )
+    except (
+        FileNotFoundError,
+        OSError,
+        ObjectTransactionError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise SystemExit(f"[release pool-object retire] GATE_BLOCK {exc}") from exc
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
 def handle_pool_attribution_repair(args: argparse.Namespace) -> None:
     publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
     output_root = Path(OUTPUT_ROOT).resolve()
@@ -310,5 +413,6 @@ __all__ = [
     "handle_pool_backfill_plan",
     "handle_pool_dispatch",
     "handle_pool_inspect",
+    "handle_pool_object_retire",
     "handle_pool_release_build",
 ]

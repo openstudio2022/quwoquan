@@ -15,6 +15,7 @@
 ### In Scope
 
 - premium/similar/featured/immersive/精品 路由到 FeedSimilar + premium_stream。
+- 视频书是首页顶部文本分类 Tab，固定紧跟“推荐”；移动与 Web 搜索/主工具栏不保留视频书 action、独立壳目的地或专用入口图标。
 - premium preset、质量分和交集融合排序。
 - 精品解释标题与 primaryText-only 呈现。
 - product-ops 全局精品池写入前置：global scope、质量准入、审计、过期、回滚和下架剔除。
@@ -33,6 +34,8 @@
 ### REQ-001 精品流式体验路由与解释契约
 
 - 精品流必须统一路由、排序与解释；全局精品必须先经 product-ops 写入并由 Recommendation 消费 typed event，候选投影或排序窗口未闭合时不得返回伪精品结果。
+- 首页频道 metadata 必须包含 `recommend → featured` 邻接不变量；远程覆盖缺失、重复或重排任一项时整份覆盖 fail-closed 到发布默认，不由 UI 本地补插第二份 Tab。
+- `featured` Tab 复用现有沉浸 viewer 和 `premium_stream` 数据语义，不走普通首页 feed、不新建独立业务列表。compact/regular/expanded 仅允许视觉布局差异，供给、route、错误和归因保持同源。
 - premium_stream/similar 首刷必须读取当前环境 canonical active release snapshot；健康零 active release 或同 release eligible playable-video 计数为零时返回 canonical 成功空结果，依赖读取/绑定/硬过滤/召回/scorer/hydration 故障返回 `CONTENT.SYSTEM.required_dependency_unavailable`。任何成功空态都不能替代发布门要求的当前 release 非空可播放视频精品。
 
 <a id="req-002"></a>
@@ -69,6 +72,7 @@
 - GIVEN 用户进入精品/沉浸式内容流，内容具备质量分和交集理由。
 - WHEN content-service 请求推荐引擎，App 展示精品详情解释。
 - THEN 推荐场景为 similar/premium_stream，App 标题展示“与你相关的线索”，主句只显示 primaryText。
+- AND 首页顶部“视频书”文本 Tab 紧跟“推荐”，选择后挂载同源沉浸 viewer；移动/Web 工具栏、独立 shell destination 与专用视频书入口图标均不存在。
 
 <a id="gwt-002"></a>
 ### GWT-002 精品池全局召回读路径闭环

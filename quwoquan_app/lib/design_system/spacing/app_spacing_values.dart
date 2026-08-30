@@ -37,6 +37,11 @@ class AppSpacing {
   static const double articleWrapImageMaxWidthWide = 156.0;
   static const double articleWrapImageMaxWidthCompact = 144.0;
 
+  /// 文章纸面横屏双页 spread 的最小 stage 宽度（唯一断点真相源）。
+  /// 仅纸比场景（preview/reader sheet）消费；immersive edge-to-edge
+  /// 渲染无 spread，其分页几何由渲染 metrics 单源注入（GWT-015）。
+  static const double articleLandscapeSpreadMinWidth = 920.0;
+
   /// Web/桌面公开内容入口布局语义尺寸。
   static const double webContentMaxWidth = 1120.0;
   static const double webInstallBannerCompactHeight = 72.0;
@@ -178,6 +183,18 @@ class AppSpacing {
 
   /// 登录页验证码格圆角。
   static const double loginOtpBoxRadius = 12.0;
+
+  /// 登录页反馈/状态区固定占位最小高度：容纳一行 inlineError 文案或行内加载
+  /// 指示；反馈出现、消失或切换不得移动周边输入框、按钮与协议行。
+  static const double loginFeedbackSlotMinHeight = 20.0;
+
+  /// 登录页底部第三方登录 footer 最小高度，保证正文状态切换时底部基线不动。
+  static const double loginMethodFooterMinHeight = 132.0;
+
+  /// 登录页顶栏左侧内边距：补偿 44pt 按钮内 24pt 图标两侧的透明命中区，
+  /// 使返回/关闭图标的视觉左缘与正文 lg 边距光学对齐。
+  static const double loginTopBarLeadingInset =
+      lg - (appChromeActionButtonSize - appChromeActionIconSize) / 2;
 
   /// 登录页返回账号态三列其他方式最大宽度。
   static const double loginOtherMethodsThreeColumnWidth = 320.0;
@@ -430,6 +447,11 @@ class AppSpacing {
     BuildContext context,
     double bottomSafeInset,
   ) => bottomNavContentSideInset(context, bottomSafeInset);
+
+  /// 沉浸浏览器底部 chrome 的垂直抬升量（REQ-019）：
+  /// 机型底部安全区的保护只以垂直方向表达——底部工具栏内容在
+  /// home indicator 之上再抬升本值，左右不向中间收拢。
+  static const double immersiveBottomChromeLift = xs;
 
   /// 对话输入栏单行默认中心槽高度。
   static const double chatInputToolbarMinHeight = appChromeActionButtonSize;

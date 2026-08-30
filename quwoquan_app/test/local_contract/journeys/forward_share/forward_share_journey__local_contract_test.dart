@@ -33,6 +33,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../support/service/chat_service/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
 import '../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
+import '../../../support/runtime/public_content_link_test_scope.dart';
 
 const _qrCard = ProfileQrCardData(
   publicProfileUrl: 'https://mock.quwoquan.local/u/current',
@@ -249,6 +250,7 @@ void main() {
         ),
       ),
       enableIdentityTemplate: true,
+      publicLinks: testPublicContentLinks,
     );
 
     await tester.pumpWidget(
@@ -334,6 +336,7 @@ void main() {
         ),
       ),
       enableIdentityTemplate: true,
+      publicLinks: testPublicContentLinks,
     );
     final container = ProviderContainer(
       overrides: [

@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib import startup_attempt_receipt as subject
+from quwoquan_ops.cli.lib.environment_topology import formal_release_compose_project_name
 from quwoquan_ops.tests.support.startup_attempt_receipt_test_support import (
     _composition,
     _oci_manifest,
@@ -34,7 +35,7 @@ def test_startup_attempt_has_atomic_transactional_lifecycle(tmp_path: Path) -> N
         "target": "alpha-local",
         "attempt_id": "up-alpha",
         "workload": "content-release",
-        "compose_project": "quwoquan_alpha_release",
+        "compose_project": "quwoquan_alpha_release_78142_3",
         "candidate_digest": "sha256:" + "b" * 64,
         "configuration_digest": "sha256:" + "c" * 64,
         "provider_runtime_digest": "sha256:" + "d" * 64,
@@ -63,7 +64,7 @@ def test_startup_attempt_has_atomic_transactional_lifecycle(tmp_path: Path) -> N
         "running",
         "stopped",
     ]
-    assert stopped["composeProject"] == "quwoquan_alpha_release"
+    assert stopped["composeProject"] == "quwoquan_alpha_release_78142_3"
     assert stopped["providerRuntimeDigest"] == "sha256:" + "d" * 64
     assert stopped["observabilityLogSinkDigest"] == "sha256:" + "e" * 64
     assert stopped["imageComposition"] == _composition()
@@ -78,6 +79,68 @@ def test_startup_attempt_has_atomic_transactional_lifecycle(tmp_path: Path) -> N
         (run_root / "startup_attempt.json").read_text(encoding="utf-8")
     ) == stopped
     assert not list(receipt_path.parent.glob("*.tmp"))
+
+
+@pytest.mark.parametrize(
+    "compose_project",
+    [
+        "quwoquan_alpha_other",
+        "quwoquan_alpha_release_evil_name_more",
+        "quwoquan_alpha_release_0_1",
+        "quwoquan_alpha_release_1_0",
+    ],
+)
+def test_startup_attempt_rejects_non_formal_compose_project(
+    tmp_path: Path,
+    compose_project: str,
+) -> None:
+    composition = _composition()
+    with (
+        mock.patch.object(
+            subject,
+            "startup_attempt_path",
+            return_value=tmp_path / "process/startup_attempt.json",
+        ),
+        mock.patch.object(subject, "output_root", return_value=tmp_path),
+    ):
+        with pytest.raises(ValueError, match="Compose project mismatch"):
+            subject.transition_startup_attempt(
+                env="alpha",
+                target="alpha-local",
+                attempt_id="up-alpha",
+                status="prepared",
+                workload="content-release",
+                compose_project=compose_project,
+                candidate_digest="sha256:" + "b" * 64,
+                configuration_digest="sha256:" + "c" * 64,
+                provider_runtime_digest="sha256:" + "d" * 64,
+                observability_log_sink_digest="sha256:" + "e" * 64,
+                image_transport_tag=composition["imageVersion"],
+                image_composition=composition,
+                run_root=str(tmp_path / "env/alpha/runs/up-alpha"),
+            )
+
+
+@pytest.mark.parametrize(
+    ("run_id", "run_attempt"),
+    [
+        ("!!!", "@@@"),
+        ("78142", ""),
+        ("", "3"),
+        ("0", "1"),
+        ("1", "0"),
+    ],
+)
+def test_formal_project_generator_rejects_invalid_run_identity(
+    run_id: str,
+    run_attempt: str,
+) -> None:
+    with pytest.raises(ValueError, match="run identity"):
+        formal_release_compose_project_name(
+            "alpha-local",
+            run_id=run_id,
+            run_attempt=run_attempt,
+        )
 
 
 def test_partial_cleanup_failure_remains_partial_and_keeps_original_error(
@@ -178,7 +241,7 @@ def test_workload_receipts_remain_isolated(tmp_path: Path) -> None:
     common = {
         "env": "alpha",
         "target": "alpha-local",
-        "compose_project": "quwoquan_alpha",
+        "compose_project": "quwoquan_alpha_release",
         "candidate_digest": "sha256:" + "b" * 64,
         "configuration_digest": "sha256:" + "c" * 64,
         "provider_runtime_digest": "sha256:" + "d" * 64,
@@ -240,7 +303,7 @@ def test_startup_attempt_rejects_unbound_candidate_and_incomplete_images(
         "attempt_id": "attempt-1",
         "status": "prepared",
         "workload": "content-release",
-        "compose_project": "quwoquan_alpha",
+        "compose_project": "quwoquan_alpha_release",
         "configuration_digest": "sha256:" + "c" * 64,
         "provider_runtime_digest": "sha256:" + "d" * 64,
         "image_transport_tag": composition["imageVersion"],

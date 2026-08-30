@@ -13,6 +13,7 @@ services:
       SERVICE_NAME: notification-service
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
+      QWQ_ARTIFACT_IDENTITY_FILE: /etc/quwoquan/artifact-identity.json
       CONFIG_VERSION: "${QWQ_COMPOSE_NOTIFICATION_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_NOTIFICATION_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       NOTIFICATION_SERVICE_ADDR: ":18087"
@@ -25,8 +26,9 @@ services:
       NOTIFICATION_CLAIM_PER_SECOND: "100"
       NOTIFICATION_DISPATCH_PER_SECOND: "100"
       NOTIFICATION_RETRY_PER_SECOND: "20"
-      NOTIFICATION_REDIS_ADDR: "redis:6379"
+      NOTIFICATION_REDIS_GENERAL_ADDR: "redis:6379"
       NOTIFICATION_REDIS_GENERAL_DB: "1"
+      NOTIFICATION_REDIS_REALTIME_ADDR: "redis:6379"
       NOTIFICATION_REDIS_REALTIME_DB: "4"
       AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
       AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
@@ -49,6 +51,7 @@ services:
       - "${QWQ_COMPOSE_NOTIFICATION_PORT:-19320}:18087"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      - ${QWQ_COMPOSE_ARTIFACT_IDENTITY_FILE:?artifact identity mount is required}:/etc/quwoquan/artifact-identity.json:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1"]
       interval: 10s

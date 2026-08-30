@@ -1,363 +1,63 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "https://json-schema.org/draft/2020-12/schema.json",
   "$id": "quwoquan_data/schema/execution/execution_state.schema.json",
-  "title": "Execution workflow state (执行工作流状态机)",
-  "description": "execution_state.json 唯一字段定义（写入口 content/run_context.save_execution_state）。运行时代码不得维护第二套字段定义；新增字段必须先补本 Schema。",
+  "title": "Receipt-derived execution-state projection",
+  "description": "只读便利投影；恢复事实唯一来自 _shared/receipts。唯一 writer 是 receipt_state_reducer。",
   "type": "object",
+  "additionalProperties": false,
   "required": [
     "schema",
     "executionId",
     "completed",
     "status",
+    "latestStage",
+    "next",
+    "latestReceiptRef",
+    "latestReceiptDigest",
     "updatedAt"
   ],
-  "additionalProperties": false,
   "properties": {
+    "schema": {
+      "const": "quwoquan.content.execution_state_projection"
+    },
     "executionId": {
       "type": "string",
       "minLength": 1
     },
     "completed": {
       "type": "array",
+      "uniqueItems": true,
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       }
     },
     "status": {
       "enum": [
-        "queued",
         "running",
-        "stopped_at_until",
-        "waiting_agent",
-        "repairing",
         "manual_required",
-        "interrupted",
         "succeeded"
       ]
     },
-    "waitingCheckpoint": {
-      "type": [
-        "string",
-        "null"
-      ]
+    "latestStage": {
+      "type": "string",
+      "minLength": 1
     },
-    "owner": {
-      "type": [
-        "string",
-        "null"
-      ]
+    "next": {
+      "type": "string",
+      "minLength": 1
     },
-    "heartbeatAt": {
-      "type": [
-        "string",
-        "null"
-      ]
+    "latestReceiptRef": {
+      "type": "string",
+      "pattern": "^_shared/receipts/[0-9]{3}-.+\\.json$"
     },
-    "startedAt": {
-      "type": [
-        "string",
-        "null"
-      ]
+    "latestReceiptDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
     },
     "updatedAt": {
-      "type": "string"
-    },
-    "nextAction": {
-      "type": [
-        "string",
-        "object",
-        "null"
-      ]
-    },
-    "stoppedAtStage": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "interruptReason": {
-      "type": [
-        "string",
-        "object",
-        "null"
-      ]
-    },
-    "lastFailedStage": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "retryCounts": {
-      "type": "object"
-    },
-    "infrastructureRetryCounts": {
-      "type": "object"
-    },
-    "failedObjects": {
-      "type": "array"
-    },
-    "failedIssueRecords": {
-      "type": "array",
-      "items": {
-        "type": "object"
-      }
-    },
-    "baselinePacketPath": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "baselinePacketSummary": {
-      "type": [
-        "object",
-        "null"
-      ]
-    },
-    "workspaceCleanupReports": {
-      "type": "array"
-    },
-    "completionGateIssues": {
-      "type": "array"
-    },
-    "quality": {
-      "type": "object"
-    },
-    "throughput": {
-      "type": "object"
-    },
-    "controller": {
-      "type": "object"
-    },
-    "controllerYield": {
-      "type": [
-        "object",
-        "null"
-      ]
-    },
-    "controllerYieldRecoveryActions": {
-      "type": "array"
-    },
-    "recoveryActions": {
-      "type": "array"
-    },
-    "schedulerRecoveryActions": {
-      "type": "array"
-    },
-    "autoResearchRecoveryActions": {
-      "type": "array"
-    },
-    "activeAgentScheduler": {
-      "type": [
-        "object",
-        "null"
-      ]
-    },
-    "activeAutoResearch": {
-      "type": [
-        "object",
-        "null"
-      ]
-    },
-    "agentRunHistory": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/managedAgentRunRecord"
-      }
-    },
-    "lastAgentRun": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/managedAgentRunRecord"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
-    "reactRewinds": {
-      "type": [
-        "array",
-        "object"
-      ]
-    },
-    "managedCheckpointInterruption": {
-      "type": [
-        "object",
-        "null"
-      ]
-    },
-    "managedInfraRecoveryCutoffs": {
-      "type": [
-        "object",
-        "array"
-      ]
-    },
-    "manualRepairResumes": {
-      "type": "array"
-    },
-    "produceReviewRetryHistory": {
-      "type": [
-        "array",
-        "object"
-      ]
-    },
-    "lastAuthorFinalizeCount": {
-      "type": "integer"
-    },
-    "lastObjectQueueAuthorFinalizeCount": {
-      "type": "integer"
-    },
-    "quarantine": {
-      "type": "object"
-    },
-    "schema": {
-      "const": "quwoquan.content.execution_state"
-    }
-  },
-  "$defs": {
-    "managedAgentOutcome": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "started",
-        "status",
-        "agentProvider",
-        "failureKind",
-        "error",
-        "retryable",
-        "authFailure",
-        "errorCode",
-        "retryAfterSeconds",
-        "requestId",
-        "attempts",
-        "warmAttempts",
-        "result",
-        "agentId",
-        "runId",
-        "capacityReceiptRef",
-        "capacityReceiptDigest",
-        "durationMs",
-        "completionMode",
-        "stdoutTail",
-        "stderrTail",
-        "jobIndex",
-        "lane",
-        "ref",
-        "timing",
-        "gateIssues",
-        "issueRecords"
-      ],
-      "properties": {
-        "started": { "type": "boolean" },
-        "status": { "enum": ["finished", "error"] },
-        "agentProvider": { "enum": ["cursor_sdk", "codex_sdk"] },
-        "failureKind": { "type": ["string", "null"] },
-        "error": { "type": ["string", "null"] },
-        "retryable": { "type": "boolean" },
-        "authFailure": { "type": "boolean" },
-        "errorCode": { "type": ["string", "null"] },
-        "retryAfterSeconds": { "type": "integer", "minimum": 0 },
-        "requestId": { "type": ["string", "null"] },
-        "attempts": { "type": "integer", "minimum": 0 },
-        "warmAttempts": { "type": "integer", "minimum": 0 },
-        "result": { "type": "string" },
-        "agentId": { "type": ["string", "null"] },
-        "runId": { "type": ["string", "null"] },
-        "capacityReceiptRef": { "type": ["string", "null"] },
-        "capacityReceiptDigest": {
-          "type": ["string", "null"],
-          "pattern": "^sha256:[a-f0-9]{64}$"
-        },
-        "durationMs": { "type": "integer", "minimum": 0 },
-        "completionMode": { "type": ["string", "null"] },
-        "stdoutTail": { "type": ["string", "null"] },
-        "stderrTail": { "type": ["string", "null"] },
-        "jobIndex": { "type": "integer", "minimum": 0 },
-        "lane": { "type": "string", "minLength": 1 },
-        "ref": { "type": ["string", "null"] },
-        "timing": { "type": "object" },
-        "gateIssues": { "type": "array", "items": { "type": "string" } },
-        "issueRecords": { "type": "array", "items": { "type": "object" } }
-      }
-    },
-    "managedAgentScheduler": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "requestedMaxWorkers",
-        "effectiveWorkerCount",
-        "localCursorMaxWorkers",
-        "runtime",
-        "promptCount",
-        "estimatedMinWaves",
-        "laneLimits",
-        "agentProvider",
-        "startedAt",
-        "finishedAt",
-        "elapsedSeconds"
-      ],
-      "properties": {
-        "requestedMaxWorkers": { "type": "integer", "minimum": 0 },
-        "effectiveWorkerCount": { "type": "integer", "minimum": 0 },
-        "localCursorMaxWorkers": { "type": "integer", "minimum": 0 },
-        "runtime": { "type": "string", "minLength": 1 },
-        "promptCount": { "type": "integer", "minimum": 0 },
-        "estimatedMinWaves": { "type": "integer", "minimum": 0 },
-        "laneLimits": {
-          "type": "object",
-          "additionalProperties": { "type": "integer", "minimum": 1 }
-        },
-        "agentProvider": { "enum": ["cursor_sdk", "codex_sdk"] },
-        "startedAt": { "type": "string", "minLength": 1 },
-        "finishedAt": { "type": "string", "minLength": 1 },
-        "elapsedSeconds": { "type": "number", "minimum": 0 }
-      }
-    },
-    "managedAgentRunRecord": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "stage",
-        "jobCount",
-        "plannedJobCount",
-        "scheduler",
-        "refs",
-        "startedCount",
-        "finishedCount",
-        "infrastructureFailures",
-        "outcomes",
-        "finishedAt",
-        "recovered",
-        "recoveredAt",
-        "recoveryReason",
-        "status",
-        "interruptReason",
-        "cancelledQueuedJobCount",
-        "cancelledActiveJobCount",
-        "terminatedSubprocessPids"
-      ],
-      "properties": {
-        "stage": { "enum": ["download_plan", "build_homepage", "content_plan", "post_author"] },
-        "jobCount": { "type": "integer", "minimum": 0 },
-        "plannedJobCount": { "type": "integer", "minimum": 0 },
-        "scheduler": { "$ref": "#/$defs/managedAgentScheduler" },
-        "refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "startedCount": { "type": "integer", "minimum": 0 },
-        "finishedCount": { "type": "integer", "minimum": 0 },
-        "infrastructureFailures": { "type": "integer", "minimum": 0 },
-        "outcomes": { "type": "array", "items": { "$ref": "#/$defs/managedAgentOutcome" } },
-        "finishedAt": { "type": "string", "minLength": 1 },
-        "recovered": { "type": "boolean" },
-        "recoveredAt": { "type": ["string", "null"] },
-        "recoveryReason": { "type": ["string", "null"] },
-        "status": { "enum": ["completed", "interrupted"] },
-        "interruptReason": { "type": ["string", "null"] },
-        "cancelledQueuedJobCount": { "type": "integer", "minimum": 0 },
-        "cancelledActiveJobCount": { "type": "integer", "minimum": 0 },
-        "terminatedSubprocessPids": { "type": "array", "items": { "type": "integer", "minimum": 1 } }
-      }
+      "type": "string",
+      "minLength": 1
     }
   }
 }

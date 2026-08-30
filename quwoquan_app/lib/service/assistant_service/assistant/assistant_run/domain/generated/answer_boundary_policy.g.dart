@@ -32,18 +32,18 @@ class AnswerBoundaryPolicyDto {
   final String summary;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'evidenceRequired': evidenceRequired,
-        'authorityRequired': authorityRequired,
-        'requireToolResultBeforeSynthesis': requireToolResultBeforeSynthesis,
-        'allowBoundedAnswer': allowBoundedAnswer,
-        'freshnessHoursMax': freshnessHoursMax,
-        'authorityDomains': authorityDomains,
-        'requiredDimensions': requiredDimensions,
-        'blockingDimensions': blockingDimensions,
-        'expansionPolicy': expansionPolicy.wireName,
-        'insufficiencyReason': insufficiencyReason.wireName,
-        'summary': summary,
-      };
+    'evidenceRequired': evidenceRequired,
+    'authorityRequired': authorityRequired,
+    'requireToolResultBeforeSynthesis': requireToolResultBeforeSynthesis,
+    'allowBoundedAnswer': allowBoundedAnswer,
+    'freshnessHoursMax': freshnessHoursMax,
+    'authorityDomains': authorityDomains,
+    'requiredDimensions': requiredDimensions,
+    'blockingDimensions': blockingDimensions,
+    'expansionPolicy': expansionPolicy.wireName,
+    'insufficiencyReason': insufficiencyReason.wireName,
+    'summary': summary,
+  };
 
   factory AnswerBoundaryPolicyDto.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -63,59 +63,124 @@ class AnswerBoundaryPolicyDto {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AnswerBoundaryPolicyDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AnswerBoundaryPolicyDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('evidenceRequired') && json['evidenceRequired'] != null && (json['evidenceRequired'] is! bool)) {
-      throw const FormatException('AnswerBoundaryPolicyDto field evidenceRequired has an invalid wire value');
+    if (json.containsKey('evidenceRequired') &&
+        json['evidenceRequired'] != null &&
+        (json['evidenceRequired'] is! bool)) {
+      throw const FormatException(
+        'AnswerBoundaryPolicyDto field evidenceRequired has an invalid wire value',
+      );
     }
-    if (json.containsKey('authorityRequired') && json['authorityRequired'] != null && (json['authorityRequired'] is! bool)) {
-      throw const FormatException('AnswerBoundaryPolicyDto field authorityRequired has an invalid wire value');
+    if (json.containsKey('authorityRequired') &&
+        json['authorityRequired'] != null &&
+        (json['authorityRequired'] is! bool)) {
+      throw const FormatException(
+        'AnswerBoundaryPolicyDto field authorityRequired has an invalid wire value',
+      );
     }
-    if (json.containsKey('requireToolResultBeforeSynthesis') && json['requireToolResultBeforeSynthesis'] != null && (json['requireToolResultBeforeSynthesis'] is! bool)) {
-      throw const FormatException('AnswerBoundaryPolicyDto field requireToolResultBeforeSynthesis has an invalid wire value');
+    if (json.containsKey('requireToolResultBeforeSynthesis') &&
+        json['requireToolResultBeforeSynthesis'] != null &&
+        (json['requireToolResultBeforeSynthesis'] is! bool)) {
+      throw const FormatException(
+        'AnswerBoundaryPolicyDto field requireToolResultBeforeSynthesis has an invalid wire value',
+      );
     }
-    if (json.containsKey('allowBoundedAnswer') && json['allowBoundedAnswer'] != null && (json['allowBoundedAnswer'] is! bool)) {
-      throw const FormatException('AnswerBoundaryPolicyDto field allowBoundedAnswer has an invalid wire value');
+    if (json.containsKey('allowBoundedAnswer') &&
+        json['allowBoundedAnswer'] != null &&
+        (json['allowBoundedAnswer'] is! bool)) {
+      throw const FormatException(
+        'AnswerBoundaryPolicyDto field allowBoundedAnswer has an invalid wire value',
+      );
     }
-    if (json.containsKey('freshnessHoursMax') && json['freshnessHoursMax'] != null && (json['freshnessHoursMax'] is! num)) {
-      throw const FormatException('AnswerBoundaryPolicyDto field freshnessHoursMax has an invalid wire value');
+    if (json.containsKey('freshnessHoursMax') &&
+        json['freshnessHoursMax'] != null &&
+        (json['freshnessHoursMax'] is! num)) {
+      throw const FormatException(
+        'AnswerBoundaryPolicyDto field freshnessHoursMax has an invalid wire value',
+      );
     }
-    if (json.containsKey('authorityDomains') && json['authorityDomains'] != null && (json['authorityDomains'] is! List || (json['authorityDomains'] as List).any((item) => item is! String))) {
-      throw const FormatException('AnswerBoundaryPolicyDto field authorityDomains has an invalid wire value');
+    if (json.containsKey('authorityDomains') &&
+        json['authorityDomains'] != null &&
+        (json['authorityDomains'] is! List ||
+            (json['authorityDomains'] as List).any(
+              (item) => item is! String,
+            ))) {
+      throw const FormatException(
+        'AnswerBoundaryPolicyDto field authorityDomains has an invalid wire value',
+      );
     }
-    if (json.containsKey('requiredDimensions') && json['requiredDimensions'] != null && (json['requiredDimensions'] is! List || (json['requiredDimensions'] as List).any((item) => item is! String))) {
-      throw const FormatException('AnswerBoundaryPolicyDto field requiredDimensions has an invalid wire value');
+    if (json.containsKey('requiredDimensions') &&
+        json['requiredDimensions'] != null &&
+        (json['requiredDimensions'] is! List ||
+            (json['requiredDimensions'] as List).any(
+              (item) => item is! String,
+            ))) {
+      throw const FormatException(
+        'AnswerBoundaryPolicyDto field requiredDimensions has an invalid wire value',
+      );
     }
-    if (json.containsKey('blockingDimensions') && json['blockingDimensions'] != null && (json['blockingDimensions'] is! List || (json['blockingDimensions'] as List).any((item) => item is! String))) {
-      throw const FormatException('AnswerBoundaryPolicyDto field blockingDimensions has an invalid wire value');
+    if (json.containsKey('blockingDimensions') &&
+        json['blockingDimensions'] != null &&
+        (json['blockingDimensions'] is! List ||
+            (json['blockingDimensions'] as List).any(
+              (item) => item is! String,
+            ))) {
+      throw const FormatException(
+        'AnswerBoundaryPolicyDto field blockingDimensions has an invalid wire value',
+      );
     }
-    if (json.containsKey('expansionPolicy') && json['expansionPolicy'] != null && (json['expansionPolicy'] is! String)) {
-      throw const FormatException('AnswerBoundaryPolicyDto field expansionPolicy has an invalid wire value');
+    if (json.containsKey('expansionPolicy') &&
+        json['expansionPolicy'] != null &&
+        (json['expansionPolicy'] is! String)) {
+      throw const FormatException(
+        'AnswerBoundaryPolicyDto field expansionPolicy has an invalid wire value',
+      );
     }
-    if (json.containsKey('insufficiencyReason') && json['insufficiencyReason'] != null && (json['insufficiencyReason'] is! String)) {
-      throw const FormatException('AnswerBoundaryPolicyDto field insufficiencyReason has an invalid wire value');
+    if (json.containsKey('insufficiencyReason') &&
+        json['insufficiencyReason'] != null &&
+        (json['insufficiencyReason'] is! String)) {
+      throw const FormatException(
+        'AnswerBoundaryPolicyDto field insufficiencyReason has an invalid wire value',
+      );
     }
-    if (json.containsKey('summary') && json['summary'] != null && (json['summary'] is! String)) {
-      throw const FormatException('AnswerBoundaryPolicyDto field summary has an invalid wire value');
+    if (json.containsKey('summary') &&
+        json['summary'] != null &&
+        (json['summary'] is! String)) {
+      throw const FormatException(
+        'AnswerBoundaryPolicyDto field summary has an invalid wire value',
+      );
     }
     return AnswerBoundaryPolicyDto(
       evidenceRequired: json['evidenceRequired'] == true,
       authorityRequired: json['authorityRequired'] == true,
-      requireToolResultBeforeSynthesis: json['requireToolResultBeforeSynthesis'] == true,
+      requireToolResultBeforeSynthesis:
+          json['requireToolResultBeforeSynthesis'] == true,
       allowBoundedAnswer: json['allowBoundedAnswer'] != false,
       freshnessHoursMax: (json['freshnessHoursMax'] as num?)?.toInt() ?? 72,
       authorityDomains: _assistantStringList(json['authorityDomains']),
       requiredDimensions: _assistantStringList(json['requiredDimensions']),
       blockingDimensions: _assistantStringList(json['blockingDimensions']),
-      expansionPolicy: parseContextScopeExpansionPolicyStrict((json['expansionPolicy'] as String?)?.trim() ?? "expand_scope_and_requery"),
-      insufficiencyReason: parsePlannerReasonCodeStrict((json['insufficiencyReason'] as String?)?.trim() ?? "need_more_evidence"),
+      expansionPolicy: parseContextScopeExpansionPolicyStrict(
+        (json['expansionPolicy'] as String?)?.trim() ??
+            "expand_scope_and_requery",
+      ),
+      insufficiencyReason: parsePlannerReasonCodeStrict(
+        (json['insufficiencyReason'] as String?)?.trim() ??
+            "need_more_evidence",
+      ),
       summary: (json['summary'] as String?)?.trim() ?? "",
     );
   }
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }
@@ -124,7 +189,8 @@ class AnswerBoundaryPolicyDto {
 class AnswerBoundaryPolicyDtoFields {
   static const String evidenceRequired = 'evidenceRequired';
   static const String authorityRequired = 'authorityRequired';
-  static const String requireToolResultBeforeSynthesis = 'requireToolResultBeforeSynthesis';
+  static const String requireToolResultBeforeSynthesis =
+      'requireToolResultBeforeSynthesis';
   static const String allowBoundedAnswer = 'allowBoundedAnswer';
   static const String freshnessHoursMax = 'freshnessHoursMax';
   static const String authorityDomains = 'authorityDomains';

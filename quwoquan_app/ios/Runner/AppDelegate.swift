@@ -7,10 +7,165 @@ import CryptoKit
 import EventKit
 import Foundation
 import Flutter
+import Darwin
 import MetricKit
 import PushKit
 import Security
 import UIKit
+
+enum StartupSafeTerminalSurface: Equatable {
+  case routerShell
+  case safeRecovery
+  case flutterRecovery
+  case missing
+  case unknown
+
+  static func parse(event: String) -> StartupSafeTerminalSurface {
+    guard let data = event.data(using: .utf8),
+          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let rawSurface = object["surface"] as? String
+    else {
+      return .missing
+    }
+    switch rawSurface {
+    case "router_shell": return .routerShell
+    case "safe_recovery": return .safeRecovery
+    case "flutter_recovery": return .flutterRecovery
+    default: return .unknown
+    }
+  }
+
+  var markerValue: String {
+    switch self {
+    case .routerShell: return "router_shell"
+    case .safeRecovery: return "safe_recovery"
+    case .flutterRecovery: return "flutter_recovery"
+    case .missing: return "missing"
+    case .unknown: return "unknown"
+    }
+  }
+
+  var isCanonical: Bool { self == .routerShell }
+
+  var isRecognizedSafeSurface: Bool {
+    self == .routerShell || self == .safeRecovery || self == .flutterRecovery
+  }
+}
+
+enum NativeRecoveryUpdateState: String, Equatable {
+  case none
+  case available
+  case required
+}
+
+struct NativeRecoveryVersionResponse: Equatable {
+  private static let canonicalFields: Set<String> = [
+    "platform",
+    "latestVersion",
+    "latestBuild",
+    "minimumSupportedVersion",
+    "minimumSupportedBuild",
+    "updateState",
+    "updateUrl",
+    "recoveryUrl",
+  ]
+
+  let platform: String
+  let latestVersion: String
+  let latestBuild: Int
+  let minimumSupportedVersion: String
+  let minimumSupportedBuild: Int
+  let updateState: NativeRecoveryUpdateState
+  let updateURL: String?
+  let recoveryURL: String
+
+  var hasNewerVersion: Bool { updateState != .none }
+
+  // 公众 iOS wire 明确没有原生更新通道；即使服务端判定 available/required，
+  // 原生恢复页也只能进入 Web/PWA。
+  var offersNativeUpdate: Bool {
+    platform == "android" && hasNewerVersion && updateURL != nil
+  }
+
+  static func parse(
+    payload: [String: Any],
+    expectedPlatform: String,
+    currentBuild: Int,
+    isTrustedURL: (URL?) -> Bool
+  ) -> NativeRecoveryVersionResponse? {
+    guard Set(payload.keys) == canonicalFields,
+          currentBuild > 0,
+          payload["platform"] as? String == expectedPlatform,
+          let latestVersion = nonBlankString(payload["latestVersion"]),
+          let latestBuild = positiveDecimal(payload["latestBuild"]),
+          let minimumSupportedVersion = nonBlankString(
+            payload["minimumSupportedVersion"]
+          ),
+          let minimumSupportedBuild = positiveDecimal(
+            payload["minimumSupportedBuild"]
+          ),
+          minimumSupportedBuild <= latestBuild,
+          let updateStateRaw = payload["updateState"] as? String,
+          let updateState = NativeRecoveryUpdateState(rawValue: updateStateRaw),
+          let recoveryURL = nonBlankString(payload["recoveryUrl"]),
+          isTrustedURL(URL(string: recoveryURL))
+    else {
+      return nil
+    }
+    let expectedUpdateState: NativeRecoveryUpdateState
+    if currentBuild < minimumSupportedBuild {
+      expectedUpdateState = .required
+    } else if currentBuild < latestBuild {
+      expectedUpdateState = .available
+    } else {
+      expectedUpdateState = .none
+    }
+    guard updateState == expectedUpdateState else { return nil }
+
+    let updateURL: String?
+    switch expectedPlatform {
+    case "ios":
+      guard payload["updateUrl"] is NSNull else { return nil }
+      updateURL = nil
+    case "android":
+      guard let rawUpdateURL = nonBlankString(payload["updateUrl"]),
+            isTrustedURL(URL(string: rawUpdateURL))
+      else {
+        return nil
+      }
+      updateURL = rawUpdateURL
+    default:
+      return nil
+    }
+    return NativeRecoveryVersionResponse(
+      platform: expectedPlatform,
+      latestVersion: latestVersion,
+      latestBuild: latestBuild,
+      minimumSupportedVersion: minimumSupportedVersion,
+      minimumSupportedBuild: minimumSupportedBuild,
+      updateState: updateState,
+      updateURL: updateURL,
+      recoveryURL: recoveryURL
+    )
+  }
+
+  private static func nonBlankString(_ value: Any?) -> String? {
+    guard let value = value as? String else { return nil }
+    let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return normalized.isEmpty ? nil : normalized
+  }
+
+  private static func positiveDecimal(_ value: Any?) -> Int? {
+    guard let raw = value as? String,
+          raw.range(of: "^[1-9][0-9]*$", options: .regularExpression) != nil,
+          let parsed = Int(raw),
+          parsed > 0
+    else {
+      return nil
+    }
+    return parsed
+  }
+}
 
 /// 仅持久化已脱敏的原生未捕获异常类别，供下次 Dart 启动产出一条标准诊断事实。
 /// 原生异常消息与堆栈绝不能写入 UserDefaults 或运行时日志管道。
@@ -93,15 +248,19 @@ private enum NativeCrashMarkerStore {
   }
 
   static var currentArtifactIdentity: String {
-    let manifest = nativeRuntimeIdentityManifest
-    let environment = manifest["runtimeEnvironment"] as? String ?? "unknown"
-    let configDigest = manifest["runtimeConfigDigest"] as? String ?? "missing"
-    let definesDigest = manifest["dartDefinesDigest"] as? String ?? "missing"
-    let target = manifest["launchTarget"] as? String ?? "missing"
-    let effectiveDigest =
-      manifest["effectiveLaunchManifestDigest"] as? String ?? "missing"
-    return
-      "\(currentBuild)|\(environment)|\(configDigest)|\(definesDigest)|\(target)|\(effectiveDigest)"
+    switch NativeRuntimeConfigStore.readActivePackage() {
+    case .present(let active):
+      let package = active.package
+      let environment = package["environment"] as? String ?? "unknown"
+      let target = package["target"] as? String ?? "missing"
+      let buildProfile = active.artifactTrustEnvelope["buildProfile"] as? String ?? "missing"
+      return "\(currentBuild)|\(buildProfile)|\(environment)|\(target)|\(active.packageDigest)"
+    case .absent(let trust):
+      let buildProfile = trust.artifactTrustEnvelope["buildProfile"] as? String ?? "missing"
+      return "\(currentBuild)|\(buildProfile)|runtime-config-absent|\(trust.trustEnvelopeDigest)"
+    case .failure(let error):
+      return "\(currentBuild)|runtime-config-failure|\(error.flutterCode)"
+    }
   }
 
   static func shouldRecoverCurrentBuild() -> Bool {
@@ -182,7 +341,8 @@ private enum NativeCrashMarkerStore {
   }
 
   static var effectiveLaunchManifestDigest: String {
-    nativeRuntimeIdentityManifest["effectiveLaunchManifestDigest"] as? String ?? ""
+    (try? NativeRuntimeConfigActivationCoordinator.readVerifiedIdentity()
+      .effectiveLaunchManifestDigest) ?? ""
   }
 
   private static func clearFatalMarker(reason: String) {
@@ -193,24 +353,6 @@ private enum NativeCrashMarkerStore {
     NSLog("QWQStartup startup_fatal_marker_stale_cleared reason=%@", reason)
   }
 
-  private static var nativeRuntimeIdentityManifest: [String: Any] {
-    guard
-      let url = Bundle.main.url(
-        forResource: "QWQNativeRuntime",
-        withExtension: "plist"
-      ),
-      let data = try? Data(contentsOf: url),
-      let raw = try? PropertyListSerialization.propertyList(
-        from: data,
-        options: [],
-        format: nil
-      ),
-      let manifest = raw as? [String: Any]
-    else {
-      return [:]
-    }
-    return manifest
-  }
 }
 
 private final class RecoveryActionButton: UIButton {
@@ -470,17 +612,23 @@ private final class RecoveryFailureEncryptedStore {
   private var nativeRecoveryTerminalReconciliation: DispatchWorkItem?
   private var flutterFirstFrameConfirmed = false
   private var startupSafeTerminalConfirmed = false
+  private var canonicalStartupSafeTerminalConfirmed = false
   private var appInForeground = false
   private var nativeRecoveryShown = false
   private var nativeRecoveryDeadlineReached = false
   private var confirmedPreviousBuildFatal = false
+  private var nativeActivationOnly = false
+  private var nativeActivationFailureCode = ""
+  private var nativeActivationValidationIssues: [String] = []
   private var recoveryExternalOpenInFlight = false
+  private var recoveryExternalReturnPending = false
   private var recoveryVersionCheckInFlight = false
   private var recoveryVersionRefreshPending = false
   private var dartStartupAttemptStarted = false
   private var currentDartAttemptIsHotRestart = false
   private var currentDartAttemptId = ""
-  private var currentLaunchMode = "unknown"
+  private var currentLaunchProvenance = "unknown"
+  private var currentRuntimeConfigSupplyMode = "unknown"
   private var currentDartAttemptStartedUptime: TimeInterval = 0
   private var firstFrameForegroundRemaining = AppDelegate.flutterFirstFrameDeadline
   private var foregroundStartedUptime: TimeInterval = 0
@@ -505,6 +653,24 @@ private final class RecoveryFailureEncryptedStore {
         NSLog("QWQStartup ios_debug_confirmed_startup_fatal_cleared")
       }
     #endif
+    let activation = consumePendingActivationRequest()
+    if activation.requested && !activation.activated {
+      nativeActivationFailureCode = activation.errorCode
+      nativeActivationValidationIssues = activation.validationIssues
+      NSLog(
+        "QWQStartup ios_runtime_config_activation_failed code=%@ issues=%@",
+        nativeActivationFailureCode,
+        nativeActivationValidationIssues.joined(separator: ",")
+      )
+      return true
+    }
+    if activation.activated {
+      nativeActivationOnly = true
+      NSLog("QWQStartup ios_runtime_config_activation_complete")
+      // Canonical executor 验证回执后会用无 activation argument 的第二次冷启动
+      // 进入 Flutter；当前进程只提交原生 CAS，绝不能创建 implicit engine。
+      return true
+    }
     confirmedPreviousBuildFatal = NativeCrashMarkerStore.shouldRecoverCurrentBuild()
     if confirmedPreviousBuildFatal {
       // FlutterAppDelegate 的 will/didFinish 都不得进入；恢复 gate 必须先于
@@ -521,6 +687,20 @@ private final class RecoveryFailureEncryptedStore {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    if nativeActivationOnly {
+      startupSafeTerminalConfirmed = true
+      NSLog("QWQStartup ios_native_activation_only_complete")
+      return true
+    }
+    if !nativeActivationFailureCode.isEmpty {
+      startupSafeTerminalConfirmed = true
+      appInForeground = true
+      NSLog(
+        "QWQStartup ios_native_activation_gate_recovery code=%@",
+        nativeActivationFailureCode
+      )
+      return true
+    }
     if confirmedPreviousBuildFatal {
       startupSafeTerminalConfirmed = true
       appInForeground = true
@@ -555,7 +735,10 @@ private final class RecoveryFailureEncryptedStore {
     configurationForConnecting connectingSceneSession: UISceneSession,
     options: UIScene.ConnectionOptions
   ) -> UISceneConfiguration {
-    guard confirmedPreviousBuildFatal else {
+    guard confirmedPreviousBuildFatal
+            || nativeActivationOnly
+            || !nativeActivationFailureCode.isEmpty
+    else {
       // FlutterAppDelegate adopts UIApplicationDelegate but does not implement
       // this optional selector on every engine version. Calling super here
       // therefore crashes normal launch with an unrecognized selector.
@@ -582,7 +765,10 @@ private final class RecoveryFailureEncryptedStore {
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    guard !confirmedPreviousBuildFatal else {
+    guard !confirmedPreviousBuildFatal,
+          !nativeActivationOnly,
+          nativeActivationFailureCode.isEmpty
+    else {
       assertionFailure("Flutter engine initialized behind native startup recovery gate")
       return
     }
@@ -607,6 +793,15 @@ private final class RecoveryFailureEncryptedStore {
     )
   }
 
+  private func consumePendingActivationRequest()
+    -> NativeRuntimeConfigActivationConsumeResult
+  {
+    NativeRuntimeConfigActivationCoordinator.consumePendingActivationRequest(
+      arguments: ProcessInfo.processInfo.arguments,
+      coldStartAllowed: true
+    )
+  }
+
   private func registerMethodChannels(
     binaryMessenger: FlutterBinaryMessenger,
     includeStartupTimings: Bool = true
@@ -615,40 +810,7 @@ private final class RecoveryFailureEncryptedStore {
       registerStartupTimingsChannel(binaryMessenger: binaryMessenger)
     }
 
-    let runtimeConfigChannel = FlutterMethodChannel(
-      name: "quwoquan/runtime/config",
-      binaryMessenger: binaryMessenger
-    )
-    runtimeConfigChannel.setMethodCallHandler { [weak self] call, result in
-      guard call.method == "readRuntimeConfig" else {
-        result(FlutterMethodNotImplemented)
-        return
-      }
-      guard let rawValues = self?.nativeRuntimeManifest["runtimeDefines"]
-              as? [String: Any]
-      else {
-        result([String: String]())
-        return
-      }
-      let values = rawValues.reduce(into: [String: String]()) { output, entry in
-        if let value = entry.value as? String, !value.isEmpty {
-          output[entry.key] = value
-        }
-      }
-      var packageValues = values
-      for key in [
-        "contentReleaseId",
-        "contentManifestDigest",
-        "contentReadinessReceiptDigest",
-        "launchTarget",
-        "effectiveLaunchManifestDigest",
-      ] {
-        if let value = self?.nativeRuntimeManifest[key] as? String, !value.isEmpty {
-          packageValues[key] = value
-        }
-      }
-      result(packageValues)
-    }
+    NativeRuntimeConfigChannel.register(binaryMessenger: binaryMessenger)
 
     let videoEditingChannel = FlutterMethodChannel(
       name: "quwoquan/video_editing",
@@ -762,7 +924,7 @@ private final class RecoveryFailureEncryptedStore {
           "deviceModel": UIDevice.current.model,
           "environment": self.nativeRuntimeEnvironment,
           "recoveryBaseUrl": self.recoveryBaseURLString,
-          "runtimeConfigDigest": self.nativeRuntimeConfigDigest,
+          "runtimeConfigDigest": self.nativeActiveRuntimePackageDigest,
           "effectiveLaunchManifestDigest": self.nativeEffectiveLaunchManifestDigest,
           "publicWebUrl": self.publicWebURLString,
           "appDownloadBaseUrl": self.appDownloadBaseURLString,
@@ -883,12 +1045,7 @@ private final class RecoveryFailureEncryptedStore {
       nativeRuntimeManifest["publicWebURL"] as? String,
       nativeRuntimeManifest["appDownloadBaseURL"] as? String,
     ]
-    let bundleValues = [
-      Bundle.main.object(forInfoDictionaryKey: "QWQRecoveryBaseURL") as? String,
-      Bundle.main.object(forInfoDictionaryKey: "QWQPublicWebURL") as? String,
-      Bundle.main.object(forInfoDictionaryKey: "QWQAppDownloadBaseURL") as? String,
-    ]
-    return (manifestValues + bundleValues).compactMap { rawValue in
+    return manifestValues.compactMap { rawValue in
       guard let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines),
             !value.isEmpty
       else {
@@ -897,7 +1054,6 @@ private final class RecoveryFailureEncryptedStore {
       return URL(string: value)
     }
   }
-
   private func registerStartupTimingsChannel(
     binaryMessenger: FlutterBinaryMessenger
   ) {
@@ -917,7 +1073,10 @@ private final class RecoveryFailureEncryptedStore {
           self.confirmFlutterFirstFrame(source: "dart_channel")
         }
         if event.contains("\"eventName\":\"startup_safe_terminal\"") {
-          self.confirmStartupSafeTerminal(reportedElapsedMs: self.startupEventElapsedMs(event))
+          self.confirmStartupSafeTerminal(
+            reportedElapsedMs: self.startupEventElapsedMs(event),
+            surface: StartupSafeTerminalSurface.parse(event: event)
+          )
         }
         result(nil)
         return
@@ -982,15 +1141,21 @@ private final class RecoveryFailureEncryptedStore {
         NSLog("QWQStartup ios_dart_startup_attempt_invalid reason=attempt_mismatch")
         return
       }
-      currentLaunchMode = safeStartupEnum(event["launchMode"] as? String)
+      currentLaunchProvenance = safeStartupEnum(
+        event["launchProvenance"] as? String
+      )
+      currentRuntimeConfigSupplyMode = safeStartupEnum(
+        event["runtimeConfigSupplyMode"] as? String
+      )
       let configurationState = safeStartupEnum(
         event["configurationState"] as? String
       )
       let missingDefineKeys = safeDefineKeyList(event["missingDefineKeys"] as? String)
       NSLog(
-        "QWQStartup ios_dart_startup_attempt attemptId=%@ launchMode=%@ hotRestart=%@ configurationState=%@ effectiveLaunchManifestDigest=%@%@",
+        "QWQStartup ios_dart_startup_attempt attemptId=%@ launchProvenance=%@ runtimeConfigSupplyMode=%@ hotRestart=%@ configurationState=%@ effectiveLaunchManifestDigest=%@%@",
         currentDartAttemptId,
-        currentLaunchMode,
+        currentLaunchProvenance,
+        currentRuntimeConfigSupplyMode,
         currentDartAttemptIsHotRestart ? "true" : "false",
         configurationState,
         NativeCrashMarkerStore.effectiveLaunchManifestDigest,
@@ -1004,9 +1169,10 @@ private final class RecoveryFailureEncryptedStore {
       let failureCode = safeStartupFailureCode(event["failureCode"] as? String)
       let missingDefineKeys = safeDefineKeyList(event["missingDefineKeys"] as? String)
       NSLog(
-        "QWQStartup ios_startup_bootstrap_failure attemptId=%@ launchMode=%@%@%@",
+        "QWQStartup ios_startup_bootstrap_failure attemptId=%@ launchProvenance=%@ runtimeConfigSupplyMode=%@%@%@",
         currentDartAttemptId,
-        currentLaunchMode,
+        currentLaunchProvenance,
+        currentRuntimeConfigSupplyMode,
         failureCode.isEmpty ? "" : " failureCode=\(failureCode)",
         missingDefineKeys.isEmpty ? "" : " missingDefineKeys=\(missingDefineKeys)"
       )
@@ -1169,12 +1335,22 @@ private final class RecoveryFailureEncryptedStore {
   }
 
   override func applicationDidBecomeActive(_ application: UIApplication) {
-    if !confirmedPreviousBuildFatal {
+    if nativeActivationOnly {
+      return
+    }
+    if !confirmedPreviousBuildFatal && nativeActivationFailureCode.isEmpty {
       super.applicationDidBecomeActive(application)
     }
     if !appInForeground {
       appInForeground = true
       foregroundStartedUptime = ProcessInfo.processInfo.systemUptime
+    }
+    if recoveryExternalReturnPending && confirmedPreviousBuildFatal {
+      recoveryExternalReturnPending = false
+      NSLog(
+        "QWQStartup ios_native_recovery_external_returned processId=%d",
+        ProcessInfo.processInfo.processIdentifier
+      )
     }
     if recoveryVersionRefreshPending,
        nativeRecoveryShown,
@@ -1191,7 +1367,7 @@ private final class RecoveryFailureEncryptedStore {
         webButton: web
       )
     }
-    if !confirmedPreviousBuildFatal {
+    if !confirmedPreviousBuildFatal && nativeActivationFailureCode.isEmpty {
       armFlutterFirstFrameWatchdog()
     }
   }
@@ -1205,7 +1381,10 @@ private final class RecoveryFailureEncryptedStore {
     appInForeground = false
     foregroundStartedUptime = 0
     cancelFlutterFirstFrameWatchdog()
-    if !confirmedPreviousBuildFatal {
+    if !confirmedPreviousBuildFatal,
+       !nativeActivationOnly,
+       nativeActivationFailureCode.isEmpty
+    {
       super.applicationWillResignActive(application)
     }
   }
@@ -1213,7 +1392,10 @@ private final class RecoveryFailureEncryptedStore {
   override func applicationWillTerminate(_ application: UIApplication) {
     cancelFlutterFirstFrameWatchdog()
     cancelNativeRecoveryTerminalReconciliation()
-    if !confirmedPreviousBuildFatal {
+    if !confirmedPreviousBuildFatal,
+       !nativeActivationOnly,
+       nativeActivationFailureCode.isEmpty
+    {
       super.applicationWillTerminate(application)
     }
   }
@@ -1236,14 +1418,15 @@ private final class RecoveryFailureEncryptedStore {
       (ProcessInfo.processInfo.systemUptime - currentDartAttemptStartedUptime) * 1000
     )
     NSLog(
-      "QWQStartup ios_flutter_first_frame elapsedMs=%d source=%@ attemptId=%@ nativeAttemptId=%@ launchMode=%@",
+      "QWQStartup ios_flutter_first_frame elapsedMs=%d source=%@ attemptId=%@ nativeAttemptId=%@ launchProvenance=%@ runtimeConfigSupplyMode=%@",
       elapsedMs,
       source,
       currentDartAttemptId.isEmpty
         ? startupTelemetryJournal.currentAttemptId
         : currentDartAttemptId,
       startupTelemetryJournal.currentAttemptId,
-      currentLaunchMode
+      currentLaunchProvenance,
+      currentRuntimeConfigSupplyMode
     )
   }
 
@@ -1257,15 +1440,14 @@ private final class RecoveryFailureEncryptedStore {
     return elapsedMs.intValue
   }
 
-  private func confirmStartupSafeTerminal(reportedElapsedMs: Int?) {
-    // MethodChannel 可能比 watchdog 主线程任务晚几毫秒。只要 Flutter 已到
-    // routerShell / recovery 安全面，就必须取消看门狗并撤销竞态恢复层。
-    let firstNativeSafeTerminal = !startupSafeTerminalConfirmed
-    if firstNativeSafeTerminal {
+  private func confirmStartupSafeTerminal(
+    reportedElapsedMs: Int?,
+    surface: StartupSafeTerminalSurface
+  ) {
+    // recovery surface 可取消 native watchdog，但只有 router_shell 才能成为
+    // strict canonical safe-terminal evidence 或把当前构建标记为 safe shell。
+    if surface.isRecognizedSafeSurface && !startupSafeTerminalConfirmed {
       startupSafeTerminalConfirmed = true
-      if !confirmedPreviousBuildFatal {
-        NativeCrashMarkerStore.markSafeShell()
-      }
       cancelFlutterFirstFrameWatchdog()
       cancelNativeRecoveryTerminalReconciliation()
       dismissNativeStartupRecoveryForSafeTerminalRace()
@@ -1274,18 +1456,40 @@ private final class RecoveryFailureEncryptedStore {
       (ProcessInfo.processInfo.systemUptime - currentDartAttemptStartedUptime) * 1000
     )
     let reportedMs = max(0, reportedElapsedMs ?? receivedElapsedMs)
+    let attemptId = currentDartAttemptId.isEmpty
+      ? startupTelemetryJournal.currentAttemptId
+      : currentDartAttemptId
+    if !surface.isCanonical {
+      NSLog(
+        "QWQStartup ios_startup_safe_terminal_rejected surface=%@ reason=canonical_router_shell_required reportedElapsedMs=%d receivedMs=%d attemptId=%@ nativeAttemptId=%@ launchProvenance=%@ runtimeConfigSupplyMode=%@",
+        surface.markerValue,
+        reportedMs,
+        receivedElapsedMs,
+        attemptId,
+        startupTelemetryJournal.currentAttemptId,
+        currentLaunchProvenance,
+        currentRuntimeConfigSupplyMode
+      )
+      return
+    }
+    if !canonicalStartupSafeTerminalConfirmed {
+      canonicalStartupSafeTerminalConfirmed = true
+      if !confirmedPreviousBuildFatal {
+        NativeCrashMarkerStore.markSafeShell()
+      }
+    }
     let exceedsDeadline =
       reportedMs > Int(Self.flutterFirstFrameDeadline * 1000)
       || receivedElapsedMs > Int(Self.flutterFirstFrameDeadline * 1000)
     NSLog(
-      "QWQStartup ios_startup_safe_terminal reportedElapsedMs=%d receivedMs=%d attemptId=%@ nativeAttemptId=%@ launchMode=%@",
+      "QWQStartup ios_startup_safe_terminal surface=%@ reportedElapsedMs=%d receivedMs=%d attemptId=%@ nativeAttemptId=%@ launchProvenance=%@ runtimeConfigSupplyMode=%@",
+      surface.markerValue,
       reportedMs,
       receivedElapsedMs,
-      currentDartAttemptId.isEmpty
-        ? startupTelemetryJournal.currentAttemptId
-        : currentDartAttemptId,
+      attemptId,
       startupTelemetryJournal.currentAttemptId,
-      currentLaunchMode
+      currentLaunchProvenance,
+      currentRuntimeConfigSupplyMode
     )
     if exceedsDeadline {
       NSLog(
@@ -1518,14 +1722,34 @@ private final class RecoveryFailureEncryptedStore {
     recoveryWindow.makeKeyAndVisible()
   }
 
+  func connectNativeStartupSceneIfNeeded(in sceneWindow: UIWindow) -> Bool {
+    guard confirmedPreviousBuildFatal
+            || nativeActivationOnly
+            || !nativeActivationFailureCode.isEmpty
+    else {
+      return false
+    }
+    installNativeStartupRecoveryRoot(in: sceneWindow)
+    if nativeActivationOnly {
+      NSLog("QWQStartup ios_native_activation_scene_connected")
+      return true
+    }
+    showNativeStartupRecovery()
+    NSLog("QWQStartup ios_native_startup_recovery_scene_connected")
+    return true
+  }
+
   func showNativeStartupRecovery() {
-    guard (!startupSafeTerminalConfirmed || confirmedPreviousBuildFatal),
+    guard (!startupSafeTerminalConfirmed
+             || confirmedPreviousBuildFatal
+             || !nativeActivationFailureCode.isEmpty),
           !nativeRecoveryShown,
           let window
     else { return }
     nativeRecoveryShown = true
 
     let recovery = UIView(frame: window.bounds)
+    recovery.accessibilityIdentifier = "qwq.native.startup.recovery"
     let backgroundColor = UIColor(
       red: 247 / 255,
       green: 247 / 255,
@@ -1562,9 +1786,11 @@ private final class RecoveryFailureEncryptedStore {
     message.translatesAutoresizingMaskIntoConstraints = false
 
     let primary = RecoveryActionButton(type: .system)
+    primary.accessibilityIdentifier = "qwq.native.startup.recovery.primary"
     configureRecoveryButton(primary, title: "正在检查…", filled: true, enabled: false)
 
     let web = RecoveryActionButton(type: .system)
+    web.accessibilityIdentifier = "qwq.native.startup.recovery.web"
     configureRecoveryButton(web, title: "使用网页版", filled: false, enabled: true)
     web.recoveryAction = { [weak self] in
       self?.openRecoveryTarget(
@@ -1648,57 +1874,42 @@ private final class RecoveryFailureEncryptedStore {
   }
 
   private var recoveryBaseURLString: String {
-    if let value = nativeRuntimeManifest["recoveryBaseURL"] as? String,
-       isTrustedRecoveryURL(URL(string: value)) {
-      return value
+    guard let value = nativeRuntimeManifest["recoveryBaseURL"] as? String,
+          isTrustedRecoveryURL(URL(string: value))
+    else {
+      return ""
     }
-    let configured = Bundle.main.object(forInfoDictionaryKey: "QWQRecoveryBaseURL") as? String
-    let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    if isTrustedRecoveryURL(URL(string: value)) {
-      return value
-    }
-    return ""
+    return value
   }
 
   private var publicWebURLString: String {
-    if let value = nativeRuntimeManifest["publicWebURL"] as? String,
-       isTrustedRecoveryURL(URL(string: value)) {
-      return value
+    guard let value = nativeRuntimeManifest["publicWebURL"] as? String,
+          isTrustedRecoveryURL(URL(string: value))
+    else {
+      return ""
     }
-    let configured = Bundle.main.object(forInfoDictionaryKey: "QWQPublicWebURL") as? String
-    let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    if isTrustedRecoveryURL(URL(string: value)) {
-      return value
-    }
-    return ""
+    return value
   }
 
   private var appDownloadBaseURLString: String {
-    if let value = nativeRuntimeManifest["appDownloadBaseURL"] as? String,
-       isTrustedRecoveryURL(URL(string: value)) {
-      return value
+    guard let value = nativeRuntimeManifest["appDownloadBaseURL"] as? String,
+          isTrustedRecoveryURL(URL(string: value))
+    else {
+      return ""
     }
-    let configured = Bundle.main.object(
-      forInfoDictionaryKey: "QWQAppDownloadBaseURL"
-    ) as? String
-    let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    if isTrustedRecoveryURL(URL(string: value)) {
-      return value
-    }
-    return ""
+    return value
   }
 
   private var nativeRuntimeEnvironment: String {
-    if let value = nativeRuntimeManifest["runtimeEnvironment"] as? String,
-       ["alpha", "beta", "gamma", "prod"].contains(value) {
-      return value
+    guard let value = nativeRuntimeManifest["runtimeEnvironment"] as? String,
+          ["alpha", "beta", "gamma", "prod"].contains(value)
+    else {
+      return ""
     }
-    let configured = Bundle.main.object(forInfoDictionaryKey: "QWQRuntimeEnvironment") as? String
-    let value = configured?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    return ["alpha", "beta", "gamma", "prod"].contains(value) ? value : ""
+    return value
   }
 
-  private var nativeRuntimeConfigDigest: String {
+  private var nativeActiveRuntimePackageDigest: String {
     (nativeRuntimeManifest["runtimeConfigDigest"] as? String)?
       .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
   }
@@ -1709,21 +1920,15 @@ private final class RecoveryFailureEncryptedStore {
   }
 
   private var nativeRuntimeManifest: [String: Any] {
-    guard
-      let url = Bundle.main.url(
-        forResource: "QWQNativeRuntime",
-        withExtension: "plist"
-      ),
-      let data = try? Data(contentsOf: url),
-      let value = try? PropertyListSerialization.propertyList(
-        from: data,
-        options: [],
-        format: nil
-      ) as? [String: Any]
-    else {
+    switch NativeRuntimeConfigActivationCoordinator.readRecoveryRuntimeContext() {
+    case .present(let manifest):
+      return manifest
+    case .absent:
       return [:]
+    case .failure(let code):
+      NSLog("QWQStartup ios_runtime_config_recovery_context_failed code=%@", code)
+      return ["runtimeConfigErrorCode": code]
     }
-    return value
   }
 
   private func checkNativeRecoveryVersion(
@@ -1776,14 +1981,12 @@ private final class RecoveryFailureEncryptedStore {
             let data,
             data.count <= 65_536,
             let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            payload.count == 4,
-            let latestBuildRaw = payload["latestBuild"] as? String,
-            let latestBuild = Int(latestBuildRaw),
-            let updateRaw = payload["updateUrl"] as? String,
-            let recoveryRaw = payload["recoveryUrl"] as? String,
-            self.isTrustedRecoveryURL(URL(string: recoveryRaw)),
-            latestBuild <= (Int(buildNumber) ?? 0)
-              || self.isTrustedRecoveryURL(URL(string: updateRaw))
+            let version = NativeRecoveryVersionResponse.parse(
+              payload: payload,
+              expectedPlatform: "ios",
+              currentBuild: Int(buildNumber) ?? 0,
+              isTrustedURL: self.isTrustedRecoveryURL
+            )
       else {
         DispatchQueue.main.async { [weak self] in
           self?.applyNativeVersionUnavailable(
@@ -1797,32 +2000,29 @@ private final class RecoveryFailureEncryptedStore {
       }
       DispatchQueue.main.async { [weak self] in
         guard let self else { return }
-        if latestBuild > (Int(buildNumber) ?? 0) {
+        if version.hasNewerVersion {
           titleLabel.text = "当前版本需要更新"
-          messageLabel.text = "更新后即可正常启动"
-          self.configureRecoveryButton(primaryButton, title: "前往更新", filled: true, enabled: true)
-          primaryButton.recoveryAction = { [weak self] in
-            self?.openRecoveryTarget(
-              updateRaw,
-              fallback: recoveryRaw,
-              failureMessage: "暂时无法打开更新页面，请稍后再试",
-              recheckVersionOnReturn: true
-            )
-          }
-          webButton.isHidden = false
+          messageLabel.text = "请使用网页版继续"
         } else {
           titleLabel.text = "当前已是最新版本"
           messageLabel.text = "请使用网页版继续"
-          self.configureRecoveryButton(primaryButton, title: "使用网页版", filled: true, enabled: true)
-          primaryButton.recoveryAction = { [weak self] in
-            self?.openRecoveryTarget(
-              self?.publicWebURLString ?? "",
-              fallback: recoveryRaw,
-              failureMessage: "网页暂时无法打开，请稍后再试"
-            )
-          }
-          webButton.isHidden = true
         }
+        // 公众 iOS 无论 available/required/none 都不得显示或触发原生
+        // 更新动作；官方 Web/PWA 是主通道，recoveryUrl 仅作受信 fallback。
+        self.configureRecoveryButton(
+          primaryButton,
+          title: "使用网页版",
+          filled: true,
+          enabled: true
+        )
+        primaryButton.recoveryAction = { [weak self] in
+          self?.openRecoveryTarget(
+            self?.publicWebURLString ?? "",
+            fallback: version.recoveryURL,
+            failureMessage: "网页暂时无法打开，请稍后再试"
+          )
+        }
+        webButton.isHidden = true
       }
     }.resume()
   }
@@ -1881,7 +2081,28 @@ private final class RecoveryFailureEncryptedStore {
       completion(false)
       return
     }
-    UIApplication.shared.open(url, options: [:], completionHandler: completion)
+    let urlDigest = recoveryURLDigest(rawURL)
+    NSLog(
+      "QWQStartup ios_native_recovery_external_open_requested urlDigest=%@ processId=%d",
+      urlDigest,
+      ProcessInfo.processInfo.processIdentifier
+    )
+    UIApplication.shared.open(url, options: [:]) { opened in
+      NSLog(
+        "QWQStartup ios_native_recovery_external_open_completed urlDigest=%@ opened=%@",
+        urlDigest,
+        opened ? "true" : "false"
+      )
+      if opened {
+        self.recoveryExternalReturnPending = true
+      }
+      completion(opened)
+    }
+  }
+
+  private func recoveryURLDigest(_ rawURL: String) -> String {
+    let digest = SHA256.hash(data: Data(rawURL.utf8))
+    return "sha256:" + digest.map { String(format: "%02x", $0) }.joined()
   }
 
   private func showRecoveryToast(_ message: String) {

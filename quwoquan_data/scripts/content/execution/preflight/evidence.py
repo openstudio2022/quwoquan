@@ -21,6 +21,7 @@ def compact_ready_evidence(report: Mapping[str, Any]) -> dict[str, Any]:
     capacity = _mapping(report.get("capacitySoak"))
     workspace_smoke = _mapping(report.get("workspaceSmoke"))
     catalog = _mapping(capacity.get("modelCatalog"))
+    startup_catalog = _mapping(preflight.get("modelCatalog"))
     capacity_runs = [
         {
             "attempt": row.get("attempt"),
@@ -73,6 +74,14 @@ def compact_ready_evidence(report: Mapping[str, Any]) -> dict[str, Any]:
             "sdkVersion": startup.get("sdkVersion"),
             "issues": list(startup.get("issues") or []),
         },
+        "modelCatalog": {
+            "checked": bool(startup_catalog.get("checked")),
+            "ready": bool(startup_catalog.get("ready")),
+            "modelCount": startup_catalog.get("modelCount"),
+            "selectionSupport": _mapping(startup_catalog.get("selectionSupport"))
+            or {"checked": False, "supported": True, "issues": []},
+            "issues": list(startup_catalog.get("issues") or []),
+        },
         "capacitySoak": {
             "semanticSelectionId": capacity.get("semanticSelectionId"),
             "selectionDigest": capacity.get("selectionDigest"),
@@ -93,6 +102,7 @@ def compact_ready_evidence(report: Mapping[str, Any]) -> dict[str, Any]:
                 "modelCount": catalog.get("modelCount"),
                 "modelIds": list(catalog.get("modelIds") or []),
                 "autoSelection": catalog.get("autoSelection") or {},
+                "selectionSupport": catalog.get("selectionSupport") or {},
                 "issues": list(catalog.get("issues") or []),
             },
             "runs": capacity_runs,

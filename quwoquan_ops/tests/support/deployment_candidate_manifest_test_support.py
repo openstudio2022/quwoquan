@@ -12,19 +12,67 @@ import json
 import hashlib
 import unittest
 from contextlib import ExitStack
+from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 from unittest import mock
 
 from quwoquan_ops.cli.lib import deployment_candidate_manifest as subject
+from quwoquan_ops.cli.lib.deployment_candidate_manifest import provider_binding_overlay
+from quwoquan_ops.cli.lib.runtime_topology_package import (
+    SCHEMA as RUNTIME_TOPOLOGY_SCHEMA,
+)
+
+
+@lru_cache(maxsize=1)
+def _compiled_provider_bindings() -> dict[str, Any]:
+    """Compile the Provider binding capsule once for the whole test process.
+
+    Compilation reads the immutable capsule, so every candidate in this fixture
+    would get identical bytes; doing it per test would add seconds per case.
+    """
+
+    return provider_binding_overlay.compile_single_environment_bindings(
+        environment="alpha",
+        target="alpha-local",
+        source_root=subject.ROOT,
+    )
 
 
 class DeploymentCandidateManifestContractBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        compiled = {
+            "schema": "compiled-external-provider-bindings",
+            "issues": [],
+            "selectedBindings": {
+                "alpha": {
+                    "identity.sms.otp": {
+                        "state": "enabled",
+                        "adapter_id": "ext.sms.local_capture",
+                        "endpoint_ref": "local_topology:sms-provider-substitute",
+                        "endpoint_envs": {
+                            "endpoint": "INTEGRATION_SMS_ENDPOINT",
+                        },
+                        "secret_refs": ["INTEGRATION_SMS_TOKEN"],
+                    },
+                    "runtime.log.sink": {
+                        "state": "enabled",
+                        "adapter_id": "ext.obs.elasticsearch",
+                        "endpoint_ref": "local_topology:elasticsearch",
+                        "endpoint_envs": {
+                            "endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
+                        },
+                        "secret_refs": [],
+                    },
+                },
+            },
+        }
         cls.provider_runtime_fixture = subject.compile_provider_runtime_composition(
             environment="alpha",
             target="alpha-local",
+            compiled=compiled,
         )
 
     def setUp(self) -> None:
@@ -50,6 +98,14 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
         digest = "sha256:" + "a" * 64
         self.configuration_digest = "sha256:" + "1" * 64
         self.runtime_config_digest = "sha256:" + "2" * 64
+        self.workspace_digest = digest
+        self.environment_artifact_schema = json.loads(
+            (
+                subject.ROOT
+                / "quwoquan_service/contracts/metadata/_schemas"
+                / "environment_artifact_identity.schema.json"
+            ).read_text(encoding="utf-8")
+        )
         self.contract_graph = self.root / "contract_graph.json"
         self.contract_graph.write_text(
             json.dumps({"objects": [], "operations": []}) + "\n",
@@ -73,6 +129,10 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
                     "schema": "environment-runtime-package",
                     "environment": "alpha",
                     "target": "alpha-local",
+                    "publicBases": {
+                        "api": "https://api.alpha.example",
+                        "publicWeb": "https://www.alpha.example",
+                    },
                 }
             )
             + "\n",
@@ -86,7 +146,12 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
             json.dumps(
                 {
                     "candidateType": subject.RUNTIME_CANDIDATE_TYPE,
+                    "environment": "alpha",
+                    "target": "alpha-local",
                     "includeServices": True,
+                    "baselineId": self.snapshot["baselineId"],
+                    "sourceRevision": self.snapshot["sourceRevision"],
+                    "workspaceStatusDigest": self.snapshot["workspaceStatusDigest"],
                     "releaseInputClassification": "commercial_inputs",
                     "contractGraphDigest": self.contract_graph_digest,
                     "graphqlReadRegistry": self.graphql_read_registry,
@@ -103,6 +168,23 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
                     "buildInputDigest": digest,
                     "imageDigest": "sha256:" + "e" * 64,
                 }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.runtime_topology_path = (
+            self.shared / "runtime-topology" / "manifest.json"
+        )
+        self.runtime_topology_path.parent.mkdir(parents=True)
+        self.runtime_topology_path.write_text(
+            json.dumps(
+                {
+                    "schema": RUNTIME_TOPOLOGY_SCHEMA,
+                    "environment": "alpha",
+                    "target": "alpha-local",
+                    "topologyDigest": "sha256:" + "f" * 64,
+                },
+                sort_keys=True,
             )
             + "\n",
             encoding="utf-8",
@@ -184,7 +266,23 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
                 self.provider_runtime,
             )
         )
-        subject.materialize_provider_runtime_package("alpha", "alpha-local")
+        subject.materialize_provider_runtime_package(
+            "alpha",
+            "alpha-local",
+            source_root=subject.ROOT,
+        )
+        self.patches.enter_context(
+            mock.patch.object(
+                provider_binding_overlay,
+                "compile_single_environment_bindings",
+                return_value=_compiled_provider_bindings(),
+            )
+        )
+        self.provider_binding_overlay = subject.materialize_provider_binding_overlay(
+            "alpha",
+            "alpha-local",
+            source_root=subject.ROOT,
+        )
         self.provider_images = {}
         for index, workload in enumerate(self.provider_runtime["workloads"], start=4):
             role = str(workload["role"])
@@ -237,6 +335,9 @@ class DeploymentCandidateManifestContractBase(unittest.TestCase):
                     ),
                     "providerRuntimeDigest": self.provider_runtime[
                         "runtimeCompositionDigest"
+                    ],
+                    "providerBindingManifestDigest": self.provider_binding_overlay[
+                        "bindingManifestDigest"
                     ],
                     "providerImageRefs": provider_refs,
                 }

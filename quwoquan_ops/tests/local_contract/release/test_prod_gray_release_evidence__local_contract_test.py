@@ -62,6 +62,6 @@ def test_release_evidence_never_creates_a_top_level_runtime_directory(
     issues = root_layout_issues(tmp_path)
 
     assert any(
-        ".release-evidence-manifest: forbidden top-level directory" in issue
+        ".release-evidence-manifest: retired top-level entry" in issue
         for issue in issues
     )

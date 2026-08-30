@@ -47,17 +47,22 @@ from .constants import (
     PROVIDER_RUNTIME_PACKAGE_SCHEMA,
     ROOT,
 )
+from .provider_binding_overlay import load_provider_binding_overlay
 
 
 def materialize_provider_runtime_package(
     env_name: str,
     target_name: str,
+    *,
+    source_root: Path,
 ) -> dict[str, Any]:
     """Atomically seal Provider composition and Compose overlays before fingerprinting."""
 
+    source_root = Path(source_root).resolve()
     composition = _pkg.compile_provider_runtime_composition(
         environment=env_name,
         target=target_name,
+        source_root=source_root,
     )
     validate_provider_runtime_composition(
         composition,
@@ -80,8 +85,8 @@ def materialize_provider_runtime_package(
             raise ValueError(
                 f"package-bound Provider workload has no Compose artifact: {role}"
             )
-        source_path = (ROOT / source_ref).resolve()
-        if not source_path.is_relative_to(ROOT) or not source_path.is_file():
+        source_path = (source_root / source_ref).resolve()
+        if not source_path.is_relative_to(source_root) or not source_path.is_file():
             raise ValueError(
                 f"Provider workload Compose source is outside the repository: {role}"
             )
@@ -529,12 +534,21 @@ def _validate_candidate_provider_oci_binding(
             }
             for role, descriptor in sorted(provider_images.items())
         }
+        # 首方镜像在构建期把单环境 Provider binding overlay 编译进二进制，
+        # 所以 buildInputDigest 必须闭合到候选内那份 overlay 的 manifest digest：
+        # 换绑定就换镜像身份，运行时无从再选。
+        overlay = load_provider_binding_overlay(
+            str(candidate.get("environment") or ""),
+            str(candidate.get("target") or ""),
+            candidate_root,
+        )
         expected_build_input = _sha256_json(
             {
                 "firstPartyImageVersion": immutable_image_digest(first_party_refs),
                 "providerRuntimeDigest": provider_runtime["composition"][
                     "runtimeCompositionDigest"
                 ],
+                "providerBindingManifestDigest": overlay["bindingManifestDigest"],
                 "providerImageRefs": provider_refs,
             }
         )

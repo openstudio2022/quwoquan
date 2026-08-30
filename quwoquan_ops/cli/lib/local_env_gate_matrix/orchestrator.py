@@ -1,34 +1,57 @@
 """stackctl matrix：固定候选上的 Alpha → Beta → Gamma 串行门禁（主状态机，自原单文件逐字搬移）。"""
+
 from __future__ import annotations
 
 import time
-from pathlib import Path
 from typing import Any
-
-from quwoquan_ops.cli.lib import external_provider_governance, provider_conformance
-from quwoquan_ops.cli.lib.local_env_gate_timing import PhaseTimer, load_local_env_matrix_budgets
-from quwoquan_ops.cli.lib.local_postgres_migration_drift import format_drift_gate_block
-from quwoquan_ops.cli.lib.startup_attempt_receipt import load_startup_attempt
 
 # 测试通过 mock.patch("...local_env_gate_matrix._run_commit_gate") 与
 # mock.patch("...local_env_gate_matrix.probe_migration_drift") 打桩；
 # 这里保持对包属性的延迟访问以兼容 monkeypatch（参考 feature_tree/gitio 模式）。
 import quwoquan_ops.cli.lib.local_env_gate_matrix as _matrix_pkg
 from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import (
-    _acceptance_lease_event, _data_cli_runner, _data_readiness_path, _data_run_ids,
-    _homepage_release_evidence, _invoke_env, _lifecycle_exit_path, _record_phase, _run_data_phase,
+    _acceptance_lease_event,
+    _data_cli_runner,
+    _data_readiness_path,
+    _data_run_ids,
+    _homepage_release_evidence,
+    _invoke_env,
+    _lifecycle_exit_path,
+    _record_phase,
+    _run_data_phase,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.evidence import (
-    _down_target, _live_matrix_evidence_errors, _provider_local_functional_errors,
+    _down_target,
+    _live_matrix_evidence_errors,
+    _provider_local_functional_errors,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
-    CANONICAL_TARGETS, DEVICE_PROFILE_FULL, DEVICE_PROFILES, DataRunner, EnvRunner, ROOT,
-    TARGET_ENVIRONMENTS, _SHA256, _evidence_path, _namespace, _repo_matrix_dir,
+    CANONICAL_TARGETS,
+    DEVICE_PROFILE_FULL,
+    DEVICE_PROFILES,
+    TARGET_ENVIRONMENTS,
+    DataRunner,
+    EnvRunner,
+    _evidence_path,
+    _namespace,
+    _repo_matrix_dir,
+    _startup_attempt_matches_package_identity,
+)
+from quwoquan_ops.cli.lib.local_env_gate_matrix.input_validation import (
+    ResearchLifecycleUnsupported,
+    _resolve_matrix_inputs,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.preflight import (
-    _device_binding_errors, _device_uat_bindings, _docker_daemon_ready, _release_binding,
+    _device_uat_bindings,
+    _docker_daemon_ready,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.reporting import _write_matrix_result
+from quwoquan_ops.cli.lib.local_env_gate_timing import (
+    PhaseTimer,
+    load_local_env_matrix_budgets,
+)
+from quwoquan_ops.cli.lib.local_postgres_migration_drift import format_drift_gate_block
+from quwoquan_ops.cli.lib.startup_attempt_receipt import load_startup_attempt
 
 
 def _run_local_env_gate_matrix(
@@ -61,9 +84,7 @@ def _run_local_env_gate_matrix(
     if execution_class not in {"live", "contract-simulation"}:
         raise ValueError("execution_class must be live or contract-simulation")
     if device_profile not in DEVICE_PROFILES:
-        raise ValueError(
-            "device_profile must be one of " + ", ".join(DEVICE_PROFILES)
-        )
+        raise ValueError("device_profile must be one of " + ", ".join(DEVICE_PROFILES))
     if tuple(targets) != CANONICAL_TARGETS:
         return {
             "exitCode": 2,
@@ -76,73 +97,33 @@ def _run_local_env_gate_matrix(
             "executed": 0,
             "skipped": 0,
         }
-    compiled_provider_governance: dict[str, Any] = {}
     try:
-        candidate_release = _release_binding(release_attestation, label="candidate")
-        rollback_release = _release_binding(
-            rollback_release_attestation,
-            label="rollback",
+        input_bindings = _resolve_matrix_inputs(
+            release_attestation=release_attestation,
+            rollback_release_attestation=rollback_release_attestation,
+            test_data_request=test_data_request,
+            test_data_evidence=test_data_evidence,
+            test_data_handoff=test_data_handoff,
+            telemetry_fn=telemetry_fn,
+            provider_fn=provider_fn,
+            app_uat_fn=app_uat_fn,
+            ios_simulator_device=ios_simulator_device,
+            android_emulator_device=android_emulator_device,
+            android_physical_device=android_physical_device,
+            device_profile=device_profile,
+            execution_class=execution_class,
         )
-        if candidate_release["releaseId"] == rollback_release["releaseId"]:
-            raise ValueError("candidate and rollback release must be different")
-        request_by_target = dict(test_data_request or {})
-        evidence_by_target = dict(test_data_evidence or {})
-        handoff_by_target = dict(test_data_handoff or {})
-        if execution_class == "live":
-            compiled_provider_governance, provider_governance_issues = (
-                external_provider_governance.load_and_compile()
-            )
-            if provider_governance_issues:
-                raise ValueError(
-                    "canonical Provider governance is invalid: "
-                    + "; ".join(issue.render() for issue in provider_governance_issues)
-                )
-            if not provider_conformance.provider_conformance_capability_ids(
-                compiled_provider_governance
-            ):
-                raise ValueError(
-                    "canonical Provider governance defines no required capabilities"
-                )
-            if set(request_by_target) != set(CANONICAL_TARGETS):
-                raise ValueError(
-                    "live matrix requires one --test-data-request for every target"
-                )
-            if set(handoff_by_target) != set(CANONICAL_TARGETS):
-                raise ValueError(
-                    "live matrix requires one --test-data-handoff for every target"
-                )
-            for target, raw_path in sorted(request_by_target.items()):
-                request_path = Path(str(raw_path or "").strip()).expanduser()
-                if not request_path.is_absolute():
-                    request_path = ROOT / request_path
-                if not request_path.is_file():
-                    raise ValueError(f"{target} test-data request is unavailable")
-            for target, raw_path in sorted(evidence_by_target.items()):
-                if target not in CANONICAL_TARGETS:
-                    raise ValueError(f"unknown test-data evidence target: {target}")
-                evidence_path = Path(str(raw_path or "").strip()).expanduser()
-                if not evidence_path.is_absolute():
-                    evidence_path = ROOT / evidence_path
-                if not evidence_path.is_file():
-                    raise ValueError(f"{target} test-data evidence is unavailable")
-            for target, raw_path in sorted(handoff_by_target.items()):
-                handoff_path = Path(str(raw_path or "").strip()).expanduser()
-                if not handoff_path.is_absolute():
-                    handoff_path = ROOT / handoff_path
-                if not handoff_path.is_file():
-                    raise ValueError(f"{target} test-data handoff is unavailable")
-            if telemetry_fn is None or provider_fn is None or app_uat_fn is None:
-                raise ValueError(
-                    "live matrix requires telemetry, Provider, and App UAT runners"
-                )
-            device_errors = _device_binding_errors(
-                device_profile=device_profile,
-                ios_simulator_device=ios_simulator_device,
-                android_emulator_device=android_emulator_device,
-                android_physical_device=android_physical_device,
-            )
-            if device_errors:
-                raise ValueError("; ".join(device_errors))
+    except ResearchLifecycleUnsupported as exc:
+        return {
+            "exitCode": 2,
+            "summary": "stackctl matrix release lifecycle is GATE_BLOCK",
+            "details": [str(exc)],
+            "failureCategory": "research_lifecycle_unsupported",
+            "claim": "GATE_BLOCK",
+            "status": "gate_block",
+            "executed": 0,
+            "skipped": 0,
+        }
     except ValueError as exc:
         return {
             "exitCode": 2,
@@ -154,6 +135,13 @@ def _run_local_env_gate_matrix(
             "skipped": 0,
         }
 
+    candidate_release = input_bindings.candidate_release
+    rollback_release = input_bindings.rollback_release
+    request_by_target = input_bindings.request_by_target
+    evidence_by_target = input_bindings.evidence_by_target
+    handoff_by_target = input_bindings.handoff_by_target
+    compiled_provider_governance = input_bindings.compiled_provider_governance
+
     budgets = load_local_env_matrix_budgets()
     matrix_dir = _repo_matrix_dir(matrix_run_id)
     wall_started = time.monotonic()
@@ -161,7 +149,8 @@ def _run_local_env_gate_matrix(
     environments: dict[str, Any] = {}
     overall_exit = 0
     failure_category = ""
-    matrix_baseline_id = ""
+    matrix_release_train_id = ""
+    package_baselines: dict[str, str] = {}
 
     docker_ok, docker_detail = _docker_daemon_ready()
     phases.append(
@@ -187,18 +176,9 @@ def _run_local_env_gate_matrix(
             overall_exit = int(l0["exitCode"] or 2)
             failure_category = "l0"
 
+    # Freeze all target identities before the first runtime start, Data, or Patrol.
     for target in targets:
         if overall_exit != 0:
-            break
-        if time.monotonic() - wall_started > int(budgets["hardBudgetSeconds"]):
-            overall_exit = 2
-            failure_category = "budget"
-            phases.append(
-                PhaseTimer(f"{target}_budget").finish(
-                    status="gate_block",
-                    details=["hard budget exhausted before target execution"],
-                )
-            )
             break
 
         env_name = TARGET_ENVIRONMENTS[target]
@@ -213,6 +193,7 @@ def _run_local_env_gate_matrix(
         }
         data_ids = _data_run_ids(matrix_run_id, env_name)
         block["dataRunIds"] = data_ids
+        environments[target] = block
 
         # The local targets share resources. Normal down is the sole cleanup path.
         for other in CANONICAL_TARGETS:
@@ -228,7 +209,6 @@ def _run_local_env_gate_matrix(
                 failure_category = "down"
                 break
         if overall_exit != 0:
-            environments[target] = block
             break
 
         package_payload = _invoke_env(
@@ -258,36 +238,58 @@ def _run_local_env_gate_matrix(
         if package_exit != 0:
             overall_exit = package_exit
             failure_category = "package"
-            environments[target] = block
             break
-        package_baseline = str(package_payload.get("baselineId") or "").strip()
-        if _SHA256.fullmatch(package_baseline) is None:
+        try:
+            active_candidate = _matrix_pkg.active_deployment_candidate_snapshot(target)
+            package_identity = _matrix_pkg._package_candidate_release_identity(
+                package_payload,
+                active_candidate,
+                target=target,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
             overall_exit = 2
             failure_category = "package_identity"
             phases.append(
                 PhaseTimer(f"{target}_package_identity").finish(
                     status="gate_block",
-                    details=["package result is missing canonical baselineId"],
+                    details=[str(exc)],
                 )
             )
-            environments[target] = block
             break
-        if matrix_baseline_id and package_baseline != matrix_baseline_id:
+        block["packageIdentity"] = package_identity
+        try:
+            matrix_release_train_id = _matrix_pkg._freeze_matrix_package_identity(
+                package_identity,
+                release_train_id=matrix_release_train_id,
+                package_baselines=package_baselines,
+            )
+        except ValueError as exc:
             overall_exit = 2
-            failure_category = "workspace_drift"
+            failure_category = "release_train_drift"
             phases.append(
                 PhaseTimer(f"{target}_package_identity").finish(
                     status="gate_block",
-                    details=[
-                        "Alpha/Beta/Gamma package baselineId drifted during the serial matrix",
-                        f"expected={matrix_baseline_id}",
-                        f"actual={package_baseline}",
-                    ],
+                    details=[str(exc)],
                 )
             )
-            environments[target] = block
             break
-        matrix_baseline_id = package_baseline
+    for target in targets:
+        if overall_exit != 0:
+            break
+        if time.monotonic() - wall_started > int(budgets["hardBudgetSeconds"]):
+            overall_exit = 2
+            failure_category = "budget"
+            phases.append(
+                PhaseTimer(f"{target}_budget").finish(
+                    status="gate_block",
+                    details=["hard budget exhausted before target execution"],
+                )
+            )
+            break
+
+        env_name = TARGET_ENVIRONMENTS[target]
+        block = environments[target]
+        data_ids = block["dataRunIds"]
 
         if target in {"alpha-local", "beta-local"}:
             drift = _matrix_pkg.probe_migration_drift(target)
@@ -295,7 +297,9 @@ def _run_local_env_gate_matrix(
                 PhaseTimer(f"{target}_migration_drift_probe").finish(
                     status="gate_block" if drift.has_drift else "passed",
                     details=[
-                        format_drift_gate_block(drift) if drift.has_drift else drift.detail
+                        format_drift_gate_block(drift)
+                        if drift.has_drift
+                        else drift.detail
                     ],
                 )
             )
@@ -352,21 +356,11 @@ def _run_local_env_gate_matrix(
             else:
                 startup_detail = ""
             block["startupAttempt"] = startup_attempt
-            startup_identity_ok = (
-                isinstance(startup_attempt, dict)
-                and startup_attempt.get("status") == "running"
-                and startup_attempt.get("target") == target
-                and startup_attempt.get("env") == env_name
-                and startup_attempt.get("workload") == "full"
-                and str(startup_attempt.get("composeProject") or "").strip()
-                and _SHA256.fullmatch(
-                    str(startup_attempt.get("configurationDigest") or "")
-                )
-                is not None
-                and _SHA256.fullmatch(
-                    str(startup_attempt.get("imageTransportTag") or "")
-                )
-                is not None
+            startup_identity_ok = _startup_attempt_matches_package_identity(
+                startup_attempt,
+                target=target,
+                environment=env_name,
+                package_baseline=package_baselines[target],
             )
             phases.append(
                 PhaseTimer(f"{target}_startup_attempt_identity").finish(
@@ -518,7 +512,11 @@ def _run_local_env_gate_matrix(
                     "--import",
                     "--full-sync",
                 ],
-                report_path=(original_readiness.parent.parent / data_ids["originalImport"] / "result.json"),
+                report_path=(
+                    original_readiness.parent.parent
+                    / data_ids["originalImport"]
+                    / "result.json"
+                ),
                 data_fn=data_fn,
             )
             block["candidateApply"] = data_payload
@@ -582,7 +580,11 @@ def _run_local_env_gate_matrix(
                     data_ids["rollbackImport"],
                     "--import",
                 ],
-                report_path=(rollback_readiness.parent.parent / data_ids["rollbackImport"] / "result.json"),
+                report_path=(
+                    rollback_readiness.parent.parent
+                    / data_ids["rollbackImport"]
+                    / "result.json"
+                ),
                 data_fn=data_fn,
             )
             block["rollbackApply"] = data_payload
@@ -645,7 +647,11 @@ def _run_local_env_gate_matrix(
                     "--import",
                     "--full-sync",
                 ],
-                report_path=(replay_readiness.parent.parent / data_ids["replayImport"] / "result.json"),
+                report_path=(
+                    replay_readiness.parent.parent
+                    / data_ids["replayImport"]
+                    / "result.json"
+                ),
                 data_fn=data_fn,
             )
             block["replayApply"] = data_payload
@@ -846,9 +852,7 @@ def _run_local_env_gate_matrix(
                         device_id=device_id,
                         dry_run=False,
                         output_format="json",
-                        report_dir=str(
-                            matrix_dir / target / "device-uat" / key
-                        ),
+                        report_dir=str(matrix_dir / target / "device-uat" / key),
                     ),
                     action=f"{target} {key}",
                 )
@@ -949,13 +953,15 @@ def _run_local_env_gate_matrix(
     if overall_exit == 0 and execution_class == "live":
         evidence_errors = _live_matrix_evidence_errors(
             environments,
-            baseline_id=matrix_baseline_id,
+            release_train_id=matrix_release_train_id,
+            package_baselines=package_baselines,
             device_profile=device_profile,
         )
         phases.append(
             PhaseTimer("live_matrix_evidence_identity").finish(
                 status="gate_block" if evidence_errors else "passed",
-                details=evidence_errors or ["all live evidence identities are report-bound"],
+                details=evidence_errors
+                or ["all live evidence identities are report-bound"],
             )
         )
         if evidence_errors:
@@ -974,7 +980,8 @@ def _run_local_env_gate_matrix(
         wall_seconds=wall_seconds,
         exit_code=overall_exit,
         failure_category=failure_category,
-        baseline_id=matrix_baseline_id,
+        release_train_id=matrix_release_train_id,
+        package_baselines=package_baselines,
         release=candidate_release,
         matrix_run_id=matrix_run_id,
         execution_class=execution_class,

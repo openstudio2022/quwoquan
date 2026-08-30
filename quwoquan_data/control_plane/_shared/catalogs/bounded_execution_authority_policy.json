@@ -1,0 +1,11 @@
+{
+  "schema": "quwoquan_data.bounded_execution_authority_policy",
+  "policyId": "bounded-explicit-v1",
+  "workloadMode": "explicit",
+  "maxTotalObjects": 10,
+  "maxWorkers": 1,
+  "objectWallClockSeconds": 1800,
+  "completionGraceSeconds": 900,
+  "sourceDiscoveryHeartbeatIntervalSeconds": 30,
+  "sourceDiscoveryHeartbeatStaleAfterSeconds": 90
+}

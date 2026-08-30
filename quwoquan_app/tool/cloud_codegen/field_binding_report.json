@@ -1,6 +1,6 @@
 {
   "generator": "app-only-emitter",
-  "contractGraphSha256": "ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28",
+  "contractGraphSha256": "cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f",
   "bindings": [
     {
       "generatedPath": "lib/service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart",
@@ -1214,6 +1214,17 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
+      "dartClass": "GatheringPlanProposal",
+      "dartField": "status",
+      "dartType": "GatheringPlanProposalStatus",
+      "enumRef": "GatheringPlanProposalStatus",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
       "dartClass": "GatheringPolicySet",
       "dartField": "admissionPolicy",
       "dartType": "GatheringAdmissionPolicy",
@@ -1444,6 +1455,50 @@
       "typed": true
     },
     {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
+      "dartClass": "PlanAcknowledgementPolicy",
+      "dartField": "mode",
+      "dartType": "PlanAcknowledgementMode",
+      "enumRef": "PlanAcknowledgementMode",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
+      "dartClass": "PlanItem",
+      "dartField": "kind",
+      "dartType": "PlanItemKind",
+      "enumRef": "PlanItemKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
+      "dartClass": "PlanRevisionAcknowledgement",
+      "dartField": "status",
+      "dartType": "PlanAcknowledgementStatus",
+      "enumRef": "PlanAcknowledgementStatus",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/circle/circle_operation_contracts.g.dart",
+      "dartClass": "PlanRouteSegmentItem",
+      "dartField": "travelMode",
+      "dartType": "PlanTravelMode",
+      "enumRef": "PlanTravelMode",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
       "dartClass": "CommentCommandResult",
       "dartField": "status",
@@ -1533,10 +1588,32 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ContentPostDetailSlice",
+      "dartField": "authorAvatarAccessMode",
+      "dartType": "MediaDeliveryAccessMode?",
+      "enumRef": "MediaDeliveryAccessMode",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
       "dartClass": "ContentPostProjection",
       "dartField": "assistantUsePolicy",
       "dartType": "AssistantUsePolicy?",
       "enumRef": "AssistantUsePolicy",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ContentPostProjection",
+      "dartField": "authorAvatarAccessMode",
+      "dartType": "MediaDeliveryAccessMode?",
+      "enumRef": "MediaDeliveryAccessMode",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
@@ -1698,10 +1775,32 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "PostArticleAsset",
+      "dartField": "accessMode",
+      "dartType": "MediaDeliveryAccessMode?",
+      "enumRef": "MediaDeliveryAccessMode",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
       "dartClass": "PostDeletionReceipt",
       "dartField": "status",
       "dartType": "PostStatus",
       "enumRef": "PostStatus",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "PostMediaItem",
+      "dartField": "accessMode",
+      "dartType": "MediaDeliveryAccessMode?",
+      "enumRef": "MediaDeliveryAccessMode",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
@@ -1724,6 +1823,17 @@
       "dartField": "direction",
       "dartType": "InteractionDirection",
       "enumRef": "InteractionDirection",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ProfileInteractionActivityView",
+      "dartField": "previewImageAccessMode",
+      "dartType": "MediaDeliveryAccessMode?",
+      "enumRef": "MediaDeliveryAccessMode",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
@@ -1797,6 +1907,17 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/entity/entity_operation_contracts.g.dart",
+      "dartClass": "HomepageDetailView",
+      "dartField": "coverAccessMode",
+      "dartType": "MediaDeliveryAccessMode?",
+      "enumRef": "MediaDeliveryAccessMode",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/entity/entity_operation_contracts.g.dart",
       "dartClass": "HomepageFactSource",
       "dartField": "field",
       "dartType": "HomepageStructuredFactField",
@@ -1819,10 +1940,43 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/entity/entity_operation_contracts.g.dart",
+      "dartClass": "HomepageIntroduction",
+      "dartField": "coverAccessMode",
+      "dartType": "MediaDeliveryAccessMode?",
+      "enumRef": "MediaDeliveryAccessMode",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/entity/entity_operation_contracts.g.dart",
+      "dartClass": "HomepageIntroductionAsset",
+      "dartField": "accessMode",
+      "dartType": "MediaDeliveryAccessMode?",
+      "enumRef": "MediaDeliveryAccessMode",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/entity/entity_operation_contracts.g.dart",
       "dartClass": "HomepageReviewView",
       "dartField": "status",
       "dartType": "HomepageReviewStatus",
       "enumRef": "HomepageReviewStatus",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/entity/entity_operation_contracts.g.dart",
+      "dartClass": "HomepageSearchItemView",
+      "dartField": "coverAccessMode",
+      "dartType": "MediaDeliveryAccessMode?",
+      "enumRef": "MediaDeliveryAccessMode",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
@@ -1900,6 +2054,17 @@
       "dartField": "resultType",
       "dartType": "SearchPageObjectType",
       "enumRef": "SearchPageObjectType",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/gateway/gateway_operation_contracts.g.dart",
+      "dartClass": "SearchPageItem",
+      "dartField": "thumbnailAccessMode",
+      "dartType": "MediaDeliveryAccessMode?",
+      "enumRef": "MediaDeliveryAccessMode",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
@@ -3468,6 +3633,17 @@
       "typed": true
     },
     {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_content_hit.g.dart",
+      "dartClass": "CanonicalSearchContentHit",
+      "dartField": "coverAccessMode",
+      "dartType": "MediaDeliveryAccessMode?",
+      "enumRef": "MediaDeliveryAccessMode",
+      "contractType": "enum",
+      "contractSource": "search/search/search_index_view/fields.yaml#types.CanonicalSearchContentHit",
+      "clientDartType": "MediaDeliveryAccessMode",
+      "typed": true
+    },
+    {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/integration/integration_operation_contracts.g.dart",
       "dartClass": "ConnectorConnectionView",
       "dartField": "status",
@@ -4023,6 +4199,17 @@
       "dartField": "status",
       "dartType": "PersonaStatus",
       "enumRef": "PersonaStatus",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/user/user_operation_contracts.g.dart",
+      "dartClass": "PersonaProfileView",
+      "dartField": "avatarAccessMode",
+      "dartType": "MediaDeliveryAccessMode?",
+      "enumRef": "MediaDeliveryAccessMode",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",

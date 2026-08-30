@@ -51,6 +51,9 @@ types:
     - {name: subtitle, source: gatewayProjection.subtitle, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: none, api_exposure: read, ops_exposure: none, description: 当前 owner flat-card 未声明独立 subtitle 时保持 null，禁止从 contentType 或 snippet 伪造。}
     - {name: snippet, source: searchOwner.snippet, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: none, api_exposure: read, ops_exposure: none}
     - {name: thumbnailUrl, source: searchOwner.thumbnailUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+    # 缩略的配对资产标识与交付访问模式（DEC-033）：research 相位的封面是相对私有 CAS 引用，端侧按 assetId 换短签才渲染得出。
+    - {name: thumbnailAssetId, source: searchOwner.thumbnailAssetId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: thumbnailAccessMode, source: searchOwner.thumbnailAccessMode, type: enum, enum_ref: MediaDeliveryAccessMode, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: action, source: searchOwner.action, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, description: 只接受 owner canonical DeepLink；缺失时整个 Query Slice fail-closed。}
     - {name: rankPosition, source: searchOwner.rankPosition, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, description: 服务端最终排序位置（0 起）；端侧只读消费，不得客户端重排。}
     - {name: rankReason, source: searchOwner.rankReasons, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, description: owner rankReasons 的首要理由 label；结构化列表保留在 owner wire，GraphQL cost 治理禁止 list 内嵌套 list。}

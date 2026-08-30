@@ -1,12 +1,13 @@
 description: 该自治边界的运行配置定义与默认值；环境只维护差异和引用。
 configs:
-- key: sys.search-service.accountSecurityAuthority.baseUrl
+- key: sys.search-service.user_account_security_authority.base_url
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
-- key: sys.search-service.accountSecurityAuthority.timeoutMs
+- key: sys.search-service.user_account_security_authority.timeout_ms
+  # 不设默认值：缺失时 authority 客户端构造 fail-closed，四环境必须显式声明。
   type: int
   scope: workload
   reload: restart
@@ -85,6 +86,19 @@ configs:
   rollout: progressive
   sensitive: false
   default: []
+- key: sys.search-service.mongo.database
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: quwoquan
+- key: sys.search-service.mongo.uri
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
 - key: sys.search-service.ranking.termHeatBoost
   type: float
   scope: workload
@@ -121,7 +135,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.search-service.redis.general.password
   type: string
   scope: workload
@@ -197,7 +210,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.search-service.redis.rec.password
   type: string
   scope: workload
@@ -246,6 +258,31 @@ configs:
   rollout: progressive
   sensitive: false
   default: false
+- key: sys.search-service.serving.max_inflight
+  # 单实例在途并发上界：ES 变慢时主动以 typed 503 卸载，而不是堆积到实例崩溃。
+  # 默认值沿用迁移前的启动期取值；observability/slo/search_slo.yaml 的
+  # load_model 按容量档给出 100-150 的规划值，收敛到哪一档由容量评审决定，
+  # 现在可按环境覆盖而不必改代码。
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 256
+- key: sys.search-service.serving.related_terms_cache_max
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 1024
+- key: sys.search-service.serving.related_terms_cache_ttl_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 2000
 - key: sys.search-service.service.http.addr
   type: string
   scope: workload

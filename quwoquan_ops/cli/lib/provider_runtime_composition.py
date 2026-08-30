@@ -77,31 +77,51 @@ def compile_provider_runtime_composition(
     target: str,
     compiled: Mapping[str, Any] | None = None,
     contract_root: Path | None = None,
+    source_root: Path | None = None,
 ) -> dict[str, Any]:
     """Derive an immutable Provider workload identity for one target.
 
-    ``compiled`` and ``contract_root`` are injectable only for local-contract
-    tests. Production callers omit them and therefore consume the canonical
-    compiler output plus checked-in endpoint contracts.
+    ``compiled`` is retained for local-contract tests. Candidate/package callers
+    pass ``source_root`` so Bindings and endpoint contracts come only from the
+    sealed source capsule instead of the live workspace.
     """
 
     validate_provider_runtime_scope(environment, target)
+    if compiled is not None and source_root is not None:
+        raise ValueError(
+            "compiled Provider Bindings and source_root are mutually exclusive"
+        )
     source = compiled
+    if source is None and source_root is not None:
+        from .external_provider_governance_lib import (
+            compile_single_environment_bindings,
+        )
+
+        source = compile_single_environment_bindings(
+            environment=environment,
+            target=target,
+            source_root=source_root,
+        )
     if source is None:
         loaded, issues = load_and_compile()
         if issues:
             raise RuntimeError("; ".join(issue.render() for issue in issues))
         source = loaded
-    if source.get("schema") != COMPILED_BINDING_SCHEMA:
+    if source.get("schema") == COMPILED_BINDING_SCHEMA:
+        compiled_issues = source.get("issues") or []
+        if compiled_issues:
+            raise RuntimeError(
+                "compiled Provider Bindings are invalid: "
+                + "; ".join(str(issue) for issue in compiled_issues)
+            )
+        selected = source.get("selectedBindings")
+        scope = selected.get(environment) if isinstance(selected, Mapping) else None
+    elif source.get("schema") == "compiled-external-provider-bindings.single-environment":
+        if source.get("environment") != environment or source.get("target") != target:
+            raise ValueError("compiled Provider Binding target identity mismatch")
+        scope = source.get("bindings")
+    else:
         raise ValueError("compiled Provider Binding schema mismatch")
-    compiled_issues = source.get("issues") or []
-    if compiled_issues:
-        raise RuntimeError(
-            "compiled Provider Bindings are invalid: "
-            + "; ".join(str(issue) for issue in compiled_issues)
-        )
-    selected = source.get("selectedBindings")
-    scope = selected.get(environment) if isinstance(selected, Mapping) else None
     if not isinstance(scope, Mapping) or not scope:
         raise ValueError(
             f"compiled Provider Bindings have no environment {environment}"
@@ -109,7 +129,17 @@ def compile_provider_runtime_composition(
 
     bindings = _canonical_bindings(scope)
     _validate_nonprod_isolation_policy(environment, bindings)
-    endpoint_contracts = _load_endpoint_contracts(contract_root or CONTRACT_ROOT)
+    effective_contract_root = contract_root
+    if effective_contract_root is None:
+        effective_contract_root = (
+            Path(source_root).resolve() / "quwoquan_ops" / "external"
+            if source_root is not None
+            else CONTRACT_ROOT
+        )
+    endpoint_contracts = _load_endpoint_contracts(
+        effective_contract_root,
+        source_root=source_root,
+    )
     workloads: dict[str, dict[str, Any]] = {}
     endpoint_material_keys: set[str] = set()
     secret_material_keys: set[str] = set()
@@ -220,6 +250,7 @@ def validate_provider_runtime_composition(
     expected_environment: str,
     expected_target: str,
     require_current_contracts: bool = True,
+    source_root: Path | None = None,
 ) -> dict[str, Any]:
     """Validate a packaged composition without rereading workspace Bindings."""
 
@@ -311,8 +342,18 @@ def validate_provider_runtime_composition(
     }
     workload_roles: set[str] = set()
     represented_capabilities: set[str] = set()
+    current_contract_root = (
+        Path(source_root).resolve() / "quwoquan_ops" / "external"
+        if source_root is not None
+        else CONTRACT_ROOT
+    )
     canonical_contracts = (
-        _load_endpoint_contracts(CONTRACT_ROOT) if require_current_contracts else {}
+        _load_endpoint_contracts(
+            current_contract_root,
+            source_root=source_root,
+        )
+        if require_current_contracts
+        else {}
     )
     for workload in workloads:
         if not isinstance(workload, dict) or set(workload) != WORKLOAD_FIELDS:
@@ -468,10 +509,10 @@ def _validate_nonprod_isolation_policy(
                 )
             continue
         if adapter_id == "ext.obs.elasticsearch":
-            if endpoint_ref != f"local_topology:{environment}.elasticsearch":
+            if endpoint_ref != "local_topology:elasticsearch":
                 raise ValueError(
-                    "non-production Elasticsearch endpoint crosses target isolation: "
-                    f"{capability_id}"
+                    "non-production Elasticsearch endpoint must use the shared "
+                    f"trust-domain authority: {capability_id}"
                 )
             continue
         allowed_infrastructure_endpoints = _NONPROD_INFRASTRUCTURE_ENDPOINTS.get(
@@ -545,10 +586,19 @@ def _canonical_bindings(scope: Mapping[str, Any]) -> list[dict[str, Any]]:
     return bindings
 
 
-def _load_endpoint_contracts(contract_root: Path) -> dict[str, dict[str, Any]]:
+def _load_endpoint_contracts(
+    contract_root: Path,
+    *,
+    source_root: Path | None = None,
+) -> dict[str, dict[str, Any]]:
     contracts: dict[str, dict[str, Any]] = {}
+    validation_root = ROOT if source_root is None else Path(source_root).resolve()
     for path in sorted(contract_root.glob("*/contract/endpoints.yaml")):
-        _validate_repo_regular_file(path, label="Provider endpoint contract")
+        _validate_repo_regular_file(
+            path,
+            label="Provider endpoint contract",
+            source_root=validation_root,
+        )
         try:
             payload = yaml.safe_load(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, yaml.YAMLError) as exc:
@@ -583,14 +633,21 @@ def _load_endpoint_contracts(contract_root: Path) -> dict[str, dict[str, Any]]:
             contract.update(
                 {
                     "composeProfiles": [],
-                    "contractRef": _display_path(contract_path),
+                    "contractRef": _display_path(
+                        contract_path,
+                        source_root=validation_root,
+                    ),
                     "contractDigest": _sha256_file(contract_path),
                     "composeRef": "",
                     "composeDigest": "",
                 }
             )
             continue
-        _validate_repo_regular_file(compose_path, label="Provider workload Compose")
+        _validate_repo_regular_file(
+            compose_path,
+            label="Provider workload Compose",
+            source_root=validation_root,
+        )
         try:
             compose = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, yaml.YAMLError) as exc:
@@ -619,20 +676,31 @@ def _load_endpoint_contracts(contract_root: Path) -> dict[str, dict[str, Any]]:
                         if str(profile).strip()
                     }
                 ),
-                "contractRef": _display_path(contract_path),
+                "contractRef": _display_path(
+                    contract_path,
+                    source_root=validation_root,
+                ),
                 "contractDigest": _sha256_file(contract_path),
-                "composeRef": _display_path(compose_path),
+                "composeRef": _display_path(
+                    compose_path,
+                    source_root=validation_root,
+                ),
                 "composeDigest": _sha256_file(compose_path),
             }
         )
     return contracts
 
 
-def _validate_repo_regular_file(path: Path, *, label: str) -> None:
-    """Reject absolute/ref traversal and every symlink component under ROOT."""
+def _validate_repo_regular_file(
+    path: Path,
+    *,
+    label: str,
+    source_root: Path | None = None,
+) -> None:
+    """Reject absolute/ref traversal and every symlink component under source_root."""
 
-    root = ROOT.resolve()
-    candidate = path if path.is_absolute() else ROOT / path
+    root = ROOT.resolve() if source_root is None else Path(source_root).resolve()
+    candidate = path if path.is_absolute() else root / path
     unresolved = candidate.absolute()
     try:
         relative = unresolved.relative_to(root)
@@ -660,21 +728,28 @@ def _local_topology_role(endpoint_ref: str) -> str:
 def validate_provider_runtime_scope(environment: str, target: str) -> None:
     """Fail closed when a Provider environment is paired with another target."""
 
-    expected_target = (
-        f"{environment}-local" if environment in NONPROD_ENVIRONMENTS else "prod-hosted"
-    )
     if environment not in {*NONPROD_ENVIRONMENTS, "prod"}:
         raise ValueError(f"unsupported Provider environment: {environment}")
-    if target != expected_target:
+    expected_targets = (
+        {f"{environment}-local"}
+        if environment in NONPROD_ENVIRONMENTS
+        else {"prod-sim", "prod-hosted"}
+    )
+    if target not in expected_targets:
         raise ValueError(
             "Provider target/environment mismatch: "
             f"environment={environment} target={target}"
         )
 
 
-def _display_path(path: Path) -> str:
+def _display_path(
+    path: Path,
+    *,
+    source_root: Path | None = None,
+) -> str:
+    root = ROOT.resolve() if source_root is None else Path(source_root).resolve()
     try:
-        return path.resolve().relative_to(ROOT).as_posix()
+        return path.resolve().relative_to(root).as_posix()
     except ValueError:
         return path.resolve().as_posix()
 

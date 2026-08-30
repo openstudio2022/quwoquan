@@ -2,12 +2,13 @@ ARG GO_BASE_IMAGE
 ARG ALPINE_BASE_IMAGE
 ARG ALPINE_PACKAGE_REPOSITORY=https://mirrors.aliyun.com/alpine
 ARG GO_BUILD_FLAGS=-p=1
-ARG IP2REGION_DATA_VERSION=v3.17.0+incompatible
-ARG IP2REGION_V4_SHA256=6307a9696f5711f84bcb8b25f07894de68a64a0ed4a1cc7e990562dd3084f210
-ARG IP2REGION_V6_SHA256=5b93da35ac28bc316dccc54a758381f7a874ae0461dd51ff5df5e34815586f11
+ARG IP2REGION_DATA_VERSION=v3.17.1-0.20260814054437-800d19424237+incompatible
+ARG IP2REGION_V4_SHA256=c6edaf379fe524d7283a9c11c7eac27d5641a0976baa48c22c319ccd59aa3f36
+ARG IP2REGION_V6_SHA256=939f6b46bd2b8bec3cf7c5ceb8ba782266ae9b1f35b5ba7916700dec0b7506ed
 
 FROM --platform=${BUILDPLATFORM} ${GO_BASE_IMAGE} AS builder
 ARG GO_BUILD_FLAGS
+ARG QWQ_PROVIDER_BINDING_MANIFEST_DIGEST
 ARG TARGETOS
 ARG TARGETARCH
 ARG GOPROXY=https://goproxy.cn,direct
@@ -32,11 +33,15 @@ RUN --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
 COPY . .
 RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-    go build ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" \
+    --mount=type=bind,from=qwq_provider_bindings,source=.,target=/run/qwq-provider-bindings,ro \
+    test -n "${QWQ_PROVIDER_BINDING_MANIFEST_DIGEST}" \
+    && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+    go build -overlay=/run/qwq-provider-bindings/go.overlay.json ${GO_BUILD_FLAGS} -trimpath -ldflags="-s -w" \
     -o /out/service-core \
     ./cmd/service-core
 
+# 环境身份不烤入镜像：artifact-identity.json 由部署面挂载（DEC-005 信任域裁决），
+# 启动时经 QWQ_ARTIFACT_IDENTITY_FILE 读取并用 APP_ENV 断言校验。
 FROM ${ALPINE_BASE_IMAGE}
 ARG ALPINE_PACKAGE_REPOSITORY
 RUN if command -v apk >/dev/null 2>&1; then \

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/governance/canonical_gc_execution_tombstone.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "executionId", "reclaimReason", "reclaimedAt",
+    "referencedBy", "tombstoneDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.canonical_gc_execution_tombstone"},
+    "executionId": {"type": "string", "minLength": 1},
+    "reclaimReason": {
+      "enum": ["gc_quarantine_reclaim", "reclaimed_before_tombstone_protocol"]
+    },
+    "reclaimedAt": {"type": "string", "format": "date-time"},
+    "planId": {"type": "string", "minLength": 1},
+    "planDigest": {"$ref": "#/$defs/digest"},
+    "backfillId": {"type": "string", "minLength": 1},
+    "quarantineRef": {
+      "type": "string",
+      "pattern": "^data/local/workspace/quarantine/canonical-gc/"
+    },
+    "merkleRoot": {"$ref": "#/$defs/digest"},
+    "fileCount": {"type": "integer", "minimum": 0},
+    "bytes": {"type": "integer", "minimum": 0},
+    "referencedBy": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/reference"}
+    },
+    "tombstoneDigest": {"$ref": "#/$defs/digest"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["reclaimReason"],
+        "properties": {"reclaimReason": {"const": "gc_quarantine_reclaim"}}
+      },
+      "then": {
+        "required": [
+          "planId", "planDigest", "quarantineRef",
+          "merkleRoot", "fileCount", "bytes"
+        ],
+        "not": {"required": ["backfillId"]}
+      },
+      "else": {
+        "required": ["backfillId"],
+        "not": {
+          "anyOf": [
+            {"required": ["planId"]},
+            {"required": ["planDigest"]},
+            {"required": ["quarantineRef"]},
+            {"required": ["merkleRoot"]},
+            {"required": ["fileCount"]},
+            {"required": ["bytes"]}
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "relation"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "relation": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

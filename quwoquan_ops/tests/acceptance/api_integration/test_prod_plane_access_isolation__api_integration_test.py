@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,9 +16,12 @@ except ImportError:  # pragma: no cover
 ROOT = Path(__file__).resolve().parents[4]
 ACCESS = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 RUNTIME = ROOT / "quwoquan_ops/environments/prod/runtime.yaml"
+DEPLOY_SCRIPT = ROOT / "quwoquan_ops/cli/prod/deploy_to_prod.sh"
 
 
 def _run(argv: list[str], **env_overrides: str) -> subprocess.CompletedProcess[str]:
+    if argv and argv[0] == "python3":
+        argv = [sys.executable, "-B", *argv[1:]]
     env = os.environ.copy()
     for key in (
         "PROD_KUBECONFIG",
@@ -64,6 +68,7 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
 
     @unittest.skipIf(yaml is None, "PyYAML required")
     def test_planes_accounts_and_secrets_single_source(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-002.t2
         data = yaml.safe_load(ACCESS.read_text(encoding="utf-8"))
         runtime = yaml.safe_load(RUNTIME.read_text(encoding="utf-8"))
         self.assertEqual(data["management"]["purpose"], "ssh-only-management")
@@ -165,6 +170,10 @@ class ProdPlaneAccessIsolationTest(unittest.TestCase):
         self.assertIn("enable-linger \"prod-service-svc\"", result.stdout)
 
     # --- 部署模块：prod deploy dry-run 给出按平面 SSH 发布计划 ---
+    def test_deploy_script_disables_source_tree_bytecode_for_every_python_entry(self) -> None:
+        script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+        self.assertNotIn("python3 ", script.replace("python3 -B ", ""))
+
     def test_deploy_dry_run_plane_plan(self) -> None:
         result = _run(
             ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],

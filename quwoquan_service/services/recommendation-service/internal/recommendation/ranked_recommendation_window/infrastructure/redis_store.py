@@ -501,6 +501,7 @@ class RedisWindowStore:
             ("windowId", window.window_id),
             ("subjectId", window.subject_id),
             ("scenario", window.scenario),
+            ("experimentBucket", window.experiment_bucket),
             ("modelBucket", window.model_bucket),
             ("modelChannel", window.model_channel),
             ("modelReleaseId", window.model_release_id),
@@ -595,6 +596,7 @@ class RedisWindowStore:
                 window.window_id,
                 window.subject_id,
                 window.scenario,
+                window.experiment_bucket,
                 window.model_bucket,
                 window.model_channel,
                 window.model_release_id,
@@ -648,6 +650,7 @@ class RedisWindowStore:
                     "windowId",
                     "subjectId",
                     "scenario",
+                    "experimentBucket",
                     "modelBucket",
                     "modelChannel",
                     "modelReleaseId",
@@ -751,6 +754,9 @@ class RedisWindowStore:
                     )
                 )
             ranking = RankingResult(
+                experiment_bucket=self._required_text(
+                    document["experimentBucket"], "experimentBucket"
+                ),
                 model_bucket=self._required_text(document["modelBucket"], "modelBucket"),
                 model_channel=self._optional_text(document["modelChannel"], "modelChannel"),
                 model_release_id=self._optional_text(

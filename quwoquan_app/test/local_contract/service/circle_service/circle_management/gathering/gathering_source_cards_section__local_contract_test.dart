@@ -11,8 +11,6 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart';
-import 'package:quwoquan_app/runtime/di/gathering_dependencies.dart'
-    show gatheringQueryReaderProvider;
 import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart'
     show exceptionTelemetryPortProvider;
 import 'package:quwoquan_app/runtime/observability/app_observability_ports.dart';
@@ -22,7 +20,9 @@ import 'package:quwoquan_app/service/circle_service/circle_management/gathering/
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_source_cards_section.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart'
     show RuntimeFailureBase;
+
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
 
 const String _homepageId = 'homepage_sight_west_lake';
 
@@ -58,9 +58,8 @@ final class _QueryReaderDouble implements GatheringQueryReader {
   ) async => GatheringHostCardPage.empty;
 
   @override
-  Future<GatheringHostCardPage> listMine(
-    GatheringMineListQuery query,
-  ) async => GatheringHostCardPage.empty;
+  Future<GatheringHostCardPage> listMine(GatheringMineListQuery query) async =>
+      GatheringHostCardPage.empty;
 }
 
 final class _RecordingTelemetry implements ExceptionTelemetryPort {
@@ -150,7 +149,7 @@ Future<List<String>> _pump(
     ProviderScope(
       overrides: <Override>[
         ...sealedCloudBoundaryOverrides(),
-        gatheringQueryReaderProvider.overrideWithValue(reader),
+        ...homepageSourceCardsBoundaryOverrides(gatheringQueryReader: reader),
         exceptionTelemetryPortProvider.overrideWithValue(
           telemetry ?? _RecordingTelemetry(),
         ),

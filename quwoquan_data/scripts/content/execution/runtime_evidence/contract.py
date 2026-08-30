@@ -60,6 +60,7 @@ class ProcessObservation:
     command: str
     start_token: str
     rss_bytes: int
+    cpu_percent: float
     open_fd_count: int
 
     @property
@@ -574,7 +575,6 @@ def create_runtime_evidence_session(
         recorded_at_field="createdAt",
     )
     return document, path
-
 
 __all__ = [
     "CARRIERS",

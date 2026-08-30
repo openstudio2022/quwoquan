@@ -108,7 +108,7 @@ func newGraphQLContentExecutor(
 
 func contentPostEntry() domain.Entry {
 	plan := domain.CostPlan{
-		BaseComplexity: 56, ListMultipliers: []domain.ListMultiplier{},
+		BaseComplexity: 60, ListMultipliers: []domain.ListMultiplier{},
 		MaxOwnerCalls: 1, MaxBatchKeys: 1, MaxResponseBytes: 64 * 1024,
 	}
 	digest, err := plan.Digest()
@@ -116,7 +116,7 @@ func contentPostEntry() domain.Entry {
 		panic(err)
 	}
 	return domain.Entry{
-		SHA256Hash:           "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110",
+		SHA256Hash:           "3a73f535735fcbb64f7de0db524e9dab2ca1f41d7f1fec91c68053dfde5bc80f",
 		OperationName:        "ContentPostDetailBase",
 		OperationType:        domain.OperationTypeQuery,
 		CanonicalOperationID: "content.post.GetPost",
@@ -127,13 +127,26 @@ func contentPostEntry() domain.Entry {
 		CostModelVersion: domain.CostModelVersionV1,
 		CostPlanDigest:   digest,
 		Cost: domain.CostBudget{
-			Depth: 3, TopLevelFields: 1, Complexity: 56,
+			Depth: 3, TopLevelFields: 1, Complexity: 60,
 			VariablesMaxBytes: 1024, PageSizeMax: 1,
 			MaxOwnerCalls: 1, MaxBatchKeys: 1, MaxResponseBytes: 64 * 1024,
 			SLORef: "slo:gateway_graphql_read_detail",
 		},
 		CostPlan:    plan,
 		ExecutorKey: "content.post.getPost",
+		AppClientBundle: &domain.AppClientBundle{
+			BundleID: "content.post.ContentPostDetail", Role: "base",
+			SupportedContentTypes: []string{"article", "image", "micro", "video"},
+			SelectedFields: []string{
+				"assistantUsePolicy", "authorAvatarAccessMode", "authorAvatarAssetId", "authorAvatarUrl",
+				"authorDisplayName", "authorId", "body", "canonicalEntityId", "commentCount", "contentIdentity",
+				"contentType", "coverUrl", "createdAt", "gatheringRef", "geoTagRef", "likeCount", "location",
+				"locationName", "postId", "primaryHomepageId", "primaryHomepageSnapshot", "primaryHomepageType",
+				"publishedAt", "shareCount", "sourceAttribution", "status", "summary", "title", "updatedAt",
+				"viewCount", "viewerLiked", "visibility", "visitedAt",
+			},
+			AssemblyMappings: []domain.AssemblyMapping{},
+		},
 	}
 }
 
@@ -214,11 +227,12 @@ func apiBaseOwnerPost(title string) map[string]any {
 	return map[string]any{
 		"postId": "post-1", "contentType": "article", "contentIdentity": nil,
 		"assistantUsePolicy": nil, "authorId": nil, "authorDisplayName": nil,
-		"authorAvatarUrl": nil, "title": title, "body": nil, "summary": nil,
+		"authorAvatarUrl": nil, "authorAvatarAssetId": nil, "authorAvatarAccessMode": nil,
+		"title": title, "body": nil, "summary": nil,
 		"coverUrl": nil, "sourceAttribution": nil, "location": nil,
 		"locationName": nil, "geoTagRef": nil, "visitedAt": nil,
 		"primaryHomepageId": nil, "canonicalEntityId": nil, "primaryHomepageType": nil,
-		"primaryHomepageSnapshot": nil, "status": "published", "visibility": "public",
+		"primaryHomepageSnapshot": nil, "status": "published", "visibility": "public", "gatheringRef": nil,
 		"likeCount": 1, "commentCount": 2, "shareCount": 3, "viewCount": 4, "viewerLiked": nil,
 		"createdAt": "2026-08-11T00:00:00Z", "updatedAt": "2026-08-11T00:01:00Z",
 		"publishedAt": nil,

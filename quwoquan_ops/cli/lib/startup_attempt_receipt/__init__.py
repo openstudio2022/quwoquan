@@ -75,6 +75,7 @@ from .receipt_contract import (  # noqa: F401
     _utc_now,
     load_startup_attempt,
     load_workload_startup_attempt,
+    read_startup_attempt,
     startup_attempt_path,
     startup_attempt_path_for_workload,
     validate_startup_attempt,

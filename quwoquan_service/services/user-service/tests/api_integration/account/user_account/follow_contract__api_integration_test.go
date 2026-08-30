@@ -1,6 +1,7 @@
 package api_integration
 
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-002.t2
 import (
 	"context"
 	"encoding/json"

@@ -29,6 +29,7 @@ func TestGatewayErrorContractSemanticsMatchDeclaredCatalog(t *testing.T) {
 		"edge_security/rate_limit_bucket": {
 			"GATEWAY.USER.rate_limited":                       {429, "retry"},
 			"GATEWAY.MIDDLEWARE.rate_limit_state_unavailable": {503, "retry"},
+			"GATEWAY.MIDDLEWARE.upstream_timeout":             {504, "retry"},
 			"GATEWAY.MIDDLEWARE.upstream_unavailable":         {503, "retry"},
 		},
 		"edge_security/rollout_assignment": {

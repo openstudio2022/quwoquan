@@ -7,29 +7,18 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	configrelease "quwoquan_service/runtime/configrelease"
 	"strings"
-	"sync"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	operationsecurity "quwoquan_service/generated/operationsecurity"
-	rtmongo "quwoquan_service/internal/platform/mongodb"
-	platformredis "quwoquan_service/internal/platform/redis"
-	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/artifactidentity"
+	rterr "quwoquan_service/runtime/errors"
 	rtgov "quwoquan_service/runtime/governance"
-	rthealth "quwoquan_service/runtime/health"
-	rtotel "quwoquan_service/runtime/otel"
+	runtimemessaging "quwoquan_service/runtime/messaging"
+	"quwoquan_service/runtime/servicehost"
+	"quwoquan_service/runtime/servicekit"
 
 	runtimeconfig "quwoquan_service/runtime/config"
-	"quwoquan_service/runtime/controlplane"
-	rterr "quwoquan_service/runtime/errors"
-	rthttp "quwoquan_service/runtime/http"
-	runtimemessaging "quwoquan_service/runtime/messaging"
-	rtmetrics "quwoquan_service/runtime/metrics"
-	robs "quwoquan_service/runtime/observability"
-	rtredis "quwoquan_service/runtime/redis"
 	httpadapter "quwoquan_service/services/rtc-service/internal/rtc/call_session/adapters/inbound/http"
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/adapters/inbound/mq"
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/application"
@@ -41,194 +30,160 @@ import (
 	rtcconfig "quwoquan_service/services/rtc-service/internal/rtc/call_session/infrastructure/runtimeconfig"
 )
 
-type redisSceneCfg struct {
-	Mode     string   `yaml:"mode"`
-	Addr     string   `yaml:"addr"`
-	Addrs    []string `yaml:"addrs"`
-	Password string   `yaml:"password"`
-	DB       int      `yaml:"db"`
-	TLS      bool     `yaml:"tls"`
-	Pool     struct {
-		Size    int `yaml:"size"`
-		MinIdle int `yaml:"min_idle"`
-	} `yaml:"pool"`
-}
-
+// config 是 rtc-service 的声明式配置：通用段内嵌 servicekit.BaseConfig，
+// 装配骨架由 servicekit.Bootstrap 承担（DEC-028）。MongoDB 键沿用环境
+// secretRefs 已固定的无前缀契约键（envAbsolute）。
 type config struct {
-	Config struct {
-		Version string `yaml:"version"`
-	} `yaml:"config"`
-
-	Service struct {
-		HTTP struct {
-			Addr string `yaml:"addr"`
-		} `yaml:"http"`
-	} `yaml:"service"`
-
-	UserAccountSecurityAuthority struct {
-		BaseURL   string `yaml:"base_url"`
-		TimeoutMs int    `yaml:"timeout_ms"`
-	} `yaml:"user_account_security_authority"`
+	servicekit.BaseConfig `yaml:",inline"`
 
 	CallSession struct {
 		RingTimeout rtcconfig.RingTimeoutSettings `yaml:"ring_timeout"`
 	} `yaml:"call_session"`
 
 	MongoDB struct {
-		URI      string `yaml:"uri"`
-		Database string `yaml:"database"`
+		URI      string `yaml:"uri" env:"MONGO_URI" required:"true"`
+		Database string `yaml:"database" env:"MONGO_DATABASE" required:"true"`
 	} `yaml:"mongodb"`
 
 	Redis struct {
-		Realtime redisSceneCfg `yaml:"realtime"`
-		General  redisSceneCfg `yaml:"general"`
+		Realtime servicekit.RedisSceneConfig `yaml:"realtime" envPrefix:"REDIS_REALTIME"`
+		General  servicekit.RedisSceneConfig `yaml:"general" envPrefix:"REDIS_GENERAL"`
+		// SharedAddr 是部署面为两个 scene 共享注入的兜底地址，scene 专属
+		// addr 优先。声明在此而非 os.Getenv 裸读，键才进 DeclaredEnvKeys。
+		SharedAddr string `yaml:"-" env:"REDIS_ADDR"`
 	} `yaml:"redis"`
 }
 
-func main() {
-	serviceName, appEnv, configRoot, configVersion, imageVersion, err := resolveRuntimeIdentity()
-	if err != nil {
-		log.Fatalf("rtc-service runtime identity invalid: %v", err)
-	}
+// DeclaredEnvKeys 暴露声明派生的 env 覆盖键全集，供等价断言测试锁定
+// 键集不随重构漂移。
+func DeclaredEnvKeys() ([]string, error) {
+	return servicekit.EnvOverrideKeys(servicekit.DefaultEnvPrefix("rtc-service"), &config{})
+}
 
-	cfg, err := loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion)
-	if err != nil {
-		log.Fatalf("rtc-service config load failed: %v", err)
+func main() {
+	if _, err := artifactidentity.LoadAndValidate(
+		os.Getenv("QWQ_ARTIFACT_IDENTITY_FILE"),
+		os.Getenv("APP_ENV"),
+	); err != nil {
+		log.Fatalf("rtc-service artifact identity invalid: %v", err)
 	}
-	applyEnvOverrides(&cfg)
-	if err := validateRuntimeConfigurationIdentity(cfg, configVersion); err != nil {
-		log.Fatalf("rtc-service config identity failed: %v", err)
+	servicekit.RunStandalone("rtc-service", func() (servicehost.Module, error) {
+		return newModule()
+	})
+}
+
+func newModule() (*servicekit.Module, error) {
+	return servicekit.Bootstrap("rtc-service", servicekit.BootstrapSpec[config]{
+		OperationDescriptors: operationsecurity.ForDomain("rtc"),
+		AuthorityScopes:      []string{"user.account.security.read"},
+		RedisScenes:          resolveRedisScenes,
+		Assemble:             assembleRTCDomain,
+	})
+}
+
+// resolveRedisScenes 装配三个 codegen scene：realtime 独立，rec 复用 general。
+//
+// 地址有两个声明位：scene 专属 addr 与 RTC_REDIS_ADDR。后者是 compose 与 prod
+// plane 为两个 scene 共享注入的本服务部署面既有契约。两者构成固定优先级——
+// scene 专属优先、共享其次——与配置渲染的分层默认同构：每一层都是显式声明，
+// 生效值总能指回一处写下它的地方。这不是「地址为空就去猜」，两层都缺就是没人
+// 声明过地址，交给 DeclaredMode 按声明的 mode 判否。
+func resolveRedisScenes(cfg *config) map[string]servicekit.RedisSceneConfig {
+	general := cfg.Redis.General
+	realtime := cfg.Redis.Realtime
+	shared := strings.TrimSpace(cfg.Redis.SharedAddr)
+	general.Addr = firstDeclaredAddr(general.Addr, shared)
+	realtime.Addr = firstDeclaredAddr(realtime.Addr, shared)
+	return map[string]servicekit.RedisSceneConfig{
+		"realtime": realtime,
+		"general":  general,
+		"rec":      general,
 	}
+}
+
+// firstDeclaredAddr 按声明位优先级取第一个被声明过的地址。
+func firstDeclaredAddr(layers ...string) string {
+	for _, layer := range layers {
+		if declared := strings.TrimSpace(layer); declared != "" {
+			return declared
+		}
+	}
+	return ""
+}
+
+func assembleRTCDomain(asm *servicekit.Assembly, cfg *config) error {
+	ctx := asm.Context
+	logger := slog.Default()
+
 	ringTimeoutConfiguration, err := cfg.CallSession.RingTimeout.Resolve()
 	if err != nil {
-		log.Fatalf("rtc-service ring timeout configuration invalid: %v", err)
+		return fmt.Errorf("ring timeout configuration invalid: %w", err)
 	}
-	controlplane.StartReleaseConfigAttestation(
-		serviceName, appEnv, configRoot, configVersion, imageVersion,
-	)
-	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
-		runtimeconfig.EnvRuntimeConfigProvider{},
-	)
-	if err != nil {
-		log.Fatalf("rtc-service access token config invalid: %v", err)
-	}
-	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
-	if err != nil {
-		log.Fatalf("rtc-service access token verifier invalid: %v", err)
-	}
-	accountSecurityAuthority, err := rtcconfig.NewAccountSecurityAuthority(
-		accessTokenConfig,
-		cfg.UserAccountSecurityAuthority.BaseURL,
-		cfg.UserAccountSecurityAuthority.TimeoutMs,
-	)
-	if err != nil {
-		log.Fatalf("rtc-service account security authority invalid: %v", err)
-	}
+	accountSecurityAuthority := asm.Auth.AccountSecurityAuthority
 
-	addr := getenvOrDefault("RTC_SERVICE_ADDR", cfg.Service.HTTP.Addr)
-	if addr == "" {
-		addr = ":18083"
-	}
-
-	logger := slog.Default()
-	instanceID := getenvOrDefault("SERVICE_INSTANCE_ID", hostname())
-
-	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
-	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
-	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
-		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
-		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
-		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
-	)
-	if err != nil {
-		log.Fatalf("rtc-service runtime log exporter init failed: %v", err)
-	}
-	defer runtimeLogExporter.Close()
-	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
-	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
-	defer standardLogWriter.Close()
-	defer errorLogWriter.Close()
-	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
-	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, "info", nil)
-	if err != nil {
-		log.Fatalf("rtc-service process logger init failed: %v", err)
-	}
-	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
-	if err != nil {
-		log.Fatalf("rtc-service exception logger init failed: %v", err)
-	}
-
-	router := buildRedisRouter(cfg)
-	defer router.Close()
-
-	ctx := context.Background()
-	messageTransport, err := requireRTCMessageTransport(
-		ctx,
-		appEnv,
-		router,
-		map[string]string{
-			"general":  toSceneConfig(cfg.Redis.General).Mode,
-			"realtime": toSceneConfig(cfg.Redis.Realtime).Mode,
-		},
-	)
-	if err != nil {
-		log.Fatalf("rtc-service message transport preflight failed: %v", err)
-	}
-
-	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "rtc-service", SamplingRatio: 0.1})
-	defer otelShutdown()
-
-	if err := router.PingAll(ctx); err != nil {
+	if err := asm.RedisRouter.PingAll(ctx); err != nil {
 		log.Printf("WARN: rtc-service redis ping: %v", err)
 	}
-	mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI}, "rtc-service")
-	defer func() { _ = mongoClient.Disconnect(ctx) }()
+	messageTransport, err := requireRTCMessageTransport(
+		ctx,
+		asm.Identity.AppEnv,
+		asm.RedisRouter,
+		asm.RedisSceneModes,
+	)
+	if err != nil {
+		return fmt.Errorf("message transport preflight failed: %w", err)
+	}
 
-	mongoDB := mongoClient.Database(cfg.MongoDB.Database)
+	mongoDB, err := asm.Mongo(servicekit.MongoConfig{
+		URI:      cfg.MongoDB.URI,
+		Database: cfg.MongoDB.Database,
+	})
+	if err != nil {
+		return err
+	}
 	callStore := persistence.NewMongoCallStore(mongoDB)
 	if err := callStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("rtc-service call session indexes unavailable: %v", err)
+		return fmt.Errorf("call session indexes unavailable: %w", err)
 	}
-	callCache := rtccache.NewCallStateCache(router.Scene("general"))
+	callCache := rtccache.NewCallStateCache(asm.RedisRouter.Scene("general"))
 	realtimePublisher := mq.NewRealtimePublisher(messageTransport)
 
 	mediaBinding, err := providerbinding.ResolveMediaTransport(
-		appEnv,
+		asm.Identity.AppEnv,
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
 	if err != nil {
-		log.Fatalf("rtc-service media transport binding invalid: %v", err)
+		return fmt.Errorf("media transport binding invalid: %w", err)
 	}
-	var roomAdapter application.MediaRoomProvider
-	switch mediaBinding.AdapterID {
-	case livekit.AdapterID:
-		livekitCB := rtgov.NewCircuitBreaker(5, 15*time.Second, logger)
-		livekitClient := rtgov.WrapClientWithCB(
-			&http.Client{Timeout: mediaBinding.Timeout},
-			livekitCB,
-		)
-		roomAdapter = livekit.NewLiveKitRoomAdapter(
-			mediaBinding.ConnectionURL,
-			mediaBinding.APIKey,
-			mediaBinding.APISecret,
-			livekit.WithHTTPClient(livekitClient),
-		)
-	default:
-		log.Fatalf(
-			"rtc-service media transport adapter mismatch: got %q",
-			mediaBinding.AdapterID,
+	if mediaBinding.AdapterID != livekit.AdapterID {
+		return fmt.Errorf(
+			"media transport adapter mismatch: got %q", mediaBinding.AdapterID,
 		)
 	}
+	livekitCB := rtgov.NewCircuitBreaker(5, 15*time.Second, logger)
+	livekitClient := rtgov.WrapClientWithCB(
+		&http.Client{Timeout: mediaBinding.Timeout},
+		livekitCB,
+	)
+	var roomAdapter application.MediaRoomProvider = livekit.NewLiveKitRoomAdapter(
+		mediaBinding.ConnectionURL,
+		mediaBinding.APIKey,
+		mediaBinding.APISecret,
+		livekit.WithHTTPClient(livekitClient),
+	)
 	domainSvc, err := callsession.NewCallSessionService(
 		ringTimeoutConfiguration.DomainPolicy,
 	)
 	if err != nil {
-		log.Fatalf("rtc-service call session domain policy invalid: %v", err)
+		return fmt.Errorf("call session domain policy invalid: %w", err)
 	}
 
 	userServiceBaseURL := strings.TrimSpace(os.Getenv("USER_SERVICE_BASE_URL"))
-	if userServiceBaseURL == "" && failFastEnvironment(appEnv) {
-		log.Fatalf("rtc-service requires USER_SERVICE_BASE_URL in %s for the one-to-one relationship gate", appEnv)
+	if userServiceBaseURL == "" && failFastEnvironment(asm.Identity.AppEnv) {
+		return fmt.Errorf(
+			"USER_SERVICE_BASE_URL is required in %s for the one-to-one relationship gate",
+			asm.Identity.AppEnv,
+		)
 	}
 	relationshipGate := application.DenyRelationshipGate()
 	if userServiceBaseURL != "" {
@@ -251,24 +206,21 @@ func main() {
 		realtimePublisher,
 	)
 	accountSecurityFailures := rtccache.NewAccountSecurityEventFailureStore(
-		router.Scene("general"),
+		asm.RedisRouter.Scene("general"),
 	)
 	accountSecurityConsumer, err := mq.NewUserAccountSecurityConsumer(
 		messageTransport,
 		orchestrator,
 		accountSecurityFailures,
-		instanceID,
+		asm.Identity.InstanceID,
 		logger,
 		mq.DefaultUserAccountSecurityConsumerConfig(),
 	)
 	if err != nil {
-		log.Fatalf("rtc-service account security consumer invalid: %v", err)
+		return fmt.Errorf("account security consumer invalid: %w", err)
 	}
-	workerCtx, cancelWorkers := context.WithCancel(context.Background())
-	var workerWG sync.WaitGroup
-	workerWG.Add(3)
-	go func() {
-		defer workerWG.Done()
+
+	asm.Workers.Add(func(workerCtx context.Context) {
 		runRecoveringWorker(
 			workerCtx,
 			logger,
@@ -277,11 +229,10 @@ func main() {
 				return signalDeliveryCoordinator.Run(runCtx, 100*time.Millisecond)
 			},
 		)
-	}()
+	})
 	// 振铃超时收割：无人接听迁移 ended/no_answer 并经 outbox 下发 call.ended。
 	// 扫描间隔与领域阈值来自同一 typed service runtime configuration。
-	go func() {
-		defer workerWG.Done()
+	asm.Workers.Add(func(workerCtx context.Context) {
 		runRecoveringWorker(
 			workerCtx,
 			logger,
@@ -293,14 +244,11 @@ func main() {
 				)
 			},
 		)
-	}()
-	go func() {
-		defer workerWG.Done()
-		accountSecurityConsumer.Run(workerCtx)
-	}()
-	handler := httpadapter.NewCallHandler(orchestrator).Routes()
-	handler, err = runtimemessaging.WithDeadLetterRecoveryRoute(
-		handler,
+	})
+	asm.Workers.Add(accountSecurityConsumer.Run)
+
+	domainHandler, err := runtimemessaging.WithDeadLetterRecoveryRoute(
+		httpadapter.NewCallHandler(orchestrator).Routes(),
 		runtimemessaging.DeadLetterRecoveryRouteConfig{
 			Path:     "/internal/rtc/account-closure/dead-letters:recover",
 			Module:   rterr.ModuleRTC,
@@ -308,73 +256,14 @@ func main() {
 		},
 	)
 	if err != nil {
-		log.Fatalf("rtc account-closure recovery route failed: %v", err)
+		return fmt.Errorf("account-closure recovery route failed: %w", err)
 	}
+	asm.Mux.Handle("/", domainHandler)
 
-	healthChecker := rthealth.NewChecker()
-	healthChecker.Register("redis", func(hctx context.Context) error {
-		return router.PingAll(hctx)
-	})
-	healthChecker.Register("mongodb", func(hctx context.Context) error {
-		return mongoClient.Ping(hctx, nil)
-	})
-	healthChecker.Register("account_security_authority", func(hctx context.Context) error {
-		return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)
-	})
-	healthChecker.Register("user_account_security_consumer", func(context.Context) error {
+	asm.Health.Register("user_account_security_consumer", func(context.Context) error {
 		return accountSecurityConsumer.Healthy(10 * time.Second)
 	})
-	outerMux := http.NewServeMux()
-	outerMux.HandleFunc("/healthz", healthChecker.Handler())
-	outerMux.Handle("/metrics", rtmetrics.Handler())
-	outerMux.Handle(
-		"/",
-		rtauth.RequireGeneratedOperationAuthorization(
-			operationsecurity.ForDomain("rtc"),
-		)(handler),
-	)
-
-	observedHandler := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
-		Service:           "rtc-service",
-		ServiceName:       "rtc-service",
-		ServiceInstanceID: instanceID,
-		Origin:            "service.http",
-		Direction:         robs.DirectionInbound,
-		SourceID:          "rtc-service",
-		Src:               "rtc-service",
-	}, ioLogger, processLogger, exceptionLogger)
-
-	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(runtimeconfig.EnvRuntimeConfigProvider{})
-	if err != nil {
-		log.Fatalf("rtc-service device ticket config invalid: %v", err)
-	}
-	deviceVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
-	if err != nil {
-		log.Fatalf("rtc-service device ticket verifier invalid: %v", err)
-	}
-	authenticated := rtauth.Middleware(rtauth.MiddlewareConfig{
-		AccessTokenVerifier:      accessVerifier,
-		DeviceTicketVerifier:     deviceVerifier,
-		AccountSecurityAuthority: accountSecurityAuthority,
-	})(observedHandler)
-	timeouts := rtauth.ContractHTTPServerTimeouts(
-		operationsecurity.ForDomain("rtc"),
-	)
-	server := &http.Server{
-		Addr:              addr,
-		Handler:           authenticated,
-		ReadHeaderTimeout: timeouts.ReadHeader,
-		WriteTimeout:      timeouts.Write,
-		IdleTimeout:       timeouts.Idle,
-	}
-
-	logger.Info("rtc-service starting", "addr", addr, "env", appEnv)
-	serveErr := rthttp.ListenAndServeGraceful(server, 15*time.Second)
-	cancelWorkers()
-	workerWG.Wait()
-	if serveErr != nil {
-		log.Fatalf("rtc-service: %v", serveErr)
-	}
+	return nil
 }
 
 func runRecoveringWorker(
@@ -404,166 +293,11 @@ func runRecoveringWorker(
 	}
 }
 
-func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
-	serviceName = getenvOrDefault("SERVICE_NAME", "rtc-service")
-	appEnv = getenvOrDefault("APP_ENV", "alpha")
-	configRoot = os.Getenv("CONFIG_ROOT")
-	configVersion = os.Getenv("CONFIG_VERSION")
-	imageVersion = os.Getenv("IMAGE_VERSION")
-
-	if !isValidAppEnv(appEnv) {
-		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
-	}
-	if requiresConfigVersion(appEnv) && strings.TrimSpace(configVersion) == "" {
-		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
-	}
-	return serviceName, appEnv, configRoot, configVersion, imageVersion, nil
-}
-
-func isValidAppEnv(env string) bool {
-	switch env {
-	case "alpha", "beta", "gamma", "prod":
-		return true
-	default:
-		return false
-	}
-}
-
-func requiresConfigVersion(env string) bool {
-	switch env {
-	case "gamma", "prod":
-		return true
-	default:
-		return false
-	}
-}
-
 func failFastEnvironment(appEnv string) bool {
 	switch strings.TrimSpace(appEnv) {
 	case "beta", "gamma", "prod":
 		return true
 	default:
 		return false
-	}
-}
-
-func getenvOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func hostname() string {
-	h, err := os.Hostname()
-	if err != nil {
-		return "unknown"
-	}
-	return h
-}
-
-func mergeConfigFile(cfg *config, path string) error {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	if err := yaml.Unmarshal(raw, cfg); err != nil {
-		return fmt.Errorf("parse %s: %w", path, err)
-	}
-	return nil
-}
-
-func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
-	cfg := config{}
-	path, err := configrelease.File(configRoot, serviceName, appEnv)
-	if err != nil {
-		return config{}, err
-	}
-	if err := mergeConfigFile(&cfg, path); err != nil {
-		return config{}, fmt.Errorf("read generated runtime config: %w", err)
-	}
-	return cfg, nil
-}
-
-func validateRuntimeConfigurationIdentity(cfg config, configVersion string) error {
-	if strings.TrimSpace(configVersion) != "" && strings.TrimSpace(cfg.Config.Version) != "" && cfg.Config.Version != configVersion {
-		return fmt.Errorf("CONFIG_VERSION mismatch: env=%s file=%s", configVersion, cfg.Config.Version)
-	}
-	return nil
-}
-
-func applyEnvOverrides(cfg *config) {
-	if v := os.Getenv("MONGO_URI"); v != "" {
-		cfg.MongoDB.URI = v
-	}
-	if v := os.Getenv("MONGO_DATABASE"); v != "" {
-		cfg.MongoDB.Database = v
-	}
-
-	applyRedisSceneEnv("RTC_REDIS_REALTIME", &cfg.Redis.Realtime)
-	applyRedisSceneEnv("RTC_REDIS_GENERAL", &cfg.Redis.General)
-
-	if v := os.Getenv("REDIS_ADDR"); v != "" {
-		if cfg.Redis.General.Addr == "" {
-			cfg.Redis.General.Addr = v
-		}
-		if cfg.Redis.Realtime.Addr == "" {
-			cfg.Redis.Realtime.Addr = v
-		}
-	}
-}
-
-func applyRedisSceneEnv(prefix string, cfg *redisSceneCfg) {
-	if v := os.Getenv(prefix + "_MODE"); v != "" {
-		cfg.Mode = v
-	}
-	if v := os.Getenv(prefix + "_ADDR"); v != "" {
-		cfg.Addr = v
-	}
-	if v := os.Getenv(prefix + "_ADDRS"); v != "" {
-		cfg.Addrs = strings.Split(v, ",")
-	}
-	if v := os.Getenv(prefix + "_PASSWORD"); v != "" {
-		cfg.Password = v
-	}
-	if v := os.Getenv(prefix + "_TLS"); v == "true" || v == "1" {
-		cfg.TLS = true
-	}
-}
-
-func buildRedisRouter(cfg config) *rtredis.Router {
-	generalScene := toSceneConfig(cfg.Redis.General)
-	routerCfg := rtredis.RouterConfig{
-		Scenes: map[string]rtredis.SceneConfig{
-			"realtime": toSceneConfig(cfg.Redis.Realtime),
-			"general":  generalScene,
-			"rec":      generalScene,
-		},
-		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
-		DefaultScene: rtredis.GeneratedDefaultScene,
-	}
-	return platformredis.MustNewRouter(routerCfg)
-}
-
-func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {
-	mode := strings.ToLower(strings.TrimSpace(r.Mode))
-	if mode == "" {
-		mode = "standalone"
-	}
-	if mode == "standalone" && r.Addr == "" {
-		mode = "memory"
-	}
-	if mode == "cluster" && len(r.Addrs) == 0 {
-		mode = "memory"
-	}
-	return rtredis.SceneConfig{
-		Mode:         mode,
-		Addr:         r.Addr,
-		Addrs:        r.Addrs,
-		Password:     r.Password,
-		DB:           r.DB,
-		TLS:          r.TLS,
-		PoolSize:     r.Pool.Size,
-		MinIdleConns: r.Pool.MinIdle,
 	}
 }

@@ -112,12 +112,15 @@ void main() {
       await WebShellTestHarness.enterToolbar(tester);
       await WebShellTestHarness.tapPrimary(tester, 'create');
       await tester.tap(find.byKey(TestKeys.webCreateActionStartGroupChat));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.byType(LoginPage), findsOneWidget);
 
-      await tester.tap(find.byIcon(CupertinoIcons.xmark));
-      await tester.pumpAndSettle();
+      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
+      await tester.tap(find.byIcon(CupertinoIcons.back));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.byType(LoginPage), findsNothing);
       expect(find.byKey(TestKeys.webCreateActionStartGathering), findsNothing);
@@ -141,12 +144,15 @@ void main() {
       await WebShellTestHarness.enterToolbar(tester);
       await WebShellTestHarness.tapPrimary(tester, 'create');
       await tester.tap(find.byKey(TestKeys.webCreateActionStartGathering));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.byType(LoginPage), findsOneWidget);
 
-      await tester.tap(find.byIcon(CupertinoIcons.xmark));
-      await tester.pumpAndSettle();
+      // REQ-012：根步骤顶栏为返回箭头，箭头即执行宿主关闭策略。
+      await tester.tap(find.byIcon(CupertinoIcons.back));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.byType(LoginPage), findsNothing);
       expect(find.byKey(TestKeys.webCreateActionStartGathering), findsNothing);

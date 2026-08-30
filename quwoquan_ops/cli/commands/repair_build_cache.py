@@ -409,12 +409,16 @@ def _repair_reclaim_build_cache(
                 argv=inventory_argv,
                 result=before,
             )
-            before_detail = f"{before.stderr}\n{before.stdout}".lower()
-            preinventory_no_space = (
-                before.returncode != 0 and "no space left on device" in before_detail
+            # 容量耗尽有 typed 表达：清点失败但确认是容量耗尽时不能反过来
+            # 阻断回收本身，否则唯一的恢复路径会在最需要它的时刻被关掉。
+            preinventory_no_space = before.returncode != 0 and _stackctl.is_disk_exhausted(
+                before.stderr, before.stdout
             )
             report["cacheInventory"]["preInventoryNoSpaceRecovery"] = (
                 preinventory_no_space
+            )
+            report["cacheInventory"]["preInventoryBlocker"] = (
+                _stackctl.CAPACITY_BLOCKER if preinventory_no_space else ""
             )
             if before.returncode != 0 and not preinventory_no_space:
                 report["resourceReleaseIssues"].append(

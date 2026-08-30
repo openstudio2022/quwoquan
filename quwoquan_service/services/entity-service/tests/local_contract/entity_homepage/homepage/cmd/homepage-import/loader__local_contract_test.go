@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -120,11 +121,13 @@ func loadHomepageProjections(
 	imageBase string,
 ) ([]application.ImportedHomepageInput, []string, error) {
 	t.Helper()
+	// 既有用例断言 canonical public slice URL，对应 commercial release class。
 	return homepageimport.LoadHomepageProjections(
 		root,
 		filter,
 		releaseMediaAuthority(t, root),
 		runtimemedia.MediaDeliveryBases{Image: imageBase},
+		"commercial",
 	)
 }
 
@@ -169,6 +172,28 @@ func TestLoadHomepageProjectionsMapsPageAndAssets(t *testing.T) {
 	if got.PrimarySource == nil || got.PrimarySource.SourceKind != "wikipedia" ||
 		len(got.SourceURLs) != 1 || got.SourceURLs[0] != got.PrimarySource.SourceURL {
 		t.Fatalf("public source projection mismatch: primary=%+v urls=%v", got.PrimarySource, got.SourceURLs)
+	}
+}
+
+func TestLoadHomepageProjectionsIgnoresExecutionIdentity(t *testing.T) {
+	root := t.TempDir()
+	seedPublishEntity(t, root, "地点/景区/九寨沟", true)
+	first, _, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(root, "entities", "地点", "景区", "九寨沟", "manifest.json")
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, manifestPath, strings.Replace(string(raw), "20260715--travel-homepage-coverage--cn-sichuan--m1-001", "different-producer-execution", 1))
+	second, _, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("execution identity changed Homepage projection: first=%+v second=%+v", first, second)
 	}
 }
 
@@ -329,6 +354,7 @@ func TestLoadHomepageProjectionsRejectsObjectKeyAndIdentityDrift(t *testing.T) {
 				nil,
 				authority,
 				runtimemedia.MediaDeliveryBases{Image: "https://image.example.com"},
+				"commercial",
 			)
 			if err == nil || !strings.Contains(err.Error(), test.errorMarker) {
 				t.Fatalf("%s drift must fail closed, err=%v", test.name, err)
@@ -372,6 +398,7 @@ func TestLoadHomepageProjectionsRejectsOwnerAndRightsDrift(t *testing.T) {
 				nil,
 				authority,
 				runtimemedia.MediaDeliveryBases{Image: "https://image.example.com"},
+				"commercial",
 			)
 			if err == nil || !strings.Contains(err.Error(), test.errorMarker) {
 				t.Fatalf("%s drift must fail closed, err=%v", test.name, err)

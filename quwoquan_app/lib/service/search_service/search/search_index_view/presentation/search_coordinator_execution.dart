@@ -103,6 +103,12 @@ extension SearchCoordinatorExecution on SearchCoordinator {
                 item.ratingCount,
               ),
               coverUrl: item.coverUrl,
+              // 交付形态取自主页搜索投影声明（DEC-033）。
+              coverBinding: MediaDeliveryBinding(
+                assetId: item.coverAssetId?.trim() ?? '',
+                accessMode: item.coverAccessMode,
+                publicUrl: item.coverUrl ?? '',
+              ),
               query: item.title,
             ),
           )

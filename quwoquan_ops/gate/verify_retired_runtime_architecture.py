@@ -69,8 +69,6 @@ MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 MARKDOWN_LINK_FILES = ("specs/README.md",)
 
 NEGATIVE_REFERENCE_PATHS = {
-    ".cursor/commands/infra-audit.md",
-    ".cursor/commands/infra-dev.md",
     "specs/feature-tree/design.md",
     (
         "specs/feature-tree/runtime/system-architecture-and-engineering-guide/"
@@ -98,7 +96,7 @@ NEGATIVE_MARKERS = (
 HISTORICAL_PATHS: set[str] = set()
 
 REQUIRED_TOKENS: dict[str, tuple[str, ...]] = {
-    ".cursor/commands/extend.md": (
+    ".agents/skills/dev/references/object-extension.md": (
         "EX01–EX11",
         "commercial validate",
         "Object Application Facade",

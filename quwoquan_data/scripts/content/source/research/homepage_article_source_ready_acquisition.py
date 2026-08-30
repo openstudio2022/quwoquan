@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import json
-import re
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -14,6 +13,19 @@ from governance.coverage.coverage_source_ready_catalog_projection import (
     project_coverage_source_ready_catalog_inputs,
 )
 
+from content.source.research.homepage_article_source_ready_acquisition_evidence import (
+    SOURCE_ACQUISITION_FAILED,
+    SOURCE_INVALID_EVIDENCE,
+    SOURCE_POOL_SHORTFALL,
+    HomepageArticleSourceReadyAcquisitionError,
+    _COVERAGE_FILES,
+    _SOURCE_SET_ID,
+    _copy_coverage_run as _copy_coverage_run_impl,
+    _identity,
+    _physical_content,
+    _project_coverage_run,
+    _write_acquired_candidate,
+)
 from content.source.research.homepage_article_source_ready_baike import (
     acquire_baike_homepage_source_ready_candidate,
 )
@@ -26,10 +38,8 @@ from content.source.research.homepage_article_source_ready_article_site import (
     acquire_article_site_source_ready_candidate,
 )
 from content.source.research.homepage_article_source_ready_evidence import (
-    assert_source_ready_evidence_matches_capsule,
     canonical_digest,
     file_sha256,
-    validate_source_ready_acquisition_evidence,
     write_create_once_bytes,
     write_create_once_json,
 )
@@ -43,57 +53,6 @@ from content.source.research.homepage_article_seed_selection import (
     select_fresh_coverage_candidates,
 )
 
-SOURCE_POOL_SHORTFALL = "DATA.SOURCE.POOL_SHORTFALL"
-SOURCE_INVALID_EVIDENCE = "DATA.SOURCE.INVALID_EVIDENCE"
-_SOURCE_SET_ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
-_COVERAGE_FILES = (
-    "manifest.json",
-    "report.json",
-    "source_ready.ndjson",
-    "source_inconclusive.ndjson",
-    "frozen_targets.ndjson",
-)
-
-
-class HomepageArticleSourceReadyAcquisitionError(ValueError):
-    """Typed acquisition shortfall or immutable evidence blocker."""
-
-    def __init__(
-        self,
-        code: str,
-        issues: Sequence[object],
-        *,
-        checkpoint: Mapping[str, Any] | None = None,
-    ) -> None:
-        normalized = tuple(
-            str(issue).strip() for issue in issues if str(issue).strip()
-        )
-        if not normalized:
-            raise ValueError("homepage/article acquisition requires an issue")
-        self.code = code
-        self.issues = normalized
-        self.checkpoint = dict(checkpoint) if checkpoint is not None else None
-        super().__init__(f"{code}: " + "; ".join(normalized))
-
-
-def _identity(
-    *,
-    source_revision: str,
-    source_digest: str,
-    entity_catalog_digest: str,
-) -> dict[str, str]:
-    values = {
-        "sourceRevision": str(source_revision).strip(),
-        "sourceDigest": str(source_digest).strip(),
-        "entityCatalogDigest": str(entity_catalog_digest).strip(),
-    }
-    if any(not re.fullmatch(r"sha256:[0-9a-f]{64}", value) for value in values.values()):
-        raise HomepageArticleSourceReadyAcquisitionError(
-            SOURCE_INVALID_EVIDENCE,
-            ["sourceRevision/sourceDigest/entityCatalogDigest must be sha256"],
-        )
-    return values
-
 
 def _copy_coverage_run(
     source_run: Path,
@@ -102,228 +61,19 @@ def _copy_coverage_run(
     identity: Mapping[str, str],
     expected_projection: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    try:
-        initial = project_coverage_source_ready_catalog_inputs(
-            run_dir=source_run,
-            source_revision=identity["sourceRevision"],
-            source_digest=identity["sourceDigest"],
-            entity_catalog_digest=identity["entityCatalogDigest"],
-        )
-        if expected_projection is not None and initial != expected_projection:
-            raise ValueError("coverage evidence changed after write preflight")
-        for name in _COVERAGE_FILES:
-            write_create_once_bytes(
-                evidence_root / name,
-                (source_run / name).read_bytes(),
-                allow_empty=name.endswith(".ndjson"),
-            )
-        observed = project_coverage_source_ready_catalog_inputs(
-            run_dir=source_run,
-            source_revision=identity["sourceRevision"],
-            source_digest=identity["sourceDigest"],
-            entity_catalog_digest=identity["entityCatalogDigest"],
-        )
-    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
-        raise HomepageArticleSourceReadyAcquisitionError(
-            SOURCE_INVALID_EVIDENCE,
-            [f"coverage source-readiness evidence is invalid: {exc}"],
-        ) from exc
-    if observed != initial:
-        raise HomepageArticleSourceReadyAcquisitionError(
-            SOURCE_INVALID_EVIDENCE,
-            ["coverage evidence changed while creating immutable snapshot"],
-        )
-    projection_path = evidence_root / "coverage-projection.json"
-    write_create_once_json(projection_path, initial)
-    return initial
-
-
-def _project_coverage_run(
-    source_run: Path, *, identity: Mapping[str, str]
-) -> dict[str, Any]:
-    try:
-        return project_coverage_source_ready_catalog_inputs(
-            run_dir=source_run,
-            source_revision=identity["sourceRevision"],
-            source_digest=identity["sourceDigest"],
-            entity_catalog_digest=identity["entityCatalogDigest"],
-        )
-    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
-        raise HomepageArticleSourceReadyAcquisitionError(
-            SOURCE_INVALID_EVIDENCE,
-            [f"coverage source-readiness evidence is invalid: {exc}"],
-        ) from exc
-
-
-def _physical_content(acquired: AcquiredSourceReadyCandidate) -> set[str]:
-    return {
-        str(acquired.source_unit["bodyContentSha256"]),
-        *(str(asset.document["contentSha256"]) for asset in acquired.assets),
-    }
-
-
-def _write_acquired_candidate(
-    acquired: AcquiredSourceReadyCandidate,
-    *,
-    evidence_root: Path,
-    identity: Mapping[str, str],
-    captured_at: str,
-    coverage_binding: Mapping[str, str],
-    seed_selection_binding: Mapping[str, str],
-    seed: Mapping[str, Any],
-) -> dict[str, Any]:
-    candidate = acquired.candidate
-    candidate_id = str(candidate["candidateId"])
-    body_ref = str(acquired.source_unit["bodyEvidenceRef"])
-    body_path = evidence_root / body_ref
-    write_create_once_bytes(body_path, acquired.body)
-    raw_ref = f"raw/{acquired.carrier}/{candidate_id}.json"
-    raw_path = evidence_root / raw_ref
-    write_create_once_bytes(raw_path, acquired.raw_evidence)
-    for asset in acquired.assets:
-        write_create_once_bytes(
-            evidence_root / str(asset.document["assetRef"]),
-            asset.body,
-        )
-    source_unit = {
-        **acquired.source_unit,
-        "bodyFileSha256": file_sha256(body_path),
-        "rawEvidenceRef": raw_ref,
-        "rawEvidenceFileSha256": file_sha256(raw_path),
-    }
-    seed_binding = {
-        "seedOrigin": seed["seedOrigin"],
-        "seedId": seed["seedId"],
-        "coverageKey": dict(seed["coverageKey"]),
-    }
-    for field in ("articleCategory", "writingIntent", "topicTagRefs"):
-        if field in seed:
-            seed_binding[field] = seed[field]
-    historical_baseline = seed.get("historicalBaseline")
-    historical_comparison: dict[str, Any] | None = None
-    if isinstance(historical_baseline, Mapping):
-        historical_comparison = {
-            "candidateId": historical_baseline["candidateId"],
-            "bodyContentSha256": historical_baseline["bodyContentSha256"],
-            "bodyComparison": (
-                "same"
-                if historical_baseline["bodyContentSha256"]
-                == source_unit["bodyContentSha256"]
-                else "changed"
-            ),
-        }
-    stable_evidence: dict[str, Any] = {
-        "schema": "quwoquan_data.homepage_article_source_ready_acquisition_evidence",
-        "carrier": acquired.carrier,
-        "candidateId": candidate_id,
-        "entityRef": candidate["entityRef"],
-        **identity,
-        "capturedAt": captured_at,
-        "sourceAttribution": dict(candidate["sourceAttribution"]),
-        "publishMediaMode": str(
-            candidate.get("publishMediaMode") or "illustrated"
-        ),
-        "seedSelection": dict(seed_selection_binding),
-        "seed": seed_binding,
-        "sourceUnit": source_unit,
-        "assets": [dict(asset.document) for asset in acquired.assets],
-    }
-    if acquired.source_selection_origin != "coverage_source":
-        stable_evidence["sourceSelectionOrigin"] = acquired.source_selection_origin
-    if historical_comparison is not None:
-        stable_evidence["historicalComparison"] = historical_comparison
-    evidence = {
-        **stable_evidence,
-        "evidenceDigest": canonical_digest(stable_evidence),
-    }
-    validate_source_ready_acquisition_evidence(evidence)
-    evidence_ref = (
-        f"acquisition-evidence/{acquired.carrier}/"
-        f"{evidence['evidenceDigest'].removeprefix('sha256:')}.json"
-    )
-    evidence_path = evidence_root / evidence_ref
-    write_create_once_json(evidence_path, evidence)
-    materialization = {
-        "body": {
-            "ref": body_ref,
-            "contentSha256": source_unit["bodyContentSha256"],
-            "fileSha256": source_unit["bodyFileSha256"],
-        },
-        "media": [
-            {
-                "assetId": asset.document["assetId"],
-                "role": asset.document["role"],
-                "ref": asset.document["assetRef"],
-                "contentSha256": asset.document["contentSha256"],
-                "fileSha256": file_sha256(
-                    evidence_root / str(asset.document["assetRef"])
-                ),
-            }
-            for asset in acquired.assets
-        ],
-    }
-    evidence_file_binding = {
-        "ref": evidence_ref,
-        "fileSha256": file_sha256(evidence_path),
-    }
-    stable_capsule: dict[str, Any] = {
-        "schema": "quwoquan_data.homepage_article_source_ready_candidate",
-        "carrier": acquired.carrier,
-        **identity,
-        "candidate": candidate,
-        "materialization": materialization,
-        "provenance": {
-            "coverageProjectionRef": coverage_binding["ref"],
-            "coverageProjectionDigest": coverage_binding["digest"],
-            "coverageProjectionFileSha256": coverage_binding["fileSha256"],
-            "seedSelectionRef": seed_selection_binding["ref"],
-            "seedSelectionDigest": seed_selection_binding["digest"],
-            "seedSelectionFileSha256": seed_selection_binding["fileSha256"],
-            **seed_binding,
-            "discoveryEvidenceRef": evidence_ref,
-            "discoveryEvidenceFileSha256": evidence_file_binding["fileSha256"],
-            "acquisitionEvidenceRefs": [evidence_file_binding],
-            "rightsEvidenceRefs": [evidence_file_binding],
-            "qualityEvidenceRefs": [evidence_file_binding],
-        },
-    }
-    if acquired.source_selection_origin != "coverage_source":
-        stable_capsule["provenance"]["sourceSelectionOrigin"] = (
-            acquired.source_selection_origin
-        )
-    if historical_comparison is not None:
-        stable_capsule["provenance"]["historicalComparison"] = historical_comparison
-    capsule = {
-        **stable_capsule,
-        "capsuleDigest": canonical_digest(stable_capsule),
-    }
-    assert_source_ready_evidence_matches_capsule(evidence, capsule)
-    capsule_ref = (
-        f"capsules/{acquired.carrier}/"
-        f"{capsule['capsuleDigest'].removeprefix('sha256:')}.json"
-    )
-    capsule_path = evidence_root / capsule_ref
-    write_create_once_json(capsule_path, capsule)
-    validate_source_ready_candidate_capsule(
-        capsule,
+    return _copy_coverage_run_impl(
+        source_run,
         evidence_root=evidence_root,
+        identity=identity,
+        expected_projection=expected_projection,
+        projector=project_coverage_source_ready_catalog_inputs,
     )
-    return {
-        "carrier": acquired.carrier,
-        "candidateId": candidate_id,
-        "evidenceRootRef": ".",
-        "ref": capsule_ref,
-        "digest": capsule["capsuleDigest"],
-        "fileSha256": file_sha256(capsule_path),
-    }
-
 
 def _acquire_carrier(
     planned: list[dict[str, Any]],
     *,
     carrier: str,
     required: int,
-    acquisition_concurrency: int,
     identity: Mapping[str, str],
     captured_at: str,
     evidence_root: Path,
@@ -496,14 +246,15 @@ def _acquire_carrier(
     pending_rows = [
         row for row in eligible if _seed_id(row) not in existing_by_seed
     ]
-    executor = ThreadPoolExecutor(max_workers=acquisition_concurrency)
+    if not pending_rows:
+        return bindings, accepted_coverage_ids, attempted
+    executor = ThreadPoolExecutor(max_workers=len(pending_rows))
     futures: list[tuple[dict[str, Any], Future[AcquiredSourceReadyCandidate]]] = [
-        (row, executor.submit(acquire, row)) for row in pending_rows[:remaining]
+        (row, executor.submit(acquire, row)) for row in pending_rows
     ]
-    next_candidate = len(futures)
     future_index = 0
     try:
-        while future_index < len(futures) and len(bindings) < required:
+        while future_index < len(futures):
             row, future = futures[future_index]
             future_index += 1
             attempted += 1
@@ -513,6 +264,8 @@ def _acquire_carrier(
             source = source if isinstance(source, Mapping) else {}
             try:
                 acquired = future.result()
+                if len(bindings) >= required:
+                    continue
                 physical = _physical_content(acquired)
                 if physical & used_content:
                     raise MediaWikiSourceReadyRejected(
@@ -545,13 +298,25 @@ def _acquire_carrier(
                         "reason": reason,
                     }
                 )
+            except Exception as exc:  # noqa: BLE001 - one source must not abort its batch
+                rejected = True
+                reason = (
+                    f"{SOURCE_ACQUISITION_FAILED}: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                rejection_counts[reason] += 1
+                rejections.append(
+                    {
+                        "carrier": carrier,
+                        "coverageEntityIdentity": coverage_id,
+                        "candidateName": str(row.get("candidateName") or ""),
+                        "entityType": str(row.get("entityType") or ""),
+                        "sourceKind": str(source.get("sourceKind") or ""),
+                        "sourceUrl": str(source.get("sourceUrl") or ""),
+                        "reason": reason,
+                    }
+                )
             if rejected:
-                if next_candidate < len(pending_rows):
-                    replacement = pending_rows[next_candidate]
-                    next_candidate += 1
-                    futures.append(
-                        (replacement, executor.submit(acquire, replacement))
-                    )
                 continue
             bindings.append(binding)
             accepted_coverage_ids.add(coverage_id)
@@ -574,7 +339,6 @@ def acquire_homepage_article_source_ready_batch(
     homepage_count: int,
     article_count: int,
     seed_selection: Path,
-    acquisition_concurrency: int = 1,
 ) -> dict[str, Any]:
     """Acquire exact source-ready counts and freeze a physical batch manifest."""
 
@@ -582,7 +346,7 @@ def acquire_homepage_article_source_ready_batch(
         raise HomepageArticleSourceReadyAcquisitionError(
             SOURCE_INVALID_EVIDENCE, ["sourceSetId is invalid"]
         )
-    if target_scale not in {"M100", "M1000", "M10000"}:
+    if target_scale not in {"WORKLOAD", "M100", "M1000", "M10000"}:
         raise HomepageArticleSourceReadyAcquisitionError(
             SOURCE_INVALID_EVIDENCE, ["targetScale is invalid"]
         )
@@ -593,11 +357,6 @@ def acquire_homepage_article_source_ready_batch(
                 "homepage/article candidate counts must be non-negative "
                 "and at least one carrier must be active"
             ],
-        )
-    if not 1 <= acquisition_concurrency <= 32:
-        raise HomepageArticleSourceReadyAcquisitionError(
-            SOURCE_INVALID_EVIDENCE,
-            ["acquisition concurrency must be between 1 and 32"],
         )
     identity = _identity(
         source_revision=source_revision,
@@ -687,7 +446,6 @@ def acquire_homepage_article_source_ready_batch(
         active_selected["homepage"],
         carrier="homepage",
         required=homepage_count,
-        acquisition_concurrency=acquisition_concurrency,
         identity=identity,
         captured_at=captured_at,
         evidence_root=evidence_root,
@@ -702,7 +460,6 @@ def acquire_homepage_article_source_ready_batch(
         active_selected["article"],
         carrier="article",
         required=article_count,
-        acquisition_concurrency=acquisition_concurrency,
         identity=identity,
         captured_at=captured_at,
         evidence_root=evidence_root,

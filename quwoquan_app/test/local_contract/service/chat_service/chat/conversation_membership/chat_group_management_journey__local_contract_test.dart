@@ -77,6 +77,7 @@ Widget _scopedApp({
                     builder: (_, state) => GroupManagePage(
                       conversationId: state.pathParameters['id'] ?? _testConvId,
                       conversationDissolver: resolvedGroupAdmin,
+                      assistantSkillPlacementPresenter: (_, _) async {},
                     ),
                     routes: [
                       GoRoute(
@@ -259,6 +260,7 @@ void main() {
                       builder: (_, s) => GroupManagePage(
                         conversationId: s.pathParameters['id'] ?? _testConvId,
                         conversationDissolver: facets.groupAdmin,
+                        assistantSkillPlacementPresenter: (_, _) async {},
                       ),
                     ),
                   ],
@@ -311,6 +313,7 @@ void main() {
               body: GroupManagePage(
                 conversationId: _testConvId,
                 conversationDissolver: facets.groupAdmin,
+                assistantSkillPlacementPresenter: (_, _) async {},
               ),
             ),
           ),
@@ -334,6 +337,7 @@ void main() {
               body: GroupManagePage(
                 conversationId: _testConvId,
                 conversationDissolver: facets.groupAdmin,
+                assistantSkillPlacementPresenter: (_, _) async {},
               ),
             ),
           ),

@@ -22,6 +22,9 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.content_release_readiness import VerificationProfile
+from quwoquan_ops.cli.lib.provider_runtime_composition import (
+    compile_provider_runtime_composition,
+)
 from quwoquan_ops.tests.support.environment_patrol_smoke_test_support import (
     EnvironmentPatrolSmokeCaseBase,
 )
@@ -356,6 +359,62 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         )
         self.assertNotIn("env", command)
 
+    def test_stackctl_patrol_profile_forwards_exact_app_uat_authority(self) -> None:
+        target = {
+            "env": "alpha",
+            "publicBases": {
+                "api": "https://api.alpha.quwoquan.com:17000",
+                "productOps": "https://ops.alpha.quwoquan.com:17010",
+                "rtc": "wss://rtc.alpha.quwoquan.com:17000",
+                "mediaAvatar": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaImage": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaVideo": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaUpload": "https://upload.alpha.quwoquan.com:17130",
+            },
+        }
+        authority = {
+            "releaseId": "release-a",
+            "samplePlanRef": "data/releases/release-a/uat/sample_plan.json",
+            "samplePlanSha256": "sha256:" + "1" * 64,
+            "targetUatBindingRef": "target-uat-bindings/binding.json",
+            "targetUatBindingSha256": "sha256:" + "2" * 64,
+            "targetUatBindingDigest": "sha256:" + "2" * 64,
+            "releaseDigest": "sha256:" + "3" * 64,
+            "sourceIdentitySetDigest": "sha256:" + "4" * 64,
+            "commitSha": "a" * 40,
+            "contractGraphSourceHash": "b" * 64,
+            "candidateManifestSha256": "c" * 64,
+        }
+        with (
+            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+            mock.patch.object(stackctl, "get_target", return_value=target),
+            mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
+        ):
+            command = stackctl._environment_page_smoke_profile_command(
+                "alpha",
+                "alpha-local",
+                Path("/tmp/alpha-authority"),
+                app_uat_authority=authority,
+            )
+
+        self.assertIsNotNone(command)
+        argv = command["argv"]
+        expected = {
+            "releaseId": "--data-release-id",
+            "samplePlanRef": "--app-uat-sample-plan-ref",
+            "samplePlanSha256": "--app-uat-sample-plan-sha256",
+            "targetUatBindingRef": "--app-uat-target-binding-ref",
+            "targetUatBindingSha256": "--app-uat-target-binding-sha256",
+            "targetUatBindingDigest": "--app-uat-target-binding-digest",
+            "releaseDigest": "--app-uat-release-digest",
+            "sourceIdentitySetDigest": "--app-uat-source-identity-set-digest",
+            "commitSha": "--app-uat-commit-sha",
+            "contractGraphSourceHash": "--app-uat-contract-graph-source-hash",
+            "candidateManifestSha256": "--app-uat-candidate-manifest-sha256",
+        }
+        for field, option in expected.items():
+            self.assertEqual(argv[argv.index(option) + 1], authority[field])
+
     def test_stackctl_home_video_smoke_injects_the_release_video_work_id(self) -> None:
         target = {
             "env": "alpha",
@@ -630,6 +689,44 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self.assertIn("content-service", roles)
         self.assertIn("notification-service", roles)
         self.assertNotIn("fixture-gateway", roles)
+
+    def test_two_running_startup_receipts_on_one_target_fail_closed(self) -> None:
+        """release 栈与 test-live 栈同时 running 时不能任取其一，只能判否。"""
+        target_name = "beta-local"
+        environment_name = "beta"
+        composition = compile_provider_runtime_composition(
+            environment=environment_name,
+            target=target_name,
+        )
+        running = {
+            "schema": "stackctl-local-startup-attempt",
+            "attemptId": f"attempt-{target_name}",
+            "env": environment_name,
+            "target": target_name,
+            "status": "running",
+            "workload": "full",
+            "providerRuntimeDigest": composition["runtimeCompositionDigest"],
+        }
+
+        with (
+            mock.patch.object(
+                stackctl,
+                "_active_provider_runtime",
+                return_value={"composition": composition},
+            ),
+            mock.patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value=running,
+            ),
+            mock.patch.object(
+                stackctl,
+                "load_test_live_startup_attempt",
+                return_value=dict(running, attemptId="attempt-test-live"),
+            ),
+            self.assertRaisesRegex(RuntimeError, "at the same time"),
+        ):
+            stackctl._expected_local_roles(target_name)
 
     def test_beta_content_release_readiness_excludes_full_workload_planes(self) -> None:
         roles = set(

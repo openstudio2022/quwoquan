@@ -57,6 +57,33 @@ def test_article_source_quality_sort_prefers_entity_focus_over_length():
     ordered = sorted(candidates, key=_article_source_quality_sort_key)
     assert ordered[0]["sourceId"] == "article_qunar_focused"
 
+
+def test_article_source_quality_sort_prefers_strict_title_anchor_over_broad_city_page():
+    candidates = [
+        {
+            "sourceId": "broad_city_overview",
+            "sourceQualityScore": 4,
+            "textLen": 3600,
+            "entityFocusScore": 0.72,
+            "entityTitleAnchorRank": 0,
+            "entityAnchorScore": 0.0022,
+            "rows": [],
+        },
+        {
+            "sourceId": "exact_entity_page",
+            "sourceQualityScore": 3,
+            "textLen": 700,
+            "entityFocusScore": 0.55,
+            "entityTitleAnchorRank": 2,
+            "entityAnchorScore": 0.0375,
+            "rows": [],
+        },
+    ]
+
+    ordered = sorted(candidates, key=_article_source_quality_sort_key)
+
+    assert ordered[0]["sourceId"] == "exact_entity_page"
+
 def test_article_source_quality_sort_downgrades_qunar_over_three_years():
     candidates = [
         {

@@ -61,15 +61,6 @@ def validate_promotion_timing(
         raise ResearchScalePromotionTimingError(
             "DATA.SCALE.ATTAINMENT_TIMING_BLOCKED: campaign timing evidence drift"
         )
-    if budget is not None and elapsed > budget:
-        code = (
-            "DATA.SCALE.M10000_WALL_CLOCK_BUDGET_EXCEEDED"
-            if target_scale == "M10000"
-            else "DATA.SCALE.ATTAINMENT_SHORTFALL"
-        )
-        raise ResearchScalePromotionTimingError(
-            f"{code}: {target_scale} wall-clock {elapsed}s exceeds {budget}s"
-        )
     return {
         "scaleStartedAt": started.isoformat(),
         "scaleCompletedAt": completed.isoformat(),

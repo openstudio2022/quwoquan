@@ -14,6 +14,9 @@ from content.release.canonical.content_pool_record import (
     iter_pool_records,
     pool_payload_digest,
 )
+from content.release.canonical.canonical_identity_state import (
+    CanonicalIdentityStateQuery,
+)
 from content.release.canonical.object_source_identity import (
     validate_object_source_identity,
 )
@@ -21,12 +24,12 @@ from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _digest_file,
     _read_json,
-    _safe_rel,
 )
 from content.release.canonical.pool_source_attribution import (
     source_attribution_complete,
 )
 from content.source.professional_video_probe import probe_professional_video
+from core.content_library import MediaHoldingError, resolve_media_holding
 
 _ATTRIBUTION_FIELDS = (
     "isOriginal",
@@ -194,24 +197,16 @@ def _video_research_issue(
     if len(assets) != 1:
         return "DATA.POOL.VIDEO_MEDIA_MISSING"
     asset = assets[0]
-    try:
-        video_path = object_root / _safe_rel(
-            str(asset.get("fileName") or ""), label="video.fileName"
-        )
-        poster_path = object_root / _safe_rel(
-            str(asset.get("posterFileName") or ""), label="video.posterFileName"
-        )
-    except ObjectTransactionError:
-        return "DATA.POOL.VIDEO_MEDIA_MISSING"
-    if (
-        video_path.is_symlink()
-        or poster_path.is_symlink()
-        or not video_path.is_file()
-        or not poster_path.is_file()
-    ):
-        return "DATA.POOL.VIDEO_MEDIA_MISSING"
     digest = str(asset.get("sha256") or "")
     poster_digest = str(asset.get("posterSha256") or "")
+    # The object records its track and poster by digest; the content library owns
+    # the bodies. Resolving them here is what makes "the media is present" a claim
+    # about the bytes rather than about a copy sitting next to the manifest.
+    try:
+        video_path = resolve_media_holding(digest)
+        poster_path = resolve_media_holding(poster_digest)
+    except (MediaHoldingError, ValueError):
+        return "DATA.POOL.VIDEO_MEDIA_MISSING"
     if _digest_file(video_path) != digest:
         return "DATA.POOL.VIDEO_DIGEST_DRIFT"
     if _digest_file(poster_path) != poster_digest:
@@ -251,18 +246,45 @@ def canonical_plan_items(
     list[dict[str, str]],
     list[dict[str, Any]],
     list[dict[str, str]],
+    list[dict[str, Any]],
 ]:
     object_type = "homepage" if kind == "entities" else "content"
     items: list[dict[str, Any]] = []
     exclusions: list[dict[str, str]] = []
     repair_requirements: list[dict[str, Any]] = []
     already_admitted: list[dict[str, str]] = []
+    identity_states: list[dict[str, Any]] = []
     root = publish_root / kind
+    identity_query = CanonicalIdentityStateQuery(publish_root=publish_root)
     video_digests = _video_digests(root) if kind == "posts" else Counter()
     for manifest_path in sorted(root.rglob("manifest.json")) if root.is_dir() else []:
         object_root = manifest_path.parent
         object_ref = object_root.relative_to(root).as_posix()
         manifest = _read_json(manifest_path)
+        identity_state = identity_query.get(
+            object_type=object_type,
+            object_ref=f"{kind}/{object_ref}",
+        )
+        identity_states.append(identity_state)
+        if identity_state["state"].startswith("invalid_"):
+            exclusions.append(
+                {
+                    "objectType": object_type,
+                    "objectRef": object_ref,
+                    "reason": str(identity_state["deepestError"]),
+                }
+            )
+            repair_requirements.append(identity_state)
+            continue
+        if identity_state["state"] == "terminated":
+            exclusions.append(
+                {
+                    "objectType": object_type,
+                    "objectRef": object_ref,
+                    "reason": "DATA.POOL.IDENTITY_TERMINATED",
+                }
+            )
+            continue
         passed, evidence_path = object_evidence(object_root)
         process_result = "completed" if passed else "failed"
         quality_result = "passed" if passed else "failed"
@@ -403,7 +425,13 @@ def canonical_plan_items(
         if reason:
             item["reason"] = reason
         items.append(item)
-    return items, exclusions, repair_requirements, already_admitted
+    return (
+        items,
+        exclusions,
+        repair_requirements,
+        already_admitted,
+        identity_states,
+    )
 
 
 __all__ = [

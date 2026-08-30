@@ -21,10 +21,7 @@ func requireRTCMessageTransport(
 	sceneModes map[string]string,
 ) (rtcMessageTransport, error) {
 	const rootID = "rtc-service-api"
-	binding, found := bindingdescriptor.ExternalProviderBindingFor(
-		environment,
-		runtimemessaging.RuntimeMessageTransportCapability,
-	)
+	binding, found := bindingdescriptor.CompiledBindingFor(runtimemessaging.RuntimeMessageTransportCapability)
 	resolved, err := runtimemessaging.RequireConfiguredRedisMessageTransport(
 		ctx, environment, found,
 		runtimemessaging.MessageTransportBinding{

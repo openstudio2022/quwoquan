@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import time
 from collections.abc import Mapping
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -17,9 +15,9 @@ from content.execution.campaign.external_inputs import (
     external_inputs_digest,
     payload_digest,
 )
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
-from content.execution.campaign.m100_alpha_acceptance import (
-    validate_m100_alpha_acceptance_binding,
+from content.execution.campaign.lane import (
+    normalize_active_carriers,
+    normalize_workloads,
 )
 from content.execution.campaign.plan_lane_status import (
     aggregate_status,
@@ -27,8 +25,15 @@ from content.execution.campaign.plan_lane_status import (
     load_publish_for_lane,
     load_review_for_lane,
 )
+from content.execution.campaign.plan_identity import (
+    campaign_path,
+    plan_path,
+    report_path,
+    sha256_payload,
+    utc_now,
+)
 from content.execution.campaign.plan_source_pool import aggregate_plan_source_pool
-from content.execution.campaign.submission import campaign_root, load_submissions
+from content.execution.campaign.submission import load_submissions
 from content.execution.campaign.workspace import (
     CampaignRuntimePaths,
     assert_frozen_main_tree,
@@ -37,6 +42,9 @@ from content.execution.closure.adoption_campaign_contract import (
     CAMPAIGN_ADOPTION_FIELD,
     validate_adoption_target_identity,
     validate_campaign_adoption_binding,
+)
+from content.execution.planning.execution_authority import (
+    assert_execution_authority,
 )
 from content.execution.planning.semantic_preflight_admission import (
     bind_semantic_preflight_receipt,
@@ -48,28 +56,6 @@ if TYPE_CHECKING:
 
 
 CAMPAIGN_SUBMISSION_POLL_SECONDS = 2
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def sha256_payload(payload: dict[str, Any]) -> str:
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
-
-
-def campaign_path(runtime: CampaignRuntimePaths, root_execution_id: str) -> Path:
-    return campaign_root(root_execution_id, root=runtime.campaigns_root)
-
-
-def plan_path(runtime: CampaignRuntimePaths, root_execution_id: str) -> Path:
-    return campaign_path(runtime, root_execution_id) / "campaign_plan.json"
 
 
 def require_frozen_campaign_preflight_admission(
@@ -107,20 +93,17 @@ def require_frozen_campaign_preflight_admission(
         raise ValueError("campaign semantic preflight admission identity drift")
     binding = payload.get("semanticPreflightReceipt")
     if binding is None:
-        if semantic_selection_id == "not_applicable" and not requested_receipt_ref:
+        if not requested_receipt_ref:
             return None
-        raise ValueError("campaign semantic preflight admission is missing")
-    alpha_acceptance = payload.get("m100AlphaAcceptance")
-    if alpha_acceptance is not None:
-        validate_m100_alpha_acceptance_binding(
-            alpha_acceptance, output_root=runtime.output_root
-        )
+        raise ValueError("campaign plan has no matching semantic preflight observation")
     validate_semantic_preflight_binding_at(
         binding,
         semantic_selection_id=semantic_selection_id,
         admitted_at=str(payload["frozenAt"]),
         output_root=runtime.output_root,
     )
+    if not requested_receipt_ref:
+        return dict(binding)
     requested_path = Path(requested_receipt_ref).expanduser()
     if not requested_path.is_absolute():
         requested_path = runtime.output_root / requested_path
@@ -128,7 +111,6 @@ def require_frozen_campaign_preflight_admission(
         requested_path,
         semantic_selection_id=semantic_selection_id,
         output_root=runtime.output_root,
-        require_fresh=False,
     )
     if requested != binding:
         raise ValueError(
@@ -137,34 +119,7 @@ def require_frozen_campaign_preflight_admission(
     return dict(binding)
 
 
-def report_path(runtime: CampaignRuntimePaths, root_execution_id: str) -> Path:
-    return campaign_path(runtime, root_execution_id) / "campaign_report.json"
-
-
-def empty_lane(execution_id: str = "pending") -> dict[str, Any]:
-    return {
-        "executionId": execution_id,
-        "status": "pending",
-        "phase": "submission",
-        "reviewReturnCode": None,
-        "publishReturnCode": None,
-        "sourceCapsuleRef": None,
-        "sourceCapsuleDigest": None,
-        "sourceCapsuleCommitSha": None,
-        "sourceCapsuleSourceDigest": None,
-        "sourceCapsuleReadOnly": None,
-        "executionRootRef": None,
-        "cleanupStatus": "not_created",
-        "approvedQuota": None,
-        "qualifiedCount": None,
-        "finalizedCount": None,
-        "selectedCount": None,
-        "discardedCount": None,
-        "shortfallCount": None,
-        "deliveryPendingCount": 0,
-        "deliveryIntentRefs": [],
-        "error": None,
-    }
+from content.execution.campaign.plan_lane_state import empty_lane
 
 
 def write_report(
@@ -181,13 +136,23 @@ def write_report(
     lanes: dict[str, dict[str, Any]],
     started_at: str,
     failure: str | None,
+    active_carriers: tuple[str, ...],
+    workloads: Mapping[str, int],
+    revision_audits: list[dict[str, Any]] | None = None,
 ) -> Path:
     from content.execution.campaign.runtime import read_runtime_snapshot
 
     runtime_snapshot = read_runtime_snapshot(runtime, root_execution_id) or {}
+    active = normalize_active_carriers(active_carriers)
+    if set(lanes) != set(active):
+        raise ValueError("campaign report lanes must exactly match active carriers")
     payload = {
         "schema": "quwoquan_data.content_campaign_report",
         "rootExecutionId": root_execution_id,
+        "activeCarriers": list(active),
+        "workloads": normalize_workloads(
+            workloads, active_carriers=active
+        ),
         "campaignRunId": runtime_snapshot.get("runId"),
         "campaignGeneration": runtime_snapshot.get("generation"),
         "campaignFencingToken": runtime_snapshot.get("fencingToken"),
@@ -199,6 +164,7 @@ def write_report(
         "sourceDigest": source_digest,
         "entityCatalogDigest": entity_catalog_digest,
         "lanes": lanes,
+        "revisionAudits": list(revision_audits or []),
         "failure": failure,
         "startedAt": started_at,
         "updatedAt": utc_now(),
@@ -233,7 +199,35 @@ def wait_for_submissions(
             root_execution_id,
             root=runtime.campaigns_root,
         )
-        missing = set(CAMPAIGN_CARRIERS) - set(submissions)
+        if not submissions:
+            if time.monotonic() >= deadline:
+                raise TimeoutError("campaign submissions timed out; no active request")
+            time.sleep(
+                min(
+                    CAMPAIGN_SUBMISSION_POLL_SECONDS,
+                    max(0.0, deadline - time.monotonic()),
+                )
+            )
+            continue
+        first = next(iter(submissions.values()))
+        active = normalize_active_carriers(first["activeCarriers"])
+        workloads = normalize_workloads(first["workloads"], active_carriers=active)
+        unexpected = set(submissions) - set(active)
+        if unexpected:
+            raise ValueError(
+                "campaign has submissions outside active workloads: "
+                + ", ".join(sorted(unexpected))
+            )
+        lanes.clear()
+        lanes.update(
+            {
+                carrier: empty_lane(
+                    str(submissions.get(carrier, {}).get("executionId") or "pending")
+                )
+                for carrier in active
+            }
+        )
+        missing = set(active) - set(submissions)
         if not missing:
             return submissions
         write_report(
@@ -249,10 +243,32 @@ def wait_for_submissions(
             lanes=lanes,
             started_at=started_at,
             failure=None,
+            active_carriers=active,
+            workloads=workloads,
         )
         if time.monotonic() >= deadline:
+            failure = (
+                "campaign submissions timed out; missing "
+                + ", ".join(sorted(missing))
+            )
+            write_report(
+                runtime,
+                root_execution_id,
+                status="blocked",
+                phase="submission",
+                plan_digest=None,
+                git_branch=None,
+                git_commit_sha=None,
+                source_digest=None,
+                entity_catalog_digest=None,
+                lanes=lanes,
+                started_at=started_at,
+                failure=failure,
+                active_carriers=active,
+                workloads=workloads,
+            )
             raise TimeoutError(
-                "campaign submissions timed out; missing " + ", ".join(sorted(missing))
+                failure
             )
         time.sleep(
             min(
@@ -285,6 +301,22 @@ def freeze_plan(
             )
         ):
             raise ValueError("distributed campaign run identity is incomplete")
+    if not submissions:
+        raise ValueError("campaign plan requires active submissions")
+    first_submission = next(iter(submissions.values()))
+    active = normalize_active_carriers(first_submission["activeCarriers"])
+    workloads = normalize_workloads(
+        first_submission["workloads"], active_carriers=active
+    )
+    if set(submissions) != set(active):
+        raise ValueError("campaign submissions do not match active workloads")
+    if any(
+        row.get("activeCarriers") != list(active)
+        or row.get("workloads") != workloads
+        or int(row.get("quota") or 0) != workloads[carrier]
+        for carrier, row in submissions.items()
+    ):
+        raise ValueError("campaign submission active workload drift")
     branches = {str(row.get("gitBranch") or "") for row in submissions.values()}
     commits = {str(row.get("gitCommitSha") or "") for row in submissions.values()}
     source_digests = {
@@ -306,6 +338,30 @@ def freeze_plan(
         )
         for row in submissions.values()
     }
+    execution_authorities = {
+        json.dumps(
+            row.get("executionAuthority"),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        for row in submissions.values()
+    }
+    if len(execution_authorities) != 1:
+        raise ValueError("campaign lanes disagree on the execution authority")
+    # 只有真正要跑受治理工作的 campaign 才有执行授权事实：reviewed-closure
+    # adoption 不作者、不派发 fleet，只重发已审对象，绑一份授权会让它声称一个
+    # 从未发生过的并发与批次预算。
+    raw_execution_authority = first_submission.get("executionAuthority")
+    execution_authority: dict[str, Any] | None = None
+    if raw_execution_authority is not None:
+        execution_authority = dict(raw_execution_authority)
+        assert_execution_authority(execution_authority)
+    elif first_submission.get(CAMPAIGN_ADOPTION_FIELD) is None:
+        raise ValueError(
+            "GATE_BLOCK DATA.CAPACITY.CALIBRATION_REQUIRED: campaign plan "
+            "requires a governed capacity calibration binding"
+        )
     scales = {str(row.get("scale") or "") for row in submissions.values()}
     regions = {str(row.get("regionRef") or "") for row in submissions.values()}
     semantic_selections = {
@@ -320,21 +376,6 @@ def freeze_plan(
         )
         for row in submissions.values()
     }
-    alpha_acceptances = {
-        json.dumps(
-            row.get("m100AlphaAcceptance"),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        for row in submissions.values()
-    }
-    selected_semantic = next(iter(semantic_selections), "")
-    if selected_semantic != "not_applicable" and semantic_preflights == {"null"}:
-        raise ValueError(
-            "campaign selected semantic Provider requires one fresh "
-            "preflight/soak receipt"
-        )
     if (
         len(branches) != 1
         or not next(iter(branches))
@@ -350,7 +391,6 @@ def freeze_plan(
         or len(semantic_selections) != 1
         or not next(iter(semantic_selections))
         or len(semantic_preflights) != 1
-        or len(alpha_acceptances) != 1
     ):
         raise ValueError(
             "campaign lanes must share one branch, commit, sourceRevision, "
@@ -358,11 +398,8 @@ def freeze_plan(
         )
     if len(regions) != 1:
         raise ValueError("campaign lanes must share one regionRef")
-    selected_scale = next(iter(scales))
-    if selected_scale == "M1000" and alpha_acceptances == {"null"}:
-        raise ValueError("M1000 semantic campaign requires M100 Alpha acceptance")
-    if str(submissions["homepage"].get("executionId") or "") != root_execution_id:
-        raise ValueError("homepage submission executionId must equal campaign root")
+    if str(submissions[active[0]].get("executionId") or "") != root_execution_id:
+        raise ValueError("first active submission executionId must equal campaign root")
     (
         source_pool_binding,
         source_pool_evidence_ref,
@@ -370,7 +407,7 @@ def freeze_plan(
     ) = aggregate_plan_source_pool(submissions)
     adoption_values = [
         submissions[carrier].get(CAMPAIGN_ADOPTION_FIELD)
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active
     ]
     reviewed_closure_adoption: dict[str, Any] | None = None
     if any(value is not None for value in adoption_values):
@@ -392,14 +429,14 @@ def freeze_plan(
         validate_adoption_target_identity(
             {
                 "sourceRevision": next(iter(source_revisions)),
-                "sourceDigest": submissions["homepage"]["sourceDigest"],
+                "sourceDigest": submissions[active[0]]["sourceDigest"],
                 "entityCatalogDigest": next(iter(catalog_digests)),
             },
             binding=binding,
         )
         if any(
             submissions[carrier].get("externalInputRefs")
-            for carrier in CAMPAIGN_CARRIERS
+            for carrier in active
         ):
             raise ValueError(
                 "reviewed closure adoption cannot masquerade as acquisition inputs"
@@ -407,7 +444,7 @@ def freeze_plan(
     frozen_commit = next(iter(commits))
     frozen_source = next(iter(source_digests))
     lane_external_inputs: dict[str, dict[str, Any]] = {}
-    for carrier in CAMPAIGN_CARRIERS:
+    for carrier in active:
         refs = list(submissions[carrier].get("externalInputRefs") or [])
         digest = external_inputs_digest(refs)
         if submissions[carrier].get("externalInputsDigest") != digest:
@@ -420,6 +457,11 @@ def freeze_plan(
             "externalInputRefs": refs,
             "externalInputsDigest": digest,
         }
+        acquisition_root_ref = str(
+            submissions[carrier].get("acquisitionRootRef") or ""
+        ).strip()
+        if acquisition_root_ref:
+            lane_external_inputs[carrier]["acquisitionRootRef"] = acquisition_root_ref
     aggregate_external_digest = payload_digest(
         {
             "schema": "quwoquan_data.campaign_external_input_lanes",
@@ -432,30 +474,37 @@ def freeze_plan(
         commit_sha=frozen_commit,
         source_digest=frozen_source,
         execution_bundle_digest=str(
-            submissions["homepage"]["executionBundle"]["digest"]
+            submissions[active[0]]["executionBundle"]["digest"]
         ),
     )
     stable = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": root_execution_id,
+        "workloadMode": str(first_submission["workloadMode"]),
+        "activeCarriers": list(active),
+        "workloads": workloads,
         "executionMode": execution_mode,
         "scale": next(iter(scales)),
         "gitBranch": next(iter(branches)),
         "gitCommitSha": frozen_commit,
         "sourceRevision": next(iter(source_revisions)),
         "sourceDigest": frozen_source,
-        "executionBundle": dict(submissions["homepage"]["executionBundle"]),
+        "executionBundle": dict(submissions[active[0]]["executionBundle"]),
         "entityCatalogDigest": next(iter(catalog_digests)),
         "semanticSelectionId": next(iter(semantic_selections)),
         "laneExternalInputs": lane_external_inputs,
         "externalInputsDigest": aggregate_external_digest,
         "submissionDigests": {
             carrier: str(submissions[carrier]["requestDigest"])
-            for carrier in CAMPAIGN_CARRIERS
+            for carrier in active
+        },
+        "laneRetryUnfinishedRefs": {
+            carrier: list(submissions[carrier]["retryUnfinishedRefs"])
+            for carrier in active
         },
         "executionIds": {
             carrier: str(submissions[carrier]["executionId"])
-            for carrier in CAMPAIGN_CARRIERS
+            for carrier in active
         },
         "frozenAt": utc_now(),
     }
@@ -465,15 +514,11 @@ def freeze_plan(
             "campaignGeneration": int(distributed_run["campaignGeneration"]),
             "campaignFencingToken": str(distributed_run["campaignFencingToken"]),
         }
-    semantic_preflight = submissions["homepage"].get("semanticPreflightReceipt")
+    if execution_authority is not None:
+        stable["executionAuthority"] = execution_authority
+    semantic_preflight = submissions[active[0]].get("semanticPreflightReceipt")
     if semantic_preflight is not None:
         stable["semanticPreflightReceipt"] = dict(semantic_preflight)
-    alpha_acceptance = submissions["homepage"].get("m100AlphaAcceptance")
-    if alpha_acceptance is not None:
-        validate_m100_alpha_acceptance_binding(
-            alpha_acceptance, output_root=runtime.output_root
-        )
-        stable["m100AlphaAcceptance"] = dict(alpha_acceptance)
     if reviewed_closure_adoption is not None:
         stable[CAMPAIGN_ADOPTION_FIELD] = reviewed_closure_adoption
     if source_pool_binding is not None:
@@ -505,11 +550,6 @@ def freeze_plan(
                 semantic_selection_id=str(existing["semanticSelectionId"]),
                 admitted_at=str(existing["frozenAt"]),
                 output_root=runtime.output_root,
-            )
-        existing_acceptance = existing.get("m100AlphaAcceptance")
-        if existing_acceptance is not None:
-            validate_m100_alpha_acceptance_binding(
-                existing_acceptance, output_root=runtime.output_root
             )
         return existing, digest
     if semantic_preflight is not None:

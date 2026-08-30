@@ -15,29 +15,29 @@ import (
 	"gopkg.in/yaml.v3"
 
 	rtauth "quwoquan_service/runtime/auth"
-	notificationaccountsecurity "quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/accountsecurity"
 )
 
 const notificationAccountSecurityAuthorityScope = "user.account.security.read"
 
 func TestNotificationAccountSecurityAuthorityFailsClosedAtConstruction(t *testing.T) {
 	accessConfig := notificationAuthorityAccessTokenConfig()
-	for _, config := range []notificationaccountsecurity.Config{
+	for _, config := range []struct {
+		baseURL   string
+		timeoutMS int
+	}{
 		{},
-		{BaseURL: "http://user-service:18081"},
-		{BaseURL: "http://user-service:18081", TimeoutMS: 0},
-		{BaseURL: "http://user-service:18081/path", TimeoutMS: 300},
+		{baseURL: "http://user-service:18081"},
+		{baseURL: "http://user-service:18081", timeoutMS: 0},
+		{baseURL: "http://user-service:18081/path", timeoutMS: 300},
 	} {
-		if _, err := notificationaccountsecurity.NewAuthority(accessConfig, config); err == nil {
+		if _, err := buildNotificationAccountSecurityAuthority(
+			accessConfig, config.baseURL, config.timeoutMS,
+		); err == nil {
 			t.Fatalf("config=%+v constructed despite missing or invalid authority settings", config)
 		}
 	}
-	if _, err := notificationaccountsecurity.NewAuthority(
-		rtauth.TokenConfig{},
-		notificationaccountsecurity.Config{
-			BaseURL:   "http://user-service:18081",
-			TimeoutMS: 300,
-		},
+	if _, err := buildNotificationAccountSecurityAuthority(
+		rtauth.TokenConfig{}, "http://user-service:18081", 300,
 	); err == nil {
 		t.Fatal("missing service credential material must fail authority construction")
 	}
@@ -292,8 +292,8 @@ func TestNotificationAccountSecurityAuthorityConfigurationAndAPIWiring(t *testin
 		definitions[key] = definition
 	}
 	for _, key := range []string{
-		"sys.notification-service.accountSecurityAuthority.baseUrl",
-		"sys.notification-service.accountSecurityAuthority.timeoutMs",
+		"sys.notification-service.user_account_security_authority.base_url",
+		"sys.notification-service.user_account_security_authority.timeout_ms",
 	} {
 		definition, exists := definitions[key]
 		if !exists {
@@ -303,7 +303,7 @@ func TestNotificationAccountSecurityAuthorityConfigurationAndAPIWiring(t *testin
 			t.Fatalf("authority setting %q must not have a fallback default", key)
 		}
 	}
-	if definitions["sys.notification-service.accountSecurityAuthority.timeoutMs"]["type"] != "int" {
+	if definitions["sys.notification-service.user_account_security_authority.timeout_ms"]["type"] != "int" {
 		t.Fatal("authority timeout must be an integer config value")
 	}
 
@@ -323,32 +323,75 @@ func TestNotificationAccountSecurityAuthorityConfigurationAndAPIWiring(t *testin
 				filepath.Join(root, "environments", environment, "config.yaml"),
 				&environmentConfig,
 			)
-			if got := environmentConfig.Overrides["sys.notification-service.accountSecurityAuthority.baseUrl"]; got != wantBaseURL {
+			if got := environmentConfig.Overrides["sys.notification-service.user_account_security_authority.base_url"]; got != wantBaseURL {
 				t.Fatalf("base URL=%#v, want=%q", got, wantBaseURL)
 			}
-			if got := environmentConfig.Overrides["sys.notification-service.accountSecurityAuthority.timeoutMs"]; got != 300 {
+			if got := environmentConfig.Overrides["sys.notification-service.user_account_security_authority.timeout_ms"]; got != 300 {
 				t.Fatalf("timeout=%#v, want=300ms", got)
 			}
 		})
 	}
 
-	mainSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "main.go"))
+	bootstrapSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "bootstrap.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := string(mainSource)
+	configSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "runtime_config.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 迁移后 authority 客户端、凭据 scope 与 readiness 检查全部由 servicekit
+	// 按声明装配，服务侧只声明 scope 与内嵌通用配置段；取证对象随之从服务自建
+	// 客户端改为这两处声明。
+	source := string(bootstrapSource)
 	for _, required := range []string{
-		"accountsecurity.NewAuthority(",
-		"accountSecurityAuthority.CheckAccountSecurityAuthority(readyCtx)",
-		"AccountSecurityAuthority: accountSecurityAuthority",
+		`servicekit.Bootstrap(serviceName`,
+		"AuthorityScopes:      []string{accountSecurityReadScope}",
 	} {
 		if !strings.Contains(source, required) {
 			t.Fatalf("notification API composition is missing %q", required)
 		}
 	}
-	if strings.Contains(source, "NOTIFICATION_ACCOUNT_SECURITY") {
+	declaration := string(configSource)
+	for _, required := range []string{
+		`accountSecurityReadScope = "user.account.security.read"`,
+		"servicekit.BaseConfig `yaml:\",inline\"`",
+	} {
+		if !strings.Contains(declaration, required) {
+			t.Fatalf("notification config declaration is missing %q", required)
+		}
+	}
+	if strings.Contains(source, "NOTIFICATION_ACCOUNT_SECURITY") ||
+		strings.Contains(declaration, "NOTIFICATION_ACCOUNT_SECURITY") {
 		t.Fatal("account security authority must not use an environment fallback")
 	}
+}
+
+// buildNotificationAccountSecurityAuthority 复刻 servicekit 装配 authority 的
+// 输入形状（BaseConfig.user_account_security_authority + AuthorityScopes），
+// 让本合约测试与骨架实际走的构造路径同源。
+func buildNotificationAccountSecurityAuthority(
+	accessConfig rtauth.TokenConfig,
+	baseURL string,
+	timeoutMS int,
+) (*rtauth.HTTPAccountSecurityAuthority, error) {
+	credentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessConfig,
+		"notification-service",
+		[]string{notificationAccountSecurityAuthorityScope},
+	)
+	if err != nil {
+		return nil, err
+	}
+	timeout := time.Duration(timeoutMS) * time.Millisecond
+	return rtauth.NewHTTPAccountSecurityAuthority(
+		rtauth.HTTPAccountSecurityAuthorityConfig{
+			BaseURL:     baseURL,
+			HTTPClient:  &http.Client{Timeout: timeout},
+			Credentials: credentials,
+			Timeout:     timeout,
+		},
+	)
 }
 
 func newNotificationAccountSecurityAuthority(
@@ -357,10 +400,7 @@ func newNotificationAccountSecurityAuthority(
 	accessConfig rtauth.TokenConfig,
 ) *rtauth.HTTPAccountSecurityAuthority {
 	t.Helper()
-	authority, err := notificationaccountsecurity.NewAuthority(
-		accessConfig,
-		notificationaccountsecurity.Config{BaseURL: baseURL, TimeoutMS: 300},
-	)
+	authority, err := buildNotificationAccountSecurityAuthority(accessConfig, baseURL, 300)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -494,7 +534,7 @@ func notificationServiceRoot(t *testing.T) string {
 	root := filepath.Clean(
 		filepath.Join(filepath.Dir(file), "..", "..", "..", ".."),
 	)
-	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "main.go")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "bootstrap.go")); err != nil {
 		t.Fatal(err)
 	}
 	return root

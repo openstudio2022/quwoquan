@@ -101,6 +101,8 @@ extension SearchCoordinatorSuggestions on SearchCoordinator {
                     item.homepageType,
                 homepageId: item.id,
                 coverUrl: item.coverUrl,
+                coverAssetId: item.coverAssetId,
+                coverAccessMode: item.coverAccessMode,
               ),
             )
             .toList(growable: false);

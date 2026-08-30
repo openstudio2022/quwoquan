@@ -1,11 +1,10 @@
 """底稿（base draft）选取、批次级占用账本与贴合度度量。
 
-复用策略（产品裁定：full light-edit，统一以底稿为骨架轻改）：
+复用策略按来源权利语义分轨：
 
-- `licensed_adaptation` 与 `factual_reference_only` 统一作为表达底稿处理：以底稿为骨架做
-  适度润色 + 平台/作者痕迹清理 + 私人信息脱敏 + 人设适配；优质原句/自然段可保留，
-  禁止脱离底稿从零另写，也禁止零加工整篇逐字照搬。
-- review 对两类来源都启用 `baseDraftFidelity`（下限防换稿/重写，上限防零加工照搬）。
+- `licensed_adaptation` 可作为表达底稿轻改，并由 `baseDraftFidelity` 防换稿与零加工照搬。
+- `factual_reference_only` 只提供可核验事实、路线顺序与必要专有名词；成稿必须独立组织和
+  表达，不承担最低底稿留存率，并继续由 `commercialNearCopy` 阻断近抄与连续长句复现。
 - 仅 `blocked` 来源不可作底稿（且不会进入底稿路径）。
 - 普通网页/UGC（攻略/游记/评论）只有在对象级 source/rights 证据满足
   `runtime-data-engineering/article-commercial-scale-closure` 的准入合同后才可进入发布；
@@ -37,9 +36,9 @@ BASE_DRAFT_LEDGER = "base_draft_ledger.json"
 LEDGER_SCHEMA = "quwoquan_data.base_draft_ledger"
 
 
-# 可作"以底稿为骨架轻改"的权利模式（产品裁定 full light-edit，licensed 与 factual 同等对待）。
-# 仅 blocked 不可作底稿；rights 准入校验另在 download/content_plan 层执行，与此复用策略解耦。
-ADAPTABLE_SOURCE_USE_MODES = ("licensed_adaptation", "factual_reference_only")
+# 只有明确允许改编的来源可作为表达骨架轻改。事实参考来源仍可通过 baseSourceRef
+# 提供事实证据，但不得因此取得复用原句/自然段的许可。
+ADAPTABLE_SOURCE_USE_MODES = ("licensed_adaptation",)
 # 字数门唯一真相源（形态自适应）：长文 article 正文≥600；图文混排正文≥200 且
 # 有足量内联图与图注（一篇真·图文底稿，而非图片占位）。任何 verify/review/run.py
 # 预检都必须经 base_draft_readiness 消费这些阈值，禁止在别处另起一份固定 600。
@@ -322,22 +321,43 @@ def assign_base_draft(
 
 
 # ─── 底稿正文读取与贴合度 ──────────────────────────────────────────────
-def load_base_draft_text(execution_id: str, base_source_ref: str | None) -> str:
-    """读底稿正文：优先 source.clean.md，回退 source.md。"""
+def _base_draft_source_candidates(
+    execution_id: str, base_source_ref: str | None
+) -> list[Path]:
+    """底稿引用可能指向的清洗正文文件，按优先级排列。
+
+    候选顺序是底稿正文的唯一解析规则：读全文的 `load_base_draft_text` 与只要文件
+    路径的 `base_draft_source_path` 必须落到同一个文件，否则「判据看的正文」与
+    「issue 指的行号」会来自两份不同的稿子。
+    """
     if not base_source_ref:
-        return ""
+        return []
     candidate = execution_root(execution_id) / str(base_source_ref)
-    paths: list[Path] = []
     # 兼容指向 source.clean.md / source.md / 来源目录三种情况；review 与 prompt 都应优先消费清洗正文。
     if candidate.name == "source.clean.md":
-        paths.extend([candidate, candidate.parent / "source.md"])
-    elif candidate.name == "source.md":
-        paths.extend([candidate.parent / "source.clean.md", candidate])
-    elif candidate.suffix:
-        paths.extend([candidate, candidate.parent / "source.clean.md", candidate.parent / "source.md"])
-    else:
-        paths.extend([candidate / "source.clean.md", candidate / "source.md"])
-    for path in paths:
+        return [candidate, candidate.parent / "source.md"]
+    if candidate.name == "source.md":
+        return [candidate.parent / "source.clean.md", candidate]
+    if candidate.suffix:
+        return [
+            candidate,
+            candidate.parent / "source.clean.md",
+            candidate.parent / "source.md",
+        ]
+    return [candidate / "source.clean.md", candidate / "source.md"]
+
+
+def base_draft_source_path(execution_id: str, base_source_ref: str | None) -> Path | None:
+    """底稿正文所在文件；引用不在场或候选文件都不存在时返回 `None`。"""
+    for path in _base_draft_source_candidates(execution_id, base_source_ref):
+        if path.is_file():
+            return path
+    return None
+
+
+def load_base_draft_text(execution_id: str, base_source_ref: str | None) -> str:
+    """读底稿正文：优先 source.clean.md，回退 source.md。"""
+    for path in _base_draft_source_candidates(execution_id, base_source_ref):
         if path.is_file():
             try:
                 return _extract_base_draft_body(path.read_text(encoding="utf-8"))
@@ -483,7 +503,6 @@ def extract_base_draft_body(text: str) -> str:
 # 注入 prompt 的底稿正文上限：fidelity 门按整篇底稿判，prompt 必须给整篇（否则 agent 看不到
 # 的内容无法保留 → 必然低保真）。仅对极端超长底稿（书籍级）设安全上限，避免 prompt 失控。
 BASE_DRAFT_PROMPT_MAX_CHARS = 24000
-
 
 
 

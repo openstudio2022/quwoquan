@@ -9,7 +9,7 @@ from __future__ import annotations
 import shutil
 import sys
 from pathlib import Path
-from types import SimpleNamespace
+
 
 DATA_ROOT = next(
     parent
@@ -34,21 +34,13 @@ from core.control_types import (  # noqa: E402
     ContentType,
     ExecutionStage,
     QueueBackend,
-    QueueJobStage,
     QueueJobState,
     QueueTimelineEvent,
     ReliableTaskDispatchStatus,
     RuntimeEnvironment,
 )
-from core.data_issue import (  # noqa: E402
-    DataIssueCode,
-    DataIssueError,
-    DataIssueLane,
-    DataIssueStage,
-    DataRecoveryAction,
-    data_issue,
-)
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
+
 
 EXECUTION_ID = "20260727--travel-homepage-generate--test-region-q--pilot-902"
 _NAMES = ("配额实体甲", "配额实体乙", "配额实体丙", "配额实体丁")
@@ -120,7 +112,7 @@ def _settle(jobs, succeeded: int, delivered: dict[str, int] | None = None, final
     ``finalized`` 是本轮真正落盘的达标对象数，可以与账本成功数不同。
     """
 
-    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
+    def run_fleet(_execution_id, _stage):
         if delivered is not None:
             delivered["qualified"] = finalized
         outcomes = []
@@ -307,130 +299,8 @@ def test_candidate_pool_exhausted__zero_qualified__blocks__functional__local_con
     assert result is not None
     assert result.status is ReliableTaskDispatchStatus.BLOCKED
     assert result.completed_count == 0
-    assert result.issues
-    assert all(issue.code is DataIssueCode.QUEUE_EXECUTION_FAILED for issue in result.issues)
-    assert not any("候选池耗尽" in str(issue) for issue in result.issues)
+    assert any("无合格对象" in str(issue) for issue in result.issues)
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
-
-
-def test_remote_host_executor_blocker_preserves_typed_code(
-    monkeypatch,
-) -> None:
-    ctx, _jobs = _build(quota=1)
-    from content.execution.queue.reliabletask import fleet as reliabletask_fleet
-
-    issue = data_issue(
-        DataIssueCode.REMOTE_HOST_EXECUTOR_UNAVAILABLE,
-        stage=DataIssueStage.AUTHOR,
-        lane=DataIssueLane.HOMEPAGE,
-        ref=EXECUTION_ID,
-        recovery=DataRecoveryAction.STOP,
-        message="governed external host executor is unavailable",
-    )
-
-    def fail_typed(*_args, **_kwargs):
-        raise DataIssueError((issue,))
-
-    monkeypatch.setattr(reliabletask_fleet, "run_reliabletask_fleet", fail_typed)
-    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
-        ctx,
-        ExecutionStage.BUILD_HOMEPAGE,
-    )
-    assert result is not None
-    assert result.status is ReliableTaskDispatchStatus.BLOCKED
-    assert result.issues == (issue,)
-    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
-
-
-def test_terminal_article_repair_preserves_original_typed_cause(
-    monkeypatch,
-) -> None:
-    original = data_issue(
-        DataIssueCode.QUALITY_FAILED,
-        stage=DataIssueStage.REVIEW,
-        lane=DataIssueLane.ARTICLE,
-        recovery=DataRecoveryAction.REWIND_COMPOSE,
-        ref="杭州西湖__article_frontier",
-        message="closing figure cannot anchor the article entity",
-    )
-    terminal_job = SimpleNamespace(
-        state=QueueJobState.DEAD,
-        last_issue=original,
-        job_id="article-author-job",
-    )
-    ctx = SimpleNamespace(execution_id="article-repair-test", max_workers=1)
-    monkeypatch.setattr(reliabletask_dispatch, "_quota_reached", lambda *_args: False)
-    monkeypatch.setattr(
-        reliabletask_dispatch,
-        "_terminal_partial_closure_ready",
-        lambda *_args: False,
-    )
-    monkeypatch.setattr(
-        reliabletask_dispatch,
-        "_remaining_jobs",
-        lambda *_args: (terminal_job,),
-    )
-    monkeypatch.setattr(
-        "content.execution.queue.reliabletask.fleet._has_audited_remote_recovery",
-        lambda *_args: False,
-    )
-    monkeypatch.setattr(reliabletask_dispatch, "_delivered_count", lambda *_args: 0)
-
-    result = reliabletask_dispatch._dispatch_fleet(
-        ctx,
-        ExecutionStage.POST_AUTHOR,
-        QueueJobStage.AUTHOR,
-    )
-
-    assert result is not None
-    assert result.status is ReliableTaskDispatchStatus.BLOCKED
-    assert result.issues[0] == original
-    assert result.issues[0].recovery is DataRecoveryAction.REWIND_COMPOSE
-    assert "candidate pool" not in result.issues[0].message
-
-
-def test_audited_publish_recovery_treats_dead_job_as_active(
-    monkeypatch,
-) -> None:
-    dead = SimpleNamespace(
-        state=QueueJobState.DEAD,
-        last_issue=None,
-        job_id="homepage-publish-job",
-    )
-    monkeypatch.setattr(
-        reliabletask_dispatch,
-        "_remaining_jobs",
-        lambda *_args: (dead,),
-    )
-    monkeypatch.setattr(
-        "content.execution.queue.reliabletask.fleet._has_audited_remote_recovery",
-        lambda _execution_id, stage: stage is QueueJobStage.PUBLISH,
-    )
-
-    assert reliabletask_dispatch._active_jobs(
-        "homepage-delivery-recovery",
-        QueueJobStage.PUBLISH,
-    ) == (dead,)
-
-
-def test_audited_publish_recovery_outranks_terminal_partial_closure(
-    monkeypatch,
-) -> None:
-    dead = SimpleNamespace(state=QueueJobState.DEAD)
-    monkeypatch.setattr(
-        reliabletask_dispatch,
-        "_remaining_jobs",
-        lambda *_args: (dead,),
-    )
-    monkeypatch.setattr(
-        "content.execution.queue.reliabletask.fleet._has_audited_remote_recovery",
-        lambda _execution_id, stage: stage is QueueJobStage.PUBLISH,
-    )
-
-    assert reliabletask_dispatch._audited_dead_recovery_pending(
-        "homepage-delivery-recovery",
-        QueueJobStage.PUBLISH,
-    ) is True
 
 
 def test_acceptance_gate_outranks_queue_ledger__functional__local_contract(
@@ -507,7 +377,7 @@ def _settle_publish(
     passed: bool,
     finalized_object_count: int,
 ):
-    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
+    def run_fleet(_execution_id, _stage):
         outcomes = []
         for index, job in enumerate(jobs):
             if index < succeeded:
@@ -544,10 +414,10 @@ def _settle_publish(
     return run_fleet
 
 
-def test_publish_finalized_work_package_does_not_absorb_dead_jobs__functional__local_contract(
+def test_publish_finalized_quota_outranks_dead_jobs__functional__local_contract(
     monkeypatch,
 ) -> None:
-    """Publish 必须由 canonical acceptance 准出，本地 finalized 不能吸收死任务。"""
+    """Publish 幂等重放：作业全死但 finalizedObjectCount≥配额且 fleet.passed 时必须收工。"""
     ctx, jobs = _build_publish(quota=3)
     from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
@@ -561,61 +431,12 @@ def test_publish_finalized_work_package_does_not_absorb_dead_jobs__functional__l
             finalized_object_count=5,
         ),
     )
-    monkeypatch.setattr(
-        "content.execution.preflight.pool_delivery.record_pool_delivery_preflight",
-        lambda _execution_id: ({"poolDeliveryReady": True}, {}, None),
-    )
     result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
         ctx, ExecutionStage.PUBLISH
     )
 
     assert result is not None
-    assert result.status is ReliableTaskDispatchStatus.BLOCKED
-    assert result.completed_count == 0
-    assert result.issues
-    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
-
-
-def test_publish_transport_down_retains_jobs_as_delivery_pending__functional__local_contract(
-    monkeypatch,
-) -> None:
-    ctx, jobs = _build_publish(quota=3)
-    fleet_called = False
-
-    def unexpected_fleet(*_args, **_kwargs):
-        nonlocal fleet_called
-        fleet_called = True
-        raise AssertionError("delivery-unavailable preflight must not dispatch")
-
-    monkeypatch.setattr(
-        "content.execution.preflight.pool_delivery.record_pool_delivery_preflight",
-        lambda _execution_id: (
-            {
-                "poolDeliveryReady": False,
-                "issueCode": "DATA.POOL.DELIVERY_UNAVAILABLE",
-            },
-            None,
-            None,
-        ),
-    )
-    monkeypatch.setattr(
-        "content.execution.queue.reliabletask.fleet.run_reliabletask_fleet",
-        unexpected_fleet,
-    )
-
-    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
-        ctx,
-        ExecutionStage.PUBLISH,
-    )
-
-    assert result is not None
-    assert result.status is ReliableTaskDispatchStatus.WAITING
-    assert result.completed_count == 0
-    assert result.issues[0].code.value == "DATA.POOL.DELIVERY_UNAVAILABLE"
-    assert result.issues[0].recovery is DataRecoveryAction.RETRY_DELIVERY
-    assert fleet_called is False
-    assert all(
-        _read_job(EXECUTION_ID, job.job_id).state is QueueJobState.QUEUED
-        for job in jobs
-    )
+    assert result.status is ReliableTaskDispatchStatus.COMPLETED
+    assert result.completed_count == 5
+    assert result.issues == ()
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)

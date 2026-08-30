@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.receipt import load_lane_receipt
 from content.execution.campaign.workspace import CampaignRuntimePaths
 
@@ -31,6 +30,13 @@ def apply_receipt_fields(
         lane_status = "partial"
     else:
         lane_status = "blocked"
+    # campaign 只投影 lane 回执里的同一个原因取值，不做转换映射也不自己写原因；
+    # lane 在 capsule 等更早阶段 blocked 时没有零合格终态，因此没有可投影的原因。
+    reason = receipt.get("zeroQualifiedReason")
+    if lane_status == "blocked" and reason is not None:
+        lanes[carrier]["zeroQualifiedReason"] = reason
+    else:
+        lanes[carrier].pop("zeroQualifiedReason", None)
     lanes[carrier].update(
         {
             "approvedQuota": int(receipt["approvedQuota"]),
@@ -99,8 +105,7 @@ def aggregate_status(lanes: dict[str, dict[str, Any]]) -> str:
     finalized_or_partial = 0
     delivery_pending = 0
     milestone_met = 0
-    for carrier in CAMPAIGN_CARRIERS:
-        lane = lanes[carrier]
+    for lane in lanes.values():
         qualified = int(lane.get("qualifiedCount") or 0)
         finalized = int(lane.get("finalizedCount") or 0)
         approved = int(lane.get("approvedQuota") or 0)
@@ -119,7 +124,7 @@ def aggregate_status(lanes: dict[str, dict[str, Any]]) -> str:
                 milestone_met += 1
     if finalized_or_partial == 0 and delivery_pending == 0:
         return "blocked"
-    if milestone_met == len(CAMPAIGN_CARRIERS):
+    if milestone_met == len(lanes):
         return "succeeded"
     return "succeeded_partial"
 

@@ -5,19 +5,30 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
 from typing import Any
 
+from quwoquan_app.scripts.device.verify_flutter_run_defines import (
+    RUNTIME_VALUE_DEFINE_KEYS,
+)
 from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
 )
-from quwoquan_ops.cli.lib.test_live_content_binding import (
-    load_test_live_content_binding,
+from quwoquan_ops.cli.lib.generated.app_launch_contract import (
+    APP_EFFECTIVE_LAUNCH_MANIFEST_REQUIRED_FIELDS,
+    APP_LAUNCHER_HANDOFF_REQUIRED_FIELDS,
+    LAUNCH_PROVENANCES,
+    RUNTIME_CONFIG_SUPPLY_MODES,
 )
+
 # 原入口的历史 import，运行时无调用点；保留在此供测试 patch 断言其不被调用。
 from quwoquan_ops.cli.lib.test_live_startup_attempt_receipt import (  # noqa: F401
     load_test_live_startup_attempt,
@@ -37,7 +48,6 @@ from .constants import (
 from .session import (
     _local_target_for_environment_alias,
     _resolved_media_base_urls,
-    _resolved_owner_id,
     _runtime_env_for_alias,
 )
 
@@ -87,6 +97,51 @@ def _effective_base_urls_for_device(
     }
 
 
+# App 运行面不读的 define，但 Patrol 测试宿主的 kernel 仍需要它们；取值同样只来自
+# 签名 runtime package，不另立一份 endpoint 真相源。
+_PATROL_HOST_DEFINE_KEYS = {"appDownloadBaseUrl": "APP_DOWNLOAD_BASE_URL"}
+
+
+def _test_host_dart_defines(handoff: dict[str, Any]) -> dict[str, str]:
+    """从签名 runtime package 投影出 Patrol 测试宿主的 endpoint define。
+
+    App 运行时本身不读编译期 define——runtime config 走签名 package 的安装后
+    激活——但 ``String.fromEnvironment`` 会冻进 Patrol 的测试 kernel，所以宿主
+    必须在编译前拿到该打哪个 endpoint。取值只来自 handoff 携带的签名 package，
+    键映射由 ``verify_flutter_run_defines`` 独占，两者都不在此处复制。
+    """
+
+    package = handoff.get("runtimeConfigPackage")
+    if not isinstance(package, dict):
+        raise ValueError("canonical launcher handoff runtime package is invalid")
+    values = package.get("runtime")
+    if not isinstance(values, dict):
+        raise ValueError("canonical launcher handoff runtime values are invalid")
+    defines: dict[str, str] = {
+        "QWQ_APP_LAUNCH_PROVENANCE": str(
+            handoff.get("launchProvenance") or ""
+        ),
+        "QWQ_RUNTIME_CONFIG_SUPPLY_MODE": str(
+            handoff.get("runtimeConfigSupplyMode") or ""
+        ),
+        "APP_LAUNCH_POLICY": str(handoff.get("launchPolicy") or ""),
+    }
+    projected = {**RUNTIME_VALUE_DEFINE_KEYS, **_PATROL_HOST_DEFINE_KEYS}
+    for value_key, define_key in projected.items():
+        value = values.get(value_key)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(
+                f"canonical launcher handoff runtime value is missing: {value_key}"
+            )
+        defines[define_key] = value
+    absent = sorted(key for key, value in defines.items() if not value)
+    if absent:
+        raise ValueError(
+            "canonical launcher handoff Dart defines are invalid: " + ", ".join(absent)
+        )
+    return defines
+
+
 def _canonical_handoff_projection(
     handoff: dict[str, Any],
 ) -> tuple[dict[str, str], dict[str, str]]:
@@ -94,78 +149,76 @@ def _canonical_handoff_projection(
 
     if handoff.get("schema") != "app-launcher-handoff":
         raise ValueError("canonical launcher handoff schema is invalid")
+    handoff_field_drift = sorted(
+        set(APP_LAUNCHER_HANDOFF_REQUIRED_FIELDS) ^ handoff.keys()
+    )
+    if handoff_field_drift:
+        raise ValueError(
+            "canonical launcher handoff fields do not match generated contract: "
+            + ", ".join(handoff_field_drift)
+        )
     effective = handoff.get("effectiveLaunchManifest")
     if not isinstance(effective, dict) or effective.get("schema") != (
         "app-effective-launch-manifest"
     ):
         raise ValueError("canonical effective launch manifest is invalid")
+    effective_field_drift = sorted(
+        set(APP_EFFECTIVE_LAUNCH_MANIFEST_REQUIRED_FIELDS) ^ effective.keys()
+    )
+    if effective_field_drift:
+        raise ValueError(
+            "canonical effective launch manifest fields do not match generated contract: "
+            + ", ".join(effective_field_drift)
+        )
     for field, value in effective.items():
         if field != "schema" and handoff.get(field) != value:
             raise ValueError(
                 "canonical launcher handoff/effective manifest mismatch: "
                 f"{field}"
             )
+    launch_provenance = str(handoff.get("launchProvenance") or "")
+    if launch_provenance not in LAUNCH_PROVENANCES:
+        raise ValueError("canonical launcher handoff launchProvenance is invalid")
+    runtime_config_supply_mode = str(
+        handoff.get("runtimeConfigSupplyMode") or ""
+    )
+    if runtime_config_supply_mode not in RUNTIME_CONFIG_SUPPLY_MODES:
+        raise ValueError(
+            "canonical launcher handoff runtimeConfigSupplyMode is invalid"
+        )
     for field in (
-        "dartDefinesDigest",
-        "runtimeConfigDigest",
+        "runtimeConfigPackageDigest",
+        "runtimeConfigTrustEnvelopeDigest",
         "effectiveLaunchManifestDigest",
     ):
         if CANONICAL_DIGEST_PATTERN.fullmatch(str(handoff.get(field) or "")) is None:
             raise ValueError(f"canonical launcher handoff {field} is invalid")
-    defines = handoff.get("dartDefines")
-    if not isinstance(defines, dict) or any(
-        not isinstance(key, str) or not isinstance(value, str)
-        for key, value in defines.items()
-    ):
-        raise ValueError("canonical launcher handoff Dart defines are invalid")
+    defines = _test_host_dart_defines(handoff)
     missing_defines = sorted(CANONICAL_TEST_LIVE_DART_DEFINE_KEYS - defines.keys())
     if missing_defines:
         raise ValueError(
             "canonical launcher handoff Dart defines are incomplete: "
             + ", ".join(missing_defines)
         )
-    expected_define_values = {
-        "APP_RUNTIME_ENV": str(handoff.get("environment") or ""),
-        "QWQ_APP_LAUNCH_MODE": str(handoff.get("launchMode") or ""),
-        "APP_LAUNCH_POLICY": str(handoff.get("launchPolicy") or ""),
-        "CONTENT_BINDING_STATE": str(handoff.get("contentBindingState") or ""),
-        "CLOUD_GATEWAY_BASE_URL": str(handoff.get("recoveryBaseUrl") or ""),
-        "PUBLIC_WEB_BASE_URL": str(handoff.get("publicWebBaseUrl") or ""),
-        "APP_DOWNLOAD_BASE_URL": str(handoff.get("appDownloadBaseUrl") or ""),
-    }
-    mismatched_defines = sorted(
-        key
-        for key, value in expected_define_values.items()
-        if defines.get(key) != value
-    )
-    if mismatched_defines:
-        raise ValueError(
-            "canonical launcher handoff Dart define projection mismatch: "
-            + ", ".join(mismatched_defines)
-        )
     build_environment = {
         "QWQ_APP_RUNTIME_ENV": str(handoff["environment"]),
         "QWQ_LAUNCH_TARGET": str(handoff["target"]),
-        "QWQ_APP_LAUNCH_MODE": str(handoff["launchMode"]),
+        "QWQ_APP_LAUNCH_PROVENANCE": launch_provenance,
+        "QWQ_RUNTIME_CONFIG_SUPPLY_MODE": runtime_config_supply_mode,
         "QWQ_APP_LAUNCH_POLICY": str(handoff["launchPolicy"]),
         "QWQ_APP_BUILD_CONTEXT": "runtime",
-        "QWQ_DART_DEFINES_DIGEST": str(handoff["dartDefinesDigest"]),
         "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": str(
-            handoff["runtimeConfigDigest"]
+            handoff["runtimeConfigPackageDigest"]
+        ),
+        "QWQ_EXPECTED_RUNTIME_CONFIG_TRUST_DIGEST": str(
+            handoff["runtimeConfigTrustEnvelopeDigest"]
         ),
         "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": str(
             handoff["effectiveLaunchManifestDigest"]
         ),
-        "QWQ_CONTENT_RELEASE_ID": str(handoff.get("contentReleaseId") or ""),
-        "QWQ_CONTENT_MANIFEST_DIGEST": str(
-            handoff.get("contentManifestDigest") or ""
-        ),
-        "QWQ_CONTENT_READINESS_RECEIPT_DIGEST": str(
-            handoff.get("contentReadinessReceiptDigest") or ""
-        ),
-        "QWQ_APP_RECOVERY_BASE_URL": str(handoff["recoveryBaseUrl"]),
-        "QWQ_APP_PUBLIC_WEB_URL": str(handoff["publicWebBaseUrl"]),
-        "QWQ_APP_DOWNLOAD_BASE_URL": str(handoff["appDownloadBaseUrl"]),
+        "QWQ_APP_RECOVERY_BASE_URL": defines["CLOUD_GATEWAY_BASE_URL"],
+        "QWQ_APP_PUBLIC_WEB_URL": defines["PUBLIC_WEB_BASE_URL"],
+        "QWQ_APP_DOWNLOAD_BASE_URL": defines["APP_DOWNLOAD_BASE_URL"],
         "QWQ_LAUNCH_HANDOFF_JSON": json.dumps(
             handoff,
             ensure_ascii=False,
@@ -173,15 +226,30 @@ def _canonical_handoff_projection(
             separators=(",", ":"),
         ),
     }
-    return dict(defines), build_environment
+    return defines, build_environment
+
+
+def _materialized_runtime_config_trust_root() -> Path:
+    """在源码树外开一个只放 trust envelope 的 assets 根。
+
+    与 run.sh 的 canonical 启动链同构：宿主原生侧要验签 runtime config package 就必须在
+    构建产物里带上 trust envelope，而 target runtime package 不得随构建进入产物——目录里
+    因此只允许出现 trust envelope 一个文件，这条判否由两个工程共用的 Gradle 校验脚本执行。
+    """
+
+    root = Path(tempfile.mkdtemp(prefix="qwq-patrol-runtime-config."))
+    root.chmod(0o700)
+    runtime_root = root / "qwq_runtime"
+    runtime_root.mkdir()
+    runtime_root.chmod(0o700)
+    atexit.register(shutil.rmtree, root, True)
+    return root
 
 
 def _canonical_test_live_launcher_handoff(
     args: argparse.Namespace,
     device: dict[str, Any],
     command_env: dict[str, str],
-    *,
-    content_binding_mode: str = "current",
 ) -> dict[str, Any]:
     """Render one run-bound canonical handoff for both Patrol and Gradle."""
 
@@ -190,36 +258,22 @@ def _canonical_test_live_launcher_handoff(
         raise ValueError("test_live launcher handoff requires alpha, beta, or gamma")
     target_name = _local_target_for_environment_alias(args.env_name)
     get_target(load_environment_topology(), target_name)
-    if content_binding_mode == "current":
-        content_binding = load_test_live_content_binding(target_name) or {}
-    elif content_binding_mode == "unbound":
-        content_binding = {}
-    else:
-        raise ValueError("canonical test_live content binding mode is invalid")
-    expected_content = {
-        "contentReleaseId": str(content_binding.get("releaseId") or ""),
-        "contentManifestDigest": str(content_binding.get("manifestDigest") or ""),
-        "contentReadinessReceiptDigest": str(
-            content_binding.get("readinessReceiptDigest") or ""
-        ),
-    }
-    populated_content = [value for value in expected_content.values() if value]
-    if populated_content and len(populated_content) != len(expected_content):
-        raise ValueError("current test_live content binding is partial")
     base_urls = _effective_base_urls_for_device(args, device)
+    trust_root = _materialized_runtime_config_trust_root()
+    trust_path = trust_root / "qwq_runtime" / "runtime-config-trust.json"
     command = [
         sys.executable,
         str(APP_LAUNCHER_HANDOFF_BUILDER),
+        "--runtime-config-trust-output",
+        str(trust_path),
         "--env",
         runtime_env,
         "--target",
         target_name,
-        "--launch-mode",
+        "--launch-provenance",
         "canonical_launcher",
         "--launch-policy",
         "test_live",
-        "--app-instance-namespace",
-        f"{runtime_env}-test-live",
         "--gateway-base-url",
         base_urls["gatewayBaseUrl"],
         "--legal-base-url",
@@ -235,20 +289,6 @@ def _canonical_test_live_launcher_handoff(
         "--rtc-media-connection-url",
         base_urls["rtcMediaConnectionUrl"],
     ]
-    current_user_id = _resolved_owner_id(args)
-    if current_user_id:
-        command.extend(("--current-user-id", current_user_id))
-    if populated_content:
-        command.extend(
-            (
-                "--content-release-id",
-                expected_content["contentReleaseId"],
-                "--content-manifest-digest",
-                expected_content["contentManifestDigest"],
-                "--content-readiness-receipt-digest",
-                expected_content["contentReadinessReceiptDigest"],
-            )
-        )
     is_android = str(device.get("targetPlatform") or "").lower().startswith(
         "android"
     )
@@ -312,14 +352,12 @@ def _canonical_test_live_launcher_handoff(
     if not isinstance(payload, dict):
         raise ValueError("canonical test_live launcher handoff must be an object")
     _canonical_handoff_projection(payload)
-    expected_state = "bound" if populated_content else "unbound"
     expected_identity = {
         "environment": runtime_env,
         "target": target_name,
-        "launchMode": "canonical_launcher",
+        "launchProvenance": "canonical_launcher",
+        "runtimeConfigSupplyMode": RUNTIME_CONFIG_SUPPLY_MODES[0],
         "launchPolicy": "test_live",
-        "contentBindingState": expected_state,
-        **expected_content,
     }
     mismatched = sorted(
         field
@@ -331,10 +369,6 @@ def _canonical_test_live_launcher_handoff(
             "canonical test_live launcher handoff identity mismatch: "
             + ", ".join(mismatched)
         )
-    if payload["runtimeConfigDigest"] != payload["dartDefinesDigest"]:
-        raise ValueError(
-            "test_live runtime config digest must equal the Dart defines digest"
-        )
     expected_runtime_defines = {
         "APP_LEGAL_BASE_URL": base_urls["legalBaseUrl"],
         "MEDIA_AVATAR_CDN_BASE_URL": base_urls["mediaAvatarBaseUrl"],
@@ -343,7 +377,7 @@ def _canonical_test_live_launcher_handoff(
         "MEDIA_UPLOAD_BASE_URL": base_urls["mediaUploadBaseUrl"],
         "RTC_MEDIA_CONNECTION_URL": base_urls["rtcMediaConnectionUrl"],
     }
-    defines = payload["dartDefines"]
+    defines = _test_host_dart_defines(payload)
     mismatched_runtime_defines = sorted(
         key
         for key, value in expected_runtime_defines.items()
@@ -368,6 +402,21 @@ def _canonical_test_live_launcher_handoff(
                 raise ValueError(
                     f"Android test_live launcher transport mismatch: {field}"
                 )
+    if not trust_path.is_file() or trust_path.stat().st_size <= 0:
+        raise ValueError(
+            "canonical test_live launcher handoff did not materialize the trust envelope"
+        )
+    build_profile = str(payload.get("buildProfile") or "").strip()
+    if not build_profile:
+        raise ValueError(
+            "canonical test_live launcher handoff is missing buildProfile"
+        )
+    # 宿主构建期的 trust 供给，与 run.sh 对生产 App 的注入同名同义：Android 走 assets 根，
+    # iOS 走 bundle 资源复制。buildProfile 必须一并交出，否则 Gradle 侧无法判定 envelope
+    # 是否属于当前构建产物。
+    command_env["QWQ_APP_BUILD_PROFILE"] = build_profile
+    command_env["QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT"] = str(trust_root)
+    command_env["QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH"] = str(trust_path)
     return payload
 
 
@@ -478,15 +527,10 @@ def _provider_patrol_launcher_handoff(
 ) -> dict[str, Any]:
     """Build only the canonical launcher rail frozen before side effects."""
 
-    if runtime_identity is None:
-        return _canonical_test_live_launcher_handoff(args, device, command_env)
-    if runtime_identity["runtimeMode"] == "immutable_candidate":
-        return _canonical_test_live_launcher_handoff(
-            args,
-            device,
-            command_env,
-            content_binding_mode="unbound",
-        )
+    if runtime_identity is not None:
+        # runtimeMode 只影响服务端 runtime 身份证据；launcher handoff 不再携带
+        # 内容绑定，因此两种模式共用同一 canonical handoff。
+        _ = runtime_identity["runtimeMode"]
     return _canonical_test_live_launcher_handoff(args, device, command_env)
 
 
@@ -495,4 +539,13 @@ def _apply_launcher_handoff_to_command_env(
     handoff: dict[str, Any],
 ) -> None:
     _, projection = _canonical_handoff_projection(handoff)
+    # 内容激活是运行时服务端事实；编译期 dart-define 摘要已随 executor cutover
+    # 退役。两类遗留注入都必须清除，否则宿主环境会带着无 owner 的旧摘要继续跑。
+    for retired_key in (
+        "QWQ_CONTENT_RELEASE_ID",
+        "QWQ_CONTENT_MANIFEST_DIGEST",
+        "QWQ_CONTENT_READINESS_RECEIPT_DIGEST",
+        "QWQ_DART_DEFINES_DIGEST",
+    ):
+        command_env.pop(retired_key, None)
     command_env.update(projection)

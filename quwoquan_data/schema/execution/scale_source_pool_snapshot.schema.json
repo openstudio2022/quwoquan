@@ -17,7 +17,7 @@
     "laneSourcePoolSelections": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["homepage", "article", "image", "video"],
+      "minProperties": 1,
       "properties": {
         "homepage": {"$ref": "scale_source_pool_selection.schema.json"},
         "article": {"$ref": "scale_source_pool_selection.schema.json"},
@@ -27,7 +27,7 @@
     },
     "selectedCandidates": {
       "type": "array",
-      "minItems": 4,
+      "minItems": 1,
       "items": {"type": "object", "minProperties": 1}
     },
     "snapshotDigest": {"$ref": "#/$defs/sha256"}

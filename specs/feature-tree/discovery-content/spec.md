@@ -113,6 +113,11 @@
   - 进入条件：用户确认、来源快照与媒体引用有效。
   - 交付给下游的结果：草稿或已发布 Post receipt。
   - 不负责：不自动发布，不保存 Gathering/GatheringPlan 快照正文副本。
+- [`JNY-014 / SCN-035`](../spec.md#scn-035)
+  - 本领域负责：在“按需请求经来源发现与四载体生产入池”中，承接内容运营者 confirmed 按需请求，完成来源发现、SourcePool 固化、WorkRequest 派生编译、载体生产、独立审核与 canonical 池准入，并交付 typed 终态与恢复动作。
+  - 进入条件：内容运营者提交并显式确认按需请求，范围、载体组合、数量与来源策略输入有效。
+  - 交付给下游的结果：canonical 内容池的合格唯一对象 record、数量与 shortfall 事实，以及非成功终态的 nextAction/reentry 引用。
+  - 不负责：不拥有 immutable release 之后的环境激活、App 消费与推荐排序结论。
 
 ## 4. 业务能力
 
@@ -232,6 +237,7 @@
 ## 7. 工程归属
 
 - App：`quwoquan_app/lib/service/content_service`
+- App（翻页几何基础设施）：`quwoquan_app/lib/design_system/pageflip`
 - Contracts：`quwoquan_service/services/content-service/contracts`
 - Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/integration-service/contracts`
 - Service：`quwoquan_data`、`quwoquan_service/services/content-service`

@@ -11,6 +11,7 @@ from .context import (
     DEVICE_PROFILES,
     ENVIRONMENTS,
     RUNTIME_CASES,
+    RUNTIME_TARGETS,
     SHA256_PATTERN,
     SPEC_REFS,
 )
@@ -20,12 +21,16 @@ from .evidence_validation import (
     _validate_runtime_evidence,
 )
 from .package_probe import (
-    _ios_defines,
+    _ios_compile_defines,
     _launcher_handoff,
-    _runtime_defines,
-    _validate_defines,
+    _runtime_package,
+    _validate_compile_defines,
+    _validate_runtime_package,
 )
 from .reporting import _case, _case_counts, _report_status, _write_report
+
+
+_PROD_TEST_LIVE_REJECTION = "test_live target/environment selection is invalid"
 
 
 def main() -> int:
@@ -49,6 +54,16 @@ def main() -> int:
     parser.add_argument("--release-id", default="")
     parser.add_argument("--release-digest", default="")
     parser.add_argument("--report", default="")
+    parser.add_argument(
+        "--component-environment",
+        action="append",
+        choices=ENVIRONMENTS,
+        dest="component_environments",
+        help=(
+            "Limit component-readiness probes to explicit environments. "
+            "Release-bound evidence still uses the complete canonical matrix."
+        ),
+    )
     args = parser.parse_args()
 
     issues: list[str] = []
@@ -132,17 +147,70 @@ def main() -> int:
                 )
             )
 
-    for environment in ENVIRONMENTS:
+    component_environments = tuple(args.component_environments or ENVIRONMENTS)
+    for environment in component_environments:
+        if environment == "prod":
+            prod_issues: list[str] = []
+            rejection_reason = ""
+            try:
+                _runtime_package(environment)
+            except RuntimeError as exc:
+                rejection_reason = str(exc).strip()
+                if rejection_reason != _PROD_TEST_LIVE_REJECTION:
+                    prod_issues.append(
+                        "prod: test_live rejection reason mismatch: "
+                        f"{rejection_reason or '<empty>'}"
+                    )
+            except (KeyError, json.JSONDecodeError) as exc:
+                prod_issues.append(f"prod: test_live boundary probe invalid: {exc}")
+            else:
+                prod_issues.append("prod: test_live was unexpectedly accepted")
+
+            boundary_status = (
+                "expected_fail_closed" if not prod_issues else "failed"
+            )
+            issues.extend(prod_issues)
+            packages[environment] = {
+                "runtimeDefineKeys": [],
+                "iosDefineKeys": [],
+                "runtimeTarget": RUNTIME_TARGETS[environment],
+                "entrypoint": "",
+                "dartDefinesDigest": "",
+                "runtimeConfigDigest": "",
+                "effectiveLaunchManifestDigest": "",
+                "status": boundary_status,
+                "componentEligible": False,
+                "promotionEligible": False,
+                "reason": rejection_reason,
+            }
+            cases.append(
+                _case(
+                    "component:prod",
+                    kind="component_readiness",
+                    status=boundary_status,
+                    required=bool(prod_issues),
+                    environment=environment,
+                    target=RUNTIME_TARGETS[environment],
+                    launchPolicy="test_live",
+                    componentEligible=False,
+                    promotionEligible=False,
+                    effectiveLaunchManifestDigest="",
+                    reason=rejection_reason,
+                    issues=prod_issues,
+                )
+            )
+            continue
+
         package_issues: list[str] = []
         runtime: dict[str, str] = {}
         ios: dict[str, str] = {}
         handoff: dict[str, Any] = {}
         try:
-            runtime = _runtime_defines(environment)
-            ios = _ios_defines(environment)
+            runtime = _runtime_package(environment)
+            ios = _ios_compile_defines(environment)
             handoff = _launcher_handoff(environment)
-            package_issues.extend(_validate_defines(environment, runtime))
-            package_issues.extend(_validate_defines(environment, ios))
+            package_issues.extend(_validate_runtime_package(environment, runtime))
+            package_issues.extend(_validate_compile_defines(environment, ios))
             manifest_digest = str(
                 handoff.get("effectiveLaunchManifestDigest") or ""
             )
@@ -158,8 +226,9 @@ def main() -> int:
             "iosDefineKeys": sorted(ios),
             "runtimeTarget": handoff.get("target", ""),
             "entrypoint": handoff.get("entrypoint", ""),
-            "dartDefinesDigest": handoff.get("dartDefinesDigest", ""),
-            "runtimeConfigDigest": handoff.get("runtimeConfigDigest", ""),
+            "runtimeConfigPackageDigest": handoff.get(
+                "runtimeConfigPackageDigest", ""
+            ),
             "effectiveLaunchManifestDigest": handoff.get(
                 "effectiveLaunchManifestDigest",
                 "",

@@ -1,7 +1,10 @@
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001.t3
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from pathlib import Path
 from unittest import mock
@@ -9,12 +12,102 @@ from unittest import mock
 import yaml
 
 from quwoquan_ops.cli.lib import external_provider_governance as governance
+from quwoquan_ops.cli.lib.external_provider_governance_lib import (
+    compile_single_environment_bindings,
+)
+from quwoquan_ops.cli.lib.external_provider_governance_lib.derived_sources import (
+    load_environment_bindings,
+)
 from quwoquan_ops.gate import verify_external_provider_governance as provider_gate
 
 ROOT = Path(__file__).resolve().parents[4]
 
 
 class ExternalProviderGovernanceContractTest(unittest.TestCase):
+    def test_message_transport_roots_use_package_bound_generated_bindings(self) -> None:
+        registry = governance.load_registry()
+        self.assertEqual(provider_gate.message_transport_static_issues(registry), [])
+        service_root = ROOT / "quwoquan_service" / "services"
+        roots = [
+            path
+            for path in sorted(service_root.glob("*/cmd/**/*.go"))
+            if not path.name.endswith("_test.go")
+            and provider_gate.MESSAGE_TRANSPORT_ASSEMBLY_RE.search(
+                path.read_text(encoding="utf-8")
+            )
+        ]
+        self.assertTrue(roots)
+        for path in roots:
+            source = path.read_text(encoding="utf-8")
+            self.assertIn("CompiledBindingFor(", source, path)
+            self.assertNotIn("ExternalProviderBindingFor(", source, path)
+
+    def test_message_transport_preflight_gap_is_reported(self) -> None:
+        """反向 fixture：放宽 servicekit 合法形态后，gate 仍抓得住 preflight 缺失。"""
+        registry = governance.load_registry()
+        with tempfile.TemporaryDirectory() as temporary:
+            services_root = Path(temporary)
+            cmd_dir = services_root / "fixture-service" / "cmd" / "api"
+            cmd_dir.mkdir(parents=True)
+            helper = cmd_dir / "message_transport.go"
+
+            # 两种合法 preflight 形态（RequireConfiguredRedisMessageTransport /
+            # servicekit.NewMessageTransport）都缺失时必须报 issue。
+            helper.write_text(
+                "package bootstrap\n\n"
+                'func newTransport() { _ = bindingdescriptor.CompiledBindingFor("runtime.message.transport") }\n',
+                encoding="utf-8",
+            )
+            issues = provider_gate.message_transport_static_issues(
+                registry, services_root=services_root
+            )
+            self.assertTrue(
+                any("must run generated-binding preflight" in issue for issue in issues),
+                issues,
+            )
+
+            # servicekit 形态在场时 preflight 判定放行。
+            helper.write_text(
+                "package bootstrap\n\n"
+                "func newTransport() error {\n"
+                '\tbinding, _ := bindingdescriptor.CompiledBindingFor("runtime.message.transport")\n'
+                "\t_, err := servicekit.NewMessageTransport(spec, binding)\n"
+                "\treturn err\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            issues = provider_gate.message_transport_static_issues(
+                registry, services_root=services_root
+            )
+            self.assertFalse(
+                any("must run generated-binding preflight" in issue for issue in issues),
+                issues,
+            )
+
+            # 直接构造 transport 的分支不接受 servicekit 形态替代显式 preflight：
+            # 既然绕开了 servicekit 封装直接构造，就必须自己执行
+            # RequireConfiguredRedisMessageTransport。
+            helper.write_text(
+                "package bootstrap\n\n"
+                "func newTransport() error {\n"
+                '\tbinding, _ := bindingdescriptor.CompiledBindingFor("runtime.message.transport")\n'
+                "\t_, _ = servicekit.NewMessageTransport(spec, binding)\n"
+                "\t_ = messaging.NewRedisMessageTransport(router)\n"
+                "\treturn nil\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            issues = provider_gate.message_transport_static_issues(
+                registry, services_root=services_root
+            )
+            self.assertTrue(
+                any(
+                    "direct transport construction lacks generated preflight" in issue
+                    for issue in issues
+                ),
+                issues,
+            )
+
     def test_provider_runtime_has_one_package_bound_launch_track(self) -> None:
         sources = {
             relative: (ROOT / relative).read_text(encoding="utf-8")
@@ -176,6 +269,47 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
                         governance.is_prod_forbidden_adapter(binding["adapter"]),
                         (environment, service_id, capability_id, binding["adapter"]),
                     )
+
+    def test_enabled_binding_is_matched_by_an_enabled_capability_switch(self) -> None:
+        """绑定为 enabled 却不打开能力开关，会让该能力在该环境静默缺席。
+
+        这不是「环境按容量裁剪」——绑定已经声明这个环境要用该能力，开关关着
+        只会让依赖它的读取面返回空结果，且没有任何失败信号。
+
+        spec_ref: environment-topology-and-packaging GWT-001（四环境同一 composition）
+        """
+        # 能力标识 -> 决定它是否真正生效的服务配置开关。
+        capability_switches = {
+            "content.embedding.generation": (
+                "content-service",
+                "sys.content-service.embedding.enabled",
+            ),
+        }
+        bindings = governance.load_bindings()
+        missing: list[tuple[str, str, str]] = []
+        for environment, service_map in bindings["environments"].items():
+            for service_id, service_bindings in service_map.items():
+                for capability_id, binding in service_bindings.items():
+                    switch = capability_switches.get(capability_id)
+                    if switch is None or switch[0] != service_id:
+                        continue
+                    if binding.get("state") != "enabled":
+                        continue
+                    config_path = (
+                        ROOT
+                        / "quwoquan_service"
+                        / "services"
+                        / service_id
+                        / "environments"
+                        / environment
+                        / "config.yaml"
+                    )
+                    overrides = (
+                        yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+                    ).get("overrides") or {}
+                    if overrides.get(switch[1]) is not True:
+                        missing.append((environment, service_id, switch[1]))
+        self.assertEqual(missing, [])
 
     def test_adapter_paths_are_scanned_from_real_sources(self) -> None:
         for adapter in governance.load_registry()["adapters"]:
@@ -454,9 +588,10 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
             set(compiled["providerConformanceCapabilityIds"]),
             expected_conformance_capabilities,
         )
-        # location.poi.search 已在 alpha 启用 protocol substitute 并进入 conformance；
-        # route.read 仍无消费点，保持在 conformance 集之外。
-        self.assertIn(
+        # location.poi.search 已在四环境对齐为 not_required（nonprod 三环境必须
+        # 与 prod 共享同一状态），与 route.read 一样保持在 conformance 集之外，
+        # 待消费点落地再翻牌。
+        self.assertNotIn(
             "location.poi.search", compiled["providerConformanceCapabilityIds"]
         )
         self.assertNotIn(
@@ -495,6 +630,168 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
         self.assertIn("EndpointEnvironmentKeys: map[string]string{}", assistant_transport)
         self.assertIn("if !ok {\n\t\treturn ExternalProviderBinding{}, false\n\t}", assistant_transport)
 
+    def test_single_environment_compiler_is_candidate_scoped_and_environment_free_at_runtime(
+        self,
+    ) -> None:
+        artifacts = {}
+        for environment, target in (
+            ("alpha", "alpha-local"),
+            ("beta", "beta-local"),
+            ("gamma", "gamma-local"),
+            ("prod", "prod-hosted"),
+        ):
+            artifact = compile_single_environment_bindings(
+                environment=environment,
+                target=target,
+                source_root=ROOT,
+            )
+            artifacts[environment] = artifact
+            self.assertNotIn("selectedBindings", artifact)
+            self.assertNotIn("selectedRootBindings", artifact)
+            self.assertNotIn("readiness", artifact.get("bindings", {}))
+            for other in {"alpha", "beta", "gamma", "prod"} - {environment}:
+                self.assertNotIn(
+                    other,
+                    {artifact["environment"], artifact["target"]},
+                )
+            for generated in artifact["goSources"]:
+                source = generated["source"]
+                self.assertIn(
+                    "func CompiledBindingFor(capabilityID string)",
+                    source,
+                )
+                self.assertNotIn("environment, capabilityID", source)
+                self.assertNotIn("func ExternalProviderBindingFor(", source)
+                self.assertNotIn("map[string]map[string]ExternalProviderBinding", source)
+        self.assertEqual(
+            len(
+                {
+                    artifact["manifest"]["manifestDigest"]
+                    for artifact in artifacts.values()
+                }
+            ),
+            4,
+        )
+
+    def test_single_environment_compiler_does_not_read_other_environment_configs(
+        self,
+    ) -> None:
+        original_read_text = Path.read_text
+
+        def reject_other_environment(
+            path: Path,
+            *args: object,
+            **kwargs: object,
+        ) -> str:
+            if (
+                path.name == "config.yaml"
+                and "environments" in path.parts
+                and any(other in path.parts for other in ("beta", "gamma", "prod"))
+            ):
+                raise AssertionError(f"single-environment compile crossed scope: {path}")
+            return original_read_text(path, *args, **kwargs)
+
+        governance.load_registry.cache_clear()
+        governance.load_conformance_manifest.cache_clear()
+        load_environment_bindings.cache_clear()
+        with mock.patch.object(Path, "read_text", reject_other_environment):
+            artifact = compile_single_environment_bindings(
+                environment="alpha",
+                target="alpha-local",
+                source_root=ROOT,
+            )
+        self.assertEqual(artifact["environment"], "alpha")
+
+    def test_single_environment_compiler_concurrent_results_do_not_overwrite(self) -> None:
+        requests = (
+            ("alpha", "alpha-local"),
+            ("beta", "beta-local"),
+            ("gamma", "gamma-local"),
+            ("prod", "prod-hosted"),
+        )
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [
+                executor.submit(
+                    compile_single_environment_bindings,
+                    environment=environment,
+                    target=target,
+                    source_root=ROOT,
+                )
+                for environment, target in requests
+            ]
+            artifacts = [future.result() for future in futures]
+        self.assertEqual(
+            [(item["environment"], item["target"]) for item in artifacts],
+            list(requests),
+        )
+        self.assertEqual(
+            len({item["manifest"]["manifestDigest"] for item in artifacts}),
+            4,
+        )
+
+    def test_prod_targets_have_distinct_binding_artifact_identities(self) -> None:
+        prod_sim = compile_single_environment_bindings(
+            environment="prod",
+            target="prod-sim",
+            source_root=ROOT,
+        )
+        prod_hosted = compile_single_environment_bindings(
+            environment="prod",
+            target="prod-hosted",
+            source_root=ROOT,
+        )
+        self.assertEqual(prod_sim["bindings"], prod_hosted["bindings"])
+        self.assertNotEqual(
+            prod_sim["manifest"]["manifestDigest"],
+            prod_hosted["manifest"]["manifestDigest"],
+        )
+
+    def test_single_environment_compiler_reads_capsule_after_live_workspace_drift(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            capsule_root = Path(temporary) / "capsule"
+            shutil.copytree(
+                ROOT / "quwoquan_service",
+                capsule_root / "quwoquan_service",
+                ignore=shutil.ignore_patterns(
+                    ".git",
+                    ".qwq_output",
+                    "generated",
+                    "tests",
+                ),
+            )
+            shutil.copytree(
+                ROOT / "quwoquan_ops" / "external",
+                capsule_root / "quwoquan_ops" / "external",
+            )
+            baseline = compile_single_environment_bindings(
+                environment="alpha",
+                target="alpha-local",
+                source_root=capsule_root,
+            )
+            governance.load_registry.cache_clear()
+            governance.load_conformance_manifest.cache_clear()
+            load_environment_bindings.cache_clear()
+            live_root = ROOT.resolve()
+            original_read_text = Path.read_text
+
+            def reject_live_workspace_read(
+                path: Path,
+                *args: object,
+                **kwargs: object,
+            ) -> str:
+                if path.resolve().is_relative_to(live_root):
+                    raise AssertionError(f"capsule compile read live workspace: {path}")
+                return original_read_text(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "read_text", reject_live_workspace_read):
+                repeated = compile_single_environment_bindings(
+                    environment="alpha",
+                    target="alpha-local",
+                    source_root=capsule_root,
+                )
+            self.assertEqual(repeated, baseline)
 
 if __name__ == "__main__":
     unittest.main()

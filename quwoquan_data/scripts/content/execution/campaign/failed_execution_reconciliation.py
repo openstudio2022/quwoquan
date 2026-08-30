@@ -9,7 +9,7 @@ from typing import Any
 from core import paths
 from core.io import read_json, write_json
 from core.schema import assert_valid
-from core.source_digest import current_source_digest
+from core.source_digest import current_source_definition_snapshot
 
 from content.execution.campaign.failed_execution_reconciliation_cli import (
     register_reconcile_failed_campaign_parser,
@@ -27,12 +27,14 @@ from content.execution.campaign.failed_execution_reconciliation_dispatch import 
 )
 from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.runtime_process import _pid_alive
+from content.execution.campaign.submission_reconciliation_workload import (
+    frozen_submission_workload,
+)
 from content.execution.campaign.submission_reconciliation_contract import (
     campaigns_root,
     canonical_digest,
     file_digest,
     load_terminal_submission_documents,
-    predecessor_campaign_root_execution_id,
     reconciliation_receipt_path,
     resolve_ref,
     source_identity,
@@ -43,105 +45,14 @@ from content.execution.identity import parse_execution_id
 from content.execution.workspace import entity_catalog_digest
 
 
-def _source_drift_successor(
-    plan: Mapping[str, Any],
-    report: Mapping[str, Any],
-    runtime: Mapping[str, Any],
-) -> bool:
-    distributed = plan.get("distributedRun")
-    if not isinstance(distributed, Mapping):
-        return False
-    failure = (
-        "ValueError: campaign sourceDigest drift: "
-        f"frozen={plan.get('sourceDigest')} current="
-    )
-    return (
-        report.get("status") == "blocked"
-        and report.get("phase") == "freeze"
-        and report.get("planDigest") is None
-        and report.get("sourceDigest") is None
-        and report.get("entityCatalogDigest") is None
-        and str(report.get("failure") or "").startswith(failure)
-        and runtime.get("status") == "blocked"
-        and runtime.get("phase") == "freeze"
-        and runtime.get("planDigest") is None
-        and runtime.get("lanes") == {}
-        and bool(runtime.get("finishedAt"))
-        and runtime.get("failure") == report.get("failure")
-        and runtime.get("runId") == report.get("campaignRunId")
-        and runtime.get("generation") == report.get("campaignGeneration")
-        and runtime.get("fencingToken") == report.get("campaignFencingToken")
-        and int(runtime.get("generation") or 0)
-        == int(distributed.get("campaignGeneration") or 0) + 1
-        and runtime.get("runId") != distributed.get("campaignRunId")
-    )
-def _terminalize_dead_source_drift_claims(
-    root_id: str,
-    *,
-    output_root: Path,
-) -> None:
-    campaign = campaigns_root(output_root) / root_id
-    plan = read_json(campaign / "campaign_plan.json")
-    report = read_json(campaign / "campaign_report.json")
-    runtime = read_json(campaign / "runtime/snapshot.json")
-    if not all(isinstance(item, Mapping) for item in (plan, report, runtime)):
-        return
-    if not _source_drift_successor(plan, report, runtime):
-        return
-    distributed = plan["distributedRun"]
-    for carrier in CAMPAIGN_CARRIERS:
-        path = campaign / "claims" / f"{carrier}.json"
-        claim = read_json(path)
-        if not isinstance(claim, dict) or claim.get("status") not in {
-            "active",
-            "starting",
-            "running",
-        }:
-            continue
-        execution_root = Path(str(claim.get("executionRoot") or ""))
-        if (
-            claim.get("rootExecutionId") != root_id
-            or claim.get("carrier") != carrier
-            or claim.get("planDigest") != plan.get("planDigest")
-            or claim.get("campaignRunId") != distributed.get("campaignRunId")
-            or claim.get("campaignGeneration")
-            != distributed.get("campaignGeneration")
-            or claim.get("campaignFencingToken")
-            != distributed.get("campaignFencingToken")
-            or _pid_alive(claim.get("pid"))
-            or _pid_alive(claim.get("pgid"))
-            or execution_root.exists()
-        ):
-            raise typed(
-                "CAMPAIGN_NOT_TERMINAL_FAILED",
-                f"{carrier} source-drift claim is still live or identity-drifted",
-            )
-        now = _now()
-        claim.update(
-            {
-                "status": "failed",
-                "phase": "completed",
-                "returnCode": (
-                    claim["returnCode"]
-                    if isinstance(claim.get("returnCode"), int)
-                    and claim["returnCode"] != 0
-                    else 130
-                ),
-                "error": str(claim.get("error") or "").strip()
-                or "DATA.CAMPAIGN.LANE_PROCESS_GONE_AFTER_SOURCE_DRIFT",
-                "terminationOwner": claim.get("terminationOwner")
-                or "external_or_kernel",
-                "updatedAt": now,
-                "finishedAt": now,
-            }
-        )
-        assert_valid(
-            claim,
-            "execution",
-            "content_campaign_lane_claim",
-            label=f"source-drift terminal campaign lane claim:{carrier}",
-        )
-        write_json(path, claim)
+from content.execution.campaign.failed_execution_claim_terminalization import (
+    _terminalize_dead_source_drift_claims,
+)
+from content.execution.campaign.failed_execution_reconciliation_source_drift import (
+    source_drift_successor as _source_drift_successor,
+)
+
+
 def _failed_campaign_evidence(
     root_id: str,
     *,
@@ -428,9 +339,11 @@ def reconcile_failed_campaign(
 ) -> tuple[dict[str, Any], Path]:
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
     resolved_output = (output_root or paths.OUTPUT_ROOT).resolve()
-    root_id = predecessor_campaign_root_execution_id(root_execution_id)
+    # 活动载体由冻结的 workload 决定，campaign 根不再被推定成 homepage 车道：
+    # 调用方必须直接给出那个不可变的根执行 ID。
+    root_id = parse_execution_id(root_execution_id).execution_id
     if root_id != root_execution_id:
-        raise typed("IDENTITY_DRIFT", "rootExecutionId must be the homepage lane")
+        raise typed("IDENTITY_DRIFT", "rootExecutionId must be the campaign root lane")
     if reason not in _ERROR_CODES:
         raise typed("REASON_INVALID", f"unsupported failed campaign reason: {reason}")
     receipt_path = reconciliation_receipt_path(
@@ -454,6 +367,10 @@ def reconcile_failed_campaign(
         output_root=resolved_output,
         require_all=True,
     )
+    active_carriers, workloads, _root = frozen_submission_workload(
+        submissions,
+        root_execution_id=root_id,
+    )
     rows, original = submission_evidence(
         submissions,
         output_root=resolved_output,
@@ -470,7 +387,9 @@ def reconcile_failed_campaign(
             output_root=resolved_output,
         ),
     )
-    observed_source = current_source_digest(repo_root=source_repo).to_document()
+    observed_source = current_source_definition_snapshot(
+        repo_root=source_repo,
+    ).to_document()
     representative = submissions["homepage"]
     discovery = (
         source_repo
@@ -553,6 +472,8 @@ def reconcile_failed_campaign(
     stable = {
         "schema": SCHEMA,
         "rootExecutionId": root_id,
+        "activeCarriers": list(active_carriers),
+        "workloads": workloads,
         "decision": "superseded",
         "reason": reason,
         "errorCode": _ERROR_CODES[reason],
@@ -562,7 +483,7 @@ def reconcile_failed_campaign(
         "campaignEvidence": campaign_evidence,
         "executionEvidence": execution_evidence,
         "blockerEvidence": blocker,
-        "retryPolicy": "new_four_lane_execution_with_retryOf",
+        "retryPolicy": "active_workload_execution_with_retryOf",
         "recordedAt": _now(),
     }
     receipt = {**stable, "receiptDigest": canonical_digest(stable)}

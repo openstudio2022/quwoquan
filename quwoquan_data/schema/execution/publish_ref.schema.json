@@ -6,7 +6,7 @@
   "properties": {
     "schema": {"const": "quwoquan_data.execution_publish_ref"},
     "executionId": {"type": "string", "minLength": 1},
-    "canonicalPublishRoot": {"const": "quwoquan_data/publish"},
+    "canonicalPublishRoot": {"const": "canonical-publish"},
     "publishedRefs": {
       "type": "object",
       "required": ["entities", "posts"],
@@ -19,6 +19,23 @@
         "posts": {
           "type": "array",
           "items": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"}
+        }
+      }
+    },
+    "publishDiscards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["objectRef", "issues"],
+        "additionalProperties": false,
+        "properties": {
+          "objectRef": {"type": "string", "minLength": 1},
+          "issues": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
         }
       }
     }

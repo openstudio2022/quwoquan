@@ -20,9 +20,16 @@ from quwoquan_ops.ci.device_matrix.evidence import sanitize_device_id
 
 from .constants import (
     APP_DIR,
+    APP_CONTENT_VIDEO_PAGE_COUNT_ENV,
     CORE_READBACK_TARGET,
+    HOME_VIDEO_PLAYBACK_TARGET,
+    PATROL_ANDROID_PACKAGE,
+    PATROL_HOST_DIR,
+    PATROL_IOS_BUNDLE_ID,
     PATROL_TEST_DIRECTORY,
+    PROFILE_JOURNEY_TARGET,
     RELEASE_APP_UAT_DEFINES,
+    RELEASE_SAMPLE_MATRIX_TARGET,
 )
 from .devices import patrol_ios_runtime_argument
 from .handoff import (
@@ -31,6 +38,7 @@ from .handoff import (
 )
 from .session import (
     TypedTestDataActor,
+    TypedTestDataConversation,
     _is_account_enforcement_target,
     _local_target_for_environment_alias,
     _public_video_canary_session_mode,
@@ -147,16 +155,35 @@ def _patrol_bundler_target(target: str) -> str:
     )
 
 
+def _canonical_patrol_uat_targets() -> tuple[tuple[str, str], ...]:
+    """Enumerate every canonical UAT and its collision-free host wrapper target."""
+
+    canonical_root = APP_DIR / "test/user_acceptance"
+    targets = tuple(
+        path.relative_to(APP_DIR).as_posix()
+        for path in sorted(canonical_root.rglob("*_test.dart"))
+        if path.is_file()
+    )
+    if not targets:
+        raise RuntimeError("No canonical App UAT is available for the Patrol host")
+    enumerated = tuple((target, _patrol_bundler_target(target)) for target in targets)
+    wrapper_targets = tuple(wrapper_target for _, wrapper_target in enumerated)
+    if len(set(wrapper_targets)) != len(wrapper_targets):
+        raise RuntimeError("Canonical App UAT wrapper target collision")
+    return enumerated
+
+
 def _create_patrol_target_wrapper(
     target: str,
     *,
     typed_actor: TypedTestDataActor | None = None,
+    typed_conversation: TypedTestDataConversation | None = None,
 ) -> tuple[Path, str, Callable[[], None]]:
     """Securely create one temporary Patrol-shell wrapper for an external UAT."""
 
     _patrol_bundler_target(target)
     normalized = target.strip().replace("\\", "/")
-    wrapper_directory = APP_DIR / PATROL_TEST_DIRECTORY
+    wrapper_directory = PATROL_HOST_DIR / PATROL_TEST_DIRECTORY
     if wrapper_directory.is_symlink() or not wrapper_directory.is_dir():
         raise RuntimeError("Patrol test directory is missing or unsafe")
     bundle_path = wrapper_directory / "test_bundle.dart"
@@ -175,8 +202,21 @@ def _create_patrol_target_wrapper(
     if not relative_import.startswith("../"):
         raise RuntimeError("Patrol wrapper target must remain outside its shell directory")
     imports = [f"import '{relative_import}' as canonical_target;"]
+    relative_support_import = os.path.relpath(
+        APP_DIR / "test/support/runtime/patrol/patrol_test_support.dart",
+        wrapper_directory,
+    ).replace(os.sep, "/")
     actor_module_path: Path | None = None
+    conversation_module_path: Path | None = None
     actor_install = ""
+    conversation_install = ""
+    if typed_actor is not None or typed_conversation is not None:
+        imports = [
+            "import 'dart:convert';",
+            *imports,
+            f"import '{relative_support_import}' "
+            "as patrol_support;",
+        ]
     if typed_actor is not None:
         actor_descriptor, raw_actor_path = tempfile.mkstemp(
             prefix="qwq_typed_test_data_actor_",
@@ -218,21 +258,70 @@ def _create_patrol_target_wrapper(
                 pass
             actor_module_path.unlink(missing_ok=True)
             raise
-        imports = [
-            "import 'dart:convert';",
-            *imports,
-            f"import '{actor_module_path.name}' as typed_actor;",
-            "import '../../support/runtime/patrol/patrol_test_support.dart' "
-            "as patrol_support;",
-        ]
+        imports.insert(-1, f"import '{actor_module_path.name}' as typed_actor;")
         actor_install = (
-            "  String decode(String value) => "
-            "utf8.decode(base64.decode(value));\n"
             "  patrol_support.installPatrolAcceptanceSessionForRunner(\n"
             "    accessToken: decode(typed_actor.accessToken),\n"
             "    refreshToken: decode(typed_actor.refreshToken),\n"
             "    ownerId: decode(typed_actor.ownerId),\n"
             "    personaId: decode(typed_actor.personaId),\n"
+            "  );\n"
+        )
+    if typed_conversation is not None:
+        conversation_descriptor, raw_conversation_path = tempfile.mkstemp(
+            prefix="qwq_typed_test_data_conversation_",
+            suffix=".dart",
+            dir=wrapper_directory,
+            text=True,
+        )
+        conversation_module_path = Path(raw_conversation_path)
+        conversation_constants = {
+            "conversationId": typed_conversation.conversation_id,
+            "messageIdsJson": json.dumps(
+                list(typed_conversation.message_ids),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+        }
+        try:
+            os.fchmod(conversation_descriptor, 0o600)
+            with os.fdopen(
+                conversation_descriptor,
+                "w",
+                encoding="utf-8",
+                closefd=True,
+            ) as conversation_handle:
+                conversation_handle.write(
+                    "// Ephemeral encoded typed conversation; never commit this file.\n"
+                )
+                for name, value in conversation_constants.items():
+                    encoded_value = base64.b64encode(value.encode("utf-8")).decode(
+                        "ascii"
+                    )
+                    conversation_handle.write(
+                        f"const String {name} = '{encoded_value}';\n"
+                    )
+                conversation_handle.flush()
+                os.fsync(conversation_handle.fileno())
+        except BaseException:
+            try:
+                os.close(conversation_descriptor)
+            except OSError:
+                pass
+            conversation_module_path.unlink(missing_ok=True)
+            if actor_module_path is not None:
+                actor_module_path.unlink(missing_ok=True)
+            raise
+        imports.insert(
+            -1,
+            f"import '{conversation_module_path.name}' as typed_conversation;",
+        )
+        conversation_install = (
+            "  patrol_support.installPatrolTestDataConversationForRunner(\n"
+            "    conversationId: decode(typed_conversation.conversationId),\n"
+            "    initialMessageIds: (jsonDecode(\n"
+            "      decode(typed_conversation.messageIdsJson),\n"
+            "    ) as List<dynamic>).cast<String>(),\n"
             "  );\n"
         )
     descriptor, raw_path = tempfile.mkstemp(
@@ -242,7 +331,7 @@ def _create_patrol_target_wrapper(
         text=True,
     )
     wrapper_path = Path(raw_path)
-    wrapper_target = wrapper_path.relative_to(APP_DIR).as_posix()
+    wrapper_target = wrapper_path.relative_to(PATROL_HOST_DIR).as_posix()
     if re.fullmatch(
         r"qwq_environment_smoke_[A-Za-z0-9_]+_test\.dart",
         wrapper_path.name,
@@ -254,7 +343,14 @@ def _create_patrol_target_wrapper(
         "// Ephemeral runner-owned Patrol wrapper; never commit this file.\n"
         + "\n".join(imports)
         + "\n\nvoid main() {\n"
+        + (
+            "  String decode(String value) => "
+            "utf8.decode(base64.decode(value));\n"
+            if typed_actor is not None or typed_conversation is not None
+            else ""
+        )
         + actor_install
+        + conversation_install
         + "  canonical_target.main();\n}\n"
     ).encode("utf-8")
     try:
@@ -271,12 +367,16 @@ def _create_patrol_target_wrapper(
         wrapper_path.unlink(missing_ok=True)
         if actor_module_path is not None:
             actor_module_path.unlink(missing_ok=True)
+        if conversation_module_path is not None:
+            conversation_module_path.unlink(missing_ok=True)
         raise
 
     def cleanup() -> None:
         wrapper_path.unlink(missing_ok=True)
         if actor_module_path is not None:
             actor_module_path.unlink(missing_ok=True)
+        if conversation_module_path is not None:
+            conversation_module_path.unlink(missing_ok=True)
         if bundle_path.is_symlink():
             bundle_path.unlink()
         if bundle_preimage is None:
@@ -400,7 +500,7 @@ def _purge_typed_actor_credential_artifacts(
     if not canonical_values:
         return 0
     needles = tuple(value.encode("utf-8") for value in canonical_values)
-    root = app_dir or APP_DIR
+    root = app_dir or PATROL_HOST_DIR
     removed = 0
     for path in _generated_patrol_artifact_candidates(root):
         if _generated_artifact_contains_any(path, needles):
@@ -449,6 +549,16 @@ def patrol_command(
         getattr(args, "video_playback_canary_work_id", "") or ""
     ).strip()
     patrol_install_id = str(getattr(args, "patrol_install_id", "") or "").strip()
+    profile_p0_only = os.environ.get(
+        "QWQ_APP_CONTENT_PROFILE_P0_ONLY",
+        "",
+    ).strip()
+    if profile_p0_only and profile_p0_only != "true":
+        raise ValueError("QWQ_APP_CONTENT_PROFILE_P0_ONLY must equal true")
+    if profile_p0_only and str(args.target).strip() != PROFILE_JOURNEY_TARGET:
+        raise ValueError(
+            "QWQ_APP_CONTENT_PROFILE_P0_ONLY is only valid for the profile journey"
+        )
     _validate_account_closure_execution(args, runtime_env)
     if patrol_install_id:
         patrol_install_id = patrol_install_id.replace(
@@ -475,6 +585,12 @@ def patrol_command(
         f"--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL={product_ops_base_url}",
         f"--dart-define=VIDEO_PLAYBACK_CANARY_WORK_ID={video_playback_canary_work_id}",
     ]
+    # Patrol instrumentation 只能安装物理隔离 test host；环境身份仅由
+    # production Remote runtime defines 传入，test host 永不成为可晋级制品。
+    if str(device.get("targetPlatform") or "").lower().startswith("android"):
+        command.append(f"--package-name={PATROL_ANDROID_PACKAGE}")
+    else:
+        command.append(f"--bundle-id={PATROL_IOS_BUNDLE_ID}")
     if canonical_runtime_defines is None:
         command.extend(
             (
@@ -490,6 +606,8 @@ def patrol_command(
             f"--dart-define={key}={value}"
             for key, value in sorted(canonical_runtime_defines.items())
         )
+    if profile_p0_only:
+        command.append("--dart-define=APP_CONTENT_PROFILE_P0_ONLY=true")
     ios_runtime_argument = patrol_ios_runtime_argument(device)
     if ios_runtime_argument:
         command.append(ios_runtime_argument)
@@ -555,10 +673,20 @@ def patrol_command(
                 f"--dart-define=MEDIA_UPLOAD_BASE_URL={media_upload_base_url}",
             ]
         )
+    release_plan_b64 = str(getattr(args, "app_uat_sample_plan_b64", "") or "")
+    release_runtime_b64 = str(getattr(args, "app_uat_runtime_binding_b64", "") or "")
+    if str(args.target).strip() == RELEASE_SAMPLE_MATRIX_TARGET:
+        if not release_plan_b64 or not release_runtime_b64:
+            raise ValueError("release sample matrix requires exact plan and runtime binding")
+        command.extend((
+            f"--dart-define=QWQ_RELEASE_UAT_SAMPLE_PLAN_B64={release_plan_b64}",
+            f"--dart-define=QWQ_RELEASE_UAT_RUNTIME_BINDING_B64={release_runtime_b64}",
+        ))
     release_uat_cases_b64 = str(getattr(args, "release_uat_cases_b64", "") or "")
     if release_uat_cases_b64:
         command.append(f"--dart-define=QWQ_RELEASE_HOMEPAGE_UAT_CASES_B64={release_uat_cases_b64}")
-    if Path(args.target).name == Path(CORE_READBACK_TARGET).name:
+    target_name = Path(args.target).name
+    if target_name == Path(CORE_READBACK_TARGET).name:
         release_defines = {
             define_name: str(getattr(args, destination, "") or "").strip()
             for destination, define_name in RELEASE_APP_UAT_DEFINES
@@ -575,4 +703,22 @@ def patrol_command(
             f"--dart-define={name}={value}"
             for name, value in release_defines.items()
         )
+        video_page_count = os.environ.get(
+            APP_CONTENT_VIDEO_PAGE_COUNT_ENV,
+            "",
+        ).strip()
+        if re.fullmatch(r"[1-9][0-9]*", video_page_count) is None:
+            raise ValueError(
+                "app core readback requires a positive release video page count"
+            )
+        command.append(
+            f"--dart-define=DATA_RELEASE_VIDEO_PAGE_COUNT={video_page_count}"
+        )
+    elif target_name == Path(HOME_VIDEO_PLAYBACK_TARGET).name:
+        release_id = str(getattr(args, "data_release_id", "") or "").strip()
+        if not release_id:
+            raise ValueError(
+                "home video playback requires one immutable release identity"
+            )
+        command.append(f"--dart-define=DATA_RELEASE_ID={release_id}")
     return command

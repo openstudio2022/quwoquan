@@ -21,7 +21,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"runtime.log.sink": {
 			State:       "enabled",
 			AdapterID:   "ext.obs.elasticsearch",
-			EndpointRef: "local_topology:alpha.elasticsearch",
+			EndpointRef: "local_topology:elasticsearch",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
 			},
@@ -34,7 +34,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"runtime.log.sink": {
 			State:       "enabled",
 			AdapterID:   "ext.obs.elasticsearch",
-			EndpointRef: "local_topology:beta.elasticsearch",
+			EndpointRef: "local_topology:elasticsearch",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
 			},
@@ -47,7 +47,7 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 		"runtime.log.sink": {
 			State:       "enabled",
 			AdapterID:   "ext.obs.elasticsearch",
-			EndpointRef: "local_topology:gamma.elasticsearch",
+			EndpointRef: "local_topology:elasticsearch",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
 			},
@@ -80,4 +80,9 @@ func ExternalProviderBindingFor(environment, capabilityID string) (ExternalProvi
 	}
 	binding, ok := byCapability[capabilityID]
 	return binding, ok
+}
+
+func CompiledBindingFor(capabilityID string) (ExternalProviderBinding, bool) {
+	_ = capabilityID
+	return ExternalProviderBinding{}, false
 }

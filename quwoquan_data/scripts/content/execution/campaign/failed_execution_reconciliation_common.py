@@ -23,6 +23,7 @@ _ERROR_CODES = {
     "post_publish_partial_terminal": "DATA.CAMPAIGN.POST_PUBLISH_PARTIAL_TERMINAL",
     "mixed_finalized_partial_terminal": "DATA.CAMPAIGN.MIXED_FINALIZED_PARTIAL_TERMINAL",
     "terminal_unpublished_source_drift": "DATA.CAMPAIGN.TERMINAL_UNPUBLISHED_SOURCE_DRIFT",
+    "terminal_unpublished_retryable_shortfall": "DATA.CAMPAIGN.TERMINAL_UNPUBLISHED_RETRYABLE_SHORTFALL",
 }
 _SHA256_RE = re.compile(r"^sha256:([a-f0-9]{64})$")
 
@@ -70,6 +71,28 @@ def terminal_unpublished_receipt_path(
     return base.parent / "terminal-unpublished-source-drift" / f"{match[1]}.json"
 
 
+def terminal_unpublished_shortfall_receipt_path(
+    root_execution_id: str,
+    observed_source_revision: object,
+    *,
+    output_root: Path,
+) -> Path:
+    """Return the create-once shortfall receipt path for one source identity."""
+
+    match = _SHA256_RE.fullmatch(str(observed_source_revision or ""))
+    if match is None:
+        raise ValueError("terminal unpublished observed sourceRevision is invalid")
+    base = reconciliation_receipt_path(
+        root_execution_id,
+        output_root=output_root,
+    )
+    return (
+        base.parent
+        / "terminal-unpublished-retryable-shortfall"
+        / f"{match[1]}.json"
+    )
+
+
 file_binding = _file_binding
 
 __all__ = [
@@ -80,4 +103,5 @@ __all__ = [
     "_now",
     "file_binding",
     "terminal_unpublished_receipt_path",
+    "terminal_unpublished_shortfall_receipt_path",
 ]

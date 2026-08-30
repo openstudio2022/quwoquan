@@ -3,26 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
 from typing import Any
-
-from governance.coverage.distribution import (
-    ProductLifecycleState,
-    ReleaseClass,
-    load_content_distribution_policy,
-)
-
-
-def pool_distribution_policy(selection: Any | None):
-    policy = load_content_distribution_policy()
-    if selection is None:
-        return policy
-    release_class = ReleaseClass(selection.release_mode)
-    return replace(
-        policy,
-        release_class=release_class,
-        product_lifecycle_state=ProductLifecycleState(selection.release_mode),
-    )
 
 
 def aggregate_release_result(
@@ -38,6 +19,8 @@ def aggregate_release_result(
     environment_selection: Any | None,
     excluded: tuple[Mapping[str, str], ...],
     pool_wide: bool,
+    sample_plan_ref: str | None,
+    sample_plan_digest: str | None,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "schema": "quwoquan_data.aggregate_release_result",
@@ -54,6 +37,7 @@ def aggregate_release_result(
     if environment_selection is not None:
         result.update(
             {
+                "selectionScope": environment_selection.selection_scope,
                 "releaseMode": environment_selection.release_mode,
                 "poolDigest": environment_selection.pool_digest,
                 "poolEligibleCount": environment_selection.eligible_count,
@@ -67,10 +51,12 @@ def aggregate_release_result(
             result["milestoneTargets"] = dict(
                 environment_selection.milestone_targets or {}
             )
+        result["samplePlanRef"] = sample_plan_ref
+        result["samplePlanDigest"] = sample_plan_digest
     if pool_wide:
         result["excluded"] = list(excluded)
         result["excludedCount"] = len(excluded)
     return result
 
 
-__all__ = ["aggregate_release_result", "pool_distribution_policy"]
+__all__ = ["aggregate_release_result"]

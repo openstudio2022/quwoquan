@@ -4,16 +4,16 @@ package runtimeconfig
 
 import (
 	"os"
-	"strconv"
 	"strings"
 )
 
 // RecommendationModelConfig is the runtime binding consumed by the content
-// composition root.
+// composition root. env tag 是相对后缀：完整键由 config struct 的
+// envPrefix 链拼出（CONTENT_REC_MODEL_SERVICE_URL 等）。
 type RecommendationModelConfig struct {
-	URL       string `yaml:"url"`
-	TimeoutMs int    `yaml:"timeout_ms"`
-	Enabled   bool   `yaml:"enabled"`
+	URL       string `yaml:"url" env:"URL"`
+	TimeoutMs int    `yaml:"timeout_ms" env:"TIMEOUT_MS"`
+	Enabled   bool   `yaml:"enabled" env:"ENABLED"`
 }
 
 // ContentSliceWorkload reports whether the current process is serving one of
@@ -24,26 +24,5 @@ func ContentSliceWorkload() bool {
 		return true
 	default:
 		return false
-	}
-}
-
-// ApplyRecommendationModelEnvOverrides applies the deployment-owned model
-// endpoint overrides without changing invalid values into implicit defaults.
-func ApplyRecommendationModelEnvOverrides(cfg *RecommendationModelConfig) {
-	if cfg == nil {
-		return
-	}
-	if value := os.Getenv("REC_MODEL_SERVICE_URL"); value != "" {
-		cfg.URL = value
-	}
-	if value := os.Getenv("REC_MODEL_SERVICE_ENABLED"); value != "" {
-		if enabled, err := strconv.ParseBool(value); err == nil {
-			cfg.Enabled = enabled
-		}
-	}
-	if value := os.Getenv("REC_MODEL_SERVICE_TIMEOUT_MS"); value != "" {
-		if milliseconds, err := strconv.Atoi(value); err == nil && milliseconds > 0 {
-			cfg.TimeoutMs = milliseconds
-		}
 	}
 }

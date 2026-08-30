@@ -324,7 +324,7 @@ def campaign_lane_claim_session(
         )
     elif workspace.capsule.scale_source_pool is not None:
         raise ValueError(
-            "DATA.SOURCE.POOL_SHORTFALL: below-M100 lane received source pool"
+            "DATA.SOURCE.POOL_SHORTFALL: unbound lane received source pool"
         )
     path = lane_claim_path(runtime, root_execution_id, carrier)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -15,6 +15,7 @@ from content.release.canonical.garbage_collection_contract import (
     GC_APPLY_SCHEMA,
     GC_PLAN_SCHEMA,
     file_digest,
+    gc_workspace_root,
     json_digest,
     validate_apply_receipt,
     validate_plan_document,
@@ -22,6 +23,10 @@ from content.release.canonical.garbage_collection_contract import (
 )
 from content.release.canonical.garbage_collection_reachability import (
     reachability_snapshot,
+)
+from content.release.canonical.garbage_collection_tombstone import (
+    ExecutionReclaimReason,
+    write_execution_tombstone,
 )
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
@@ -38,7 +43,7 @@ from content.release.canonical.release_operation_lock import (
     release_operation_guard,
     release_operation_lock_root,
 )
-from core.paths import DATA_GC_WORKSPACE_ROOT, DATA_QUARANTINE_ROOT, OUTPUT_ROOT
+from core.paths import DATA_QUARANTINE_ROOT, OUTPUT_ROOT
 from core.tree_integrity import tree_integrity_stats
 
 
@@ -48,10 +53,6 @@ def _now() -> datetime:
 
 def _iso(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat()
-
-
-def _gc_root(output_root: Path) -> Path:
-    return output_root.resolve() / DATA_GC_WORKSPACE_ROOT.relative_to(OUTPUT_ROOT)
 
 
 def _quarantine_root(output_root: Path, plan_id: str) -> Path:
@@ -65,7 +66,7 @@ def _quarantine_root(output_root: Path, plan_id: str) -> Path:
 
 @contextmanager
 def _gc_lock(output_root: Path) -> Iterator[None]:
-    path = _gc_root(output_root) / "gc.lock"
+    path = gc_workspace_root(output_root) / "gc.lock"
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+b") as handle:
         try:
@@ -116,7 +117,7 @@ def plan_canonical_gc(
     output_root = output_root.resolve()
     publish_root = publish_root.resolve()
     release_root = (release_root or output_root / "data/releases").resolve()
-    path = _gc_root(output_root) / "plans" / plan_id / "plan.json"
+    path = gc_workspace_root(output_root) / "plans" / plan_id / "plan.json"
     with (
         release_identity_protection_lock(
             output_root=output_root,
@@ -274,6 +275,43 @@ def _validate_quarantined_candidate(
         raise ObjectTransactionError(f"GATE_BLOCK GC quarantine drift: {path}")
 
 
+def _record_execution_tombstone(
+    *,
+    output_root: Path,
+    row: Mapping[str, Any],
+    plan_id: str,
+    plan_digest: str,
+) -> None:
+    """Leave a terminal record where a reclaimed execution used to live.
+
+    Written after the journal reaches `quarantined` and on every replay, so a
+    crash between the move and the tombstone still converges: the journal is the
+    intent of record and the tombstone is create-once.
+
+    An execution only becomes a candidate while nothing references it, so
+    `referencedBy` is normally empty — and that emptiness is the fact worth
+    keeping, because it is what distinguishes a reclaim the collector was allowed
+    to make from the backfilled absences it never authorized.
+    """
+
+    if row.get("kind") != "execution":
+        return
+    execution_id = Path(str(row["ref"])).name
+    write_execution_tombstone(
+        output_root=output_root,
+        execution_id=execution_id,
+        reason=ExecutionReclaimReason.GC_QUARANTINE_RECLAIM,
+        reclaimed_at=str(row["quarantinedAt"]),
+        referenced_by=(),
+        plan_id=plan_id,
+        plan_digest=plan_digest,
+        quarantine_ref=str(row["quarantineRef"]),
+        merkle_root=str(row["merkleRoot"]),
+        file_count=int(row["fileCount"]),
+        total_bytes=int(row["bytes"]),
+    )
+
+
 def apply_canonical_gc(
     *,
     plan_id: str,
@@ -289,7 +327,7 @@ def apply_canonical_gc(
     output_root = output_root.resolve()
     publish_root = publish_root.resolve()
     release_root = (release_root or output_root / "data/releases").resolve()
-    plan_root = _gc_root(output_root) / "plans" / plan_id
+    plan_root = gc_workspace_root(output_root) / "plans" / plan_id
     plan_path = plan_root / "plan.json"
     receipt_path = plan_root / "apply.json"
     quarantine_root = _quarantine_root(output_root, plan_id)
@@ -471,6 +509,12 @@ def apply_canonical_gc(
                 }
                 _append_journal(journal_path, row)
                 completed[ref] = row
+            _record_execution_tombstone(
+                output_root=output_root,
+                row=completed[ref],
+                plan_id=plan_id,
+                plan_digest=actual_digest,
+            )
             quarantined_rows.append(dict(completed[ref]))
 
         receipt: dict[str, Any] = {

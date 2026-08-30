@@ -109,6 +109,39 @@ class ArticleReaderObservability {
     );
   }
 
+  void trackImageViewerOpen({required String postId, required String assetId}) {
+    _record(
+      AppTelemetryPayload.productAction(
+        journey: 'article_reader',
+        action: 'image_viewer_open',
+        surfaceId: 'workBrowser',
+        objectType: 'contentPost',
+        objectId: postId,
+        targetType: 'mediaAsset',
+        targetId: assetId,
+        result: 'success',
+      ),
+    );
+  }
+
+  void trackImageViewerClose({
+    required String postId,
+    required String assetId,
+  }) {
+    _record(
+      AppTelemetryPayload.productAction(
+        journey: 'article_reader',
+        action: 'image_viewer_close',
+        surfaceId: 'workBrowser',
+        objectType: 'contentPost',
+        objectId: postId,
+        targetType: 'mediaAsset',
+        targetId: assetId,
+        result: 'success',
+      ),
+    );
+  }
+
   void trackReaderError({
     required String postId,
     required String errorCode,

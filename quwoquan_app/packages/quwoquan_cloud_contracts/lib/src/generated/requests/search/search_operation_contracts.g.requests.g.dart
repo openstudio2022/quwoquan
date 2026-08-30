@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
+// ContractGraph SHA256: cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f
 
 part of '../../../search/search_operation_contracts.g.dart';
 
@@ -23,7 +23,6 @@ List<String> _normalizeGeneratedTextList(
   return List<String>.unmodifiable(result);
 }
 
-
 void _generatedRequestRejectUnknownFields(
   Map<String, Object?> map,
   Set<String> allowed,
@@ -36,18 +35,15 @@ void _generatedRequestRejectUnknownFields(
   }
 }
 
-
 String _generatedRequestString(Object? value, String path) {
   if (value is String) return value;
   throw FormatException('$path must be a string');
 }
 
-
 int _generatedRequestInt(Object? value, String path) {
   if (value is int) return value;
   throw FormatException('$path must be an integer');
 }
-
 
 List<Object?> _generatedRequestList(Object? value, String path) {
   if (value is List) return List<Object?>.from(value);
@@ -67,8 +63,14 @@ final class CanonicalSearchQuery {
   }) : sessionId = _normalizeGeneratedOptionalText(sessionId),
        query = query.trim(),
        mode = mode,
-       objectTypes = _normalizeGeneratedTextList(objectTypes, deduplicate: false),
-       contentTypes = _normalizeGeneratedTextList(contentTypes, deduplicate: false),
+       objectTypes = _normalizeGeneratedTextList(
+         objectTypes,
+         deduplicate: false,
+       ),
+       contentTypes = _normalizeGeneratedTextList(
+         contentTypes,
+         deduplicate: false,
+       ),
        ids = _normalizeGeneratedTextList(ids, deduplicate: false),
        limit = limit,
        cursor = cursor {
@@ -86,17 +88,79 @@ final class CanonicalSearchQuery {
   final int limit;
   final String? cursor;
 
-  factory CanonicalSearchQuery.fromWire(Map<String, Object?> map, [String path = "CanonicalSearchQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"sessionId", "query", "mode", "objectTypes", "contentTypes", "ids", "limit", "cursor"}, path);
+  factory CanonicalSearchQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "CanonicalSearchQuery",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "sessionId",
+      "query",
+      "mode",
+      "objectTypes",
+      "contentTypes",
+      "ids",
+      "limit",
+      "cursor",
+    }, path);
     return CanonicalSearchQuery(
-      sessionId: map["sessionId"] == null ? null : _generatedRequestString(map["sessionId"], '$path.sessionId'),
+      sessionId: map["sessionId"] == null
+          ? null
+          : _generatedRequestString(map["sessionId"], '$path.sessionId'),
       query: _generatedRequestString(map["query"], '$path.query'),
-      mode: map.containsKey("mode") ? switch (map["mode"]) { "suggest" => CanonicalSearchMode.suggest, "result" => CanonicalSearchMode.result, _ => throw FormatException('$path.mode' + ' has an invalid enum value'), } : CanonicalSearchMode.result,
-      objectTypes: map.containsKey("objectTypes") ? List<String>.unmodifiable(_generatedRequestList(map["objectTypes"], '$path.objectTypes').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.objectTypes' + '[${entry.key}]'))) : const <String>[],
-      contentTypes: map.containsKey("contentTypes") ? List<String>.unmodifiable(_generatedRequestList(map["contentTypes"], '$path.contentTypes').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.contentTypes' + '[${entry.key}]'))) : const <String>[],
-      ids: map.containsKey("ids") ? List<String>.unmodifiable(_generatedRequestList(map["ids"], '$path.ids').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.ids' + '[${entry.key}]'))) : const <String>[],
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
-      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
+      mode: map.containsKey("mode")
+          ? switch (map["mode"]) {
+              "suggest" => CanonicalSearchMode.suggest,
+              "result" => CanonicalSearchMode.result,
+              _ => throw FormatException(
+                '$path.mode' + ' has an invalid enum value',
+              ),
+            }
+          : CanonicalSearchMode.result,
+      objectTypes: map.containsKey("objectTypes")
+          ? List<String>.unmodifiable(
+              _generatedRequestList(
+                map["objectTypes"],
+                '$path.objectTypes',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.objectTypes' + '[${entry.key}]',
+                ),
+              ),
+            )
+          : const <String>[],
+      contentTypes: map.containsKey("contentTypes")
+          ? List<String>.unmodifiable(
+              _generatedRequestList(
+                map["contentTypes"],
+                '$path.contentTypes',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.contentTypes' + '[${entry.key}]',
+                ),
+              ),
+            )
+          : const <String>[],
+      ids: map.containsKey("ids")
+          ? List<String>.unmodifiable(
+              _generatedRequestList(
+                map["ids"],
+                '$path.ids',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.ids' + '[${entry.key}]',
+                ),
+              ),
+            )
+          : const <String>[],
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 20,
+      cursor: map["cursor"] == null
+          ? null
+          : _generatedRequestString(map["cursor"], '$path.cursor'),
     );
   }
 
@@ -104,26 +168,35 @@ final class CanonicalSearchQuery {
     if (this.sessionId != null) "sessionId": this.sessionId!,
     "query": this.query,
     "mode": this.mode.wireValue,
-    "objectTypes": this.objectTypes.map((value) => value).toList(growable: false),
-    if (this.contentTypes.isNotEmpty) "contentTypes": this.contentTypes.map((value) => value).toList(growable: false),
-    if (this.ids.isNotEmpty) "ids": this.ids.map((value) => value).toList(growable: false),
+    "objectTypes": this.objectTypes
+        .map((value) => value)
+        .toList(growable: false),
+    if (this.contentTypes.isNotEmpty)
+      "contentTypes": this.contentTypes
+          .map((value) => value)
+          .toList(growable: false),
+    if (this.ids.isNotEmpty)
+      "ids": this.ids.map((value) => value).toList(growable: false),
     "limit": this.limit,
     if (this.cursor != null) "cursor": this.cursor!,
   };
 }
 
 final class ClearRecentSearchesCommand {
-  ClearRecentSearchesCommand({
-    String? scope,
-  }) : scope = _normalizeGeneratedOptionalText(scope) {
-  }
+  ClearRecentSearchesCommand({String? scope})
+    : scope = _normalizeGeneratedOptionalText(scope) {}
 
   final String? scope;
 
-  factory ClearRecentSearchesCommand.fromWire(Map<String, Object?> map, [String path = "ClearRecentSearchesCommand"]) {
+  factory ClearRecentSearchesCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ClearRecentSearchesCommand",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"scope"}, path);
     return ClearRecentSearchesCommand(
-      scope: map["scope"] == null ? null : _generatedRequestString(map["scope"], '$path.scope'),
+      scope: map["scope"] == null
+          ? null
+          : _generatedRequestString(map["scope"], '$path.scope'),
     );
   }
 
@@ -133,9 +206,8 @@ final class ClearRecentSearchesCommand {
 }
 
 final class DeleteRecentSearchCommand {
-  DeleteRecentSearchCommand({
-    required String entryId,
-  }) : entryId = entryId.trim() {
+  DeleteRecentSearchCommand({required String entryId})
+    : entryId = entryId.trim() {
     if (this.entryId.isEmpty) {
       throw ArgumentError.value(this.entryId, "entryId", 'must not be blank');
     }
@@ -143,25 +215,24 @@ final class DeleteRecentSearchCommand {
 
   final String entryId;
 
-  factory DeleteRecentSearchCommand.fromWire(Map<String, Object?> map, [String path = "DeleteRecentSearchCommand"]) {
+  factory DeleteRecentSearchCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "DeleteRecentSearchCommand",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"entryId"}, path);
     return DeleteRecentSearchCommand(
       entryId: _generatedRequestString(map["entryId"], '$path.entryId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "entryId": this.entryId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"entryId": this.entryId};
 }
 
 final class ListHotQueriesQuery {
   static const int defaultLimit = 10;
   static const int maximumLimit = 20;
 
-  ListHotQueriesQuery({
-    int limit = 10,
-  }) : limit = limit {
+  ListHotQueriesQuery({int limit = 10}) : limit = limit {
     if (this.limit <= 0) {
       throw ArgumentError.value(this.limit, "limit", "must be positive");
     }
@@ -172,30 +243,36 @@ final class ListHotQueriesQuery {
 
   final int limit;
 
-  factory ListHotQueriesQuery.fromWire(Map<String, Object?> map, [String path = "ListHotQueriesQuery"]) {
+  factory ListHotQueriesQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListHotQueriesQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"limit"}, path);
     return ListHotQueriesQuery(
-      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 10,
+      limit: map.containsKey("limit")
+          ? _generatedRequestInt(map["limit"], '$path.limit')
+          : 10,
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "limit": this.limit,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"limit": this.limit};
 }
 
 final class ListRecentSearchesQuery {
-  ListRecentSearchesQuery({
-    String? scope,
-  }) : scope = _normalizeGeneratedOptionalText(scope) {
-  }
+  ListRecentSearchesQuery({String? scope})
+    : scope = _normalizeGeneratedOptionalText(scope) {}
 
   final String? scope;
 
-  factory ListRecentSearchesQuery.fromWire(Map<String, Object?> map, [String path = "ListRecentSearchesQuery"]) {
+  factory ListRecentSearchesQuery.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListRecentSearchesQuery",
+  ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{"scope"}, path);
     return ListRecentSearchesQuery(
-      scope: map["scope"] == null ? null : _generatedRequestString(map["scope"], '$path.scope'),
+      scope: map["scope"] == null
+          ? null
+          : _generatedRequestString(map["scope"], '$path.scope'),
     );
   }
 
@@ -223,16 +300,30 @@ final class ReportSearchFeedbackCommand {
        feedRequestId = _normalizeGeneratedOptionalText(feedRequestId),
        dwellMs = dwellMs {
     if (this.searchRequestId.isEmpty) {
-      throw ArgumentError.value(this.searchRequestId, "searchRequestId", 'must not be blank');
+      throw ArgumentError.value(
+        this.searchRequestId,
+        "searchRequestId",
+        'must not be blank',
+      );
     }
     if (this.dwellMs != null && this.dwellMs! <= 0) {
       throw ArgumentError.value(this.dwellMs, "dwellMs", "must be positive");
     }
-    if (this.eventType == SearchFeedbackEventType.dwell && this.dwellMs == null) {
-      throw ArgumentError.value(this.dwellMs, "dwellMs", "is required when eventType is dwell");
+    if (this.eventType == SearchFeedbackEventType.dwell &&
+        this.dwellMs == null) {
+      throw ArgumentError.value(
+        this.dwellMs,
+        "dwellMs",
+        "is required when eventType is dwell",
+      );
     }
-    if (this.eventType != SearchFeedbackEventType.dwell && this.dwellMs != null) {
-      throw ArgumentError.value(this.dwellMs, "dwellMs", "is forbidden unless eventType is dwell");
+    if (this.eventType != SearchFeedbackEventType.dwell &&
+        this.dwellMs != null) {
+      throw ArgumentError.value(
+        this.dwellMs,
+        "dwellMs",
+        "is forbidden unless eventType is dwell",
+      );
     }
   }
 
@@ -245,17 +336,60 @@ final class ReportSearchFeedbackCommand {
   final String? feedRequestId;
   final int? dwellMs;
 
-  factory ReportSearchFeedbackCommand.fromWire(Map<String, Object?> map, [String path = "ReportSearchFeedbackCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"searchRequestId", "eventType", "objectId", "target", "rankPosition", "referralSource", "feedRequestId", "dwellMs"}, path);
+  factory ReportSearchFeedbackCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "ReportSearchFeedbackCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "searchRequestId",
+      "eventType",
+      "objectId",
+      "target",
+      "rankPosition",
+      "referralSource",
+      "feedRequestId",
+      "dwellMs",
+    }, path);
     return ReportSearchFeedbackCommand(
-      searchRequestId: _generatedRequestString(map["searchRequestId"], '$path.searchRequestId'),
-      eventType: switch (map["eventType"]) { "impression" => SearchFeedbackEventType.impression, "click" => SearchFeedbackEventType.click, "dwell" => SearchFeedbackEventType.dwell, "refine" => SearchFeedbackEventType.refine, "zero_result" => SearchFeedbackEventType.zeroResult, "degrade" => SearchFeedbackEventType.degrade, _ => throw FormatException('$path.eventType' + ' has an invalid enum value'), },
-      objectId: map["objectId"] == null ? null : _generatedRequestString(map["objectId"], '$path.objectId'),
-      target: map["target"] == null ? null : _generatedRequestString(map["target"], '$path.target'),
-      rankPosition: map["rankPosition"] == null ? null : _generatedRequestInt(map["rankPosition"], '$path.rankPosition'),
-      referralSource: map["referralSource"] == null ? null : _generatedRequestString(map["referralSource"], '$path.referralSource'),
-      feedRequestId: map["feedRequestId"] == null ? null : _generatedRequestString(map["feedRequestId"], '$path.feedRequestId'),
-      dwellMs: map["dwellMs"] == null ? null : _generatedRequestInt(map["dwellMs"], '$path.dwellMs'),
+      searchRequestId: _generatedRequestString(
+        map["searchRequestId"],
+        '$path.searchRequestId',
+      ),
+      eventType: switch (map["eventType"]) {
+        "impression" => SearchFeedbackEventType.impression,
+        "click" => SearchFeedbackEventType.click,
+        "dwell" => SearchFeedbackEventType.dwell,
+        "refine" => SearchFeedbackEventType.refine,
+        "zero_result" => SearchFeedbackEventType.zeroResult,
+        "degrade" => SearchFeedbackEventType.degrade,
+        _ => throw FormatException(
+          '$path.eventType' + ' has an invalid enum value',
+        ),
+      },
+      objectId: map["objectId"] == null
+          ? null
+          : _generatedRequestString(map["objectId"], '$path.objectId'),
+      target: map["target"] == null
+          ? null
+          : _generatedRequestString(map["target"], '$path.target'),
+      rankPosition: map["rankPosition"] == null
+          ? null
+          : _generatedRequestInt(map["rankPosition"], '$path.rankPosition'),
+      referralSource: map["referralSource"] == null
+          ? null
+          : _generatedRequestString(
+              map["referralSource"],
+              '$path.referralSource',
+            ),
+      feedRequestId: map["feedRequestId"] == null
+          ? null
+          : _generatedRequestString(
+              map["feedRequestId"],
+              '$path.feedRequestId',
+            ),
+      dwellMs: map["dwellMs"] == null
+          ? null
+          : _generatedRequestInt(map["dwellMs"], '$path.dwellMs'),
     );
   }
 
@@ -291,12 +425,21 @@ final class UpsertRecentSearchCommand {
   final String scope;
   final String? facet;
 
-  factory UpsertRecentSearchCommand.fromWire(Map<String, Object?> map, [String path = "UpsertRecentSearchCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"query", "scope", "facet"}, path);
+  factory UpsertRecentSearchCommand.fromWire(
+    Map<String, Object?> map, [
+    String path = "UpsertRecentSearchCommand",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "query",
+      "scope",
+      "facet",
+    }, path);
     return UpsertRecentSearchCommand(
       query: _generatedRequestString(map["query"], '$path.query'),
       scope: _generatedRequestString(map["scope"], '$path.scope'),
-      facet: map["facet"] == null ? null : _generatedRequestString(map["facet"], '$path.facet'),
+      facet: map["facet"] == null
+          ? null
+          : _generatedRequestString(map["facet"], '$path.facet'),
     );
   }
 
@@ -307,7 +450,10 @@ final class UpsertRecentSearchCommand {
   };
 }
 
-CloudOperationRequestPayload encodeSearchRecentSearchStateClearRecentSearchesGeneratedRequest(ClearRecentSearchesCommand request) {
+CloudOperationRequestPayload
+encodeSearchRecentSearchStateClearRecentSearchesGeneratedRequest(
+  ClearRecentSearchesCommand request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.scope != null) "scope": request.scope!,
@@ -315,15 +461,19 @@ CloudOperationRequestPayload encodeSearchRecentSearchStateClearRecentSearchesGen
   );
 }
 
-CloudOperationRequestPayload encodeSearchRecentSearchStateDeleteRecentSearchGeneratedRequest(DeleteRecentSearchCommand request) {
+CloudOperationRequestPayload
+encodeSearchRecentSearchStateDeleteRecentSearchGeneratedRequest(
+  DeleteRecentSearchCommand request,
+) {
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      "entryId": request.entryId,
-    },
+    pathParameters: <String, String>{"entryId": request.entryId},
   );
 }
 
-CloudOperationRequestPayload encodeSearchRecentSearchStateListRecentSearchesGeneratedRequest(ListRecentSearchesQuery request) {
+CloudOperationRequestPayload
+encodeSearchRecentSearchStateListRecentSearchesGeneratedRequest(
+  ListRecentSearchesQuery request,
+) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
       if (request.scope != null) "scope": request.scope!,
@@ -331,7 +481,10 @@ CloudOperationRequestPayload encodeSearchRecentSearchStateListRecentSearchesGene
   );
 }
 
-CloudOperationRequestPayload encodeSearchRecentSearchStateUpsertRecentSearchGeneratedRequest(UpsertRecentSearchCommand request) {
+CloudOperationRequestPayload
+encodeSearchRecentSearchStateUpsertRecentSearchGeneratedRequest(
+  UpsertRecentSearchCommand request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "query": request.query,
@@ -341,7 +494,10 @@ CloudOperationRequestPayload encodeSearchRecentSearchStateUpsertRecentSearchGene
   );
 }
 
-CloudOperationRequestPayload encodeSearchSearchFeedbackFactReportSearchFeedbackGeneratedRequest(ReportSearchFeedbackCommand request) {
+CloudOperationRequestPayload
+encodeSearchSearchFeedbackFactReportSearchFeedbackGeneratedRequest(
+  ReportSearchFeedbackCommand request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "searchRequestId": request.searchRequestId,
@@ -349,14 +505,18 @@ CloudOperationRequestPayload encodeSearchSearchFeedbackFactReportSearchFeedbackG
       if (request.objectId != null) "objectId": request.objectId!,
       if (request.target != null) "target": request.target!,
       if (request.rankPosition != null) "rankPosition": request.rankPosition!,
-      if (request.referralSource != null) "referralSource": request.referralSource!,
-      if (request.feedRequestId != null) "feedRequestId": request.feedRequestId!,
+      if (request.referralSource != null)
+        "referralSource": request.referralSource!,
+      if (request.feedRequestId != null)
+        "feedRequestId": request.feedRequestId!,
       if (request.dwellMs != null) "dwellMs": request.dwellMs!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeSearchSearchIndexViewSearchGeneratedRequest(CanonicalSearchQuery request) {
+CloudOperationRequestPayload encodeSearchSearchIndexViewSearchGeneratedRequest(
+  CanonicalSearchQuery request,
+) {
   return CloudOperationRequestPayload(
     headers: <String, String>{
       if (request.sessionId != null) "X-Session-Id": request.sessionId!,
@@ -364,20 +524,26 @@ CloudOperationRequestPayload encodeSearchSearchIndexViewSearchGeneratedRequest(C
     body: <String, Object?>{
       "query": request.query,
       "mode": request.mode.wireValue,
-      "objectTypes": request.objectTypes.map((value) => value).toList(growable: false),
-      if (request.contentTypes.isNotEmpty) "contentTypes": request.contentTypes.map((value) => value).toList(growable: false),
-      if (request.ids.isNotEmpty) "ids": request.ids.map((value) => value).toList(growable: false),
+      "objectTypes": request.objectTypes
+          .map((value) => value)
+          .toList(growable: false),
+      if (request.contentTypes.isNotEmpty)
+        "contentTypes": request.contentTypes
+            .map((value) => value)
+            .toList(growable: false),
+      if (request.ids.isNotEmpty)
+        "ids": request.ids.map((value) => value).toList(growable: false),
       "limit": request.limit,
       if (request.cursor != null) "cursor": request.cursor!,
     },
   );
 }
 
-CloudOperationRequestPayload encodeSearchSearchRequestFactListHotQueriesGeneratedRequest(ListHotQueriesQuery request) {
+CloudOperationRequestPayload
+encodeSearchSearchRequestFactListHotQueriesGeneratedRequest(
+  ListHotQueriesQuery request,
+) {
   return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      "limit": (request.limit).toString(),
-    },
+    queryParameters: <String, String>{"limit": (request.limit).toString()},
   );
 }
-

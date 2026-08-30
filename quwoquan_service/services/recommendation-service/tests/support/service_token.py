@@ -75,7 +75,26 @@ def configure_test_auth_environment() -> None:
         ),
         encoding="utf-8",
     )
-    os.environ["APP_ENV"] = "alpha"
+    environment = "alpha"
+    # 打包镜像把环境身份放在 /etc/quwoquan/artifact-identity.json，main 在导入期就
+    # fail-closed 校验它；测试进程没有那份文件，必须自备一份等价身份。environment
+    # 与 APP_ENV 取同一个变量：两者不一致时校验按设计拒绝，写死两处会漂移。
+    identity_path = config_root / "artifact-identity.json"
+    identity_path.write_text(
+        json.dumps(
+            {
+                "schema": "qwq.environment-artifact-identity",
+                "environment": environment,
+                "configDigest": config_version,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    os.environ["QWQ_ARTIFACT_IDENTITY_FILE"] = str(identity_path)
+    os.environ["APP_ENV"] = environment
     os.environ["SERVICE_NAME"] = "recommendation-service"
     os.environ["CONFIG_ROOT"] = str(config_root)
     os.environ["CONFIG_VERSION"] = config_version

@@ -18,11 +18,11 @@ class DialogueTransitionDecisionDto {
   final bool canAnswerPartially;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'nextTurnMode': nextTurnMode.wireName,
-        'needsClarification': needsClarification,
-        'clarificationTargetIntentId': clarificationTargetIntentId,
-        'canAnswerPartially': canAnswerPartially,
-      };
+    'nextTurnMode': nextTurnMode.wireName,
+    'needsClarification': needsClarification,
+    'clarificationTargetIntentId': clarificationTargetIntentId,
+    'canAnswerPartially': canAnswerPartially,
+  };
 
   factory DialogueTransitionDecisionDto.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -35,24 +35,45 @@ class DialogueTransitionDecisionDto {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('DialogueTransitionDecisionDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'DialogueTransitionDecisionDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('nextTurnMode') && json['nextTurnMode'] != null && (json['nextTurnMode'] is! String)) {
-      throw const FormatException('DialogueTransitionDecisionDto field nextTurnMode has an invalid wire value');
+    if (json.containsKey('nextTurnMode') &&
+        json['nextTurnMode'] != null &&
+        (json['nextTurnMode'] is! String)) {
+      throw const FormatException(
+        'DialogueTransitionDecisionDto field nextTurnMode has an invalid wire value',
+      );
     }
-    if (json.containsKey('needsClarification') && json['needsClarification'] != null && (json['needsClarification'] is! bool)) {
-      throw const FormatException('DialogueTransitionDecisionDto field needsClarification has an invalid wire value');
+    if (json.containsKey('needsClarification') &&
+        json['needsClarification'] != null &&
+        (json['needsClarification'] is! bool)) {
+      throw const FormatException(
+        'DialogueTransitionDecisionDto field needsClarification has an invalid wire value',
+      );
     }
-    if (json.containsKey('clarificationTargetIntentId') && json['clarificationTargetIntentId'] != null && (json['clarificationTargetIntentId'] is! String)) {
-      throw const FormatException('DialogueTransitionDecisionDto field clarificationTargetIntentId has an invalid wire value');
+    if (json.containsKey('clarificationTargetIntentId') &&
+        json['clarificationTargetIntentId'] != null &&
+        (json['clarificationTargetIntentId'] is! String)) {
+      throw const FormatException(
+        'DialogueTransitionDecisionDto field clarificationTargetIntentId has an invalid wire value',
+      );
     }
-    if (json.containsKey('canAnswerPartially') && json['canAnswerPartially'] != null && (json['canAnswerPartially'] is! bool)) {
-      throw const FormatException('DialogueTransitionDecisionDto field canAnswerPartially has an invalid wire value');
+    if (json.containsKey('canAnswerPartially') &&
+        json['canAnswerPartially'] != null &&
+        (json['canAnswerPartially'] is! bool)) {
+      throw const FormatException(
+        'DialogueTransitionDecisionDto field canAnswerPartially has an invalid wire value',
+      );
     }
     return DialogueTransitionDecisionDto(
-      nextTurnMode: parseNextTurnModeStrict((json['nextTurnMode'] as String?)?.trim() ?? "answer"),
+      nextTurnMode: parseNextTurnModeStrict(
+        (json['nextTurnMode'] as String?)?.trim() ?? "answer",
+      ),
       needsClarification: json['needsClarification'] == true,
-      clarificationTargetIntentId: (json['clarificationTargetIntentId'] as String?)?.trim() ?? "",
+      clarificationTargetIntentId:
+          (json['clarificationTargetIntentId'] as String?)?.trim() ?? "",
       canAnswerPartially: json['canAnswerPartially'] == true,
     );
   }
@@ -61,40 +82,45 @@ class DialogueTransitionDecisionDto {
 class DialogueTransitionDecisionDtoFields {
   static const String nextTurnMode = 'nextTurnMode';
   static const String needsClarification = 'needsClarification';
-  static const String clarificationTargetIntentId = 'clarificationTargetIntentId';
+  static const String clarificationTargetIntentId =
+      'clarificationTargetIntentId';
   static const String canAnswerPartially = 'canAnswerPartially';
 }
 
 class IntentConstraintDto {
-  const IntentConstraintDto({
-    this.key = "",
-    this.value = "",
-  });
+  const IntentConstraintDto({this.key = "", this.value = ""});
 
   final String key;
   final String value;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'key': key,
-        'value': value,
-      };
+    'key': key,
+    'value': value,
+  };
 
   factory IntentConstraintDto.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'key',
-      'value',
-    };
+    const allowedFields = <String>{'key', 'value'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('IntentConstraintDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'IntentConstraintDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('key') && json['key'] != null && (json['key'] is! String)) {
-      throw const FormatException('IntentConstraintDto field key has an invalid wire value');
+    if (json.containsKey('key') &&
+        json['key'] != null &&
+        (json['key'] is! String)) {
+      throw const FormatException(
+        'IntentConstraintDto field key has an invalid wire value',
+      );
     }
-    if (json.containsKey('value') && json['value'] != null && (json['value'] is! String)) {
-      throw const FormatException('IntentConstraintDto field value has an invalid wire value');
+    if (json.containsKey('value') &&
+        json['value'] != null &&
+        (json['value'] is! String)) {
+      throw const FormatException(
+        'IntentConstraintDto field value has an invalid wire value',
+      );
     }
     return IntentConstraintDto(
       key: (json['key'] as String?)?.trim() ?? "",
@@ -120,31 +146,41 @@ class IntentEntityRefDto {
   final String displayText;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'entityType': entityType,
-        'canonicalKey': canonicalKey,
-        'displayText': displayText,
-      };
+    'entityType': entityType,
+    'canonicalKey': canonicalKey,
+    'displayText': displayText,
+  };
 
   factory IntentEntityRefDto.fromJson(Map<String, dynamic> json) {
-    const allowedFields = <String>{
-      'entityType',
-      'canonicalKey',
-      'displayText',
-    };
+    const allowedFields = <String>{'entityType', 'canonicalKey', 'displayText'};
     final unknownFields = json.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('IntentEntityRefDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'IntentEntityRefDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('entityType') && json['entityType'] != null && (json['entityType'] is! String)) {
-      throw const FormatException('IntentEntityRefDto field entityType has an invalid wire value');
+    if (json.containsKey('entityType') &&
+        json['entityType'] != null &&
+        (json['entityType'] is! String)) {
+      throw const FormatException(
+        'IntentEntityRefDto field entityType has an invalid wire value',
+      );
     }
-    if (json.containsKey('canonicalKey') && json['canonicalKey'] != null && (json['canonicalKey'] is! String)) {
-      throw const FormatException('IntentEntityRefDto field canonicalKey has an invalid wire value');
+    if (json.containsKey('canonicalKey') &&
+        json['canonicalKey'] != null &&
+        (json['canonicalKey'] is! String)) {
+      throw const FormatException(
+        'IntentEntityRefDto field canonicalKey has an invalid wire value',
+      );
     }
-    if (json.containsKey('displayText') && json['displayText'] != null && (json['displayText'] is! String)) {
-      throw const FormatException('IntentEntityRefDto field displayText has an invalid wire value');
+    if (json.containsKey('displayText') &&
+        json['displayText'] != null &&
+        (json['displayText'] is! String)) {
+      throw const FormatException(
+        'IntentEntityRefDto field displayText has an invalid wire value',
+      );
     }
     return IntentEntityRefDto(
       entityType: (json['entityType'] as String?)?.trim() ?? "",
@@ -178,13 +214,17 @@ class IntentNodeDto {
   final bool requiresEvidence;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'intentId': intentId,
-        'intentType': intentType,
-        'goal': goal,
-        'entityRefs': entityRefs.map((item) => item.toJson()).toList(growable: false),
-        'constraints': constraints.map((item) => item.toJson()).toList(growable: false),
-        'requiresEvidence': requiresEvidence,
-      };
+    'intentId': intentId,
+    'intentType': intentType,
+    'goal': goal,
+    'entityRefs': entityRefs
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    'constraints': constraints
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    'requiresEvidence': requiresEvidence,
+  };
 
   factory IntentNodeDto.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -199,32 +239,76 @@ class IntentNodeDto {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('IntentNodeDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'IntentNodeDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('intentId') && json['intentId'] != null && (json['intentId'] is! String)) {
-      throw const FormatException('IntentNodeDto field intentId has an invalid wire value');
+    if (json.containsKey('intentId') &&
+        json['intentId'] != null &&
+        (json['intentId'] is! String)) {
+      throw const FormatException(
+        'IntentNodeDto field intentId has an invalid wire value',
+      );
     }
-    if (json.containsKey('intentType') && json['intentType'] != null && (json['intentType'] is! String)) {
-      throw const FormatException('IntentNodeDto field intentType has an invalid wire value');
+    if (json.containsKey('intentType') &&
+        json['intentType'] != null &&
+        (json['intentType'] is! String)) {
+      throw const FormatException(
+        'IntentNodeDto field intentType has an invalid wire value',
+      );
     }
-    if (json.containsKey('goal') && json['goal'] != null && (json['goal'] is! String)) {
-      throw const FormatException('IntentNodeDto field goal has an invalid wire value');
+    if (json.containsKey('goal') &&
+        json['goal'] != null &&
+        (json['goal'] is! String)) {
+      throw const FormatException(
+        'IntentNodeDto field goal has an invalid wire value',
+      );
     }
-    if (json.containsKey('entityRefs') && json['entityRefs'] != null && (json['entityRefs'] is! List || (json['entityRefs'] as List).any((item) => item is! Map))) {
-      throw const FormatException('IntentNodeDto field entityRefs has an invalid wire value');
+    if (json.containsKey('entityRefs') &&
+        json['entityRefs'] != null &&
+        (json['entityRefs'] is! List ||
+            (json['entityRefs'] as List).any((item) => item is! Map))) {
+      throw const FormatException(
+        'IntentNodeDto field entityRefs has an invalid wire value',
+      );
     }
-    if (json.containsKey('constraints') && json['constraints'] != null && (json['constraints'] is! List || (json['constraints'] as List).any((item) => item is! Map))) {
-      throw const FormatException('IntentNodeDto field constraints has an invalid wire value');
+    if (json.containsKey('constraints') &&
+        json['constraints'] != null &&
+        (json['constraints'] is! List ||
+            (json['constraints'] as List).any((item) => item is! Map))) {
+      throw const FormatException(
+        'IntentNodeDto field constraints has an invalid wire value',
+      );
     }
-    if (json.containsKey('requiresEvidence') && json['requiresEvidence'] != null && (json['requiresEvidence'] is! bool)) {
-      throw const FormatException('IntentNodeDto field requiresEvidence has an invalid wire value');
+    if (json.containsKey('requiresEvidence') &&
+        json['requiresEvidence'] != null &&
+        (json['requiresEvidence'] is! bool)) {
+      throw const FormatException(
+        'IntentNodeDto field requiresEvidence has an invalid wire value',
+      );
     }
     return IntentNodeDto(
       intentId: (json['intentId'] as String?)?.trim() ?? "",
       intentType: (json['intentType'] as String?)?.trim() ?? "",
       goal: (json['goal'] as String?)?.trim() ?? "",
-      entityRefs: (json['entityRefs'] as List?)?.whereType<Map>().map((item) => IntentEntityRefDto.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <IntentEntityRefDto>[],
-      constraints: (json['constraints'] as List?)?.whereType<Map>().map((item) => IntentConstraintDto.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <IntentConstraintDto>[],
+      entityRefs:
+          (json['entityRefs'] as List?)
+              ?.whereType<Map>()
+              .map(
+                (item) =>
+                    IntentEntityRefDto.fromJson(item.cast<String, dynamic>()),
+              )
+              .toList(growable: false) ??
+          const <IntentEntityRefDto>[],
+      constraints:
+          (json['constraints'] as List?)
+              ?.whereType<Map>()
+              .map(
+                (item) =>
+                    IntentConstraintDto.fromJson(item.cast<String, dynamic>()),
+              )
+              .toList(growable: false) ??
+          const <IntentConstraintDto>[],
       requiresEvidence: json['requiresEvidence'] == true,
     );
   }
@@ -251,10 +335,10 @@ class UnderstandingResultDto {
   final DialogueTransitionDecisionDto dialogueTransitionDecision;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'contractId': contractId,
-        'intents': intents.map((item) => item.toJson()).toList(growable: false),
-        'dialogueTransitionDecision': dialogueTransitionDecision.toJson(),
-      };
+    'contractId': contractId,
+    'intents': intents.map((item) => item.toJson()).toList(growable: false),
+    'dialogueTransitionDecision': dialogueTransitionDecision.toJson(),
+  };
 
   factory UnderstandingResultDto.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -266,24 +350,51 @@ class UnderstandingResultDto {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('UnderstandingResultDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'UnderstandingResultDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('contractId') && json['contractId'] != null && (json['contractId'] is! String)) {
-      throw const FormatException('UnderstandingResultDto field contractId has an invalid wire value');
+    if (json.containsKey('contractId') &&
+        json['contractId'] != null &&
+        (json['contractId'] is! String)) {
+      throw const FormatException(
+        'UnderstandingResultDto field contractId has an invalid wire value',
+      );
     }
-    if (json.containsKey('intents') && json['intents'] != null && (json['intents'] is! List || (json['intents'] as List).any((item) => item is! Map))) {
-      throw const FormatException('UnderstandingResultDto field intents has an invalid wire value');
+    if (json.containsKey('intents') &&
+        json['intents'] != null &&
+        (json['intents'] is! List ||
+            (json['intents'] as List).any((item) => item is! Map))) {
+      throw const FormatException(
+        'UnderstandingResultDto field intents has an invalid wire value',
+      );
     }
-    if (json.containsKey('dialogueTransitionDecision') && json['dialogueTransitionDecision'] != null && (json['dialogueTransitionDecision'] is! Map)) {
-      throw const FormatException('UnderstandingResultDto field dialogueTransitionDecision has an invalid wire value');
+    if (json.containsKey('dialogueTransitionDecision') &&
+        json['dialogueTransitionDecision'] != null &&
+        (json['dialogueTransitionDecision'] is! Map)) {
+      throw const FormatException(
+        'UnderstandingResultDto field dialogueTransitionDecision has an invalid wire value',
+      );
     }
     return UnderstandingResultDto(
-      contractId: (json['contractId'] as String?)?.trim() ?? "understanding_result",
-      intents: (json['intents'] as List?)?.whereType<Map>().map((item) => IntentNodeDto.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <IntentNodeDto>[],
-      dialogueTransitionDecision: json['dialogueTransitionDecision'] is Map ? DialogueTransitionDecisionDto.fromJson((json['dialogueTransitionDecision'] as Map).cast<String, dynamic>()) : const DialogueTransitionDecisionDto(),
+      contractId:
+          (json['contractId'] as String?)?.trim() ?? "understanding_result",
+      intents:
+          (json['intents'] as List?)
+              ?.whereType<Map>()
+              .map(
+                (item) => IntentNodeDto.fromJson(item.cast<String, dynamic>()),
+              )
+              .toList(growable: false) ??
+          const <IntentNodeDto>[],
+      dialogueTransitionDecision: json['dialogueTransitionDecision'] is Map
+          ? DialogueTransitionDecisionDto.fromJson(
+              (json['dialogueTransitionDecision'] as Map)
+                  .cast<String, dynamic>(),
+            )
+          : const DialogueTransitionDecisionDto(),
     );
   }
-
 }
 
 class UnderstandingResultDtoFields {

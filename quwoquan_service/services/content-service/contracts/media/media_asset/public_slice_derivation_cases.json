@@ -1,0 +1,137 @@
+{
+  "schema": "content_media_public_slice_derivation_cases",
+  "domain": {
+    "kinds": ["avatar", "image", "video"],
+    "contentTypes": [
+      "image/gif",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "video/mp4",
+      "video/webm"
+    ],
+    "note": "Closed release-media domain. The Data packager and the Go runtime must return byte-identical publicSliceKey for every case below; an empty publicSliceKey means neither side may derive a public identity. Attachment kinds and audio content types are live-upload concerns that never enter a release media closure, so they are out of this contract."
+  },
+  "cases": [
+    {
+      "name": "canonical_ascii_asset_id_is_kept_verbatim",
+      "mediaType": "image",
+      "assetId": "mas_image_001",
+      "version": 1,
+      "contentType": "image/jpeg",
+      "publicSliceKey": "media/image/s/asset/mas_image_001/v1/source.jpg"
+    },
+    {
+      "name": "creator_avatar_asset_id_is_kept_verbatim",
+      "mediaType": "avatar",
+      "assetId": "creator-avatar-qwq_creator_geo_editor_001-3dc30246e996c120",
+      "version": 1,
+      "contentType": "image/png",
+      "publicSliceKey": "media/avatar/s/asset/creator-avatar-qwq_creator_geo_editor_001-3dc30246e996c120/v1/source.png"
+    },
+    {
+      "name": "cover_post_asset_id_exposes_role_and_sequence",
+      "mediaType": "image",
+      "assetId": "杭州西湖_cover_三潭印月石塔_28_36eb11bd",
+      "version": 1,
+      "contentType": "image/jpeg",
+      "publicSliceKey": "media/image/s/asset/cover-28-145ed0eb8ce6aa336cc7395e8c6e6639/v1/source.jpg"
+    },
+    {
+      "name": "detail_post_asset_id_exposes_role_and_sequence",
+      "mediaType": "image",
+      "assetId": "俞源太极星象村_detail_俞氏宗祠_322_031859c9",
+      "version": 2,
+      "contentType": "image/webp",
+      "publicSliceKey": "media/image/s/asset/detail-322-bdd2d1776137973d461a1fce6d81ba23/v2/source.webp"
+    },
+    {
+      "name": "closing_post_asset_id_exposes_role_and_sequence",
+      "mediaType": "image",
+      "assetId": "九寨沟_closing_九寨沟景区大门_28_a5cc1287",
+      "version": 1,
+      "contentType": "image/gif",
+      "publicSliceKey": "media/image/s/asset/closing-28-a538be83639d790c7f8c52d995f44b52/v1/source.gif"
+    },
+    {
+      "name": "underscored_caption_is_right_anchored_on_sequence_and_digest",
+      "mediaType": "image",
+      "assetId": "乌镇_cover_Aerial_panorama_68_4418e034",
+      "version": 1,
+      "contentType": "image/png",
+      "publicSliceKey": "media/image/s/asset/cover-68-83051e37a1001ee95340d2096ea4d5d7/v1/source.png"
+    },
+    {
+      "name": "video_post_asset_id_uses_video_root",
+      "mediaType": "video",
+      "assetId": "都江堰_cover_内江水道全景_7_c78fe93a",
+      "version": 3,
+      "contentType": "video/mp4",
+      "publicSliceKey": "media/video/s/asset/cover-7-f1e240a3e78dabf3b9f0071e7e5e071a/v3/source.mp4"
+    },
+    {
+      "name": "unstructured_unicode_asset_id_has_no_public_identity",
+      "mediaType": "image",
+      "assetId": "杭州西湖_cover_三潭印月",
+      "version": 1,
+      "contentType": "image/jpeg",
+      "publicSliceKey": ""
+    },
+    {
+      "name": "unknown_role_token_has_no_public_identity",
+      "mediaType": "image",
+      "assetId": "杭州西湖_hero_三潭印月石塔_28_36eb11bd",
+      "version": 1,
+      "contentType": "image/jpeg",
+      "publicSliceKey": ""
+    },
+    {
+      "name": "leading_zero_sequence_has_no_public_identity",
+      "mediaType": "image",
+      "assetId": "杭州西湖_cover_三潭印月石塔_028_36eb11bd",
+      "version": 1,
+      "contentType": "image/jpeg",
+      "publicSliceKey": ""
+    },
+    {
+      "name": "whitespace_in_asset_id_has_no_public_identity",
+      "mediaType": "image",
+      "assetId": "杭州西湖 cover_三潭印月石塔_28_36eb11bd",
+      "version": 1,
+      "contentType": "image/jpeg",
+      "publicSliceKey": ""
+    },
+    {
+      "name": "path_separator_in_asset_id_has_no_public_identity",
+      "mediaType": "image",
+      "assetId": "杭州西湖/cover_三潭印月石塔_28_36eb11bd",
+      "version": 1,
+      "contentType": "image/jpeg",
+      "publicSliceKey": ""
+    },
+    {
+      "name": "empty_asset_id_has_no_public_identity",
+      "mediaType": "image",
+      "assetId": "",
+      "version": 1,
+      "contentType": "image/jpeg",
+      "publicSliceKey": ""
+    },
+    {
+      "name": "non_positive_version_has_no_public_identity",
+      "mediaType": "image",
+      "assetId": "mas_image_001",
+      "version": 0,
+      "contentType": "image/jpeg",
+      "publicSliceKey": ""
+    },
+    {
+      "name": "unsupported_kind_has_no_public_identity",
+      "mediaType": "attachment",
+      "assetId": "mas_image_001",
+      "version": 1,
+      "contentType": "image/jpeg",
+      "publicSliceKey": ""
+    }
+  ]
+}

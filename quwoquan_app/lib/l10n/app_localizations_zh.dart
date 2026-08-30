@@ -1,5 +1,6 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
+
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -195,6 +196,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get loading => '加载中...';
+
+  @override
+  String get webBootstrapLoading => '正在加载，请稍候';
+
+  @override
+  String get webBootstrapUnavailableTitle => '页面暂时无法打开';
+
+  @override
+  String get webBootstrapUnavailableBody => '关键资源未能加载，可能是网络不稳定。请检查网络后重新加载。';
+
+  @override
+  String get webBootstrapReload => '重新加载';
 
   @override
   String get retry => '重试';

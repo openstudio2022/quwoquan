@@ -41,7 +41,8 @@ void main() {
 
   test('CircleGroupMembership Reader rejects userId and decision actor', () {
     expect(
-      decodeCircleGroupMembershipSlice(circleGroupMembershipSliceFixture()).personaId,
+      decodeCircleGroupMembershipSlice(circleGroupMembershipSliceFixture())
+          .personaId,
       'persona-2',
     );
     expect(
@@ -54,7 +55,8 @@ void main() {
     );
     expect(
       () => decodeCircleGroupMembershipSlice(
-        circleGroupMembershipSliceFixture()..['decidedByPersonaId'] = 'persona-owner',
+        circleGroupMembershipSliceFixture()
+          ..['decidedByPersonaId'] = 'persona-owner',
       ),
       throwsFormatException,
     );

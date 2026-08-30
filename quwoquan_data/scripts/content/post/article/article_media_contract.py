@@ -46,6 +46,74 @@ _SOURCE_COUNT_FIELDS = frozenset(
 )
 
 
+def article_plan_media_rejection(
+    publish_media_mode: object,
+    asset_count: int,
+) -> tuple[str, str] | None:
+    """Apply the source-declared Article media mode without inference."""
+    mode = str(publish_media_mode or "").strip()
+    if mode not in {"text_only", "illustrated"}:
+        return "publish_media_mode_invalid", "publishMediaMode must be text_only|illustrated"
+    if mode == "text_only" and asset_count:
+        return "text_only_source_has_assets", "text_only article assetRefs must be empty"
+    if mode == "illustrated" and asset_count < 2:
+        return "same_source_cover_body_missing", "illustrated article requires at least two assetRefs"
+    return None
+
+
+def article_media_mode_converges_to_text_only(
+    *,
+    source_publish_media_mode: object,
+    publish_media_mode: object,
+    asset_count: int,
+) -> bool:
+    """Return whether one item is the source's illustrated claim losing its basis.
+
+    Source ``illustrated`` is itself derived from「同源可发布图 >= 2」at freeze time.
+    Publish-time asset assessment can drop those images below two, at which point
+    the derived claim no longer holds and re-deriving it is the same rule applied
+    again — not a second media policy. Only this one direction, and only with an
+    empty asset set, is a convergence; the reverse would be inventing images.
+    """
+
+    return (
+        str(source_publish_media_mode or "").strip() == "illustrated"
+        and str(publish_media_mode or "").strip() == "text_only"
+        and asset_count == 0
+    )
+
+
+def article_plan_media_binding_issues(
+    *,
+    ref: str,
+    publish_media_mode: object,
+    source_publish_media_mode: object,
+    asset_refs: Sequence[object],
+    source_unit_freeze: object,
+) -> list[str]:
+    """Validate packet media bindings against the frozen source declaration."""
+    mode = str(publish_media_mode or "").strip()
+    source_mode = str(source_publish_media_mode or "").strip()
+    issues: list[str] = []
+    rejection = article_plan_media_rejection(mode, len(asset_refs))
+    if rejection is not None:
+        issues.append(f"item[{ref}]: {rejection[1]}")
+    if mode != source_mode and not article_media_mode_converges_to_text_only(
+        source_publish_media_mode=source_mode,
+        publish_media_mode=mode,
+        asset_count=len(asset_refs),
+    ):
+        issues.append(
+            f"item[{ref}]: publishMediaMode {mode or '<missing>'!r} does not match "
+            f"source meta {source_mode or '<missing>'!r}"
+        )
+    if mode == "text_only" and source_unit_freeze is not None:
+        issues.append(f"item[{ref}]: text_only article must not bind articleSourceUnitFreeze")
+    if mode == "illustrated" and not isinstance(source_unit_freeze, Mapping):
+        issues.append(f"item[{ref}]: illustrated article requires articleSourceUnitFreeze")
+    return issues
+
+
 def _nonnegative_int(value: object) -> int:
     try:
         return max(0, int(value or 0))
@@ -444,6 +512,9 @@ __all__ = [
     "ARTICLE_MEDIA_CLOSURE_SCHEMA",
     "ARTICLE_SOURCE_ASSET_RECEIPT_REF",
     "article_media_contract_issues",
+    "article_media_mode_converges_to_text_only",
+    "article_plan_media_binding_issues",
+    "article_plan_media_rejection",
     "article_source_asset_counts",
     "materialize_article_media",
     "read_article_media_closure",

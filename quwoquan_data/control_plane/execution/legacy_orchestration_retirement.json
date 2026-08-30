@@ -1,0 +1,7 @@
+{
+  "schema": "quwoquan_data.legacy_orchestration_retirement_inventory",
+  "state": "operationally_retired",
+  "deleteFamilies": ["agent", "queue", "controller", "recovery", "campaign"],
+  "preserveProtocolKernels": ["closure", "runtime_evidence", "scale"],
+  "forbiddenCompatibility": ["alias", "dual_read", "dual_write", "shim"]
+}

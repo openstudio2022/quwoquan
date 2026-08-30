@@ -59,6 +59,10 @@
 ### REQ-005 安装转化入口对 4 类对象统一可用
 
 - 安装转化组件必须区分手机与 PC，并只使用受控配置注入的下载地址。
+- Android 入口只提供官网正式签名 APK 下载。
+- iOS 入口只展示 App Store 链接与 PWA 添加主屏指引，standalone 模式隐藏安装横幅。
+- PC 并列提供 Android 下载与 iOS 两类入口，可用二维码承载。
+- 经网页版下载安装的 App，其安装后首次点击图标启动行为必须与其他受支持安装渠道等价；下载对象的 SHA-256、包名与签名证书摘要必须与 `app_release` 发布事实逐字段一致。
 
 <a id="req-006"></a>
 ### REQ-006 HTML 只能由 `articleMarkdown + articleAssetManifest + articleRenderProfile` 派生，不能成为作者或业务维护的第二正文
@@ -72,6 +76,14 @@
 - Android 二进制下载只能由用户明确点击触发；iOS 安装动作只展示 Safari“添加到主屏幕”指引，standalone 模式隐藏安装横幅。
 - Web 首屏必须声明 `lang="zh-CN"`、首部 UTF-8 charset、系统中文字体回退栈；HTML 响应必须使用 `text/html; charset=utf-8`，正文不得套用 icon font。
 - Web 启动等待超时不得生成致命恢复事实或“重试”页面；只有捕获到的不可恢复异常才能进入恢复状态机。
+
+<a id="req-007"></a>
+### REQ-007 Web 字体交付与启动可读性
+
+- 打包进 Web 产物的字体文件名必须 URL-safe；FontManifest 中每个字体 URL 必须映射到产物内唯一常规文件，构建与发布门禁校验字体对象 HTTP 可达、正确 MIME 与 immutable cache，四环境使用同一静态交付规则。
+- 字体加载成功时中文正文以品牌字体渲染；首次慢载期间以系统中文字体回退栈渲染。任何状态下不得出现方框字（tofu）或不可读占位。
+- 字体 404 或首次访问离线导致引擎无法启动时，引擎前只允许唯一平台实现的 Web bootstrap 恢复态，唯一动作为重新加载；已缓存离线与 Service Worker 更新场景必须保持可读。
+- Web 启动 loading 态为无动作的状态宣告（`role=status` + `aria-live=polite`）；引擎前 surface 的文案 key 与颜色/字体/间距/圆角只来自设计系统生成的 canonical 产物，不在 HTML 复制品牌字面值。Flutter 引擎启动后的网络/内容错误回到应用内 canonical 错误/空态组件，HTML 壳不再承载业务页面。
 
 ## 4. 契约引用
 
@@ -122,9 +134,27 @@
 - GIVEN 用户在手机 Web 或 PC Web 浏览任一对象公开页。
 - WHEN 用户触发安装/下载/扫码入口。
 - THEN Android 手机 Web 明确点击后下载正式签名 APK。
-- THEN iOS 手机 Web 展示 PWA 安装指引。
-- THEN PC Web 并列提供 Android 下载和 iOS PWA 指引。
+- THEN iOS 手机 Web 展示 App Store 链接与 PWA 安装指引。
+- THEN PC Web 并列提供 Android 下载和 iOS App Store/PWA 指引。
 - THEN 下载地址来自 CloudRuntimeConfig，不硬编码。
+
+<a id="gwt-006"></a>
+### GWT-006 Web 中文始终可读或可恢复
+
+- GIVEN 四环境 official Web artifact 在 Chrome 与 Safari 下分别处于字体 200、首次慢载、字体 404、已缓存离线与 Service Worker 更新状态。
+- WHEN 用户打开公开页或 Web App 首页。
+- THEN 字体 200 与首次慢载状态下中文像素可读、无方框字；慢载期间由系统中文字体回退栈渲染。
+- THEN 字体 404 或首次离线导致引擎不可启动时进入唯一 bootstrap 恢复态，重新加载动作可用；已缓存离线保持可读。
+- AND 每条证据绑定实际字体 HTTP 状态码与内容 digest，loading/恢复态满足状态宣告与键盘可达。
+
+<a id="gwt-007"></a>
+### GWT-007 网页版下载安装到首启等价
+
+- GIVEN Android 设备用户在官网公开页明确点击下载入口，`app_release` 发布事实已绑定当前正式签名 APK。
+- WHEN 浏览器下载 APK、系统完成安装、用户点击图标冷启动。
+- THEN 下载对象的 SHA-256、包名与签名证书摘要与 `app_release` 发布事实逐字段一致。
+- THEN 安装后首启的规范化行为指纹与其他受支持安装渠道一致，install receipt 记录 `official_web` 渠道。
+- AND iOS 同一入口只出现 App Store 链接与 PWA 指引，不出现任何二进制下载。
 
 ## 6. 依赖
 
@@ -183,8 +213,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：安装转化组件测试覆盖手机/PC 两形态与下载地址注入。
-- 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：尚缺安装转化组件对手机/PC 两形态与 4 类对象页的统一实现和验收覆盖，以及 runner 对真实官网 CDN 与真机的执行证据（受 app-release-recovery-routing OPEN-001 外部阻断）。无人值守 runner `quwoquan_app/scripts/device/web_download_install_uat.py` 已实现 download_verify（URL 来源、SHA-256、签名证书摘要、包名与 canonical 身份比对）、全新安装与覆盖升级、图标冷启动与首帧回读，并有 `web_download_install_runner__local_contract_test.py` 绑定。
+- 完成判定：`GWT-005` 与 `GWT-007` 对应行为满足且真实测试 `spec_ref` 有效；`GWT-007` 的 Android 轨以该 runner 对真实官网分发产出下载比对与安装后启动回读证据。
 
 <a id="open-004"></a>
 ### OPEN-004 完整 Web 与四环境公网证据
@@ -193,4 +223,13 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：仓内已有响应式 Flutter Web 主 Shell 和核心业务路由，但尚缺四环境 DNS/TLS、真实同源 API、Safari/Android 浏览器、PWA 安装、Web Push/RTC 与完整业务矩阵的公网证据。
-- 完成判定：`GWT-003`、`GWT-004` 与 `GWT-005` 在四环境公网真实通过，且 Alpha/Beta/Gamma/Prod 分别通过 UTF-8、登录、浏览、发布、互动、聊天、PWA 安装、Android 下载横幅和同源 API 的 `api_integration` 与 `user_acceptance`；缺项必须保留明确降级，不得宣称完整等价。
+- 完成判定：`GWT-003`、`GWT-004`、`GWT-005`、`GWT-006` 与 `GWT-007` 在四环境公网真实通过，且 Alpha/Beta/Gamma/Prod 分别通过 UTF-8、字体可读性五状态、登录、浏览、发布、互动、聊天、PWA 安装、Android 下载横幅和同源 API 的 `api_integration` 与 `user_acceptance`；缺项必须保留明确降级，不得宣称完整等价。
+
+<a id="open-005"></a>
+### OPEN-005 API 面停机时静态恢复面的真实 HTTP 证据
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前 `health` 已把 API 面与 publicWeb 静态面拆成互不掩盖的两个 surface，静态面失败以 `APP.WEB.recovery_unavailable` 表达，但当前只有以 `fetch_url` 替身驱动的 `local_contract`。「API 全停时 HTML、CSS、字体与离线 Shell 仍返回成功」这一行为按 [runtime-client-foundation design](../design.md) 的「Web 恢复面证据分工」归 `api_integration`，尚无真实 HTTP 回执，因此不得据 `local_contract` 结论宣称 `GWT-006` 的恢复面部分已达成。
+- 完成判定：`GWT-006` 的恢复面部分由 `api_integration` 直接覆盖——Ops public-Web runner 从 exact `AppArtifactManifest` 启动真实静态服务，在 API plane 全停条件下回读 `index.html`、`main.dart.js`、`flutter_service_worker.js` 与字体的真实状态码、content-type 与 digest；静态面缺失时返回 `APP.WEB.recovery_unavailable` 且不生成 launched/ready 证据。

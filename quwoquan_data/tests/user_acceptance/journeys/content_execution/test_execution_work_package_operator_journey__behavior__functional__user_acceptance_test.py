@@ -7,11 +7,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+from support.capacity_calibration_fixture import write_synthetic_capacity_receipt
+
 
 REPO_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "quwoquan_data").is_dir())
 CLI = REPO_ROOT / "quwoquan_data/scripts/cli.py"
 EXECUTION_ID = "20260711--travel-homepage-coverage--test-region-a--pilot-981"
 RETRY_ID = "20260711--travel-homepage-coverage--test-region-a--pilot-982"
+CAPACITY_RECEIPT_REF = "data/local/tests/capacity/operator-journey-capacity.json"
 
 
 def _run(
@@ -38,6 +41,8 @@ def _run(
         "1",
         "--quota",
         "1",
+        "--capacity-calibration-receipt",
+        CAPACITY_RECEIPT_REF,
         "--stage",
         "plan-only",
     ]
@@ -56,6 +61,7 @@ def _run(
 
 
 def test_operator_creates_resumes_and_retries_one_work_package(tmp_path: Path):
+    write_synthetic_capacity_receipt(tmp_path / CAPACITY_RECEIPT_REF)
     first = _run(tmp_path, EXECUTION_ID)
     assert first.returncode == 0, first.stdout + first.stderr
 

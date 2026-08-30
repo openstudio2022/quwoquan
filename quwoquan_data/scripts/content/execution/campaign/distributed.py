@@ -10,6 +10,10 @@ from core.runtime_policy import DEFAULT_RUNTIME_PROFILE_ID, load_runtime_policy
 from core.schema import assert_valid
 
 from content.execution.campaign.copy_ready import maybe_write_copy_ready_receipt
+from content.execution.campaign.distributed_frozen import (
+    load_distributed_plan,
+    reuse_existing_frozen_campaign,
+)
 from content.execution.campaign.distributed_review_barrier import (
     wait_for_parallel_review_claims,
 )
@@ -20,7 +24,12 @@ from content.execution.campaign.distributed_workspace import (
     prepare_distributed_capsule,
     prepare_distributed_workspace,
 )
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS, LaneRunner
+from content.execution.campaign.lane import (
+    CAMPAIGN_CARRIERS,
+    LaneRunner,
+    normalize_active_carriers,
+    normalize_workloads,
+)
 from content.execution.campaign.lane_claim import (
     campaign_lane_claim_session,
     read_lane_claim,
@@ -34,7 +43,6 @@ from content.execution.campaign.plan import (
     load_publish_for_lane,
     load_review_for_lane,
     report_path,
-    sha256_payload,
     utc_now,
     wait_for_submissions,
     write_report,
@@ -43,12 +51,10 @@ from content.execution.campaign.process import run_phase
 from content.execution.campaign.receipt import load_lane_receipt
 from content.execution.campaign.runtime import (
     campaign_run_session,
-    read_runtime_snapshot,
 )
 from content.execution.campaign.submission import campaign_root, load_submissions
 from content.execution.campaign.workspace import (
     CampaignRuntimePaths,
-    assert_frozen_main_tree,
     release_lane_workspace,
 )
 from content.execution.closure.pool_delivery import (
@@ -57,94 +63,12 @@ from content.execution.closure.pool_delivery import (
 from content.execution.identity import validate_execution_id
 
 
-def _load_distributed_plan(
-    runtime: CampaignRuntimePaths,
-    root_execution_id: str,
-) -> dict[str, Any]:
-    path = (
-        campaign_root(root_execution_id, root=runtime.campaigns_root)
-        / "campaign_plan.json"
-    )
-    plan = read_json(path)
-    assert_valid(
-        plan,
-        "execution",
-        "content_campaign_plan",
-        label=f"distributed campaign plan:{root_execution_id}",
-    )
-    stable = {key: value for key, value in plan.items() if key != "planDigest"}
-    if (
-        plan.get("rootExecutionId") != root_execution_id
-        or plan.get("executionMode") != "distributed"
-        or plan.get("planDigest") != sha256_payload(stable)
-    ):
-        raise ValueError("distributed campaign plan identity or digest drift")
-    return plan
-
-
-def _reuse_existing_frozen_campaign(
-    runtime: CampaignRuntimePaths,
-    root_execution_id: str,
-) -> Path | None:
-    campaign = campaign_root(root_execution_id, root=runtime.campaigns_root)
-    if not (campaign / "campaign_plan.json").is_file():
-        return None
-    plan = _load_distributed_plan(runtime, root_execution_id)
-    submissions = load_submissions(
-        root_execution_id,
-        root=runtime.campaigns_root,
-    )
-    if set(submissions) != set(CAMPAIGN_CARRIERS):
-        raise ValueError("existing frozen campaign submissions are incomplete")
-    for carrier in CAMPAIGN_CARRIERS:
-        if (
-            plan["executionIds"].get(carrier)
-            != submissions[carrier].get("executionId")
-            or plan["submissionDigests"].get(carrier)
-            != submissions[carrier].get("requestDigest")
-        ):
-            raise ValueError(
-                f"existing frozen campaign {carrier} submission drift"
-            )
-    distributed_run = plan.get("distributedRun")
-    snapshot = read_runtime_snapshot(runtime, root_execution_id)
-    if (
-        not isinstance(distributed_run, dict)
-        or not isinstance(snapshot, dict)
-        or snapshot.get("runId") != distributed_run.get("campaignRunId")
-        or snapshot.get("generation")
-        != distributed_run.get("campaignGeneration")
-        or snapshot.get("fencingToken")
-        != distributed_run.get("campaignFencingToken")
-        or snapshot.get("planDigest") != plan.get("planDigest")
-        or snapshot.get("status") != "frozen"
-        or not snapshot.get("finishedAt")
-    ):
-        raise ValueError("existing frozen campaign runtime fence drift")
-    path = report_path(runtime, root_execution_id)
-    if not path.is_file():
-        raise ValueError("existing frozen campaign report is missing")
-    report = read_json(path)
-    assert_valid(
-        report,
-        "execution",
-        "content_campaign_report",
-        label=f"distributed campaign report:{root_execution_id}",
-    )
-    if (
-        report.get("rootExecutionId") != root_execution_id
-        or report.get("planDigest") != plan.get("planDigest")
-    ):
-        raise ValueError("existing frozen campaign report identity drift")
-    return path
-
-
 def _wait_for_parallel_review_claims(
     runtime: CampaignRuntimePaths,
     root_execution_id: str,
     *,
     plan: dict[str, Any],
-    timeout_seconds: float,
+    timeout_seconds: float | None,
 ) -> None:
     wait_for_parallel_review_claims(
         runtime,
@@ -168,7 +92,7 @@ def freeze_campaign(
     )
 
     assert_campaign_not_reconciled(root_id, output_root=runtime.output_root)
-    existing_report = _reuse_existing_frozen_campaign(runtime, root_id)
+    existing_report = reuse_existing_frozen_campaign(runtime, root_id)
     if existing_report is not None:
         return existing_report
     policy = load_runtime_policy(DEFAULT_RUNTIME_PROFILE_ID)
@@ -176,7 +100,7 @@ def freeze_campaign(
         submission_timeout_seconds or policy.campaign_submission_timeout_seconds
     )
     started_at = utc_now()
-    lanes = {carrier: empty_lane() for carrier in CAMPAIGN_CARRIERS}
+    lanes: dict[str, dict[str, Any]] = {}
     with campaign_run_session(
         runtime,
         root_id,
@@ -194,7 +118,12 @@ def freeze_campaign(
             started_at=started_at,
             run_session=session,
         )
-        for carrier in CAMPAIGN_CARRIERS:
+        first_submission = next(iter(submissions.values()))
+        active = normalize_active_carriers(first_submission["activeCarriers"])
+        workloads = normalize_workloads(
+            first_submission["workloads"], active_carriers=active
+        )
+        for carrier in active:
             lanes[carrier]["executionId"] = str(submissions[carrier]["executionId"])
         plan, plan_digest = freeze_plan(
             runtime,
@@ -209,7 +138,7 @@ def freeze_campaign(
         )
         session.campaign_checkpoint(phase="capsule", plan_digest=plan_digest)
         capsule = prepare_distributed_capsule(runtime, plan)
-        for carrier in CAMPAIGN_CARRIERS:
+        for carrier in active:
             workspace = prepare_distributed_workspace(
                 runtime,
                 root_id,
@@ -247,6 +176,8 @@ def freeze_campaign(
             lanes=lanes,
             started_at=started_at,
             failure=None,
+            active_carriers=active,
+            workloads=workloads,
         )
         session.finish(status="frozen", phase="capsule", failure=None)
         return path
@@ -268,17 +199,25 @@ def run_campaign_lane(
     runtime = runtime_paths or CampaignRuntimePaths.defaults()
     recovery = audited_recovery_kwargs(recover_stage, recovery_reason)
     policy = load_runtime_policy(DEFAULT_RUNTIME_PROFILE_ID)
-    plan = _load_distributed_plan(runtime, root_id)
-    timeout = (
-        lane_timeout_seconds
-        or policy.campaign_lane_timeout_seconds_for_scale(str(plan["scale"]))
-    )
+    plan = load_distributed_plan(runtime, root_id)
+    active = normalize_active_carriers(plan["activeCarriers"])
+    if carrier not in active:
+        raise ValueError(f"campaign carrier is not active: {carrier}")
+    timeout = lane_timeout_seconds
     submissions = load_submissions(root_id, root=runtime.campaigns_root)
-    if set(submissions) != set(CAMPAIGN_CARRIERS):
+    if set(submissions) != set(active):
         raise ValueError("distributed campaign submissions are incomplete")
     expected_execution_id = str((plan["executionIds"] or {}).get(carrier) or "")
     if expected_execution_id != str(submissions[carrier]["executionId"]):
         raise ValueError(f"{carrier} distributed execution identity drift")
+    frozen_report = read_json(report_path(runtime, root_id))
+    assert_valid(
+        frozen_report,
+        "execution",
+        "content_campaign_report",
+        label=f"frozen campaign report:{root_id}",
+    )
+    capsule = load_distributed_capsule(runtime, plan, frozen_report)
     existing = load_publish_for_lane(
         runtime,
         root_id,
@@ -288,14 +227,6 @@ def run_campaign_lane(
     )
     if existing is not None:
         return report_path(runtime, root_id)
-    assert_frozen_main_tree(
-        runtime.repo_root,
-        git_branch=str(plan["gitBranch"]),
-        commit_sha=str(plan["gitCommitSha"]),
-        source_digest=str(plan["sourceDigest"]),
-        execution_bundle_digest=str(plan["executionBundle"]["digest"]),
-    )
-    capsule = prepare_distributed_capsule(runtime, plan)
     workspace = prepare_distributed_workspace(
         runtime,
         root_id,
@@ -336,7 +267,6 @@ def run_campaign_lane(
                     runtime=runtime,
                     root_execution_id=root_id,
                     timeout_seconds=timeout,
-                    worker_count=1,
                     lane_runner=lane_runner,
                     run_session=session,
                     carriers=(carrier,),
@@ -359,13 +289,6 @@ def run_campaign_lane(
                 or str(review["status"]) not in {"qualified", "partial"}
             ):
                 raise RuntimeError(f"{carrier} review produced no qualified objects")
-            assert_frozen_main_tree(
-                runtime.repo_root,
-                git_branch=str(plan["gitBranch"]),
-                commit_sha=str(plan["gitCommitSha"]),
-                source_digest=str(plan["sourceDigest"]),
-                execution_bundle_digest=str(plan["executionBundle"]["digest"]),
-            )
             published = run_phase(
                 {carrier: workspace},
                 {carrier: submissions[carrier]},
@@ -373,7 +296,6 @@ def run_campaign_lane(
                 runtime=runtime,
                 root_execution_id=root_id,
                 timeout_seconds=timeout,
-                worker_count=1,
                 lane_runner=lane_runner,
                 run_session=session,
                 carriers=(carrier,),
@@ -425,9 +347,13 @@ def finalize_campaign(
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as handle:
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        plan = _load_distributed_plan(runtime, root_id)
+        plan = load_distributed_plan(runtime, root_id)
+        active = normalize_active_carriers(plan["activeCarriers"])
+        workloads = normalize_workloads(
+            plan["workloads"], active_carriers=active
+        )
         submissions = load_submissions(root_id, root=runtime.campaigns_root)
-        if set(submissions) != set(CAMPAIGN_CARRIERS):
+        if set(submissions) != set(active):
             raise ValueError("distributed campaign submissions are incomplete")
         frozen_report = read_json(report_path(runtime, root_id))
         assert_valid(
@@ -457,10 +383,12 @@ def finalize_campaign(
                 lanes=lanes,
                 started_at=str(plan["frozenAt"]),
                 failure=failure,
+                active_carriers=active,
+                workloads=workloads,
             )
-        lanes = {carrier: empty_lane() for carrier in CAMPAIGN_CARRIERS}
+        lanes = {carrier: empty_lane() for carrier in active}
         failure_rows: list[str] = []
-        for carrier in CAMPAIGN_CARRIERS:
+        for carrier in active:
             execution_id = str(submissions[carrier]["executionId"])
             workspace = prepare_distributed_workspace(
                 runtime,
@@ -572,10 +500,12 @@ def finalize_campaign(
             lanes=lanes,
             started_at=str(plan["frozenAt"]),
             failure=failure,
+            active_carriers=active,
+            workloads=workloads,
         )
         if all(
             str(lanes[carrier]["status"]) in {"finalized", "partial"}
-            for carrier in CAMPAIGN_CARRIERS
+            for carrier in active
         ):
             finalize_distributed_runtime(
                 runtime, root_id, plan=plan, lanes=lanes, status=status

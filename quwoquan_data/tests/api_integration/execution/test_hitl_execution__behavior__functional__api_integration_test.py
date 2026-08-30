@@ -57,6 +57,10 @@ from core.paths import (
 )
 from governance.coverage.entity_extract import _governance_root
 from governance.creators.candidates.store import CandidateRepository
+from support.article_source_registry_fixture import (
+    ARTICLE_SOURCE_UNIT_IDENTITY,
+    article_source_registry_binding,
+)
 from support.execution_manifest_fixture import build_execution_fixture
 from support.helpers.agent_draft_kit import route_article
 
@@ -150,10 +154,7 @@ def _run_controller() -> Path:
                 "excerpt": f"{entity} 这一段真正影响体验的是转场和停留的平衡。",
                 "url": f"https://example.com/{entity}",
             },
-            platform="curated",
-            source_category="internal-curated",
-            source_use_mode="factual_reference_only",
-            rights_mode="factual_reference_only",
+            platform="去哪儿",
             publish_media_mode="illustrated",
             source_role="base",
             research_lane="article",
@@ -161,6 +162,11 @@ def _run_controller() -> Path:
             title="sample",
             target_ref=f"/entity/地点/景区/{entity}",
             relevance=f"{entity} 线路证据",
+            **ARTICLE_SOURCE_UNIT_IDENTITY,
+            source=article_source_registry_binding(
+                platform="去哪儿",
+                url=f"https://example.com/{entity}",
+            ),
             images=[{"sourcePath": str(path), "caption": f"{entity} 图{k}", "relevance": f"{entity} 图{k}"} for k, path in enumerate(image_paths)],
         )
         if idx == 0:

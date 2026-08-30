@@ -25,6 +25,7 @@ from content.source.research.homepage_article_source_attribution import (
     encyclopedia_source_attribution,
 )
 from content.source.research.homepage_structured_fact_text import (
+    extract_structured_fact_from_baike_infobox,
     extract_structured_fact_from_text,
 )
 from content.source.research.homepage_text_quality import (
@@ -111,7 +112,9 @@ def _structured_fact_from_text(
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     field = ""
     value: object = None
-    extracted = extract_structured_fact_from_text(text)
+    extracted = extract_structured_fact_from_text(
+        text
+    ) or extract_structured_fact_from_baike_infobox(raw_html)
     if extracted is not None:
         field, value = extracted
     if not field:

@@ -58,14 +58,19 @@ BANNED_PATHS = {
 ALLOWED_OPS_ENVIRONMENT_ROOT_FILES = {
     "commit_gate_sla_verification.json",
     "commit_gate_timing_baseline.json",
+    # 全局跨服务配置默认层：只为服务 schema 已声明的键供值，不引入新键，因此
+    # 不构成配置键的第二真相源。
+    "config-defaults.yaml",
     "data_execution_fleet.json",
     "domain_governance.yaml",
     "local_env_port_manifest.yaml",
+    "local_runtime_capacity.yaml",
     "output_layout_manifest.yaml",
     "output_layout_reconciliation_plan.schema.json",
     "pr_gate_timing_budgets.json",
     "provider_conformance_evidence.schema.json",
     "release_video_delivery_evidence.schema.json",
+    "read_only_user_availability_report.schema.json",
 }
 ALLOWED_OPS_ENVIRONMENT_ROOT_DIRS = {
     "alpha",
@@ -96,12 +101,8 @@ GENERIC_OBJECT_DESCRIPTION_RE = re.compile(
     r"(?:领域对象契约|domain\s+object\s+contract|business\s+object\s+contract)",
     re.IGNORECASE,
 )
-OBJECT_TEST_SPEC_REF_RE = re.compile(
-    r"(?m)^\s*(?://|#)\s*spec_ref:\s*"
-    r"(specs/feature-tree/(?:[A-Za-z0-9_.-]+/)*spec\.md)#"
-    r"((?:uat|dom|sit|gwt)-\d{3,})\b",
-    re.IGNORECASE,
-)
+# spec_ref 语法解析统一由 feature-tree 库唯一 lexical 入口承担
+#（source_analysis.valid_object_test_spec_refs 消费），本处不再定义第二套正则。
 OBJECT_ACCESS_BY_KIND = {
     "aggregate_root": {
         "commands": "aggregate_facade",

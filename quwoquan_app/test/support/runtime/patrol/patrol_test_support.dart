@@ -21,6 +21,12 @@ import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show AuthSessionGrant, LoginAnonymousCommand;
 
+import '../patrol_acceptance_session.dart';
+
+// 会话身份契约由 patrol_acceptance_session.dart 拥有，这里只做转发，
+// 让既有 UAT 的单一 import 不变。
+export '../patrol_acceptance_session.dart';
+
 /// Patrol user_acceptance tests should only run under `patrol test`.
 ///
 /// We guard them behind an explicit dart-define so `flutter test` can run the
@@ -41,14 +47,9 @@ const String _patrolAcceptanceAuthToken = String.fromEnvironment(
 const String _patrolAcceptanceRefreshToken = String.fromEnvironment(
   'TEST_REFRESH_TOKEN',
 );
-const String _patrolRuntimeInstallId = String.fromEnvironment(
-  'QWQ_PATROL_INSTALL_ID',
-  defaultValue: 'patrol-local-remote-acceptance',
-);
 const int _patrolAnonymousLoginSetupAttempts = 3;
 
 Future<void>? _patrolAppLaunch;
-AuthSessionState? _runnerInstalledAcceptanceSession;
 Completer<void>? _runtimeAnonymousSessionReady;
 String _runtimeAnonymousSessionFailure = '';
 Future<void>? _runtimeAnonymousSessionLogin;
@@ -65,45 +66,12 @@ bool get _usesUnauthenticatedAuthEntry =>
 Completer<void> _runtimeAnonymousSessionGate() =>
     _runtimeAnonymousSessionReady ??= Completer<void>();
 
-/// Installs the protected actor opened by the host-side test-live runner.
-///
-/// This handoff is called only from the runner-owned ephemeral Patrol wrapper,
-/// before the production App is mounted. It keeps bearer credentials out of
-/// Flutter/Gradle command arguments and out of UAT reports.
-AuthSessionState installPatrolAcceptanceSessionForRunner({
-  required String accessToken,
-  required String refreshToken,
-  required String ownerId,
-  required String personaId,
-}) {
-  if (_patrolAppLaunch != null) {
-    throw StateError(
-      'Patrol acceptance session must be installed before App launch',
-    );
-  }
-  final session = buildPatrolAcceptanceSession(
-    accessToken: accessToken,
-    refreshToken: refreshToken,
-    ownerId: ownerId,
-    personaId: personaId,
-  );
-  _runnerInstalledAcceptanceSession = session;
-  return session;
-}
-
-/// Clears the runtime handoff between local-contract cases.
-void resetPatrolAcceptanceSessionForTest() {
-  if (_patrolAppLaunch != null) {
-    throw StateError('Patrol App has already launched');
-  }
-  _runnerInstalledAcceptanceSession = null;
-}
-
 /// Starts the real App exactly once from the generated Patrol target.
 ///
 /// 仅认证会话控制器允许测试装配；业务 Query/Command 始终使用 production
 /// Remote composition，调用方不能注入业务 Provider double。
 Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
+  markPatrolAppLaunchStarted();
   _patrolAppLaunch ??= runQuwoquanApp(
     autoCompleteStartupWelcomeForTest: true,
     providerScopeOverrides: [
@@ -122,6 +90,7 @@ Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
 Future<void> launchPatrolAppWithPersistedSessionOnce(
   PatrolIntegrationTester $,
 ) async {
+  markPatrolAppLaunchStarted();
   _patrolAppLaunch ??= runQuwoquanApp(
     autoCompleteStartupWelcomeForTest: true,
     providerScopeOverrides: const [],
@@ -236,8 +205,8 @@ Future<AuthSessionGrant> _loginAnonymousForPatrolWithRetry(
   ProviderContainer container,
 ) async {
   final command = LoginAnonymousCommand(
-    installId: _patrolRuntimeInstallId,
-    deviceFingerprintHash: _patrolRuntimeInstallId,
+    installId: patrolRuntimeInstallId,
+    deviceFingerprintHash: patrolRuntimeInstallId,
     platform: CloudRequestHeaders.platform(),
     appVersion: 'local-e2e',
   );
@@ -314,44 +283,6 @@ GoRouter? _tryReadPatrolRouter() {
   return null;
 }
 
-AuthSessionState buildPatrolAcceptanceSession({
-  required String accessToken,
-  required String refreshToken,
-  required String ownerId,
-  required String personaId,
-}) {
-  if (accessToken.trim().isEmpty ||
-      refreshToken.trim().isEmpty ||
-      ownerId.trim().isEmpty ||
-      personaId.trim().isEmpty) {
-    throw StateError(
-      'Patrol user_acceptance requires a complete access/refresh/owner/persona session',
-    );
-  }
-  return AuthSessionState(
-    status: AuthSessionStatus.authenticated,
-    accessToken: accessToken.trim(),
-    refreshToken: refreshToken.trim(),
-    ownerId: ownerId.trim(),
-    activePersonaId: personaId.trim(),
-    accountState: 'active',
-    identityOrigin: 'patrol-user-acceptance',
-    installId: 'patrol-user-acceptance-install',
-  );
-}
-
-AuthSessionState buildPatrolAnonymousPublicVideoSession() =>
-    const AuthSessionState(status: AuthSessionStatus.guest);
-
-AuthSessionState buildPatrolUnauthenticatedAuthEntrySession() =>
-    AuthSessionState(
-      status: AuthSessionStatus.guest,
-      // 此模式只去掉登录凭证，不能去掉安装身份。新鲜 iOS
-      // Keychain 没有可回退的 persisted installId；空 deviceId 会让
-      // OTP 验证成功后的 AccountSession Issue 在服务端 fail-closed。
-      installId: _patrolRuntimeInstallId,
-    );
-
 final class _PatrolAuthSessionController extends AuthSessionController {
   @override
   AuthSessionState build() {
@@ -364,7 +295,7 @@ final class _PatrolAuthSessionController extends AuthSessionController {
     if (_usesUnauthenticatedAuthEntry) {
       return buildPatrolUnauthenticatedAuthEntrySession();
     }
-    final runnerSession = _runnerInstalledAcceptanceSession;
+    final runnerSession = patrolRunnerInstalledAcceptanceSession;
     if (runnerSession != null) {
       return runnerSession;
     }

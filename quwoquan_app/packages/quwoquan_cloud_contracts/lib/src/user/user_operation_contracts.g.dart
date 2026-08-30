@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
+// ContractGraph SHA256: cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f
 
 library;
 
@@ -353,7 +353,8 @@ enum OtpDeliveryAvailability {
   static OtpDeliveryAvailability fromWire(Object? value, String path) {
     return switch (value) {
       "ready" => OtpDeliveryAvailability.ready,
-      "temporarily_unavailable" => OtpDeliveryAvailability.temporarilyUnavailable,
+      "temporarily_unavailable" =>
+        OtpDeliveryAvailability.temporarilyUnavailable,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -410,10 +411,13 @@ enum PersonaLifecycleGuardReason {
   static PersonaLifecycleGuardReason fromWire(Object? value, String path) {
     return switch (value) {
       "allowed" => PersonaLifecycleGuardReason.allowed,
-      "blocked_primary_persona" => PersonaLifecycleGuardReason.blockedPrimaryPersona,
+      "blocked_primary_persona" =>
+        PersonaLifecycleGuardReason.blockedPrimaryPersona,
       "blocked_last_persona" => PersonaLifecycleGuardReason.blockedLastPersona,
-      "blocked_active_persona" => PersonaLifecycleGuardReason.blockedActivePersona,
-      "blocked_retired_persona" => PersonaLifecycleGuardReason.blockedRetiredPersona,
+      "blocked_active_persona" =>
+        PersonaLifecycleGuardReason.blockedActivePersona,
+      "blocked_retired_persona" =>
+        PersonaLifecycleGuardReason.blockedRetiredPersona,
       "quota_reached" => PersonaLifecycleGuardReason.quotaReached,
       _ => throw FormatException('$path has an invalid enum value'),
     };
@@ -591,7 +595,8 @@ enum UserSyncPatchKind {
   static UserSyncPatchKind fromWire(Object? value, String path) {
     return switch (value) {
       "user_avatar_updated" => UserSyncPatchKind.userAvatarUpdated,
-      "conversation_avatar_updated" => UserSyncPatchKind.conversationAvatarUpdated,
+      "conversation_avatar_updated" =>
+        UserSyncPatchKind.conversationAvatarUpdated,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -614,15 +619,34 @@ final class AccountHintSnapshot {
   final String maskedPhone;
   final String identityOrigin;
 
-  factory AccountHintSnapshot.fromWire(Map<String, Object?> map, [String path = "AccountHintSnapshot"]) {
-    _rejectUnknownFields(map, const <String>{"displayName", "nicknameCustomized", "avatarUrl", "avatarAssetId", "maskedPhone", "identityOrigin"}, path);
+  factory AccountHintSnapshot.fromWire(
+    Map<String, Object?> map, [
+    String path = "AccountHintSnapshot",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "displayName",
+      "nicknameCustomized",
+      "avatarUrl",
+      "avatarAssetId",
+      "maskedPhone",
+      "identityOrigin",
+    }, path);
     return AccountHintSnapshot(
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      nicknameCustomized: _requiredBool(map["nicknameCustomized"], '$path.nicknameCustomized'),
+      nicknameCustomized: _requiredBool(
+        map["nicknameCustomized"],
+        '$path.nicknameCustomized',
+      ),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      avatarAssetId: _requiredString(map["avatarAssetId"], '$path.avatarAssetId'),
+      avatarAssetId: _requiredString(
+        map["avatarAssetId"],
+        '$path.avatarAssetId',
+      ),
       maskedPhone: _requiredString(map["maskedPhone"], '$path.maskedPhone'),
-      identityOrigin: _requiredString(map["identityOrigin"], '$path.identityOrigin'),
+      identityOrigin: _requiredString(
+        map["identityOrigin"],
+        '$path.identityOrigin',
+      ),
     );
   }
 
@@ -669,22 +693,62 @@ final class ActivePersonaContextView {
   final bool explicitOverride;
   final DateTime switchedAt;
 
-  factory ActivePersonaContextView.fromWire(Map<String, Object?> map, [String path = "ActivePersonaContextView"]) {
-    _rejectUnknownFields(map, const <String>{"ownerUserId", "personaId", "subjectType", "displayName", "avatarUrl", "avatarVersion", "isPrimary", "isolationLevel", "profileVisibility", "contextVersion", "personaSnapshotVersion", "sourceSurfaceId", "explicitOverride", "switchedAt"}, path);
+  factory ActivePersonaContextView.fromWire(
+    Map<String, Object?> map, [
+    String path = "ActivePersonaContextView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "ownerUserId",
+      "personaId",
+      "subjectType",
+      "displayName",
+      "avatarUrl",
+      "avatarVersion",
+      "isPrimary",
+      "isolationLevel",
+      "profileVisibility",
+      "contextVersion",
+      "personaSnapshotVersion",
+      "sourceSurfaceId",
+      "explicitOverride",
+      "switchedAt",
+    }, path);
     return ActivePersonaContextView(
       ownerUserId: _requiredString(map["ownerUserId"], '$path.ownerUserId'),
       personaId: _requiredString(map["personaId"], '$path.personaId'),
-      subjectType: ProfileOwnerKind.fromWire(map["subjectType"], '$path.subjectType'),
+      subjectType: ProfileOwnerKind.fromWire(
+        map["subjectType"],
+        '$path.subjectType',
+      ),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      avatarUrl: map["avatarUrl"] == null ? null : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      avatarUrl: map["avatarUrl"] == null
+          ? null
+          : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
       avatarVersion: _requiredInt(map["avatarVersion"], '$path.avatarVersion'),
       isPrimary: _requiredBool(map["isPrimary"], '$path.isPrimary'),
-      isolationLevel: IsolationLevel.fromWire(map["isolationLevel"], '$path.isolationLevel'),
-      profileVisibility: ProfileVisibility.fromWire(map["profileVisibility"], '$path.profileVisibility'),
-      contextVersion: _requiredInt(map["contextVersion"], '$path.contextVersion'),
-      personaSnapshotVersion: _requiredInt(map["personaSnapshotVersion"], '$path.personaSnapshotVersion'),
-      sourceSurfaceId: map["sourceSurfaceId"] == null ? null : _requiredString(map["sourceSurfaceId"], '$path.sourceSurfaceId'),
-      explicitOverride: _requiredBool(map["explicitOverride"], '$path.explicitOverride'),
+      isolationLevel: IsolationLevel.fromWire(
+        map["isolationLevel"],
+        '$path.isolationLevel',
+      ),
+      profileVisibility: ProfileVisibility.fromWire(
+        map["profileVisibility"],
+        '$path.profileVisibility',
+      ),
+      contextVersion: _requiredInt(
+        map["contextVersion"],
+        '$path.contextVersion',
+      ),
+      personaSnapshotVersion: _requiredInt(
+        map["personaSnapshotVersion"],
+        '$path.personaSnapshotVersion',
+      ),
+      sourceSurfaceId: map["sourceSurfaceId"] == null
+          ? null
+          : _requiredString(map["sourceSurfaceId"], '$path.sourceSurfaceId'),
+      explicitOverride: _requiredBool(
+        map["explicitOverride"],
+        '$path.explicitOverride',
+      ),
       switchedAt: _requiredTimestamp(map["switchedAt"], '$path.switchedAt'),
     );
   }
@@ -708,22 +772,21 @@ final class ActivePersonaContextView {
 }
 
 final class ActivePersonaEnvelope {
-  const ActivePersonaEnvelope({
-    required this.personaId,
-  });
+  const ActivePersonaEnvelope({required this.personaId});
 
   final String personaId;
 
-  factory ActivePersonaEnvelope.fromWire(Map<String, Object?> map, [String path = "ActivePersonaEnvelope"]) {
+  factory ActivePersonaEnvelope.fromWire(
+    Map<String, Object?> map, [
+    String path = "ActivePersonaEnvelope",
+  ]) {
     _rejectUnknownFields(map, const <String>{"personaId"}, path);
     return ActivePersonaEnvelope(
       personaId: _requiredNonBlankString(map["personaId"], '$path.personaId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "personaId": personaId,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"personaId": personaId};
 }
 
 final class AlipayAuthorizationGrant {
@@ -735,10 +798,19 @@ final class AlipayAuthorizationGrant {
   final String authorizationPayload;
   final DateTime expiresAt;
 
-  factory AlipayAuthorizationGrant.fromWire(Map<String, Object?> map, [String path = "AlipayAuthorizationGrant"]) {
-    _rejectUnknownFields(map, const <String>{"authorizationPayload", "expiresAt"}, path);
+  factory AlipayAuthorizationGrant.fromWire(
+    Map<String, Object?> map, [
+    String path = "AlipayAuthorizationGrant",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "authorizationPayload",
+      "expiresAt",
+    }, path);
     return AlipayAuthorizationGrant(
-      authorizationPayload: _requiredNonBlankString(map["authorizationPayload"], '$path.authorizationPayload'),
+      authorizationPayload: _requiredNonBlankString(
+        map["authorizationPayload"],
+        '$path.authorizationPayload',
+      ),
       expiresAt: _requiredTimestamp(map["expiresAt"], '$path.expiresAt'),
     );
   }
@@ -770,15 +842,39 @@ final class AppearanceSettingsView {
   final int version;
   final DateTime updatedAt;
 
-  factory AppearanceSettingsView.fromWire(Map<String, Object?> map, [String path = "AppearanceSettingsView"]) {
-    _rejectUnknownFields(map, const <String>{"themeMode", "fontSizePreset", "source", "ownerDefaultThemeMode", "ownerDefaultFontSizePreset", "hasPersonaOverride", "version", "updatedAt"}, path);
+  factory AppearanceSettingsView.fromWire(
+    Map<String, Object?> map, [
+    String path = "AppearanceSettingsView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "themeMode",
+      "fontSizePreset",
+      "source",
+      "ownerDefaultThemeMode",
+      "ownerDefaultFontSizePreset",
+      "hasPersonaOverride",
+      "version",
+      "updatedAt",
+    }, path);
     return AppearanceSettingsView(
       themeMode: ThemeModeSetting.fromWire(map["themeMode"], '$path.themeMode'),
-      fontSizePreset: FontSizePreset.fromWire(map["fontSizePreset"], '$path.fontSizePreset'),
+      fontSizePreset: FontSizePreset.fromWire(
+        map["fontSizePreset"],
+        '$path.fontSizePreset',
+      ),
       source: AppearanceSource.fromWire(map["source"], '$path.source'),
-      ownerDefaultThemeMode: ThemeModeSetting.fromWire(map["ownerDefaultThemeMode"], '$path.ownerDefaultThemeMode'),
-      ownerDefaultFontSizePreset: FontSizePreset.fromWire(map["ownerDefaultFontSizePreset"], '$path.ownerDefaultFontSizePreset'),
-      hasPersonaOverride: _requiredBool(map["hasPersonaOverride"], '$path.hasPersonaOverride'),
+      ownerDefaultThemeMode: ThemeModeSetting.fromWire(
+        map["ownerDefaultThemeMode"],
+        '$path.ownerDefaultThemeMode',
+      ),
+      ownerDefaultFontSizePreset: FontSizePreset.fromWire(
+        map["ownerDefaultFontSizePreset"],
+        '$path.ownerDefaultFontSizePreset',
+      ),
+      hasPersonaOverride: _requiredBool(
+        map["hasPersonaOverride"],
+        '$path.hasPersonaOverride',
+      ),
       version: _requiredInt(map["version"], '$path.version'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
@@ -823,20 +919,60 @@ final class AuthSessionGrant {
   final ActivePersonaEnvelope? activePersona;
   final AccountHintSnapshot? accountHint;
 
-  factory AuthSessionGrant.fromWire(Map<String, Object?> map, [String path = "AuthSessionGrant"]) {
-    _rejectUnknownFields(map, const <String>{"accessToken", "refreshToken", "ownerId", "accountState", "identityOrigin", "logicalShard", "anonymousRetentionPolicy", "personaCount", "sessionRememberTtlSeconds", "activePersona", "accountHint"}, path);
+  factory AuthSessionGrant.fromWire(
+    Map<String, Object?> map, [
+    String path = "AuthSessionGrant",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "accessToken",
+      "refreshToken",
+      "ownerId",
+      "accountState",
+      "identityOrigin",
+      "logicalShard",
+      "anonymousRetentionPolicy",
+      "personaCount",
+      "sessionRememberTtlSeconds",
+      "activePersona",
+      "accountHint",
+    }, path);
     return AuthSessionGrant(
-      accessToken: _requiredNonBlankString(map["accessToken"], '$path.accessToken'),
-      refreshToken: _requiredNonBlankString(map["refreshToken"], '$path.refreshToken'),
+      accessToken: _requiredNonBlankString(
+        map["accessToken"],
+        '$path.accessToken',
+      ),
+      refreshToken: _requiredNonBlankString(
+        map["refreshToken"],
+        '$path.refreshToken',
+      ),
       ownerId: _requiredNonBlankString(map["ownerId"], '$path.ownerId'),
       accountState: _requiredString(map["accountState"], '$path.accountState'),
-      identityOrigin: _requiredString(map["identityOrigin"], '$path.identityOrigin'),
+      identityOrigin: _requiredString(
+        map["identityOrigin"],
+        '$path.identityOrigin',
+      ),
       logicalShard: _requiredInt(map["logicalShard"], '$path.logicalShard'),
-      anonymousRetentionPolicy: _requiredString(map["anonymousRetentionPolicy"], '$path.anonymousRetentionPolicy'),
+      anonymousRetentionPolicy: _requiredString(
+        map["anonymousRetentionPolicy"],
+        '$path.anonymousRetentionPolicy',
+      ),
       personaCount: _requiredInt(map["personaCount"], '$path.personaCount'),
-      sessionRememberTtlSeconds: _requiredInt(map["sessionRememberTtlSeconds"], '$path.sessionRememberTtlSeconds'),
-      activePersona: map["activePersona"] == null ? null : ActivePersonaEnvelope.fromWire(_requiredObject(map["activePersona"], '$path.activePersona'), '$path.activePersona'),
-      accountHint: map["accountHint"] == null ? null : AccountHintSnapshot.fromWire(_requiredObject(map["accountHint"], '$path.accountHint'), '$path.accountHint'),
+      sessionRememberTtlSeconds: _requiredInt(
+        map["sessionRememberTtlSeconds"],
+        '$path.sessionRememberTtlSeconds',
+      ),
+      activePersona: map["activePersona"] == null
+          ? null
+          : ActivePersonaEnvelope.fromWire(
+              _requiredObject(map["activePersona"], '$path.activePersona'),
+              '$path.activePersona',
+            ),
+      accountHint: map["accountHint"] == null
+          ? null
+          : AccountHintSnapshot.fromWire(
+              _requiredObject(map["accountHint"], '$path.accountHint'),
+              '$path.accountHint',
+            ),
     );
   }
 
@@ -868,12 +1004,26 @@ final class BlockCommandResult {
   final bool idempotentReplay;
   final DateTime updatedAt;
 
-  factory BlockCommandResult.fromWire(Map<String, Object?> map, [String path = "BlockCommandResult"]) {
-    _rejectUnknownFields(map, const <String>{"targetPersonaId", "blocked", "idempotentReplay", "updatedAt"}, path);
+  factory BlockCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "BlockCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "targetPersonaId",
+      "blocked",
+      "idempotentReplay",
+      "updatedAt",
+    }, path);
     return BlockCommandResult(
-      targetPersonaId: _requiredString(map["targetPersonaId"], '$path.targetPersonaId'),
+      targetPersonaId: _requiredString(
+        map["targetPersonaId"],
+        '$path.targetPersonaId',
+      ),
       blocked: _requiredBool(map["blocked"], '$path.blocked'),
-      idempotentReplay: _requiredBool(map["idempotentReplay"], '$path.idempotentReplay'),
+      idempotentReplay: _requiredBool(
+        map["idempotentReplay"],
+        '$path.idempotentReplay',
+      ),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
   }
@@ -901,13 +1051,27 @@ final class BlockedListItemView {
   final String? avatarUrl;
   final DateTime blockedAt;
 
-  factory BlockedListItemView.fromWire(Map<String, Object?> map, [String path = "BlockedListItemView"]) {
-    _rejectUnknownFields(map, const <String>{"targetPersonaId", "displayName", "userHandle", "avatarUrl", "blockedAt"}, path);
+  factory BlockedListItemView.fromWire(
+    Map<String, Object?> map, [
+    String path = "BlockedListItemView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "targetPersonaId",
+      "displayName",
+      "userHandle",
+      "avatarUrl",
+      "blockedAt",
+    }, path);
     return BlockedListItemView(
-      targetPersonaId: _requiredString(map["targetPersonaId"], '$path.targetPersonaId'),
+      targetPersonaId: _requiredString(
+        map["targetPersonaId"],
+        '$path.targetPersonaId',
+      ),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
-      avatarUrl: map["avatarUrl"] == null ? null : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      avatarUrl: map["avatarUrl"] == null
+          ? null
+          : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
       blockedAt: _requiredTimestamp(map["blockedAt"], '$path.blockedAt'),
     );
   }
@@ -922,19 +1086,28 @@ final class BlockedListItemView {
 }
 
 final class BlockedUserSlice {
-  const BlockedUserSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const BlockedUserSlice({required this.items, this.nextCursor});
 
   final List<BlockedListItemView> items;
   final String? nextCursor;
 
-  factory BlockedUserSlice.fromWire(Map<String, Object?> map, [String path = "BlockedUserSlice"]) {
+  factory BlockedUserSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "BlockedUserSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return BlockedUserSlice(
-      items: List<BlockedListItemView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => BlockedListItemView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<BlockedListItemView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => BlockedListItemView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -963,14 +1136,40 @@ final class CallSettingsView {
   final int version;
   final DateTime updatedAt;
 
-  factory CallSettingsView.fromWire(Map<String, Object?> map, [String path = "CallSettingsView"]) {
-    _rejectUnknownFields(map, const <String>{"userId", "defaultIncomingCallRingtoneId", "allowCallerRingtoneOverride", "enableCallVibration", "enableGroupCallRing", "version", "updatedAt"}, path);
+  factory CallSettingsView.fromWire(
+    Map<String, Object?> map, [
+    String path = "CallSettingsView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "userId",
+      "defaultIncomingCallRingtoneId",
+      "allowCallerRingtoneOverride",
+      "enableCallVibration",
+      "enableGroupCallRing",
+      "version",
+      "updatedAt",
+    }, path);
     return CallSettingsView(
       userId: _requiredString(map["userId"], '$path.userId'),
-      defaultIncomingCallRingtoneId: map["defaultIncomingCallRingtoneId"] == null ? null : _requiredString(map["defaultIncomingCallRingtoneId"], '$path.defaultIncomingCallRingtoneId'),
-      allowCallerRingtoneOverride: _requiredBool(map["allowCallerRingtoneOverride"], '$path.allowCallerRingtoneOverride'),
-      enableCallVibration: _requiredBool(map["enableCallVibration"], '$path.enableCallVibration'),
-      enableGroupCallRing: _requiredBool(map["enableGroupCallRing"], '$path.enableGroupCallRing'),
+      defaultIncomingCallRingtoneId:
+          map["defaultIncomingCallRingtoneId"] == null
+          ? null
+          : _requiredString(
+              map["defaultIncomingCallRingtoneId"],
+              '$path.defaultIncomingCallRingtoneId',
+            ),
+      allowCallerRingtoneOverride: _requiredBool(
+        map["allowCallerRingtoneOverride"],
+        '$path.allowCallerRingtoneOverride',
+      ),
+      enableCallVibration: _requiredBool(
+        map["enableCallVibration"],
+        '$path.enableCallVibration',
+      ),
+      enableGroupCallRing: _requiredBool(
+        map["enableGroupCallRing"],
+        '$path.enableGroupCallRing',
+      ),
       version: _requiredInt(map["version"], '$path.version'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
@@ -978,7 +1177,8 @@ final class CallSettingsView {
 
   Map<String, Object?> toWire() => <String, Object?>{
     "userId": userId,
-    if (defaultIncomingCallRingtoneId != null) "defaultIncomingCallRingtoneId": defaultIncomingCallRingtoneId!,
+    if (defaultIncomingCallRingtoneId != null)
+      "defaultIncomingCallRingtoneId": defaultIncomingCallRingtoneId!,
     "allowCallerRingtoneOverride": allowCallerRingtoneOverride,
     "enableCallVibration": enableCallVibration,
     "enableGroupCallRing": enableGroupCallRing,
@@ -998,12 +1198,25 @@ final class CloseAccountResultWire {
   final DateTime closedAt;
   final bool idempotentReplay;
 
-  factory CloseAccountResultWire.fromWire(Map<String, Object?> map, [String path = "CloseAccountResultWire"]) {
-    _rejectUnknownFields(map, const <String>{"accountState", "closedAt", "idempotentReplay"}, path);
+  factory CloseAccountResultWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "CloseAccountResultWire",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "accountState",
+      "closedAt",
+      "idempotentReplay",
+    }, path);
     return CloseAccountResultWire(
-      accountState: AccountState.fromWire(map["accountState"], '$path.accountState'),
+      accountState: AccountState.fromWire(
+        map["accountState"],
+        '$path.accountState',
+      ),
       closedAt: _requiredTimestamp(map["closedAt"], '$path.closedAt'),
-      idempotentReplay: _requiredBool(map["idempotentReplay"], '$path.idempotentReplay'),
+      idempotentReplay: _requiredBool(
+        map["idempotentReplay"],
+        '$path.idempotentReplay',
+      ),
     );
   }
 
@@ -1015,22 +1228,21 @@ final class CloseAccountResultWire {
 }
 
 final class ContactDiscoveryDismissResult {
-  const ContactDiscoveryDismissResult({
-    required this.status,
-  });
+  const ContactDiscoveryDismissResult({required this.status});
 
   final DiscoveryStatus status;
 
-  factory ContactDiscoveryDismissResult.fromWire(Map<String, Object?> map, [String path = "ContactDiscoveryDismissResult"]) {
+  factory ContactDiscoveryDismissResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContactDiscoveryDismissResult",
+  ]) {
     _rejectUnknownFields(map, const <String>{"status"}, path);
     return ContactDiscoveryDismissResult(
       status: DiscoveryStatus.fromWire(map["status"], '$path.status'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "status": status.wireName,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"status": status.wireName};
 }
 
 final class ContactDiscoveryMatchResult {
@@ -1054,17 +1266,42 @@ final class ContactDiscoveryMatchResult {
   final String? region;
   final RelationshipCapabilityView relationshipCapability;
 
-  factory ContactDiscoveryMatchResult.fromWire(Map<String, Object?> map, [String path = "ContactDiscoveryMatchResult"]) {
-    _rejectUnknownFields(map, const <String>{"hashedPhone", "personaId", "userHandle", "displayName", "avatarUrl", "avatarVersion", "region", "relationshipCapability"}, path);
+  factory ContactDiscoveryMatchResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContactDiscoveryMatchResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "hashedPhone",
+      "personaId",
+      "userHandle",
+      "displayName",
+      "avatarUrl",
+      "avatarVersion",
+      "region",
+      "relationshipCapability",
+    }, path);
     return ContactDiscoveryMatchResult(
-      hashedPhone: _requiredNonBlankString(map["hashedPhone"], '$path.hashedPhone'),
+      hashedPhone: _requiredNonBlankString(
+        map["hashedPhone"],
+        '$path.hashedPhone',
+      ),
       personaId: _requiredNonBlankString(map["personaId"], '$path.personaId'),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      avatarUrl: map["avatarUrl"] == null ? null : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      avatarUrl: map["avatarUrl"] == null
+          ? null
+          : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
       avatarVersion: _requiredInt(map["avatarVersion"], '$path.avatarVersion'),
-      region: map["region"] == null ? null : _requiredString(map["region"], '$path.region'),
-      relationshipCapability: RelationshipCapabilityView.fromWire(_requiredObject(map["relationshipCapability"], '$path.relationshipCapability'), '$path.relationshipCapability'),
+      region: map["region"] == null
+          ? null
+          : _requiredString(map["region"], '$path.region'),
+      relationshipCapability: RelationshipCapabilityView.fromWire(
+        _requiredObject(
+          map["relationshipCapability"],
+          '$path.relationshipCapability',
+        ),
+        '$path.relationshipCapability',
+      ),
     );
   }
 
@@ -1099,27 +1336,62 @@ final class ContactDiscoveryResult {
   final DateTime? expireAt;
   final DateTime? completedAt;
 
-  factory ContactDiscoveryResult.fromWire(Map<String, Object?> map, [String path = "ContactDiscoveryResult"]) {
-    _rejectUnknownFields(map, const <String>{"id", "status", "matchedPersonaIds", "matchCount", "matches", "expireAt", "completedAt"}, path);
+  factory ContactDiscoveryResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContactDiscoveryResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "status",
+      "matchedPersonaIds",
+      "matchCount",
+      "matches",
+      "expireAt",
+      "completedAt",
+    }, path);
     return ContactDiscoveryResult(
       id: _requiredNonBlankString(map["id"], '$path.id'),
       status: DiscoveryStatus.fromWire(map["status"], '$path.status'),
-      matchedPersonaIds: List<String>.unmodifiable(_requiredList(map["matchedPersonaIds"], '$path.matchedPersonaIds').asMap().entries.map((entry) => _requiredString(entry.value, '$path.matchedPersonaIds' + '[${entry.key}]'))),
+      matchedPersonaIds: List<String>.unmodifiable(
+        _requiredList(
+          map["matchedPersonaIds"],
+          '$path.matchedPersonaIds',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.matchedPersonaIds' + '[${entry.key}]',
+          ),
+        ),
+      ),
       matchCount: _requiredInt(map["matchCount"], '$path.matchCount'),
-      matches: List<ContactDiscoveryMatchResult>.unmodifiable(_requiredList(map["matches"], '$path.matches').asMap().entries.map((entry) => ContactDiscoveryMatchResult.fromWire(_requiredObject(entry.value, '$path.matches' + '[${entry.key}]'), '$path.matches' + '[${entry.key}]'))),
-      expireAt: map["expireAt"] == null ? null : _requiredTimestamp(map["expireAt"], '$path.expireAt'),
-      completedAt: map["completedAt"] == null ? null : _requiredTimestamp(map["completedAt"], '$path.completedAt'),
+      matches: List<ContactDiscoveryMatchResult>.unmodifiable(
+        _requiredList(map["matches"], '$path.matches').asMap().entries.map(
+          (entry) => ContactDiscoveryMatchResult.fromWire(
+            _requiredObject(entry.value, '$path.matches' + '[${entry.key}]'),
+            '$path.matches' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      expireAt: map["expireAt"] == null
+          ? null
+          : _requiredTimestamp(map["expireAt"], '$path.expireAt'),
+      completedAt: map["completedAt"] == null
+          ? null
+          : _requiredTimestamp(map["completedAt"], '$path.completedAt'),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "id": id,
     "status": status.wireName,
-    "matchedPersonaIds": matchedPersonaIds.map((value) => value).toList(growable: false),
+    "matchedPersonaIds": matchedPersonaIds
+        .map((value) => value)
+        .toList(growable: false),
     "matchCount": matchCount,
     "matches": matches.map((value) => value.toWire()).toList(growable: false),
     if (expireAt != null) "expireAt": expireAt!.toUtc().toIso8601String(),
-    if (completedAt != null) "completedAt": completedAt!.toUtc().toIso8601String(),
+    if (completedAt != null)
+      "completedAt": completedAt!.toUtc().toIso8601String(),
   };
 }
 
@@ -1136,13 +1408,31 @@ final class ConversationAvatarSyncPatchPayload {
   final int? groupAvatarVersion;
   final String? groupAvatarSourceHash;
 
-  factory ConversationAvatarSyncPatchPayload.fromWire(Map<String, Object?> map, [String path = "ConversationAvatarSyncPatchPayload"]) {
-    _rejectUnknownFields(map, const <String>{"conversationId", "avatarUrl", "groupAvatarVersion", "groupAvatarSourceHash"}, path);
+  factory ConversationAvatarSyncPatchPayload.fromWire(
+    Map<String, Object?> map, [
+    String path = "ConversationAvatarSyncPatchPayload",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "conversationId",
+      "avatarUrl",
+      "groupAvatarVersion",
+      "groupAvatarSourceHash",
+    }, path);
     return ConversationAvatarSyncPatchPayload(
-      conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
+      conversationId: _requiredString(
+        map["conversationId"],
+        '$path.conversationId',
+      ),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      groupAvatarVersion: map["groupAvatarVersion"] == null ? null : _requiredInt(map["groupAvatarVersion"], '$path.groupAvatarVersion'),
-      groupAvatarSourceHash: map["groupAvatarSourceHash"] == null ? null : _requiredString(map["groupAvatarSourceHash"], '$path.groupAvatarSourceHash'),
+      groupAvatarVersion: map["groupAvatarVersion"] == null
+          ? null
+          : _requiredInt(map["groupAvatarVersion"], '$path.groupAvatarVersion'),
+      groupAvatarSourceHash: map["groupAvatarSourceHash"] == null
+          ? null
+          : _requiredString(
+              map["groupAvatarSourceHash"],
+              '$path.groupAvatarSourceHash',
+            ),
     );
   }
 
@@ -1150,7 +1440,8 @@ final class ConversationAvatarSyncPatchPayload {
     "conversationId": conversationId,
     "avatarUrl": avatarUrl,
     if (groupAvatarVersion != null) "groupAvatarVersion": groupAvatarVersion!,
-    if (groupAvatarSourceHash != null) "groupAvatarSourceHash": groupAvatarSourceHash!,
+    if (groupAvatarSourceHash != null)
+      "groupAvatarSourceHash": groupAvatarSourceHash!,
   };
 }
 
@@ -1169,14 +1460,31 @@ final class CredentialBindingCommandResult {
   final bool idempotentReplay;
   final String? displayLabel;
 
-  factory CredentialBindingCommandResult.fromWire(Map<String, Object?> map, [String path = "CredentialBindingCommandResult"]) {
-    _rejectUnknownFields(map, const <String>{"credentialType", "isActive", "version", "idempotentReplay", "displayLabel"}, path);
+  factory CredentialBindingCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "CredentialBindingCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "credentialType",
+      "isActive",
+      "version",
+      "idempotentReplay",
+      "displayLabel",
+    }, path);
     return CredentialBindingCommandResult(
-      credentialType: CredentialType.fromWire(map["credentialType"], '$path.credentialType'),
+      credentialType: CredentialType.fromWire(
+        map["credentialType"],
+        '$path.credentialType',
+      ),
       isActive: _requiredBool(map["isActive"], '$path.isActive'),
       version: _requiredInt(map["version"], '$path.version'),
-      idempotentReplay: _requiredBool(map["idempotentReplay"], '$path.idempotentReplay'),
-      displayLabel: map["displayLabel"] == null ? null : _requiredString(map["displayLabel"], '$path.displayLabel'),
+      idempotentReplay: _requiredBool(
+        map["idempotentReplay"],
+        '$path.idempotentReplay',
+      ),
+      displayLabel: map["displayLabel"] == null
+          ? null
+          : _requiredString(map["displayLabel"], '$path.displayLabel'),
     );
   }
 
@@ -1206,12 +1514,27 @@ final class CredentialBindingView {
   final DateTime boundAt;
   final int version;
 
-  factory CredentialBindingView.fromWire(Map<String, Object?> map, [String path = "CredentialBindingView"]) {
-    _rejectUnknownFields(map, const <String>{"id", "credentialType", "displayLabel", "isActive", "boundAt", "version"}, path);
+  factory CredentialBindingView.fromWire(
+    Map<String, Object?> map, [
+    String path = "CredentialBindingView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "credentialType",
+      "displayLabel",
+      "isActive",
+      "boundAt",
+      "version",
+    }, path);
     return CredentialBindingView(
       id: _requiredNonBlankString(map["id"], '$path.id'),
-      credentialType: CredentialType.fromWire(map["credentialType"], '$path.credentialType'),
-      displayLabel: map["displayLabel"] == null ? null : _requiredString(map["displayLabel"], '$path.displayLabel'),
+      credentialType: CredentialType.fromWire(
+        map["credentialType"],
+        '$path.credentialType',
+      ),
+      displayLabel: map["displayLabel"] == null
+          ? null
+          : _requiredString(map["displayLabel"], '$path.displayLabel'),
       isActive: _requiredBool(map["isActive"], '$path.isActive'),
       boundAt: _requiredTimestamp(map["boundAt"], '$path.boundAt'),
       version: _requiredInt(map["version"], '$path.version'),
@@ -1249,16 +1572,37 @@ final class DevicePushEndpointCommandResult {
   final bool idempotentReplay;
   final DateTime updatedAt;
 
-  factory DevicePushEndpointCommandResult.fromWire(Map<String, Object?> map, [String path = "DevicePushEndpointCommandResult"]) {
-    _rejectUnknownFields(map, const <String>{"endpointRef", "deviceId", "endpointKind", "status", "version", "aggregateVersion", "idempotentReplay", "updatedAt"}, path);
+  factory DevicePushEndpointCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "DevicePushEndpointCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "endpointRef",
+      "deviceId",
+      "endpointKind",
+      "status",
+      "version",
+      "aggregateVersion",
+      "idempotentReplay",
+      "updatedAt",
+    }, path);
     return DevicePushEndpointCommandResult(
       endpointRef: _requiredString(map["endpointRef"], '$path.endpointRef'),
       deviceId: _requiredString(map["deviceId"], '$path.deviceId'),
-      endpointKind: DevicePushEndpointKind.fromWire(map["endpointKind"], '$path.endpointKind'),
+      endpointKind: DevicePushEndpointKind.fromWire(
+        map["endpointKind"],
+        '$path.endpointKind',
+      ),
       status: DeviceRegistrationStatus.fromWire(map["status"], '$path.status'),
       version: _requiredInt(map["version"], '$path.version'),
-      aggregateVersion: _requiredInt(map["aggregateVersion"], '$path.aggregateVersion'),
-      idempotentReplay: _requiredBool(map["idempotentReplay"], '$path.idempotentReplay'),
+      aggregateVersion: _requiredInt(
+        map["aggregateVersion"],
+        '$path.aggregateVersion',
+      ),
+      idempotentReplay: _requiredBool(
+        map["idempotentReplay"],
+        '$path.idempotentReplay',
+      ),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
   }
@@ -1290,14 +1634,35 @@ final class FederatedLoginOutcome {
   final String? provider;
   final int expiresInSeconds;
 
-  factory FederatedLoginOutcome.fromWire(Map<String, Object?> map, [String path = "FederatedLoginOutcome"]) {
-    _rejectUnknownFields(map, const <String>{"status", "session", "bindingTicket", "provider", "expiresInSeconds"}, path);
+  factory FederatedLoginOutcome.fromWire(
+    Map<String, Object?> map, [
+    String path = "FederatedLoginOutcome",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "status",
+      "session",
+      "bindingTicket",
+      "provider",
+      "expiresInSeconds",
+    }, path);
     return FederatedLoginOutcome(
       status: FederatedLoginStatus.fromWire(map["status"], '$path.status'),
-      session: map["session"] == null ? null : AuthSessionGrant.fromWire(_requiredObject(map["session"], '$path.session'), '$path.session'),
-      bindingTicket: map["bindingTicket"] == null ? null : _requiredString(map["bindingTicket"], '$path.bindingTicket'),
-      provider: map["provider"] == null ? null : _requiredString(map["provider"], '$path.provider'),
-      expiresInSeconds: _requiredInt(map["expiresInSeconds"], '$path.expiresInSeconds'),
+      session: map["session"] == null
+          ? null
+          : AuthSessionGrant.fromWire(
+              _requiredObject(map["session"], '$path.session'),
+              '$path.session',
+            ),
+      bindingTicket: map["bindingTicket"] == null
+          ? null
+          : _requiredString(map["bindingTicket"], '$path.bindingTicket'),
+      provider: map["provider"] == null
+          ? null
+          : _requiredString(map["provider"], '$path.provider'),
+      expiresInSeconds: _requiredInt(
+        map["expiresInSeconds"],
+        '$path.expiresInSeconds',
+      ),
     );
   }
 
@@ -1325,13 +1690,34 @@ final class FollowCommandResult {
   final bool idempotentReplay;
   final DateTime updatedAt;
 
-  factory FollowCommandResult.fromWire(Map<String, Object?> map, [String path = "FollowCommandResult"]) {
-    _rejectUnknownFields(map, const <String>{"actorPersonaId", "targetPersonaId", "relationState", "idempotentReplay", "updatedAt"}, path);
+  factory FollowCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "FollowCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "actorPersonaId",
+      "targetPersonaId",
+      "relationState",
+      "idempotentReplay",
+      "updatedAt",
+    }, path);
     return FollowCommandResult(
-      actorPersonaId: _requiredString(map["actorPersonaId"], '$path.actorPersonaId'),
-      targetPersonaId: _requiredString(map["targetPersonaId"], '$path.targetPersonaId'),
-      relationState: RelationshipState.fromWire(map["relationState"], '$path.relationState'),
-      idempotentReplay: _requiredBool(map["idempotentReplay"], '$path.idempotentReplay'),
+      actorPersonaId: _requiredString(
+        map["actorPersonaId"],
+        '$path.actorPersonaId',
+      ),
+      targetPersonaId: _requiredString(
+        map["targetPersonaId"],
+        '$path.targetPersonaId',
+      ),
+      relationState: RelationshipState.fromWire(
+        map["relationState"],
+        '$path.relationState',
+      ),
+      idempotentReplay: _requiredBool(
+        map["idempotentReplay"],
+        '$path.idempotentReplay',
+      ),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
   }
@@ -1358,13 +1744,30 @@ final class FollowedSubjectVisitResult {
   final DateTime lastVisitedAt;
   final bool hasUnreadChanges;
 
-  factory FollowedSubjectVisitResult.fromWire(Map<String, Object?> map, [String path = "FollowedSubjectVisitResult"]) {
-    _rejectUnknownFields(map, const <String>{"subjectId", "subjectType", "lastVisitedAt", "hasUnreadChanges"}, path);
+  factory FollowedSubjectVisitResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "FollowedSubjectVisitResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "subjectId",
+      "subjectType",
+      "lastVisitedAt",
+      "hasUnreadChanges",
+    }, path);
     return FollowedSubjectVisitResult(
       subjectId: _requiredString(map["subjectId"], '$path.subjectId'),
-      subjectType: FollowSubjectKind.fromWire(map["subjectType"], '$path.subjectType'),
-      lastVisitedAt: _requiredTimestamp(map["lastVisitedAt"], '$path.lastVisitedAt'),
-      hasUnreadChanges: _requiredBool(map["hasUnreadChanges"], '$path.hasUnreadChanges'),
+      subjectType: FollowSubjectKind.fromWire(
+        map["subjectType"],
+        '$path.subjectType',
+      ),
+      lastVisitedAt: _requiredTimestamp(
+        map["lastVisitedAt"],
+        '$path.lastVisitedAt',
+      ),
+      hasUnreadChanges: _requiredBool(
+        map["hasUnreadChanges"],
+        '$path.hasUnreadChanges',
+      ),
     );
   }
 
@@ -1397,17 +1800,45 @@ final class FollowerListItemView {
   final DateTime followedAt;
   final RelationshipCapabilityView? relationshipCapability;
 
-  factory FollowerListItemView.fromWire(Map<String, Object?> map, [String path = "FollowerListItemView"]) {
-    _rejectUnknownFields(map, const <String>{"personaId", "userHandle", "displayName", "avatarUrl", "profileVisibility", "relationState", "followedAt", "relationshipCapability"}, path);
+  factory FollowerListItemView.fromWire(
+    Map<String, Object?> map, [
+    String path = "FollowerListItemView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "personaId",
+      "userHandle",
+      "displayName",
+      "avatarUrl",
+      "profileVisibility",
+      "relationState",
+      "followedAt",
+      "relationshipCapability",
+    }, path);
     return FollowerListItemView(
       personaId: _requiredString(map["personaId"], '$path.personaId'),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      avatarUrl: map["avatarUrl"] == null ? null : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      profileVisibility: ProfileVisibility.fromWire(map["profileVisibility"], '$path.profileVisibility'),
-      relationState: RelationshipState.fromWire(map["relationState"], '$path.relationState'),
+      avatarUrl: map["avatarUrl"] == null
+          ? null
+          : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      profileVisibility: ProfileVisibility.fromWire(
+        map["profileVisibility"],
+        '$path.profileVisibility',
+      ),
+      relationState: RelationshipState.fromWire(
+        map["relationState"],
+        '$path.relationState',
+      ),
       followedAt: _requiredTimestamp(map["followedAt"], '$path.followedAt'),
-      relationshipCapability: map["relationshipCapability"] == null ? null : RelationshipCapabilityView.fromWire(_requiredObject(map["relationshipCapability"], '$path.relationshipCapability'), '$path.relationshipCapability'),
+      relationshipCapability: map["relationshipCapability"] == null
+          ? null
+          : RelationshipCapabilityView.fromWire(
+              _requiredObject(
+                map["relationshipCapability"],
+                '$path.relationshipCapability',
+              ),
+              '$path.relationshipCapability',
+            ),
     );
   }
 
@@ -1419,24 +1850,34 @@ final class FollowerListItemView {
     "profileVisibility": profileVisibility.wireName,
     "relationState": relationState.wireName,
     "followedAt": followedAt.toUtc().toIso8601String(),
-    if (relationshipCapability != null) "relationshipCapability": relationshipCapability!.toWire(),
+    if (relationshipCapability != null)
+      "relationshipCapability": relationshipCapability!.toWire(),
   };
 }
 
 final class FollowerRelationshipPageSlice {
-  const FollowerRelationshipPageSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const FollowerRelationshipPageSlice({required this.items, this.nextCursor});
 
   final List<FollowerListItemView> items;
   final String? nextCursor;
 
-  factory FollowerRelationshipPageSlice.fromWire(Map<String, Object?> map, [String path = "FollowerRelationshipPageSlice"]) {
+  factory FollowerRelationshipPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "FollowerRelationshipPageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return FollowerRelationshipPageSlice(
-      items: List<FollowerListItemView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => FollowerListItemView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<FollowerListItemView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => FollowerListItemView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -1467,17 +1908,45 @@ final class FollowingListItemView {
   final DateTime followedAt;
   final RelationshipCapabilityView? relationshipCapability;
 
-  factory FollowingListItemView.fromWire(Map<String, Object?> map, [String path = "FollowingListItemView"]) {
-    _rejectUnknownFields(map, const <String>{"personaId", "userHandle", "displayName", "avatarUrl", "profileVisibility", "relationState", "followedAt", "relationshipCapability"}, path);
+  factory FollowingListItemView.fromWire(
+    Map<String, Object?> map, [
+    String path = "FollowingListItemView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "personaId",
+      "userHandle",
+      "displayName",
+      "avatarUrl",
+      "profileVisibility",
+      "relationState",
+      "followedAt",
+      "relationshipCapability",
+    }, path);
     return FollowingListItemView(
       personaId: _requiredString(map["personaId"], '$path.personaId'),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      avatarUrl: map["avatarUrl"] == null ? null : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      profileVisibility: ProfileVisibility.fromWire(map["profileVisibility"], '$path.profileVisibility'),
-      relationState: RelationshipState.fromWire(map["relationState"], '$path.relationState'),
+      avatarUrl: map["avatarUrl"] == null
+          ? null
+          : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      profileVisibility: ProfileVisibility.fromWire(
+        map["profileVisibility"],
+        '$path.profileVisibility',
+      ),
+      relationState: RelationshipState.fromWire(
+        map["relationState"],
+        '$path.relationState',
+      ),
       followedAt: _requiredTimestamp(map["followedAt"], '$path.followedAt'),
-      relationshipCapability: map["relationshipCapability"] == null ? null : RelationshipCapabilityView.fromWire(_requiredObject(map["relationshipCapability"], '$path.relationshipCapability'), '$path.relationshipCapability'),
+      relationshipCapability: map["relationshipCapability"] == null
+          ? null
+          : RelationshipCapabilityView.fromWire(
+              _requiredObject(
+                map["relationshipCapability"],
+                '$path.relationshipCapability',
+              ),
+              '$path.relationshipCapability',
+            ),
     );
   }
 
@@ -1489,24 +1958,34 @@ final class FollowingListItemView {
     "profileVisibility": profileVisibility.wireName,
     "relationState": relationState.wireName,
     "followedAt": followedAt.toUtc().toIso8601String(),
-    if (relationshipCapability != null) "relationshipCapability": relationshipCapability!.toWire(),
+    if (relationshipCapability != null)
+      "relationshipCapability": relationshipCapability!.toWire(),
   };
 }
 
 final class FollowingRelationshipPageSlice {
-  const FollowingRelationshipPageSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const FollowingRelationshipPageSlice({required this.items, this.nextCursor});
 
   final List<FollowingListItemView> items;
   final String? nextCursor;
 
-  factory FollowingRelationshipPageSlice.fromWire(Map<String, Object?> map, [String path = "FollowingRelationshipPageSlice"]) {
+  factory FollowingRelationshipPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "FollowingRelationshipPageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return FollowingRelationshipPageSlice(
-      items: List<FollowingListItemView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => FollowingListItemView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<FollowingListItemView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => FollowingListItemView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -1549,23 +2028,71 @@ final class FollowingSubjectItemView {
   final bool hasUnreadChanges;
   final String? latestChangeReason;
 
-  factory FollowingSubjectItemView.fromWire(Map<String, Object?> map, [String path = "FollowingSubjectItemView"]) {
-    _rejectUnknownFields(map, const <String>{"subjectId", "subjectType", "displayName", "avatarUrl", "coverUrl", "subtitle", "targetRouteId", "targetObjectId", "followedAt", "lastVisitedAt", "latestChangedAt", "unreadChangeCount", "hasUnreadChanges", "latestChangeReason"}, path);
+  factory FollowingSubjectItemView.fromWire(
+    Map<String, Object?> map, [
+    String path = "FollowingSubjectItemView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "subjectId",
+      "subjectType",
+      "displayName",
+      "avatarUrl",
+      "coverUrl",
+      "subtitle",
+      "targetRouteId",
+      "targetObjectId",
+      "followedAt",
+      "lastVisitedAt",
+      "latestChangedAt",
+      "unreadChangeCount",
+      "hasUnreadChanges",
+      "latestChangeReason",
+    }, path);
     return FollowingSubjectItemView(
       subjectId: _requiredString(map["subjectId"], '$path.subjectId'),
-      subjectType: FollowSubjectKind.fromWire(map["subjectType"], '$path.subjectType'),
+      subjectType: FollowSubjectKind.fromWire(
+        map["subjectType"],
+        '$path.subjectType',
+      ),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      avatarUrl: map["avatarUrl"] == null ? null : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      coverUrl: map["coverUrl"] == null ? null : _requiredString(map["coverUrl"], '$path.coverUrl'),
-      subtitle: map["subtitle"] == null ? null : _requiredString(map["subtitle"], '$path.subtitle'),
-      targetRouteId: _requiredString(map["targetRouteId"], '$path.targetRouteId'),
-      targetObjectId: _requiredString(map["targetObjectId"], '$path.targetObjectId'),
+      avatarUrl: map["avatarUrl"] == null
+          ? null
+          : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      subtitle: map["subtitle"] == null
+          ? null
+          : _requiredString(map["subtitle"], '$path.subtitle'),
+      targetRouteId: _requiredString(
+        map["targetRouteId"],
+        '$path.targetRouteId',
+      ),
+      targetObjectId: _requiredString(
+        map["targetObjectId"],
+        '$path.targetObjectId',
+      ),
       followedAt: _requiredTimestamp(map["followedAt"], '$path.followedAt'),
-      lastVisitedAt: map["lastVisitedAt"] == null ? null : _requiredTimestamp(map["lastVisitedAt"], '$path.lastVisitedAt'),
-      latestChangedAt: map["latestChangedAt"] == null ? null : _requiredTimestamp(map["latestChangedAt"], '$path.latestChangedAt'),
-      unreadChangeCount: _requiredInt(map["unreadChangeCount"], '$path.unreadChangeCount'),
-      hasUnreadChanges: _requiredBool(map["hasUnreadChanges"], '$path.hasUnreadChanges'),
-      latestChangeReason: map["latestChangeReason"] == null ? null : _requiredString(map["latestChangeReason"], '$path.latestChangeReason'),
+      lastVisitedAt: map["lastVisitedAt"] == null
+          ? null
+          : _requiredTimestamp(map["lastVisitedAt"], '$path.lastVisitedAt'),
+      latestChangedAt: map["latestChangedAt"] == null
+          ? null
+          : _requiredTimestamp(map["latestChangedAt"], '$path.latestChangedAt'),
+      unreadChangeCount: _requiredInt(
+        map["unreadChangeCount"],
+        '$path.unreadChangeCount',
+      ),
+      hasUnreadChanges: _requiredBool(
+        map["hasUnreadChanges"],
+        '$path.hasUnreadChanges',
+      ),
+      latestChangeReason: map["latestChangeReason"] == null
+          ? null
+          : _requiredString(
+              map["latestChangeReason"],
+              '$path.latestChangeReason',
+            ),
     );
   }
 
@@ -1579,8 +2106,10 @@ final class FollowingSubjectItemView {
     "targetRouteId": targetRouteId,
     "targetObjectId": targetObjectId,
     "followedAt": followedAt.toUtc().toIso8601String(),
-    if (lastVisitedAt != null) "lastVisitedAt": lastVisitedAt!.toUtc().toIso8601String(),
-    if (latestChangedAt != null) "latestChangedAt": latestChangedAt!.toUtc().toIso8601String(),
+    if (lastVisitedAt != null)
+      "lastVisitedAt": lastVisitedAt!.toUtc().toIso8601String(),
+    if (latestChangedAt != null)
+      "latestChangedAt": latestChangedAt!.toUtc().toIso8601String(),
     "unreadChangeCount": unreadChangeCount,
     "hasUnreadChanges": hasUnreadChanges,
     if (latestChangeReason != null) "latestChangeReason": latestChangeReason!,
@@ -1588,19 +2117,28 @@ final class FollowingSubjectItemView {
 }
 
 final class FollowingSubjectSlice {
-  const FollowingSubjectSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const FollowingSubjectSlice({required this.items, this.nextCursor});
 
   final List<FollowingSubjectItemView> items;
   final String? nextCursor;
 
-  factory FollowingSubjectSlice.fromWire(Map<String, Object?> map, [String path = "FollowingSubjectSlice"]) {
+  factory FollowingSubjectSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "FollowingSubjectSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return FollowingSubjectSlice(
-      items: List<FollowingSubjectItemView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => FollowingSubjectItemView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<FollowingSubjectItemView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => FollowingSubjectItemView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -1625,13 +2163,31 @@ final class GreetingIntersectionRef {
   final String objectTypeRef;
   final String objectId;
 
-  factory GreetingIntersectionRef.fromWire(Map<String, Object?> map, [String path = "GreetingIntersectionRef"]) {
-    _rejectUnknownFields(map, const <String>{"intersectionId", "evidenceId", "sourceRef", "objectTypeRef", "objectId"}, path);
+  factory GreetingIntersectionRef.fromWire(
+    Map<String, Object?> map, [
+    String path = "GreetingIntersectionRef",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "intersectionId",
+      "evidenceId",
+      "sourceRef",
+      "objectTypeRef",
+      "objectId",
+    }, path);
     return GreetingIntersectionRef(
-      intersectionId: _requiredNonBlankString(map["intersectionId"], '$path.intersectionId'),
-      evidenceId: _requiredNonBlankString(map["evidenceId"], '$path.evidenceId'),
+      intersectionId: _requiredNonBlankString(
+        map["intersectionId"],
+        '$path.intersectionId',
+      ),
+      evidenceId: _requiredNonBlankString(
+        map["evidenceId"],
+        '$path.evidenceId',
+      ),
       sourceRef: _requiredNonBlankString(map["sourceRef"], '$path.sourceRef'),
-      objectTypeRef: _requiredNonBlankString(map["objectTypeRef"], '$path.objectTypeRef'),
+      objectTypeRef: _requiredNonBlankString(
+        map["objectTypeRef"],
+        '$path.objectTypeRef',
+      ),
       objectId: _requiredNonBlankString(map["objectId"], '$path.objectId'),
     );
   }
@@ -1676,20 +2232,67 @@ final class GreetingRequestRecord {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  factory GreetingRequestRecord.fromWire(Map<String, Object?> map, [String path = "GreetingRequestRecord"]) {
-    _rejectUnknownFields(map, const <String>{"id", "requesterPersonaId", "targetPersonaId", "requestMessage", "intersectionRef", "intersectionSnapshot", "status", "source", "promotedConversationId", "expireAt", "decisionAt", "createdAt", "updatedAt"}, path);
+  factory GreetingRequestRecord.fromWire(
+    Map<String, Object?> map, [
+    String path = "GreetingRequestRecord",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "requesterPersonaId",
+      "targetPersonaId",
+      "requestMessage",
+      "intersectionRef",
+      "intersectionSnapshot",
+      "status",
+      "source",
+      "promotedConversationId",
+      "expireAt",
+      "decisionAt",
+      "createdAt",
+      "updatedAt",
+    }, path);
     return GreetingRequestRecord(
       id: _requiredNonBlankString(map["id"], '$path.id'),
-      requesterPersonaId: _requiredNonBlankString(map["requesterPersonaId"], '$path.requesterPersonaId'),
-      targetPersonaId: _requiredNonBlankString(map["targetPersonaId"], '$path.targetPersonaId'),
-      requestMessage: map["requestMessage"] == null ? null : _requiredString(map["requestMessage"], '$path.requestMessage'),
-      intersectionRef: map["intersectionRef"] == null ? null : GreetingIntersectionRef.fromWire(_requiredObject(map["intersectionRef"], '$path.intersectionRef'), '$path.intersectionRef'),
-      intersectionSnapshot: map["intersectionSnapshot"] == null ? null : GreetingIntersectionSnapshot.fromWire(_requiredObject(map["intersectionSnapshot"], '$path.intersectionSnapshot'), '$path.intersectionSnapshot'),
+      requesterPersonaId: _requiredNonBlankString(
+        map["requesterPersonaId"],
+        '$path.requesterPersonaId',
+      ),
+      targetPersonaId: _requiredNonBlankString(
+        map["targetPersonaId"],
+        '$path.targetPersonaId',
+      ),
+      requestMessage: map["requestMessage"] == null
+          ? null
+          : _requiredString(map["requestMessage"], '$path.requestMessage'),
+      intersectionRef: map["intersectionRef"] == null
+          ? null
+          : GreetingIntersectionRef.fromWire(
+              _requiredObject(map["intersectionRef"], '$path.intersectionRef'),
+              '$path.intersectionRef',
+            ),
+      intersectionSnapshot: map["intersectionSnapshot"] == null
+          ? null
+          : GreetingIntersectionSnapshot.fromWire(
+              _requiredObject(
+                map["intersectionSnapshot"],
+                '$path.intersectionSnapshot',
+              ),
+              '$path.intersectionSnapshot',
+            ),
       status: GreetingRequestStatus.fromWire(map["status"], '$path.status'),
       source: GreetingRequestSource.fromWire(map["source"], '$path.source'),
-      promotedConversationId: map["promotedConversationId"] == null ? null : _requiredString(map["promotedConversationId"], '$path.promotedConversationId'),
-      expireAt: map["expireAt"] == null ? null : _requiredTimestamp(map["expireAt"], '$path.expireAt'),
-      decisionAt: map["decisionAt"] == null ? null : _requiredTimestamp(map["decisionAt"], '$path.decisionAt'),
+      promotedConversationId: map["promotedConversationId"] == null
+          ? null
+          : _requiredString(
+              map["promotedConversationId"],
+              '$path.promotedConversationId',
+            ),
+      expireAt: map["expireAt"] == null
+          ? null
+          : _requiredTimestamp(map["expireAt"], '$path.expireAt'),
+      decisionAt: map["decisionAt"] == null
+          ? null
+          : _requiredTimestamp(map["decisionAt"], '$path.decisionAt'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
@@ -1701,10 +2304,12 @@ final class GreetingRequestRecord {
     "targetPersonaId": targetPersonaId,
     if (requestMessage != null) "requestMessage": requestMessage!,
     if (intersectionRef != null) "intersectionRef": intersectionRef!.toWire(),
-    if (intersectionSnapshot != null) "intersectionSnapshot": intersectionSnapshot!.toWire(),
+    if (intersectionSnapshot != null)
+      "intersectionSnapshot": intersectionSnapshot!.toWire(),
     "status": status.wireName,
     "source": source.wireName,
-    if (promotedConversationId != null) "promotedConversationId": promotedConversationId!,
+    if (promotedConversationId != null)
+      "promotedConversationId": promotedConversationId!,
     if (expireAt != null) "expireAt": expireAt!.toUtc().toIso8601String(),
     if (decisionAt != null) "decisionAt": decisionAt!.toUtc().toIso8601String(),
     "createdAt": createdAt.toUtc().toIso8601String(),
@@ -1713,19 +2318,28 @@ final class GreetingRequestRecord {
 }
 
 final class GreetingRequestSlice {
-  const GreetingRequestSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const GreetingRequestSlice({required this.items, this.nextCursor});
 
   final List<GreetingRequestRecord> items;
   final String? nextCursor;
 
-  factory GreetingRequestSlice.fromWire(Map<String, Object?> map, [String path = "GreetingRequestSlice"]) {
+  factory GreetingRequestSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "GreetingRequestSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return GreetingRequestSlice(
-      items: List<GreetingRequestRecord>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => GreetingRequestRecord.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<GreetingRequestRecord>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => GreetingRequestRecord.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -1736,35 +2350,59 @@ final class GreetingRequestSlice {
 }
 
 final class ListCredentialsSlice {
-  const ListCredentialsSlice({
-    required this.credentials,
-  });
+  const ListCredentialsSlice({required this.credentials});
 
   final List<CredentialBindingView> credentials;
 
-  factory ListCredentialsSlice.fromWire(Map<String, Object?> map, [String path = "ListCredentialsSlice"]) {
+  factory ListCredentialsSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListCredentialsSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"credentials"}, path);
     return ListCredentialsSlice(
-      credentials: List<CredentialBindingView>.unmodifiable(_requiredList(map["credentials"], '$path.credentials').asMap().entries.map((entry) => CredentialBindingView.fromWire(_requiredObject(entry.value, '$path.credentials' + '[${entry.key}]'), '$path.credentials' + '[${entry.key}]'))),
+      credentials: List<CredentialBindingView>.unmodifiable(
+        _requiredList(
+          map["credentials"],
+          '$path.credentials',
+        ).asMap().entries.map(
+          (entry) => CredentialBindingView.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.credentials' + '[${entry.key}]',
+            ),
+            '$path.credentials' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
-    "credentials": credentials.map((value) => value.toWire()).toList(growable: false),
+    "credentials": credentials
+        .map((value) => value.toWire())
+        .toList(growable: false),
   };
 }
 
 final class ListPersonasResult {
-  const ListPersonasResult({
-    required this.items,
-  });
+  const ListPersonasResult({required this.items});
 
   final List<PersonaManagementItemView> items;
 
-  factory ListPersonasResult.fromWire(Map<String, Object?> map, [String path = "ListPersonasResult"]) {
+  factory ListPersonasResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListPersonasResult",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items"}, path);
     return ListPersonasResult(
-      items: List<PersonaManagementItemView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => PersonaManagementItemView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<PersonaManagementItemView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => PersonaManagementItemView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -1774,22 +2412,19 @@ final class ListPersonasResult {
 }
 
 final class LogoutAck {
-  const LogoutAck({
-    required this.revoked,
-  });
+  const LogoutAck({required this.revoked});
 
   final bool revoked;
 
-  factory LogoutAck.fromWire(Map<String, Object?> map, [String path = "LogoutAck"]) {
+  factory LogoutAck.fromWire(
+    Map<String, Object?> map, [
+    String path = "LogoutAck",
+  ]) {
     _rejectUnknownFields(map, const <String>{"revoked"}, path);
-    return LogoutAck(
-      revoked: _requiredBool(map["revoked"], '$path.revoked'),
-    );
+    return LogoutAck(revoked: _requiredBool(map["revoked"], '$path.revoked'));
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "revoked": revoked,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"revoked": revoked};
 }
 
 final class NotificationSettingsView {
@@ -1811,14 +2446,32 @@ final class NotificationSettingsView {
   final int version;
   final DateTime updatedAt;
 
-  factory NotificationSettingsView.fromWire(Map<String, Object?> map, [String path = "NotificationSettingsView"]) {
-    _rejectUnknownFields(map, const <String>{"userId", "enablePush", "enableMarketing", "quietHoursStart", "quietHoursEnd", "version", "updatedAt"}, path);
+  factory NotificationSettingsView.fromWire(
+    Map<String, Object?> map, [
+    String path = "NotificationSettingsView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "userId",
+      "enablePush",
+      "enableMarketing",
+      "quietHoursStart",
+      "quietHoursEnd",
+      "version",
+      "updatedAt",
+    }, path);
     return NotificationSettingsView(
       userId: _requiredString(map["userId"], '$path.userId'),
       enablePush: _requiredBool(map["enablePush"], '$path.enablePush'),
-      enableMarketing: _requiredBool(map["enableMarketing"], '$path.enableMarketing'),
-      quietHoursStart: map["quietHoursStart"] == null ? null : _requiredTimeOfDay(map["quietHoursStart"], '$path.quietHoursStart'),
-      quietHoursEnd: map["quietHoursEnd"] == null ? null : _requiredTimeOfDay(map["quietHoursEnd"], '$path.quietHoursEnd'),
+      enableMarketing: _requiredBool(
+        map["enableMarketing"],
+        '$path.enableMarketing',
+      ),
+      quietHoursStart: map["quietHoursStart"] == null
+          ? null
+          : _requiredTimeOfDay(map["quietHoursStart"], '$path.quietHoursStart'),
+      quietHoursEnd: map["quietHoursEnd"] == null
+          ? null
+          : _requiredTimeOfDay(map["quietHoursEnd"], '$path.quietHoursEnd'),
       version: _requiredInt(map["version"], '$path.version'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
@@ -1848,13 +2501,24 @@ final class OneTapAccountHint {
   final String maskedPhone;
   final String identityOrigin;
 
-  factory OneTapAccountHint.fromWire(Map<String, Object?> map, [String path = "OneTapAccountHint"]) {
-    _rejectUnknownFields(map, const <String>{"displayName", "avatarUrl", "maskedPhone", "identityOrigin"}, path);
+  factory OneTapAccountHint.fromWire(
+    Map<String, Object?> map, [
+    String path = "OneTapAccountHint",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "displayName",
+      "avatarUrl",
+      "maskedPhone",
+      "identityOrigin",
+    }, path);
     return OneTapAccountHint(
       displayName: _requiredString(map["displayName"], '$path.displayName'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
       maskedPhone: _requiredString(map["maskedPhone"], '$path.maskedPhone'),
-      identityOrigin: _requiredString(map["identityOrigin"], '$path.identityOrigin'),
+      identityOrigin: _requiredString(
+        map["identityOrigin"],
+        '$path.identityOrigin',
+      ),
     );
   }
 
@@ -1883,15 +2547,38 @@ final class OneTapLoginHint {
   final OneTapAccountHint? accountHint;
   final String? providerRequestId;
 
-  factory OneTapLoginHint.fromWire(Map<String, Object?> map, [String path = "OneTapLoginHint"]) {
-    _rejectUnknownFields(map, const <String>{"state", "maskedPhone", "registered", "expiresInSeconds", "accountHint", "providerRequestId"}, path);
+  factory OneTapLoginHint.fromWire(
+    Map<String, Object?> map, [
+    String path = "OneTapLoginHint",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "state",
+      "maskedPhone",
+      "registered",
+      "expiresInSeconds",
+      "accountHint",
+      "providerRequestId",
+    }, path);
     return OneTapLoginHint(
       state: _requiredString(map["state"], '$path.state'),
       maskedPhone: _requiredString(map["maskedPhone"], '$path.maskedPhone'),
       registered: _requiredBool(map["registered"], '$path.registered'),
-      expiresInSeconds: _requiredInt(map["expiresInSeconds"], '$path.expiresInSeconds'),
-      accountHint: map["accountHint"] == null ? null : OneTapAccountHint.fromWire(_requiredObject(map["accountHint"], '$path.accountHint'), '$path.accountHint'),
-      providerRequestId: map["providerRequestId"] == null ? null : _requiredString(map["providerRequestId"], '$path.providerRequestId'),
+      expiresInSeconds: _requiredInt(
+        map["expiresInSeconds"],
+        '$path.expiresInSeconds',
+      ),
+      accountHint: map["accountHint"] == null
+          ? null
+          : OneTapAccountHint.fromWire(
+              _requiredObject(map["accountHint"], '$path.accountHint'),
+              '$path.accountHint',
+            ),
+      providerRequestId: map["providerRequestId"] == null
+          ? null
+          : _requiredString(
+              map["providerRequestId"],
+              '$path.providerRequestId',
+            ),
     );
   }
 
@@ -1922,15 +2609,37 @@ final class OtpChallengeIssueResult {
   final String requestId;
   final String challengeId;
 
-  factory OtpChallengeIssueResult.fromWire(Map<String, Object?> map, [String path = "OtpChallengeIssueResult"]) {
-    _rejectUnknownFields(map, const <String>{"maskedPhone", "expiresInSeconds", "deliveryStatus", "retryAfterSeconds", "requestId", "challengeId"}, path);
+  factory OtpChallengeIssueResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "OtpChallengeIssueResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "maskedPhone",
+      "expiresInSeconds",
+      "deliveryStatus",
+      "retryAfterSeconds",
+      "requestId",
+      "challengeId",
+    }, path);
     return OtpChallengeIssueResult(
       maskedPhone: _requiredString(map["maskedPhone"], '$path.maskedPhone'),
-      expiresInSeconds: _requiredInt(map["expiresInSeconds"], '$path.expiresInSeconds'),
-      deliveryStatus: OtpDeliveryStatus.fromWire(map["deliveryStatus"], '$path.deliveryStatus'),
-      retryAfterSeconds: _requiredInt(map["retryAfterSeconds"], '$path.retryAfterSeconds'),
+      expiresInSeconds: _requiredInt(
+        map["expiresInSeconds"],
+        '$path.expiresInSeconds',
+      ),
+      deliveryStatus: OtpDeliveryStatus.fromWire(
+        map["deliveryStatus"],
+        '$path.deliveryStatus',
+      ),
+      retryAfterSeconds: _requiredInt(
+        map["retryAfterSeconds"],
+        '$path.retryAfterSeconds',
+      ),
       requestId: _requiredNonBlankString(map["requestId"], '$path.requestId'),
-      challengeId: _requiredNonBlankString(map["challengeId"], '$path.challengeId'),
+      challengeId: _requiredNonBlankString(
+        map["challengeId"],
+        '$path.challengeId',
+      ),
     );
   }
 
@@ -1953,11 +2662,23 @@ final class OtpDeliveryReadiness {
   final OtpDeliveryAvailability availability;
   final int retryAfterSeconds;
 
-  factory OtpDeliveryReadiness.fromWire(Map<String, Object?> map, [String path = "OtpDeliveryReadiness"]) {
-    _rejectUnknownFields(map, const <String>{"availability", "retryAfterSeconds"}, path);
+  factory OtpDeliveryReadiness.fromWire(
+    Map<String, Object?> map, [
+    String path = "OtpDeliveryReadiness",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "availability",
+      "retryAfterSeconds",
+    }, path);
     return OtpDeliveryReadiness(
-      availability: OtpDeliveryAvailability.fromWire(map["availability"], '$path.availability'),
-      retryAfterSeconds: _requiredInt(map["retryAfterSeconds"], '$path.retryAfterSeconds'),
+      availability: OtpDeliveryAvailability.fromWire(
+        map["availability"],
+        '$path.availability',
+      ),
+      retryAfterSeconds: _requiredInt(
+        map["retryAfterSeconds"],
+        '$path.retryAfterSeconds',
+      ),
     );
   }
 
@@ -1982,14 +2703,32 @@ final class PersonaLifecycleGuardView {
   final PersonaLifecycleGuardReason reason;
   final bool requiresSuccessor;
 
-  factory PersonaLifecycleGuardView.fromWire(Map<String, Object?> map, [String path = "PersonaLifecycleGuardView"]) {
-    _rejectUnknownFields(map, const <String>{"personaId", "requestedAction", "allowed", "reason", "requiresSuccessor"}, path);
+  factory PersonaLifecycleGuardView.fromWire(
+    Map<String, Object?> map, [
+    String path = "PersonaLifecycleGuardView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "personaId",
+      "requestedAction",
+      "allowed",
+      "reason",
+      "requiresSuccessor",
+    }, path);
     return PersonaLifecycleGuardView(
       personaId: _requiredString(map["personaId"], '$path.personaId'),
-      requestedAction: PersonaLifecycleAction.fromWire(map["requestedAction"], '$path.requestedAction'),
+      requestedAction: PersonaLifecycleAction.fromWire(
+        map["requestedAction"],
+        '$path.requestedAction',
+      ),
       allowed: _requiredBool(map["allowed"], '$path.allowed'),
-      reason: PersonaLifecycleGuardReason.fromWire(map["reason"], '$path.reason'),
-      requiresSuccessor: _requiredBool(map["requiresSuccessor"], '$path.requiresSuccessor'),
+      reason: PersonaLifecycleGuardReason.fromWire(
+        map["reason"],
+        '$path.reason',
+      ),
+      requiresSuccessor: _requiredBool(
+        map["requiresSuccessor"],
+        '$path.requiresSuccessor',
+      ),
     );
   }
 
@@ -2045,28 +2784,94 @@ final class PersonaManagementItemView {
   final DateTime updatedAt;
   final DateTime? lastActivatedAt;
 
-  factory PersonaManagementItemView.fromWire(Map<String, Object?> map, [String path = "PersonaManagementItemView"]) {
-    _rejectUnknownFields(map, const <String>{"personaId", "displayName", "userHandle", "avatarUrl", "backgroundUrl", "bio", "isolationLevel", "isPrimary", "isActive", "status", "retiredAt", "inheritsProfileFromOwner", "overriddenProfileFields", "lastProfileSyncAt", "lastProfileSyncSource", "profileVisibility", "purposeHint", "updatedAt", "lastActivatedAt"}, path);
+  factory PersonaManagementItemView.fromWire(
+    Map<String, Object?> map, [
+    String path = "PersonaManagementItemView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "personaId",
+      "displayName",
+      "userHandle",
+      "avatarUrl",
+      "backgroundUrl",
+      "bio",
+      "isolationLevel",
+      "isPrimary",
+      "isActive",
+      "status",
+      "retiredAt",
+      "inheritsProfileFromOwner",
+      "overriddenProfileFields",
+      "lastProfileSyncAt",
+      "lastProfileSyncSource",
+      "profileVisibility",
+      "purposeHint",
+      "updatedAt",
+      "lastActivatedAt",
+    }, path);
     return PersonaManagementItemView(
       personaId: _requiredString(map["personaId"], '$path.personaId'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      userHandle: map["userHandle"] == null ? null : _requiredString(map["userHandle"], '$path.userHandle'),
-      avatarUrl: map["avatarUrl"] == null ? null : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      backgroundUrl: map["backgroundUrl"] == null ? null : _requiredString(map["backgroundUrl"], '$path.backgroundUrl'),
+      userHandle: map["userHandle"] == null
+          ? null
+          : _requiredString(map["userHandle"], '$path.userHandle'),
+      avatarUrl: map["avatarUrl"] == null
+          ? null
+          : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      backgroundUrl: map["backgroundUrl"] == null
+          ? null
+          : _requiredString(map["backgroundUrl"], '$path.backgroundUrl'),
       bio: map["bio"] == null ? null : _requiredString(map["bio"], '$path.bio'),
-      isolationLevel: IsolationLevel.fromWire(map["isolationLevel"], '$path.isolationLevel'),
+      isolationLevel: IsolationLevel.fromWire(
+        map["isolationLevel"],
+        '$path.isolationLevel',
+      ),
       isPrimary: _requiredBool(map["isPrimary"], '$path.isPrimary'),
       isActive: _requiredBool(map["isActive"], '$path.isActive'),
       status: PersonaStatus.fromWire(map["status"], '$path.status'),
-      retiredAt: map["retiredAt"] == null ? null : _requiredTimestamp(map["retiredAt"], '$path.retiredAt'),
-      inheritsProfileFromOwner: _requiredBool(map["inheritsProfileFromOwner"], '$path.inheritsProfileFromOwner'),
-      overriddenProfileFields: map["overriddenProfileFields"] == null ? null : List<String>.unmodifiable(_requiredList(map["overriddenProfileFields"], '$path.overriddenProfileFields').asMap().entries.map((entry) => _requiredString(entry.value, '$path.overriddenProfileFields' + '[${entry.key}]'))),
-      lastProfileSyncAt: map["lastProfileSyncAt"] == null ? null : _requiredTimestamp(map["lastProfileSyncAt"], '$path.lastProfileSyncAt'),
-      lastProfileSyncSource: map["lastProfileSyncSource"] == null ? null : _requiredString(map["lastProfileSyncSource"], '$path.lastProfileSyncSource'),
-      profileVisibility: ProfileVisibility.fromWire(map["profileVisibility"], '$path.profileVisibility'),
-      purposeHint: map["purposeHint"] == null ? null : _requiredString(map["purposeHint"], '$path.purposeHint'),
+      retiredAt: map["retiredAt"] == null
+          ? null
+          : _requiredTimestamp(map["retiredAt"], '$path.retiredAt'),
+      inheritsProfileFromOwner: _requiredBool(
+        map["inheritsProfileFromOwner"],
+        '$path.inheritsProfileFromOwner',
+      ),
+      overriddenProfileFields: map["overriddenProfileFields"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["overriddenProfileFields"],
+                '$path.overriddenProfileFields',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.overriddenProfileFields' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      lastProfileSyncAt: map["lastProfileSyncAt"] == null
+          ? null
+          : _requiredTimestamp(
+              map["lastProfileSyncAt"],
+              '$path.lastProfileSyncAt',
+            ),
+      lastProfileSyncSource: map["lastProfileSyncSource"] == null
+          ? null
+          : _requiredString(
+              map["lastProfileSyncSource"],
+              '$path.lastProfileSyncSource',
+            ),
+      profileVisibility: ProfileVisibility.fromWire(
+        map["profileVisibility"],
+        '$path.profileVisibility',
+      ),
+      purposeHint: map["purposeHint"] == null
+          ? null
+          : _requiredString(map["purposeHint"], '$path.purposeHint'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
-      lastActivatedAt: map["lastActivatedAt"] == null ? null : _requiredTimestamp(map["lastActivatedAt"], '$path.lastActivatedAt'),
+      lastActivatedAt: map["lastActivatedAt"] == null
+          ? null
+          : _requiredTimestamp(map["lastActivatedAt"], '$path.lastActivatedAt'),
     );
   }
 
@@ -2083,13 +2888,19 @@ final class PersonaManagementItemView {
     "status": status.wireName,
     if (retiredAt != null) "retiredAt": retiredAt!.toUtc().toIso8601String(),
     "inheritsProfileFromOwner": inheritsProfileFromOwner,
-    if (overriddenProfileFields != null) "overriddenProfileFields": overriddenProfileFields!.map((value) => value).toList(growable: false),
-    if (lastProfileSyncAt != null) "lastProfileSyncAt": lastProfileSyncAt!.toUtc().toIso8601String(),
-    if (lastProfileSyncSource != null) "lastProfileSyncSource": lastProfileSyncSource!,
+    if (overriddenProfileFields != null)
+      "overriddenProfileFields": overriddenProfileFields!
+          .map((value) => value)
+          .toList(growable: false),
+    if (lastProfileSyncAt != null)
+      "lastProfileSyncAt": lastProfileSyncAt!.toUtc().toIso8601String(),
+    if (lastProfileSyncSource != null)
+      "lastProfileSyncSource": lastProfileSyncSource!,
     "profileVisibility": profileVisibility.wireName,
     if (purposeHint != null) "purposeHint": purposeHint!,
     "updatedAt": updatedAt.toUtc().toIso8601String(),
-    if (lastActivatedAt != null) "lastActivatedAt": lastActivatedAt!.toUtc().toIso8601String(),
+    if (lastActivatedAt != null)
+      "lastActivatedAt": lastActivatedAt!.toUtc().toIso8601String(),
   };
 }
 
@@ -2110,15 +2921,34 @@ final class PersonaManagementQuotaView {
   final String activePersonaId;
   final String primaryPersonaId;
 
-  factory PersonaManagementQuotaView.fromWire(Map<String, Object?> map, [String path = "PersonaManagementQuotaView"]) {
-    _rejectUnknownFields(map, const <String>{"ownerUserId", "totalCount", "quotaLimit", "remainingCount", "activePersonaId", "primaryPersonaId"}, path);
+  factory PersonaManagementQuotaView.fromWire(
+    Map<String, Object?> map, [
+    String path = "PersonaManagementQuotaView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "ownerUserId",
+      "totalCount",
+      "quotaLimit",
+      "remainingCount",
+      "activePersonaId",
+      "primaryPersonaId",
+    }, path);
     return PersonaManagementQuotaView(
       ownerUserId: _requiredString(map["ownerUserId"], '$path.ownerUserId'),
       totalCount: _requiredInt(map["totalCount"], '$path.totalCount'),
       quotaLimit: _requiredInt(map["quotaLimit"], '$path.quotaLimit'),
-      remainingCount: _requiredInt(map["remainingCount"], '$path.remainingCount'),
-      activePersonaId: _requiredString(map["activePersonaId"], '$path.activePersonaId'),
-      primaryPersonaId: _requiredString(map["primaryPersonaId"], '$path.primaryPersonaId'),
+      remainingCount: _requiredInt(
+        map["remainingCount"],
+        '$path.remainingCount',
+      ),
+      activePersonaId: _requiredString(
+        map["activePersonaId"],
+        '$path.activePersonaId',
+      ),
+      primaryPersonaId: _requiredString(
+        map["primaryPersonaId"],
+        '$path.primaryPersonaId',
+      ),
     );
   }
 
@@ -2143,12 +2973,32 @@ final class PersonaManagementSummaryView {
   final PersonaManagementQuotaView quota;
   final ActivePersonaContextView activeContext;
 
-  factory PersonaManagementSummaryView.fromWire(Map<String, Object?> map, [String path = "PersonaManagementSummaryView"]) {
-    _rejectUnknownFields(map, const <String>{"items", "quota", "activeContext"}, path);
+  factory PersonaManagementSummaryView.fromWire(
+    Map<String, Object?> map, [
+    String path = "PersonaManagementSummaryView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "items",
+      "quota",
+      "activeContext",
+    }, path);
     return PersonaManagementSummaryView(
-      items: List<PersonaManagementItemView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => PersonaManagementItemView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      quota: PersonaManagementQuotaView.fromWire(_requiredObject(map["quota"], '$path.quota'), '$path.quota'),
-      activeContext: ActivePersonaContextView.fromWire(_requiredObject(map["activeContext"], '$path.activeContext'), '$path.activeContext'),
+      items: List<PersonaManagementItemView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => PersonaManagementItemView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      quota: PersonaManagementQuotaView.fromWire(
+        _requiredObject(map["quota"], '$path.quota'),
+        '$path.quota',
+      ),
+      activeContext: ActivePersonaContextView.fromWire(
+        _requiredObject(map["activeContext"], '$path.activeContext'),
+        '$path.activeContext',
+      ),
     );
   }
 
@@ -2170,12 +3020,29 @@ final class PersonaProfileSyncResult {
   final int appliedCount;
   final List<String> fieldsMask;
 
-  factory PersonaProfileSyncResult.fromWire(Map<String, Object?> map, [String path = "PersonaProfileSyncResult"]) {
-    _rejectUnknownFields(map, const <String>{"status", "appliedCount", "fieldsMask"}, path);
+  factory PersonaProfileSyncResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "PersonaProfileSyncResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "status",
+      "appliedCount",
+      "fieldsMask",
+    }, path);
     return PersonaProfileSyncResult(
       status: _requiredString(map["status"], '$path.status'),
       appliedCount: _requiredInt(map["appliedCount"], '$path.appliedCount'),
-      fieldsMask: List<String>.unmodifiable(_requiredList(map["fieldsMask"], '$path.fieldsMask').asMap().entries.map((entry) => _requiredString(entry.value, '$path.fieldsMask' + '[${entry.key}]'))),
+      fieldsMask: List<String>.unmodifiable(
+        _requiredList(
+          map["fieldsMask"],
+          '$path.fieldsMask',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.fieldsMask' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -2194,6 +3061,8 @@ final class PersonaProfileView {
     required this.displayName,
     required this.nicknameCustomized,
     this.avatarUrl,
+    this.avatarAssetId,
+    this.avatarAccessMode,
     this.backgroundUrl,
     this.bio,
     this.headline,
@@ -2218,6 +3087,8 @@ final class PersonaProfileView {
   final String displayName;
   final bool nicknameCustomized;
   final String? avatarUrl;
+  final String? avatarAssetId;
+  final MediaDeliveryAccessMode? avatarAccessMode;
   final String? backgroundUrl;
   final String? bio;
   final String? headline;
@@ -2235,30 +3106,129 @@ final class PersonaProfileView {
   final List<String>? overriddenFields;
   final DateTime updatedAt;
 
-  factory PersonaProfileView.fromWire(Map<String, Object?> map, [String path = "PersonaProfileView"]) {
-    _rejectUnknownFields(map, const <String>{"personaId", "subjectType", "userHandle", "displayName", "nicknameCustomized", "avatarUrl", "backgroundUrl", "bio", "headline", "expertiseClaims", "disclosure", "identityTags", "followerCount", "followingCount", "postCount", "circleCount", "likeCount", "profileVisibility", "isolationLevel", "inheritsFromOwner", "overriddenFields", "updatedAt"}, path);
+  factory PersonaProfileView.fromWire(
+    Map<String, Object?> map, [
+    String path = "PersonaProfileView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "personaId",
+      "subjectType",
+      "userHandle",
+      "displayName",
+      "nicknameCustomized",
+      "avatarUrl",
+      "avatarAssetId",
+      "avatarAccessMode",
+      "backgroundUrl",
+      "bio",
+      "headline",
+      "expertiseClaims",
+      "disclosure",
+      "identityTags",
+      "followerCount",
+      "followingCount",
+      "postCount",
+      "circleCount",
+      "likeCount",
+      "profileVisibility",
+      "isolationLevel",
+      "inheritsFromOwner",
+      "overriddenFields",
+      "updatedAt",
+    }, path);
     return PersonaProfileView(
       personaId: _requiredString(map["personaId"], '$path.personaId'),
-      subjectType: ProfileOwnerKind.fromWire(map["subjectType"], '$path.subjectType'),
+      subjectType: ProfileOwnerKind.fromWire(
+        map["subjectType"],
+        '$path.subjectType',
+      ),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      nicknameCustomized: _requiredBool(map["nicknameCustomized"], '$path.nicknameCustomized'),
-      avatarUrl: map["avatarUrl"] == null ? null : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      backgroundUrl: map["backgroundUrl"] == null ? null : _requiredString(map["backgroundUrl"], '$path.backgroundUrl'),
+      nicknameCustomized: _requiredBool(
+        map["nicknameCustomized"],
+        '$path.nicknameCustomized',
+      ),
+      avatarUrl: map["avatarUrl"] == null
+          ? null
+          : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      avatarAssetId: map["avatarAssetId"] == null
+          ? null
+          : _requiredString(map["avatarAssetId"], '$path.avatarAssetId'),
+      avatarAccessMode: map["avatarAccessMode"] == null
+          ? null
+          : MediaDeliveryAccessMode.fromWire(
+              map["avatarAccessMode"],
+              '$path.avatarAccessMode',
+            ),
+      backgroundUrl: map["backgroundUrl"] == null
+          ? null
+          : _requiredString(map["backgroundUrl"], '$path.backgroundUrl'),
       bio: map["bio"] == null ? null : _requiredString(map["bio"], '$path.bio'),
-      headline: map["headline"] == null ? null : _requiredString(map["headline"], '$path.headline'),
-      expertiseClaims: map["expertiseClaims"] == null ? null : List<String>.unmodifiable(_requiredList(map["expertiseClaims"], '$path.expertiseClaims').asMap().entries.map((entry) => _requiredString(entry.value, '$path.expertiseClaims' + '[${entry.key}]'))),
-      disclosure: map["disclosure"] == null ? null : _requiredString(map["disclosure"], '$path.disclosure'),
-      identityTags: map["identityTags"] == null ? null : List<String>.unmodifiable(_requiredList(map["identityTags"], '$path.identityTags').asMap().entries.map((entry) => _requiredString(entry.value, '$path.identityTags' + '[${entry.key}]'))),
+      headline: map["headline"] == null
+          ? null
+          : _requiredString(map["headline"], '$path.headline'),
+      expertiseClaims: map["expertiseClaims"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["expertiseClaims"],
+                '$path.expertiseClaims',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.expertiseClaims' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      disclosure: map["disclosure"] == null
+          ? null
+          : _requiredString(map["disclosure"], '$path.disclosure'),
+      identityTags: map["identityTags"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["identityTags"],
+                '$path.identityTags',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.identityTags' + '[${entry.key}]',
+                ),
+              ),
+            ),
       followerCount: _requiredInt(map["followerCount"], '$path.followerCount'),
-      followingCount: _requiredInt(map["followingCount"], '$path.followingCount'),
+      followingCount: _requiredInt(
+        map["followingCount"],
+        '$path.followingCount',
+      ),
       postCount: _requiredInt(map["postCount"], '$path.postCount'),
       circleCount: _requiredInt(map["circleCount"], '$path.circleCount'),
       likeCount: _requiredInt(map["likeCount"], '$path.likeCount'),
-      profileVisibility: ProfileVisibility.fromWire(map["profileVisibility"], '$path.profileVisibility'),
-      isolationLevel: IsolationLevel.fromWire(map["isolationLevel"], '$path.isolationLevel'),
-      inheritsFromOwner: _requiredBool(map["inheritsFromOwner"], '$path.inheritsFromOwner'),
-      overriddenFields: map["overriddenFields"] == null ? null : List<String>.unmodifiable(_requiredList(map["overriddenFields"], '$path.overriddenFields').asMap().entries.map((entry) => _requiredString(entry.value, '$path.overriddenFields' + '[${entry.key}]'))),
+      profileVisibility: ProfileVisibility.fromWire(
+        map["profileVisibility"],
+        '$path.profileVisibility',
+      ),
+      isolationLevel: IsolationLevel.fromWire(
+        map["isolationLevel"],
+        '$path.isolationLevel',
+      ),
+      inheritsFromOwner: _requiredBool(
+        map["inheritsFromOwner"],
+        '$path.inheritsFromOwner',
+      ),
+      overriddenFields: map["overriddenFields"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["overriddenFields"],
+                '$path.overriddenFields',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.overriddenFields' + '[${entry.key}]',
+                ),
+              ),
+            ),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
   }
@@ -2270,12 +3240,21 @@ final class PersonaProfileView {
     "displayName": displayName,
     "nicknameCustomized": nicknameCustomized,
     if (avatarUrl != null) "avatarUrl": avatarUrl!,
+    if (avatarAssetId != null) "avatarAssetId": avatarAssetId!,
+    if (avatarAccessMode != null)
+      "avatarAccessMode": avatarAccessMode!.wireName,
     if (backgroundUrl != null) "backgroundUrl": backgroundUrl!,
     if (bio != null) "bio": bio!,
     if (headline != null) "headline": headline!,
-    if (expertiseClaims != null) "expertiseClaims": expertiseClaims!.map((value) => value).toList(growable: false),
+    if (expertiseClaims != null)
+      "expertiseClaims": expertiseClaims!
+          .map((value) => value)
+          .toList(growable: false),
     if (disclosure != null) "disclosure": disclosure!,
-    if (identityTags != null) "identityTags": identityTags!.map((value) => value).toList(growable: false),
+    if (identityTags != null)
+      "identityTags": identityTags!
+          .map((value) => value)
+          .toList(growable: false),
     "followerCount": followerCount,
     "followingCount": followingCount,
     "postCount": postCount,
@@ -2284,7 +3263,10 @@ final class PersonaProfileView {
     "profileVisibility": profileVisibility.wireName,
     "isolationLevel": isolationLevel.wireName,
     "inheritsFromOwner": inheritsFromOwner,
-    if (overriddenFields != null) "overriddenFields": overriddenFields!.map((value) => value).toList(growable: false),
+    if (overriddenFields != null)
+      "overriddenFields": overriddenFields!
+          .map((value) => value)
+          .toList(growable: false),
     "updatedAt": updatedAt.toUtc().toIso8601String(),
   };
 }
@@ -2312,16 +3294,55 @@ final class PrivacySettingsView {
   final int version;
   final DateTime updatedAt;
 
-  factory PrivacySettingsView.fromWire(Map<String, Object?> map, [String path = "PrivacySettingsView"]) {
-    _rejectUnknownFields(map, const <String>{"userId", "allowStrangerMsg", "profileVisibility", "contentLanguage", "feedPreference", "assistantEnabled", "blockedKeywords", "version", "updatedAt"}, path);
+  factory PrivacySettingsView.fromWire(
+    Map<String, Object?> map, [
+    String path = "PrivacySettingsView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "userId",
+      "allowStrangerMsg",
+      "profileVisibility",
+      "contentLanguage",
+      "feedPreference",
+      "assistantEnabled",
+      "blockedKeywords",
+      "version",
+      "updatedAt",
+    }, path);
     return PrivacySettingsView(
       userId: _requiredString(map["userId"], '$path.userId'),
-      allowStrangerMsg: _requiredBool(map["allowStrangerMsg"], '$path.allowStrangerMsg'),
-      profileVisibility: ProfileVisibility.fromWire(map["profileVisibility"], '$path.profileVisibility'),
-      contentLanguage: map["contentLanguage"] == null ? null : _requiredString(map["contentLanguage"], '$path.contentLanguage'),
-      feedPreference: map["feedPreference"] == null ? null : FeedPreference.fromWire(map["feedPreference"], '$path.feedPreference'),
-      assistantEnabled: _requiredBool(map["assistantEnabled"], '$path.assistantEnabled'),
-      blockedKeywords: List<String>.unmodifiable(_requiredList(map["blockedKeywords"], '$path.blockedKeywords').asMap().entries.map((entry) => _requiredString(entry.value, '$path.blockedKeywords' + '[${entry.key}]'))),
+      allowStrangerMsg: _requiredBool(
+        map["allowStrangerMsg"],
+        '$path.allowStrangerMsg',
+      ),
+      profileVisibility: ProfileVisibility.fromWire(
+        map["profileVisibility"],
+        '$path.profileVisibility',
+      ),
+      contentLanguage: map["contentLanguage"] == null
+          ? null
+          : _requiredString(map["contentLanguage"], '$path.contentLanguage'),
+      feedPreference: map["feedPreference"] == null
+          ? null
+          : FeedPreference.fromWire(
+              map["feedPreference"],
+              '$path.feedPreference',
+            ),
+      assistantEnabled: _requiredBool(
+        map["assistantEnabled"],
+        '$path.assistantEnabled',
+      ),
+      blockedKeywords: List<String>.unmodifiable(
+        _requiredList(
+          map["blockedKeywords"],
+          '$path.blockedKeywords',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.blockedKeywords' + '[${entry.key}]',
+          ),
+        ),
+      ),
       version: _requiredInt(map["version"], '$path.version'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
@@ -2334,7 +3355,9 @@ final class PrivacySettingsView {
     if (contentLanguage != null) "contentLanguage": contentLanguage!,
     if (feedPreference != null) "feedPreference": feedPreference!.wireName,
     "assistantEnabled": assistantEnabled,
-    "blockedKeywords": blockedKeywords.map((value) => value).toList(growable: false),
+    "blockedKeywords": blockedKeywords
+        .map((value) => value)
+        .toList(growable: false),
     "version": version,
     "updatedAt": updatedAt.toUtc().toIso8601String(),
   };
@@ -2351,10 +3374,20 @@ final class ProfileCredentialSummaryWire {
   final String displayLabel;
   final bool isBound;
 
-  factory ProfileCredentialSummaryWire.fromWire(Map<String, Object?> map, [String path = "ProfileCredentialSummaryWire"]) {
-    _rejectUnknownFields(map, const <String>{"credentialType", "displayLabel", "isBound"}, path);
+  factory ProfileCredentialSummaryWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "ProfileCredentialSummaryWire",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "credentialType",
+      "displayLabel",
+      "isBound",
+    }, path);
     return ProfileCredentialSummaryWire(
-      credentialType: CredentialType.fromWire(map["credentialType"], '$path.credentialType'),
+      credentialType: CredentialType.fromWire(
+        map["credentialType"],
+        '$path.credentialType',
+      ),
       displayLabel: _requiredString(map["displayLabel"], '$path.displayLabel'),
       isBound: _requiredBool(map["isBound"], '$path.isBound'),
     );
@@ -2414,29 +3447,109 @@ final class ProfileEditSnapshotWire {
   final ProfileQrCardWire? qrCard;
   final DateTime updatedAt;
 
-  factory ProfileEditSnapshotWire.fromWire(Map<String, Object?> map, [String path = "ProfileEditSnapshotWire"]) {
-    _rejectUnknownFields(map, const <String>{"ownerUserId", "personaId", "avatarUrl", "avatarAssetId", "avatarVersion", "backgroundUrl", "backgroundAssetId", "nickname", "displayName", "gender", "birthDate", "region", "regionTagRef", "userHandle", "bio", "identityTags", "occupationTagRef", "interestTagRefs", "phoneCredential", "qrCard", "updatedAt"}, path);
+  factory ProfileEditSnapshotWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "ProfileEditSnapshotWire",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "ownerUserId",
+      "personaId",
+      "avatarUrl",
+      "avatarAssetId",
+      "avatarVersion",
+      "backgroundUrl",
+      "backgroundAssetId",
+      "nickname",
+      "displayName",
+      "gender",
+      "birthDate",
+      "region",
+      "regionTagRef",
+      "userHandle",
+      "bio",
+      "identityTags",
+      "occupationTagRef",
+      "interestTagRefs",
+      "phoneCredential",
+      "qrCard",
+      "updatedAt",
+    }, path);
     return ProfileEditSnapshotWire(
       ownerUserId: _requiredString(map["ownerUserId"], '$path.ownerUserId'),
       personaId: _requiredString(map["personaId"], '$path.personaId'),
-      avatarUrl: map["avatarUrl"] == null ? null : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      avatarAssetId: map["avatarAssetId"] == null ? null : _requiredString(map["avatarAssetId"], '$path.avatarAssetId'),
+      avatarUrl: map["avatarUrl"] == null
+          ? null
+          : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      avatarAssetId: map["avatarAssetId"] == null
+          ? null
+          : _requiredString(map["avatarAssetId"], '$path.avatarAssetId'),
       avatarVersion: _requiredInt(map["avatarVersion"], '$path.avatarVersion'),
-      backgroundUrl: map["backgroundUrl"] == null ? null : _requiredString(map["backgroundUrl"], '$path.backgroundUrl'),
-      backgroundAssetId: map["backgroundAssetId"] == null ? null : _requiredString(map["backgroundAssetId"], '$path.backgroundAssetId'),
+      backgroundUrl: map["backgroundUrl"] == null
+          ? null
+          : _requiredString(map["backgroundUrl"], '$path.backgroundUrl'),
+      backgroundAssetId: map["backgroundAssetId"] == null
+          ? null
+          : _requiredString(
+              map["backgroundAssetId"],
+              '$path.backgroundAssetId',
+            ),
       nickname: _requiredString(map["nickname"], '$path.nickname'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      gender: map["gender"] == null ? null : Gender.fromWire(map["gender"], '$path.gender'),
-      birthDate: map["birthDate"] == null ? null : _requiredTimestamp(map["birthDate"], '$path.birthDate'),
-      region: map["region"] == null ? null : _requiredString(map["region"], '$path.region'),
-      regionTagRef: map["regionTagRef"] == null ? null : _requiredString(map["regionTagRef"], '$path.regionTagRef'),
+      gender: map["gender"] == null
+          ? null
+          : Gender.fromWire(map["gender"], '$path.gender'),
+      birthDate: map["birthDate"] == null
+          ? null
+          : _requiredTimestamp(map["birthDate"], '$path.birthDate'),
+      region: map["region"] == null
+          ? null
+          : _requiredString(map["region"], '$path.region'),
+      regionTagRef: map["regionTagRef"] == null
+          ? null
+          : _requiredString(map["regionTagRef"], '$path.regionTagRef'),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
       bio: map["bio"] == null ? null : _requiredString(map["bio"], '$path.bio'),
-      identityTags: map["identityTags"] == null ? null : List<String>.unmodifiable(_requiredList(map["identityTags"], '$path.identityTags').asMap().entries.map((entry) => _requiredString(entry.value, '$path.identityTags' + '[${entry.key}]'))),
-      occupationTagRef: map["occupationTagRef"] == null ? null : _requiredString(map["occupationTagRef"], '$path.occupationTagRef'),
-      interestTagRefs: map["interestTagRefs"] == null ? null : List<String>.unmodifiable(_requiredList(map["interestTagRefs"], '$path.interestTagRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.interestTagRefs' + '[${entry.key}]'))),
-      phoneCredential: map["phoneCredential"] == null ? null : ProfileCredentialSummaryWire.fromWire(_requiredObject(map["phoneCredential"], '$path.phoneCredential'), '$path.phoneCredential'),
-      qrCard: map["qrCard"] == null ? null : ProfileQrCardWire.fromWire(_requiredObject(map["qrCard"], '$path.qrCard'), '$path.qrCard'),
+      identityTags: map["identityTags"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["identityTags"],
+                '$path.identityTags',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.identityTags' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      occupationTagRef: map["occupationTagRef"] == null
+          ? null
+          : _requiredString(map["occupationTagRef"], '$path.occupationTagRef'),
+      interestTagRefs: map["interestTagRefs"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["interestTagRefs"],
+                '$path.interestTagRefs',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.interestTagRefs' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      phoneCredential: map["phoneCredential"] == null
+          ? null
+          : ProfileCredentialSummaryWire.fromWire(
+              _requiredObject(map["phoneCredential"], '$path.phoneCredential'),
+              '$path.phoneCredential',
+            ),
+      qrCard: map["qrCard"] == null
+          ? null
+          : ProfileQrCardWire.fromWire(
+              _requiredObject(map["qrCard"], '$path.qrCard'),
+              '$path.qrCard',
+            ),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
   }
@@ -2457,9 +3570,15 @@ final class ProfileEditSnapshotWire {
     if (regionTagRef != null) "regionTagRef": regionTagRef!,
     "userHandle": userHandle,
     if (bio != null) "bio": bio!,
-    if (identityTags != null) "identityTags": identityTags!.map((value) => value).toList(growable: false),
+    if (identityTags != null)
+      "identityTags": identityTags!
+          .map((value) => value)
+          .toList(growable: false),
     if (occupationTagRef != null) "occupationTagRef": occupationTagRef!,
-    if (interestTagRefs != null) "interestTagRefs": interestTagRefs!.map((value) => value).toList(growable: false),
+    if (interestTagRefs != null)
+      "interestTagRefs": interestTagRefs!
+          .map((value) => value)
+          .toList(growable: false),
     if (phoneCredential != null) "phoneCredential": phoneCredential!.toWire(),
     if (qrCard != null) "qrCard": qrCard!.toWire(),
     "updatedAt": updatedAt.toUtc().toIso8601String(),
@@ -2487,17 +3606,40 @@ final class ProfileQrCardWire {
   final String? shareText;
   final DateTime? expiresAt;
 
-  factory ProfileQrCardWire.fromWire(Map<String, Object?> map, [String path = "ProfileQrCardWire"]) {
-    _rejectUnknownFields(map, const <String>{"publicProfileUrl", "qrPayload", "qrTokenId", "avatarUrl", "displayName", "region", "shareText", "expiresAt"}, path);
+  factory ProfileQrCardWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "ProfileQrCardWire",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "publicProfileUrl",
+      "qrPayload",
+      "qrTokenId",
+      "avatarUrl",
+      "displayName",
+      "region",
+      "shareText",
+      "expiresAt",
+    }, path);
     return ProfileQrCardWire(
-      publicProfileUrl: _requiredString(map["publicProfileUrl"], '$path.publicProfileUrl'),
+      publicProfileUrl: _requiredString(
+        map["publicProfileUrl"],
+        '$path.publicProfileUrl',
+      ),
       qrPayload: _requiredString(map["qrPayload"], '$path.qrPayload'),
       qrTokenId: _requiredString(map["qrTokenId"], '$path.qrTokenId'),
-      avatarUrl: map["avatarUrl"] == null ? null : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      avatarUrl: map["avatarUrl"] == null
+          ? null
+          : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      region: map["region"] == null ? null : _requiredString(map["region"], '$path.region'),
-      shareText: map["shareText"] == null ? null : _requiredString(map["shareText"], '$path.shareText'),
-      expiresAt: map["expiresAt"] == null ? null : _requiredTimestamp(map["expiresAt"], '$path.expiresAt'),
+      region: map["region"] == null
+          ? null
+          : _requiredString(map["region"], '$path.region'),
+      shareText: map["shareText"] == null
+          ? null
+          : _requiredString(map["shareText"], '$path.shareText'),
+      expiresAt: map["expiresAt"] == null
+          ? null
+          : _requiredTimestamp(map["expiresAt"], '$path.expiresAt'),
     );
   }
 
@@ -2526,12 +3668,23 @@ final class ProfileQrResolveWire {
   final String publicProfileUrl;
   final String scanStatus;
 
-  factory ProfileQrResolveWire.fromWire(Map<String, Object?> map, [String path = "ProfileQrResolveWire"]) {
-    _rejectUnknownFields(map, const <String>{"personaId", "userHandle", "publicProfileUrl", "scanStatus"}, path);
+  factory ProfileQrResolveWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "ProfileQrResolveWire",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "personaId",
+      "userHandle",
+      "publicProfileUrl",
+      "scanStatus",
+    }, path);
     return ProfileQrResolveWire(
       personaId: _requiredString(map["personaId"], '$path.personaId'),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
-      publicProfileUrl: _requiredString(map["publicProfileUrl"], '$path.publicProfileUrl'),
+      publicProfileUrl: _requiredString(
+        map["publicProfileUrl"],
+        '$path.publicProfileUrl',
+      ),
       scanStatus: _requiredString(map["scanStatus"], '$path.scanStatus'),
     );
   }
@@ -2557,8 +3710,16 @@ final class ProfileUpdateProposalCommandResult {
   final ProposalStatus status;
   final bool replayed;
 
-  factory ProfileUpdateProposalCommandResult.fromWire(Map<String, Object?> map, [String path = "ProfileUpdateProposalCommandResult"]) {
-    _rejectUnknownFields(map, const <String>{"proposalId", "version", "status", "replayed"}, path);
+  factory ProfileUpdateProposalCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "ProfileUpdateProposalCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "proposalId",
+      "version",
+      "status",
+      "replayed",
+    }, path);
     return ProfileUpdateProposalCommandResult(
       proposalId: _requiredString(map["proposalId"], '$path.proposalId'),
       version: _requiredInt(map["version"], '$path.version'),
@@ -2576,19 +3737,28 @@ final class ProfileUpdateProposalCommandResult {
 }
 
 final class ProfileUpdateProposalSlice {
-  const ProfileUpdateProposalSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const ProfileUpdateProposalSlice({required this.items, this.nextCursor});
 
   final List<ProfileUpdateProposalView> items;
   final String? nextCursor;
 
-  factory ProfileUpdateProposalSlice.fromWire(Map<String, Object?> map, [String path = "ProfileUpdateProposalSlice"]) {
+  factory ProfileUpdateProposalSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "ProfileUpdateProposalSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return ProfileUpdateProposalSlice(
-      items: List<ProfileUpdateProposalView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ProfileUpdateProposalView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<ProfileUpdateProposalView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => ProfileUpdateProposalView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -2649,32 +3819,110 @@ final class ProfileUpdateProposalView {
   final DateTime updatedAt;
   final DateTime? resolvedAt;
 
-  factory ProfileUpdateProposalView.fromWire(Map<String, Object?> map, [String path = "ProfileUpdateProposalView"]) {
-    _rejectUnknownFields(map, const <String>{"id", "personaId", "source", "reason", "evidenceRefs", "impactScope", "createdBy", "status", "displayName", "bio", "avatarMediaAssetId", "backgroundMediaAssetId", "isPrivate", "isolationLevel", "purposeHint", "reviewedBy", "applyAuditId", "rollbackDeadline", "rollbackAuditId", "version", "createdAt", "updatedAt", "resolvedAt"}, path);
+  factory ProfileUpdateProposalView.fromWire(
+    Map<String, Object?> map, [
+    String path = "ProfileUpdateProposalView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "personaId",
+      "source",
+      "reason",
+      "evidenceRefs",
+      "impactScope",
+      "createdBy",
+      "status",
+      "displayName",
+      "bio",
+      "avatarMediaAssetId",
+      "backgroundMediaAssetId",
+      "isPrivate",
+      "isolationLevel",
+      "purposeHint",
+      "reviewedBy",
+      "applyAuditId",
+      "rollbackDeadline",
+      "rollbackAuditId",
+      "version",
+      "createdAt",
+      "updatedAt",
+      "resolvedAt",
+    }, path);
     return ProfileUpdateProposalView(
       id: _requiredString(map["id"], '$path.id'),
       personaId: _requiredString(map["personaId"], '$path.personaId'),
       source: ProposalSource.fromWire(map["source"], '$path.source'),
       reason: _requiredString(map["reason"], '$path.reason'),
-      evidenceRefs: List<String>.unmodifiable(_requiredList(map["evidenceRefs"], '$path.evidenceRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.evidenceRefs' + '[${entry.key}]'))),
-      impactScope: List<String>.unmodifiable(_requiredList(map["impactScope"], '$path.impactScope').asMap().entries.map((entry) => _requiredString(entry.value, '$path.impactScope' + '[${entry.key}]'))),
+      evidenceRefs: List<String>.unmodifiable(
+        _requiredList(
+          map["evidenceRefs"],
+          '$path.evidenceRefs',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.evidenceRefs' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      impactScope: List<String>.unmodifiable(
+        _requiredList(
+          map["impactScope"],
+          '$path.impactScope',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.impactScope' + '[${entry.key}]',
+          ),
+        ),
+      ),
       createdBy: _requiredString(map["createdBy"], '$path.createdBy'),
       status: ProposalStatus.fromWire(map["status"], '$path.status'),
-      displayName: map["displayName"] == null ? null : _requiredString(map["displayName"], '$path.displayName'),
+      displayName: map["displayName"] == null
+          ? null
+          : _requiredString(map["displayName"], '$path.displayName'),
       bio: map["bio"] == null ? null : _requiredString(map["bio"], '$path.bio'),
-      avatarMediaAssetId: map["avatarMediaAssetId"] == null ? null : _requiredString(map["avatarMediaAssetId"], '$path.avatarMediaAssetId'),
-      backgroundMediaAssetId: map["backgroundMediaAssetId"] == null ? null : _requiredString(map["backgroundMediaAssetId"], '$path.backgroundMediaAssetId'),
-      isPrivate: map["isPrivate"] == null ? null : _requiredBool(map["isPrivate"], '$path.isPrivate'),
-      isolationLevel: map["isolationLevel"] == null ? null : _requiredString(map["isolationLevel"], '$path.isolationLevel'),
-      purposeHint: map["purposeHint"] == null ? null : _requiredString(map["purposeHint"], '$path.purposeHint'),
-      reviewedBy: map["reviewedBy"] == null ? null : _requiredString(map["reviewedBy"], '$path.reviewedBy'),
-      applyAuditId: map["applyAuditId"] == null ? null : _requiredString(map["applyAuditId"], '$path.applyAuditId'),
-      rollbackDeadline: map["rollbackDeadline"] == null ? null : _requiredTimestamp(map["rollbackDeadline"], '$path.rollbackDeadline'),
-      rollbackAuditId: map["rollbackAuditId"] == null ? null : _requiredString(map["rollbackAuditId"], '$path.rollbackAuditId'),
+      avatarMediaAssetId: map["avatarMediaAssetId"] == null
+          ? null
+          : _requiredString(
+              map["avatarMediaAssetId"],
+              '$path.avatarMediaAssetId',
+            ),
+      backgroundMediaAssetId: map["backgroundMediaAssetId"] == null
+          ? null
+          : _requiredString(
+              map["backgroundMediaAssetId"],
+              '$path.backgroundMediaAssetId',
+            ),
+      isPrivate: map["isPrivate"] == null
+          ? null
+          : _requiredBool(map["isPrivate"], '$path.isPrivate'),
+      isolationLevel: map["isolationLevel"] == null
+          ? null
+          : _requiredString(map["isolationLevel"], '$path.isolationLevel'),
+      purposeHint: map["purposeHint"] == null
+          ? null
+          : _requiredString(map["purposeHint"], '$path.purposeHint'),
+      reviewedBy: map["reviewedBy"] == null
+          ? null
+          : _requiredString(map["reviewedBy"], '$path.reviewedBy'),
+      applyAuditId: map["applyAuditId"] == null
+          ? null
+          : _requiredString(map["applyAuditId"], '$path.applyAuditId'),
+      rollbackDeadline: map["rollbackDeadline"] == null
+          ? null
+          : _requiredTimestamp(
+              map["rollbackDeadline"],
+              '$path.rollbackDeadline',
+            ),
+      rollbackAuditId: map["rollbackAuditId"] == null
+          ? null
+          : _requiredString(map["rollbackAuditId"], '$path.rollbackAuditId'),
       version: _requiredInt(map["version"], '$path.version'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
-      resolvedAt: map["resolvedAt"] == null ? null : _requiredTimestamp(map["resolvedAt"], '$path.resolvedAt'),
+      resolvedAt: map["resolvedAt"] == null
+          ? null
+          : _requiredTimestamp(map["resolvedAt"], '$path.resolvedAt'),
     );
   }
 
@@ -2690,13 +3938,15 @@ final class ProfileUpdateProposalView {
     if (displayName != null) "displayName": displayName!,
     if (bio != null) "bio": bio!,
     if (avatarMediaAssetId != null) "avatarMediaAssetId": avatarMediaAssetId!,
-    if (backgroundMediaAssetId != null) "backgroundMediaAssetId": backgroundMediaAssetId!,
+    if (backgroundMediaAssetId != null)
+      "backgroundMediaAssetId": backgroundMediaAssetId!,
     if (isPrivate != null) "isPrivate": isPrivate!,
     if (isolationLevel != null) "isolationLevel": isolationLevel!,
     if (purposeHint != null) "purposeHint": purposeHint!,
     if (reviewedBy != null) "reviewedBy": reviewedBy!,
     if (applyAuditId != null) "applyAuditId": applyAuditId!,
-    if (rollbackDeadline != null) "rollbackDeadline": rollbackDeadline!.toUtc().toIso8601String(),
+    if (rollbackDeadline != null)
+      "rollbackDeadline": rollbackDeadline!.toUtc().toIso8601String(),
     if (rollbackAuditId != null) "rollbackAuditId": rollbackAuditId!,
     "version": version,
     "createdAt": createdAt.toUtc().toIso8601String(),
@@ -2746,27 +3996,90 @@ final class ProfileUpdateSnapshot {
   final String? status;
   final DateTime? updatedAt;
 
-  factory ProfileUpdateSnapshot.fromWire(Map<String, Object?> map, [String path = "ProfileUpdateSnapshot"]) {
-    _rejectUnknownFields(map, const <String>{"userId", "nickname", "nicknameCustomized", "profileVersion", "accountState", "avatarUrl", "avatarAssetId", "avatarVersion", "backgroundUrl", "backgroundAssetId", "bio", "identityTags", "gender", "birthDate", "region", "regionTagRef", "status", "updatedAt"}, path);
+  factory ProfileUpdateSnapshot.fromWire(
+    Map<String, Object?> map, [
+    String path = "ProfileUpdateSnapshot",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "userId",
+      "nickname",
+      "nicknameCustomized",
+      "profileVersion",
+      "accountState",
+      "avatarUrl",
+      "avatarAssetId",
+      "avatarVersion",
+      "backgroundUrl",
+      "backgroundAssetId",
+      "bio",
+      "identityTags",
+      "gender",
+      "birthDate",
+      "region",
+      "regionTagRef",
+      "status",
+      "updatedAt",
+    }, path);
     return ProfileUpdateSnapshot(
       userId: _requiredNonBlankString(map["userId"], '$path.userId'),
       nickname: _requiredString(map["nickname"], '$path.nickname'),
-      nicknameCustomized: _requiredBool(map["nicknameCustomized"], '$path.nicknameCustomized'),
-      profileVersion: _requiredInt(map["profileVersion"], '$path.profileVersion'),
-      accountState: map["accountState"] == null ? null : _requiredString(map["accountState"], '$path.accountState'),
-      avatarUrl: map["avatarUrl"] == null ? null : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      avatarAssetId: map["avatarAssetId"] == null ? null : _requiredString(map["avatarAssetId"], '$path.avatarAssetId'),
+      nicknameCustomized: _requiredBool(
+        map["nicknameCustomized"],
+        '$path.nicknameCustomized',
+      ),
+      profileVersion: _requiredInt(
+        map["profileVersion"],
+        '$path.profileVersion',
+      ),
+      accountState: map["accountState"] == null
+          ? null
+          : _requiredString(map["accountState"], '$path.accountState'),
+      avatarUrl: map["avatarUrl"] == null
+          ? null
+          : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      avatarAssetId: map["avatarAssetId"] == null
+          ? null
+          : _requiredString(map["avatarAssetId"], '$path.avatarAssetId'),
       avatarVersion: _requiredInt(map["avatarVersion"], '$path.avatarVersion'),
-      backgroundUrl: map["backgroundUrl"] == null ? null : _requiredString(map["backgroundUrl"], '$path.backgroundUrl'),
-      backgroundAssetId: map["backgroundAssetId"] == null ? null : _requiredString(map["backgroundAssetId"], '$path.backgroundAssetId'),
+      backgroundUrl: map["backgroundUrl"] == null
+          ? null
+          : _requiredString(map["backgroundUrl"], '$path.backgroundUrl'),
+      backgroundAssetId: map["backgroundAssetId"] == null
+          ? null
+          : _requiredString(
+              map["backgroundAssetId"],
+              '$path.backgroundAssetId',
+            ),
       bio: map["bio"] == null ? null : _requiredString(map["bio"], '$path.bio'),
-      identityTags: List<String>.unmodifiable(_requiredList(map["identityTags"], '$path.identityTags').asMap().entries.map((entry) => _requiredString(entry.value, '$path.identityTags' + '[${entry.key}]'))),
-      gender: map["gender"] == null ? null : _requiredString(map["gender"], '$path.gender'),
-      birthDate: map["birthDate"] == null ? null : _requiredTimestamp(map["birthDate"], '$path.birthDate'),
-      region: map["region"] == null ? null : _requiredString(map["region"], '$path.region'),
-      regionTagRef: map["regionTagRef"] == null ? null : _requiredString(map["regionTagRef"], '$path.regionTagRef'),
-      status: map["status"] == null ? null : _requiredString(map["status"], '$path.status'),
-      updatedAt: map["updatedAt"] == null ? null : _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
+      identityTags: List<String>.unmodifiable(
+        _requiredList(
+          map["identityTags"],
+          '$path.identityTags',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.identityTags' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      gender: map["gender"] == null
+          ? null
+          : _requiredString(map["gender"], '$path.gender'),
+      birthDate: map["birthDate"] == null
+          ? null
+          : _requiredTimestamp(map["birthDate"], '$path.birthDate'),
+      region: map["region"] == null
+          ? null
+          : _requiredString(map["region"], '$path.region'),
+      regionTagRef: map["regionTagRef"] == null
+          ? null
+          : _requiredString(map["regionTagRef"], '$path.regionTagRef'),
+      status: map["status"] == null
+          ? null
+          : _requiredString(map["status"], '$path.status'),
+      updatedAt: map["updatedAt"] == null
+          ? null
+          : _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
   }
 
@@ -2805,13 +4118,31 @@ final class PullUserSyncSlice {
   final bool hasMore;
   final bool requiresResync;
 
-  factory PullUserSyncSlice.fromWire(Map<String, Object?> map, [String path = "PullUserSyncSlice"]) {
-    _rejectUnknownFields(map, const <String>{"patches", "latestSyncSeq", "hasMore", "requiresResync"}, path);
+  factory PullUserSyncSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "PullUserSyncSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "patches",
+      "latestSyncSeq",
+      "hasMore",
+      "requiresResync",
+    }, path);
     return PullUserSyncSlice(
-      patches: List<UserSyncPatch>.unmodifiable(_requiredList(map["patches"], '$path.patches').asMap().entries.map((entry) => UserSyncPatch.fromWire(_requiredObject(entry.value, '$path.patches' + '[${entry.key}]'), '$path.patches' + '[${entry.key}]'))),
+      patches: List<UserSyncPatch>.unmodifiable(
+        _requiredList(map["patches"], '$path.patches').asMap().entries.map(
+          (entry) => UserSyncPatch.fromWire(
+            _requiredObject(entry.value, '$path.patches' + '[${entry.key}]'),
+            '$path.patches' + '[${entry.key}]',
+          ),
+        ),
+      ),
       latestSyncSeq: _requiredInt(map["latestSyncSeq"], '$path.latestSyncSeq'),
       hasMore: _requiredBool(map["hasMore"], '$path.hasMore'),
-      requiresResync: _requiredBool(map["requiresResync"], '$path.requiresResync'),
+      requiresResync: _requiredBool(
+        map["requiresResync"],
+        '$path.requiresResync',
+      ),
     );
   }
 
@@ -2860,23 +4191,73 @@ final class RelationshipCapabilityView {
   final bool isBlocked;
   final bool isBlockedBy;
 
-  factory RelationshipCapabilityView.fromWire(Map<String, Object?> map, [String path = "RelationshipCapabilityView"]) {
-    _rejectUnknownFields(map, const <String>{"viewerPersonaId", "targetPersonaId", "relationState", "canFollow", "canUnfollow", "canFollowBack", "canGreet", "canOpenConversation", "canCreateDirectConversation", "canSendMessage", "hasPendingGreeting", "hasFormalConversation", "canStartVoiceCall", "canStartVideoCall", "isBlocked", "isBlockedBy"}, path);
+  factory RelationshipCapabilityView.fromWire(
+    Map<String, Object?> map, [
+    String path = "RelationshipCapabilityView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "viewerPersonaId",
+      "targetPersonaId",
+      "relationState",
+      "canFollow",
+      "canUnfollow",
+      "canFollowBack",
+      "canGreet",
+      "canOpenConversation",
+      "canCreateDirectConversation",
+      "canSendMessage",
+      "hasPendingGreeting",
+      "hasFormalConversation",
+      "canStartVoiceCall",
+      "canStartVideoCall",
+      "isBlocked",
+      "isBlockedBy",
+    }, path);
     return RelationshipCapabilityView(
-      viewerPersonaId: _requiredString(map["viewerPersonaId"], '$path.viewerPersonaId'),
-      targetPersonaId: _requiredString(map["targetPersonaId"], '$path.targetPersonaId'),
-      relationState: RelationshipState.fromWire(map["relationState"], '$path.relationState'),
+      viewerPersonaId: _requiredString(
+        map["viewerPersonaId"],
+        '$path.viewerPersonaId',
+      ),
+      targetPersonaId: _requiredString(
+        map["targetPersonaId"],
+        '$path.targetPersonaId',
+      ),
+      relationState: RelationshipState.fromWire(
+        map["relationState"],
+        '$path.relationState',
+      ),
       canFollow: _requiredBool(map["canFollow"], '$path.canFollow'),
       canUnfollow: _requiredBool(map["canUnfollow"], '$path.canUnfollow'),
       canFollowBack: _requiredBool(map["canFollowBack"], '$path.canFollowBack'),
       canGreet: _requiredBool(map["canGreet"], '$path.canGreet'),
-      canOpenConversation: _requiredBool(map["canOpenConversation"], '$path.canOpenConversation'),
-      canCreateDirectConversation: _requiredBool(map["canCreateDirectConversation"], '$path.canCreateDirectConversation'),
-      canSendMessage: _requiredBool(map["canSendMessage"], '$path.canSendMessage'),
-      hasPendingGreeting: _requiredBool(map["hasPendingGreeting"], '$path.hasPendingGreeting'),
-      hasFormalConversation: _requiredBool(map["hasFormalConversation"], '$path.hasFormalConversation'),
-      canStartVoiceCall: _requiredBool(map["canStartVoiceCall"], '$path.canStartVoiceCall'),
-      canStartVideoCall: _requiredBool(map["canStartVideoCall"], '$path.canStartVideoCall'),
+      canOpenConversation: _requiredBool(
+        map["canOpenConversation"],
+        '$path.canOpenConversation',
+      ),
+      canCreateDirectConversation: _requiredBool(
+        map["canCreateDirectConversation"],
+        '$path.canCreateDirectConversation',
+      ),
+      canSendMessage: _requiredBool(
+        map["canSendMessage"],
+        '$path.canSendMessage',
+      ),
+      hasPendingGreeting: _requiredBool(
+        map["hasPendingGreeting"],
+        '$path.hasPendingGreeting',
+      ),
+      hasFormalConversation: _requiredBool(
+        map["hasFormalConversation"],
+        '$path.hasFormalConversation',
+      ),
+      canStartVoiceCall: _requiredBool(
+        map["canStartVoiceCall"],
+        '$path.canStartVoiceCall',
+      ),
+      canStartVideoCall: _requiredBool(
+        map["canStartVideoCall"],
+        '$path.canStartVideoCall',
+      ),
       isBlocked: _requiredBool(map["isBlocked"], '$path.isBlocked'),
       isBlockedBy: _requiredBool(map["isBlockedBy"], '$path.isBlockedBy'),
     );
@@ -2911,10 +4292,20 @@ final class SearchSocialRelationsResult {
   final List<SocialRelationSearchItemView> items;
   final String cursor;
 
-  factory SearchSocialRelationsResult.fromWire(Map<String, Object?> map, [String path = "SearchSocialRelationsResult"]) {
+  factory SearchSocialRelationsResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "SearchSocialRelationsResult",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "cursor"}, path);
     return SearchSocialRelationsResult(
-      items: List<SocialRelationSearchItemView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => SocialRelationSearchItemView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<SocialRelationSearchItemView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => SocialRelationSearchItemView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
       cursor: _requiredString(map["cursor"], '$path.cursor'),
     );
   }
@@ -2944,16 +4335,37 @@ final class SocialRelationSearchItemView {
   final bool chatAvailable;
   final RelationshipCapabilityView relationshipCapability;
 
-  factory SocialRelationSearchItemView.fromWire(Map<String, Object?> map, [String path = "SocialRelationSearchItemView"]) {
-    _rejectUnknownFields(map, const <String>{"personaId", "userHandle", "displayName", "avatarUrl", "headline", "chatAvailable", "relationshipCapability"}, path);
+  factory SocialRelationSearchItemView.fromWire(
+    Map<String, Object?> map, [
+    String path = "SocialRelationSearchItemView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "personaId",
+      "userHandle",
+      "displayName",
+      "avatarUrl",
+      "headline",
+      "chatAvailable",
+      "relationshipCapability",
+    }, path);
     return SocialRelationSearchItemView(
       personaId: _requiredString(map["personaId"], '$path.personaId'),
       userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
-      avatarUrl: map["avatarUrl"] == null ? null : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
-      headline: map["headline"] == null ? null : _requiredString(map["headline"], '$path.headline'),
+      avatarUrl: map["avatarUrl"] == null
+          ? null
+          : _requiredString(map["avatarUrl"], '$path.avatarUrl'),
+      headline: map["headline"] == null
+          ? null
+          : _requiredString(map["headline"], '$path.headline'),
       chatAvailable: _requiredBool(map["chatAvailable"], '$path.chatAvailable'),
-      relationshipCapability: RelationshipCapabilityView.fromWire(_requiredObject(map["relationshipCapability"], '$path.relationshipCapability'), '$path.relationshipCapability'),
+      relationshipCapability: RelationshipCapabilityView.fromWire(
+        _requiredObject(
+          map["relationshipCapability"],
+          '$path.relationshipCapability',
+        ),
+        '$path.relationshipCapability',
+      ),
     );
   }
 
@@ -2985,14 +4397,30 @@ final class SubjectFollowCommandResult {
   final bool idempotentReplay;
   final DateTime updatedAt;
 
-  factory SubjectFollowCommandResult.fromWire(Map<String, Object?> map, [String path = "SubjectFollowCommandResult"]) {
-    _rejectUnknownFields(map, const <String>{"personaId", "subjectType", "subjectId", "state", "idempotentReplay", "updatedAt"}, path);
+  factory SubjectFollowCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "SubjectFollowCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "personaId",
+      "subjectType",
+      "subjectId",
+      "state",
+      "idempotentReplay",
+      "updatedAt",
+    }, path);
     return SubjectFollowCommandResult(
       personaId: _requiredString(map["personaId"], '$path.personaId'),
-      subjectType: SubjectFollowTargetKind.fromWire(map["subjectType"], '$path.subjectType'),
+      subjectType: SubjectFollowTargetKind.fromWire(
+        map["subjectType"],
+        '$path.subjectType',
+      ),
       subjectId: _requiredString(map["subjectId"], '$path.subjectId'),
       state: SubjectFollowState.fromWire(map["state"], '$path.state'),
-      idempotentReplay: _requiredBool(map["idempotentReplay"], '$path.idempotentReplay'),
+      idempotentReplay: _requiredBool(
+        map["idempotentReplay"],
+        '$path.idempotentReplay',
+      ),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
   }
@@ -3018,12 +4446,28 @@ final class TokenRefreshGrant {
   final String refreshToken;
   final int sessionRememberTtlSeconds;
 
-  factory TokenRefreshGrant.fromWire(Map<String, Object?> map, [String path = "TokenRefreshGrant"]) {
-    _rejectUnknownFields(map, const <String>{"accessToken", "refreshToken", "sessionRememberTtlSeconds"}, path);
+  factory TokenRefreshGrant.fromWire(
+    Map<String, Object?> map, [
+    String path = "TokenRefreshGrant",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "accessToken",
+      "refreshToken",
+      "sessionRememberTtlSeconds",
+    }, path);
     return TokenRefreshGrant(
-      accessToken: _requiredNonBlankString(map["accessToken"], '$path.accessToken'),
-      refreshToken: _requiredNonBlankString(map["refreshToken"], '$path.refreshToken'),
-      sessionRememberTtlSeconds: _requiredInt(map["sessionRememberTtlSeconds"], '$path.sessionRememberTtlSeconds'),
+      accessToken: _requiredNonBlankString(
+        map["accessToken"],
+        '$path.accessToken',
+      ),
+      refreshToken: _requiredNonBlankString(
+        map["refreshToken"],
+        '$path.refreshToken',
+      ),
+      sessionRememberTtlSeconds: _requiredInt(
+        map["sessionRememberTtlSeconds"],
+        '$path.sessionRememberTtlSeconds',
+      ),
     );
   }
 
@@ -3045,8 +4489,15 @@ final class UserAvatarSyncPatchPayload {
   final String avatarUrl;
   final int avatarVersion;
 
-  factory UserAvatarSyncPatchPayload.fromWire(Map<String, Object?> map, [String path = "UserAvatarSyncPatchPayload"]) {
-    _rejectUnknownFields(map, const <String>{"userId", "avatarUrl", "avatarVersion"}, path);
+  factory UserAvatarSyncPatchPayload.fromWire(
+    Map<String, Object?> map, [
+    String path = "UserAvatarSyncPatchPayload",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "userId",
+      "avatarUrl",
+      "avatarVersion",
+    }, path);
     return UserAvatarSyncPatchPayload(
       userId: _requiredString(map["userId"], '$path.userId'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
@@ -3078,14 +4529,44 @@ final class UserHomepageBundleWire {
   final UserHomepageViewerContextWire viewerContext;
   final String cacheVersion;
 
-  factory UserHomepageBundleWire.fromWire(Map<String, Object?> map, [String path = "UserHomepageBundleWire"]) {
-    _rejectUnknownFields(map, const <String>{"profile", "stats", "relationshipCapability", "tabCounts", "viewerContext", "cacheVersion"}, path);
+  factory UserHomepageBundleWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "UserHomepageBundleWire",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "profile",
+      "stats",
+      "relationshipCapability",
+      "tabCounts",
+      "viewerContext",
+      "cacheVersion",
+    }, path);
     return UserHomepageBundleWire(
-      profile: PersonaProfileView.fromWire(_requiredObject(map["profile"], '$path.profile'), '$path.profile'),
-      stats: UserProfileStatsWire.fromWire(_requiredObject(map["stats"], '$path.stats'), '$path.stats'),
-      relationshipCapability: map["relationshipCapability"] == null ? null : RelationshipCapabilityView.fromWire(_requiredObject(map["relationshipCapability"], '$path.relationshipCapability'), '$path.relationshipCapability'),
-      tabCounts: UserHomepageTabCountsWire.fromWire(_requiredObject(map["tabCounts"], '$path.tabCounts'), '$path.tabCounts'),
-      viewerContext: UserHomepageViewerContextWire.fromWire(_requiredObject(map["viewerContext"], '$path.viewerContext'), '$path.viewerContext'),
+      profile: PersonaProfileView.fromWire(
+        _requiredObject(map["profile"], '$path.profile'),
+        '$path.profile',
+      ),
+      stats: UserProfileStatsWire.fromWire(
+        _requiredObject(map["stats"], '$path.stats'),
+        '$path.stats',
+      ),
+      relationshipCapability: map["relationshipCapability"] == null
+          ? null
+          : RelationshipCapabilityView.fromWire(
+              _requiredObject(
+                map["relationshipCapability"],
+                '$path.relationshipCapability',
+              ),
+              '$path.relationshipCapability',
+            ),
+      tabCounts: UserHomepageTabCountsWire.fromWire(
+        _requiredObject(map["tabCounts"], '$path.tabCounts'),
+        '$path.tabCounts',
+      ),
+      viewerContext: UserHomepageViewerContextWire.fromWire(
+        _requiredObject(map["viewerContext"], '$path.viewerContext'),
+        '$path.viewerContext',
+      ),
       cacheVersion: _requiredString(map["cacheVersion"], '$path.cacheVersion'),
     );
   }
@@ -3093,7 +4574,8 @@ final class UserHomepageBundleWire {
   Map<String, Object?> toWire() => <String, Object?>{
     "profile": profile.toWire(),
     "stats": stats.toWire(),
-    if (relationshipCapability != null) "relationshipCapability": relationshipCapability!.toWire(),
+    if (relationshipCapability != null)
+      "relationshipCapability": relationshipCapability!.toWire(),
     "tabCounts": tabCounts.toWire(),
     "viewerContext": viewerContext.toWire(),
     "cacheVersion": cacheVersion,
@@ -3113,13 +4595,24 @@ final class UserHomepageTabCountsWire {
   final int circlesCount;
   final int collectionsCount;
 
-  factory UserHomepageTabCountsWire.fromWire(Map<String, Object?> map, [String path = "UserHomepageTabCountsWire"]) {
-    _rejectUnknownFields(map, const <String>{"worksCount", "likesCount", "circlesCount", "collectionsCount"}, path);
+  factory UserHomepageTabCountsWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "UserHomepageTabCountsWire",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "worksCount",
+      "likesCount",
+      "circlesCount",
+      "collectionsCount",
+    }, path);
     return UserHomepageTabCountsWire(
       worksCount: _requiredInt(map["worksCount"], '$path.worksCount'),
       likesCount: _requiredInt(map["likesCount"], '$path.likesCount'),
       circlesCount: _requiredInt(map["circlesCount"], '$path.circlesCount'),
-      collectionsCount: _requiredInt(map["collectionsCount"], '$path.collectionsCount'),
+      collectionsCount: _requiredInt(
+        map["collectionsCount"],
+        '$path.collectionsCount',
+      ),
     );
   }
 
@@ -3146,14 +4639,32 @@ final class UserHomepageViewerContextWire {
   final RelationshipState relationToTarget;
   final bool canViewFullProfile;
 
-  factory UserHomepageViewerContextWire.fromWire(Map<String, Object?> map, [String path = "UserHomepageViewerContextWire"]) {
-    _rejectUnknownFields(map, const <String>{"viewerPersonaId", "isOwner", "isGuest", "relationToTarget", "canViewFullProfile"}, path);
+  factory UserHomepageViewerContextWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "UserHomepageViewerContextWire",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "viewerPersonaId",
+      "isOwner",
+      "isGuest",
+      "relationToTarget",
+      "canViewFullProfile",
+    }, path);
     return UserHomepageViewerContextWire(
-      viewerPersonaId: _requiredString(map["viewerPersonaId"], '$path.viewerPersonaId'),
+      viewerPersonaId: _requiredString(
+        map["viewerPersonaId"],
+        '$path.viewerPersonaId',
+      ),
       isOwner: _requiredBool(map["isOwner"], '$path.isOwner'),
       isGuest: _requiredBool(map["isGuest"], '$path.isGuest'),
-      relationToTarget: RelationshipState.fromWire(map["relationToTarget"], '$path.relationToTarget'),
-      canViewFullProfile: _requiredBool(map["canViewFullProfile"], '$path.canViewFullProfile'),
+      relationToTarget: RelationshipState.fromWire(
+        map["relationToTarget"],
+        '$path.relationToTarget',
+      ),
+      canViewFullProfile: _requiredBool(
+        map["canViewFullProfile"],
+        '$path.canViewFullProfile',
+      ),
     );
   }
 
@@ -3181,10 +4692,22 @@ final class UserProfileStatsWire {
   final int likeCount;
   final int postCount;
 
-  factory UserProfileStatsWire.fromWire(Map<String, Object?> map, [String path = "UserProfileStatsWire"]) {
-    _rejectUnknownFields(map, const <String>{"followingCount", "circleCount", "followerCount", "likeCount", "postCount"}, path);
+  factory UserProfileStatsWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "UserProfileStatsWire",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "followingCount",
+      "circleCount",
+      "followerCount",
+      "likeCount",
+      "postCount",
+    }, path);
     return UserProfileStatsWire(
-      followingCount: _requiredInt(map["followingCount"], '$path.followingCount'),
+      followingCount: _requiredInt(
+        map["followingCount"],
+        '$path.followingCount',
+      ),
       circleCount: _requiredInt(map["circleCount"], '$path.circleCount'),
       followerCount: _requiredInt(map["followerCount"], '$path.followerCount'),
       likeCount: _requiredInt(map["likeCount"], '$path.likeCount'),
@@ -3212,12 +4735,22 @@ final class UserSettingsCommandResult {
   final int version;
   final bool idempotentReplay;
 
-  factory UserSettingsCommandResult.fromWire(Map<String, Object?> map, [String path = "UserSettingsCommandResult"]) {
-    _rejectUnknownFields(map, const <String>{"userId", "version", "idempotentReplay"}, path);
+  factory UserSettingsCommandResult.fromWire(
+    Map<String, Object?> map, [
+    String path = "UserSettingsCommandResult",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "userId",
+      "version",
+      "idempotentReplay",
+    }, path);
     return UserSettingsCommandResult(
       userId: _requiredString(map["userId"], '$path.userId'),
       version: _requiredInt(map["version"], '$path.version'),
-      idempotentReplay: _requiredBool(map["idempotentReplay"], '$path.idempotentReplay'),
+      idempotentReplay: _requiredBool(
+        map["idempotentReplay"],
+        '$path.idempotentReplay',
+      ),
     );
   }
 
@@ -3243,13 +4776,38 @@ final class UserSyncPatch {
   final ConversationAvatarSyncPatchPayload? conversationAvatarUpdated;
   final DateTime occurredAt;
 
-  factory UserSyncPatch.fromWire(Map<String, Object?> map, [String path = "UserSyncPatch"]) {
-    _rejectUnknownFields(map, const <String>{"syncSeq", "kind", "userAvatarUpdated", "conversationAvatarUpdated", "occurredAt"}, path);
+  factory UserSyncPatch.fromWire(
+    Map<String, Object?> map, [
+    String path = "UserSyncPatch",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "syncSeq",
+      "kind",
+      "userAvatarUpdated",
+      "conversationAvatarUpdated",
+      "occurredAt",
+    }, path);
     return UserSyncPatch(
       syncSeq: _requiredInt(map["syncSeq"], '$path.syncSeq'),
       kind: UserSyncPatchKind.fromWire(map["kind"], '$path.kind'),
-      userAvatarUpdated: map["userAvatarUpdated"] == null ? null : UserAvatarSyncPatchPayload.fromWire(_requiredObject(map["userAvatarUpdated"], '$path.userAvatarUpdated'), '$path.userAvatarUpdated'),
-      conversationAvatarUpdated: map["conversationAvatarUpdated"] == null ? null : ConversationAvatarSyncPatchPayload.fromWire(_requiredObject(map["conversationAvatarUpdated"], '$path.conversationAvatarUpdated'), '$path.conversationAvatarUpdated'),
+      userAvatarUpdated: map["userAvatarUpdated"] == null
+          ? null
+          : UserAvatarSyncPatchPayload.fromWire(
+              _requiredObject(
+                map["userAvatarUpdated"],
+                '$path.userAvatarUpdated',
+              ),
+              '$path.userAvatarUpdated',
+            ),
+      conversationAvatarUpdated: map["conversationAvatarUpdated"] == null
+          ? null
+          : ConversationAvatarSyncPatchPayload.fromWire(
+              _requiredObject(
+                map["conversationAvatarUpdated"],
+                '$path.conversationAvatarUpdated',
+              ),
+              '$path.conversationAvatarUpdated',
+            ),
       occurredAt: _requiredTimestamp(map["occurredAt"], '$path.occurredAt'),
     );
   }
@@ -3257,8 +4815,10 @@ final class UserSyncPatch {
   Map<String, Object?> toWire() => <String, Object?>{
     "syncSeq": syncSeq,
     "kind": kind.wireName,
-    if (userAvatarUpdated != null) "userAvatarUpdated": userAvatarUpdated!.toWire(),
-    if (conversationAvatarUpdated != null) "conversationAvatarUpdated": conversationAvatarUpdated!.toWire(),
+    if (userAvatarUpdated != null)
+      "userAvatarUpdated": userAvatarUpdated!.toWire(),
+    if (conversationAvatarUpdated != null)
+      "conversationAvatarUpdated": conversationAvatarUpdated!.toWire(),
     "occurredAt": occurredAt.toUtc().toIso8601String(),
   };
 }
@@ -3274,11 +4834,24 @@ final class WhitelistedResearchSession {
   final String attestationId;
   final DateTime expiresAt;
 
-  factory WhitelistedResearchSession.fromWire(Map<String, Object?> map, [String path = "WhitelistedResearchSession"]) {
-    _rejectUnknownFields(map, const <String>{"subjectHash", "attestationId", "expiresAt"}, path);
+  factory WhitelistedResearchSession.fromWire(
+    Map<String, Object?> map, [
+    String path = "WhitelistedResearchSession",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "subjectHash",
+      "attestationId",
+      "expiresAt",
+    }, path);
     return WhitelistedResearchSession(
-      subjectHash: _requiredNonBlankString(map["subjectHash"], '$path.subjectHash'),
-      attestationId: _requiredNonBlankString(map["attestationId"], '$path.attestationId'),
+      subjectHash: _requiredNonBlankString(
+        map["subjectHash"],
+        '$path.subjectHash',
+      ),
+      attestationId: _requiredNonBlankString(
+        map["attestationId"],
+        '$path.attestationId',
+      ),
       expiresAt: _requiredTimestamp(map["expiresAt"], '$path.expiresAt'),
     );
   }
@@ -3291,148 +4864,297 @@ final class WhitelistedResearchSession {
 }
 
 ActivePersonaContextView decodeActivePersonaContextView(Object? response) =>
-    ActivePersonaContextView.fromWire(_requiredObject(response, "ActivePersonaContextView"), "ActivePersonaContextView");
+    ActivePersonaContextView.fromWire(
+      _requiredObject(response, "ActivePersonaContextView"),
+      "ActivePersonaContextView",
+    );
 
 AlipayAuthorizationGrant decodeAlipayAuthorizationGrant(Object? response) =>
-    AlipayAuthorizationGrant.fromWire(_requiredObject(response, "AlipayAuthorizationGrant"), "AlipayAuthorizationGrant");
+    AlipayAuthorizationGrant.fromWire(
+      _requiredObject(response, "AlipayAuthorizationGrant"),
+      "AlipayAuthorizationGrant",
+    );
 
 AppearanceSettingsView decodeAppearanceSettingsView(Object? response) =>
-    AppearanceSettingsView.fromWire(_requiredObject(response, "AppearanceSettingsView"), "AppearanceSettingsView");
+    AppearanceSettingsView.fromWire(
+      _requiredObject(response, "AppearanceSettingsView"),
+      "AppearanceSettingsView",
+    );
 
 AuthSessionGrant decodeAuthSessionGrant(Object? response) =>
-    AuthSessionGrant.fromWire(_requiredObject(response, "AuthSessionGrant"), "AuthSessionGrant");
+    AuthSessionGrant.fromWire(
+      _requiredObject(response, "AuthSessionGrant"),
+      "AuthSessionGrant",
+    );
 
 BlockCommandResult decodeBlockCommandResult(Object? response) =>
-    BlockCommandResult.fromWire(_requiredObject(response, "BlockCommandResult"), "BlockCommandResult");
+    BlockCommandResult.fromWire(
+      _requiredObject(response, "BlockCommandResult"),
+      "BlockCommandResult",
+    );
 
 BlockedUserSlice decodeBlockedUserSlice(Object? response) =>
-    BlockedUserSlice.fromWire(_requiredObject(response, "BlockedUserSlice"), "BlockedUserSlice");
+    BlockedUserSlice.fromWire(
+      _requiredObject(response, "BlockedUserSlice"),
+      "BlockedUserSlice",
+    );
 
 CallSettingsView decodeCallSettingsView(Object? response) =>
-    CallSettingsView.fromWire(_requiredObject(response, "CallSettingsView"), "CallSettingsView");
+    CallSettingsView.fromWire(
+      _requiredObject(response, "CallSettingsView"),
+      "CallSettingsView",
+    );
 
 CloseAccountResultWire decodeCloseAccountResultWire(Object? response) =>
-    CloseAccountResultWire.fromWire(_requiredObject(response, "CloseAccountResultWire"), "CloseAccountResultWire");
+    CloseAccountResultWire.fromWire(
+      _requiredObject(response, "CloseAccountResultWire"),
+      "CloseAccountResultWire",
+    );
 
-ContactDiscoveryDismissResult decodeContactDiscoveryDismissResult(Object? response) =>
-    ContactDiscoveryDismissResult.fromWire(_requiredObject(response, "ContactDiscoveryDismissResult"), "ContactDiscoveryDismissResult");
+ContactDiscoveryDismissResult decodeContactDiscoveryDismissResult(
+  Object? response,
+) => ContactDiscoveryDismissResult.fromWire(
+  _requiredObject(response, "ContactDiscoveryDismissResult"),
+  "ContactDiscoveryDismissResult",
+);
 
 ContactDiscoveryResult decodeContactDiscoveryResult(Object? response) =>
-    ContactDiscoveryResult.fromWire(_requiredObject(response, "ContactDiscoveryResult"), "ContactDiscoveryResult");
+    ContactDiscoveryResult.fromWire(
+      _requiredObject(response, "ContactDiscoveryResult"),
+      "ContactDiscoveryResult",
+    );
 
-CredentialBindingCommandResult decodeCredentialBindingCommandResult(Object? response) =>
-    CredentialBindingCommandResult.fromWire(_requiredObject(response, "CredentialBindingCommandResult"), "CredentialBindingCommandResult");
+CredentialBindingCommandResult decodeCredentialBindingCommandResult(
+  Object? response,
+) => CredentialBindingCommandResult.fromWire(
+  _requiredObject(response, "CredentialBindingCommandResult"),
+  "CredentialBindingCommandResult",
+);
 
-DevicePushEndpointCommandResult decodeDevicePushEndpointCommandResult(Object? response) =>
-    DevicePushEndpointCommandResult.fromWire(_requiredObject(response, "DevicePushEndpointCommandResult"), "DevicePushEndpointCommandResult");
+DevicePushEndpointCommandResult decodeDevicePushEndpointCommandResult(
+  Object? response,
+) => DevicePushEndpointCommandResult.fromWire(
+  _requiredObject(response, "DevicePushEndpointCommandResult"),
+  "DevicePushEndpointCommandResult",
+);
 
 FederatedLoginOutcome decodeFederatedLoginOutcome(Object? response) =>
-    FederatedLoginOutcome.fromWire(_requiredObject(response, "FederatedLoginOutcome"), "FederatedLoginOutcome");
+    FederatedLoginOutcome.fromWire(
+      _requiredObject(response, "FederatedLoginOutcome"),
+      "FederatedLoginOutcome",
+    );
 
 FollowCommandResult decodeFollowCommandResult(Object? response) =>
-    FollowCommandResult.fromWire(_requiredObject(response, "FollowCommandResult"), "FollowCommandResult");
+    FollowCommandResult.fromWire(
+      _requiredObject(response, "FollowCommandResult"),
+      "FollowCommandResult",
+    );
 
 FollowedSubjectVisitResult decodeFollowedSubjectVisitResult(Object? response) =>
-    FollowedSubjectVisitResult.fromWire(_requiredObject(response, "FollowedSubjectVisitResult"), "FollowedSubjectVisitResult");
+    FollowedSubjectVisitResult.fromWire(
+      _requiredObject(response, "FollowedSubjectVisitResult"),
+      "FollowedSubjectVisitResult",
+    );
 
-FollowerRelationshipPageSlice decodeFollowerRelationshipPageSlice(Object? response) =>
-    FollowerRelationshipPageSlice.fromWire(_requiredObject(response, "FollowerRelationshipPageSlice"), "FollowerRelationshipPageSlice");
+FollowerRelationshipPageSlice decodeFollowerRelationshipPageSlice(
+  Object? response,
+) => FollowerRelationshipPageSlice.fromWire(
+  _requiredObject(response, "FollowerRelationshipPageSlice"),
+  "FollowerRelationshipPageSlice",
+);
 
-FollowingRelationshipPageSlice decodeFollowingRelationshipPageSlice(Object? response) =>
-    FollowingRelationshipPageSlice.fromWire(_requiredObject(response, "FollowingRelationshipPageSlice"), "FollowingRelationshipPageSlice");
+FollowingRelationshipPageSlice decodeFollowingRelationshipPageSlice(
+  Object? response,
+) => FollowingRelationshipPageSlice.fromWire(
+  _requiredObject(response, "FollowingRelationshipPageSlice"),
+  "FollowingRelationshipPageSlice",
+);
 
 FollowingSubjectSlice decodeFollowingSubjectSlice(Object? response) =>
-    FollowingSubjectSlice.fromWire(_requiredObject(response, "FollowingSubjectSlice"), "FollowingSubjectSlice");
+    FollowingSubjectSlice.fromWire(
+      _requiredObject(response, "FollowingSubjectSlice"),
+      "FollowingSubjectSlice",
+    );
 
 GreetingRequestRecord decodeGreetingRequestRecord(Object? response) =>
-    GreetingRequestRecord.fromWire(_requiredObject(response, "GreetingRequestRecord"), "GreetingRequestRecord");
+    GreetingRequestRecord.fromWire(
+      _requiredObject(response, "GreetingRequestRecord"),
+      "GreetingRequestRecord",
+    );
 
 GreetingRequestSlice decodeGreetingRequestSlice(Object? response) =>
-    GreetingRequestSlice.fromWire(_requiredObject(response, "GreetingRequestSlice"), "GreetingRequestSlice");
+    GreetingRequestSlice.fromWire(
+      _requiredObject(response, "GreetingRequestSlice"),
+      "GreetingRequestSlice",
+    );
 
 ListCredentialsSlice decodeListCredentialsSlice(Object? response) =>
-    ListCredentialsSlice.fromWire(_requiredObject(response, "ListCredentialsSlice"), "ListCredentialsSlice");
+    ListCredentialsSlice.fromWire(
+      _requiredObject(response, "ListCredentialsSlice"),
+      "ListCredentialsSlice",
+    );
 
 ListPersonasResult decodeListPersonasResult(Object? response) =>
-    ListPersonasResult.fromWire(_requiredObject(response, "ListPersonasResult"), "ListPersonasResult");
+    ListPersonasResult.fromWire(
+      _requiredObject(response, "ListPersonasResult"),
+      "ListPersonasResult",
+    );
 
 LogoutAck decodeLogoutAck(Object? response) =>
     LogoutAck.fromWire(_requiredObject(response, "LogoutAck"), "LogoutAck");
 
 NotificationSettingsView decodeNotificationSettingsView(Object? response) =>
-    NotificationSettingsView.fromWire(_requiredObject(response, "NotificationSettingsView"), "NotificationSettingsView");
+    NotificationSettingsView.fromWire(
+      _requiredObject(response, "NotificationSettingsView"),
+      "NotificationSettingsView",
+    );
 
 OneTapLoginHint decodeOneTapLoginHint(Object? response) =>
-    OneTapLoginHint.fromWire(_requiredObject(response, "OneTapLoginHint"), "OneTapLoginHint");
+    OneTapLoginHint.fromWire(
+      _requiredObject(response, "OneTapLoginHint"),
+      "OneTapLoginHint",
+    );
 
 OtpChallengeIssueResult decodeOtpChallengeIssueResult(Object? response) =>
-    OtpChallengeIssueResult.fromWire(_requiredObject(response, "OtpChallengeIssueResult"), "OtpChallengeIssueResult");
+    OtpChallengeIssueResult.fromWire(
+      _requiredObject(response, "OtpChallengeIssueResult"),
+      "OtpChallengeIssueResult",
+    );
 
 OtpDeliveryReadiness decodeOtpDeliveryReadiness(Object? response) =>
-    OtpDeliveryReadiness.fromWire(_requiredObject(response, "OtpDeliveryReadiness"), "OtpDeliveryReadiness");
+    OtpDeliveryReadiness.fromWire(
+      _requiredObject(response, "OtpDeliveryReadiness"),
+      "OtpDeliveryReadiness",
+    );
 
 PersonaLifecycleGuardView decodePersonaLifecycleGuardView(Object? response) =>
-    PersonaLifecycleGuardView.fromWire(_requiredObject(response, "PersonaLifecycleGuardView"), "PersonaLifecycleGuardView");
+    PersonaLifecycleGuardView.fromWire(
+      _requiredObject(response, "PersonaLifecycleGuardView"),
+      "PersonaLifecycleGuardView",
+    );
 
 PersonaManagementItemView decodePersonaManagementItemView(Object? response) =>
-    PersonaManagementItemView.fromWire(_requiredObject(response, "PersonaManagementItemView"), "PersonaManagementItemView");
+    PersonaManagementItemView.fromWire(
+      _requiredObject(response, "PersonaManagementItemView"),
+      "PersonaManagementItemView",
+    );
 
-PersonaManagementSummaryView decodePersonaManagementSummaryView(Object? response) =>
-    PersonaManagementSummaryView.fromWire(_requiredObject(response, "PersonaManagementSummaryView"), "PersonaManagementSummaryView");
+PersonaManagementSummaryView decodePersonaManagementSummaryView(
+  Object? response,
+) => PersonaManagementSummaryView.fromWire(
+  _requiredObject(response, "PersonaManagementSummaryView"),
+  "PersonaManagementSummaryView",
+);
 
 PersonaProfileSyncResult decodePersonaProfileSyncResult(Object? response) =>
-    PersonaProfileSyncResult.fromWire(_requiredObject(response, "PersonaProfileSyncResult"), "PersonaProfileSyncResult");
+    PersonaProfileSyncResult.fromWire(
+      _requiredObject(response, "PersonaProfileSyncResult"),
+      "PersonaProfileSyncResult",
+    );
 
 PersonaProfileView decodePersonaProfileView(Object? response) =>
-    PersonaProfileView.fromWire(_requiredObject(response, "PersonaProfileView"), "PersonaProfileView");
+    PersonaProfileView.fromWire(
+      _requiredObject(response, "PersonaProfileView"),
+      "PersonaProfileView",
+    );
 
 PrivacySettingsView decodePrivacySettingsView(Object? response) =>
-    PrivacySettingsView.fromWire(_requiredObject(response, "PrivacySettingsView"), "PrivacySettingsView");
+    PrivacySettingsView.fromWire(
+      _requiredObject(response, "PrivacySettingsView"),
+      "PrivacySettingsView",
+    );
 
 ProfileEditSnapshotWire decodeProfileEditSnapshotWire(Object? response) =>
-    ProfileEditSnapshotWire.fromWire(_requiredObject(response, "ProfileEditSnapshotWire"), "ProfileEditSnapshotWire");
+    ProfileEditSnapshotWire.fromWire(
+      _requiredObject(response, "ProfileEditSnapshotWire"),
+      "ProfileEditSnapshotWire",
+    );
 
 ProfileQrCardWire decodeProfileQrCardWire(Object? response) =>
-    ProfileQrCardWire.fromWire(_requiredObject(response, "ProfileQrCardWire"), "ProfileQrCardWire");
+    ProfileQrCardWire.fromWire(
+      _requiredObject(response, "ProfileQrCardWire"),
+      "ProfileQrCardWire",
+    );
 
 ProfileQrResolveWire decodeProfileQrResolveWire(Object? response) =>
-    ProfileQrResolveWire.fromWire(_requiredObject(response, "ProfileQrResolveWire"), "ProfileQrResolveWire");
+    ProfileQrResolveWire.fromWire(
+      _requiredObject(response, "ProfileQrResolveWire"),
+      "ProfileQrResolveWire",
+    );
 
-ProfileUpdateProposalCommandResult decodeProfileUpdateProposalCommandResult(Object? response) =>
-    ProfileUpdateProposalCommandResult.fromWire(_requiredObject(response, "ProfileUpdateProposalCommandResult"), "ProfileUpdateProposalCommandResult");
+ProfileUpdateProposalCommandResult decodeProfileUpdateProposalCommandResult(
+  Object? response,
+) => ProfileUpdateProposalCommandResult.fromWire(
+  _requiredObject(response, "ProfileUpdateProposalCommandResult"),
+  "ProfileUpdateProposalCommandResult",
+);
 
 ProfileUpdateProposalSlice decodeProfileUpdateProposalSlice(Object? response) =>
-    ProfileUpdateProposalSlice.fromWire(_requiredObject(response, "ProfileUpdateProposalSlice"), "ProfileUpdateProposalSlice");
+    ProfileUpdateProposalSlice.fromWire(
+      _requiredObject(response, "ProfileUpdateProposalSlice"),
+      "ProfileUpdateProposalSlice",
+    );
 
 ProfileUpdateProposalView decodeProfileUpdateProposalView(Object? response) =>
-    ProfileUpdateProposalView.fromWire(_requiredObject(response, "ProfileUpdateProposalView"), "ProfileUpdateProposalView");
+    ProfileUpdateProposalView.fromWire(
+      _requiredObject(response, "ProfileUpdateProposalView"),
+      "ProfileUpdateProposalView",
+    );
 
 ProfileUpdateSnapshot decodeProfileUpdateSnapshot(Object? response) =>
-    ProfileUpdateSnapshot.fromWire(_requiredObject(response, "ProfileUpdateSnapshot"), "ProfileUpdateSnapshot");
+    ProfileUpdateSnapshot.fromWire(
+      _requiredObject(response, "ProfileUpdateSnapshot"),
+      "ProfileUpdateSnapshot",
+    );
 
 PullUserSyncSlice decodePullUserSyncSlice(Object? response) =>
-    PullUserSyncSlice.fromWire(_requiredObject(response, "PullUserSyncSlice"), "PullUserSyncSlice");
+    PullUserSyncSlice.fromWire(
+      _requiredObject(response, "PullUserSyncSlice"),
+      "PullUserSyncSlice",
+    );
 
 RelationshipCapabilityView decodeRelationshipCapabilityView(Object? response) =>
-    RelationshipCapabilityView.fromWire(_requiredObject(response, "RelationshipCapabilityView"), "RelationshipCapabilityView");
+    RelationshipCapabilityView.fromWire(
+      _requiredObject(response, "RelationshipCapabilityView"),
+      "RelationshipCapabilityView",
+    );
 
-SearchSocialRelationsResult decodeSearchSocialRelationsResult(Object? response) =>
-    SearchSocialRelationsResult.fromWire(_requiredObject(response, "SearchSocialRelationsResult"), "SearchSocialRelationsResult");
+SearchSocialRelationsResult decodeSearchSocialRelationsResult(
+  Object? response,
+) => SearchSocialRelationsResult.fromWire(
+  _requiredObject(response, "SearchSocialRelationsResult"),
+  "SearchSocialRelationsResult",
+);
 
 SubjectFollowCommandResult decodeSubjectFollowCommandResult(Object? response) =>
-    SubjectFollowCommandResult.fromWire(_requiredObject(response, "SubjectFollowCommandResult"), "SubjectFollowCommandResult");
+    SubjectFollowCommandResult.fromWire(
+      _requiredObject(response, "SubjectFollowCommandResult"),
+      "SubjectFollowCommandResult",
+    );
 
 TokenRefreshGrant decodeTokenRefreshGrant(Object? response) =>
-    TokenRefreshGrant.fromWire(_requiredObject(response, "TokenRefreshGrant"), "TokenRefreshGrant");
+    TokenRefreshGrant.fromWire(
+      _requiredObject(response, "TokenRefreshGrant"),
+      "TokenRefreshGrant",
+    );
 
 UserHomepageBundleWire decodeUserHomepageBundleWire(Object? response) =>
-    UserHomepageBundleWire.fromWire(_requiredObject(response, "UserHomepageBundleWire"), "UserHomepageBundleWire");
+    UserHomepageBundleWire.fromWire(
+      _requiredObject(response, "UserHomepageBundleWire"),
+      "UserHomepageBundleWire",
+    );
 
 UserSettingsCommandResult decodeUserSettingsCommandResult(Object? response) =>
-    UserSettingsCommandResult.fromWire(_requiredObject(response, "UserSettingsCommandResult"), "UserSettingsCommandResult");
+    UserSettingsCommandResult.fromWire(
+      _requiredObject(response, "UserSettingsCommandResult"),
+      "UserSettingsCommandResult",
+    );
 
 WhitelistedResearchSession decodeWhitelistedResearchSession(Object? response) =>
-    WhitelistedResearchSession.fromWire(_requiredObject(response, "WhitelistedResearchSession"), "WhitelistedResearchSession");
+    WhitelistedResearchSession.fromWire(
+      _requiredObject(response, "WhitelistedResearchSession"),
+      "WhitelistedResearchSession",
+    );
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {
@@ -3457,7 +5179,9 @@ void _rejectUnknownFields(
   final unknown = value.keys.where((key) => !allowed.contains(key)).toList()
     ..sort();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }
 

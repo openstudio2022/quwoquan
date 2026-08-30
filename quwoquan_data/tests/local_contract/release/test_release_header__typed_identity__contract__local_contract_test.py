@@ -16,13 +16,16 @@ from content.release.canonical.release_header import (
 from content.release.environment.release_runtime import load_release
 from core.io import write_json
 from core.release_layout import payload_file
-from core.source_digest import content_source_revision, current_source_digest
+from core.source_digest import (
+    content_source_revision,
+    current_source_definition_snapshot,
+)
 
 _ENTITY_CATALOG_DIGEST = "sha256:" + "1" * 64
 
 
 def _header(*, release_id: str, release_kind: str = "content") -> dict[str, object]:
-    source = current_source_digest()
+    source = current_source_definition_snapshot()
     document: dict[str, object] = {
         "schema": "quwoquan_data.release",
         "releaseId": release_id,
@@ -88,6 +91,14 @@ def test_typed_header_accepts_one_derived_content_identity() -> None:
     assert validate_release_header(document) == document
 
 
+def test_typed_header_rejects_execution_bundle_inputs_as_source_identity() -> None:
+    document = _header(release_id="content-typed-execution-inputs-001")
+    document["sourceDigests"][0]["inputs"] = ["quwoquan_data/scripts"]
+
+    with pytest.raises(ReleaseHeaderError, match="source-definition inputs|必须等于"):
+        validate_release_header(document)
+
+
 def _target_environment_identity_set_header() -> dict[str, object]:
     document = _header(release_id="content-alpha-identity-set-001")
     execution_id = str(document["executionIds"][0])
@@ -100,7 +111,10 @@ def _target_environment_identity_set_header() -> dict[str, object]:
     identities, identity_set_digest = source_identity_set([identity])
     document.update(
         {
+            "selectionScope": "target_environment",
             "targetEnvironment": "alpha",
+            "samplePlanRef": "uat/sample_plan.json",
+            "samplePlanDigest": "sha256:" + "8" * 64,
             "releaseMode": "research",
             "poolDigest": "sha256:" + "3" * 64,
             "counts": {"article": 1, "image": 0, "video": 0, "total": 1},
@@ -109,8 +123,9 @@ def _target_environment_identity_set_header() -> dict[str, object]:
                     "contentId": "content-alpha-001",
                     "version": 1,
                     "postRef": "article/alpha-work/1",
-                    "executionId": execution_id,
-                    "sourceIdentityDigest": source_identity_digest(identity),
+                    "selectionIdentityDigest": "sha256:" + "7" * 64,
+                    "canonicalObjectDigest": "sha256:" + "8" * 64,
+                    "contentLibraryBindingDigest": "sha256:" + "9" * 64,
                 }
             ],
             "authors": [],
@@ -146,30 +161,36 @@ def test_typed_header_rejects_scalar_and_set_identity_together() -> None:
         validate_release_header(document)
 
 
-@pytest.mark.parametrize("mode", ["commercial", "non_pool"])
-def test_typed_header_rejects_identity_set_outside_research_pool(mode: str) -> None:
+def test_typed_header_accepts_commercial_target_environment_identity_set() -> None:
     document = _target_environment_identity_set_header()
-    if mode == "commercial":
-        document.update(
-            {
-                "releaseClass": "commercial",
-                "productLifecycleState": "commercial",
-                "releaseMode": "commercial",
-            }
-        )
-    else:
-        for key in (
+    document.update(
+        {
+            "releaseClass": "commercial",
+            "productLifecycleState": "commercial",
+            "releaseMode": "commercial",
+        }
+    )
+
+    assert validate_release_header(document) == document
+
+
+def test_typed_header_rejects_identity_set_outside_pool_release() -> None:
+    document = _target_environment_identity_set_header()
+    for key in (
+            "selectionScope",
             "targetEnvironment",
             "releaseMode",
-            "poolDigest",
-            "counts",
-            "contents",
-            "authors",
-            "buildResult",
-        ):
-            document.pop(key)
+        "poolDigest",
+        "counts",
+        "contents",
+        "authors",
+        "buildResult",
+        "samplePlanRef",
+        "samplePlanDigest",
+    ):
+        document.pop(key)
 
-    with pytest.raises(ReleaseHeaderError, match="research pool"):
+    with pytest.raises(ReleaseHeaderError, match="pool selection"):
         validate_release_header(document)
 
 
@@ -189,8 +210,9 @@ def test_typed_header_accepts_environment_neutral_exact_m100_research_cohort() -
             "contentId": f"content-{index}",
             "version": 1,
             "postRef": f"{content_type}/work-{index}/1",
-            "executionId": execution_id,
-            "sourceIdentityDigest": identity_digest,
+            "selectionIdentityDigest": "sha256:" + f"{index:064x}"[-64:],
+            "canonicalObjectDigest": "sha256:" + f"{index + 1000:064x}"[-64:],
+            "contentLibraryBindingDigest": "sha256:" + f"{index + 2000:064x}"[-64:],
         }
         for content_type, start, count in (
             ("article", 0, 100),
@@ -200,6 +222,9 @@ def test_typed_header_accepts_environment_neutral_exact_m100_research_cohort() -
         for index in range(start, start + count)
     ]
     document.update({
+        "selectionScope": "milestone",
+        "samplePlanRef": "uat/sample_plan.json",
+        "samplePlanDigest": "sha256:" + "8" * 64,
         "milestone": "M100",
         "milestoneTargets": {
             "homepage": 100,
@@ -260,8 +285,9 @@ def test_milestone_header_preserves_two_execution_identities_and_rejects_drift()
                     "contentId": f"cross-content-{index}",
                     "version": 1,
                     "postRef": f"{content_type}/cross-work-{index}/1",
-                    "executionId": execution_id,
-                    "sourceIdentityDigest": identity_digests[execution_id],
+                    "selectionIdentityDigest": "sha256:" + f"{index + 3000:064x}"[-64:],
+                    "canonicalObjectDigest": "sha256:" + f"{index + 4000:064x}"[-64:],
+                    "contentLibraryBindingDigest": "sha256:" + f"{index + 5000:064x}"[-64:],
                 }
             )
     source_documents = list(document["sourceDigests"])
@@ -274,7 +300,10 @@ def test_milestone_header_preserves_two_execution_identities_and_rejects_drift()
             "sourceDigests": sorted(
                 source_documents, key=lambda row: str(row["digest"])
             ),
-            "milestone": "M100",
+            "selectionScope": "milestone",
+        "samplePlanRef": "uat/sample_plan.json",
+        "samplePlanDigest": "sha256:" + "8" * 64,
+        "milestone": "M100",
             "milestoneTargets": {
                 "homepage": 100,
                 "article": 100,
@@ -293,8 +322,10 @@ def test_milestone_header_preserves_two_execution_identities_and_rejects_drift()
     )
 
     assert validate_release_header(document) == document
-    document["contents"][0]["sourceIdentityDigest"] = "sha256:" + "f" * 64
-    with pytest.raises(ReleaseHeaderError, match="closure drifted"):
+    document["contents"][0]["selectionIdentityDigest"] = (
+        document["contents"][1]["selectionIdentityDigest"]
+    )
+    with pytest.raises(ReleaseHeaderError, match="selection identity is duplicated"):
         validate_release_header(document)
 
 
@@ -320,3 +351,33 @@ def test_ship_loader_uses_typed_header_boundary(tmp_path: Path) -> None:
 
     with pytest.raises(SystemExit, match="immutable release contract invalid"):
         load_release(tmp_path, release_id)
+
+
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/spec.md#req-006
+def test_pool_header_requires_exact_release_uat_sample_plan_binding() -> None:
+    document = _target_environment_identity_set_header()
+    document["selectionScope"] = "milestone"
+    document.pop("targetEnvironment")
+    document["milestone"] = "M100"
+    document["milestoneTargets"] = {
+        "homepage": 100,
+        "article": 100,
+        "image": 100,
+        "video": 10,
+    }
+    assert validate_release_header(document) == document
+
+    document.pop("samplePlanDigest")
+    with pytest.raises(ReleaseHeaderError, match="samplePlanDigest|UAT sample plan binding is invalid"):
+        validate_release_header(document)
+
+
+def test_pool_header_rejects_legacy_uat_sample_binding_names() -> None:
+    document = _target_environment_identity_set_header()
+    document.pop("samplePlanRef")
+    document.pop("samplePlanDigest")
+    document["uatSamplePlanRef"] = "uat/sample_plan.json"
+    document["uatSamplePlanSha256"] = "sha256:" + "8" * 64
+
+    with pytest.raises(ReleaseHeaderError, match="samplePlanRef|未知字段|UAT sample plan binding is invalid"):
+        validate_release_header(document)

@@ -1,7 +1,8 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 from core.runtime_policy import active_runtime_policy
-from content.execution.support import Any, ExecutionContext, ExecutionStateStatus, MANAGED_AGENT_FUTURE_GRACE_SECONDS, MANAGED_AGENT_TIMEOUT_SECONDS, MANAGED_LANE_LIMITS, MAX_MANAGED_INFRA_RETRIES, MAX_REACT_REWINDS, Mapping, Path, ThreadPoolExecutor, _is_homepage_only_execution, _normalize_managed_agent_provider, defaultdict, execution_root, load_execution_state, os, release_root, save_execution_state, store, time, wait
+from content.execution.context import managed_lane_limits
+from content.execution.support import Any, ExecutionContext, ExecutionStateStatus, MANAGED_AGENT_FUTURE_GRACE_SECONDS, MANAGED_AGENT_TIMEOUT_SECONDS, MAX_MANAGED_INFRA_RETRIES, MAX_REACT_REWINDS, Mapping, Path, ThreadPoolExecutor, _is_homepage_only_execution, _normalize_managed_agent_provider, defaultdict, execution_root, load_execution_state, os, release_root, save_execution_state, store, time, wait
 
 _AGENT_FUTURE_POLL_TIMEOUT_SECONDS = active_runtime_policy().agent_future_poll_timeout_seconds
 
@@ -11,8 +12,8 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
     from content.execution.agent.agent_runner import _terminate_workspace_cursor_bridges
     from content.execution.agent.agent_worker import _default_managed_agent_runner_isolated, _terminate_managed_agent_subprocesses
     from content.execution.agent.history import (
-        ManagedAgentRunRecord,
         ManagedAgentScheduler,
+        build_managed_agent_run_record,
         save_managed_agent_run,
     )
     from content.execution.agent.outcome import (
@@ -31,6 +32,7 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
     prompts = _checkpoint_prompts(ctx, stage)
     if not prompts:
         return False
+    lane_limits = managed_lane_limits(len(prompts))
     worker_count = _managed_checkpoint_worker_count(ctx, len(prompts))
     checkpoint_started_at = store.now_iso()
     checkpoint_started_mono = time.monotonic()
@@ -50,7 +52,7 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
         "runtime": str(ctx.runtime),
         "promptCount": len(prompts),
         "estimatedMinWaves": estimated_waves,
-        "laneLimits": dict(MANAGED_LANE_LIMITS),
+        "laneLimits": dict(lane_limits),
         "agentProvider": _normalize_managed_agent_provider(ctx.agent_provider),
         "startedAt": checkpoint_started_at,
     }
@@ -76,7 +78,7 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
                 submitted = False
                 for position, index in enumerate(queued):
                     lane = _managed_prompt_lane(prompts[index])
-                    cap = MANAGED_LANE_LIMITS.get(lane, worker_count)
+                    cap = lane_limits.get(lane, worker_count)
                     if active_by_lane[lane] >= cap:
                         continue
                     future = pool.submit(runner, prompts[index])
@@ -96,7 +98,7 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
                 queued_lanes = {_managed_prompt_lane(prompts[index]) for index in queued}
                 idle_slots = sum(
                     max(0, cap - active_by_lane.get(lane, 0))
-                    for lane, cap in MANAGED_LANE_LIMITS.items()
+                    for lane, cap in lane_limits.items()
                     if lane not in queued_lanes
                 )
                 if idle_slots and queued:
@@ -227,9 +229,8 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
         yield_reason = "managed checkpoint interrupted"
         if finished_count > 0:
             yield_reason = "managed checkpoint interrupted after partial author progress"
-        partial_record = ManagedAgentRunRecord(
+        partial_record = build_managed_agent_run_record(
             stage=ExecutionStage(stage),
-            job_count=len(outcomes),
             planned_job_count=len(prompts),
             scheduler=ManagedAgentScheduler(
                 requested_max_workers=int(ctx.max_workers or 1),
@@ -238,16 +239,12 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
                 runtime=str(ctx.runtime),
                 prompt_count=len(prompts),
                 estimated_min_waves=estimated_waves,
-                lane_limits=tuple(sorted(MANAGED_LANE_LIMITS.items())),
+                lane_limits=tuple(sorted(lane_limits.items())),
                 provider=AgentProvider(_normalize_managed_agent_provider(ctx.agent_provider)),
                 started_at=checkpoint_started_at,
                 finished_at=interrupted_at,
                 elapsed_seconds=round(max(0.0, time.monotonic() - checkpoint_started_mono), 3),
             ),
-            refs=tuple(out.ref for out in outcomes if out.ref),
-            started_count=started_count,
-            finished_count=finished_count,
-            infrastructure_failures=infrastructure_failures,
             outcomes=tuple(outcomes),
             finished_at=interrupted_at,
             status=ManagedAgentCheckpointStatus.INTERRUPTED,
@@ -291,9 +288,22 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
     finished_at = store.now_iso()
     state = load_execution_state(ctx.execution_id)
     state.active_agent_scheduler = None
-    agent_run_record = ManagedAgentRunRecord(
-        stage=ExecutionStage(stage),
-        job_count=len(outcomes),
+    typed_stage = ExecutionStage(stage)
+    if typed_stage in {ExecutionStage.BUILD_HOMEPAGE, ExecutionStage.POST_AUTHOR}:
+        from content.execution.agent.checkpoint_exclusion import (
+            write_semantic_checkpoint_exclusion,
+        )
+
+        for outcome in outcomes:
+            if not outcome.succeeded and outcome.ref:
+                write_semantic_checkpoint_exclusion(
+                    ctx.execution_id,
+                    stage=typed_stage,
+                    job_outcome=outcome,
+                    recorded_at=finished_at,
+                )
+    agent_run_record = build_managed_agent_run_record(
+        stage=typed_stage,
         planned_job_count=len(prompts),
         scheduler=ManagedAgentScheduler(
             requested_max_workers=int(ctx.max_workers or 1),
@@ -302,16 +312,12 @@ def _run_managed_checkpoint(ctx: ExecutionContext, stage: str) -> bool:
             runtime=str(ctx.runtime),
             prompt_count=len(prompts),
             estimated_min_waves=estimated_waves,
-            lane_limits=tuple(sorted(MANAGED_LANE_LIMITS.items())),
+            lane_limits=tuple(sorted(lane_limits.items())),
             provider=AgentProvider(_normalize_managed_agent_provider(ctx.agent_provider)),
             started_at=checkpoint_started_at,
             finished_at=finished_at,
             elapsed_seconds=round(max(0.0, time.monotonic() - checkpoint_started_mono), 3),
         ),
-        refs=tuple(out.ref for out in outcomes if out.ref),
-        started_count=started_count,
-        finished_count=finished_count,
-        infrastructure_failures=infrastructure_failures,
         outcomes=tuple(outcomes),
         finished_at=finished_at,
     )
@@ -394,12 +400,8 @@ def _managed_checkpoint_ref(
 
 
 def _managed_checkpoint_worker_count(ctx: ExecutionContext, prompt_count: int) -> int:
-    from content.execution.context import _managed_local_cursor_worker_cap
-    worker_count = max(1, min(ctx.max_workers, prompt_count))
-    provider = _normalize_managed_agent_provider(ctx.agent_provider)
-    if ctx.agent_runner is None and str(ctx.runtime) == "local" and provider == "cursor_sdk":
-        worker_count = min(worker_count, _managed_local_cursor_worker_cap(ctx))
-    return worker_count
+    """Every prompt of one checkpoint may start; this is not a capacity ceiling."""
+    return max(1, prompt_count)
 def _managed_checkpoint_ref_limit() -> int:
     from core.runtime_policy import active_runtime_policy
 

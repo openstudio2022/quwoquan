@@ -1,0 +1,6 @@
+{
+  "schema": "quwoquan_data.review_attestation", "stage": "5.review", "executionId": "20260823--travel-article-m1-first--leshan--pilot-001", "executionBinding": "frozen", "objectRef": "entities/地点/景区/乐山大佛", "decision": "approved",
+  "deterministicGate": {"status": "passed", "issues": []},
+  "independentReviewer": {"status": "passed", "provider": "codex", "model": "gpt-5", "modelFamily": "gpt", "runId": "codex-root-20260824-5-review-r2", "resultHash": "sha256:4979bc0ad72df62b6f63107f0bd3a2c152fdbc5a6ebf18f3c34cf878e375c77e"},
+  "mediaRefReview": {"status": "passed", "issues": []}, "repair": {"status": "not_required"}, "finalizationRef": "5.review/finalization_report.json", "evidenceIndexRef": "5.review/evidence_index.json"
+}

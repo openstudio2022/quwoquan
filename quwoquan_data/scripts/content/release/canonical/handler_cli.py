@@ -4,6 +4,9 @@ from __future__ import annotations
 import argparse
 
 from content.release.canonical import handler as owner
+from content.release.canonical.handler_identity_cli import register_identity_parsers
+from content.release.canonical.handler_uat_cli import register_uat_parsers
+from core.control_types import PoolObjectRetirementReason
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -24,12 +27,17 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
             "alpha/beta/gamma cap 分别为 2.1k/10k/100k"
         ),
     )
+    aggregate.add_argument(
+        "--release-class",
+        choices=("research", "commercial"),
+        required=True,
+    )
     aggregate.add_argument("--output-root")
     aggregate.set_defaults(handler=owner.handle_campaign_aggregate_release)
 
     pool_build = commands.add_parser(
         "pool-build",
-        help="从统一池构建环境 ReleaseManifest 或精确 Research milestone cohort",
+        help="从同一 canonical 池按显式 Research/Commercial 权限构建 ReleaseManifest",
     )
     pool_build.add_argument("--release-id", required=True)
     selection = pool_build.add_mutually_exclusive_group(required=True)
@@ -38,12 +46,74 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         choices=("alpha", "beta", "gamma", "prod"),
     )
     selection.add_argument(
+        "--all-publishable",
+        action="store_true",
+        help="冻结当前全部 publishable 对象的环境无关日常 release",
+    )
+    selection.add_argument(
         "--milestone", choices=("M100", "M1000", "M10000")
     )
-    pool_build.add_argument("--release-class", choices=("research",))
+    pool_build.add_argument(
+        "--release-class",
+        choices=("research", "commercial"),
+        required=True,
+        help="显式发布类别；Research 接受 research/commercial，Commercial 仅接受商用闭包",
+    )
     pool_build.add_argument("--publish-root")
     pool_build.add_argument("--release-root")
+    pool_build.add_argument(
+        "--sampling-authority-artifact-root",
+        help="M1000 projected authority exact ref 的只读根；仅 M1000 使用",
+    )
+    pool_build.add_argument(
+        "--sampling-authority-ref",
+        help="M1000 projected authority repo/output-relative exact ref",
+    )
+    pool_build.add_argument(
+        "--sampling-authority-digest",
+        help="M1000 projected authority exact-byte sha256 digest",
+    )
     pool_build.set_defaults(handler=owner.handle_pool_release_build)
+
+    contract_migrate = commands.add_parser(
+        "contract-migrate",
+        help=(
+            "只读预检或从旧不可变 release 的 canonical payload 构建新合同 release；"
+            "绝不修改源 release"
+        ),
+    )
+    contract_migrate.add_argument("--source-release-id", required=True)
+    contract_migrate.add_argument("--new-release-id", required=True)
+    contract_migrate.add_argument("--release-root")
+    contract_migrate.add_argument(
+        "--apply",
+        action="store_true",
+        help="显式创建新的 immutable release；省略时只运行 fail-closed precheck",
+    )
+    contract_migrate.set_defaults(handler=owner.handle_release_contract_migration)
+
+    pool_precheck = commands.add_parser(
+        "pool-precheck",
+        help="只读复用 pool-build 真实判据链判定可选中集；不写任何 release 产物",
+    )
+    pool_precheck.add_argument(
+        "--milestone",
+        choices=("M100", "M1000", "M10000"),
+        required=True,
+    )
+    pool_precheck.add_argument(
+        "--release-class",
+        choices=("research", "commercial"),
+        default="research",
+        help="载体判据段的发布类别；milestone 段按契约恒为 research",
+    )
+    pool_precheck.add_argument(
+        "--details",
+        action="store_true",
+        help="输出逐条可选中 postRef 与全部 typed 排除原因",
+    )
+    pool_precheck.add_argument("--publish-root")
+    pool_precheck.set_defaults(handler=owner.handle_pool_precheck)
 
     pool_inspect = commands.add_parser(
         "pool-inspect",
@@ -53,8 +123,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pool_inspect.add_argument(
         "--milestone",
         choices=("M100", "M1000", "M10000"),
-        default="M100",
-        help="按累计唯一 publishable 计算目标、gap 与下一 rolling wave",
+        help="可选 milestone preset；显式 --workload 时省略",
     )
     pool_inspect.add_argument(
         "--details",
@@ -83,6 +152,13 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "--throughput-promotion-ref",
         help="可选：含真实 per-slot samples 的 immutable promotion output ref",
     )
+    pool_inspect.add_argument(
+        "--workload",
+        action="append",
+        default=[],
+        metavar="CARRIER=QUOTA",
+        help="显式活动载体及精确调度目标；可重复传入",
+    )
     pool_inspect.set_defaults(handler=owner.handle_pool_inspect)
 
     pool_dispatch = commands.add_parser(
@@ -91,11 +167,26 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     pool_dispatch.add_argument("--dispatch-id", required=True)
     pool_dispatch.add_argument("--pool-inspection-ref", required=True)
-    pool_dispatch.add_argument("--semantic-preflight-receipt", required=True)
+    pool_dispatch.add_argument(
+        "--semantic-preflight-receipt",
+        help="可选 preflight 观测 receipt；不参与 dispatch 准入",
+    )
+    pool_dispatch.add_argument(
+        "--capacity-calibration-receipt",
+        required=True,
+        help="受治理 M100 soak 产出的 capacity calibration receipt",
+    )
     pool_dispatch.add_argument("--run-date", required=True)
     pool_dispatch.add_argument("--scope", required=True)
     pool_dispatch.add_argument("--region-ref", required=True)
     pool_dispatch.add_argument("--sequence-start", type=int, default=1)
+    pool_dispatch.add_argument(
+        "--workload",
+        action="append",
+        default=[],
+        metavar="CARRIER=QUOTA",
+        help="再次显式绑定 inspection 中的活动载体与精确目标",
+    )
     pool_dispatch.add_argument(
         "--predecessor-dispatch-ref",
         help="retry wave 的 immutable predecessor dispatch manifest output ref",
@@ -114,14 +205,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         metavar="SLOT_ID=OBJECT_REF",
         help="逐 slot 按 predecessor state 的 exact ordered unfinished ref 缩窄 retry",
     )
-    pool_dispatch.add_argument("--required-workers", type=int, default=1)
-    pool_dispatch.add_argument(
-        "--partition-count",
-        type=int,
-        choices=(16, 32, 64, 128, 256),
-        default=16,
-    )
-    pool_dispatch.add_argument("--capacity-plan-digest", required=True)
     pool_dispatch.add_argument("--publish-root")
     pool_dispatch.set_defaults(handler=owner.handle_pool_dispatch)
 
@@ -147,6 +230,18 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     supply_chain_drill.add_argument("--device-id", default="")
     supply_chain_drill.set_defaults(handler=owner.handle_supply_chain_drill)
+
+    publish_execution = commands.add_parser(
+        "publish-execution",
+        help="receipt 协议 publish 原子链：物化 approved 对象并经单对象事务写 canonical（DEC-027）",
+    )
+    publish_execution.add_argument("--execution-id", required=True)
+    publish_execution.add_argument(
+        "--apply",
+        action="store_true",
+        help="显式执行物化与 canonical 写入；省略时只校验并输出 plan 结果",
+    )
+    publish_execution.set_defaults(handler=owner.handle_publish_execution)
 
     pool_append = commands.add_parser(
         "pool-append",
@@ -188,6 +283,47 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         handler=owner.handle_pool_attribution_repair
     )
 
+    pool_object = commands.add_parser(
+        "pool-object",
+        help="对池内单个对象的逐对象操作",
+    )
+    pool_object_actions = pool_object.add_subparsers(
+        dest="pool_object_action", required=True
+    )
+    pool_object_retire = pool_object_actions.add_parser(
+        "retire",
+        help=(
+            "为已被 discovery 层判否且无入池事务回执的历史对象写 create-once "
+            "退役回执；只写回执，不改写 manifest、generator 与审核回执"
+        ),
+    )
+    pool_object_retire.add_argument(
+        "--object-type", choices=("homepage", "content"), required=True
+    )
+    pool_object_retire.add_argument(
+        "--object-ref",
+        required=True,
+        help="对象在 posts/ 或 entities/ 下的相对 ref",
+    )
+    pool_object_retire.add_argument(
+        "--reason",
+        choices=tuple(member.value for member in PoolObjectRetirementReason),
+        required=True,
+    )
+    pool_object_retire.add_argument(
+        "--retired-at",
+        required=True,
+        metavar="YYYY-MM-DDTHH:MM:SSZ",
+        help="显式退役时刻；create-once 重入必须复算出同一份回执，故不读进程时钟",
+    )
+    pool_object_retire.add_argument("--publish-root")
+    pool_object_retire.add_argument(
+        "--apply",
+        action="store_true",
+        help="显式写入；省略时只校验判据并输出 plan 结果",
+    )
+    pool_object_retire.set_defaults(handler=owner.handle_pool_object_retire)
+
     object_transaction = commands.add_parser(
         "object-transaction",
         help="按审计 delta 与 canonical Merkle 管理单一对象事务",
@@ -206,58 +342,20 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     object_transaction_rollback.set_defaults(
         handler=owner.handle_object_transaction_rollback
     )
+    object_transaction_replay = object_transaction_actions.add_parser(
+        "replay-package",
+        help="用显式内容库持仓精确重放一笔已评审的对象事务包",
+    )
+    object_transaction_replay.add_argument("--replay-id", required=True)
+    object_transaction_replay.add_argument("--source-package-root", required=True)
+    object_transaction_replay.add_argument("--media-library-root", required=True)
+    object_transaction_replay.add_argument("--output-root")
+    object_transaction_replay.add_argument("--publish-root")
+    object_transaction_replay.set_defaults(
+        handler=owner.handle_object_transaction_replay_package
+    )
 
-    identity_incident = commands.add_parser(
-        "identity-incident",
-        help="记录同一 releaseId 的冲突 immutable identity；不修改任何 release",
-    )
-    identity_incident.add_argument("--release-id", required=True)
-    identity_incident.add_argument("--incident-id", required=True)
-    identity_incident.add_argument(
-        "--original-attestation",
-        action="append",
-        default=[],
-        help="原始留存的 release attestation 文件；可重复",
-    )
-    identity_incident.add_argument(
-        "--recovery-provenance",
-        action="append",
-        default=[],
-        help="deterministic_byte_reconstruction 的 create-once provenance；可重复",
-    )
-    identity_incident.add_argument("--output-root")
-    identity_incident.set_defaults(handler=owner.handle_release_identity_incident)
-
-    identity_recovery = commands.add_parser(
-        "identity-recovery",
-        help="按冻结 JSON 序列化合同写确定性 attestation 恢复物与 provenance",
-    )
-    identity_recovery.add_argument("--release-id", required=True)
-    identity_recovery.add_argument("--recovery-id", required=True)
-    identity_recovery.add_argument("--attestation-document", required=True)
-    identity_recovery.add_argument("--template-attestation", required=True)
-    identity_recovery.add_argument("--target-attestation-sha256", required=True)
-    identity_recovery.add_argument("--writer-revision", required=True)
-    identity_recovery.add_argument(
-        "--writer-source",
-        action="append",
-        required=True,
-        help="历史 writer 闭集，格式 <logicalRef>=<snapshotPath>；必须四项",
-    )
-    identity_recovery.add_argument("--recovered-recorded-at", required=True)
-    identity_recovery.add_argument("--search-start-at", required=True)
-    identity_recovery.add_argument("--search-end-at", required=True)
-    identity_recovery.add_argument(
-        "--evidence",
-        action="append",
-        required=True,
-        help=(
-            "独立证据，格式 <role>=<path>；必须各提供 "
-            "release_identity 与 execution_closure"
-        ),
-    )
-    identity_recovery.add_argument("--output-root")
-    identity_recovery.set_defaults(handler=owner.handle_release_identity_recovery)
+    register_identity_parsers(commands, owner=owner)
 
     baseline = commands.add_parser(
         "baseline", help="创建仅用于 full-sync rollback 的空 desired-state 发布包"
@@ -265,6 +363,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     baseline.add_argument("--release-id", required=True)
     baseline.add_argument("--publish-root")
     baseline.add_argument("--release-root")
+    baseline.add_argument(
+        "--release-class",
+        choices=("research", "commercial"),
+        required=True,
+    )
     baseline.set_defaults(handler=owner.handle_baseline_release)
 
     build_lookups = commands.add_parser(
@@ -350,7 +453,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     research_promote = commands.add_parser(
         "research-promote-scale",
-        help="由四载体累计规模与资源隔离/恢复证据写入 create-once promotion receipt",
+        help="由累计唯一对象、引用闭包与 milestone 最终门写 create-once promotion receipt",
     )
     research_promote.add_argument("--release-id", required=True)
     research_promote.add_argument("--promotion-id", required=True)
@@ -358,10 +461,36 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "--target-scale", required=True, choices=("M100", "M1000", "M10000")
     )
     research_promote.add_argument("--predecessor-promotion")
-    research_promote.add_argument("--campaign-evidence", required=True)
+    research_promote.add_argument(
+        "--m100-alpha-acceptance-binding",
+        help=(
+            "M1000 promotion：由 canonical binder 生成的 exact Alpha M100 "
+            "acceptance binding；与两份 receipt 参数互斥"
+        ),
+    )
+    research_promote.add_argument(
+        "--m100-alpha-readiness-receipt",
+        help=(
+            "M1000 promotion：同一 M100 Research release 的 Alpha "
+            "activation/readback receipt"
+        ),
+    )
+    research_promote.add_argument(
+        "--m100-alpha-app-uat-receipt",
+        help="M1000 promotion：同一 M100 Research release 的 100-case App UAT receipt",
+    )
+    research_promote.add_argument(
+        "--campaign-evidence",
+        help=(
+            "可选 campaign 诊断；缺失、failed 或漂移均不影响 immutable "
+            "milestone release 的 promotion 硬门"
+        ),
+    )
     research_promote.add_argument("--release-root")
     research_promote.add_argument("--output-root")
     research_promote.set_defaults(handler=owner.handle_research_scale_promotion)
+
+    register_uat_parsers(commands, owner=owner)
 
     commercial_transition = commands.add_parser(
         "commercial-transition",
@@ -394,6 +523,20 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     gc_apply.add_argument("--publish-root")
     gc_apply.add_argument("--release-root")
     gc_apply.set_defaults(handler=owner.handle_gc_apply)
+    gc_backfill = gc_actions.add_parser(
+        "backfill-tombstones",
+        help="为墓碑协议之前已被移除的被引用 execution 补写终态墓碑",
+    )
+    gc_backfill.add_argument("--backfill-id", required=True)
+    gc_backfill.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只列出无终态的 execution 引用，不写任何墓碑",
+    )
+    gc_backfill.add_argument("--output-root")
+    gc_backfill.add_argument("--publish-root")
+    gc_backfill.add_argument("--release-root")
+    gc_backfill.set_defaults(handler=owner.handle_gc_backfill_tombstones)
 
     scale_evidence = commands.add_parser(
         "campaign-scale-evidence",
@@ -406,11 +549,14 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     scale_evidence.add_argument("--predecessor-promotion")
     scale_evidence.add_argument("--campaign-plan", required=True)
-    scale_evidence.add_argument("--runtime-session", required=True)
+    scale_evidence.add_argument(
+        "--runtime-session",
+        help="可选 runtime/resource/fault 诊断 session；缺失或失败不阻断 promotion",
+    )
     scale_evidence.add_argument(
         "--calibration-preflight-receipt",
         required=True,
-        help="fresh sol_calibration preflight+soak receipt",
+        help="sol_calibration startup receipt；resource soak 另为可选诊断",
     )
     scale_evidence.add_argument("--tasks-root")
     scale_evidence.add_argument("--release-root")

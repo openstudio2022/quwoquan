@@ -12,17 +12,20 @@ class RealtimeRequestPageIds {
     'LongPoll': 'chat.longpoll',
     'Metrics': 'realtime.metrics',
     'ReadinessCheck': 'realtime.readiness.check',
-    'RecoverRealtimeAccountClosureDeadLetter': 'realtime.recover.realtime.account.closure.dead.letter',
+    'RecoverRealtimeAccountClosureDeadLetter':
+        'realtime.recover.realtime.account.closure.dead.letter',
     'WebSocketUpgrade': 'chat.realtime',
   };
 
   static const String getPersonaPresence = 'realtime.get.persona.presence';
   static const String getRealtimeConfig = 'realtime.config.get';
   static const String healthCheck = 'realtime.health.check';
-  static const String issueConnectionTicket = 'realtime.issue.connection.ticket';
+  static const String issueConnectionTicket =
+      'realtime.issue.connection.ticket';
   static const String longPoll = 'chat.longpoll';
   static const String metrics = 'realtime.metrics';
   static const String readinessCheck = 'realtime.readiness.check';
-  static const String recoverRealtimeAccountClosureDeadLetter = 'realtime.recover.realtime.account.closure.dead.letter';
+  static const String recoverRealtimeAccountClosureDeadLetter =
+      'realtime.recover.realtime.account.closure.dead.letter';
   static const String webSocketUpgrade = 'chat.realtime';
 }

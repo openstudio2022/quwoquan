@@ -29,18 +29,18 @@ from content.release.canonical.canonical_image_inventory import (
     sync_image_index_delta,
 )
 from content.release.canonical.object_transaction_contract import (
-    ALLOWED_CANONICAL_ROOTS,
     ObjectTransactionError,
     _digest_bytes,
     _digest_file,
     _files,
     _json_bytes,
     _safe_rel,
+    canonical_destination,
 )
 from content.release.canonical.object_transaction_lock import (
     canonical_publish_serialized,
 )
-from core.paths import publish_lock_path
+from core.paths import canonical_publish_sidecar_root
 
 INVENTORY_SCHEMA = "quwoquan_data.canonical_publish_inventory"
 INVENTORY_ALGORITHM = "sha256-path-blob-xor-accumulator-v2"
@@ -48,8 +48,7 @@ _EMPTY_ACCUMULATOR = bytes(hashlib.sha256().digest_size)
 
 
 def canonical_inventory_path(publish_root: Path) -> Path:
-    lock_path = publish_lock_path(publish_root)
-    return lock_path.with_name(f"{lock_path.stem}.inventory.sqlite3")
+    return canonical_publish_sidecar_root(publish_root) / "inventory.sqlite3"
 
 
 def _sha256(data: bytes) -> str:
@@ -66,11 +65,11 @@ def _valid_digest(value: str) -> bool:
 
 
 def _leaf(path: str, sha256: str, size: int) -> dict[str, Any]:
-    relative = _safe_rel(path, label="canonicalInventory.path")
-    if relative.parts[0] not in ALLOWED_CANONICAL_ROOTS:
-        raise ObjectTransactionError(
-            f"canonical inventory path is outside canonical roots: {path}"
-        )
+    # The inventory is what the Merkle root and every fenced comparison are
+    # computed over, so admitting a leaf is the same decision as admitting a
+    # canonical file. Asking the shared rule here keeps a media body out of the
+    # inventory even if some future producer bypasses the delta path.
+    relative = canonical_destination(path, label="canonicalInventory.path")
     if not _valid_digest(sha256):
         raise ObjectTransactionError("canonical publish inventory digest drift")
     if isinstance(size, bool) or not isinstance(size, int) or size < 0:

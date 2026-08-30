@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -113,6 +114,73 @@ class AppCircularAvatar extends StatelessWidget {
   }
 }
 
+class _ImageLoadTelemetryCycle {
+  _ImageLoadTelemetryCycle(DateTime Function()? now)
+    : _now = now,
+      _startedAt = now?.call(),
+      _stopwatch = now == null ? (Stopwatch()..start()) : null;
+
+  final DateTime Function()? _now;
+  final DateTime? _startedAt;
+  final Stopwatch? _stopwatch;
+  bool _completed = false;
+  late int durationMs;
+
+  bool markTerminal() {
+    if (_completed) {
+      return false;
+    }
+    _completed = true;
+    final stopwatch = _stopwatch;
+    if (stopwatch != null) {
+      stopwatch.stop();
+      durationMs = stopwatch.elapsedMilliseconds;
+    } else {
+      durationMs = _now!().difference(_startedAt!).inMilliseconds;
+    }
+    return true;
+  }
+}
+
+class _ImageLoadCycleScope extends StatefulWidget {
+  const _ImageLoadCycleScope({
+    required this.sourceIdentity,
+    required this.candidates,
+    required this.now,
+    required this.builder,
+  });
+
+  final String sourceIdentity;
+  final List<String> candidates;
+  final DateTime Function()? now;
+  final Widget Function(_ImageLoadTelemetryCycle cycle) builder;
+
+  @override
+  State<_ImageLoadCycleScope> createState() => _ImageLoadCycleScopeState();
+}
+
+class _ImageLoadCycleScopeState extends State<_ImageLoadCycleScope> {
+  late _ImageLoadTelemetryCycle _cycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _cycle = _ImageLoadTelemetryCycle(widget.now);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ImageLoadCycleScope oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sourceIdentity != widget.sourceIdentity ||
+        !listEquals(oldWidget.candidates, widget.candidates)) {
+      _cycle = _ImageLoadTelemetryCycle(widget.now);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(_cycle);
+}
+
 class AppCachedNetworkImage extends ConsumerWidget {
   final String imageUrl;
   final List<String>? imageUrlCandidates;
@@ -126,6 +194,14 @@ class AppCachedNetworkImage extends ConsumerWidget {
   final CdnImagePreset cdnPreset;
   final Widget Function(BuildContext context, ImageProvider imageProvider)?
   imageBuilder;
+  final DateTime Function()? now;
+
+  /// 稳定缓存键（可选）。默认 null 时沿用完整 URL 作缓存键，行为不变。
+  /// 短签 URL（signed grant）场景必须传入稳定资产身份
+  /// （SignedMediaDeliveryLease.cacheIdentity）：签名 query 随 TTL 轮换，
+  /// 用完整 URL 作键会导致每次换签都重新下载与解码。
+  /// 仅作用于首个候选 URL；候选回退指向不同资产字节，不能共享同一键。
+  final String? cacheKey;
 
   const AppCachedNetworkImage({
     super.key,
@@ -140,6 +216,8 @@ class AppCachedNetworkImage extends ConsumerWidget {
     this.onLoadFailed,
     this.cdnPreset = CdnImagePreset.none,
     this.imageBuilder,
+    this.cacheKey,
+    this.now,
   });
 
   List<String> _processedUrlCandidates(
@@ -208,35 +286,84 @@ class AppCachedNetworkImage extends ConsumerWidget {
       ref.watch(mediaEndpointConfigProvider),
       ref.watch(cdnImageUrlPortProvider),
     );
-    if (candidates.isEmpty) {
-      return _ImageLoadFailureReporter(
-        onReport: () =>
-            onLoadFailed?.call(StateError('image url candidates empty')),
-        child: KeyedSubtree(
-          key: appImageLoadErrorKey,
-          child: errorWidget ?? _buildErrorWidget(context),
-        ),
-      );
+    return _ImageLoadCycleScope(
+      sourceIdentity: imageUrl.trim(),
+      candidates: candidates,
+      now: now,
+      builder: (cycle) {
+        if (candidates.isEmpty) {
+          final error = StateError('image url candidates empty');
+          return _ImageLoadFailureReporter(
+            key: ObjectKey(cycle),
+            onReport: () {
+              _recordTerminalMediaLoad(
+                ref: ref,
+                cycle: cycle,
+                result: 'failure',
+                candidatesTried: 0,
+                error: error,
+              );
+              onLoadFailed?.call(error);
+            },
+            child: KeyedSubtree(
+              key: appImageLoadErrorKey,
+              child: errorWidget ?? _buildErrorWidget(context),
+            ),
+          );
+        }
+        final primaryIdentity = candidates.first;
+        if (MediaLoadFailureCache.instance.shouldSkipNetwork(primaryIdentity)) {
+          final record = MediaLoadFailureCache.instance.activeFailure(
+            primaryIdentity,
+          );
+          final error = StateError(
+            'media negative cache active '
+            '(kind=${record?.kind.name ?? 'other'}; '
+            'status=${record?.statusCode ?? 'n/a'})',
+          );
+          return _ImageLoadFailureReporter(
+            key: ObjectKey(cycle),
+            onReport: () {
+              _recordTerminalMediaLoad(
+                ref: ref,
+                cycle: cycle,
+                result: 'failure',
+                candidatesTried: 0,
+                error: error,
+              );
+              onLoadFailed?.call(error);
+            },
+            child: KeyedSubtree(
+              key: appImageLoadErrorKey,
+              child: errorWidget ?? _buildErrorWidget(context),
+            ),
+          );
+        }
+        return _buildCandidateImage(context, ref, candidates, 0, cycle);
+      },
+    );
+  }
+
+  void _recordTerminalMediaLoad({
+    required WidgetRef ref,
+    required _ImageLoadTelemetryCycle cycle,
+    required String result,
+    required int candidatesTried,
+    Object? error,
+  }) {
+    if (!cycle.markTerminal()) {
+      return;
     }
-    final primaryIdentity = candidates.first;
-    if (MediaLoadFailureCache.instance.shouldSkipNetwork(primaryIdentity)) {
-      final record = MediaLoadFailureCache.instance.activeFailure(
-        primaryIdentity,
-      );
-      final error = StateError(
-        'media negative cache active '
-        '(kind=${record?.kind.name ?? 'other'}; '
-        'status=${record?.statusCode ?? 'n/a'})',
-      );
-      return _ImageLoadFailureReporter(
-        onReport: () => onLoadFailed?.call(error),
-        child: KeyedSubtree(
-          key: appImageLoadErrorKey,
-          child: errorWidget ?? _buildErrorWidget(context),
-        ),
-      );
-    }
-    return _buildCandidateImage(context, ref, candidates, 0);
+    ref
+        .read(pageLifecycleObservabilityProvider)
+        .recordMediaLoad(
+          mediaType: 'image',
+          result: result,
+          copyKey: result == 'failure' ? 'imageLoadFailed' : null,
+          error: error,
+          durationMs: cycle.durationMs,
+          candidatesTried: candidatesTried,
+        );
   }
 
   Widget _buildCandidateImage(
@@ -244,6 +371,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
     WidgetRef ref,
     List<String> candidates,
     int index,
+    _ImageLoadTelemetryCycle cycle,
   ) {
     final cacheManager = AppImageCacheController.cacheManagerForPreset(
       cdnPreset,
@@ -260,6 +388,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
         );
         return CachedNetworkImage(
           imageUrl: candidates[index],
+          cacheKey: index == 0 ? cacheKey : null,
           cacheManager: cacheManager,
           fit: fit,
           width: width,
@@ -278,13 +407,12 @@ class AppCachedNetworkImage extends ConsumerWidget {
           ),
           imageBuilder: (context, imageProvider) {
             MediaLoadFailureCache.instance.clearIdentity(candidates[index]);
-            ref
-                .read(pageLifecycleObservabilityProvider)
-                .recordMediaLoad(
-                  mediaType: 'image',
-                  result: 'success',
-                  candidatesTried: index + 1,
-                );
+            _recordTerminalMediaLoad(
+              ref: ref,
+              cycle: cycle,
+              result: 'success',
+              candidatesTried: index + 1,
+            );
             final builder = imageBuilder;
             final decoded = builder != null
                 ? builder(context, imageProvider)
@@ -318,7 +446,13 @@ class AppCachedNetworkImage extends ConsumerWidget {
           errorWidget: (context, url, error) {
             final nextIndex = index + 1;
             if (nextIndex < candidates.length) {
-              return _buildCandidateImage(context, ref, candidates, nextIndex);
+              return _buildCandidateImage(
+                context,
+                ref,
+                candidates,
+                nextIndex,
+                cycle,
+              );
             }
             final failureIdentity = candidates.first;
             MediaLoadFailureCache.instance.recordFailure(
@@ -348,15 +482,13 @@ class AppCachedNetworkImage extends ConsumerWidget {
                 'errorType=${error.runtimeType}',
               );
             }
-            ref
-                .read(pageLifecycleObservabilityProvider)
-                .recordMediaLoad(
-                  mediaType: 'image',
-                  result: 'failure',
-                  copyKey: 'imageLoadFailed',
-                  error: error,
-                  candidatesTried: candidates.length,
-                );
+            _recordTerminalMediaLoad(
+              ref: ref,
+              cycle: cycle,
+              result: 'failure',
+              error: error,
+              candidatesTried: candidates.length,
+            );
             onLoadFailed?.call(error);
             return KeyedSubtree(
               key: appImageLoadErrorKey,
@@ -517,19 +649,22 @@ class _ImageLoadSuccessReporterState extends State<_ImageLoadSuccessReporter> {
   Widget build(BuildContext context) => widget.child;
 }
 
-class _ImageLoadFailureReporter extends ConsumerStatefulWidget {
-  const _ImageLoadFailureReporter({required this.child, this.onReport});
+class _ImageLoadFailureReporter extends StatefulWidget {
+  const _ImageLoadFailureReporter({
+    super.key,
+    required this.child,
+    this.onReport,
+  });
 
   final Widget child;
   final VoidCallback? onReport;
 
   @override
-  ConsumerState<_ImageLoadFailureReporter> createState() =>
+  State<_ImageLoadFailureReporter> createState() =>
       _ImageLoadFailureReporterState();
 }
 
-class _ImageLoadFailureReporterState
-    extends ConsumerState<_ImageLoadFailureReporter> {
+class _ImageLoadFailureReporterState extends State<_ImageLoadFailureReporter> {
   bool _reported = false;
 
   @override
@@ -540,14 +675,6 @@ class _ImageLoadFailureReporterState
         return;
       }
       _reported = true;
-      ref
-          .read(pageLifecycleObservabilityProvider)
-          .recordMediaLoad(
-            mediaType: 'image',
-            result: 'failure',
-            copyKey: 'imageLoadFailed',
-            candidatesTried: 0,
-          );
       widget.onReport?.call();
     });
   }

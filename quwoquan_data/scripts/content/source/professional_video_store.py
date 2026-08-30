@@ -14,6 +14,10 @@ from content.source.professional_video_receipt import (
 )
 
 
+class ProfessionalVideoCasCollision(ValueError):
+    """A content-addressed destination contains bytes for another digest."""
+
+
 def put_video_cas(
     source: Path,
     suffix: str,
@@ -26,7 +30,9 @@ def put_video_cas(
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.is_file():
         if file_digest(destination) != content_sha256:
-            raise ValueError(f"professional video CAS collision: {destination}")
+            raise ProfessionalVideoCasCollision(
+                f"professional video CAS collision: {destination}"
+            )
         return destination, content_sha256
     temporary = ""
     try:
@@ -87,4 +93,8 @@ def write_create_once_video_receipt(
             Path(temporary).unlink(missing_ok=True)
 
 
-__all__ = ["put_video_cas", "write_create_once_video_receipt"]
+__all__ = [
+    "ProfessionalVideoCasCollision",
+    "put_video_cas",
+    "write_create_once_video_receipt",
+]

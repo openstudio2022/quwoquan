@@ -11,6 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import sys
+
+sys.dont_write_bytecode = True
+
 from quwoquan_ops.ci.render_environment_release_receipt import (
     RELEASE_CLOSURE_PATHS,
     TEST_RELEASE_CLOSURE_LABELS,

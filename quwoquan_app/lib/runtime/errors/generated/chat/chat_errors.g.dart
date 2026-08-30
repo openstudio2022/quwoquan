@@ -3,32 +3,84 @@
 
 enum ChatErrorCode {
   invalidArgument('CHAT.USER.invalid_argument', '请求参数无效', 400),
-  sourceManagedBindingWriteForbidden('CHAT.USER.source_managed_binding_write_forbidden', '来源对象绑定只能由所属领域创建', 400),
-  gatheringBindingConflict('CHAT.USER.gathering_binding_conflict', '相聚会话绑定冲突', 409),
+  sourceManagedBindingWriteForbidden(
+    'CHAT.USER.source_managed_binding_write_forbidden',
+    '来源对象绑定只能由所属领域创建',
+    400,
+  ),
+  gatheringBindingConflict(
+    'CHAT.USER.gathering_binding_conflict',
+    '相聚会话绑定冲突',
+    409,
+  ),
   conversationNotFound('CHAT.USER.conversation_not_found', '会话不存在', 404),
   unauthorized('CHAT.USER.unauthorized', '请先登录', 401),
   messageNotFound('CHAT.USER.message_not_found', '消息不存在', 404),
-  messageRecallForbidden('CHAT.USER.message_recall_forbidden', '只能撤回自己发送的消息', 403),
+  messageRecallForbidden(
+    'CHAT.USER.message_recall_forbidden',
+    '只能撤回自己发送的消息',
+    403,
+  ),
   messageRecallExpired('CHAT.USER.message_recall_expired', '消息已超过可撤回时间', 409),
-  messageIdempotencyConflict('CHAT.USER.message_idempotency_conflict', '该消息请求标识已用于不同内容，请重新发送', 409),
-  conversationIdempotencyConflict('CHAT.USER.conversation_idempotency_conflict', '该建群请求标识已用于不同内容，请重新发起', 409),
+  messageIdempotencyConflict(
+    'CHAT.USER.message_idempotency_conflict',
+    '该消息请求标识已用于不同内容，请重新发送',
+    409,
+  ),
+  conversationIdempotencyConflict(
+    'CHAT.USER.conversation_idempotency_conflict',
+    '该建群请求标识已用于不同内容，请重新发起',
+    409,
+  ),
   messageTooLong('CHAT.USER.message_too_long', '消息内容超出长度限制', 400),
   messageInvalid('CHAT.USER.message_invalid', '消息内容不符合发送要求，请检查后重试', 400),
-  messageMediaInvalid('CHAT.USER.message_media_invalid', '消息媒体不可用，请重新上传后再发送', 400),
-  messageMediaUnavailable('CHAT.SYSTEM.message_media_unavailable', '媒体服务暂时不可用，请稍后重试', 503),
+  messageMediaInvalid(
+    'CHAT.USER.message_media_invalid',
+    '消息媒体不可用，请重新上传后再发送',
+    400,
+  ),
+  messageMediaUnavailable(
+    'CHAT.SYSTEM.message_media_unavailable',
+    '媒体服务暂时不可用，请稍后重试',
+    503,
+  ),
   notMutual('CHAT.USER.not_mutual', '互相关注后可进入正式私信', 403),
   greetingRequired('CHAT.USER.greeting_required', '请先打招呼，等对方回复后再进入正式私信', 403),
   blocked('CHAT.USER.blocked', '当前状态不能继续发送消息', 403),
-  groupMemberNotMutual('CHAT.USER.group_member_not_mutual', '只能邀请互相关注的好友加入群聊', 403),
+  groupMemberNotMutual(
+    'CHAT.USER.group_member_not_mutual',
+    '只能邀请互相关注的好友加入群聊',
+    403,
+  ),
   groupMemberBlocked('CHAT.USER.group_member_blocked', '存在已屏蔽的成员，无法发起群聊', 403),
-  groupGovernanceForbidden('CHAT.USER.group_governance_forbidden', '只有群主或管理员可以执行该操作', 403),
-  sourceManagedConversation('CHAT.USER.source_managed_conversation', '该会话由来源对象管理，请从来源对象操作', 409),
-  circleGroupBindingConflict('CHAT.SYSTEM.circle_group_binding_conflict', '圈群会话绑定状态异常，请稍后重试', 0),
+  groupGovernanceForbidden(
+    'CHAT.USER.group_governance_forbidden',
+    '只有群主或管理员可以执行该操作',
+    403,
+  ),
+  sourceManagedConversation(
+    'CHAT.USER.source_managed_conversation',
+    '该会话由来源对象管理，请从来源对象操作',
+    409,
+  ),
+  circleGroupBindingConflict(
+    'CHAT.SYSTEM.circle_group_binding_conflict',
+    '圈群会话绑定状态异常，请稍后重试',
+    0,
+  ),
   groupFull('CHAT.USER.group_full', '群成员已达上限', 400),
   conversationDissolved('CHAT.USER.conversation_dissolved', '该群聊已解散', 409),
-  groupOwnerMustTransferBeforeLeave('CHAT.USER.group_owner_must_transfer_before_leave', '群主退群前需先转让群主', 409),
+  groupOwnerMustTransferBeforeLeave(
+    'CHAT.USER.group_owner_must_transfer_before_leave',
+    '群主退群前需先转让群主',
+    409,
+  ),
   internalError('CHAT.SYSTEM.internal_error', '消息服务异常，请稍后重试', 500),
-  conversationProjectionUnavailable('CHAT.MIDDLEWARE.conversation_projection_unavailable', '群聊会话暂时不可用，请稍后重试', 0),
+  conversationProjectionUnavailable(
+    'CHAT.MIDDLEWARE.conversation_projection_unavailable',
+    '群聊会话暂时不可用，请稍后重试',
+    0,
+  ),
   unknown('', '消息服务异常，请稍后重试', 500);
 
   final String code;
@@ -81,31 +133,43 @@ class ChatErrorMessages {
 
   static const Map<ChatErrorCode, String> en = <ChatErrorCode, String>{
     ChatErrorCode.invalidArgument: 'Request parameters are invalid',
-    ChatErrorCode.sourceManagedBindingWriteForbidden: 'Source-managed bindings can only be created by their owning domain',
-    ChatErrorCode.gatheringBindingConflict: 'Gathering conversation binding conflicts with the source fact',
+    ChatErrorCode.sourceManagedBindingWriteForbidden:
+        'Source-managed bindings can only be created by their owning domain',
+    ChatErrorCode.gatheringBindingConflict:
+        'Gathering conversation binding conflicts with the source fact',
     ChatErrorCode.conversationNotFound: 'Conversation not found',
     ChatErrorCode.unauthorized: 'Please sign in',
     ChatErrorCode.messageNotFound: 'Message not found',
-    ChatErrorCode.messageRecallForbidden: 'Only the sender can recall a message',
+    ChatErrorCode.messageRecallForbidden:
+        'Only the sender can recall a message',
     ChatErrorCode.messageRecallExpired: 'Message recall window has expired',
     ChatErrorCode.messageIdempotencyConflict: 'This message request identifier was already used for different content',
     ChatErrorCode.conversationIdempotencyConflict: 'This conversation request identifier was already used for different content',
     ChatErrorCode.messageTooLong: 'Message exceeds length limit',
-    ChatErrorCode.messageInvalid: 'Message content is invalid; review it and try again',
-    ChatErrorCode.messageMediaInvalid: 'Message media is invalid; upload it again before sending',
-    ChatErrorCode.messageMediaUnavailable: 'Media service is temporarily unavailable; try again later',
-    ChatErrorCode.notMutual: 'Mutual follow is required to enter a formal direct conversation',
+    ChatErrorCode.messageInvalid:
+        'Message content is invalid; review it and try again',
+    ChatErrorCode.messageMediaInvalid:
+        'Message media is invalid; upload it again before sending',
+    ChatErrorCode.messageMediaUnavailable:
+        'Media service is temporarily unavailable; try again later',
+    ChatErrorCode.notMutual:
+        'Mutual follow is required to enter a formal direct conversation',
     ChatErrorCode.greetingRequired: 'Send a greeting first and wait for a reply before entering formal direct conversation',
     ChatErrorCode.blocked: 'Current relationship does not allow messaging',
-    ChatErrorCode.groupMemberNotMutual: 'Only mutually-followed friends can be invited to a group',
-    ChatErrorCode.groupMemberBlocked: 'Cannot start a group while some members are blocked',
-    ChatErrorCode.groupGovernanceForbidden: 'Only the group owner or an admin can perform this action',
+    ChatErrorCode.groupMemberNotMutual:
+        'Only mutually-followed friends can be invited to a group',
+    ChatErrorCode.groupMemberBlocked:
+        'Cannot start a group while some members are blocked',
+    ChatErrorCode.groupGovernanceForbidden:
+        'Only the group owner or an admin can perform this action',
     ChatErrorCode.sourceManagedConversation: 'This conversation is managed by its source object. Use the source object instead.',
     ChatErrorCode.circleGroupBindingConflict: 'The circle group chat binding is inconsistent. Please try again later.',
     ChatErrorCode.groupFull: 'The group has reached its member limit',
     ChatErrorCode.conversationDissolved: 'This group has been dissolved',
-    ChatErrorCode.groupOwnerMustTransferBeforeLeave: 'Transfer ownership before leaving the group',
+    ChatErrorCode.groupOwnerMustTransferBeforeLeave:
+        'Transfer ownership before leaving the group',
     ChatErrorCode.internalError: 'Chat service error, please try again',
-    ChatErrorCode.conversationProjectionUnavailable: 'The group conversation is temporarily unavailable, please retry',
+    ChatErrorCode.conversationProjectionUnavailable:
+        'The group conversation is temporarily unavailable, please retry',
   };
 }

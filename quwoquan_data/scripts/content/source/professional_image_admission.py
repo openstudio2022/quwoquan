@@ -108,15 +108,18 @@ def pre_acquisition_block(item: Mapping[str, Any]) -> tuple[str, str]:
         return "DATA.SOURCE.WATERMARK_BLOCKED", "watermark is present or unknown"
     entity_key = _normalized_title(str(item["entityId"]))
     observed_key = _normalized_title(str(item["observedEntityId"]))
-    if not entity_key or observed_key != entity_key:
-        return "DATA.SOURCE.ENTITY_MISMATCH", "observedEntityId does not match entityId"
-    evidence_key = _normalized_title(f"{item['caption']} {item['relevance']}")
-    aliases = [
+    identity_keys = {
         _normalized_title(value)
         for value in [item["entityId"], *item["entityAliases"]]
         if _normalized_title(value)
-    ]
-    if not any(alias in evidence_key for alias in aliases):
+    }
+    if not entity_key or observed_key not in identity_keys:
+        return (
+            "DATA.SOURCE.ENTITY_MISMATCH",
+            "observedEntityId is outside the canonical entity alias closure",
+        )
+    evidence_key = _normalized_title(f"{item['caption']} {item['relevance']}")
+    if not any(alias in evidence_key for alias in identity_keys):
         return (
             "DATA.SOURCE.ENTITY_MISMATCH",
             "caption and relevance do not identify entity",

@@ -20,9 +20,25 @@ from core.io import read_json  # noqa: E402
 from content.execution.closure import post_review as post_review_closure
 from content.execution.runtime_contract import canonical_sha256  # noqa: E402
 from verify import verify_execution_readiness as gate  # noqa: E402
+from content.execution.model_contract import governed_cursor_grok_model
 
 
 EXECUTION_ID = "20260713--travel-homepage-coverage--test-region-a--pilot-901"
+
+
+def _readiness_layout_issues(expected_execution_id: str):
+    def issues(
+        *,
+        execution_id: str | None = None,
+        allow_succeeded_terminal: bool = False,
+    ) -> list[str]:
+        assert execution_id == expected_execution_id
+        assert allow_succeeded_terminal is True
+        return []
+
+    return issues
+
+
 OBJECT_REF = "/entity/地点/景区/验收景区"
 
 
@@ -100,7 +116,11 @@ def _write_transaction(
 def _fixture(monkeypatch, tmp_path: Path) -> Path:
     root = tmp_path / EXECUTION_ID
     monkeypatch.setattr(gate, "DATA_EXECUTIONS_ROOT", tmp_path)
-    monkeypatch.setattr(gate, "content_execution_layout_issues", lambda **_kwargs: [])
+    monkeypatch.setattr(
+        gate,
+        "content_execution_layout_issues",
+        _readiness_layout_issues(EXECUTION_ID),
+    )
     monkeypatch.setattr(gate, "load_execution_manifest", lambda execution_id: {"executionId": execution_id})
     monkeypatch.setattr(
         gate,
@@ -136,7 +156,7 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
             "ready": True,
             "runtime": "local",
             "author": {
-                "model": "grok-4.5",
+                "model": governed_cursor_grok_model(),
                 "modelFamily": "grok",
                 "modelParameters": [
                     {"id": "effort", "value": "high"},
@@ -149,7 +169,7 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
                     "errorCode": "",
                     "httpStatus": None,
                     "runtime": "local",
-                    "model": "grok-4.5",
+                    "model": governed_cursor_grok_model(),
                     "modelParameters": [
                         {"id": "effort", "value": "high"},
                         {"id": "fast", "value": "false"},
@@ -190,7 +210,7 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
             "objectRef": OBJECT_REF,
             "status": "completed",
             "provider": "cursor_sdk",
-            "model": "grok-4.5",
+            "model": governed_cursor_grok_model(),
             "agentRunId": "author-run-001",
             "promptSha256": "sha256:" + "a" * 64,
             "draftSha256": compute_document_sha256(draft),
@@ -408,7 +428,11 @@ def _article_fixture(monkeypatch, tmp_path: Path) -> tuple[str, Path]:
     execution_id = "20260722--travel-article-supply--test-region-a--pilot-902"
     root = tmp_path / execution_id
     monkeypatch.setattr(gate, "DATA_EXECUTIONS_ROOT", tmp_path)
-    monkeypatch.setattr(gate, "content_execution_layout_issues", lambda **_kwargs: [])
+    monkeypatch.setattr(
+        gate,
+        "content_execution_layout_issues",
+        _readiness_layout_issues(execution_id),
+    )
     monkeypatch.setattr(
         gate,
         "load_execution_manifest",
@@ -440,7 +464,7 @@ def _article_fixture(monkeypatch, tmp_path: Path) -> tuple[str, Path]:
             "ready": True,
             "runtime": "local",
             "author": {
-                "model": "grok-4.5",
+                "model": governed_cursor_grok_model(),
                 "modelFamily": "grok",
                 "modelParameters": [
                     {"id": "effort", "value": "high"},
@@ -453,7 +477,7 @@ def _article_fixture(monkeypatch, tmp_path: Path) -> tuple[str, Path]:
                     "errorCode": "",
                     "httpStatus": None,
                     "runtime": "local",
-                    "model": "grok-4.5",
+                    "model": governed_cursor_grok_model(),
                     "modelParameters": [
                         {"id": "effort", "value": "high"},
                         {"id": "fast", "value": "false"},
@@ -497,7 +521,7 @@ def _article_fixture(monkeypatch, tmp_path: Path) -> tuple[str, Path]:
             "generator": "agent",
             "status": "completed",
             "provider": "cursor_sdk",
-            "model": "grok-4.5",
+            "model": governed_cursor_grok_model(),
             "agentRunId": "author-run-902",
             "promptSha256": "sha256:" + "a" * 64,
             "draftSha256": compute_document_sha256(draft),
@@ -509,7 +533,7 @@ def _article_fixture(monkeypatch, tmp_path: Path) -> tuple[str, Path]:
         {
             "generator": "agent",
             "contentType": "article",
-            "generatorModel": "grok-4.5",
+            "generatorModel": governed_cursor_grok_model(),
         },
     )
     response = {

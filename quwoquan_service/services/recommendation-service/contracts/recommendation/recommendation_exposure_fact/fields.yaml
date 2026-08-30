@@ -74,6 +74,13 @@ fields:
   - NOT_NULL
   description: 服务端稳定窗口的零基序位，禁止消费端侧 position
   role: append_only_fact
+- name: experimentBucket
+  source: context.experimentBucket
+  type: string
+  constraints:
+  - NOT_NULL
+  description: 服务端权威实验分桶，从 FeedPageDelivered 原样固化；独立于可能降级的实际 modelBucket
+  role: append_only_fact
 - name: modelBucket
   source: context.modelBucket
   type: string

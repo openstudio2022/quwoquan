@@ -82,6 +82,8 @@ type ContentPostDetailBase {
   authorId: ID
   authorDisplayName: String
   authorAvatarUrl: String
+  authorAvatarAssetId: ID
+  authorAvatarAccessMode: String
   title: String
   body: String
   summary: String
@@ -297,6 +299,8 @@ type ContentPostDetailSlice {
   authorId: ID
   authorDisplayName: String
   authorAvatarUrl: String
+  authorAvatarAssetId: ID
+  authorAvatarAccessMode: String
   title: String
   body: String
   summary: String

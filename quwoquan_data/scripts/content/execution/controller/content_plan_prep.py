@@ -13,7 +13,6 @@ from content.execution.support import (
     Mapping,
     Path,
     _active_spec,
-    article_commercial_closure_enabled,
     defaultdict,
     execution_root,
     image_count_is_hard_quota,
@@ -53,11 +52,14 @@ def _entity_name_from_source_dir(source_dir: Path) -> str:
             return parts[index - 1]
     return ""
 
-def _article_source_quality_sort_key(row: Mapping[str, Any]) -> tuple[int, int, int, int, int, str]:
-    """实体聚焦优先、再质量、再长度的 article 候选排序（无平台/来源类别偏置）。"""
+def _article_source_quality_sort_key(row: Mapping[str, Any]) -> tuple[int, int, int, int, int, int, int, str]:
+    """严格实体锚定优先，再按聚焦、质量与长度排序。"""
     from core.qunar_template import qunar_source_freshness_rank
 
     from content.post.content_plan import ARTICLE_MIN_BASE_DRAFT_CHARS
+    title_anchor = int(row.get("entityTitleAnchorRank") or 0)
+    anchor_score = float(row.get("entityAnchorScore") or 0.0)
+    anchor_bucket = int(max(0.0, min(anchor_score, 1.0)) * 1000)
     focus = float(row.get("entityFocusScore") or 0.0)
     focus_bucket = int(max(0.0, min(focus, 1.0)) * 20)  # 5% 一档，避免微小噪声扰动排序
     freshness_rank = qunar_source_freshness_rank(row)
@@ -66,7 +68,12 @@ def _article_source_quality_sort_key(row: Mapping[str, Any]) -> tuple[int, int, 
     text_len = int(row.get("textLen") or 0)
     length_score = min(max(text_len, 0), ARTICLE_MIN_BASE_DRAFT_CHARS)
     source_id = str(row.get("sourceId") or "")
-    return (-focus_bucket, freshness_rank, -source_quality, -length_score, -image_count, source_id)
+    return (
+        # 先按实体锚定强弱，再按内容质量，最后用 sourceId 定死同分顺序。
+        -title_anchor, -anchor_bucket, -focus_bucket,
+        freshness_rank, -source_quality, -length_score, -image_count,
+        source_id,
+    )
 
 def _assess_content_plan_publish_image(asset_path: Path, ctx: ExecutionContext):
     """Use the same publish-safety decision before an image enters content_plan."""
@@ -99,11 +106,11 @@ def _content_capacity_gate_for_entity(
         _canonical_image_asset_issue,
         article_asset_claims,
         claims_conflict,
-        normalize_article_media_claims,
     )
     from content.execution.controller.content_plan_assets import (
         claim as claim_assets,
     )
+    from content.post.article.article_media_contract import article_plan_media_rejection
     from content.post.article.base_draft import (
         base_draft_readiness,
         load_base_draft_text,
@@ -112,16 +119,11 @@ def _content_capacity_gate_for_entity(
     from content.source.source_unit import iter_source_units, resolve_entity_object_dir
     spec = active_spec or _active_spec(ctx)
     quotas = (spec.get("content") or {}).get("quotas") or {}
-    commercial_closure = article_commercial_closure_enabled(spec)
     # entityArticlesPerTarget 是放量对象数合同。前置容量门必须与最终
     # content_plan_packet 校验同口径，否则短缺目标会穿过 download_fetch，
     # 到 content_plan 才被误派给 Agent 反复重试。
     desired_articles = max(0, int(quotas.get("entityArticlesPerTarget") or 0))
-    required_articles = (
-        1
-        if commercial_closure and desired_articles > 0
-        else desired_articles
-    )
+    required_articles = desired_articles
     desired_images = max(0, int(quotas.get("imageWorksPerTarget") or 0))
     required_images = (
         desired_images
@@ -170,6 +172,13 @@ def _content_capacity_gate_for_entity(
     image_raw_count = 0
     article_rejects: dict[str, int] = defaultdict(int)
     article_image_soft_warnings: dict[str, int] = defaultdict(int)
+    article_image_soft_warning_sources: dict[str, list[str]] = defaultdict(list)
+
+    def _soft_warn(kind: str, source_id: str) -> None:
+        """软警告的计数与归因必须同时落，否则对账时数得出却查不到是谁。"""
+        article_image_soft_warnings[kind] += 1
+        article_image_soft_warning_sources[kind].append(source_id)
+
     image_rejects: dict[str, int] = defaultdict(int)
     # 其它覆盖目标：用于多地点环线判定（底稿突出提及 >=2 个兄弟目标 → 单实体弃稿）。
     sibling_target_names = tuple(
@@ -184,6 +193,9 @@ def _content_capacity_gate_for_entity(
         and str(target.get("name") or "").strip() == entity_id
         for alias in target.get("aliases") or []
         if str(alias).strip()
+    )
+    from content.execution.controller.content_plan_article_anchor import (
+        assess_article_entity_anchor,
     )
     for source_dir in source_units:
         meta_path = source_dir / "meta.json"
@@ -240,6 +252,15 @@ def _content_capacity_gate_for_entity(
                 article_rejects["text_too_short"] += 1
                 continue
             entity_name = _entity_name_from_source_dir(source_dir)
+            entity_anchor = assess_article_entity_anchor(
+                body=base_body,
+                title=str(meta.get("title") or ""),
+                target=entity_name,
+                aliases=entity_aliases,
+            )
+            if not entity_anchor.eligible:
+                article_rejects["entity_anchor_mismatch"] += 1
+                continue
             focus_score, focus_verdict = _classify_entity_focus(
                 base_body,
                 entity_name,
@@ -268,14 +289,9 @@ def _content_capacity_gate_for_entity(
                     article_text=base_body,
                 )
                 if semantic_issue:
-                    article_image_soft_warnings["asset_semantic_mismatch"] += 1
+                    _soft_warn("asset_semantic_mismatch", source_id)
                     continue
                 admitted_rows.append(row)
-            if len(admitted_rows) < 2:
-                # Research Article 的正文 readiness 与配图 readiness 是两个独立
-                # 维度。少于 cover+body 两张图时不得把单图冒充 illustrated，
-                # 但已通过正文/来源质量门的 base source 可作为 text_only 对象。
-                admitted_rows = []
             candidate = {
                 "sourceDir": source_dir,
                 "sourceRef": source_ref,
@@ -299,23 +315,31 @@ def _content_capacity_gate_for_entity(
                     or ""
                 ),
                 "rows": admitted_rows,
+                "publishMediaMode": str(meta.get("publishMediaMode") or "").strip(),
                 "targetEntity": entity_id,
                 "targetAliases": list(entity_aliases),
                 "articleAnchorText": base_body,
+                **entity_anchor.candidate_fields(),
             }
-            refs, shas, collections, asset_refs, media_mode = (
-                normalize_article_media_claims(
-                    article_asset_claims(
-                        ctx,
-                        root,
-                        candidate,
-                    )
-                )
+            refs, shas, collections, asset_refs = article_asset_claims(
+                ctx,
+                root,
+                candidate,
             )
+            media_mode = str(candidate.get("publishMediaMode") or "").strip()
+            if media_mode == "illustrated" and len(asset_refs) < 2:
+                # 冻结期的 illustrated 由「同源可发布图 >= 2」派生；发布评估把图剔到不足
+                # 两张后该派生失去依据，按同一条规则收敛为 text_only，而不是连合格正文一起丢弃。
+                _soft_warn("no_publishable_source_asset", source_id)
+                media_mode = "text_only"
+                candidate["publishMediaMode"] = media_mode
+                refs, shas, collections, asset_refs = [], [], [], []
+            media_rejection = article_plan_media_rejection(media_mode, len(asset_refs))
+            if media_rejection is not None:
+                article_rejects[media_rejection[0]] += 1
+                continue
             if media_mode == "text_only":
-                article_image_soft_warnings["no_publishable_source_asset"] += 1
                 candidate["rows"] = []
-            candidate["publishMediaMode"] = media_mode
             candidate["assetClaimRefs"] = refs
             candidate["assetClaimShas"] = shas
             candidate["assetClaimCollections"] = collections
@@ -452,6 +476,9 @@ def _content_capacity_gate_for_entity(
         ),
         "articleRejects": dict(sorted(article_rejects.items())),
         "articleImageSoftWarnings": dict(sorted(article_image_soft_warnings.items())),
+        "articleImageSoftWarningSources": {
+            k: sorted(v) for k, v in sorted(article_image_soft_warning_sources.items())
+        },
         "imageRejects": dict(sorted(image_rejects.items())),
     }
     issues: list[str] = []

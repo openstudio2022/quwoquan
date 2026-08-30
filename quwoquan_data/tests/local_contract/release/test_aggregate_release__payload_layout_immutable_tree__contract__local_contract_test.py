@@ -27,7 +27,7 @@ from support.aggregate_release_payload_fixture import (
     TAG_REF,
     _fixture,
     _release_source_identity,
-    _use_research_distribution,
+    _use_release_test_output,
     _write_json,
 )
 
@@ -47,6 +47,7 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
         release_root=release_root,
         release_id=RELEASE_ID,
         execution_ids=[EXECUTION_ID],
+        release_class="research",
         **identity,
     )
 
@@ -62,8 +63,10 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
     assert len(media["assets"]) == 1
     release_asset = media["assets"][0]
     assert "objectKey" not in release_asset
-    assert release_asset["publicSliceKey"].startswith("media/image/s/asset/")
-    assert payload_file(release, release_asset["publicSliceKey"]).is_file()
+    # DEC-031: research release delivers the CAS body, never a public slice.
+    assert "publicSliceKey" not in release_asset
+    assert release_asset["privateObjectKey"].startswith("media/objects/sha256/")
+    assert payload_file(release, release_asset["privateObjectKey"]).is_file()
     release_objects_text = "\n".join(
         path.read_text(encoding="utf-8")
         for path in sorted(payload_file(release, "objects").rglob("*.json"))
@@ -99,6 +102,7 @@ def test_aggregate_release__payload_layout__contract__local_contract(tmp_path: P
         release_root=release_root,
         release_id=RELEASE_ID,
         execution_ids=[EXECUTION_ID],
+        release_class="research",
         **identity,
     )
     assert rerun["idempotent"] is True
@@ -122,6 +126,7 @@ def test_existing_release__self_consistent_rights_tamper__rejects_idempotent(
         release_root=release_root,
         release_id=RELEASE_ID,
         execution_ids=[EXECUTION_ID],
+        release_class="research",
         **identity,
     )
 
@@ -172,6 +177,7 @@ def test_existing_release__self_consistent_rights_tamper__rejects_idempotent(
             release_root=release_root,
             release_id=RELEASE_ID,
             execution_ids=[EXECUTION_ID],
+            release_class="research",
             **identity,
         )
 
@@ -209,9 +215,11 @@ def test_release_campaign_aggregate_handler__derives_execution_ids__contract(
             root_execution_id=root_execution_id,
             output_root=str(tmp_path / "output"),
             release_id=RELEASE_ID,
+            release_class="research",
         )
     )
 
     assert captured["root_execution_id"] == root_execution_id
+    assert captured["release_class"] == "research"
     assert "execution_ids" not in captured
     assert json.loads(capsys.readouterr().out)["releaseId"] == RELEASE_ID

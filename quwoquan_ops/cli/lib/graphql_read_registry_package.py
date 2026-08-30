@@ -13,27 +13,34 @@ import base64
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import stat
 import subprocess
 import tempfile
-from typing import Any, Mapping
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
 
 import yaml
 
 from quwoquan_ops.cli.lib.graphql_read_registry_signing import (
-    SIGNING_KEY_ID_ENV,
-    SIGNING_PRIVATE_KEY_FILE_ENV,
-    TRUSTED_PUBLIC_KEYS_FILE_ENV,
     SigningMaterial,
-    decode_keyring as _decode_keyring,
     resolve_signing_material,
+)
+from quwoquan_ops.cli.lib.openssl3_resolver import resolve_openssl3
+from quwoquan_ops.cli.lib.currentness import CURRENTNESS_TIMEOUT_SECONDS
+from quwoquan_ops.cli.lib.graphql_read_registry_signing import (
+    decode_keyring as _decode_keyring,
+)
+from quwoquan_ops.cli.lib.graphql_read_registry_signing import (
     sign_payload as _sign_payload,
+)
+from quwoquan_ops.cli.lib.graphql_read_registry_signing import (
     validate_signing_material as _validate_signing_material,
+)
+from quwoquan_ops.cli.lib.graphql_read_registry_signing import (
     verify_signature as _verify_signature,
 )
-
 
 PACKAGE_SCHEMA = "stackctl-graphql-read-registry-package"
 COST_MODEL_VERSION = "graphql-cost-v1"
@@ -56,6 +63,14 @@ KEYRING_REF = (
     SERVICE_PACKAGE_REF / "config/graphql-read-trusted-public-keys.json"
 )
 PACKAGE_REF = SERVICE_PACKAGE_REF / "config/graphql-read-package.json"
+_GRAPHQL_REGISTRY_SOURCE_REFS = (CONFIG_REF, MANIFEST_REF, PROVENANCE_REF)
+_GRAPHQL_REGISTRY_GENERATED_REFS = (
+    SCHEMA_REF,
+    PAYLOAD_REF,
+    ENVELOPE_REF,
+    KEYRING_REF,
+    PACKAGE_REF,
+)
 
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _KEY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -221,7 +236,9 @@ def _payload_identity(
     versions: set[str] = set()
     for entry in entries:
         if not isinstance(entry, dict):
-            raise ValueError("generated GraphQL registry entry is invalid")
+            raise ValueError(  # noqa: TRY004
+                "generated GraphQL registry entry is invalid"
+            )
         query_hash = str(entry.get("sha256Hash") or "")
         plan_digest = str(entry.get("costPlanDigest") or "")
         version = str(entry.get("costModelVersion") or "")
@@ -260,7 +277,7 @@ def _read_object(path: Path, *, label: str) -> dict[str, Any]:
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"{label} is unreadable: {exc}") from exc
     if not isinstance(value, dict):
-        raise ValueError(f"{label} must be a JSON object")
+        raise ValueError(f"{label} must be a JSON object")  # noqa: TRY004
     return value
 
 
@@ -277,7 +294,55 @@ def _write_bytes(path: Path, encoded: bytes) -> None:
     os.replace(temporary, path)
 
 
-def _candidate_root_without_links(candidate_root: Path) -> Path:
+def _validate_registry_boundary_ref(
+    candidate_root: Path,
+    relative: Path,
+    *,
+    required: bool,
+) -> None:
+    current = candidate_root
+    for part in relative.parts[:-1]:
+        current /= part
+        try:
+            info = current.lstat()
+        except OSError as exc:
+            raise ValueError(
+                f"GraphQL registry package boundary is unavailable: {current}"
+            ) from exc
+        if stat.S_ISLNK(info.st_mode):
+            raise ValueError(
+                f"GraphQL registry package boundary contains a symlink: {current}"
+            )
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError(
+                f"GraphQL registry package boundary is not a directory: {current}"
+            )
+    path = current / relative.name
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        if not required:
+            return
+        raise ValueError(f"GraphQL registry package input is missing: {path}") from None
+    except OSError as exc:
+        raise ValueError(
+            f"GraphQL registry package boundary is unavailable: {path}"
+        ) from exc
+    if stat.S_ISLNK(info.st_mode):
+        raise ValueError(
+            f"GraphQL registry package boundary contains a symlink: {path}"
+        )
+    if not stat.S_ISREG(info.st_mode):
+        raise ValueError(
+            f"GraphQL registry package boundary is not a regular file: {path}"
+        )
+
+
+def _graphql_registry_candidate_boundary(
+    candidate_root: Path,
+    *,
+    require_generated: bool,
+) -> Path:
     root = Path(os.path.abspath(candidate_root))
     try:
         info = root.lstat()
@@ -285,14 +350,14 @@ def _candidate_root_without_links(candidate_root: Path) -> Path:
         raise ValueError(f"GraphQL registry candidate root is unavailable: {exc}") from exc
     if root.is_symlink() or not stat.S_ISDIR(info.st_mode):
         raise ValueError("GraphQL registry candidate root is missing or unsafe")
-    for current, directories, files in os.walk(root, followlinks=False):
-        parent = Path(current)
-        for name in (*directories, *files):
-            entry = parent / name
-            if entry.is_symlink():
-                raise ValueError(
-                    f"GraphQL registry candidate contains a symlink: {entry}"
-                )
+    for relative in _GRAPHQL_REGISTRY_SOURCE_REFS:
+        _validate_registry_boundary_ref(root, relative, required=True)
+    for relative in _GRAPHQL_REGISTRY_GENERATED_REFS:
+        _validate_registry_boundary_ref(
+            root,
+            relative,
+            required=require_generated,
+        )
     return root
 
 
@@ -333,7 +398,9 @@ def _patch_service_package(
     except (OSError, UnicodeError, yaml.YAMLError) as exc:
         raise ValueError(f"api-edge package config is unreadable: {exc}") from exc
     if not isinstance(config, dict):
-        raise ValueError("api-edge package config must be a mapping")
+        raise ValueError(  # noqa: TRY004
+            "api-edge package config must be a mapping"
+        )
     graph = config.get("graphql_read")
     if not isinstance(graph, dict) or graph.get("enabled") is not True:
         raise ValueError("GraphQL read is disabled in the runtime package")
@@ -396,7 +463,9 @@ def _patch_service_package(
     config_map = config_maps[0]
     data = config_map.setdefault("data", {})
     if not isinstance(data, dict):
-        raise ValueError("api-edge runtime ConfigMap data is invalid")
+        raise ValueError(  # noqa: TRY004
+            "api-edge runtime ConfigMap data is invalid"
+        )
     data.update(
         {
             "api-edge.yaml": config_bytes.decode("utf-8"),
@@ -416,7 +485,9 @@ def _patch_service_package(
         raise ValueError("api-edge package provenance identity mismatch")
     digests = provenance.get("digests")
     if not isinstance(digests, dict):
-        raise ValueError("api-edge package provenance digests are missing")
+        raise ValueError(  # noqa: TRY004
+            "api-edge package provenance digests are missing"
+        )
     provenance["configVersion"] = version
     digests["config"] = _sha256_bytes(config_bytes)
     digests["manifests"] = _sha256_bytes(manifest_bytes)
@@ -452,14 +523,25 @@ def _build_graphql_read_registry_artifacts(
 ) -> dict[str, Any]:
     if environment not in {"alpha", "beta", "gamma", "prod"}:
         raise ValueError("GraphQL registry package environment is invalid")
-    expected_target = "prod-hosted" if environment == "prod" else f"{environment}-local"
-    if target != expected_target:
+    allowed_targets = (
+        {"prod-sim", "prod-hosted"}
+        if environment == "prod"
+        else {f"{environment}-local"}
+    )
+    if target not in allowed_targets:
         raise ValueError("GraphQL registry package target/environment mismatch")
     if _DIGEST.fullmatch(candidate_digest) is None:
         raise ValueError("GraphQL registry candidate digest must be canonical sha256")
-    resolved_signing = signing or resolve_signing_material(repo_root)
+    openssl = resolve_openssl3()
+    if environment == "prod" and signing is None:
+        raise ValueError(
+            "Prod GraphQL registry package requires explicit signing material"
+        )
+    resolved_signing = signing or resolve_signing_material(
+        repo_root, openssl=openssl
+    )
     private_bytes, keyring_bytes, keyring = _validate_signing_material(
-        repo_root, resolved_signing
+        repo_root, resolved_signing, openssl=openssl
     )
     payload_bytes = _generate_payload(
         repo_root,
@@ -472,7 +554,7 @@ def _build_graphql_read_registry_artifacts(
     schema_bytes = (repo_root / SCHEMA_SOURCE).read_bytes()
     if _sha256_bytes(schema_bytes) != schema_digest:
         raise ValueError("GraphQL generator schema digest differs from source bytes")
-    signature = _sign_payload(private_bytes, payload_bytes)
+    signature = _sign_payload(private_bytes, payload_bytes, openssl=openssl)
     envelope = {
         "keyId": resolved_signing.key_id,
         "payloadSha256": _sha256_bytes(payload_bytes),
@@ -527,7 +609,9 @@ def materialize_graphql_read_runtime_config(
     except (OSError, UnicodeError, yaml.YAMLError) as exc:
         raise ValueError(f"api-edge mutable runtime config is unreadable: {exc}") from exc
     if not isinstance(config, dict):
-        raise ValueError("api-edge mutable runtime config must be a mapping")
+        raise ValueError(  # noqa: TRY004
+            "api-edge mutable runtime config must be a mapping"
+        )
     graph = config.get("graphql_read")
     if not isinstance(graph, dict) or graph.get("enabled") is not True:
         raise ValueError("GraphQL read is disabled in the mutable runtime config")
@@ -590,7 +674,10 @@ def materialize_graphql_read_registry_package(
 ) -> dict[str, Any]:
     """Generate, sign and bind one registry inside a fresh candidate package."""
 
-    candidate_root = _candidate_root_without_links(candidate_root)
+    candidate_root = _graphql_registry_candidate_boundary(
+        candidate_root,
+        require_generated=False,
+    )
     _validate_package_source_graphql_enabled(candidate_root)
     artifacts = _build_graphql_read_registry_artifacts(
         repo_root=repo_root,
@@ -694,7 +781,7 @@ def validate_packaged_graphql_read_registry(
     expected_candidate_digest: str,
     expected_descriptor: object | None = None,
     purpose: str = "self_verify",
-    currentness_timeout_seconds: float = 120.0,
+    currentness_timeout_seconds: float = CURRENTNESS_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Verify package bytes; only explicit currentness reruns source generators."""
 
@@ -702,7 +789,10 @@ def validate_packaged_graphql_read_registry(
         raise ValueError("expected GraphQL candidate digest is invalid")
     if purpose not in {"self_verify", "currentness"}:
         raise ValueError("GraphQL registry validation purpose is invalid")
-    candidate_root = _candidate_root_without_links(candidate_root)
+    candidate_root = _graphql_registry_candidate_boundary(
+        candidate_root,
+        require_generated=True,
+    )
     package_descriptor = _read_object(
         candidate_root / PACKAGE_REF,
         label="GraphQL registry package descriptor",
@@ -772,10 +862,12 @@ def validate_packaged_graphql_read_registry(
         raise ValueError("GraphQL registry envelope base64 is invalid") from exc
     if embedded_payload != payload_bytes:
         raise ValueError("GraphQL registry envelope payload drifted")
+    openssl = resolve_openssl3()
     _verify_signature(
         base64.b64decode(keyring[key_id], validate=True),
         payload_bytes,
         signature,
+        openssl=openssl,
     )
     config = yaml.safe_load((candidate_root / CONFIG_REF).read_text(encoding="utf-8"))
     graph = config.get("graphql_read") if isinstance(config, dict) else None

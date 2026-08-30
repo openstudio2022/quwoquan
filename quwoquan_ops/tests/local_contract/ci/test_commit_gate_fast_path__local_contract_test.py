@@ -19,9 +19,11 @@ DELIVERY_GATE = ROOT / ".github" / "workflows" / "delivery-gate.yml"
 
 
 class CommitGateFastPathTest(unittest.TestCase):
-    def test_pre_commit_uses_commit_gate_not_make_gate(self) -> None:
+    def test_pre_commit_consumes_fresh_staged_scope_receipt_only(self) -> None:
         source = PRE_COMMIT.read_text(encoding="utf-8")
-        self.assertIn("commit_gate.sh", source)
+        self.assertIn("local_readiness.py verify --level scope --staged", source)
+        self.assertIn("local_readiness.py scope --staged", source)
+        self.assertNotIn("commit_gate.sh", source)
         self.assertNotRegex(source, r"(?m)^\s*make gate\b")
         self.assertNotIn("gate_repo.sh --scope", source)
 
@@ -104,6 +106,8 @@ class CommitGateFastPathTest(unittest.TestCase):
                 "--changed-file",
                 "quwoquan_service/services/user-service/internal/foo.go",
                 "--changed-file",
+                "quwoquan_service/services/user-service/internal/tool.py",
+                "--changed-file",
                 "quwoquan_app/lib/cloud/user/bar.dart",
             ],
             cwd=ROOT,
@@ -116,7 +120,7 @@ class CommitGateFastPathTest(unittest.TestCase):
         self.assertTrue(plan["flags"]["has_app"])
         self.assertIn("user-service", plan["go_services"])
         self.assertIn("service_architecture", plan["static_checks"])
-        self.assertIn("python_script_governance", plan["static_checks"])
+        self.assertIn("python_script_governance_service", plan["static_checks"])
         self.assertIn("entrypoint_script_paths", plan["static_checks"])
 
     def test_flutter_guard_no_longer_forces_concurrency_one(self) -> None:
@@ -138,6 +142,8 @@ class CommitGateFastPathTest(unittest.TestCase):
     def test_commit_gate_script_has_fingerprint_and_budgets(self) -> None:
         source = COMMIT_GATE.read_text(encoding="utf-8")
         self.assertIn("fingerprint", source.lower())
+        self.assertIn("local_readiness.py plan --level fast --staged", source)
+        self.assertNotIn("git status --porcelain | shasum", source)
         self.assertIn("HARD_BUDGET", source)
         self.assertIn("SOFT_BUDGET", source)
         self.assertIn("entrypoint_script_paths", source)
@@ -152,6 +158,19 @@ class CommitGateFastPathTest(unittest.TestCase):
         self.assertIn("import pytest", source)
         self.assertIn("PYTEST_ADDOPTS", source)
         self.assertIn("cache_dir=$QWQ_OUTPUT_ROOT/env/repo/local/tests/cache/pytest", source)
+
+    def test_commit_gate_scrubs_hook_git_environment_before_pytest(self) -> None:
+        source = COMMIT_GATE.read_text(encoding="utf-8")
+
+        pytest_start = source.index('start_test_job "pytest_impacted"')
+        pytest_end = source.index("start_test_job \"smoke_marker\"", pytest_start)
+        pytest_block = source[pytest_start:pytest_end]
+        self.assertIn("git rev-parse --local-env-vars", pytest_block)
+        self.assertIn('unset "$git_local_var"', pytest_block)
+        self.assertLess(
+            pytest_block.index("git rev-parse --local-env-vars"),
+            pytest_block.index('"$pytest_python" -m pytest'),
+        )
 
 
 if __name__ == "__main__":

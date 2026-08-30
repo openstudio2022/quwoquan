@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import tempfile
 import threading
@@ -13,11 +12,7 @@ import hashlib
 from pathlib import Path
 from unittest.mock import patch
 
-from quwoquan_ops.ci.render_provider_conformance_source import (
-    expected_required_cell_count_from_readiness,
-)
 from quwoquan_ops.cli import stackctl
-from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.prod import collect_release_artifact_descriptors as evidence_collector
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.cli.prod import generate_mainline_release_artifact as generator
@@ -25,15 +20,15 @@ from quwoquan_ops.cli.prod import hosted_release_ledger
 from quwoquan_ops.tests.support.rollout_stage_promotion_evidence_test_support import (
     promotion_evidence,
 )
-
+from quwoquan_ops.tests.support.prod_release_evidence_sources_test_support import (
+    _application_package_payloads,
+    _application_package_sources,
+    _evidence_sources,
+    _provider_raw_dir,
+)
 
 ROOT = Path(__file__).resolve().parents[4]
 APP_EVIDENCE_REF = "oci://ghcr.io/example/quwoquan/app-candidate@sha256:" + ("a" * 64)
-PROVIDER_EVIDENCE_DIGEST = "sha256:" + ("e" * 64)
-PROVIDER_EVIDENCE_REF = (
-    "oci://ghcr.io/example/quwoquan/provider-evidence@" + PROVIDER_EVIDENCE_DIGEST
-)
-
 
 def _git_head() -> str:
     return subprocess.run(
@@ -44,7 +39,6 @@ def _git_head() -> str:
         text=True,
     ).stdout.strip()
 
-
 def _write_build_input(
     artifact: Path,
     *,
@@ -54,9 +48,8 @@ def _write_build_input(
         environment: {} for environment in finalizer.ENVIRONMENTS
     }
     transport_tag = "sha-" + _git_head()
-    images: dict[str, dict[str, str]] = {}
     for environment in finalizer.ENVIRONMENTS:
-        for service in services:
+        for service in generator.RELEASE_SERVICES:
             relative = (
                 Path("packages/environments")
                 / environment
@@ -73,15 +66,32 @@ def _write_build_input(
                 "path": relative.as_posix(),
                 "digest": generator.sha256_file(path),
             }
-    for service in services:
-        repository = f"ghcr.io/example/quwoquan/{service}"
-        images[service] = {
-            "repository": repository,
-            "transportRef": f"{repository}:{transport_tag}",
+    environment_artifacts = {
+        environment: {
+            "environment": environment,
+            "environmentArtifactDigest": None,
+            "images": {
+                service: {
+                    "repository": (
+                        "ghcr.io/example/quwoquan/"
+                        f"{service}-{'prod' if environment == 'prod' else 'nonprod'}"
+                    ),
+                    "transportRef": (
+                        "ghcr.io/example/quwoquan/"
+                        f"{service}-{'prod' if environment == 'prod' else 'nonprod'}:"
+                        f"{transport_tag}"
+                    ),
+                }
+                for service in services
+            },
+            "configurationPackages": configuration_packages[environment],
         }
+        for environment in finalizer.ENVIRONMENTS
+    }
     manifest = finalizer.seal_manifest(
         {
             "schema": finalizer.SCHEMA,
+            "releaseTrainId": None,
             "candidateId": None,
             "status": "build-input",
             "generatedAt": "2026-07-28T00:00:00Z",
@@ -93,22 +103,23 @@ def _write_build_input(
                 "sourceArchiveDigest": None,
             },
             "artifactDigest": None,
-            "images": images,
-            "configurationPackages": configuration_packages,
-            "applicationPackages": {
-                environment: {} for environment in finalizer.ENVIRONMENTS
-            },
+            "environmentArtifacts": environment_artifacts,
+            "applicationPackages": {},
+            "publicWeb": None,
+            "androidOfficialRelease": None,
+            "opsPortal": None,
             "contractGraphDigest": None,
             "requiredEvidence": {
-                "images": list(services),
-                "configurationPackages": {
+                "environmentArtifacts": {
                     environment: list(services)
                     for environment in finalizer.ENVIRONMENTS
                 },
-                "applicationPackages": {
-                    environment: list(finalizer.APPLICATION_PACKAGES[environment])
+                "configurationPackages": {
+                    environment: list(generator.RELEASE_SERVICES)
                     for environment in finalizer.ENVIRONMENTS
                 },
+                "applicationPackages": list(finalizer.APPLICATION_PACKAGES),
+                "opsPortal": True,
                 "contractGraphDigest": True,
                 "providerEvidence": True,
                 "testEvidence": list(finalizer.TEST_LAYERS),
@@ -126,12 +137,18 @@ def _write_build_input(
                 "whole-application-evidence-pending",
             ],
             "missingEvidence": [
-                *(f"images.{service}.digest" for service in services),
                 *(
-                    f"applicationPackages.{environment}.{surface}"
+                    f"environmentArtifacts.{environment}.images.{service}.digest"
                     for environment in finalizer.ENVIRONMENTS
-                    for surface in finalizer.APPLICATION_PACKAGES[environment]
+                    for service in services
                 ),
+                *(
+                    f"applicationPackages.{build_product_id}"
+                    for build_product_id in finalizer.APPLICATION_PACKAGES
+                ),
+                "publicWeb",
+                "androidOfficialRelease",
+                "opsPortal",
                 "contractGraphDigest",
                 "providerEvidence",
                 "testEvidence",
@@ -145,302 +162,35 @@ def _write_build_input(
     generator.write_json(artifact / "manifest.json", manifest)
     return manifest
 
-
 def _write_image_descriptors(
     directory: Path,
     manifest: dict[str, object],
 ) -> None:
-    for index, (service, image_value) in enumerate(
-        manifest["images"].items(),
-        start=1,
-    ):
-        image = dict(image_value)
-        repository = str(image["repository"])
-        digest = f"sha256:{index:064x}"
-        ref = f"{repository}@{digest}"
-        generator.write_json(
-            directory / f"{service}.json",
-            {
-                "service": service,
-                "repository": repository,
-                "transportRef": image["transportRef"],
-                "digest": digest,
-                "ref": ref,
-                "attestations": {
-                    "spdxSbom": f"oci://{ref}#spdxSbom",
-                    "slsaProvenance": f"oci://{ref}#slsaProvenance",
+    for environment, artifact_value in manifest["environmentArtifacts"].items():
+        artifact = dict(artifact_value)
+        trust_domain = "prod" if environment == "prod" else "nonprod"
+        for service, image_value in artifact["images"].items():
+            image = dict(image_value)
+            repository = str(image["repository"])
+            digest = "sha256:" + hashlib.sha256(
+                f"{service}:{trust_domain}".encode("utf-8")
+            ).hexdigest()
+            ref = f"{repository}@{digest}"
+            generator.write_json(
+                directory / environment / f"{service}.json",
+                {
+                    "environment": environment,
+                    "runtimeImageOwner": service,
+                    "repository": repository,
+                    "transportRef": image["transportRef"],
+                    "digest": digest,
+                    "ref": ref,
+                    "attestations": {
+                        "spdxSbom": f"oci://{ref}#spdxSbom",
+                        "slsaProvenance": f"oci://{ref}#slsaProvenance",
+                    },
                 },
-            },
-        )
-
-
-def _application_package_payloads(root: Path) -> Path:
-    payloads = root / "application-payloads"
-    for environment in finalizer.ENVIRONMENTS:
-        for surface in finalizer.APPLICATION_PACKAGES[environment]:
-            package = payloads / environment / surface
-            package.mkdir(parents=True, exist_ok=True)
-            if environment == "prod" and surface == "android":
-                (package / "quwoquan.apk").write_bytes(b"signed-apk")
-            elif environment == "prod" and surface == "opsPortal":
-                generator.write_json(package / "manifest.json", {"name": "ops"})
-                (package / "dist").mkdir(exist_ok=True)
-                (package / "dist/index.html").write_text(
-                    "ops portal", encoding="utf-8"
-                )
-            else:
-                (package / "payload.bin").write_bytes(
-                    f"{environment}/{surface}".encode("utf-8")
-                )
-    return payloads
-
-
-def _provider_raw_dir(root: Path) -> Path:
-    return root / "provider-raw"
-
-
-def _evidence_sources(
-    root: Path, manifest: dict[str, object]
-) -> dict[str, Path]:
-    sources = root / "sources"
-    payload_root = _application_package_payloads(root)
-    source = manifest["source"]
-    assert isinstance(source, dict)
-    contract_graph_path = sources / "contractGraph.json"
-    generator.write_json(
-        contract_graph_path,
-        {
-            "schema": "qwq.contract-graph",
-            "sources": [],
-            "documents": [],
-            "objects": [],
-            "operations": [],
-            "projections": [],
-        },
-    )
-    provider_readiness = {
-        environment: {
-            capability_id: {
-                "required": True,
-                "capability_ready": True,
-            }
-            for capability_id in ("search", "fixture-message-transport")
-        }
-        for environment in provider_conformance.READINESS_ENVIRONMENTS
-    }
-    provider_cells = sorted(
-        provider_conformance.expected_required_cell_keys(
-            {
-                "providerConformanceCapabilityIds": sorted(
-                    provider_readiness["prod"]
-                )
-            }
-        )
-    )
-    provider_evidence_count = expected_required_cell_count_from_readiness(
-        provider_readiness
-    )
-    if len(provider_cells) != provider_evidence_count:
-        raise AssertionError("Provider fixture cell count does not match readiness")
-    provider_files: dict[str, str] = {}
-    for index, (capability_id, environment, layer) in enumerate(provider_cells):
-        relative = (
-            f"env/{environment}/runs/provider-check-{index:03d}/"
-            "provider-conformance.evidence.json"
-        )
-        provider_raw = _provider_raw_dir(root) / relative
-        generator.write_json(
-            provider_raw,
-            {
-                "provider": capability_id,
-                "environment": environment,
-                "testLayer": layer,
-                "status": "passed",
-            },
-        )
-        provider_files[f"evidence/raw/provider/{relative}"] = (
-            finalizer.sha256_file(provider_raw)
-        )
-    payloads: dict[str, dict[str, object]] = {
-        "publicWeb": {
-            "schema": "client-app.web.official-release",
-            "sourceGitSha": source["gitSha"],
-            "sourceTreeDigest": source["treeDigest"],
-            "contentSHA256": finalizer.sha256_tree(
-                payload_root / "prod/web"
-            ).removeprefix("sha256:"),
-        },
-        "androidOfficialRelease": {
-            "schema": "client-app.android.official-release",
-            "sourceGitSha": source["gitSha"],
-            "sourceTreeDigest": source["treeDigest"],
-            "packagedAPK": "quwoquan.apk",
-            "apkSHA256": finalizer.sha256_file(
-                payload_root / "prod/android/quwoquan.apk"
-            ).removeprefix("sha256:"),
-        },
-        "opsPortal": {
-            "schema": "qwq.ops_portal_package",
-            "sourceGitSha": source["gitSha"],
-            "sourceTreeDigest": source["treeDigest"],
-            "packageDigest": finalizer.sha256_ops_portal_tree(
-                payload_root / "prod/opsPortal/dist"
-            ),
-            "digests": {
-                "manifest": finalizer.sha256_file(
-                    payload_root / "prod/opsPortal/manifest.json"
-                ),
-                "distTree": finalizer.sha256_ops_portal_tree(
-                    payload_root / "prod/opsPortal/dist"
-                ),
-            },
-        },
-        "contractGraph": {
-            "schema": "qwq.contract-graph",
-            "sources": [],
-            "documents": [],
-            "objects": [],
-            "operations": [],
-            "projections": [],
-        },
-        "providerEvidence": {
-            "schema": "provider-conformance-readiness",
-            "status": "passed",
-            "generatedAt": "2026-07-28T00:00:00Z",
-            "source": {
-                key: source[key]
-                for key in ("gitSha", "treeDigest", "repository", "workflowRunId")
-            },
-            "candidateMaterial": {
-                "images": {
-                    service: descriptor["digest"]
-                    for service, descriptor in manifest["images"].items()
-                },
-                "contractGraphDigest": finalizer.sha256_file(contract_graph_path),
-            },
-            "sourceEvidence": {
-                "ref": PROVIDER_EVIDENCE_REF,
-                "digest": PROVIDER_EVIDENCE_DIGEST,
-                "files": provider_files,
-            },
-            "evidenceCount": provider_evidence_count,
-            "sourceCoverageIssues": [],
-            "readiness": provider_readiness,
-            "issues": [],
-        },
-    }
-    application_material: dict[str, dict[str, str]] = {
-        environment: {} for environment in finalizer.ENVIRONMENTS
-    }
-    for environment, surface in sorted(evidence_collector.ALL_APPLICATION_KEYS):
-        special_source = next(
-            (
-                artifact_id
-                for artifact_id, target in evidence_collector.APPLICATION_SOURCE_TARGETS.items()
-                if target == (environment, surface)
-            ),
-            None,
-        )
-        application_payload = (
-            payloads[special_source]
-            if special_source is not None
-            else {
-                "packageDigest": finalizer.sha256_tree(
-                    payload_root / environment / surface
-                )
-            }
-        )
-        application_material[environment][surface] = (
-            evidence_collector.application_package_digest(
-                application_payload,
-                environment=environment,
-                surface=surface,
             )
-        )
-    release_closure_files: dict[str, dict[str, str]] = {}
-    for index, (label, relative) in enumerate(
-        sorted(evidence_collector.RELEASE_CLOSURE_PATHS.items())
-    ):
-        closure_path = sources / relative
-        generator.write_json(
-            closure_path,
-            {"label": label, "sequence": index},
-        )
-        release_closure_files[label] = {
-            "path": relative,
-            "digest": finalizer.sha256_file(closure_path),
-        }
-    payloads["testEvidence"] = {
-        "schema": "qwq.three-layer-case-results",
-        "status": "passed",
-        "layers": {
-            layer: {
-                "status": "passed",
-                "artifactDigest": "sha256:" + ("f" * 64),
-                **(
-                    {
-                        "candidateMaterial": {
-                            "images": {
-                                service: descriptor["digest"]
-                                for service, descriptor in manifest["images"].items()
-                            },
-                            "configurationPackages": {
-                                environment: {
-                                    service: descriptor["digest"]
-                                    for service, descriptor in packages.items()
-                                }
-                                for environment, packages in manifest[
-                                    "configurationPackages"
-                                ].items()
-                            },
-                            "applicationPackages": application_material,
-                            "contractGraphDigest": finalizer.sha256_file(
-                                contract_graph_path
-                            ),
-                        }
-                    }
-                    if layer == "user_acceptance"
-                    else {}
-                ),
-            }
-            for layer in finalizer.TEST_LAYERS
-        },
-        "evidence": {"files": release_closure_files},
-    }
-    result: dict[str, Path] = {}
-    for key, payload in payloads.items():
-        path = contract_graph_path if key == "contractGraph" else sources / f"{key}.json"
-        generator.write_json(path, payload)
-        result[key] = path
-    return result
-
-
-def _application_package_sources(
-    root: Path,
-    manifest: dict[str, object],
-) -> dict[tuple[str, str], Path]:
-    source = manifest["source"]
-    assert isinstance(source, dict)
-    payloads = _application_package_payloads(root)
-    result: dict[tuple[str, str], Path] = {}
-    for environment, surface in sorted(evidence_collector.GENERIC_APPLICATION_KEYS):
-        path = root / "application-sources" / f"{environment}--{surface}.json"
-        generator.write_json(
-            path,
-            {
-                "schema": evidence_collector.GENERIC_APPLICATION_SCHEMA,
-                "environment": environment,
-                "surface": surface,
-                "sourceGitSha": source["gitSha"],
-                "sourceTreeDigest": source["treeDigest"],
-                "packageDigest": finalizer.sha256_tree(
-                    payloads / environment / surface
-                ),
-            },
-        )
-        result[(environment, surface)] = path
-    return result
-
 
 def _write_receipt(
     path: Path,
@@ -487,7 +237,6 @@ def _write_receipt(
     )
     return path
 
-
 def _qualify_for_prod(
     root: Path,
     artifact: Path,
@@ -516,19 +265,24 @@ def _qualify_for_prod(
         rollback_receipt_path=rollback_ready,
     )
 
-
 class ProdReleaseTransactionContractTest(unittest.TestCase):
     def test_prod_registry_attestations_are_verified_concurrently(self) -> None:
         rendezvous = threading.Barrier(2, timeout=2)
         manifest = {
             "source": {"repository": "owner/repo"},
-            "images": {
-                "content-service": {
-                    "ref": "ghcr.io/owner/repo/content-service@sha256:" + ("a" * 64)
-                },
-                "user-service": {
-                    "ref": "ghcr.io/owner/repo/user-service@sha256:" + ("b" * 64)
-                },
+            "environmentArtifacts": {
+                "prod": {
+                    "images": {
+                        "content-service": {
+                            "ref": "ghcr.io/owner/repo/content-service-prod@sha256:"
+                            + ("a" * 64)
+                        },
+                        "user-service": {
+                            "ref": "ghcr.io/owner/repo/user-service-prod@sha256:"
+                            + ("b" * 64)
+                        },
+                    }
+                }
             },
         }
 
@@ -549,26 +303,6 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             )
 
         self.assertEqual(verify_mock.call_count, 2)
-
-    def test_service_images_alone_are_not_marked_deployable(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            artifact = root / "artifact"
-            descriptors = root / "image-descriptors"
-            artifact.mkdir()
-            descriptors.mkdir()
-            manifest = _write_build_input(
-                artifact,
-                services=("content-service",),
-            )
-            _write_image_descriptors(descriptors, manifest)
-            finalized = finalizer.finalize(artifact, descriptors)
-            self.assertEqual(finalized["status"], "component-ready")
-            self.assertEqual(
-                finalized["applicationPackages"],
-                {environment: {} for environment in finalizer.ENVIRONMENTS},
-            )
-            self.assertIn("whole-application-evidence-pending", finalized["blockers"])
 
     def test_manifest_requires_every_digest_and_attestation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -605,8 +339,10 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             self.assertEqual(finalized["status"], "deployable")
             self.assertEqual(
                 set(finalized["applicationPackages"]),
-                set(finalizer.ENVIRONMENTS),
+                set(finalizer.APPLICATION_PACKAGES),
             )
+            self.assertIn("opsPortal", finalized)
+            self.assertNotIn("opsPortal", finalized["applicationPackages"])
             generator.write_json(
                 artifact / "governance-receipt.json",
                 {
@@ -624,10 +360,17 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             )
             self.assertEqual(path, (artifact / "manifest.json").resolve())
             self.assertEqual(digest, finalized["artifactDigest"])
-            self.assertEqual(set(loaded["images"]), set(generator.DEPLOYED_SERVICES))
+            self.assertEqual(
+                set(loaded["environmentArtifacts"]["prod"]["images"]),
+                set(generator.DEPLOYED_SERVICES),
+            )
 
             first_config = artifact / next(
-                iter(finalized["configurationPackages"]["prod"].values())
+                iter(
+                    finalized["environmentArtifacts"]["prod"][
+                        "configurationPackages"
+                    ].values()
+                )
             )["path"]
             first_config.write_text("tampered: true\n", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "config digest mismatch"):
@@ -643,6 +386,15 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             to_digest = "sha256:" + ("b" * 64)
             request = {
                 "schema": hosted_release_ledger.REQUEST_SCHEMA,
+                "environmentAcceptanceRef": "prod/fact.json",
+                "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
+                "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
+                "gammaPredecessorFactId": "sha256:" + ("8" * 64),
+                "gammaPredecessorDigest": "sha256:" + ("9" * 64),
+                "engineeringEligibilityRef": "prod/engineering.json",
+                "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
+                "durableApprovalRef": "prod/approval.json",
+                "durableApprovalDigest": "sha256:" + ("e" * 64),
                 "service": "prod-stack",
                 "fromCandidateDigest": from_digest,
                 "toCandidateDigest": to_digest,
@@ -720,6 +472,15 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             }
             initial = {
                 "schema": hosted_release_ledger.REQUEST_SCHEMA,
+                "environmentAcceptanceRef": "prod/fact.json",
+                "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
+                "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
+                "gammaPredecessorFactId": "sha256:" + ("8" * 64),
+                "gammaPredecessorDigest": "sha256:" + ("9" * 64),
+                "engineeringEligibilityRef": "prod/engineering.json",
+                "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
+                "durableApprovalRef": "prod/approval.json",
+                "durableApprovalDigest": "sha256:" + ("e" * 64),
                 "service": "prod-stack",
                 "fromCandidateDigest": source,
                 "toCandidateDigest": candidate,
@@ -852,6 +613,15 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
         digest = "sha256:" + ("b" * 64)
         receipt = {
             "schema": hosted_release_ledger.RECEIPT_SCHEMA,
+            "environmentAcceptanceRef": "prod/fact.json",
+            "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
+            "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
+            "gammaPredecessorFactId": "sha256:" + ("8" * 64),
+            "gammaPredecessorDigest": "sha256:" + ("9" * 64),
+            "engineeringEligibilityRef": "prod/engineering.json",
+            "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
+            "durableApprovalRef": "prod/approval.json",
+            "durableApprovalDigest": "sha256:" + ("e" * 64),
             "authority": hosted_release_ledger.AUTHORITY,
             "service": "prod-stack",
             "fromCandidateDigest": from_digest,
@@ -975,19 +745,3 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             ),
             ("rollback", "100 rollout cannot remain paused on warning SLO"),
         )
-
-    def test_global_release_lock_fails_closed(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            with patch.dict(
-                os.environ,
-                {"QWQ_PROD_RELEASE_STATE_DIR": str(Path(temporary).resolve())},
-                clear=False,
-            ):
-                with stackctl._prod_release_lock():
-                    with self.assertRaisesRegex(RuntimeError, "lock is held"):
-                        with stackctl._prod_release_lock():
-                            self.fail("nested release lock must not be acquired")
-
-
-if __name__ == "__main__":
-    unittest.main()

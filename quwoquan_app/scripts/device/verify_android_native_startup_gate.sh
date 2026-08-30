@@ -19,30 +19,23 @@ cd "${REPO_ROOT}"
 python3 quwoquan_app/scripts/device/build_launcher_handoff.py \
   --env alpha \
   --target alpha-local \
-  --launch-mode native_startup_instrumentation \
+  --launch-provenance canonical_launcher \
   >"${HANDOFF_FILE}"
 
 eval "$(
   python3 - "${HANDOFF_FILE}" <<'PY'
-import base64
 import json
 import shlex
 import sys
 
 handoff = json.load(open(sys.argv[1], encoding="utf-8"))
-encoded_defines = ",".join(
-    base64.b64encode(f"{key}={value}".encode()).decode()
-    for key, value in handoff["dartDefines"].items()
-)
 values = {
     "QWQ_APP_RUNTIME_ENV": handoff["environment"],
     "QWQ_LAUNCH_TARGET": handoff["target"],
-    "QWQ_DART_DEFINES_DIGEST": handoff["dartDefinesDigest"],
-    "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": handoff["runtimeConfigDigest"],
+    "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": handoff["runtimeConfigPackageDigest"],
     "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": handoff[
         "effectiveLaunchManifestDigest"
     ],
-    "GRADLE_DART_DEFINES": encoded_defines,
 }
 for key, value in values.items():
     print(f"export {key}={shlex.quote(str(value))}")
@@ -55,6 +48,4 @@ export QWQ_APP_BUILD_CONTEXT="package-only"
 
 cd "${APP_DIR}/android"
 ./gradlew :app:connectedDebugAndroidTest \
-  -Pqwq.nativeStartupInstrumentation=true \
-  -Pandroid.testInstrumentationRunnerArguments.class=com.quwoquan.quwoquan_app.StartupGateHandoffInstrumentedTest,com.quwoquan.quwoquan_app.StartupLaunchResourceInstrumentedTest \
-  -Pdart-defines="${GRADLE_DART_DEFINES}"
+  -Pandroid.testInstrumentationRunnerArguments.class=com.quwoquan.quwoquan_app.StartupGateHandoffInstrumentedTest,com.quwoquan.quwoquan_app.StartupLaunchResourceInstrumentedTest

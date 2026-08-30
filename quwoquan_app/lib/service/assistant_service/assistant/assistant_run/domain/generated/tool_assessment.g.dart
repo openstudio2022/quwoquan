@@ -32,18 +32,18 @@ class ToolAssessmentDto {
   final List<String> missingDimensions;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'assessmentType': assessmentType.wireName,
-        'userMessage': userMessage,
-        'shouldContinueLoop': shouldContinueLoop,
-        'gapFill': gapFill,
-        'rewriteQuery': rewriteQuery,
-        'allowAnswerWithCurrentEvidence': allowAnswerWithCurrentEvidence,
-        'reasonCode': reasonCode.wireName,
-        'referenceCount': referenceCount,
-        'queryCount': queryCount,
-        'coveredDimensions': coveredDimensions,
-        'missingDimensions': missingDimensions,
-      };
+    'assessmentType': assessmentType.wireName,
+    'userMessage': userMessage,
+    'shouldContinueLoop': shouldContinueLoop,
+    'gapFill': gapFill,
+    'rewriteQuery': rewriteQuery,
+    'allowAnswerWithCurrentEvidence': allowAnswerWithCurrentEvidence,
+    'reasonCode': reasonCode.wireName,
+    'referenceCount': referenceCount,
+    'queryCount': queryCount,
+    'coveredDimensions': coveredDimensions,
+    'missingDimensions': missingDimensions,
+  };
 
   factory ToolAssessmentDto.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -63,49 +63,106 @@ class ToolAssessmentDto {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('ToolAssessmentDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'ToolAssessmentDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('assessmentType') || json['assessmentType'] == null || (json['assessmentType'] is! String)) {
-      throw const FormatException('ToolAssessmentDto field assessmentType has an invalid wire value');
+    if (!json.containsKey('assessmentType') ||
+        json['assessmentType'] == null ||
+        (json['assessmentType'] is! String)) {
+      throw const FormatException(
+        'ToolAssessmentDto field assessmentType has an invalid wire value',
+      );
     }
-    if (json.containsKey('userMessage') && json['userMessage'] != null && (json['userMessage'] is! String)) {
-      throw const FormatException('ToolAssessmentDto field userMessage has an invalid wire value');
+    if (json.containsKey('userMessage') &&
+        json['userMessage'] != null &&
+        (json['userMessage'] is! String)) {
+      throw const FormatException(
+        'ToolAssessmentDto field userMessage has an invalid wire value',
+      );
     }
-    if (json.containsKey('shouldContinueLoop') && json['shouldContinueLoop'] != null && (json['shouldContinueLoop'] is! bool)) {
-      throw const FormatException('ToolAssessmentDto field shouldContinueLoop has an invalid wire value');
+    if (json.containsKey('shouldContinueLoop') &&
+        json['shouldContinueLoop'] != null &&
+        (json['shouldContinueLoop'] is! bool)) {
+      throw const FormatException(
+        'ToolAssessmentDto field shouldContinueLoop has an invalid wire value',
+      );
     }
-    if (json.containsKey('gapFill') && json['gapFill'] != null && (json['gapFill'] is! bool)) {
-      throw const FormatException('ToolAssessmentDto field gapFill has an invalid wire value');
+    if (json.containsKey('gapFill') &&
+        json['gapFill'] != null &&
+        (json['gapFill'] is! bool)) {
+      throw const FormatException(
+        'ToolAssessmentDto field gapFill has an invalid wire value',
+      );
     }
-    if (json.containsKey('rewriteQuery') && json['rewriteQuery'] != null && (json['rewriteQuery'] is! bool)) {
-      throw const FormatException('ToolAssessmentDto field rewriteQuery has an invalid wire value');
+    if (json.containsKey('rewriteQuery') &&
+        json['rewriteQuery'] != null &&
+        (json['rewriteQuery'] is! bool)) {
+      throw const FormatException(
+        'ToolAssessmentDto field rewriteQuery has an invalid wire value',
+      );
     }
-    if (json.containsKey('allowAnswerWithCurrentEvidence') && json['allowAnswerWithCurrentEvidence'] != null && (json['allowAnswerWithCurrentEvidence'] is! bool)) {
-      throw const FormatException('ToolAssessmentDto field allowAnswerWithCurrentEvidence has an invalid wire value');
+    if (json.containsKey('allowAnswerWithCurrentEvidence') &&
+        json['allowAnswerWithCurrentEvidence'] != null &&
+        (json['allowAnswerWithCurrentEvidence'] is! bool)) {
+      throw const FormatException(
+        'ToolAssessmentDto field allowAnswerWithCurrentEvidence has an invalid wire value',
+      );
     }
-    if (json.containsKey('reasonCode') && json['reasonCode'] != null && (json['reasonCode'] is! String)) {
-      throw const FormatException('ToolAssessmentDto field reasonCode has an invalid wire value');
+    if (json.containsKey('reasonCode') &&
+        json['reasonCode'] != null &&
+        (json['reasonCode'] is! String)) {
+      throw const FormatException(
+        'ToolAssessmentDto field reasonCode has an invalid wire value',
+      );
     }
-    if (json.containsKey('referenceCount') && json['referenceCount'] != null && (json['referenceCount'] is! num)) {
-      throw const FormatException('ToolAssessmentDto field referenceCount has an invalid wire value');
+    if (json.containsKey('referenceCount') &&
+        json['referenceCount'] != null &&
+        (json['referenceCount'] is! num)) {
+      throw const FormatException(
+        'ToolAssessmentDto field referenceCount has an invalid wire value',
+      );
     }
-    if (json.containsKey('queryCount') && json['queryCount'] != null && (json['queryCount'] is! num)) {
-      throw const FormatException('ToolAssessmentDto field queryCount has an invalid wire value');
+    if (json.containsKey('queryCount') &&
+        json['queryCount'] != null &&
+        (json['queryCount'] is! num)) {
+      throw const FormatException(
+        'ToolAssessmentDto field queryCount has an invalid wire value',
+      );
     }
-    if (json.containsKey('coveredDimensions') && json['coveredDimensions'] != null && (json['coveredDimensions'] is! List || (json['coveredDimensions'] as List).any((item) => item is! String))) {
-      throw const FormatException('ToolAssessmentDto field coveredDimensions has an invalid wire value');
+    if (json.containsKey('coveredDimensions') &&
+        json['coveredDimensions'] != null &&
+        (json['coveredDimensions'] is! List ||
+            (json['coveredDimensions'] as List).any(
+              (item) => item is! String,
+            ))) {
+      throw const FormatException(
+        'ToolAssessmentDto field coveredDimensions has an invalid wire value',
+      );
     }
-    if (json.containsKey('missingDimensions') && json['missingDimensions'] != null && (json['missingDimensions'] is! List || (json['missingDimensions'] as List).any((item) => item is! String))) {
-      throw const FormatException('ToolAssessmentDto field missingDimensions has an invalid wire value');
+    if (json.containsKey('missingDimensions') &&
+        json['missingDimensions'] != null &&
+        (json['missingDimensions'] is! List ||
+            (json['missingDimensions'] as List).any(
+              (item) => item is! String,
+            ))) {
+      throw const FormatException(
+        'ToolAssessmentDto field missingDimensions has an invalid wire value',
+      );
     }
     return ToolAssessmentDto(
-      assessmentType: parseAssessmentTypeStrict((json['assessmentType'] as String?)?.trim() ?? ''),
+      assessmentType: parseAssessmentTypeStrict(
+        (json['assessmentType'] as String?)?.trim() ?? '',
+      ),
       userMessage: (json['userMessage'] as String?)?.trim() ?? "",
       shouldContinueLoop: json['shouldContinueLoop'] != false,
       gapFill: json['gapFill'] == true,
       rewriteQuery: json['rewriteQuery'] == true,
-      allowAnswerWithCurrentEvidence: json['allowAnswerWithCurrentEvidence'] == true,
-      reasonCode: parsePlannerReasonCodeStrict((json['reasonCode'] as String?)?.trim() ?? "assessment_update"),
+      allowAnswerWithCurrentEvidence:
+          json['allowAnswerWithCurrentEvidence'] == true,
+      reasonCode: parsePlannerReasonCodeStrict(
+        (json['reasonCode'] as String?)?.trim() ?? "assessment_update",
+      ),
       referenceCount: (json['referenceCount'] as num?)?.toInt() ?? 0,
       queryCount: (json['queryCount'] as num?)?.toInt() ?? 0,
       coveredDimensions: _assistantStringList(json['coveredDimensions']),
@@ -115,7 +172,10 @@ class ToolAssessmentDto {
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }
@@ -127,7 +187,8 @@ class ToolAssessmentDtoFields {
   static const String shouldContinueLoop = 'shouldContinueLoop';
   static const String gapFill = 'gapFill';
   static const String rewriteQuery = 'rewriteQuery';
-  static const String allowAnswerWithCurrentEvidence = 'allowAnswerWithCurrentEvidence';
+  static const String allowAnswerWithCurrentEvidence =
+      'allowAnswerWithCurrentEvidence';
   static const String reasonCode = 'reasonCode';
   static const String referenceCount = 'referenceCount';
   static const String queryCount = 'queryCount';

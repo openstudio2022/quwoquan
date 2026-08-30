@@ -13,12 +13,23 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.ci import generate_release_bound_environment_identity as renderer
+from quwoquan_ops.cli.lib.app_identity import (
+    build_profile_for_environment,
+    resolve_build_product,
+    supported_build_products,
+)
+from quwoquan_ops.tests.support.app_artifact_manifest_test_support import (
+    app_artifact_manifest,
+)
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
+    DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENTS,
     RELEASE_CLOSURE_PATHS,
     canonical_candidate_digest,
+    canonical_environment_artifact_digest,
     canonical_manifest_digest,
+    canonical_release_train_digest,
 )
 
 DIGEST_A = "sha256:" + "a" * 64
@@ -62,24 +73,6 @@ def _checksum(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _research_activation_fields(environment: str) -> dict[str, Any]:
-    app_uat = {
-        "releaseId": RELEASE_ID,
-        "releaseClass": "research",
-        "productLifecycleState": "research",
-        "homepageId": "entity:west-lake",
-        "homepageTitle": "杭州西湖",
-        "articleWorkId": "post-article",
-        "articleTitle": "西湖图文",
-        "imageWorkId": "post-image",
-        "imageTitle": "西湖图片",
-        "videoWorkId": "post-video",
-        "videoTitle": "西湖视频",
-        "creatorId": "creator-1",
-        "creatorDisplayName": "创作者一号",
-        "tagLabel": "旅行",
-        "videoAttribution": "研究素材来源",
-    }
-    app_uat_digest = _document_digest(app_uat)
     verification_ref = (
         f"env/{environment}/runs/data-release/{RELEASE_ID}/verify-001/"
         "research-isolation-verification.json"
@@ -101,7 +94,6 @@ def _research_activation_fields(environment: str) -> dict[str, Any]:
             f"env/{environment}/runs/data-release/{RELEASE_ID}/import-001/import.json"
         ),
         "importReportDigest": DIGEST_B,
-        "appUatEnvelopeDigest": app_uat_digest,
         "researchIsolationPolicy": {
             "policyRef": f"quwoquan_ops/environments/{environment}/runtime.yaml",
             "policyDigest": ISOLATION_DIGEST,
@@ -117,8 +109,6 @@ def _research_activation_fields(environment: str) -> dict[str, Any]:
         "sourceDigest": SOURCE_DIGEST,
         "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
         "readinessPhase": "research",
-        "appUatEnvelope": app_uat,
-        "appUatEnvelopeDigest": app_uat_digest,
         "activationEnvelope": activation,
         "activationEnvelopeDigest": _document_digest(activation),
         "internalSubjectHash": SUBJECT_HASH,
@@ -137,58 +127,70 @@ class Fixture:
         self._build()
 
     def _build(self) -> None:
-        package_digests = {
-            "android": "sha256:" + "1" * 64,
-            "ios": "sha256:" + "2" * 64,
+        application_packages: dict[str, dict[str, str]] = {}
+        application_source_ref = f"oci://ghcr.io/owner/app@{DIGEST_B}"
+        profile = build_profile_for_environment(self.environment)
+        required_products = {
+            product.build_product_id
+            for product in supported_build_products()
+            if product.build_profile in {profile, "shared"}
         }
-        for surface in ("android", "ios"):
-            payload: dict[str, Any]
-            if self.environment == "prod" and surface == "android":
-                payload = {
-                    "schema": "client-app.android.official-release",
-                    "sourceGitSha": GIT_SHA,
-                    "sourceTreeDigest": TREE_DIGEST,
-                    "packagedAPK": "quwoquan.apk",
-                    "apkSHA256": package_digests[surface].removeprefix("sha256:"),
-                }
-            else:
+        for build_product_id in APPLICATION_PACKAGES:
+            package_digest = (
+                "sha256:"
+                + hashlib.sha256(build_product_id.encode()).hexdigest()
+            )
+            descriptor_digest = DIGEST_A
+            if build_product_id in required_products:
+                product = resolve_build_product(build_product_id)
                 payload = {
                     "schema": "release-application-package",
-                    "environment": self.environment,
-                    "surface": surface,
+                    "buildProductId": build_product_id,
+                    "buildProfile": product.build_profile,
+                    "platform": product.platform,
                     "sourceGitSha": GIT_SHA,
                     "sourceTreeDigest": TREE_DIGEST,
-                    "packageDigest": package_digests[surface],
+                    "packageDigest": package_digest,
+                    "artifactManifest": app_artifact_manifest(
+                        build_product_id=build_product_id,
+                        source_git_sha=GIT_SHA,
+                        source_tree_digest=TREE_DIGEST,
+                        artifact_digest=package_digest,
+                    ),
                 }
-            self.app_paths.append(
-                _write(
-                    self.root / f"app-{surface}.json",
+                app_path = _write(
+                    self.root / f"app-{build_product_id}.json",
                     payload,
                 )
+                self.app_paths.append(app_path)
+                descriptor_digest = _sha(app_path)
+            application_packages[build_product_id] = {
+                "path": f"packages/applications/{build_product_id}/receipt.json",
+                "digest": descriptor_digest,
+                "packageDigest": package_digest,
+                "sourceRef": application_source_ref,
+            }
+        distribution_descriptors: dict[str, dict[str, str]] = {}
+        distribution_schemas = {
+            "publicWeb": "client-app.web.official-release",
+            "androidOfficialRelease": "client-app.android.official-release",
+        }
+        for evidence_key, relative in DISTRIBUTION_EVIDENCE_PATHS.items():
+            distribution_path = _write(
+                self.root / relative,
+                {
+                    "schema": distribution_schemas[evidence_key],
+                    "sourceGitSha": GIT_SHA,
+                    "sourceTreeDigest": TREE_DIGEST,
+                },
             )
-
-        application_packages: dict[str, dict[str, dict[str, str]]] = {}
-        application_source_ref = f"oci://ghcr.io/owner/app@{DIGEST_B}"
-        for environment in ENVIRONMENTS:
-            application_packages[environment] = {}
-            for surface in APPLICATION_PACKAGES[environment]:
-                package_digest = (
-                    "sha256:"
-                    + hashlib.sha256(f"{environment}/{surface}".encode()).hexdigest()
-                )
-                descriptor_digest = DIGEST_A
-                if environment == self.environment and surface in package_digests:
-                    index = 0 if surface == "android" else 1
-                    package_digest = package_digests[surface]
-                    descriptor_digest = _sha(self.app_paths[index])
-                application_packages[environment][surface] = {
-                    "path": f"packages/applications/{environment}/{surface}/receipt.json",
-                    "digest": descriptor_digest,
-                    "packageDigest": package_digest,
-                    "sourceRef": application_source_ref,
-                }
+            distribution_descriptors[evidence_key] = {
+                "path": relative,
+                "digest": _sha(distribution_path),
+            }
         manifest: dict[str, Any] = {
             "schema": "release-evidence-manifest",
+            "releaseTrainId": None,
             "candidateId": None,
             "status": "candidate-ready",
             "generatedAt": "2026-07-28T21:00:00Z",
@@ -200,41 +202,79 @@ class Fixture:
                 "sourceArchiveDigest": DIGEST_A,
             },
             "artifactDigest": None,
-            "images": {
-                "content-service": {
-                    "repository": "ghcr.io/owner/content-service",
-                    "transportRef": "ghcr.io/owner/content-service:candidate-100",
-                    "digest": DIGEST_A,
-                    "ref": f"ghcr.io/owner/content-service@{DIGEST_A}",
-                    "attestations": {
-                        "spdxSbom": f"oci://ghcr.io/owner/content-service@{DIGEST_A}#spdxSbom",
-                        "slsaProvenance": f"oci://ghcr.io/owner/content-service@{DIGEST_A}#slsaProvenance",
+            "environmentArtifacts": {
+                environment: {
+                    "environment": environment,
+                    "environmentArtifactDigest": None,
+                    "images": {
+                        "content-service": {
+                            "repository": (
+                                "ghcr.io/owner/content-service-"
+                                + ("prod" if environment == "prod" else "nonprod")
+                            ),
+                            "transportRef": (
+                                "ghcr.io/owner/content-service-"
+                                + ("prod" if environment == "prod" else "nonprod")
+                                + ":candidate-100"
+                            ),
+                            "digest": f"sha256:{(2 if environment == 'prod' else 1):064x}",
+                            "ref": (
+                                "ghcr.io/owner/content-service-"
+                                + ("prod" if environment == "prod" else "nonprod")
+                                + "@"
+                                + f"sha256:{(2 if environment == 'prod' else 1):064x}"
+                            ),
+                            "attestations": {
+                                "spdxSbom": (
+                                    "oci://ghcr.io/owner/content-service-"
+                                    + ("prod" if environment == "prod" else "nonprod")
+                                    + "@"
+                                    + f"sha256:{(2 if environment == 'prod' else 1):064x}"
+                                    + "#spdxSbom"
+                                ),
+                                "slsaProvenance": (
+                                    "oci://ghcr.io/owner/content-service-"
+                                    + ("prod" if environment == "prod" else "nonprod")
+                                    + "@"
+                                    + f"sha256:{(2 if environment == 'prod' else 1):064x}"
+                                    + "#slsaProvenance"
+                                ),
+                            },
+                        }
+                    },
+                    "configurationPackages": {
+                        "content-service": {
+                            "path": (
+                                f"packages/environments/{environment}/"
+                                "services/content-service/config/config.yaml"
+                            ),
+                            "digest": DIGEST_A,
+                        }
                     },
                 }
-            },
-            "configurationPackages": {
-                environment: {
-                    "content-service": {
-                        "path": (
-                            f"packages/environments/{environment}/"
-                            "services/content-service/config/config.yaml"
-                        ),
-                        "digest": DIGEST_A,
-                    }
-                }
-                for environment in ENVIRONMENTS
+                for index, environment in enumerate(ENVIRONMENTS, start=1)
             },
             "applicationPackages": application_packages,
+            "publicWeb": distribution_descriptors["publicWeb"],
+            "androidOfficialRelease": distribution_descriptors[
+                "androidOfficialRelease"
+            ],
+            "opsPortal": {
+                "path": "evidence/ops-portal/provenance.json",
+                "digest": DIGEST_A,
+                "packageDigest": DIGEST_B,
+                "sourceRef": "oci://ghcr.io/owner/ops-portal@" + DIGEST_B,
+            },
             "contractGraphDigest": DIGEST_A,
             "requiredEvidence": {
-                "images": ["content-service"],
+                "environmentArtifacts": {
+                    environment: ["content-service"] for environment in ENVIRONMENTS
+                },
                 "configurationPackages": {
                     environment: ["content-service"] for environment in ENVIRONMENTS
                 },
-                "applicationPackages": {
-                    environment: list(APPLICATION_PACKAGES[environment])
-                    for environment in ENVIRONMENTS
-                },
+                "applicationPackages": list(APPLICATION_PACKAGES),
+                "opsPortal": True,
                 "contractGraphDigest": True,
                 "providerEvidence": True,
                 "testEvidence": [
@@ -282,6 +322,11 @@ class Fixture:
                 "rollbackReceipt.outcome",
             ],
         }
+        for environment in ENVIRONMENTS:
+            manifest["environmentArtifacts"][environment][
+                "environmentArtifactDigest"
+            ] = canonical_environment_artifact_digest(manifest, environment)
+        manifest["releaseTrainId"] = canonical_release_train_digest(manifest)
         manifest["candidateId"] = canonical_candidate_digest(manifest)
         if self.environment == "prod":
 
@@ -321,6 +366,25 @@ class Fixture:
         manifest["artifactDigest"] = canonical_manifest_digest(manifest)
         self.paths["manifest"] = _write(self.root / "manifest.json", manifest)
 
+        self.paths["acceptance"] = _write(
+            self.root / "environment-acceptance.json",
+            {
+                "schema": "quwoquan_ops.environment_acceptance_fact.v1",
+                "factId": DIGEST_A,
+                "environment": self.environment,
+                "target": self.target,
+                "releaseId": RELEASE_ID,
+                "releaseDigest": RELEASE_DIGEST,
+                "requiredRawResults": [
+                    {
+                        "ref": f"env/{self.environment}/raw/readiness-case.json",
+                        "digest": DIGEST_B,
+                        "slotId": DIGEST_A,
+                        "status": "passed",
+                    }
+                ],
+            },
+        )
         self.paths["readiness"] = _write(
             self.root / "release-readiness.json",
             _checksum(
@@ -477,20 +541,25 @@ class Fixture:
         launch = {
             "schema": "app-effective-launch-manifest",
             "environment": self.environment,
+            "buildProfile": build_profile_for_environment(self.environment),
             "target": self.target,
             "entrypoint": "lib/main_prod.dart",
-            "launchMode": "matrix_uat",
-            "dartDefinesDigest": DIGEST_A,
-            "runtimeConfigDigest": DIGEST_B,
-            "recoveryBaseUrl": "https://api.example.com",
-            "publicWebBaseUrl": "https://example.com",
-            "appDownloadBaseUrl": "https://cdn.example.com/download",
+            "launchProvenance": "release_package",
+            "runtimeConfigSupplyMode": "external_runtime_package",
+            "launchPolicy": (
+                "prod_release" if self.environment == "prod" else "test_live"
+            ),
+            "runtimeConfigPackageDigest": DIGEST_A,
+            "runtimeConfigTrustEnvelopeDigest": DIGEST_B,
             "requiresLocalTransport": self.environment != "prod",
             "transport": transport,
         }
         self.launch_digest = renderer._canonical_digest(launch)
         self.paths["launch"] = _write(self.root / "launch.json", launch)
-        artifacts = dict(package_digests)
+        artifacts = {
+            build_product_id: application_packages[build_product_id]["packageDigest"]
+            for build_product_id in sorted(required_products)
+        }
         profiles = sorted(renderer.EXPECTED_DEVICE_PROFILES[self.environment])
         runtime_evidence: dict[str, Any] = {}
         readback_evidence: dict[str, Any] = {}
@@ -519,7 +588,8 @@ class Fixture:
                     "platform": platform,
                     "deviceKind": device_kind,
                     "sourceReport": f"evidence/startup/{attempt}.json",
-                    "launchMode": "matrix_uat",
+                    "launchProvenance": "release_package",
+                    "runtimeConfigSupplyMode": "external_runtime_package",
                     "hotRestart": False,
                     "runtimeConfigurationState": "complete",
                     "missingDefineKeys": [],
@@ -721,6 +791,8 @@ class Fixture:
             str(self.paths["replay"]),
             "--effective-launch-manifest",
             str(self.paths["launch"]),
+            "--environment-acceptance-fact",
+            str(self.paths["acceptance"]),
         ]
         for path in self.app_paths:
             values.extend(["--app-artifact-receipt", str(path)])

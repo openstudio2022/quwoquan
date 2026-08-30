@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -21,11 +20,6 @@ from content.source.independent_asset_review_contract import (
     file_digest,
 )
 from core.source_digest import content_source_revision
-from governance.coverage.distribution import (
-    ProductLifecycleState,
-    ReleaseClass,
-    load_content_distribution_policy,
-)
 
 
 def _digest(seed: str) -> str:
@@ -49,6 +43,7 @@ def _build_test_release_asset_admission(**kwargs):
     objects_root = kwargs["objects_root"]
     return build_release_asset_admission(
         **kwargs,
+        release_class="research",
         output_root=_review_output_root(objects_root),
     )
 
@@ -67,14 +62,6 @@ def _rights_asset(asset_id: str) -> dict[str, object]:
         "termsUrl": "https://media.example/terms",
         "authorizationProof": "",
     }
-
-
-def _research_policy():
-    return replace(
-        load_content_distribution_policy(),
-        product_lifecycle_state=ProductLifecycleState.RESEARCH,
-        release_class=ReleaseClass.RESEARCH,
-    )
 
 
 def _source_asset_counts(asset_count: int) -> list[dict[str, object]]:
@@ -387,7 +374,6 @@ def test_research_release_accepts_unverified_assets_for_all_four_carriers(
         release_id="research-release",
         objects_root=tmp_path,
         desired=desired,
-        policy=_research_policy(),
     )
 
     assert admission["releaseClass"] == "research"
@@ -407,19 +393,13 @@ def test_research_release_accepts_unverified_assets_for_all_four_carriers(
 
 def test_commercial_release_rejects_same_unverified_assets(tmp_path: Path) -> None:
     desired = _release_objects(tmp_path)
-    research = load_content_distribution_policy()
-    commercial = replace(
-        research,
-        product_lifecycle_state=ProductLifecycleState.COMMERCIAL,
-        release_class=ReleaseClass.COMMERCIAL,
-    )
-
     with pytest.raises(ObjectTransactionError, match="non-commercial assets"):
-        _build_test_release_asset_admission(
+        build_release_asset_admission(
             release_id="commercial-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=commercial,
+            release_class="commercial",
+            output_root=_review_output_root(tmp_path),
         )
 
 
@@ -430,18 +410,12 @@ def test_commercial_release_does_not_filter_author_by_avatar_rights(
         tmp_path / "creators/creator/rights_snapshots/avatar.json",
         {"commercialRights": _rights_asset("avatar-unverified")},
     )
-    research = load_content_distribution_policy()
-    commercial = replace(
-        research,
-        product_lifecycle_state=ProductLifecycleState.COMMERCIAL,
-        release_class=ReleaseClass.COMMERCIAL,
-    )
-
-    admission = _build_test_release_asset_admission(
+    admission = build_release_asset_admission(
         release_id="commercial-avatar-independent",
         objects_root=tmp_path,
         desired={"entities": [], "posts": [], "creators": ["creator"], "tags": []},
-        policy=commercial,
+        release_class="commercial",
+        output_root=_review_output_root(tmp_path),
     )
 
     assert admission["containsUnverifiedAssets"] is False
@@ -472,12 +446,10 @@ def test_professional_acquisition_without_frozen_review_is_gate_blocked(
             release_id="acquisition-only-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=_research_policy(),
         )
 
 
 def test_article_media_coverage_reports_target_shortfall_without_blocking() -> None:
-    policy = load_content_distribution_policy()
     illustrated = {
         "carrier": "article",
         "objectRef": "posts/illustrated",
@@ -513,16 +485,10 @@ def test_article_media_coverage_reports_target_shortfall_without_blocking() -> N
             "articleRenderProfile": _article_render_profile(mode="text_only"),
         },
     }
-    coverage = _article_media_coverage(
-        [illustrated] * 9 + [text_only],
-        policy=policy,
-    )
+    coverage = _article_media_coverage([illustrated] * 9 + [text_only])
     assert coverage["illustratedRate"] == 0.9
 
-    below_target = _article_media_coverage(
-        [illustrated] * 8 + [text_only] * 2,
-        policy=policy,
-    )
+    below_target = _article_media_coverage([illustrated] * 8 + [text_only] * 2)
     assert below_target == {
         "articleCount": 10,
         "illustratedCount": 8,
@@ -547,7 +513,6 @@ def test_article_release_rejects_two_cover_assets_despite_two_bindings(
             release_id="two-cover-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=_research_policy(),
         )
 
 
@@ -564,7 +529,6 @@ def test_article_cover_and_body_may_use_independently_authorized_sources(
         release_id="mixed-source-article-release",
         objects_root=tmp_path,
         desired=desired,
-        policy=_research_policy(),
     )
 
     assert next(
@@ -587,7 +551,6 @@ def test_video_release_requires_independent_publishable_review(
             release_id="unreviewed-video-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=_research_policy(),
         )
 
 
@@ -626,7 +589,6 @@ def test_video_release_revalidates_motion_evidence(
             release_id="invalid-video-evidence-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=_research_policy(),
         )
 
 
@@ -660,7 +622,6 @@ def test_daily_research_release_accepts_truthfully_unranked_video(
         release_id="daily-research-release",
         objects_root=tmp_path,
         desired=desired,
-        policy=_research_policy(),
     )
 
     assert next(
@@ -679,7 +640,6 @@ def test_required_carrier_media_cannot_be_inferred_from_rights_only(
             release_id="research-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=_research_policy(),
         )
 
 
@@ -695,7 +655,6 @@ def test_required_carrier_media_rejects_empty_manifest_and_rights(
             release_id="research-release",
             objects_root=tmp_path,
             desired=desired,
-            policy=_research_policy(),
         )
 
 

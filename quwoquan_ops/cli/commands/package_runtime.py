@@ -22,15 +22,48 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import re
-import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
+
+from quwoquan_ops.cli.commands.package_runtime_support import (
+    _build_official_skill_package_publication as _build_skill_publication,
+)
+from quwoquan_ops.cli.commands.package_runtime_support import (
+    _receipt_safe_step,
+    _receipt_safe_text,
+    _runtime_package_report_path,
+    _validate_runtime_package_identity_readback,
+)
+from quwoquan_ops.cli.commands.package_runtime_support import (
+    _run_runtime_compile_preflight as _run_compile_preflight,
+)
+
+__all__ = (
+    "_command_package_unlocked",
+    "_run_runtime_compile_preflight",
+    "_runtime_package_report_path",
+    "_validate_runtime_package_identity_readback",
+)
 
 # 与 stackctl.ROOT 同源同值(仓库根);仅用于函数默认参数,
 # 函数体内仍统一经 `_stackctl.ROOT` 访问。
 _REPO_ROOT = Path(__file__).resolve().parents[3]
+PACKAGE_CAPSULE_CAS_BLOCKER = "OPS.PACKAGE.input_capsule_cas_drift"
+
+
+def _persist_package_capsule_cas_failure(
+    *, report_dir: Path, env_name: str, target_name: str,
+    package_snapshot: dict[str, object], reports: list[dict[str, Any]],
+    detail: str, timing: dict[str, Any],
+) -> dict[str, Any]:
+    from quwoquan_ops.cli.commands.package_runtime_capsule_receipt import (
+        _persist_package_capsule_cas_failure as persist_failure,
+    )
+    return persist_failure(
+        report_dir=report_dir, env_name=env_name, target_name=target_name,
+        package_snapshot=package_snapshot, reports=reports, detail=detail, timing=timing,
+    )
 
 
 def _build_official_skill_package_publication(
@@ -41,156 +74,13 @@ def _build_official_skill_package_publication(
     package_environment: dict[str, str],
     output_root: Path | None = None,
 ) -> dict[str, Any]:
-    """把签名官方 Skill package publication 产物封进 assistant 服务包。
-
-    运行时(assistant 模块 PrepareMigration)在空环境凭该产物幂等自举
-    stage+activate;没有它,readiness 的 active-package 检查会与环境首次
-    启动死锁。产物走 skill-package-build 的既有签名/receipt 链路,
-    build-id 由官方源树 digest 派生,保证同源打包字节幂等。
-    """
-    import shutil
-    import subprocess
-
-    from quwoquan_ops.cli.lib.local_assistant_skill_package_keys import (
-        KEY_ID,
-        prepare_local_assistant_skill_package_keys,
+    return _build_skill_publication(
+        env_name,
+        target_name,
+        package_source_root=package_source_root,
+        package_environment=package_environment,
+        output_root=output_root,
     )
-    from quwoquan_ops.cli.lib.local_assistant_skill_package_publication import (
-        _private_key_base64,
-        _source_digest,
-    )
-
-    keys = prepare_local_assistant_skill_package_keys(env_name, target_name)
-    source_root = (
-        package_source_root
-        / "quwoquan_service/services/assistant-service/resources/skill_packages/official"
-    )
-    source_digest = _source_digest(source_root)
-    build_id = "local-" + source_digest.removeprefix("sha256:")[:16]
-    from quwoquan_ops.cli import stackctl as _stackctl
-
-    if output_root is None:
-        output_root = (
-            _stackctl.service_deployment_package_dir(
-                env_name, "assistant-service", target=target_name
-            )
-            / "skill-packages"
-        )
-    if output_root.exists():
-        shutil.rmtree(output_root)
-    source_revision = str(
-        package_environment.get("QWQ_PACKAGE_SOURCE_REVISION") or ""
-    ).strip() or ("0" * 40)
-    command = [
-        "go",
-        "run",
-        "./services/assistant-service/cmd/skill-package-build",
-        "--source-root",
-        "services/assistant-service/resources/skill_packages/official",
-        "--output-root",
-        str(output_root),
-        "--package-version",
-        "1.0.0",
-        "--build-id",
-        build_id,
-        "--source-repository",
-        "quwoquan",
-        "--source-revision",
-        source_revision,
-        "--built-at",
-        "2026-01-01T00:00:00Z",
-        "--key-id",
-        KEY_ID,
-        "--command-id",
-        f"official-bootstrap-{build_id}",
-        "--expected-revision",
-        "0",
-        "--activated-by",
-        f"service:local-managed-bootstrap:{target_name}",
-    ]
-    result = subprocess.run(
-        command,
-        cwd=str(package_source_root / "quwoquan_service"),
-        env={
-            **os.environ,
-            **package_environment,
-            "ASSISTANT_SKILL_PACKAGE_SIGNING_PRIVATE_KEY_BASE64": _private_key_base64(
-                keys.private_key_path,
-                keys.public_keys_json,
-            ),
-        },
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    return {
-        "name": "assistant-skill-package-publication",
-        "argv": [item for item in command if "PRIVATE" not in item],
-        "exitCode": result.returncode,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-    }
-
-
-def _validate_runtime_package_identity_readback(
-    *,
-    report_path: Path,
-    fingerprint_path: Path,
-    manifest_path: Path,
-) -> dict[str, Any]:
-    """Read back one non-claiming package identity from all three artifacts."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    payloads: dict[str, dict[str, Any]] = {}
-    for label, path in (
-        ("package report", report_path),
-        ("package fingerprint", fingerprint_path),
-        ("candidate manifest", manifest_path),
-    ):
-        if path.is_symlink() or not path.is_file():
-            raise ValueError(f"{label} is missing or unsafe")
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise ValueError(f"{label} is unreadable: {exc}") from exc
-        if not isinstance(payload, dict):
-            raise ValueError(f"{label} must be a JSON object")
-        if "formalRelease" in payload:
-            raise ValueError(f"{label} must not claim formalRelease")
-        payloads[label] = payload
-
-    identities: dict[str, dict[str, Any]] = {}
-    for label, payload in payloads.items():
-        classification = payload.get("releaseInputClassification")
-        graph_digest = payload.get("contractGraphDigest")
-        if classification not in _stackctl.RELEASE_INPUT_CLASSIFICATIONS:
-            raise ValueError(f"{label} releaseInputClassification is invalid")
-        if re.fullmatch(r"sha256:[0-9a-f]{64}", str(graph_digest or "")) is None:
-            raise ValueError(f"{label} contractGraphDigest is invalid")
-        identities[label] = {
-            "releaseInputClassification": str(classification),
-            "contractGraphDigest": str(graph_digest),
-            "graphqlReadRegistry": payload.get("graphqlReadRegistry"),
-        }
-        if not isinstance(identities[label]["graphqlReadRegistry"], dict):
-            raise ValueError(f"{label} graphqlReadRegistry is invalid")
-    expected = identities["candidate manifest"]
-    if any(identity != expected for identity in identities.values()):
-        raise ValueError("runtime package release/ContractGraph identity drifted")
-    return expected
-
-
-def _runtime_package_report_path(report_ref: str) -> Path:
-    """Resolve the package report file from the canonical report directory."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    normalized = str(report_ref or "").strip()
-    if not normalized:
-        raise ValueError("package report directory is required")
-    report_dir = Path(normalized)
-    if not report_dir.is_absolute():
-        report_dir = _stackctl.ROOT / report_dir
-    return report_dir / "report.json"
 
 
 def _run_runtime_compile_preflight(
@@ -198,60 +88,10 @@ def _run_runtime_compile_preflight(
     package_environment: dict[str, str],
     source_root: Path = _REPO_ROOT,
 ) -> tuple[list[dict[str, Any]], str]:
-    """Compile every runtime entrypoint before any package/image materialization."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    checks = [
-        (
-            "compile-entrypoints:go",
-            [
-                "go",
-                "test",
-                "-run",
-                "^$",
-                "./services/.../cmd/...",
-                "./control-plane/.../cmd/...",
-            ],
-            source_root / "quwoquan_service",
-        ),
-        (
-            "compile-entrypoints:recommendation-python",
-            [
-                sys.executable,
-                "-B",
-                "-c",
-                (
-                    "import ast,pathlib;"
-                    "root=pathlib.Path('services/recommendation-service');"
-                    "files=sorted(root.rglob('*.py'));"
-                    "assert files, 'recommendation Python source set is empty';"
-                    "[(ast.parse(path.read_text(encoding='utf-8'), filename=str(path))) "
-                    "for path in files]"
-                ),
-            ],
-            source_root / "quwoquan_service",
-        ),
-    ]
-    reports: list[dict[str, Any]] = []
-    for name, argv, cwd in checks:
-        result = _stackctl.run(argv, cwd=cwd, env=package_environment)
-        reports.append(
-            {
-                "name": name,
-                "argv": argv,
-                "exitCode": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-            }
-        )
-        if result.returncode != 0:
-            return (
-                reports,
-                result.stderr.strip()
-                or result.stdout.strip()
-                or f"{name} failed",
-            )
-    return reports, ""
+    return _run_compile_preflight(
+        package_environment=package_environment,
+        source_root=source_root,
+    )
 
 
 def _command_package_unlocked(
@@ -263,9 +103,16 @@ def _command_package_unlocked(
     package_capsule_root: Path | None = None,
 ) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.deployment_candidate_manifest import manifest
 
     if getattr(args, "kind", "runtime") == "release-manifest":
         return _stackctl._command_package_release_manifest(args)
+    if getattr(args, "kind", "runtime") == "app-artifact":
+        from quwoquan_ops.cli.commands.package_app_artifact import (
+            command_package_app_artifact,
+        )
+
+        return command_package_app_artifact(args)
     if getattr(args, "kind", "runtime") == "legal-static":
         return _stackctl._command_package_legal_static(args)
     if getattr(args, "kind", "runtime") == "ops-portal":
@@ -280,6 +127,7 @@ def _command_package_unlocked(
             release = _stackctl.package_web_official_release(
                 repo_root=_stackctl.ROOT,
                 environment=env_name,
+                target=target_name,
                 package_root=_stackctl.web_deployment_package_dir(
                     env_name,
                     target=target_name,
@@ -299,6 +147,7 @@ def _command_package_unlocked(
                 f"origin: {release['publicOrigin']}",
                 f"release: {release['releaseId']}",
                 f"manifest: {_stackctl.relpath(Path(str(release['manifestPath'])))}",
+                f"active: {_stackctl.relpath(Path(str(release['activePath'])))}",
                 f"noindex: {release['noindex']}",
             ],
         }
@@ -321,7 +170,11 @@ def _command_package_unlocked(
                 package_root=package_root,
                 public_origin=str(public_bases.get("publicWeb") or ""),
                 download_origin=str(public_bases.get("appDownload") or ""),
-                expected_package="com.quwoquan.quwoquan_app",
+                # 官网 APK 是 Release 制品；包名按 canonical 身份映射推导，
+                # 非 prod 环境带环境后缀，禁止硬编码单一 applicationId。
+                expected_package=_stackctl.application_id_for(
+                    "android", env_name, "release"
+                ),
                 expected_signing_certificate_sha256=os.environ.get(
                     "QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256", ""
                 ),
@@ -379,6 +232,7 @@ def _command_package_unlocked(
     reports: list[dict[str, Any]] = []
     packaged_services: list[str] = []
     provider_runtime_package: dict[str, Any] | None = None
+    provider_binding_overlay_package: dict[str, Any] | None = None
     observability_log_sink_package: dict[str, Any] | None = None
     graphql_read_registry_package: dict[str, Any] | None = None
     package_cache = _stackctl.target_cache_dir(target_name) / "package"
@@ -447,19 +301,19 @@ def _command_package_unlocked(
             environment=package_environment,
         )
         reports.append(
-            {
+            _receipt_safe_step({
                 "name": "legal-static-package",
                 "argv": legal_payload.get("argv", []),
                 "exitCode": legal_result.returncode,
                 "stdout": legal_result.stdout,
                 "stderr": legal_result.stderr,
-            }
+            })
         )
         if legal_result.returncode != 0:
             timing = _stackctl._finish_timing(started_monotonic, started_at)
             detail = (
-                legal_result.stderr.strip()
-                or legal_result.stdout.strip()
+                _receipt_safe_text(legal_result.stderr.strip())
+                or _receipt_safe_text(legal_result.stdout.strip())
                 or "legal-static package failed"
             )
             _stackctl.write_json(
@@ -481,13 +335,13 @@ def _command_package_unlocked(
         app_cmd = ["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", env_name]
         app_result = _stackctl.run(app_cmd, cwd=package_source_root, env=package_environment)
         reports.append(
-            {
+            _receipt_safe_step({
                 "name": "app-package",
                 "argv": app_cmd,
                 "exitCode": app_result.returncode,
                 "stdout": app_result.stdout,
                 "stderr": app_result.stderr,
-            }
+            })
         )
         if app_result.returncode != 0:
             timing = _stackctl._finish_timing(started_monotonic, started_at)
@@ -498,7 +352,10 @@ def _command_package_unlocked(
                 target=target_name,
                 status="failed",
                 summary=f"stackctl package failed for {env_name}",
-                details=[app_result.stderr.strip() or app_result.stdout.strip()],
+                details=[
+                    _receipt_safe_text(app_result.stderr.strip())
+                    or _receipt_safe_text(app_result.stdout.strip())
+                ],
                 extra={"env": env_name},
                 timing=timing,
             )
@@ -506,7 +363,10 @@ def _command_package_unlocked(
             return {
                 "exitCode": app_result.returncode,
                 "summary": f"stackctl package failed for {env_name}",
-                "details": [app_result.stderr.strip() or app_result.stdout.strip()],
+                "details": [
+                    _receipt_safe_text(app_result.stderr.strip())
+                    or _receipt_safe_text(app_result.stdout.strip())
+                ],
                 "reportDir": _stackctl.relpath(report_dir),
                 **timing,
             }
@@ -528,13 +388,13 @@ def _command_package_unlocked(
             ]
             svc_result = _stackctl.run(svc_cmd, cwd=package_source_root, env=package_environment)
             reports.append(
-                {
+                _receipt_safe_step({
                     "name": f"service-package:{service}",
                     "argv": svc_cmd,
                     "exitCode": svc_result.returncode,
                     "stdout": svc_result.stdout,
                     "stderr": svc_result.stderr,
-                }
+                })
             )
             if svc_result.returncode != 0:
                 timing = _stackctl._finish_timing(started_monotonic, started_at)
@@ -545,7 +405,10 @@ def _command_package_unlocked(
                     target=target_name,
                     status="failed",
                     summary=f"stackctl package failed for {service}/{env_name}",
-                    details=[svc_result.stderr.strip() or svc_result.stdout.strip()],
+                    details=[
+                        _receipt_safe_text(svc_result.stderr.strip())
+                        or _receipt_safe_text(svc_result.stdout.strip())
+                    ],
                     extra={"env": env_name},
                     timing=timing,
                 )
@@ -556,7 +419,10 @@ def _command_package_unlocked(
                 return {
                     "exitCode": svc_result.returncode,
                     "summary": f"stackctl package failed for {service}/{env_name}",
-                    "details": [svc_result.stderr.strip() or svc_result.stdout.strip()],
+                    "details": [
+                        _receipt_safe_text(svc_result.stderr.strip())
+                        or _receipt_safe_text(svc_result.stdout.strip())
+                    ],
                     "reportDir": _stackctl.relpath(report_dir),
                     **timing,
                 }
@@ -565,13 +431,14 @@ def _command_package_unlocked(
                 f"{_stackctl.relpath(_stackctl.service_deployment_package_dir(env_name, service, target=target_name))}"
             )
 
-    if not args.service and env_name in {"alpha", "beta", "gamma"}:
+    if not args.service:
         skill_step = _build_official_skill_package_publication(
             env_name,
             target_name,
             package_source_root=package_source_root,
             package_environment=package_environment,
         )
+        skill_step = _receipt_safe_step(skill_step)
         reports.append(skill_step)
         if skill_step["exitCode"] != 0:
             timing = _stackctl._finish_timing(started_monotonic, started_at)
@@ -723,6 +590,7 @@ def _command_package_unlocked(
             provider_runtime_package = _stackctl.materialize_provider_runtime_package(
                 env_name,
                 target_name,
+                source_root=package_source_root,
             )
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             timing = _stackctl._finish_timing(started_monotonic, started_at)
@@ -743,6 +611,30 @@ def _command_package_unlocked(
                     "runtimeCompositionDigest"
                 ]
             )
+        )
+        try:
+            provider_binding_overlay_package = (
+                _stackctl.materialize_provider_binding_overlay(
+                    env_name,
+                    target_name,
+                    source_root=package_source_root,
+                )
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            timing = _stackctl._finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": (
+                    "stackctl package Provider binding overlay is GATE_BLOCK for "
+                    f"{env_name}"
+                ),
+                "details": [str(exc)],
+                "reportDir": _stackctl.relpath(report_dir),
+                **timing,
+            }
+        details.append(
+            "Provider binding overlay ready: "
+            + str(provider_binding_overlay_package["bindingManifestDigest"])
         )
         try:
             observability_log_sink_package = (
@@ -776,6 +668,7 @@ def _command_package_unlocked(
     ):
         if (
             provider_runtime_package is None
+            or provider_binding_overlay_package is None
             or observability_log_sink_package is None
         ):
             raise RuntimeError(
@@ -786,6 +679,7 @@ def _command_package_unlocked(
                 env_name,
                 target_name,
                 report_dir=report_dir,
+                provider_binding_overlay=provider_binding_overlay_package,
                 provider_runtime=provider_runtime_package,
                 observability_log_sink=observability_log_sink_package,
                 candidate_root=shared_package_dir.parent.parent,
@@ -794,7 +688,7 @@ def _command_package_unlocked(
             )
         except RuntimeError as exc:
             timing = _stackctl._finish_timing(started_monotonic, started_at)
-            detail = str(exc)
+            detail = _receipt_safe_text(str(exc))
             _stackctl.write_json(
                 report_dir / "report.json",
                 {
@@ -821,6 +715,66 @@ def _command_package_unlocked(
                 f"imageDigest: {image_manifest['imageDigest']}",
             ]
         )
+    elif (
+        bool(args.include_services)
+        and not args.service
+        and target_name == "prod-hosted"
+    ):
+        if provider_runtime_package is None or package_snapshot is None:
+            raise RuntimeError("prod-hosted package inputs were not materialized")
+        try:
+            image_manifest_path, image_manifest = (
+                manifest._materialize_prod_hosted_oci_manifest(
+                    env_name,
+                    target_name,
+                    provider_runtime=provider_runtime_package,
+                    candidate_root=shared_package_dir.parent.parent,
+                    package_snapshot=package_snapshot,
+                    materialized_release_evidence=materialized_release_evidence,
+                    source_root=package_source_root,
+                )
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            timing = _stackctl._finish_timing(started_monotonic, started_at)
+            detail = str(exc)
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl package hosted OCI evidence blocked for {env_name}",
+                "details": [detail],
+                "reportDir": _stackctl.relpath(report_dir),
+                **timing,
+            }
+        details.append(
+            f"hosted OCI image manifest ready: {_stackctl.relpath(image_manifest_path)} "
+            f"buildInputDigest={image_manifest['buildInputDigest']} "
+            f"imageDigest={image_manifest['imageDigest']}"
+        )
+
+    app_launch_bundle: dict[str, Any] | None = None
+    if target_name == "prod-sim":
+        if package_snapshot is None or package_capsule_root is None:
+            raise RuntimeError("prod-sim App launch bundle requires immutable inputs")
+        try:
+            app_launch_bundle = manifest.materialize_prod_sim_app_launch_bundle(
+                candidate_root=package_capsule_root.parent,
+                package_snapshot=package_snapshot,
+                materialized_release_evidence=materialized_release_evidence,
+                source_root=package_source_root,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            timing = _stackctl._finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": "stackctl package prod-sim App launch bundle is GATE_BLOCK",
+                "details": [str(exc)],
+                "reportDir": _stackctl.relpath(report_dir),
+                "baselineId": package_snapshot["baselineId"],
+                **timing,
+            }
+        details.append(
+            "prod-sim App launch bundle ready: "
+            + str(app_launch_bundle["artifactManifestDigest"])
+        )
 
     if package_snapshot is None or package_capsule_root is None:
         raise RuntimeError("runtime package requires an immutable input capsule")
@@ -831,13 +785,15 @@ def _command_package_unlocked(
         )
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
         timing = _stackctl._finish_timing(started_monotonic, started_at)
-        return {
-            "exitCode": 2,
-            "summary": f"stackctl package capsule CAS blocked for {env_name}",
-            "details": [str(exc)],
-            "reportDir": _stackctl.relpath(report_dir),
-            **timing,
-        }
+        return _persist_package_capsule_cas_failure(
+            report_dir=report_dir,
+            env_name=env_name,
+            target_name=target_name,
+            package_snapshot=package_snapshot,
+            reports=reports,
+            detail=str(exc),
+            timing=timing,
+        )
 
     try:
         release_bindings = _stackctl.validate_release_attestations(
@@ -855,6 +811,19 @@ def _command_package_unlocked(
             release_input_classification=release_classification,
             contract_graph_digest=contract_graph_digest,
             graphql_read_registry=graphql_read_registry_package or {},
+            app_launch_bundle=(
+                {
+                    **app_launch_bundle,
+                    "candidateDigest": _stackctl.package_content_digest(
+                        env_name,
+                        target_name,
+                        service_packages=packaged_services,
+                        candidate_root=package_capsule_root.parent,
+                    )[0],
+                }
+                if app_launch_bundle is not None
+                else None
+            ),
             service_packages=packaged_services,
             release_attestation=str(
                 getattr(args, "release_attestation", "") or ""
@@ -875,6 +844,7 @@ def _command_package_unlocked(
             rollback_release_attestation=str(
                 getattr(args, "rollback_release_attestation", "") or ""
             ),
+            app_launch_bundle=app_launch_bundle,
         )
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
         timing = _stackctl._finish_timing(started_monotonic, started_at)
@@ -899,6 +869,8 @@ def _command_package_unlocked(
             "baselineId": package_snapshot["baselineId"],
             **timing,
         }
+    candidate_manifest_payload = json.loads(candidate_manifest.read_text(encoding="utf-8"))
+    package_identity_digest = str(candidate_manifest_payload.get("packageDigest") or "")
     details.append(f"package fingerprint: {_stackctl.relpath(fingerprint)}")
     details.append(f"candidate manifest: {candidate_manifest}")
     details.append(f"baselineId: {package_snapshot['baselineId']}")
@@ -914,6 +886,11 @@ def _command_package_unlocked(
         "releaseInputClassification": release_classification,
         "contractGraphDigest": contract_graph_digest,
         "graphqlReadRegistry": graphql_read_registry_package,
+        "appLaunchBundle": (
+            {**app_launch_bundle, "candidateDigest": package_identity_digest}
+            if app_launch_bundle is not None
+            else None
+        ),
         "timestamp": _stackctl.utc_now(),
         "reportDir": _stackctl.relpath(report_dir),
         "steps": reports,

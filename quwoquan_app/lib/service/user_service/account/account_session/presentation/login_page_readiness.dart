@@ -24,21 +24,27 @@ extension _LoginFrameHostReadiness on _LoginFrameHostState {
           .getOtpDeliveryReadiness()
           .timeout(_LoginFrameHostState._probeTimeout);
       if (!mounted || generation != _entryResolutionGeneration) return;
+      const unavailableFeedback = LoginFeedback(
+        message: FoundationText.loginOtpServiceUnavailable,
+        copyKey: 'loginOtpServiceUnavailable',
+        surface: LoginFeedbackSurface.phone,
+        recoveryAction: 'retryReadiness',
+      );
       _flowController.replace(
         _flow.copyWith(
           otpReadinessState: readiness.isReady
               ? OtpReadinessState.ready
               : OtpReadinessState.unavailable,
-          feedback: readiness.isReady
-              ? null
-              : const LoginFeedback(
-                  message: FoundationText.loginOtpServiceUnavailable,
-                  copyKey: 'loginOtpServiceUnavailable',
-                  surface: LoginFeedbackSurface.phone,
-                  recoveryAction: 'retryReadiness',
-                ),
+          feedback: readiness.isReady ? null : unavailableFeedback,
         ),
       );
+      if (!readiness.isReady) {
+        _trackLoginOperation(
+          operationId: 'get_otp_delivery_readiness',
+          result: 'temporarily_unavailable',
+          feedback: unavailableFeedback,
+        );
+      }
     } catch (error) {
       if (!mounted || generation != _entryResolutionGeneration) return;
       _flowController.replace(

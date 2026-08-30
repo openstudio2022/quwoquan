@@ -35,12 +35,7 @@
         },
         "resultEnvelopeRef": {"type": "string", "minLength": 1},
         "acceptanceClass": {
-          "enum": [
-            "stage_completed",
-            "research_canonical",
-            "commercial_canonical",
-            "contract_fixture"
-          ]
+          "enum": ["stage_completed", "canonical_pool", "contract_fixture"]
         },
         "completedAt": {"type": "string", "format": "date-time"}
       },
@@ -48,9 +43,7 @@
         {
           "if": {
             "properties": {
-              "acceptanceClass": {
-                "enum": ["research_canonical", "commercial_canonical"]
-              }
+              "acceptanceClass": {"const": "canonical_pool"}
             }
           },
           "then": {

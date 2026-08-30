@@ -63,6 +63,9 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
                     for issue in legal_issues
                     if isinstance(issue, str) and issue.strip()
                 )
+    capacity = _stackctl.local_runtime_capacity_evidence(target)
+    findings.extend(capacity["issues"])
+    advisories.extend(capacity["warnings"])
     health_args = argparse.Namespace(
         command="health",
         target=args.target,
@@ -152,12 +155,14 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
             repair_plan.append("run `stackctl repair --target <target> --fix restart-stack` for local targets")
         if any("artifact" in item for item in findings):
             repair_plan.append("run `stackctl repair --target <target> --fix rebuild-packages`")
+        repair_plan.extend(capacity["reclaimCommands"])
     timing = _stackctl._finish_timing(started_monotonic, started_at)
     _stackctl.write_json(
         report_dir / "report.json",
         {
             "command": "doctor",
             "target": args.target,
+            "capacity": capacity["evidence"],
             "findings": findings,
             "advisories": advisories,
             "repairPlan": repair_plan,

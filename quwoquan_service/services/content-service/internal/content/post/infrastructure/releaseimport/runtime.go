@@ -109,7 +109,11 @@ func Run() {
 	if err != nil {
 		log.Fatalf("load release object closure: %v", err)
 	}
-	releaseMediaAssets, err := LoadReleaseMediaAssets(*releaseRoot, desired.ReleaseID)
+	releaseMediaAssets, err := LoadReleaseMediaAssets(
+		*releaseRoot,
+		desired.ReleaseID,
+		releaseBinding.ReleaseClass,
+	)
 	if err != nil {
 		log.Fatalf("load release media authority: %v", err)
 	}
@@ -132,7 +136,7 @@ func Run() {
 		}
 	}
 
-	posts, err := LoadPosts(objectRoot, postFilter)
+	posts, err := LoadPosts(objectRoot, postFilter, releaseBinding.ReleaseClass)
 	if err != nil {
 		log.Fatalf("load posts: %v", err)
 	}
@@ -152,6 +156,9 @@ func Run() {
 		mediaBases,
 	); err != nil {
 		log.Fatalf("bind post asset URLs: %v", err)
+	}
+	if err := ValidateImportedPostMediaBindings(posts, releaseBinding.ReleaseClass); err != nil {
+		log.Fatalf("validate post media delivery bindings: %v", err)
 	}
 	postBindings, err := ImportedPostBindings(posts)
 	if err != nil {
@@ -208,6 +215,7 @@ func Run() {
 	opts := NormalizeImportOptions(ImportOptions{
 		ReleaseID:                 desired.ReleaseID,
 		ManifestDigest:            releaseBinding.ManifestDigest,
+		ReleaseClass:              releaseBinding.ReleaseClass,
 		Mode:                      *mode,
 		DeletePolicy:              *deletePolicy,
 		SourceOwner:               *sourceOwner,
@@ -227,7 +235,19 @@ func Run() {
 	if err != nil {
 		log.Fatalf("apply Content-owned Data release: %v", err)
 	}
+	mediaAssetsProjected, err := UpsertReleaseMediaAssetProjections(
+		ctx,
+		client.Database(*postsDB).Collection("media_assets"),
+		releaseMediaAssets,
+		releaseBinding.SourceOwner,
+		opts.ReleaseID,
+		now,
+	)
+	if err != nil {
+		log.Fatalf("project release media assets: %v", err)
+	}
 	activeCounts := ImportPoolCounts(posts, len(desired.DesiredRefs.Entities))
+	activeCounts["mediaAssetsProjected"] = mediaAssetsProjected
 	activeCounts["postsUpserted"] = applyResult.PostsUpserted
 	activeCounts["postsRemoved"] = applyResult.PostsRemoved
 	activeCounts["outboxEventsReady"] = applyResult.OutboxEventsReady
@@ -349,8 +369,11 @@ func UpsertPosts(ctx context.Context, coll *mongo.Collection, posts []PostDoc, n
 }
 
 type ImportOptions struct {
-	ReleaseID                 string
-	ManifestDigest            string
+	ReleaseID      string
+	ManifestDigest string
+	// ReleaseClass 是 release.json 声明的 release 级类别（research|commercial），
+	// 随导入落进 data_release_state，供 research readback 判定 release 类别。
+	ReleaseClass              string
 	Mode                      string
 	DeletePolicy              string
 	SourceOwner               string
@@ -484,25 +507,16 @@ func sourceHash(v any) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// RuntimePostID derives the public Post identity from the stable contentId.
-// postRef is used only while importing a pre-contentId immutable release.
-func RuntimePostID(contentID string, postRef ...string) string {
+// RuntimePostID derives the public Post identity exclusively from the stable
+// contentId admitted by the canonical content pool. Missing contentId is an
+// invalid release input and never falls back to a producer object path.
+func RuntimePostID(contentID string) string {
 	identity := strings.TrimSpace(contentID)
-	if identity == "" && len(postRef) > 0 {
-		identity = strings.TrimSpace(postRef[0])
-	}
 	if identity == "" {
 		return ""
 	}
 	sum := sha256.Sum256([]byte("qwq-content-post:" + identity))
 	return "data_post_" + hex.EncodeToString(sum[:])
-}
-
-// RuntimePostIDFromPostRef identifies a Post imported before contentId became
-// the runtime identity owner. Import migration may remove this ID, but never
-// emits it for a newly admitted content record.
-func RuntimePostIDFromPostRef(postRef string) string {
-	return RuntimePostID(strings.TrimSpace(postRef))
 }
 
 // CanonicalImportReportPostRef projects the loader storage postRef
@@ -552,7 +566,7 @@ func ImportedPostBindings(posts []PostDoc) ([]ImportedPostBinding, error) {
 		storagePostRef := strings.TrimSpace(post.PostRef)
 		contentType := strings.TrimSpace(post.ContentType)
 		authorID := strings.TrimSpace(post.AuthorID)
-		postID := RuntimePostID(post.ContentID, storagePostRef)
+		postID := RuntimePostID(post.ContentID)
 		reportPostRef, err := CanonicalImportReportPostRef(storagePostRef)
 		if err != nil {
 			return nil, err
@@ -609,7 +623,7 @@ func desiredPostRefs(posts []PostDoc) []string {
 func desiredRuntimePostIDs(posts []PostDoc) []string {
 	ids := make([]string, 0, len(posts))
 	for _, p := range posts {
-		id := RuntimePostID(p.ContentID, p.PostRef)
+		id := RuntimePostID(p.ContentID)
 		if id != "" {
 			ids = append(ids, id)
 		}
@@ -635,16 +649,17 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 		if err != nil {
 			return n, fmt.Errorf("%s: %w", p.PostRef, err)
 		}
-		postID := RuntimePostID(p.ContentID, p.PostRef)
+		postID := RuntimePostID(p.ContentID)
 		if postID == "" {
-			return n, fmt.Errorf("postRef is required to derive runtime postId")
+			return n, fmt.Errorf("contentId is required to derive runtime postId")
 		}
 		newHash := sourceHash(p)
 		runtimeEntityRefs := p.NormalizedEntityRefs
 		if len(runtimeEntityRefs) == 0 {
 			runtimeEntityRefs = p.EntityRefs
 		}
-		media := ImportedMediaFields(importedPostAssets(p))
+		accessMode := MediaDeliveryAccessModeForReleaseClass(opts.ReleaseClass)
+		media := ImportedMediaFields(importedPostAssets(p), accessMode)
 		body := p.ArticleMarkdown
 		summary := ProjectImportedArticleSummary(p.ArticleMarkdown)
 		if p.ContentType == "image" {
@@ -675,16 +690,19 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 			"creator":                   p.Creator,
 			"page":                      p.Page,
 			"licenseProof":              p.LicenseProof,
-			"template":                  p.Template, "generatorModel": p.GeneratorModel, "articleTemplate": p.Template,
+			"template":                  p.Template, "articleTemplate": p.Template,
 			"body": body, "summary": summary,
 			"mediaUrls": media.MediaURLs, "mediaItems": media.MediaItems, "coverUrl": media.CoverURL,
+			"mediaAssetIds":   media.MediaAssetIDs,
 			"articleMarkdown": p.ArticleMarkdown, "articleDigest": p.ArticleDigest, "articleMarkdownDigest": p.ArticleDigest,
-			"articleAssetManifest": p.ArticleAssetManifest,
-			"sourceTaskId":         p.SourceTaskId,
-			"createdAt":            p.CreatedAt,
-			"updatedAt":            p.UpdatedAt,
-			"publishedAt":          p.PublishedAt,
-			"version":              opts.ProjectionVersion,
+			"articleAssetManifest": ImportedArticleAssetManifest(
+				p.ArticleAssetManifest,
+				accessMode,
+			),
+			"createdAt":   p.CreatedAt,
+			"updatedAt":   p.UpdatedAt,
+			"publishedAt": p.PublishedAt,
+			"version":     opts.ProjectionVersion,
 			// Path A 导入的 publish 主线文章默认视为已公开发布，保证
 			// 在线 search/feed 与 rm_discovery_feed 的 discoverability 口径一致。
 			"status":           "published",
@@ -693,6 +711,7 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 			"sourceHash":       newHash,
 		}
 		applyImportedVideoFields(doc, media)
+		ApplyImportedAuthorAvatarDeliveryFields(doc, p, accessMode)
 		for k, v := range releaseFields(opts, now, "active") {
 			doc[k] = v
 		}
@@ -780,8 +799,8 @@ func UpsertEntitiesWithOptions(ctx context.Context, coll *mongo.Collection, enti
 			"entityRef": e.EntityRef, "domain": e.Domain, "etype": e.Etype, "name": e.Name,
 			"label": e.Label, "tagRefs": e.TagRefs, "page": e.Page, "hasPage": e.HasPage,
 			"assetManifest":    e.AssetManifest,
-			"conditionProfile": e.ConditionProfile, "sourceTaskId": e.SourceTaskId,
-			"updatedAt": now, "sourceHash": sourceHash(e),
+			"conditionProfile": e.ConditionProfile,
+			"updatedAt":        now, "sourceHash": sourceHash(e),
 		}
 		for k, v := range releaseFields(opts, now, "active") {
 			doc[k] = v
@@ -869,6 +888,7 @@ func UpsertReleaseState(ctx context.Context, coll *mongo.Collection, env string,
 			"environment": env, "sourceOwner": opts.SourceOwner,
 			"releaseId": opts.ReleaseID, "activeReleaseId": opts.ReleaseID, "status": "active",
 			"manifestDigest":    opts.ManifestDigest,
+			"releaseClass":      opts.ReleaseClass,
 			"projectionVersion": opts.ProjectionVersion,
 			"activatedAt":       now,
 			"readback": bson.M{

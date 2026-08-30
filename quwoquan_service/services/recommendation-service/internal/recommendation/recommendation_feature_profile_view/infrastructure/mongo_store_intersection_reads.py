@@ -337,12 +337,12 @@ class MongoIntersectionReadOps:
                 if entities_by_persona.get(persona, set()) & source_entities:
                     joined_personas.add(persona)
 
-        # 3. 比例③：窗口内促成收据（notifiedAt）中，收据冻结的创作者在
-        #    notifiedAt 之后存在新的 active 内容（post_authors 事实）。
+        # 3. 比例③：窗口内促成收据（occurredAt）中，收据冻结的创作者在
+        #    occurredAt 之后存在新的 active 内容（post_authors 事实）。
         facilitations = list(
             self._intersection_facilitations.find(
-                {"notifiedAt": {"$gte": window_from, "$lt": window_to}},
-                {"notifiedAt": 1, "creatorPersonaIds": 1},
+                {"occurredAt": {"$gte": window_from, "$lt": window_to}},
+                {"occurredAt": 1, "creatorPersonaIds": 1},
             ).limit(self._FUNNEL_MAX_FACILITATIONS + 1)
         )
         if len(facilitations) > self._FUNNEL_MAX_FACILITATIONS:
@@ -351,20 +351,20 @@ class MongoIntersectionReadOps:
         facilitation_notified = len(facilitations)
         republished = 0
         for receipt in facilitations:
-            notified_at = receipt.get("notifiedAt")
+            occurred_at = receipt.get("occurredAt")
             creators = [
                 str(value).strip()
                 for value in receipt.get("creatorPersonaIds") or []
                 if str(value).strip()
             ]
-            if notified_at is None or not creators:
+            if occurred_at is None or not creators:
                 # 旧收据缺创作者名单：unclassified，不臆造续发。
                 continue
             follow_up = self._intersection_post_authors.find_one(
                 {
                     "authorId": {"$in": creators},
                     "active": True,
-                    "occurredAt": {"$gt": notified_at},
+                    "occurredAt": {"$gt": occurred_at},
                 },
                 {"_id": 1},
             )

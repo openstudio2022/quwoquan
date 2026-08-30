@@ -33,8 +33,7 @@ func importedSightInput(title string) application.ImportedHomepageInput {
 			SnapshotHash:   "sha256:" + strings.Repeat("a", 64),
 			PolicyRevision: "encyclopedia-primary", SourceUseMode: "licensed_adaptation",
 		},
-		SourceURLs:   []string{"https://zh.wikipedia.org/wiki/" + title},
-		SourceTaskID: "旅行/地域/中国/景区/全国景区主页试点0706a",
+		SourceURLs: []string{"https://zh.wikipedia.org/wiki/" + title},
 	}
 }
 

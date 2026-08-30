@@ -432,3 +432,31 @@ readiness_cases:
     device: runner
     provider: mongodb
     digest_binding: candidate
+- case_id: gathering_plan_get_gathering_plan_app_local
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target:
+    kind: operation
+    id: GetGatheringPlan
+  runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering_plan/gathering_plan_remote__local_contract_test.dart
+  executions:
+  - env: alpha
+    platform: app
+    device: runner
+    provider: none
+    digest_binding: candidate
+- case_id: circle-gathering-plan
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-plan-collaboration/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target:
+    kind: operation
+    id: GetGatheringPlan
+  runner_source_path: quwoquan_app/test/api_integration/service/circle_service/circle_management/gathering_plan/gathering_plan_remote__api_integration_test.dart
+  executions:
+  - env: gamma
+    platform: app
+    device: runner
+    provider: first-party-https
+    digest_binding: candidate

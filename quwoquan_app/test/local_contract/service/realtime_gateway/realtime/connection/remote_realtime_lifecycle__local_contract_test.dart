@@ -25,10 +25,16 @@ void main() {
         longPollHoldSec: 1,
       ),
       longPollFactory:
-          ({required config, required authTokenProvider, required onEvents}) {
+          ({
+            required config,
+            required authTokenProvider,
+            required activeConversationIdResolver,
+            required onEvents,
+          }) {
             return _RecordingLongPollTransport(
               config: config,
               authTokenProvider: authTokenProvider,
+              activeConversationIdResolver: activeConversationIdResolver,
               onEvents: onEvents,
               log: log,
             );
@@ -87,10 +93,12 @@ void main() {
             ({
               required config,
               required authTokenProvider,
+              required activeConversationIdResolver,
               required onEvents,
             }) => _RecordingLongPollTransport(
               config: config,
               authTokenProvider: authTokenProvider,
+              activeConversationIdResolver: activeConversationIdResolver,
               onEvents: onEvents,
               log: <String>[],
             ),
@@ -117,10 +125,16 @@ void main() {
         longPollHoldSec: 1,
       ),
       longPollFactory:
-          ({required config, required authTokenProvider, required onEvents}) {
+          ({
+            required config,
+            required authTokenProvider,
+            required activeConversationIdResolver,
+            required onEvents,
+          }) {
             return _RecordingLongPollTransport(
               config: config,
               authTokenProvider: authTokenProvider,
+              activeConversationIdResolver: activeConversationIdResolver,
               onEvents: onEvents,
               log: log,
             );
@@ -155,6 +169,67 @@ void main() {
     ]);
   });
 
+  test(
+    'dispose while websocket connect is pending drops stale completion',
+    () async {
+      final log = <String>[];
+      final telemetry = <Map<String, Object?>>[];
+      late _BlockingWebSocketTransport ws;
+      final delegate = RemoteRealtimeConnectionDelegate(
+        read: _unsupportedRead,
+        currentUserIdResolver: () => 'user-42',
+        authTokenProvider: const _TokenProvider(),
+        config: const RealtimeConfig(
+          wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
+          gatewayBaseUrl: 'http://127.0.0.1:17000',
+          longPollHoldSec: 1,
+        ),
+        telemetryRecorder:
+            ({
+              required transport,
+              required result,
+              required durationMs,
+              failReasonCode,
+            }) async {
+              telemetry.add(<String, Object?>{
+                'transport': transport,
+                'result': result,
+                'failReasonCode': failReasonCode,
+              });
+            },
+        webSocketFactory:
+            ({
+              required config,
+              required authTokenProvider,
+              required onEvent,
+              required onDisconnect,
+            }) {
+              return ws = _BlockingWebSocketTransport(
+                config: config,
+                authTokenProvider: authTokenProvider,
+                onEvent: onEvent,
+                onDisconnect: onDisconnect,
+                log: log,
+              );
+            },
+      );
+
+      delegate.onEnterConversation('conv_001');
+      await ws.connectEntered.future.timeout(const Duration(seconds: 2));
+      delegate.dispose();
+      ws.releaseConnect.complete();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(log, <String>['ws:connect:pending', 'ws:dispose']);
+      expect(
+        telemetry,
+        isEmpty,
+        reason: 'dispose 后旧 connect completion 不得上报或接管 delegate',
+      );
+    },
+  );
+
   test('remote background tears down active transports', () async {
     final log = <String>[];
     final delegate = RemoteRealtimeConnectionDelegate(
@@ -167,10 +242,16 @@ void main() {
         longPollHoldSec: 1,
       ),
       longPollFactory:
-          ({required config, required authTokenProvider, required onEvents}) {
+          ({
+            required config,
+            required authTokenProvider,
+            required activeConversationIdResolver,
+            required onEvents,
+          }) {
             return _RecordingLongPollTransport(
               config: config,
               authTokenProvider: authTokenProvider,
+              activeConversationIdResolver: activeConversationIdResolver,
               onEvents: onEvents,
               log: log,
             );
@@ -225,10 +306,12 @@ void main() {
             ({
               required config,
               required authTokenProvider,
+              required activeConversationIdResolver,
               required onEvents,
             }) => _RecordingLongPollTransport(
               config: config,
               authTokenProvider: authTokenProvider,
+              activeConversationIdResolver: activeConversationIdResolver,
               onEvents: onEvents,
               log: log,
             ),
@@ -266,6 +349,7 @@ void main() {
     'failed reconnects exhaust the budget and fall back to long poll',
     () async {
       final log = <String>[];
+      String? fallbackConversationId;
       final delegate = RemoteRealtimeConnectionDelegate(
         read: _unsupportedRead,
         currentUserIdResolver: () => 'user-42',
@@ -284,13 +368,18 @@ void main() {
             ({
               required config,
               required authTokenProvider,
+              required activeConversationIdResolver,
               required onEvents,
-            }) => _RecordingLongPollTransport(
-              config: config,
-              authTokenProvider: authTokenProvider,
-              onEvents: onEvents,
-              log: log,
-            ),
+            }) {
+              fallbackConversationId = activeConversationIdResolver();
+              return _RecordingLongPollTransport(
+                config: config,
+                authTokenProvider: authTokenProvider,
+                activeConversationIdResolver: activeConversationIdResolver,
+                onEvents: onEvents,
+                log: log,
+              );
+            },
         webSocketFactory:
             ({
               required config,
@@ -316,6 +405,7 @@ void main() {
         log.where((entry) => entry.startsWith('ws:connect:')),
         hasLength(3),
       );
+      expect(fallbackConversationId, 'conv_001');
       expect(log.last, 'longpoll:start');
     },
   );
@@ -334,10 +424,16 @@ void main() {
           longPollHoldSec: 1,
         ),
         longPollFactory:
-            ({required config, required authTokenProvider, required onEvents}) {
+            ({
+              required config,
+              required authTokenProvider,
+              required activeConversationIdResolver,
+              required onEvents,
+            }) {
               return _RecordingLongPollTransport(
                 config: config,
                 authTokenProvider: authTokenProvider,
+                activeConversationIdResolver: activeConversationIdResolver,
                 onEvents: onEvents,
                 log: log,
               );
@@ -385,6 +481,7 @@ class _RecordingLongPollTransport extends LongPollTransport {
   _RecordingLongPollTransport({
     required super.config,
     required super.authTokenProvider,
+    required super.activeConversationIdResolver,
     required super.onEvents,
     required this.log,
   });
@@ -453,6 +550,32 @@ class _FailingWebSocketTransport extends _RecordingWebSocketTransport {
   void dispose() {
     super.dispose();
     _connected.dispose();
+  }
+}
+
+class _BlockingWebSocketTransport extends WebSocketTransport {
+  _BlockingWebSocketTransport({
+    required super.config,
+    required super.authTokenProvider,
+    required super.onEvent,
+    required super.onDisconnect,
+    required this.log,
+  });
+
+  final List<String> log;
+  final Completer<void> connectEntered = Completer<void>();
+  final Completer<void> releaseConnect = Completer<void>();
+
+  @override
+  Future<void> connect({List<String> topics = const <String>[]}) async {
+    log.add('ws:connect:pending');
+    if (!connectEntered.isCompleted) connectEntered.complete();
+    await releaseConnect.future;
+  }
+
+  @override
+  void dispose() {
+    log.add('ws:dispose');
   }
 }
 

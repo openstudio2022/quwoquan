@@ -353,7 +353,9 @@ func (c *Client) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// Ping checks cluster liveness (GET /), used by the service health checker.
+// Ping checks cluster transport liveness (GET /). It deliberately does not
+// claim that the configured read alias can execute a search; serving readiness
+// uses CheckSearchReady.
 func (c *Client) Ping(ctx context.Context) error {
 	status, data, err := c.send(ctx, http.MethodGet, "/", nil, "application/json")
 	if err != nil {
@@ -361,6 +363,44 @@ func (c *Client) Ping(ctx context.Context) error {
 	}
 	if status < 200 || status >= 300 {
 		return fmt.Errorf("es: ping status %d: %s", status, truncateBytes(data, 200))
+	}
+	return nil
+}
+
+// CheckSearchReady verifies the exact capability search-service needs before it
+// can enter the ready pool: the configured read alias must execute a bounded
+// search successfully. A root GET can stay responsive while shard search is
+// timing out or unavailable, so it is insufficient for serving readiness.
+func (c *Client) CheckSearchReady(ctx context.Context) error {
+	status, data, err := c.send(
+		ctx,
+		http.MethodPost,
+		"/"+c.index+"/_search",
+		map[string]any{
+			"size":             1,
+			"track_total_hits": false,
+			"_source":          false,
+			"query":            map[string]any{"match_all": map[string]any{}},
+		},
+		"application/json",
+	)
+	if err != nil {
+		return err
+	}
+	if status < 200 || status >= 300 {
+		if retryableDependencyStatus(status) {
+			return fmt.Errorf(
+				"%w: es search readiness status %d: %s",
+				ErrDependencyUnavailable,
+				status,
+				truncateBytes(data, 200),
+			)
+		}
+		return fmt.Errorf(
+			"es: search readiness status %d: %s",
+			status,
+			truncateBytes(data, 200),
+		)
 	}
 	return nil
 }

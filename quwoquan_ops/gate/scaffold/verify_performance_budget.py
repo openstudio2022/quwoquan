@@ -8,6 +8,8 @@ import json
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 from nonfunctional_coverage_lib import Failures, ROOT
 
 
@@ -21,7 +23,7 @@ EVIDENCE_GATE = ROOT / "quwoquan_ops/gate/verify_runtime_media_playback_evidence
 ARTIFACT_GATE = ROOT / "quwoquan_ops/gate/runtime_media_playback_artifacts.py"
 EVIDENCE_TEST = (
     ROOT
-    / "quwoquan_ops/tests/local_contract/"
+    / "quwoquan_ops/tests/local_contract/media/"
     "test_runtime_media_playback_evidence__local_contract_test.py"
 )
 

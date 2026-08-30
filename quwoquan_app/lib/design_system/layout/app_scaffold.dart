@@ -103,8 +103,8 @@ class AppNavigationBarIconButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Color? color;
 
-  /// chrome 表面语义：`immersive` 渲染半透明暗色圆底并取白色图标，
-  /// 保证媒体失败退到浅色背景时按钮仍可见；颜色决策收口在
+  /// chrome 表面语义：`immersive` 取无底色白色图标加柔和投影（REQ-019），
+  /// 浅色媒体与失败面浅背景上仍可见；颜色与投影决策收口在
   /// [AppNavigationSemanticConstants]，调用方不再自管颜色。
   final AppChromeSurface surface;
 
@@ -136,6 +136,9 @@ class AppNavigationBarIconButton extends StatelessWidget {
                     isDark,
                     surface: surface,
                   ),
+              shadows: AppNavigationSemanticConstants.chromeActionIconShadows(
+                surface: surface,
+              ),
             ),
           ),
         ),

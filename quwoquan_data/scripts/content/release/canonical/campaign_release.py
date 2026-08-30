@@ -1,4 +1,4 @@
-"""Select one aggregate release only from a frozen four-lane campaign.
+"""Select one aggregate release from a frozen active-workload campaign.
 
 Callers provide a campaign root and a new release identity.  Execution IDs are
 derived from the immutable campaign plan; there is deliberately no public
@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.identity import validate_execution_id
 from content.execution.closure.adoption_campaign_contract import (
     CAMPAIGN_ADOPTION_FIELD,
@@ -39,6 +38,7 @@ from content.release.canonical.campaign_release_contract import (
     typed_error as _typed,
 )
 from content.release.canonical.campaign_release_publish import validate_lane_publish
+from content.release.canonical.campaign_release_scope import active_campaign_scope
 from content.release.canonical.campaign_release_selection import (
     retry_lineage,
     validate_plan,
@@ -57,6 +57,8 @@ from content.release.canonical.release_operation_lock import (
 )
 from core.io import write_json
 from core.release_layout import payload_digest as release_payload_digest
+
+
 @contextmanager
 def _selection_lock(path: Path) -> Iterator[None]:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -113,6 +115,10 @@ def validate_reviewed_closure_campaign_selection(
         raise _typed("IDENTITY_INVALID", str(exc)) from exc
     selected_roots = (roots or CampaignReleaseRoots.defaults()).validated()
     plan, _plan_path = validate_plan(root_id, roots=selected_roots)
+    active, workloads, execution_ids = active_campaign_scope(
+        plan,
+        root_execution_id=root_id,
+    )
     if plan.get(CAMPAIGN_ADOPTION_FIELD) is None:
         raise _typed(
             "ADOPTION_BINDING_INVALID",
@@ -127,12 +133,12 @@ def validate_reviewed_closure_campaign_selection(
     lineage = {
         carrier: retry_lineage(
             carrier,
-            str(plan["executionIds"][carrier]),
+            execution_ids[carrier],
             submissions[carrier],
             plan,
             roots=selected_roots,
         )
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active
     }
     lanes = {
         carrier: validate_lane_publish(
@@ -143,7 +149,7 @@ def validate_reviewed_closure_campaign_selection(
             snapshot,
             roots=selected_roots,
         )
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active
     }
     stable = {
         "schema": "quwoquan_data.reviewed_closure_campaign_selection",
@@ -152,13 +158,16 @@ def validate_reviewed_closure_campaign_selection(
         "sourceRevision": plan["sourceRevision"],
         "sourceDigest": plan["sourceDigest"],
         "entityCatalogDigest": plan["entityCatalogDigest"],
+        "workloadMode": plan["workloadMode"],
+        "activeCarriers": list(active),
+        "workloads": workloads,
         CAMPAIGN_ADOPTION_FIELD: plan[CAMPAIGN_ADOPTION_FIELD],
         "campaignRun": {
             "runId": snapshot["runId"],
             "generation": snapshot["generation"],
             "fencingToken": snapshot["fencingToken"],
         },
-        "executionIds": dict(plan["executionIds"]),
+        "executionIds": execution_ids,
         "retryLineage": lineage,
         "lanes": lanes,
         "releaseCreated": False,
@@ -170,10 +179,11 @@ def build_campaign_release(
     *,
     root_execution_id: str,
     release_id: str,
+    release_class: str,
     roots: CampaignReleaseRoots | None = None,
     target_environment: str | None = None,
 ) -> dict[str, Any]:
-    """Build a release from the exact current four-lane campaign selection."""
+    """Build a release from the exact current active-workload selection."""
 
     try:
         root_id = validate_execution_id(root_execution_id)
@@ -195,6 +205,10 @@ def build_campaign_release(
                 evidence=selection_path,
             )
         plan, _plan_path = validate_plan(root_id, roots=selected_roots)
+        active, workloads, execution_ids = active_campaign_scope(
+            plan,
+            root_execution_id=root_id,
+        )
         adoption_document = plan.get(CAMPAIGN_ADOPTION_FIELD)
         if (
             adoption_document is not None
@@ -211,12 +225,12 @@ def build_campaign_release(
         lineage = {
             carrier: retry_lineage(
                 carrier,
-                str(plan["executionIds"][carrier]),
+                execution_ids[carrier],
                 submissions[carrier],
                 plan,
                 roots=selected_roots,
             )
-            for carrier in CAMPAIGN_CARRIERS
+            for carrier in active
         }
         try:
             guarded_release_ids = (release_id,)
@@ -250,11 +264,7 @@ def build_campaign_release(
                         snapshot,
                         roots=selected_roots,
                     )
-                    for carrier in CAMPAIGN_CARRIERS
-                }
-                execution_ids = {
-                    carrier: str(plan["executionIds"][carrier])
-                    for carrier in CAMPAIGN_CARRIERS
+                    for carrier in active
                 }
                 aggregate = build_aggregate_release(
                     publish_root=selected_roots.publish_root,
@@ -263,6 +273,7 @@ def build_campaign_release(
                     execution_ids=list(execution_ids.values()),
                     source_revision=str(plan["sourceRevision"]),
                     entity_catalog_digest=str(plan["entityCatalogDigest"]),
+                    release_class=release_class,
                     reviewed_closure_adoption=adoption_document,
                     adoption_output_root=selected_roots.output_root,
                     target_environment=target_environment,
@@ -277,6 +288,9 @@ def build_campaign_release(
                     "sourceDigest": plan["sourceDigest"],
                     "entityCatalogDigest": plan["entityCatalogDigest"],
                     "externalInputsDigest": plan["externalInputsDigest"],
+                    "workloadMode": plan["workloadMode"],
+                    "activeCarriers": list(active),
+                    "workloads": workloads,
                     "campaignRun": {
                         "runId": snapshot["runId"],
                         "generation": snapshot["generation"],

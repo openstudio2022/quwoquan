@@ -10,8 +10,8 @@
     "releaseIdentityIncidentReleaseRefs",
     "releaseIdentityIncidentExecutionRefs",
     "reviewedClosureAdoptionSourceReleaseRefs",
-    "reviewedClosureAdoptionExecutionRefs", "referenceGraph",
-    "candidateCount", "reclaimableBytes", "planDigest"
+    "reviewedClosureAdoptionExecutionRefs", "reclaimedExecutions",
+    "referenceGraph", "candidateCount", "reclaimableBytes", "planDigest"
   ],
   "properties": {
     "schema": {"const": "quwoquan_data.canonical_gc_plan"},
@@ -39,6 +39,10 @@
     "releaseIdentityIncidentExecutionRefs": {"$ref": "#/$defs/stringSet"},
     "reviewedClosureAdoptionSourceReleaseRefs": {"$ref": "#/$defs/stringSet"},
     "reviewedClosureAdoptionExecutionRefs": {"$ref": "#/$defs/stringSet"},
+    "reclaimedExecutions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/reclaimedExecution"}
+    },
     "referenceGraph": {"type": "object"},
     "candidateCount": {"type": "integer", "minimum": 0},
     "reclaimableBytes": {"type": "integer", "minimum": 0},
@@ -83,6 +87,23 @@
         "reasons": {
           "type": "array", "minItems": 1, "uniqueItems": true,
           "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "reclaimedExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executionId", "reclaimReason", "tombstoneRef"],
+      "properties": {
+        "executionId": {"type": "string", "minLength": 1},
+        "reclaimReason": {
+          "enum": [
+            "gc_quarantine_reclaim", "reclaimed_before_tombstone_protocol"
+          ]
+        },
+        "tombstoneRef": {
+          "type": "string",
+          "pattern": "^data/local/workspace/gc/tombstones/"
         }
       }
     },

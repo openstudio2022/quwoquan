@@ -21,9 +21,26 @@ from content.release.canonical.aggregate_release import (
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
 )
+from content.release.canonical.rehydrate_media_holdings import (
+    main as admit_carried_media_holdings,
+)
 from core.source_digest import content_source_revision
 
 ENTITY_CATALOG_DIGEST = "sha256:" + "e" * 64
+
+
+@pytest.fixture(autouse=True)
+def _carried_media_holdings() -> None:
+    """Put the golden tree's media in the library before the gates are judged.
+
+    On an empty library the release build stops at a dangling asset ref, so the
+    case would report a missing holding while claiming to prove that legacy
+    golden data cannot bypass the current gates. Admitting the carried bytes
+    first keeps the assertion about the gates rather than about whatever this
+    machine happened to have in its library.
+    """
+
+    assert admit_carried_media_holdings(publish_root=PUBLISH) == 0
 
 
 def _object(path: Path) -> dict[str, object]:
@@ -51,29 +68,35 @@ def test_geo_content_trinity_legacy_golden_cannot_bypass_current_release_gates(
         assert isinstance(source, dict)
         digest = str(source.get("digest") or "")
         by_source_digest.setdefault(digest, []).append(manifest)
-    source_digest, selected = next(
-        (digest, rows)
-        for digest, rows in sorted(by_source_digest.items())
-        if {str(row.get("contentType") or "homepage") for row in rows}
-        == {"homepage", "article", "image", "video"}
+    carriers = {
+        str(manifest.get("contentType") or "homepage") for manifest in manifests
+    }
+    assert carriers == {"homepage", "article", "image", "video"}
+    assert len(by_source_digest) > 1, (
+        "legacy evidence must exercise cross-source-identity reuse"
     )
+    source_digest = sorted(by_source_digest)[0]
     execution_ids = sorted(
         {
             str(manifest.get("executionId") or "")
-            for manifest in selected
+            for manifest in manifests
             if str(manifest.get("executionId") or "")
         }
     )
 
     with pytest.raises(
         ObjectTransactionError,
-        match="(lacks a valid frozen sourceDigest|article media (closure|coverage))",
+        match=(
+            "(requires one frozen sourceDigest|lacks a valid frozen sourceDigest|"
+            "article media (closure|coverage))"
+        ),
     ):
         build_aggregate_release(
             publish_root=PUBLISH,
             release_root=tmp_path / "releases",
             release_id="legacy-golden-must-not-be-reused",
             execution_ids=execution_ids,
+            release_class="research",
             source_revision=content_source_revision(
                 source_digest=source_digest,
                 entity_catalog_digest=ENTITY_CATALOG_DIGEST,

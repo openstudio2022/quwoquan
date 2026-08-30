@@ -1,12 +1,12 @@
 description: 该自治边界的运行配置定义与默认值；环境只维护差异和引用。
 configs:
-- key: sys.assistant-service.account_security_authority.base_url
+- key: sys.assistant-service.user_account_security_authority.base_url
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
-- key: sys.assistant-service.account_security_authority.timeout_ms
+- key: sys.assistant-service.user_account_security_authority.timeout_ms
   type: int
   scope: workload
   reload: restart
@@ -217,7 +217,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.assistant-service.redis.general.password
   type: string
   scope: workload
@@ -293,7 +292,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.assistant-service.redis.rec.password
   type: string
   scope: workload

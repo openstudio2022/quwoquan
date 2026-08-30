@@ -110,3 +110,27 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/api-edge/tests/api_integration/graphql_read/persisted_query_execution/search_page_query_executor__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: persisted_query_execution_search_page_app_local
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md#gwt-001
+  producer: app
+  layer: local_contract
+  target: {kind: operation, id: SearchPage}
+  runner_source_path: quwoquan_app/test/local_contract/service/api_edge/graphql_read/persisted_query_execution/search_page_production_composition__local_contract_test.dart
+  executions:
+  - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: persisted_query_execution_search_page_app_api
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md#gwt-002
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: SearchPage}
+  runner_source_path: quwoquan_app/test/api_integration/service/api_edge/graphql_read/persisted_query_execution/persisted_search_page_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: persisted_query_execution_readiness_ops_env
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md#gwt-002
+  producer: ops
+  layer: environment_acceptance
+  target: {kind: object, id: gateway.persisted_query_execution}
+  runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/api-edge/smoke/run_persisted_query_execution_readiness.py
+  executions:
+  - {env: gamma, platform: linux, device: ci-runner, provider: first-party-https, digest_binding: candidate}

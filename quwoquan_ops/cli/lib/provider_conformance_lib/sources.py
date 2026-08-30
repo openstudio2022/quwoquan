@@ -14,6 +14,8 @@ from typing import Any
 
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 from quwoquan_ops.cli.lib import provider_conformance as _pc
+from quwoquan_ops.cli.lib.feature_tree.evidence import extract_spec_refs
+from quwoquan_ops.cli.lib.feature_tree.patterns import SPEC_REF_RE
 
 from .attestation import _digest_bytes
 from .constants import (
@@ -36,17 +38,22 @@ from .governance_bindings import (
 )
 
 def _source_spec_refs(raw_source: str, *, location: str) -> list[str]:
-    refs = [
-        match.group(1)
-        for line in raw_source.splitlines()
-        if (
-            match := re.match(r"^\s*(?://|#)\s*spec_ref:\s*(\S+)\s*$", line)
-        )
-        is not None
-    ]
-    if not refs:
+    """按原文出现顺序返回显式 spec_ref 绑定；语法判定单轨于 feature-tree 库。
+
+    evidence_validation 对 acceptanceRefs 做精确列表比对，已落盘 evidence 依赖
+    原文行序——绑定成员资格来自唯一 lexical 入口 ``extract_spec_refs``，顺序由
+    同一真相源正则 ``SPEC_REF_RE`` 按行定位重建，两者不构成第二套语法解析。
+    """
+    allowed = extract_spec_refs(raw_source)
+    ordered: dict[str, None] = {}
+    for line in raw_source.splitlines():
+        for match in SPEC_REF_RE.finditer(line):
+            ref = match.group(0)
+            if ref in allowed:
+                ordered.setdefault(ref)
+    if not ordered:
         raise ValueError(f"{location} must declare at least one spec_ref")
-    return list(dict.fromkeys(refs))
+    return list(ordered)
 
 
 def _source_metadata(raw_source: str, *, location: str) -> Mapping[str, Any]:

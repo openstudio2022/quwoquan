@@ -7,7 +7,9 @@
 - ``candidate_fs``：candidate 根内 symlink-safe 打开/读取/校验原语。
 - ``candidate_staging``：candidate 文件原子写入与 staging 目录发布。
 - ``release_binding``：release attestation 绑定与 ContractGraph 摘要。
+- ``environment_artifact``：统一 environment artifact identity 的复算与校验。
 - ``log_sink_package``：observability log-sink（Elasticsearch）package。
+- ``provider_binding_overlay``：单环境 Provider Go source overlay 物化与校验。
 - ``provider_runtime_package``：Provider runtime package 物化/封版/校验。
 - ``manifest``：candidate manifest 写入、加载与全量校验。
 
@@ -47,6 +49,8 @@ from .constants import (  # noqa: F401
     CANDIDATE_MANIFEST_SCHEMA,
     CANDIDATE_VALIDATION_PURPOSES,
     CONTRACT_GRAPH_PATH,
+    ENVIRONMENT_ARTIFACT_METADATA_PATH,
+    ENVIRONMENT_ARTIFACT_SCHEMA_PATH,
     LOG_SINK_ADAPTER_ID,
     OBSERVABILITY_LOG_SINK_PACKAGE_SCHEMA,
     PROVIDER_RUNTIME_PACKAGE_SCHEMA,
@@ -87,6 +91,12 @@ from .release_binding import (  # noqa: F401
     release_input_classification,
     validate_release_attestations,
 )
+from .environment_artifact import (  # noqa: F401
+    build_environment_artifact,
+    environment_artifact_digest,
+    environment_artifact_identity_core_digest,
+    validate_environment_artifact,
+)
 from .log_sink_package import (  # noqa: F401
     _ELASTICSEARCH_IMAGE_DEFAULT_RE,
     _ELASTICSEARCH_IMAGE_LITERAL_RE,
@@ -99,6 +109,14 @@ from .log_sink_package import (  # noqa: F401
     materialize_observability_log_sink_package,
     validate_observability_log_sink_package,
 )
+from .provider_binding_overlay import (  # noqa: F401
+    PROVIDER_BINDING_OVERLAY_SCHEMA,
+    load_provider_binding_overlay,
+    materialize_mutable_provider_binding_overlay,
+    materialize_provider_binding_overlay,
+    provider_binding_overlay_build_inputs,
+    validate_provider_binding_overlay,
+)
 from .provider_runtime_package import (  # noqa: F401
     _validate_candidate_provider_oci_binding,
     load_provider_runtime_package,
@@ -110,6 +128,8 @@ from .provider_runtime_package import (  # noqa: F401
 from .manifest import (  # noqa: F401
     _validate_candidate_app_runtime_binding,
     load_candidate_manifest,
+    materialize_prod_sim_app_launch_bundle,
+    prod_sim_app_launch_bundle_from_candidate,
     validate_candidate_manifest,
     write_candidate_manifest,
 )

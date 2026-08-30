@@ -43,12 +43,20 @@ def lane_argv(
         str(submission["quota"]),
         "--count",
         str(submission["count"]),
-        "--required-workers",
-        str(submission["requiredWorkers"]),
-        "--partition-count",
-        str(submission["partitionCount"]),
-        "--capacity-plan-digest",
-        str(submission["capacityPlanDigest"]),
+        # governed 授权重放 receipt ref；bounded 授权由 task execute 从
+        # policy 确定性重建，不携带 receipt 参数。
+        *(
+            [
+                "--capacity-calibration-receipt",
+                str(
+                    submission["executionAuthority"]["calibration"][
+                        "calibrationReceiptRef"
+                    ]
+                ),
+            ]
+            if submission["executionAuthority"]["mode"] == "governed_calibration"
+            else []
+        ),
         "--stage",
         stage,
         "--semantic-selection-id",

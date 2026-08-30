@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+    DISTRIBUTION_EVIDENCE_PATHS,
     ENVIRONMENTS,
     PRE_PROD_ENVIRONMENTS,
     RECEIPT_SOURCE_FIELDS,
@@ -114,6 +115,12 @@ def _apply_candidate_evidence(
     evidence: dict[str, dict[str, Any]],
 ) -> None:
     manifest["applicationPackages"] = evidence["applicationPackages"]
+    for evidence_key in DISTRIBUTION_EVIDENCE_PATHS:
+        manifest[evidence_key] = {
+            "path": evidence[evidence_key]["path"],
+            "digest": evidence[evidence_key]["digest"],
+        }
+    manifest["opsPortal"] = evidence["opsPortal"]
     manifest["contractGraphDigest"] = evidence["contractGraph"]["digest"]
     provider = evidence["providerEvidence"]
     provider_payload = provider["payload"]
@@ -174,22 +181,50 @@ def finalize(
         if original_status != "build-input" or operations != 1:
             raise ValueError("image evidence is only accepted from build-input")
         descriptors = load_image_descriptors(descriptors_dir)
-        required = manifest["requiredEvidence"]["images"]
-        if set(descriptors) != set(required):
-            missing = sorted(set(required) - set(descriptors))
-            extra = sorted(set(descriptors) - set(required))
-            raise ValueError(
-                f"image descriptor set mismatch: missing={missing}, extra={extra}"
-            )
-        manifest["images"] = {
-            service: validate_descriptor(
-                service,
-                descriptors[service],
-                expected_repository=str(manifest["images"][service]["repository"]),
-                expected_transport_ref=str(manifest["images"][service]["transportRef"]),
-            )
-            for service in required
-        }
+        required = manifest["requiredEvidence"]["environmentArtifacts"]
+        trust_domain_digests: dict[tuple[str, str], str] = {}
+        for environment in ENVIRONMENTS:
+            if set(descriptors[environment]) != set(required[environment]):
+                missing = sorted(
+                    set(required[environment]) - set(descriptors[environment])
+                )
+                extra = sorted(
+                    set(descriptors[environment]) - set(required[environment])
+                )
+                raise ValueError(
+                    "image descriptor set mismatch: "
+                    f"environment={environment}, missing={missing}, extra={extra}"
+                )
+            images: dict[str, dict[str, Any]] = {}
+            for owner in required[environment]:
+                current = manifest["environmentArtifacts"][environment]["images"][owner]
+                descriptor = validate_descriptor(
+                    environment,
+                    owner,
+                    descriptors[environment][owner],
+                    expected_repository=str(current["repository"]),
+                    expected_transport_ref=str(current["transportRef"]),
+                )
+                digest = str(descriptor["digest"])
+                trust_domain = "prod" if environment == "prod" else "nonprod"
+                previous = trust_domain_digests.setdefault(
+                    (trust_domain, str(owner)), digest
+                )
+                if previous != digest:
+                    raise ValueError(
+                        "nonprod image descriptors must share one digest per owner: "
+                        f"{owner} diverges at {environment}"
+                    )
+                images[owner] = descriptor
+            manifest["environmentArtifacts"][environment]["images"] = images
+        for owner in required["prod"]:
+            if trust_domain_digests[("prod", owner)] == trust_domain_digests.get(
+                ("nonprod", owner)
+            ):
+                raise ValueError(
+                    "prod image descriptor must fork from the nonprod trust domain: "
+                    f"{owner}"
+                )
     elif artifact_descriptors_dir is not None:
         if original_status != "component-ready" or operations != 1:
             raise ValueError("candidate material is only accepted from component-ready")
@@ -304,8 +339,12 @@ def main() -> int:
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"FAIL: {error}")
         return 1
+    image_count = sum(
+        len(artifact["images"])
+        for artifact in manifest["environmentArtifacts"].values()
+    )
     print(
         f"OK: {manifest['status']} release evidence "
-        f"{manifest['artifactDigest']} includes {len(manifest['images'])} immutable images"
+        f"{manifest['artifactDigest']} includes {image_count} immutable images"
     )
     return 0

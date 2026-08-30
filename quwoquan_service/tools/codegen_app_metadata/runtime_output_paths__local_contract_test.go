@@ -66,6 +66,17 @@ func TestDirectNonAssistantGeneratedTargetsHaveSingleCanonicalOwners(
 	); got != circleMembership {
 		t.Fatalf("circle membership target = %q, want %q", got, circleMembership)
 	}
+	gatheringPlan := filepath.Join(
+		appDir,
+		"lib/runtime/errors/generated/circle/gathering_plan_errors.g.dart",
+	)
+	if got := runtimeErrorOutputPath(
+		appDir,
+		"circle",
+		"gathering_plan_errors.g.dart",
+	); got != gatheringPlan {
+		t.Fatalf("gathering plan target = %q, want %q", got, gatheringPlan)
+	}
 
 	for _, domain := range []string{
 		"assistant",
@@ -288,6 +299,7 @@ func TestMainEmitsRuntimeArtifactsOnlyThroughCanonicalTargetHelpers(t *testing.T
 		`runtimeErrorOutputPath(appDir, "chat", "chat_errors.g.dart")`,
 		`runtimeErrorOutputPath(appDir, "circle", "circle_errors.g.dart")`,
 		`runtimeErrorOutputPath(appDir, "circle", "circle_membership_errors.g.dart")`,
+		`runtimeErrorOutputPath(appDir, "circle", "gathering_plan_errors.g.dart")`,
 		`runtimeErrorOutputPath(appDir, "content", "content_errors.g.dart")`,
 		`runtimeErrorOutputPath(appDir, "entity", "entity_errors.g.dart")`,
 		`runtimeErrorOutputPath(appDir, "integration", "integration_location_errors.g.dart")`,

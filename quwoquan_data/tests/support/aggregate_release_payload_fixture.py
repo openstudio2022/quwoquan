@@ -4,27 +4,23 @@ Aggregate homepage releases use one immutable payload tree.
 
 由 test_aggregate_release__payload_layout_* 场景组测试文件共享；
 从原单体测试文件逐字下沉，不改变任何 fixture 逻辑。
-``_use_research_distribution`` 是模块级 autouse fixture，场景测试文件
+``_use_release_test_output`` 是模块级 autouse fixture，场景测试文件
 必须显式 import 它以保持 autouse 语义。
 """
 from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from content.release.canonical import (
-    aggregate_release_pool_closure,
-    aggregate_release_result,
-)
 from core import paths as core_paths
+from core.content_library import resolve_media_holding
 from core.source_digest import (
     content_source_revision,
-    current_source_digest,
+    current_source_definition_snapshot,
 )
-from governance.coverage import distribution
+from support.media_fixture import admit_media_body
 
 
 EXECUTION_ID = "20260713--travel-homepage-coverage--test-region-a--scale-901"
@@ -34,31 +30,15 @@ ENTITY_CATALOG_DIGEST = "sha256:" + "e" * 64
 
 
 @pytest.fixture(autouse=True)
-def _use_research_distribution(
+def _use_release_test_output(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    policy = distribution.load_content_distribution_policy()
-    research_policy = replace(
-        policy,
-        product_lifecycle_state=distribution.ProductLifecycleState.RESEARCH,
-        release_class=distribution.ReleaseClass.RESEARCH,
-    )
-    monkeypatch.setattr(
-        aggregate_release_pool_closure,
-        "load_content_distribution_policy",
-        lambda: research_policy,
-    )
-    monkeypatch.setattr(
-        aggregate_release_result,
-        "load_content_distribution_policy",
-        lambda: research_policy,
-    )
     monkeypatch.setattr(core_paths, "OUTPUT_ROOT", tmp_path / "output")
 
 
 def _release_source_identity(source_digest: str | None = None) -> dict[str, str]:
-    source_digest = source_digest or current_source_digest().digest
+    source_digest = source_digest or current_source_definition_snapshot().digest
     return {
         "source_revision": content_source_revision(
             source_digest=source_digest,
@@ -73,19 +53,23 @@ def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
-def _write_cas(
-    publish_root: Path,
+def _admit_media(
     payload: bytes,
     *,
     suffix: str = ".jpg",
     kind: str = "image",
     mime_type: str = "image/jpeg",
 ) -> tuple[str, dict[str, object]]:
+    """Give the library one media body and return the reference objects cite it by.
+
+    Canonical publish records the reference; the library holds the body. A test
+    that wants an object to resolve therefore admits the bytes here rather than
+    writing them under the publish root.
+    """
+
     digest = hashlib.sha256(payload).hexdigest()
     object_key = f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}{suffix}"
-    path = publish_root / object_key
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(payload)
+    admit_media_body(payload)
     return object_key, {
         "assetId": f"asset-{digest[:16]}",
         "kind": kind,
@@ -144,6 +128,7 @@ def _source_attribution(content_type: str) -> dict[str, object]:
         "propertyReleaseStatus": "not_required",
         "collectedAt": "2026-08-05T00:00:00Z",
         "takedownPolicy": "remove on substantiated request",
+        "derivedModifications": [],
     }
 
 
@@ -151,9 +136,7 @@ def _write_avatar_rights_snapshot(
     object_root: Path,
     asset: dict[str, object],
 ) -> None:
-    object_key = str(asset["objectKey"])
-    physical = object_root.parents[1] / object_key
-    byte_count = physical.stat().st_size
+    byte_count = resolve_media_holding(str(asset["sha256"])).stat().st_size
     asset_id = str(asset["assetId"])
     digest = str(asset["sha256"])
     _write_json(
@@ -208,7 +191,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
     publish_root = tmp_path / "publish"
     execution_root = tmp_path / EXECUTION_ID
     release_root = tmp_path / "releases"
-    source_digest = current_source_digest().to_document()
+    source_digest = current_source_definition_snapshot().to_document()
     _write_json(
         execution_root / "execution_manifest.json",
         {
@@ -221,7 +204,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
         {
             "schema": "quwoquan_data.execution_publish_ref",
             "executionId": EXECUTION_ID,
-            "canonicalPublishRoot": "quwoquan_data/publish",
+            "canonicalPublishRoot": "canonical-publish",
             "publishedRefs": {"entities": ["地点/景区/测试实体甲"], "posts": []},
         },
     )
@@ -233,8 +216,8 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str, str]:
             "independentReviewer": {"status": "passed"},
         },
     )
-    selected_key, selected_asset = _write_cas(publish_root, b"putuo-release-asset")
-    unrelated_key, unrelated_asset = _write_cas(publish_root, b"unrelated-canonical-asset")
+    selected_key, selected_asset = _admit_media(b"putuo-release-asset")
+    unrelated_key, unrelated_asset = _admit_media(b"unrelated-canonical-asset")
     entity_root = publish_root / "entities/地点/景区/测试实体甲"
     _write_json(
         entity_root / "manifest.json",

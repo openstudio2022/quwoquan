@@ -14,6 +14,7 @@ from typing import Any
 
 import quwoquan_ops.cli.lib.startup_attempt_receipt as _pkg
 
+from ..environment_topology import require_formal_release_compose_project
 from ..immutable_image_composition import immutable_image_digest
 from ..output_paths import target_process_dir
 from .constants import (
@@ -84,9 +85,12 @@ def validate_startup_attempt(
     workload = str(value.get("workload") or "").strip()
     if workload not in WORKLOADS:
         raise ValueError("startup attempt receipt workload is invalid")
-    for field in ("attemptId", "composeProject"):
-        if not str(value.get(field) or "").strip():
-            raise ValueError(f"startup attempt receipt {field} is required")
+    if not str(value.get("attemptId") or "").strip():
+        raise ValueError("startup attempt receipt attemptId is required")
+    try:
+        require_formal_release_compose_project(target, value.get("composeProject"))
+    except ValueError as exc:
+        raise ValueError("startup attempt receipt Compose project mismatch") from exc
     for field in (
         "candidateDigest",
         "configurationDigest",
@@ -186,6 +190,12 @@ def validate_startup_attempt(
         if value.get(field) is not None and not isinstance(value.get(field), str):
             raise ValueError(f"startup attempt receipt {field} is invalid")
     return value
+
+
+def read_startup_attempt(target: str) -> dict[str, Any] | None:
+    """只读加载启动回执，不恢复未完成的 fan-out 事务。"""
+
+    return _read(_pkg.startup_attempt_path(target))
 
 
 def load_startup_attempt(target: str) -> dict[str, Any] | None:

@@ -22,11 +22,7 @@ class CanonicalSearchRankReason {
   }
 
   Map<String, dynamic> toMap() {
-    return <String, dynamic>{
-      'code': code,
-      'label': label,
-      'weight': weight,
-    };
+    return <String, dynamic>{'code': code, 'label': label, 'weight': weight};
   }
 
   CanonicalSearchRankReason copyWith({
@@ -43,22 +39,32 @@ class CanonicalSearchRankReason {
 }
 
 void _validateCanonicalSearchRankReasonWire(Map<String, dynamic> m) {
-  const allowed = <String>{
-    'code',
-    'label',
-    'weight',
-  };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  const allowed = <String>{'code', 'label', 'weight'};
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('CanonicalSearchRankReason contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'CanonicalSearchRankReason contains unknown fields: ${unknown.join(',')}',
+    );
   }
   if (!m.containsKey('code') || m['code'] == null || (m['code'] is! String)) {
-    throw FormatException('CanonicalSearchRankReason.code has an invalid wire value');
+    throw FormatException(
+      'CanonicalSearchRankReason.code has an invalid wire value',
+    );
   }
-  if (!m.containsKey('label') || m['label'] == null || (m['label'] is! String)) {
-    throw FormatException('CanonicalSearchRankReason.label has an invalid wire value');
+  if (!m.containsKey('label') ||
+      m['label'] == null ||
+      (m['label'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchRankReason.label has an invalid wire value',
+    );
   }
-  if (!m.containsKey('weight') || m['weight'] == null || (m['weight'] is! num)) {
-    throw FormatException('CanonicalSearchRankReason.weight has an invalid wire value');
+  if (!m.containsKey('weight') ||
+      m['weight'] == null ||
+      (m['weight'] is! num)) {
+    throw FormatException(
+      'CanonicalSearchRankReason.weight has an invalid wire value',
+    );
   }
 }

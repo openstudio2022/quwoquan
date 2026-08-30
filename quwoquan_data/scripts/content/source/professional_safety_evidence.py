@@ -76,6 +76,7 @@ def load_bound_safety_evidence(
     evidence_root: Path,
     kind: str,
     manual_root: Path | None = None,
+    source_review_identity: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Load one exact evidence file and verify every pre-payload binding."""
     if kind not in {"image", "video"}:
@@ -112,6 +113,7 @@ def load_bound_safety_evidence(
             item,
             evidence_root=evidence_root,
             manual_root=manual_root,
+            source_review_identity=source_review_identity,
         )
     return evidence
 
@@ -122,6 +124,7 @@ def _validate_video_physical_refs(
     *,
     evidence_root: Path,
     manual_root: Path | None,
+    source_review_identity: Mapping[str, str] | None,
 ) -> None:
     contact_sheet = _safe_file(
         evidence_root,
@@ -138,13 +141,17 @@ def _validate_video_physical_refs(
             f"{item.get('assetId')}: safety contact sheet is not a decodable image"
         )
     file_ref = str(evidence.get("fileRef") or "")
-    if item.get("acquisitionPath") != "manual_file":
+    if item.get("acquisitionPath") != "manual_file" or item.get("frozenAsset") is not None:
         if file_ref:
             raise ValueError(
                 f"{item.get('assetId')}: non-manual safety evidence forbids fileRef"
             )
         _validate_video_source_attribution(evidence, item)
-        _validate_source_review_evidence(evidence, evidence_root=evidence_root)
+        _validate_source_review_evidence(
+            evidence,
+            evidence_root=evidence_root,
+            source_review_identity=source_review_identity,
+        )
         return
     if manual_root is None:
         raise ValueError("manual_root is required by manual_file safety evidence")
@@ -163,7 +170,11 @@ def _validate_video_physical_refs(
             f"{item.get('assetId')}: safety evidence physical video drift"
         )
     _validate_video_source_attribution(evidence, item)
-    _validate_source_review_evidence(evidence, evidence_root=evidence_root)
+    _validate_source_review_evidence(
+        evidence,
+        evidence_root=evidence_root,
+        source_review_identity=source_review_identity,
+    )
 
 
 def _validate_video_source_attribution(
@@ -202,26 +213,29 @@ def _validate_source_review_evidence(
     evidence: Mapping[str, Any],
     *,
     evidence_root: Path,
+    source_review_identity: Mapping[str, str] | None,
 ) -> None:
+    from content.source.host_source_review import read_host_source_review_result
+
     review = evidence.get("reviewEvidence")
     if review is None:
         return
     if not isinstance(review, Mapping):
         raise TypeError("video source review evidence is invalid")
-    for ref_field, digest_field in (
-        ("sourceReviewRequestRef", "sourceReviewRequestSha256"),
-        ("sourceReviewAttemptRef", "sourceReviewAttemptSha256"),
-        ("sourceCapacityReceiptRef", "sourceCapacityReceiptSha256"),
-    ):
-        path = _safe_file(
-            evidence_root,
-            review.get(ref_field),
-            label=f"video source review {ref_field}",
-        )
-        if file_sha256(path) != review.get(digest_field):
-            raise ValueError(
-                f"video source review evidence SHA-256 drift: {ref_field}"
-            )
+    result = read_host_source_review_result(
+        evidence_root=evidence_root,
+        request_ref=str(review.get("requestRef") or ""),
+        result_ref=str(review.get("resultRef") or ""),
+    )
+    if result.get("resultDigest") != review.get("resultDigest"):
+        raise ValueError("video host source review result digest drift")
+    if source_review_identity is not None:
+        observed = result.get("sourceIdentity")
+        if not isinstance(observed, Mapping) or any(
+            observed.get(field) != value
+            for field, value in source_review_identity.items()
+        ):
+            raise ValueError("video source review identity differs from current handoff")
 
 
 def validate_image_safety_payload(

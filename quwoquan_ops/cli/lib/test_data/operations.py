@@ -78,6 +78,7 @@ class TestDataRuntime:
     def __init__(self, *, candidate_cache_enabled: bool = True) -> None:
         self._sessions: dict[str, LocalAcceptanceActor] = {}
         self._actor_handles: dict[tuple[str, ActorRole], ActorHandle] = {}
+        self._verified_mutual_relationships: set[tuple[str, str, str]] = set()
         self._candidate_cache: dict[tuple[str, str, str], ProvisionedCapability] = {}
         self._candidate_inflight: dict[
             tuple[str, str, str],
@@ -241,6 +242,57 @@ class TestDataRuntime:
         self.actor(handle)
         return handle
 
+    def register_verified_mutual_relationship(
+        self,
+        first: ActorHandle,
+        second: ActorHandle,
+        *,
+        test_data_instance_id: str,
+    ) -> None:
+        key = _mutual_relationship_key(
+            test_data_instance_id,
+            first,
+            second,
+        )
+        self.actor(first)
+        self.actor(second)
+        with self._lock:
+            if key in self._verified_mutual_relationships:
+                raise RuntimeError("mutual actor relationship is already registered")
+            self._verified_mutual_relationships.add(key)
+
+    def require_verified_mutual_relationship(
+        self,
+        first: ActorHandle,
+        second: ActorHandle,
+        *,
+        test_data_instance_id: str,
+    ) -> None:
+        key = _mutual_relationship_key(
+            test_data_instance_id,
+            first,
+            second,
+        )
+        with self._lock:
+            verified = key in self._verified_mutual_relationships
+        if not verified:
+            raise RuntimeError("direct conversation requires verified mutual actors")
+
+    def unregister_verified_mutual_relationship(
+        self,
+        first: ActorHandle,
+        second: ActorHandle,
+        *,
+        test_data_instance_id: str,
+    ) -> None:
+        key = _mutual_relationship_key(
+            test_data_instance_id,
+            first,
+            second,
+        )
+        with self._lock:
+            self._verified_mutual_relationships.discard(key)
+
     def register_operation_receipt_sink(
         self,
         test_data_instance_id: str,
@@ -336,6 +388,19 @@ class TestDataRuntime:
                 catalog = ContractOperationCatalog()
                 self._operation_catalog = catalog
             return catalog
+
+
+def _mutual_relationship_key(
+    test_data_instance_id: str,
+    first: ActorHandle,
+    second: ActorHandle,
+) -> tuple[str, str, str]:
+    if not test_data_instance_id.strip():
+        raise ValueError("mutual relationship requires a test-data instance")
+    if first.role is second.role:
+        raise ValueError("mutual relationship actor roles must differ")
+    personas = sorted((first.persona.object_id, second.persona.object_id))
+    return (test_data_instance_id, personas[0], personas[1])
 
 
 class PublicOperationExecutor:

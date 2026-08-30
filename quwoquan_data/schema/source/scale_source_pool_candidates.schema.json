@@ -7,10 +7,12 @@
   "required": [
     "schema",
     "targetScale",
+    "workloadMode",
     "sourceRevision",
     "sourceDigest",
     "entityCatalogDigest",
     "activeCarriers",
+    "workloadTargets",
     "projectionBindings",
     "candidateCounts",
     "candidates",
@@ -18,7 +20,8 @@
   ],
   "properties": {
     "schema": { "const": "quwoquan_data.scale_source_pool_candidates" },
-    "targetScale": { "enum": ["M100", "M1000", "M10000"] },
+    "targetScale": { "enum": ["WORKLOAD", "M100", "M1000", "M10000"] },
+    "workloadMode": {"enum": ["explicit", "milestone_preset"]},
     "sourceRevision": { "$ref": "#/$defs/sha256" },
     "sourceDigest": { "$ref": "#/$defs/sha256" },
     "entityCatalogDigest": { "$ref": "#/$defs/sha256" },
@@ -28,6 +31,17 @@
       "maxItems": 4,
       "uniqueItems": true,
       "items": { "enum": ["homepage", "article", "image", "video"] }
+    },
+    "workloadTargets": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {"type": "integer", "minimum": 1},
+        "article": {"type": "integer", "minimum": 1},
+        "image": {"type": "integer", "minimum": 1},
+        "video": {"type": "integer", "minimum": 1}
+      }
     },
     "projectionBindings": {
       "type": "array",

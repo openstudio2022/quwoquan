@@ -15,6 +15,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -69,14 +71,16 @@ def _release_identity(
     ):
         raise ValueError("release evidence ref must be an exact immutable GHCR ref")
     source = manifest.get("source")
-    images = manifest.get("images")
+    artifacts = manifest.get("environmentArtifacts")
+    prod_artifact = artifacts.get("prod") if isinstance(artifacts, Mapping) else None
+    images = prod_artifact.get("images") if isinstance(prod_artifact, Mapping) else None
     if not isinstance(source, Mapping) or not isinstance(images, Mapping) or not images:
-        raise ValueError("component evidence source/images are incomplete")
+        raise ValueError("Prod environment artifact source/images are incomplete")
     services: list[dict[str, str]] = []
     for service, descriptor in sorted(images.items()):
         digest = descriptor.get("digest") if isinstance(descriptor, Mapping) else None
         if not isinstance(service, str) or DIGEST.fullmatch(str(digest or "")) is None:
-            raise ValueError("component evidence image identity is incomplete")
+            raise ValueError("Prod environment artifact image identity is incomplete")
         services.append({"service": service, "imageDigest": str(digest)})
     source_sha = str(source.get("gitSha") or "")
     current_sha = subprocess.run(

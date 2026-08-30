@@ -14,9 +14,11 @@
 
 ### In Scope
 
-- provider policy 与文本、插图的 source/rights 闭包
-- Agent authoring、独立 review、canonical promotion 与 immutable release
-- request 驱动规模下的 import/API/consumer/rollback/replay 证据
+- provider policy 与文本、插图的 source/rights consumer closure
+- immutable release 到 importer/API/consumer/rollback/replay 的跨域同 identity 证据
+- 既有 `GWT-004` 的文章 media-mode consumer 判据
+
+> execution、reviewed delivery、pool、M100/M1000、release build/promotion 与 UAT/acceptance 业务 owner 已迁至 discovery `multi-carrier-release`；本 Story 保留既有锚点以承接已绑定测试，不再据此拥有里程碑或环境完成结论。
 
 ### Out of Scope
 
@@ -44,6 +46,7 @@
 
 - M100/M1000 的 article workload target 分别为 100/1000；quota/count 只表达请求负载与里程碑目标，不是发布门。
 - receipt 分别记录 target、selected、qualified、finalized、discarded、shortfall，以及 object pass、illustrated、first-pass、discard 与 quota attainment 的分子、分母和 rate；任何目标缺口或比率值都不阻断已闭合对象。
+- active article workloads 按可用容量独立调度；固定并发、固定 worker、workspace smoke、capacity soak 与 resource samples 不作为 dispatch/promotion 前置。每个实际启动的 task 逐项记录 typed 终态，诊断 sample 不得冒充 task 结果。
 - 容量评估可重算且不被当作生产完成；对象级 review、source/rights/provenance、同源图片闭包、去重与 canonical 引用仍是硬门。
 
 <a id="req-004"></a>
@@ -54,6 +57,15 @@
 - 搜索补全供给使用独立 execution，不能和主线共享冻结目标、状态或准出口径。
 - article source discovery 只允许进入 registry 已声明可抓取、允许 crawl、包含 article lane 且具备 commercial release admission 的站点；robots/terms、allowed path、速率/退避、深度/日页数、canonical 去重与实体/别名/主题相关性均须形成不可变审计证据。
 - 登录墙、robots deny、网络不可达与不相关候选必须形成 typed blocked/discard；`factual_reference_only` 只保留事实引用身份，不得保存原文或伪造成功。
+- content plan 只消费 target set 冻结的 canonical target 与 aliases 作为实体锚定；只偶然列举目标的城市总览或 figure caption 不能因行长、推断短别名或标题回填成为目标文章底稿。
+- 图片与实体的相关性只由来源侧字段作证：来源说明、视觉主体、标题与来源/授权 URL。采集侧自己写给候选的 `relevance` 注释不是证据——把它算作证据等于允许候选自证相关，一张来源说明与 URL 都指向别处的图片，只要注释里写上实体名就能过门，而这类假阳性在规模生产下正是「配图与实体无关」的主要入口。
+- `factual_reference_only` 只可提取可核验事实、路线顺序、必要数字与专有名词；成稿必须使用独立句式、结构和叙事，不得保留来源连续长句、自然段、小标题或原文结构，也不得以 licensed adaptation 的底稿留存率为其设下限。
+- 来源的 `illustrated` 声明由「同源可发布图片至少两张」派生，不是独立的编辑意图。发布评估把同源图片剔到不足两张时该派生失去依据，候选按同一条规则收敛为 `text_only` 并计入 `articleImageSoftWarnings.no_publishable_source_asset`，合格正文不因图片侧短缺被丢弃；反向从 `text_only` 变为 `illustrated` 等于凭空造图，一律拒绝。来源本就声明 `text_only` 的候选谈不上缺可发布素材，不计入该软警告键。
+- independent review 已有 finished Grok journal，但 controller 中断后只剩唯一 schema-valid pending response 时，不得改写旧 execution 的 `reviewer_result`/attestation。
+- 只有唯一 pending response 与唯一未绑定 finished reviewer work unit 能生成 create-once reconciliation receipt。
+- 标准 campaign submission 必须从该 receipt 与其余 final review 自动派生 failed-only refs。
+- plan 冻结该 scope，lane argv 透传该 scope，并在新 sequence 以 `retryOf` 消费 typed issues。
+- 已通过对象不得重试。
 
 ## 4. 契约引用
 
@@ -63,6 +75,8 @@
 - canonical：`quwoquan_data/scripts/content/execution`
 - canonical：`quwoquan_data/scripts/content/release`
 - canonical：`quwoquan_data/scripts/governance/coverage/benchmark.py`
+- interrupted review reconciliation：`quwoquan_data/schema/execution/campaign_review_interruption_reconciliation_receipt.schema.json`
+- failed-only retry feedback：`quwoquan_data/schema/execution/retry_review_feedback.schema.json`
 
 ## 5. 验收场景
 
@@ -72,6 +86,8 @@
 - GIVEN 垂类 provider policy、content policy 与 family 已由仓内真相源声明。
 - WHEN 任一文章 execution 以 request 选择 provider 和主题。
 - THEN provider admission、文本事实来源和插图 rights/provenance 使用同一合同。
+- THEN content plan 优先并准入严格锚定 canonical target/alias 的直接来源，排除只偶然列举目标的宽泛页面；`factual_reference_only` author prompt 只允许事实提取与独立表达。
+- THEN review 中断证据不改写旧 execution；create-once receipt 、submission、plan 与 lane 只向新 `retryOf` 透传 exact failed refs 和 typed feedback，通过对象不进入新序列。
 - THEN 静态 policy 不包含实体 URL、区域、数量或运行结论。
 - THEN 真实 source discovery 主线可回读 provider policy、frontier 决策、canonical URL 与 typed blocked/discard evidence。
 
@@ -93,7 +109,18 @@
 - WHEN 运营评估后续规模与预算。
 - THEN 吞吐、成本、object pass、illustrated、first-pass、discard、quota attainment、queue lag 与 source capacity 都来自 receipt，并为每个 rate 标明分子与分母。
 - THEN 未命中 workload target 或统计 rate 只形成 shortfall/趋势结论，不否决至少一个 hard-qualified 对象的发布与结构性 promotion。
+- THEN active workloads 可串行或重叠执行；每个实际 task 分别终态，soak/workspace/resource samples 的缺失或失败只影响容量结论，不影响 dispatch。canonical publish 保持对象事务单写者，最终 release 仍要求 exact closure。
 - THEN 缺失对象级硬门或 receipt 身份证据时结论为 GATE_BLOCK，不能写入静态 policy 或 acceptance 数字。
+
+<a id="gwt-004"></a>
+### GWT-004 `illustrated` 来源缺可发布图片时的准入结论单义且可对账
+
+- GIVEN 一个声明 `publishMediaMode=illustrated` 的文章来源，其同源图片中只有一张能通过发布评估。
+- WHEN content plan 对该来源做候选级准入。
+- THEN 该来源以 `text_only` 进入候选集合并计入 `articleImageSoftWarnings.no_publishable_source_asset`，不计入 `articleRejects`；同一个来源不得同时出现在两侧，也不得两侧都不出现。
+- THEN 收敛后的候选不再携带任何图片声明与素材引用，其 packet 的 `text_only` 与来源 meta 的 `illustrated` 之间的差异只在素材集合为空时被接受；从 `text_only` 反向变为 `illustrated` 一律拒绝。
+- THEN `no_publishable_source_asset` 只在「来源声明需要配图而可发布图片不足」时计数；来源本就声明 `text_only` 的候选不计入该键。
+- THEN 结论可按来源逐一对账回具体候选，不只留下无法回到来源的计数。
 
 ## 6. 依赖
 

@@ -21,7 +21,6 @@ import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/ca
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/rtc_signal_events.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/second_incoming_call_provider.dart';
-import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_state.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/rtc_service/rtc/call_session/rtc_contract_test_builders.dart';
@@ -99,8 +98,11 @@ void main() {
     return (container, router, acknowledger);
   }
 
-  Future<void> attachRouter(WidgetTester tester, ProviderContainer container,
-      GoRouter router) async {
+  Future<void> attachRouter(
+    WidgetTester tester,
+    ProviderContainer container,
+    GoRouter router,
+  ) async {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -131,21 +133,13 @@ void main() {
       reason: '活跃 CallSession 不得被第二来电篡夺',
     );
     expect(session.status, CallStatus.inCall);
-    expect(
-      find.byKey(incomingPageKey),
-      findsNothing,
-      reason: '不得导航到全屏来电页覆盖通话',
-    );
+    expect(find.byKey(incomingPageKey), findsNothing, reason: '不得导航到全屏来电页覆盖通话');
     expect(
       container.read(secondIncomingCallProvider)?.callId,
       _secondCallId,
       reason: '第二来电必须以轻提示状态暴露给通话页',
     );
-    expect(
-      acknowledger.receipts,
-      hasLength(1),
-      reason: '轻提示也是真实呈现，必须 ACK 记账',
-    );
+    expect(acknowledger.receipts, hasLength(1), reason: '轻提示也是真实呈现，必须 ACK 记账');
   });
 
   testWidgets('空闲时来电行为不变：seed 首帧并进入来电页', (tester) async {
@@ -161,11 +155,7 @@ void main() {
     final session = container.read(callSessionProvider);
     expect(session.session?.id, _secondCallId);
     expect(session.status, CallStatus.ringing);
-    expect(
-      find.byKey(incomingPageKey),
-      findsOneWidget,
-      reason: '空闲时必须进入全屏来电页',
-    );
+    expect(find.byKey(incomingPageKey), findsOneWidget, reason: '空闲时必须进入全屏来电页');
     expect(container.read(secondIncomingCallProvider), isNull);
     expect(acknowledger.receipts, hasLength(1));
   });

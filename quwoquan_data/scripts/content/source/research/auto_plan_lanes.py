@@ -6,6 +6,7 @@ from typing import Any
 
 from core.data_issue import DataIssueCode, DataRecoveryAction
 
+from content.source.rights_decision_projection import projected_distribution_decision
 from content.source.research.plan_state import (
     _image_at,
     _record_unavailable,
@@ -125,7 +126,7 @@ def _single_image_collection(
         ),
         "rightsStatus": item.get("rightsStatus") or "",
         "authorizationRequired": item.get("authorizationRequired"),
-        "distributionDecision": item.get("distributionDecision") or "",
+        **projected_distribution_decision(item),
         "rightsIssues": list(item.get("rightsIssues") or []),
         "images": [item],
     }
@@ -214,9 +215,13 @@ def write_image_lane(
         collections: list[dict[str, Any]] = []
         professional_specs = list(professional_image_specs or [])
         professional_bound = bool(acquisition_receipt_refs)
-        desired_image_collections = max(
-            required_publishable_images + 3,
-            min(12, required_publishable_images + required_article_bases + 3),
+        desired_image_collections = (
+            len(professional_specs)
+            if professional_bound
+            else max(
+                required_publishable_images + 3,
+                min(12, required_publishable_images + required_article_bases + 3),
+            )
         )
         used_collection_ids: set[str] = set()
         for collection in ([] if professional_bound else prior_image_collections):

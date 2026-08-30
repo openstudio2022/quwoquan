@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260817--travel-homepage-closure--china-sichuan--pilot-001",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/景区/海螺沟",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "grok-4.6",
+    "modelFamily": "grok",
+    "runId": "run-8b4d93a7-2182-465a-ab28-e03c12ffcec0",
+    "resultHash": "sha256:ead845bb5336bf647dd9a839d496f421b7c3465aaf7067030feb9d887f061e74"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

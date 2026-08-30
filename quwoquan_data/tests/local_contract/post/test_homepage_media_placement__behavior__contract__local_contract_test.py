@@ -29,11 +29,14 @@ coverImage: asset://cover_arch
 asset://gallery_01
 :::
 """
+    # role 是 `1.download` 冻结的处置（DEC-029）；本函数只按它落版面。
+    # inline_model 在冻结阶段已被定为内嵌，unanchored 冻结为 related——
+    # 后者的 placementType 仍写 inline，用来证明版面提示不能翻转冻结处置。
     assets = [
         {"assetId": "cover_arch", "role": "cover", "caption": "测试实体甲海岸牌坊"},
         {
             "assetId": "inline_model",
-            "role": "related",
+            "role": "inline",
             "caption": "测试实体甲全貌模型",
             "placementType": "inline",
         },
@@ -81,9 +84,15 @@ asset://gallery_01
     assert "gallery_01" in gallery_line
     assert "unanchored" in gallery_line
     assert "inline_model" not in gallery_line
-    assert assets[1]["role"] == "inline"
-    assert assets[2]["role"] == "related"
-    assert assets[3]["role"] == "related"
+    # 渲染不裁决：冻结处置在函数返回后必须逐字不变。这里点名断言而不是只看版面，
+    # 因为一旦函数又开始依据正文改写 role，版面可能仍然「看起来对」，
+    # 而第二个决策点已经悄悄回来了。
+    assert [asset["role"] for asset in assets] == [
+        "cover",
+        "inline",
+        "related",
+        "related",
+    ]
 
 
 def test_empty_source_gallery_heading_is_removed_after_related_gallery_is_materialized() -> None:

@@ -126,11 +126,10 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
     return false;
   }
 
-  Future<String?> _writeImageToTemp(ui.Image image, String prefix) async {
+  Future<String> _writeImageToTemp(ui.Image image, String prefix) async {
     try {
       final data = await ImageEditorExportEngine.encodePng(image);
-      if (data == null) return null;
-      return writeAppTemporaryFileBytes(
+      return await writeAppTemporaryFileBytes(
         fileName: '${prefix}_${DateTime.now().millisecondsSinceEpoch}.png',
         bytes: data,
       );
@@ -139,19 +138,33 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
     }
   }
 
-  Future<String?> _applyCropToCurrentImage() async {
-    if (_currentPath.isEmpty) return null;
+  /// 读取当前图片像素；没有可读内容时抛出，因为后续烘焙已经不可能达成。
+  Future<Uint8List> _requireCurrentImageBytes() async {
+    if (_currentPath.isEmpty) {
+      throw const ImageEditorBakeException('no current image path');
+    }
+    final bytes = await _loadImageBytes(_currentPath);
+    if (bytes.isEmpty) {
+      throw const ImageEditorBakeException('current image has no bytes');
+    }
+    return bytes;
+  }
+
+  Future<String> _applyCropToCurrentImage() async {
+    final bytes = await _requireCurrentImageBytes();
+    final image = await ImageEditorExportEngine.decodeConstrained(bytes);
     try {
-      final bytes = await _loadImageBytes(_currentPath);
-      if (bytes.isEmpty) return null;
-      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
       final baseRect = _cropImageRect == Rect.zero
           ? _resolveImageRect(_cropLayoutSize)
           : _cropImageRect;
       final imageRect = baseRect.shift(_cropImageOffset);
-      if (imageRect.isEmpty) return null;
+      if (imageRect.isEmpty) {
+        throw const ImageEditorBakeException('crop source rect is empty');
+      }
       final cropRect = _resolveCropRect(imageRect).intersect(imageRect);
-      if (cropRect.isEmpty) return null;
+      if (cropRect.isEmpty) {
+        throw const ImageEditorBakeException('crop selection is empty');
+      }
       final scaleX = image.width / imageRect.width;
       final scaleY = image.height / imageRect.height;
       final srcRect = Rect.fromLTWH(
@@ -164,23 +177,23 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
         image,
         srcRect,
       );
+      return await _writeImageToTemp(croppedImage, 'crop');
+    } finally {
       image.dispose();
-      return _writeImageToTemp(croppedImage, 'crop');
-    } catch (e) {
-      return null;
     }
   }
 
-  Future<String?> _applyRotateToCurrentImage() async {
-    if (_currentPath.isEmpty) return null;
+  Future<String> _applyRotateToCurrentImage() async {
+    if (_currentPath.isEmpty) {
+      throw const ImageEditorBakeException('no current image path');
+    }
+    final totalDegrees = _rotateDegrees + _rotateFineDegrees;
+    if (totalDegrees == 0 && !_flipHorizontal && !_flipVertical) {
+      return _currentPath;
+    }
+    final bytes = await _requireCurrentImageBytes();
+    final image = await ImageEditorExportEngine.decodeConstrained(bytes);
     try {
-      final totalDegrees = _rotateDegrees + _rotateFineDegrees;
-      if (totalDegrees == 0 && !_flipHorizontal && !_flipVertical) {
-        return _currentPath;
-      }
-      final bytes = await _loadImageBytes(_currentPath);
-      if (bytes.isEmpty) return null;
-      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
       // 旋转确认时导出“范围框内”结果，而非整张旋转包围盒。
       // 这里保持输出分辨率与原图一致，仅变换并裁切可见范围。
       final scale = RotateGeometry.scaleToFill(
@@ -195,70 +208,62 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
         flipHorizontal: _flipHorizontal,
         flipVertical: _flipVertical,
       );
+      return await _writeImageToTemp(rotatedImage, 'rotate');
+    } finally {
       image.dispose();
-      return _writeImageToTemp(rotatedImage, 'rotate');
-    } catch (e) {
-      return null;
     }
   }
 
-  Future<String?> _applyFilterToCurrentImage() async {
+  Future<String> _applyFilterToCurrentImage() async {
     final preset = _selectedFilterPreset;
     if (preset == null) return _currentPath;
     final strength = (_filterStrengthByPresetId[preset.id] ?? _filterIntensity)
         .clamp(0, 100);
     if (strength <= 0.001) return _currentPath;
-    if (_currentPath.isEmpty) return null;
+    final bytes = await _requireCurrentImageBytes();
+    final image = await ImageEditorExportEngine.decodeConstrained(bytes);
     try {
-      final bytes = await _loadImageBytes(_currentPath);
-      if (bytes.isEmpty) return null;
-      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
       // 滤镜与整体面板同源：纯色彩矩阵 + 细节类逐像素管线（GWT-009）。
       final adjusted = await ImageEditorExportEngine.applyBaseAdjustments(
         image,
         colorMatrix: _buildFilterColorMatrix(preset, strength.toDouble()),
         detail: _buildFilterDetailSpec(preset, strength.toDouble()),
       );
+      return await _writeImageToTemp(adjusted, 'filter');
+    } finally {
       image.dispose();
-      return _writeImageToTemp(adjusted, 'filter');
-    } catch (_) {
-      return null;
     }
   }
 
   /// 马赛克烘焙：全尺寸合成笔画。
-  Future<String?> _applyMosaicToCurrentImage() async {
+  Future<String> _applyMosaicToCurrentImage() async {
     if (_currentPath.isEmpty || _mosaicStrokes.isEmpty) return _currentPath;
+    final bytes = await _requireCurrentImageBytes();
+    final image = await ImageEditorExportEngine.decodeConstrained(bytes);
     try {
-      final bytes = await _loadImageBytes(_currentPath);
-      if (bytes.isEmpty) return null;
-      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
       final composed = await ImageEditorExportEngine.applyMosaicStrokes(
         image,
         List<ImageEditorMosaicStroke>.of(_mosaicStrokes),
       );
+      return await _writeImageToTemp(composed, 'mosaic');
+    } finally {
       image.dispose();
-      return _writeImageToTemp(composed, 'mosaic');
-    } catch (_) {
-      return null;
     }
   }
 
   /// 文字烘焙：全尺寸合成文字项。
-  Future<String?> _applyTextToCurrentImage() async {
+  Future<String> _applyTextToCurrentImage() async {
     if (_currentPath.isEmpty || _textItems.isEmpty) return _currentPath;
+    final bytes = await _requireCurrentImageBytes();
+    final image = await ImageEditorExportEngine.decodeConstrained(bytes);
     try {
-      final bytes = await _loadImageBytes(_currentPath);
-      if (bytes.isEmpty) return null;
-      final image = await ImageEditorExportEngine.decodeConstrained(bytes);
       final composed = await ImageEditorExportEngine.applyTextItems(
         image,
         List<ImageEditorTextItem>.of(_textItems),
       );
+      return await _writeImageToTemp(composed, 'text');
+    } finally {
       image.dispose();
-      return _writeImageToTemp(composed, 'text');
-    } catch (_) {
-      return null;
     }
   }
 
@@ -302,71 +307,75 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
         _setEditorState(() => _selectedToolIndex = null);
         return;
       }
-      final rotatedPath = await _applyRotateToCurrentImage();
-      if (rotatedPath == null) {
-        await _showEditorActionFailure(title: MediaText.imageEditorRotate);
-        return;
-      }
-      _commitBakedStep(
-        payload: ImageEditorRotateStepPayload(
-          degrees: _rotateDegrees,
-          fineDegrees: _rotateFineDegrees,
-          flipHorizontal: _flipHorizontal,
-          flipVertical: _flipVertical,
+      final applied = await _runBakeAction(
+        title: MediaText.imageEditorRotate,
+        source: 'content.image_editor.bake_rotate',
+        bake: _applyRotateToCurrentImage,
+        onBaked: (rotatedPath) => _commitBakedStep(
+          payload: ImageEditorRotateStepPayload(
+            degrees: _rotateDegrees,
+            fineDegrees: _rotateFineDegrees,
+            flipHorizontal: _flipHorizontal,
+            flipVertical: _flipVertical,
+          ),
+          beforePath: beforePath,
+          afterPath: rotatedPath,
         ),
-        beforePath: beforePath,
-        afterPath: rotatedPath,
       );
+      if (!applied) return;
       _resetRotateState();
     }
     if (toolIndex == kImageEditorToolCrop) {
-      final croppedPath = await _applyCropToCurrentImage();
-      if (croppedPath == null) {
-        await _showEditorActionFailure(title: MediaText.imageEditorCrop);
-        return;
-      }
-      _commitBakedStep(
-        payload: ImageEditorCropStepPayload(ratio: _cropRatio),
-        beforePath: beforePath,
-        afterPath: croppedPath,
+      final applied = await _runBakeAction(
+        title: MediaText.imageEditorCrop,
+        source: 'content.image_editor.bake_crop',
+        bake: _applyCropToCurrentImage,
+        onBaked: (croppedPath) => _commitBakedStep(
+          payload: ImageEditorCropStepPayload(ratio: _cropRatio),
+          beforePath: beforePath,
+          afterPath: croppedPath,
+        ),
       );
+      if (!applied) return;
       _prepareCropSnapshot();
     }
     if (toolIndex == kImageEditorToolFilter) {
       final preset = _selectedFilterPreset;
       if (preset != null && _hasFilterAdjustments) {
-        final filteredPath = await _applyFilterToCurrentImage();
-        if (filteredPath == null) {
-          await _showEditorActionFailure(title: MediaText.imageEditorFilter);
-          return;
-        }
-        _commitBakedStep(
-          payload: ImageEditorFilterStepPayload(
-            presetId: preset.id,
-            presetName: preset.name,
-            intensity: _filterIntensity,
+        final applied = await _runBakeAction(
+          title: MediaText.imageEditorFilter,
+          source: 'content.image_editor.bake_filter',
+          bake: _applyFilterToCurrentImage,
+          onBaked: (filteredPath) => _commitBakedStep(
+            payload: ImageEditorFilterStepPayload(
+              presetId: preset.id,
+              presetName: preset.name,
+              intensity: _filterIntensity,
+            ),
+            beforePath: beforePath,
+            afterPath: filteredPath,
           ),
-          beforePath: beforePath,
-          afterPath: filteredPath,
         );
+        if (!applied) return;
         await _filterRepository.savePresetUseStats(preset.id);
         await _rebuildFilterData();
       }
     }
     if (toolIndex == kImageEditorToolMosaic) {
       if (_mosaicStrokes.isNotEmpty) {
-        final mosaicPath = await _applyMosaicToCurrentImage();
-        if (mosaicPath == null) {
-          await _showEditorActionFailure(title: MediaText.imageEditorMosaic);
-          return;
-        }
-        _commitBakedStep(
-          payload: ImageEditorMosaicStepPayload(
-            strokes: List<ImageEditorMosaicStroke>.of(_mosaicStrokes),
+        final applied = await _runBakeAction(
+          title: MediaText.imageEditorMosaic,
+          source: 'content.image_editor.bake_mosaic',
+          bake: _applyMosaicToCurrentImage,
+          onBaked: (mosaicPath) => _commitBakedStep(
+            payload: ImageEditorMosaicStepPayload(
+              strokes: List<ImageEditorMosaicStroke>.of(_mosaicStrokes),
+            ),
+            beforePath: beforePath,
+            afterPath: mosaicPath,
           ),
-          beforePath: beforePath,
-          afterPath: mosaicPath,
         );
+        if (!applied) return;
       }
       _setEditorState(() {
         _mosaicStrokes.clear();
@@ -376,18 +385,19 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
     }
     if (toolIndex == kImageEditorToolText) {
       if (_textItems.isNotEmpty) {
-        final textPath = await _applyTextToCurrentImage();
-        if (textPath == null) {
-          await _showEditorActionFailure(title: MediaText.imageEditorText);
-          return;
-        }
-        _commitBakedStep(
-          payload: ImageEditorTextStepPayload(
-            items: List<ImageEditorTextItem>.of(_textItems),
+        final applied = await _runBakeAction(
+          title: MediaText.imageEditorText,
+          source: 'content.image_editor.bake_text',
+          bake: _applyTextToCurrentImage,
+          onBaked: (textPath) => _commitBakedStep(
+            payload: ImageEditorTextStepPayload(
+              items: List<ImageEditorTextItem>.of(_textItems),
+            ),
+            beforePath: beforePath,
+            afterPath: textPath,
           ),
-          beforePath: beforePath,
-          afterPath: textPath,
         );
+        if (!applied) return;
       }
       _setEditorState(() {
         _textItems.clear();
@@ -424,16 +434,17 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
   Future<void> _confirmCropAndExit() async {
     if (_selectedToolIndex != kImageEditorToolCrop) return;
     final beforePath = _currentPath;
-    final croppedPath = await _applyCropToCurrentImage();
-    if (croppedPath == null) {
-      await _showEditorActionFailure(title: MediaText.imageEditorCrop);
-      return;
-    }
-    _commitBakedStep(
-      payload: ImageEditorCropStepPayload(ratio: _cropRatio),
-      beforePath: beforePath,
-      afterPath: croppedPath,
+    final applied = await _runBakeAction(
+      title: MediaText.imageEditorCrop,
+      source: 'content.image_editor.bake_crop',
+      bake: _applyCropToCurrentImage,
+      onBaked: (croppedPath) => _commitBakedStep(
+        payload: ImageEditorCropStepPayload(ratio: _cropRatio),
+        beforePath: beforePath,
+        afterPath: croppedPath,
+      ),
     );
+    if (!applied) return;
     _prepareCropSnapshot();
     if (!mounted) return;
     _setEditorState(() => _selectedToolIndex = null);

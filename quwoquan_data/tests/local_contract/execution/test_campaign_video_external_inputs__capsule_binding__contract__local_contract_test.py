@@ -237,6 +237,7 @@ def test_video_external_input_freezes_typed_manifest_receipt_and_cas(
         source_revision=SOURCE_REVISION,
         source_digest=SOURCE_DIGEST,
         entity_catalog_digest=ENTITY_CATALOG_DIGEST,
+        library_root=bundle.parent / "content_library",
     )
     assert verify_external_input_refs(
         "video",
@@ -288,6 +289,7 @@ def test_video_plan_and_fetch_consume_only_explicit_capsule_refs_and_root(
         source_revision=SOURCE_REVISION,
         source_digest=SOURCE_DIGEST,
         entity_catalog_digest=ENTITY_CATALOG_DIGEST,
+        library_root=bundle.parent / "content_library",
     )
     context = _context(bundle, refs)
     receipt_refs = context.receipt_refs(PROFESSIONAL_VIDEO_ACQUISITION_KIND)
@@ -362,7 +364,13 @@ def test_video_plan_and_fetch_consume_only_explicit_capsule_refs_and_root(
     assert captured["professional_acquisition_root"] == professional_root
 
     blob = context.blob_path(str(refs[0]["blobRefs"][0]["contentSha256"]))
-    blob.write_bytes(blob.read_bytes() + b"replacement")
+    # Bundled bytes are references onto immutable library entries, so an edit in
+    # place cannot reach the shared bytes; substitution replaces the reference.
+    with pytest.raises(PermissionError):
+        blob.write_bytes(blob.read_bytes() + b"replacement")
+    substituted = blob.read_bytes() + b"replacement"
+    blob.unlink()
+    blob.write_bytes(substituted)
     with pytest.raises(CampaignExternalInputError, match="DIGEST_DRIFT|digest mismatch"):
         verify_external_input_refs(
             "video",

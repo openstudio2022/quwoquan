@@ -1,0 +1,112 @@
+schema: media-delivery-consumer-sweep
+governance:
+  owner: content-media-delivery
+  reason: |
+    枚举式 sealed 清单只盯已收口的文件，新增或从未被想起的消费点不在清单里，
+    于是「私有资产走公开 URL」这类漏接在门禁上永远不会红。逐轮补清单的结果是
+    每轮都宣称收完、每轮又被翻出新的一批。
+  measure: |
+    media_delivery_consumer_sweep 扫 quwoquan_app/lib 下全部直连公开渲染原子
+    （AppCachedNetworkImage / AppMediaImage / AppAvatarImage / AppCircularAvatar /
+    RoundedSquareAvatar / ArticleAdaptiveImage）的位置，排除原子自身定义文件与
+    typed 入口的 publicBuilder/readyBuilder/signedReadyBuilder 分派回调。
+    每一处命中都必须落到 baseline 或 allowlist 之一，不在册即 BLOCK。
+  expires_when: baseline 归零时删除该段，并把未登记命中改为全仓零容忍
+  note: |
+    这里记录具体 site 而不是总数。纯计数基线挡不住「修一处、又漏接一处」这种
+    总数不变的漂移；逐条登记后，收口一处必须同批删除对应条目，行号漂移导致的
+    陈旧条目同样 BLOCK，册子因此不会腐化成一张无人维护的白名单。
+
+# 待收口：消费 release 媒体却未经 typed 交付入口分流。修一处删一条，归零即链路闭合。
+baseline:
+
+# 按设计不消费 release 交付的渲染位。每条必须写明归类理由。
+allowlist:
+  design_system/search/embedded/embedded_member_search_bar_with_chips.dart:269: 成员选择器渲染 user account 头像，不属 release 交付闭包
+  design_system/search/embedded/member_list_tiles.dart:130: 成员选择器渲染 user account 头像，不属 release 交付闭包
+  design_system/search/embedded/member_list_tiles.dart:41: 成员选择器渲染 user account 头像，不属 release 交付闭包
+  runtime/shell/share/forward_recipient_widgets.dart:152: 转发收件人是会话成员，头像取自 user account 域
+  runtime/shell/share/forward_recipient_widgets.dart:73: 转发收件人是会话成员，头像取自 user account 域
+  service/assistant_service/assistant/assistant_run/presentation/assistant_message_bubble.dart:347: 同上：助手会话内图片与头像不属 release 交付闭包
+  service/assistant_service/assistant/assistant_run/presentation/assistant_message_bubble.dart:472: 助手与用户在会话内的头像，不属 release 交付闭包
+  service/assistant_service/assistant/assistant_run/presentation/assistant_message_bubble.dart:481: 助手与用户在会话内的头像，不属 release 交付闭包
+  service/assistant_service/assistant/assistant_run/presentation/assistant_presentation_renderer.dart:467: 助手渲染图为助手自有 HTTPS 资源，不经 release media manifest
+  service/chat_service/chat/chat_inbox_view/presentation/chat_page.dart:243: 会话成员头像取自 user account 域，不属 release 交付闭包
+  service/chat_service/chat/chat_inbox_view/presentation/chat_page.dart:625: 会话成员头像取自 user account 域，不属 release 交付闭包
+  service/chat_service/chat/chat_inbox_view/presentation/chat_page_state.dart:866: 会话成员头像取自 user account 域，不属 release 交付闭包
+  service/chat_service/chat/conversation/presentation/chat_conversation_page_actions.dart:478: 会话自有媒体（成员上传）走 chat 自己的交付，不经 release media manifest
+  service/chat_service/chat/conversation/presentation/chat_mention_picker.dart:296: 会话成员头像取自 user account 域，不属 release 交付闭包
+  service/chat_service/chat/conversation/presentation/chat_message_bubble.dart:138: 会话自有图片与成员头像，不属 release 交付闭包
+  service/chat_service/chat/conversation/presentation/chat_message_bubble.dart:260: 会话自有图片与成员头像，不属 release 交付闭包
+  service/chat_service/chat/conversation/presentation/chat_message_bubble.dart:461: 会话分享卡缩略沿用 ContentSurfaceView 的公开取值；release post 的私有封面由内容面 typed 入口承载，chat 侧不另建授权路径
+  service/chat_service/chat/conversation/presentation/chat_message_bubble.dart:613: 会话自有图片与成员头像，不属 release 交付闭包
+  service/chat_service/chat/conversation/presentation/chat_message_bubble.dart:622: 会话自有图片与成员头像，不属 release 交付闭包
+  service/chat_service/chat/conversation/presentation/chat_settings_page.dart:196: 会话成员头像取自 user account 域，不属 release 交付闭包
+  service/chat_service/chat/conversation/presentation/chat_settings_page_widgets.part.dart:156: 会话成员头像取自 user account 域，不属 release 交付闭包
+  service/chat_service/chat/conversation/presentation/conversation_assets_sheet.dart:193: 会话自有媒体（成员上传）走 chat 自己的交付，不经 release media manifest
+  service/chat_service/chat/conversation/presentation/conversation_avatar.dart:87: 会话成员头像取自 user account 域，不属 release 交付闭包
+  service/chat_service/chat/conversation/presentation/start_group_chat_group_picker_sheet.dart:424: 会话成员头像取自 user account 域，不属 release 交付闭包
+  service/chat_service/chat/conversation/presentation/start_group_chat_page_widgets.dart:136: 会话成员头像取自 user account 域，不属 release 交付闭包
+  service/chat_service/chat/conversation/presentation/start_group_chat_page_widgets.dart:25: 会话成员头像取自 user account 域，不属 release 交付闭包
+  service/chat_service/chat/message/presentation/chat_mention_picker.dart:295: 会话成员头像取自 user account 域，不属 release 交付闭包
+  service/chat_service/chat/message/presentation/chat_message_bubble.dart:133: 会话自有图片与成员头像，不属 release 交付闭包
+  service/chat_service/chat/message/presentation/chat_message_bubble.dart:239: 会话自有图片与成员头像，不属 release 交付闭包
+  service/chat_service/chat/message/presentation/chat_message_bubble.dart:357: 会话分享卡缩略沿用 ContentSurfaceView 的公开取值；release post 的私有封面由内容面 typed 入口承载，chat 侧不另建授权路径
+  service/chat_service/chat/message/presentation/chat_message_bubble.dart:509: 会话自有图片与成员头像，不属 release 交付闭包
+  service/chat_service/chat/message/presentation/chat_message_bubble.dart:518: 会话自有图片与成员头像，不属 release 交付闭包
+  service/circle_service/circle_management/circle/presentation/circle_edit_settings_page_state_helpers.dart:165: 自有圈子设置页的封面/头像编辑预览，渲染本地选择或已上传的圈子自有媒体
+  service/circle_service/circle_management/circle/presentation/circle_edit_settings_page_state_helpers.dart:272: 自有圈子设置页的封面/头像编辑预览，渲染本地选择或已上传的圈子自有媒体
+  service/circle_service/circle_management/circle/presentation/circle_edit_settings_page_state_helpers.dart:30: 自有圈子设置页的封面/头像编辑预览，渲染本地选择或已上传的圈子自有媒体
+  service/circle_service/circle_management/circle/presentation/circle_edit_settings_page_state_helpers.dart:74: 自有圈子设置页的封面/头像编辑预览，渲染本地选择或已上传的圈子自有媒体
+  service/circle_service/circle_management/circle/presentation/circle_header.dart:80: 同上：圈子头像为用户自建社区媒体
+  service/circle_service/circle_management/circle/presentation/circle_shell_builders.dart:273: 圈子封面由 CreateCircle 用户命令写入（circle_command_facade.go），非 release 导入
+  service/circle_service/circle_management/circle/presentation/circle_shell_builders.dart:424: 圈子封面由 CreateCircle 用户命令写入（circle_command_facade.go），非 release 导入
+  service/circle_service/circle_management/circle/presentation/circle_stats_page.dart:366: 圈子成员头像取自 user account 域
+  service/circle_service/circle_management/circle/presentation/circle_stats_page.dart:559: 圈子成员头像取自 user account 域
+  service/circle_service/circle_management/circle/presentation/home_circles_category_tab.dart:231: 圈子封面与成员头像为用户自建社区媒体，非 release 导入
+  service/circle_service/circle_management/circle/presentation/home_circles_category_tab.dart:305: 圈子封面与成员头像为用户自建社区媒体，非 release 导入
+  service/circle_service/circle_management/circle/presentation/home_circles_hub_page_widgets.dart:381: 同上：圈子封面为用户自建社区媒体
+  service/circle_service/circle_management/circle/presentation/my_circles_rail.dart:88: 同上：圈子封面为用户自建社区媒体
+  service/circle_service/circle_management/circle_membership/presentation/circle_compact_card.dart:58: 同上：圈子封面为用户自建社区媒体
+  service/circle_service/circle_management/circle_membership/presentation/section_members.dart:177: 圈子成员头像取自 user account 域
+  service/content_service/content/comment/presentation/comment_input_overlay_components.dart:190: 同上：评论输入态渲染的是本次待发送的自有附件
+  service/content_service/content/comment/presentation/comment_thread_atoms.dart:185: 评论附件为评论者运行时上传的自有媒体（CommentAttachmentSlice.url），评论作者头像取自 user account 域；release payload 不含 comments，评论不属 release 交付闭包
+  service/content_service/content/comment/presentation/comment_thread_atoms.dart:233: 评论附件为评论者运行时上传的自有媒体（CommentAttachmentSlice.url），评论作者头像取自 user account 域；release payload 不含 comments，评论不属 release 交付闭包
+  service/content_service/content/comment/presentation/comment_thread_rows.dart:78: 同上：评论作者头像取自 user account 域，非 release creator 头像交付
+  service/content_service/content/post/presentation/article_editor_accessory_selection_panels.dart:456: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
+  service/content_service/content/post/presentation/article_editor_content_builders.dart:455: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
+  service/content_service/content/post/presentation/content_circle_share_picker_route.dart:275: 同上：圈子图标/封面为用户自建社区媒体
+  service/content_service/content/post/presentation/content_share_sheet_components.dart:87: 分享模板封面沿用 ContentSurfaceView 的公开取值；release post 分享的私有缩略由 chat 卡侧承载
+  service/content_service/content/post/presentation/following_subject_strip.dart:389: 关注对象为圈子/主页 subject，封面同圈子域来源，非 release post 交付
+  service/content_service/content/post/presentation/publish_circle_select_page.dart:177: 同上：圈子封面为用户自建社区媒体
+  service/content_service/content/profile_interaction_activity_view/presentation/profile_interaction_tab.dart:378: 互动 Tab 头像取自 user account 域的互动发起者，非 release creator 交付
+  service/content_service/media/filter_catalog_release/presentation/image_editor_page_preview_layers.dart:138: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
+  service/content_service/media/filter_catalog_release/presentation/image_editor_page_preview_layers.dart:214: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
+  service/content_service/media/media_asset/presentation/media_viewer_toolbar.dart:242: 工具条为无状态展示件，作者头像由调用方交出；其唯一调用链已在沉浸页经 typed 绑定收口
+  service/content_service/media/media_asset/presentation/video_media_viewer.dart:249: 全仓零引用（含路由与测试）的历史脚手架，不构成运行时消费点；其 posts 为 List<dynamic> 亦无交付声明来源，重新接入前必须先接 typed 绑定
+  service/content_service/media/media_asset/presentation/video_timeline_preview.dart:160: timeline sprite 由媒体处理管线运行时生成并强制 public slice（video_preview_track_remote.dart 校验 accessPolicy==public），非 release 导入的私有 CAS 字段
+  service/entity_service/entity_homepage/homepage/presentation/homepage_detail_shell_components2.dart:95: 唯一调用点传空封面（同文件 18 行），网络封面分支不可达；contentPreview 亦不由 release 导入填充
+  service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/interactive_intersection_text.dart:217: 交集视觉的 imageUrl 来自 persona avatar 与静态交集 icon 注册表（intersection_hydration.go 的 AvatarURL / IntersectionIconAssetByIconKey），不是 release post/homepage 封面
+  service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_entity.dart:423: 交集视觉的 imageUrl 来自 persona avatar 与静态交集 icon 注册表（intersection_hydration.go 的 AvatarURL / IntersectionIconAssetByIconKey），不是 release post/homepage 封面
+  service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_icon_resolver.dart:230: 交集视觉的 imageUrl 来自 persona avatar 与静态交集 icon 注册表（intersection_hydration.go 的 AvatarURL / IntersectionIconAssetByIconKey），不是 release post/homepage 封面
+  service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_object_cover.dart:82: 交集视觉的 imageUrl 来自 persona avatar 与静态交集 icon 注册表（intersection_hydration.go 的 AvatarURL / IntersectionIconAssetByIconKey），不是 release post/homepage 封面
+  service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_visual_cluster.dart:148: 交集视觉的 imageUrl 来自 persona avatar 与静态交集 icon 注册表（intersection_hydration.go 的 AvatarURL / IntersectionIconAssetByIconKey），不是 release post/homepage 封面
+  service/rtc_service/rtc/call_session/presentation/call_participant_picker_page.dart:637: 通话参与者头像取自 user account 域的实时会话成员，不属 release 交付闭包
+  service/rtc_service/rtc/call_session/presentation/caller_avatar_pulse.dart:106: 通话参与者头像取自 user account 域的实时会话成员，不属 release 交付闭包
+  service/rtc_service/rtc/call_session/presentation/participant_list_sheet.dart:123: 通话参与者头像取自 user account 域的实时会话成员，不属 release 交付闭包
+  service/rtc_service/rtc/call_session/presentation/participant_tile.dart:86: 通话参与者头像取自 user account 域的实时会话成员，不属 release 交付闭包
+  service/rtc_service/rtc/call_session/presentation/pip_call_overlay.dart:165: 通话参与者头像取自 user account 域的实时会话成员，不属 release 交付闭包
+  service/rtc_service/rtc/call_session/presentation/voice_call_page.dart:292: 通话参与者头像取自 user account 域的实时会话成员，不属 release 交付闭包
+  service/rtc_service/rtc/call_session/presentation/voice_call_page.dart:328: 通话参与者头像取自 user account 域的实时会话成员，不属 release 交付闭包
+  service/search_service/search/search_index_view/presentation/global_search_page_suggestion_widgets.dart:336: 搜索建议里的会话入口头像取自 user account 域的会话成员（_buildConversationLeading），非 release creator 交付
+  service/user_service/account/user_account/presentation/my_qr_card.dart:409: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
+  service/user_service/persona_management/persona/presentation/edit_profile_page.dart:153: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
+  service/user_service/persona_management/persona/presentation/profile_shell_builders_parts.dart:539: persona 背景由用户自行上传（persona_service.go 的 backgroundAssetId/backgroundUrl）；release creator 导入只写 avatar 不写 background
+  service/user_service/persona_management/persona/presentation/profile_shell_builders_parts.dart:848: persona 背景由用户自行上传（persona_service.go 的 backgroundAssetId/backgroundUrl）；release creator 导入只写 avatar 不写 background
+  service/user_service/persona_management/persona/presentation/share_interaction/share_interaction_row.dart:246: 分享互动行渲染 user account 域的联系人头像，非 release creator 交付
+  service/user_service/persona_management/persona/presentation/share_interaction/share_target_preview.dart:51: 分享目标预览沿用 ContentSurfaceView 公开取值，与 chat 分享卡同源
+  service/user_service/relationship/persona_relationship/presentation/blocked_users_page.dart:449: 通讯录与拉黑名单渲染 user account 头像，不属 release 交付闭包
+  service/user_service/relationship/persona_relationship/presentation/contact_candidate_row.dart:125: 通讯录与拉黑名单渲染 user account 头像，不属 release 交付闭包
+  service/user_service/relationship/persona_relationship/presentation/contact_confirm_page.dart:374: 通讯录与拉黑名单渲染 user account 头像，不属 release 交付闭包
+  service/user_service/relationship/persona_relationship/presentation/profile_stats_page_widgets.dart:260: 圈子封面与成员头像分别为用户自建社区媒体与 user account 头像
+  service/user_service/relationship/persona_relationship/presentation/profile_stats_page_widgets.dart:375: 圈子封面与成员头像分别为用户自建社区媒体与 user account 头像

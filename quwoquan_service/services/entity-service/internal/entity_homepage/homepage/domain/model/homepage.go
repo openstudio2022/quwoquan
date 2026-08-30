@@ -48,8 +48,14 @@ func (g GeoPoint) InRange() bool {
 type IntroductionAsset struct {
 	AssetID string `json:"assetId" bson:"assetId"`
 	URL     string `json:"url" bson:"url"`
-	Caption string `json:"caption,omitempty" bson:"caption,omitempty"`
-	Role    string `json:"role,omitempty" bson:"role,omitempty"`
+	// AccessMode 是媒体交付访问模式（DEC-033，契约
+	// projections/homepage_introduction_asset.yaml accessMode，enum 唯一真相源
+	// contracts/metadata/_shared/types.yaml MediaDeliveryAccessMode）。
+	// signed_grant 时 URL 为相对私有引用，App 必须按 assetId 换取短签；
+	// 空串表示缺席（契约 NULLABLE），只允许出现在存量 public 交付。
+	AccessMode string `json:"accessMode,omitempty" bson:"accessMode,omitempty"`
+	Caption    string `json:"caption,omitempty" bson:"caption,omitempty"`
+	Role       string `json:"role,omitempty" bson:"role,omitempty"`
 }
 
 type Source struct {

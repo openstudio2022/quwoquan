@@ -36,6 +36,9 @@ import cv2  # noqa: E402
 
 from core.article_package import copy_asset_files  # noqa: E402
 from content.execution.runtime_state import write_execution_runtime_state  # noqa: E402
+from support.article_source_registry_fixture import (  # noqa: E402
+    article_registry_write_kwargs,
+)
 from core.io import read_json, write_json  # noqa: E402
 from core.paths import (  # noqa: E402
     execution_entity_object_dir,
@@ -230,10 +233,11 @@ def test_inline_image_placeholders_bind_to_source_asset_ids():
         source_md=source_md,
         clean_md=source_md,
         quality={"sourceId": "article_qunar_base", "quality": "Good", "score": 4},
-        platform="qunar",
-        source_category="travelogue",
-        research_lane="article",
-        url="https://travel.qunar.com/youji/7870084",
+        **article_registry_write_kwargs(
+            url="https://travel.qunar.com/youji/7870084",
+            platform="qunar",
+            publish_media_mode="illustrated",
+        ),
         title="九寨沟游记",
         target_ref="/entity/地点/景区/九寨沟",
         relevance="九寨沟图文混排游记底稿",
@@ -300,18 +304,16 @@ def test_qunar_source_unit_records_author_identity_from_source_row():
             "2025/09/29出发\n剑门关栈道、交通、门票和观光车信息都写清楚。"
         ),
         quality={"sourceId": "article_qunar_author_base", "quality": "Good", "score": 4},
-        platform="qunar",
-        source_category="travelogue",
-        research_lane="article",
-        url="https://touch.travel.qunar.com/youji/7869929",
         title="剑门关一日游",
         target_ref="/entity/地点/景区/剑门关",
         relevance="剑门关图文游记底稿",
-        source={
-            "userName": "灵光旅行",
-            "userId": "3367372@qunar",
-            "userBooksUrl": "https://touch.travel.qunar.com/3367372@qunar/books",
-        },
+        **article_registry_write_kwargs(
+            url="https://touch.travel.qunar.com/youji/7869929",
+            platform="qunar",
+            userName="灵光旅行",
+            userId="3367372@qunar",
+            userBooksUrl="https://touch.travel.qunar.com/3367372@qunar/books",
+        ),
         execution_id=TASK,
         build_variants=False,
     )

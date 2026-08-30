@@ -138,11 +138,7 @@ def test_fleet_request_rejects_carrier_different_from_execution_identity() -> No
         )
 
         with pytest.raises(ValueError, match="carrier 必须与 executionId 一致"):
-            build_fleet_request(
-                execution_id,
-                QueueJobStage.AUTHOR,
-                required_workers=1,
-            )
+            build_fleet_request(execution_id, QueueJobStage.AUTHOR)
     finally:
         shutil.rmtree(execution_root(execution_id), ignore_errors=True)
 
@@ -324,7 +320,6 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
     author_request = build_fleet_request(
         EXECUTION_ID,
         QueueJobStage.AUTHOR,
-        required_workers=1,
     )
     assert author_request["requireCommercial"] is False
     assert payload["partitionKey"] == "source-unit-001"
@@ -379,9 +374,12 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
     def fake_promote_post_object(
         execution_id: str,
         post_ref: str,
+        *,
+        pool_delivery_intent: dict[str, object] | None = None,
     ) -> dict[str, str]:
         assert execution_id == EXECUTION_ID
         assert post_ref == content_object.content_object_rel(EXECUTION_ID, ref)
+        assert pool_delivery_intent is not None
         return {
             "transactionId": "post-worker-transaction-001",
             "applyReportRef": apply_report.relative_to(OUTPUT_ROOT).as_posix(),
@@ -396,6 +394,45 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
         post_promotion,
         "promote_post_object",
         fake_promote_post_object,
+    )
+    # publish 阶段绑定 pool delivery preflight receipt；本测试关注 author
+    # evidence 与 job 绑定，preflight 面由对象级替身提供最小 receipt。
+    from content.execution.preflight import pool_delivery as delivery_preflight
+    from content.execution.workspace import execution_root as _execution_root
+
+    synthetic_receipt = {
+        "receiptId": "sha256:" + "4" * 64,
+        "evidenceDigest": "sha256:" + "5" * 64,
+        "transportDigest": "sha256:" + "6" * 64,
+        "deliveryGeneration": 1,
+        "deliveryFencingToken": "sha256:" + "7" * 64,
+        "workerRef": "data/local/cache/worker/data-content-worker",
+        "workerSha256": "sha256:" + "8" * 64,
+        "campaignBinding": None,
+    }
+    monkeypatch.setattr(
+        delivery_preflight,
+        "load_current_pool_delivery_preflight_receipt",
+        lambda _execution_id: (
+            synthetic_receipt,
+            _execution_root(EXECUTION_ID)
+            / "preflight/pool-delivery/receipt.json",
+        ),
+    )
+    # publish 执行只消费 reviewed pool delivery intent；本测试的交付物是
+    # author evidence 与 job 绑定，intent 校验由对象级替身给出最小结果。
+    from content.execution.closure import pool_delivery as closure_pool_delivery
+
+    monkeypatch.setattr(
+        closure_pool_delivery,
+        "validate_pool_delivery_intent_for_job",
+        lambda _job: {
+            "intentId": "sha256:" + "9" * 64,
+            "transactionId": "post-worker-transaction-001",
+            "executionId": EXECUTION_ID,
+            "carrier": "article",
+            "objectRef": ref,
+        },
     )
     publish_job = enqueue_ref_job(
         EXECUTION_ID,
@@ -421,7 +458,6 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
     publish_request = build_fleet_request(
         EXECUTION_ID,
         QueueJobStage.PUBLISH,
-        required_workers=1,
     )
     assert publish_request["requireCommercial"] is False
     assert publish_payload["partitionKey"] == "canonical-publish"
@@ -452,7 +488,7 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
     )
     completed_publish = _read_job(EXECUTION_ID, publish_job.job_id)
     assert completed_publish.state is QueueJobState.SUCCEEDED
-    assert publish_result["acceptanceClass"] == "research_canonical"
+    assert publish_result["acceptanceClass"] == "canonical_pool"
     assert publish_result["objectTransactionId"] == "post-worker-transaction-001"
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
     shutil.rmtree(apply_report.parents[0], ignore_errors=True)

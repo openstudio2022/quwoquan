@@ -7,9 +7,9 @@
   `_dev_session_workload_conflict` / `_dev_session_compose_project`;
 - workspace 与身份: `_mutable_workspace_snapshot` /
   `_mutable_test_live_operation_identity_environment`;
-- compose 与输入: `_dev_session_source_compose_files` /
-  `_materialize_local_portal_root` / `_dev_session_materialize_compose_files` /
-  `_dev_session_target_media_root` / `_dev_session_render_runtime_inputs`。
+- compose 与输入: `_materialize_local_portal_root` /
+  `_dev_session_target_media_root` / `_dev_session_render_runtime_inputs`
+  （Compose 闭包解析与物化归 `dev_session_compose.py`）。
 
 测试经 ``mock.patch.object(stackctl, ...)`` patch 本模块符号与协作符号，
 因此函数体内一律经函数内延迟导入 `_stackctl` 属性访问（含本模块符号互调），
@@ -31,6 +31,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 from typing import Mapping
+from uuid import uuid4
 
 
 def _dev_session_child_args(
@@ -291,332 +292,6 @@ def _mutable_test_live_operation_identity_environment(
     }
 
 
-def _dev_session_source_compose_files(
-    *,
-    environment: str,
-    target: str,
-    provider_composition: Mapping[str, Any],
-) -> tuple[list[Path], list[str]]:
-    """Resolve the complete current-worktree Compose closure without packaging."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    _stackctl._dev_session_compose_project(environment, target)
-    services_root = _stackctl.ROOT / "quwoquan_service" / "services"
-    active_services = set(_stackctl.first_party_service_names(_stackctl.ROOT))
-    files = [
-        _stackctl.ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
-    ]
-    files.extend(
-        sorted(
-            path
-            for path in services_root.glob("*/deploy/compose.yaml")
-            if path.parents[1].name in active_services
-        )
-    )
-    files.extend(
-        sorted(
-            path
-            for path in services_root.glob(
-                f"*/environments/{environment}/deploy/compose.yaml"
-            )
-            if path.parents[3].name in active_services
-        )
-    )
-    files.extend(
-        (
-            _stackctl.ROOT
-            / "quwoquan_service/services/product-ops-service/deploy/local-elasticsearch.compose.yaml",
-            _stackctl.ROOT
-            / "quwoquan_service/control-plane/platform-ops/deploy/compose.yaml",
-        )
-    )
-    profiles = {"assistant-runtime", "commercial-observability", "edge-media"}
-    validated_provider = _stackctl.validate_provider_runtime_composition(
-        dict(provider_composition),
-        expected_environment=environment,
-        expected_target=target,
-    )
-    for workload in validated_provider["workloads"]:
-        compose_ref = Path(str(workload["composeRef"]))
-        if compose_ref.is_absolute() or ".." in compose_ref.parts:
-            raise ValueError("mutable Provider Compose reference is unsafe")
-        compose_path = (_stackctl.ROOT / compose_ref).resolve()
-        if (
-            not compose_path.is_relative_to(_stackctl.ROOT)
-            or not compose_path.is_file()
-            or compose_path.is_symlink()
-            or _stackctl._sha256_file(compose_path) != str(workload["composeDigest"])
-        ):
-            raise ValueError(
-                f"mutable Provider Compose identity drifted: {workload['role']}"
-            )
-        files.append(compose_path)
-        profiles.update(str(item) for item in workload["composeProfiles"])
-
-    canonical_files: list[Path] = []
-    seen: set[Path] = set()
-    for raw_path in files:
-        path = raw_path.resolve()
-        if (
-            path in seen
-            or not path.is_relative_to(_stackctl.ROOT)
-            or not path.is_file()
-            or path.is_symlink()
-        ):
-            if path in seen:
-                continue
-            raise ValueError(f"mutable test_live Compose source is unsafe: {path}")
-        seen.add(path)
-        canonical_files.append(path)
-    if not canonical_files:
-        raise ValueError("mutable test_live Compose closure is empty")
-    return canonical_files, sorted(profiles)
-
-
-def _materialize_local_portal_root(
-    topology: dict[str, Any],
-    target_name: str,
-    portal_root: Path,
-) -> str:
-    """物化本地 Portal 静态站点到 Caddy /srv/portal 挂载根。
-
-    具备仓内 node 工具链（portal/node_modules/.bin）与 QWQ_DEPLOY_WORK_ROOT
-    时现场 vite build（base URL 从目标 publicBases 派生，不手写域名）；
-    工具链缺失时写显式「未构建」提示页——本地开发环境不因前端缺构建阻塞
-    服务栈启动，但绝不留下静默空 404 根目录。
-    """
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    portal_dir = _stackctl.ROOT / "quwoquan_ops/portal"
-    vite_binary = portal_dir / "node_modules/.bin/vite"
-    deploy_work_root = os.environ.get("QWQ_DEPLOY_WORK_ROOT", "").strip()
-    bases = _stackctl.get_target(topology, target_name).get("publicBases") or {}
-
-    def _base(role: str) -> str:
-        # 本地 target 的 publicBases 是渲染后的 URL 字符串（含端口）。
-        return str(bases.get(role) or "")
-
-    if vite_binary.is_file() and deploy_work_root:
-        build_env = {
-            **os.environ,
-            "QWQ_DEPLOY_TARGET": target_name,
-            "VITE_PRODUCT_OPS_BASE_URL": _base("productOps"),
-            "VITE_PLATFORM_OPS_BASE_URL": _base("productOps"),
-            "VITE_CONTENT_SERVICE_BASE_URL": _base("api"),
-            "VITE_ENTITY_SERVICE_BASE_URL": _base("api"),
-        }
-        try:
-            result = subprocess.run(
-                [str(vite_binary), "build"],
-                cwd=portal_dir,
-                env=build_env,
-                capture_output=True,
-                text=True,
-                timeout=600,
-                check=False,
-            )
-            build_output = (
-                Path(deploy_work_root) / target_name / "build" / "ops-portal"
-            )
-            if result.returncode == 0 and (build_output / "index.html").is_file():
-                shutil.copytree(build_output, portal_root, dirs_exist_ok=True)
-                return "built"
-        except (OSError, subprocess.TimeoutExpired):
-            pass
-    (portal_root / "index.html").write_text(
-        "<!doctype html><html lang=\"zh\"><meta charset=\"utf-8\">"
-        "<title>ops-portal 未构建</title><body>"
-        "<h1>ops-portal 尚未构建</h1>"
-        "<p>本地 Portal 静态产物缺失：请在 quwoquan_ops/portal 安装 node "
-        "依赖后重新执行 stackctl dev-session / up，或运行 "
-        "stackctl package --kind ops-portal。本页面是显式占位，"
-        "不承载任何业务数据。</p></body></html>\n",
-        encoding="utf-8",
-    )
-    return "placeholder"
-
-
-def _dev_session_materialize_compose_files(
-    source_files: Sequence[Path],
-    *,
-    destination_root: Path,
-) -> list[Path]:
-    """Create execution-only Compose copies with source-relative build contexts."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    def contains_symlink(path: Path) -> bool:
-        current = _stackctl.ROOT
-        for part in path.relative_to(_stackctl.ROOT).parts:
-            current /= part
-            if current.is_symlink():
-                return True
-        return False
-
-    destination_root.mkdir(parents=True, exist_ok=True)
-    execution_files: list[Path] = []
-    compose_base = (
-        Path(os.path.abspath(source_files[0].parent)) if source_files else _stackctl.ROOT
-    )
-    for index, source in enumerate(source_files):
-        payload = _stackctl.load_json_yaml(source)
-        services = payload.get("services")
-        if services is not None and not isinstance(services, dict):
-            raise ValueError(f"mutable Compose services must be an object: {source}")
-        try:
-            source_ref = source.relative_to(_stackctl.ROOT).as_posix()
-        except ValueError as exc:
-            raise ValueError(
-                f"mutable test_live Compose source escapes repository: {source}"
-            ) from exc
-        if source_ref == "quwoquan_service/services/content-service/deploy/compose.yaml":
-            content_service = (services or {}).get("content-service")
-            if not isinstance(content_service, dict):
-                raise ValueError(
-                    "mutable content-service Compose source has no service definition"
-                )
-            dependencies = content_service.get("depends_on")
-            if not isinstance(dependencies, dict):
-                raise ValueError(
-                    "mutable content-service Compose dependencies must be an object"
-                )
-            # Full test-live always enables the canonical Elasticsearch-backed
-            # feed/search projection.  Formal environment overlays retain their
-            # existing ownership; this execution-only copy closes the cold
-            # Alpha/Beta race without changing package/deploy semantics.
-            dependencies["elasticsearch"] = {"condition": "service_healthy"}
-            dependencies["postgres"] = {"condition": "service_healthy"}
-        if source_ref == "quwoquan_service/services/recommendation-service/deploy/compose.yaml":
-            recommendation_service = (services or {}).get("recommendation-service")
-            if not isinstance(recommendation_service, dict):
-                raise ValueError(
-                    "mutable recommendation-service Compose source has no service definition"
-                )
-            dependencies = recommendation_service.get("depends_on")
-            if dependencies is None:
-                dependencies = {}
-                recommendation_service["depends_on"] = dependencies
-            if not isinstance(dependencies, dict):
-                raise ValueError(
-                    "mutable recommendation-service Compose dependencies must be an object"
-                )
-            dependencies["redis"] = {"condition": "service_healthy"}
-        for service_name, service in (services or {}).items():
-            if not isinstance(service, dict):
-                raise ValueError(
-                    f"mutable Compose service must be an object: {source}:{service_name}"
-                )
-            volumes = service.get("volumes")
-            if volumes is not None:
-                if not isinstance(volumes, list):
-                    raise ValueError(
-                        f"mutable Compose volumes must be a list: {source}:{service_name}"
-                    )
-                rewritten_volumes: list[object] = []
-                for volume in volumes:
-                    if isinstance(volume, str) and volume.startswith("."):
-                        host_ref, separator, container_ref = volume.partition(":")
-                        host_path = Path(
-                            os.path.abspath(source.parent / Path(host_ref))
-                        )
-                        if (
-                            not separator
-                            or not host_path.is_relative_to(_stackctl.ROOT)
-                            or not host_path.exists()
-                            or contains_symlink(host_path)
-                        ):
-                            raise ValueError(
-                                "mutable Compose bind source is unsafe: "
-                                f"{source}:{service_name}:{host_ref}"
-                            )
-                        rewritten_volumes.append(
-                            str(host_path) + separator + container_ref
-                        )
-                        continue
-                    if (
-                        isinstance(volume, dict)
-                        and volume.get("type") == "bind"
-                        and str(volume.get("source") or "").startswith(".")
-                    ):
-                        host_ref = str(volume["source"])
-                        host_path = Path(
-                            os.path.abspath(source.parent / Path(host_ref))
-                        )
-                        if (
-                            not host_path.is_relative_to(_stackctl.ROOT)
-                            or not host_path.exists()
-                            or contains_symlink(host_path)
-                        ):
-                            raise ValueError(
-                                "mutable Compose bind source is unsafe: "
-                                f"{source}:{service_name}:{host_ref}"
-                            )
-                        rewritten_volumes.append(
-                            {**volume, "source": str(host_path)}
-                        )
-                        continue
-                    rewritten_volumes.append(volume)
-                service["volumes"] = rewritten_volumes
-            build = service.get("build")
-            if isinstance(build, str):
-                build = {"context": build}
-                service["build"] = build
-            elif build is None:
-                continue
-            elif not isinstance(build, dict):
-                raise ValueError(
-                    f"mutable Compose build must be a string or object: "
-                    f"{source}:{service_name}"
-                )
-            context_value = str(build.get("context") or "").strip()
-            if not context_value:
-                raise ValueError(
-                    f"mutable Compose build context is empty: {source}:{service_name}"
-                )
-            context_path = Path(context_value)
-            dockerfile_value = str(build.get("dockerfile") or "Dockerfile").strip()
-            dockerfile_path = Path(dockerfile_value)
-            if not dockerfile_value or dockerfile_path.is_absolute():
-                raise ValueError(
-                    f"mutable Compose Dockerfile is unsafe: {source}:{service_name}"
-                )
-            raw_candidates = (
-                [Path(os.path.abspath(context_path))]
-                if context_path.is_absolute()
-                else [
-                    Path(os.path.abspath(source.parent / context_path)),
-                    Path(os.path.abspath(compose_base / context_path)),
-                ]
-            )
-            candidates: list[Path] = []
-            for candidate in raw_candidates:
-                if candidate in candidates:
-                    continue
-                dockerfile = Path(os.path.abspath(candidate / dockerfile_path))
-                if (
-                    candidate.is_relative_to(_stackctl.ROOT)
-                    and candidate.is_dir()
-                    and not contains_symlink(candidate)
-                    and dockerfile.is_relative_to(candidate)
-                    and dockerfile.is_file()
-                    and not contains_symlink(dockerfile)
-                ):
-                    candidates.append(candidate)
-            if len(candidates) != 1:
-                raise ValueError(
-                    f"mutable Compose build context must resolve exactly once: "
-                    f"{source}:{service_name}:{context_value}"
-                )
-            resolved_context = candidates[0]
-            build["context"] = str(resolved_context)
-        payload = _stackctl.project_compose_document(payload)
-        destination = destination_root / f"{index:02d}-{source.stem}.json"
-        _stackctl.write_json(destination, payload)
-        execution_files.append(destination)
-    return execution_files
-
-
 def _dev_session_target_media_root(
     *,
     target: str,
@@ -660,6 +335,52 @@ def _dev_session_target_media_root(
     return media_local_ref, media_root
 
 
+def _dev_session_finalize_runtime_plan(
+    *,
+    runtime_plan: Mapping[str, Any],
+    compose_model: Mapping[str, object],
+    report_dir: Path,
+    manifest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    plan = dict(runtime_plan)
+    if plan.get("schema") != "stackctl.mutable_test_live_runtime":
+        raise ValueError("mutable test_live runtime plan schema mismatch")
+    port_profile = str(plan.get("portProfile") or "").strip()
+    if not port_profile:
+        raise ValueError("mutable test_live runtime port profile is required")
+    if "publishedPorts" in plan:
+        raise ValueError(
+            "mutable test_live published ports must come from the Compose model"
+        )
+    resolved_manifest = manifest if manifest is not None else _stackctl.load_port_manifest()
+    published_endpoints = _stackctl.project_compose_published_endpoints(
+        port_profile=port_profile,
+        compose_model=compose_model,
+        manifest=resolved_manifest,
+    )
+    _stackctl.project_runtime_owned_ports(
+        port_profile=port_profile,
+        published_ports=published_endpoints,
+        manifest=resolved_manifest,
+    )
+    plan["publishedPorts"] = published_endpoints
+    plan_path = report_dir / "mutable-runtime-plan.json"
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = plan_path.with_name(f".{plan_path.name}.{uuid4().hex}.tmp")
+    try:
+        with temporary_path.open("x", encoding="utf-8") as handle:
+            json.dump(plan, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, plan_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+    return plan
+
+
 def _dev_session_render_runtime_inputs(
     *,
     environment: str,
@@ -680,6 +401,13 @@ def _dev_session_render_runtime_inputs(
     profile_name = str(target_contract.get("portProfile") or "")
     if profile_name != target:
         raise ValueError("mutable test_live target must own its canonical port profile")
+    public_web_package, public_web_artifact_root = (
+        _stackctl._resolve_dev_session_public_web_package(
+            environment=environment,
+            target=target,
+            target_contract=target_contract,
+        )
+    )
     manifest = _stackctl.load_port_manifest()
     profile = manifest.get("profiles", {}).get(profile_name)
     if not isinstance(profile, dict):
@@ -733,9 +461,38 @@ def _dev_session_render_runtime_inputs(
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
+    from quwoquan_ops.cli.lib.dev_session_web_runtime_config import (
+        materialize_dev_session_web_runtime_config,
+    )
+
+    public_web_root = render_root / "public-web-hosting"
+    runtime_config_digests = materialize_dev_session_web_runtime_config(
+        repo_root=_stackctl.ROOT,
+        environment=environment,
+        target=target,
+        artifact_root=public_web_artifact_root,
+        hosting_root=public_web_root,
+        source_revision=str(workspace_snapshot.get("sourceRevision") or ""),
+        run_command=_stackctl.run,
+    )
+
+    # mutable test-live 镜像由 compose build 从当前工作树构建，Dockerfile 依赖
+    # named build context `qwq_provider_bindings`（与 immutable package 同一
+    # 编译产物形态），因此 render 时从源码编译并物化 run-scoped overlay。
+    provider_binding_overlay_root, provider_binding_manifest_digest = (
+        _stackctl.materialize_mutable_provider_binding_overlay(
+            environment,
+            target,
+            source_root=_stackctl.ROOT,
+            output_root=render_root / "provider-binding-overlay",
+        )
+    )
+
     execution_compose_files = _stackctl._dev_session_materialize_compose_files(
         compose_files,
         destination_root=execution_compose_root,
+        provider_binding_overlay_context=provider_binding_overlay_root,
+        provider_binding_manifest_digest=provider_binding_manifest_digest,
     )
     portal_materialization = _stackctl._materialize_local_portal_root(
         topology, target, portal_root
@@ -796,15 +553,27 @@ def _dev_session_render_runtime_inputs(
     # service-core 镜像不再内嵌 skill release 资产;mutable test_live 与
     # immutable package 走同一条 skill-package-build 签名链路,把官方
     # publication 物化进 config-root 供 assistant asset-reader 消费。
-    from quwoquan_ops.cli.commands.package_runtime import (
-        _build_official_skill_package_publication,
+    from quwoquan_ops.cli.lib.assistant_skill_package_artifact import (
+        build_official_skill_package_publication,
     )
 
-    skill_publication = _build_official_skill_package_publication(
+    source_revision_result = _stackctl.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=_stackctl.ROOT,
+    )
+    source_revision = source_revision_result.stdout.strip()
+    if source_revision_result.returncode != 0 or re.fullmatch(
+        r"[0-9a-f]{40}",
+        source_revision,
+    ) is None:
+        raise ValueError("mutable official Skill package source revision is invalid")
+    skill_publication = build_official_skill_package_publication(
         environment,
         target,
         package_source_root=_stackctl.ROOT,
-        package_environment={},
+        package_environment={
+            "QWQ_PACKAGE_SOURCE_REVISION": source_revision,
+        },
         output_root=config_root / "skill-packages" / "official",
     )
     if int(skill_publication.get("exitCode") or 0) != 0:
@@ -833,7 +602,6 @@ def _dev_session_render_runtime_inputs(
             "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": _stackctl._dev_session_compose_project(
                 environment, target
             ),
-            "LOCAL_GAMMA_ADMIN_PORT": str(block_end),
             "LOCAL_GAMMA_CADDYFILE": str(shared_root / "Caddyfile"),
             "LOCAL_GAMMA_LIVEKIT_CONFIG_FILE": str(shared_root / "livekit.yaml"),
             "LOCAL_GAMMA_OBJECT_STORAGE_LIFECYCLE_FILE": str(
@@ -842,6 +610,10 @@ def _dev_session_render_runtime_inputs(
             "LOCAL_GAMMA_MEDIA_ROOT": str(media_root),
             "LOCAL_GAMMA_LEGAL_STATIC_ROOT": str(legal_root),
             "LOCAL_GAMMA_PORTAL_ROOT": str(portal_root),
+            "LOCAL_GAMMA_PUBLIC_WEB_ROOT": str(public_web_root),
+            "QWQ_PUBLIC_WEB_CONTENT_DIGEST": public_web_package[
+                "contentDigest"
+            ],
             "QWQ_COMPOSE_CONFIG_ROOT": str(config_root),
             "QWQ_COMPOSE_ENV": environment,
             "QWQ_WORKLOAD": "full",
@@ -931,6 +703,13 @@ def _dev_session_render_runtime_inputs(
         if key.startswith("LOCAL_GAMMA_"):
             environment_values[f"QWQ_COMPOSE_{key.removeprefix('LOCAL_GAMMA_')}"] = value
 
+    # 服务 Compose 片段由 immutable 候选与 mutable test_live 共用，且把部署期
+    # 环境身份与 platform-ops facts 声明为必需挂载。两条装配必须绑定同一份材料，
+    # 否则本路径的 Compose render 会在缺少插值变量时直接失败。
+    environment_values["QWQ_LOCAL_RELEASE_ENV"] = environment
+    environment_values["QWQ_RUN_ROOT"] = str(report_dir)
+    _stackctl._bind_artifact_identity_mount_material(environment_values)
+
     plan = {
         "schema": "stackctl.mutable_test_live_runtime",
         "environment": environment,
@@ -938,7 +717,6 @@ def _dev_session_render_runtime_inputs(
         "composeProject": environment_values["LOCAL_GAMMA_COMPOSE_PROJECT_NAME"],
         "portProfile": profile_name,
         "portBlock": {"start": block_start, "end": block_end},
-        "publishedPorts": dict(sorted(ports.items())),
         "composeFiles": [_stackctl.relpath(path) for path in compose_files],
         "executionComposeFiles": [_stackctl.relpath(path) for path in execution_compose_files],
         "composeProfiles": compose_profiles,
@@ -951,13 +729,14 @@ def _dev_session_render_runtime_inputs(
         "resolverHandoffDigest": resolver_handoff["handoffDigest"],
         "workspaceIdentity": dict(workspace_snapshot),
         "graphqlReadRegistry": dict(graphql_read_registry),
+        "publicWebPackage": dict(public_web_package),
         "serviceCoreModules": sorted(_stackctl.SERVICE_CORE_MODULE_SET),
     }
-    _stackctl.write_json(report_dir / "mutable-runtime-plan.json", plan)
     return {
         "plan": plan,
         "environment": environment_values,
         "composeFiles": execution_compose_files,
         "composeProfiles": compose_profiles,
         "portalMaterialization": portal_materialization,
+        "publicWebRuntimeConfig": dict(runtime_config_digests),
     }

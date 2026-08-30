@@ -6,6 +6,8 @@ import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/image_book_canvas.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/media_delivery_image.dart'
+    show MediaDeliveryBinding;
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 
@@ -21,9 +23,17 @@ Widget _host(
           child: SizedBox.fromSize(
             size: viewport,
             child: ImageBookCanvas(
-              imageUrls: const <String>[
-                'media/image/s/uat/book-0.jpg',
-                'media/image/s/uat/book-1.jpg',
+              deliveries: const <MediaDeliveryBinding>[
+                MediaDeliveryBinding(
+                  assetId: '',
+                  accessMode: null,
+                  publicUrl: 'media/image/s/uat/v1/book-0.jpg',
+                ),
+                MediaDeliveryBinding(
+                  assetId: '',
+                  accessMode: null,
+                  publicUrl: 'media/image/s/uat/v1/book-1.jpg',
+                ),
               ],
               imageLoader: loader,
               onImageChanged: onPage,
@@ -33,6 +43,26 @@ Widget _host(
       ),
     ),
   );
+}
+
+final class _ImmediateImageLoadOperation
+    implements ImageBookImageLoadOperation {
+  _ImmediateImageLoadOperation(Future<ui.Image> image)
+    : _result = image.then(
+        (resolved) =>
+            ImageBookImageLoadResult(image: resolved, candidatesTried: 1),
+      );
+
+  final Future<ImageBookImageLoadResult> _result;
+
+  @override
+  Future<ImageBookImageLoadResult> get result => _result;
+
+  @override
+  int get candidatesTried => 1;
+
+  @override
+  void cancel() {}
 }
 
 Future<ui.Image> _pageImage(int pageIndex, Size pageSize) async {
@@ -79,7 +109,7 @@ Future<void> _exerciseTenTurns(WidgetTester tester, Size viewport) async {
         required pageIndex,
         required candidates,
         required pageSize,
-      }) => _pageImage(pageIndex, pageSize),
+      }) => _ImmediateImageLoadOperation(_pageImage(pageIndex, pageSize)),
       changed.add,
     ),
   );
@@ -162,7 +192,9 @@ void main() {
           required pageIndex,
           required candidates,
           required pageSize,
-        }) => Future<ui.Image>.error(StateError('controlled image failure')),
+        }) => _ImmediateImageLoadOperation(
+          Future<ui.Image>.error(StateError('controlled image failure')),
+        ),
         (_) {},
       ),
     );

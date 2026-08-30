@@ -13,7 +13,10 @@ if str(SCRIPTS) not in sys.path:
 
 from content.release.canonical.baseline_release import build_empty_baseline_release
 from core.release_layout import payload_digest
-from core.source_digest import content_source_revision, current_source_digest
+from core.source_digest import (
+    content_source_revision,
+    current_source_definition_snapshot,
+)
 from verify import verify_release_lifecycle as lifecycle
 
 RELEASE_ID = "20260715--travel-homepage-coverage--test-release-a--003"
@@ -60,7 +63,7 @@ def _write_json(path: Path, payload: dict) -> None:
 
 def _fixture(tmp_path: Path) -> Path:
     release = tmp_path / RELEASE_ID
-    source_digest = current_source_digest().to_document()
+    source_digest = current_source_definition_snapshot().to_document()
     _write_json(
         release / "payload/release.json",
         {
@@ -138,7 +141,11 @@ def _environment_fixture(
 ) -> None:
     run = root / "env" / environment / "runs/data-release" / RELEASE_ID / import_run_id
     dry_run = status == "dry_run"
+    # Tag/creator projections and the content import report spell the same
+    # applied state with different literals, so each receipt takes the value its
+    # own schema admits.
     receipt_status = "dry-run" if dry_run else "active"
+    content_receipt_status = "dry-run" if dry_run else "imported"
     _write_json(
         run / "run.json",
         {
@@ -225,7 +232,7 @@ def _environment_fixture(
         run / "import.json",
         {
             "schema": "quwoquan.content_import_report",
-            "status": receipt_status,
+            "status": content_receipt_status,
             "environment": environment,
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
@@ -348,10 +355,7 @@ def test_release_lifecycle__rejects_frozen_source_digest__local_contract(
 
     issues = lifecycle.release_lifecycle_issues(RELEASE_ID)
 
-    assert any(
-        "sourceDigest.inputs must name the fixed repository inputs" in issue
-        for issue in issues
-    )
+    assert any("$.sourceDigests[0].inputs" in issue for issue in issues)
 
 
 def test_release_lifecycle__rejects_attestation_payload_drift__local_contract(
@@ -381,11 +385,13 @@ def test_release_lifecycle__accepts_create_once_empty_baseline__local_contract(
         publish_root=publish_root,
         release_root=release_root,
         release_id=baseline_id,
+        release_class="research",
     )
     repeated = build_empty_baseline_release(
         publish_root=publish_root,
         release_root=release_root,
         release_id=baseline_id,
+        release_class="research",
     )
 
     assert created["releaseKind"] == "empty_baseline"

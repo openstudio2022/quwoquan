@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 from . import context  # noqa: F401
-from .patterns import *  # noqa: F401,F403
 from .cli_entry import build_parser, main  # noqa: F401
 from .commands import (  # noqa: F401
     command_change_report,
@@ -31,15 +30,23 @@ from .delta import (  # noqa: F401
     open_anchor_ratchet_targets,
     semantic_anchor_changes,
 )
-from .evidence import canonical_spec_ref, iter_test_files, test_spec_refs  # noqa: F401
+from .evidence import (  # noqa: F401
+    canonical_spec_ref,
+    extract_spec_refs,
+    iter_test_files,
+    test_spec_refs,
+)
 from .gitio import git_changed_paths, git_head_text  # noqa: F401
 from .nodes import Node, discover_nodes, node_for_spec, parent_chain  # noqa: F401
 from .ownership import (  # noqa: F401
+    DesignOwnership,
+    TargetResolution,
     canonical_app_test_owner_target,
     domain_service_roots,
     owners_for_app_test_path,
     owners_for_path,
     resolve_target,
+    resolve_target_details,
     undeclared_service_roots,
     validate_domain_service_ownership,
 )
@@ -66,9 +73,11 @@ from .parsing import (  # noqa: F401
     outcome_clause_count,
     outcome_sub_clauses,
     section,
+    singleton_repository_roots,
     title,
     validate_acceptance_clause_coverage,
 )
+from .patterns import *  # noqa: F401,F403
 from .verify import (  # noqa: F401
     UNBOUND_COMPOUND_BASELINE,
     command_verify,

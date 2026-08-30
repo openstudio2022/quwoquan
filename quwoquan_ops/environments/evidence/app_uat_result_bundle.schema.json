@@ -1,0 +1,363 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/app_uat_result_bundle.schema.json",
+  "title": "Read-only App UAT completeness projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "generatedAt",
+    "releaseId",
+    "releaseDigest",
+    "samplePlan",
+    "targetBindings",
+    "requiredSlots",
+    "notApplicableCells",
+    "coverage",
+    "issues"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_ops.app_uat_result_bundle.v1"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "releaseId": {
+      "$ref": "#/$defs/identity"
+    },
+    "releaseDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "samplePlan": {
+      "$ref": "#/$defs/source"
+    },
+    "targetBindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/targetBinding"
+      }
+    },
+    "requiredSlots": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/requiredSlot"
+      }
+    },
+    "notApplicableCells": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/notApplicableCell"
+      }
+    },
+    "coverage": {
+      "$ref": "#/$defs/coverage"
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    }
+  },
+  "$defs": {
+    "identity": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "ref": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "targetBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest",
+        "bindingId",
+        "target",
+        "platform",
+        "provider",
+        "device",
+        "profile"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "bindingId": {
+          "$ref": "#/$defs/identity"
+        },
+        "target": {
+          "$ref": "#/$defs/identity"
+        },
+        "platform": {
+          "$ref": "#/$defs/identity"
+        },
+        "provider": {
+          "$ref": "#/$defs/identity"
+        },
+        "device": {
+          "$ref": "#/$defs/identity"
+        },
+        "profile": {
+          "$ref": "#/$defs/identity"
+        }
+      }
+    },
+    "rawResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest",
+        "rawStatus"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "rawStatus": {
+          "enum": [
+            "passed",
+            "failed",
+            "blocked",
+            "skipped"
+          ]
+        }
+      }
+    },
+    "requiredSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slotId",
+        "target",
+        "platform",
+        "provider",
+        "device",
+        "profile",
+        "sampleId",
+        "objectId",
+        "objectRef",
+        "objectDigest",
+        "entry",
+        "carrier",
+        "specRef",
+        "runner",
+        "rawResults"
+      ],
+      "properties": {
+        "slotId": {
+          "$ref": "#/$defs/identity"
+        },
+        "target": {
+          "$ref": "#/$defs/identity"
+        },
+        "platform": {
+          "$ref": "#/$defs/identity"
+        },
+        "provider": {
+          "$ref": "#/$defs/identity"
+        },
+        "device": {
+          "$ref": "#/$defs/identity"
+        },
+        "profile": {
+          "$ref": "#/$defs/identity"
+        },
+        "sampleId": {
+          "$ref": "#/$defs/identity"
+        },
+        "objectId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "objectRef": {
+          "$ref": "#/$defs/ref"
+        },
+        "objectDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "entry": {
+          "enum": [
+            "feed",
+            "search",
+            "recommendation",
+            "direct_or_object_route"
+          ]
+        },
+        "carrier": {
+          "enum": [
+            "homepage",
+            "article",
+            "image",
+            "video"
+          ]
+        },
+        "specRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runner": {
+          "$ref": "#/$defs/identity"
+        },
+        "rawResults": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rawResult"
+          }
+        }
+      }
+    },
+    "notApplicableCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "platform",
+        "provider",
+        "device",
+        "profile",
+        "entry",
+        "carrier",
+        "reason"
+      ],
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/identity"
+        },
+        "platform": {
+          "$ref": "#/$defs/identity"
+        },
+        "provider": {
+          "$ref": "#/$defs/identity"
+        },
+        "device": {
+          "$ref": "#/$defs/identity"
+        },
+        "profile": {
+          "$ref": "#/$defs/identity"
+        },
+        "entry": {
+          "enum": [
+            "feed",
+            "search",
+            "recommendation",
+            "direct_or_object_route"
+          ]
+        },
+        "carrier": {
+          "enum": [
+            "homepage",
+            "article",
+            "image",
+            "video"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "present",
+        "missing",
+        "duplicate",
+        "nonPassed",
+        "drifted"
+      ],
+      "properties": {
+        "required": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "present": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicate": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nonPassed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "drifted": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/identity"
+        },
+        "slotId": {
+          "$ref": "#/$defs/identity"
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "slotId"
+          ]
+        },
+        {
+          "required": [
+            "ref"
+          ]
+        }
+      ]
+    }
+  }
+}

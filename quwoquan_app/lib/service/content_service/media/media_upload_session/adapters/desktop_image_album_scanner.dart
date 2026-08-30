@@ -24,7 +24,7 @@ class DesktopImageAlbum {
 
 /// 递归扫描一个根目录，把「直接包含图片的子目录」聚合为相册。
 ///
-/// 设计（对齐 `.cursor/rules/14-cross-platform-portability` 能力优先 + R-XP3 dart:io 收口）：
+/// 设计（对齐 runtime-client-foundation/cross-platform-portability 能力优先和 dart:io 收口）：
 /// - 仅通过 [FileStorageGateway.listDirectory] 单层枚举，自身控制递归与上限，
 ///   既便于纯单测注入，也便于对桌面大目录做性能管控（深度 / 目录数 / 单册图片数封顶）。
 /// - 产出按「全部照片」(isAll，跨目录聚合) 置顶，其余目录按图片数降序、名称升序。

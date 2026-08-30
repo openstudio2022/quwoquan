@@ -27,6 +27,7 @@ import '../../../../../support/service/content_service/content/post/content_face
 import '../../../../../support/service/content_service/content/profile_interaction_activity_view/author_impact_fixtures.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
+import '../../../../../support/runtime/public_content_link_test_scope.dart';
 
 /// 他人主页（other 模式）头部操作（返回/更多）可达，更多面板提供
 /// 分享/拉黑/举报；交集区不崩溃（无交集不占位）。
@@ -94,6 +95,7 @@ class _StaticCapabilityRepository extends RelationshipCapabilityRepository {
 Widget _scopedApp() {
   return ProviderScope(
     overrides: [
+      ...publicContentLinkOverrides(),
       profileQueryProvider.overrideWith(
         (ref, surface) => const MockUserProfileRepository(),
       ),

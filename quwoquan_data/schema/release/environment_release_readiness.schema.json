@@ -35,8 +35,6 @@
     "homepageApiVerificationRef",
     "postApiVerificationRef",
     "mediaManifestRef",
-    "appUatEnvelope",
-    "appUatEnvelopeDigest",
     "activationEnvelope",
     "activationEnvelopeDigest",
     "verifiedAt",
@@ -64,6 +62,7 @@
       "items": {"$ref": "#/$defs/sourceIdentity"}
     },
     "sourceIdentitySetDigest": {"$ref": "#/$defs/digest"},
+    "milestone": {"enum": ["M100", "M1000", "M10000"]},
     "readinessPhase": {"enum": ["research", "consumer", "commercial"]},
     "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "mediaManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
@@ -77,6 +76,20 @@
     "researchIsolationVerificationDigest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "researchReadbackEntityRefs": {
+      "description": "post 域对象闭包：posts 关联实体的 runtime 规范形态并集，供 ops 与 runtime readback 精确复核（口径窄于 entityRefs）。",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "researchReadbackMediaAssetIds": {
+      "description": "post 域对象闭包：posts 拥有媒体资产并集，供 ops 与 runtime readback 精确复核（口径窄于 mediaAssetIds）。",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
     },
     "guestActorHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "guestLogin": {
@@ -125,49 +138,6 @@
     "creatorIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
     "tagRefs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
     "mediaAssetIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-    "appUatEnvelope": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "releaseId",
-        "releaseClass",
-        "productLifecycleState",
-        "homepageId",
-        "homepageTitle",
-        "articleWorkId",
-        "articleTitle",
-        "imageWorkId",
-        "imageTitle",
-        "videoWorkId",
-        "videoTitle",
-        "creatorName",
-        "creatorUserHandle",
-        "creatorPersonaId",
-        "creatorAvatarAssetId",
-        "tagLabel",
-        "videoAttribution"
-      ],
-      "properties": {
-        "releaseId": {"type": "string", "minLength": 1},
-        "releaseClass": {"enum": ["research", "commercial"]},
-        "productLifecycleState": {"enum": ["research", "commercial"]},
-        "homepageId": {"type": "string", "minLength": 1},
-        "homepageTitle": {"type": "string", "minLength": 1},
-        "articleWorkId": {"type": "string", "minLength": 1},
-        "articleTitle": {"type": "string", "minLength": 1},
-        "imageWorkId": {"type": "string", "minLength": 1},
-        "imageTitle": {"type": "string", "minLength": 1},
-        "videoWorkId": {"type": "string", "minLength": 1},
-        "videoTitle": {"type": "string", "minLength": 1},
-        "creatorName": {"type": "string", "minLength": 1},
-        "creatorUserHandle": {"type": "string", "minLength": 1},
-        "creatorPersonaId": {"type": "string", "minLength": 1},
-        "creatorAvatarAssetId": {"type": "string", "minLength": 1},
-        "tagLabel": {"type": "string", "minLength": 1},
-        "videoAttribution": {"type": "string", "minLength": 1}
-      }
-    },
-    "appUatEnvelopeDigest": {"$ref": "#/$defs/digest"},
     "activationEnvelope": {"$ref": "#/$defs/activationEnvelope"},
     "activationEnvelopeDigest": {"$ref": "#/$defs/digest"},
     "feedQueries": {
@@ -272,7 +242,9 @@
         "required": [
           "internalSubjectHash",
           "researchIsolationVerificationRef",
-          "researchIsolationVerificationDigest"
+          "researchIsolationVerificationDigest",
+          "researchReadbackEntityRefs",
+          "researchReadbackMediaAssetIds"
         ],
         "not": {
           "anyOf": [
@@ -287,13 +259,14 @@
           "anyOf": [
             {"required": ["internalSubjectHash"]},
             {"required": ["researchIsolationVerificationRef"]},
-            {"required": ["researchIsolationVerificationDigest"]}
+            {"required": ["researchIsolationVerificationDigest"]},
+            {"required": ["researchReadbackEntityRefs"]},
+            {"required": ["researchReadbackMediaAssetIds"]}
           ]
         }
       }
     },
     {
-      "required": ["appUatEnvelope"],
       "properties": {
         "counts": {
           "properties": {
@@ -360,9 +333,7 @@
         "environment",
         "readinessRef",
         "readinessDigest",
-        "verifyRunId",
-        "activationEnvelopeDigest",
-        "appUatEnvelopeDigest"
+        "activationEnvelopeDigest"
       ],
       "properties": {
         "environment": {"enum": ["alpha", "beta", "gamma"]},
@@ -371,9 +342,7 @@
           "pattern": "^env/(alpha|beta|gamma)/runs/data-release/.+/.+/release-readiness\\.json$"
         },
         "readinessDigest": {"$ref": "#/$defs/digest"},
-        "verifyRunId": {"type": "string", "minLength": 1},
-        "activationEnvelopeDigest": {"$ref": "#/$defs/digest"},
-        "appUatEnvelopeDigest": {"$ref": "#/$defs/digest"}
+        "activationEnvelopeDigest": {"$ref": "#/$defs/digest"}
       }
     },
     "activationEnvelope": {
@@ -390,8 +359,7 @@
         "importRunId",
         "verifyRunId",
         "importReportRef",
-        "importReportDigest",
-        "appUatEnvelopeDigest"
+        "importReportDigest"
       ],
       "properties": {
         "schema": {"const": "quwoquan_data.environment_activation_envelope"},
@@ -423,7 +391,6 @@
           "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/.+/import\\.json$"
         },
         "importReportDigest": {"$ref": "#/$defs/digest"},
-        "appUatEnvelopeDigest": {"$ref": "#/$defs/digest"},
         "researchIsolationPolicy": {"$ref": "#/$defs/researchIsolationPolicy"}
       },
       "allOf": [

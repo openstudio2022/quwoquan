@@ -5,8 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
 )
 
 func TestUserProfileSearchProjectionIsDurableAndSearchOwned(t *testing.T) {
@@ -53,4 +56,24 @@ func TestUserProfileSearchProjectionIsDurableAndSearchOwned(t *testing.T) {
 		return
 	}
 	t.Fatal("UserProfileSearchProjectionRequested event is not declared")
+}
+
+func TestUserProfileSearchBackfillUsesAnAttemptSpecificEventIdentity(t *testing.T) {
+	firstAt := time.Date(2026, 8, 14, 0, 0, 0, 0, time.UTC)
+	secondAt := firstAt.Add(time.Nanosecond)
+
+	first := persistence.UserProfileSearchBackfillEventID("user-1", 7, firstAt)
+	second := persistence.UserProfileSearchBackfillEventID("user-1", 7, secondAt)
+	writePath := persistence.UserProfileSearchProjectionEventID(
+		"user-1",
+		7,
+		"user.user_account.UserProfileUpdated",
+	)
+
+	if first == second {
+		t.Fatal("separate backfill attempts must have distinct event identities")
+	}
+	if first == writePath {
+		t.Fatal("backfill event must not collide with the write-path event")
+	}
 }

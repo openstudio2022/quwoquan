@@ -15,6 +15,7 @@ import subprocess
 import sys
 
 from quwoquan_ops.gate.verify_service_architecture import (
+    go_import_declarations,
     is_substantive_test_source,
     lifecycle_authored_consumers,
     lifecycle_handler_binding_issues,
@@ -37,6 +38,42 @@ def test_service_architecture_governance_facade() -> None:
         check=False,
     )
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+
+
+def test_cross_service_boundary_reads_imports_not_path_literals() -> None:
+    real_import = (
+        "package conversation\n"
+        "\n"
+        "import (\n"
+        '\t"fmt"\n'
+        '\tgovernance "quwoquan_service/services/user-service/internal/relationship"\n'
+        ")\n"
+    )
+    declarations = go_import_declarations(real_import)
+    assert "user-service/internal/relationship" in declarations
+
+    single_line_import = (
+        "package conversation\n"
+        '\nimport "quwoquan_service/services/user-service/generated/events"\n'
+    )
+    assert "user-service/generated/events" in go_import_declarations(
+        single_line_import
+    )
+
+    # 测试枚举别的服务的路径做扫描目标，是数据不是依赖：边界判定不得据此报违规。
+    path_literal_only = (
+        "package conversation\n"
+        "\n"
+        'import "testing"\n'
+        "\n"
+        "func TestHomology(t *testing.T) {\n"
+        "\tcarriers := map[string][]string{\n"
+        '\t\t"go-struct": {"quwoquan_service/services/user-service/internal/relationship"},\n'
+        "\t}\n"
+        "\t_ = carriers\n"
+        "}\n"
+    )
+    assert "user-service" not in go_import_declarations(path_literal_only)
 
 
 def test_object_evidence_rejects_support_files_and_empty_tests(tmp_path: Path) -> None:
@@ -97,6 +134,44 @@ def test_object_evidence_requires_an_existing_feature_tree_acceptance_anchor(
     assert issues == [
         f"spec_ref acceptance anchor does not exist: {missing_anchor_ref}"
     ]
+
+
+def test_object_evidence_accepts_list_block_and_rejects_bare_strings(
+    tmp_path: Path,
+) -> None:
+    """列表块与同行 marker 同源生效；裸字符串字面量不构成对象证据。"""
+    marker = "spec_" + "ref"
+    spec_path = "specs/feature-tree/sample/" "capability/story/spec.md"
+    spec = tmp_path / spec_path
+    spec.parent.mkdir(parents=True)
+    spec.write_text(
+        '# Story\n\n<a id="gwt-001"></a>\n### GWT-001 behavior\n',
+        encoding="utf-8",
+    )
+
+    block = tmp_path / "test_block.py"
+    block.write_text(
+        '"""Docstring contract.\n'
+        f"{marker}:\n"
+        f"  - {spec_path}#gwt-001.t2\n"
+        '"""\n'
+        "def test_contract():\n    assert 1 == 1\n",
+        encoding="utf-8",
+    )
+    refs, issues = valid_object_test_spec_refs(block, tmp_path)
+    # `.tN` 子句剥离到主锚点做存在性校验。
+    assert refs == {f"{spec_path}#gwt-001"}
+    assert issues == []
+
+    bare_only = tmp_path / "test_bare.py"
+    bare_only.write_text(
+        f'bare = "{spec_path}#gwt-001"\n'
+        "def test_contract():\n    assert 1 == 1\n",
+        encoding="utf-8",
+    )
+    refs, issues = valid_object_test_spec_refs(bare_only, tmp_path)
+    assert refs == set()
+    assert issues == []
 
 
 def test_object_semantics_are_kind_aware_and_reject_generic_placeholders() -> None:

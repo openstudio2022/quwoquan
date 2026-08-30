@@ -281,6 +281,44 @@ def publish(redis_client):
     assert collect_storage_governance_issues(tmp_path) == []
 
 
+def test_storage_governance_accepts_only_exact_declared_cross_service_collection_writer(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path
+        / "quwoquan_service/services/alpha-service/contracts/domain/view/storage.yaml",
+        """backend: mongodb
+role: projection
+collections:
+  shared_projection:
+    entity: SharedProjection
+    role: projection
+    writers: [beta-service]
+""",
+    )
+    _write(
+        tmp_path
+        / "quwoquan_service/services/beta-service/internal/domain/view/projector.go",
+        'package view\nfunc write(db interface{ Collection(string) any }) { _ = db.Collection("shared_projection") }\n',
+    )
+
+    assert collect_storage_governance_issues(tmp_path) == []
+
+    _write(
+        tmp_path
+        / "quwoquan_service/services/gamma-service/internal/domain/view/projector.go",
+        'package view\nfunc write(db interface{ Collection(string) any }) { _ = db.Collection("shared_projection") }\n',
+    )
+
+    issues = collect_storage_governance_issues(tmp_path)
+    assert any(
+        "gamma-service" in issue
+        and "shared_projection" in issue
+        and "owned by alpha-service" in issue
+        for issue in issues
+    )
+
+
 def test_storage_governance_scans_gateway_service_names(tmp_path: Path) -> None:
     _write(
         tmp_path

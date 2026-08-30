@@ -1,3 +1,6 @@
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-009
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-009.t1
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-009.t3
 """Canonical execution target-selection contracts."""
 from __future__ import annotations
 
@@ -14,6 +17,10 @@ from content.execution.planning.selection import (
 )
 from content.execution.spec_contract import ExecutionSpec
 from core.control_types import TargetSelector
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 EXECUTION_ID = "20260711--travel-homepage-coverage--test-region-a--pilot-001"
@@ -48,10 +55,67 @@ def _spec() -> dict:
         target_entity_count=1,
         approved_quota=1,
         oversample_factor=1.0,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
     )
+
+def _capacity_eight() -> dict[str, object]:
+    binding = synthetic_capacity_source_binding()
+    binding["frozenCapacity"]["autoResearchMaxConcurrentWorkers"] = 8
+    binding["frozenCapacity"]["fleetMaxConcurrentWorkers"] = 8
+    return binding
+
+
+def _scaled_homepage_spec(*, count: int, quota: int, sequence: int) -> dict:
+    return build_execution_spec(
+        execution_id=(
+            f"20260818--travel-homepage-capacity--china--scale-{sequence:03d}"
+        ),
+        name="容量三值分离",
+        title="容量三值分离",
+        region="中国",
+        category="景区",
+        targets=[
+            {"name": f"容量实体-{index:04d}", "entityType": "地点/景区"}
+            for index in range(count)
+        ],
+        created_by="test",
+        entity_articles_per_target=0,
+        entity_homepages_per_target=1,
+        image_works_per_target=0,
+        video_works_per_target=0,
+        target_entity_count=count,
+        approved_quota=quota,
+        oversample_factor=count / quota,
+        capacity_calibration=_capacity_eight(),
+        frozen_at_epoch_seconds=2_000_000_000,
+    )
+
+
+def test_execution_policy_separates_quota_work_units_and_concurrency_cap() -> None:
+    policy = _scaled_homepage_spec(
+        count=180,
+        quota=100,
+        sequence=901,
+    )["executionPolicy"]
+
+    assert policy["approvedQuota"] == 100
+    assert policy["targetObjectCount"] == 180
+    assert policy["capacityCalibration"]["frozenCapacity"][
+        "fleetMaxConcurrentWorkers"
+    ] == 8
+    assert policy["capacityCalibration"]["waveCount"] == 23
+    assert "requiredWorkers" not in policy
+
+    larger = _scaled_homepage_spec(
+        count=1000,
+        quota=1000,
+        sequence=902,
+    )["executionPolicy"]
+    assert larger["capacityCalibration"]["frozenCapacity"][
+        "fleetMaxConcurrentWorkers"
+    ] == 8
+    assert larger["capacityCalibration"]["waveCount"] == 125
+
 
 def test_execution_spec_has_one_identity_and_readable_intent():
     spec = _spec()
@@ -117,9 +181,7 @@ def test_execution_spec_derives_entity_types_from_selected_targets():
         target_entity_count=3,
         approved_quota=3,
         oversample_factor=1.0,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
     )
 
     assert spec["scope"]["entityTypes"] == [
@@ -145,9 +207,7 @@ def test_execution_spec_supports_strict_full_delivery():
         target_entity_count=1,
         approved_quota=1,
         oversample_factor=1.0,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
     )
 
     assert spec["executionPolicy"]["selectionPolicy"] == "frozen"
@@ -211,9 +271,7 @@ def test_execution_spec_requires_readable_execution_id():
             video_works_per_target=0,
             approved_quota=1,
             oversample_factor=1.0,
-            required_workers=1,
-            partition_count=16,
-            capacity_plan_digest="sha256:" + "1" * 64,
+            capacity_calibration=synthetic_capacity_source_binding(),
         )
     except ValueError as exc:
         assert "executionId" in str(exc)
@@ -334,9 +392,7 @@ def test_execution_spec_binds_acceptance_to_the_quota_not_the_pool() -> None:
         target_entity_count=5,
         approved_quota=3,
         oversample_factor=1.8,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
     )
 
     assert spec["executionPolicy"]["targetEntityCount"] == 5

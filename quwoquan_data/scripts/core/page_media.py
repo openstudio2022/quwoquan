@@ -32,6 +32,8 @@ class PageImageDropCode(StrEnum):
     FETCH_FAILURE = "fetch_failure"
     DECODE_POLICY = "decode_policy"
     PIXEL_POLICY = "pixel_policy"
+    # 单资产装不进其载体的对象存储预算，且逐档降采样后仍装不进：下一步是换素材。
+    BUDGET_POLICY = "budget_policy"
     SAFETY_POLICY = "safety_policy"
     RELEVANCE_POLICY = "relevance_policy"
     DUPLICATE = "duplicate"

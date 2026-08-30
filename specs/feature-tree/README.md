@@ -87,29 +87,27 @@ OPEN 的存在就是未关闭；关闭时删除 OPEN，并把已支持行为写�
 ## 6. Agent 最小阅读链
 
 ```text
-最近的 AGENTS.md
-  -> 本 README
-  -> AppRoot spec/design
-  -> 目标 L1 spec/design
-  -> 目标 L2 spec/design（若存在）
-  -> 目标 L3 spec
-  -> spec 引用的 metadata
-  -> spec_ref 对应测试
+根 + 最近的 AGENTS.md
+  -> make feature-context TARGET=<spec-or-code-path>
+  -> manifest.owner_chain（只用于归属/范围）
+  -> manifest.canonical_contexts 列出的精确 path + anchor
+  -> 直接 contract / spec_ref 证据
 ```
 
-只读取目标父链和直接依赖。决策优先级是 AppRoot spec → L1 spec → L2 spec → L3 spec → design → metadata → code/tests。下层只能细化上层；发生冲突时先修规格。
+默认不拼接父链全文。owner chain 确定边界与优先级，canonical contexts 直接定位本任务所需 DEC/REQ/GWT/contract；角色 reference、Cursor rule 与 harness adapter 不得作为中转链。AppRoot → L1 → L2 → L3 只能逐层细化，冲突时先修正 canonical spec/design/contracts。
 
 ## 7. 动态工具
 
 ```bash
 make feature-context TARGET=<spec-or-code-path>
+make feature-context TARGET=<spec-or-code-path> FORMAT=expanded
 make feature-tree-overview
 make feature-tree-change-report
 make feature-tree-content-review
 make verify-feature-tree
 ```
 
-- `feature-context`：输出目标父链、要求/验收/DEC/OPEN、Journey、工程归属、metadata 与测试引用；代码路径必须唯一定位到 L1。
+- `feature-context`：默认输出不超过 8KiB 的 manifest，含唯一 owner chain、精确 canonical path/anchor、适用 AGENTS、profiles、OPEN 和直接 contract/test 证据。代码路径先按 L1 最长工程根定位，再按 L2 DEC 的适用工程根与唯一影响 Story 下钻；歧义/无 owner fail-closed。`FORMAT=expanded` 仅供人工诊断。
 - `feature-tree-overview`：实时输出领域、能力、Story，并按 OPEN 类型、优先级、准出影响、完成判定与 L1/L2 子树聚合开放事项。
 - `feature-tree-change-report`：从 Git diff 推导受影响父链、锚点变化和未归属变更。
 - `feature-tree-content-review`：逐文件检查实际节点与模板的章节、参与者与价值、非占位要求、GWT/DOM/SIT/UAT、DEC、服务本地契约、工程引用、真实 `spec_ref` 与 OPEN 一致性，并阻断历史编号、迁移病句、通用治理占位和中心业务域 metadata 回潮。

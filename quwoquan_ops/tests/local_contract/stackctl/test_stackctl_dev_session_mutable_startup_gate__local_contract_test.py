@@ -16,8 +16,10 @@ from unittest import mock
 from quwoquan_ops.cli import stackctl
 
 from quwoquan_ops.tests.support.stackctl_dev_session_test_support import (
-    _ok,
     _handoff_completed,
+    _mutable_compose_config_json,
+    _mutable_unfinalized_runtime_plan,
+    _ok,
     _runtime_started,
     _runtime_started_with_identity,
     StackctlDevSessionTestBase,
@@ -27,12 +29,7 @@ from quwoquan_ops.tests.support.stackctl_dev_session_test_support import (
 class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
     def test_mutable_compose_up_failure_keeps_partial_receipt(self) -> None:
         rendered = {
-            "plan": {
-                "composeProject": "quwoquan_alpha_test_live",
-                "composeDigest": "sha256:" + "1" * 64,
-                "configurationDigest": "sha256:" + "2" * 64,
-                "publishedPorts": {"product-ops-service": 17250},
-            },
+            "plan": _mutable_unfinalized_runtime_plan(),
             "environment": {
                 "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS": "3600",
                 "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS": "45",
@@ -63,14 +60,20 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                 "run",
                 side_effect=[
                     subprocess.CompletedProcess(
-                        ["docker", "compose", "config"], 0, "", ""
+                        ["docker", "compose", "config"],
+                        0,
+                        _mutable_compose_config_json(),
+                        "",
                     ),
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess(
                         ["docker", "compose", "up", "product-ops-service"],
                         0,
                         "",
                         "",
                     ),
+                    subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess(
                         ["docker", "compose", "build"], 0, "", ""
                     ),
@@ -114,12 +117,7 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
 
     def test_mutable_compose_build_failure_blocks_before_replacement(self) -> None:
         rendered = {
-            "plan": {
-                "composeProject": "quwoquan_alpha_test_live",
-                "composeDigest": "sha256:" + "1" * 64,
-                "configurationDigest": "sha256:" + "2" * 64,
-                "publishedPorts": {"product-ops-service": 17250},
-            },
+            "plan": _mutable_unfinalized_runtime_plan(),
             "environment": {
                 "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS": "3600",
                 "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS": "45",
@@ -149,6 +147,14 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                 stackctl,
                 "run",
                 side_effect=[
+                    subprocess.CompletedProcess(
+                        ["compose", "config"],
+                        0,
+                        _mutable_compose_config_json(),
+                        "",
+                    ),
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess([], 1, "", "build failed"),
@@ -176,7 +182,7 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
             )
 
         self.assertEqual(result["blockerKind"], "mutable_compose_build_failed")
-        self.assertEqual(run_mock.call_count, 3)
+        self.assertEqual(run_mock.call_count, 6)
         self.assertEqual(
             [row["status"] for row in transitions],
             ["prepared", "partial", "partial"],
@@ -184,12 +190,7 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
 
     def test_mutable_compose_replacement_failure_blocks_before_full_up(self) -> None:
         rendered = {
-            "plan": {
-                "composeProject": "quwoquan_alpha_test_live",
-                "composeDigest": "sha256:" + "1" * 64,
-                "configurationDigest": "sha256:" + "2" * 64,
-                "publishedPorts": {"product-ops-service": 17250},
-            },
+            "plan": _mutable_unfinalized_runtime_plan(),
             "environment": {
                 "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS": "3600",
                 "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS": "45",
@@ -219,6 +220,14 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                 stackctl,
                 "run",
                 side_effect=[
+                    subprocess.CompletedProcess(
+                        ["compose", "config"],
+                        0,
+                        _mutable_compose_config_json(),
+                        "",
+                    ),
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess([], 0, "", ""),
@@ -249,7 +258,7 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
         self.assertEqual(
             result["blockerKind"], "mutable_compose_service_replacement_failed"
         )
-        self.assertEqual(run_mock.call_count, 4)
+        self.assertEqual(run_mock.call_count, 7)
         self.assertEqual(
             [row["status"] for row in transitions],
             ["prepared", "partial", "partial"],
@@ -257,12 +266,7 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
 
     def test_policy_owner_bootstrap_failure_blocks_before_full_up(self) -> None:
         rendered = {
-            "plan": {
-                "composeProject": "quwoquan_alpha_test_live",
-                "composeDigest": "sha256:" + "1" * 64,
-                "configurationDigest": "sha256:" + "2" * 64,
-                "publishedPorts": {"product-ops-service": 17250},
-            },
+            "plan": _mutable_unfinalized_runtime_plan(),
             "environment": {
                 "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS": "3600",
                 "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS": "45",
@@ -290,7 +294,15 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                 stackctl,
                 "run",
                 side_effect=[
-                    subprocess.CompletedProcess(["compose", "config"], 0, "", ""),
+                    subprocess.CompletedProcess(
+                        ["compose", "config"],
+                        0,
+                        _mutable_compose_config_json(),
+                        "",
+                    ),
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
                     subprocess.CompletedProcess(
                         ["compose", "up", "product-ops-service"], 1, "", "owner failed"
                     ),
@@ -313,18 +325,24 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
             )
 
         self.assertEqual(result["blockerKind"], "test_live_policy_owner_bootstrap_failed")
-        self.assertEqual(execute.call_count, 2)
+        self.assertEqual(execute.call_count, 5)
+        commands = [call.args[0] for call in execute.call_args_list]
+        self.assertIn("--wait", commands[1])
+        self.assertNotIn("service-core", commands[1])
+        self.assertNotIn("recommendation-service", commands[1])
+        self.assertEqual(commands[2][-3:], ["up", "--no-deps", "mongo-init"])
+        self.assertEqual(
+            commands[3][-4:],
+            ["--build", "-d", "--no-deps", "service-core"],
+        )
+        self.assertIn("--wait", commands[4])
+        self.assertEqual(commands[4][-1], "product-ops-service")
         activate.assert_not_called()
         self.assertEqual([row["status"] for row in transitions], ["prepared", "partial", "partial"])
 
     def test_policy_activation_failure_blocks_before_full_up(self) -> None:
         rendered = {
-            "plan": {
-                "composeProject": "quwoquan_alpha_test_live",
-                "composeDigest": "sha256:" + "1" * 64,
-                "configurationDigest": "sha256:" + "2" * 64,
-                "publishedPorts": {"product-ops-service": 17250},
-            },
+            "plan": _mutable_unfinalized_runtime_plan(),
             "environment": {
                 "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS": "3600",
                 "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS": "45",
@@ -352,7 +370,17 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                 stackctl,
                 "run",
                 side_effect=[
-                    subprocess.CompletedProcess(["compose", "config"], 0, "", ""),
+                    subprocess.CompletedProcess(
+                        ["compose", "config"],
+                        0,
+                        _mutable_compose_config_json(),
+                        "",
+                    ),
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess([], 0, "", ""),
+                    subprocess.CompletedProcess(
+                        ["compose", "up", "service-core"], 0, "", ""
+                    ),
                     subprocess.CompletedProcess(
                         ["compose", "up", "product-ops-service"], 0, "", ""
                     ),
@@ -381,17 +409,20 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
         self.assertEqual(
             result["blockerKind"], "test_live_experiment_policy_activation_failed"
         )
-        self.assertEqual(execute.call_count, 2)
+        self.assertEqual(execute.call_count, 5)
+        commands = [call.args[0] for call in execute.call_args_list]
+        self.assertEqual(
+            commands[3][-4:],
+            ["--build", "-d", "--no-deps", "service-core"],
+        )
+        self.assertIn("--wait", commands[4])
+        self.assertIn("--wait-timeout", commands[4])
+        self.assertEqual(commands[4][-1], "product-ops-service")
         self.assertEqual([row["status"] for row in transitions], ["prepared", "partial", "partial"])
 
     def test_mutable_runtime_blocks_retry_until_partial_receipt_is_stopped(self) -> None:
         rendered = {
-            "plan": {
-                "composeProject": "quwoquan_alpha_test_live",
-                "composeDigest": "sha256:" + "1" * 64,
-                "configurationDigest": "sha256:" + "2" * 64,
-                "publishedPorts": {"product-ops-service": 17250},
-            },
+            "plan": _mutable_unfinalized_runtime_plan(),
             "environment": {
                 "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS": "3600",
                 "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS": "45",
@@ -435,7 +466,14 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                 stackctl,
                 "run",
                 side_effect=lambda argv, **_kwargs: subprocess.CompletedProcess(
-                    argv, 0, "", ""
+                    argv,
+                    0,
+                    (
+                        _mutable_compose_config_json()
+                        if argv[-3:] == ["config", "--format", "json"]
+                        else ""
+                    ),
+                    "",
                 ),
             ),
             mock.patch.object(
@@ -471,10 +509,7 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
 
     def test_mutable_receipt_failure_blocks_before_compose_up(self) -> None:
         rendered = {
-            "plan": {
-                "composeProject": "quwoquan_alpha_test_live",
-                "composeDigest": "sha256:" + "1" * 64,
-            },
+            "plan": _mutable_unfinalized_runtime_plan(),
             "environment": {
                 "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS": "3600",
                 "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS": "45",
@@ -493,7 +528,10 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                 stackctl,
                 "run",
                 return_value=subprocess.CompletedProcess(
-                    ["docker", "compose", "config"], 0, "", ""
+                    ["docker", "compose", "config"],
+                    0,
+                    _mutable_compose_config_json(),
+                    "",
                 ),
             ) as execute,
             mock.patch.object(
@@ -514,6 +552,7 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
         execute.assert_called_once()
 
     def test_mutable_compose_render_failure_blocks_before_up(self) -> None:
+        sentinel_secret = "compose-render-failure-secret-must-not-persist"
         rendered = {
             "plan": {
                 "composeProject": "quwoquan_beta_test_live",
@@ -539,7 +578,7 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
                     ["docker", "compose", "config"],
                     1,
                     "",
-                    "unsafe interpolation",
+                    f"unsafe interpolation exposed {sentinel_secret}",
                 ),
             ) as execute,
         ):
@@ -552,7 +591,98 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
 
         self.assertEqual(result["exitCode"], 2)
         self.assertEqual(result["blockerKind"], "mutable_compose_render_failed")
+        self.assertNotIn(sentinel_secret, json.dumps(result, sort_keys=True))
         execute.assert_called_once()
+
+    def test_mutable_unregistered_compose_publish_blocks_before_receipt_and_mutation(
+        self,
+    ) -> None:
+        rendered = {
+            "plan": {
+                "schema": "stackctl.mutable_test_live_runtime",
+                "environment": "alpha",
+                "target": "alpha-local",
+                "composeProject": "quwoquan_alpha_test_live",
+                "composeDigest": "sha256:" + "1" * 64,
+                "configurationDigest": "sha256:" + "2" * 64,
+                "portProfile": "alpha-local",
+            },
+            "environment": {
+                "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS": "3600",
+                "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS": "45",
+            },
+            "composeFiles": [Path("/repo/current/base.compose.yaml")],
+            "composeProfiles": ["edge-media"],
+        }
+        compose_model = {
+            "services": {
+                "gamma-proxy": {
+                    "environment": {
+                        "SENTINEL_CREDENTIAL": (
+                            "compose-render-success-secret-must-not-persist"
+                        )
+                    },
+                    "ports": [
+                        {
+                            "target": 2019,
+                            "published": "17999",
+                            "protocol": "tcp",
+                        }
+                    ]
+                }
+            }
+        }
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            mock.patch.object(
+                stackctl,
+                "_dev_session_render_runtime_inputs",
+                return_value=rendered,
+            ),
+            mock.patch.object(
+                stackctl,
+                "run",
+                return_value=subprocess.CompletedProcess(
+                    ["docker", "compose", "config"],
+                    0,
+                    json.dumps(compose_model),
+                    "",
+                ),
+            ) as execute,
+            mock.patch.object(
+                stackctl,
+                "transition_test_live_startup_attempt",
+            ) as transition,
+            mock.patch.object(
+                stackctl,
+                "activate_test_live_experiment_policies",
+            ) as activate,
+        ):
+            report_dir = Path(temporary)
+            result = stackctl._start_mutable_test_live_runtime(
+                environment="alpha",
+                target="alpha-local",
+                report_dir=report_dir,
+                workspace_snapshot={},
+            )
+
+            self.assertFalse((report_dir / "mutable-runtime-plan.json").exists())
+
+        self.assertEqual(result["exitCode"], 2)
+        self.assertEqual(result["blockerKind"], "mutable_compose_ownership_invalid")
+        serialized_result = json.dumps(result, sort_keys=True)
+        self.assertNotIn("SENTINEL_CREDENTIAL", serialized_result)
+        self.assertNotIn(
+            "compose-render-success-secret-must-not-persist",
+            serialized_result,
+        )
+        execute.assert_called_once()
+        self.assertEqual(
+            execute.call_args.args[0][-3:],
+            ["config", "--format", "json"],
+        )
+        transition.assert_not_called()
+        activate.assert_not_called()
 
     def test_mutable_project_and_port_profile_are_target_exact(self) -> None:
         self.assertEqual(
@@ -791,5 +921,8 @@ class StackctlDevSessionMutableStartupGateTest(StackctlDevSessionTestBase):
         self.assertEqual(result["launchPolicy"], "test_live")
         self.assertEqual(result["contentBindingState"], "unbound")
         self.assertTrue(result["warnings"])
-        self.assertIn("./run.sh --env alpha -d emulator-5554", result["details"][0])
-
+        self.assertIn(
+            "./run.sh --env alpha --target alpha-local --mode content-live "
+            "-d emulator-5554",
+            result["details"][0],
+        )

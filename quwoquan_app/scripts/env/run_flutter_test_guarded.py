@@ -21,6 +21,24 @@ import time
 from pathlib import Path
 
 
+sys.dont_write_bytecode = True
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+if str(REPOSITORY_ROOT) not in sys.path:
+  sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from quwoquan_app.scripts._common.flutter_test_selection import (  # noqa: E402
+  declares_serial_tests,
+)
+from quwoquan_app.scripts.device.verify_flutter_run_defines import (  # noqa: E402
+  RUNTIME_VALUE_DEFINE_KEYS,
+)
+from quwoquan_app.scripts.env.print_app_env_dart_defines import (  # noqa: E402
+  deployment_target_for_env,
+  test_live_runtime_values,
+)
+
+
 APP_ROOT = Path(__file__).resolve().parents[2]
 LOCK_FILE = APP_ROOT / ".dart_tool" / "flutter_test.lock"
 RETRY_MARKERS = (
@@ -42,7 +60,7 @@ void main() {
 DEFAULT_TEST_TIMEOUT_SECONDS = int(
   os.environ.get("FLUTTER_TEST_GUARD_TIMEOUT_SECONDS", "1200")
 )
-RUNTIME_DEFINE_SCRIPT = APP_ROOT / "scripts" / "env" / "print_app_env_dart_defines.py"
+DEFAULT_MAX_ATTEMPTS = int(os.environ.get("FLUTTER_TEST_GUARD_MAX_ATTEMPTS", "3"))
 
 
 def _cpu_default_concurrency(*, full_local_contract: bool) -> int:
@@ -115,6 +133,36 @@ def _with_serial_tag_policy(args: list[str]) -> list[str]:
   if mode == "only":
     return ["--tags", "serial", *args]
   return args
+
+
+def _with_serial_target_selection(args: list[str]) -> list[str]:
+  """Replace broad test directories with their deterministic serial file set."""
+  if os.environ.get("FLUTTER_TEST_SERIAL_MODE", "").strip().lower() != "only":
+    return args
+
+  selected: list[str] = []
+  replaced_directory = False
+  app_root = APP_ROOT.resolve()
+  test_root = (app_root / "test").resolve()
+  for arg in args:
+    candidate = Path(arg)
+    resolved = candidate.resolve() if candidate.is_absolute() else (APP_ROOT / candidate).resolve()
+    try:
+      within_test_root = resolved.is_relative_to(test_root)
+    except AttributeError:
+      within_test_root = resolved == test_root or test_root in resolved.parents
+    if not within_test_root or not resolved.is_dir():
+      selected.append(arg)
+      continue
+
+    replaced_directory = True
+    for test_file in sorted(resolved.rglob("*_test.dart")):
+      if declares_serial_tests(test_file):
+        selected.append(test_file.relative_to(app_root).as_posix())
+
+  if replaced_directory and not any(arg.endswith("_test.dart") for arg in selected):
+    raise RuntimeError("serial Flutter selection resolved no tagged test files")
+  return selected
 
 
 def _run_checked(cmd: list[str], *, cwd: Path = APP_ROOT) -> int:
@@ -191,6 +239,16 @@ def _run_flutter_test_with_retries(
   timeout_seconds: int = DEFAULT_TEST_TIMEOUT_SECONDS,
 ) -> int:
   for attempt in range(1, max_attempts + 1):
+    for argument in cmd:
+      if not argument.startswith("--coverage-path="):
+        continue
+      raw_path = argument.removeprefix("--coverage-path=")
+      coverage_path = Path(raw_path)
+      if not coverage_path.is_absolute():
+        coverage_path = cwd / coverage_path
+      if coverage_path.is_symlink():
+        raise RuntimeError("coverage output path must not be a symlink")
+      coverage_path.unlink(missing_ok=True)
     returncode, output, timed_out = _stream_command(
       cmd,
       cwd=cwd,
@@ -232,39 +290,39 @@ def _dart_define_values(args: list[str]) -> dict[str, str]:
 
 
 def _with_runtime_environment_defines(args: list[str]) -> list[str]:
+  """给测试宿主注入 endpoint define。
+
+  App 运行时本身不读编译期 define——runtime config 走签名 package 的安装后
+  激活——但 ``String.fromEnvironment`` 会冻进测试 kernel，所以 user_acceptance
+  测试宿主必须在 ``flutter test`` 前拿到该打哪个 endpoint。取值与 App 同源，
+  键映射由 ``verify_flutter_run_defines`` 独占。
+  """
   defined = _dart_define_values(args)
   runtime_env = (
     defined.get("APP_RUNTIME_ENV")
     or os.environ.get("QWQ_APP_RUNTIME_ENV")
     or "alpha"
   ).strip()
-  result = subprocess.run(
-    [
-      sys.executable,
-      str(RUNTIME_DEFINE_SCRIPT),
-      "--env",
-      runtime_env,
-      "--format",
-      "args",
-    ],
-    cwd=str(APP_ROOT),
-    text=True,
-    capture_output=True,
-    check=False,
-  )
-  if result.returncode != 0:
+  try:
+    values = test_live_runtime_values(
+      runtime_env, deployment_target_for_env(runtime_env)
+    )
+  except (OSError, SystemExit, ValueError) as error:
     raise RuntimeError(
       "cannot resolve explicit runtime Dart defines for Flutter tests: "
-      + (result.stderr or result.stdout).strip()
-    )
+      f"{error}"
+    ) from error
   injected: list[str] = []
-  for line in result.stdout.splitlines():
-    value = line.strip()
-    if not value.startswith("--dart-define="):
+  for value_key, define_key in sorted(RUNTIME_VALUE_DEFINE_KEYS.items()):
+    if define_key in defined:
       continue
-    key = value.removeprefix("--dart-define=").partition("=")[0]
-    if key and key not in defined:
-      injected.append(value)
+    value = str(values.get(value_key, "")).strip()
+    if not value:
+      raise RuntimeError(
+        "cannot resolve explicit runtime Dart defines for Flutter tests: "
+        f"{runtime_env} runtime config has no {value_key}"
+      )
+    injected.append(f"--dart-define={define_key}={value}")
   return [*injected, *args]
 
 
@@ -273,7 +331,9 @@ def _ensure_flutter_pub_get() -> None:
   if package_config.exists():
     return
   print("[flutter-test-guard] package_config missing, running flutter pub get --offline")
-  rc = _run_checked(["flutter", "pub", "get", "--offline"])
+  rc = _run_checked(
+      ["flutter", "pub", "get", "--offline", "--enforce-lockfile"]
+  )
   if rc != 0:
     print(
       "[flutter-test-guard] FAIL: offline Flutter dependency resolution failed. "
@@ -331,12 +391,13 @@ def main(argv: list[str]) -> int:
     _prewarm_sqlite3()
     flutter_args = [arg for arg in args if arg != "--no-pub"]
     flutter_args = _with_runtime_environment_defines(flutter_args)
+    flutter_args = _with_serial_target_selection(flutter_args)
     flutter_args = _with_serial_tag_policy(flutter_args)
     flutter_args = _with_shard_flags(flutter_args)
     flutter_args = _with_concurrency(flutter_args)
     cmd = ["flutter", "test", "--no-pub", *flutter_args]
     print(f"[flutter-test-guard] {' '.join(cmd)}")
-    return _run_flutter_test_with_retries(cmd)
+    return _run_flutter_test_with_retries(cmd, max_attempts=DEFAULT_MAX_ATTEMPTS)
 
 
 if __name__ == "__main__":

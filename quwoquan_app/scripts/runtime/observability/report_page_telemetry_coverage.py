@@ -21,7 +21,18 @@ from pathlib import Path
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+sys.dont_write_bytecode = True
+
+_SCRIPTS_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "scripts" and (parent / "_common" / "paths.py").is_file()
+)
+if str(_SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_ROOT))
+
+from _common.paths import REPO_ROOT  # noqa: E402
+
 APP_ROOT = REPO_ROOT / "quwoquan_app"
 PAGE_CONTRACT = (
     REPO_ROOT / "quwoquan_service/contracts/metadata/_shared/page_object_contract.yaml"

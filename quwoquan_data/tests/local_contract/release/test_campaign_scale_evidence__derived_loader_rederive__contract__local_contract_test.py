@@ -19,7 +19,6 @@ from content.release.canonical.research_scale_promotion import (
     ResearchScalePromotionError,
     write_research_scale_promotion,
 )
-
 from support.campaign_scale_evidence_fixture import (
     _execution_id,
     _resign_evidence,
@@ -53,7 +52,11 @@ def test_campaign_loader_rederives_resource_evidence_after_valid_resign(
         CampaignScaleEvidenceError,
         match="resource soak derived evidence drift",
     ):
-        load_campaign_scale_evidence(path, output_root=fixture["output"])
+        load_campaign_scale_evidence(
+            path,
+            output_root=fixture["output"],
+            diagnostics_required=True,
+        )
 
 
 def test_campaign_loader_rederives_aggregate_after_valid_resign(
@@ -68,9 +71,13 @@ def test_campaign_loader_rederives_aggregate_after_valid_resign(
 
     with pytest.raises(
         CampaignScaleEvidenceError,
-        match="campaign aggregate derived evidence drift",
+        match="campaign exact promotion closure drift",
     ):
-        load_campaign_scale_evidence(path, output_root=fixture["output"])
+        load_campaign_scale_evidence(
+            path,
+            output_root=fixture["output"],
+            diagnostics_required=True,
+        )
 
 
 def test_campaign_loader_rederives_fault_evidence_after_valid_resign(
@@ -97,10 +104,16 @@ def test_campaign_loader_rederives_fault_evidence_after_valid_resign(
         CampaignScaleEvidenceError,
         match="create-once fault_injection_evidence collision",
     ):
-        load_campaign_scale_evidence(path, output_root=fixture["output"])
+        load_campaign_scale_evidence(
+            path,
+            output_root=fixture["output"],
+            diagnostics_required=True,
+        )
 
 
-def test_fault_injection_rejects_typed_event_digest_drift(tmp_path: Path) -> None:
+def test_fault_injection_records_typed_event_digest_drift_without_blocking(
+    tmp_path: Path,
+) -> None:
     fixture = _fixture(tmp_path)
     receipt_path = min(fixture["faultsRoot"].glob("*/receipt.json"))
     receipt = json.loads(receipt_path.read_text())
@@ -109,11 +122,15 @@ def test_fault_injection_rejects_typed_event_digest_drift(tmp_path: Path) -> Non
     event["faultType"] = "provider_timeout"
     _write(event_path, event)
 
-    with pytest.raises(
-        CampaignScaleEvidenceError,
-        match="fault injection event digest drift",
-    ):
-        _write_evidence(fixture)
+    evidence, _path = _write_evidence(fixture)
+
+    assert evidence["status"] == "passed"
+    assert "resourceSoakEvidenceRef" not in evidence
+    assert "faultInjectionEvidenceRef" not in evidence
+    assert any(
+        "RUNTIME_EVIDENCE_UNAVAILABLE" in issue
+        for issue in evidence["diagnosticIssues"]
+    )
 
 
 def test_campaign_scale_evidence_marks_cross_lane_write_failed(tmp_path: Path) -> None:
@@ -129,7 +146,9 @@ def test_campaign_scale_evidence_marks_cross_lane_write_failed(tmp_path: Path) -
     assert evidence["crossLaneWriteCount"] == 1
 
 
-def test_promotion_rechecks_subordinate_evidence_digest(tmp_path: Path) -> None:
+def test_promotion_ignores_invalid_subordinate_diagnostic_digest(
+    tmp_path: Path,
+) -> None:
     fixture = _fixture(tmp_path)
     _evidence, path = _write_evidence(fixture)
     resource_path = path.parent / "resource-soak.json"
@@ -137,14 +156,21 @@ def test_promotion_rechecks_subordinate_evidence_digest(tmp_path: Path) -> None:
     resource["fourLaneOverlapSampleCount"] = 60
     _write(resource_path, resource)
 
-    with pytest.raises(ResearchScalePromotionError, match="evidenceDigest drift"):
-        write_research_scale_promotion(
-            release_id="research-release",
-            promotion_id="promotion-tampered",
-            campaign_evidence_path=path,
-            release_root=fixture["releaseRoot"],
-            output_root=fixture["output"],
-        )
+    promotion, _promotion_path = write_research_scale_promotion(
+        release_id="research-release",
+        promotion_id="promotion-diagnostics-unavailable",
+        campaign_evidence_path=path,
+        release_root=fixture["releaseRoot"],
+        output_root=fixture["output"],
+    )
+
+    assert [row["shortfallCount"] for row in promotion["carrierCounts"]] == [0] * 4
+    assert "resourceSoakEvidenceRef" not in promotion
+    assert any(
+        "RESOURCE_SOAK_UNAVAILABLE" in issue
+        or "SCALE_TIMING_UNAVAILABLE" in issue
+        for issue in promotion["diagnosticIssues"]
+    )
 
 
 def test_release_cli_exposes_canonical_campaign_scale_evidence_writer() -> None:

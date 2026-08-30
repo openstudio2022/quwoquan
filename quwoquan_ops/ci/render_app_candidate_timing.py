@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Calculate the reusable App candidate machine path from GitHub Jobs API facts."""
 
 from __future__ import annotations
@@ -6,21 +5,30 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
-import urllib.parse
-import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
 
-SHARD_JOB_PATTERNS = (
-    "App package shard / Android",
-    "App package shard / iOS",
-    "App package shard / Web",
-    "App package shard / macOS",
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.ci.lib.github_actions_api import (
+    GithubActionsApiError,
+    load_run_and_jobs,
 )
-ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
+from quwoquan_ops.cli.lib.app_identity import supported_build_products
+
+BUILD_PRODUCT_IDS = tuple(
+    product.build_product_id for product in supported_build_products()
+)
+if len(BUILD_PRODUCT_IDS) != 5 or len(set(BUILD_PRODUCT_IDS)) != 5:
+    raise ValueError("baseline App build product set must contain exactly five products")
+SHARD_JOB_PATTERN = "App package product"
 AGGREGATE_JOB_PATTERN = "App candidate OCI / aggregate"
 READY_STEP = "Expose immutable App OCI identity"
 
@@ -48,19 +56,17 @@ def _one(jobs: list[dict[str, Any]], pattern: str) -> dict[str, Any]:
 def calculate(jobs: list[dict[str, Any]]) -> dict[str, Any]:
     shard_seconds: dict[str, int] = {}
     shard_completed: list[datetime] = []
-    for pattern in SHARD_JOB_PATTERNS:
-        platform = pattern.rsplit("/", 1)[-1].strip().lower()
-        for environment in ENVIRONMENTS:
-            job_pattern = f"{pattern} / {environment}"
-            job = _one(jobs, job_pattern)
-            if job.get("conclusion") != "success":
-                raise ValueError(f"App shard is not successful: {job_pattern}")
-            shard_seconds[f"{platform}/{environment}"] = _seconds(
-                job.get("started_at"), job.get("completed_at"), job_pattern
-            )
-            shard_completed.append(
-                _timestamp(job.get("completed_at"), job_pattern + ".completed_at")
-            )
+    for build_product_id in BUILD_PRODUCT_IDS:
+        job_pattern = f"{SHARD_JOB_PATTERN} / {build_product_id}"
+        job = _one(jobs, job_pattern)
+        if job.get("conclusion") != "success":
+            raise ValueError(f"App build-product shard is not successful: {job_pattern}")
+        shard_seconds[build_product_id] = _seconds(
+            job.get("started_at"), job.get("completed_at"), job_pattern
+        )
+        shard_completed.append(
+            _timestamp(job.get("completed_at"), job_pattern + ".completed_at")
+        )
 
     aggregate = _one(jobs, AGGREGATE_JOB_PATTERN)
     ready_steps = [
@@ -86,30 +92,6 @@ def calculate(jobs: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _jobs(repository: str, run_id: str, token: str) -> list[dict[str, Any]]:
-    jobs: list[dict[str, Any]] = []
-    page = 1
-    while True:
-        query = urllib.parse.urlencode({"filter": "latest", "per_page": 100, "page": page})
-        request = urllib.request.Request(
-            f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/jobs?{query}",
-            headers={
-                "Accept": "application/vnd.github+json",
-                "Authorization": f"Bearer {token}",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
-        )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            payload = json.load(response)
-        batch = payload.get("jobs") if isinstance(payload, dict) else None
-        if not isinstance(batch, list):
-            raise ValueError("GitHub Jobs API returned an invalid payload")
-        jobs.extend(item for item in batch if isinstance(item, dict))
-        if len(batch) < 100:
-            return jobs
-        page += 1
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY", ""))
@@ -133,7 +115,12 @@ def main() -> int:
                 if delay:
                     time.sleep(delay)
                 try:
-                    result = calculate(_jobs(args.repository, args.run_id, args.token))
+                    _, jobs, _ = load_run_and_jobs(
+                        args.repository,
+                        args.run_id,
+                        args.token,
+                    )
+                    result = calculate(jobs)
                     break
                 except ValueError as error:
                     last_error = error
@@ -145,7 +132,7 @@ def main() -> int:
             f"candidate_ready_at={result['candidate_ready_at']}\n",
             encoding="utf-8",
         )
-    except (OSError, ValueError, json.JSONDecodeError) as error:
+    except (GithubActionsApiError, OSError, ValueError, json.JSONDecodeError) as error:
         print(f"GATE_BLOCK: {error}")
         return 2
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))

@@ -1,9 +1,9 @@
+import 'package:quwoquan_app/service/api_edge/graphql_read/persisted_query_execution/adapters/persisted_search_page_query_remote.dart';
 import 'package:quwoquan_app/service/search_service/search/recent_search_state/adapters/recent_search_remote.dart';
 import 'package:quwoquan_app/service/search_service/search/recent_search_state/application/recent_search_ports.dart';
 import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/adapters/search_feedback_remote.dart';
 import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_fact_appender.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/remote_search_page_repository.dart';
-import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/search_page_query_remote.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_repository.dart';
 import 'package:quwoquan_app/service/search_service/search/search_request_fact/adapters/hot_query_remote.dart';
 import 'package:quwoquan_app/service/search_service/search/search_request_fact/application/search_hot_query_reader.dart';
@@ -27,10 +27,10 @@ final class SearchProductionComposition {
 
   static SearchRepository searchRepository({
     required GeneratedSearchPageGraphQLClient searchPageClient,
-    required SearchPageQueryInvocationContextFactory invocationContext,
+    required PersistedQueryInvocationContextFactory invocationContext,
   }) {
     return RemoteSearchPageRepository(
-      remoteQuery: RemoteSearchPageQuery(
+      remoteQuery: RemotePersistedSearchPageQuery(
         client: searchPageClient,
         invocationContext: invocationContext,
       ),

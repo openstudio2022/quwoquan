@@ -153,22 +153,13 @@ def _resolve_managed_model(provider: str, raw_model: str | None) -> str:
     return model or DEFAULT_SEMANTIC_AGENT_MODEL
 
 
-MANAGED_LANE_LIMITS = {
-    "homepage": _RUNTIME_POLICY.author_workers,
-    "article": _RUNTIME_POLICY.author_workers,
-    "image": _RUNTIME_POLICY.research_workers,
-    "video": _RUNTIME_POLICY.author_workers,
-}
+MANAGED_LANES = ("homepage", "article", "image", "video")
 MANAGED_AGENT_TIMEOUT_SECONDS = _RUNTIME_POLICY.agent_timeout_seconds
 MANAGED_AGENT_FUTURE_GRACE_SECONDS = _RUNTIME_POLICY.managed_future_grace_seconds
 MANAGED_SCHEDULER_STALE_SECONDS = _RUNTIME_POLICY.scheduler_stale_seconds
 DOWNLOAD_FETCH_ONLY_RETRY_LIMIT = _RUNTIME_POLICY.download_fetch_retry_limit
 _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS = _RUNTIME_POLICY.bridge_launch_cooldown_seconds
 _CURSOR_BRIDGE_READY_DELAY_SECONDS = _RUNTIME_POLICY.bridge_ready_delay_seconds
-MANAGED_LOCAL_CURSOR_MAX_WORKERS = min(
-    _RUNTIME_POLICY.author_workers,
-    _RUNTIME_POLICY.cursor_bridge_instances,
-)
 _MANAGED_AGENT_SUBPROCESS_LOCK = threading.Lock()
 _MANAGED_AGENT_SUBPROCESS_PIDS: set[int] = set()
 
@@ -184,7 +175,7 @@ class ExecutionContext:
     completed: tuple[ExecutionStage, ...] = field(default_factory=tuple)
     managed: bool = False
     runtime: RuntimeEnvironment = RuntimeEnvironment.LOCAL
-    max_workers: int = _RUNTIME_POLICY.author_workers
+    max_workers: int | None = None
     model: str = DEFAULT_SEMANTIC_AGENT_MODEL
     model_parameters: tuple[CursorModelParameter, ...] = (
         _RUNTIME_POLICY.semantic_agent_model_parameters
@@ -218,6 +209,18 @@ class ExecutionContext:
             raise ValueError(
                 "ExecutionContext execution_id must match ExecutionSpec.execution_id"
             )
+        if self.max_workers is None:
+            object.__setattr__(
+                self,
+                "max_workers",
+                self.spec.execution_policy.fleet_max_concurrent_workers,
+            )
+        if (
+            isinstance(self.max_workers, bool)
+            or not isinstance(self.max_workers, int)
+            or self.max_workers < 1
+        ):
+            raise ValueError("ExecutionContext max_workers must be >= 1")
         if not isinstance(self.runtime, RuntimeEnvironment):
             object.__setattr__(self, "runtime", RuntimeEnvironment(str(self.runtime)))
         if not isinstance(self.agent_provider, AgentProvider):
@@ -251,12 +254,20 @@ class ExecutionContext:
         )
 
 
+def managed_lane_limits(prompt_count: int) -> dict[str, int]:
+    """Prompt fanout is not a governed ceiling, so no lane may throttle it.
+
+    The frozen ceilings belong to the source-discovery and delivery stages; the
+    two capacity words must not be reused for this dimension.
+    """
+    return {lane: max(1, prompt_count) for lane in MANAGED_LANES}
+
+
 def _managed_local_cursor_worker_cap(
     ctx: ExecutionContext,
 ) -> int:
-    if _normalize_managed_agent_provider(ctx.agent_provider) != "cursor_sdk":
-        return max(1, int(ctx.max_workers))
-    return min(max(1, int(ctx.max_workers)), MANAGED_LOCAL_CURSOR_MAX_WORKERS)
+    """Local cursor bridge startup parameter, frozen with the execution."""
+    return max(1, int(ctx.max_workers))
 
 
 def _managed_uses_serial_local_cursor(ctx: ExecutionContext) -> bool:
@@ -360,18 +371,9 @@ def execution_state_status(state: ExecutionStateTransition) -> ExecutionStateSta
     return state.status
 
 
-def save_execution_state(state: ExecutionStateTransition) -> Path:
-    state.updated_at = store.now_iso()
-    payload = state.freeze().to_dict()
-    loaded = save_execution_state_document(
-        _state_path(state.execution_id),
-        payload,
-        expected=getattr(state, "_journal_identity", None),
+def save_execution_state(*_args: object, **_kwargs: object) -> Path:
+    """Reject legacy business writers; stage receipts own the projection."""
+    raise ValueError(
+        "GATE_BLOCK DATA.EXECUTION.STATE_WRITER_RETIRED: "
+        "execution_state is derived only by task stage-record receipt reducer"
     )
-    state.replace_with(ExecutionState.from_mapping(loaded.payload).open_transition())
-    state._journal_identity = ExecutionStateIdentity(
-        loaded.identity.sequence,
-        loaded.identity.event_digest,
-        loaded.identity.snapshot_digest,
-    )
-    return _state_path(state.execution_id)

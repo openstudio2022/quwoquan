@@ -35,5 +35,4 @@ abstract final class RunArtifactsMapStableKeys {
     "synthesisReady",
     "synthesisReason",
   };
-
 }

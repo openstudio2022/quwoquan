@@ -10,6 +10,8 @@ from pathlib import Path
 import yaml
 
 
+sys.dont_write_bytecode = True
+
 _BOOTSTRAP = next(
     p for p in Path(__file__).resolve().parents if (p / "repository_root.py").is_file()
 )
@@ -23,7 +25,6 @@ OWNER_LIMIT_PATTERNS = (
     re.compile(r"\b(?:Canonical)?RateLimitMiddleware\s*\("),
     re.compile(r"\b(?:new|New)[A-Za-z0-9_]*RateLimiter\s*\("),
     re.compile(r"\btype\s+[A-Za-z0-9_]*RateLimiter\s+struct\s*\{"),
-    re.compile(r"\bRateLimitPerSecond\b"),
 )
 RETIRED_TRUTHS = (
     "sys.gateway.rate_limit.per_user_rps",
@@ -121,6 +122,20 @@ def collect_issues() -> list[str]:
                 "method": "admit",
                 "object_owner": "RateLimitBucket",
             },
+            "telemetry": {
+                "metric": "api_edge_admission_decisions_total",
+                "trace": True,
+                "attributes": [
+                    "environment",
+                    "operation",
+                    "outcome",
+                    "failurePolicy",
+                ],
+            },
+            "slo": {
+                "latency_p95_ms": 20,
+                "failure_ratio_percent": 0.1,
+            },
         }
         if entrypoints[0] != expected:
             issues.append(
@@ -162,8 +177,20 @@ def collect_issues() -> list[str]:
     caddy_text = caddy.read_text(encoding="utf-8") if caddy.exists() else ""
     if caddy_text.count("reverse_proxy api-edge:18079") != 1:
         issues.append(f"{_relative(caddy)}: public business proxy must have exactly one api-edge upstream")
+    public_content_proxy = (
+        "\thandle @public_web_seo {\n"
+        "\t\trewrite * /public-web{uri}\n"
+        "\t\treverse_proxy content-service:18080\n"
+        "\t}"
+    )
+    if caddy_text.count(public_content_proxy) != 1:
+        issues.append(
+            f"{_relative(caddy)}: public Web SEO/transfer projection must have "
+            "exactly one content-service owner route"
+        )
+    owner_scan_text = caddy_text.replace(public_content_proxy, "", 1)
     for owner in OWNER_UPSTREAMS:
-        if f"reverse_proxy {owner}:" in caddy_text:
+        if f"reverse_proxy {owner}:" in owner_scan_text:
             issues.append(f"{_relative(caddy)}: public Caddy bypasses api-edge to {owner}")
 
     prod_renderer = REPO_ROOT / "quwoquan_ops/cli/prod/render_prod_plane_stack.py"

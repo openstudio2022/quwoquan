@@ -144,14 +144,21 @@ def append_article_plan_items(
             topic_tag_refs=topic_tag_refs,
         )
         publish_schedule = scheduler.schedule(creator_assignment)
+        publish_media_mode = str(candidate.get("publishMediaMode") or "").strip()
         asset_refs = list(candidate.get("assetRefs") or [])
+        if publish_media_mode not in {"text_only", "illustrated"}:
+            raise ValueError("article candidate publishMediaMode must be text_only|illustrated")
+        if publish_media_mode == "text_only" and asset_refs:
+            raise ValueError("text_only article candidate cannot carry source assets")
+        if publish_media_mode == "illustrated" and len(asset_refs) < 2:
+            raise ValueError("illustrated article candidate requires at least two source assets")
         source_unit_freeze = (
             write_article_source_unit_freeze(
                 execution_id=ctx.execution_id,
                 source_dir=candidate["sourceDir"],
                 asset_refs=asset_refs,
             )
-            if asset_refs
+            if publish_media_mode == "illustrated"
             else None
         )
         brief = {
@@ -164,14 +171,13 @@ def append_article_plan_items(
             "writingIntent": intent,
             "evidenceRequirements": {"emotion": {"required": False}},
             "baseSourceRef": candidate["sourceRef"],
+            "publishMediaMode": publish_media_mode,
             "assetRefs": asset_refs,
             "publishSchedule": publish_schedule,
             **creator_assignment,
         }
         if source_unit_freeze is not None:
             brief["articleSourceUnitFreeze"] = source_unit_freeze
-        else:
-            brief["publishMediaMode"] = "text_only"
         item = {
             "ref": ref,
             "kind": "entity",
@@ -189,6 +195,7 @@ def append_article_plan_items(
             "writingIntent": intent,
             "evidenceRequirements": brief["evidenceRequirements"],
             "baseSourceRef": candidate["sourceRef"],
+            "publishMediaMode": publish_media_mode,
             "assetRefs": asset_refs,
             "sourceUseMode": candidate["sourceUseMode"],
             "entityFocusScore": float(candidate.get("entityFocusScore") or 0.0),
@@ -206,8 +213,6 @@ def append_article_plan_items(
         write_brief_object(ctx.execution_id, ref, brief, content_type="article")
         if source_unit_freeze is not None:
             item["articleSourceUnitFreeze"] = source_unit_freeze
-        else:
-            item["publishMediaMode"] = "text_only"
         items.append(item)
 
 
@@ -220,9 +225,21 @@ def append_image_plan_items(
     candidates: list[dict[str, Any]],
     items: list[dict[str, Any]],
 ) -> None:
+    from content.execution.planning.media_work_units import work_unit_object_binding
+
     single_image = len(candidates) == 1
     for index, candidate in enumerate(candidates, start=1):
-        ref = f"{target}_image" if single_image else f"{target}_image_{index}"
+        # workUnit 模式下对象身份只在 projection 导出面物化一次；quota-only
+        # 模式没有 workUnit 声明，按序号编排 ref。
+        binding = work_unit_object_binding(candidate, carrier="image")
+        object_identity = {} if binding is None else binding.object_identity()
+        ref = (
+            binding.object_ref(target=target)
+            if binding is not None
+            else f"{target}_image"
+            if single_image
+            else f"{target}_image_{index}"
+        )
         raw_title = str(candidate.get("title") or "").strip()
         source_id = str(candidate.get("sourceId") or "").strip()
         title = "" if raw_title.casefold() == source_id.casefold() else raw_title[:80]
@@ -250,27 +267,28 @@ def append_image_plan_items(
             "caption": caption,
             "publishSchedule": publish_schedule,
             **creator_assignment,
+            **object_identity,
         }
         write_brief_object(ctx.execution_id, ref, brief, content_type="image")
-        items.append(
-            {
-                "ref": ref,
-                "kind": "entity",
-                "carrier": "image",
-                "researchLane": "image",
-                "title": title,
-                "caption": caption,
-                "entityRefs": [entity_ref],
-                "entityTags": [target],
-                "evidenceRefs": [candidate["sourceRef"]],
-                "rationale": (
-                    "底稿中心配额选源：image research lane 下单一 "
-                    "sourceCollectionId 的授权图片集合（一源一作品）"
-                ),
-                "sourceCollectionId": candidate["collectionId"],
-                "baseSourceRef": candidate["sourceRef"],
-                "assetRefs": [candidate["assetRef"]],
-                "publishSchedule": publish_schedule,
-                **creator_assignment,
-            }
-        )
+        item = {
+            "ref": ref,
+            "kind": "entity",
+            "carrier": "image",
+            "researchLane": "image",
+            "title": title,
+            "caption": caption,
+            "entityRefs": [entity_ref],
+            "entityTags": [target],
+            "evidenceRefs": [candidate["sourceRef"]],
+            "rationale": (
+                "底稿中心配额选源：image research lane 下单一 "
+                "sourceCollectionId 的授权图片集合（一源一作品）"
+            ),
+            "sourceCollectionId": candidate["collectionId"],
+            "baseSourceRef": candidate["sourceRef"],
+            "assetRefs": [candidate["assetRef"]],
+            "publishSchedule": publish_schedule,
+            **creator_assignment,
+            **object_identity,
+        }
+        items.append(item)

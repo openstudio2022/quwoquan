@@ -548,14 +548,19 @@ func BuildImportedPostLifecycleEvents(
 		if len(entityRefs) == 0 {
 			entityRefs = post.EntityRefs
 		}
-		media := ImportedMediaFields(importedPostAssets(post))
+		// lifecycle payload 只消费 summary 字段，不含 mediaItems；accessMode
+		// 传映射值不影响既有 payload 字节（replay byte-for-byte 依赖）。
+		media := ImportedMediaFields(
+			importedPostAssets(post),
+			MediaDeliveryAccessModeForReleaseClass(opts.ReleaseClass),
+		)
 		body := post.ArticleMarkdown
 		summary := ProjectImportedArticleSummary(post.ArticleMarkdown)
 		if post.ContentType == "image" {
 			body = post.Body
 			summary = post.Body
 		}
-		postID := RuntimePostID(post.ContentID, post.PostRef)
+		postID := RuntimePostID(post.ContentID)
 		if postID == "" {
 			return nil, fmt.Errorf("imported Post postRef is required")
 		}

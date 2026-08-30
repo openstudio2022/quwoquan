@@ -22,10 +22,7 @@
     "soakRequested",
     "workspaceSmokeRequested",
     "preflightReady",
-    "capacitySoakReady",
-    "workspaceSmokeReady",
     "ready",
-    "semanticExecutionReady",
     "evidenceDigest",
     "evidence"
   ],
@@ -62,10 +59,7 @@
     "soakRequested": { "type": "boolean" },
     "workspaceSmokeRequested": { "type": "boolean" },
     "preflightReady": { "type": "boolean" },
-    "capacitySoakReady": { "type": "boolean" },
-    "workspaceSmokeReady": { "type": "boolean" },
     "ready": { "type": "boolean" },
-    "semanticExecutionReady": { "type": "boolean" },
     "evidenceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "evidence": {
       "type": "object",
@@ -86,6 +80,7 @@
         "credential",
         "network",
         "semanticAgentStartup",
+        "modelCatalog",
         "capacitySoak",
         "workspaceSmoke",
         "issues"
@@ -136,6 +131,7 @@
           }
         },
         "semanticAgentStartup": { "$ref": "#/$defs/startupEvidence" },
+        "modelCatalog": { "$ref": "#/$defs/modelCatalogEvidence" },
         "capacitySoak": { "$ref": "#/$defs/capacityEvidence" },
         "workspaceSmoke": { "$ref": "#/$defs/workspaceEvidence" },
         "issues": { "type": "array", "items": { "type": "string" } }
@@ -143,6 +139,29 @@
     }
   },
   "$defs": {
+    "modelCatalogEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checked", "ready", "modelCount", "selectionSupport", "issues"],
+      "properties": {
+        "checked": { "type": "boolean" },
+        "ready": { "type": "boolean" },
+        "modelCount": { "type": ["integer", "null"] },
+        "selectionSupport": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["checked", "supported", "issues"],
+          "properties": {
+            "checked": { "type": "boolean" },
+            "supported": { "type": "boolean" },
+            "requestedModel": { "type": ["string", "null"] },
+            "requestedParameters": { "type": "array" },
+            "issues": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      }
+    },
     "startupEvidence": {
       "type": "object",
       "additionalProperties": false,

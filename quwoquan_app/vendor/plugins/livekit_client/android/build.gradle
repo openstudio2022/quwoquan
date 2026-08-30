@@ -4,7 +4,16 @@ group = "io.livekit.plugin"
 version = "1.0-SNAPSHOT"
 
 def vendoredAndroidArtifact(String name) {
-    def artifact = new File(rootProject.projectDir, "../vendor/android_artifacts/${name}")
+    // vendor 根由消费方 Gradle 根显式声明，而不是由本插件按相对位置猜测：本插件同时被
+    // 生产工程与 Patrol UAT test host 消费，两者到 vendor 的相对深度不同。
+    def declaredRoot = rootProject.findProperty("qwq.vendor.androidArtifactsRoot")
+    if (declaredRoot == null || declaredRoot.toString().trim().isEmpty()) {
+        throw new GradleException(
+            "Missing gradle property qwq.vendor.androidArtifactsRoot in ${rootProject.projectDir}. " +
+            "Every Gradle root consuming vendored plugins must declare this path explicitly."
+        )
+    }
+    def artifact = new File(rootProject.projectDir, "${declaredRoot.toString().trim()}/${name}")
     if (!artifact.exists()) {
         throw new GradleException(
             "Missing vendored Android artifact ${artifact}. " +

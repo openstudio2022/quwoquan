@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 import tempfile
 from collections import Counter
@@ -12,15 +11,8 @@ from typing import Any
 
 import yaml
 from content.release.canonical.content_pool_record import (
-    append_pool_record,
     is_pool_record_admitted,
     iter_pool_records,
-    pool_payload_digest,
-    preflight_pool_record_append,
-)
-from content.release.canonical.creator_projection import project_creator_object
-from content.release.canonical.object_source_identity import (
-    validate_object_source_identity,
 )
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
@@ -29,8 +21,22 @@ from content.release.canonical.object_transaction_contract import (
     _json_bytes,
     _read_json,
     _safe_rel,
+    refresh_canonical_tag_snapshots,
 )
-from content.release.canonical.pool_append_report import batch_reason, batch_report
+from content.release.canonical.pool_append_admission import (
+    assert_no_work_request_object,
+)
+from content.release.canonical.pool_append_apply import (
+    apply_pool_item,
+    prepare_item_rollback,
+    restore_batch,
+)
+from content.release.canonical.pool_append_report import (
+    batch_reason,
+    batch_report,
+    excluded_outcome,
+    is_hard_batch_failure,
+)
 from content.release.canonical.pool_backfill_canonical import (
     build_pool_record,
     canonical_plan_items,
@@ -172,12 +178,20 @@ def plan_pool_backfill(
 ) -> dict[str, Any]:
     """Derive a read-only append batch exclusively from existing evidence."""
 
-    entity_items, entity_exclusions, entity_repairs, entity_admitted = canonical_plan_items(
-        publish_root, "entities"
-    )
-    content_items, content_exclusions, content_repairs, content_admitted = canonical_plan_items(
-        publish_root, "posts"
-    )
+    (
+        entity_items,
+        entity_exclusions,
+        entity_repairs,
+        entity_admitted,
+        entity_identity_states,
+    ) = canonical_plan_items(publish_root, "entities")
+    (
+        content_items,
+        content_exclusions,
+        content_repairs,
+        content_admitted,
+        content_identity_states,
+    ) = canonical_plan_items(publish_root, "posts")
     author_items, author_exclusions, author_admitted = _author_plan_items(
         creator_pool_root, publish_root
     )
@@ -224,11 +238,17 @@ def plan_pool_backfill(
         ),
         "detailsRef": None,
         "repairRequirements": [*entity_repairs, *content_repairs],
+        "canonicalIdentityStates": [
+            *entity_identity_states,
+            *content_identity_states,
+        ],
         "batch": batch,
     }
 
 
-def _validate_batch(document: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _validate_batch(
+    document: Mapping[str, Any], *, envelope_output_root: Path | None
+) -> list[dict[str, Any]]:
     if document.get("schema") == PLAN_SCHEMA:
         document = document.get("batch") or {}
     if document.get("schema") != BATCH_SCHEMA:
@@ -274,158 +294,10 @@ def _validate_batch(document: Mapping[str, Any]) -> list[dict[str, Any]]:
             raise ObjectTransactionError("DATA.POOL.BATCH_TARGET_CONFLICT")
         targets.add(target)
         result.append(item)
+    # 判在结构校验之后、任何写入之前：本判据要说的是「这批对象不该走这条路」，
+    # 而 preflight 与 apply 共用本函数，因此两者给出同一个 typed 判否。
+    assert_no_work_request_object(result, output_root=envelope_output_root)
     return result
-
-
-def _replace_author_projection(
-    *, target: Path, creator_ref: str, record: Mapping[str, Any]
-) -> str:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix=f".{target.name}.pool-", dir=target.parent))
-    backup = target.with_name(f".{target.name}.{os.getpid()}.pool-backup")
-    try:
-        projection = staging / "projection"
-        project_creator_object(creator_ref, projection)
-        profile = _read_json(projection / "profile.json")
-        if (
-            str(profile.get("authorId") or "") != str(record["objectId"])
-            or profile.get("version") != record["contentVersion"]
-        ):
-            raise ObjectTransactionError("DATA.POOL.AUTHOR_PROJECTION_IDENTITY_DRIFT")
-        if target.is_dir() and (target / "_pool").is_dir():
-            shutil.copytree(target / "_pool", projection / "_pool")
-        append_status, _ = append_pool_record(object_root=projection, record=record)
-        if target.exists():
-            if backup.exists():
-                raise ObjectTransactionError("DATA.POOL.AUTHOR_BACKUP_CONFLICT")
-            os.replace(target, backup)
-        try:
-            os.replace(projection, target)
-        except BaseException:
-            if backup.exists() and not target.exists():
-                os.replace(backup, target)
-            raise
-        shutil.rmtree(backup, ignore_errors=True)
-        return append_status
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
-
-
-def _apply_item(
-    item: Mapping[str, Any], *, publish_root: Path, creator_pool_root: Path, apply: bool
-) -> dict[str, Any]:
-    record = dict(item["record"])
-    object_type = str(record.get("objectType") or "")
-    object_ref = _safe_rel(str(record.get("objectRef") or ""), label="objectRef")
-    if object_type == "author":
-        source = creator_pool_root / _safe_rel(
-            str(item.get("sourceRef") or ""), label="sourceRef"
-        )
-        target = publish_root / "creators" / object_ref
-        evidence = creator_pool_root / _safe_rel(
-            str(record.get("evidenceRef") or ""), label="evidenceRef"
-        )
-        actual_payload_digest = _digest_file(source)
-        try:
-            profile = yaml.safe_load(source.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, yaml.YAMLError) as exc:
-            raise ObjectTransactionError("DATA.POOL.AUTHOR_PROFILE_INVALID") from exc
-        if (
-            not isinstance(profile, Mapping)
-            or profile.get("creatorProfileId") != object_ref.as_posix()
-            or profile.get("authorId") != record.get("objectId")
-            or profile.get("version") != record.get("contentVersion")
-            or not isinstance(profile.get("admission"), Mapping)
-            or profile["admission"].get("processResult")
-            != record.get("processResult")
-            or profile["admission"].get("qualityResult")
-            != record.get("qualityResult")
-            or profile["admission"].get("evidenceRef")
-            != record.get("evidenceRef")
-            or profile["admission"].get("evidenceDigest")
-            != record.get("evidenceDigest")
-        ):
-            raise ObjectTransactionError("DATA.POOL.AUTHOR_IDENTITY_DRIFT")
-    elif object_type in {"content", "homepage"}:
-        kind = "posts" if object_type == "content" else "entities"
-        target = publish_root / kind / object_ref
-        declared_source = _safe_rel(str(item.get("sourceRef") or ""), label="sourceRef")
-        if declared_source != Path(kind) / object_ref:
-            raise ObjectTransactionError("DATA.POOL.SOURCE_REF_MISMATCH")
-        source = target
-        evidence = target / _safe_rel(
-            str(record.get("evidenceRef") or ""), label="evidenceRef"
-        )
-        actual_payload_digest = pool_payload_digest(target)
-        manifest = _read_json(target / "manifest.json")
-        if record.get("sourceAttribution") != manifest.get("sourceAttribution"):
-            raise ObjectTransactionError(
-                "DATA.POOL.SOURCE_ATTRIBUTION_DRIFT"
-            )
-        declared_identity = record.get("sourceIdentity")
-        if not isinstance(declared_identity, Mapping):
-            raise ObjectTransactionError("DATA.POOL.SOURCE_IDENTITY_INVALID")
-        expected_identity = validate_object_source_identity(manifest)
-        if dict(declared_identity) != expected_identity:
-            raise ObjectTransactionError("DATA.POOL.SOURCE_IDENTITY_DRIFT")
-    else:
-        raise ObjectTransactionError("DATA.POOL.RECORD_OBJECT_TYPE_INVALID")
-    if not source.exists() or actual_payload_digest != record.get("payloadDigest"):
-        raise ObjectTransactionError("DATA.POOL.PAYLOAD_DIGEST_DRIFT")
-    if not evidence.is_file() or _digest_file(evidence) != record.get("evidenceDigest"):
-        raise ObjectTransactionError("DATA.POOL.EVIDENCE_DIGEST_DRIFT")
-    admitted = is_pool_record_admitted(record)
-    if not admitted:
-        status = "pending"
-    elif not apply:
-        write_status, _ = preflight_pool_record_append(
-            object_root=target,
-            record=record,
-        )
-        status = "ready" if write_status == "appended" else write_status
-    elif object_type == "author":
-        status = _replace_author_projection(
-            target=target, creator_ref=object_ref.as_posix(), record=record
-        )
-    else:
-        status, _ = append_pool_record(object_root=target, record=record)
-    return {
-        "itemId": str(item["itemId"]),
-        "objectType": object_type,
-        "objectId": str(record.get("objectId") or ""),
-        "contentVersion": int(record.get("contentVersion") or 0),
-        "recordSequence": int(record.get("recordSequence") or 0),
-        "status": status,
-        "eligibilityResult": str(record.get("eligibilityResult") or ""),
-        "usageScope": record.get("usageScope"),
-    }
-
-
-def _item_target(item: Mapping[str, Any], publish_root: Path) -> Path:
-    record = item["record"]
-    object_type = str(record.get("objectType") or "")
-    object_ref = _safe_rel(str(record.get("objectRef") or ""), label="objectRef")
-    if object_type == "author":
-        return publish_root / "creators" / object_ref
-    if object_type == "content":
-        return publish_root / "posts" / object_ref
-    if object_type == "homepage":
-        return publish_root / "entities" / object_ref
-    raise ObjectTransactionError("DATA.POOL.RECORD_OBJECT_TYPE_INVALID")
-
-
-def _restore_batch(
-    *,
-    author_backups: list[tuple[Path, Path | None]],
-    record_targets: list[Path],
-) -> None:
-    for target in reversed(record_targets):
-        target.unlink(missing_ok=True)
-    for target, backup in reversed(author_backups):
-        if target.exists():
-            shutil.rmtree(target)
-        if backup is not None and backup.exists():
-            os.replace(backup, target)
 
 
 def append_pool_batch(
@@ -434,23 +306,25 @@ def append_pool_batch(
     publish_root: Path = PUBLISH_ROOT,
     creator_pool_root: Path = CONTROL_PLANE_CREATOR_POOL_ROOT,
     apply: bool = False,
+    envelope_output_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Preflight the whole batch, then apply every admitted record or none."""
+    """Append every valid object; only structural corruption aborts siblings."""
 
     document = _read_json(input_path)
-    items = _validate_batch(document)
-    preflight: list[dict[str, Any]] = []
+    items = _validate_batch(document, envelope_output_root=envelope_output_root)
+    preflight: dict[str, dict[str, Any]] = {}
     reasons: list[dict[str, str]] = []
     pending = 0
+    failed = 0
     for item in items:
         try:
-            outcome = _apply_item(
+            outcome = apply_pool_item(
                 item,
                 publish_root=publish_root,
                 creator_pool_root=creator_pool_root,
                 apply=False,
             )
-            preflight.append(outcome)
+            preflight[str(item["itemId"])] = outcome
             if outcome["eligibilityResult"] != "passed":
                 pending += 1
                 reasons.append(
@@ -464,39 +338,33 @@ def append_pool_batch(
                     }
                 )
         except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
+            if is_hard_batch_failure(exc):
+                return batch_report(
+                    apply=apply,
+                    total=len(items),
+                    ready=0,
+                    pending=0,
+                    failed=len(items),
+                    reasons=[batch_reason(item, exc)],
+                    outcomes=[],
+                )
+            failed += 1
             reasons.append(batch_reason(item, exc))
-    failed_preflight = len(items) - len(preflight)
-    if pending or failed_preflight:
-        failed = len(items) - pending
-        failed_ids = {row["itemId"] for row in reasons}
-        reasons.extend(
-            {
-                "category": "eligibility",
-                "itemId": str(item["itemId"]),
-                "code": "DATA.POOL.BATCH_PREFLIGHT_ABORTED",
-            }
-            for item in items
-            if item["itemId"] not in failed_ids
-            and item["record"]["eligibilityResult"] == "passed"
-        )
-        return batch_report(
-            apply=apply,
-            total=len(items),
-            ready=0,
-            pending=pending,
-            failed=failed,
-            reasons=reasons,
-            outcomes=[],
-        )
+            preflight[str(item["itemId"])] = excluded_outcome(item)
+    ready_items = [
+        item
+        for item in items
+        if preflight[str(item["itemId"])]["status"] not in {"pending", "excluded"}
+    ]
     if not apply:
         return batch_report(
             apply=False,
             total=len(items),
-            ready=len(items),
-            pending=0,
-            failed=0,
-            reasons=[],
-            outcomes=preflight,
+            ready=len(ready_items),
+            pending=pending,
+            failed=failed,
+            reasons=reasons,
+            outcomes=[preflight[str(item["itemId"])] for item in items],
         )
 
     rollback_root = Path(tempfile.mkdtemp(
@@ -504,59 +372,67 @@ def append_pool_batch(
     ))
     author_backups: list[tuple[Path, Path | None]] = []
     record_targets: list[Path] = []
+    ready = 0
     try:
-        for index, (item, outcome) in enumerate(zip(items, preflight, strict=True)):
+        for index, item in enumerate(ready_items):
+            outcome = preflight[str(item["itemId"])]
             if outcome["status"] == "replayed":
+                ready += 1
                 continue
-            target = _item_target(item, publish_root)
-            record = item["record"]
-            if record["objectType"] == "author":
-                backup = rollback_root / f"author-{index}"
-                if target.exists():
-                    shutil.copytree(target, backup)
-                    author_backups.append((target, backup))
-                else:
-                    author_backups.append((target, None))
-            else:
-                record_targets.append(
-                    target
-                    / "_pool"
-                    / "versions"
-                    / f"{record['recordSequence']}.json"
-                )
-        outcomes = [
-            _apply_item(
+            item_authors, item_records = prepare_item_rollback(
                 item,
                 publish_root=publish_root,
-                creator_pool_root=creator_pool_root,
-                apply=True,
+                rollback_root=rollback_root,
+                index=index,
             )
-            for item in items
-        ]
-    except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
-        _restore_batch(
-            author_backups=author_backups,
-            record_targets=record_targets,
-        )
-        return batch_report(
-            apply=True,
-            total=len(items),
-            ready=0,
-            pending=0,
-            failed=len(items),
-            reasons=[batch_reason(items[0], exc)],
-            outcomes=[],
-        )
+            try:
+                preflight[str(item["itemId"])] = apply_pool_item(
+                    item,
+                    publish_root=publish_root,
+                    creator_pool_root=creator_pool_root,
+                    apply=True,
+                )
+            except (OSError, TypeError, ValueError, ObjectTransactionError) as exc:
+                if is_hard_batch_failure(exc):
+                    restore_batch(
+                        author_backups=[*author_backups, *item_authors],
+                        record_targets=[*record_targets, *item_records],
+                    )
+                    return batch_report(
+                        apply=True,
+                        total=len(items),
+                        ready=0,
+                        pending=0,
+                        failed=len(items),
+                        reasons=[batch_reason(item, exc)],
+                        outcomes=[],
+                    )
+                restore_batch(
+                    author_backups=item_authors,
+                    record_targets=item_records,
+                )
+                failed += 1
+                reasons.append(batch_reason(item, exc))
+                preflight[str(item["itemId"])] = excluded_outcome(item)
+                continue
+            author_backups.extend(item_authors)
+            record_targets.extend(item_records)
+            ready += 1
     finally:
         shutil.rmtree(rollback_root, ignore_errors=True)
+    # A projected creator carries its own tag references, so the batch owns their
+    # snapshot closure. Collection walks the whole canonical tree, which is why it
+    # settles once per batch here instead of per admitted object; an unresolvable
+    # reference leaves publish unclosed and must surface rather than be absorbed.
+    refresh_canonical_tag_snapshots(publish_root)
     return batch_report(
         apply=True,
         total=len(items),
-        ready=len(items),
-        pending=0,
-        failed=0,
-        reasons=[],
-        outcomes=outcomes,
+        ready=ready,
+        pending=pending,
+        failed=failed,
+        reasons=reasons,
+        outcomes=[preflight[str(item["itemId"])] for item in items],
     )
 
 

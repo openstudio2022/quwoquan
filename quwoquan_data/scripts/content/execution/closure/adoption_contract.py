@@ -11,9 +11,13 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from core.release_layout import object_closure_digest, payload_digest
+from core.release_layout import objects_merkle, payload_digest
 from core.schema import assert_valid
-from core.source_digest import SourceDigest, SourceDigestError, content_source_revision
+from core.source_digest import (
+    SourceDefinitionSnapshot,
+    SourceDigestError,
+    content_source_revision,
+)
 
 from content.execution.closure.adoption_identity import (
     ReleaseIdentityIncident,
@@ -199,8 +203,18 @@ def _media_assets(
             raise _typed(
                 "RIGHTS_CLOSURE_DRIFT", f"media asset {index} rights closure drifted"
             )
+        # Exactly one delivery identity per asset (DEC-031): a derived public
+        # slice for commercial delivery or the CAS key for research delivery.
+        delivery_field = (
+            "privateObjectKey" if "privateObjectKey" in row else "publicSliceKey"
+        )
+        if "publicSliceKey" in row and "privateObjectKey" in row:
+            raise _typed(
+                "MEDIA_CLOSURE_DRIFT",
+                f"media asset {index} declares both delivery identities",
+            )
         public_slice = _safe_ref(
-            row.get("publicSliceKey"), label=f"mediaAssets[{index}].publicSliceKey"
+            row.get(delivery_field), label=f"mediaAssets[{index}].{delivery_field}"
         )
         media_path = release_root / "payload" / public_slice
         if media_path.is_symlink() or not media_path.is_file():
@@ -213,7 +227,7 @@ def _media_assets(
             "contentType": str(row.get("contentType") or ""),
             "bytes": int(row.get("bytes") or 0),
             "sha256": str(row.get("sha256") or ""),
-            "publicSliceKey": public_slice.as_posix(),
+            delivery_field: public_slice.as_posix(),
             "version": int(row.get("version") or 0),
             "ownerRefs": list(owner_refs),
             "rightsSnapshotRefs": list(snapshot_refs),
@@ -272,7 +286,7 @@ def validate_reviewed_closure_adoption_ref(
     )
     if payload_digest(release_root) != identity.payload_sha256:
         raise _typed("PAYLOAD_DRIFT", "source release payload digest drifted")
-    if object_closure_digest(release_root) != identity.canonical_merkle:
+    if objects_merkle(release_root) != identity.canonical_merkle:
         raise _typed("OBJECT_CLOSURE_DRIFT", "source object Merkle drifted")
 
     source_evidence = document.get("sourceEvidence")
@@ -424,7 +438,7 @@ def validate_reviewed_closure_adoption_receipt(
     *,
     output_root: Path,
 ) -> ReviewedClosureAdoptionReceipt:
-    """Validate a four-lane receipt against its exact adoption reference."""
+    """Validate active-lane receipt rows against the exact adoption reference."""
     try:
         assert_valid(
             value,
@@ -476,7 +490,9 @@ def validate_reviewed_closure_adoption_receipt(
     if not isinstance(target, Mapping):
         raise _typed("TARGET_IDENTITY_INVALID", "targetSourceIdentity is invalid")
     try:
-        target_source = SourceDigest.from_document(target.get("sourceDigest"))
+        target_source = SourceDefinitionSnapshot.from_document(
+            target.get("sourceDigest")
+        )
         expected_revision = content_source_revision(
             source_digest=target_source.digest,
             entity_catalog_digest=str(target.get("entityCatalogDigest") or ""),
@@ -504,9 +520,20 @@ def validate_reviewed_closure_adoption_receipt(
             f"posts/{ref}" for ref in source_refs["posts"] if ref.startswith("video/")
         ],
     }
+    active_carriers = tuple(
+        carrier for carrier in _CARRIERS if expected_lanes[carrier]
+    )
+    if not active_carriers:
+        raise _typed(
+            "LANE_CLOSURE_DRIFT",
+            "reviewed closure has no active carrier objects",
+        )
     lane_rows = document.get("laneExecutions")
-    if not isinstance(lane_rows, list) or len(lane_rows) != len(_CARRIERS):
-        raise _typed("LANE_CLOSURE_DRIFT", "exactly four lane executions are required")
+    if not isinstance(lane_rows, list) or len(lane_rows) != len(active_carriers):
+        raise _typed(
+            "LANE_CLOSURE_DRIFT",
+            "lane executions must exactly match active closure carriers",
+        )
     observed_carriers: list[str] = []
     lane_execution_ids: list[str] = []
     for index, row in enumerate(lane_rows):
@@ -521,11 +548,11 @@ def validate_reviewed_closure_adoption_receipt(
             raise _typed(
                 "LANE_CLOSURE_DRIFT", f"{carrier or index} object closure drifted"
             )
-    if tuple(observed_carriers) != _CARRIERS:
+    if tuple(observed_carriers) != active_carriers:
         raise _typed("LANE_CLOSURE_DRIFT", "lane executions are not in canonical order")
     if (
         any(not item for item in lane_execution_ids)
-        or len(set(lane_execution_ids)) != len(_CARRIERS)
+        or len(set(lane_execution_ids)) != len(active_carriers)
         or set(lane_execution_ids).intersection(adoption_ref.upstream_execution_ids)
     ):
         raise _typed("LANE_CLOSURE_DRIFT", "lane execution identity is invalid")

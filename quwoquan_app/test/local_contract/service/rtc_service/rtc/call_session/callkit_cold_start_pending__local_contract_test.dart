@@ -86,11 +86,7 @@ void main() {
     final session = container.read(callSessionProvider);
     expect(session.session?.id, _pendingCallId, reason: '冷启动必须回填来电会话首帧');
     expect(session.status, CallStatus.ringing);
-    expect(
-      callKit.showIncomingCount,
-      0,
-      reason: '原生面已展示，Flutter 不得二次弹系统来电面',
-    );
+    expect(callKit.showIncomingCount, 0, reason: '原生面已展示，Flutter 不得二次弹系统来电面');
     expect(
       nativeBridge.endedCallIds,
       isEmpty,
@@ -121,7 +117,6 @@ final class _PendingNativeBridge implements IncomingCallNativeBridge {
       const IncomingCallNativeCapability(
         nativeUiAvailable: true,
         fullScreenPresentationAllowed: true,
-        backgroundPushConfigured: true,
       );
 
   @override
@@ -178,8 +173,7 @@ final class _FixedCallQuery implements CallQuery {
   }
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      super.noSuchMethod(invocation);
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 final class _RecordingAcknowledger

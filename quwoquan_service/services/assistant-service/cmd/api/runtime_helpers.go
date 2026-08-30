@@ -1,7 +1,6 @@
 package bootstrap
 
 import (
-	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -11,9 +10,6 @@ import (
 	"time"
 
 	rtgov "quwoquan_service/runtime/governance"
-	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/runtimeconfig"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/runtimewiring"
 )
 
 func providerTimeout(ms int) time.Duration {
@@ -43,38 +39,6 @@ func searchHTTPClient(ms int) *http.Client {
 		&http.Client{Timeout: timeout, Transport: transport},
 		rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default()),
 	)
-}
-
-func validateRuntimeConfigurationIdentity(cfg config, configVersion string) error {
-	fileVersion := strings.TrimSpace(cfg.Config.Version)
-	environmentVersion := strings.TrimSpace(configVersion)
-	if environmentVersion != "" && fileVersion != "" && fileVersion != environmentVersion {
-		return fmt.Errorf(
-			"CONFIG_VERSION mismatch: env=%s file=%s",
-			environmentVersion,
-			fileVersion,
-		)
-	}
-	return nil
-}
-
-func buildRedisRouter(cfg config) (*rtredis.Router, error) {
-	return runtimewiring.BuildRedisRouter(cfg)
-}
-
-func isValidAppEnv(env string) bool {
-	return runtimeconfig.IsValidAppEnv(env)
-}
-
-func requiresConfigVersion(env string) bool {
-	return runtimeconfig.RequiresConfigVersion(env)
-}
-
-func getenvOrDefault(key, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-		return value
-	}
-	return fallback
 }
 
 func assistantShutdownTimeout() time.Duration {

@@ -6080,7 +6080,10 @@
       "mutationTarget": "",
       "objectId": "chat.message",
       "ownershipPolicy": "conversation_member",
-      "pagination": null,
+      "pagination": {
+        "defaultItems": 60,
+        "maximumItems": 200
+      },
       "pathTemplate": "/chat/conversations/{conversationId}/assets",
       "permissions": [],
       "principal": "persona",
@@ -12721,6 +12724,193 @@
           "outcome"
         ],
         "metric": "circle_gathering_availability_watch",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "circle.gathering_plan.GetGatheringPlan",
+      "clientContract": {
+        "dartImport": "../circle/circle_operation_contracts.g.dart",
+        "responseDecoder": "decodeGatheringPlan",
+        "responseType": "GatheringPlan"
+      },
+      "commercial": {
+        "blockReason": "Chat Board/App Remote、durable consumer 与跨域 user_acceptance 尚未接线；三层证据未闭合",
+        "explicit": true,
+        "gapId": "CIRCLE_GATHERING_PLAN_COMMERCIAL_CLOSURE",
+        "status": "blocked",
+        "targetStory": "circle-community-gathering-plan-collaboration"
+      },
+      "concurrency": {},
+      "domain": "circle",
+      "errorCodes": [
+        "CIRCLE.USER.gathering_plan_not_found",
+        "CIRCLE.USER.gathering_plan_permission_denied",
+        "CIRCLE.USER.gathering_plan_gathering_unavailable",
+        "CIRCLE.SYSTEM.gathering_plan_storage_failed"
+      ],
+      "facadeMethod": "getGatheringPlan",
+      "facet": "GatheringPlanQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetGatheringPlan",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "circle.gathering_plan",
+      "ownershipPolicy": "delegated_current_gathering_host_or_active_participation",
+      "pagination": null,
+      "pathTemplate": "/gatherings/{gatheringId}/plan",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1000
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "gatheringId",
+            "name": "gatheringId"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GatheringPlanByGatheringQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "GatheringPlan",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 400
+      },
+      "sourcePath": "circle/circle_management/gathering_plan/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "gatheringBoard",
+        "gatheringDetail"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome",
+          "authority_kind"
+        ],
+        "metric": "circle_gathering_plan_get",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "circle.gathering_plan.ListGatheringPlanRevisions",
+      "clientContract": {
+        "dartImport": "../circle/circle_operation_contracts.g.dart",
+        "responseDecoder": "decodeGatheringPlanRevisionPageSlice",
+        "responseType": "GatheringPlanRevisionPageSlice"
+      },
+      "commercial": {
+        "blockReason": "Chat Board/App Remote、durable consumer 与跨域 user_acceptance 尚未接线；三层证据未闭合",
+        "explicit": true,
+        "gapId": "CIRCLE_GATHERING_PLAN_COMMERCIAL_CLOSURE",
+        "status": "blocked",
+        "targetStory": "circle-community-gathering-plan-collaboration"
+      },
+      "concurrency": {},
+      "domain": "circle",
+      "errorCodes": [
+        "CIRCLE.USER.gathering_plan_not_found",
+        "CIRCLE.USER.gathering_plan_permission_denied",
+        "CIRCLE.USER.gathering_plan_gathering_unavailable",
+        "CIRCLE.USER.gathering_plan_cursor_invalid",
+        "CIRCLE.SYSTEM.gathering_plan_storage_failed"
+      ],
+      "facadeMethod": "listGatheringPlanRevisions",
+      "facet": "GatheringPlanQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListGatheringPlanRevisions",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "circle.gathering_plan",
+      "ownershipPolicy": "delegated_current_gathering_host_or_active_participation",
+      "pagination": null,
+      "pathTemplate": "/gathering-plans/{planId}/revisions",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1000
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "planId",
+            "name": "planId"
+          }
+        ],
+        "query": [
+          {
+            "field": "cursor",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "field": "limit",
+            "name": "limit",
+            "required": false
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GatheringPlanRevisionPageQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "GatheringPlanRevisionPageSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 400
+      },
+      "sourcePath": "circle/circle_management/gathering_plan/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "gatheringBoard",
+        "gatheringDetail"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome",
+          "has_more"
+        ],
+        "metric": "circle_gathering_plan_revision_list",
         "trace": true
       },
       "transport": "json"
@@ -29679,13 +29869,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "16b31c5973f2a26d5399bb3d9a11e98f6e2caadf7a254f7ea90aa2129c19228a"
+    "sha256": "3441da57a805ae46502a43168e5accb845605b9c6022f62bea749bae3bde826c"
   },
   "contractGraph": {
-    "compilerHash": "sha256:88eda096929822ed15dc83b01bf7dd3fd60051e241d98548a7f90dd0794b0196",
+    "compilerHash": "sha256:3b7d4716dcaad122fc0404b0e7b782f81b45913a95ff7dadc0d26fa4974d9e45",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28",
-    "sourceDigestSetSha256": "e8b67aeda10257a22e20583cb760c129f3fb1e066b68e14974fc1a8ce9cf5307"
+    "sha256": "cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f",
+    "sourceDigestSetSha256": "c591815b8893a093aedbe6f86359b3ccefe87436211d1e49d176b0ce13abd7fb"
   },
   "generator": "app-cloud-handoff"
 }

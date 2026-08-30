@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260817--travel-video-workload-video-1--china--scale-003",
+  "executionBinding": "frozen",
+  "objectRef": "成都大熊猫繁育研究基地_video_ee1ad1212d32",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:52fd677b00fc01dbc94d4cee163c7082a7a7afee1e272843a8b076ec30eabf58"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:6ff2ecdea2f12e5c68628c7b8956b40ed6fcc9c95b29f17c92e53aa034186a73"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:270324524701f93b5a01a9f300d1441a4a5a40da11effc59d31d96513074aa4e"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:9ef7a834516c49bb19bada8283a2a4acbbe2a6e8c4fec59b2246b2d564129906"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:a7fa811ea528150c844eec1ce5ae166e3b58d8e758aa17ae0b858afa73b28a60"
+    }
+  ]
+}

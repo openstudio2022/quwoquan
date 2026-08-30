@@ -26,8 +26,10 @@ slis:
     sli: 1 - sum(rate(runtime_auth_account_security_authority_checks_total{outcome="unavailable"}[5m])) / sum(rate(runtime_auth_account_security_authority_checks_total[5m]))
     objective: 0.999
   - id: account_security_authority_readiness
-    description: scoped authority health 失败会使 /healthz 返回 503。
-    sli: runtime_health_check_status{check="account-security-authority"}
+    description: scoped authority health 失败会使 /readyz 返回 503。
+    # check 标签取 servicekit 注册的检查名（下划线形态）；标签写错会让这条 SLI
+    # 静默匹配空序列，看起来永远没有告警。
+    sli: runtime_health_check_status{check="account_security_authority"}
     objective: 1
 
 failure_semantics:

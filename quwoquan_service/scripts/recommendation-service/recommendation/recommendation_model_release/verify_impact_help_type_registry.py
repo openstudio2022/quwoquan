@@ -13,7 +13,8 @@
   3. 端侧 Dart codegen 产物 impact_help_type_metadata.g.dart 与注册表一致：
      impactHelpTypeKeys / impactIconKeyByHelpType / impactToneByIconKey / impactDefaultTone / impactDefaultIconKey。
   4. 端 IntersectionIconResolver 已查 impactToneByIconKey，不得回归硬编码 impact 色调 switch；
-     _iconForKey 覆盖注册表全部 impact iconKey（含 cascadePath 兜底），且不得回归 legacy 别名 compass/read。
+     _iconByKey 的真实字符串键覆盖注册表全部 impact iconKey（含 cascadePath 兜底），
+     且不得回归 legacy 别名 compass/read。
   5. 云侧消费方已查 rtimpact.* 表，不得回归手写 helpType switch / 重复常量 / 字面量：
      author_impact_language.go / author_impact_evidence_view.go / behavior_service.go / circle_service.go /
      author_impact_store.go（已删 AuthorImpactHelp* 重复常量）。
@@ -331,22 +332,191 @@ def check_consumers(exp: dict, problems: list[str]) -> None:
         problems.append(f"circle_service.go missing: {CIRCLE_GO}")
 
 
+def _strip_dart_comments(src: str) -> str:
+    """移除 Dart 注释，同时保留字符串中的注释标记与源码行结构。"""
+
+    out: list[str] = []
+    index = 0
+    length = len(src)
+    while index < length:
+        if src.startswith("//", index):
+            newline = src.find("\n", index + 2)
+            if newline < 0:
+                out.append(" " * (length - index))
+                break
+            out.append(" " * (newline - index))
+            out.append("\n")
+            index = newline + 1
+            continue
+        if src.startswith("/*", index):
+            start = index
+            depth = 1
+            index += 2
+            while index < length and depth:
+                if src.startswith("/*", index):
+                    depth += 1
+                    index += 2
+                elif src.startswith("*/", index):
+                    depth -= 1
+                    index += 2
+                else:
+                    index += 1
+            comment = src[start:index]
+            out.append("".join("\n" if char == "\n" else " " for char in comment))
+            continue
+        if src[index] in ("'", '"'):
+            quote = src[index]
+            delimiter = quote * 3 if src.startswith(quote * 3, index) else quote
+            out.append(delimiter)
+            index += len(delimiter)
+            while index < length:
+                if src.startswith(delimiter, index):
+                    out.append(delimiter)
+                    index += len(delimiter)
+                    break
+                char = src[index]
+                out.append(char)
+                index += 1
+                if char == "\\" and index < length:
+                    out.append(src[index])
+                    index += 1
+            continue
+        out.append(src[index])
+        index += 1
+    return "".join(out)
+
+
+def _matching_curly(src: str, opening: int) -> int | None:
+    depth = 0
+    index = opening
+    while index < len(src):
+        char = src[index]
+        if char in ("'", '"'):
+            delimiter = char * 3 if src.startswith(char * 3, index) else char
+            index += len(delimiter)
+            while index < len(src):
+                if src.startswith(delimiter, index):
+                    index += len(delimiter)
+                    break
+                if src[index] == "\\":
+                    index += 2
+                else:
+                    index += 1
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return index
+        index += 1
+    return None
+
+
+def _top_level_map_entries(body: str) -> list[str]:
+    entries: list[str] = []
+    start = 0
+    stack: list[str] = []
+    closing = {"(": ")", "[": "]", "{": "}"}
+    index = 0
+    while index < len(body):
+        char = body[index]
+        if char in ("'", '"'):
+            delimiter = char * 3 if body.startswith(char * 3, index) else char
+            index += len(delimiter)
+            while index < len(body):
+                if body.startswith(delimiter, index):
+                    index += len(delimiter)
+                    break
+                if body[index] == "\\":
+                    index += 2
+                else:
+                    index += 1
+            continue
+        if char in closing:
+            stack.append(closing[char])
+        elif stack and char == stack[-1]:
+            stack.pop()
+        elif char == "," and not stack:
+            entries.append(body[start:index])
+            start = index + 1
+        index += 1
+    entries.append(body[start:])
+    return entries
+
+
+def _parse_icon_map_keys(src: str, problems: list[str]) -> tuple[str, set[str]]:
+    cleaned = _strip_dart_comments(src)
+    declaration = re.compile(
+        r"\bstatic\s+const\s+Map\s*<\s*String\s*,\s*IconData\s*>\s*"
+        r"_iconByKey\s*=\s*<\s*String\s*,\s*IconData\s*>\s*\{"
+    )
+    matches = list(declaration.finditer(cleaned))
+    if len(matches) != 1:
+        problems.append(
+            "resolver must declare exactly one static const Map<String, IconData> "
+            "_iconByKey with literal glyph entries"
+        )
+        return cleaned, set()
+
+    opening = matches[0].end() - 1
+    closing = _matching_curly(cleaned, opening)
+    if closing is None:
+        problems.append("resolver _iconByKey map has no matching closing brace")
+        return cleaned, set()
+
+    keys: set[str] = set()
+    key_pattern = re.compile(
+        r'^\s*(?:\'([A-Za-z][A-Za-z0-9]*)\'|"([A-Za-z][A-Za-z0-9]*)")\s*:'
+    )
+    for raw_entry in _top_level_map_entries(cleaned[opening + 1 : closing]):
+        entry = raw_entry.strip()
+        if not entry:
+            continue
+        key_match = key_pattern.match(entry)
+        if key_match is None:
+            problems.append(
+                "resolver _iconByKey must use only literal string keys and explicit glyph values"
+            )
+            continue
+        key = key_match.group(1) or key_match.group(2)
+        if key in keys:
+            problems.append(f"resolver _iconByKey duplicates glyph key '{key}'")
+        keys.add(key)
+    return cleaned, keys
+
+
+def validate_resolver_source(src: str, exp: dict, problems: list[str]) -> None:
+    cleaned, mapped_keys = _parse_icon_map_keys(src, problems)
+    if not re.search(r"\bimpactToneByIconKey\s*\[", cleaned):
+        problems.append("resolver must consume impactToneByIconKey (no hardcoded impact tone switch)")
+
+    # anti-regression: no legacy aliases in the canonical map or old switch cases.
+    for legacy in ("compass", "read"):
+        if legacy in mapped_keys:
+            problems.append(
+                f"resolver re-introduced legacy iconKey map key '{legacy}' "
+                "(zero-compat: removed)"
+            )
+        if re.search(rf"\bcase\s+(['\"]){re.escape(legacy)}\1\s*:", cleaned):
+            problems.append(
+                f"resolver re-introduced legacy iconKey switch case '{legacy}' "
+                "(zero-compat: removed)"
+            )
+
+    # The map itself must cover the registry closed set plus the default cascade.
+    needed = set(exp["iconKeyByHelpType"].values()) | {exp["defaultIconKey"]}
+    for icon in sorted(needed - mapped_keys):
+        problems.append(
+            f"resolver _iconByKey missing glyph map entry for impact iconKey '{icon}'"
+        )
+
+
 def check_resolver(exp: dict, problems: list[str]) -> None:
     if not RESOLVER.exists():
         problems.append(f"resolver missing: {RESOLVER}")
         return
-    src = RESOLVER.read_text(encoding="utf-8")
-    if "impactToneByIconKey" not in src:
-        problems.append("resolver must consume impactToneByIconKey (no hardcoded impact tone switch)")
-    # anti-regression: no legacy alias cases re-introduced.
-    for legacy in ("compass", "read"):
-        if re.search(rf"case '{legacy}':", src):
-            problems.append(f"resolver re-introduced legacy iconKey case '{legacy}' (zero-compat: removed)")
-    # _iconForKey must cover every impact iconKey (closed set ∪ default cascadePath) — no missing glyph.
-    needed = set(exp["iconKeyByHelpType"].values()) | {exp["defaultIconKey"]}
-    for icon in sorted(needed):
-        if f"case '{icon}':" not in src:
-            problems.append(f"resolver _iconForKey missing glyph case for impact iconKey '{icon}'")
+    validate_resolver_source(RESOLVER.read_text(encoding="utf-8"), exp, problems)
 
 
 def check_fixtures(problems: list[str]) -> None:

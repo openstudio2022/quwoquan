@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess
 import sys
 from collections.abc import Callable
@@ -21,13 +20,10 @@ from core.control_types import TargetSelector  # noqa: F401
 from core.io import read_json, write_json
 from core.paths import OUTPUT_ROOT, REPO_ROOT, recipe_path
 from core.source_digest import current_source_digest
-from governance.provider_policy import load_provider_policy
-
 from content.execution import store
-from content.execution.planning.recipe import request as recipe_request
-from content.execution.planning.recipe import support as recipe_support
-from content.execution.planning.recipe.contract import gate_recipe_contract, lint_recipe
 from content.execution.queue import backend as queue_backend
+from content.execution.planning.recipe import request as recipe_request, support as recipe_support
+from content.execution.planning.recipe.contract import lint_recipe
 from content.execution.request import (  # noqa: F401
     RuntimeExecutionRequest,
     resolve_candidate_pool,
@@ -69,6 +65,34 @@ def load_recipe(recipe_ref: str) -> dict[str, Any]:
     if errors:
         raise ValueError(f"recipe '{recipe_ref}' 不合法: " + "; ".join(errors))
     return doc
+
+
+def _contract_gate(recipe: dict[str, Any], execution_id: str) -> None:
+    contract = recipe.get("contract") or {}
+    spec = store.load_spec(execution_id)
+    errors: list[str] = []
+    declared_preset = store.spec_preset_ref(spec)
+    if declared_preset != str(recipe.get("presetRef") or ""):
+        errors.append(
+            f"content.presetRef={declared_preset!r} 与配方 presetRef={recipe.get('presetRef')!r} 不一致"
+        )
+    if (
+        bool(contract.get("requireActiveStatus", True))
+        and str(spec.get("status") or "") != "active"
+    ):
+        errors.append(f"task status 必须 active，实得 {spec.get('status')!r}")
+    # 分支治理（P4）：recipe 禁止声明 executionBranch（临时 feature 分支绑定已废止）；
+    # 商业执行只校验 branch policy（quwoquan_ops/policies/branch_policy.yaml）。
+    if contract.get("executionBranch"):
+        errors.append(
+            "contract.executionBranch 已废止：recipe 不得绑定 Git 分支，"
+            "正式分支由 branch_policy.yaml 治理"
+        )
+    from core.execution_branch import execution_branch_issues
+
+    errors.extend(execution_branch_issues(spec, cwd=REPO_ROOT))
+    if errors:
+        raise SystemExit("[task execute] 契约门 BLOCK: " + "; ".join(errors))
 
 
 def _execute(
@@ -127,7 +151,15 @@ def _runtime_preflight_argv(
 
 
 def _requires_runtime_preflight(*, campaign_bound: bool, stage: str) -> bool:
-    """Only Agent-bearing phases need a fresh runtime/network probe."""
+    """Decide whether this stage still owes a live runtime preflight.
+
+    A campaign lane proves provider reachability once, at `review-only`, and the
+    following `run` stage may only publish what that review receipt already
+    qualified.  Re-probing the network there would make publish depend on a
+    second, unrelated liveness fact that the frozen receipt does not cover.
+    """
+    if stage == "plan-only":
+        return False
     return not (campaign_bound and stage == "run")
 
 
@@ -169,12 +201,6 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         )
     recipe = load_recipe(recipe_ref)
     stage = str(getattr(args, "stage", "run") or "run")
-    try:
-        load_provider_policy(identity.vertical).require_declared(
-            runtime_request.source_providers
-        )
-    except ValueError as exc:
-        raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
     scale_promotion_receipt: dict[str, Any] | None = None
     scale_promotion_carrier: str | None = None
     if (
@@ -209,7 +235,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
                 )
             current_branch = _current_git_branch()
             # A detached managed clone has no current branch. The predecessor
-            # receipt supplies its immutable main branch while HEAD/source
+            # receipt supplies its immutable dev1.0 branch while HEAD/source
             # digest still have to match exactly.
             receipt_branch = (
                 str(scale_promotion_receipt.get("gitBranch") or "")
@@ -265,8 +291,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         )
 
         require_campaign_external_inputs(identity)
-    campaign_publish_resume = campaign_bound and stage == "run"
-    if campaign_publish_resume:
+    if campaign_bound and stage == "run":
         from content.execution.campaign.receipt import (
             require_lane_review_receipt,
         )
@@ -368,39 +393,17 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     except (RuntimeError, ValueError) as exc:
         raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
     semantic_selection_id = semantic_binding.selection_id
+    from content.execution.planning.semantic_preflight_admission import (
+        resolve_cli_preflight_binding,
+    )
+
     try:
-        if campaign_bound:
-            from content.execution.campaign.plan import (
-                require_frozen_campaign_preflight_admission,
-            )
-            from content.execution.campaign.workspace import CampaignRuntimePaths
-
-            expected_plan_digest = str(
-                os.environ.get("QWQ_CAMPAIGN_PLAN_DIGEST") or ""
-            ).strip()
-            if not expected_plan_digest:
-                raise ValueError("campaign plan digest binding is missing")
-            semantic_preflight_binding = (
-                require_frozen_campaign_preflight_admission(
-                    CampaignRuntimePaths.defaults(),
-                    root_execution_id,
-                    execution_id=identity.execution_id,
-                    semantic_selection_id=semantic_selection_id,
-                    requested_receipt_ref=requested_semantic_preflight,
-                    expected_plan_digest=expected_plan_digest,
-                )
-            )
-        else:
-            from content.execution.planning.semantic_preflight_admission import (
-                resolve_cli_preflight_binding,
-            )
-
-            semantic_preflight_binding = resolve_cli_preflight_binding(
-                existing_manifest=existing_manifest,
-                requested_receipt_ref=requested_semantic_preflight,
-                semantic_selection_id=semantic_selection_id,
-                output_root=OUTPUT_ROOT,
-            )
+        semantic_preflight_binding = resolve_cli_preflight_binding(
+            existing_manifest=existing_manifest,
+            requested_receipt_ref=requested_semantic_preflight,
+            semantic_selection_id=semantic_selection_id,
+            output_root=OUTPUT_ROOT,
+        )
     except (OSError, TypeError, ValueError) as exc:
         raise SystemExit(f"[task execute] GATE_BLOCK {exc}") from exc
     if stage == "promote-scale":
@@ -446,11 +449,11 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         )
         return
     from content.execution import create_execution_manifest
+    from content.execution.identity import SelectionPolicy
     from content.execution.controller.execute.runner import (
         preflight_execution_models,
         write_execution_model_readiness,
     )
-    from content.execution.identity import SelectionPolicy
     from content.execution.workspace import TARGET_SET_REF, frozen_target_set_digest
 
     # plan-only 只验证可复用输入和工作包形状；它不得冒充 Agent/来源/发布成功，
@@ -468,9 +471,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
 
     from core.data_issue import DataIssueError
 
-    from content.execution.controller.execute.materialization import (
-        ensure_execution_spec,
-    )
+    from content.execution.controller.execute.materialization import ensure_execution_spec
 
     try:
         execution_spec_id = ensure_execution_spec(
@@ -485,6 +486,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
                 and not bool(
                     getattr(args, "retry_submission_only_predecessor", False)
                 )
+                and not bool(getattr(args, "retry_external_media_scope", False))
             ),
             inherited_targets=tuple(getattr(args, "inherited_targets", ()) or ()),
         )
@@ -500,9 +502,12 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
         target_set_ref=TARGET_SET_REF,
         target_set_digest=frozen_target_set_digest(execution_id),
         retry_of=manifest_retry_of,
+        allow_campaign_retry_scope=bool(
+            getattr(args, "retry_submission_only_predecessor", False)
+            or getattr(args, "retry_external_media_scope", False)
+        ),
         semantic_selection_id=semantic_selection_id,
         semantic_preflight_binding=semantic_preflight_binding,
-        semantic_preflight_require_fresh=not campaign_bound,
     )
     queue_backend.freeze_execution_queue_backend(
         execution_id, spec=store.load_spec(execution_id), manifest=frozen_manifest
@@ -523,7 +528,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
             write_json(frozen_promotion_path, scale_promotion_receipt)
     if stage != "plan-only":
         write_execution_model_readiness(execution_id, model_readiness)
-    gate_recipe_contract(recipe, execution_spec_id)
+    _contract_gate(recipe, execution_spec_id)
     from content.execution import prepare_execution_qualification
 
     prepare_execution_qualification(execution_id)
@@ -533,13 +538,7 @@ def _run_execution(args: argparse.Namespace, invoke: InvokeCli | None = None) ->
     if stage == "readiness-only":
         _readiness(recipe, execution_id, invoke)
         return
-    # campaign-lane-run 的 review 阶段已经以 frozenAt 绑定 semantic admission，
-    # 且 review receipt 证明所有 Agent 阶段结束。后续 run 只做 canonical publish；
-    # 不得再用瞬时 Cursor 网络探测推翻已冻结准入。
-    if _requires_runtime_preflight(
-        campaign_bound=campaign_bound,
-        stage=stage,
-    ):
+    if _requires_runtime_preflight(campaign_bound=campaign_bound, stage=stage):
         rc = invoke(_runtime_preflight_argv(execution_id, semantic_selection_id))
         if rc != 0:
             raise SystemExit(f"[task execute] task preflight rc={rc}")

@@ -14,6 +14,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))

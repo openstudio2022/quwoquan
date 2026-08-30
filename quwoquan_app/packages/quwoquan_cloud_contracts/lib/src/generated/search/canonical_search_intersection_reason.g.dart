@@ -62,23 +62,45 @@ void _validateCanonicalSearchIntersectionReasonWire(Map<String, dynamic> m) {
     'class',
     'sourceRef',
   };
-  final unknown = m.keys.where((key) => !allowed.contains(key)).toList(growable: false);
+  final unknown = m.keys
+      .where((key) => !allowed.contains(key))
+      .toList(growable: false);
   if (unknown.isNotEmpty) {
-    throw FormatException('CanonicalSearchIntersectionReason contains unknown fields: ${unknown.join(',')}');
+    throw FormatException(
+      'CanonicalSearchIntersectionReason contains unknown fields: ${unknown.join(',')}',
+    );
   }
-  if (m.containsKey('primaryText') && m['primaryText'] != null && (m['primaryText'] is! String)) {
-    throw FormatException('CanonicalSearchIntersectionReason.primaryText has an invalid wire value');
+  if (m.containsKey('primaryText') &&
+      m['primaryText'] != null &&
+      (m['primaryText'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchIntersectionReason.primaryText has an invalid wire value',
+    );
   }
-  if (m.containsKey('intersectionId') && m['intersectionId'] != null && (m['intersectionId'] is! String)) {
-    throw FormatException('CanonicalSearchIntersectionReason.intersectionId has an invalid wire value');
+  if (m.containsKey('intersectionId') &&
+      m['intersectionId'] != null &&
+      (m['intersectionId'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchIntersectionReason.intersectionId has an invalid wire value',
+    );
   }
-  if (m.containsKey('dimension') && m['dimension'] != null && (m['dimension'] is! String)) {
-    throw FormatException('CanonicalSearchIntersectionReason.dimension has an invalid wire value');
+  if (m.containsKey('dimension') &&
+      m['dimension'] != null &&
+      (m['dimension'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchIntersectionReason.dimension has an invalid wire value',
+    );
   }
   if (m.containsKey('class') && m['class'] != null && (m['class'] is! String)) {
-    throw FormatException('CanonicalSearchIntersectionReason.class has an invalid wire value');
+    throw FormatException(
+      'CanonicalSearchIntersectionReason.class has an invalid wire value',
+    );
   }
-  if (m.containsKey('sourceRef') && m['sourceRef'] != null && (m['sourceRef'] is! String)) {
-    throw FormatException('CanonicalSearchIntersectionReason.sourceRef has an invalid wire value');
+  if (m.containsKey('sourceRef') &&
+      m['sourceRef'] != null &&
+      (m['sourceRef'] is! String)) {
+    throw FormatException(
+      'CanonicalSearchIntersectionReason.sourceRef has an invalid wire value',
+    );
   }
 }

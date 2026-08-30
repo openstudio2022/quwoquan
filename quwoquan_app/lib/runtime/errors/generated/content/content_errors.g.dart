@@ -5,70 +5,265 @@ enum ContentErrorCode {
   contentDeleted('CONTENT.USER.content_deleted', 'surface', 0, 410),
   postNotFound('CONTENT.USER.post_not_found', 'surface', 0, 404),
   forbiddenEdit('CONTENT.USER.forbidden_edit', 'surface', 0, 403),
-  gatheringParticipationRequired('CONTENT.USER.gathering_participation_required', 'surface', 0, 403),
+  gatheringParticipationRequired(
+    'CONTENT.USER.gathering_participation_required',
+    'surface',
+    0,
+    403,
+  ),
   forbiddenDelete('CONTENT.USER.forbidden_delete', 'surface', 0, 403),
   unauthorized('CONTENT.USER.unauthorized', 'surface', 0, 401),
-  researchIdentityInvalid('CONTENT.USER.research_identity_invalid', 'surface', 0, 403),
+  researchIdentityInvalid(
+    'CONTENT.USER.research_identity_invalid',
+    'surface',
+    0,
+    403,
+  ),
   invalidArgument('CONTENT.USER.invalid_argument', 'surface', 0, 400),
   invalidContentType('CONTENT.USER.invalid_content_type', 'surface', 0, 400),
   rateLimited('CONTENT.USER.rate_limited', 'retry', 60, 429),
-  feedCapacityUnavailable('CONTENT.SYSTEM.feed_capacity_unavailable', 'retry', 1, 503),
+  feedCapacityUnavailable(
+    'CONTENT.SYSTEM.feed_capacity_unavailable',
+    'retry',
+    1,
+    503,
+  ),
   contentTooLong('CONTENT.USER.content_too_long', 'surface', 0, 400),
   publicationRejected('CONTENT.USER.publication_rejected', 'surface', 0, 422),
   versionConflict('CONTENT.USER.version_conflict', 'retry', 0, 409),
   idempotencyConflict('CONTENT.USER.idempotency_conflict', 'retry', 0, 409),
   storageWriteFailed('CONTENT.SYSTEM.storage_write_failed', 'retry', 5, 500),
   storageReadFailed('CONTENT.SYSTEM.storage_read_failed', 'retry', 5, 500),
-  requiredDependencyUnavailable('CONTENT.SYSTEM.required_dependency_unavailable', 'retry', 5, 503),
+  requiredDependencyUnavailable(
+    'CONTENT.SYSTEM.required_dependency_unavailable',
+    'retry',
+    5,
+    503,
+  ),
   internalError('CONTENT.SYSTEM.internal_error', 'surface', 0, 500),
   upstreamTimeout('CONTENT.MIDDLEWARE.upstream_timeout', 'retry', 10, 504),
   commentNotFound('CONTENT.USER.comment_not_found', 'surface', 0, 404),
-  commentForbiddenDelete('CONTENT.USER.comment_forbidden_delete', 'surface', 0, 403),
+  commentForbiddenDelete(
+    'CONTENT.USER.comment_forbidden_delete',
+    'surface',
+    0,
+    403,
+  ),
   commentPinForbidden('CONTENT.USER.comment_pin_forbidden', 'surface', 0, 403),
-  commentPinInvalidTarget('CONTENT.USER.comment_pin_invalid_target', 'surface', 0, 400),
+  commentPinInvalidTarget(
+    'CONTENT.USER.comment_pin_invalid_target',
+    'surface',
+    0,
+    400,
+  ),
   commentParentInvalid('CONTENT.USER.comment_parent_invalid', 'retry', 0, 409),
   commentTooLong('CONTENT.USER.comment_too_long', 'surface', 0, 400),
   commentRateLimited('CONTENT.USER.comment_rate_limited', 'retry', 60, 429),
-  commentAttachmentLimitExceeded('CONTENT.USER.comment_attachment_limit_exceeded', 'surface', 0, 400),
-  commentAttachmentNotReady('CONTENT.USER.comment_attachment_not_ready', 'retry', 3, 400),
-  commentModerationForbidden('CONTENT.USER.comment_moderation_forbidden', 'surface', 0, 403),
-  commentStatusTransitionInvalid('CONTENT.USER.comment_status_transition_invalid', 'retry', 0, 409),
+  commentAttachmentLimitExceeded(
+    'CONTENT.USER.comment_attachment_limit_exceeded',
+    'surface',
+    0,
+    400,
+  ),
+  commentAttachmentNotReady(
+    'CONTENT.USER.comment_attachment_not_ready',
+    'retry',
+    3,
+    400,
+  ),
+  commentModerationForbidden(
+    'CONTENT.USER.comment_moderation_forbidden',
+    'surface',
+    0,
+    403,
+  ),
+  commentStatusTransitionInvalid(
+    'CONTENT.USER.comment_status_transition_invalid',
+    'retry',
+    0,
+    409,
+  ),
   commentSortInvalid('CONTENT.USER.comment_sort_invalid', 'surface', 0, 400),
-  contentReactionTargetNotFound('CONTENT.USER.content_reaction_target_not_found', 'surface', 0, 404),
-  interactionTypeInvalid('CONTENT.USER.interaction_type_invalid', 'surface', 0, 400),
-  interactionCursorInvalid('CONTENT.USER.interaction_cursor_invalid', 'retry', 0, 400),
-  interactionOwnerForbidden('CONTENT.USER.interaction_owner_forbidden', 'surface', 0, 403),
-  interactionReadModelUnavailable('CONTENT.SYSTEM.interaction_read_model_unavailable', 'retry', 3, 503),
-  profileInteractionReadFactOwnerForbidden('CONTENT.USER.profile_interaction_read_fact_owner_forbidden', 'surface', 0, 403),
-  profileInteractionReadFactTargetUnavailable('CONTENT.SYSTEM.profile_interaction_read_fact_target_unavailable', 'retry', 3, 503),
-  filterCatalogReleaseNotFound('CONTENT.USER.filter_catalog_release_not_found', 'surface', 0, 404),
-  filterCatalogInvalidArgument('CONTENT.USER.filter_catalog_invalid_argument', 'surface', 0, 400),
-  filterCatalogDigestMismatch('CONTENT.USER.filter_catalog_digest_mismatch', 'surface', 0, 400),
-  filterCatalogInvalidTransition('CONTENT.USER.filter_catalog_invalid_transition', 'retry', 0, 409),
-  filterCatalogIdempotencyConflict('CONTENT.USER.filter_catalog_idempotency_conflict', 'retry', 0, 409),
-  filterCatalogUnavailable('CONTENT.SYSTEM.filter_catalog_unavailable', 'retry', 3, 503),
-  filterCatalogStorageUnavailable('CONTENT.SYSTEM.filter_catalog_storage_unavailable', 'retry', 3, 503),
+  contentReactionTargetNotFound(
+    'CONTENT.USER.content_reaction_target_not_found',
+    'surface',
+    0,
+    404,
+  ),
+  interactionTypeInvalid(
+    'CONTENT.USER.interaction_type_invalid',
+    'surface',
+    0,
+    400,
+  ),
+  interactionCursorInvalid(
+    'CONTENT.USER.interaction_cursor_invalid',
+    'retry',
+    0,
+    400,
+  ),
+  interactionOwnerForbidden(
+    'CONTENT.USER.interaction_owner_forbidden',
+    'surface',
+    0,
+    403,
+  ),
+  interactionReadModelUnavailable(
+    'CONTENT.SYSTEM.interaction_read_model_unavailable',
+    'retry',
+    3,
+    503,
+  ),
+  profileInteractionReadFactOwnerForbidden(
+    'CONTENT.USER.profile_interaction_read_fact_owner_forbidden',
+    'surface',
+    0,
+    403,
+  ),
+  profileInteractionReadFactTargetUnavailable(
+    'CONTENT.SYSTEM.profile_interaction_read_fact_target_unavailable',
+    'retry',
+    3,
+    503,
+  ),
+  filterCatalogReleaseNotFound(
+    'CONTENT.USER.filter_catalog_release_not_found',
+    'surface',
+    0,
+    404,
+  ),
+  filterCatalogInvalidArgument(
+    'CONTENT.USER.filter_catalog_invalid_argument',
+    'surface',
+    0,
+    400,
+  ),
+  filterCatalogDigestMismatch(
+    'CONTENT.USER.filter_catalog_digest_mismatch',
+    'surface',
+    0,
+    400,
+  ),
+  filterCatalogInvalidTransition(
+    'CONTENT.USER.filter_catalog_invalid_transition',
+    'retry',
+    0,
+    409,
+  ),
+  filterCatalogIdempotencyConflict(
+    'CONTENT.USER.filter_catalog_idempotency_conflict',
+    'retry',
+    0,
+    409,
+  ),
+  filterCatalogUnavailable(
+    'CONTENT.SYSTEM.filter_catalog_unavailable',
+    'retry',
+    3,
+    503,
+  ),
+  filterCatalogStorageUnavailable(
+    'CONTENT.SYSTEM.filter_catalog_storage_unavailable',
+    'retry',
+    3,
+    503,
+  ),
   mediaNotFound('CONTENT.USER.media_not_found', 'surface', 0, 404),
   mediaNotReady('CONTENT.USER.media_not_ready', 'retry', 3, 400),
-  mediaProcessingRejected('CONTENT.USER.media_processing_rejected', 'surface', 0, 422),
+  mediaProcessingRejected(
+    'CONTENT.USER.media_processing_rejected',
+    'surface',
+    0,
+    422,
+  ),
   mediaInUse('CONTENT.USER.media_in_use', 'surface', 0, 409),
-  mediaPlaybackNetworkUnavailable('CONTENT.SYSTEM.media_playback_network_unavailable', 'retry', 0, 0),
-  mediaPlaybackTemporarilyUnavailable('CONTENT.SYSTEM.media_playback_temporarily_unavailable', 'retry', 0, 0),
-  mediaPlaybackServiceBusy('CONTENT.SYSTEM.media_playback_service_busy', 'retry', 0, 0),
-  mediaPlaybackUnavailable('CONTENT.USER.media_playback_unavailable', 'surface', 0, 0),
-  mediaPlaybackUnsupported('CONTENT.SYSTEM.media_playback_unsupported', 'surface', 0, 0),
+  mediaPlaybackNetworkUnavailable(
+    'CONTENT.SYSTEM.media_playback_network_unavailable',
+    'retry',
+    0,
+    0,
+  ),
+  mediaPlaybackTemporarilyUnavailable(
+    'CONTENT.SYSTEM.media_playback_temporarily_unavailable',
+    'retry',
+    0,
+    0,
+  ),
+  mediaPlaybackServiceBusy(
+    'CONTENT.SYSTEM.media_playback_service_busy',
+    'retry',
+    0,
+    0,
+  ),
+  mediaPlaybackUnavailable(
+    'CONTENT.USER.media_playback_unavailable',
+    'surface',
+    0,
+    0,
+  ),
+  mediaPlaybackUnsupported(
+    'CONTENT.SYSTEM.media_playback_unsupported',
+    'surface',
+    0,
+    0,
+  ),
   mediaSeekFailed('CONTENT.SYSTEM.media_seek_failed', 'retry', 0, 0),
-  originalAccessDenied('CONTENT.USER.original_access_denied', 'surface', 0, 403),
-  originalAccessRateLimited('CONTENT.USER.original_access_rate_limited', 'retry', 60, 429),
+  originalAccessDenied(
+    'CONTENT.USER.original_access_denied',
+    'surface',
+    0,
+    403,
+  ),
+  originalAccessRateLimited(
+    'CONTENT.USER.original_access_rate_limited',
+    'retry',
+    60,
+    429,
+  ),
   mediaFileTooLarge('CONTENT.USER.media_file_too_large', 'surface', 0, 413),
-  mediaTypeUnsupported('CONTENT.USER.media_type_unsupported', 'surface', 0, 415),
-  mediaUploadSessionExpired('CONTENT.USER.media_upload_session_expired', 'retry', 0, 409),
-  moderationCaseNotFound('CONTENT.USER.moderation_case_not_found', 'retry', 0, 404),
+  mediaTypeUnsupported(
+    'CONTENT.USER.media_type_unsupported',
+    'surface',
+    0,
+    415,
+  ),
+  mediaUploadSessionExpired(
+    'CONTENT.USER.media_upload_session_expired',
+    'retry',
+    0,
+    409,
+  ),
+  moderationCaseNotFound(
+    'CONTENT.USER.moderation_case_not_found',
+    'retry',
+    0,
+    404,
+  ),
   reportNotFound('CONTENT.USER.report_not_found', 'surface', 0, 404),
-  gatheringSafetyAuthorizationInvalid('CONTENT.USER.gathering_safety_authorization_invalid', 'surface', 0, 400),
-  gatheringSafetyAuthorizationDenied('CONTENT.USER.gathering_safety_authorization_denied', 'surface', 0, 403),
-  gatheringSafetyAuthorizationConflict('CONTENT.USER.gathering_safety_authorization_conflict', 'surface', 0, 409),
-  gatheringSafetyAuthorityUnavailable('CONTENT.SYSTEM.gathering_safety_authority_unavailable', 'retry', 3, 503),
+  gatheringSafetyAuthorizationInvalid(
+    'CONTENT.USER.gathering_safety_authorization_invalid',
+    'surface',
+    0,
+    400,
+  ),
+  gatheringSafetyAuthorizationDenied(
+    'CONTENT.USER.gathering_safety_authorization_denied',
+    'surface',
+    0,
+    403,
+  ),
+  gatheringSafetyAuthorizationConflict(
+    'CONTENT.USER.gathering_safety_authorization_conflict',
+    'surface',
+    0,
+    409,
+  ),
+  gatheringSafetyAuthorityUnavailable(
+    'CONTENT.SYSTEM.gathering_safety_authority_unavailable',
+    'retry',
+    3,
+    503,
+  ),
   unknown('', '', 0, 500);
 
   final String code;
@@ -76,7 +271,12 @@ enum ContentErrorCode {
   final int recoveryAfterSeconds;
   final int httpStatus;
 
-  const ContentErrorCode(this.code, this.recoveryAction, this.recoveryAfterSeconds, this.httpStatus);
+  const ContentErrorCode(
+    this.code,
+    this.recoveryAction,
+    this.recoveryAfterSeconds,
+    this.httpStatus,
+  );
 
   static ContentErrorCode fromCode(String code) {
     switch (code) {
@@ -263,7 +463,8 @@ class ContentErrorMessages {
     ContentErrorCode.interactionOwnerForbidden: '无权查看该互动记录',
     ContentErrorCode.interactionReadModelUnavailable: '互动记录暂时不可用，请稍后重试',
     ContentErrorCode.profileInteractionReadFactOwnerForbidden: '无权更新该互动记录',
-    ContentErrorCode.profileInteractionReadFactTargetUnavailable: '互动记录暂时不可用，请稍后重试',
+    ContentErrorCode.profileInteractionReadFactTargetUnavailable:
+        '互动记录暂时不可用，请稍后重试',
     ContentErrorCode.filterCatalogReleaseNotFound: '滤镜目录发布不存在',
     ContentErrorCode.filterCatalogInvalidArgument: '滤镜目录内容不合法',
     ContentErrorCode.filterCatalogDigestMismatch: '滤镜目录校验失败',
@@ -298,69 +499,114 @@ class ContentErrorMessages {
     ContentErrorCode.contentDeleted: 'Content has been deleted',
     ContentErrorCode.postNotFound: 'Post not found or deleted',
     ContentErrorCode.forbiddenEdit: 'Not allowed to edit this post',
-    ContentErrorCode.gatheringParticipationRequired: 'Only an active participant of this gathering can attach it to a post',
+    ContentErrorCode.gatheringParticipationRequired:
+        'Only an active participant of this gathering can attach it to a post',
     ContentErrorCode.forbiddenDelete: 'Not allowed to delete this post',
     ContentErrorCode.unauthorized: 'Please sign in to continue',
-    ContentErrorCode.researchIdentityInvalid: 'The research identity is invalid or expired',
+    ContentErrorCode.researchIdentityInvalid:
+        'The research identity is invalid or expired',
     ContentErrorCode.invalidArgument: 'Invalid request, please check and retry',
     ContentErrorCode.invalidContentType: 'Unsupported content type',
     ContentErrorCode.rateLimited: 'Too many requests, please retry later',
-    ContentErrorCode.feedCapacityUnavailable: 'Content service is busy, please retry shortly',
+    ContentErrorCode.feedCapacityUnavailable:
+        'Content service is busy, please retry shortly',
     ContentErrorCode.contentTooLong: 'Content exceeds length limit',
-    ContentErrorCode.publicationRejected: 'Content did not pass publication safety checks',
+    ContentErrorCode.publicationRejected:
+        'Content did not pass publication safety checks',
     ContentErrorCode.versionConflict: 'Content changed, refresh and retry',
-    ContentErrorCode.idempotencyConflict: 'The repeated request differs from the original operation',
+    ContentErrorCode.idempotencyConflict:
+        'The repeated request differs from the original operation',
     ContentErrorCode.storageWriteFailed: 'Operation failed, please retry',
     ContentErrorCode.storageReadFailed: 'Unable to read content, please retry',
-    ContentErrorCode.requiredDependencyUnavailable: 'A required content dependency is unavailable',
+    ContentErrorCode.requiredDependencyUnavailable:
+        'A required content dependency is unavailable',
     ContentErrorCode.internalError: 'Service error, please try again later',
-    ContentErrorCode.upstreamTimeout: 'The content service timed out, please try again later',
+    ContentErrorCode.upstreamTimeout:
+        'The content service timed out, please try again later',
     ContentErrorCode.commentNotFound: 'Comment not found or deleted',
-    ContentErrorCode.commentForbiddenDelete: 'Not allowed to delete this comment',
-    ContentErrorCode.commentPinForbidden: 'Only the referenced post author can pin a comment',
-    ContentErrorCode.commentPinInvalidTarget: 'Only a top-level comment can be pinned',
-    ContentErrorCode.commentParentInvalid: 'The reply target changed or belongs to another post',
+    ContentErrorCode.commentForbiddenDelete:
+        'Not allowed to delete this comment',
+    ContentErrorCode.commentPinForbidden:
+        'Only the referenced post author can pin a comment',
+    ContentErrorCode.commentPinInvalidTarget:
+        'Only a top-level comment can be pinned',
+    ContentErrorCode.commentParentInvalid:
+        'The reply target changed or belongs to another post',
     ContentErrorCode.commentTooLong: 'Comment exceeds the length limit',
-    ContentErrorCode.commentRateLimited: 'Too many comments, please retry later',
+    ContentErrorCode.commentRateLimited:
+        'Too many comments, please retry later',
     ContentErrorCode.commentAttachmentLimitExceeded: 'Too many comment images',
-    ContentErrorCode.commentAttachmentNotReady: 'Comment image is still processing, please retry shortly',
-    ContentErrorCode.commentModerationForbidden: 'Not allowed to moderate this comment',
-    ContentErrorCode.commentStatusTransitionInvalid: 'Comment state changed; the action is no longer valid',
+    ContentErrorCode.commentAttachmentNotReady:
+        'Comment image is still processing, please retry shortly',
+    ContentErrorCode.commentModerationForbidden:
+        'Not allowed to moderate this comment',
+    ContentErrorCode.commentStatusTransitionInvalid:
+        'Comment state changed; the action is no longer valid',
     ContentErrorCode.commentSortInvalid: 'Unsupported comment sort',
-    ContentErrorCode.contentReactionTargetNotFound: 'The reaction target is missing or unavailable',
+    ContentErrorCode.contentReactionTargetNotFound:
+        'The reaction target is missing or unavailable',
     ContentErrorCode.interactionTypeInvalid: 'Unsupported interaction type',
-    ContentErrorCode.interactionCursorInvalid: 'The list changed, refresh and retry',
-    ContentErrorCode.interactionOwnerForbidden: 'You cannot view this interaction history',
-    ContentErrorCode.interactionReadModelUnavailable: 'Interaction history is temporarily unavailable',
-    ContentErrorCode.profileInteractionReadFactOwnerForbidden: 'You cannot update this interaction record',
-    ContentErrorCode.profileInteractionReadFactTargetUnavailable: 'The interaction record is temporarily unavailable',
-    ContentErrorCode.filterCatalogReleaseNotFound: 'Filter catalog release not found',
+    ContentErrorCode.interactionCursorInvalid:
+        'The list changed, refresh and retry',
+    ContentErrorCode.interactionOwnerForbidden:
+        'You cannot view this interaction history',
+    ContentErrorCode.interactionReadModelUnavailable:
+        'Interaction history is temporarily unavailable',
+    ContentErrorCode.profileInteractionReadFactOwnerForbidden:
+        'You cannot update this interaction record',
+    ContentErrorCode.profileInteractionReadFactTargetUnavailable:
+        'The interaction record is temporarily unavailable',
+    ContentErrorCode.filterCatalogReleaseNotFound:
+        'Filter catalog release not found',
     ContentErrorCode.filterCatalogInvalidArgument: 'Invalid filter catalog',
-    ContentErrorCode.filterCatalogDigestMismatch: 'Filter catalog digest verification failed',
-    ContentErrorCode.filterCatalogInvalidTransition: 'Filter catalog state does not allow this operation',
+    ContentErrorCode.filterCatalogDigestMismatch:
+        'Filter catalog digest verification failed',
+    ContentErrorCode.filterCatalogInvalidTransition:
+        'Filter catalog state does not allow this operation',
     ContentErrorCode.filterCatalogIdempotencyConflict: 'The repeated request differs from the original filter catalog operation',
-    ContentErrorCode.filterCatalogUnavailable: 'Filters are temporarily unavailable. Please retry shortly',
-    ContentErrorCode.filterCatalogStorageUnavailable: 'Filter catalog service is temporarily unavailable',
+    ContentErrorCode.filterCatalogUnavailable:
+        'Filters are temporarily unavailable. Please retry shortly',
+    ContentErrorCode.filterCatalogStorageUnavailable:
+        'Filter catalog service is temporarily unavailable',
     ContentErrorCode.mediaNotFound: 'Media asset not found or expired',
-    ContentErrorCode.mediaNotReady: 'Media is still processing, please retry shortly',
-    ContentErrorCode.mediaProcessingRejected: 'This media could not be processed. Replace it and publish again',
-    ContentErrorCode.mediaInUse: 'This media is referenced by content and cannot be discarded',
-    ContentErrorCode.mediaPlaybackNetworkUnavailable: 'The network is unstable.',
-    ContentErrorCode.mediaPlaybackTemporarilyUnavailable: 'Playback is temporarily unavailable.',
-    ContentErrorCode.mediaPlaybackServiceBusy: 'Playback is temporarily unavailable.',
-    ContentErrorCode.mediaPlaybackUnavailable: 'This video is temporarily unavailable. Please browse other content.',
-    ContentErrorCode.mediaPlaybackUnsupported: 'This video is not supported. Browse other content.',
-    ContentErrorCode.mediaSeekFailed: 'Unable to seek to this position right now.',
-    ContentErrorCode.originalAccessDenied: 'Original media access is not allowed',
-    ContentErrorCode.originalAccessRateLimited: 'Too many original media requests, please retry later',
-    ContentErrorCode.mediaFileTooLarge: 'The file exceeds 50 MB. Choose a shorter or smaller media file.',
-    ContentErrorCode.mediaTypeUnsupported: 'This media format is not supported.',
-    ContentErrorCode.mediaUploadSessionExpired: 'The upload grant expired and will be prepared again.',
-    ContentErrorCode.moderationCaseNotFound: 'No current moderation case was found',
+    ContentErrorCode.mediaNotReady:
+        'Media is still processing, please retry shortly',
+    ContentErrorCode.mediaProcessingRejected:
+        'This media could not be processed. Replace it and publish again',
+    ContentErrorCode.mediaInUse:
+        'This media is referenced by content and cannot be discarded',
+    ContentErrorCode.mediaPlaybackNetworkUnavailable:
+        'The network is unstable.',
+    ContentErrorCode.mediaPlaybackTemporarilyUnavailable:
+        'Playback is temporarily unavailable.',
+    ContentErrorCode.mediaPlaybackServiceBusy:
+        'Playback is temporarily unavailable.',
+    ContentErrorCode.mediaPlaybackUnavailable:
+        'This video is temporarily unavailable. Please browse other content.',
+    ContentErrorCode.mediaPlaybackUnsupported:
+        'This video is not supported. Browse other content.',
+    ContentErrorCode.mediaSeekFailed:
+        'Unable to seek to this position right now.',
+    ContentErrorCode.originalAccessDenied:
+        'Original media access is not allowed',
+    ContentErrorCode.originalAccessRateLimited:
+        'Too many original media requests, please retry later',
+    ContentErrorCode.mediaFileTooLarge:
+        'The file exceeds 50 MB. Choose a shorter or smaller media file.',
+    ContentErrorCode.mediaTypeUnsupported:
+        'This media format is not supported.',
+    ContentErrorCode.mediaUploadSessionExpired:
+        'The upload grant expired and will be prepared again.',
+    ContentErrorCode.moderationCaseNotFound:
+        'No current moderation case was found',
     ContentErrorCode.reportNotFound: 'Report not found',
-    ContentErrorCode.gatheringSafetyAuthorizationInvalid: 'Invalid safety authorization request',
-    ContentErrorCode.gatheringSafetyAuthorizationDenied: 'Safety authorization is not available',
-    ContentErrorCode.gatheringSafetyAuthorizationConflict: 'Safety authorization changed concurrently',
-    ContentErrorCode.gatheringSafetyAuthorityUnavailable: 'Safety authorization is temporarily unavailable',
+    ContentErrorCode.gatheringSafetyAuthorizationInvalid:
+        'Invalid safety authorization request',
+    ContentErrorCode.gatheringSafetyAuthorizationDenied:
+        'Safety authorization is not available',
+    ContentErrorCode.gatheringSafetyAuthorizationConflict:
+        'Safety authorization changed concurrently',
+    ContentErrorCode.gatheringSafetyAuthorityUnavailable:
+        'Safety authorization is temporarily unavailable',
   };
 }

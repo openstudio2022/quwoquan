@@ -148,9 +148,7 @@ void main() {
     // 人对物交集不进入候选。
     expect(
       find.byKey(
-        const ValueKey<String>(
-          'gathering-invite-candidate-homepage-peak-park',
-        ),
+        const ValueKey<String>('gathering-invite-candidate-homepage-peak-park'),
       ),
       findsNothing,
     );
@@ -176,9 +174,6 @@ void main() {
     );
 
     expect(find.text(GatheringText.inviteCandidatesLabel), findsNothing);
-    expect(
-      find.text(gatheringDetailTestCopy.personaIdLabel),
-      findsWidgets,
-    );
+    expect(find.text(gatheringDetailTestCopy.personaIdLabel), findsWidgets);
   });
 }

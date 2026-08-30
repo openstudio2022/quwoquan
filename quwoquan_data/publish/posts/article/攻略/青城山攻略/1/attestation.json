@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260822--travel-article-workload-article-1--china-cultural-deep-tour--scale-007",
+  "executionBinding": "frozen",
+  "objectRef": "青城山__article-source-e148d9091f46b5f28617",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "grok-4.6",
+    "modelFamily": "grok",
+    "runId": "run-e840ef32-184e-47bc-8cf5-ed2c422cf465",
+    "resultHash": "sha256:b02766adf878947ab5b48ab5ac8e2da06f964e323b5c76b4490f484bd813982c"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

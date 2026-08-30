@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260816--travel-article-g1--china-sichuan--pilot-011",
+  "executionBinding": "frozen",
+  "objectRef": "泸沽湖__article_frontier_wikipedia_zh_caece52aa667",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:88e78630bf07c5d8cb7ba6e668aa1f362c02643767c01653a491315587394afb"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:2b4798d366a5a137eeb57f7d92f3229d1fad09247d18391909e0bfe2483a7257"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:30e53edccf98b0014f3f20bc3c629a022aa3d53a1a0509d3f735aba738684b12"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:fbea6fbd4ebff0c5ef45458be509b776ac04c110e32a3ea8d99fe1c905406dba"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:fa7353271c74001fc88d337b81b380682c51d7fb926ff669dffc643a88bbb7c4"
+    }
+  ]
+}

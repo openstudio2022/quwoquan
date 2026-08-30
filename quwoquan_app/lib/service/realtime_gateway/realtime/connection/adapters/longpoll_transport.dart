@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/runtime/auth/realtime_connection_credential.dart';
@@ -7,10 +8,13 @@ import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/applic
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Callback for incoming realtime events from long-polling.
-typedef LongPollEventCallback =
-    void Function(List<Map<String, dynamic>> events);
+typedef LongPollEventCallback = FutureOr<void> Function(
+  List<Map<String, dynamic>> events,
+);
 
 typedef LongPollFirstFailureCallback = void Function(String reasonCode);
+
+typedef LongPollActiveConversationIdResolver = String? Function();
 
 abstract interface class LongPollCursorStore {
   Future<String?> read(String partition);
@@ -44,6 +48,7 @@ class LongPollTransport {
     required this.config,
     required this.authTokenProvider,
     this.operations,
+    required this.activeConversationIdResolver,
     required this.onEvents,
     this._cursorStore = const SharedPreferencesLongPollCursorStore(),
   });
@@ -51,6 +56,7 @@ class LongPollTransport {
   final RealtimeConfig config;
   final CloudAuthTokenProvider authTokenProvider;
   final RealtimeConnectionOperationGateway? operations;
+  final LongPollActiveConversationIdResolver activeConversationIdResolver;
   final LongPollEventCallback onEvents;
   final LongPollCursorStore _cursorStore;
 
@@ -90,7 +96,11 @@ class LongPollTransport {
           _running = false;
           break;
         }
-        await _loadCursor(credential.cursorPartition);
+        final cursorLoaded = await _loadCursor(
+          credential.cursorPartition,
+          generation,
+        );
+        if (!cursorLoaded) break;
         final gateway = operations;
         if (gateway == null) {
           throw StateError(
@@ -103,7 +113,6 @@ class LongPollTransport {
 
         if (!_running || _disposed || generation != _pollGeneration) break;
 
-        _consecutiveErrors = 0;
         final nextCursor = response.nextCursor.trim();
         if (!_isCanonicalCursor(nextCursor)) {
           throw const FormatException('invalid long poll nextCursor');
@@ -111,19 +120,33 @@ class LongPollTransport {
         final events = response.events
             .map((event) => Map<String, dynamic>.from(event.toWire()))
             .toList(growable: false);
+        if (response.transportResumed && !_resumeRecoveryEmitted) {
+          final conversationId = activeConversationIdResolver()?.trim();
+          await Future<void>.sync(
+            () => onEvents(<Map<String, dynamic>>[
+              <String, dynamic>{
+                'type': 'Reconnected',
+                if (conversationId != null && conversationId.isNotEmpty)
+                  'conversationId': conversationId,
+              },
+            ]),
+          );
+          if (!_running || _disposed || generation != _pollGeneration) break;
+          _resumeRecoveryEmitted = true;
+        }
+        if (events.isNotEmpty) {
+          await Future<void>.sync(() => onEvents(events));
+        }
+        if (!_running || _disposed || generation != _pollGeneration) break;
         final partition = _cursorPartition;
         if (partition == null) {
           throw StateError('long poll cursor partition is unavailable');
         }
+        // Commit only after recovery and event dispatch completed. A failed
+        // downstream recovery must retry from the last committed cursor.
         await _cursorStore.write(partition, nextCursor);
         _cursor = nextCursor;
-        if (response.transportResumed && !_resumeRecoveryEmitted) {
-          _resumeRecoveryEmitted = true;
-          onEvents(const <Map<String, dynamic>>[
-            <String, dynamic>{'type': 'Reconnected'},
-          ]);
-        }
-        if (events.isNotEmpty) onEvents(events);
+        _consecutiveErrors = 0;
       } catch (error) {
         if (!_running || _disposed || generation != _pollGeneration) break;
         _reportFirstFailure(error.runtimeType.toString());
@@ -146,12 +169,15 @@ class LongPollTransport {
     }
   }
 
-  Future<void> _loadCursor(String partition) async {
-    if (_cursorPartition == partition) return;
+  Future<bool> _loadCursor(String partition, int generation) async {
+    if (!_running || _disposed || generation != _pollGeneration) return false;
+    if (_cursorPartition == partition) return true;
     final stored = (await _cursorStore.read(partition))?.trim();
+    if (!_running || _disposed || generation != _pollGeneration) return false;
     _cursorPartition = partition;
     _cursor = stored != null && _isCanonicalCursor(stored) ? stored : null;
     _resumeRecoveryEmitted = false;
+    return true;
   }
 
   static bool _isCanonicalCursor(String value) {

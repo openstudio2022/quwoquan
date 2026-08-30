@@ -3,6 +3,8 @@ from __future__ import annotations
 import shlex
 import sys
 
+sys.dont_write_bytecode = True
+
 from .local_environment_object_storage import (
     LocalEnvironmentObjectStorage,
     prepare_local_environment_object_storage,

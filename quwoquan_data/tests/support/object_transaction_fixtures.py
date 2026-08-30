@@ -7,6 +7,7 @@ from pathlib import Path
 
 from content.release.canonical import object_transaction as transaction
 
+from support.media_fixture import admit_media_body
 
 TRANSACTION_ID = "object-one"
 RELEASE_ID = "release-one"
@@ -25,8 +26,11 @@ def write_json(path: Path, payload: object) -> None:
 
 
 def build_canonical(root: Path) -> Path:
+    # Only the roots canonical publish may own. There is no `media` root: bodies
+    # belong to the content library, and a fixture that pre-creates one would
+    # hand every test a tree the real contract already rejects.
     canonical = root / "publish"
-    for name in ("creators", "entities", "posts", "media/objects"):
+    for name in ("creators", "entities", "posts"):
         (canonical / name).mkdir(parents=True, exist_ok=True)
     creator = canonical / "creators" / CREATOR_ID
     write_json(
@@ -88,8 +92,10 @@ def build_package(
     image = package_root / "cas/image.jpg"
     image.parent.mkdir(parents=True, exist_ok=True)
     image.write_bytes(b"licensed-real-image")
-    digest_hex = hashlib.sha256(image.read_bytes()).hexdigest()
-    digest = f"sha256:{digest_hex}"
+    # 采集阶段就把字节交给内容库，封缄闭包时的存储预算准入才解析得到这条引用；
+    # 少了这一步，事务包只能靠上一轮跑剩的库内容才封得住。
+    digest = admit_media_body(image.read_bytes())
+    digest_hex = digest.removeprefix("sha256:")
     object_key = (
         f"media/objects/sha256/{digest_hex[:2]}/{digest_hex[2:4]}/"
         f"{digest_hex}.jpg"
@@ -212,6 +218,7 @@ def build_package(
                         "https://commons.wikimedia.org/w/index.php?"
                         "title=File:Example.jpg&oldid=1"
                     ),
+                    "distributionDecision": "commercial_allowed",
                     "modelReleaseStatus": "not_required",
                     "rightsAuditStatus": "verified",
                     "rightsAuditIssues": [],

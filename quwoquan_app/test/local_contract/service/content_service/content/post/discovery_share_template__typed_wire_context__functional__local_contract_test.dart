@@ -3,6 +3,8 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/presentation/discovery_share_template.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../../../support/runtime/public_content_link_test_scope.dart';
+
 void main() {
   test(
     'discovery share template uses only declared presentation wire fields',
@@ -28,6 +30,7 @@ void main() {
         enableIdentityTemplate: true,
         visibility: 'public',
         tags: const <String>['travel'],
+        publicLinks: testPublicContentLinks,
       );
 
       expect(template.permission, 'public');

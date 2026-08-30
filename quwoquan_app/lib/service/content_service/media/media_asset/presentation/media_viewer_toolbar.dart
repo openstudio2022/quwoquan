@@ -279,8 +279,8 @@ class ImmersiveToolbarIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 默认半透明暗圆底（immersive chrome 语义）：白色图标在浅色媒体、
-    // 媒体加载失败退到浅色背景时仍然可见，返回出路永不消失。
+    // 沉浸导航钮无底色（REQ-019）：白色图标经语义投影在浅色媒体与
+    // 失败面浅背景上保持可见，返回出路永不消失。
     final fill =
         backgroundColor ??
         AppNavigationSemanticConstants.chromeActionBackground(
@@ -302,7 +302,14 @@ class ImmersiveToolbarIconButton extends StatelessWidget {
               ? null
               : Border.all(color: outline, width: AppSpacing.hairline),
         ),
-        child: Icon(icon, color: foregroundColor, size: iconSize),
+        child: Icon(
+          icon,
+          color: foregroundColor,
+          size: iconSize,
+          shadows: AppNavigationSemanticConstants.chromeActionIconShadows(
+            surface: AppChromeSurface.immersive,
+          ),
+        ),
       ),
     );
   }
@@ -334,17 +341,13 @@ class MediaViewerBottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final vPad = AppSpacing.appChromeToolbarVerticalPadding(context);
     final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
-    final hSafeInset = AppSpacing.appChromeBottomSafeSideInset(
-      context,
-      safeBottom,
-    );
 
+    // 底部安全区保护只走垂直方向（REQ-019）：左右保持 rail 对齐，
+    // 内容在 home indicator 之上抬升 lift。
     return Container(
       padding: EdgeInsets.only(
-        left: hSafeInset,
         top: vPad,
-        right: hSafeInset,
-        bottom: vPad + safeBottom,
+        bottom: vPad + safeBottom + AppSpacing.immersiveBottomChromeLift,
       ),
       decoration: BoxDecoration(
         gradient: LinearGradient(

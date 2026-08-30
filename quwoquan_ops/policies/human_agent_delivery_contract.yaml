@@ -1,0 +1,467 @@
+schema_id: human-agent-delivery-contract
+schema_version: 2
+owner_story: specs/feature-tree/runtime/development-workflow-governance/human-agent-delivery-interaction/spec.md
+
+namespaces:
+  human_authority_role:
+    prefix: human_authority
+    values:
+      - business_sponsor
+      - product_owner
+      - business_acceptance_representative
+      - experience_design_owner
+      - domain_solution_architecture_owner
+      - engineering_delivery_owner
+      - quality_owner
+      - security_privacy_legal_compliance_owner
+      - release_owner
+      - environment_reliability_owner
+      - operations_support_market_channel_owner
+  review_role:
+    prefix: review
+    values:
+      - product
+      - architect
+      - developer
+      - ux
+      - recommendation
+      - data-legal
+      - infra-capacity
+      - ops
+      - data-quality
+      - observability
+      - test
+    may_supply_evidence_only: true
+    may_decide_or_authorize: false
+
+closed_sets:
+  delivery_stage:
+    - concept_intake
+    - product_definition
+    - experience_design
+    - solution_risk_design
+    - delivery_planning_authorization
+    - agent_led_implementation
+    - quality_business_uat
+    - integration_trusted_ci
+    - immutable_artifact
+    - nonproduction_validation
+    - commercial_readiness
+    - production_campaign
+    - channel_distribution
+    - outcome_observation_acceptance
+    - feedback_knowledge_distillation
+  decision_kind:
+    - problem_acceptance
+    - product_scope
+    - experience_direction
+    - solution_risk
+    - delivery_authorization
+    - implementation_exception
+    - quality_uat_acceptance
+    - integration_acceptance
+    - artifact_acceptance
+    - nonproduction_acceptance
+    - commercial_readiness
+    - production_campaign_approval
+    - channel_publication
+    - outcome_acceptance
+    - knowledge_landing
+    - routine_execution
+  decision_unit_responsibility:
+    - required_input_providers
+    - independent_impact_assessors
+    - hard_veto_owners
+    - accountable_decider
+    - authorized_executor
+    - evidence_owner
+    - result_acceptor
+  card_type: [choice, authorization, exception, post_check]
+  sod_policy: [role-record-only, independent-principal-required]
+  router_result: [required_role, no_human_needed, typed_blocker]
+  default_terminal: [pause, hold, escalate, abort]
+  commercial_readiness_status: [go, limited_go, hold, abort]
+  production_campaign_status: [approved, executing, paused, released, rolled_back, failed, aborted]
+  outcome_status: [attained, not_attained, inconclusive]
+  outcome_observation_state: [observing, paused, clarify, escalated, accepted, aborted]
+  role_interaction_event_type: [progress_update, decision_request, exception_escalation, completion_report]
+  role_interaction_audience_role: [business_sponsor, product_owner, business_acceptance_representative, experience_design_owner, domain_solution_architecture_owner, engineering_delivery_owner, quality_owner, security_privacy_legal_compliance_owner, release_owner, environment_reliability_owner, operations_support_market_channel_owner]
+  role_interaction_legal_action: [continue_authorized_work, request_evidence, transfer_to_correct_role, choose_legal_option, approve_owned_scope, request_changes_in_owned_scope, pause, hold, escalate, abort]
+  role_interaction_safe_action: [preserve_current_state, stop_unauthorized_work, continue_read_only_investigation, narrow_to_authorized_scope, isolate_failed_step, keep_external_effects_disabled, record_audit_details]
+  human_calibration_status: [not_observed, insufficient, calibrated]
+  human_calibration_principal_class: [product, engineering, quality, release_operations]
+  human_calibration_responsibility_class: [business, product, experience, quality, engineering, release_operations]
+  human_calibration_observation_dimension: [understanding, option_cross_role_impact_comprehension, transfer, pause_deny_abort, recovery, post_check]
+  human_calibration_source_kind: [human_participant, machine_fixture, reviewer, agent_self_test, machine_baseline]
+  human_calibration_observation_outcome: [demonstrated, insufficient, not_attempted]
+  human_calibration_blocker:
+    - no_qualifying_human_session
+    - source_assurance_incomplete
+    - session_stale
+    - scope_mismatch
+    - principal_coverage_incomplete
+    - responsibility_coverage_incomplete
+    - observation_dimension_coverage_incomplete
+    - minimum_qualifying_role_sessions_not_met
+    - independent_principal_required
+
+schemas:
+  role_interaction_envelope:
+    required_fields:
+      - event_type
+      - delivery_stage
+      - audience_role
+      - what_happened
+      - user_or_business_impact
+      - decision_owner
+      - legal_actions
+      - safe_actions_taken
+      - next_acceptance
+      - next_acceptance_role
+      - audit_details
+    event_required_fields:
+      progress_update: []
+      decision_request: []
+      exception_escalation: [cannot_continue_reason, safest_default]
+      completion_report: [proof, limits]
+    nullable_fields: [decision_owner, next_acceptance_role]
+    audit_only_internal_terms: [digest, cas, gate_block, typed_blocker, fingerprint, owner_manifest, receipt, readback, exact_byte, sha, internal_absolute_path, internal_command, internal_tool_name]
+  decision_unit:
+    required_fields:
+      - decision_unit_id
+      - stage
+      - decision_kind
+      - required_input_providers
+      - independent_impact_assessors
+      - hard_veto_owners
+      - accountable_decider
+      - authorized_executor
+      - evidence_owner
+      - result_acceptor
+      - sod_policy
+      - scope
+      - evidence_expires_at
+  role_submission:
+    required_fields:
+      - submission_id
+      - decision_unit_id
+      - role
+      - actor_id
+      - actor_authenticated
+      - round
+      - facts
+      - impacts
+      - unknowns
+      - submitted_at
+      - evidence_expires_at
+      - sealed
+  decision_option:
+    symmetric_fields:
+      - option_id
+      - neutral_label
+      - user_outcome
+      - business_outcome
+      - cost
+      - time_to_effect
+      - risk
+      - reversibility
+      - scope_change
+      - unknowns
+      - next_step
+  eligibility:
+    required_fields: [option_id, eligible, failed_hard_gate_ids]
+  hard_gate:
+    required_fields:
+      - gate_id
+      - owner_role
+      - option_ids
+      - passed
+      - evidence_fresh
+      - waivable
+  decision_record:
+    required_fields:
+      - decision_id
+      - decision_unit_id
+      - decision_kind
+      - selected_option_id
+      - accountable_role
+      - actor_id
+      - actor_authenticated
+      - authority_source
+      - recorded_at
+      - expires_at
+      - scope
+      - append_only
+      - consumed
+  authorization_grant:
+    required_fields:
+      - grant_projection_id
+      - source_decision_id
+      - target
+      - scope
+      - actions
+      - expires_at
+      - stop_conditions
+      - projection_only_until_authority_provider
+      - authenticated_authority
+      - executable
+    projection_only_until_authority_provider: true
+    authenticated_authority: false
+    executable: false
+  card_projection:
+    required_fields:
+      - schema_version
+      - card_type
+      - current_role
+      - question
+      - known_facts
+      - unknowns
+      - hard_constraints
+      - options
+      - selected_option_id
+      - agent_recommendation
+      - actions
+      - consequences
+    recovery_actions: [request_evidence, transfer_to_correct_role, pause_or_stop]
+  commercial_readiness_decision:
+    required_fields: [decision_id, status, limited_scope, hard_gate_ids]
+    authorizes_production_side_effects: false
+  production_campaign_approval:
+    required_fields:
+      - decision_id
+      - production_source
+      - immutable_candidate
+      - traffic_stages
+      - slo
+      - window
+      - stop_conditions
+      - rollback_target
+      - status
+  outcome_acceptance:
+    required_fields:
+      - decision_id
+      - outcome
+      - observation_state
+      - extension_policy
+      - extensions_used
+  human_calibration_session:
+    required_fields:
+      - schema_version
+      - contract_version
+      - role_model_version
+      - observation_model_version
+      - session_id
+      - principal_class
+      - participant_ref
+      - scope
+      - started_at
+      - completed_at
+      - source_assurance
+      - separation_policy
+      - observations
+    scope_required_fields: [decision_unit_id, task_id, evidence_fingerprint, responsibility_classes]
+    source_assurance_required_fields: [source_kind, authentication_provider_ref, participant_authenticated, consent_obtained, consent_recorded_at, direct_identifiers_removed, free_text_excluded, observer_attested]
+    participant_ref_pattern: ^participant-[a-z0-9][a-z0-9-]{2,63}$
+    session_id_pattern: ^calibration-[a-z0-9][a-z0-9-]{2,63}$
+    direct_identity_fields_forbidden: [name, email, phone, address, government_id, raw_identity_claim, actor_id, user_id]
+    raw_content_fields_forbidden: [prompt, prompt_text, message, message_text, payload, raw_payload, free_text, transcript]
+    free_text_allowed: false
+  human_calibration_observation:
+    required_fields: [observation_id, dimension, observed_at, outcome, responsibility_classes]
+    observation_id_pattern: ^observation-[a-z0-9][a-z0-9-]{0,63}$
+  human_calibration_readback:
+    required_fields:
+      - schema_version
+      - contract_version
+      - role_model_version
+      - observation_model_version
+      - generated_at
+      - fresh_until
+      - status
+      - scope
+      - sample_counters
+      - coverage
+      - source_assurance
+      - separation
+      - session_refs
+      - blockers
+    scope_required_fields: [decision_unit_id, evidence_fingerprint, task_ids]
+    sample_counters_required_fields: [session_count, human_source_session_count, machine_source_session_count, qualifying_role_session_count, unique_participant_count]
+    coverage_required_fields: [required_principal_classes, completed_principal_classes, required_responsibility_classes, completed_responsibility_classes, required_observation_dimensions, completed_observation_dimensions]
+    source_assurance_required_fields: [authenticated, consented, deidentified, raw_content_excluded, human_source_only]
+    separation_required_fields: [policy, satisfied, distinct_participant_count, required_distinct_participant_count]
+    session_ref_required_fields: [session_id, ref, digest, byte_length, principal_class, participant_ref]
+
+calibration_model:
+  contract_version: human-calibration-v2
+  role_model_version: human-calibration-role-model-v2
+  observation_model_version: human-calibration-observation-model-v2
+  freshness_seconds: 86400
+  minimum_qualifying_role_sessions: 4
+  principal_responsibility_mapping:
+    product: [business, product, experience]
+    engineering: [engineering]
+    quality: [quality]
+    release_operations: [release_operations]
+  mapping_semantics: calibration_coverage_only
+  authority_delegation: false
+  signoff_substitution: false
+  qualifying_source_kind: human_participant
+  non_human_source_kinds: [machine_fixture, reviewer, agent_self_test, machine_baseline]
+  each_principal_requires_qualifying_role_session: true
+  same_participant_cross_principal_requires_separate_session_role_records: true
+  routine_calibration_requires_four_unique_participants: false
+  independent_principal_policy: independent-principal-required
+  exact_session_bytes_required: true
+  timezone_aware_chronology_required: true
+  caller_status_flags_accepted: false
+
+sod_policies:
+  role-record-only:
+    separate_role_records_required: true
+    distinct_authenticated_actors_required: false
+  independent-principal-required:
+    separate_role_records_required: true
+    distinct_authenticated_actors_required: true
+
+risk_sod_policy:
+  default: role-record-only
+  classifications:
+    safety: independent-principal-required
+    compliance: independent-principal-required
+    irreversible_data: independent-principal-required
+    production_critical: independent-principal-required
+
+router:
+  - {stage: concept_intake, decision_kind: problem_acceptance, accountable_role: business_sponsor, hard_veto_roles: [], default_terminal: pause}
+  - {stage: product_definition, decision_kind: product_scope, accountable_role: product_owner, hard_veto_roles: [], default_terminal: hold}
+  - {stage: experience_design, decision_kind: experience_direction, accountable_role: experience_design_owner, hard_veto_roles: [], default_terminal: hold}
+  - {stage: solution_risk_design, decision_kind: solution_risk, accountable_role: domain_solution_architecture_owner, hard_veto_roles: [security_privacy_legal_compliance_owner, quality_owner, environment_reliability_owner], default_terminal: abort}
+  - {stage: delivery_planning_authorization, decision_kind: delivery_authorization, accountable_role: engineering_delivery_owner, hard_veto_roles: [security_privacy_legal_compliance_owner], default_terminal: pause}
+  - {stage: agent_led_implementation, decision_kind: implementation_exception, accountable_role: engineering_delivery_owner, hard_veto_roles: [], default_terminal: pause}
+  - {stage: quality_business_uat, decision_kind: quality_uat_acceptance, accountable_role: quality_owner, hard_veto_roles: [security_privacy_legal_compliance_owner], default_terminal: hold}
+  - {stage: integration_trusted_ci, decision_kind: integration_acceptance, accountable_role: engineering_delivery_owner, hard_veto_roles: [], default_terminal: hold}
+  - {stage: immutable_artifact, decision_kind: artifact_acceptance, accountable_role: release_owner, hard_veto_roles: [security_privacy_legal_compliance_owner, quality_owner], default_terminal: hold}
+  - {stage: nonproduction_validation, decision_kind: nonproduction_acceptance, accountable_role: environment_reliability_owner, hard_veto_roles: [quality_owner, security_privacy_legal_compliance_owner], default_terminal: hold}
+  - {stage: commercial_readiness, decision_kind: commercial_readiness, accountable_role: product_owner, hard_veto_roles: [quality_owner, security_privacy_legal_compliance_owner, environment_reliability_owner], default_terminal: hold}
+  - {stage: production_campaign, decision_kind: production_campaign_approval, accountable_role: release_owner, hard_veto_roles: [environment_reliability_owner, security_privacy_legal_compliance_owner], default_terminal: abort}
+  - {stage: channel_distribution, decision_kind: channel_publication, accountable_role: operations_support_market_channel_owner, hard_veto_roles: [security_privacy_legal_compliance_owner, release_owner], default_terminal: hold}
+  - {stage: outcome_observation_acceptance, decision_kind: outcome_acceptance, accountable_role: product_owner, hard_veto_roles: [], default_terminal: escalate}
+  - {stage: feedback_knowledge_distillation, decision_kind: knowledge_landing, accountable_role: engineering_delivery_owner, hard_veto_roles: [], default_terminal: pause}
+  - {stage: agent_led_implementation, decision_kind: routine_execution, accountable_role: null, hard_veto_roles: [], default_terminal: pause}
+  - {stage: nonproduction_validation, decision_kind: routine_execution, accountable_role: null, hard_veto_roles: [], default_terminal: pause}
+  - {stage: production_campaign, decision_kind: routine_execution, accountable_role: null, hard_veto_roles: [], default_terminal: pause}
+
+recommendation_policy:
+  forbidden_decision_kinds:
+    - product_scope
+    - experience_direction
+    - commercial_readiness
+    - outcome_acceptance
+  engineering_recommendation_requires_independent_inputs_sealed: true
+
+harness_projection:
+  harnesses: [cursor, codex]
+  canonical_cli: quwoquan_ops/cli/human_agent_delivery.py
+  projection_commands: [project-card, project-interaction]
+  interaction_projection_command: project-interaction
+  harness_is_contract_field: true
+  identical_json_projection: true
+
+workflow_interaction_binding:
+  natural_language_and_explicit_skill_same_track: true
+  canonical_projector: quwoquan_ops/cli/lib/human_agent_delivery/projection.py#project_role_interaction
+  skill_root: .agents/skills
+  required_skills: [commit, content-production, continue, design, dev, distill, environment-ops, explore, incident-inspection, plan-next, prd, review]
+  required_phases: [PRE, DURING, POST]
+  required_binding_fields: [phase, event_type, delivery_stage, audience_role]
+  dynamic_audience_role: $route
+  bindings:
+    commit:
+      - {phase: PRE, event_type: decision_request, delivery_stage: integration_trusted_ci, audience_role: engineering_delivery_owner}
+      - {phase: DURING, event_type: exception_escalation, delivery_stage: integration_trusted_ci, audience_role: engineering_delivery_owner}
+      - {phase: POST, event_type: completion_report, delivery_stage: integration_trusted_ci, audience_role: engineering_delivery_owner}
+    content-production:
+      - {phase: PRE, event_type: progress_update, delivery_stage: delivery_planning_authorization, audience_role: engineering_delivery_owner}
+      - {phase: DURING, event_type: exception_escalation, delivery_stage: nonproduction_validation, audience_role: $route}
+      - {phase: POST, event_type: completion_report, delivery_stage: nonproduction_validation, audience_role: $route}
+    continue:
+      - {phase: PRE, event_type: progress_update, delivery_stage: delivery_planning_authorization, audience_role: engineering_delivery_owner}
+      - {phase: DURING, event_type: exception_escalation, delivery_stage: agent_led_implementation, audience_role: $route}
+      - {phase: POST, event_type: completion_report, delivery_stage: agent_led_implementation, audience_role: $route}
+    design:
+      - {phase: PRE, event_type: progress_update, delivery_stage: solution_risk_design, audience_role: domain_solution_architecture_owner}
+      - {phase: DURING, event_type: decision_request, delivery_stage: solution_risk_design, audience_role: $route}
+      - {phase: POST, event_type: completion_report, delivery_stage: solution_risk_design, audience_role: domain_solution_architecture_owner}
+    dev:
+      - {phase: PRE, event_type: progress_update, delivery_stage: agent_led_implementation, audience_role: engineering_delivery_owner}
+      - {phase: DURING, event_type: exception_escalation, delivery_stage: agent_led_implementation, audience_role: $route}
+      - {phase: POST, event_type: completion_report, delivery_stage: agent_led_implementation, audience_role: engineering_delivery_owner}
+    distill:
+      - {phase: PRE, event_type: progress_update, delivery_stage: feedback_knowledge_distillation, audience_role: engineering_delivery_owner}
+      - {phase: DURING, event_type: decision_request, delivery_stage: feedback_knowledge_distillation, audience_role: $route}
+      - {phase: POST, event_type: completion_report, delivery_stage: feedback_knowledge_distillation, audience_role: $route}
+    environment-ops:
+      - {phase: PRE, event_type: progress_update, delivery_stage: nonproduction_validation, audience_role: environment_reliability_owner}
+      - {phase: DURING, event_type: exception_escalation, delivery_stage: production_campaign, audience_role: $route}
+      - {phase: POST, event_type: completion_report, delivery_stage: production_campaign, audience_role: $route}
+    explore:
+      - {phase: PRE, event_type: progress_update, delivery_stage: concept_intake, audience_role: business_sponsor}
+      - {phase: DURING, event_type: decision_request, delivery_stage: concept_intake, audience_role: $route}
+      - {phase: POST, event_type: completion_report, delivery_stage: concept_intake, audience_role: engineering_delivery_owner}
+    incident-inspection:
+      - {phase: PRE, event_type: progress_update, delivery_stage: outcome_observation_acceptance, audience_role: environment_reliability_owner}
+      - {phase: DURING, event_type: exception_escalation, delivery_stage: outcome_observation_acceptance, audience_role: $route}
+      - {phase: POST, event_type: completion_report, delivery_stage: outcome_observation_acceptance, audience_role: $route}
+    plan-next:
+      - {phase: PRE, event_type: progress_update, delivery_stage: feedback_knowledge_distillation, audience_role: engineering_delivery_owner}
+      - {phase: DURING, event_type: decision_request, delivery_stage: delivery_planning_authorization, audience_role: $route}
+      - {phase: POST, event_type: completion_report, delivery_stage: delivery_planning_authorization, audience_role: engineering_delivery_owner}
+    prd:
+      - {phase: PRE, event_type: progress_update, delivery_stage: product_definition, audience_role: product_owner}
+      - {phase: DURING, event_type: decision_request, delivery_stage: product_definition, audience_role: $route}
+      - {phase: POST, event_type: completion_report, delivery_stage: product_definition, audience_role: product_owner}
+    review:
+      - {phase: PRE, event_type: progress_update, delivery_stage: quality_business_uat, audience_role: quality_owner}
+      - {phase: DURING, event_type: exception_escalation, delivery_stage: quality_business_uat, audience_role: $route}
+      - {phase: POST, event_type: completion_report, delivery_stage: quality_business_uat, audience_role: quality_owner}
+
+production_policy:
+  one_approval_per_frozen_campaign: true
+  technical_gate_stages: [canary, "5", "20", "50", "100"]
+  constraint_change_requires_new_decision: true
+  resume_requires_new_decision: true
+  objective_execution_admission_source: quwoquan_ops/policies/objective_execution_contract.yaml#admission
+
+outcome_policy:
+  extension_transition: [observing, paused, observing]
+  extension_requires_prefrozen: [max_extensions, budget, sample, window, exit_conditions]
+  no_prefrozen_extension_terminal: clarify
+
+errors:
+  HAD.UNKNOWN_STAGE: {terminal: pause, recovery: select_declared_stage}
+  HAD.UNKNOWN_DECISION_KIND: {terminal: pause, recovery: select_declared_decision_kind}
+  HAD.ROUTE_NOT_FOUND: {terminal: pause, recovery: freeze_router_entry_or_narrow_scope}
+  HAD.WRONG_HUMAN_ROLE: {terminal: escalate, recovery: transfer_to_required_role}
+  HAD.REVIEW_ROLE_FORBIDDEN: {terminal: escalate, recovery: collect_named_human_authority_decision}
+  HAD.IDENTITY_UNKNOWN: {terminal: hold, recovery: authenticate_actor}
+  HAD.ROLE_ABSENT: {terminal: pause, recovery: transfer_or_pause}
+  HAD.ROLE_TIMEOUT: {terminal: hold, recovery: reissue_or_abort_without_implicit_approval}
+  HAD.SCOPE_INVALID: {terminal: pause, recovery: narrow_or_refreeze_scope}
+  HAD.EVIDENCE_EXPIRED: {terminal: hold, recovery: refresh_evidence}
+  HAD.HARD_GATE_FAILED: {terminal: hold, recovery: fix_supply_evidence_narrow_or_abort}
+  HAD.SOD_FAILED: {terminal: hold, recovery: collect_distinct_authenticated_principal}
+  HAD.AUTHORITY_PROVIDER_UNAVAILABLE: {terminal: hold, recovery: keep_projection_non_executable}
+  HAD.DECISION_CONSUMPTION_CONFLICT: {terminal: hold, recovery: readback_append_only_record_then_reconcile}
+  HAD.CAMPAIGN_REAPPROVAL_REQUIRED: {terminal: hold, recovery: record_new_campaign_decision}
+  HAD.RECOMMENDATION_FORBIDDEN: {terminal: pause, recovery: render_neutral_symmetric_options}
+  HAD.CONTRACT_INVALID: {terminal: abort, recovery: repair_canonical_contract}
+  HAD.UNKNOWN_HARNESS: {terminal: abort, recovery: select_declared_harness}
+  HAD.INTERACTION_FIELD_INVALID: {terminal: pause, recovery: repair_role_interaction_envelope}
+  HAD.INTERACTION_TERM_LEAK: {terminal: pause, recovery: move_internal_detail_to_audit_details}
+  HAD.INTERACTION_ROLE_OVERRUN: {terminal: hold, recovery: restrict_completion_to_audience_role_domain}
+  HAD.CALIBRATION_INVALID: {terminal: hold, recovery: repair_calibration_session_without_human_claim}
+  HAD.CALIBRATION_OBSERVATION_UNVERIFIED: {terminal: hold, recovery: obtain_authenticated_consented_human_observation}
+  HAD.CALIBRATION_PII_FORBIDDEN: {terminal: abort, recovery: remove_direct_identifiers_and_recreate_session}
+  HAD.CALIBRATION_CONFLICT: {terminal: hold, recovery: readback_create_once_session_then_reconcile}
+  HAD.CALIBRATION_CONTRACT_INCOMPATIBLE: {terminal: hold, recovery: migrate_to_single_track_human_calibration_v2}

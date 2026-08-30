@@ -79,3 +79,8 @@ func ExternalProviderBindingFor(environment, capabilityID string) (ExternalProvi
 	binding, ok := byCapability[capabilityID]
 	return binding, ok
 }
+
+func CompiledBindingFor(capabilityID string) (ExternalProviderBinding, bool) {
+	_ = capabilityID
+	return ExternalProviderBinding{}, false
+}

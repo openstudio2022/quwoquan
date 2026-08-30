@@ -111,7 +111,7 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: com.quwoquan.quwoquan_app
+  default: com.leadwise.quwoquan
 - key: sys.product-ops-service.app_release.android.apk_sha256
   type: string
   scope: workload
@@ -209,13 +209,13 @@ configs:
   rollout: none
   risk_level: low
   ui_editable: true
-- key: sys.product-ops-service.account_security_authority.base_url
+- key: sys.product-ops-service.user_account_security_authority.base_url
   type: string
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
-- key: sys.product-ops-service.account_security_authority.timeout_ms
+- key: sys.product-ops-service.user_account_security_authority.timeout_ms
   type: int
   scope: workload
   reload: restart
@@ -400,7 +400,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.product-ops-service.redis.general.password
   type: string
   scope: workload
@@ -476,7 +475,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.product-ops-service.redis.rec.password
   type: string
   scope: workload

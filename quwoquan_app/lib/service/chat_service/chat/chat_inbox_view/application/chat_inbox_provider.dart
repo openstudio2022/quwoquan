@@ -141,11 +141,7 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState>
       if (avatarUrl.isEmpty) {
         continue;
       }
-      unawaited(
-        AppImageCacheController.preloadAvatar(
-          avatarUrl,
-        ).catchError((_) => null),
-      );
+      unawaited(AppImageCacheController.warmAvatarCache(avatarUrl));
     }
   }
 

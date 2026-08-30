@@ -210,7 +210,7 @@ func (s *MemberService) ListSelectableGroupConversations(
 			conv, found := byID[state.ConversationId]
 			if !found ||
 				conv.Type != "group" ||
-				(conv.Status != "" && conv.Status != "active") {
+				conv.Status != model.ConversationStatusActive {
 				continue
 			}
 			circleID := strings.TrimSpace(conv.CircleId)

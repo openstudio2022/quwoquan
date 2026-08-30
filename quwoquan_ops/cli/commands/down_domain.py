@@ -25,8 +25,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
+from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 
@@ -225,9 +228,16 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
             str(target["env"]),
             args.target,
         )
+        # 恢复动作必须与真实阻断同源：锁内操作自身失败（端口所有权投影、published
+        # endpoint 释放探测等）与「锁被别的持有者占用」是两回事，混报成等待 lease
+        # 会把操作员引向一个并不存在的持有者。
+        lock_busy = isinstance(exc, _stackctl.LocalOperationLockBusyError)
         details = [
             str(exc),
-            "wait for the active Patrol/UAT runtime lease to finish",
+            "wait for the active Patrol/UAT runtime lease to finish"
+            if lock_busy
+            else "resolve the reported failure before retrying stackctl down; "
+            "no other operation holds the local runtime lock",
         ]
         _stackctl.write_json(
             report_dir / "report.json",
@@ -235,6 +245,9 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
                 "command": "down",
                 "target": args.target,
                 "status": "gate_block",
+                "blockerKind": "local_operation_lock_busy"
+                if lock_busy
+                else "down_operation_failed",
                 "details": details,
             },
         )
@@ -265,7 +278,19 @@ def _bind_local_teardown_runtime(
     import quwoquan_ops.cli.stackctl as _stackctl
 
     current_attempt = _stackctl.load_startup_attempt(target_name)
-    if current_attempt is None or current_attempt.get("status") == "stopped":
+    if current_attempt is None:
+        raise ValueError(
+            "local teardown requires a canonical startup receipt; "
+            "use an explicit repair action for orphaned resources"
+        )
+    if current_attempt.get("status") == "stopped" and not purge_rebuildable_state:
+        # 停止一个已停止的运行时无事可做，所以普通 teardown 仍然要求非 stopped。
+        #
+        # 清理可重建状态不同：一次启动失败会自己回滚并把回执写成 stopped，而挡住
+        # 下一次启动的数据卷仍留在原处（例如 pre-alias 物理索引占了读别名名）。
+        # 把 stopped 一并拒掉，等于让唯一受支持的清理入口只在不需要它的时候可用，
+        # 运营者只剩手工删卷一条路。stopped 回执携带的正是刚被拆掉那次运行的
+        # composeProject/candidate/workload，清理因此依然是绑定的而非盲删。
         raise ValueError(
             "local teardown requires a non-stopped canonical startup receipt; "
             "use an explicit repair action for orphaned resources"
@@ -298,7 +323,7 @@ def _bind_local_teardown_runtime(
         target_name,
         receipt_candidate,
         require_full=True,
-        purpose="self_verify",
+        purpose="teardown",
     )
     provider_runtime_binding = _stackctl._candidate_provider_runtime(
         env_name,
@@ -356,7 +381,10 @@ def _bind_local_teardown_runtime(
             "runtime receipt observability composition differs from active candidate"
         )
     environment["QWQ_WORKLOAD"] = runtime_workload
-    runtime_receipt = _stackctl._load_gamma_runtime_image_composition(target_name)
+    runtime_receipt = _stackctl._load_gamma_runtime_image_composition(
+        target_name,
+        include_stopped=purge_rebuildable_state,
+    )
     if runtime_receipt is None:
         raise ValueError("local teardown requires an exact runtime receipt")
 
@@ -364,6 +392,163 @@ def _bind_local_teardown_runtime(
     environment["LOCAL_GAMMA_COMPOSE_PROJECT_NAME"] = compose_project
     _stackctl._apply_gamma_image_composition(release_composition, environment)
     return release_composition, "runtime-receipt", compose_project, False
+
+
+def _receipt_bound_local_compose_model(
+    *,
+    environment_name: str,
+    target_name: str,
+    workload: str,
+    compose_project: str,
+    environment: dict[str, str],
+) -> dict[str, Any]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    candidate_value = str(
+        environment.get(_stackctl.RUNTIME_CANDIDATE_ROOT_ENV) or ""
+    ).strip()
+    candidate_path = Path(candidate_value).expanduser()
+    if (
+        not candidate_value
+        or not candidate_path.is_absolute()
+        or candidate_path.is_symlink()
+        or not candidate_path.is_dir()
+    ):
+        raise ValueError("receipt-bound runtime candidate root is unavailable")
+    candidate_root = candidate_path.resolve()
+    shared_root = candidate_root / "packages/runtime-shared"
+    candidate_sources = {
+        "LOCAL_GAMMA_CADDYFILE": shared_root / "Caddyfile",
+        "LOCAL_GAMMA_LIVEKIT_CONFIG_FILE": shared_root / "livekit.yaml",
+        "LOCAL_GAMMA_OBJECT_STORAGE_LIFECYCLE_FILE": (
+            shared_root / "object-storage-lifecycle.json"
+        ),
+        "QWQ_COMPOSE_REC_POLICY_SOURCE": (
+            shared_root / "runtime-topology/policies/recommendation_policy.yaml"
+        ),
+    }
+    legal_root = candidate_root / "packages/legal-static/current/public"
+    for name, source in candidate_sources.items():
+        if not source.is_file() or source.is_symlink():
+            raise ValueError(
+                f"receipt-bound candidate Compose source is unavailable: {name}"
+            )
+        environment[name] = str(source)
+    if not legal_root.is_dir() or legal_root.is_symlink():
+        raise ValueError(
+            "receipt-bound candidate Compose source is unavailable: "
+            "LOCAL_GAMMA_LEGAL_STATIC_ROOT"
+        )
+    environment["LOCAL_GAMMA_RUNTIME_SHARED_ROOT"] = str(shared_root)
+    environment["LOCAL_GAMMA_LEGAL_STATIC_ROOT"] = str(legal_root)
+
+    # These sources are required only so `docker compose config` can project
+    # published ports.  They are not candidate identity and are never mounted
+    # or started by teardown, so use explicit deterministic non-existent paths.
+    placeholder_root = Path(
+        f"/nonexistent/quwoquan-teardown-port-projection/{target_name}"
+    )
+    environment.update(
+        {
+            "LOCAL_GAMMA_MEDIA_ROOT": str(placeholder_root / "media"),
+            "LOCAL_GAMMA_PORTAL_ROOT": str(placeholder_root / "portal"),
+            "LOCAL_GAMMA_PUBLIC_WEB_ROOT": str(placeholder_root / "public-web"),
+            "QWQ_COMPOSE_CONFIG_ROOT": str(placeholder_root / "config-root"),
+            "QWQ_PUBLIC_TLS_CERT_FILE": str(placeholder_root / "tls.crt"),
+            "QWQ_PUBLIC_TLS_KEY_FILE": str(placeholder_root / "tls.key"),
+            "QWQ_PUBLIC_WEB_CONTENT_DIGEST": f"sha256:{'0' * 64}",
+        }
+    )
+    topology = _stackctl.load_runtime_topology_package(
+        candidate_root,
+        environment=environment_name,
+        target=target_name,
+        workload=workload,
+    )
+    compose_files = list(topology["composeFiles"])
+    profiles: list[str] = []
+    if workload == "full":
+        provider_files = [
+            Path(value)
+            for value in str(
+                environment.get("QWQ_PROVIDER_RUNTIME_COMPOSE_FILES") or ""
+            ).splitlines()
+            if value.strip()
+        ]
+        provider_profiles = [
+            value.strip()
+            for value in str(
+                environment.get("QWQ_PROVIDER_RUNTIME_COMPOSE_PROFILES") or ""
+            ).split(",")
+            if value.strip()
+        ]
+        if not provider_files or not provider_profiles:
+            raise ValueError(
+                "receipt-bound full runtime Provider Compose closure is incomplete"
+            )
+        compose_files.extend(provider_files)
+        profiles.extend(
+            (
+                *sorted(_stackctl.FULL_WORKLOAD_COMPOSE_PROFILES),
+                *provider_profiles,
+            )
+        )
+    elif workload == "content-commercial":
+        profiles.extend(sorted(_stackctl.CONTENT_COMMERCIAL_COMPOSE_PROFILES))
+    elif workload != "content-release":
+        raise ValueError("receipt-bound runtime workload is unsupported")
+
+    if workload in {"full", "content-commercial"}:
+        observability_file = str(
+            environment.get("QWQ_OBSERVABILITY_LOG_SINK_COMPOSE_FILE") or ""
+        ).strip()
+        if not observability_file:
+            raise ValueError(
+                "receipt-bound observability Compose artifact is unavailable"
+            )
+        compose_files.append(Path(observability_file))
+
+    # CONFIG_VERSION keys come from the exact candidate Compose closure, never
+    # the current workspace or mutable active pointer.  Values are irrelevant
+    # to published-port projection and therefore deterministic placeholders.
+    for compose_file in compose_files:
+        body = compose_file.read_text(encoding="utf-8")
+        for key in set(re.findall(r"QWQ_COMPOSE_[A-Z_]+_CONFIG_VERSION", body)):
+            environment.setdefault(key, "down-not-used")
+
+    for source_name, value in tuple(environment.items()):
+        if source_name.startswith("LOCAL_GAMMA_"):
+            environment[
+                "QWQ_COMPOSE_" + source_name.removeprefix("LOCAL_GAMMA_")
+            ] = value
+    environment["QWQ_COMPOSE_ENV"] = environment_name
+    environment["COMPOSE_PROFILES"] = ""
+    command = [
+        "docker",
+        "compose",
+        "-p",
+        compose_project,
+        *_stackctl.compose_file_args(compose_files),
+    ]
+    for profile in profiles:
+        command.extend(("--profile", profile))
+    result = _stackctl.run(
+        [*command, "config", "--format", "json"],
+        env=environment,
+        timeout_seconds=90,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or (
+            f"exit={result.returncode}"
+        )
+        raise RuntimeError(f"receipt-bound Compose model rendering failed: {detail}")
+    try:
+        compose_model = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError("receipt-bound Compose model is not valid JSON") from exc
+    if not isinstance(compose_model, Mapping):
+        raise ValueError("receipt-bound Compose model must be a JSON object")
+    return dict(compose_model)
 
 
 def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
@@ -381,6 +566,7 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
     runtime_composition_source = ""
     runtime_compose_project = ""
     prepared_attempt_only = False
+    runtime_owned_port_report: dict[str, Any] | None = None
 
     if (
         not formal_release
@@ -401,6 +587,14 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
             if selection_issue:
                 pass
             elif immutable_attempt and immutable_status != "stopped":
+                if mutable_status == "partial" and not purge_rebuildable_state:
+                    return _stackctl._command_mutable_test_live_down(
+                        args,
+                        env_name=env_name,
+                        report_dir=report_dir,
+                        receipt=mutable_attempt,
+                        allow_active_immutable_ports=True,
+                    )
                 selection_issue = (
                     "mutable and immutable runtime receipts are both active; "
                     "teardown identity is ambiguous"
@@ -493,7 +687,12 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
         }
     elif args.target in {"alpha-local", "beta-local", "gamma-local"}:
         cmd = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh", "--down"]
-        env = _stackctl._gamma_env_from_port_manifest(topology, args.target)
+        port_manifest = _stackctl.load_port_manifest()
+        env = _stackctl._gamma_env_from_port_manifest(
+            topology,
+            args.target,
+            manifest=port_manifest,
+        )
         env[_stackctl.PACKAGE_ROOT_OVERRIDE_ENV] = ""
         try:
             (
@@ -516,7 +715,74 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
                     str(exc),
                 ],
             }
-        _stackctl._bind_gamma_down_parse_environment(env)
+        _stackctl._bind_gamma_down_parse_environment(env, receipt_bound=True)
+        if not prepared_attempt_only:
+            try:
+                runtime_workload = str(env.get("QWQ_WORKLOAD") or "").strip()
+                compose_model = _stackctl._receipt_bound_local_compose_model(
+                    environment_name=env_name,
+                    target_name=args.target,
+                    workload=runtime_workload,
+                    compose_project=runtime_compose_project,
+                    environment=env,
+                )
+                declared_port_profile = str(
+                    _stackctl.get_target(topology, args.target).get("portProfile") or ""
+                ).strip()
+                if not declared_port_profile:
+                    raise ValueError(
+                        f"{args.target} declares no portProfile in the environment topology"
+                    )
+                published_endpoints = _stackctl.project_compose_published_endpoints(
+                    port_profile=declared_port_profile,
+                    compose_model=compose_model,
+                    manifest=port_manifest,
+                )
+                runtime_owned_port_report = (
+                    _stackctl._runtime_owned_port_occupancy_report(
+                        args.target,
+                        published_ports=published_endpoints,
+                        topology=topology,
+                        manifest=port_manifest,
+                    )
+                )
+            except (
+                OSError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+                json.JSONDecodeError,
+            ) as exc:
+                details = [
+                    f"{args.target} runtime port ownership is invalid: {exc}"
+                ]
+                _stackctl.write_json(
+                    report_dir / "report.json",
+                    {
+                        "command": "down",
+                        "target": args.target,
+                        "status": "gate_block",
+                        "exitCode": 2,
+                        "blockerKind": "runtime_port_ownership_invalid",
+                        "details": details,
+                    },
+                )
+                _stackctl._write_summary_bundle(
+                    report_dir,
+                    command="down",
+                    target=args.target,
+                    status="gate_block",
+                    summary=f"stackctl down is GATE_BLOCK for {args.target}",
+                    details=details,
+                    extra={"blockerKind": "runtime_port_ownership_invalid"},
+                )
+                return {
+                    "exitCode": 2,
+                    "summary": f"stackctl down is GATE_BLOCK for {args.target}",
+                    "details": details,
+                    "reportDir": _stackctl.relpath(report_dir),
+                    "blockerKind": "runtime_port_ownership_invalid",
+                }
         if purge_rebuildable_state:
             cmd.append("--purge-rebuildable-state")
         runtime_result = _stackctl.run(cmd, env=env)
@@ -570,14 +836,38 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
     resource_release_issues: list[str] = []
     startup_receipt: dict[str, Any] | None = None
     if result.returncode == 0 and not prepared_attempt_only:
-        occupied = _stackctl._wait_for_network_ports_released(
-            args.target,
-            port_reporter=_stackctl._canonical_port_occupancy_report,
-        )
-        resource_release_issues = [
-            f"canonical port remains occupied after down: {item['name']}:{item['port']}"
-            for item in occupied
-        ]
+        if args.target in {"alpha-local", "beta-local", "gamma-local"}:
+            if runtime_owned_port_report is None:
+                raise RuntimeError(
+                    f"GATE_BLOCK: {args.target} runtime port ownership was not projected"
+                )
+            runtime_owned_endpoints = [
+                {
+                    "role": str(item["role"]),
+                    "hostPort": int(item["hostPort"]),
+                    "protocol": str(item["protocol"]),
+                }
+                for item in runtime_owned_port_report["publishedEndpoints"]
+            ]
+            occupied_endpoints = (
+                _stackctl._wait_for_published_endpoints_released(
+                    runtime_owned_endpoints
+                )
+            )
+            resource_release_issues = [
+                "runtime-owned endpoint remains occupied after down: "
+                f"{endpoint['role']}:{endpoint['hostPort']}/{endpoint['protocol']}"
+                for endpoint in occupied_endpoints
+            ]
+        else:
+            occupied = _stackctl._wait_for_network_ports_released(
+                args.target,
+                port_reporter=_stackctl._canonical_port_occupancy_report,
+            )
+            resource_release_issues = [
+                f"canonical port remains occupied after down: {item['name']}:{item['port']}"
+                for item in occupied
+            ]
         if resource_release_issues:
             result = subprocess.CompletedProcess(
                 result.args,
@@ -658,5 +948,3 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
         "details": _stackctl._command_details(result),
         "reportDir": _stackctl.relpath(report_dir),
     }
-
-

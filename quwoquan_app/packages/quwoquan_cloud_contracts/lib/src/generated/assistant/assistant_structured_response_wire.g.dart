@@ -20,12 +20,12 @@ class AssistantUiReferenceWireDto {
   final String label;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'destination': destination.toJson(),
-        'title': title,
-        'source': source,
-        'snippet': snippet,
-        'label': label,
-      };
+    'destination': destination.toJson(),
+    'title': title,
+    'source': source,
+    'snippet': snippet,
+    'label': label,
+  };
 
   factory AssistantUiReferenceWireDto.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -39,32 +39,59 @@ class AssistantUiReferenceWireDto {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantUiReferenceWireDto response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantUiReferenceWireDto response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('destination') || json['destination'] == null || (json['destination'] is! Map)) {
-      throw const FormatException('AssistantUiReferenceWireDto field destination has an invalid wire value');
+    if (!json.containsKey('destination') ||
+        json['destination'] == null ||
+        (json['destination'] is! Map)) {
+      throw const FormatException(
+        'AssistantUiReferenceWireDto field destination has an invalid wire value',
+      );
     }
-    if (json.containsKey('title') && json['title'] != null && (json['title'] is! String)) {
-      throw const FormatException('AssistantUiReferenceWireDto field title has an invalid wire value');
+    if (json.containsKey('title') &&
+        json['title'] != null &&
+        (json['title'] is! String)) {
+      throw const FormatException(
+        'AssistantUiReferenceWireDto field title has an invalid wire value',
+      );
     }
-    if (json.containsKey('source') && json['source'] != null && (json['source'] is! String)) {
-      throw const FormatException('AssistantUiReferenceWireDto field source has an invalid wire value');
+    if (json.containsKey('source') &&
+        json['source'] != null &&
+        (json['source'] is! String)) {
+      throw const FormatException(
+        'AssistantUiReferenceWireDto field source has an invalid wire value',
+      );
     }
-    if (json.containsKey('snippet') && json['snippet'] != null && (json['snippet'] is! String)) {
-      throw const FormatException('AssistantUiReferenceWireDto field snippet has an invalid wire value');
+    if (json.containsKey('snippet') &&
+        json['snippet'] != null &&
+        (json['snippet'] is! String)) {
+      throw const FormatException(
+        'AssistantUiReferenceWireDto field snippet has an invalid wire value',
+      );
     }
-    if (json.containsKey('label') && json['label'] != null && (json['label'] is! String)) {
-      throw const FormatException('AssistantUiReferenceWireDto field label has an invalid wire value');
+    if (json.containsKey('label') &&
+        json['label'] != null &&
+        (json['label'] is! String)) {
+      throw const FormatException(
+        'AssistantUiReferenceWireDto field label has an invalid wire value',
+      );
     }
     return AssistantUiReferenceWireDto(
-      destination: json['destination'] is Map ? CitationDestination.fromJson((json['destination'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field destination is missing')),
+      destination: json['destination'] is Map
+          ? CitationDestination.fromJson(
+              (json['destination'] as Map).cast<String, dynamic>(),
+            )
+          : (throw FormatException(
+              'required object field destination is missing',
+            )),
       title: (json['title'] as String?)?.trim() ?? "",
       source: (json['source'] as String?)?.trim() ?? "",
       snippet: (json['snippet'] as String?)?.trim() ?? "",
       label: (json['label'] as String?)?.trim() ?? "",
     );
   }
-
 }
 
 class AssistantUiReferenceWireDtoFields {
@@ -97,15 +124,17 @@ class AssistantStructuredResponseWire {
   final List<AssistantUiReferenceWireDto> uiReferences;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'qualityMetrics': qualityMetrics,
-        'decisionParseSuccess': decisionParseSuccess,
-        'hardCutSource': hardCutSource,
-        'answerGateReady': answerGateReady,
-        'answerGateReasonCode': answerGateReasonCode,
-        'dialogueDomainId': dialogueDomainId,
-        'dialogueRuntime': dialogueRuntime,
-        'uiReferences': uiReferences.map((item) => item.toJson()).toList(growable: false),
-      };
+    'qualityMetrics': qualityMetrics,
+    'decisionParseSuccess': decisionParseSuccess,
+    'hardCutSource': hardCutSource,
+    'answerGateReady': answerGateReady,
+    'answerGateReasonCode': answerGateReasonCode,
+    'dialogueDomainId': dialogueDomainId,
+    'dialogueRuntime': dialogueRuntime,
+    'uiReferences': uiReferences
+        .map((item) => item.toJson())
+        .toList(growable: false),
+  };
 
   factory AssistantStructuredResponseWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -122,41 +151,90 @@ class AssistantStructuredResponseWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantStructuredResponseWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantStructuredResponseWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (json.containsKey('qualityMetrics') && json['qualityMetrics'] != null && (json['qualityMetrics'] is! Map)) {
-      throw const FormatException('AssistantStructuredResponseWire field qualityMetrics has an invalid wire value');
+    if (json.containsKey('qualityMetrics') &&
+        json['qualityMetrics'] != null &&
+        (json['qualityMetrics'] is! Map)) {
+      throw const FormatException(
+        'AssistantStructuredResponseWire field qualityMetrics has an invalid wire value',
+      );
     }
-    if (json.containsKey('decisionParseSuccess') && json['decisionParseSuccess'] != null && (json['decisionParseSuccess'] is! bool)) {
-      throw const FormatException('AssistantStructuredResponseWire field decisionParseSuccess has an invalid wire value');
+    if (json.containsKey('decisionParseSuccess') &&
+        json['decisionParseSuccess'] != null &&
+        (json['decisionParseSuccess'] is! bool)) {
+      throw const FormatException(
+        'AssistantStructuredResponseWire field decisionParseSuccess has an invalid wire value',
+      );
     }
-    if (json.containsKey('hardCutSource') && json['hardCutSource'] != null && (json['hardCutSource'] is! String)) {
-      throw const FormatException('AssistantStructuredResponseWire field hardCutSource has an invalid wire value');
+    if (json.containsKey('hardCutSource') &&
+        json['hardCutSource'] != null &&
+        (json['hardCutSource'] is! String)) {
+      throw const FormatException(
+        'AssistantStructuredResponseWire field hardCutSource has an invalid wire value',
+      );
     }
-    if (json.containsKey('answerGateReady') && json['answerGateReady'] != null && (json['answerGateReady'] is! bool)) {
-      throw const FormatException('AssistantStructuredResponseWire field answerGateReady has an invalid wire value');
+    if (json.containsKey('answerGateReady') &&
+        json['answerGateReady'] != null &&
+        (json['answerGateReady'] is! bool)) {
+      throw const FormatException(
+        'AssistantStructuredResponseWire field answerGateReady has an invalid wire value',
+      );
     }
-    if (json.containsKey('answerGateReasonCode') && json['answerGateReasonCode'] != null && (json['answerGateReasonCode'] is! String)) {
-      throw const FormatException('AssistantStructuredResponseWire field answerGateReasonCode has an invalid wire value');
+    if (json.containsKey('answerGateReasonCode') &&
+        json['answerGateReasonCode'] != null &&
+        (json['answerGateReasonCode'] is! String)) {
+      throw const FormatException(
+        'AssistantStructuredResponseWire field answerGateReasonCode has an invalid wire value',
+      );
     }
-    if (json.containsKey('dialogueDomainId') && json['dialogueDomainId'] != null && (json['dialogueDomainId'] is! String)) {
-      throw const FormatException('AssistantStructuredResponseWire field dialogueDomainId has an invalid wire value');
+    if (json.containsKey('dialogueDomainId') &&
+        json['dialogueDomainId'] != null &&
+        (json['dialogueDomainId'] is! String)) {
+      throw const FormatException(
+        'AssistantStructuredResponseWire field dialogueDomainId has an invalid wire value',
+      );
     }
-    if (json.containsKey('dialogueRuntime') && json['dialogueRuntime'] != null && (json['dialogueRuntime'] is! Map)) {
-      throw const FormatException('AssistantStructuredResponseWire field dialogueRuntime has an invalid wire value');
+    if (json.containsKey('dialogueRuntime') &&
+        json['dialogueRuntime'] != null &&
+        (json['dialogueRuntime'] is! Map)) {
+      throw const FormatException(
+        'AssistantStructuredResponseWire field dialogueRuntime has an invalid wire value',
+      );
     }
-    if (json.containsKey('uiReferences') && json['uiReferences'] != null && (json['uiReferences'] is! List || (json['uiReferences'] as List).any((item) => item is! Map))) {
-      throw const FormatException('AssistantStructuredResponseWire field uiReferences has an invalid wire value');
+    if (json.containsKey('uiReferences') &&
+        json['uiReferences'] != null &&
+        (json['uiReferences'] is! List ||
+            (json['uiReferences'] as List).any((item) => item is! Map))) {
+      throw const FormatException(
+        'AssistantStructuredResponseWire field uiReferences has an invalid wire value',
+      );
     }
     return AssistantStructuredResponseWire(
-      qualityMetrics: (json['qualityMetrics'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
+      qualityMetrics:
+          (json['qualityMetrics'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
       decisionParseSuccess: json['decisionParseSuccess'] != false,
       hardCutSource: (json['hardCutSource'] as String?)?.trim() ?? "",
       answerGateReady: json['answerGateReady'] == true,
-      answerGateReasonCode: (json['answerGateReasonCode'] as String?)?.trim() ?? "",
+      answerGateReasonCode:
+          (json['answerGateReasonCode'] as String?)?.trim() ?? "",
       dialogueDomainId: (json['dialogueDomainId'] as String?)?.trim() ?? "",
-      dialogueRuntime: (json['dialogueRuntime'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
-      uiReferences: (json['uiReferences'] as List?)?.whereType<Map>().map((item) => AssistantUiReferenceWireDto.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantUiReferenceWireDto>[],
+      dialogueRuntime:
+          (json['dialogueRuntime'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{},
+      uiReferences:
+          (json['uiReferences'] as List?)
+              ?.whereType<Map>()
+              .map(
+                (item) => AssistantUiReferenceWireDto.fromJson(
+                  item.cast<String, dynamic>(),
+                ),
+              )
+              .toList(growable: false) ??
+          const <AssistantUiReferenceWireDto>[],
     );
   }
 }

@@ -282,6 +282,83 @@ void main() {
     );
   });
 
+  testWidgets('直达入口：同一路由切换 workId 时重新拉取并渲染新作品', (tester) async {
+    final store = _suiteStore();
+    final runtimeLogger = RuntimeLogger(
+      resource: const RuntimeLogResource(
+        sourceType: 'app',
+        environment: 'alpha',
+        service: 'quwoquan_app',
+        appVersion: 'test',
+      ),
+      buffer: InMemoryRuntimeLogBuffer(),
+    );
+    addTearDown(runtimeLogger.dispose);
+    var workId = 'work-browser-article';
+    late StateSetter updateHost;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          ...sealedCloudBoundaryOverrides(),
+          ...mockContentFacetOverrides(store: store),
+          activePersonaContextProvider.overrideWith(
+            (_) async => ActivePersonaContextViewData.fallback(
+              personaId: 'work-browser-test-persona',
+              ownerUserId: 'work-browser-test-account',
+              displayName: '测试用户',
+              avatarUrl: '',
+            ),
+          ),
+          videoPreviewTrackQueryProvider.overrideWithValue(
+            const _UnusedVideoPreviewTrackQuery(),
+          ),
+          runtimeLoggerProvider.overrideWithValue(runtimeLogger),
+          mediaEndpointConfigProvider.overrideWithValue(mediaEndpoints),
+        ],
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, _) => StatefulBuilder(
+            builder: (context, setState) {
+              updateHost = setState;
+              return MaterialApp(
+                localizationsDelegates: AppLocalizations.localizationsDelegates,
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: WorkBrowserEntryPage(
+                  workId: workId,
+                  source: 'environmentSmoke',
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byKey(TestKeys.worksImmersivePager), findsOneWidget);
+
+    updateHost(() => workId = 'video_tokyo_midnight');
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('work-browser-entry-loading')),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(
+      find.byKey(const ValueKey('works-video-stage-video_tokyo_midnight-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('work-browser-entry-error')),
+      findsNothing,
+    );
+  });
+
   testWidgets('直达入口：浅色来源的失效内容错误页不继承深色沉浸上下文', (tester) async {
     final store = _suiteStore();
 

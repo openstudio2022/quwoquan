@@ -1,9 +1,12 @@
-"""Atomic four-lane writer for immutable campaign request envelopes."""
+"""Atomic active-workload writer for immutable campaign request envelopes."""
 
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping
+import os
+import shutil
+import tempfile
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -11,16 +14,30 @@ from core import paths
 from core.io import read_json, write_json
 from core.schema import assert_valid
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import (
+    CAMPAIGN_CARRIERS,
+    normalize_active_carriers,
+    normalize_workloads,
+)
 from content.execution.campaign.request_envelope import (
-    _OPERATIONS,
     _require_stable_source_inputs,
+    _sha256,
     build_envelope,
     envelope_path,
 )
-from content.execution.campaign.scale import CampaignScaleError, resolve_campaign_scale
+from content.execution.campaign.request_envelope_identity import (
+    assert_one_handoff_identity as _assert_one_handoff_identity,
+    assert_one_source_identity as _assert_one_source_identity,
+)
+from content.execution.campaign.scale import campaign_workload_targets, resolve_campaign_scale
+from content.source.pre_acquisition_handoff import (
+    load_pre_acquisition_handoff,
+)
 from content.execution.identity import parse_execution_id
 from content.execution.model_contract import DEFAULT_SEMANTIC_SELECTION_ID
+from content.execution.planning.execution_authority import (
+    assert_execution_authority,
+)
 
 
 def _reconciliation_inputs(
@@ -42,32 +59,57 @@ def _reconciliation_inputs(
         output_root=output_root,
     )
     submissions = receipt.get("submissions")
-    if not isinstance(submissions, Mapping) or set(submissions) != set(
-        CAMPAIGN_CARRIERS
-    ):
+    if not isinstance(submissions, Mapping) or not submissions:
         raise ValueError("campaign predecessor reconciliation is incomplete")
-    predecessors = {
-        carrier: str(submissions[carrier]["executionId"])
-        for carrier in CAMPAIGN_CARRIERS
+    active = normalize_active_carriers(receipt.get("activeCarriers") or ())
+    if not set(submissions) <= set(active):
+        raise ValueError("campaign predecessor reconciliation carriers are invalid")
+    absence_rows = {
+        str(row.get("carrier") or ""): str(row.get("executionId") or "")
+        for row in (receipt.get("executionEvidence") or {}).get("lanes") or []
+        if isinstance(row, Mapping)
     }
-    targets = tuple(submissions["homepage"]["targetNames"])
+    predecessors = {
+        carrier: (
+            str(submissions[carrier]["executionId"])
+            if carrier in submissions
+            else absence_rows.get(carrier, "")
+        )
+        for carrier in active
+    }
+    if any(not execution_id for execution_id in predecessors.values()):
+        raise ValueError("campaign predecessor reconciliation executionIds are incomplete")
+    first_carrier = active[0]
+    targets = tuple(submissions[first_carrier]["targetNames"])
     if any(
         tuple(submissions[carrier]["targetNames"]) != targets
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active
     ):
         raise ValueError("campaign predecessor reconciliation targetNames drift")
     if tuple(sorted(set(targets))) != targets:
         raise ValueError(
             "campaign predecessor reconciliation targetNames are not canonical"
         )
-    if retry_predecessors and dict(retry_predecessors) != predecessors:
-        raise ValueError(
-            "campaign retry predecessors differ from reconciliation receipt"
+    reason = receipt.get("reason")
+    retry_subset_allowed = reason == "terminal_unpublished_retryable_shortfall"
+    if retry_predecessors:
+        supplied = dict(retry_predecessors)
+        valid = (
+            all(predecessors.get(carrier) == execution_id for carrier, execution_id in supplied.items())
+            and (
+                set(supplied) <= set(predecessors)
+                if retry_subset_allowed
+                else supplied == predecessors
+            )
         )
+        if not valid:
+            raise ValueError(
+                "campaign retry predecessors differ from reconciliation receipt"
+            )
     requested = tuple(
         sorted({str(item).strip() for item in target_names if str(item).strip()})
     )
-    if requested and requested != targets:
+    if requested and requested != targets and not retry_subset_allowed:
         raise ValueError(
             "campaign retry targetNames differ from reconciliation receipt"
         )
@@ -77,8 +119,8 @@ def _reconciliation_inputs(
             "campaign predecessor reconciliation original identity is invalid"
         )
     return (
-        predecessors,
-        targets,
+        (dict(retry_predecessors) if retry_subset_allowed else predecessors),
+        (requested if retry_subset_allowed else targets),
         envelope_contract.reconciliation_reference(
             receipt_path,
             output_root=output_root,
@@ -87,176 +129,29 @@ def _reconciliation_inputs(
     )
 
 
-def _assert_one_source_identity(
-    payloads: Mapping[str, Mapping[str, Any]],
-    *,
-    predecessor_reconciliation_receipt: Mapping[str, Any] | None,
-) -> None:
-    identities = {
-        json.dumps(
-            {
-                "sourceRevision": payload["sourceRevision"],
-                "sourceDigest": payload["sourceDigest"],
-                "entityCatalogDigest": payload["entityCatalogDigest"],
-            },
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        for payload in payloads.values()
-    }
-    if len(identities) != 1:
-        raise ValueError(
-            "campaign envelope source identity changed while freezing carriers"
-        )
-    if predecessor_reconciliation_receipt is None:
-        return
-    reason = predecessor_reconciliation_receipt.get("reason")
-    if reason in {
-        "mixed_finalized_partial_terminal",
-        "terminal_unpublished_source_drift",
-    }:
-        observed_identity = predecessor_reconciliation_receipt.get(
-            "observedSourceIdentity"
-        )
-        if not isinstance(observed_identity, Mapping):
-            raise TypeError(
-                "campaign mixed terminal reconciliation observed identity is invalid"
-            )
-        execution_evidence = predecessor_reconciliation_receipt.get(
-            "executionEvidence"
-        )
-        if not isinstance(execution_evidence, Mapping):
-            raise TypeError(
-                "campaign mixed terminal reconciliation execution evidence is invalid"
-            )
-        if (
-            predecessor_reconciliation_receipt.get("retryPolicy")
-            != "new_four_lane_execution_with_retryOf"
-            or execution_evidence.get("excludedFromRetryRelease") is not True
-            or execution_evidence.get("eligibleForRelease") is not False
-        ):
-            raise ValueError(
-                "campaign mixed terminal reconciliation does not exclude predecessor objects"
-            )
-        current = next(iter(payloads.values()))
-        current_identity = {
-            "sourceRevision": current["sourceRevision"],
-            "sourceDigest": current["sourceDigest"],
-            "entityCatalogDigest": current["entityCatalogDigest"],
-        }
-        if (
-            reason == "terminal_unpublished_source_drift"
-            and current_identity != observed_identity
-        ):
-            raise ValueError(
-                "campaign terminal unpublished retry source identity drifted"
-            )
-        # The receipt binds the old mixed terminal boundary.  A retry is a fresh
-        # four-lane execution and may intentionally use a superseding handoff
-        # after a source fix; the old objects remain provenance only and are
-        # never carried into the retry release.
-        return
-    if reason not in {
-        "source_drift",
-        "claimed_execution_source_drift",
-    }:
-        return
-    original_identity = predecessor_reconciliation_receipt.get(
-        "originalSourceIdentity"
-    )
-    if not isinstance(original_identity, Mapping):
-        raise TypeError(
-            "campaign predecessor reconciliation original identity is invalid"
-        )
-    current = next(iter(payloads.values()))
-    current_identity = {
-        "sourceRevision": current["sourceRevision"],
-        "sourceDigest": current["sourceDigest"],
-        "entityCatalogDigest": current["entityCatalogDigest"],
-    }
-    if current_identity == dict(original_identity):
-        raise ValueError(
-            "campaign retry source identity did not leave the reconciled source"
-        )
-
-
-def _assert_one_handoff_identity(
+def _assert_workload_plans(
     payloads: Mapping[str, Mapping[str, Any]],
 ) -> None:
-    bindings = {
-        json.dumps(
-            payload["preAcquisitionHandoff"],
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        for payload in payloads.values()
-    }
-    if len(bindings) != 1:
-        raise ValueError(
-            "campaign handoff identity changed while freezing carriers"
-        )
+    """Hold every carrier of one campaign on a single execution authority.
 
-
-def _assert_one_capacity_plan(
-    payloads: Mapping[str, Mapping[str, Any]],
-) -> None:
-    digests = {str(payload["capacityPlanDigest"]) for payload in payloads.values()}
-    if len(digests) != 1:
-        raise ValueError(
-            "campaign capacity plan changed while freezing carriers"
+    `DEC-002` moved partition count and `capacityPlanDigest` to the execution
+    freeze, so the envelope no longer carries them. What the envelope must still
+    guarantee is that all carriers were admitted against the same mutually
+    exclusive authority and that no host slice was pre-bound here.
+    """
+    authorities = set()
+    for payload in payloads.values():
+        authority = payload.get("executionAuthority")
+        if not isinstance(authority, Mapping):
+            raise ValueError("campaign envelope execution authority is missing")
+        assert_execution_authority(authority)
+        authorities.add(
+            json.dumps(dict(authority), sort_keys=True, separators=(",", ":"))
         )
-    if any(
-        isinstance(payload.get("requiredWorkers"), bool)
-        or int(payload.get("requiredWorkers") or 0) < 1
-        or int(payload.get("partitionCount") or 0) not in {16, 32, 64, 128, 256}
-        for payload in payloads.values()
-    ):
-        raise ValueError("campaign capacity plan contains an invalid lane binding")
-    bindings = [payload.get("workerHostSetBinding") for payload in payloads.values()]
-    if not any(binding is not None for binding in bindings):
-        if any(str(payload.get("scale")) == "M10000" for payload in payloads.values()):
-            raise ValueError("M10000 governed capacity requires every lane host binding")
-        return
-    if (
-        any(str(payload.get("scale")) not in {"M1000", "M10000"} for payload in payloads.values())
-        or not all(isinstance(binding, Mapping) for binding in bindings)
-    ):
-        raise ValueError(
-            "explicit governed campaign capacity requires every lane host binding"
-        )
-    identities = {
-        (
-            str(binding["hostSetId"]),
-            int(binding["generation"]),
-            str(binding["fencingToken"]),
-            str(binding["hostSetDigest"]),
-            json.dumps(binding["transportBinding"], sort_keys=True),
-        )
-        for binding in bindings
-        if isinstance(binding, Mapping)
-    }
-    if len(identities) != 1:
-        raise ValueError("campaign worker host-set identity changed across carriers")
-    for payload, binding in zip(payloads.values(), bindings, strict=True):
-        assert isinstance(binding, Mapping)
-        hosts = binding.get("hosts")
-        if not isinstance(hosts, list) or not hosts:
-            raise ValueError("campaign lane host assignments are missing")
-        partitions = [
-            int(partition)
-            for host in hosts
-            if isinstance(host, Mapping)
-            for partition in host.get("partitionKeys") or []
-        ]
-        if (
-            len(partitions) != len(set(partitions))
-            or sorted(partitions) != list(range(int(payload["partitionCount"])))
-            or sum(int(host["workerCount"]) for host in hosts)
-            != int(payload["requiredWorkers"])
-        ):
-            raise ValueError("campaign lane host/partition assignment drift")
+        if payload.get("workerHostSetBinding") is not None:
+            raise ValueError("campaign envelope must not pre-bind a worker host set")
+    if len(authorities) > 1:
+        raise ValueError("campaign carriers disagree on the execution authority")
 
 
 def _assert_one_scale_source_pool(
@@ -280,89 +175,104 @@ def _assert_one_scale_source_pool(
             raise ValueError(
                 "DATA.SOURCE.POOL_SHORTFALL: incomplete campaign pool binding"
             )
-        if scale == "M10000":
-            raise ValueError(
-                "DATA.SOURCE.POOL_SHORTFALL: M10000 campaign requires source pool"
-            )
         return
-    if scale in {"M100", "M1000", "M10000"}:
-        if len(bindings) != 1 or len(evidence_refs) != 1 or "" in evidence_refs:
-            raise ValueError("DATA.SOURCE.POOL_SHORTFALL: campaign pool binding drift")
-        carriers = {
-            str((payload.get("sourcePoolSelection") or {}).get("carrier") or "")
-            for payload in payloads.values()
-        }
-        if carriers != set(CAMPAIGN_CARRIERS):
-            raise ValueError("DATA.SOURCE.POOL_SHORTFALL: lane pool selections incomplete")
-    elif bindings != {"null"} or evidence_refs != {""}:
-        raise ValueError(
-            "DATA.SOURCE.POOL_SHORTFALL: below-M100 forbids source pool binding"
-        )
-
-
-def _assert_one_m100_alpha_acceptance(
-    payloads: Mapping[str, Mapping[str, Any]], *, scale: str
-) -> None:
-    bindings = {
-        json.dumps(
-            payload.get("m100AlphaAcceptance"),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
+    if len(bindings) != 1 or len(evidence_refs) != 1 or "" in evidence_refs:
+        raise ValueError("DATA.SOURCE.POOL_SHORTFALL: campaign pool binding drift")
+    carriers = {
+        str((payload.get("sourcePoolSelection") or {}).get("carrier") or "")
         for payload in payloads.values()
     }
-    if scale == "M1000":
-        if len(bindings) != 1 or bindings == {"null"}:
-            raise ValueError(
-                "DATA.SCALE.ALPHA_M100_ACCEPTANCE_DRIFT: lanes must share one "
-                "verified M100 Alpha acceptance"
-            )
-    elif bindings != {"null"}:
-        raise ValueError("only M1000 lanes may bind M100 Alpha acceptance")
+    if carriers != set(payloads):
+        raise ValueError("DATA.SOURCE.POOL_SHORTFALL: lane pool selections incomplete")
+    first = next(iter(payloads.values()))
+    binding = first.get("scaleSourcePool") or {}
+    workload_mode = str(first.get("workloadMode") or "")
+    expected_target_scale = "WORKLOAD" if workload_mode == "explicit" else scale
+    if (
+        binding.get("targetScale") != expected_target_scale
+        or binding.get("workloadMode") != workload_mode
+        or binding.get("activeCarriers") != list(payloads)
+        or binding.get("workloadTargets") != first.get("workloads")
+    ):
+        raise ValueError("DATA.SOURCE.POOL_SHORTFALL: pool workload binding drift")
 
 
 def write_scale_envelopes(
     scale: str | None = None,
     *,
     quota: int | None = None,
-    region_ref: str = "china",
-    vertical: str = "travel",
-    topic: str | None = None,
     target_names: Iterable[str] | None = None,
-    source_providers: Iterable[str] | None = None,
     family_ref: str | None = None,
-    carriers: Iterable[str] = CAMPAIGN_CARRIERS,
+    carriers: Iterable[str] | None = None,
+    workloads: Mapping[str, int] | None = None,
     repo_root: Path | None = None,
     output_root: Path | None = None,
     day: str | None = None,
     sequence: int = 1,
     semantic_selection_id: str = DEFAULT_SEMANTIC_SELECTION_ID,
     semantic_preflight_receipt: Path | None = None,
-    capacity_host_set: Path | None = None,
     semantic_preflight_output_root: Path | None = None,
+    capacity_calibration_receipt: Path | None = None,
+    capacity_calibration_output_root: Path | None = None,
     predecessor_execution_ids_by_carrier: Mapping[str, str] | None = None,
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
     promotion_output_root: Path | None = None,
-    alpha_m100_readiness_receipt: Path | None = None,
-    alpha_m100_app_uat_receipt: Path | None = None,
-    alpha_m100_acceptance_output_root: Path | None = None,
     pre_acquisition_handoff: Path | None = None,
     pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
     acquisition_root: Path | None = None,
     scale_source_pool: Path | None = None,
     source_pool_evidence_root: Path | None = None,
+    retry_evidence_output_root: Path | None = None,
+    batch_documents_factory: Callable[
+        [Mapping[str, Mapping[str, Any]], Mapping[str, Path]],
+        Mapping[str, Mapping[str, Any]],
+    ]
+    | None = None,
 ) -> dict[str, Path]:
     """Write immutable envelopes for selected carriers at one resolved scale."""
 
-    resolved = resolve_campaign_scale(scale=scale, quota=quota)
-    selected = tuple(carriers) or CAMPAIGN_CARRIERS
-    unknown = [carrier for carrier in selected if carrier not in _OPERATIONS]
-    if unknown:
-        raise ValueError(f"unsupported carriers: {unknown}")
+    if pre_acquisition_handoff is None:
+        raise ValueError(
+            "GATE_BLOCK DATA.CAMPAIGN.HANDOFF_REQUIRED: campaign envelopes "
+            "require a confirmed pre-acquisition handoff"
+        )
+    handoff_document = load_pre_acquisition_handoff(
+        pre_acquisition_handoff.expanduser().resolve()
+    )
+    vertical = str(handoff_document["vertical"])
+    requested_workloads = dict(workloads or {})
+    resolved = resolve_campaign_scale(
+        scale=scale,
+        quota=(
+            quota
+            if quota is not None
+            else (max(requested_workloads.values()) if scale is None and requested_workloads else None)
+        ),
+    )
+    if requested_workloads:
+        selected = normalize_active_carriers(
+            carriers if carriers is not None else requested_workloads
+        )
+        exact_workloads = normalize_workloads(
+            requested_workloads,
+            active_carriers=selected,
+        )
+        workload_mode = "explicit"
+    else:
+        selected = normalize_active_carriers(carriers or CAMPAIGN_CARRIERS)
+        is_milestone_preset = (
+            selected == CAMPAIGN_CARRIERS
+            and resolved.scale in {"M100", "M1000", "M10000"}
+        )
+        workload_mode = "milestone_preset" if is_milestone_preset else "explicit"
+        exact_workloads = (
+            campaign_workload_targets(resolved.scale)
+            if is_milestone_preset
+            else {carrier: resolved.quota for carrier in selected}
+        )
     retry_predecessors = dict(predecessor_execution_ids_by_carrier or {})
     target_input = tuple(target_names or ())
     predecessor_reconciliation: dict[str, Any] | None = None
@@ -385,14 +295,10 @@ def write_scale_envelopes(
         )
     if sequence == 1 and retry_predecessors:
         raise ValueError("campaign envelope sequence=1 forbids retry predecessors")
-    required = set(CAMPAIGN_CARRIERS)
-    if retry_predecessors and (
-        len(selected) != len(required)
-        or set(selected) != required
-        or set(retry_predecessors) != required
-    ):
+    required = set(selected)
+    if retry_predecessors and set(retry_predecessors) != required:
         raise ValueError(
-            "campaign retry requires complete four-carrier retry predecessors"
+            "campaign retry predecessors must exactly match active carriers"
         )
     payloads: dict[str, dict[str, Any]] = {}
     for carrier in selected:
@@ -400,30 +306,25 @@ def write_scale_envelopes(
             scale=resolved.scale,
             quota=None,
             carrier=carrier,
-            region_ref=region_ref,
-            vertical=vertical,
-            topic=topic,
             target_names=target_input,
-            source_providers=source_providers,
             family_ref=family_ref,
             repo_root=repo_root,
             day=day,
             sequence=sequence,
             predecessor_execution_id=retry_predecessors.get(carrier),
+            allow_retry_intent_change=(
+                reconciliation_receipt is not None
+                and reconciliation_receipt.get("reason")
+                == "terminal_unpublished_retryable_shortfall"
+            ),
             semantic_selection_id=semantic_selection_id,
             semantic_preflight_receipt=semantic_preflight_receipt,
-            capacity_host_set=capacity_host_set,
             semantic_preflight_output_root=semantic_preflight_output_root,
+            capacity_calibration_receipt=capacity_calibration_receipt,
+            capacity_calibration_output_root=capacity_calibration_output_root,
             predecessor_reconciliation=predecessor_reconciliation,
             promotion_receipt=promotion_receipt,
             promotion_output_root=(promotion_output_root or output_root or paths.OUTPUT_ROOT),
-            alpha_m100_readiness_receipt=alpha_m100_readiness_receipt,
-            alpha_m100_app_uat_receipt=alpha_m100_app_uat_receipt,
-            alpha_m100_acceptance_output_root=(
-                alpha_m100_acceptance_output_root
-                or output_root
-                or paths.OUTPUT_ROOT
-            ),
             pre_acquisition_handoff=pre_acquisition_handoff,
             pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
             external_input_refs=(external_input_refs_by_carrier or {}).get(carrier, ()),
@@ -431,22 +332,59 @@ def write_scale_envelopes(
             scale_source_pool=scale_source_pool,
             source_pool_evidence_root=source_pool_evidence_root,
             source_pool_output_root=(output_root or paths.OUTPUT_ROOT),
+            retry_evidence_output_root=retry_evidence_output_root,
+            active_carriers=selected,
+            workloads=exact_workloads,
+            workload_mode=workload_mode,
         )
+        payloads[carrier] = payload
+    first_identity = parse_execution_id(str(payloads[selected[0]]["executionId"]))
+    replay_target_root = envelope_path(
+        resolved.scale,
+        selected[0],
+        scope=first_identity.scope,
+        vertical=vertical,
+        root=output_root,
+        sequence=first_identity.sequence,
+    ).parent
+    replay_first = replay_target_root / f"{selected[0]}.json"
+    if replay_first.is_file():
+        existing_first = read_json(replay_first)
+        if not isinstance(existing_first, Mapping):
+            raise TypeError("existing campaign envelope must be an object")
+        batch_frozen_at = str(existing_first.get("frozenAt") or "")
+    else:
+        batch_frozen_at = str(payloads[selected[0]]["frozenAt"])
+    for payload in payloads.values():
+        payload["frozenAt"] = batch_frozen_at
+    actual_workloads = {
+        carrier: int(payloads[carrier]["quota"])
+        for carrier in selected
+    }
+    root_execution_id = str(payloads[selected[0]]["executionId"])
+    for payload in payloads.values():
+        payload["activeCarriers"] = list(selected)
+        payload["workloads"] = dict(actual_workloads)
+        payload["rootExecutionId"] = root_execution_id
+        stable = {
+            key: value
+            for key, value in payload.items()
+            if key != "requestDigest"
+        }
+        payload["requestDigest"] = _sha256(stable)
         assert_valid(
             payload,
             "execution",
             "content_campaign_request_envelope",
-            label=f"campaign envelope:{resolved.scale}:{carrier}",
+            label=f"campaign envelope:{resolved.scale}:{payload['carrier']}",
         )
-        payloads[carrier] = payload
     _assert_one_source_identity(
         payloads,
         predecessor_reconciliation_receipt=reconciliation_receipt,
     )
     _assert_one_handoff_identity(payloads)
-    _assert_one_capacity_plan(payloads)
+    _assert_workload_plans(payloads)
     _assert_one_scale_source_pool(payloads, scale=resolved.scale)
-    _assert_one_m100_alpha_acceptance(payloads, scale=resolved.scale)
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
     frozen_source = next(iter(payloads.values()))["sourceDigest"]
     frozen_bundle = next(iter(payloads.values()))["executionBundle"]
@@ -471,52 +409,87 @@ def write_scale_envelopes(
             root=output_root,
             sequence=identity.sequence,
         )
-        if path.is_file():
-            existing = read_json(path)
-            if existing != payload and (
-                str(existing.get("requestDigest") or "")
-                != str(payload.get("requestDigest") or "")
-            ):
-                raise ValueError(
-                    f"campaign envelope already frozen with different digest: {path}"
-                )
-            written[carrier] = path
-            continue
-        write_json(path, payload)
         written[carrier] = path
-    return written
-
-
-def write_campaign_envelopes(
-    *,
-    scales: Iterable[str] | None = None,
-    quota: int | None = None,
-    **kwargs: Any,
-) -> dict[str, dict[str, Path]]:
-    """Write one or more named/custom scales through the atomic writer."""
-    scale_list = [str(item).strip() for item in (scales or []) if str(item).strip()]
-    if scale_list and quota is not None and len(scale_list) != 1:
-        raise CampaignScaleError(
-            "GATE_BLOCK write_campaign_envelopes cannot combine quota= with multiple scales"
-        )
-    if not scale_list:
-        if quota is None:
-            raise CampaignScaleError(
-                "GATE_BLOCK write_campaign_envelopes requires scales= or quota="
+    target_roots = {path.parent for path in written.values()}
+    if len(target_roots) != 1:
+        raise ValueError("campaign envelope batch resolved multiple commit roots")
+    target_root = next(iter(target_roots))
+    extra_documents = (
+        dict(batch_documents_factory(payloads, written))
+        if batch_documents_factory is not None
+        else {}
+    )
+    documents: dict[str, Mapping[str, Any]] = {
+        f"{carrier}.json": payload for carrier, payload in payloads.items()
+    }
+    for filename, document in extra_documents.items():
+        if (
+            not filename.endswith(".json")
+            or Path(filename).name != filename
+            or filename in documents
+            or not isinstance(document, Mapping)
+        ):
+            raise ValueError(f"campaign envelope batch document is invalid: {filename}")
+        documents[filename] = document
+    if target_root.exists():
+        observed_entries = {path.name: path for path in target_root.iterdir()}
+        if set(observed_entries) != set(documents) or any(
+            not path.is_file() for path in observed_entries.values()
+        ):
+            raise ValueError(
+                f"campaign envelope batch is partial or has foreign files: {target_root}"
             )
-        scale_list = [resolve_campaign_scale(quota=quota).scale]
-    written: dict[str, dict[str, Path]] = {}
-    for scale in scale_list:
-        resolved = resolve_campaign_scale(
-            scale=scale,
-            quota=quota if len(scale_list) == 1 else None,
-        )
-        written[resolved.scale] = write_scale_envelopes(
-            resolved.scale,
-            quota=resolved.quota,
-            **kwargs,
-        )
+        for filename, document in documents.items():
+            existing = read_json(target_root / filename)
+            if filename in {f"{carrier}.json" for carrier in payloads}:
+                assert_valid(
+                    existing,
+                    "execution",
+                    "content_campaign_request_envelope",
+                    label=f"existing campaign envelope:{filename}",
+                )
+                existing_stable = {
+                    key: value
+                    for key, value in existing.items()
+                    if key != "requestDigest"
+                }
+                candidate_stable = {
+                    key: value
+                    for key, value in document.items()
+                    if key != "requestDigest"
+                }
+                if (
+                    existing.get("requestDigest") != _sha256(existing_stable)
+                    or document.get("requestDigest") != _sha256(candidate_stable)
+                    or existing_stable != candidate_stable
+                ):
+                    raise ValueError(
+                        "campaign envelope already frozen with different digest: "
+                        f"{target_root / filename}"
+                    )
+            elif existing != document:
+                raise ValueError(
+                    f"campaign envelope batch document collision: {target_root / filename}"
+                )
+        return written
+    target_root.parent.mkdir(parents=True, exist_ok=True)
+    staging_root = Path(
+        tempfile.mkdtemp(prefix=f".{target_root.name}.", dir=target_root.parent)
+    )
+    try:
+        for filename, document in documents.items():
+            write_json(staging_root / filename, document)
+        directory_fd = os.open(staging_root, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        os.replace(staging_root, target_root)
+    except Exception:
+        if staging_root.exists():
+            shutil.rmtree(staging_root)
+        raise
     return written
 
 
-__all__ = ["write_campaign_envelopes", "write_scale_envelopes"]
+__all__ = ["write_scale_envelopes"]

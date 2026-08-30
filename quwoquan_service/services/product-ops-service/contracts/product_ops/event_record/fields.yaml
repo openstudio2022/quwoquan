@@ -154,7 +154,7 @@ enums:
   StartupRecoveryMount:
     values: [bootstrap, runtime_boundary, safe_shell, router_error]
   StartupRecoveryPhase:
-    values: [startup_checking, startup_update_required, startup_latest, startup_version_unavailable, runtime_unavailable, runtime_reentering, runtime_version_checking, runtime_update_required, runtime_latest, runtime_version_unavailable]
+    values: [startup_checking, startup_update_required, startup_web_only, startup_latest, startup_version_unavailable, runtime_unavailable, runtime_reentering, runtime_version_checking, runtime_update_required, runtime_web_only, runtime_latest, runtime_version_unavailable]
   StartupRecoveryAction:
     values: [none, open_update, open_web, external_return, runtime_reentry]
 typed_extensions:

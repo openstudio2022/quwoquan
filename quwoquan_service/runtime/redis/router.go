@@ -78,10 +78,16 @@ func NewRouterWithFactory(cfg RouterConfig, factory ClientFactory) (*Router, err
 	}, nil
 }
 
+// 只有显式 memory 走进程内存实现；空 mode 是缺声明，不是「默认内存」。
 func memoryClientFactory(cfg SceneConfig) (Client, error) {
 	switch cfg.Mode {
-	case "", "memory":
+	case "memory":
 		return NewMemoryClient(), nil
+	case "":
+		return nil, fmt.Errorf(
+			"redis: scene has no mode declared; declare one of " +
+				"memory/standalone/cluster",
+		)
 	default:
 		return nil, fmt.Errorf(
 			"redis: mode %q requires internal/platform/redis composition",

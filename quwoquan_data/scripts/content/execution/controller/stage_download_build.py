@@ -1,6 +1,5 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-
 from core.control_types import ExecutionStage, StageStatus
 from core.data_issue import DataIssue
 
@@ -17,7 +16,6 @@ from content.execution.support import (
     DataIssueStage,
     DataRecoveryAction,
     ExecutionContext,
-    Mapping,
     StageResult,
     _active_spec,
     _entity_homepages_per_target,
@@ -25,6 +23,9 @@ from content.execution.support import (
     data_issue,
     issue_messages,
     stage_issues,
+)
+from content.execution.controller.stage_download_media_freeze import (
+    freeze_homepage_media_dispositions_for_stage,
 )
 from content.execution.workspace import ExecutionSourceDigestDriftError
 
@@ -152,6 +153,9 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
                 ),
                 source="download_fetch_failed",
             )
+        freeze_result = freeze_homepage_media_dispositions_for_stage(ctx)
+        if freeze_result is not None:
+            return freeze_result
         capacity_result = _resolve_download_content_capacity_shortfall(
             ctx,
             _download_content_capacity_preflight(ctx),
@@ -196,7 +200,7 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
                 entity_ids=group_ids,
                 entity_type=group_type,
                 lane=download_lane,
-                max_workers=max(1, int(ctx.max_workers or 1)),
+                max_workers=int(ctx.max_workers),
                 defer_gate=group_index < len(grouped_items) - 1,
             )
     except SystemExit as exc:
@@ -256,6 +260,9 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
             message="download gate failed:\n  - " + "\n  - ".join(rendered_issues[:10]),
             source="download_fetch_failed",
         )
+    freeze_result = freeze_homepage_media_dispositions_for_stage(ctx)
+    if freeze_result is not None:
+        return freeze_result
     repair_path = _download_repair_path(ctx)
     if repair_path.is_file():
         repair_path.unlink()
@@ -316,49 +323,6 @@ def _qualified_entity_names(verdict: Any) -> tuple[str, ...]:
     return tuple(names)
 
 
-def _write_homepage_independent_review_repairs(ctx: ExecutionContext) -> None:
-    """Turn failed independent reviews into object-bound author retry input."""
-    from core.io import read_json
-    from governance.coverage.entity_extract import entity_ref, require_domain_etype
-
-    from content.execution.controller.homepage_author_finalization import (
-        _write_homepage_repair_report,
-    )
-    from content.homepage.homepage_review import _entity_draft_dir
-
-    for target in ctx.spec.scope.coverage_targets:
-        domain, entity_type = require_domain_etype(
-            target.entity_type,
-            context=target.name,
-        )
-        draft_dir = _entity_draft_dir(
-            ctx.execution_id,
-            domain,
-            entity_type,
-            target.name,
-        )
-        result_path = draft_dir.parent / "5.review" / "reviewer_result.json"
-        if not result_path.is_file():
-            continue
-        result = read_json(result_path)
-        if not isinstance(result, Mapping) or result.get("verdict") != "failed":
-            continue
-        issues = tuple(
-            str(item).strip()
-            for item in (result.get("issues") or [])
-            if str(item).strip()
-        )
-        if not issues:
-            continue
-        _write_homepage_repair_report(
-            ctx,
-            object_dir=draft_dir.parent,
-            ref=entity_ref(domain, entity_type, target.name),
-            materialization_messages=issues,
-            repair_strategy="local_edit",
-        )
-
-
 def _run_build_validate(ctx: ExecutionContext) -> StageResult:
     from verify.verify_homepage_media_completeness import (
         homepage_media_completeness_report,
@@ -368,6 +332,7 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
     from content.execution.controller.homepage_review_stage import (
         independent_reviewer_precondition_issues,
         run_homepage_independent_reviews,
+        write_homepage_independent_review_repairs,
     )
     from content.homepage.homepage import homepage_runtime_spec
     if _entity_homepages_per_target(ctx) <= 0:
@@ -438,17 +403,19 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
                 recovery=DataRecoveryAction.STOP,
             ),
         )
-    run_homepage_independent_reviews(
+    review_failures = run_homepage_independent_reviews(
         ctx, homepage_runtime_spec(ctx.execution_id, _active_spec(ctx))
     )
     # 审阅结论逐对象写回 5.review/review.json。审阅未过的对象按丢弃处理；
     # 只要仍有合格对象就 partial 准出，approvedQuota 只保留为规模里程碑。
-    reviewed = homepage_quota_verdict(ctx)
+    # 此处必须要求审阅已绑定结果：仍为 pending 的对象表示审阅没跑成，
+    # 放行会让未审阅对象一路走到 publish 才被 pool delivery 拦下。
+    reviewed = homepage_quota_verdict(ctx, require_independent_review=True)
     if reviewed.qualified_count <= 0:
         issues = reviewed.blocking_issues() or [
-            "homepage independent review produced no qualified objects"
-        ]
-        _write_homepage_independent_review_repairs(ctx)
+            str(item) for item in review_failures if str(item).strip()
+        ] or ["homepage independent review produced no qualified objects"]
+        write_homepage_independent_review_repairs(ctx)
         return StageResult(
             ExecutionStage.BUILD_VALIDATE,
             AUTO,

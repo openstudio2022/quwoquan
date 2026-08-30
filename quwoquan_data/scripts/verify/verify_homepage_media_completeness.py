@@ -1,52 +1,34 @@
 #!/usr/bin/env python3
-"""Verify source-page image enumeration, download and homepage disposition closure."""
+"""Verify source-page image enumeration, download and homepage disposition closure.
+
+Two verdicts with different decidable moments (DEC-029), plus their union:
+
+- decision: owed the moment `1.download` closes, reads only sources and the frozen
+  dispositions.
+- fulfillment: owed once the object is materialized, reconciles the manifest against
+  those same frozen dispositions in both directions.
+"""
 from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 from collections.abc import Collection
 from typing import Any, Iterable, Mapping
 
+sys.dont_write_bytecode = True
+
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core import paths
-from core.data_issue import DataIssue, DataIssueCode, DataIssueStage, DataRecoveryAction, data_issue
-from core.io import read_json, write_json
-from core.page_media import (
-    HomepageAssetDisposition,
-    PageImageDropCode,
-    is_image_dimension_token,
-    normalized_subject_core,
-    normalized_subject_key,
-    subject_keys_conflict,
-)
-
-
-_ASSET_REF_RE = re.compile(r"asset://([^\s,\"')]+)")
-_CAP_REASON_RE = re.compile(r"capReached|maxKeptPerSource|group_aware", re.IGNORECASE)
-def _issue(
-    code: DataIssueCode,
-    message: str,
-    *,
-    ref: str,
-    attrs: Mapping[str, object] | None = None,
-) -> DataIssue:
-    return data_issue(
-        code,
-        stage=DataIssueStage.VERIFY_HOMEPAGE_MEDIA,
-        ref=ref,
-        message=message,
-        recovery=DataRecoveryAction.STOP,
-        attributes=attrs,
-    )
-
-
-def _mapping_rows(value: object) -> list[dict[str, Any]]:
-    return [dict(row) for row in (value or []) if isinstance(row, Mapping)]
+from core.data_issue import DataIssue, DataIssueCode
+from core.io import read_json
+from content.execution.execution_terminal import load_terminal_execution_evidence
+from verify import homepage_media_decision as decision
+from verify import homepage_media_fulfillment as fulfillment
+from verify.homepage_media_issue import issue as _issue, mapping_rows as _mapping_rows
 
 
 def _homepage_media_dispositions(root: Path) -> dict[str, list[dict[str, Any]]]:
@@ -62,88 +44,6 @@ def _homepage_media_dispositions(root: Path) -> dict[str, list[dict[str, Any]]]:
     return rows
 
 
-def _disposition_issues(
-    source_ref: str,
-    index_assets: list[dict[str, Any]],
-    dispositions: Mapping[str, list[dict[str, Any]]],
-    published_source_assets: set[str],
-) -> list[DataIssue]:
-    """Every downloaded image must have one publish, policy, or dedupe outcome."""
-
-    issues: list[DataIssue] = []
-    allowed = {item.value for item in HomepageAssetDisposition}
-    published = {
-        HomepageAssetDisposition.COVER.value,
-        HomepageAssetDisposition.INLINE.value,
-        HomepageAssetDisposition.RELATED.value,
-    }
-    for asset in index_assets:
-        file_name = str(asset.get("fileName") or "").strip()
-        if not file_name:
-            issues.append(
-                _issue(
-                    DataIssueCode.CONTRACT_INVALID,
-                    "assets/index.json 缺少 fileName，无法闭合页面图片处置",
-                    ref=source_ref,
-                    attrs={"sourceAssetId": str(asset.get("sourceAssetId") or "")},
-                )
-            )
-            continue
-        source_asset_ref = f"sources/{source_ref}/assets/{file_name}"
-        outcomes = dispositions.get(source_asset_ref, [])
-        if len(outcomes) != 1:
-            issues.append(
-                _issue(
-                    DataIssueCode.MEDIA_ENUMERATION_INCOMPLETE,
-                    "下载图片没有且只能有一个发布处置",
-                    ref=source_ref,
-                    attrs={"sourceAssetRef": source_asset_ref, "outcomeCount": len(outcomes)},
-                )
-            )
-            continue
-        outcome = outcomes[0]
-        disposition = str(outcome.get("disposition") or "")
-        reason = str(outcome.get("reason") or "")
-        asset_id = str(outcome.get("assetId") or "")
-        if disposition not in allowed or not reason:
-            issues.append(
-                _issue(
-                    DataIssueCode.CONTRACT_INVALID,
-                    "页面图片处置不符合闭集合同",
-                    ref=source_ref,
-                    attrs={"sourceAssetRef": source_asset_ref, "disposition": disposition},
-                )
-            )
-            continue
-        if disposition in published:
-            if not asset_id or source_asset_ref not in published_source_assets:
-                issues.append(
-                    _issue(
-                        DataIssueCode.MEDIA_ENUMERATION_INCOMPLETE,
-                        "已发布图片没有对应主页 manifest 资产",
-                        ref=source_ref,
-                        attrs={"sourceAssetRef": source_asset_ref, "assetId": asset_id},
-                    )
-                )
-        elif asset_id:
-            issues.append(
-                _issue(
-                    DataIssueCode.CONTRACT_INVALID,
-                    "策略排除或重复别名图片不得指向发布资产",
-                    ref=source_ref,
-                    attrs={"sourceAssetRef": source_asset_ref, "assetId": asset_id},
-                )
-            )
-    return issues
-
-
-def _subject_core(caption: str, file_name: str, entity_name: str) -> str:
-    return normalized_subject_core(
-        normalized_subject_key(caption, file_name),
-        entity_name=entity_name,
-    )
-
-
 def _entity_manifest_by_name(root: Path) -> dict[str, tuple[Path, dict[str, Any]]]:
     out: dict[str, tuple[Path, dict[str, Any]]] = {}
     for path in sorted((root / "entities").glob("*/*/*/manifest.json")):
@@ -151,208 +51,61 @@ def _entity_manifest_by_name(root: Path) -> dict[str, tuple[Path, dict[str, Any]
     return out
 
 
-def _funnel_issues(
-    source_ref: str,
-    placements: list[dict[str, Any]],
-    meta: Mapping[str, Any],
-    index_assets: list[dict[str, Any]],
-) -> list[DataIssue]:
+def _scan_sources(
+    root: Path,
+    *,
+    scope: set[str] | None,
+    dispositions: Mapping[str, list[dict[str, Any]]],
+    published_source_assets: set[str],
+    include_decision: bool,
+    include_fulfillment: bool,
+) -> tuple[list[DataIssue], int]:
+    """Walk 每个有图片 placement 的来源单元，按视图收集问题并计数。"""
+
     issues: list[DataIssue] = []
-    funnel = meta.get("assetFunnel") if isinstance(meta.get("assetFunnel"), Mapping) else {}
-    candidate_count = int(funnel.get("candidateCount") or 0)
-    kept_count = int(funnel.get("keptCount") or 0)
-    drops = _mapping_rows(funnel.get("drops"))
-    dropped_count = int(funnel.get("droppedCount") or 0)
-    dedupe_removed = int(funnel.get("dedupeRemoved") or 0)
-    serialized_funnel = json.dumps(funnel, ensure_ascii=False)
-    if _CAP_REASON_RE.search(serialized_funnel):
-        issues.append(
-            _issue(
-                DataIssueCode.MEDIA_ENUMERATION_INCOMPLETE,
-                "页面图片存在数量上限或配额截断",
-                ref=source_ref,
-                attrs={"candidateCount": candidate_count, "keptCount": kept_count},
-            )
-        )
-    if candidate_count != kept_count + dropped_count:
-        issues.append(
-            _issue(
-                DataIssueCode.MEDIA_DOWNLOAD_INCOMPLETE,
-                "图片漏失未被下载或策略排除归因",
-                ref=source_ref,
-                attrs={
-                    "candidateCount": candidate_count,
-                    "keptCount": kept_count,
-                    "droppedCount": dropped_count,
-                },
-            )
-        )
-    if kept_count != len(index_assets):
-        issues.append(
-            _issue(
-                DataIssueCode.MEDIA_DOWNLOAD_INCOMPLETE,
-                "asset funnel keptCount 与 assets/index.json 不一致",
-                ref=source_ref,
-                attrs={"keptCount": kept_count, "indexCount": len(index_assets)},
-            )
-        )
-    if dropped_count != len(drops) or dedupe_removed > dropped_count:
-        issues.append(
-            _issue(
-                DataIssueCode.CONTRACT_INVALID,
-                "asset funnel 丢弃计数与终态记录不一致",
-                ref=source_ref,
-                attrs={
-                    "droppedCount": dropped_count,
-                    "dropRecordCount": len(drops),
-                    "dedupeRemoved": dedupe_removed,
-                },
-            )
-        )
-    for drop in drops:
-        raw_code = str(drop.get("code") or "")
-        reason = str(drop.get("reason") or "")
-        try:
-            code = PageImageDropCode(raw_code)
-        except ValueError:
-            issues.append(
-                _issue(
-                    DataIssueCode.CONTRACT_INVALID,
-                    "图片丢弃缺少稳定闭集代码",
-                    ref=source_ref,
-                    attrs={"code": raw_code, "reason": reason[:240]},
-                )
-            )
+    checked_sources = 0
+    for meta_path in sorted((root / "sources").glob("*/meta.json")):
+        meta = read_json(meta_path)
+        if scope is not None and str(meta.get("entityName") or "").strip() not in scope:
             continue
-        if not reason:
-            issues.append(
-                _issue(
-                    DataIssueCode.CONTRACT_INVALID,
-                    "图片丢弃缺少可审计说明",
-                    ref=source_ref,
-                    attrs={"code": code.value},
-                )
-            )
-        if not code.is_policy_outcome:
-            issues.append(
-                _issue(
-                    DataIssueCode.MEDIA_DOWNLOAD_INCOMPLETE,
-                    "页面图片下载未闭合",
-                    ref=source_ref,
-                    attrs={"code": code.value, "reason": reason[:240]},
-                )
-            )
-    return issues
-
-
-def _manifest_issues(
-    entity_name: str,
-    manifest_path: Path,
-    manifest: Mapping[str, Any],
-    page_text: str,
-) -> list[DataIssue]:
-    issues: list[DataIssue] = []
-    assets = _mapping_rows(manifest.get("assets"))
-    roles = {"cover", "inline", "related"}
-    invalid_roles = sorted({str(row.get("role") or "") for row in assets} - roles)
-    if invalid_roles:
-        issues.append(
-            _issue(
-                DataIssueCode.MEDIA_ENUMERATION_INCOMPLETE,
-                "主页资产存在未归一角色",
-                ref=entity_name,
-                attrs={"roles": ",".join(invalid_roles)},
-            )
-        )
-    if not assets:
-        return issues
-    covers = [row for row in assets if row.get("role") == "cover"]
-    if len(covers) != 1:
-        issues.append(
-            _issue(
-                DataIssueCode.MEDIA_COVER_CONFLICT,
-                "主页必须且只能有一个封面",
-                ref=entity_name,
-                attrs={"coverCount": len(covers)},
-            )
-        )
-        return issues
-    cover = covers[0]
-    cover_id = str(cover.get("assetId") or "")
-    body_refs = _ASSET_REF_RE.findall(page_text.split("---\n", 2)[-1])
-    if cover_id in body_refs:
-        issues.append(
-            _issue(
-                DataIssueCode.MEDIA_COVER_CONFLICT,
-                "coverImage 被正文或相关图片区重复引用",
-                ref=entity_name,
-                attrs={"assetId": cover_id},
-            )
-        )
-    cover_subject = _subject_core(
-        str(cover.get("caption") or ""),
-        str(cover.get("fileName") or ""),
-        entity_name,
-    )
-    for asset in assets:
-        if asset is cover:
+        placements = _mapping_rows(meta.get("imagePlacements"))
+        if not placements:
             continue
-        if str(asset.get("placementType") or "") == "groupMember" and asset.get("role") != "related":
-            issues.append(
-                _issue(
-                    DataIssueCode.MEDIA_ENUMERATION_INCOMPLETE,
-                    "groupMember 必须归入相关图片",
-                    ref=entity_name,
-                    attrs={"assetId": asset.get("assetId") or ""},
+        checked_sources += 1
+        source_ref = meta_path.parent.name
+        index_path = meta_path.parent / "assets" / "index.json"
+        index_payload = read_json(index_path) if index_path.is_file() else {}
+        index_assets = _mapping_rows(index_payload.get("assets"))
+        if include_decision:
+            issues.extend(decision.funnel_issues(source_ref, meta, index_assets))
+            issues.extend(
+                decision.disposition_issues(source_ref, index_assets, dispositions)
+            )
+            issues.extend(decision.placement_caption_issues(source_ref, placements))
+        if include_fulfillment:
+            issues.extend(
+                fulfillment.reconciliation_issues(
+                    source_ref,
+                    index_assets,
+                    dispositions,
+                    published_source_assets,
                 )
             )
-        subject = _subject_core(
-            str(asset.get("caption") or ""),
-            str(asset.get("fileName") or ""),
-            entity_name,
-        )
-        if subject_keys_conflict(cover_subject, subject, entity_name=entity_name):
-            issues.append(
-                _issue(
-                    DataIssueCode.MEDIA_COVER_CONFLICT,
-                    "封面与正文/相关图片使用同一视觉主题",
-                    ref=entity_name,
-                    attrs={"cover": cover_id, "assetId": asset.get("assetId") or ""},
-                )
-            )
-    for asset in assets:
-        caption = str(asset.get("caption") or "").strip()
-        if caption and is_image_dimension_token(caption):
-            issues.append(
-                _issue(
-                    DataIssueCode.MEDIA_CAPTION_INVALID,
-                    "图片尺寸参数被错误保存为图注",
-                    ref=entity_name,
-                    attrs={"assetId": asset.get("assetId") or "", "caption": caption},
-                )
-            )
-        if re.search(r"(?:^|_)cover_(?:x?\d+|\d+[x×]\d+)px(?:_|$)", str(asset.get("assetId") or ""), re.I):
-            issues.append(
-                _issue(
-                    DataIssueCode.MEDIA_CAPTION_INVALID,
-                    "封面 assetId 含尺寸伪图注",
-                    ref=entity_name,
-                    attrs={"assetId": asset.get("assetId") or ""},
-                )
-            )
-    return issues
+    return issues, checked_sources
 
 
-def homepage_media_completeness_report(
+def _media_report(
     execution_id: str,
     *,
-    publishable_names: Collection[str] | None = None,
+    publishable_names: Collection[str] | None,
+    include_decision: bool,
+    include_fulfillment: bool,
 ) -> dict[str, Any]:
-    """校验主页图片枚举与发布处置的完整性。
+    """Shared scan behind the decision, fulfillment and combined verdicts.
 
-    ``publishable_names`` 为 None 时审计整个工作包（独立 verifier 口径）。批次准出
-    调用方必须传入本次准出集合：候选池经过采后必然留下未产出的丢弃对象，它们的来源
-    图片既不会进入任何 manifest，也不该阻断已达标对象发布。
+    ``publishable_names`` narrows the audit to the objects being released.  The
+    decision view never passes a scope: at download time no object has been
+    discarded yet, so every downloaded image owes an outcome.
     """
     root = paths.execution_root(execution_id)
     issues: list[DataIssue] = []
@@ -372,7 +125,17 @@ def homepage_media_completeness_report(
         for asset in _mapping_rows(manifest.get("assets"))
         if str(asset.get("sourceAssetRef") or "").strip()
     }
-    if not root.is_dir():
+    if root.is_dir():
+        source_issues, checked_sources = _scan_sources(
+            root,
+            scope=scope,
+            dispositions=dispositions,
+            published_source_assets=published_source_assets,
+            include_decision=include_decision,
+            include_fulfillment=include_fulfillment,
+        )
+        issues.extend(source_issues)
+    else:
         issues.append(
             _issue(
                 DataIssueCode.CONTRACT_INVALID,
@@ -381,44 +144,14 @@ def homepage_media_completeness_report(
                 attrs={"path": root},
             )
         )
-    for meta_path in sorted((root / "sources").glob("*/meta.json")) if root.is_dir() else []:
-        meta = read_json(meta_path)
-        if scope is not None and str(meta.get("entityName") or "").strip() not in scope:
-            continue
-        placements = _mapping_rows(meta.get("imagePlacements"))
-        if not placements:
-            continue
-        checked_sources += 1
-        source_ref = meta_path.parent.name
-        index_path = meta_path.parent / "assets" / "index.json"
-        index_payload = read_json(index_path) if index_path.is_file() else {}
-        index_assets = _mapping_rows(index_payload.get("assets"))
-        issues.extend(_funnel_issues(source_ref, placements, meta, index_assets))
-        issues.extend(
-            _disposition_issues(
-                source_ref,
-                index_assets,
-                dispositions,
-                published_source_assets,
-            )
-        )
-        for placement in placements:
-            caption = str(placement.get("caption") or "").strip()
-            if caption and is_image_dimension_token(caption):
-                issues.append(
-                    _issue(
-                        DataIssueCode.MEDIA_CAPTION_INVALID,
-                        "source placement 图注是尺寸参数",
-                        ref=source_ref,
-                        attrs={"fileName": placement.get("fileName") or "", "caption": caption},
-                    )
-                )
-    for entity_name, (manifest_path, manifest) in manifests.items():
-        page_path = manifest_path.parent / "page.md"
-        page_text = page_path.read_text(encoding="utf-8") if page_path.is_file() else ""
-        issues.extend(_manifest_issues(entity_name, manifest_path, manifest, page_text))
+    if include_fulfillment:
+        issues.extend(fulfillment.scan_manifests(manifests))
     report = {
-        "passed": not issues and checked_sources > 0 and bool(manifests),
+        "passed": (
+            not issues
+            and checked_sources > 0
+            and (bool(manifests) or not include_fulfillment)
+        ),
         "executionId": execution_id,
         "checkedSourceCount": checked_sources,
         "checkedHomepageCount": len(manifests),
@@ -434,18 +167,74 @@ def homepage_media_completeness_report(
         )
         report["passed"] = False
     if root.is_dir():
-        evidence = root / "evidence" / "homepage_media_completeness.json"
-        evidence.parent.mkdir(parents=True, exist_ok=True)
-        write_json(evidence, report)
-        report["reportPath"] = str(evidence)
+        # 纯 verifier 对 active 与 terminal 工作包都只读；该调用只负责让无效的
+        # stale/supersession candidate fail closed，不把报告反写进 execution inventory。
+        load_terminal_execution_evidence(root)
     return report
+
+
+def homepage_media_decision_report(execution_id: str) -> dict[str, Any]:
+    """`1.download` 完成判据：每张下载图的处置已冻结且合法。
+
+    只读 `sources/**` 与冻结处置，不读 manifest，因此下载一闭合即可判定。
+    """
+    return _media_report(
+        execution_id,
+        publishable_names=None,
+        include_decision=True,
+        include_fulfillment=False,
+    )
+
+
+def homepage_media_fulfillment_report(
+    execution_id: str,
+    *,
+    publishable_names: Collection[str] | None = None,
+) -> dict[str, Any]:
+    """物化后判据：manifest 与冻结处置双向对账，差集 fail closed。"""
+    return _media_report(
+        execution_id,
+        publishable_names=publishable_names,
+        include_decision=False,
+        include_fulfillment=True,
+    )
+
+
+def homepage_media_completeness_report(
+    execution_id: str,
+    *,
+    publishable_names: Collection[str] | None = None,
+) -> dict[str, Any]:
+    """校验主页图片枚举与发布处置的完整性（决策 + 兑现的合并口径）。
+
+    ``publishable_names`` 为 None 时审计整个工作包（独立 verifier 口径）。批次准出
+    调用方必须传入本次准出集合：候选池经过采后必然留下未产出的丢弃对象，它们的来源
+    图片既不会进入任何 manifest，也不该阻断已达标对象发布。
+    """
+    return _media_report(
+        execution_id,
+        publishable_names=publishable_names,
+        include_decision=True,
+        include_fulfillment=True,
+    )
 
 
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--execution", required=True)
+    parser.add_argument(
+        "--view",
+        choices=("decision", "fulfillment", "combined"),
+        default="combined",
+        help="decision 供 1.download 判据；fulfillment 供物化后对账；combined 为整包审计",
+    )
     args = parser.parse_args(list(argv) if argv is not None else None)
-    report = homepage_media_completeness_report(args.execution)
+    if args.view == "decision":
+        report = homepage_media_decision_report(args.execution)
+    elif args.view == "fulfillment":
+        report = homepage_media_fulfillment_report(args.execution)
+    else:
+        report = homepage_media_completeness_report(args.execution)
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0 if report["passed"] else 1
 

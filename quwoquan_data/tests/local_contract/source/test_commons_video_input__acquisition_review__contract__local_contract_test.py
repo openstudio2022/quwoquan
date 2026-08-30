@@ -18,7 +18,7 @@ from content.execution.campaign.external_inputs import (
 from content.source import professional_commons_video_input as commons_input
 from content.source import professional_video_acquisition
 from content.source.professional_safety_evidence import file_sha256
-from governance.coverage.distribution import ProductLifecycleState
+from content.execution.model_contract import governed_cursor_grok_model
 
 _SHA = lambda value: "sha256:" + hashlib.sha256(value).hexdigest()
 _SOURCE_DIGEST = "sha256:" + "1" * 64
@@ -83,7 +83,6 @@ def _review_journal(root: Path, calls: list[str]):
         journal_root = root / "source-reviews" / "test-journal"
         request_path = journal_root / "request.json"
         attempt_path = journal_root / "attempts" / "001.json"
-        capacity_path = root / "temporary-capacity-receipt.json"
         request_path.parent.mkdir(parents=True, exist_ok=True)
         attempt_path.parent.mkdir(parents=True, exist_ok=True)
         result = (
@@ -94,11 +93,12 @@ def _review_journal(root: Path, calls: list[str]):
         request_path.write_text("{}", encoding="utf-8")
         attempt = {
             "status": "finished",
+            "provider": "cursor_sdk",
             "runId": "commons-grok-review",
+            "recordedAt": "2026-08-12T12:01:00Z",
             "resultSha256": _SHA(result.encode()),
         }
         attempt_path.write_text(json.dumps(attempt), encoding="utf-8")
-        capacity_path.write_text("capacity", encoding="utf-8")
         outcome = AgentRunOutcome.finished(
             provider=AgentProvider.CURSOR_SDK,
             run_id="commons-grok-review",
@@ -107,9 +107,7 @@ def _review_journal(root: Path, calls: list[str]):
         return {
             "requestPath": request_path,
             "attemptPath": attempt_path,
-            "capacityReceiptPath": capacity_path,
             "attempt": attempt,
-            "capacityReceipt": {"recordedAt": "2026-08-12T12:01:00+00:00"},
             "outcome": outcome,
         }, attempt_path
 
@@ -135,15 +133,6 @@ def _install_common_fakes(
         professional_video_acquisition,
         "guard_acquisition_source_identity",
         lambda *_args, **_kwargs: _handoff(),
-    )
-    monkeypatch.setattr(
-        professional_video_acquisition,
-        "load_content_distribution_policy",
-        lambda: type(
-            "ResearchPolicy",
-            (),
-            {"product_lifecycle_state": ProductLifecycleState.RESEARCH},
-        )(),
     )
     monkeypatch.setattr(
         commons_input,
@@ -254,7 +243,7 @@ def test_commons_public_direct_bytes_review_and_campaign_binding(
         "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
         "authorizationProof": _candidate()["authorizationProofUrl"],
     }
-    assert safety["reviewEvidence"]["model"] == "grok-4.5"
+    assert safety["reviewEvidence"]["model"] == governed_cursor_grok_model()
     refs = bind_external_input_refs(
         "video",
         [
@@ -306,7 +295,10 @@ def test_commons_download_failure_is_typed(
             discovery=lambda *_args, **_kwargs: [_candidate()],
         )
 
-    assert captured.value.code == "DATA.SOURCE.ACQUISITION_FAILED"
+    assert captured.value.code == "DATA.SOURCE.VIDEO_BATCH_NO_SUCCESS"
+    assert captured.value.outcomes[0]["failureCode"] == (
+        "DATA.SOURCE.ACQUISITION_FAILED"
+    )
 
 
 def test_commons_bytes_drift_is_recorded_by_existing_acquisition_receipt(
@@ -319,7 +311,9 @@ def test_commons_bytes_drift_is_recorded_by_existing_acquisition_receipt(
         monkeypatch, root=root, source=source, replacement=drifted
     )
 
-    outcome = _acquire(root, discovery=commons_input.discover_commons_sourced_videos)[0]
+    with pytest.raises(commons_input.CommonsVideoBatchBlocked) as captured:
+        _acquire(root, discovery=commons_input.discover_commons_sourced_videos)
+    outcome = captured.value.outcomes[0]
 
     assert outcome["acquisitionStatus"] == "acquired", json.dumps(
         outcome, ensure_ascii=False
@@ -355,7 +349,9 @@ def test_commons_unplayable_preflight_is_typed_without_review(
         commons_input, "probe_professional_video", lambda _path: unplayable_probe
     )
 
-    outcome = _acquire(root, discovery=commons_input.discover_commons_sourced_videos)[0]
+    with pytest.raises(commons_input.CommonsVideoBatchBlocked) as captured:
+        _acquire(root, discovery=commons_input.discover_commons_sourced_videos)
+    outcome = captured.value.outcomes[0]
 
     assert outcome["preflight"] == "DATA.SOURCE.NOT_PLAYABLE_MOTION_VIDEO"
     assert outcome["distributionDecision"] == "blocked"
@@ -377,8 +373,11 @@ def test_commons_resume_adopts_frozen_candidate_despite_fresh_observed_at(
             RuntimeError("simulated crash after metadata freeze")
         ),
     )
-    with pytest.raises(RuntimeError, match="simulated crash"):
+    with pytest.raises(commons_input.CommonsVideoBatchBlocked) as captured:
         _acquire(root, discovery=commons_input.discover_commons_sourced_videos)
+    assert captured.value.outcomes[0]["failureCode"] == (
+        "DATA.SOURCE.CANDIDATE_EXCLUDED"
+    )
     metadata_files = list(root.glob("commons-direct/*/metadata.json"))
     assert len(metadata_files) == 1
     frozen_observed_at = json.loads(metadata_files[0].read_text(encoding="utf-8"))[
@@ -413,8 +412,11 @@ def test_commons_resume_still_blocks_stable_field_drift(
             RuntimeError("simulated crash after metadata freeze")
         ),
     )
-    with pytest.raises(RuntimeError, match="simulated crash"):
+    with pytest.raises(commons_input.CommonsVideoBatchBlocked) as captured:
         _acquire(root, discovery=commons_input.discover_commons_sourced_videos)
+    assert captured.value.outcomes[0]["failureCode"] == (
+        "DATA.SOURCE.CANDIDATE_EXCLUDED"
+    )
     monkeypatch.setattr(commons_input, "run_source_review", _review_journal(root, calls))
     # relevance 不参与 candidate token，但属于冻结 metadata 的稳定字段。
     drifted = _candidate()
@@ -455,12 +457,78 @@ def test_commons_source_and_license_drift_fail_before_reacquisition(
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     handoff = root.parent / "handoff.json"
 
-    with pytest.raises(ValueError, match="source/rights drift"):
+    with pytest.raises(professional_video_acquisition.ProfessionalVideoAcquisitionBlocked) as captured:
         professional_video_acquisition.acquire_professional_videos(
             manifest_path,
             handoff_ref=handoff,
             output_root=root,
         )
+    assert captured.value.receipt["assets"][0]["failureCode"] == (
+        "DATA.SOURCE.SAFETY_EVIDENCE_INVALID"
+    )
+    assert "source/rights drift" in captured.value.receipt["assets"][0]["failure"]
+
+
+def test_commons_candidate_failure_is_isolated_when_a_sibling_succeeds(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "acquisition" / "video"
+    source = _video(tmp_path / "source.mp4", moving=True, seed=8)
+    _install_common_fakes(monkeypatch, root=root, source=source)
+    good = _candidate()
+    bad = _candidate()
+    bad.update(
+        title="西湖失效候选",
+        assetUrl="https://upload.wikimedia.org/example/broken-west-lake.mp4",
+        sourcePostUrl="https://commons.wikimedia.org/wiki/File:Broken_West_Lake.mp4",
+        authorizationProofUrl=(
+            "https://commons.wikimedia.org/wiki/File:Broken_West_Lake.mp4"
+        ),
+    )
+    original_fetch = commons_input.fetch_public_video
+
+    def fetch(url: str, destination: Path, *, supported_api: bool) -> str:
+        if "broken-west-lake" in url:
+            raise OSError("candidate transport failed")
+        return original_fetch(url, destination, supported_api=supported_api)
+
+    monkeypatch.setattr(commons_input, "fetch_public_video", fetch)
+
+    outcomes = _acquire(root, discovery=lambda *_args, **_kwargs: [bad, good])
+
+    assert len(outcomes) == 2
+    assert outcomes[0]["status"] == "excluded"
+    assert outcomes[0]["failureCode"] == "DATA.SOURCE.ACQUISITION_FAILED"
+    assert outcomes[1]["status"] == "accepted"
+    assert outcomes[1]["distributionDecision"] == "commercial_allowed"
+
+
+def test_commons_create_once_collision_remains_a_global_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    handoff = tmp_path / "handoff.json"
+    handoff.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(commons_input, "load_pre_acquisition_handoff", lambda _path: _handoff())
+    monkeypatch.setattr(
+        commons_input,
+        "_prepared_candidate",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            commons_input.CommonsVideoInputError(
+                "DATA.SOURCE.REVIEW_CREATE_ONCE_CONFLICT", "exact collision"
+            )
+        ),
+    )
+
+    with pytest.raises(commons_input.CommonsVideoInputError) as captured:
+        commons_input.acquire_commons_sourced_videos(
+            entity_id="西湖",
+            entity_aliases=("杭州西湖",),
+            handoff_ref=handoff,
+            output_root=tmp_path / "video",
+            discovery=lambda *_args, **_kwargs: [_candidate(), _candidate()],
+        )
+
+    assert captured.value.code == "DATA.SOURCE.REVIEW_CREATE_ONCE_CONFLICT"
 
 
 def test_commons_cc_license_url_protocol_is_normalized_to_https(

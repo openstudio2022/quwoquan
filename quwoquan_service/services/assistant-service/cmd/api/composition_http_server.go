@@ -8,10 +8,7 @@ import (
 	"strings"
 	"time"
 
-	rtauth "quwoquan_service/runtime/auth"
-	rthttp "quwoquan_service/runtime/http"
-	rtmetrics "quwoquan_service/runtime/metrics"
-	robs "quwoquan_service/runtime/observability"
+	"quwoquan_service/runtime/servicekit"
 	entryhttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_entry_view/adapters/inbound/http"
 	entryapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_entry_view/application"
 	learninghttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/adapters/inbound/http"
@@ -43,11 +40,15 @@ import (
 
 const dependencyHealthResponseDrainLimitBytes = 4 << 10
 
-func buildAssistantHTTPServer(
+// registerAssistantRoutes 把领域入站面注册到骨架提供的 mux。探针、metrics、
+// 观测中间件、CORS、认证与 operation guard 都由 servicekit 统一挂接
+// （DEC-028），本函数只负责领域路由。
+func registerAssistantRoutes(
+	asm *servicekit.Assembly,
 	runtime *assistantAPIRuntime,
 	infrastructure *assistantInfrastructure,
 	assistant *assistantComponents,
-) *http.Server {
+) {
 	deps := infrastructure.dependencies
 	baseHandler := httpadapter.NewHandler(assistant.service).Routes()
 	skillCatalogQueries := skillcatalogapplication.NewQueryService(
@@ -131,50 +132,7 @@ func buildAssistantHTTPServer(
 	assistant.domainReaderHandler.RegisterRoutes(serviceMux)
 	skillcataloghttp.NewHandler(skillCatalogQueries).RegisterRoutes(serviceMux)
 	serviceMux.Handle("/", baseHandler)
-	baseHandler = serviceMux
-	outerMux := http.NewServeMux()
-	// Compose / k8s liveness stays shallow: process is up. Deep dependency and
-	// worker probes belong on /readyz so a slow first worker/external scan
-	// cannot keep the container unhealthy for the full start_period window.
-	outerMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
-	})
-	outerMux.HandleFunc("/readyz", infrastructure.healthChecker.Handler())
-	outerMux.Handle("/metrics", rtmetrics.Handler())
-	outerMux.Handle("/", httpadapter.GeneratedOperationContractHandler(baseHandler))
-	observedHandler := rthttp.NewHTTPServerMiddleware(
-		outerMux,
-		rthttp.HTTPServerMiddlewareConfig{
-			Service:           "assistant-service",
-			ServiceName:       "assistant-service",
-			ServiceInstanceID: runtime.instanceID,
-			Origin:            "service.http",
-			Direction:         robs.DirectionInbound,
-			SourceID:          "assistant-service",
-			Src:               "assistant-service",
-			EndpointResolver:  httpadapter.GeneratedOperationPathTemplateResolver(),
-		},
-		runtime.ioLogger,
-		runtime.processLogger,
-		runtime.exceptionLogger,
-	)
-	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
-	timeouts := rtauth.ContractHTTPServerTimeouts(
-		httpadapter.AssistantOperationDescriptors(),
-	)
-	return &http.Server{
-		Addr: runtime.addr,
-		Handler: withAssistantAccessMiddleware(
-			corsHandler,
-			runtime.accessVerifier,
-			runtime.accountSecurityAuthority,
-		),
-		ReadHeaderTimeout: timeouts.ReadHeader,
-		WriteTimeout:      timeouts.Write,
-		IdleTimeout:       timeouts.Idle,
-	}
+	asm.Mux.Handle("/", serviceMux)
 }
 
 func checkServiceHealth(

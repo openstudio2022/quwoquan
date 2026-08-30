@@ -10,17 +10,28 @@ def task_execute_argv(
     execution_id: str,
     carrier: str,
     request: RuntimeExecutionRequest,
-    semantic_receipt_ref: str,
+    semantic_receipt_ref: str | None,
     retry_of: str | None = None,
     retry_unfinished_refs: tuple[str, ...] = (),
 ) -> list[str]:
     binding = dict(request.scale_source_pool or {})
     selection = dict(request.source_pool_selection or {})
+    authority = dict(request.execution_authority)
+    if authority.get("mode") != "governed_calibration":
+        raise ValueError(
+            "GATE_BLOCK DATA.EXECUTION.AUTHORITY_INVALID: semantic wave "
+            "dispatch requires governed_calibration authority"
+        )
+    # Canonical order is positional for the command prefix only. Every optional
+    # option below is appended once in the order declared here; validators parse
+    # option/value tokens and must not assume lineage is the argv suffix.
     argv = [
         "python3",
         "quwoquan_data/scripts/cli.py",
         "task",
         "execute",
+        "--stage",
+        "plan-only",
         "--execution-id",
         execution_id,
         "--family",
@@ -33,16 +44,12 @@ def task_execute_argv(
         str(request.quota),
         "--count",
         str(request.count),
-        "--required-workers",
-        str(request.required_workers),
-        "--partition-count",
-        str(request.partition_count),
-        "--capacity-plan-digest",
-        request.capacity_plan_digest,
+        "--capacity-calibration-receipt",
+        str(
+            authority["calibration"]["calibrationReceiptRef"]
+        ),
         "--semantic-selection-id",
         "cursor_grok",
-        "--semantic-preflight-receipt",
-        semantic_receipt_ref,
         "--scale-source-pool-id",
         str(binding["poolId"]),
         "--scale-source-pool-target-scale",
@@ -68,18 +75,16 @@ def task_execute_argv(
         "--topic",
         str(request.topic),
     ]
-    if retry_of:
-        argv[6:6] = ["--retry-of", retry_of]
-        retry_scope_argv = [
-            value
-            for ref in retry_unfinished_refs
-            for value in ("--retry-unfinished-ref", ref)
-        ]
-        argv[8:8] = retry_scope_argv
+    if semantic_receipt_ref:
+        argv.extend(("--semantic-preflight-receipt", semantic_receipt_ref))
     for candidate_id in selection["candidateIds"]:
         argv.extend(("--source-pool-candidate-id", str(candidate_id)))
     for name in request.target_names:
         argv.extend(("--target", name))
+    if retry_of:
+        argv.extend(("--retry-of", retry_of))
+        for ref in retry_unfinished_refs:
+            argv.extend(("--retry-unfinished-ref", ref))
     return argv
 
 

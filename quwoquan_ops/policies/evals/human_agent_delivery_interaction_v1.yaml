@@ -1,0 +1,3714 @@
+schema_id: human-agent-delivery-interaction-eval-policy
+schema_version: 1
+policy_id: human-agent-delivery-interaction-v1
+owner_story: specs/feature-tree/runtime/development-workflow-governance/human-agent-delivery-interaction/spec.md
+canonical_contract: quwoquan_ops/policies/human_agent_delivery_contract.yaml
+spec_refs:
+- specs/feature-tree/runtime/development-workflow-governance/human-agent-delivery-interaction/spec.md#gwt-001
+- specs/feature-tree/runtime/development-workflow-governance/human-agent-delivery-interaction/spec.md#gwt-002
+- specs/feature-tree/runtime/development-workflow-governance/human-agent-delivery-interaction/spec.md#gwt-003
+evaluation:
+  expected_fixture_count: 30
+  required_families:
+  - A
+  - B
+  - C
+  - D
+  - E
+  - F
+  - G
+  - H
+  expected_family_counts:
+    A: 3
+    B: 3
+    C: 2
+    D: 3
+    E: 3
+    F: 3
+    G: 8
+    H: 5
+  checks_per_fixture: 8
+  global_check_count: 10
+  hard_invariant_denominator: 250
+  hard_invariant_threshold: 1.0
+  zero_sample_result: block
+  report_path: .qwq_output/env/repo/runs/human-agent-delivery-eval/report.json
+readability_proxy:
+  forbidden_internal_terms:
+  - DecisionUnit
+  - GWT-
+  - OPEN-
+  - router
+  - projection
+  - schema_version
+  - SHA
+  - CLI
+  - Python 文件路径
+  - 策略文件名
+  - stage code
+  - S4
+  - digest
+  - CAS
+  - GATE_BLOCK
+  - typed blocker
+  - fingerprint
+  - owner manifest
+  - receipt
+  - readback
+  - exact-byte
+  - 内部绝对路径
+  - 内部命令
+  - 内部工具名
+  required_role_language_fields:
+  - current_role
+  - question
+  - known_facts
+  - unknowns
+  - hard_constraints
+  - consequences
+  question_count: 1
+  minimum_options: 2
+  maximum_options: 4
+  required_recovery_actions:
+  - request_evidence
+  - transfer_to_correct_role
+  - pause_or_stop
+  symmetric_fields:
+  - option_id
+  - neutral_label
+  - user_outcome
+  - business_outcome
+  - cost
+  - time_to_effect
+  - risk
+  - reversibility
+  - scope_change
+  - unknowns
+  - next_step
+role_interaction_evaluation:
+  expected_fixture_count: 4
+  required_event_types: [progress_update, decision_request, exception_escalation, completion_report]
+  fixtures:
+  - id: interaction-progress
+    payload:
+      event_type: progress_update
+      delivery_stage: agent_led_implementation
+      audience_role: engineering_delivery_owner
+      what_happened: 已完成当前增量的契约修改，正在验证角色可见交互。
+      user_or_business_impact: 当前尚无外部行为变化，交付范围保持不变。
+      decision_owner: null
+      legal_actions: [continue_authorized_work, pause]
+      safe_actions_taken: [preserve_current_state, keep_external_effects_disabled]
+      next_acceptance: 完成最小验证后由工程交付负责人检查范围与结果。
+      next_acceptance_role: engineering_delivery_owner
+      audit_details: {internal_tool_name: pytest, sha: abc123}
+  - id: interaction-decision
+    payload:
+      event_type: decision_request
+      delivery_stage: product_definition
+      audience_role: product_owner
+      what_happened: 两个产品范围方向均合法，需要由产品负责人选择。
+      user_or_business_impact: 选择会影响首轮覆盖人群与交付时间。
+      decision_owner: product_owner
+      legal_actions: [choose_legal_option, request_evidence, pause]
+      safe_actions_taken: [preserve_current_state]
+      next_acceptance: 产品负责人确认范围后继续冻结验收。
+      next_acceptance_role: product_owner
+      audit_details: {owner_manifest: context-manifest.json}
+  - id: interaction-exception
+    payload:
+      event_type: exception_escalation
+      delivery_stage: quality_business_uat
+      audience_role: quality_owner
+      what_happened: 目标场景验证失败，当前不能继续准出。
+      user_or_business_impact: 用户任务是否可用尚未得到证明。
+      decision_owner: quality_owner
+      legal_actions: [request_evidence, request_changes_in_owned_scope, hold, abort]
+      safe_actions_taken: [isolate_failed_step, preserve_current_state]
+      next_acceptance: 修复后由质量负责人重新检查当前场景结果。
+      next_acceptance_role: quality_owner
+      audit_details: {typed_blocker: REVIEW.EVIDENCE_FAILED, receipt: run.json}
+      cannot_continue_reason: 必需的当前场景验证未通过。
+      safest_default: 保持等待，不向下游宣称可用。
+  - id: interaction-completion
+    payload:
+      event_type: completion_report
+      delivery_stage: agent_led_implementation
+      audience_role: engineering_delivery_owner
+      what_happened: 授权范围内的实现与本地验证已经完成。
+      user_or_business_impact: 角色可见交互已可供本地工作流使用，但尚未形成生产或商用结论。
+      decision_owner: engineering_delivery_owner
+      legal_actions: [approve_owned_scope, request_changes_in_owned_scope, pause]
+      safe_actions_taken: [preserve_current_state, keep_external_effects_disabled]
+      next_acceptance: 工程交付负责人检查本轮范围与本地验证结果。
+      next_acceptance_role: engineering_delivery_owner
+      audit_details: {digest: abc, exact_byte: true, readback: local}
+      proof: [四类事件字段均通过本地契约测试。]
+      limits: [仅证明本地实现，不代表真实用户验收、发布或业务结果。]
+conversation_replay:
+  input_mode: injectable_json_object
+  required_input_fields: [messages, expected_event_type, expected_delivery_stage, expected_audience_role]
+  canonical_private_transcript_fixture: false
+  reads_private_transcript_paths: false
+  example_input:
+    messages:
+    - {speaker: user, text: 请实现并验证本地增量。}
+    expected_event_type: progress_update
+    expected_delivery_stage: agent_led_implementation
+    expected_audience_role: engineering_delivery_owner
+human_calibration:
+  status: not_observed
+  qualifying_role_session_count: 0
+  unique_participant_count: 0
+  target_participants: 真实非技术角色负责人
+  required_principal_classes: [product, engineering, quality, release_operations]
+  required_responsibility_classes: [business, product, experience, quality, engineering, release_operations]
+  required_observation_dimensions: [understanding, option_cross_role_impact_comprehension, transfer, pause_deny_abort, recovery, post_check]
+  canonical_cli_commands: [calibration-validate, calibration-record, calibration-readback]
+  canonical_session_schema: human_agent_delivery_contract.yaml#schemas.human_calibration_session
+  canonical_observation_schema: human_agent_delivery_contract.yaml#schemas.human_calibration_observation
+  machine_baseline_fixture: quwoquan_ops/tests/local_contract/gate/fixtures/human_agent_delivery_calibration/machine_baseline_session.json
+  machine_baseline_is_human_usability_evidence: false
+  completion_ref: specs/feature-tree/runtime/development-workflow-governance/human-agent-delivery-interaction/spec.md#gwt-004
+  note: 机器结构代理与 staged 本地记录通道已建立；尚未收到 authenticated/consented 真实角色 observation，不能声称人类可理解性闭合。
+fixtures:
+- id: A01
+  family: A
+  stage: concept_intake
+  decision_kind: problem_acceptance
+  required_role: business_sponsor
+  other_roles: []
+  facts:
+    known:
+    - 提出了希望改善的问题
+    unknowns:
+    - 尚无足够痛点证据
+    hard_constraints:
+    - 事实不足时不得形成实施授权
+    consequences:
+      will: 记录补充或暂停选择
+      will_not: 不会选择技术方案
+  options:
+  - option_id: supply_evidence
+    neutral_label: 补充事实后再决定
+    user_outcome: 暂不改变当前体验
+    business_outcome: 提高问题判断可信度
+    cost: 需要补充材料
+    time_to_effect: 取得材料后继续
+    risk: 进度延后
+    reversibility: 可随时停止
+    scope_change: 不改变范围
+    unknowns:
+    - 补充材料何时可得
+    next_step: 收集事实并重新展示选择
+  - option_id: pause
+    neutral_label: 暂停推进
+    user_outcome: 当前服务保持不变
+    business_outcome: 避免在事实不足时投入
+    cost: 无新增投入
+    time_to_effect: 立即生效
+    risk: 机会窗口可能延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 恢复时间未定
+    next_step: 保留上下文并等待恢复
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: business_sponsor
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: business_sponsor
+    hard_veto_roles: []
+    default_terminal: pause
+  expected_legal_option_ids:
+  - supply_evidence
+  - pause
+  default_terminal: pause
+  expected_recovery: not_required
+  card:
+    card_type: choice
+    current_role_language: 业务发起人
+    question: 业务发起人，目前信息不足时希望补充事实还是暂停推进？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - supply_evidence
+    - pause
+    selected_probe_option_id: pause
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: A02
+  family: A
+  stage: concept_intake
+  decision_kind: problem_acceptance
+  required_role: business_sponsor
+  other_roles: []
+  facts:
+    known:
+    - 曾经提交过问题证据
+    unknowns:
+    - 证据是否仍代表当前情况
+    hard_constraints:
+    - 过期事实不能用于批准
+    consequences:
+      will: 请求更新证据
+      will_not: 不会把旧材料当作当前结论
+  options:
+  - option_id: supply_evidence
+    neutral_label: 补充事实后再决定
+    user_outcome: 暂不改变当前体验
+    business_outcome: 提高问题判断可信度
+    cost: 需要补充材料
+    time_to_effect: 取得材料后继续
+    risk: 进度延后
+    reversibility: 可随时停止
+    scope_change: 不改变范围
+    unknowns:
+    - 补充材料何时可得
+    next_step: 收集事实并重新展示选择
+  - option_id: pause
+    neutral_label: 暂停推进
+    user_outcome: 当前服务保持不变
+    business_outcome: 避免在事实不足时投入
+    cost: 无新增投入
+    time_to_effect: 立即生效
+    risk: 机会窗口可能延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 恢复时间未定
+    next_step: 保留上下文并等待恢复
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: business_sponsor
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: false
+  expected_route:
+    result: typed_blocker
+    code: HAD.EVIDENCE_EXPIRED
+    terminal: pause
+    recovery: refresh_evidence
+    detail: ''
+  expected_legal_option_ids:
+  - supply_evidence
+  - pause
+  default_terminal: pause
+  expected_recovery: refresh_evidence
+  card:
+    card_type: choice
+    current_role_language: 业务发起人
+    question: 业务发起人，是否补充当前证据后再决定？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - supply_evidence
+    - pause
+    selected_probe_option_id: pause
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: A03
+  family: A
+  stage: concept_intake
+  decision_kind: problem_acceptance
+  required_role: business_sponsor
+  other_roles:
+  - product_owner
+  facts:
+    known:
+    - 当前作答者是产品负责人
+    unknowns:
+    - 业务发起人何时接手
+    hard_constraints:
+    - 问题价值只能由业务发起人确认
+    consequences:
+      will: 转交完整事实包
+      will_not: 不会由当前角色代签
+  options:
+  - option_id: transfer
+    neutral_label: 转交正确负责人
+    user_outcome: 当前体验保持不变
+    business_outcome: 由有权角色作答
+    cost: 需要协调负责人
+    time_to_effect: 负责人接手后继续
+    risk: 等待时间不确定
+    reversibility: 可撤回转交
+    scope_change: 不改变范围
+    unknowns:
+    - 接手时间未定
+    next_step: 发送完整事实包给正确负责人
+  - option_id: pause
+    neutral_label: 暂停推进
+    user_outcome: 当前服务保持不变
+    business_outcome: 避免在事实不足时投入
+    cost: 无新增投入
+    time_to_effect: 立即生效
+    risk: 机会窗口可能延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 恢复时间未定
+    next_step: 保留上下文并等待恢复
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: product_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: typed_blocker
+    code: HAD.WRONG_HUMAN_ROLE
+    terminal: pause
+    recovery: transfer_to_required_role
+    detail: required=business_sponsor, actual=product_owner
+  expected_legal_option_ids:
+  - transfer
+  - pause
+  default_terminal: pause
+  expected_recovery: transfer_to_required_role
+  card:
+    card_type: choice
+    current_role_language: 业务发起人
+    question: 业务发起人，收到转交后希望继续确认还是暂停？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - transfer
+    - pause
+    selected_probe_option_id: transfer
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: B01
+  family: B
+  stage: product_definition
+  decision_kind: product_scope
+  required_role: product_owner
+  other_roles:
+  - business_acceptance_representative
+  facts:
+    known:
+    - 核心用户主路径已经确认
+    unknowns:
+    - 次要人群需求强度
+    hard_constraints:
+    - 首发范围必须可验收
+    consequences:
+      will: 冻结所选产品范围
+      will_not: 不会替代体验或风险决定
+  options:
+  - option_id: minimal_scope
+    neutral_label: 先覆盖核心人群
+    user_outcome: 核心用户先获得完整主路径
+    business_outcome: 较快验证主要价值
+    cost: 投入较低
+    time_to_effect: 较早可验证
+    risk: 次要人群暂不覆盖
+    reversibility: 可扩展
+    scope_change: 缩小首发人群
+    unknowns:
+    - 次要人群需求强度
+    next_step: 冻结核心范围与验收
+  - option_id: broad_scope
+    neutral_label: 同时覆盖更多人群
+    user_outcome: 更多用户首轮即可使用
+    business_outcome: 覆盖面更广
+    cost: 投入较高
+    time_to_effect: 较晚可验证
+    risk: 交付复杂度上升
+    reversibility: 可缩回
+    scope_change: 扩大首发人群
+    unknowns:
+    - 额外场景的真实频率
+    next_step: 补齐扩展范围与验收
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: product_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: product_owner
+    hard_veto_roles: []
+    default_terminal: hold
+  expected_legal_option_ids:
+  - minimal_scope
+  - broad_scope
+  default_terminal: hold
+  expected_recovery: not_required
+  card:
+    card_type: choice
+    current_role_language: 产品负责人
+    question: 产品负责人，首发范围选择核心人群还是更多人群？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - minimal_scope
+    - broad_scope
+    selected_probe_option_id: broad_scope
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: B02
+  family: B
+  stage: product_definition
+  decision_kind: product_scope
+  required_role: product_owner
+  other_roles: []
+  facts:
+    known:
+    - 产品范围存在两个合法方向
+    unknowns:
+    - 产品负责人当前不在场
+    hard_constraints:
+    - 缺席不能视为默认同意
+    consequences:
+      will: 等待或转交负责人
+      will_not: 不会隐式批准范围
+  options:
+  - option_id: transfer
+    neutral_label: 转交正确负责人
+    user_outcome: 当前体验保持不变
+    business_outcome: 由有权角色作答
+    cost: 需要协调负责人
+    time_to_effect: 负责人接手后继续
+    risk: 等待时间不确定
+    reversibility: 可撤回转交
+    scope_change: 不改变范围
+    unknowns:
+    - 接手时间未定
+    next_step: 发送完整事实包给正确负责人
+  - option_id: pause
+    neutral_label: 暂停推进
+    user_outcome: 当前服务保持不变
+    business_outcome: 避免在事实不足时投入
+    cost: 无新增投入
+    time_to_effect: 立即生效
+    risk: 机会窗口可能延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 恢复时间未定
+    next_step: 保留上下文并等待恢复
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: product_owner
+    actor_authenticated: true
+    role_present: false
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: typed_blocker
+    code: HAD.ROLE_ABSENT
+    terminal: hold
+    recovery: transfer_or_pause
+    detail: ''
+  expected_legal_option_ids:
+  - transfer
+  - pause
+  default_terminal: hold
+  expected_recovery: transfer_or_pause
+  card:
+    card_type: choice
+    current_role_language: 产品负责人
+    question: 产品负责人，接手后希望审阅事实还是继续暂停？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - transfer
+    - pause
+    selected_probe_option_id: pause
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: B03
+  family: B
+  stage: product_definition
+  decision_kind: product_scope
+  required_role: product_owner
+  other_roles: []
+  facts:
+    known:
+    - 已有冻结范围
+    unknowns:
+    - 新增需求的真实价值
+    hard_constraints:
+    - 范围变化必须重新确认
+    consequences:
+      will: 缩小或重新冻结范围
+      will_not: 不会沿用失效授权
+  options:
+  - option_id: minimal_scope
+    neutral_label: 先覆盖核心人群
+    user_outcome: 核心用户先获得完整主路径
+    business_outcome: 较快验证主要价值
+    cost: 投入较低
+    time_to_effect: 较早可验证
+    risk: 次要人群暂不覆盖
+    reversibility: 可扩展
+    scope_change: 缩小首发人群
+    unknowns:
+    - 次要人群需求强度
+    next_step: 冻结核心范围与验收
+  - option_id: pause
+    neutral_label: 暂停推进
+    user_outcome: 当前服务保持不变
+    business_outcome: 避免在事实不足时投入
+    cost: 无新增投入
+    time_to_effect: 立即生效
+    risk: 机会窗口可能延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 恢复时间未定
+    next_step: 保留上下文并等待恢复
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: product_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: false
+    evidence_fresh: true
+  expected_route:
+    result: typed_blocker
+    code: HAD.SCOPE_INVALID
+    terminal: hold
+    recovery: narrow_or_refreeze_scope
+    detail: ''
+  expected_legal_option_ids:
+  - minimal_scope
+  - pause
+  default_terminal: hold
+  expected_recovery: narrow_or_refreeze_scope
+  card:
+    card_type: choice
+    current_role_language: 产品负责人
+    question: 产品负责人，范围发生变化后选择缩小还是暂停重定？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - minimal_scope
+    - pause
+    selected_probe_option_id: pause
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: C01
+  family: C
+  stage: experience_design
+  decision_kind: experience_direction
+  required_role: experience_design_owner
+  other_roles:
+  - product_owner
+  - business_acceptance_representative
+  facts:
+    known:
+    - 两个方向都满足产品边界
+    unknowns:
+    - 不同用户的学习成本
+    hard_constraints:
+    - 不得借体验选择扩大产品范围
+    consequences:
+      will: 冻结一个体验方向
+      will_not: 不会改变产品边界
+  options:
+  - option_id: guided_flow
+    neutral_label: 分步引导
+    user_outcome: 每一步只处理一个选择
+    business_outcome: 降低首次使用理解成本
+    cost: 设计与实现投入中等
+    time_to_effect: 按原窗口交付
+    risk: 步骤较多
+    reversibility: 可改为集中呈现
+    scope_change: 不改变产品范围
+    unknowns:
+    - 熟练用户是否觉得步骤过多
+    next_step: 演示全状态并走查
+  - option_id: compact_flow
+    neutral_label: 集中呈现
+    user_outcome: 一次看到全部关键选择
+    business_outcome: 熟练用户操作更快
+    cost: 设计与实现投入中等
+    time_to_effect: 按原窗口交付
+    risk: 首次使用信息较多
+    reversibility: 可改为分步引导
+    scope_change: 不改变产品范围
+    unknowns:
+    - 首次用户能否理解全部信息
+    next_step: 演示全状态并走查
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: experience_design_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: experience_design_owner
+    hard_veto_roles: []
+    default_terminal: hold
+  expected_legal_option_ids:
+  - guided_flow
+  - compact_flow
+  default_terminal: hold
+  expected_recovery: not_required
+  card:
+    card_type: choice
+    current_role_language: 体验设计负责人
+    question: 体验设计负责人，选择分步引导还是集中呈现？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - guided_flow
+    - compact_flow
+    selected_probe_option_id: compact_flow
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: C02
+  family: C
+  stage: experience_design
+  decision_kind: experience_direction
+  required_role: experience_design_owner
+  other_roles:
+  - business_acceptance_representative
+  facts:
+    known:
+    - 成功、空白、错误与恢复状态都有演示
+    unknowns:
+    - 首次使用理解程度
+    hard_constraints:
+    - 两个方向必须使用同样字段比较
+    consequences:
+      will: 按中性选择继续走查
+      will_not: 不会突出任何一个方向
+  options:
+  - option_id: compact_flow
+    neutral_label: 集中呈现
+    user_outcome: 一次看到全部关键选择
+    business_outcome: 熟练用户操作更快
+    cost: 设计与实现投入中等
+    time_to_effect: 按原窗口交付
+    risk: 首次使用信息较多
+    reversibility: 可改为分步引导
+    scope_change: 不改变产品范围
+    unknowns:
+    - 首次用户能否理解全部信息
+    next_step: 演示全状态并走查
+  - option_id: guided_flow
+    neutral_label: 分步引导
+    user_outcome: 每一步只处理一个选择
+    business_outcome: 降低首次使用理解成本
+    cost: 设计与实现投入中等
+    time_to_effect: 按原窗口交付
+    risk: 步骤较多
+    reversibility: 可改为集中呈现
+    scope_change: 不改变产品范围
+    unknowns:
+    - 熟练用户是否觉得步骤过多
+    next_step: 演示全状态并走查
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: experience_design_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: experience_design_owner
+    hard_veto_roles: []
+    default_terminal: hold
+  expected_legal_option_ids:
+  - guided_flow
+  - compact_flow
+  default_terminal: hold
+  expected_recovery: not_required
+  card:
+    card_type: choice
+    current_role_language: 体验设计负责人
+    question: 体验设计负责人，基于相同影响说明选择哪种呈现？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - guided_flow
+    - compact_flow
+    selected_probe_option_id: guided_flow
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: D01
+  family: D
+  stage: solution_risk_design
+  decision_kind: solution_risk
+  required_role: domain_solution_architecture_owner
+  other_roles:
+  - security_privacy_legal_compliance_owner
+  - quality_owner
+  - environment_reliability_owner
+  facts:
+    known:
+    - 当前方案触发不可豁免安全约束
+    unknowns:
+    - 新方案成本
+    hard_constraints:
+    - 硬约束失败时高风险方案不可选
+    consequences:
+      will: 仅保留安全恢复方向
+      will_not: 不会用偏好覆盖硬约束
+  options:
+  - option_id: unsafe_go
+    neutral_label: 保持当前高风险方案
+    user_outcome: 更快看到功能但暴露不可接受风险
+    business_outcome: 窗口较早
+    cost: 投入较低
+    time_to_effect: 较早
+    risk: 违反不可豁免约束
+    reversibility: 不可安全恢复
+    scope_change: 不改变目标范围
+    unknowns:
+    - 影响范围
+    next_step: 不得执行
+  - option_id: redesign
+    neutral_label: 调整方案后再评估
+    user_outcome: 不会暴露不可接受风险
+    business_outcome: 延后换取可商用边界
+    cost: 需要重新设计
+    time_to_effect: 完成新方案后继续
+    risk: 交付时间延后
+    reversibility: 可继续调整
+    scope_change: 保持目标但改变方案
+    unknowns:
+    - 新方案成本
+    next_step: 修复硬约束并补齐证据
+  - option_id: abort
+    neutral_label: 停止本次方向
+    user_outcome: 不会引入新变化
+    business_outcome: 停止继续投入
+    cost: 终止已有投入
+    time_to_effect: 立即生效
+    risk: 目标暂不达成
+    reversibility: 需新决定才能重启
+    scope_change: 移出当前范围
+    unknowns:
+    - 未来是否重启
+    next_step: 记录停止原因与恢复条件
+  hard_gates:
+  - gate_id: security-boundary
+    owner_role: security_privacy_legal_compliance_owner
+    option_ids:
+    - unsafe_go
+    passed: false
+    evidence_fresh: true
+    waivable: false
+  sod:
+    policy: independent-principal-required
+    risk_categories:
+    - safety
+    role_actor_ids: {}
+  route_input:
+    current_role: domain_solution_architecture_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: typed_blocker
+    code: HAD.HARD_GATE_FAILED
+    terminal: abort
+    recovery: fix_supply_evidence_narrow_or_abort
+    detail: security-boundary
+  expected_legal_option_ids:
+  - redesign
+  - abort
+  default_terminal: abort
+  expected_recovery: fix_supply_evidence_narrow_or_abort
+  card:
+    card_type: choice
+    current_role_language: 方案与架构负责人
+    question: 方案与架构负责人，选择调整方案还是停止本次方向？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - redesign
+    - abort
+    selected_probe_option_id: redesign
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: D02
+  family: D
+  stage: solution_risk_design
+  decision_kind: solution_risk
+  required_role: domain_solution_architecture_owner
+  other_roles:
+  - security_privacy_legal_compliance_owner
+  facts:
+    known:
+    - 技术评审已经给出通过意见
+    unknowns:
+    - 具名方案负责人尚未作答
+    hard_constraints:
+    - 技术评审只能提供证据
+    consequences:
+      will: 转交具名负责人
+      will_not: 不会生成决定或授权
+  options:
+  - option_id: transfer
+    neutral_label: 转交正确负责人
+    user_outcome: 当前体验保持不变
+    business_outcome: 由有权角色作答
+    cost: 需要协调负责人
+    time_to_effect: 负责人接手后继续
+    risk: 等待时间不确定
+    reversibility: 可撤回转交
+    scope_change: 不改变范围
+    unknowns:
+    - 接手时间未定
+    next_step: 发送完整事实包给正确负责人
+  - option_id: pause
+    neutral_label: 暂停推进
+    user_outcome: 当前服务保持不变
+    business_outcome: 避免在事实不足时投入
+    cost: 无新增投入
+    time_to_effect: 立即生效
+    risk: 机会窗口可能延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 恢复时间未定
+    next_step: 保留上下文并等待恢复
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: architect
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: typed_blocker
+    code: HAD.REVIEW_ROLE_FORBIDDEN
+    terminal: abort
+    recovery: collect_named_human_authority_decision
+    detail: ''
+  expected_legal_option_ids:
+  - transfer
+  - pause
+  default_terminal: abort
+  expected_recovery: collect_named_human_authority_decision
+  card:
+    card_type: choice
+    current_role_language: 方案与架构负责人
+    question: 方案与架构负责人，收到技术证据后选择继续审阅还是暂停？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - transfer
+    - pause
+    selected_probe_option_id: pause
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: D03
+  family: D
+  stage: solution_risk_design
+  decision_kind: solution_risk
+  required_role: domain_solution_architecture_owner
+  other_roles:
+  - security_privacy_legal_compliance_owner
+  - quality_owner
+  - environment_reliability_owner
+  facts:
+    known:
+    - 方案与安全角色由同一作答者提交
+    unknowns:
+    - 独立安全负责人何时可用
+    hard_constraints:
+    - 高风险决定要求不同作答者
+    consequences:
+      will: 等待独立负责人
+      will_not: 不会以兼任绕过职责分离
+  options:
+  - option_id: transfer
+    neutral_label: 转交正确负责人
+    user_outcome: 当前体验保持不变
+    business_outcome: 由有权角色作答
+    cost: 需要协调负责人
+    time_to_effect: 负责人接手后继续
+    risk: 等待时间不确定
+    reversibility: 可撤回转交
+    scope_change: 不改变范围
+    unknowns:
+    - 接手时间未定
+    next_step: 发送完整事实包给正确负责人
+  - option_id: pause
+    neutral_label: 暂停推进
+    user_outcome: 当前服务保持不变
+    business_outcome: 避免在事实不足时投入
+    cost: 无新增投入
+    time_to_effect: 立即生效
+    risk: 机会窗口可能延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 恢复时间未定
+    next_step: 保留上下文并等待恢复
+  hard_gates: []
+  sod:
+    policy: independent-principal-required
+    risk_categories:
+    - safety
+    role_actor_ids:
+      domain_solution_architecture_owner: actor-1
+      security_privacy_legal_compliance_owner: actor-1
+      quality_owner: actor-2
+      environment_reliability_owner: actor-3
+  route_input:
+    current_role: domain_solution_architecture_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: typed_blocker
+    code: HAD.SOD_FAILED
+    terminal: abort
+    recovery: collect_distinct_authenticated_principal
+    detail: independent principal roles require distinct authenticated actors
+  expected_legal_option_ids:
+  - transfer
+  - pause
+  default_terminal: abort
+  expected_recovery: collect_distinct_authenticated_principal
+  card:
+    card_type: choice
+    current_role_language: 方案与架构负责人
+    question: 方案与架构负责人，选择转交独立负责人还是暂停？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - transfer
+    - pause
+    selected_probe_option_id: pause
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: E01
+  family: E
+  stage: agent_led_implementation
+  decision_kind: implementation_exception
+  required_role: engineering_delivery_owner
+  other_roles:
+  - product_owner
+  facts:
+    known:
+    - 实施中出现超出授权范围的需求
+    unknowns:
+    - 新增需求的优先级
+    hard_constraints:
+    - 范围漂移使原授权失效
+    consequences:
+      will: 缩小或暂停并重新确认
+      will_not: 不会继续越界实施
+  options:
+  - option_id: narrow_allowed_scope
+    neutral_label: 缩小到允许范围
+    user_outcome: 部分用户或场景暂不开放
+    business_outcome: 保留可安全交付部分
+    cost: 需要重冻范围
+    time_to_effect: 重冻后继续
+    risk: 价值覆盖减少
+    reversibility: 可在后续扩大
+    scope_change: 缩小人群或渠道
+    unknowns:
+    - 缩小后的价值是否足够
+    next_step: 由产品与质量负责人确认新范围
+  - option_id: pause
+    neutral_label: 暂停推进
+    user_outcome: 当前服务保持不变
+    business_outcome: 避免在事实不足时投入
+    cost: 无新增投入
+    time_to_effect: 立即生效
+    risk: 机会窗口可能延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 恢复时间未定
+    next_step: 保留上下文并等待恢复
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: engineering_delivery_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: false
+    evidence_fresh: true
+  expected_route:
+    result: typed_blocker
+    code: HAD.SCOPE_INVALID
+    terminal: pause
+    recovery: narrow_or_refreeze_scope
+    detail: ''
+  expected_legal_option_ids:
+  - narrow_allowed_scope
+  - pause
+  default_terminal: pause
+  expected_recovery: narrow_or_refreeze_scope
+  card:
+    card_type: exception
+    current_role_language: 工程交付负责人
+    question: 工程交付负责人，范围漂移后选择缩小范围还是暂停？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - narrow_allowed_scope
+    - pause
+    selected_probe_option_id: pause
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: E02
+  family: E
+  stage: delivery_planning_authorization
+  decision_kind: delivery_authorization
+  required_role: engineering_delivery_owner
+  other_roles:
+  - product_owner
+  - security_privacy_legal_compliance_owner
+  facts:
+    known:
+    - 本地实施已具备条件
+    unknowns:
+    - 外部系统最终响应时间
+    hard_constraints:
+    - 外部写入必须单独限界授权
+    consequences:
+      will: 记录一次限界授权
+      will_not: 不会授权生产发布
+  options:
+  - option_id: local_only
+    neutral_label: 仅完成本地实施与验证
+    user_outcome: 用户暂时看不到外部变化
+    business_outcome: 先获得可审查结果
+    cost: 投入较低
+    time_to_effect: 较早完成
+    risk: 尚未形成外部集成结果
+    reversibility: 完全可撤销
+    scope_change: 排除外部写入
+    unknowns:
+    - 外部窗口是否变化
+    next_step: 完成本地证据后再次授权外部动作
+  - option_id: external_push
+    neutral_label: 包含一次受限外部写入
+    user_outcome: 用户仍不会自动获得生产变化
+    business_outcome: 可形成集成候选
+    cost: 需要额外协调
+    time_to_effect: 在授权窗口内完成
+    risk: 外部状态可能未知
+    reversibility: 先查询结果再补偿
+    scope_change: 增加一次具名外部动作
+    unknowns:
+    - 外部系统响应时间
+    next_step: 执行一次写入并查询最终结果
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: engineering_delivery_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: engineering_delivery_owner
+    hard_veto_roles:
+    - security_privacy_legal_compliance_owner
+    default_terminal: pause
+  expected_legal_option_ids:
+  - local_only
+  - external_push
+  default_terminal: pause
+  expected_recovery: not_required
+  card:
+    card_type: authorization
+    current_role_language: 工程交付负责人
+    question: 工程交付负责人，本轮授权仅含本地工作还是包含一次外部写入？
+    agent_recommendation:
+      option_id: local_only
+      reason: 先完成可撤销的本地验证，外部写入仍单独授权
+    independent_inputs_sealed: true
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - local_only
+    - external_push
+    selected_probe_option_id: external_push
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: E03
+  family: E
+  stage: agent_led_implementation
+  decision_kind: routine_execution
+  required_role: null
+  other_roles: []
+  facts:
+    known:
+    - 当前动作在冻结方案和授权范围内
+    unknowns:
+    - 没有新增未知项
+    hard_constraints:
+    - 常规执行不得产生额外副作用
+    consequences:
+      will: 继续自动执行并保留证据
+      will_not: 不会要求逐文件人工确认
+  options:
+  - option_id: local_only
+    neutral_label: 仅完成本地实施与验证
+    user_outcome: 用户暂时看不到外部变化
+    business_outcome: 先获得可审查结果
+    cost: 投入较低
+    time_to_effect: 较早完成
+    risk: 尚未形成外部集成结果
+    reversibility: 完全可撤销
+    scope_change: 排除外部写入
+    unknowns:
+    - 外部窗口是否变化
+    next_step: 完成本地证据后再次授权外部动作
+  - option_id: pause
+    neutral_label: 暂停推进
+    user_outcome: 当前服务保持不变
+    business_outcome: 避免在事实不足时投入
+    cost: 无新增投入
+    time_to_effect: 立即生效
+    risk: 机会窗口可能延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 恢复时间未定
+    next_step: 保留上下文并等待恢复
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: null
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: no_human_needed
+  expected_legal_option_ids:
+  - local_only
+  - pause
+  default_terminal: pause
+  expected_recovery: not_required
+  card:
+    card_type: post_check
+    current_role_language: 工程交付负责人
+    question: 工程交付负责人，事后查看时选择接受证据还是暂停后续动作？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - local_only
+    - pause
+    selected_probe_option_id: local_only
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: F01
+  family: F
+  stage: quality_business_uat
+  decision_kind: quality_uat_acceptance
+  required_role: quality_owner
+  other_roles:
+  - business_acceptance_representative
+  - product_owner
+  facts:
+    known:
+    - 必需质量证据失败
+    unknowns:
+    - 修复所需时间
+    hard_constraints:
+    - 失败证据未关闭时不得准出
+    consequences:
+      will: 修复、缩小或暂停
+      will_not: 不会用评审通过代替测试
+  options:
+  - option_id: accept_uat
+    neutral_label: 接受当前真实任务结果
+    user_outcome: 目标任务可完成
+    business_outcome: 当前范围具备业务可用性
+    cost: 无新增成本
+    time_to_effect: 立即记录
+    risk: 仅覆盖已验证范围
+    reversibility: 可在新证据下复核
+    scope_change: 不改变范围
+    unknowns:
+    - 未覆盖设备表现
+    next_step: 记录具名验收结果
+  - option_id: fix_blocker
+    neutral_label: 修复阻断问题
+    user_outcome: 避免把缺陷带给用户
+    business_outcome: 恢复质量准出可能性
+    cost: 需要修复与回归
+    time_to_effect: 修复后继续
+    risk: 交付延后
+    reversibility: 可回退修改
+    scope_change: 不缩小承诺范围
+    unknowns:
+    - 修复复杂度
+    next_step: 修复并重跑失败证据
+  - option_id: narrow_allowed_scope
+    neutral_label: 缩小到允许范围
+    user_outcome: 部分用户或场景暂不开放
+    business_outcome: 保留可安全交付部分
+    cost: 需要重冻范围
+    time_to_effect: 重冻后继续
+    risk: 价值覆盖减少
+    reversibility: 可在后续扩大
+    scope_change: 缩小人群或渠道
+    unknowns:
+    - 缩小后的价值是否足够
+    next_step: 由产品与质量负责人确认新范围
+  hard_gates:
+  - gate_id: required-quality-evidence
+    owner_role: quality_owner
+    option_ids:
+    - accept_uat
+    passed: false
+    evidence_fresh: true
+    waivable: false
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: quality_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: typed_blocker
+    code: HAD.HARD_GATE_FAILED
+    terminal: hold
+    recovery: fix_supply_evidence_narrow_or_abort
+    detail: required-quality-evidence
+  expected_legal_option_ids:
+  - fix_blocker
+  - narrow_allowed_scope
+  default_terminal: hold
+  expected_recovery: fix_supply_evidence_narrow_or_abort
+  card:
+    card_type: exception
+    current_role_language: 质量负责人
+    question: 质量负责人，选择修复阻断还是缩小到允许范围？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - fix_blocker
+    - narrow_allowed_scope
+    selected_probe_option_id: fix_blocker
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: F02
+  family: F
+  stage: quality_business_uat
+  decision_kind: quality_uat_acceptance
+  required_role: quality_owner
+  other_roles:
+  - business_acceptance_representative
+  - product_owner
+  - experience_design_owner
+  facts:
+    known:
+    - 真实任务在目标设备上完成
+    unknowns:
+    - 未覆盖设备表现
+    hard_constraints:
+    - 各角色只能接受自己的责任域
+    consequences:
+      will: 记录质量与业务验收
+      will_not: 不会生成集成或生产资格
+  options:
+  - option_id: accept_uat
+    neutral_label: 接受当前真实任务结果
+    user_outcome: 目标任务可完成
+    business_outcome: 当前范围具备业务可用性
+    cost: 无新增成本
+    time_to_effect: 立即记录
+    risk: 仅覆盖已验证范围
+    reversibility: 可在新证据下复核
+    scope_change: 不改变范围
+    unknowns:
+    - 未覆盖设备表现
+    next_step: 记录具名验收结果
+  - option_id: request_more_uat
+    neutral_label: 补充真实任务验证
+    user_outcome: 暂不扩大可用结论
+    business_outcome: 增加结果可信度
+    cost: 需要额外设备与人员
+    time_to_effect: 补测后继续
+    risk: 窗口延后
+    reversibility: 可停止补测
+    scope_change: 不改变范围
+    unknowns:
+    - 目标设备可用时间
+    next_step: 补测并更新事实包
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: quality_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: quality_owner
+    hard_veto_roles:
+    - security_privacy_legal_compliance_owner
+    default_terminal: hold
+  expected_legal_option_ids:
+  - accept_uat
+  - request_more_uat
+  default_terminal: hold
+  expected_recovery: not_required
+  card:
+    card_type: post_check
+    current_role_language: 质量负责人
+    question: 质量负责人，接受当前证据还是补充真实任务验证？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - accept_uat
+    - request_more_uat
+    selected_probe_option_id: accept_uat
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: F03
+  family: F
+  stage: quality_business_uat
+  decision_kind: quality_uat_acceptance
+  required_role: quality_owner
+  other_roles:
+  - business_acceptance_representative
+  facts:
+    known:
+    - 已有一份历史验收结果
+    unknowns:
+    - 当前候选是否仍一致
+    hard_constraints:
+    - 过期证据不得准出
+    consequences:
+      will: 刷新证据或保持等待
+      will_not: 不会复用旧结果
+  options:
+  - option_id: supply_evidence
+    neutral_label: 补充事实后再决定
+    user_outcome: 暂不改变当前体验
+    business_outcome: 提高问题判断可信度
+    cost: 需要补充材料
+    time_to_effect: 取得材料后继续
+    risk: 进度延后
+    reversibility: 可随时停止
+    scope_change: 不改变范围
+    unknowns:
+    - 补充材料何时可得
+    next_step: 收集事实并重新展示选择
+  - option_id: hold
+    neutral_label: 保持等待
+    user_outcome: 用户暂不获得新服务
+    business_outcome: 等待事实或硬约束关闭
+    cost: 无新增发布投入
+    time_to_effect: 条件满足后继续
+    risk: 机会窗口延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 阻断关闭时间
+    next_step: 补齐证据后重新决定
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: quality_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: false
+  expected_route:
+    result: typed_blocker
+    code: HAD.EVIDENCE_EXPIRED
+    terminal: hold
+    recovery: refresh_evidence
+    detail: ''
+  expected_legal_option_ids:
+  - supply_evidence
+  - hold
+  default_terminal: hold
+  expected_recovery: refresh_evidence
+  card:
+    card_type: post_check
+    current_role_language: 质量负责人
+    question: 质量负责人，选择刷新当前候选证据还是保持等待？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - supply_evidence
+    - hold
+    selected_probe_option_id: hold
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: G01
+  family: G
+  stage: commercial_readiness
+  decision_kind: commercial_readiness
+  required_role: product_owner
+  other_roles:
+  - quality_owner
+  - security_privacy_legal_compliance_owner
+  - environment_reliability_owner
+  - release_owner
+  facts:
+    known:
+    - 所有商用准备硬约束通过
+    unknowns:
+    - 实际市场反馈
+    hard_constraints:
+    - 商用决定不授权生产副作用
+    consequences:
+      will: 记录商用准备通过
+      will_not: 不会启动生产行动
+  options:
+  - option_id: go
+    neutral_label: 按已定范围进入商用准备终态
+    user_outcome: 目标人群可按后续独立步骤获得服务
+    business_outcome: 接受当前商用准备事实
+    cost: 使用已批准预算
+    time_to_effect: 按既定窗口
+    risk: 后续生产与渠道仍各自受控
+    reversibility: 可由后续决定停止
+    scope_change: 不改变商用范围
+    unknowns:
+    - 实际市场反馈
+    next_step: 记录商用准备决定但不触发生产动作
+  - option_id: limited_go
+    neutral_label: 仅向可逆小范围准备开放
+    user_outcome: 少量目标用户先获得服务
+    business_outcome: 以有限范围验证商用假设
+    cost: 使用受限预算
+    time_to_effect: 较早开始
+    risk: 覆盖面较小
+    reversibility: 满足退出条件可撤回
+    scope_change: 缩小人群、渠道、时间或流量
+    unknowns:
+    - 小范围代表性
+    next_step: 冻结退出条件并记录有限范围决定
+  - option_id: hold
+    neutral_label: 保持等待
+    user_outcome: 用户暂不获得新服务
+    business_outcome: 等待事实或硬约束关闭
+    cost: 无新增发布投入
+    time_to_effect: 条件满足后继续
+    risk: 机会窗口延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 阻断关闭时间
+    next_step: 补齐证据后重新决定
+  - option_id: abort
+    neutral_label: 停止本次方向
+    user_outcome: 不会引入新变化
+    business_outcome: 停止继续投入
+    cost: 终止已有投入
+    time_to_effect: 立即生效
+    risk: 目标暂不达成
+    reversibility: 需新决定才能重启
+    scope_change: 移出当前范围
+    unknowns:
+    - 未来是否重启
+    next_step: 记录停止原因与恢复条件
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: product_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: product_owner
+    hard_veto_roles:
+    - quality_owner
+    - security_privacy_legal_compliance_owner
+    - environment_reliability_owner
+    default_terminal: hold
+  expected_legal_option_ids:
+  - go
+  - limited_go
+  - hold
+  - abort
+  default_terminal: hold
+  expected_recovery: not_required
+  card:
+    card_type: choice
+    current_role_language: 产品负责人
+    question: 产品负责人，选择进入商用准备终态、有限范围、等待还是停止？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - go
+    - limited_go
+    - hold
+    - abort
+    selected_probe_option_id: go
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: commercial
+    status: go
+    limited_scope_reversible: false
+    policy_allows_limited_scope: false
+    decision_record:
+      decision_id: decision-g01
+      decision_unit_id: unit-g01
+      decision_kind: commercial_readiness
+      selected_option_id: go
+      accountable_role: product_owner
+      actor_id: actor-g01
+      actor_authenticated: true
+      authority_source: authenticated-authority-placeholder
+      recorded_at: '2026-08-29T00:00:00Z'
+      expires_at: '2026-08-30T00:00:00Z'
+      scope:
+        candidate: candidate-g01
+      append_only: true
+      consumed: false
+  expected_state:
+    legal: true
+    production_authorization: null
+- id: G02
+  family: G
+  stage: commercial_readiness
+  decision_kind: commercial_readiness
+  required_role: product_owner
+  other_roles:
+  - quality_owner
+  - security_privacy_legal_compliance_owner
+  - environment_reliability_owner
+  facts:
+    known:
+    - 有限范围被策略允许且可撤回
+    unknowns:
+    - 小范围代表性
+    hard_constraints:
+    - 有限范围不得绕过任何硬约束
+    consequences:
+      will: 记录有限范围与退出条件
+      will_not: 不会扩大范围或启动生产
+  options:
+  - option_id: go
+    neutral_label: 按已定范围进入商用准备终态
+    user_outcome: 目标人群可按后续独立步骤获得服务
+    business_outcome: 接受当前商用准备事实
+    cost: 使用已批准预算
+    time_to_effect: 按既定窗口
+    risk: 后续生产与渠道仍各自受控
+    reversibility: 可由后续决定停止
+    scope_change: 不改变商用范围
+    unknowns:
+    - 实际市场反馈
+    next_step: 记录商用准备决定但不触发生产动作
+  - option_id: limited_go
+    neutral_label: 仅向可逆小范围准备开放
+    user_outcome: 少量目标用户先获得服务
+    business_outcome: 以有限范围验证商用假设
+    cost: 使用受限预算
+    time_to_effect: 较早开始
+    risk: 覆盖面较小
+    reversibility: 满足退出条件可撤回
+    scope_change: 缩小人群、渠道、时间或流量
+    unknowns:
+    - 小范围代表性
+    next_step: 冻结退出条件并记录有限范围决定
+  - option_id: hold
+    neutral_label: 保持等待
+    user_outcome: 用户暂不获得新服务
+    business_outcome: 等待事实或硬约束关闭
+    cost: 无新增发布投入
+    time_to_effect: 条件满足后继续
+    risk: 机会窗口延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 阻断关闭时间
+    next_step: 补齐证据后重新决定
+  - option_id: abort
+    neutral_label: 停止本次方向
+    user_outcome: 不会引入新变化
+    business_outcome: 停止继续投入
+    cost: 终止已有投入
+    time_to_effect: 立即生效
+    risk: 目标暂不达成
+    reversibility: 需新决定才能重启
+    scope_change: 移出当前范围
+    unknowns:
+    - 未来是否重启
+    next_step: 记录停止原因与恢复条件
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: product_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: product_owner
+    hard_veto_roles:
+    - quality_owner
+    - security_privacy_legal_compliance_owner
+    - environment_reliability_owner
+    default_terminal: hold
+  expected_legal_option_ids:
+  - go
+  - limited_go
+  - hold
+  - abort
+  default_terminal: hold
+  expected_recovery: not_required
+  card:
+    card_type: choice
+    current_role_language: 产品负责人
+    question: 产品负责人，选择完整范围、有限范围、等待还是停止？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - go
+    - limited_go
+    - hold
+    - abort
+    selected_probe_option_id: limited_go
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: commercial
+    status: limited_go
+    limited_scope_reversible: true
+    policy_allows_limited_scope: true
+    decision_record:
+      decision_id: decision-g02
+      decision_unit_id: unit-g02
+      decision_kind: commercial_readiness
+      selected_option_id: limited_go
+      accountable_role: product_owner
+      actor_id: actor-g02
+      actor_authenticated: true
+      authority_source: authenticated-authority-placeholder
+      recorded_at: '2026-08-29T00:00:00Z'
+      expires_at: '2026-08-30T00:00:00Z'
+      scope:
+        candidate: candidate-g02
+      append_only: true
+      consumed: false
+  expected_state:
+    legal: true
+    production_authorization: null
+- id: G03
+  family: G
+  stage: commercial_readiness
+  decision_kind: commercial_readiness
+  required_role: product_owner
+  other_roles:
+  - quality_owner
+  - security_privacy_legal_compliance_owner
+  - environment_reliability_owner
+  facts:
+    known:
+    - 商用硬约束尚未通过
+    unknowns:
+    - 关闭时间
+    hard_constraints:
+    - 完整与有限范围均不能绕过硬约束
+    consequences:
+      will: 只保留等待或停止
+      will_not: 不会展示可用的通过方向
+  options:
+  - option_id: go
+    neutral_label: 按已定范围进入商用准备终态
+    user_outcome: 目标人群可按后续独立步骤获得服务
+    business_outcome: 接受当前商用准备事实
+    cost: 使用已批准预算
+    time_to_effect: 按既定窗口
+    risk: 后续生产与渠道仍各自受控
+    reversibility: 可由后续决定停止
+    scope_change: 不改变商用范围
+    unknowns:
+    - 实际市场反馈
+    next_step: 记录商用准备决定但不触发生产动作
+  - option_id: limited_go
+    neutral_label: 仅向可逆小范围准备开放
+    user_outcome: 少量目标用户先获得服务
+    business_outcome: 以有限范围验证商用假设
+    cost: 使用受限预算
+    time_to_effect: 较早开始
+    risk: 覆盖面较小
+    reversibility: 满足退出条件可撤回
+    scope_change: 缩小人群、渠道、时间或流量
+    unknowns:
+    - 小范围代表性
+    next_step: 冻结退出条件并记录有限范围决定
+  - option_id: hold
+    neutral_label: 保持等待
+    user_outcome: 用户暂不获得新服务
+    business_outcome: 等待事实或硬约束关闭
+    cost: 无新增发布投入
+    time_to_effect: 条件满足后继续
+    risk: 机会窗口延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 阻断关闭时间
+    next_step: 补齐证据后重新决定
+  - option_id: abort
+    neutral_label: 停止本次方向
+    user_outcome: 不会引入新变化
+    business_outcome: 停止继续投入
+    cost: 终止已有投入
+    time_to_effect: 立即生效
+    risk: 目标暂不达成
+    reversibility: 需新决定才能重启
+    scope_change: 移出当前范围
+    unknowns:
+    - 未来是否重启
+    next_step: 记录停止原因与恢复条件
+  hard_gates:
+  - gate_id: commercial-hard-gates
+    owner_role: security_privacy_legal_compliance_owner
+    option_ids:
+    - go
+    - limited_go
+    passed: false
+    evidence_fresh: true
+    waivable: false
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: product_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: typed_blocker
+    code: HAD.HARD_GATE_FAILED
+    terminal: hold
+    recovery: fix_supply_evidence_narrow_or_abort
+    detail: commercial-hard-gates
+  expected_legal_option_ids:
+  - hold
+  - abort
+  default_terminal: hold
+  expected_recovery: fix_supply_evidence_narrow_or_abort
+  card:
+    card_type: choice
+    current_role_language: 产品负责人
+    question: 产品负责人，硬约束未关闭时选择等待还是停止？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - hold
+    - abort
+    selected_probe_option_id: hold
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: commercial
+    status: hold
+    limited_scope_reversible: false
+    policy_allows_limited_scope: false
+    decision_record:
+      decision_id: decision-g03
+      decision_unit_id: unit-g03
+      decision_kind: commercial_readiness
+      selected_option_id: hold
+      accountable_role: product_owner
+      actor_id: actor-g03
+      actor_authenticated: true
+      authority_source: authenticated-authority-placeholder
+      recorded_at: '2026-08-29T00:00:00Z'
+      expires_at: '2026-08-30T00:00:00Z'
+      scope:
+        candidate: candidate-g03
+      append_only: true
+      consumed: false
+  expected_state:
+    legal: true
+    production_authorization: null
+- id: G04
+  family: G
+  stage: production_campaign
+  decision_kind: production_campaign_approval
+  required_role: release_owner
+  other_roles:
+  - environment_reliability_owner
+  - security_privacy_legal_compliance_owner
+  facts:
+    known:
+    - 候选、阶段、运行目标和回退目标已冻结
+    unknowns:
+    - 真实流量表现
+    hard_constraints:
+    - 同一次生产行动内正常阶段无需重复批准
+    consequences:
+      will: 自动推进两个技术阶段
+      will_not: 不会改变候选或约束
+  options:
+  - option_id: approve_campaign
+    neutral_label: 批准一次限界生产行动
+    user_outcome: 用户按冻结阶段逐步获得服务
+    business_outcome: 在停止条件内推进
+    cost: 使用发布预算
+    time_to_effect: 按冻结窗口
+    risk: 服务目标破坏时先停止或回退
+    reversibility: 支持预授权回退
+    scope_change: 仅限冻结候选与阶段
+    unknowns:
+    - 真实流量表现
+    next_step: 自动执行技术检查并逐步推进
+  - option_id: campaign_pause
+    neutral_label: 暂不启动生产行动
+    user_outcome: 用户体验保持不变
+    business_outcome: 保留候选等待窗口
+    cost: 无新增生产投入
+    time_to_effect: 立即生效
+    risk: 候选可能过期
+    reversibility: 可重新申请
+    scope_change: 不改变范围
+    unknowns:
+    - 下个窗口
+    next_step: 等待新决定
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: release_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: release_owner
+    hard_veto_roles:
+    - environment_reliability_owner
+    - security_privacy_legal_compliance_owner
+    default_terminal: abort
+  expected_legal_option_ids:
+  - approve_campaign
+  - campaign_pause
+  default_terminal: abort
+  expected_recovery: not_required
+  card:
+    card_type: authorization
+    current_role_language: 发布负责人
+    question: 发布负责人，批准一次限界生产行动还是暂不启动？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - approve_campaign
+    - campaign_pause
+    selected_probe_option_id: approve_campaign
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: campaign_sequence
+    approval:
+      decision_id: campaign-g04
+    steps:
+    - current_stage: canary
+      technical_gate_passed: true
+    - current_stage: '5'
+      technical_gate_passed: true
+  expected_state:
+    steps:
+    - status: executing
+      approval_id: campaign-g04
+      next_stage: '5'
+    - status: executing
+      approval_id: campaign-g04
+      next_stage: '20'
+- id: G05
+  family: G
+  stage: production_campaign
+  decision_kind: production_campaign_approval
+  required_role: release_owner
+  other_roles:
+  - environment_reliability_owner
+  facts:
+    known:
+    - 生产运行目标触发停止条件
+    unknowns:
+    - 回退后的业务恢复时间
+    hard_constraints:
+    - 先停止并按预授权回退
+    consequences:
+      will: 执行预授权回退
+      will_not: 不会继续扩大流量
+  options:
+  - option_id: campaign_pause
+    neutral_label: 暂不启动生产行动
+    user_outcome: 用户体验保持不变
+    business_outcome: 保留候选等待窗口
+    cost: 无新增生产投入
+    time_to_effect: 立即生效
+    risk: 候选可能过期
+    reversibility: 可重新申请
+    scope_change: 不改变范围
+    unknowns:
+    - 下个窗口
+    next_step: 等待新决定
+  - option_id: abort
+    neutral_label: 停止本次方向
+    user_outcome: 不会引入新变化
+    business_outcome: 停止继续投入
+    cost: 终止已有投入
+    time_to_effect: 立即生效
+    risk: 目标暂不达成
+    reversibility: 需新决定才能重启
+    scope_change: 移出当前范围
+    unknowns:
+    - 未来是否重启
+    next_step: 记录停止原因与恢复条件
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: release_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: release_owner
+    hard_veto_roles:
+    - environment_reliability_owner
+    - security_privacy_legal_compliance_owner
+    default_terminal: abort
+  expected_legal_option_ids:
+  - campaign_pause
+  - abort
+  default_terminal: abort
+  expected_recovery: not_required
+  card:
+    card_type: exception
+    current_role_language: 发布负责人
+    question: 发布负责人，回退完成后选择保持暂停还是终止行动？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - campaign_pause
+    - abort
+    selected_probe_option_id: campaign_pause
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: campaign
+    approval:
+      decision_id: campaign-g05
+    current_stage: '20'
+    technical_gate_passed: true
+    stop_predicate: true
+    rollback_authorized: true
+  expected_state:
+    status: rolled_back
+    approval_id: campaign-g05
+    next_stage: null
+- id: G06
+  family: G
+  stage: production_campaign
+  decision_kind: production_campaign_approval
+  required_role: release_owner
+  other_roles:
+  - environment_reliability_owner
+  facts:
+    known:
+    - 生产候选或约束发生变化
+    unknowns:
+    - 新约束下的风险
+    hard_constraints:
+    - 变化后必须重新批准
+    consequences:
+      will: 请求新的生产决定
+      will_not: 不会沿用旧批准恢复
+  options:
+  - option_id: campaign_pause
+    neutral_label: 暂不启动生产行动
+    user_outcome: 用户体验保持不变
+    business_outcome: 保留候选等待窗口
+    cost: 无新增生产投入
+    time_to_effect: 立即生效
+    risk: 候选可能过期
+    reversibility: 可重新申请
+    scope_change: 不改变范围
+    unknowns:
+    - 下个窗口
+    next_step: 等待新决定
+  - option_id: abort
+    neutral_label: 停止本次方向
+    user_outcome: 不会引入新变化
+    business_outcome: 停止继续投入
+    cost: 终止已有投入
+    time_to_effect: 立即生效
+    risk: 目标暂不达成
+    reversibility: 需新决定才能重启
+    scope_change: 移出当前范围
+    unknowns:
+    - 未来是否重启
+    next_step: 记录停止原因与恢复条件
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: release_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: release_owner
+    hard_veto_roles:
+    - environment_reliability_owner
+    - security_privacy_legal_compliance_owner
+    default_terminal: abort
+  expected_legal_option_ids:
+  - campaign_pause
+  - abort
+  default_terminal: abort
+  expected_recovery: not_required
+  card:
+    card_type: exception
+    current_role_language: 发布负责人
+    question: 发布负责人，约束变化后选择重新申请还是终止行动？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - campaign_pause
+    - abort
+    selected_probe_option_id: campaign_pause
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: campaign
+    approval:
+      decision_id: campaign-g06
+    current_stage: '5'
+    technical_gate_passed: true
+    constraints_changed: true
+  expected_state:
+    result: typed_blocker
+    code: HAD.CAMPAIGN_REAPPROVAL_REQUIRED
+    terminal: hold
+    recovery: record_new_campaign_decision
+    detail: ''
+- id: G07
+  family: G
+  stage: production_campaign
+  decision_kind: routine_execution
+  required_role: null
+  other_roles: []
+  facts:
+    known:
+    - 当前仓库只允许两条长期分支
+    unknowns:
+    - 无新增未知项
+    hard_constraints:
+    - 并发写入保持单路
+    consequences:
+      will: 维持单路写入
+      will_not: 不会接纳并发写阶段
+  options:
+  - option_id: local_only
+    neutral_label: 仅完成本地实施与验证
+    user_outcome: 用户暂时看不到外部变化
+    business_outcome: 先获得可审查结果
+    cost: 投入较低
+    time_to_effect: 较早完成
+    risk: 尚未形成外部集成结果
+    reversibility: 完全可撤销
+    scope_change: 排除外部写入
+    unknowns:
+    - 外部窗口是否变化
+    next_step: 完成本地证据后再次授权外部动作
+  - option_id: pause
+    neutral_label: 暂停推进
+    user_outcome: 当前服务保持不变
+    business_outcome: 避免在事实不足时投入
+    cost: 无新增投入
+    time_to_effect: 立即生效
+    risk: 机会窗口可能延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 恢复时间未定
+    next_step: 保留上下文并等待恢复
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: null
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: no_human_needed
+  expected_legal_option_ids:
+  - local_only
+  - pause
+  default_terminal: pause
+  expected_recovery: not_required
+  card:
+    card_type: post_check
+    current_role_language: 工程交付负责人
+    question: 环境与可靠性负责人，事后选择接受单路证据还是暂停后续动作？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - local_only
+    - pause
+    selected_probe_option_id: local_only
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: production_concurrency
+  expected_state:
+    s4_admission: not_admitted
+    write_concurrency: 1
+- id: G08
+  family: G
+  stage: channel_distribution
+  decision_kind: channel_publication
+  required_role: operations_support_market_channel_owner
+  other_roles:
+  - security_privacy_legal_compliance_owner
+  - release_owner
+  facts:
+    known:
+    - 渠道审核返回失败
+    unknowns:
+    - 补充材料完成时间
+    hard_constraints:
+    - 失败渠道不得声称已经公开
+    consequences:
+      will: 重试或停止该渠道
+      will_not: 不会改变其他渠道或生产状态
+  options:
+  - option_id: publish_now
+    neutral_label: 按当前渠道条件公开
+    user_outcome: 目标用户可在指定渠道获得服务
+    business_outcome: 进入公开运营
+    cost: 使用渠道预算
+    time_to_effect: 审核通过后生效
+    risk: 渠道结果可能延迟
+    reversibility: 可按渠道规则撤回
+    scope_change: 仅限指定渠道与人群
+    unknowns:
+    - 渠道审核完成时间
+    next_step: 执行公开并查询最终状态
+  - option_id: retry_channel
+    neutral_label: 修复渠道问题后重试
+    user_outcome: 用户暂时无法从该渠道获得服务
+    business_outcome: 保留后续公开机会
+    cost: 需要补材料
+    time_to_effect: 修复后重试
+    risk: 公开时间延后
+    reversibility: 可停止重试
+    scope_change: 不改变公开范围
+    unknowns:
+    - 审核反馈关闭时间
+    next_step: 补齐材料并再次确认
+  - option_id: stop_channel
+    neutral_label: 停止该渠道公开
+    user_outcome: 用户不会从该渠道获得服务
+    business_outcome: 避免继续消耗支持资源
+    cost: 停止已有投入
+    time_to_effect: 立即生效
+    risk: 渠道覆盖减少
+    reversibility: 需新决定重启
+    scope_change: 移除该渠道
+    unknowns:
+    - 替代渠道覆盖
+    next_step: 记录停止与用户沟通
+  hard_gates:
+  - gate_id: channel-result
+    owner_role: operations_support_market_channel_owner
+    option_ids:
+    - publish_now
+    passed: false
+    evidence_fresh: true
+    waivable: false
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: operations_support_market_channel_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: typed_blocker
+    code: HAD.HARD_GATE_FAILED
+    terminal: hold
+    recovery: fix_supply_evidence_narrow_or_abort
+    detail: channel-result
+  expected_legal_option_ids:
+  - retry_channel
+  - stop_channel
+  default_terminal: hold
+  expected_recovery: fix_supply_evidence_narrow_or_abort
+  card:
+    card_type: exception
+    current_role_language: 运营与渠道负责人
+    question: 运营与渠道负责人，选择修复后重试还是停止该渠道？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - retry_channel
+    - stop_channel
+    selected_probe_option_id: retry_channel
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}
+- id: H01
+  family: H
+  stage: outcome_observation_acceptance
+  decision_kind: outcome_acceptance
+  required_role: product_owner
+  other_roles:
+  - business_sponsor
+  - environment_reliability_owner
+  facts:
+    known:
+    - 冻结指标与窗口显示目标达到
+    unknowns:
+    - 长期保持情况
+    hard_constraints:
+    - 生产发布或渠道公开不能代替结果
+    consequences:
+      will: 接受目标达到
+      will_not: 不会扩大归因边界
+  options:
+  - option_id: accept_attained
+    neutral_label: 接受目标已经达到
+    user_outcome: 目标人群获得预期改善
+    business_outcome: 结束本轮结果观察
+    cost: 无新增观察预算
+    time_to_effect: 立即记录
+    risk: 归因仍以冻结边界为限
+    reversibility: 新证据可触发新问题
+    scope_change: 不改变范围
+    unknowns:
+    - 长期保持情况
+    next_step: 记录达到结果
+  - option_id: bounded_observation
+    neutral_label: 按预定上限继续观察
+    user_outcome: 用户服务保持当前状态
+    business_outcome: 用有限样本减少不确定性
+    cost: 消耗预冻结预算
+    time_to_effect: 一个观察窗口
+    risk: 仍可能无法归因
+    reversibility: 达到上限自动退出
+    scope_change: 不改变交付范围
+    unknowns:
+    - 新增样本是否足够
+    next_step: 暂停后进入最后一个观察窗口
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: product_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: product_owner
+    hard_veto_roles: []
+    default_terminal: escalate
+  expected_legal_option_ids:
+  - accept_attained
+  - bounded_observation
+  default_terminal: escalate
+  expected_recovery: not_required
+  card:
+    card_type: post_check
+    current_role_language: 产品负责人
+    question: 产品负责人，接受目标达到还是按既定窗口继续观察？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - accept_attained
+    - bounded_observation
+    selected_probe_option_id: accept_attained
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: outcome_accept
+    outcome: attained
+  expected_state:
+    outcome: attained
+    observation_state: accepted
+- id: H02
+  family: H
+  stage: outcome_observation_acceptance
+  decision_kind: outcome_acceptance
+  required_role: product_owner
+  other_roles:
+  - business_sponsor
+  facts:
+    known:
+    - 冻结指标与窗口显示目标未达到
+    unknowns:
+    - 主要原因
+    hard_constraints:
+    - 交付数量不能替代用户价值
+    consequences:
+      will: 接受未达到并转入后续决定
+      will_not: 不会包装为成功
+  options:
+  - option_id: accept_not_attained
+    neutral_label: 接受目标尚未达到
+    user_outcome: 用户改善不足
+    business_outcome: 进入澄清、调整或终止
+    cost: 需要后续决策
+    time_to_effect: 立即记录
+    risk: 可能需要重新投入
+    reversibility: 后续方案可另行决定
+    scope_change: 不自动扩大范围
+    unknowns:
+    - 主要原因
+    next_step: 记录未达到并转交事实负责人
+  - option_id: clarify
+    neutral_label: 停止延期并澄清
+    user_outcome: 当前服务不自动变化
+    business_outcome: 避免无限观察
+    cost: 需要重新定义问题
+    time_to_effect: 立即转入澄清
+    risk: 结果暂不能定论
+    reversibility: 可在新决定后恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 下一轮判据
+    next_step: 转交产品负责人澄清
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: product_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: product_owner
+    hard_veto_roles: []
+    default_terminal: escalate
+  expected_legal_option_ids:
+  - accept_not_attained
+  - clarify
+  default_terminal: escalate
+  expected_recovery: not_required
+  card:
+    card_type: post_check
+    current_role_language: 产品负责人
+    question: 产品负责人，接受目标未达到还是先澄清原因？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - accept_not_attained
+    - clarify
+    selected_probe_option_id: accept_not_attained
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: outcome_accept
+    outcome: not_attained
+  expected_state:
+    outcome: not_attained
+    observation_state: accepted
+- id: H03
+  family: H
+  stage: outcome_observation_acceptance
+  decision_kind: outcome_acceptance
+  required_role: product_owner
+  other_roles:
+  - business_sponsor
+  facts:
+    known:
+    - 当前样本不足以判断结果
+    unknowns:
+    - 新增样本是否足够
+    hard_constraints:
+    - 延期次数、预算、样本、窗口与退出条件已预先冻结
+    consequences:
+      will: 只延长一个有界窗口
+      will_not: 不会声称结果已经达到
+  options:
+  - option_id: bounded_observation
+    neutral_label: 按预定上限继续观察
+    user_outcome: 用户服务保持当前状态
+    business_outcome: 用有限样本减少不确定性
+    cost: 消耗预冻结预算
+    time_to_effect: 一个观察窗口
+    risk: 仍可能无法归因
+    reversibility: 达到上限自动退出
+    scope_change: 不改变交付范围
+    unknowns:
+    - 新增样本是否足够
+    next_step: 暂停后进入最后一个观察窗口
+  - option_id: clarify
+    neutral_label: 停止延期并澄清
+    user_outcome: 当前服务不自动变化
+    business_outcome: 避免无限观察
+    cost: 需要重新定义问题
+    time_to_effect: 立即转入澄清
+    risk: 结果暂不能定论
+    reversibility: 可在新决定后恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 下一轮判据
+    next_step: 转交产品负责人澄清
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: product_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: product_owner
+    hard_veto_roles: []
+    default_terminal: escalate
+  expected_legal_option_ids:
+  - bounded_observation
+  - clarify
+  default_terminal: escalate
+  expected_recovery: not_required
+  card:
+    card_type: choice
+    current_role_language: 产品负责人
+    question: 产品负责人，按预定上限继续观察还是立即澄清？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - bounded_observation
+    - clarify
+    selected_probe_option_id: bounded_observation
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: outcome_inconclusive
+    extension_policy:
+      max_extensions: 1
+      budget: one-window-budget
+      sample: target-cohort
+      window: seven-days
+      exit_conditions:
+      - sample reached or window ended
+    extensions_used: 0
+  expected_state:
+    outcome: inconclusive
+    observation_state: observing
+    transition:
+    - observing
+    - paused
+    - observing
+    extensions_used: 1
+- id: H04
+  family: H
+  stage: outcome_observation_acceptance
+  decision_kind: outcome_acceptance
+  required_role: product_owner
+  other_roles:
+  - business_sponsor
+  facts:
+    known:
+    - 有界延期次数已经用完
+    unknowns:
+    - 下一步业务选择
+    hard_constraints:
+    - 不得无限观察
+    consequences:
+      will: 进入升级或澄清
+      will_not: 不会再次延长观察
+  options:
+  - option_id: clarify
+    neutral_label: 停止延期并澄清
+    user_outcome: 当前服务不自动变化
+    business_outcome: 避免无限观察
+    cost: 需要重新定义问题
+    time_to_effect: 立即转入澄清
+    risk: 结果暂不能定论
+    reversibility: 可在新决定后恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 下一轮判据
+    next_step: 转交产品负责人澄清
+  - option_id: abort
+    neutral_label: 停止本次方向
+    user_outcome: 不会引入新变化
+    business_outcome: 停止继续投入
+    cost: 终止已有投入
+    time_to_effect: 立即生效
+    risk: 目标暂不达成
+    reversibility: 需新决定才能重启
+    scope_change: 移出当前范围
+    unknowns:
+    - 未来是否重启
+    next_step: 记录停止原因与恢复条件
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: product_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: true
+  expected_route:
+    result: required_role
+    role: product_owner
+    hard_veto_roles: []
+    default_terminal: escalate
+  expected_legal_option_ids:
+  - clarify
+  - abort
+  default_terminal: escalate
+  expected_recovery: not_required
+  card:
+    card_type: exception
+    current_role_language: 产品负责人
+    question: 产品负责人，观察上限已到后选择澄清还是停止？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - clarify
+    - abort
+    selected_probe_option_id: clarify
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: outcome_inconclusive
+    extension_policy:
+      max_extensions: 1
+      budget: one-window-budget
+      sample: target-cohort
+      window: seven-days
+      exit_conditions:
+      - sample reached or window ended
+    extensions_used: 1
+  expected_state:
+    outcome: inconclusive
+    observation_state: escalated
+    extensions_used: 1
+- id: H05
+  family: H
+  stage: feedback_knowledge_distillation
+  decision_kind: knowledge_landing
+  required_role: engineering_delivery_owner
+  other_roles:
+  - product_owner
+  - domain_solution_architecture_owner
+  - quality_owner
+  facts:
+    known:
+    - 发现一个可能重复的交付问题
+    unknowns:
+    - 是否跨场景重复
+    hard_constraints:
+    - 缺真实证据时不能上升为强制规则
+    consequences:
+      will: 继续观察或暂停落地
+      will_not: 不会把候选经验冒充当前规则
+  options:
+  - option_id: land_knowledge
+    neutral_label: 采纳并绑定强制检查
+    user_outcome: 同类问题更早被发现
+    business_outcome: 减少重复等待与回退
+    cost: 需要维护检查
+    time_to_effect: 检查落地后生效
+    risk: 错误泛化会增加摩擦
+    reversibility: 可由事实 owner 修订
+    scope_change: 只覆盖证据支持边界
+    unknowns:
+    - 其他场景是否适用
+    next_step: 由唯一 owner 采纳并绑定回归
+  - option_id: observe_knowledge
+    neutral_label: 继续观察候选经验
+    user_outcome: 当前流程不改变
+    business_outcome: 避免过早上升为规则
+    cost: 保留收集成本
+    time_to_effect: 新证据出现后再看
+    risk: 同类问题可能再次发生
+    reversibility: 可随时升级
+    scope_change: 不改变范围
+    unknowns:
+    - 是否会重复出现
+    next_step: 保留来源并等待更多证据
+  - option_id: pause
+    neutral_label: 暂停推进
+    user_outcome: 当前服务保持不变
+    business_outcome: 避免在事实不足时投入
+    cost: 无新增投入
+    time_to_effect: 立即生效
+    risk: 机会窗口可能延后
+    reversibility: 可恢复
+    scope_change: 不改变范围
+    unknowns:
+    - 恢复时间未定
+    next_step: 保留上下文并等待恢复
+  hard_gates: []
+  sod:
+    policy: role-record-only
+    risk_categories: []
+    role_actor_ids: {}
+  route_input:
+    current_role: engineering_delivery_owner
+    actor_authenticated: true
+    role_present: true
+    timed_out: false
+    scope_valid: true
+    evidence_fresh: false
+  expected_route:
+    result: typed_blocker
+    code: HAD.EVIDENCE_EXPIRED
+    terminal: pause
+    recovery: refresh_evidence
+    detail: ''
+  expected_legal_option_ids:
+  - land_knowledge
+  - observe_knowledge
+  - pause
+  default_terminal: pause
+  expected_recovery: refresh_evidence
+  card:
+    card_type: post_check
+    current_role_language: 工程交付负责人
+    question: 工程交付负责人，补齐证据前选择继续观察还是暂停落地？
+    agent_recommendation: null
+    independent_inputs_sealed: false
+  card_constraints:
+    required_role_language_fields:
+    - current_role
+    - question
+    - known_facts
+    - unknowns
+    - hard_constraints
+    - consequences
+    question_count: 1
+    minimum_options: 2
+    maximum_options: 4
+    symmetric_fields:
+    - option_id
+    - neutral_label
+    - user_outcome
+    - business_outcome
+    - cost
+    - time_to_effect
+    - risk
+    - reversibility
+    - scope_change
+    - unknowns
+    - next_step
+    required_recovery_actions:
+    - request_evidence
+    - transfer_to_correct_role
+    - pause_or_stop
+    forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
+    expected_reachable_option_ids:
+    - land_knowledge
+    - observe_knowledge
+    - pause
+    selected_probe_option_id: observe_knowledge
+    expected_reprompt: false
+    require_no_preselection: true
+  state_probe:
+    kind: none
+  expected_state: {}

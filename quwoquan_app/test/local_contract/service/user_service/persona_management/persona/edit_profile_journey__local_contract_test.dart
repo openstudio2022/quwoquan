@@ -37,6 +37,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         ProfileUpdateSnapshot,
         UpdateUserProfileCommand;
 import '../../../../../support/service/tag_service/tag/tag_node_view/tag_catalog_typed_double.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 
 import '../../../../../support/service/user_service/relationship/greeting_request/user_typed_facet_test_support.dart';
 
@@ -367,8 +368,12 @@ void main() {
 
       final mockRepo = _EditProfileMockRepository();
       final noNetworkClient = _RecordingNoNetworkClient();
+      final contentStore = InMemoryContentPostStore();
       final app = ProviderScope(
         overrides: [
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           cloudHttpClientProvider.overrideWithValue(
             CloudHttpClient(
               client: noNetworkClient,
@@ -403,6 +408,9 @@ void main() {
           ),
           profileEditProposalQueryReaderProvider.overrideWithValue(
             const _EmptyProfileProposalQuery(),
+          ),
+          userProfileContentAuthorPostsReaderProvider.overrideWithValue(
+            InMemoryContentAuthorPostsReader(contentStore),
           ),
           authSessionStoreProvider.overrideWithValue(
             _AuthenticatedAuthSessionStore(),

@@ -31,6 +31,62 @@ def job(name: str, created: str, started: str, completed: str) -> dict:
 
 
 class GithubActionsTimingTest(unittest.TestCase):
+    def test_delivery_service_packaging_sibling_uses_parallel_max_not_sum(self) -> None:
+        run = {"created_at": "2026-08-18T00:00:00Z"}
+        jobs = [
+            job(
+                "Delivery Gate — Topology",
+                "2026-08-18T00:00:00Z",
+                "2026-08-18T00:00:05Z",
+                "2026-08-18T00:01:41Z",
+            ),
+            job(
+                "Delivery Gate — Service Core (L2)",
+                "2026-08-18T00:01:41Z",
+                "2026-08-18T00:01:41Z",
+                "2026-08-18T00:16:41Z",
+            ),
+            job(
+                "Delivery Gate — Service Packaging",
+                "2026-08-18T00:01:41Z",
+                "2026-08-18T00:01:41Z",
+                "2026-08-18T00:15:01Z",
+            ),
+            job(
+                "Delivery Gate — App Tests Shard 1",
+                "2026-08-18T00:01:41Z",
+                "2026-08-18T00:01:41Z",
+                "2026-08-18T00:21:13Z",
+            ),
+        ]
+
+        values = calculate(
+            run,
+            jobs,
+            phases={
+                "topology": "Delivery Gate — Topology",
+                "service": "Delivery Gate — Service Core (L2)",
+                "service_packaging": "Delivery Gate — Service Packaging",
+                "app": "Delivery Gate — App Tests Shard",
+            },
+            required_counts={
+                "topology": 1,
+                "service": 1,
+                "service_packaging": 1,
+                "app": 1,
+            },
+            candidate_job="Delivery Gate — App Tests Shard 1",
+            prod_job="",
+            critical_start="run",
+            dag_layers=[
+                ("topology",),
+                ("service", "service_packaging", "app"),
+            ],
+        )
+
+        self.assertEqual(values["machine_critical_path_seconds"], 1268)
+        self.assertEqual(values["calendar_lead_time_seconds"], 1273)
+
     def test_official_job_and_step_timestamps_drive_longest_matrix(self) -> None:
         run = {"created_at": "2026-07-28T00:00:00Z"}
         jobs = [
@@ -245,6 +301,64 @@ class GithubActionsTimingTest(unittest.TestCase):
         self.assertEqual(values["machine_critical_path_seconds"], 120)
         self.assertEqual(values["calendar_lead_time_seconds"], 1860)
         self.assertNotIn("approval_wait_seconds", values)
+
+    def test_pr_calendar_includes_push_evidence_wait_while_machine_uses_external_phases(
+        self,
+    ) -> None:
+        run = {"created_at": "2026-08-26T00:00:00Z"}
+        jobs = [
+            job(
+                "Delivery Gate — Topology",
+                "2026-08-26T00:00:00Z",
+                "2026-08-26T00:00:01Z",
+                "2026-08-26T00:01:00Z",
+            ),
+            job(
+                "Delivery Gate — Service Core (L2)",
+                "2026-08-26T00:01:00Z",
+                "2026-08-26T00:01:01Z",
+                "2026-08-26T00:05:00Z",
+            ),
+            job(
+                "Delivery Gate — App (L1)",
+                "2026-08-26T00:01:00Z",
+                "2026-08-26T00:01:01Z",
+                "2026-08-26T00:12:00Z",
+            ),
+        ]
+        values = calculate(
+            run,
+            jobs,
+            phases={
+                "topology": "Delivery Gate — Topology",
+                "service": "Delivery Gate — Service Core (L2)",
+                "app_evidence": "Delivery Gate — App (L1)",
+            },
+            required_counts={"topology": 1, "service": 1, "app_evidence": 1},
+            candidate_job="",
+            prod_job="",
+            critical_start="run",
+            dag_layers=[
+                ("topology",),
+                (
+                    "service",
+                    "app_static",
+                    "app_tests",
+                    "app_serial",
+                    "app_coverage",
+                ),
+            ],
+            external_phases={
+                "app_static": 120,
+                "app_tests": 300,
+                "app_serial": 180,
+                "app_coverage": 480,
+            },
+        )
+        self.assertEqual(values["calendar_lead_time_seconds"], 720)
+        self.assertEqual(values["candidate_ready_at"], "2026-08-26T00:12:00Z")
+        self.assertEqual(values["machine_critical_path_seconds"], 539)
+        self.assertEqual(values["phase_app_coverage"], 480)
 
     def test_jobs_start_cannot_replace_official_run_start(self) -> None:
         with self.assertRaisesRegex(ValueError, "must start at workflow run"):

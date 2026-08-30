@@ -22,10 +22,53 @@ from content.release.environment.consistency import (
 from core import paths
 from verify.gate import gate_verify
 from verify.verify_execution_readiness import READINESS_MODES
+from verify.legacy_runtime_zero_evidence import (
+    register_legacy_runtime_zero_evidence_parser,
+)
+
+
+_HOMEPAGE_MEDIA_HELP = {
+    "homepage-media-completeness": "校验实体主页图片枚举、下载与角色闭环（决策+兑现合并口径）",
+    "homepage-media-decision": "1.download 判据：每张下载图的处置已冻结且合法，不读 manifest",
+    "homepage-media-fulfillment": "物化后判据：manifest 与冻结处置双向对账",
+}
+_HOMEPAGE_MEDIA_VIEWS = {
+    "homepage-media-completeness": "combined",
+    "homepage-media-decision": "decision",
+    "homepage-media-fulfillment": "fulfillment",
+}
+
+
+# 无参 verify 门的统一转发表：cmd -> verify 模块名（模块必须暴露 main() -> int）。
+_NO_ARG_VERIFIER_MODULES = {
+    "single-contract-source": "verify_single_contract_source",
+    "works-classification": "verify_works_classification",
+    "output-root-isolation": "verify_output_root_isolation",
+    "runtime-input-ownership": "verify_runtime_input_ownership",
+    "reusable-data-contract": "verify_reusable_data_contract",
+    "publish-purity": "verify_publish_purity",
+    "publish-closure": "verify_publish_closure",
+    "cli-first": "verify_cli_first",
+    "script-architecture": "verify_script_architecture",
+    "python-symbols": "verify_python_symbols",
+    "control-literals": "verify_control_literals",
+    "scale-parameterization": "verify_scale_parameterization",
+    "object-size-budget": "verify_object_size_budget",
+    "execution-identity-purity": "verify_execution_identity_purity",
+    "cursor-credential-contract": "verify_cursor_credential_contract",
+    "active-runtime-preflight": "verify_no_active_data_runtime",
+    "data-layout": "verify_data_layout",
+    "coverage-static-identity": "verify_coverage_static_identity",
+    "media-release-contract": "verify_media_release_contract",
+}
 
 
 def handle_verify(args: argparse.Namespace) -> None:
     cmd = getattr(args, "verify_command", None)
+    if cmd in _NO_ARG_VERIFIER_MODULES:
+        from importlib import import_module
+
+        raise SystemExit(import_module(f"verify.{_NO_ARG_VERIFIER_MODULES[cmd]}").main())
     if cmd == "all":
         handle_all()
         return
@@ -41,22 +84,13 @@ def handle_verify(args: argparse.Namespace) -> None:
     if cmd == "promote-golden":
         handle_promote_golden(args)
         return
-    if cmd == "single-contract-source":
-        from verify.verify_single_contract_source import main as single_contract_source_main
-
-        raise SystemExit(single_contract_source_main())
-    if cmd == "works-classification":
-        from verify.verify_works_classification import main as works_classification_main
-
-        raise SystemExit(works_classification_main())
-    if cmd == "output-root-isolation":
-        from verify.verify_output_root_isolation import main as output_root_isolation_main
-
-        raise SystemExit(output_root_isolation_main())
     if cmd == "content-execution-layout":
         from verify.verify_content_execution_layout import main as execution_layout_main
 
-        raise SystemExit(execution_layout_main())
+        argv = []
+        if getattr(args, "execution_id", None):
+            argv = ["--execution-id", str(args.execution_id)]
+        raise SystemExit(execution_layout_main(argv))
     if cmd == "execution-readiness":
         from verify.verify_execution_readiness import main as execution_readiness_main
 
@@ -65,49 +99,17 @@ def handle_verify(args: argparse.Namespace) -> None:
             argv.append("--require-reviewed")
         argv.extend(["--mode", str(args.mode)])
         raise SystemExit(execution_readiness_main(argv))
-    if cmd == "runtime-input-ownership":
-        from verify.verify_runtime_input_ownership import main as runtime_input_ownership_main
-
-        raise SystemExit(runtime_input_ownership_main())
-    if cmd == "reusable-data-contract":
-        from verify.verify_reusable_data_contract import main as reusable_data_contract_main
-
-        raise SystemExit(reusable_data_contract_main())
-    if cmd == "publish-purity":
-        from verify.verify_publish_purity import main as publish_purity_main
-
-        raise SystemExit(publish_purity_main())
-    if cmd == "publish-closure":
-        from verify.verify_publish_closure import main as publish_closure_main
-
-        raise SystemExit(publish_closure_main())
-    if cmd == "cli-first":
-        from verify.verify_cli_first import main as cli_first_main
-
-        raise SystemExit(cli_first_main())
-    if cmd == "script-architecture":
-        from verify.verify_script_architecture import main as script_architecture_main
-
-        raise SystemExit(script_architecture_main())
-    if cmd == "python-symbols":
-        from verify.verify_python_symbols import main as python_symbols_main
-
-        raise SystemExit(python_symbols_main())
-    if cmd == "control-literals":
-        from verify.verify_control_literals import main as control_literals_main
-
-        raise SystemExit(control_literals_main())
     if cmd == "source-digest":
         from verify.verify_source_digest import main as source_digest_main
 
-        argv = []
+        argv = ["--scope", str(args.scope)]
         if getattr(args, "source_execution_id", None):
             argv.extend(["--execution-id", str(args.source_execution_id)])
         raise SystemExit(source_digest_main(argv))
-    if cmd == "execution-identity-purity":
-        from verify.verify_execution_identity_purity import main as identity_purity_main
+    if cmd == "release-publishability":
+        from verify.release_publishability import main as release_publishability_main
 
-        raise SystemExit(identity_purity_main())
+        raise SystemExit(release_publishability_main(["--receipt", str(args.publishability_receipt)]))
     if cmd == "release-lifecycle":
         from verify.verify_release_lifecycle import main as release_lifecycle_main
 
@@ -137,14 +139,14 @@ def handle_verify(args: argparse.Namespace) -> None:
                 ]
             )
         )
-    if cmd == "cursor-credential-contract":
-        from verify.verify_cursor_credential_contract import main as credential_contract_main
-
-        raise SystemExit(credential_contract_main())
-    if cmd == "homepage-media-completeness":
+    if cmd in _HOMEPAGE_MEDIA_VIEWS:
         from verify.verify_homepage_media_completeness import main as homepage_media_main
 
-        raise SystemExit(homepage_media_main(["--execution", str(args.execution)]))
+        raise SystemExit(
+            homepage_media_main(
+                ["--execution", str(args.execution), "--view", _HOMEPAGE_MEDIA_VIEWS[cmd]]
+            )
+        )
     if cmd == "homepage-draft":
         from verify.verify_homepage_draft import main as homepage_draft_main
 
@@ -153,22 +155,6 @@ def handle_verify(args: argparse.Namespace) -> None:
                 ["--execution", str(args.execution), "--entity", str(args.entity)]
             )
         )
-    if cmd == "active-runtime-preflight":
-        from verify.verify_no_active_data_runtime import main as active_runtime_preflight_main
-
-        raise SystemExit(active_runtime_preflight_main())
-    if cmd == "data-layout":
-        from verify.verify_data_layout import main as data_layout_main
-
-        raise SystemExit(data_layout_main())
-    if cmd == "coverage-static-identity":
-        from verify.verify_coverage_static_identity import main as coverage_static_identity_main
-
-        raise SystemExit(coverage_static_identity_main())
-    if cmd == "media-release-contract":
-        from verify.verify_media_release_contract import main as media_release_contract_main
-
-        raise SystemExit(media_release_contract_main())
     if cmd == "stage-artifacts":
         from verify.stage_artifacts import verify_stage_artifacts
 
@@ -177,6 +163,7 @@ def handle_verify(args: argparse.Namespace) -> None:
             publish_root=Path(args.publish_root) if args.publish_root else paths.PUBLISH_ROOT,
             release_root=Path(args.release_root) if args.release_root else paths.RELEASE_ROOT,
             commercial=not bool(args.trial),
+            through=args.through,
         )
         print(json.dumps(report, ensure_ascii=False, indent=2))
         if not report["passed"]:
@@ -237,6 +224,12 @@ def _run_filter_catalog_gate() -> int:
     return 0 if report["passed"] else 1
 
 
+def _admit_carried_media_holdings() -> int:
+    from content.release.canonical.rehydrate_media_holdings import main as rehydrate_main
+
+    return int(rehydrate_main() or 0)
+
+
 def _run_static_gate(name: str, run: Callable[[], int | None]) -> tuple[str, int]:
     try:
         result = run()
@@ -267,6 +260,7 @@ def handle_all() -> None:
     from verify import verify_script_architecture
     from verify import verify_python_symbols
     from verify import verify_control_literals
+    from verify import verify_scale_parameterization
     from verify import verify_prompt_templates
     from verify import verify_no_flat_roots
     from verify import verify_no_runtime_draft_kit
@@ -276,6 +270,13 @@ def handle_all() -> None:
     from verify import verify_works_classification
     from verify import verify_coverage_static_identity
     from verify import verify_media_release_contract
+    from verify import verify_object_size_budget
+
+    # 闭包类门禁问的是内容库而不是这棵树，而库按设计在仓外，一份新检出手里
+    # 一个字节都没有。先把仓内携带的媒体字节入库，这些门禁才是在判内容对错，
+    # 而不是在判这台机器上有没有跑过别的流程。已入库时这一步是空转。
+    if _admit_carried_media_holdings() != 0:
+        raise SystemExit(1)
 
     gates = (
         ("cli-first", verify_cli_first.main),
@@ -283,19 +284,21 @@ def handle_all() -> None:
         ("script-architecture", verify_script_architecture.main),
         ("python-symbols", verify_python_symbols.main),
         ("control-literals", verify_control_literals.main),
+        ("scale-parameterization", verify_scale_parameterization.main),
         ("prompt-templates", verify_prompt_templates.main),
         ("no-flat-roots", verify_no_flat_roots.main),
         ("no-runtime-draft-kit", verify_no_runtime_draft_kit.main),
         ("tag-tree", lambda: verify_tag_tree.main([])),
         ("source-digest", lambda: verify_source_digest.main([])),
         ("execution-identity-purity", verify_execution_identity_purity.main),
-        ("content-execution-layout", verify_content_execution_layout.main),
+        ("content-execution-layout", lambda: verify_content_execution_layout.main([])),
         ("reusable-data-contract", verify_reusable_data_contract.main),
         ("runtime-input-ownership", verify_runtime_input_ownership.main),
         ("cursor-credential-contract", verify_cursor_credential_contract.main),
         ("output-root-isolation", verify_output_root_isolation.main),
         ("coverage-static-identity", verify_coverage_static_identity.main),
         ("media-release-contract", verify_media_release_contract.main),
+        ("object-size-budget", verify_object_size_budget.main),
         ("filter-catalog", _run_filter_catalog_gate),
         ("publish-closure", verify_publish_closure.main),
         ("single-contract-source", verify_single_contract_source.main),
@@ -465,7 +468,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("single-contract-source", help="校验内容供给生产契约只有一个无版本真源")
     sub.add_parser("works-classification", help="校验作品 vs 随记判定 schema/config/registry 一致性 + 判定 smoke")
     sub.add_parser("output-root-isolation", help="仓外输出根隔离门：repo allowlist/阶段树/批次轴/摘要索引")
-    sub.add_parser("content-execution-layout", help="校验唯一 execution 工作包与五阶段目录")
+    cel = sub.add_parser("content-execution-layout", help="校验唯一 execution 工作包与五阶段目录")
+    cel.add_argument("--execution-id", help="只校验一个显式命名的 execution 工作包")
     per = sub.add_parser("execution-readiness", help="校验单个 execution 工作包的准出证据")
     per.add_argument("--execution-id", required=True)
     per.add_argument("--require-reviewed", action="store_true")
@@ -480,14 +484,32 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("publish-closure", help="校验 canonical publish 无孤立 creator/media 或悬空引用")
     sub.add_parser("cli-first", help="校验业务能力只经 Data CLI 入口暴露")
     sub.add_parser("script-architecture", help="校验脚本目录职责、模块尺寸与 core 依赖方向")
+    register_legacy_runtime_zero_evidence_parser(sub)
     sub.add_parser("python-symbols", help="校验 Data Python 运行时符号均有明确所有者")
     sub.add_parser("control-literals", help="校验双省链路控制字面量只有一个真相源")
+    sub.add_parser(
+        "scale-parameterization",
+        help="校验里程碑目标只有 control-plane 一个真相源且各消费者一致",
+    )
+    sub.add_parser(
+        "object-size-budget",
+        help="校验单对象闭包体积不超过图文 10MiB / 视频 50MiB 预算",
+    )
     source_digest = sub.add_parser(
         "source-digest",
-        help="校验 candidate source-definition snapshot 与 execution bundle",
+        help=(
+            "current 精确校验显式 candidate/现行 release 视图；"
+            "all 审计全部历史 source identity"
+        ),
     )
-    source_digest.add_argument("--execution-id", dest="source_execution_id")
+    source_digest.add_argument(
+        "--execution-id",
+        dest="source_execution_id",
+        help="显式选择 current execution candidate；省略时不从 tasks 历史推断",
+    )
     sub.add_parser("execution-identity-purity", help="校验 active code 已删除旧运行身份与旧路径")
+    prp = sub.add_parser("release-publishability", help="唯一「可发布」谓词：判定一份环境 readiness 收据是否可发布")
+    prp.add_argument("--receipt", dest="publishability_receipt", required=True, help="release-readiness.json 收据路径")
     release_lifecycle = sub.add_parser("release-lifecycle", help="校验 immutable release 的闭环证据")
     release_lifecycle.add_argument("--release", dest="lifecycle_release", required=True)
     release_lifecycle.add_argument("--environment", choices=("alpha", "beta", "gamma", "prod"))
@@ -511,8 +533,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     lifecycle_exit.add_argument("--original-release", required=True)
     lifecycle_exit.add_argument("--exit-run", required=True)
     sub.add_parser("cursor-credential-contract", help="校验只使用仓外受限 key file 且无旧 alias/secret")
-    phm = sub.add_parser("homepage-media-completeness", help="校验实体主页图片枚举、下载与角色闭环")
-    phm.add_argument("--execution", required=True)
+    for name, help_text in _HOMEPAGE_MEDIA_HELP.items():
+        sub.add_parser(name, help=help_text).add_argument("--execution", required=True)
     phd = sub.add_parser("homepage-draft", help="校验单个 Agent 主页草稿的结构与底稿贴合度")
     phd.add_argument("--execution", required=True)
     phd.add_argument("--entity", required=True)
@@ -528,6 +550,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     psa.add_argument("--publish-root")
     psa.add_argument("--release-root")
     psa.add_argument("--trial", action="store_true", help="trial 允许 independent reviewer 尚未通过")
+    psa.add_argument(
+        "--through",
+        choices=paths.OBJECT_STAGES,
+        help="进行式校验：只要求到该阶段为止的产物齐全；缺省为完成型全量校验",
+    )
     pri = sub.add_parser("release-integrity", help="校验 release 级证据链、一稿一用与跨作品资产溯源完整性")
     pri.add_argument("--release", required=True, help="Release ID under release/")
     p.set_defaults(handler=handle_verify)

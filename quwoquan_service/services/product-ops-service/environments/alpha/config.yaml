@@ -1,6 +1,6 @@
 overrides:
-  sys.product-ops-service.account_security_authority.base_url: http://user-service:18081
-  sys.product-ops-service.account_security_authority.timeout_ms: 1500
+  sys.product-ops-service.user_account_security_authority.base_url: http://user-service:18081
+  sys.product-ops-service.user_account_security_authority.timeout_ms: 1500
   sys.product-ops-service.redis.general.addr: redis:6379
   sys.product-ops-service.redis.rec.addr: redis:6379
   # ES 告警评估循环：策略文件由 compose/deployment 只读挂载；
@@ -8,12 +8,13 @@ overrides:
   sys.product-ops-service.telemetry_alerts.policy_path: /etc/qwq/observability/product_telemetry_alerts.yaml
   sys.product-ops-service.telemetry_alerts.alertmanager_url: http://host.docker.internal:9093
 secretRefs:
-  sys.product-ops-service.mongodb.uri: MONGODB_URI
-  sys.product-ops-service.postgres.dsn: POSTGRES_DSN
+  sys.product-ops-service.mongodb.uri: PRODUCT_OPS_MONGO_URI
+  sys.product-ops-service.postgres.dsn: PRODUCT_OPS_POSTGRES_DSN
   sys.product-ops-service.redis.general.password: PRODUCT_OPS_REDIS_GENERAL_PASSWORD
   sys.product-ops-service.redis.rec.password: PRODUCT_OPS_REDIS_REC_PASSWORD
 externalBindings:
   runtime.log.sink:
     state: enabled
     adapter: ext.obs.elasticsearch
-    endpointRef: local_topology:alpha.elasticsearch
+    # 逻辑键环境无关：实际 endpoint 由运行时 PRODUCT_OPS_ELASTICSEARCH_ENDPOINT 解析。
+    endpointRef: local_topology:elasticsearch

@@ -5,7 +5,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import normalize_active_carriers
 
 
 def aggregate_plan_source_pool(
@@ -28,11 +28,12 @@ def aggregate_plan_source_pool(
         return None, None, None
     if len(bindings) != 1 or len(evidence_refs) != 1:
         raise ValueError("DATA.SOURCE.POOL_SHORTFALL: campaign pool binding drift")
-    binding = submissions["homepage"].get("scaleSourcePool")
+    active = normalize_active_carriers(submissions)
+    binding = submissions[active[0]].get("scaleSourcePool")
     if not isinstance(binding, Mapping):
         raise TypeError("DATA.SOURCE.POOL_SHORTFALL: campaign pool binding invalid")
     selections: dict[str, dict[str, Any]] = {}
-    for carrier in CAMPAIGN_CARRIERS:
+    for carrier in active:
         selection = submissions[carrier].get("sourcePoolSelection")
         if not isinstance(selection, Mapping) or selection.get("carrier") != carrier:
             raise ValueError(f"DATA.SOURCE.POOL_SHORTFALL: {carrier} pool selection drift")

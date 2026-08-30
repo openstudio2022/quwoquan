@@ -7,8 +7,19 @@ from pathlib import Path
 import re
 from typing import Iterable
 
-from .constants import OBJECT_TEST_SPEC_REF_RE, ROOT
+# spec_ref 语法解析复用 feature-tree 库唯一 lexical 入口（同行 marker 与列表块
+# 两种显式形态同源生效）；本模块只保留语义校验：验收锚点类型、`.tN` 剥离、
+# 逃逸与目标存在性。用完全限定包路径导入：顶层名 `feature_tree` 被
+# cli/feature_tree.py 薄壳占用，短名导入会与其冲突。
+from quwoquan_ops.cli.lib.feature_tree.evidence import extract_spec_refs
+from quwoquan_ops.cli.lib.feature_tree.patterns import ACCEPTANCE_ANCHOR_RE
+
+from .constants import ROOT
 from .object_semantics import camel_to_snake
+
+# 对象证据只认验收锚点；`.tN` 子句剥离到主锚点做存在性校验（语义过滤，非语法
+# 解析）。闭集与位数引用 feature-tree 库唯一定义点。
+_ACCEPTANCE_ANCHOR_RE = ACCEPTANCE_ANCHOR_RE
 
 
 def is_substantive_implementation_source(path: Path) -> bool:
@@ -64,6 +75,22 @@ def is_substantive_implementation_source(path: Path) -> bool:
         without_import_blocks,
     )
     return bool(without_single_imports.strip())
+
+
+def go_import_declarations(text: str) -> str:
+    """Return only the import declarations of a Go source file.
+
+    Cross-service dependency can only be established through an import.  Service
+    paths appearing elsewhere are data — scan roots, contract inventories, error
+    strings — and treating them as dependencies makes the boundary check fire on
+    tests that legitimately enumerate other services' paths.
+    """
+
+    blocks = re.findall(r"(?ms)^\s*import\s*\((.*?)^\s*\)\s*$", text)
+    singles = re.findall(
+        r'(?m)^\s*import\s+(?:[A-Za-z_][A-Za-z0-9_]*\s+)?("[^"]+")\s*$', text
+    )
+    return "\n".join([*blocks, *singles])
 
 
 def is_substantive_test_source(path: Path) -> bool:
@@ -127,18 +154,23 @@ def valid_object_test_spec_refs(
     refs: set[str] = set()
     issues: list[str] = []
     feature_tree_root = (repo_root / "specs" / "feature-tree").resolve()
-    for spec_path, case_id in OBJECT_TEST_SPEC_REF_RE.findall(source):
+    for ref in sorted(extract_spec_refs(source)):
+        spec_path, _, raw_anchor = ref.partition("#")
+        anchor_match = _ACCEPTANCE_ANCHOR_RE.match(raw_anchor)
+        if anchor_match is None:
+            continue
+        case_id = anchor_match.group(1).lower()
         target = (repo_root / spec_path).resolve()
         try:
             target.relative_to(feature_tree_root)
         except ValueError:
             issues.append(f"spec_ref escapes feature tree: {spec_path}#{case_id}")
             continue
-        reference = f"{spec_path}#{case_id.lower()}"
+        reference = f"{spec_path}#{case_id}"
         if not target.is_file():
             issues.append(f"spec_ref target does not exist: {reference}")
             continue
-        anchor = f'<a id="{case_id.lower()}"></a>'
+        anchor = f'<a id="{case_id}"></a>'
         if anchor not in target.read_text(encoding="utf-8", errors="replace").lower():
             issues.append(f"spec_ref acceptance anchor does not exist: {reference}")
             continue

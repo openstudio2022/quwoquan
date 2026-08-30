@@ -40,17 +40,14 @@ final class IncomingCallNativeCapability {
   const IncomingCallNativeCapability({
     required this.nativeUiAvailable,
     required this.fullScreenPresentationAllowed,
-    required this.backgroundPushConfigured,
   });
 
   const IncomingCallNativeCapability.unsupported()
     : nativeUiAvailable = false,
-      fullScreenPresentationAllowed = false,
-      backgroundPushConfigured = false;
+      fullScreenPresentationAllowed = false;
 
   final bool nativeUiAvailable;
   final bool fullScreenPresentationAllowed;
-  final bool backgroundPushConfigured;
 
   bool get usesHeadsUpFallback =>
       nativeUiAvailable && !fullScreenPresentationAllowed;
@@ -174,24 +171,9 @@ final class MethodChannelIncomingCallNativeBridge
       fullScreenAllowed = false;
     }
 
-    var backgroundPushConfigured = false;
-    try {
-      final raw = await channel.invokeMethod<Object?>(
-        'readIncomingCallCapability',
-      );
-      if (raw is Map) {
-        backgroundPushConfigured =
-            raw['backgroundPushConfigured'] as bool? ?? false;
-      }
-    } on MissingPluginException {
-      // Firebase 配置状态由 Dart Firebase runtime 单独补充。
-    } on PlatformException {
-      // 保持 fail-closed。
-    }
     return IncomingCallNativeCapability(
       nativeUiAvailable: nativeUiAvailable,
       fullScreenPresentationAllowed: fullScreenAllowed,
-      backgroundPushConfigured: backgroundPushConfigured,
     );
   }
 

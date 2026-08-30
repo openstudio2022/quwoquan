@@ -5,9 +5,9 @@ overrides:
   sys.user-service.redis.general.mode: cluster
   sys.user-service.redis.general.tls: true
 secretRefs:
-  sys.user-service.mongodb.uri: MONGODB_URI
-  sys.user-service.postgres.dsn: POSTGRES_DSN
-  sys.user-service.redis.general.password: REDIS_PASSWORD
+  sys.user-service.mongodb.uri: USER_MONGO_URI
+  sys.user-service.postgres.dsn: USER_POSTGRES_DSN
+  sys.user-service.redis.general.password: USER_REDIS_GENERAL_PASSWORD
 externalBindings:
   identity.carrier.one_tap:
     state: enabled

@@ -334,39 +334,52 @@ extension _ImageEditorPageLocalPreviewLayers on _ImageEditorPageState {
       0.0,
       1.0,
     );
-    final hue = await _sampleImageHueAt(Offset(nx, ny));
+    final double? hue;
+    try {
+      hue = await _sampleImageHueAt(Offset(nx, ny));
+    } catch (error, stackTrace) {
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'content.image_editor.hsl_picker_sample',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+      );
+      return;
+    }
     if (!mounted || hue == null) return;
+    final sampledHue = hue;
     _setEditorState(() {
       _hslPickerPoint = localPosition;
-      _selectedHslChannel = hslChannelKeyFromHue(hue);
+      _selectedHslChannel = hslChannelKeyFromHue(sampledHue);
     });
   }
 
+  /// 取色采样：返回 null 表示当前没有可采样的图（无字节 / 无像素数据），是缺席；
+  /// 解码或读取过程出错向上抛给调用点上报，不在这里静默吞掉。
   Future<double?> _sampleImageHueAt(Offset normalized) async {
-    try {
-      final bytes = await _loadImageBytes(_currentPath);
-      if (bytes.isEmpty) return null;
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final image = frame.image;
-      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-      if (data == null) return null;
-      final x = (normalized.dx * (image.width - 1)).round().clamp(
-        0,
-        image.width - 1,
-      );
-      final y = (normalized.dy * (image.height - 1)).round().clamp(
-        0,
-        image.height - 1,
-      );
-      final offset = (y * image.width + x) * 4;
-      final r = data.getUint8(offset);
-      final g = data.getUint8(offset + 1);
-      final b = data.getUint8(offset + 2);
-      return HSVColor.fromColor(Color.fromARGB(255, r, g, b)).hue;
-    } catch (_) {
-      return null;
-    }
+    final bytes = await _loadImageBytes(_currentPath);
+    if (bytes.isEmpty) return null;
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
+    final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    if (data == null) return null;
+    final x = (normalized.dx * (image.width - 1)).round().clamp(
+      0,
+      image.width - 1,
+    );
+    final y = (normalized.dy * (image.height - 1)).round().clamp(
+      0,
+      image.height - 1,
+    );
+    final offset = (y * image.width + x) * 4;
+    final r = data.getUint8(offset);
+    final g = data.getUint8(offset + 1);
+    final b = data.getUint8(offset + 2);
+    return HSVColor.fromColor(Color.fromARGB(255, r, g, b)).hue;
   }
 
   /// 裁剪框与九宫格辅助线

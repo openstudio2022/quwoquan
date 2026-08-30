@@ -26,23 +26,29 @@ type feedDeliveryPageReplay struct {
 	paginationExpiresAt time.Time
 	feedRequestID       string
 	policyDigest        string
+	experimentBucket    string
+	// releaseID/manifestDigest 回放页绑定的内容激活身份；continuation 页
+	// 必须携带首刷时冻结的同一 release 身份。
+	releaseID      string
+	manifestDigest string
 }
 
 type feedDeliveryPageAppendInput struct {
-	scope          string
-	deliveryPageID string
-	feedRequestID  string
-	pageSize       int
-	depth          int
-	previousPageID string
-	items          []FeedItemView
-	objectCards    []ObjectCardView
-	outboundCursor string
-	releaseID      string
-	manifestDigest string
-	policyDigest   string
-	createdAt      time.Time
-	expiresAt      time.Time
+	scope            string
+	deliveryPageID   string
+	feedRequestID    string
+	pageSize         int
+	depth            int
+	previousPageID   string
+	items            []FeedItemView
+	objectCards      []ObjectCardView
+	outboundCursor   string
+	releaseID        string
+	manifestDigest   string
+	policyDigest     string
+	experimentBucket string
+	createdAt        time.Time
+	expiresAt        time.Time
 }
 
 func newFeedDeliveryPageIdentity(now time.Time) (string, time.Time, error) {
@@ -61,20 +67,21 @@ func (s *FeedService) appendFeedDeliveryPage(
 		return deliveryapp.ErrStoreUnavailable
 	}
 	_, err := s.deliveryPages.Append(ctx, deliverymodel.Page{
-		DeliveryPageID: input.deliveryPageID,
-		ScopeHash:      deliverymodel.ScopeHash(input.scope),
-		FeedRequestID:  input.feedRequestID,
-		PageSize:       input.pageSize,
-		Depth:          input.depth,
-		PreviousPageID: input.previousPageID,
-		Items:          deliveryPageReferences(input.items),
-		ObjectCards:    deliveryPageObjectCards(input.objectCards),
-		OutboundCursor: input.outboundCursor,
-		ReleaseID:      input.releaseID,
-		ManifestDigest: input.manifestDigest,
-		PolicyDigest:   input.policyDigest,
-		CreatedAt:      input.createdAt.UTC(),
-		ExpiresAt:      input.expiresAt.UTC(),
+		DeliveryPageID:   input.deliveryPageID,
+		ScopeHash:        deliverymodel.ScopeHash(input.scope),
+		FeedRequestID:    input.feedRequestID,
+		PageSize:         input.pageSize,
+		Depth:            input.depth,
+		PreviousPageID:   input.previousPageID,
+		Items:            deliveryPageReferences(input.items),
+		ObjectCards:      deliveryPageObjectCards(input.objectCards),
+		OutboundCursor:   input.outboundCursor,
+		ReleaseID:        input.releaseID,
+		ManifestDigest:   input.manifestDigest,
+		PolicyDigest:     input.policyDigest,
+		ExperimentBucket: input.experimentBucket,
+		CreatedAt:        input.createdAt.UTC(),
+		ExpiresAt:        input.expiresAt.UTC(),
 	})
 	return err
 }
@@ -220,6 +227,9 @@ func (s *FeedService) replayFeedDeliveryPage(
 		paginationExpiresAt: paginationExpiry,
 		feedRequestID:       page.FeedRequestID,
 		policyDigest:        page.PolicyDigest,
+		experimentBucket:    page.ExperimentBucket,
+		releaseID:           page.ReleaseID,
+		manifestDigest:      page.ManifestDigest,
 	}, nil
 }
 

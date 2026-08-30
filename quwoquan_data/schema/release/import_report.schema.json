@@ -73,6 +73,11 @@
           "type": "integer",
           "minimum": 0
         },
+        "mediaAssetsProjected": {
+          "description": "本次导入投影进 media_assets 的 release 媒体资产数；原图短签授权（DEC-031 research 消费面）依赖该投影存在。",
+          "type": "integer",
+          "minimum": 0
+        },
         "entitiesUpserted": {
           "type": "integer",
           "minimum": 0

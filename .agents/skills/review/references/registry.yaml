@@ -1,0 +1,309 @@
+# Review Board v2 registry.
+#
+# 这里只声明工作流主审、按 profile 选择的唯一专审，以及命名证据。功能事实、
+# 设计约束和命令不得复制进角色；checklist 只能用 `evidence: <id>` 引用本表。
+
+schema_version: 2
+
+limits:
+  max_parallel: 2
+  max_role_invocations: 4
+  per_role_timeout_minutes: 10
+  reviewer_context_bytes: 24576
+
+evidence:
+  feature-tree:
+    command: make verify-feature-tree
+    segment: POST
+    required: true
+    covers: []
+  agent-context-budget:
+    command: make verify-agent-context-budget
+    segment: POST
+    required: true
+    covers: []
+  app-pageflip-back-mainline:
+    command: make verify-app-pageflip-back-mainline
+    segment: POST
+    required: true
+    covers:
+      - pageflip-backward-static
+      - pageflip-backward-tests
+  app-page-object-contract:
+    command: make verify-app-page-object-contract
+    segment: POST
+    required: true
+    covers: []
+  app-mock-isolation:
+    command: make verify-app-mock-isolation
+    segment: POST
+    required: true
+    covers: []
+  service-object-evidence:
+    command: make verify-object-evidence-closure
+    segment: POST
+    required: true
+    covers: []
+  python-script-governance:
+    command: make verify-python-script-governance
+    segment: POST
+    required: true
+    covers: []
+  recommendation-event-contract:
+    command: make verify-behavior-event-type-contract
+    segment: POST
+    required: true
+    covers: []
+  data-static-contract:
+    command: python3 -B quwoquan_data/scripts/cli.py verify all
+    segment: POST
+    required: true
+    covers: []
+  content-publish-purity:
+    command: python3 -B quwoquan_data/scripts/cli.py verify publish-purity
+    segment: POST
+    required: true
+    covers: []
+  environment-release-evidence:
+    command: make verify-environment-stability-final-acceptance
+    segment: POST
+    required: true
+    covers: []
+  observability-catalog:
+    command: make verify-observability-catalog
+    segment: POST
+    required: true
+    covers: []
+
+# profile 顺序是同优先级的稳定 tie-break；priority 越大越优先。只有被选中的
+# specialist checklist 才会贡献 evidence，低优先级 profile 不加载角色或命令。
+profiles:
+  pageflip:
+    paths:
+      - quwoquan_app/lib/design_system/pageflip/**
+      - quwoquan_app/lib/service/content_service/content/post/presentation/article_reader/pageflip/**
+      - quwoquan_app/test/**/design_system/pageflip/**
+      - quwoquan_app/test/**/article_reader/pageflip/**
+    specialist:
+      role: ux
+      priority: 120
+      required: false
+      checklists:
+        dev: roles/ux/checklists/dev/pageflip.md
+
+  recommendation:
+    paths:
+      - quwoquan_app/lib/service/recommendation_service/**
+      - quwoquan_service/services/recommendation-service/**
+    specialist:
+      role: recommendation
+      priority: 110
+      required: false
+      checklists:
+        design: roles/recommendation/checklists/design/base.md
+        dev: roles/recommendation/checklists/dev/base.md
+
+  flutter-page:
+    paths:
+      - quwoquan_app/lib/service/**/presentation/**
+      - quwoquan_app/lib/design_system/**
+    deliverables: [page]
+    specialist:
+      role: ux
+      priority: 100
+      required: false
+      checklists:
+        prd: roles/ux/checklists/prd/base.md
+        design: roles/ux/checklists/design/base.md
+        dev: roles/ux/checklists/dev/flutter-page.md
+
+  content-release:
+    deliverables: [content-release]
+    specialist:
+      role: data-legal
+      priority: 95
+      required: true
+      checklists:
+        content-production: roles/data-legal/checklists/content-production/base.md
+
+  environment-release:
+    paths:
+      - quwoquan_ops/environments/**
+    deliverables: [environment, release-evidence]
+    specialist:
+      role: infra-capacity
+      priority: 90
+      required: false
+      checklists:
+        design: roles/infra-capacity/checklists/design/base.md
+        environment-ops: roles/infra-capacity/checklists/environment-ops/base.md
+
+  gate:
+    paths:
+      - quwoquan_ops/gate/**
+      - .github/workflows/**
+      - .agents/skills/review/**
+      - quwoquan_ops/**/*local_readiness*
+      - quwoquan_ops/**/*workflow_resolution*
+      - quwoquan_ops/**/*hosted_authority*
+      - quwoquan_ops/**/*objective_execution*
+      - quwoquan_ops/**/*governance_pipeline*
+      - quwoquan_service/control-plane/platform-ops/**
+      - quwoquan_ops/portal/src/domains/platform/HumanAuthorityPage*
+      - specs/feature-tree/runtime/runtime-control-plane-foundation/human-authority-role-cards/**
+    deliverables: [gate]
+    specialist:
+      role: ops
+      priority: 130
+      required: false
+      checklists:
+        design: roles/ops/checklists/design/gate.md
+        dev: roles/ops/checklists/dev/gate.md
+
+  data-pipeline:
+    paths:
+      - quwoquan_data/**
+    deliverables: [data-release]
+    specialist:
+      role: data-quality
+      priority: 80
+      required: false
+      checklists:
+        design: roles/data-quality/checklists/design/base.md
+        dev: roles/data-quality/checklists/dev/base.md
+
+  observability:
+    paths:
+      - quwoquan_app/lib/runtime/observability/**
+      - quwoquan_ops/observability/**
+    deliverables: [observability]
+    specialist:
+      role: observability
+      priority: 75
+      required: false
+      checklists:
+        dev: roles/observability/checklists/dev/base.md
+
+  python-script:
+    paths:
+      - quwoquan_app/scripts/**
+      - quwoquan_service/scripts/**
+      - quwoquan_data/scripts/**
+      - quwoquan_ops/cli/**
+      - quwoquan_ops/gate/**
+      - quwoquan_ops/ci/**
+    specialist:
+      role: ops
+      priority: 70
+      required: false
+      checklists:
+        design: roles/ops/checklists/design/python-script.md
+        dev: roles/ops/checklists/dev/python-script.md
+
+  dart-app:
+    paths:
+      - quwoquan_app/lib/**
+      - quwoquan_app/test/**
+    specialist:
+      role: test
+      priority: 60
+      required: false
+      checklists:
+        prd: roles/test/checklists/prd/base.md
+        design: roles/test/checklists/design/base.md
+        dev: roles/test/checklists/dev/app.md
+
+  go-service:
+    paths:
+      - quwoquan_service/services/**
+    deliverables: [contract]
+    specialist:
+      role: test
+      priority: 60
+      required: false
+      checklists:
+        prd: roles/test/checklists/prd/base.md
+        design: roles/test/checklists/design/base.md
+        dev: roles/test/checklists/dev/service.md
+
+workflows:
+  explore:
+    segments: [PRE, POST]
+    deliverable: resolve-report
+    automatic_review: false
+
+  prd:
+    segments: [PRE, POST]
+    deliverable: spec-node
+    primary:
+      role: product
+      required: true
+      checklist: roles/product/checklists/prd/base.md
+
+  design:
+    segments: [PRE, POST]
+    deliverable: dec
+    primary:
+      role: architect
+      required: true
+      checklist: roles/architect/checklists/design/base.md
+
+  dev:
+    segments: [PRE, POST]
+    deliverable: implementation
+    primary:
+      role: developer
+      required: true
+      checklist: roles/developer/checklists/dev/base.md
+
+  continue:
+    segments: [PRE, POST]
+    deliverable: resumed-workflow
+    automatic_review: false
+
+  plan-next:
+    segments: [PRE, POST]
+    deliverable: round-plan
+    automatic_review: false
+
+  review:
+    segments: [PRE, POST]
+    deliverable: review-plan
+    automatic_review: false
+
+  commit:
+    segments: [PRE, POST]
+    deliverable: reviewed-increment
+    automatic_review: false
+
+  environment-ops:
+    segments: [PRE, POST]
+    deliverable: release-evidence
+    primary:
+      role: ops
+      required: true
+      checklist: roles/ops/checklists/environment-ops/environment-release.md
+
+  content-production:
+    segments: [PRE, POST]
+    deliverable: content-release
+    primary:
+      role: data-quality
+      required: true
+      checklist: roles/data-quality/checklists/content-production/base.md
+
+  incident-inspection:
+    segments: [PRE, POST]
+    deliverable: inspection-report
+    primary:
+      role: observability
+      required: true
+      checklist: roles/observability/checklists/incident-inspection/base.md
+
+  distill:
+    segments: [PRE, POST]
+    deliverable: rule-candidates
+    primary:
+      role: architect
+      required: true
+      checklist: roles/architect/checklists/distill/base.md

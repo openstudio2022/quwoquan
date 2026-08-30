@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/canonical_identity_terminal_fact.schema.json",
+  "title": "Append-only canonical identity terminal fact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "objectType", "objectId", "objectRef", "recordSequence",
+    "contentVersion", "terminalReason", "nextAction", "previousSnapshotToken",
+    "resolutionCommandDigest", "evidenceBindings", "terminatedAt"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.canonical_identity_terminal_fact"},
+    "objectType": {"enum": ["homepage", "content"]},
+    "objectId": {"type": "string", "minLength": 1},
+    "objectRef": {"type": "string", "minLength": 1},
+    "recordSequence": {"type": "integer", "minimum": 1},
+    "contentVersion": {"type": "integer", "minimum": 1},
+    "terminalReason": {
+      "enum": [
+        "immutable_evidence_unavailable", "identity_collision_unrecoverable",
+        "operator_closed_intent"
+      ]
+    },
+    "nextAction": {"enum": ["select_new_identity", "close_intent"]},
+    "previousSnapshotToken": {"$ref": "#/$defs/digest"},
+    "resolutionCommandDigest": {"$ref": "#/$defs/digest"},
+    "evidenceBindings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/evidenceBinding"}
+    },
+    "terminatedAt": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "evidenceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "ref", "sha256"],
+      "properties": {
+        "role": {"enum": ["record", "author", "review", "rights", "diagnostic"]},
+        "ref": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

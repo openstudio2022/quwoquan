@@ -7,6 +7,7 @@ from content.post.fidelity import (
     commercial_article_sources_near_copy_gate,
 )
 
+from support.article_source_registry_fixture import article_registry_write_kwargs
 from support.content_plan_source_reject_fixtures import *  # noqa: F401,F403
 
 
@@ -19,12 +20,12 @@ def test_base_draft_candidates_exclude_reject_sources():
         source_id="reject_probe",
         source_md="---\nretained: false\n---\n\nmanual_source_plan_note: 探针页\n",
         quality={"sourceId": "reject_probe", "quality": "Reject", "score": 0},
-        platform="mafengwo",
-        source_category="travelogue",
-        research_lane="article",
-        url="https://example.com/r",
         title="探针页",
         target_ref="/entity/地点/景区/九寨沟",
+        **article_registry_write_kwargs(
+            url="https://travel.qunar.com/youji/jiuzhaigou-reject-probe",
+            platform="qunar",
+        ),
     )
     good = write_source_unit(
         obj,
@@ -32,12 +33,12 @@ def test_base_draft_candidates_exclude_reject_sources():
         source_id="good_story",
         source_md="# 九寨沟\n\n真实正文，含开放时间与体验判断。",
         quality={"sourceId": "good_story", "quality": "A-story", "score": 8},
-        platform="baike",
-        source_category="overview_baike",
-        research_lane="article",
-        url="https://example.com/g",
         title="可用正文",
         target_ref="/entity/地点/景区/九寨沟",
+        **article_registry_write_kwargs(
+            url="https://zh.wikipedia.org/wiki/九寨沟",
+            platform="wikipedia",
+        ),
     )
     brief = {"entityRefs": ["地点/景区/九寨沟"], "carrier": "article"}
     candidates = base_draft_candidates(EXECUTION_ID, brief)
@@ -79,12 +80,12 @@ def test_assign_base_draft_article_carrier_excludes_image_lane_source():
         source_id="qunar_article_base",
         source_md="# 螺髻山游记\n\n含开放时间、索道与现场体验判断的图文混排游记正文。",
         quality={"sourceId": "qunar_article_base", "quality": "A-story", "score": 7},
-        platform="qunar",
-        source_category="travelogue",
-        research_lane="article",
-        url="https://travel.qunar.com/youji/luojishan",
         title="螺髻山游记",
         target_ref="/entity/地点/景区/螺髻山",
+        **article_registry_write_kwargs(
+            url="https://travel.qunar.com/youji/luojishan",
+            platform="qunar",
+        ),
     )
     chosen = assign_base_draft(
         EXECUTION_ID,
@@ -105,12 +106,12 @@ def test_assign_base_draft_image_carrier_excludes_article_lane_source():
         source_id="qunar_article_base",
         source_md="# 邛海游记\n\n含现场体验与出行信息的长篇游记底稿正文。",
         quality={"sourceId": "qunar_article_base", "quality": "A-story", "score": 9},
-        platform="qunar",
-        source_category="travelogue",
-        research_lane="article",
-        url="https://travel.qunar.com/youji/qionghai",
         title="邛海游记",
         target_ref="/entity/地点/景区/邛海",
+        **article_registry_write_kwargs(
+            url="https://travel.qunar.com/youji/qionghai",
+            platform="qunar",
+        ),
     )
     image_unit = write_source_unit(
         obj,
@@ -157,12 +158,12 @@ def test_assign_base_draft_declared_wrong_lane_ref_is_reassigned_to_correct_lane
         source_id="qunar_article_base",
         source_md="# 泸山游记\n\n含现场体验判断的图文混排游记正文。",
         quality={"sourceId": "qunar_article_base", "quality": "A-story", "score": 7},
-        platform="qunar",
-        source_category="travelogue",
-        research_lane="article",
-        url="https://travel.qunar.com/youji/lushan",
         title="泸山游记",
         target_ref="/entity/地点/景区/泸山",
+        **article_registry_write_kwargs(
+            url="https://travel.qunar.com/youji/lushan",
+            platform="qunar",
+        ),
     )
     chosen = assign_base_draft(
         EXECUTION_ID,
@@ -196,12 +197,12 @@ def test_assign_base_draft_rejects_declared_reject_source():
         source_id="good_story",
         source_md="# 黄龙\n\n真实正文，含体验判断与出行信息。",
         quality={"sourceId": "good_story", "quality": "A-story", "score": 9},
-        platform="baike",
-        source_category="overview_baike",
-        research_lane="article",
-        url="https://example.com/g2",
         title="可用正文",
         target_ref="/entity/地点/景区/黄龙",
+        **article_registry_write_kwargs(
+            url="https://zh.wikipedia.org/wiki/黄龙风景名胜区",
+            platform="wikipedia",
+        ),
     )
     chosen = assign_base_draft(
         EXECUTION_ID,
@@ -222,12 +223,12 @@ def test_assign_base_draft_reassigns_when_declared_source_taken_by_peer():
         source_id="wiki_dujiangyan",
         source_md="# 都江堰\n\n概述底稿，含基础事实。",
         quality={"sourceId": "wiki_dujiangyan", "quality": "A", "score": 9},
-        platform="wikipedia",
-        source_category="overview_baike",
-        research_lane="article",
-        url="https://example.com/wiki",
         title="都江堰概述",
         target_ref="/entity/地点/景区/都江堰",
+        **article_registry_write_kwargs(
+            url="https://zh.wikipedia.org/wiki/都江堰",
+            platform="wikipedia",
+        ),
     )
     ctrip = write_source_unit(
         obj,
@@ -235,12 +236,12 @@ def test_assign_base_draft_reassigns_when_declared_source_taken_by_peer():
         source_id="ctrip_dujiangyan",
         source_md="# 都江堰游记\n\n长篇游记底稿，保留现场叙事。",
         quality={"sourceId": "ctrip_dujiangyan", "quality": "A-story", "score": 8},
-        platform="ctrip",
-        source_category="travelogue",
-        research_lane="article",
-        url="https://example.com/ctrip",
         title="都江堰游记",
         target_ref="/entity/地点/景区/都江堰",
+        **article_registry_write_kwargs(
+            url="https://you.ctrip.com/sight/dujiangyan/12345.html",
+            platform="ctrip",
+        ),
     )
     first = assign_base_draft(
         EXECUTION_ID,

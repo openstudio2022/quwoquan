@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+from content.execution.campaign.lane import normalize_active_carriers
 from content.execution.campaign.workspace import CampaignRuntimePaths
 
 ClaimReader = Callable[
@@ -28,16 +28,18 @@ def wait_for_parallel_review_claims(
     root_execution_id: str,
     *,
     plan: Mapping[str, Any],
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     read_claim: ClaimReader,
 ) -> None:
     """Start review only after every frozen lane owns its claim or has settled."""
 
     distributed = plan["distributedRun"]
-    deadline = time.monotonic() + timeout_seconds
+    deadline = (
+        None if timeout_seconds is None else time.monotonic() + timeout_seconds
+    )
     while True:
         missing: list[str] = []
-        for carrier in CAMPAIGN_CARRIERS:
+        for carrier in normalize_active_carriers(plan["activeCarriers"]):
             claim = read_claim(runtime, root_execution_id, carrier)
             if claim is None:
                 missing.append(carrier)
@@ -63,13 +65,13 @@ def wait_for_parallel_review_claims(
                 )
         if not missing:
             return
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
+        remaining = None if deadline is None else deadline - time.monotonic()
+        if remaining is not None and remaining <= 0:
             raise TimeoutError(
                 "campaign review barrier timed out waiting for lane claims: "
                 + ", ".join(sorted(missing))
             )
-        time.sleep(min(0.05, remaining))
+        time.sleep(0.05 if remaining is None else min(0.05, remaining))
 
 
 __all__ = ["wait_for_parallel_review_claims"]

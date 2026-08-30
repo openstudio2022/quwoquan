@@ -4,8 +4,7 @@
 final class ContentPostSnapshotPolicy {
   const ContentPostSnapshotPolicy._();
 
-  static const Map<String, int> postSnapshotFieldByteLimits =
-      <String, int>{
+  static const Map<String, int> postSnapshotFieldByteLimits = <String, int>{
     'authorId': 128,
     'postId': 256,
     'title': 320,

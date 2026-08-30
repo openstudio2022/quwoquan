@@ -18,6 +18,8 @@ import json
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _BOOTSTRAP = next(
     path
     for path in Path(__file__).resolve().parents
@@ -50,7 +52,6 @@ from quwoquan_ops.gate.service_architecture import (  # noqa: E402
     MIGRATION_RE,
     OBJECT_ACCESS_BY_KIND,
     OBJECT_PRIVATE_IMPORT_RE,
-    OBJECT_TEST_SPEC_REF_RE,
     OBJECT_VERSION_SOURCE_BY_KIND,
     OPS_ROOT,
     PROCESS_MANAGER_PUBLIC_QUERY_ACCESS,
@@ -65,6 +66,7 @@ from quwoquan_ops.gate.service_architecture import (  # noqa: E402
     camel_to_snake,
     compose_ownership_violations,
     domain_service_names,
+    go_import_declarations,
     is_substantive_implementation_source,
     is_substantive_test_source,
     lifecycle_authored_consumers,
@@ -97,7 +99,6 @@ __all__ = [
     "MIGRATION_RE",
     "OBJECT_ACCESS_BY_KIND",
     "OBJECT_PRIVATE_IMPORT_RE",
-    "OBJECT_TEST_SPEC_REF_RE",
     "OBJECT_VERSION_SOURCE_BY_KIND",
     "OPS_ROOT",
     "PROCESS_MANAGER_PUBLIC_QUERY_ACCESS",
@@ -113,6 +114,7 @@ __all__ = [
     "camel_to_snake",
     "compose_ownership_violations",
     "domain_service_names",
+    "go_import_declarations",
     "is_substantive_implementation_source",
     "is_substantive_test_source",
     "lifecycle_authored_consumers",

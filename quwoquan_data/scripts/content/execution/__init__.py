@@ -1,40 +1,5 @@
-"""Content execution work-package contract.
+"""Content execution package.
 
-Every content run is addressed by one readable ``executionId`` and owns one
-runtime work package.  Reusable recipes, prompts, templates, schemas, and
-coverage inventories stay in the repository; execution evidence never does.
+Public entry points import concrete owner modules explicitly.  The package import
+must remain side-effect free so CLI help never loads retired orchestration.
 """
-
-from .identity import (
-    ContentType,
-    ExecutionPhase,
-    SelectionPolicy,
-    build_execution_id,
-    parse_execution_id,
-    validate_execution_id,
-)
-from .workspace import (
-    create_execution_manifest,
-    execution_manifest_path,
-    execution_root,
-    load_execution_manifest,
-)
-from .planning.qualification import (
-    finalize_execution_qualification,
-    prepare_execution_qualification,
-)
-
-__all__ = [
-    "build_execution_id",
-    "ContentType",
-    "create_execution_manifest",
-    "execution_manifest_path",
-    "execution_root",
-    "load_execution_manifest",
-    "finalize_execution_qualification",
-    "prepare_execution_qualification",
-    "parse_execution_id",
-    "ExecutionPhase",
-    "SelectionPolicy",
-    "validate_execution_id",
-]

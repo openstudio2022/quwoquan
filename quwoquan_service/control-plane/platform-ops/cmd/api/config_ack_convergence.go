@@ -3,18 +3,11 @@ package main
 import (
 	"context"
 	"net/http"
-	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"quwoquan_service/runtime/controlplane"
-)
-
-const (
-	configAckRequiredInstancesEnv = "CONFIG_ACK_REQUIRED_INSTANCES"
-	configAckMaxAgeSecondsEnv     = "CONFIG_ACK_MAX_AGE_SECONDS"
 )
 
 // handleConfigAckConvergence 是发布编排使用的非敏感 readiness 端点。它只返回
@@ -35,7 +28,7 @@ func (s *platformService) handleConfigAckConvergence(w http.ResponseWriter, r *h
 }
 
 func (s *platformService) requireConfigAckConvergence(_ context.Context) error {
-	requiredInstances := configuredConfigAckRequiredInstances()
+	requiredInstances := s.requiredConfigAckInstances()
 	if len(requiredInstances) == 0 {
 		return errConfigAckConvergence("required config ACK instances are not configured")
 	}
@@ -51,7 +44,7 @@ func (s *platformService) requireConfigAckConvergence(_ context.Context) error {
 		byInstance[stringifyDocumentValue(report["instanceId"])] = report
 	}
 	now := time.Now().UTC()
-	maxAge := configAckMaxAge()
+	maxAge := time.Duration(s.configAckMaxAgeSecs) * time.Second
 	for _, instanceID := range requiredInstances {
 		report, ok := byInstance[instanceID]
 		if !ok || !documentBool(report["inSync"]) {
@@ -71,11 +64,12 @@ func (s *platformService) requireConfigAckConvergence(_ context.Context) error {
 	return nil
 }
 
-func configuredConfigAckRequiredInstances() []string {
-	items := strings.Split(os.Getenv(configAckRequiredInstancesEnv), ",")
-	seen := make(map[string]struct{}, len(items))
-	out := make([]string, 0, len(items))
-	for _, raw := range items {
+// requiredConfigAckInstances 归一化本次发布必须 ACK 的实例清单：去空、去重、
+// 排序，使收敛判定与注入顺序无关。
+func (s *platformService) requiredConfigAckInstances() []string {
+	seen := make(map[string]struct{}, len(s.configAckInstances))
+	out := make([]string, 0, len(s.configAckInstances))
+	for _, raw := range s.configAckInstances {
 		instanceID := strings.TrimSpace(raw)
 		if instanceID == "" {
 			continue
@@ -88,14 +82,6 @@ func configuredConfigAckRequiredInstances() []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-func configAckMaxAge() time.Duration {
-	seconds, err := strconv.Atoi(strings.TrimSpace(os.Getenv(configAckMaxAgeSecondsEnv)))
-	if err != nil || seconds < 30 || seconds > 600 {
-		return 120 * time.Second
-	}
-	return time.Duration(seconds) * time.Second
 }
 
 type errConfigAckConvergence string

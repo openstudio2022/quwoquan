@@ -2,7 +2,7 @@
 
 > 所属领域：[`runtime`](../spec.md)
 >
-> 设计归属：[L1 DEC-001](../design.md#dec-001)
+> 设计归属：[本层 design.md](./design.md)
 
 ## 1. 能力目标
 
@@ -20,11 +20,11 @@
 
 ## 3. Journey / Scenario 贡献
 
-- [`JNY-001 / SCN-004`](../../spec.md#scn-004)
-  - 本能力接收：该 Scenario 进入本能力边界的已授权主体与 canonical 输入。
-  - 本能力处理：提供统一配置运行时能力，支持 env/file/secrets/config-center 多源读取与优先级合并。
-  - 本能力输出：直属 Story 组合产生的可观察结果与明确失败终态。
-  - 失败时终态：保留已确认事实，并返回可恢复的 canonical failure。
+- [`JNY-002 / SCN-005`](../../spec.md#scn-005)
+  - 本能力接收：runtime 已选择的环境、target、effective launch manifest 与可验证服务端状态。
+  - 本能力处理：以唯一 topology/config source 装配启动、内容验收、故障恢复与环境 release replay。
+  - 本能力输出：同环境、同服务端状态下可比较的安全终态、原始 CaseResult 与 lifecycle/readback。
+  - 失败时终态：保留首个 typed blocker，并恢复已知健康环境或进入可执行的安全 Shell。
 
 ## 4. Story
 

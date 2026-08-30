@@ -16,9 +16,8 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
     }
     ref.watch(postInteractionStateProvider);
     ref.watch(userRelationshipStateProvider);
-    ref.watch(contentRuntimeConfigProvider);
     ref.watch(activePersonaContextProvider);
-    final enableArticlePageCurl = _enableArticlePageCurl;
+    final enableArticlePageCurl = ref.watch(articlePageCurlFeatureFlagProvider);
     final internalFeed = _usesExternalFeed
         ? null
         : _buildInternalFeedAggregate();
@@ -75,7 +74,10 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
           ),
           child: HomeFeedCrossObjectComposition.immersiveCommentSplit(
             postId: splitPostId,
-            content: _buildCommentSplitContent(commentSplitPost),
+            content: _buildCommentSplitContent(
+              commentSplitPost,
+              enableArticlePageCurl: enableArticlePageCurl,
+            ),
             entryObservedCommentCount: interaction.commentCountFor(
               splitPostId,
               fallback: commentSplitPost.commentCount,
@@ -124,7 +126,6 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
         ? null
         : _primaryIntersectionReasonFor(currentPost);
     final showContentIntersection = intersectionReason != null;
-    // caption header（内容下方、标题上方）：
     // - 图片多图：点指示器（● ● ○ ● ●，最多 6 点）
     // - 视频：由统一 bottom chrome 装配视频集进度、caption 与时间轴
     Widget? captionHeader;
@@ -491,7 +492,6 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                   child: ImmersiveViewerLayout.alignToRail(
                     context: context,
                     layoutSpec: currentEngagementLayoutSpec,
-                    includeBottomSafeSideInset: true,
                     child: SizedBox(
                       key: const ValueKey<String>(
                         'works-caption-intersection-reason',
@@ -549,6 +549,9 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                       return ImmersiveEngagementBar(
                         layoutSpec: currentEngagementLayoutSpec,
                         avatarUrl: currentPost.avatarUrl,
+                        avatarBinding: contentPostAuthorAvatarBinding(
+                          currentPost,
+                        ),
                         displayName: currentPost.displayName,
                         authorBadge:
                             _workItemFor(currentPost).authorBadge ?? '',
@@ -651,7 +654,6 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
       child: ImmersiveViewerLayout.alignToRail(
         context: context,
         layoutSpec: layoutSpec,
-        includeBottomSafeSideInset: true,
         child: Align(
           alignment: Alignment.centerLeft,
           child: Semantics(
@@ -668,9 +670,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.worksBackground.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.radiusTwenty,
-                  ),
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -794,69 +794,6 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
     );
   }
 
-  Widget _buildLoadMoreSentinel({
-    required bool isLoading,
-    required Object? error,
-    required VoidCallback onRetry,
-  }) {
-    final hasError = error != null;
-    return ColoredBox(
-      key: TestKeys.worksLoadMoreSentinel,
-      color: AppColors.black,
-      child: Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerLg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (hasError)
-                AppListAppendErrorFooter(
-                  key: const ValueKey<String>('works-load-more-retry'),
-                  semantic: runtime_error_display.runtimeErrorSemantic(
-                    context,
-                    error: error,
-                    category: UiErrorCategory.listAppend,
-                    scope: UiErrorScope.section,
-                    presentation: UiErrorPresentation.appendFooter,
-                  ),
-                  onAction: isLoading
-                      ? null
-                      : (action) async {
-                          if (action.type == UiErrorActionType.retry ||
-                              action.type == UiErrorActionType.resubmit) {
-                            onRetry();
-                          }
-                        },
-                )
-              else ...[
-                AppRequestFeedback.inline(),
-                SizedBox(height: AppSpacing.containerSm),
-                Text(
-                  DiscoveryText.worksVideoBookLoadingTitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.white,
-                    fontSize: AppTypography.body,
-                    fontWeight: AppTypography.semiBold,
-                  ),
-                ),
-                SizedBox(height: AppSpacing.intraGroupSm),
-                Text(
-                  DiscoveryText.worksVideoBookLoadingSubtitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.white.withValues(alpha: 0.72),
-                    fontSize: AppTypography.iosSubheadline,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildTypedCanvas(
     ContentPostViewData post, {
     required bool enableArticlePageCurl,
@@ -865,7 +802,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
   }) {
     if (_isImageLikePost(post)) {
       return ImageBookCanvas(
-        imageUrls: _imageUrlsForPost(post),
+        deliveries: _imageDeliveriesForPost(post),
         initialIndex: _photoInnerIndex[post.id] ?? _defaultImageIndexFor(post),
         gestureIntentController: _gestureIntentController,
         onImageChanged: (index) => _setMountedState(() {
@@ -879,7 +816,10 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
               .recordMediaLoad(
                 mediaType: 'image',
                 result: event.result,
-                pageName: 'works_image_book',
+                pageName: PageNames.workBrowser,
+                surfaceId: AppUiSurfaces.workBrowser.id,
+                objectType: 'contentPost',
+                objectId: post.id,
                 copyKey: event.result == 'failure' ? 'imageLoadFailed' : null,
                 error: event.error,
                 durationMs: event.durationMs,
@@ -970,6 +910,37 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
             _trackArticlePageFlipCommit(post, event),
         onPageCurlAborted: (event) => _trackArticlePageCurlAbort(post, event),
         onEntityTap: (span) => _handleArticleInlineMentionTap(post, span),
+        onImageTap: (asset) {
+          unawaited(
+            presentWorksArticleImageViewer(
+              context: context,
+              document: article.document,
+              initialAsset: asset,
+              onOpened: (assetId) => _articleReaderObservability
+                  .trackImageViewerOpen(postId: post.id, assetId: assetId),
+              onClosed: (assetId) => _articleReaderObservability
+                  .trackImageViewerClose(postId: post.id, assetId: assetId),
+              onMediaLoad: (event) {
+                ref
+                    .read(pageLifecycleObservabilityProvider)
+                    .recordMediaLoad(
+                      mediaType: 'image',
+                      result: event.result,
+                      pageName: PageNames.workBrowser,
+                      surfaceId: AppUiSurfaces.workBrowser.id,
+                      objectType: 'contentPost',
+                      objectId: post.id,
+                      copyKey: event.result == 'failure'
+                          ? 'imageLoadFailed'
+                          : null,
+                      error: event.error,
+                      durationMs: event.durationMs,
+                      candidatesTried: event.candidatesTried,
+                    );
+              },
+            ),
+          );
+        },
         gestureIntentController: _gestureIntentController,
         onOverflowPrevious: null,
         onOverflowNext: null,
@@ -985,9 +956,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
           body: _bodyForPost(post),
           reserveContentIntersection:
               _primaryIntersectionReasonFor(post) != null,
-          imageUrl: _rawPostById(
-            post.id,
-          )?[ContentMediaPostProjectionKeys.coverUrl]?.toString(),
+          backgroundBinding: _textMomentBackgroundBinding(post),
         ),
       );
     }

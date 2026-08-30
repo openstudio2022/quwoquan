@@ -15,6 +15,22 @@ from quwoquan_ops.tests.support.stackctl_gamma_operation_lock_test_support impor
     StackctlGammaOperationLockContractTestBase,
 )
 
+BINDING_MANIFEST_DIGEST = "sha256:" + "9" * 64
+
+
+def _provider_binding_overlay() -> dict[str, str]:
+    """The candidate-sealed Provider binding overlay package build reads.
+
+    Only the identity travels into the image build inputs here; overlay file
+    materialization has its own contract.
+    """
+
+    return {
+        "environment": "alpha",
+        "target": "alpha-local",
+        "bindingManifestDigest": BINDING_MANIFEST_DIGEST,
+    }
+
 
 class StackctlGammaOperationLockContractTest(
     StackctlGammaOperationLockContractTestBase
@@ -121,7 +137,14 @@ class StackctlGammaOperationLockContractTest(
                     "resolve_report_dir",
                     return_value=report_dir,
                 ),
-                mock.patch.object(stackctl, "_gamma_env_from_port_manifest", return_value={}),
+                mock.patch.object(
+                    stackctl,
+                    "_gamma_env_from_port_manifest",
+                    return_value={
+                        "QWQ_COMPOSE_GO_BASE_IMAGE": "golang@sha256:" + "1" * 64,
+                        "QWQ_COMPOSE_ALPINE_BASE_IMAGE": "alpine@sha256:" + "2" * 64,
+                    },
+                ),
                 mock.patch.object(
                     stackctl,
                     "_optional_product_telemetry_environment",
@@ -186,7 +209,14 @@ class StackctlGammaOperationLockContractTest(
 
             with (
                 mock.patch.object(stackctl, "load_environment_topology", return_value={}),
-                mock.patch.object(stackctl, "_gamma_env_from_port_manifest", return_value={}),
+                mock.patch.object(
+                    stackctl,
+                    "_gamma_env_from_port_manifest",
+                    return_value={
+                        "QWQ_COMPOSE_GO_BASE_IMAGE": "golang@sha256:" + "1" * 64,
+                        "QWQ_COMPOSE_ALPINE_BASE_IMAGE": "alpine@sha256:" + "2" * 64,
+                    },
+                ),
                 mock.patch.object(
                     stackctl,
                     "_provider_runtime_launch_environment",
@@ -221,12 +251,22 @@ class StackctlGammaOperationLockContractTest(
                     "runtime_shared_deployment_package_dir",
                     return_value=shared,
                 ),
+                mock.patch.object(
+                    stackctl,
+                    "provider_binding_overlay_build_inputs",
+                    return_value=(
+                        root / "overlay",
+                        root / "overlay/go.overlay.json",
+                        BINDING_MANIFEST_DIGEST,
+                    ),
+                ),
                 mock.patch.object(stackctl, "run", side_effect=inspect_only) as run,
             ):
                 _, manifest = stackctl._build_package_bound_local_images(
                     "alpha",
                     "alpha-local",
                     report_dir=root / "report",
+                    provider_binding_overlay=_provider_binding_overlay(),
                     provider_runtime=provider_runtime,
                     observability_log_sink=(
                         self._observability_runtime_binding("alpha", root)[
@@ -251,10 +291,12 @@ class StackctlGammaOperationLockContractTest(
             root = Path(temporary_dir).resolve()
             shared = root / "runtime-shared"
             shared.mkdir()
+            (root / "overlay").mkdir()
             provider_digest = "sha256:" + "d" * 64
+            configuration_digest = "sha256:" + "c" * 64
             composition = {
                 "imageVersion": "sha256:" + "b" * 64,
-                "configurationDigest": "sha256:" + "c" * 64,
+                "configurationDigest": configuration_digest,
                 "images": {"api-edge": {"ref": "localhost/api-edge:source"}},
             }
             provider_runtime = {
@@ -262,26 +304,33 @@ class StackctlGammaOperationLockContractTest(
                 "images": {},
             }
 
+            def bind_build_refs(
+                _env_name: str,
+                environment: dict[str, str],
+                **_kwargs: object,
+            ) -> dict[str, object]:
+                # The real binder publishes the packaged configuration digest
+                # that the image build then freezes as artifact identity.
+                environment["LOCAL_GAMMA_CONFIG_VERSION"] = configuration_digest
+                return composition
+
             def missing_after_successful_build(
                 argv: list[str],
                 *,
+                cwd: Path | None = None,
                 env: dict[str, str] | None = None,
             ) -> CompletedProcess[str]:
                 if argv[:4] == ["docker", "image", "inspect", "--format"]:
                     return CompletedProcess(argv, 1, "", "No such image")
+                self.assertEqual(cwd, stackctl.ROOT)
                 self.assertIsNotNone(env)
                 self.assertEqual(
                     env["QWQ_RELEASE_CANDIDATE_DIGEST"],  # type: ignore[index]
                     "sha256:" + "a" * 64,
                 )
-                self.assertEqual(
-                    argv,
-                    [
-                        "bash",
-                        "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh",
-                        "--build-only",
-                    ],
-                )
+                self.assertEqual(argv[:3], ["docker", "build", "--tag"])
+                self.assertIn("--file", argv)
+                self.assertIn("--build-arg", argv)
                 return CompletedProcess(
                     argv,
                     0,
@@ -291,7 +340,14 @@ class StackctlGammaOperationLockContractTest(
 
             with (
                 mock.patch.object(stackctl, "load_environment_topology", return_value={}),
-                mock.patch.object(stackctl, "_gamma_env_from_port_manifest", return_value={}),
+                mock.patch.object(
+                    stackctl,
+                    "_gamma_env_from_port_manifest",
+                    return_value={
+                        "QWQ_COMPOSE_GO_BASE_IMAGE": "golang@sha256:" + "1" * 64,
+                        "QWQ_COMPOSE_ALPINE_BASE_IMAGE": "alpine@sha256:" + "2" * 64,
+                    },
+                ),
                 mock.patch.object(
                     stackctl,
                     "_provider_runtime_launch_environment",
@@ -303,7 +359,7 @@ class StackctlGammaOperationLockContractTest(
                 mock.patch.object(
                     stackctl,
                     "_bind_gamma_build_service_image_refs",
-                    return_value=composition,
+                    side_effect=bind_build_refs,
                 ),
                 mock.patch.object(
                     stackctl,
@@ -313,18 +369,28 @@ class StackctlGammaOperationLockContractTest(
                 mock.patch.object(stackctl, "target_cache_dir", return_value=root / "cache"),
                 mock.patch.object(
                     stackctl,
+                    "provider_binding_overlay_build_inputs",
+                    return_value=(
+                        root / "overlay",
+                        root / "overlay/go.overlay.json",
+                        BINDING_MANIFEST_DIGEST,
+                    ),
+                ),
+                mock.patch.object(
+                    stackctl,
                     "run",
                     side_effect=missing_after_successful_build,
                 ),
             ):
                 with self.assertRaisesRegex(
                     RuntimeError,
-                    "build-only stdout tail: prepared artifacts only",
+                    "OCI build stdout tail: prepared artifacts only",
                 ) as raised:
                     stackctl._build_package_bound_local_images(
                         "alpha",
                         "alpha-local",
                         report_dir=root / "report",
+                        provider_binding_overlay=_provider_binding_overlay(),
                         provider_runtime=provider_runtime,
                         observability_log_sink=(
                             self._observability_runtime_binding("alpha", root)[
@@ -336,7 +402,7 @@ class StackctlGammaOperationLockContractTest(
                     )
 
         self.assertIn(
-            "build-only stderr tail: unexpected early-success branch",
+            "OCI build stderr tail: unexpected early-success branch",
             str(raised.exception),
         )
 

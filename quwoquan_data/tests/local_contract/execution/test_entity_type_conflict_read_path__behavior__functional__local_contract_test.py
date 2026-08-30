@@ -34,6 +34,11 @@ from core.paths import execution_entity_object_dir, ensure_execution_command_lay
 from content.source.source_unit import resolve_entity_object_dir  # noqa: E402
 from content.execution import store  # noqa: E402
 from content.execution.planning.selection import build_execution_spec  # noqa: E402
+from core.control_types import ExecutionStateStatus  # noqa: E402
+from support.capacity_calibration_fixture import (  # noqa: E402
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 
 _EXECUTIONS = {
     "未物化": "20260711--travel-homepage-entity-type--test-region-a--pilot-001",
@@ -79,9 +84,7 @@ def _mixed_type_task(name: str = "类型冲突读路径批") -> str:
         target_entity_count=2,
         approved_quota=2,
         oversample_factor=1.0,
-        required_workers=1,
-        partition_count=16,
-        capacity_plan_digest="sha256:" + "1" * 64,
+        capacity_calibration=synthetic_capacity_source_binding(),
     )
     store.save_spec(spec)
     return spec["executionId"]
@@ -126,7 +129,6 @@ def test_audit_managed_execution_usable_on_mixed_type_partition():
     _materialize(execution_id, "地点", "景区", "嵊泗列岛")
     _materialize(execution_id, "地点", "自然景观", "花鸟岛")
     from content.execution.planning.readiness_audit import audit_execution_readiness
-    from core.control_types import ExecutionStateStatus
     from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
     audit = audit_execution_readiness(

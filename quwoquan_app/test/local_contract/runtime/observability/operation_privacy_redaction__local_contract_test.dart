@@ -107,10 +107,7 @@ void main() {
     );
 
     expect(result.keys, <String>['authorUserId', 'cursor']);
-    expect(
-      result.values,
-      everyElement(equals(operationPrivacyOmittedValue)),
-    );
+    expect(result.values, everyElement(equals(operationPrivacyOmittedValue)));
   });
 
   test('logPolicy none 丢弃整个载荷', () {
@@ -194,8 +191,13 @@ void main() {
       }
     });
 
-    test('端侧表条目数与云侧派生表同源', () {
-      expect(generatedOperationPrivacyPolicies, hasLength(525));
+    test('端侧表条目数与同次 codegen 派生计数一致', () {
+      // 计数由 codegen 与策略表同次派生；测试不再手写第二个会随 ContractGraph
+      // operation 增长而腐化的 magic number。云侧产物由同一工具同时生成。
+      expect(
+        generatedOperationPrivacyPolicies,
+        hasLength(generatedOperationPrivacyPolicyCount),
+      );
     });
   });
 }

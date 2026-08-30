@@ -35,6 +35,17 @@ class PackageReuseContractTest(unittest.TestCase):
                 "quwoquan_service/services/user-service/source.txt",
                 "user-source\n",
             ),
+            # Packaging derives the Provider endpoint closure from the capsule
+            # instead of a hard-coded list, and refuses an empty one, so the
+            # fixture workspace has to carry one endpoint workload.
+            (
+                "quwoquan_ops/external/sms-provider-substitute/contract/endpoints.yaml",
+                "endpoints: []\n",
+            ),
+            (
+                "quwoquan_ops/external/sms-provider-substitute/deploy/compose.yaml",
+                "services: {}\n",
+            ),
         ):
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -265,6 +276,40 @@ class PackageReuseContractTest(unittest.TestCase):
         )
         package_reuse.verify_package_input_capsule(capsule_root)
 
+    def test_capsule_captures_untracked_cross_service_config_defaults(self) -> None:
+        global_defaults = self.root / "quwoquan_ops/environments/config-defaults.yaml"
+        environment_defaults = (
+            self.root / "quwoquan_ops/environments/alpha/config-defaults.yaml"
+        )
+        global_defaults.parent.mkdir(parents=True, exist_ok=True)
+        environment_defaults.parent.mkdir(parents=True, exist_ok=True)
+        global_defaults.write_text(
+            "defaults:\n  redis.*.mode: standalone\n",
+            encoding="utf-8",
+        )
+        environment_defaults.write_text(
+            "defaults:\n  redis.rec.mode: cluster\n",
+            encoding="utf-8",
+        )
+
+        capsule_root = self.root / "deployment/defaults-input-capsule"
+        manifest = package_reuse.materialize_package_input_capsule(
+            package_reuse.deployment_input_roots(
+                "alpha", "alpha-local", ["content-service", "user-service"]
+            ),
+            capsule_root=capsule_root,
+        )
+
+        logical_paths = {entry["logicalPath"] for entry in manifest["entries"]}
+        for source in (global_defaults, environment_defaults):
+            relative = source.relative_to(self.root)
+            self.assertIn(str(relative), logical_paths)
+            self.assertEqual(
+                (capsule_root / "repo" / relative).read_bytes(),
+                source.read_bytes(),
+            )
+        package_reuse.verify_package_input_capsule(capsule_root)
+
     def test_self_verify_ignores_current_source_but_rejects_package_drift(self) -> None:
         self._write()
         ok, detail = package_reuse.can_reuse_package("alpha", "alpha-local")
@@ -297,6 +342,81 @@ class PackageReuseContractTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("package content digest mismatch", detail)
 
+    def test_currentness_timeout_is_classified_and_uses_canonical_budget(self) -> None:
+        self._write()
+        with mock.patch.object(
+            package_reuse,
+            "workspace_snapshot",
+            side_effect=TimeoutError(
+                "deployment input currentness check timed out"
+            ),
+        ) as snapshot:
+            ok, detail = package_reuse.can_reuse_package(
+                "alpha",
+                "alpha-local",
+                purpose="currentness",
+            )
+
+        self.assertFalse(ok)
+        self.assertTrue(
+            detail.startswith(package_reuse.CURRENTNESS_TIMEOUT_DETAIL_PREFIX),
+            detail,
+        )
+        self.assertIn("currentness check timed out", detail)
+        self.assertEqual(package_reuse.CURRENTNESS_TIMEOUT_SECONDS, 120.0)
+        self.assertEqual(
+            snapshot.call_args.kwargs["timeout_seconds"],
+            package_reuse.CURRENTNESS_TIMEOUT_SECONDS,
+        )
+        self.validate_candidate_manifest.reset_mock()
+        expected_snapshot = package_reuse.verify_package_input_capsule(
+            self.candidate_root / package_reuse.PACKAGE_INPUT_CAPSULE_DIRECTORY
+        )
+        with mock.patch.object(
+            package_reuse,
+            "workspace_snapshot",
+            return_value=expected_snapshot,
+        ) as successful_snapshot:
+            ok, detail = package_reuse.can_reuse_package(
+                "alpha",
+                "alpha-local",
+                purpose="currentness",
+            )
+        self.assertTrue(ok, detail)
+        self.assertEqual(
+            successful_snapshot.call_args.kwargs["timeout_seconds"],
+            package_reuse.CURRENTNESS_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(
+            self.validate_candidate_manifest.call_args.kwargs[
+                "currentness_timeout_seconds"
+            ],
+            package_reuse.CURRENTNESS_TIMEOUT_SECONDS,
+        )
+
+    def test_runtime_diagnostic_can_skip_source_capsule_reread(self) -> None:
+        self._write()
+        with mock.patch.object(
+            package_reuse,
+            "verify_package_input_capsule",
+            side_effect=AssertionError("runtime diagnostic must not reread source capsule"),
+        ):
+            ok, detail = package_reuse.can_reuse_package(
+                "alpha",
+                "alpha-local",
+                verify_source_capsule=False,
+            )
+        self.assertTrue(ok, detail)
+
+        ok, detail = package_reuse.can_reuse_package(
+            "alpha",
+            "alpha-local",
+            purpose="currentness",
+            verify_source_capsule=False,
+        )
+        self.assertFalse(ok)
+        self.assertIn("currentness requires source capsule verification", detail)
+
     def test_untracked_closure_input_only_invalidates_currentness(self) -> None:
         self._write()
         untracked = self.root / "quwoquan_service/new_runtime_input.txt"
@@ -318,8 +438,25 @@ class PackageReuseContractTest(unittest.TestCase):
             ["content-service", "user-service"],
         )
 
+        self.assertIn("quwoquan_app", roots)
         self.assertIn("quwoquan_app/configs/alpha/app_runtime.yaml", roots)
+        for launch_root in (
+            "quwoquan_ops/cli",
+            "quwoquan_ops/ci",
+            "quwoquan_ops/environments",
+            "quwoquan_ops/external",
+            "quwoquan_ops/gate",
+            "quwoquan_ops/migrations",
+            "quwoquan_ops/observability",
+            "quwoquan_ops/policies",
+        ):
+            self.assertIn(launch_root, roots)
         self.assertIn("quwoquan_ops/cli/print_local_port_profile.py", roots)
+        self.assertIn("quwoquan_ops/environments/config-defaults.yaml", roots)
+        self.assertIn(
+            "quwoquan_ops/environments/alpha/config-defaults.yaml",
+            roots,
+        )
         self.assertIn("quwoquan_service", roots)
         self.assertIn("quwoquan_service/generated/contract_graph.json", roots)
         self.assertIn("quwoquan_service/contracts/metadata", roots)
@@ -331,6 +468,25 @@ class PackageReuseContractTest(unittest.TestCase):
         self.assertNotIn("quwoquan_data", roots)
         self.assertNotIn("specs", roots)
         self.assertNotIn(".github", roots)
+
+    def test_prod_deployment_closure_accepts_only_declared_prod_targets(self) -> None:
+        for target in ("prod-sim", "prod-hosted"):
+            roots = package_reuse.deployment_input_roots(
+                "prod",
+                target,
+                ["content-service", "user-service"],
+            )
+            self.assertIn("quwoquan_app/configs/prod/app_runtime.yaml", roots)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "deployment input closure target/environment mismatch",
+        ):
+            package_reuse.deployment_input_roots(
+                "prod",
+                "gamma-local",
+                ["content-service", "user-service"],
+            )
 
     def test_release_attestations_are_exact_deployment_inputs(self) -> None:
         candidate = self.root / "attestations/candidate.json"

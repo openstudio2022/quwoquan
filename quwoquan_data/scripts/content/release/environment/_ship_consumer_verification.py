@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import argparse
 import re
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from content.release.environment._ship_operation_dependencies import (
     ShipOperationDependencies,
@@ -31,6 +33,7 @@ from content.release.model import ReleaseKind
 from core.control_types import ReleaseRunKind, ReleaseRunStatus
 from core.io import read_json
 from core.release_layout import payload_digest, payload_file
+from verify.release_publishability import readiness_phase_issue
 
 _SENSITIVE_RECEIPT_ASSIGNMENT = re.compile(
     r"(?i)\b(authorization|access[_-]?token|refresh[_-]?token|token|password|"
@@ -50,6 +53,16 @@ def _failure_receipt_error(error: Exception) -> str:
         message,
     )
     return (message or "verification failed")[:1024]
+
+
+def _failure_receipt_evidence(error: Exception) -> dict[str, Any]:
+    """Retain bounded typed attempt evidence exposed by a verifier blocker."""
+
+    attempts = getattr(error, "operation_attempts", ())
+    if not isinstance(attempts, (list, tuple)) or not attempts:
+        return {}
+    rows = [dict(row) for row in attempts[:2] if isinstance(row, Mapping)]
+    return {"operationAttempts": rows} if rows else {}
 
 
 def _verify_release_consumers(
@@ -106,8 +119,9 @@ def _verify_release_consumers(
         stage: str,
         error: Exception,
         *,
-        evidence: dict[str, str] | None = None,
+        evidence: dict[str, Any] | None = None,
     ) -> None:
+        failure_evidence = _failure_receipt_evidence(error)
         dependencies.write_verification_result(
             run / "result.json",
             {
@@ -120,6 +134,7 @@ def _verify_release_consumers(
                 "status": ReleaseRunStatus.FAILED,
                 "failedStage": stage,
                 "error": _failure_receipt_error(error),
+                **failure_evidence,
                 **dict(evidence or {}),
             },
         )
@@ -186,10 +201,9 @@ def _verify_release_consumers(
     readiness_phase = str(
         getattr(args, "readiness_phase", "commercial") or "commercial"
     ).strip()
-    if readiness_phase not in {"research", "consumer", "commercial"}:
-        raise SystemExit(
-            "[ship] --readiness-phase must be research, consumer or commercial"
-        )
+    phase_issue = readiness_phase_issue(readiness_phase)
+    if phase_issue is not None:
+        raise SystemExit(f"[ship] --readiness-phase: {phase_issue}")
     lifecycle_exit_ref = str(
         getattr(args, "lifecycle_exit_ref", "") or ""
     ).strip()

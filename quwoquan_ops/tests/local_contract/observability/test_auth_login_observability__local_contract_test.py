@@ -7,6 +7,9 @@ import unittest
 import yaml
 
 from quwoquan_ops.cli.lib.storage_contract_view import load_storage_contract_view
+from quwoquan_ops.tests.support.contract_alert_coverage_test_support import (
+    latency_p95_alert,
+)
 
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -152,14 +155,6 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
         self.assertIn("> 0.02", provider["expr"])
         self.assertIn("status!~\"2..\"", provider["expr"])
 
-        challenge = rules["AuthChallengeLatencyHigh"]
-        self.assertEqual(challenge["for"], "10m")
-        self.assertIn("> 1.2", challenge["expr"])
-
-        login = rules["AuthLoginLatencyHigh"]
-        self.assertEqual(login["for"], "10m")
-        self.assertIn("> 1.5", login["expr"])
-
         stalled = rules["LoginClientStateStalled"]
         self.assertEqual(stalled["for"], "1m")
         self.assertIn('result="stalled"', stalled["expr"])
@@ -192,6 +187,27 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
         self.assertIn('action="login_phone_binding"', binding["expr"])
         self.assertIn('result="cancelled"', binding["expr"])
         self.assertIn('result="required"', binding["expr"])
+
+    def test_challenge_and_login_latency_slo_is_carried_by_contract_coverage(self) -> None:
+        """OTP 发送与登录校验的 P95 口径由 ContractGraph 派生告警承载。
+
+        等价的手写 PromQL 会被 `verify_contract_alert_overlay.py` 判为可派生残留并 BLOCK，
+        因此这里断言的是契约声明的 SLO 档位确有派生告警，而不是某条手写告警名。
+        """
+
+        challenge = latency_p95_alert("user.authentication_challenge.SendOtp")
+        self.assertIn("> 1.2", challenge["expr"])
+
+        login = latency_p95_alert("user.account_session.LoginWithPhone")
+        self.assertIn("> 1.5", login["expr"])
+
+        for blocked_login in (
+            "user.account_session.LoginOneTap",
+            "user.account_session.LoginWithAlipay",
+            "user.account_session.LoginWithQq",
+            "user.account_session.LoginWithWechat",
+        ):
+            self.assertIn("> 1.5", latency_p95_alert(blocked_login)["expr"])
 
     def test_user_control_plane_owns_sampling_but_not_logstore_retention(self) -> None:
         path = (

@@ -111,7 +111,7 @@ def _research_image_repair_hints(
 ) -> list[dict[str, Any]]:
     """Return actionable image-resolution repair hints for the research lanes."""
     from content.source.source_inputs import curated_images_for_entity, curated_sources_for_entity
-    from governance.coverage.license import validate_image_rights
+    from governance.coverage.license import audit_image_rights
 
     hints: list[dict[str, Any]] = []
     for lane in ("homepage", "article"):
@@ -125,7 +125,7 @@ def _research_image_repair_hints(
             for index, image in enumerate(source.get("imageUrls") or [], start=1):
                 rights_hint = _image_rights_repair_hint(
                     image,
-                    validate_image_rights(
+                    audit_image_rights(
                         image,
                         vertical=ctx.spec.vertical,
                     ),
@@ -157,7 +157,7 @@ def _research_image_repair_hints(
     ):
         rights_hint = _image_rights_repair_hint(
             image,
-            validate_image_rights(
+            audit_image_rights(
                 image,
                 vertical=ctx.spec.vertical,
             ),

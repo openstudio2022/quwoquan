@@ -66,8 +66,6 @@ func ResolveSupplySource(payload map[string]any) string {
 	authorID := strings.TrimSpace(projectionString(payload["authorId"]))
 	creatorProfileID := strings.TrimSpace(projectionString(payload["creatorProfileId"]))
 	switch {
-	case strings.TrimSpace(projectionString(payload["sourceTaskId"])) != "":
-		return SupplySourceDataEngineering
 	case strings.TrimSpace(projectionString(payload["experienceClaimMode"])) == "editorial_synthesis":
 		return SupplySourceDataEngineering
 	case creatorDisclosure["type"] == "platform_virtual_creator":
@@ -126,10 +124,7 @@ func mediaCompleteness(payload map[string]any) float64 {
 }
 
 func projectionTokens(payload map[string]any) []string {
-	tokens := []string{
-		projectionString(payload["contentType"]),
-		projectionString(payload["sourceTaskId"]),
-	}
+	tokens := []string{projectionString(payload["contentType"])}
 	tokens = append(tokens, AnySlice(payload, "tagRefs")...)
 	tokens = append(tokens, AnySlice(payload, "tags")...)
 	tokens = append(tokens, AnySlice(payload, "entityRefs")...)

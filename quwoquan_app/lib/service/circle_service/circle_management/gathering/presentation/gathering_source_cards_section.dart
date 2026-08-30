@@ -63,39 +63,37 @@ class _GatheringSourceCardsSectionState
     if (widget.sourceObjectTypeRef != 'homepage') {
       return;
     }
+    final reader = ref.read(homepageDetailSocialProofReaderProvider);
+    final telemetry = ref.read(exceptionTelemetryPortProvider);
     try {
-      final proof = await ref
-          .read(homepageDetailSocialProofReaderProvider)
-          .getGatheringSocialProof(
-            anchorKind: 'entity',
-            objectId: widget.sourceObjectId,
-          );
+      final proof = await reader.getGatheringSocialProof(
+        anchorKind: 'entity',
+        objectId: widget.sourceObjectId,
+      );
       if (!mounted) return;
       setState(() => _formedCount = proof.formedCount.toInt());
     } catch (error, stackTrace) {
       unawaited(
-        ref
-            .read(exceptionTelemetryPortProvider)
-            .recordHandledException(
-              source: 'circle.gathering.source_cards_social_proof',
-              error: error,
-              stackTrace: stackTrace,
-            ),
+        telemetry.recordHandledException(
+          source: 'circle.gathering.source_cards_social_proof',
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }
 
   Future<void> _load() async {
+    final reader = ref.read(gatheringQueryReaderProvider);
+    final telemetry = ref.read(exceptionTelemetryPortProvider);
     try {
-      final cards = await ref
-          .read(gatheringQueryReaderProvider)
-          .listBySource(
-            GatheringBySourceListQuery(
-              sourceObjectTypeRef: widget.sourceObjectTypeRef,
-              sourceObjectId: widget.sourceObjectId,
-              limit: widget.maxCards,
-            ),
-          );
+      final cards = await reader.listBySource(
+        GatheringBySourceListQuery(
+          sourceObjectTypeRef: widget.sourceObjectTypeRef,
+          sourceObjectId: widget.sourceObjectId,
+          limit: widget.maxCards,
+        ),
+      );
       if (!mounted) {
         return;
       }
@@ -110,13 +108,11 @@ class _GatheringSourceCardsSectionState
     } catch (error, stackTrace) {
       // 氛围层读取失败静默降级（不阻塞主页），进观测通道。
       unawaited(
-        ref
-            .read(exceptionTelemetryPortProvider)
-            .recordHandledException(
-              source: 'circle.gathering.source_cards_section',
-              error: error,
-              stackTrace: stackTrace,
-            ),
+        telemetry.recordHandledException(
+          source: 'circle.gathering.source_cards_section',
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
       if (!mounted) {
         return;
@@ -164,9 +160,7 @@ class _GatheringSourceCardsSectionState
               if (_formedCount > 0)
                 Text(
                   GatheringText.sourceFormedCountLabel(_formedCount),
-                  key: const ValueKey<String>(
-                    'gathering-source-formed-count',
-                  ),
+                  key: const ValueKey<String>('gathering-source-formed-count'),
                   style: TextStyle(
                     fontSize: AppTypography.iosCaption1,
                     color: secondary,

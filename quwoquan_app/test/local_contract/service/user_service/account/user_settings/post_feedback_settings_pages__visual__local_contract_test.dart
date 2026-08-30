@@ -1,3 +1,6 @@
+@Tags(<String>['serial', 'visual'])
+library;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;

@@ -124,6 +124,10 @@ func (s *MongoPostStore) EnsureIndexes(ctx context.Context) error {
 			Options: options.Index().SetName("idx_posts_canonical_entity").SetSparse(true),
 		},
 		{
+			Keys:    bson.D{{Key: "gatheringRef", Value: 1}, {Key: "publishedAt", Value: -1}},
+			Options: options.Index().SetName("idx_posts_gathering_ref").SetSparse(true),
+		},
+		{
 			Keys: bson.D{
 				{Key: "authorId", Value: 1},
 				{Key: "publishIntentId", Value: 1},

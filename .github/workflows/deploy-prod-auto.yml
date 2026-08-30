@@ -60,6 +60,11 @@ jobs:
     name: Resolve exact mainline source
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
     outputs:
       source_git_sha: ${{ steps.source.outputs.source_git_sha }}
       base_sha: ${{ steps.source.outputs.base_sha }}
@@ -68,18 +73,23 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.inputs.source_sha || github.sha }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.14'
+          cache: false
+      - name: Install canonical branch-policy parser dependency
+        run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
       - id: source
         name: Require an exact commit reachable from main
         env:
           REQUESTED_SOURCE_SHA: ${{ github.event.inputs.source_sha || github.sha }}
           EVENT_BASE_SHA: ${{ github.event.before || '' }}
         run: |
-          SOURCE_SHA="$(git rev-parse "$REQUESTED_SOURCE_SHA")"
-          git fetch --no-tags origin main
-          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || ! git merge-base --is-ancestor "$SOURCE_SHA" origin/main; then
-            echo "::error::GATE_BLOCK: source must be an exact commit reachable from main"
+          if [[ ! "$REQUESTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || ! git cat-file -e "${REQUESTED_SOURCE_SHA}^{commit}"; then
+            echo "::error::OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE: source must be an exact commit object"
             exit 2
           fi
+          SOURCE_SHA="$REQUESTED_SOURCE_SHA"
           BASE_SHA="$EVENT_BASE_SHA"
           if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
             BASE_SHA="$(git rev-parse "${SOURCE_SHA}^")"
@@ -90,6 +100,34 @@ jobs:
           fi
           echo "source_git_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+      - name: Admit the unique reviewed dev1.0 to main promotion
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_git_sha }}
+        run: |
+          set -euo pipefail
+          ADMISSION_RECEIPT="$RUNNER_TEMP/source-promotion-admission.json"
+          python3 quwoquan_ops/ci/verify_release_governance.py \
+            --repository "${{ github.repository }}" \
+            --git-sha "$SOURCE_SHA" \
+            --minimum-approvals 1 \
+            --output "$ADMISSION_RECEIPT"
+          python3 - "$ADMISSION_RECEIPT" "$SOURCE_SHA" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          receipt = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          expected = {
+              "schema": "prod-source-governance-receipt",
+              "gitSha": sys.argv[2],
+          }
+          observed = {key: receipt.get(key) for key in expected}
+          if observed != expected:
+              raise SystemExit(
+                  f"OPS.BRANCH.POLICY_INVALID: early promotion admission drift: {observed}"
+              )
+          PY
 
   service_pipeline:
     name: Service Pipeline (same mainline DAG)
@@ -392,7 +430,6 @@ jobs:
           EXPECTED_WORKFLOW_RUN_ID: ${{ needs.service_pipeline.outputs.producer_workflow_run_id }}
           EXPECTED_SOURCE_SHA: ${{ needs.service_pipeline.outputs.source_git_sha }}
         run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest"
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import os
@@ -495,6 +532,10 @@ jobs:
           DRY_RUN="${{ github.event.inputs.dry_run }}"
           if [[ -z "$CLOUD_PROVIDER" ]]; then CLOUD_PROVIDER="aliyun"; fi
           if [[ -z "$DRY_RUN" ]]; then DRY_RUN="true"; fi
+          if [[ "$DRY_RUN" != "true" && "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+            echo "::error::GATE_BLOCK: real Prod apply requires explicit workflow_dispatch"
+            exit 2
+          fi
           CANDIDATE_DIGEST="$(python3 - <<'PY'
           import json
           import os
@@ -540,11 +581,13 @@ jobs:
           print(ref)
           PY
           )"
-          echo "from_candidate_digest=$FROM_CANDIDATE_DIGEST" >> "$GITHUB_OUTPUT"
-          echo "resume_stage=$RESOLVED_RESUME_STAGE" >> "$GITHUB_OUTPUT"
-          echo "existing_release_evidence_ref=$EXISTING_RELEASE_EVIDENCE_REF" >> "$GITHUB_OUTPUT"
-          echo "cloud_provider=$CLOUD_PROVIDER" >> "$GITHUB_OUTPUT"
-          echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+          {
+            echo "from_candidate_digest=$FROM_CANDIDATE_DIGEST"
+            echo "resume_stage=$RESOLVED_RESUME_STAGE"
+            echo "existing_release_evidence_ref=$EXISTING_RELEASE_EVIDENCE_REF"
+            echo "cloud_provider=$CLOUD_PROVIDER"
+            echo "dry_run=$DRY_RUN"
+          } >> "$GITHUB_OUTPUT"
       - name: Parse canonical rollout stages
         id: stages
         run: |
@@ -738,7 +781,6 @@ jobs:
             --target alpha-local \
             --kind all \
             --profile smoke \
-            --reuse-package \
             --report-dir "$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-verify"
       - id: receipt
         name: Seal Alpha environment receipt from raw stackctl evidence
@@ -899,7 +941,6 @@ jobs:
             --target gamma-local \
             --kind all \
             --profile release \
-            --reuse-package \
             --report-dir "$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-verify"
       - id: receipt
         name: Seal Gamma environment receipt from raw stackctl evidence
@@ -1047,7 +1088,6 @@ jobs:
         env:
           EXPECTED_CANDIDATE: ${{ needs.prepare.outputs.candidate_digest }}
         run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/mainline-preprod/process/release-evidence-manifest"
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import os
@@ -1099,8 +1139,9 @@ jobs:
       - beta_device_matrix
       - gamma_local
       - preprod_evidence
-    runs-on: [self-hosted, macOS, prod-release]
-    environment: production
+    runs-on: [self-hosted, macOS, ARM64]
+    environment:
+      name: ${{ needs.prepare.outputs.dry_run != 'true' && 'production' || 'release-validation' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -1128,6 +1169,11 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
+      - name: Block formal Prod while hosted protection is unverified
+        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        run: |
+          echo "::error::OPS.BRANCH.AUTHORITY_UNAVAILABLE: formal Prod requires hosted branch protection/ruleset readback"
+          exit 2
       - name: Validate protected rollout promotion evidence root
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         run: |
@@ -1369,6 +1415,14 @@ jobs:
             --target prod-hosted \
             --include-services \
             --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-package"
+      - name: Verify exact Prod packaging candidate
+        run: |
+          python3 quwoquan_ops/cli/stackctl.py verify \
+            --env prod \
+            --target prod-hosted \
+            --kind packaging \
+            --profile smoke \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-package-verify"
       - name: Require the prebuilt immutable Ops Portal package
         run: |
           python3 - <<'PY'
@@ -1733,7 +1787,7 @@ jobs:
     name: Prod hosted soak authority
     needs: [prepare, prod_rollout]
     if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prod_rollout.result == 'success' && needs.prod_rollout.outputs.release_status == 'released' }}
-    runs-on: [self-hosted, macOS, prod-release]
+    runs-on: [self-hosted, macOS, ARM64]
     environment: production
     timeout-minutes: 1500
     permissions:
@@ -1908,7 +1962,7 @@ jobs:
       - preprod_evidence
       - prod_rollout
       - prod_soak_acceptance
-    if: always()
+    if: ${{ always() && needs.source_context.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -2105,9 +2159,11 @@ jobs:
           elif [ "${CALENDAR_SECONDS}" -gt "${SOFT_BUDGET_SECONDS}" ]; then
             echo "::warning::RELEASED_OVER_SOFT_BUDGET: mainline end-to-end time ${CALENDAR_SECONDS}s exceeds ${SOFT_BUDGET_SECONDS}s"
           fi
-          if [[ -z "$APPROVAL_REQUESTED_AT" || -z "$APPROVAL_APPROVED_AT" || -z "$APPROVAL_WAIT_SECONDS" || -z "$HUMAN_DECISION_WAIT_SECONDS" ]]; then
-            echo "::error::GATE_BLOCK: ${APPROVAL_EVIDENCE_REASON} Canonical summary remains historical_incomplete."
-            exit 2
+          if [[ "$DRY_RUN" != "true" ]]; then
+            if [[ -z "$APPROVAL_REQUESTED_AT" || -z "$APPROVAL_APPROVED_AT" || -z "$APPROVAL_WAIT_SECONDS" || -z "$HUMAN_DECISION_WAIT_SECONDS" ]]; then
+              echo "::error::GATE_BLOCK: ${APPROVAL_EVIDENCE_REASON} Canonical summary remains historical_incomplete."
+              exit 2
+            fi
           fi
           if [[ -n "$UPSTREAM_MISSING_EVIDENCE" ]]; then
             echo "::error::GATE_BLOCK: canonical mainline timing is historical_incomplete: ${UPSTREAM_MISSING_EVIDENCE}"
@@ -2230,6 +2286,7 @@ jobs:
           retention-days: 3
       - name: Assert four-environment promotion chain
         env:
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
           DELIVERY_RESULT: ${{ needs.delivery_gate.outputs.summary_result }}
           ALPHA_RESULT: ${{ needs.alpha_local.result }}
           BETA_RESULT: ${{ needs.beta_device_matrix.outputs.summary_result }}
@@ -2252,9 +2309,14 @@ jobs:
           expect_success "beta_device_matrix" "${BETA_RESULT}" "检查 beta-local self-hosted device matrix"
           expect_success "gamma_local" "${GAMMA_RESULT}" "检查 gamma-local release-fast package/up/health/verify"
           expect_success "prod_rollout" "${PROD_RESULT}" "检查单一 Prod 事务及真实 GATE_BLOCK"
-          expect_success "prod_soak_acceptance" "${PROD_SOAK_RESULT}" "检查真实 soak、告警、健康、凭据与审批 hosted readback"
-          if [[ "${PROD_RELEASE_STATUS}" != "released" ]]; then
-            echo "::error::prod_rollout terminal status expected released, got ${PROD_RELEASE_STATUS:-missing}. Rolled-back or rollback-failed evidence is preserved but cannot be promoted as green."
+          if [[ "$DRY_RUN" != "true" ]]; then
+            expect_success "prod_soak_acceptance" "${PROD_SOAK_RESULT}" "检查真实 soak、告警、健康、凭据与审批 hosted readback"
+            if [[ "${PROD_RELEASE_STATUS}" != "released" ]]; then
+              echo "::error::prod_rollout terminal status expected released, got ${PROD_RELEASE_STATUS:-missing}. Rolled-back or rollback-failed evidence is preserved but cannot be promoted as green."
+              fail=1
+            fi
+          elif [[ "$PROD_SOAK_RESULT" != "skipped" ]]; then
+            echo "::error::automatic dry-run must not execute Prod soak; got ${PROD_SOAK_RESULT}"
             fail=1
           fi
           if [ "${fail}" -ne 0 ]; then

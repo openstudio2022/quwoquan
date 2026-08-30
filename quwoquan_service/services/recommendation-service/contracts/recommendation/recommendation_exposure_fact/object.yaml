@@ -78,4 +78,5 @@ assistant_access:
 business_rules:
 - 只有 FeedPageDelivered 可形成曝光，候选生成、排序或被 Content 丢弃都不得记为曝光。
 - 同一 deliveryPageId、ordinal 与 contentId 至多追加一次，重放保持同一 exposure identity；windowId 与 rankingSnapshotDigest 必须绑定实际排序窗口。
+- experimentBucket 只接受 FeedPageDelivered 携带的服务端权威分配结果；modelBucket 只记录实际执行轨道，二者不得互相回填或覆盖。
 - 账号关闭阻断事实生效后不得为该 subject 追加新曝光；关闭事实先持久化，再硬删除历史可识别曝光，closure checkpoint 阻止旧事件重建。

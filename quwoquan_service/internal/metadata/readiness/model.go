@@ -82,9 +82,23 @@ type ReadinessCaseResult struct {
 	CandidateManifestSHA256 string          `json:"candidateManifestSha256"`
 	CandidateDigest         string          `json:"candidateDigest,omitempty"`
 	ReleaseDigest           string          `json:"releaseDigest,omitempty"`
+	ReleaseID               string          `json:"releaseId,omitempty"`
+	TargetUATBindingDigest  string          `json:"targetUatBindingDigest,omitempty"`
+	EntrySurface            string          `json:"entrySurface,omitempty"`
+	Carrier                 string          `json:"carrier,omitempty"`
+	DeviceIdentity          string          `json:"deviceIdentity,omitempty"`
+	UATProfile              string          `json:"uatProfile,omitempty"`
+	NonPromotable           bool            `json:"nonPromotable"`
+	ArtifactClass           string          `json:"artifactClass,omitempty"`
+	PhysicalDevice          bool            `json:"physicalDevice"`
+	ReasonCode              string          `json:"reasonCode,omitempty"`
+	ObservedOutcome         string          `json:"observedOutcome,omitempty"`
+	ObservedReleaseID       string          `json:"observedReleaseId,omitempty"`
+	PreviousReleaseID       string          `json:"previousReleaseId,omitempty"`
 	Environment             string          `json:"environment"`
 	Platform                string          `json:"platform"`
 	DeviceClass             string          `json:"deviceClass"`
+	DeviceRegistered        bool            `json:"deviceRegistered"`
 	Provider                string          `json:"provider"`
 	StartedAt               time.Time       `json:"startedAt"`
 	CompletedAt             time.Time       `json:"completedAt"`
@@ -114,9 +128,23 @@ type ReceiptBinding struct {
 	CandidateManifestSHA256 string          `json:"candidateManifestSha256"`
 	CandidateDigest         string          `json:"candidateDigest,omitempty"`
 	ReleaseDigest           string          `json:"releaseDigest,omitempty"`
+	ReleaseID               string          `json:"releaseId,omitempty"`
+	TargetUATBindingDigest  string          `json:"targetUatBindingDigest,omitempty"`
+	EntrySurface            string          `json:"entrySurface,omitempty"`
+	Carrier                 string          `json:"carrier,omitempty"`
+	DeviceIdentity          string          `json:"deviceIdentity,omitempty"`
+	UATProfile              string          `json:"uatProfile,omitempty"`
+	NonPromotable           bool            `json:"nonPromotable"`
+	ArtifactClass           string          `json:"artifactClass,omitempty"`
+	PhysicalDevice          bool            `json:"physicalDevice"`
+	ReasonCode              string          `json:"reasonCode,omitempty"`
+	ObservedOutcome         string          `json:"observedOutcome,omitempty"`
+	ObservedReleaseID       string          `json:"observedReleaseId,omitempty"`
+	PreviousReleaseID       string          `json:"previousReleaseId,omitempty"`
 	Environment             string          `json:"environment"`
 	Platform                string          `json:"platform"`
 	DeviceClass             string          `json:"deviceClass"`
+	DeviceRegistered        bool            `json:"deviceRegistered"`
 	Provider                string          `json:"provider"`
 	StartedAt               time.Time       `json:"startedAt"`
 	CompletedAt             time.Time       `json:"completedAt"`
@@ -126,7 +154,6 @@ type ReceiptBinding struct {
 	FixtureFree             bool            `json:"fixtureFree"`
 	DependenciesReady       bool            `json:"dependenciesReady"`
 	ProviderVerified        bool            `json:"providerVerified"`
-	PhysicalDevice          bool            `json:"physicalDevice"`
 }
 
 // ReadinessReceipt is a small, rebuildable manifest over the real runner

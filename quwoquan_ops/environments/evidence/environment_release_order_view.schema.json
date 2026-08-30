@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Projection-only environment release order view",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "releaseId", "derivedAt", "environments"],
+  "properties": {
+    "schema": {"const": "quwoquan_ops.environment_release_order_view"},
+    "releaseId": {"type": "string", "minLength": 1},
+    "derivedAt": {"type": "string", "format": "date-time"},
+    "environments": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"$ref": "#/$defs/alpha"},
+        {"$ref": "#/$defs/beta"},
+        {"$ref": "#/$defs/gamma"},
+        {"$ref": "#/$defs/prod"}
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "baseEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment", "state", "acceptanceRef", "acceptanceDigest", "predecessorSatisfied", "availableActions"],
+      "properties": {
+        "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+        "state": {"enum": ["no_acceptance", "accepted"]},
+        "acceptanceRef": {"type": ["string", "null"]},
+        "acceptanceDigest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+        "predecessorSatisfied": {"type": "boolean"},
+        "availableActions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["create_acceptance"]}
+        }
+      }
+    },
+    "alpha": {"allOf": [{"$ref": "#/$defs/baseEnvironment"}, {"properties": {"environment": {"const": "alpha"}}}]},
+    "beta": {"allOf": [{"$ref": "#/$defs/baseEnvironment"}, {"properties": {"environment": {"const": "beta"}}}]},
+    "gamma": {"allOf": [{"$ref": "#/$defs/baseEnvironment"}, {"properties": {"environment": {"const": "gamma"}}}]},
+    "prod": {"allOf": [{"$ref": "#/$defs/baseEnvironment"}, {"properties": {"environment": {"const": "prod"}}}]}
+  }
+}

@@ -1,14 +1,19 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/design_system/media/app_media_image.dart';
 import 'package:quwoquan_app/design_system/object_page/object_page_sections.dart';
 import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
+    show MediaDeliveryKind;
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show MediaDeliveryAccessMode;
 
 /// Profile header with left-aligned avatar that intrudes 1/3 into the
 /// background area above. Display name sits in a Row beside the avatar,
@@ -18,6 +23,8 @@ class ProfileHeader extends StatelessWidget {
     super.key,
     required this.isDark,
     this.avatarUrl,
+    this.avatarAssetId,
+    this.avatarAccessMode,
     this.displayName,
     this.identityTags = const <String>[],
     this.verified = false,
@@ -30,6 +37,11 @@ class ProfileHeader extends StatelessWidget {
 
   final bool isDark;
   final String? avatarUrl;
+
+  /// 头像的媒体交付绑定（DEC-033）：signedGrant + 资产标识在场时分流到
+  /// 私有媒体桥接原子，禁止从 URL 形态推断交付形态；契约缺席即为 null。
+  final String? avatarAssetId;
+  final MediaDeliveryAccessMode? avatarAccessMode;
   final String? displayName;
 
   /// 主页单行身份标签（云侧 identityTags 直出，端以 · 分隔；与 bio 互补不重复）。
@@ -70,7 +82,12 @@ class ProfileHeader extends StatelessWidget {
 
   Widget _buildAvatar(BuildContext context, Color bg, Color fgSecondary) {
     final normalizedAvatarUrl = (avatarUrl ?? '').trim();
-    final hasAvatar = normalizedAvatarUrl.isNotEmpty;
+    final signedAssetId = avatarAssetId?.trim() ?? '';
+    // DEC-033：typed 声明分流，signedGrant 头像交给私有媒体桥接原子。
+    final declaresSignedGrantAvatar =
+        avatarAccessMode == MediaDeliveryAccessMode.signedGrant;
+    final hasAvatar =
+        normalizedAvatarUrl.isNotEmpty || declaresSignedGrantAvatar;
     final fallback = _avatarFallback(context, fgSecondary);
     final avatar = Container(
       key: const ValueKey<String>('profile-header-avatar'),
@@ -90,24 +107,32 @@ class ProfileHeader extends StatelessWidget {
           width: avatarRadius * 2,
           height: avatarRadius * 2,
           child: hasAvatar
-              ? (isLocalFileImageSource(normalizedAvatarUrl)
-                    ? AppMediaImage(
-                        key: const ValueKey<String>(
-                          'profile-header-avatar-image',
+              ? mediaDeliveryImage(
+                  key: const ValueKey<String>('profile-header-avatar-image'),
+                  binding: MediaDeliveryBinding(
+                    assetId: signedAssetId,
+                    accessMode: avatarAccessMode,
+                    publicUrl: normalizedAvatarUrl,
+                  ),
+                  kind: MediaDeliveryKind.avatar,
+                  width: avatarRadius * 2,
+                  height: avatarRadius * 2,
+                  fit: BoxFit.cover,
+                  absentWidget: fallback,
+                  publicBuilder: (context, publicUrl) =>
+                      isLocalFileImageSource(publicUrl)
+                      ? AppMediaImage(
+                          imageSource: publicUrl,
+                          fit: BoxFit.cover,
+                          errorWidget: fallback,
+                        )
+                      : AppAvatarImage(
+                          imageUrl: publicUrl,
+                          size: avatarRadius * 2,
+                          fit: BoxFit.cover,
+                          errorWidget: fallback,
                         ),
-                        imageSource: normalizedAvatarUrl,
-                        fit: BoxFit.cover,
-                        errorWidget: fallback,
-                      )
-                    : AppAvatarImage(
-                        key: const ValueKey<String>(
-                          'profile-header-avatar-image',
-                        ),
-                        imageUrl: normalizedAvatarUrl,
-                        size: avatarRadius * 2,
-                        fit: BoxFit.cover,
-                        errorWidget: fallback,
-                      ))
+                )
               : fallback,
         ),
       ),

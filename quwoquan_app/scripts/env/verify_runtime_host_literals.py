@@ -9,10 +9,10 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_LIB = ROOT / "quwoquan_app" / "lib"
-URL_RE = re.compile(
-    r"https?://(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9][A-Za-z0-9.-]*)"
-    r"(?::[0-9]+)?[^\s'\"`)>]*"
-)
+# Candidate extraction is deliberately broader than a valid URL parser.  A
+# gate that only tokenizes valid hosts silently misses malformed literals such
+# as ``https://[not-a-host``; urllib owns the final syntax decision below.
+URL_RE = re.compile(r"https?://[^\s'\"`)>]+")
 ALLOWED_PUBLIC_HOSTS = {"schema.org", "quwoquan.com"}
 ALLOWED_PUBLIC_HOST_SUFFIXES = (".quwoquan.com",)
 
@@ -49,7 +49,11 @@ def _self_test() -> None:
         match = URL_RE.search(source)
         if match is None or urlparse(match.group(0)).hostname != expected_host:
             raise AssertionError(f"runtime host detector missed {source}")
-    if URL_RE.search(r"RegExp(r'(https://[^\s?#]+)\?[^\s#]*')") is not None:
+    regex_source = r"RegExp(r'(https://[^\s?#]+)\?[^\s#]*')"
+    regex_match = URL_RE.search(regex_source)
+    if regex_match is None or not _is_regular_expression_source(
+        regex_source, regex_match.start()
+    ):
         raise AssertionError("runtime host detector treated a regex pattern as a URL")
 
 

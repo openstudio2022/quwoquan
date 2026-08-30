@@ -1,9 +1,11 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_asset.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_presentation_values.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_surface_view.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/works_article_events.dart';
+import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_paged_canvas.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_reader/hosts/article_reader_host_adapter.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_reader/hosts/immersive_browser_reader_adapter.dart';
@@ -12,15 +14,16 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/a
 import 'package:quwoquan_app/design_system/gestures/immersive_gesture_intent_controller.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 
-typedef WorksArticleBottomClearanceResolver =
-    double Function(BuildContext context, bool includeIntersection);
+typedef WorksArticleBottomClearanceResolver = double Function(
+  BuildContext context,
+  bool includeIntersection,
+);
 
-typedef WorksArticleMetricsResolver =
-    ArticleCanvasMetricsView Function(
-      BuildContext context,
-      BoxConstraints constraints,
-      double topPaperReservedHeight,
-    );
+typedef WorksArticleMetricsResolver = ArticleCanvasMetricsView Function(
+  BuildContext context,
+  BoxConstraints constraints,
+  double topPaperReservedHeight,
+);
 
 /// Composition root for embedding the Post article reader in Media Work Browser.
 ///
@@ -44,6 +47,7 @@ final class PostWorksViewerArticle extends StatelessWidget {
     this.onPageFlipCommitted,
     this.onPageCurlAborted,
     this.onEntityTap,
+    this.onImageTap,
     this.gestureIntentController,
     this.initialPage = 0,
     this.onOverflowPrevious,
@@ -65,6 +69,7 @@ final class PostWorksViewerArticle extends StatelessWidget {
   final ValueChanged<WorksArticlePageFlipEvent>? onPageFlipCommitted;
   final ValueChanged<WorksArticlePageCurlAbortEvent>? onPageCurlAborted;
   final ValueChanged<ArticleInlineSpan>? onEntityTap;
+  final ValueChanged<ArticleDocumentAsset>? onImageTap;
   final ImmersiveGestureIntentController? gestureIntentController;
   final int initialPage;
   final VoidCallback? onOverflowPrevious;
@@ -90,6 +95,14 @@ final class PostWorksViewerArticle extends StatelessWidget {
             bottom: resolveBottomClearance(context, reserveContentIntersection),
             child: LayoutBuilder(
               builder: (context, constraints) {
+                // 几何单源（GWT-015）：先解析渲染 metrics，分页消费同一几何。
+                // 渲染 pagePadding 为 zero（immersive edge-to-edge），
+                // 分页 stage 宽度即内容区全宽，禁止另走 0.72 纸比推导。
+                final immersiveMetrics = resolveMetrics(
+                  context,
+                  constraints,
+                  topPaperReservedHeight,
+                );
                 final pages = resolvePaginatedArticlePages(
                   context: context,
                   constraints: constraints,
@@ -99,17 +112,18 @@ final class PostWorksViewerArticle extends StatelessWidget {
                   fallbackPages: article.pages,
                   variant: ArticleCanvasVariant.immersive,
                   paperTexture: paperTexture,
+                  canvasMetrics: ArticleCanvasMetrics.fromView(
+                    immersiveMetrics,
+                  ),
+                  stageWidth: constraints.maxWidth.isFinite
+                      ? constraints.maxWidth
+                      : null,
                 );
                 onResolvedPageCountChanged(pages.length.clamp(1, 99).toInt());
                 final maxIndex = pages.isEmpty ? 0 : pages.length - 1;
                 final safeInitialPage = pages.isEmpty
                     ? 0
                     : initialPage.clamp(0, maxIndex).toInt();
-                final immersiveMetrics = resolveMetrics(
-                  context,
-                  constraints,
-                  topPaperReservedHeight,
-                );
                 return ArticleReaderFlipHost(
                   adapter: ImmersiveBrowserReaderAdapter(
                     ArticleReaderHostConfig(
@@ -147,6 +161,7 @@ final class PostWorksViewerArticle extends StatelessWidget {
                         ),
                       ),
                       onEntityTap: onEntityTap,
+                      onImageTap: onImageTap,
                       gestureIntentController: gestureIntentController,
                     ),
                   ),

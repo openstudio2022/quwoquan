@@ -38,11 +38,13 @@ services:
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
       interval: 5s
-      timeout: 3s
+      timeout: 10s
       retries: 20
 
   mongo-init:
     image: "${LOCAL_GAMMA_MONGO_IMAGE:-docker.io/library/mongo:7-jammy}"
+    labels:
+      com.quwoquan.runtime.one-shot: "true"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -122,6 +124,8 @@ services:
 
   object-storage-init:
     image: "${LOCAL_GAMMA_MINIO_MC_IMAGE:-minio/mc:RELEASE.2025-03-12T17-29-24Z}"
+    labels:
+      com.quwoquan.runtime.one-shot: "true"
     depends_on:
       object-storage:
         condition: service_started
@@ -220,11 +224,14 @@ services:
       QWQ_PUBLIC_UPLOAD_HOST: "${QWQ_PUBLIC_UPLOAD_HOST:?QWQ_PUBLIC_UPLOAD_HOST is required}"
       LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT: "${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:?LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT is required}"
       LOCAL_GAMMA_OBJECT_STORAGE_BUCKET: "${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET:?LOCAL_GAMMA_OBJECT_STORAGE_BUCKET is required}"
+      QWQ_PUBLIC_WEB_CONTENT_DIGEST: "${QWQ_PUBLIC_WEB_CONTENT_DIGEST:?immutable public Web content digest is required}"
     ports:
       - "${LOCAL_GAMMA_HTTP_PORT:-19000}:${LOCAL_GAMMA_HTTP_PORT:-19000}"
       - "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}:${LOCAL_GAMMA_PRODUCT_OPS_PORT:-19010}"
       - "${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}:${LOCAL_GAMMA_MEDIA_EDGE_PORT:-19100}"
-      - "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019"
+      # Caddy admin (2019) 无鉴权且可整体替换运行配置，只绑回环。prod 平面渲染器已按
+      # 同一判据落实（`_prod_plane_admin_publish` 的 `127.0.0.1:` 前缀），本地不应更宽。
+      - "127.0.0.1:${LOCAL_GAMMA_ADMIN_PORT:?LOCAL_GAMMA_ADMIN_PORT is required}:2019"
     volumes:
       - ${LOCAL_GAMMA_CADDYFILE:?packaged Caddyfile is required}:/etc/caddy/Caddyfile:ro
       - ${QWQ_PUBLIC_TLS_CERT_FILE:?QWQ_PUBLIC_TLS_CERT_FILE is required}:/etc/caddy/tls/fullchain.pem:ro
@@ -232,6 +239,7 @@ services:
       - ${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:?LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE is required}:/etc/caddy/tls/object-storage-ca.pem:ro
       - ${LOCAL_GAMMA_MEDIA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/cache/media}:/srv/media:ro
       - ${LOCAL_GAMMA_LEGAL_STATIC_ROOT:?LOCAL_GAMMA_LEGAL_STATIC_ROOT is required}:/srv/legal:ro
+      - ${LOCAL_GAMMA_PUBLIC_WEB_ROOT:?immutable public Web package is required}:/srv/web:ro
       # 运维运营 Portal 静态站点（vite build 产物；prod 渲染时替换为 runtime/portal）。
       - ${LOCAL_GAMMA_PORTAL_ROOT:?LOCAL_GAMMA_PORTAL_ROOT is required}:/srv/portal:ro
       - ${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}:/data
@@ -252,18 +260,18 @@ services:
   # (default is internal: true).
   #
   # Only workloads whose Compose fragment is unconditionally loaded may appear
-  # here. Conditionally loaded fragments (the debug Provider substitutes) attach
-  # to `edge` inside their own fragment, otherwise this file declares an
-  # image-less service whenever that fragment is absent.
+  # here without a profile. Conditionally loaded fragments (the debug Provider
+  # substitutes) attach to `edge` inside their own fragment, otherwise this file
+  # declares an image-less service whenever that fragment is absent.
+  #
+  # 「条件加载」除 Compose profile 外还包括 workload 对 candidate 拓扑的投影：
+  # bounded content workload 会整份投影掉 rtc-service、realtime-gateway、
+  # product-ops-service 与 control-plane 层。这些条目仍必须留在此处，因为
+  # first_party_service_names 用本文件的服务集判定活跃 image owner；但它们
+  # 必须带上与自身 fragment 一致的 profile，让 Compose 在该 profile 未激活时
+  # 整个排除该服务，而不是把它当成一个无 image 无 build 的服务而使整份
+  # Compose project 失效。
   user-service:
-    networks:
-      - default
-      - edge
-  product-ops-service:
-    networks:
-      - default
-      - edge
-  platform-ops-service:
     networks:
       - default
       - edge
@@ -307,11 +315,23 @@ services:
     networks:
       - default
       - edge
+  product-ops-service:
+    profiles: ["commercial-observability"]
+    networks:
+      - default
+      - edge
+  platform-ops-service:
+    profiles: ["control-plane"]
+    networks:
+      - default
+      - edge
   realtime-gateway:
+    profiles: ["edge-media"]
     networks:
       - default
       - edge
   rtc-service:
+    profiles: ["edge-media"]
     networks:
       - default
       - edge

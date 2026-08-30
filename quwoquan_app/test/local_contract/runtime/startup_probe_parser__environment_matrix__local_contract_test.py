@@ -7,10 +7,12 @@
 # 本文件承接环境矩阵汇总场景组（release 绑定矩阵通过判定、component/release
 # 状态区分、partial 证据 gate_block、UAT/Make 候选绑定）；测试逐字搬移。
 
+import io
 import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -28,6 +30,68 @@ from verify_startup_environment_matrix import (
 
 
 class StartupProbeParserContractTest(unittest.TestCase):
+    def test_component_runtime_package_uses_exact_test_live_target(self) -> None:
+        runtime = {
+            **{key: "value" for key in startup_matrix.REQUIRED_RUNTIME_FIELDS},
+            "appRuntimeEnv": "beta",
+        }
+        completed = mock.Mock(
+            returncode=0,
+            stdout=json.dumps({"environment": "beta", "runtime": runtime}),
+            stderr="",
+        )
+
+        with mock.patch(
+            "startup_environment_matrix.package_probe._run",
+            return_value=completed,
+        ) as run:
+            self.assertEqual(startup_matrix._runtime_package("beta"), runtime)
+
+        run.assert_called_once_with(
+            "python3",
+            "scripts/env/print_app_env_dart_defines.py",
+            "--env",
+            "beta",
+            "--target",
+            "beta-local",
+            "--launch-policy",
+            "test_live",
+            "--format",
+            "json",
+        )
+
+    def test_component_failure_prints_typed_issue_and_returns_nonzero(self) -> None:
+        argv = [
+            "verify_startup_environment_matrix.py",
+            "--component-environment",
+            "alpha",
+        ]
+        output = io.StringIO()
+        with (
+            mock.patch.object(
+                startup_matrix.cli,
+                "_runtime_package",
+                side_effect=RuntimeError("typed component probe failure"),
+            ),
+            mock.patch.object(sys, "argv", argv),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(startup_matrix.main(), 1)
+
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(
+            report["issues"],
+            ["alpha: typed component probe failure"],
+        )
+
+    def test_app_static_gate_does_not_hide_component_probe_report(self) -> None:
+        gate = (APP_DIR.parent / "quwoquan_ops/gate/gate_repo.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("--component-environment gamma || exit 1", gate)
+        self.assertNotIn("--component-environment gamma >/dev/null", gate)
+
     def test_release_bound_matrix_passes_only_with_all_real_case_results(
         self,
     ) -> None:
@@ -40,10 +104,19 @@ class StartupProbeParserContractTest(unittest.TestCase):
             ("gamma", "gamma-local"),
             ("prod", "prod-hosted"),
         )
-        defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
+        runtime = {
+            key: "value" for key in startup_matrix.REQUIRED_RUNTIME_FIELDS
+        }
 
-        def environment_defines(environment: str) -> dict[str, str]:
-            return {**defines, "APP_RUNTIME_ENV": environment}
+        def environment_runtime(environment: str) -> dict[str, str]:
+            if environment == "prod":
+                raise RuntimeError(
+                    "test_live target/environment selection is invalid"
+                )
+            return {**runtime, "appRuntimeEnv": environment}
+
+        def compile_defines(environment: str) -> dict[str, str]:
+            return {}
 
         def handoff(environment: str, target: str | None = None) -> dict[str, str]:
             resolved_target = target or startup_matrix.RUNTIME_TARGETS[environment]
@@ -86,7 +159,10 @@ class StartupProbeParserContractTest(unittest.TestCase):
                             "nativeReceivedSafeTerminalMs": 1210,
                             "watchdogOutcome": "safe_terminal",
                             "canonicalTerminal": "routerShell",
-                            "launchMode": "release_package",
+                            "launchProvenance": "release_package",
+                            "runtimeConfigSupplyMode": (
+                                "external_runtime_package"
+                            ),
                             "runtimeConfigurationState": "complete",
                             "missingDefineKeys": "",
                             "failureCode": "",
@@ -236,13 +312,13 @@ class StartupProbeParserContractTest(unittest.TestCase):
             with (
                 mock.patch.object(
                     startup_matrix.cli,
-                    "_runtime_defines",
-                    side_effect=environment_defines,
+                    "_runtime_package",
+                    side_effect=environment_runtime,
                 ),
                 mock.patch.object(
                     startup_matrix.cli,
-                    "_ios_defines",
-                    side_effect=environment_defines,
+                    "_ios_compile_defines",
+                    side_effect=compile_defines,
                 ),
                 mock.patch.object(startup_matrix.cli, "_launcher_handoff", side_effect=handoff),
                 mock.patch.object(sys, "argv", argv),
@@ -251,10 +327,17 @@ class StartupProbeParserContractTest(unittest.TestCase):
                 self.assertEqual(startup_matrix.main(), 0)
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "passed")
-            self.assertEqual(report["required"], 30)
-            self.assertEqual(report["executed"], 30)
+            self.assertEqual(report["required"], 29)
+            self.assertEqual(report["executed"], 29)
             self.assertEqual(report["skipped"], 0)
             self.assertEqual(report["failed"], 0)
+            prod_component = next(
+                case
+                for case in report["cases"]
+                if case["caseId"] == "component:prod"
+            )
+            self.assertFalse(prod_component["required"])
+            self.assertEqual(prod_component["status"], "expected_fail_closed")
 
     def test_startup_matrix_status_distinguishes_component_and_release_evidence(
         self,
@@ -282,12 +365,235 @@ class StartupProbeParserContractTest(unittest.TestCase):
             {"required": 2, "executed": 1, "skipped": 0, "failed": 0},
         )
 
+    def test_default_component_matrix_requires_non_prod_and_records_prod_boundary(
+        self,
+    ) -> None:
+        digest = "sha256:" + "a" * 64
+        runtime = {
+            key: "value" for key in startup_matrix.REQUIRED_RUNTIME_FIELDS
+        }
+
+        def environment_runtime(environment: str) -> dict[str, str]:
+            if environment == "prod":
+                raise RuntimeError(
+                    "test_live target/environment selection is invalid"
+                )
+            return {**runtime, "appRuntimeEnv": environment}
+
+        def compile_defines(environment: str) -> dict[str, str]:
+            return {}
+
+        def handoff(environment: str, target: str | None = None) -> dict[str, str]:
+            self.assertNotEqual(environment, "prod")
+            return {
+                "target": target or startup_matrix.RUNTIME_TARGETS[environment],
+                "entrypoint": "lib/main_prod.dart",
+                "dartDefinesDigest": digest,
+                "runtimeConfigDigest": digest,
+                "effectiveLaunchManifestDigest": digest,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / "report.json"
+            argv = [
+                "verify_startup_environment_matrix.py",
+                "--report",
+                str(report_path),
+            ]
+            with (
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "_runtime_package",
+                    side_effect=environment_runtime,
+                ),
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "_ios_compile_defines",
+                    side_effect=compile_defines,
+                ),
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "_launcher_handoff",
+                    side_effect=handoff,
+                ),
+                mock.patch.object(sys, "argv", argv),
+                mock.patch("builtins.print"),
+            ):
+                self.assertEqual(startup_matrix.main(), 0)
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                set(report["packages"]),
+                {"alpha", "beta", "gamma", "prod"},
+            )
+            self.assertEqual(report["status"], "component_ready")
+            components = {
+                case["environment"]: case
+                for case in report["cases"]
+                if case["kind"] == "component_readiness"
+            }
+            for environment in ("alpha", "beta", "gamma"):
+                self.assertTrue(components[environment]["required"])
+                self.assertEqual(
+                    components[environment]["status"],
+                    "component_ready",
+                )
+            self.assertFalse(components["prod"]["required"])
+            self.assertEqual(
+                components["prod"]["status"],
+                "expected_fail_closed",
+            )
+            self.assertFalse(components["prod"]["componentEligible"])
+            self.assertFalse(components["prod"]["promotionEligible"])
+            self.assertEqual(
+                components["prod"]["reason"],
+                "test_live target/environment selection is invalid",
+            )
+            self.assertEqual(report["packages"]["prod"]["dartDefinesDigest"], "")
+            self.assertEqual(
+                report["packages"]["prod"]["effectiveLaunchManifestDigest"],
+                "",
+            )
+
+    def test_prod_component_boundary_fails_if_test_live_is_accepted(self) -> None:
+        runtime = {
+            **{key: "value" for key in startup_matrix.REQUIRED_RUNTIME_FIELDS},
+            "appRuntimeEnv": "prod",
+        }
+        argv = [
+            "verify_startup_environment_matrix.py",
+            "--component-environment",
+            "prod",
+        ]
+        output = io.StringIO()
+        with (
+            mock.patch.object(
+                startup_matrix.cli,
+                "_runtime_package",
+                return_value=runtime,
+            ),
+            mock.patch.object(sys, "argv", argv),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(startup_matrix.main(), 1)
+
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["status"], "failed")
+        prod_component = report["cases"][0]
+        self.assertTrue(prod_component["required"])
+        self.assertEqual(prod_component["status"], "failed")
+        self.assertEqual(
+            prod_component["issues"],
+            ["prod: test_live was unexpectedly accepted"],
+        )
+
+    def test_release_gate_keeps_missing_prod_physical_evidence_blocking(self) -> None:
+        digest = "sha256:" + "f" * 64
+        runtime = {
+            key: "value" for key in startup_matrix.REQUIRED_RUNTIME_FIELDS
+        }
+
+        def environment_runtime(environment: str) -> dict[str, str]:
+            if environment == "prod":
+                raise RuntimeError(
+                    "test_live target/environment selection is invalid"
+                )
+            return {**runtime, "appRuntimeEnv": environment}
+
+        def compile_defines(environment: str) -> dict[str, str]:
+            return {}
+
+        def handoff(environment: str, target: str | None = None) -> dict[str, str]:
+            return {
+                "target": target or startup_matrix.RUNTIME_TARGETS[environment],
+                "entrypoint": "lib/main_prod.dart",
+                "dartDefinesDigest": digest,
+                "runtimeConfigDigest": digest,
+                "effectiveLaunchManifestDigest": digest,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / "report.json"
+            argv = [
+                "verify_startup_environment_matrix.py",
+                "--evidence-root",
+                str(Path(directory) / "evidence"),
+                "--require-runtime-evidence",
+                "--require-readback",
+                "--require-observability",
+                "--require-physical-release",
+                "--baseline-id",
+                "baseline-001",
+                "--release-id",
+                "release-001",
+                "--release-digest",
+                digest,
+                "--report",
+                str(report_path),
+            ]
+            with (
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "_runtime_package",
+                    side_effect=environment_runtime,
+                ),
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "_ios_compile_defines",
+                    side_effect=compile_defines,
+                ),
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "_launcher_handoff",
+                    side_effect=handoff,
+                ),
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "RUNTIME_CASES",
+                    (("prod", "prod-hosted"),),
+                ),
+                mock.patch.object(sys, "argv", argv),
+                mock.patch("builtins.print"),
+            ):
+                self.assertEqual(startup_matrix.main(), 2)
+
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "gate_block")
+            prod_component = next(
+                case
+                for case in report["cases"]
+                if case["caseId"] == "component:prod"
+            )
+            self.assertFalse(prod_component["required"])
+            self.assertEqual(prod_component["status"], "expected_fail_closed")
+            blocked_prod_cases = {
+                case["caseId"]
+                for case in report["cases"]
+                if case["required"] and case["status"] == "gate_block"
+            }
+            self.assertIn(
+                "startup:prod-hosted/android-physical",
+                blocked_prod_cases,
+            )
+            self.assertIn(
+                "startup:prod-hosted/ios-physical",
+                blocked_prod_cases,
+            )
+
     def test_partial_release_evidence_request_is_gate_blocked(self) -> None:
         digest = "sha256:" + "e" * 64
-        defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
+        runtime = {
+            key: "value" for key in startup_matrix.REQUIRED_RUNTIME_FIELDS
+        }
 
-        def environment_defines(environment: str) -> dict[str, str]:
-            return {**defines, "APP_RUNTIME_ENV": environment}
+        def environment_runtime(environment: str) -> dict[str, str]:
+            if environment == "prod":
+                raise RuntimeError(
+                    "test_live target/environment selection is invalid"
+                )
+            return {**runtime, "appRuntimeEnv": environment}
+
+        def compile_defines(environment: str) -> dict[str, str]:
+            return {}
 
         def handoff(environment: str, target: str | None = None) -> dict[str, str]:
             return {
@@ -318,13 +624,13 @@ class StartupProbeParserContractTest(unittest.TestCase):
             with (
                 mock.patch.object(
                     startup_matrix.cli,
-                    "_runtime_defines",
-                    side_effect=environment_defines,
+                    "_runtime_package",
+                    side_effect=environment_runtime,
                 ),
                 mock.patch.object(
                     startup_matrix.cli,
-                    "_ios_defines",
-                    side_effect=environment_defines,
+                    "_ios_compile_defines",
+                    side_effect=compile_defines,
                 ),
                 mock.patch.object(
                     startup_matrix.cli,

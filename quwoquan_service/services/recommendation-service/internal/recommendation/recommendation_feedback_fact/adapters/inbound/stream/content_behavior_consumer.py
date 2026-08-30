@@ -217,6 +217,7 @@ class ContentBehaviorConsumer:
                     source_event_id=event.event_id,
                     exposure_id=exposure.exposure_id,
                     feed_request_id=event.feed_request_id,
+                    experiment_bucket=exposure.experiment_bucket,
                     subject_id=event.subject_id,
                     persona_id=(str(event.payload.get("personaId") or "").strip() or None),
                     target_type=(str(event.payload.get("contentType") or "").strip() or "post"),

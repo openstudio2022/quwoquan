@@ -338,7 +338,7 @@ def test_acquisition_can_run_article_carrier_without_waiting_for_homepage(
     assert result["counts"] == {"homepage": 0, "article": 1}
 
 
-def test_acquisition_uses_bounded_concurrency_and_replaces_rejected_candidates(
+def test_acquisition_starts_exact_pending_workload_and_isolates_rejections(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from content.source.research import homepage_article_source_ready_acquisition as mod
@@ -372,8 +372,8 @@ def test_acquisition_uses_bounded_concurrency_and_replaces_rejected_candidates(
             maximum_active = max(maximum_active, active)
         try:
             time.sleep(0.02)
-            if row["candidateName"] == "首页实体0":
-                raise MediaWikiSourceReadyRejected("first candidate unavailable")
+            if row["candidateName"] == "首页实体2":
+                raise RuntimeError("last candidate crashed")
             return _fake_acquired(carrier, str(row["candidateName"]))
         finally:
             with lock:
@@ -394,16 +394,18 @@ def test_acquisition_uses_bounded_concurrency_and_replaces_rejected_candidates(
         seed_selection=_seed_selection(
             tmp_path / "seed-selection.json", rows, homepage_count=3
         ),
-        acquisition_concurrency=2,
     )
 
-    assert maximum_active == 2
+    assert maximum_active == len(rows)
     assert result["counts"] == {"homepage": 2, "article": 0}
     report = json.loads(
         (Path(result["evidenceRoot"]) / result["reportRef"]).read_text()
     )
     assert report["counts"]["attempted"] == 3
     assert report["counts"]["rejected"] == 1
+    assert report["rejections"][0]["reason"].startswith(
+        "DATA.SOURCE.ACQUISITION_FAILED: RuntimeError:"
+    )
 
 
 def test_acquisition_cli_freezes_exact_identity_and_counts(
@@ -468,7 +470,6 @@ def test_acquisition_cli_freezes_exact_identity_and_counts(
         "homepage_count": 180,
         "article_count": 180,
         "seed_selection": tmp_path / "seed-selection.json",
-        "acquisition_concurrency": 1,
     }
     assert json.loads(capsys.readouterr().out)["counts"] == {
         "homepage": 180,

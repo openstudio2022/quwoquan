@@ -47,15 +47,41 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         deadline_epoch=int(time.time()) + 8,
     )
     result = _stackctl.command_health(health_args)
+    currentness_requested = getattr(args, "currentness", False)
     candidate_workspace = (
         _stackctl._candidate_workspace_report(args.target, purpose="currentness")
-        if getattr(args, "currentness", False)
+        if currentness_requested
         else _stackctl._candidate_workspace_report(args.target)
     )
+    if currentness_requested and candidate_workspace.get("status") != "current":
+        status = str(candidate_workspace.get("status") or "unavailable")
+        blocker_class = str(
+            candidate_workspace.get("firstBlockerClass") or "candidate_currentness"
+        )
+        detail = str(
+            (candidate_workspace.get("current") or {}).get("detail")
+            or next(iter(candidate_workspace.get("warnings") or []), "")
+            or next(iter(candidate_workspace.get("issues") or []), "")
+            or "candidate currentness was not proven"
+        )
+        currentness_failure = (
+            f"candidate currentness/{blocker_class} failed: {detail}"
+        )
+        details = list(result.get("details") or [])
+        if currentness_failure not in details:
+            details.append(currentness_failure)
+        result.update(
+            {
+                "exitCode": 1,
+                "summary": f"stackctl status {args.target}: candidate {status}",
+                "details": details,
+            }
+        )
     report_path = Path(health_args.report_dir) / "report.json"
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
         if isinstance(report, dict):
+            report["command"] = "status"
             report["candidateWorkspace"] = candidate_workspace
             _stackctl.write_json(report_path, report)
     except (OSError, json.JSONDecodeError):

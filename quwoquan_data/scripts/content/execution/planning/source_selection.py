@@ -12,7 +12,6 @@ from core.data_issue import (
     DataIssueStage,
     data_issue,
 )
-from core.runtime_policy import active_runtime_policy
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +55,7 @@ class QualifiedTargetSource(Protocol):
     def to_dict(self) -> dict[str, str]: ...
 
 
-def _rejection_summary(rows: list[dict[str, object]]) -> str:
+def rejection_summary(rows: list[dict[str, object]]) -> str:
     """Render typed qualification rejections for a bounded GATE_BLOCK receipt."""
 
     counts = Counter(
@@ -114,6 +113,35 @@ def _restrict_to_requested_targets(
     return [matched_rows[name] for name in requested_target_names]
 
 
+def restrict_to_qualification_candidates(
+    candidate_rows: list[dict[str, Any]],
+    qualification_candidate_names: tuple[str, ...],
+) -> tuple[list[dict[str, Any]], tuple[str, ...]]:
+    """Intersect catalog rows with an explicit upstream supply identity set."""
+    requested = tuple(
+        str(name).strip() for name in qualification_candidate_names if str(name).strip()
+    )
+    if len(requested) != len(qualification_candidate_names):
+        raise ValueError("qualification candidate names must be non-empty")
+    if len(requested) != len(set(requested)):
+        raise ValueError("qualification candidate names must not contain duplicates")
+    requested_set = set(requested)
+    matched_names: set[str] = set()
+    scoped_rows: list[dict[str, Any]] = []
+    for row in candidate_rows:
+        row_names = {
+            str(row.get("name") or "").strip(),
+            str(row.get("sourceName") or "").strip(),
+            *(str(alias).strip() for alias in row.get("aliases") or []),
+        }
+        intersection = requested_set & row_names
+        if not intersection:
+            continue
+        scoped_rows.append(row)
+        matched_names.update(intersection)
+    return scoped_rows, tuple(name for name in requested if name not in matched_names)
+
+
 def qualify_source_ready_targets(
     candidate_rows: list[dict[str, Any]],
     *,
@@ -124,6 +152,8 @@ def qualify_source_ready_targets(
     target_names: tuple[str, ...],
     qualification_source_key: str = "qualifiedHomepageSource",
     persist_qualified_source: bool = True,
+    qualification_candidate_names: tuple[str, ...] | None = None,
+    qualification_supply_count: int | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, object], tuple[str, ...]]:
     """Freeze the qualified candidate pool from the complete ordered reference set.
 
@@ -139,7 +169,11 @@ def qualify_source_ready_targets(
     # video quota=10、count=18）从大名单中挑 quota 个交付，名单大于该载体候选池
     # 是共享名单的预期形态。唯一的硬下限是名单不得小于交付承诺（与
     # request.py / request_envelope_build.py 的同名校验保持同一语义）。
-    if requested_target_names and len(requested_target_names) < quota:
+    if (
+        requested_target_names
+        and qualification_supply_count is None
+        and len(requested_target_names) < quota
+    ):
         raise ValueError(
             "explicit target count must reach the approved --quota"
         )
@@ -147,39 +181,59 @@ def qualify_source_ready_targets(
         scoped_rows = _restrict_to_requested_targets(candidate_rows, requested_target_names)
     else:
         scoped_rows = candidate_rows
+    unmatched_qualification_names: tuple[str, ...] = ()
+    if qualification_candidate_names is not None:
+        scoped_rows, unmatched_qualification_names = restrict_to_qualification_candidates(
+            scoped_rows,
+            qualification_candidate_names,
+        )
+        # ``limit`` is the request's semantic candidate-pool size. The external
+        # input set may be larger, but work outside this request does not belong
+        # to this execution and must not create threads or file activity here.
+        scoped_rows = scoped_rows[:limit]
     qualification_rows: list[dict[str, object]] = []
     accepted: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
-    worker_count = max(1, active_runtime_policy().research_workers)
     # Homepage must keep only authority-qualified rows. Video (and other
     # non-persisted qualification lanes) still require ``quota`` accepted rows,
     # then fill the oversampled ``limit`` pool with rejected/unevaluated leaves
     # so download admission and M100→M1000 promotion see a full candidate set.
-    stop_after_quota = not persist_qualified_source
-    with ThreadPoolExecutor(max_workers=worker_count) as executor:
-        for start in range(0, len(scoped_rows), worker_count):
-            if len(accepted) >= limit:
-                break
-            if stop_after_quota and len(accepted) >= quota:
-                break
-            batch = scoped_rows[start : start + worker_count]
-            futures = [executor.submit(source_qualifier, _candidate_from_row(row)) for row in batch]
-            for row, future in zip(batch, futures, strict=True):
+    if scoped_rows:
+        with ThreadPoolExecutor(max_workers=len(scoped_rows)) as executor:
+            futures = [
+                executor.submit(source_qualifier, _candidate_from_row(row))
+                for row in scoped_rows
+            ]
+            for row, future in zip(scoped_rows, futures, strict=True):
                 try:
                     verdict = future.result()
-                except DataIssueError:
-                    raise
-                except Exception as exc:  # noqa: BLE001 - converted at the boundary.
-                    raise DataIssueError(
-                        (
-                            data_issue(
-                                DataIssueCode.INTERNAL_UNEXPECTED,
-                                stage=DataIssueStage.SOURCE_GATE,
-                                ref=str(row["name"]),
-                                message="source qualification adapter raised unexpectedly",
-                            ),
-                        )
-                    ) from exc
+                except DataIssueError as exc:
+                    issue_code = (
+                        exc.issues[0].code
+                        if exc.issues
+                        else DataIssueCode.INTERNAL_UNEXPECTED
+                    )
+                    qualification_rows.append(
+                        {
+                            "name": str(row["name"]),
+                            "accepted": False,
+                            qualification_source_key: None,
+                            "rejectionCode": issue_code.value,
+                        }
+                    )
+                    rejected.append(dict(row))
+                    continue
+                except Exception:  # noqa: BLE001 - isolated as one typed rejection.
+                    qualification_rows.append(
+                        {
+                            "name": str(row["name"]),
+                            "accepted": False,
+                            qualification_source_key: None,
+                            "rejectionCode": DataIssueCode.INTERNAL_UNEXPECTED.value,
+                        }
+                    )
+                    rejected.append(dict(row))
+                    continue
                 qualification_rows.append(
                     {
                         "name": str(row["name"]),
@@ -201,15 +255,21 @@ def qualify_source_ready_targets(
                     accepted.append(selected_row)
                 else:
                     rejected.append(dict(row))
-                if len(accepted) >= limit:
-                    break
-                if stop_after_quota and len(accepted) >= quota:
-                    break
-            if len(accepted) >= limit:
-                break
-            if stop_after_quota and len(accepted) >= quota:
-                break
-    supply_shortfall = max(0, quota - len(accepted))
+    if qualification_supply_count is None:
+        available_supply_count = len(accepted)
+    else:
+        if (
+            isinstance(qualification_supply_count, bool)
+            or not isinstance(qualification_supply_count, int)
+            or qualification_supply_count < 0
+        ):
+            raise ValueError("qualification supply count must be a non-negative integer")
+        if qualification_supply_count < len(accepted):
+            raise ValueError(
+                "qualification supply count cannot be smaller than accepted targets"
+            )
+        available_supply_count = qualification_supply_count
+    supply_shortfall = max(0, quota - available_supply_count)
     # persist_qualified_source（homepage）把 qualification 当作交付承诺的准入门，
     # 不足配额必须 fail-closed。非 persist lane（video 等）的真实供给由冻结的外部
     # 输入 receipt 决定，qualification 只是 precheck；与 download 阶段
@@ -229,7 +289,7 @@ def qualify_source_ready_targets(
                         "acceptedCount": len(accepted),
                         "evaluatedCount": len(qualification_rows),
                         "candidateCount": len(scoped_rows),
-                        "rejectionCounts": _rejection_summary(qualification_rows),
+                        "rejectionCounts": rejection_summary(qualification_rows),
                     },
                 ),
             )
@@ -239,7 +299,10 @@ def qualify_source_ready_targets(
     # qualifiedHomepageSource（spec_contract fail-closed）；用 rejected 行凑满
     # oversample 池会把不合格实体写进交付承诺。oversample 填充只属于非
     # persist lane（download admission 会对填充行重新验证）。
-    if len(selected) < limit and not persist_qualified_source:
+    allow_oversample_fill = (
+        not persist_qualified_source and qualification_candidate_names is None
+    )
+    if len(selected) < limit and allow_oversample_fill:
         seen = {str(row.get("name") or "") for row in selected}
         for row in rejected:
             name = str(row.get("name") or "")
@@ -249,7 +312,7 @@ def qualify_source_ready_targets(
             seen.add(name)
             if len(selected) >= limit:
                 break
-        if len(selected) < limit and not persist_qualified_source:
+        if len(selected) < limit and allow_oversample_fill:
             evaluated_names = {
                 str(row.get("name") or "")
                 for row in qualification_rows
@@ -281,7 +344,14 @@ def qualify_source_ready_targets(
             "candidates": qualification_rows,
             "oversampleFilled": len(selected) - len(accepted[:limit]),
             "approvedQuota": quota,
+            "availableSupplyCount": available_supply_count,
             "supplyShortfallCount": supply_shortfall,
+            "qualificationCandidateCount": (
+                None
+                if qualification_candidate_names is None
+                else len(qualification_candidate_names)
+            ),
+            "unmatchedQualificationNames": list(unmatched_qualification_names),
         },
         requested_target_names,
     )
@@ -292,4 +362,6 @@ __all__ = [
     "TargetSourceQualification",
     "TargetSourceQualifier",
     "qualify_source_ready_targets",
+    "rejection_summary",
+    "restrict_to_qualification_candidates",
 ]

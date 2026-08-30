@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
@@ -13,6 +14,8 @@ import 'package:quwoquan_app/design_system/surfaces/app_modal_surface.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart'
     show ConversationAssetView;
 
@@ -65,7 +68,7 @@ class _ConversationAssetsSheetState
     extends ConsumerState<ConversationAssetsSheet> {
   List<ConversationAssetView> _items = const <ConversationAssetView>[];
   bool _loading = true;
-  bool _failed = false;
+  UiErrorSemantic? _failureSemantic;
 
   @override
   void initState() {
@@ -85,13 +88,24 @@ class _ConversationAssetsSheetState
       setState(() {
         _items = page.items;
         _loading = false;
-        _failed = false;
+        _failureSemantic = null;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
+      final failureSemantic = ensureRetryUiErrorSemantic(
+        runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.sectionLoad,
+          scope: UiErrorScope.section,
+          presentation: UiErrorPresentation.formInlineCard,
+          sourceSurfaceId: 'conversation-assets-sheet',
+        ),
+        retryLabel: ChatText.chatRetrySendMessage,
+      );
       setState(() {
         _loading = false;
-        _failed = true;
+        _failureSemantic = failureSemantic;
       });
     }
   }
@@ -101,14 +115,12 @@ class _ConversationAssetsSheetState
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final primary = SettingsSemanticConstants.conversationSheetPrimaryLabelColor(
-      isDark,
-    );
+    final primary =
+        SettingsSemanticConstants.conversationSheetPrimaryLabelColor(isDark);
     return AppBottomModalSurface(
       onDismiss: () => Navigator.of(context).pop(),
-      backgroundColor: SettingsSemanticConstants.conversationSheetPanelBackground(
-        isDark,
-      ),
+      backgroundColor:
+          SettingsSemanticConstants.conversationSheetPanelBackground(isDark),
       contentPadding: EdgeInsets.all(
         SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
       ),
@@ -139,24 +151,25 @@ class _ConversationAssetsSheetState
     if (_loading) {
       return const AppSkeletonListRows(rowCount: 3);
     }
-    if (_failed) {
-      return AppEmptyState(
-        icon: CupertinoIcons.exclamationmark_circle,
-        title: ChatText.chatMediaUnavailable,
-        actionLabel: ChatText.chatRetrySendMessage,
-        onAction: () {
-          setState(() => _loading = true);
-          unawaited(_load());
+    final failureSemantic = _failureSemantic;
+    if (failureSemantic != null) {
+      return AppFormErrorCard(
+        key: const ValueKey<String>('conversation_assets_retry'),
+        semantic: failureSemantic,
+        density: AppFormErrorCardDensity.compact,
+        onAction: (_) async {
+          setState(() {
+            _loading = true;
+            _failureSemantic = null;
+          });
+          await _load();
         },
-        actionKey: const ValueKey<String>('conversation_assets_retry'),
       );
     }
     if (_items.isEmpty) {
       return AppEmptyState(
         icon: _isAlbum ? CupertinoIcons.photo_on_rectangle : CupertinoIcons.doc,
-        title: _isAlbum
-            ? ChatText.groupAlbumEmpty
-            : ChatText.groupFilesEmpty,
+        title: _isAlbum ? ChatText.groupAlbumEmpty : ChatText.groupFilesEmpty,
       );
     }
     if (_isAlbum) {

@@ -50,6 +50,15 @@ def _timestamp(value: dt.datetime) -> str:
 def _full_request(*, verified_at: str) -> dict[str, Any]:
     return {
         "schema": hosted_release_ledger.REQUEST_SCHEMA,
+                "environmentAcceptanceRef": "prod/fact.json",
+                "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
+                "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
+                "gammaPredecessorFactId": "sha256:" + ("8" * 64),
+                "gammaPredecessorDigest": "sha256:" + ("9" * 64),
+                "engineeringEligibilityRef": "prod/engineering.json",
+                "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
+                "durableApprovalRef": "prod/approval.json",
+                "durableApprovalDigest": "sha256:" + ("e" * 64),
         "service": "prod-stack",
         "fromCandidateDigest": DIGEST_A,
         "toCandidateDigest": DIGEST_B,
@@ -146,11 +155,13 @@ def _fixture(
             "gitSha": SOURCE_SHA,
             "treeDigest": TREE_DIGEST,
         },
-        "configurationPackages": {
+        "environmentArtifacts": {
             "prod": {
-                "content-service": {
-                    "path": "packages/prod/content.yaml",
-                    "digest": DIGEST_A,
+                "configurationPackages": {
+                    "content-service": {
+                        "path": "packages/prod/content.yaml",
+                        "digest": DIGEST_A,
+                    }
                 }
             }
         },
@@ -177,7 +188,7 @@ def _fixture(
         "sourceTreeDigest": TREE_DIGEST,
         "rolloutConfigDigest": DIGEST_A,
         "configGraphDigest": _canonical_digest(
-            manifest["configurationPackages"]
+            manifest["environmentArtifacts"]["prod"]["configurationPackages"]
         ),
         "contractGraphDigest": DIGEST_D,
         "requiredSoakSeconds": 86400,
@@ -285,6 +296,7 @@ def test_trusted_hosted_soak_readback_returns_derived_claims(tmp_path: Path) -> 
 def test_producer_projects_raw_observations_without_secret_material(
     tmp_path: Path,
 ) -> None:
+    # spec_ref: specs/feature-tree/runtime/system-topology-and-networking/spec.md#sit-002.t2
     soak_path, rollout, manifest = _fixture(tmp_path)
     soak = json.loads(soak_path.read_text(encoding="utf-8"))["receipt"]
 

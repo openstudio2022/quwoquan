@@ -22,15 +22,18 @@ class SkillSubscriptionDeliveryStateWire {
   final String lastErrorCode;
 
   Map<String, Object?> toWire() => <String, Object?>{
-        'pendingDeliveryId': pendingDeliveryId,
-        'lastAttemptAt': lastAttemptAt,
-        'lastDeliveredAt': lastDeliveredAt,
-        'nextAttemptAt': nextAttemptAt,
-        'consecutiveFailures': consecutiveFailures,
-        'lastErrorCode': lastErrorCode,
-      };
+    'pendingDeliveryId': pendingDeliveryId,
+    'lastAttemptAt': lastAttemptAt,
+    'lastDeliveredAt': lastDeliveredAt,
+    'nextAttemptAt': nextAttemptAt,
+    'consecutiveFailures': consecutiveFailures,
+    'lastErrorCode': lastErrorCode,
+  };
 
-  factory SkillSubscriptionDeliveryStateWire.fromWire(Map<String, Object?> map, [String path = "SkillSubscriptionDeliveryStateWire"]) {
+  factory SkillSubscriptionDeliveryStateWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "SkillSubscriptionDeliveryStateWire",
+  ]) {
     const allowedFields = <String>{
       'pendingDeliveryId',
       'lastAttemptAt',
@@ -43,25 +46,51 @@ class SkillSubscriptionDeliveryStateWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('$path: SkillSubscriptionDeliveryStateWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        '$path: SkillSubscriptionDeliveryStateWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (map.containsKey('pendingDeliveryId') && map['pendingDeliveryId'] != null && (map['pendingDeliveryId'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionDeliveryStateWire field pendingDeliveryId has an invalid wire value');
+    if (map.containsKey('pendingDeliveryId') &&
+        map['pendingDeliveryId'] != null &&
+        (map['pendingDeliveryId'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionDeliveryStateWire field pendingDeliveryId has an invalid wire value',
+      );
     }
-    if (map.containsKey('lastAttemptAt') && map['lastAttemptAt'] != null && (map['lastAttemptAt'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionDeliveryStateWire field lastAttemptAt has an invalid wire value');
+    if (map.containsKey('lastAttemptAt') &&
+        map['lastAttemptAt'] != null &&
+        (map['lastAttemptAt'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionDeliveryStateWire field lastAttemptAt has an invalid wire value',
+      );
     }
-    if (map.containsKey('lastDeliveredAt') && map['lastDeliveredAt'] != null && (map['lastDeliveredAt'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionDeliveryStateWire field lastDeliveredAt has an invalid wire value');
+    if (map.containsKey('lastDeliveredAt') &&
+        map['lastDeliveredAt'] != null &&
+        (map['lastDeliveredAt'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionDeliveryStateWire field lastDeliveredAt has an invalid wire value',
+      );
     }
-    if (map.containsKey('nextAttemptAt') && map['nextAttemptAt'] != null && (map['nextAttemptAt'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionDeliveryStateWire field nextAttemptAt has an invalid wire value');
+    if (map.containsKey('nextAttemptAt') &&
+        map['nextAttemptAt'] != null &&
+        (map['nextAttemptAt'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionDeliveryStateWire field nextAttemptAt has an invalid wire value',
+      );
     }
-    if (map.containsKey('consecutiveFailures') && map['consecutiveFailures'] != null && (map['consecutiveFailures'] is! num)) {
-      throw FormatException('$path: SkillSubscriptionDeliveryStateWire field consecutiveFailures has an invalid wire value');
+    if (map.containsKey('consecutiveFailures') &&
+        map['consecutiveFailures'] != null &&
+        (map['consecutiveFailures'] is! num)) {
+      throw FormatException(
+        '$path: SkillSubscriptionDeliveryStateWire field consecutiveFailures has an invalid wire value',
+      );
     }
-    if (map.containsKey('lastErrorCode') && map['lastErrorCode'] != null && (map['lastErrorCode'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionDeliveryStateWire field lastErrorCode has an invalid wire value');
+    if (map.containsKey('lastErrorCode') &&
+        map['lastErrorCode'] != null &&
+        (map['lastErrorCode'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionDeliveryStateWire field lastErrorCode has an invalid wire value',
+      );
     }
     return SkillSubscriptionDeliveryStateWire(
       pendingDeliveryId: (map['pendingDeliveryId'] as String?)?.trim() ?? "",
@@ -93,26 +122,37 @@ class SkillSubscriptionSearchQueryPlanWire {
   final List<String> queries;
 
   Map<String, Object?> toWire() => <String, Object?>{
-        'rawText': rawText,
-        'queries': queries,
-      };
+    'rawText': rawText,
+    'queries': queries,
+  };
 
-  factory SkillSubscriptionSearchQueryPlanWire.fromWire(Map<String, Object?> map, [String path = "SkillSubscriptionSearchQueryPlanWire"]) {
-    const allowedFields = <String>{
-      'rawText',
-      'queries',
-    };
+  factory SkillSubscriptionSearchQueryPlanWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "SkillSubscriptionSearchQueryPlanWire",
+  ]) {
+    const allowedFields = <String>{'rawText', 'queries'};
     final unknownFields = map.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('$path: SkillSubscriptionSearchQueryPlanWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        '$path: SkillSubscriptionSearchQueryPlanWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (map.containsKey('rawText') && map['rawText'] != null && (map['rawText'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionSearchQueryPlanWire field rawText has an invalid wire value');
+    if (map.containsKey('rawText') &&
+        map['rawText'] != null &&
+        (map['rawText'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionSearchQueryPlanWire field rawText has an invalid wire value',
+      );
     }
-    if (map.containsKey('queries') && map['queries'] != null && (map['queries'] is! List || (map['queries'] as List).any((item) => item is! String))) {
-      throw FormatException('$path: SkillSubscriptionSearchQueryPlanWire field queries has an invalid wire value');
+    if (map.containsKey('queries') &&
+        map['queries'] != null &&
+        (map['queries'] is! List ||
+            (map['queries'] as List).any((item) => item is! String))) {
+      throw FormatException(
+        '$path: SkillSubscriptionSearchQueryPlanWire field queries has an invalid wire value',
+      );
     }
     return SkillSubscriptionSearchQueryPlanWire(
       rawText: (map['rawText'] as String?)?.trim() ?? "",
@@ -122,7 +162,10 @@ class SkillSubscriptionSearchQueryPlanWire {
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }
@@ -149,14 +192,17 @@ class SkillSubscriptionDestinationWire {
   final String quietHoursPolicy;
 
   Map<String, Object?> toWire() => <String, Object?>{
-        'destinationType': destinationType.wireName,
-        'destinationId': destinationId,
-        'maxPerDay': maxPerDay,
-        'cooldownMinutes': cooldownMinutes,
-        'quietHoursPolicy': quietHoursPolicy,
-      };
+    'destinationType': destinationType.wireName,
+    'destinationId': destinationId,
+    'maxPerDay': maxPerDay,
+    'cooldownMinutes': cooldownMinutes,
+    'quietHoursPolicy': quietHoursPolicy,
+  };
 
-  factory SkillSubscriptionDestinationWire.fromWire(Map<String, Object?> map, [String path = "SkillSubscriptionDestinationWire"]) {
+  factory SkillSubscriptionDestinationWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "SkillSubscriptionDestinationWire",
+  ]) {
     const allowedFields = <String>{
       'destinationType',
       'destinationId',
@@ -168,29 +214,55 @@ class SkillSubscriptionDestinationWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('$path: SkillSubscriptionDestinationWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        '$path: SkillSubscriptionDestinationWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (map.containsKey('destinationType') && map['destinationType'] != null && (map['destinationType'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionDestinationWire field destinationType has an invalid wire value');
+    if (map.containsKey('destinationType') &&
+        map['destinationType'] != null &&
+        (map['destinationType'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionDestinationWire field destinationType has an invalid wire value',
+      );
     }
-    if (map.containsKey('destinationId') && map['destinationId'] != null && (map['destinationId'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionDestinationWire field destinationId has an invalid wire value');
+    if (map.containsKey('destinationId') &&
+        map['destinationId'] != null &&
+        (map['destinationId'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionDestinationWire field destinationId has an invalid wire value',
+      );
     }
-    if (map.containsKey('maxPerDay') && map['maxPerDay'] != null && (map['maxPerDay'] is! num)) {
-      throw FormatException('$path: SkillSubscriptionDestinationWire field maxPerDay has an invalid wire value');
+    if (map.containsKey('maxPerDay') &&
+        map['maxPerDay'] != null &&
+        (map['maxPerDay'] is! num)) {
+      throw FormatException(
+        '$path: SkillSubscriptionDestinationWire field maxPerDay has an invalid wire value',
+      );
     }
-    if (map.containsKey('cooldownMinutes') && map['cooldownMinutes'] != null && (map['cooldownMinutes'] is! num)) {
-      throw FormatException('$path: SkillSubscriptionDestinationWire field cooldownMinutes has an invalid wire value');
+    if (map.containsKey('cooldownMinutes') &&
+        map['cooldownMinutes'] != null &&
+        (map['cooldownMinutes'] is! num)) {
+      throw FormatException(
+        '$path: SkillSubscriptionDestinationWire field cooldownMinutes has an invalid wire value',
+      );
     }
-    if (map.containsKey('quietHoursPolicy') && map['quietHoursPolicy'] != null && (map['quietHoursPolicy'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionDestinationWire field quietHoursPolicy has an invalid wire value');
+    if (map.containsKey('quietHoursPolicy') &&
+        map['quietHoursPolicy'] != null &&
+        (map['quietHoursPolicy'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionDestinationWire field quietHoursPolicy has an invalid wire value',
+      );
     }
     return SkillSubscriptionDestinationWire(
-      destinationType: parseSkillSubscriptionDestinationTypeStrict((map['destinationType'] as String?)?.trim() ?? "user"),
+      destinationType: parseSkillSubscriptionDestinationTypeStrict(
+        (map['destinationType'] as String?)?.trim() ?? "user",
+      ),
       destinationId: (map['destinationId'] as String?)?.trim() ?? "",
       maxPerDay: (map['maxPerDay'] as num?)?.toInt() ?? 1,
       cooldownMinutes: (map['cooldownMinutes'] as num?)?.toInt() ?? 60,
-      quietHoursPolicy: (map['quietHoursPolicy'] as String?)?.trim() ?? "inherit_user_setting",
+      quietHoursPolicy:
+          (map['quietHoursPolicy'] as String?)?.trim() ??
+          "inherit_user_setting",
     );
   }
 }
@@ -213,26 +285,36 @@ class SkillSubscriptionOwnerWire {
   final String ownerId;
 
   Map<String, Object?> toWire() => <String, Object?>{
-        'ownerType': ownerType,
-        'ownerId': ownerId,
-      };
+    'ownerType': ownerType,
+    'ownerId': ownerId,
+  };
 
-  factory SkillSubscriptionOwnerWire.fromWire(Map<String, Object?> map, [String path = "SkillSubscriptionOwnerWire"]) {
-    const allowedFields = <String>{
-      'ownerType',
-      'ownerId',
-    };
+  factory SkillSubscriptionOwnerWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "SkillSubscriptionOwnerWire",
+  ]) {
+    const allowedFields = <String>{'ownerType', 'ownerId'};
     final unknownFields = map.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('$path: SkillSubscriptionOwnerWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        '$path: SkillSubscriptionOwnerWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (map.containsKey('ownerType') && map['ownerType'] != null && (map['ownerType'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionOwnerWire field ownerType has an invalid wire value');
+    if (map.containsKey('ownerType') &&
+        map['ownerType'] != null &&
+        (map['ownerType'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionOwnerWire field ownerType has an invalid wire value',
+      );
     }
-    if (map.containsKey('ownerId') && map['ownerId'] != null && (map['ownerId'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionOwnerWire field ownerId has an invalid wire value');
+    if (map.containsKey('ownerId') &&
+        map['ownerId'] != null &&
+        (map['ownerId'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionOwnerWire field ownerId has an invalid wire value',
+      );
     }
     return SkillSubscriptionOwnerWire(
       ownerType: (map['ownerType'] as String?)?.trim() ?? "user",
@@ -258,31 +340,44 @@ class SkillSubscriptionTriggerWire {
   final String timezone;
 
   Map<String, Object?> toWire() => <String, Object?>{
-        'type': type,
-        'cron': cron,
-        'timezone': timezone,
-      };
+    'type': type,
+    'cron': cron,
+    'timezone': timezone,
+  };
 
-  factory SkillSubscriptionTriggerWire.fromWire(Map<String, Object?> map, [String path = "SkillSubscriptionTriggerWire"]) {
-    const allowedFields = <String>{
-      'type',
-      'cron',
-      'timezone',
-    };
+  factory SkillSubscriptionTriggerWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "SkillSubscriptionTriggerWire",
+  ]) {
+    const allowedFields = <String>{'type', 'cron', 'timezone'};
     final unknownFields = map.keys
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('$path: SkillSubscriptionTriggerWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        '$path: SkillSubscriptionTriggerWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (map.containsKey('type') && map['type'] != null && (map['type'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionTriggerWire field type has an invalid wire value');
+    if (map.containsKey('type') &&
+        map['type'] != null &&
+        (map['type'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionTriggerWire field type has an invalid wire value',
+      );
     }
-    if (map.containsKey('cron') && map['cron'] != null && (map['cron'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionTriggerWire field cron has an invalid wire value');
+    if (map.containsKey('cron') &&
+        map['cron'] != null &&
+        (map['cron'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionTriggerWire field cron has an invalid wire value',
+      );
     }
-    if (!map.containsKey('timezone') || map['timezone'] == null || (map['timezone'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionTriggerWire field timezone has an invalid wire value');
+    if (!map.containsKey('timezone') ||
+        map['timezone'] == null ||
+        (map['timezone'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionTriggerWire field timezone has an invalid wire value',
+      );
     }
     return SkillSubscriptionTriggerWire(
       type: (map['type'] as String?)?.trim() ?? "cron",
@@ -334,24 +429,27 @@ class SkillSubscriptionWire {
   final String updatedAt;
 
   Map<String, Object?> toWire() => <String, Object?>{
-        'subscriptionId': subscriptionId,
-        'version': version,
-        'owner': owner.toWire(),
-        'createdByUserId': createdByUserId,
-        'createdByPersonaId': createdByPersonaId,
-        'skillId': skillId,
-        'domainId': domainId,
-        'tagRefs': tagRefs,
-        'status': status.wireName,
-        'searchQueryPlan': searchQueryPlan.toWire(),
-        'trigger': trigger.toWire(),
-        'destination': destination.toWire(),
-        'deliveryState': deliveryState.toWire(),
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-      };
+    'subscriptionId': subscriptionId,
+    'version': version,
+    'owner': owner.toWire(),
+    'createdByUserId': createdByUserId,
+    'createdByPersonaId': createdByPersonaId,
+    'skillId': skillId,
+    'domainId': domainId,
+    'tagRefs': tagRefs,
+    'status': status.wireName,
+    'searchQueryPlan': searchQueryPlan.toWire(),
+    'trigger': trigger.toWire(),
+    'destination': destination.toWire(),
+    'deliveryState': deliveryState.toWire(),
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+  };
 
-  factory SkillSubscriptionWire.fromWire(Map<String, Object?> map, [String path = "SkillSubscriptionWire"]) {
+  factory SkillSubscriptionWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "SkillSubscriptionWire",
+  ]) {
     const allowedFields = <String>{
       'subscriptionId',
       'version',
@@ -373,67 +471,157 @@ class SkillSubscriptionWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('$path: SkillSubscriptionWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        '$path: SkillSubscriptionWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!map.containsKey('subscriptionId') || map['subscriptionId'] == null || (map['subscriptionId'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionWire field subscriptionId has an invalid wire value');
+    if (!map.containsKey('subscriptionId') ||
+        map['subscriptionId'] == null ||
+        (map['subscriptionId'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field subscriptionId has an invalid wire value',
+      );
     }
-    if (!map.containsKey('version') || map['version'] == null || (map['version'] is! num)) {
-      throw FormatException('$path: SkillSubscriptionWire field version has an invalid wire value');
+    if (!map.containsKey('version') ||
+        map['version'] == null ||
+        (map['version'] is! num)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field version has an invalid wire value',
+      );
     }
-    if (map.containsKey('owner') && map['owner'] != null && (map['owner'] is! Map)) {
-      throw FormatException('$path: SkillSubscriptionWire field owner has an invalid wire value');
+    if (map.containsKey('owner') &&
+        map['owner'] != null &&
+        (map['owner'] is! Map)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field owner has an invalid wire value',
+      );
     }
-    if (!map.containsKey('createdByUserId') || map['createdByUserId'] == null || (map['createdByUserId'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionWire field createdByUserId has an invalid wire value');
+    if (!map.containsKey('createdByUserId') ||
+        map['createdByUserId'] == null ||
+        (map['createdByUserId'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field createdByUserId has an invalid wire value',
+      );
     }
-    if (map.containsKey('createdByPersonaId') && map['createdByPersonaId'] != null && (map['createdByPersonaId'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionWire field createdByPersonaId has an invalid wire value');
+    if (map.containsKey('createdByPersonaId') &&
+        map['createdByPersonaId'] != null &&
+        (map['createdByPersonaId'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field createdByPersonaId has an invalid wire value',
+      );
     }
-    if (!map.containsKey('skillId') || map['skillId'] == null || (map['skillId'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionWire field skillId has an invalid wire value');
+    if (!map.containsKey('skillId') ||
+        map['skillId'] == null ||
+        (map['skillId'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field skillId has an invalid wire value',
+      );
     }
-    if (map.containsKey('domainId') && map['domainId'] != null && (map['domainId'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionWire field domainId has an invalid wire value');
+    if (map.containsKey('domainId') &&
+        map['domainId'] != null &&
+        (map['domainId'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field domainId has an invalid wire value',
+      );
     }
-    if (map.containsKey('tagRefs') && map['tagRefs'] != null && (map['tagRefs'] is! List || (map['tagRefs'] as List).any((item) => item is! String))) {
-      throw FormatException('$path: SkillSubscriptionWire field tagRefs has an invalid wire value');
+    if (map.containsKey('tagRefs') &&
+        map['tagRefs'] != null &&
+        (map['tagRefs'] is! List ||
+            (map['tagRefs'] as List).any((item) => item is! String))) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field tagRefs has an invalid wire value',
+      );
     }
-    if (map.containsKey('status') && map['status'] != null && (map['status'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionWire field status has an invalid wire value');
+    if (map.containsKey('status') &&
+        map['status'] != null &&
+        (map['status'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field status has an invalid wire value',
+      );
     }
-    if (map.containsKey('searchQueryPlan') && map['searchQueryPlan'] != null && (map['searchQueryPlan'] is! Map)) {
-      throw FormatException('$path: SkillSubscriptionWire field searchQueryPlan has an invalid wire value');
+    if (map.containsKey('searchQueryPlan') &&
+        map['searchQueryPlan'] != null &&
+        (map['searchQueryPlan'] is! Map)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field searchQueryPlan has an invalid wire value',
+      );
     }
-    if (map.containsKey('trigger') && map['trigger'] != null && (map['trigger'] is! Map)) {
-      throw FormatException('$path: SkillSubscriptionWire field trigger has an invalid wire value');
+    if (map.containsKey('trigger') &&
+        map['trigger'] != null &&
+        (map['trigger'] is! Map)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field trigger has an invalid wire value',
+      );
     }
-    if (map.containsKey('destination') && map['destination'] != null && (map['destination'] is! Map)) {
-      throw FormatException('$path: SkillSubscriptionWire field destination has an invalid wire value');
+    if (map.containsKey('destination') &&
+        map['destination'] != null &&
+        (map['destination'] is! Map)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field destination has an invalid wire value',
+      );
     }
-    if (map.containsKey('deliveryState') && map['deliveryState'] != null && (map['deliveryState'] is! Map)) {
-      throw FormatException('$path: SkillSubscriptionWire field deliveryState has an invalid wire value');
+    if (map.containsKey('deliveryState') &&
+        map['deliveryState'] != null &&
+        (map['deliveryState'] is! Map)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field deliveryState has an invalid wire value',
+      );
     }
-    if (!map.containsKey('createdAt') || map['createdAt'] == null || (map['createdAt'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionWire field createdAt has an invalid wire value');
+    if (!map.containsKey('createdAt') ||
+        map['createdAt'] == null ||
+        (map['createdAt'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field createdAt has an invalid wire value',
+      );
     }
-    if (!map.containsKey('updatedAt') || map['updatedAt'] == null || (map['updatedAt'] is! String)) {
-      throw FormatException('$path: SkillSubscriptionWire field updatedAt has an invalid wire value');
+    if (!map.containsKey('updatedAt') ||
+        map['updatedAt'] == null ||
+        (map['updatedAt'] is! String)) {
+      throw FormatException(
+        '$path: SkillSubscriptionWire field updatedAt has an invalid wire value',
+      );
     }
     return SkillSubscriptionWire(
       subscriptionId: (map['subscriptionId'] as String?)?.trim() ?? "",
       version: (map['version'] as num?)?.toInt() ?? 0,
-      owner: map['owner'] is Map ? SkillSubscriptionOwnerWire.fromWire((map['owner'] as Map).cast<String, Object?>(), '$path.owner') : const SkillSubscriptionOwnerWire(),
+      owner: map['owner'] is Map
+          ? SkillSubscriptionOwnerWire.fromWire(
+              (map['owner'] as Map).cast<String, Object?>(),
+              '$path.owner',
+            )
+          : const SkillSubscriptionOwnerWire(),
       createdByUserId: (map['createdByUserId'] as String?)?.trim() ?? "",
       createdByPersonaId: (map['createdByPersonaId'] as String?)?.trim() ?? "",
       skillId: (map['skillId'] as String?)?.trim() ?? "",
       domainId: (map['domainId'] as String?)?.trim() ?? "",
       tagRefs: _assistantStringList(map['tagRefs']),
-      status: parseSkillSubscriptionStatusStrict((map['status'] as String?)?.trim() ?? "active"),
-      searchQueryPlan: map['searchQueryPlan'] is Map ? SkillSubscriptionSearchQueryPlanWire.fromWire((map['searchQueryPlan'] as Map).cast<String, Object?>(), '$path.searchQueryPlan') : const SkillSubscriptionSearchQueryPlanWire(),
-      trigger: map['trigger'] is Map ? SkillSubscriptionTriggerWire.fromWire((map['trigger'] as Map).cast<String, Object?>(), '$path.trigger') : const SkillSubscriptionTriggerWire(timezone: ""),
-      destination: map['destination'] is Map ? SkillSubscriptionDestinationWire.fromWire((map['destination'] as Map).cast<String, Object?>(), '$path.destination') : const SkillSubscriptionDestinationWire(),
-      deliveryState: map['deliveryState'] is Map ? SkillSubscriptionDeliveryStateWire.fromWire((map['deliveryState'] as Map).cast<String, Object?>(), '$path.deliveryState') : const SkillSubscriptionDeliveryStateWire(),
+      status: parseSkillSubscriptionStatusStrict(
+        (map['status'] as String?)?.trim() ?? "active",
+      ),
+      searchQueryPlan: map['searchQueryPlan'] is Map
+          ? SkillSubscriptionSearchQueryPlanWire.fromWire(
+              (map['searchQueryPlan'] as Map).cast<String, Object?>(),
+              '$path.searchQueryPlan',
+            )
+          : const SkillSubscriptionSearchQueryPlanWire(),
+      trigger: map['trigger'] is Map
+          ? SkillSubscriptionTriggerWire.fromWire(
+              (map['trigger'] as Map).cast<String, Object?>(),
+              '$path.trigger',
+            )
+          : const SkillSubscriptionTriggerWire(timezone: ""),
+      destination: map['destination'] is Map
+          ? SkillSubscriptionDestinationWire.fromWire(
+              (map['destination'] as Map).cast<String, Object?>(),
+              '$path.destination',
+            )
+          : const SkillSubscriptionDestinationWire(),
+      deliveryState: map['deliveryState'] is Map
+          ? SkillSubscriptionDeliveryStateWire.fromWire(
+              (map['deliveryState'] as Map).cast<String, Object?>(),
+              '$path.deliveryState',
+            )
+          : const SkillSubscriptionDeliveryStateWire(),
       createdAt: (map['createdAt'] as String?)?.trim() ?? "",
       updatedAt: (map['updatedAt'] as String?)?.trim() ?? "",
     );
@@ -441,7 +629,10 @@ class SkillSubscriptionWire {
 
   static List<String> _assistantStringList(Object? value) {
     if (value is List) {
-      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+      return value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
     }
     return const <String>[];
   }
@@ -465,10 +656,11 @@ class SkillSubscriptionWireFields {
   static const String updatedAt = 'updatedAt';
 }
 
-
 SkillSubscriptionWire decodeSkillSubscriptionWire(Object? response) {
   if (response is! Map) {
-    throw const FormatException('SkillSubscriptionWire response must be an object');
+    throw const FormatException(
+      'SkillSubscriptionWire response must be an object',
+    );
   }
   return SkillSubscriptionWire.fromWire(response.cast<String, Object?>());
 }

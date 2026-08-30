@@ -12,6 +12,9 @@ from typing import Any
 
 SCHEMA = "quwoquan.elasticsearch_cjk_supply_chain.v1"
 PLUGIN_NAMES = frozenset({"analysis-ik", "analysis-pinyin"})
+MULTI_ARCH_IMAGE_MEDIA_TYPE = (
+    "application/vnd.docker.distribution.manifest.list.v2+json"
+)
 SHA256 = re.compile(r"[0-9a-f]{64}")
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -27,6 +30,7 @@ def load_supply_chain(path: Path) -> dict[str, Any]:
         not isinstance(elasticsearch, Mapping)
         or elasticsearch.get("version") != "8.13.4"
         or "@sha256:" not in str(elasticsearch.get("image") or "")
+        or elasticsearch.get("mediaType") != MULTI_ARCH_IMAGE_MEDIA_TYPE
         or not elasticsearch.get("license")
         or not isinstance(plugins, list)
         or {item.get("name") for item in plugins if isinstance(item, Mapping)}

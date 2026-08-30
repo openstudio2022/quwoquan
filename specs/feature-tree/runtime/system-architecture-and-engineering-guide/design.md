@@ -39,12 +39,12 @@
 - 关联验收：`SIT-001`
 
 <a id="dec-002"></a>
-### DEC-002 四环境星型继承
+### DEC-002 四环境星型 authoring 与信任域构建分离
 
-- 决策：每个服务的 `environments/alpha|beta|gamma|prod` 是环境唯一入口；四环境只共同依赖服务公共 `config/schema.yaml`、`resources/` 和 `deploy/base`，彼此不得继承。
-- 理由：环境间继承会隐藏实际生效值并形成第五种组合状态，星型继承使差异和准出边界可审计。
-- 被否决方案：将环境差异散落到 `config/environments`、`resources/seeds/<env>`、`deploy/overlays`，引入 `environments/common` 伪环境，或让 beta/gamma/prod 逐级继承。
-- 约束与影响：`APP_ENV` 由路径推导，config/image/resource version 由摘要推导；环境文件只保存差异、secret reference、external binding 和资源引用。
+- 决策：每个服务的 `environments/alpha|beta|gamma|prod` 是环境唯一 authoring 入口。四环境只共同依赖服务公共 `config/schema.yaml`、`resources/` 和 `deploy/base`，彼此不得继承。package 从当前环境入口与只读 capsule 生成环境专属 config、SecretRef、endpoint、resource、topology 与 activation closure，可执行镜像按 `nonprod/prod` 信任域从同一 capsule 构建并由环境 composition 引用。
+- 理由：环境间继承会隐藏实际生效值，按环境重复编译则把配置差异错误地升级成字节差异。星型 authoring 保证四环境差异可审计，信任域构建保证未变组件可按 digest 复用并维持 Prod 与非生产供应链隔离。
+- 被否决方案：将环境差异散落到 `config/environments`、`resources/seeds/<env>` 或 `deploy/overlays`，引入 `environments/common` 伪环境，让 beta/gamma/prod 逐级继承，按四环境生成最终镜像，或让 `APP_ENV` 在进程启动后选择 Adapter、数据源或策略。
+- 约束与影响：config/resource/authority version 从当前环境 capsule 的精确字节派生。image 与编译期 Provider binding 按信任域派生，Alpha、Beta、Gamma 的 external binding 必须先收敛为同一 nonprod 视图。环境文件只保存差异、secret reference、external binding 和资源引用。`APP_ENV` 只校验部署面挂载配置，缺失或错配即失败，不得反向选择制品。
 - 关联要求：`REQ-003`
 
 <a id="dec-003"></a>
@@ -274,6 +274,7 @@
 - 影响 Story：[`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md) 的 `OPEN-010` 据本条改写。存在性与投递路径两项已消解，该 OPEN 仅继续承载可达性：反向边只证明消费对象声明了这条边，不证明运行时 handler 真的收到，`no_consumer_reason` 亦是自由散文而无结构判据。
 - 关联验收：`SIT-001`
 
+<a id="dec-022"></a>
 ### DEC-022 平台级拒绝码归 `runtime_failure_codes.yaml`，并在该文件引入用户面字段集
 
 - 决策：`GATEWAY.USER.route_not_found` / `unauthorized` / `forbidden` / `invalid_argument` 与 `GATEWAY.MIDDLEWARE.unavailable` 的唯一声明位是 `quwoquan_service/contracts/runtime_errors/errors/runtime_failure_codes.yaml`，不归任何单一服务对象。
@@ -285,7 +286,7 @@
 - 约束与影响：`runtime/auth` 仍保留本地文案镜像，因为它不得 import 任一服务的 generated 错误包；镜像的非权威性由 `TestOperationGuardUserMessagesMatchContract` 双向断言强制，该测试已验负例（改文案即报漂移）。
 - 约束与影响：这五个码经本文件的 Dart codegen 进入 `runtime_failure_codes.g.dart`，端侧由此持有码常量；服务对象 `errors.yaml` 一侧受 `codegen_app_metadata` 域白名单约束，`gateway` 不在其内，故该路径不承载这些码。
 - 关联要求：`REQ-001`
-- 影响 Story：[`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md) 的 `OPEN-013` 据本条更新声明位。
+- 影响 Story：[`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md) 的用户面错误呈现声明位。
 - 关联验收：`SIT-001`
 
 <a id="dec-023"></a>
@@ -318,8 +319,167 @@
 - 理由：字段隐私、事件线上身份与索引都曾出现「声明存在但运行时不消费」或「运行时硬编码但声明不拥有」的第二真相源；从 authoring 单向生成并对 production 使用反向核验，才能同时发现欠覆盖、过覆盖与 stale 声明。
 - 约束：source generator、校验器与模板完成只证明 authoring/implementation 机制成立；generated catalog、运行时常量和环境证据必须来自同一稳定 source hash 的唯一 fresh generation，不能由移动中的生成物或手改产物替代。
 - 影响 Story：[`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md) 承接 fresh generation、双端运行时消费、Data 冻结项与全链漂移门的剩余准出。
+- 关联要求：对象隐私、事件身份与 storage 同源对应 `REQ-001`、`REQ-002`。
+- 关联验收：`SIT-001`
+
+<a id="dec-025"></a>
+### DEC-025 缺席、空值与失败是三种不可互换的结果状态
+
+- 决策：任何返回值只能表达「在场有值」「在场为空」「缺席」「失败」之一。失败必须经异常、`RuntimeFailure`、`AppError` 或领域 sealed 结果表达，不得降级编码为 `null`/`nil`/空字符串/空集合；缺席不得塌陷为空字符串或零值。
+- 决策：生成代码不得自行补入契约未声明的默认值，也不得对未声明可空性的字段自行推定可空。缺席只能由契约显式声明的可空性或默认值决定；解码期补值必须能追溯到契约上的 `default` 声明。
+- 决策：Go 的指针面只减不增。`infrastructure` 可用 `*T` 与 `sql.Null*` 承载列可空事实，需要三态的写入面使用专用 change set。`domain`、`application` 与出站 DTO 的可选标量使用值类型，缺席以省略键表达。HTTP wire 边界上的值类型 `bool` 禁止 `omitempty`，与该字段契约声明的可空性无关。`bool` 只有两态，`omitempty` 让在场的 `false` 在 wire 上表现为缺席，而缺席是另一个状态；必填字段上这还会直接打成端侧 fail-closed 解码失败。确需区分「未设置」与「false」时用 `*bool`，指针在这一处恰好把三态表达对了。
+- 决策：`catch` 内 `return null` 只有两条合法出路，因为两类代码本质不同而静态分析读不出区别。异常本身即形状判定（「这段输入不是一个 X」）的解析器，以 `try` 前缀命名承诺该语义，对齐 `int.tryParse` 的生态惯例；其余一律要求留下运行期证据。让代码自己声明属于哪一类，两条路就都能自动判定，门禁因此不需要豁免名单。同一条判据覆盖以空集合、`0` 或空字符串代替 `null` 的变体——换个零值不改变「失败被伪装成在场为空」这件事。`return false` 不在其列：`false` 表达的正是「这次没做成」，它的可观测性由异常吞咽预算门禁承担。
+- 决策：「出站 wire 边界」按数据流判定，不按目录名。从出站序列化调用点（`writeJSON` / `httpcodec.WriteJSON` / `json.NewEncoder(w).Encode`）的实参出发，回溯变量赋值与函数返回类型定位 struct 定义处，再沿字段类型递归展开嵌套与列表元素。早先的口径是「文件路径含 `adapters/inbound/http`」，`CommentCommandResult.Replayed` 因此带着契约冲突进入现网：DTO 定义在 `application/contracts.go`，handler 只是把它传给 `writeJSON`，按目录名判定时它根本不算 wire。无法静态定位类型的调用点单独报告、不计入违规——门禁只对能证明的部分下断言，剩下的必须可见而不是被默默当成合规。
+- 决策：门禁自身必须可证伪。本次改动涉及的门禁脚本必须有被 gate 链执行的行为级 `local_contract`，缺失即 BLOCK。「恰好有同名测试时才检查」是同构的假绿：一个门禁完全没有配套测试时配套集合为空，循环体一次都不执行，门禁反而放行——越是新写的、判据最没被验证过的门禁越容易掉进去。改动面取 `merge-base` 到 `HEAD` 的已提交增量，不含未提交工作树：脏工作树是本仓库常态，把它计入会让门禁长期为并行改动报红，而持续假红最终只会被 `--no-verify` 绕过。
+- 决策：棘轮基线的身份粒度到函数与字段，不到文件。配额挂在文件上时，同一文件内删一处、在另一个函数里添一处，总数不变而门禁看不见。相对 `HEAD` 的计数或身份集合增加一律失败，`_governance` 文字完整不能替代单调性检查——留痕字段齐全时就放行，等于把「债只能减」交给作者自觉，而改基线数字恰好是最省事的绕过方式。
+- 理由：`null`/`nil` 同时承担「没有」「空的」「没做成」三种含义时，调用方只能靠判空猜测，失败会被当作空数据继续流向下游。把四态在类型与契约上分开，消费方才可能不判空。
+- 约束：wire 字段可空性目前存在三套并行 authoring——`fields.yaml` 的 `NOT_NULL`/`NULLABLE`、assistant `schema.yaml` 的 `required`/`default`、rtc `events.yaml` 的 `payload_fields` 与 `client_payload_defaults`。三者都是契约层的取值声明而非生成器缺陷，生成器忠实执行了各自的声明；收敛需要逐字段的 wire 语义裁决，按 Story OPEN 承载，不得由生成器单方面改写。在收敛前，各管线的当前语义由 `local_contract` 分别锁定，防止其中任何一条悄悄漂移。
+- 约束：RTC 方向的收敛必须先取证据再动生成物。实测 envelope 显示，契约声明 `NOT_NULL` 的 `status` 与 `eventId` 在全部通话事件上都不出现——`payload_fields` 白名单先做了裁剪，`omitempty` 再省略空值。此时把生成物切成 fail-closed 必填会让来电信令全面解析失败。收敛只能作为「codegen 改读 `CallEventPayload`、服务端去掉不该有的 `omitempty`、端侧移除兜底」的一次性同源变更，分开做任意一步都会打断信令。
+- 被否决方案：全局禁用可空类型、把可缺字符串统一塌陷为空串、把 `NULLABLE` 标量统一映射为 Go 指针、引入 `Result`/`Either` 第二套错误模型、在未做字段级裁决前由生成器批量删除契约声明的 `default`、把 `catch` 内 `return null` 一律判死、按目录名近似出站边界，以及对出站列表批量删除 `omitempty`。这些方案分别会扩大 nil 解引用面、误伤合法解析器、漏掉真实 wire 边界，或让 nil 切片序列化成 `null`，都不能保持缺席、空值与失败的单义性。
+- 约束与影响：出站列表与布尔字段在 wire 上分别稳定为 `[]` 与显式 `false`，由真实响应体的原文断言证明——断言不能落在解码后的结构体上，`null`、`[]` 与缺键在那里已经被抹平成同一个空切片。领域端口以空返回兼作未命中信号的存量、契约未声明可空性的字段、出站列表的 `omitempty` 三笔以同一份身份指纹棘轮承载，清零后删除基线并转为硬门禁；Dart 侧与 Go wire 边界的 `bool` 实测已清零，不留基线文件。
+- 影响 Story：[`absent-empty-failure-nullability`](./absent-empty-failure-nullability/spec.md) 承接四态定义、跨管线单义与三道门禁。
 - 关联要求：`REQ-001`、`REQ-002`
 - 关联验收：`SIT-001`
+
+<a id="dec-026"></a>
+### DEC-026 本地工作副本治理由单一策略驱动三个执行面，判定实时派生且边界诚实
+
+- 决策：worktree 与 clone 的创建授权、滞留提醒与 hooks 自检共用唯一策略文件 `quwoquan_ops/policies/worktree_policy.yaml` 和唯一派生实现；Cursor、Codex 与 git hooks 三个执行面只做协议适配，不各自实现判定规则。三处规则一旦分写，最先漂移的总是最少被触发的那一处。
+- 决策：两个 AI 执行面的能力不对等，适配层必须按执行面输出不同结果，而不是取交集或并集。Cursor 的 `beforeShellExecution` 支持 `permission: "ask"`，可把动作升级为人工批准；Codex 的 `PreToolUse` 明确不支持 `ask`——返回该值会被判为 hook 运行失败并继续执行工具调用——只能 `deny` 并在理由中给出授权方式。取交集会让 Cursor 侧退化成同样生硬的拒绝，按 Cursor 的能力写死则会让 Codex 侧静默失效。
+- 决策：提醒的投递事件按执行面各自的输出能力选择，而不是统一挂在会话开始。Codex 的 `SessionStart` 支持 `additionalContext`，直接使用；Cursor 的 `sessionStart` 不声明任何输出字段，提醒改挂在支持 `user_message` 的 `beforeShellExecution` 上。挂在不支持输出的事件上，hook 会正常退出却什么也不投递，这种静默失效正是本机制要治理的那类问题。回落到高频事件后，未到提醒时点的短路必须在 shell 内完成且只读一个 epoch sentinel，使间隔参数仍然只有策略文件一个来源。
+- 决策：工作副本清单只实时派生，不落台账。授权是随命令传递的一次性凭据，不产生「已授权清单」；滞留判定由 `git worktree list`、发现根扫描与 `git rev-list` 现算。任何形式的 registry、allowlist 或滞留基线，在下一次意外发生时正好会是过期的那一份。
+- 决策：git hooks 是三个执行面唯一的公共底座，因此 `core.hooksPath` 的安装状态本身是被治理对象。自检不得只挂在 pre-commit——hooks 失效时 pre-commit 恰好不会运行，而那正是最需要发现问题的时刻；判定改由聚合门禁与执行面会话开始交叉承担。
+- 理由：`branch_policy.yaml` 只约束分支名，而实际失控的工作副本没有一个违反分支禁令（临时探针为 detached HEAD，独立 clone 均在 `dev1.0`）。真正的失控维度是工作副本的数量以及其中滞留的未合入工作，这个维度没有任何策略覆盖，也没有任何一道门禁会因它变红。
+- 约束：本机制只能阻断意外，不能阻断刻意绕过。执行体有权自行设置环境变量与改写仓内文件，Cursor 的人工批准弹窗是其中唯一执行体无法自行绕过的一环。实现与回执必须如实声明该边界，不得表述为强制保护。
+- 被否决方案：为「已授权 worktree」维护受版本控制的 allowlist（与仓库禁止 registry/inventory 冲突，且必然过期）、仅用 git hooks 覆盖全部执行面（git 没有 worktree 创建前置 hook，`post-checkout` 触发时已无法撤销）、仅用执行面 hook 而不修 git hooks（clone 目标不继承 hooks，人工终端完全失管）、引入常驻守护进程做每日提醒（仓外状态，与仓库自治边界冲突）。
+- 影响 Story：[`local-worktree-lifecycle-governance`](./local-worktree-lifecycle-governance/spec.md) 承接授权闸、滞留提醒、hooks 自检与无台账约束。
+- 关联要求：`REQ-005`
+- 关联验收：`SIT-005`
+
+<a id="dec-027"></a>
+### DEC-027 服务模块装配收敛到 servicekit，进程相位、模块装配与领域装配三层单轨
+
+- 决策：Go 服务的启动装配固定为三层，各层唯一职责。`quwoquan_service/runtime/servicehost` 拥有进程相位机（ValidateConfig → PrepareMigration → Bind → Start → Ready → OpenAdmission → Shutdown）、Composition 身份与虚拟路由。`quwoquan_service/runtime/servicekit` 拥有模块装配套件：运行时身份解析、配置快照加载与身份校验、Redis 场景路由、消息传输装配、观测栈、auth 栈、通用 `servicehost.Module` 实现与 Builder、standalone 壳、config sync 接入。各服务 `cmd/api` bootstrap 只保留带 env tag 声明的 config 结构体与领域装配，装配骨架与 env 覆盖引擎按 [DEC-028](#dec-028) 由 servicekit 承载。
+- 决策：新服务与迁移到 servicekit 的服务必须消费 servicekit 构件，不得复制身份、配置、Redis、传输、观测、auth 与生命周期样板；迁移即删除旧样板，不留兼容 shim。
+- 决策：servicekit 的依赖边界是 `runtime/*` 与 `internal/platform/*`，不得 import 任何服务的 `internal`、`generated` 或顶层共享 `generated/**`。依赖 generated 产物的输入（operation guard、server timeouts、message binding descriptor、stream rootID）由服务 bootstrap 从自己的 generated 包构造后以值对象入参传入。
+- 决策：每个 descriptor_owner 服务保留薄 `cmd/api/message_transport.go` 作为 message root，文件含本服务 generated descriptor import 与 `CompiledBindingFor(...)`，正文调 `servicekit.NewMessageTransport`。preflight（`RequireConfiguredRedisMessageTransport`）由 servicekit 内部必然执行并由其同包测试锁定，外部 provider governance gate 的判据同步认可该形态。
+- 决策：config sync 接入的合法源码形态有二：函数库装配的服务显式调用 `servicekit.RegisterConfigSync`（单行）；声明式 Bootstrap 装配的服务由 `servicekit.Bootstrap` 契约内置注册（[DEC-028](#dec-028)），源码字面量为 `servicekit.Bootstrap(`。机器 config ACK 治理 gate 的源码字面量判据同时认可两种形态。config sync 收敛率与 staleness 判定的验收锚点归 [commercial-readiness-risk-closure REQ-006](../../platform-ops-governance/commercial-readiness-risk-closure/spec.md#req-006) 与其 SIT-006，指标与告警面归 [observability-and-alerting](../../platform-ops-governance/observability-and-alerting/spec.md)，本 DEC 只承载装配形态裁决。
+- 决策：配置分为四层，各有唯一真相源，互不越界。第一层契约/代码预制：服务名与模块闭包、路由/operation/超时、Redis scene 名与 key 前缀、stream 名，变更走 contracts + codegen + candidate 发布。第二层环境装配静态：`config/schema.yaml` 与 `environments/<env>/config.yaml` 渲染到 `CONFIG_ROOT` 快照并由 `CONFIG_VERSION` digest 钉住，物理端点与凭据只以 secretRef 环境变量名引用，按 [deliver-deploy-prod-pipeline DEC-005](../deliver-deploy-prod-pipeline/design.md#dec-005) 永不进镜像字节。第三层 ops 配置中心热调：限流阈值、feature flag、采样率、文案覆盖、运营开关，判据是值变化不改变拓扑与依赖身份且需要分钟级生效与独立回滚。第四层进程注入身份：`SERVICE_NAME`/`APP_ENV`/`CONFIG_VERSION`/`IMAGE_VERSION` 等，绑定 candidate 由部署面注入。
+- 决策：组网配置逻辑面契约预制、物理面环境注入，两者都不进配置中心。逻辑组网（服务存在性、名称、依赖、逻辑端口）变化是部署事件，必须携带 Composition/Topology 身份与整体回滚语义（[deliver-deploy-prod-pipeline DEC-003](../deliver-deploy-prod-pipeline/design.md#dec-003)）；物理组网（实际地址、URI、凭据、容量）只由环境装配注入。
+- 决策：服务名由 Builder 入参单点声明，与 `composition.yaml`、compose service name、specs 同一字面值；跨服务调用键名由 `Identity.ServiceBaseURL` 统一派生 `<TOKEN>_SERVICE_BASE_URL`，值仍由部署面或宿主注入。
+- 决策：代码内 magic 兜底（硬编码监听端口、`mongodb://localhost:27017`、数据库名）随迁移移除，监听地址与数据库名缺失即启动失败；本地便利由 alpha `config.yaml` 默认值承担，默认值归 `config/schema.yaml` 与环境入口，不归代码。
+- 决策：`quwoquan_service/runtime/servicekit` 的代码工程归属按 `quwoquan_service/runtime` 前缀归 [gateway-orchestrator-foundation](../../gateway-orchestrator-foundation/spec.md) L1（其工程归属段直接认领该路径），跨横切工程规范的设计裁决归本 DEC。反查路径为「代码路径查 gateway-orchestrator-foundation spec 工程归属、装配规范查本 DEC」，与 [DEC-022](#dec-022) 裁决 `runtime/auth` 的归属分离形态同型。
+- 理由：进程级相位机与组合宿主已单轨存在，但 14 个 Go 服务的 bootstrap 各自复制身份解析（8 份）、env 校验（9 份字节级相同）、消息传输模板（13 份）、生命周期实现体（约 200–240 行 × 11 份）与观测/auth 装配（每服务 100+ 行）。样板漂移已经产生三种 config sync 签名与多处 magic 兜底，收敛到装配套件是消除第二真相源，不是新增抽象层。
+- 理由：servicekit 不依赖 generated 产物才能保持「顶层 host 只消费薄 bootstrap、横切库不反向穿透服务内部」的既有方向；generated 输入以值对象传入使服务差异（domain 名、binding、rootID）留在唯一知道它们的 bootstrap。
+- 被否决方案：继续逐服务复制样板，或把模块装配并入 servicehost——后者混淆进程相位与模块装配两种变更频率。
+- 被否决方案：servicekit 直接 import `generated/operationsecurity`——突破依赖边界，形成横切库对 codegen 的反向耦合。
+- 被否决方案：函数库装配形态下 `RegisterConfigSync` 由 Builder 隐式默认注册——该形态无统一入口字面量，隐式注册使 config ACK gate 的源码判据落空且副作用不可从 bootstrap 文本审计。声明式 Bootstrap 形态下的内置注册不在否决范围：`servicekit.Bootstrap(` 调用即审计锚点，注册必然性由其同包白盒测试锁定（[DEC-028](#dec-028)）。
+- 被否决方案：把服务名单、依赖或物理地址放进配置中心热改（绕过不可变拓扑身份与整体回滚），以及保留代码 magic 兜底作为「本地便利」（隐性 fallback 违反 fail-closed，掩盖装配错误）。
+- 约束与影响：`servicehost` 接口、相位语义、`composition.yaml` 模块集合与顺序、`cmd` 目录路径与二进制名、`CompositionDigest` 均不因本决策改变。存量 11 个核心服务 `cmd/api/main.go` 为 `package bootstrap` 且无 `func main()`，迁移时改名 `bootstrap.go`。`cmd/api` 目录语义为「api 模块组合包」，整体更名 `cmd/bootstrap` 待全部服务迁移后一次完成。
+- 约束与影响：servicekit 构件的行为由同包 `*__local_contract_test.go` 白盒测试锁定（横切区旁路同包规则）。存储驱动（Mongo/Postgres/ES）不抽为**必选**构件，服务直连 `internal/platform` 始终合法；Mongo 提供可选场景构件供常规服务收敛样板（[DEC-028](#dec-028)）。env 命名历史差异不静默统一。
+- 关联要求：`REQ-002`、`REQ-003`、`REQ-005`
+- 关联验收：`SIT-002`、`SIT-003`、`SIT-005`
+
+<a id="dec-028"></a>
+### DEC-028 服务装配声明化：Bootstrap 骨架、env tag 覆盖引擎与可选场景构件
+
+- 决策：servicekit 提供泛型声明式骨架 `Bootstrap(serviceName, BootstrapSpec[T])`，吸收装配样板全链：身份解析 → 快照加载 → env 覆盖 → 身份校验 → 观测栈 → auth 栈 → 基础设施自动装配 → HTTP 三件套 mux（healthz/metrics/operation guard）→ CORS 与服务级中间件钩子 → config sync 注册 → ConfigDigest 推导 → `ModuleSpec` 构造。服务侧只保留两件事：带声明的 config 结构体与 `Assemble` 领域回调（store/facade/worker 构造、路由注册、领域健康检查）。
+- 决策：env 覆盖声明化为 config struct tag——叶子字段 `env:"<SUFFIX>"`、嵌套结构 `envPrefix:"<SEGMENT>"`，与服务前缀按 `<PREFIX>_<SEGMENT>_<SUFFIX>` 拼接为完整键。服务前缀默认从服务名派生：去 `-service` 后缀后 token 化（tag-service → TAG、circle-service → CIRCLE、realtime-gateway → REALTIME_GATEWAY），与部署面既有键名逐一吻合；`BootstrapSpec.EnvPrefix` 仅作为历史键名不合派生规则时的显式覆盖口。支持类型为 string、[]string（逗号分割）、bool（true/1/yes/on）、int，取值先 TrimSpace，空 env 不覆盖，未支持的字段类型 fail-closed 报错。手写 env 覆盖钩子随迁移删除，声明派生的键名必须与被删除钩子的键名逐一相等。
+- 决策：`envAbsolute:"<KEY>"` tag 声明不带服务前缀的全局契约键，用于环境装配已把键名固定为无前缀形态的场景（如 `environments/<env>/config.yaml` 的 `secretRefs` 声明的 `MONGO_URI`）；同一字段同时声明 `env` 与 `envAbsolute` 即 fail-closed，一个字段只有一个键。
+- 决策：`required:"true"` tag 承载必填校验，校验时机固定在 env 覆盖应用之后统一执行；缺失即启动失败，与 [DEC-027](#dec-027) 的无 magic 兜底裁决同向。
+- 决策：入站 HTTP 观测标签（`Origin=service.http`、`Direction=inbound`、`SourceID`/`Src`=服务名）语义对所有服务相同，由 servicekit 观测栈统一填充，各服务不再重复声明；迁移不得让这些标签退化为空。
+- 决策：认证能力按声明装配——`SkipDeviceTicketAuth` 声明本服务不提供设备票据认证，骨架不装配 verifier 也不要求其运行时配置在场；中间件对带设备票据的请求仍由 nil verifier fail-closed 拒绝，不是放行。声明了该能力却缺配置仍然启动失败。
+- 决策：进程 trace 的 input/output KV 元数据脱敏由 `ObservabilityKVFilter` 声明，nil 表示原样记录；处理凭据、令牌一类敏感载荷的服务必须显式传入 filter（空策略 filter 即完全不记录 KV），迁移不得把已有的脱敏策略静默降级为原样记录。
+- 决策：operation guard 的 boundary 策略由服务选择——默认 public boundary（`RequireGeneratedOperationAuthorization`），按 runtime boundary 判定的服务经 `BootstrapSpec.OperationGuard` 传入 `EnforceRuntimeOperationContract` 包装；骨架不替服务改判 boundary，迁移不得静默切换策略。
+- 决策：`/healthz` 与 `/readyz` 语义分离且都由骨架统一挂载：`/healthz` 是浅层 liveness，恒 200，不触达任何依赖；`/readyz` 绑定 health checker，回答依赖与 worker 是否就绪。admission 门对两者与 `/metrics` 始终放行。把依赖检查放进 liveness 会让下游抖动升级为本服务重启。
+- 决策：三个探针消费面各取所需，不追求同一路径。Kubernetes `readinessProbe` 取 `/readyz`（不就绪只摘流，不重启），`livenessProbe`/`startupProbe` 取 `/healthz`。Docker Compose 的 `healthcheck` 取 `/healthz`：compose 的 healthy 被其它服务 `depends_on: condition: service_healthy` 当作启动顺序门，探深层就绪会在 `start_period` 窗口内把整条启动链级联阻塞。环境编排的「就绪等待」与巡检取 `/readyz`——它要断言的正是依赖已连上，浅层探针会让后续步骤在依赖未就绪时开跑。
+- 决策：部署面注入的 env 键必须有声明侧消费者，由 `cmd/service-core` 的对账测试同时校验 compose 与 prod plane 渲染脚本两条注入轨道。合法消费轨道三条：声明式 config 派生的覆盖键、服务 contracts `adapterContracts` 声明的 provider endpoint/secret 键（含尚未选中的备选 adapter）、仓库内 Go 源码字面量引用（如发布工具）。三条都无即判漂移——注入一个无人读的键不会报错，只会让服务带着渲染快照里的旧值起来。
+- 决策：服务把某个 env 键声明为退役（注入即 fail-closed）之后，非 prod 的环境启动器——gamma mirror、beta 手工脚本、alpha content release runtime——也不得再注入它，由 `cmd/service-core` 的第三条对账测试静态校验。这三个启动器过去是对账盲区：它们与断言自己的测试互相自洽，键名与服务声明不一致时静态检查全绿，失效要到实跑该档位才显形。该判据只对带服务前缀的退役键成立，无前缀旧键凭键名分不出注入对象，不进入判据。
+- 决策：指向具体存储实例的 env 键（Mongo/Postgres/Redis/Elasticsearch）必须带服务前缀，不得跨模块共享无前缀键。service-core 是单进程多模块，同进程模块读同一份 `os.Environ`：共享一个数据面键等于共享一个存储实例，且这种耦合不出现在任何配置文件里，换实例时会静默改变另一个模块。该不变量由 service-core 对账测试锁定。
+- 决策：被调服务的出口地址（`<CALLEE>_SERVICE_BASE_URL`）是跨调用方共享的无前缀键——同一个被调服务对所有调用方是同一地址，与数据面键的实例私有语义相反，因此保留无前缀形态并在调用方 config 用 `envAbsolute` 声明。装配代码不得用 `os.Getenv` 裸读出口地址：裸读的键不进 `DeclaredEnvKeys`，注入键对账只能退到源码字面量兜底轨道，键名重命名时声明面无从发现消费者。下游 HTTP 客户端构造器各自 fail-closed 校验空值的义务不因声明而免除。
+- 决策：治理 gate 识别装配点按源码内容特征，不按文件名。message transport 治理的装配点判据是「消费 message transport capability 的 generated binding 或声明 transport root」，`message_transport.go` 这个文件名不再是判据：声明化把 preflight 收进服务 `bootstrap.go` 后，按文件名判定会把合规装配误报为缺失，也会漏掉改了文件名的旁路实现。识别锚点限定在该 capability 自身，避免把其它 capability 的 binding 消费点与错误消息里的同名字面量误抓。
+- 决策：服务脚手架（`quwoquan_ops/gate/scaffold/new_service.py`）生成的 `cmd/api/bootstrap.go` 直接是声明式形态——内嵌 `BaseConfig` 的 config 结构、`Bootstrap` 调用与 `Assemble` 回调，附 `DeclaredEnvKeys`；生成的 deploy 资产按上述探针分层写好。脚手架若继续产出手工拼装构件的样板，每个新服务都会把已删除的重复重新引入一次。
+- 决策：config sync 由 Bootstrap 契约内置注册，其同包白盒测试锁定「调用 Bootstrap 必然注册 config sync worker 与 healthz 检查」；config ACK 治理 gate 的源码判据接受 `servicekit.Bootstrap(` 为合法形态。
+- 决策：账号安全 authority 的配置段（`user_account_security_authority` 的 base_url/timeout_ms）是跨服务同构的标准段，归入 `BaseConfig`；服务侧只声明 `AuthorityScopes` 最小授权范围与 generated operation descriptors 两个平铺字段，auth 栈由骨架自动装配。
+- 决策：基础设施构件按「声明即装配」自动发现——Bootstrap 反射扫描 config struct，发现 `MongoConfig` 字段（恰一个）即自动连接并暴露 `Assembly.MongoDB`（ping 健康检查与断连清理自动注册，多个声明 fail-closed 要求显式装配）；发现 `RedisSceneConfig` 字段即按其 yaml tag 收集为 scene 装配路由。一份 scene 配置需要装配成多个 codegen scene 名时（如 general/rec/realtime 共用同一物理连接），由 `BootstrapSpec.RedisScenes` 显式覆盖自动发现。服务直连 `internal/platform` 仍合法，未声明构件类型即不装配。
+- 决策：Redis scene 的运行模式只由 `mode` 表达，不由地址在场与否推断，骨架对任何「声明与地址不成套」的组合在装配期判否而不是回落进程内存实现。四种判否形态是 `mode` 未声明、`standalone` 缺 `addr`、`cluster` 缺 `addrs`（含「只注入了单点 `addr`」这一部署面现实形态）、`memory` 与地址同时在场。最后一种是两处声明互相矛盾，挑任一处生效都会让另一处静默失效。静默回落的代价是多副本各自持有一份不共享、重启即丢的「Redis」，而幂等键、分布式锁与会话都建立在跨副本可见的前提上，且这类失效在运行期不产生任何信号。相应地，prod plane 的明文单点 Redis 由渲染器的单一写入口成套注入地址、组网与传输安全三项，只注入地址而漏掉组网降档等价于把单点地址当成集群种子。
+- 决策：「本环境不接真实 Redis」由 `mode: memory` 表达，即把关停做成 `mode` 的第三个合法取值，而不是新增一个与 `mode` 正交的开关。正交开关会引入「开关关停但 mode 声明 cluster」这类需要额外裁决的组合，而 `mode` 本就是运行模式的唯一真相源；进程内存实现是一种运行模式，不是运行模式之外的旁路。代价是所有既有 scene 必须在四环境都有成套的地址注入或显式关停声明，缺失在装配期直接暴露。
+- 被否决方案：保留「`standalone` 缺 `addr` 回落 memory」作为兼容路径——回落会让「漏了地址注入」与「有意不接 Redis」在运行期形状相同，而两者后果相反且前者无任何信号。判否的迁移成本是一次性的，静默回落的成本每次新增 scene 都要重付一遍。
+- 决策：地址注入的成套性由 `quwoquan_ops/tests/local_contract/environment/test_redis_scene_address_provenance__local_contract_test.py` 在提交时判定，把装配期判否的暴露点从部署时提前：对每个服务实际装配的 scene 在四环境逐一要求「渲染快照有地址、该环境的注入源有地址、显式 `mode: memory`」三者至少其一。判定取四层取值后的渲染快照而不是服务快照原文，因为 `mode` 可以由跨服务默认层提供而根本不出现在服务文件里。scene 集合以 `RedisScenes` 钩子返回的 map 键为准、无钩子时取 struct 字段，两者都要覆盖：只认一种会让另一半服务以「跳过」的形式假绿，而 struct 里声明却不被钩子返回的 scene（integration 的 `rec`）不会被装配，要求它有地址会把判否指向错误的修复位置。注入源按环境分组，不分组会让某一档的注入替另一档背书。该门禁上线时实测到三处真实阻断：circle-service 四环境（键名改名后旧键无读取点）、content-service 的 prod `realtime`、search-service 的 prod `general`。
+- 决策：scene 专属键一律带 scene 段（`CIRCLE_REDIS_GENERAL_ADDR`），不带 scene 段的 `<PREFIX>_REDIS_ADDR` 形状只保留给 rtc-service 的跨 scene 共享地址位。同一形状承载两种语义时读者无法从键名判断它给哪个 scene 供值，因此 circle-service 的旧键随改名进入 `RetiredEnvKeys` 而不是留作别名——留别名会让两种语义永久共存。
+- 约束与影响：本 DEC 落地时 `mode` 仍以各服务 `config/schema.yaml` 的 `default: standalone` 兜底，那份默认值随后按 [DEC-029](#dec-029) 删除——schema 默认值同时是「本服务的物理拓扑」与「没想清楚时的占位」，前者本该逐环境声明。`mode` 的兜底声明位改为跨服务默认层（`quwoquan_ops/environments/config-defaults.yaml`），它仍是一处显式声明且对全部服务只写一遍，因此「所有既有 scene 必须在四环境有成套声明」这一代价不再需要 14 个服务逐一重复书写。
+- 决策：ConfigDigest 回退链为 `CONFIG_VERSION` → 快照 `config.version` → operation descriptors 携带的 `ContractGraphSHA256`（generated 值经 descriptors 入参已进入 servicekit，不再要求服务单独传 digest 字段）；servicekit 依赖边界维持 [DEC-027](#dec-027) 的 `runtime/*` 与 `internal/platform/*` 不变。
+- 决策：CORS 不由骨架默认挂载。`BootstrapSpec.CORS` 为 nil 表示不挂载 CORS 中间件，`OPTIONS` 按普通请求进入路由与 operation guard 由 ContractGraph 裁决；需要跨域面的服务显式声明策略（`servicekit.BrowserCORSFromEnv()` 保留 env 派生语义）。`WrapHandler` 钩子只承载真正特殊的服务级中间件。
+- 决策：双形态并存且各自合法——Bootstrap 是常规 HTTP 服务的推荐路径；WebSocket 网关、边缘网关等特殊形态继续使用函数库构件自行装配，不强行套 Bootstrap。`BootstrapSpec` 提供 `WrapHandler` 钩子承载 CORS 之外的服务级中间件差异。
+- 决策：进程入口形态按服务归属分两类，均消费同一 Bootstrap。service-core 组合成员的 `cmd/api` 是 `package bootstrap` 只导出 `NewModule`，进程壳在 `cmd/standalone-api`；独立进程服务（cloud artifact binding gate 的 Go 入口清单成员）保留 `cmd/api/main.go` 为 `package main`，`func main()` 只做 artifact 身份校验与 `servicekit.RunStandalone`，装配仍走 `Bootstrap`。两类都不再手写相位机与装配样板。
+- 决策：账号安全 authority 允许「声明缺席」而非缺省装配——`SkipAccountSecurityAuthority` 声明本服务入站面不接受终端用户账号 principal（控制面服务只认运营台 OIDC 与机器凭据），骨架不装配 authority 客户端、不把它并入 `/readyz`；中间件对携带账号 principal 的请求由 deny-all gate fail-closed 拒绝，不是绕过账号状态检查放行。该声明与 `AuthorityScopes`、`user_account_security_authority.base_url` 互斥，同时给出即启动失败。缺席不声明仍然 fail-closed：无 base_url 即报错。无条件装配会让控制面为了自己就绪而反向依赖 user-service，并把「本服务无此依赖」持续报成依赖故障。
+- 决策：配置中心自身**仍然**是自己的 config sync 客户端，不提供 `SkipConfigSync` 逃逸口。platform-ops 与其它受管服务同轨读取自己的有效配置并 ACK：prod rollout 的 `CONFIG_ACK_REQUIRED_INSTANCES` 把 platform-ops 实例算作收敛成员，关掉它等于让发布门禁永久不收敛。自举不成立——resolve 走进程内 HTTP 面，与外部客户端同一条路径，因此也顺带证明该面可用。
+- 决策：实例报告与配置解析 scope 的 cluster 身份来源优先级为「服务显式声明 → 部署面注入的 `CLUSTER_NAME` → 按环境派生的 `<env>-control-a`」。prod rollout 渲染器按 `prod-<instance>-control-<replica>` 逐副本注入 `CLUSTER_NAME`，骨架忽略该注入会让全体副本在实例报告里自称同一 cluster，副本级漂移不可分辨。
+- 决策：领域专属就绪子路由与骨架 `/readyz` 并存且语义不同——`/readyz` 回答「本实例依赖是否就绪」，`/readyz/config-convergence` 回答「本次发布的全体受管实例是否都已 ACK 当前配置」，后者是发布编排判据，挂为领域路由，两者不可互相替代。该子路由只返回 ready/not_ready，拓扑与 hash 详情仍需经 operator 授权接口读取。
+- 决策：`RequireGeneratedOperationAuthorization` 的 default-deny 只对被 descriptors 表描述的入站面成立；未被该表收录、但有独立且更窄准入判据的路由必须显式挂到 `Assembly.Unguarded()` 并逐条写明判据，不得改回迁移期的「未匹配即透传」。platform-ops 的三条例外是：发布收敛探针（无凭据探测、只暴露 ready/not_ready）、`resolve-for-instance`（机器面 operation，未被运营台门户派生的描述符表收录，准入由 handler 自身的 service principal 与 env/service 绑定承担）、Alertmanager webhook（对侧只能携带静态机器 token，由专用 token 边界 fail-closed）。透传式 guard 会让任何新增未描述路由默认无鉴权。
+- 决策：账号安全 authority 的**提供方**用 `SelfHostedAccountSecurityAuthority` 声明，语义与 `SkipAccountSecurityAuthority` 相反：入站面照常接受终端用户账号 principal，但裁决在本进程内完成。骨架不装配 HTTP 客户端也不登记远端就绪检查——指向自己的客户端会同时制造自调用与就绪自依赖。裁决点**不在认证中间件**：认证中间件位于 operation guard 之外，此刻 operation 上下文尚未写入，无法表达「已确认 closed 的账号重放某条 canonical 幂等终态命令仍返回成功」这类 operation 级豁免（`UserAccount.CloseAccount` 的 metadata 契约要求该语义）。因此自托管服务必须由领域装配经 `Assembly.Auth.ProvideInProcessAccountSecurityGate` 交出进程内裁决中间件，**挂载位置由骨架决定**——固定在 operation guard 内侧、领域路由之前。位置交给服务侧手工组装会让「挂错到 guard 外侧」这种错误只表现为某条幂等重放语义悄悄失效。
+- 决策：自托管形态下认证中间件的 authority 面是 nil，而 `rtauth.Middleware` 对 nil authority 的行为是**跳过**账号安全检查，因此「声明自托管但未交出领域 gate」必须 fail-closed：否则被封禁与已注销账号将畅通无阻，且这种失效没有任何运行期信号。骨架在领域装配之后核对 gate 在场，缺席即启动失败；gate 只能提供一次，允许覆盖等于给同一裁决留两条轨。该声明与 `SkipAccountSecurityAuthority`、authority base_url、scopes 均互斥。
+- 决策：`PreAdmissionPaths` 是 admission 门的唯一合法前置放行口，判据窄化为精确 `/internal/` 路径，不接受前缀式与通配（骨架 fail-closed 校验）。它的唯一正当用途是打破 service-core 单进程内的启动循环：同进程另一模块的就绪检查要调用本模块的内部端点，而本模块此刻尚未 `OpenAdmission`，双方互等即死锁。业务路由进入该清单等于在就绪之前接受真实流量，因此不允许。
+- 决策：认证中间件的内外两侧都有声明位且职责不同。`WrapHandler` 在认证**内侧**（principal 已解析）；`WrapOutsideAuth` 在认证**外侧**，承载必须看到原始入站报文的关注点（网关的凭据中继）——认证会把原始凭据头换成已解析的 principal 上下文。外侧不等于绕过认证：认证仍在其内侧执行，它只是先于认证观察请求。
+- 决策：`OperationGuard` 回调收进程身份并允许返回错误（`func(identity Identity) (func(http.Handler) http.Handler, error)`）。按环境分档的 boundary（`rtauth.OperationAuthorizationForRuntime`）需要 env 且构造可失败，构造失败或返回 nil middleware 一律阻止启动，不得退化成无 guard。
+- 决策：CORS 是入站面策略而非通用启动样板，因此默认不挂载，由需要它的服务在 `BootstrapSpec.CORS` 显式声明。判据是 `rthttp.WithCORS` 对 `OPTIONS` 的短路不看 options：无论策略取什么值都无条件返回 204，且该响应在观测栈、operation guard、共享准入之外写出，默认挂载等于给每个服务凭空加一个未认证、不计量、可探测的请求面。只有承载浏览器直连入站面的服务声明跨域策略（`chat-service` 的媒体面、`product-ops-service` 的运营台、`tag-service`）；其余服务包括全站唯一对外业务入口 `api-edge` 的 `OPTIONS` 语义是由 ContractGraph 裁决为 `route_not_found`。跨域面集合由 `cmd/service-core` 的 local_contract 锁定，新增声明必须同时给出该服务接受浏览器跨域直连的理由。
+- 被否决方案：默认挂载 CORS 并提供 `DisableCORS bool` 关闭位——默认值决定了「忘记声明」的后果，而此处忘记声明的后果是多一个对外可探测面，方向应当是默认关闭而非默认开放。
+- 决策：`Workers.AddFallible` 承载「启动动作本身可失败」的 worker，在 Start 相位同步执行，失败即让 Start 失败。把这类失败降级成健康检查会让失败时机推迟到 Ready 窗口，也让「拉起失败」与「运行中故障」共用同一个信号。长跑循环体仍用 `Workers.Add`。
+- 决策：生效配置快照路径由骨架写入 `BaseConfig.ConfigPath`，与 `BaseConfig.Environment` 同机制。需要按快照来源分档校验的领域钩子读它，而不是各自重算一遍 configrelease 选路——重算会形成第二套选路规则。
+- 决策：servicekit 不直接导入存储驱动。`runtime/**` 公共层禁止直连驱动（`verify_service_layering`），但连接句柄必须能穿过公共层交到服务侧，因此驱动包只在 `internal/platform/{mongodb,postgres}` 被导入，句柄以平台层类型别名对外（`rtmongo.Database`、`rtpostgres.Pool`），生命周期以不含驱动类型的接口对外（`rtmongo.Handle`）。平台层同时区分「DSN 非法」与「连接失败」（`rtpostgres.ErrInvalidDSN`）：两者运维处置相反，前者重试无用，后者可能只是依赖尚未就绪，合并成一条错误会丢掉这个判断。
+- 理由：完成 [DEC-027](#dec-027) 迁移后的服务 bootstrap 仍余约 130 行跨服务字节级重复（生命周期序言、手写 env 覆盖、Mongo 装配、HTTP 骨架、digest fallback），继续手抄将随服务数线性放大漂移面；声明化把「每服务手抄」变为「一处实现 + 同包白盒锁定」。
+- 被否决方案：env 键按 yaml 路径全隐式派生——键名不再显式出现在源码中，无法 grep、来源不可审计，违反配置来源单义。
+- 被否决方案：把特殊形态服务强行套 Bootstrap——网关的 handler 组合与常规服务不同构，强套会让骨架长出逃逸参数簇，形成第二套装配语义。
+- 被否决方案：为 `ValidateConfig` 增加 `identity` 与 `configPath` 形参——该钩子已有八个使用者，其中绝大多数不需要这两项，改签名的代价全部落在无关服务上；改为由骨架写入 `BaseConfig` 字段，钩子按需读取。
+- 被否决方案：让 authority 提供方装配一个指向自身入站面的 HTTP 客户端——它会把「本服务是否就绪」变成「本服务是否已就绪」的自指判断，并在进程内绕一圈网络栈做本可直调的裁决。
+- 被否决方案：把自托管服务的进程内裁决面注入认证中间件的 `AccountSecurityAuthority` 字段——该位置在 operation guard 之外，裁决时拿不到 operation 上下文，`CloseAccount` 的幂等重放语义会被 `closed` 判否直接吃掉。
+- 被否决方案：改用 `rtauth.MiddlewareConfig.AccountSecurityExemption` 在认证层表达豁免、退役对象级 gate——豁免判据要从 canonical operation 退化为 method+path 字面量，错误面也要从对象 `errors.yaml` 生成的构造器改为 runtime 硬编码构造器，`USER.AUTH.*` 的用户文案由此出现第二个真相源。
+- 约束与影响：Bootstrap、env 引擎与 Mongo 构件的行为由 servicekit 同包 `*__local_contract_test.go` 白盒锁定；真实 Mongo 连接路径不进白盒（连接器以同包 typed double 注入且不出测试树），由服务 api_integration 层承载。迁移服务须新增 env 键全集等价断言（声明派生键与被删除的手写键逐一相等）。
+- 关联要求：`REQ-002`、`REQ-003`、`REQ-005`
+- 关联验收：`SIT-002`、`SIT-003`、`SIT-005`
+
+<a id="dec-029"></a>
+### DEC-029 判定语义只来自显式声明，值的在场与形态不构成声明
+
+- 决策：任何决定行为分支的语义只能读显式声明位，不得读「某个值在不在场」或「某个值长什么样」。判据是一句可回答的话：**这个分支读的是「有人写下的取值」，还是「某个值恰好是/不是某种形状」**。后者一律改为前者，改不动就判否退出，不得留在运行期。本决策的效力范围是全仓 Go/Dart/Python 与配置渲染面，不限于服务装配。
+- 决策：「不启用」「不接真实依赖」是取值的一个合法枚举值，不是取值的缺席。Redis 的进程内存实现由 `mode: memory` 表达（[DEC-028](#dec-028)），不由「没注入地址」表达；ES 的启用只由 `SEARCH_ES_ENABLED` 表达，不由 `SEARCH_ES_ENDPOINTS` 在场翻转。地址或端点在场只说明有人注入了一个地址，它同时兼容「本环境要接」与「注入错了地方」两种相反事实，而按前者静默处理的失效在运行期不产生任何信号。
+- 决策：显式声明的代价由**分层默认**承担，不由放宽判据承担。配置取值优先级固定为「服务 `environments/<env>/config.yaml` override → 环境级跨服务默认 → 全局跨服务默认（`quwoquan_ops/environments/config-defaults.yaml`）→ 服务 `config/schema.yaml` 的 `default`」，四层每一层都是显式声明，任一生效值都能指回一处写下它的文件。分层默认只提供**取值**，不定义键：键的存在性、类型与 `sensitive` 仍只由本服务 schema 声明（[REQ-003](spec.md#req-003)），跨服务默认按键 pattern 匹配，未命中本服务 schema 声明的键时该键不进入快照——pattern 是跨全部服务的宽匹配，「本服务没有这个键」是常态而非缺陷，命中后的取值仍要过本服务 schema 的类型校验。`sensitive` 键不得由跨服务默认提供，它只能走 secretRef——凭据的注入归属必须逐服务逐环境可查，共享一处默认恰好抹掉这个归属。
+- 决策：一段配置的复用只允许「整段缺席即复用另一段」这一条规则，禁止字段级回落。判定由 `IsUndeclared()` 承担（该段每个字段都未被声明过），复用后的整段仍要过原有校验。字段级回落会把 `realtime` 的 mode 与 `general` 的地址拼成一份没人声明过的配置，出问题时没有任何一个文件能解释生效值；整段复用的规则写在装配处、只有一条，读者能一眼看出这个段的每个字段都来自哪里。
+- 决策：URI scheme 不是「值的形态」而是 URI 契约的一部分，读它是解析声明。OTLP endpoint 的 `http://` / `https://` 决定 trace 是否加密传输，缺 scheme 判否；注入面必须写出 scheme。改之前的判据是 `HasPrefix(endpoint, "https")`，而 `WithEndpoint` 收的是 `host:port`、注入面给的也是 `host:port`，那个前缀永远不成立——明文是唯一可达分支，且没有任何信号说明加密从未生效。同型豁免适用于 `unix://`、`rediss://` 一类由协议契约定义的 scheme。
+- 决策：判否必须止于装配，不得降级为 no-op。`otel.MustInit` 对非法 exporter 声明改为 panic：只记一条 error 再返回空 provider 会让服务带着「无 trace」运行，而无 trace 与安静服务在外部看起来完全一样。同理，校验函数的返回值不得被调用方丢弃——吞掉 error 会让装配期判否退化成注释里的承诺。
+- 决策：判否文本描述**缺的那处声明或注入键**，不描述症状。触发这类判否的现实场景是「环境装配注入了单点 addr 却没覆盖 cluster 声明」，读者此刻需要知道该改哪个文件、写哪个键，而不是「invalid config」。判否文本同时给出合法出路（含「声明 `mode: memory` 表示本环境不接」这条关停路径）。
+- 理由：隐式语义的成本不对称。声明缺失被静默按「默认关停」处理时，多副本各自持有一份不共享、重启即丢的实现，而幂等键、分布式锁与会话都建立在跨副本可见的前提上；反向的判否成本只是一次性的配置补齐。同一份代码同时服务四个环境时，「按值的形态猜环境意图」必然在某个环境上猜错，而猜错的那个环境通常是最少被实跑的 prod。
+- 约束：本决策不禁止默认值，只禁止**没有声明位的**默认值。schema `default`、分层默认与代码内的常量上限都是显式声明；被禁止的是「读不到值就自己决定语义」。
+- 约束：`try` 前缀解析器返回 `null` 表达形状判定结果的既有豁免不受影响，它由 [DEC-025](#dec-025) 拥有；本决策管「判定语义从哪来」，DEC-025 管「结果状态怎么表达」，两者不重叠也不互相豁免。
+- 被否决方案：为每处推断补注释说明其意图。注释不改变运行期行为，下一次注入错误仍然静默。
+- 被否决方案：把 `standalone` 缺地址回落 memory 保留为兼容路径，见 [DEC-028](#dec-028) 的同名否决。
+- 被否决方案：用一个与 `mode` 正交的 `enabled` 开关表达关停。它会引入「开关关停但 mode 声明 cluster」这类需要额外裁决的组合，而关停本就是运行模式的一个取值。
+- 被否决方案：允许字段级 scene 回落以减少配置行数。少写的那几行换来的是生效值不可追溯。
+- 被否决方案：给跨服务默认开 `sensitive` 例外以少写几处 secretRef。凭据的注入归属必须逐服务逐环境可查，共享一处默认恰好抹掉这个归属。
+- 影响 Story：[`explicit-semantics-no-implicit-inference`](./explicit-semantics-no-implicit-inference/spec.md) 承接唯一判据、分层默认声明位、整段复用规则、scheme 豁免与判否文本要求。
+- 关联要求：`REQ-002`、`REQ-003`
+- 关联验收：`SIT-002`、`SIT-003`
+
+<a id="dec-030"></a>
+### DEC-030 模型属性的取值语义只来自契约声明，闭集在每条消费管线上类型化
+
+- 决策：闭集的类型化必须传播到每一条消费管线，不止于契约与生成物。契约以 `type: enum` 加 `enum_ref` 声明的属性，在服务侧领域模型、跨对象读端口的 slice、投影行与端侧模型上都必须是该闭集的类型；判定与具名常量比较，不与字符串字面量比较，也不以大小写不敏感比较放宽值域。类型只落在契约与生成物、消费点仍是裸字符串时，闭集实际上不存在：`strings.EqualFold(status, "deleted")` 同时接受契约从未声明的 `Deleted` 与 `DELETED`，而它下一行就能接受一个契约里根本没有的取值而不被任何检查拦住。
+- 决策：四种输入形态各自独立判定，不得合并成一个「缺席」分支。**闭集零值**不是合法取值——契约声明 `NOT_NULL` 的枚举属性，其语言零值不在闭集内，必须与不合法取值同路判否，不得为零值单开放行分支。**宿主对象缺席**时不产出属性级判定——对象整体不在场时取属性默认值继续判定，等于把「数据还没到」判成一个具体的业务事实。**闭集外入站取值**必须落到显式声明的未知成员，且该成员不得等价于任何放行态。**契约未声明的取值**不得出现在判定分支里，这类分支是死分支，删除而不是保留为兼容。这四种形态的后果互不相同，写成一个词会让「断言的输入根本到不了被测分支」这类问题在规格层就不可见。
+- 决策：一个业务语义只有一个可写载体。判定不得把两个载体用逻辑或合并——`!DeletedAt.IsZero() || status == "deleted"` 在任一载体单独失真时都仍然成立，因此两者的不一致永远不可见。已存在伴随载体时派生方向单一：权威载体写入后由同一次事务派生伴随载体，伴随载体不得被独立写入也不得反向决定权威载体。读侧归并展示取值时，归并结果必须是显式声明的展示态成员，且语义相反的两个取值不得归并到同一个成员——把 `rejected` 与 `pending_review` 一起显示成「审核中」不是简化，是告诉用户一件不成立的事。
+- 决策：默认值是纯写侧概念，读侧只翻译不发明。默认值的声明位唯一，在写入时一次性物化为显式取值，物化后与任何其他显式取值不可区分；因此读侧不存在「默认态」这个状态。读侧为缺席属性填入默认值会制造一个写侧从未声明过的取值，且该取值无法指回任何一处声明。测试替身受同一约束：替身为被测属性补默认值时，断言绿在替身上而不是被测规则上，而这种假绿在替身与被测代码同时演进时不产生任何信号。
+- 决策：判否收缩用户可见路径时，终态与恢复动作是该判否的一部分，不是后续工作。本决策把若干「原来能看、能点」改成「不能看、不能点」，而收缩本身不产生终态：宿主对象缺席期间的渲染态与「加载已结束但对象仍缺席」是两个必须分别可达的终态，后者不得以失败对象在场为前提。闭集外取值的终态文案不得复用断言性措辞——把「本端未声明该取值」说成「内容已被删除」，会把客户端版本落后谎报成内容发生了变化。判否而不给终态，会把一个静默的错误答案换成一个静默的死路，用户的处境并没有变好。
+- 决策：本决策与相邻决策的分工按「声明位」和「判定对象」划开，不按现象划开。[DEC-029](#dec-029) 与本决策共用「判定只读显式声明」这一句判据，但声明位不同：那边是 config schema 键与 env 键，这边是对象契约的字段与枚举成员；同一句判据在两个平面各有自己的合法形态与豁免，合成一个 DEC 会让 Redis `mode` 的分层默认与属性闭集的类型化互相污染。[DEC-025](#dec-025) 管一次返回如何表达其结果状态，本决策管属性取值凭什么进入判定分支：前者的四态是返回值的形态，后者的四形态是输入的来源，`status` 取零值时 DEC-025 无话可说而本决策判否。[DEC-007](#dec-007) 拥有删除语义的三层 owner 与保留期，本决策只要求删除态不被第二个载体独立表达，不改判其 owner。[DEC-014](#dec-014) 裁定读投影值域可宽于写侧闭集，本决策不收窄它，只要求宽出来的取值同样是显式声明的成员而不是就地发明的字面量。
+- 理由：判定语义的显式化在配置面已由 [DEC-029](#dec-029) 落地，而模型属性面的失效形态更隐蔽且更贴近用户。配置面的隐式推断在装配期一次暴露，属性面的隐式推断每次请求都发生一次且各自看起来正常：会话状态取零值时授权门放行、圈子详情未到达时按公开渲染、分享目标状态未知时按可打开渲染——三处都不产生任何错误信号，都要等用户撞上才显形。三者的共同形状是「取值没有落在闭集里，于是代码替它选了一个」，而代码选的总是最宽松的那个。
+- 约束：证据层按判定的可观察位置分层，不按改动所在的目录分层。授权门的零值判否经导出命令观察，属 `local_contract`。服务侧 `internal/**` 不适用旁路同包测试，因此不得为可测性把授权门改成导出符号。渲染态与终态的可达性经 Widget 观察，属 `local_contract`。入站取值到未知成员的映射必须经公开工厂观察并绕开测试替身的补值，同属 `local_contract`。存储适配器的查询谓词只存在于发给存储的 filter 里，`local_contract` 只能断言被抽为导出构造函数的谓词，真实存储行为归 `api_integration`——用注入替身证明适配器的过滤，证明的是消费方而不是适配器自身。
+- 约束：本决策的门禁不得依赖豁免名单或存量基线文件成立。契约里「为空表示 X」形态的声明存在三类，判据必须分开：分页游标的「空表示无更多数据」是协议定义的终止信号、可选引用的「为空即无关联」是缺席本义、而「为空表示待投递」「为空表示继承默认」「为空表示全部维度」才是被缺席承载的业务状态。只判第一层文本形态会对前两类产出压倒性误报并很快被绕过。门禁自证必须双向——对新增违规样本变红，且对既有合规样本不误报；只测变红时，判据与合法文本在语法上同形这一事实不会被发现。
+- 被否决方案：把本决策并入 [DEC-029](#dec-029)。两者判据同源但声明位与合法形态不同，合并后 Redis `mode` 的四层分层默认会与属性闭集的类型化传播共用一段约束，而分层默认恰恰是本决策在读侧禁止的形态——配置取值允许四层回落且每层都是声明，属性取值不允许读侧回落。
+- 被否决方案：为闭集外取值保留「映射到最宽松成员」作为兼容路径。它让「服务端新增了取值」与「本端解析错了」在运行期形状相同，而前者应当收缩、后者应当报错，两者都不该表现为放行。
+- 被否决方案：先批量把裸字符串消费点替换为具名常量，再逐服务开启 typed enum。批量替换不会让任何一处编译失败，因此漏掉的消费点无信号；开启 typed enum 让全部裸字符串消费点编译失败，编译错误就是逐点裁决的导航。
+- 被否决方案：把「宿主对象缺席」并入「属性缺席」统一处理。两者的修复位置不同：属性缺席在解码与契约声明处修，宿主对象缺席在调用方的加载态与终态处修；并入后修复会一律落到属性侧，而缺的那个终态永远不会出现。
+- 约束与影响：服务侧 typed enum 生成能力已存在但只有一个服务的生成器调用它，因此本决策的 `REQ-001` 在其余服务上按 Story `OPEN-001` 承载。共享闭集的简写列表形态无法声明未知成员的 wire 语义，按 `OPEN-002` 承载。多载体与默认值多轨的存量逐处裁决按 `OPEN-003` 承载，全仓静态门禁按 `OPEN-004` 承载。四笔都不进中央台账，随各自完成判定关闭。
+- 影响 Story：[`model-attribute-semantics`](./model-attribute-semantics/spec.md) 承接类型化传播、四形态独立判定、单一可写载体、写侧默认物化与收缩路径终态。
+- 关联要求：`REQ-001`、`REQ-002`
+- 关联验收：`SIT-001`、`SIT-002`
 
 ## 5. 失败与恢复
 

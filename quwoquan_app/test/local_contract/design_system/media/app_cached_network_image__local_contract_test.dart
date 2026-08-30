@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 // ignore: depend_on_referenced_packages
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart';
 import 'package:quwoquan_app/runtime/observability/analytics.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -17,6 +18,7 @@ import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.da
 import 'package:quwoquan_app/runtime/transport/media/cdn_media_url_processor.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 
+import '../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
 import '../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
 
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-002
@@ -339,8 +341,7 @@ void main() {
       await tester.pumpWidget(
         _wrap(
           const AppCachedNetworkImage(
-            imageUrl:
-                'media/background/s/archived-avatar/user/fixture_user_current/v1/background.png',
+            imageUrl: 'media/background/s/archived-avatar/user/fixture_user_current/v1/background.png',
           ),
         ),
       );
@@ -411,57 +412,117 @@ void main() {
       },
     );
 
-    testWidgets(
-      '三态语义 key：加载占位 / 显式失败 / 解码成功可被测试与 UAT 区分',
-      (tester) async {
-        // 失败态（候选为空）：必须暴露 error key，不得与占位混同。
-        await tester.pumpWidget(
-          _wrap(const AppCachedNetworkImage(imageUrl: '')),
-        );
-        await tester.pump();
-        expect(find.byKey(appImageLoadErrorKey), findsOneWidget);
-        expect(find.byKey(appImageLoadPlaceholderKey), findsNothing);
-        expect(find.byKey(appImageLoadSuccessKey), findsNothing);
+    testWidgets('成功与失败共享加载周期起点并上报真实耗时', (tester) async {
+      var now = DateTime.utc(2026, 8, 27, 4, 15);
+      final telemetry = RecordingAppTelemetryRecorder();
+      const successUrl = 'https://cdn.example.test/media/image/success.png';
 
-        // 自定义 errorWidget（如 feed 灰块）同样必须携带 error key：
-        // 这是「图片全灰」可被 UAT 检出的前提。
-        await tester.pumpWidget(
-          _wrap(
-            AppCachedNetworkImage(
-              imageUrl: '',
-              errorWidget: Container(color: CupertinoColors.systemGrey5),
-            ),
+      await tester.pumpWidget(
+        _wrap(
+          AppCachedNetworkImage(
+            key: const ValueKey<String>('timed-success-image'),
+            imageUrl: successUrl,
+            imageUrlCandidates: const <String>[successUrl],
+            now: () => now,
           ),
-        );
-        await tester.pump();
-        expect(find.byKey(appImageLoadErrorKey), findsOneWidget);
+          overrides: [
+            appTelemetryReporterProvider.overrideWithValue(telemetry),
+          ],
+        ),
+      );
+      final successFinder = find.byType(CachedNetworkImage);
+      final successImage = tester.widget<CachedNetworkImage>(successFinder);
+      now = now.add(const Duration(milliseconds: 175));
+      successImage.imageBuilder!(
+        tester.element(successFinder),
+        MemoryImage(_transparentImage),
+      );
+      await tester.pump();
 
-        // 加载中：placeholder key 可见，error/success 不可见。
-        await tester.pumpWidget(
-          _wrap(
-            const AppCachedNetworkImage(
-              imageUrl:
-                  'media/image/s/archived-image/post/loading/v1/cover.png',
-            ),
+      final successEvent = telemetry.recorded.single;
+      expect(successEvent.eventType, 'media_load_state');
+      expect(successEvent.extensions['result'], 'success');
+      expect(successEvent.extensions['durationMs'], 175);
+      expect(successEvent.extensions['candidatesTried'], 1);
+
+      telemetry.recorded.clear();
+      now = DateTime.utc(2026, 8, 27, 4, 16);
+      const failureUrl = 'https://cdn.example.test/media/image/failure.png';
+      await tester.pumpWidget(
+        _wrap(
+          AppCachedNetworkImage(
+            key: const ValueKey<String>('timed-failure-image'),
+            imageUrl: failureUrl,
+            imageUrlCandidates: const <String>[failureUrl],
+            now: () => now,
           ),
-        );
-        await tester.pump();
-        expect(find.byKey(appImageLoadPlaceholderKey), findsOneWidget);
-        expect(find.byKey(appImageLoadErrorKey), findsNothing);
+          overrides: [
+            appTelemetryReporterProvider.overrideWithValue(telemetry),
+          ],
+        ),
+      );
+      final failureFinder = find.byType(CachedNetworkImage);
+      final failureImage = tester.widget<CachedNetworkImage>(failureFinder);
+      now = now.add(const Duration(milliseconds: 420));
+      failureImage.errorWidget!(
+        tester.element(failureFinder),
+        failureUrl,
+        StateError('network unavailable'),
+      );
+      await tester.pump();
 
-        // 成功态：imageBuilder 产物必须携带 success key。
-        final cachedFinder = find.byType(CachedNetworkImage);
-        final cachedImage = tester.widget<CachedNetworkImage>(cachedFinder);
-        final decoded = cachedImage.imageBuilder!(
-          tester.element(cachedFinder),
-          MemoryImage(_transparentImage),
-        );
-        await tester.pumpWidget(_wrap(decoded));
-        await tester.pump();
-        expect(find.byKey(appImageLoadSuccessKey), findsOneWidget);
-        expect(find.byKey(appImageLoadErrorKey), findsNothing);
-      },
-    );
+      final failureEvent = telemetry.recorded.single;
+      expect(failureEvent.eventType, 'media_load_state');
+      expect(failureEvent.extensions['result'], 'failure');
+      expect(failureEvent.extensions['durationMs'], 420);
+      expect(failureEvent.extensions['candidatesTried'], 1);
+    });
+
+    testWidgets('三态语义 key：加载占位 / 显式失败 / 解码成功可被测试与 UAT 区分', (tester) async {
+      // 失败态（候选为空）：必须暴露 error key，不得与占位混同。
+      await tester.pumpWidget(_wrap(const AppCachedNetworkImage(imageUrl: '')));
+      await tester.pump();
+      expect(find.byKey(appImageLoadErrorKey), findsOneWidget);
+      expect(find.byKey(appImageLoadPlaceholderKey), findsNothing);
+      expect(find.byKey(appImageLoadSuccessKey), findsNothing);
+
+      // 自定义 errorWidget（如 feed 灰块）同样必须携带 error key：
+      // 这是「图片全灰」可被 UAT 检出的前提。
+      await tester.pumpWidget(
+        _wrap(
+          AppCachedNetworkImage(
+            imageUrl: '',
+            errorWidget: Container(color: CupertinoColors.systemGrey5),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(appImageLoadErrorKey), findsOneWidget);
+
+      // 加载中：placeholder key 可见，error/success 不可见。
+      await tester.pumpWidget(
+        _wrap(
+          const AppCachedNetworkImage(
+            imageUrl: 'media/image/s/archived-image/post/loading/v1/cover.png',
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(appImageLoadPlaceholderKey), findsOneWidget);
+      expect(find.byKey(appImageLoadErrorKey), findsNothing);
+
+      // 成功态：imageBuilder 产物必须携带 success key。
+      final cachedFinder = find.byType(CachedNetworkImage);
+      final cachedImage = tester.widget<CachedNetworkImage>(cachedFinder);
+      final decoded = cachedImage.imageBuilder!(
+        tester.element(cachedFinder),
+        MemoryImage(_transparentImage),
+      );
+      await tester.pumpWidget(_wrap(decoded));
+      await tester.pump();
+      expect(find.byKey(appImageLoadSuccessKey), findsOneWidget);
+      expect(find.byKey(appImageLoadErrorKey), findsNothing);
+    });
 
     testWidgets(
       'avatar reports successful decode once and rejects raw provider URL',

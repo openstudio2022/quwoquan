@@ -23,76 +23,8 @@ from core.data_issue import (
     DataRecoveryAction,
     data_issue,
 )
+from core.rate_limit import SiteRateLimiter
 from core.runtime_policy import active_runtime_policy
-
-
-_RATE_LIMITERS_LOCK = threading.Lock()
-_RATE_LIMITERS: dict[tuple[str, str], "SiteRateLimiter"] = {}
-
-
-class SiteRateLimiter:
-    def __init__(
-        self,
-        max_requests_per_second: float,
-        *,
-        crawl_delay: float = 0.0,
-    ) -> None:
-        declared_interval = (
-            1.0 / max_requests_per_second if max_requests_per_second > 0 else 0.0
-        )
-        self._interval = max(declared_interval, max(0.0, crawl_delay))
-        self._last_request_at: float | None = None
-        self._lock = threading.Lock()
-
-    def wait(self) -> None:
-        with self._lock:
-            now = time.monotonic()
-            if self._last_request_at is not None:
-                remaining = self._interval - (now - self._last_request_at)
-                if remaining > 0:
-                    time.sleep(remaining)
-                    now = time.monotonic()
-            self._last_request_at = now
-
-    def strengthen(
-        self,
-        max_requests_per_second: float,
-        *,
-        crawl_delay: float,
-    ) -> None:
-        declared_interval = (
-            1.0 / max_requests_per_second if max_requests_per_second > 0 else 0.0
-        )
-        with self._lock:
-            self._interval = max(
-                self._interval,
-                declared_interval,
-                max(0.0, crawl_delay),
-            )
-
-
-def shared_rate_limiter(
-    site_id: str,
-    origin: str,
-    *,
-    max_requests_per_second: float,
-    crawl_delay: float,
-) -> SiteRateLimiter:
-    key = (site_id, origin)
-    with _RATE_LIMITERS_LOCK:
-        limiter = _RATE_LIMITERS.get(key)
-        if limiter is None:
-            limiter = SiteRateLimiter(
-                max_requests_per_second,
-                crawl_delay=crawl_delay,
-            )
-            _RATE_LIMITERS[key] = limiter
-        else:
-            limiter.strengthen(
-                max_requests_per_second,
-                crawl_delay=crawl_delay,
-            )
-        return limiter
 
 
 def network_issue(site_id: str, url: str, *, message: str) -> DataIssue:
@@ -296,11 +228,9 @@ def terms_precheck(
 
 
 __all__ = [
-    "SiteRateLimiter",
     "fetch_with_backoff",
     "network_issue",
     "policy_issue",
     "robots_for_url",
-    "shared_rate_limiter",
     "terms_precheck",
 ]

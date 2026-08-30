@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render and validate immutable App package evidence for ReleaseEvidenceManifest."""
+"""Render and validate immutable App build-product evidence."""
 
 from __future__ import annotations
 
@@ -8,41 +8,94 @@ import hashlib
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
 
-SCHEMA = "release-application-package"
-ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
-SURFACES = ("android", "ios", "web", "macos")
-GENERIC_PACKAGES = tuple(
-    (environment, surface)
-    for environment in ENVIRONMENTS[:-1]
-    for surface in SURFACES
-) + (("prod", "ios"), ("prod", "macos"))
-GENERIC_FIELDS = frozenset(
-    {
-        "schema",
-        "environment",
-        "surface",
-        "sourceGitSha",
-        "sourceTreeDigest",
-        "packageDigest",
-    }
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from quwoquan_ops.cli.lib.app_identity import (  # noqa: E402
+    AppBuildProduct,
+    application_id_for_build_product,
+    resolve_build_product,
+    supported_build_products,
 )
+from quwoquan_ops.cli.commands.package_app_artifact_helpers import (  # noqa: E402
+    artifact_digest,
+)
+from quwoquan_ops.cli.lib.common import load_json_yaml  # noqa: E402
+
+_ARTIFACT_METADATA_PATH = (
+    _ROOT / "quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml"
+)
+
+
+def _load_release_package_contract() -> dict[str, Any]:
+    """从 canonical metadata 读取五产品包证据契约。"""
+
+    document = load_json_yaml(_ARTIFACT_METADATA_PATH)
+    if not isinstance(document, dict):
+        raise ValueError(f"invalid artifact metadata: {_ARTIFACT_METADATA_PATH}")
+    schemas = document.get("schemas")
+    contract = schemas.get("release_application_package") if isinstance(schemas, dict) else None
+    artifact_contract = schemas.get("app_artifact_manifest") if isinstance(schemas, dict) else None
+    distribution_classes = document.get("distribution_classes")
+    if (
+        not isinstance(contract, dict)
+        or not isinstance(contract.get("schema_value"), str)
+        or not isinstance(contract.get("required_fields"), list)
+        or not isinstance(contract.get("fields"), dict)
+    ):
+        raise ValueError("release_application_package contract is not canonical")
+    if (
+        not isinstance(artifact_contract, dict)
+        or not isinstance(artifact_contract.get("schema_value"), str)
+        or not isinstance(artifact_contract.get("required_fields"), list)
+        or not isinstance(artifact_contract.get("fields"), dict)
+        or not isinstance(distribution_classes, dict)
+    ):
+        raise ValueError("app_artifact_manifest contract is not canonical")
+    products = supported_build_products()
+    if len(products) != 5 or len({item.build_product_id for item in products}) != 5:
+        raise ValueError("baseline App build product set must contain exactly five products")
+    return {
+        "schema": contract["schema_value"],
+        "fields": frozenset(str(field) for field in contract["required_fields"]),
+        "products": products,
+        "artifactSchema": artifact_contract["schema_value"],
+        "artifactRequiredFields": frozenset(
+            str(field) for field in artifact_contract["required_fields"]
+        ),
+        "artifactFields": frozenset(
+            str(field) for field in artifact_contract["fields"]
+        ),
+        "distributionClasses": distribution_classes,
+    }
+
+
+_CONTRACT = _load_release_package_contract()
+SCHEMA = _CONTRACT["schema"]
+BUILD_PRODUCTS: tuple[AppBuildProduct, ...] = _CONTRACT["products"]
+BUILD_PRODUCT_IDS = tuple(product.build_product_id for product in BUILD_PRODUCTS)
+GENERIC_PACKAGES = BUILD_PRODUCT_IDS
+GENERIC_FIELDS = _CONTRACT["fields"]
+ARTIFACT_SCHEMA = _CONTRACT["artifactSchema"]
+ARTIFACT_REQUIRED_FIELDS = _CONTRACT["artifactRequiredFields"]
+ARTIFACT_FIELDS = _CONTRACT["artifactFields"]
+_DISTRIBUTION_CLASSES = _CONTRACT["distributionClasses"]
 DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 GIT_SHA_PATTERN = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 TREE_DIGEST_PATTERN = re.compile(r"(?:sha1:[0-9a-f]{40}|sha256:[0-9a-f]{64})")
-SPECIAL_SCHEMAS = {
-    "publicWeb": "client-app.web.official-release",
-    "android": "client-app.android.official-release",
-    "opsPortal": "qwq.ops_portal_package",
-}
 PAYLOAD_NAMES = {
-    "android": "app-release.apk",
-    "ios": "quwoquan.ipa",
-    "web": "public-web.tar.gz",
-    "macos": "quwoquan-macos.zip",
+    "android-nonprod-apk": "app-release.apk",
+    "android-prod-apk": "app-release.apk",
+    "ios-nonprod-app": "quwoquan.app",
+    "ios-prod-app": "quwoquan.app",
+    "web-shared": "public-web",
 }
 
 
@@ -50,20 +103,13 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    render = subparsers.add_parser("render")
-    render.add_argument("--environment", choices=ENVIRONMENTS, required=True)
-    render.add_argument("--surface", choices=SURFACES, required=True)
-    render.add_argument("--package", required=True, type=Path)
-    render.add_argument("--source-git-sha", required=True)
-    render.add_argument("--source-tree-digest", required=True)
-    render.add_argument("--output", required=True, type=Path)
-
-    bind = subparsers.add_parser("bind-special")
-    bind.add_argument("--kind", choices=tuple(SPECIAL_SCHEMAS), required=True)
-    bind.add_argument("--manifest", required=True, type=Path)
-    bind.add_argument("--source-git-sha", required=True)
-    bind.add_argument("--source-tree-digest", required=True)
-    bind.add_argument("--output", required=True, type=Path)
+    render_parser = subparsers.add_parser("render")
+    render_parser.add_argument("--build-product-id", choices=BUILD_PRODUCT_IDS, required=True)
+    render_parser.add_argument("--package", required=True, type=Path)
+    render_parser.add_argument("--source-git-sha", required=True)
+    render_parser.add_argument("--source-tree-digest", required=True)
+    render_parser.add_argument("--artifact-manifest", required=True, type=Path)
+    render_parser.add_argument("--output", required=True, type=Path)
 
     validate = subparsers.add_parser("validate-bundle")
     validate.add_argument("--bundle-dir", required=True, type=Path)
@@ -74,14 +120,6 @@ def _parser() -> argparse.ArgumentParser:
 
 def _canonical_json(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return "sha256:" + digest.hexdigest()
 
 
 def _sha256_tree(root: Path) -> str:
@@ -106,64 +144,21 @@ def _sha256_tree(root: Path) -> str:
 
 
 def _package_digest(path: Path) -> str:
-    resolved = path.expanduser().resolve()
-    if path.is_symlink() or not resolved.exists():
-        raise ValueError(f"package is missing or is a symlink: {path}")
-    if resolved.is_file():
-        if resolved.stat().st_size <= 0:
-            raise ValueError(f"package file is empty: {path}")
-        return _sha256_file(resolved)
-    if resolved.is_dir():
-        return _sha256_tree(resolved)
-    raise ValueError(f"package is not a regular file or directory: {path}")
+    """Compatibility projection of the canonical App artifact digest."""
+
+    try:
+        return artifact_digest(path)
+    except RuntimeError as error:
+        raise ValueError(str(error)) from error
 
 
 def _generic_package_digest(path: Path) -> str:
-    """Hash the complete payload directory consumed by the release finalizer."""
-
     resolved = path.expanduser().resolve()
     if path.is_symlink() or not resolved.is_dir():
         raise ValueError(
-            "generic application package must be the canonical payload directory: "
-            f"{path}"
+            "application package must be the canonical payload directory: " f"{path}"
         )
     return _sha256_tree(resolved)
-
-
-def _public_web_tree_digest(root: Path) -> str:
-    """Match the canonical public Web producer's contentSHA256 algorithm."""
-
-    digest = hashlib.sha256()
-    files = sorted(item for item in root.rglob("*") if item.is_file())
-    if not files:
-        raise ValueError(f"public Web package directory is empty: {root}")
-    for path in files:
-        if path.is_symlink():
-            raise ValueError(f"public Web package contains a symlink: {path}")
-        relative = path.relative_to(root).as_posix().encode("utf-8")
-        digest.update(len(relative).to_bytes(4, "big"))
-        digest.update(relative)
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-    return "sha256:" + digest.hexdigest()
-
-
-def _ops_portal_tree_digest(root: Path) -> str:
-    """Match stackctl's path-sensitive Ops Portal dist digest."""
-
-    digest = hashlib.sha256()
-    files = sorted(item for item in root.rglob("*") if item.is_file())
-    if not files:
-        raise ValueError(f"Ops Portal dist directory is empty: {root}")
-    for path in files:
-        if path.is_symlink():
-            raise ValueError(f"Ops Portal dist contains a symlink: {path}")
-        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(_sha256_file(path).encode("ascii"))
-        digest.update(b"\0")
-    return "sha256:" + digest.hexdigest()
 
 
 def _validate_source(source_git_sha: str, source_tree_digest: str) -> tuple[str, str]:
@@ -178,10 +173,7 @@ def _validate_source(source_git_sha: str, source_tree_digest: str) -> tuple[str,
 
 def _git_identity() -> tuple[str, str]:
     revision = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        check=True,
-        capture_output=True,
-        text=True,
+        ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
     ).stdout.strip()
     tree = subprocess.run(
         ["git", "rev-parse", "HEAD^{tree}"],
@@ -205,54 +197,158 @@ def _require_checkout(source_git_sha: str, source_tree_digest: str) -> None:
         )
 
 
+def _expected_promotable(product: AppBuildProduct) -> bool:
+    declaration = _DISTRIBUTION_CLASSES.get(product.distribution_class)
+    return bool(
+        isinstance(declaration, dict)
+        and declaration.get("promotable")
+        and product.build_mode == "release"
+    )
+
+
+def _validate_artifact_manifest(
+    payload: Any,
+    *,
+    build_product_id: str,
+    source_git_sha: str,
+    source_tree_digest: str,
+) -> dict[str, Any]:
+    product = resolve_build_product(build_product_id)
+    label = product.build_product_id
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} AppArtifactManifest fields are not canonical")
+    payload_fields = set(payload)
+    if (
+        not ARTIFACT_REQUIRED_FIELDS.issubset(payload_fields)
+        or not payload_fields.issubset(ARTIFACT_FIELDS)
+    ):
+        raise ValueError(f"{label} AppArtifactManifest fields are not canonical")
+    trust_digest = payload.get("runtimeConfigTrustEnvelopeDigest")
+    if product.platform in {"android", "ios"}:
+        if DIGEST_PATTERN.fullmatch(str(trust_digest or "")) is None:
+            raise ValueError(
+                f"{label} AppArtifactManifest runtimeConfigTrustEnvelopeDigest is invalid"
+            )
+    elif "runtimeConfigTrustEnvelopeDigest" in payload_fields:
+        raise ValueError(
+            f"{label} Web AppArtifactManifest cannot bind a mobile trust envelope"
+        )
+    if payload.get("schema") != ARTIFACT_SCHEMA:
+        raise ValueError(f"{label} AppArtifactManifest schema mismatch")
+    expected_identity = {
+        "buildProductId": product.build_product_id,
+        "buildProfile": product.build_profile,
+        "platform": product.platform,
+        "buildMode": product.build_mode,
+        "distributionClass": product.distribution_class,
+        "artifactFormat": product.artifact_format,
+        "applicationId": application_id_for_build_product(product.build_product_id),
+    }
+    mismatches = [
+        field for field, expected in expected_identity.items() if payload.get(field) != expected
+    ]
+    if mismatches:
+        raise ValueError(
+            f"{label} AppArtifactManifest identity mismatch: {', '.join(mismatches)}"
+        )
+    if (
+        payload.get("sourceGitSha") != source_git_sha
+        or payload.get("sourceTreeDigest") != source_tree_digest
+    ):
+        raise ValueError(f"{label} AppArtifactManifest source mismatch")
+    for field in (
+        "signingIdentityDigest",
+        "buildProvenanceDigest",
+        "artifactDigest",
+    ):
+        if DIGEST_PATTERN.fullmatch(str(payload.get(field) or "")) is None:
+            raise ValueError(f"{label} AppArtifactManifest {field} is invalid")
+    declaration = _DISTRIBUTION_CLASSES.get(product.distribution_class)
+    if not isinstance(declaration, dict):
+        raise ValueError(f"{label} AppArtifactManifest distributionClass is invalid")
+    platform_modes = declaration.get("platform_build_modes") or {}
+    allowed_modes = (
+        platform_modes.get(product.platform)
+        if isinstance(platform_modes, dict)
+        else None
+    ) or declaration.get("build_modes") or []
+    if (
+        product.platform not in (declaration.get("platforms") or [])
+        or product.build_mode not in allowed_modes
+    ):
+        raise ValueError(f"{label} AppArtifactManifest distribution/build mismatch")
+    if payload.get("promotable") is not _expected_promotable(product):
+        raise ValueError(f"{label} AppArtifactManifest promotability mismatch")
+    return dict(payload)
+
+
 def render(
     *,
-    environment: str,
-    surface: str,
+    build_product_id: str,
     package: Path,
     source_git_sha: str,
     source_tree_digest: str,
-) -> dict[str, str]:
+    artifact_manifest: dict[str, Any],
+) -> dict[str, Any]:
     _require_checkout(source_git_sha, source_tree_digest)
+    product = resolve_build_product(build_product_id)
+    git_sha, tree_digest = _validate_source(source_git_sha, source_tree_digest)
+    normalized_artifact = _validate_artifact_manifest(
+        artifact_manifest,
+        build_product_id=product.build_product_id,
+        source_git_sha=git_sha,
+        source_tree_digest=tree_digest,
+    )
     payload = {
         "schema": SCHEMA,
-        "environment": environment,
-        "surface": surface,
-        "sourceGitSha": source_git_sha.strip().lower(),
-        "sourceTreeDigest": source_tree_digest.strip().lower(),
+        "buildProductId": product.build_product_id,
+        "buildProfile": product.build_profile,
+        "platform": product.platform,
+        "sourceGitSha": git_sha,
+        "sourceTreeDigest": tree_digest,
         "packageDigest": _generic_package_digest(package),
+        "artifactManifest": normalized_artifact,
     }
-    validate_generic(payload, environment=environment, surface=surface)
+    validate_package(payload, build_product_id=product.build_product_id)
     return payload
 
 
-def validate_generic(
+def validate_package(
     payload: Any,
     *,
-    environment: str,
-    surface: str,
+    build_product_id: str,
     source_git_sha: str | None = None,
     source_tree_digest: str | None = None,
-) -> dict[str, str]:
+) -> dict[str, Any]:
+    product = resolve_build_product(build_product_id)
+    label = product.build_product_id
     if not isinstance(payload, dict) or set(payload) != GENERIC_FIELDS:
-        raise ValueError(
-            f"{environment}/{surface} application package fields are not canonical"
-        )
+        raise ValueError(f"{label} application package fields are not canonical")
     if payload.get("schema") != SCHEMA:
-        raise ValueError(f"{environment}/{surface} application package schema mismatch")
-    if payload.get("environment") != environment or payload.get("surface") != surface:
-        raise ValueError(f"{environment}/{surface} application package identity mismatch")
+        raise ValueError(f"{label} application package schema mismatch")
+    if (
+        payload.get("buildProductId") != product.build_product_id
+        or payload.get("buildProfile") != product.build_profile
+        or payload.get("platform") != product.platform
+    ):
+        raise ValueError(f"{label} application package identity mismatch")
     git_sha, tree_digest = _validate_source(
         str(payload.get("sourceGitSha") or ""),
         str(payload.get("sourceTreeDigest") or ""),
     )
     if source_git_sha is not None and git_sha != source_git_sha:
-        raise ValueError(f"{environment}/{surface} sourceGitSha mismatch")
+        raise ValueError(f"{label} sourceGitSha mismatch")
     if source_tree_digest is not None and tree_digest != source_tree_digest:
-        raise ValueError(f"{environment}/{surface} sourceTreeDigest mismatch")
+        raise ValueError(f"{label} sourceTreeDigest mismatch")
     if DIGEST_PATTERN.fullmatch(str(payload.get("packageDigest") or "")) is None:
-        raise ValueError(f"{environment}/{surface} packageDigest is not immutable")
-    return {str(key): str(value) for key, value in payload.items()}
+        raise ValueError(f"{label} packageDigest is not immutable")
+    _validate_artifact_manifest(
+        payload.get("artifactManifest"),
+        build_product_id=product.build_product_id,
+        source_git_sha=git_sha,
+        source_tree_digest=tree_digest,
+    )
+    return dict(payload)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -265,115 +361,45 @@ def _load_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def bind_special(
-    *,
-    kind: str,
-    manifest_path: Path,
-    source_git_sha: str,
-    source_tree_digest: str,
-) -> dict[str, Any]:
-    _require_checkout(source_git_sha, source_tree_digest)
-    payload = _load_json(manifest_path)
-    if payload.get("schema") != SPECIAL_SCHEMAS[kind]:
-        raise ValueError(f"{kind} package schema mismatch")
-    if kind == "publicWeb":
-        if payload.get("environment") != "prod":
-            raise ValueError("public Web package is not bound to prod")
-        content_digest = str(payload.get("contentSHA256") or "")
-        if re.fullmatch(r"[0-9a-f]{64}", content_digest) is None:
-            raise ValueError("public Web content digest is invalid")
-        public = manifest_path.parent / "public"
-        if _public_web_tree_digest(public) != f"sha256:{content_digest}":
-            raise ValueError("public Web content digest does not match its payload")
-    elif kind == "android":
-        if payload.get("platform") != "android":
-            raise ValueError("Android package platform mismatch")
-        artifact = manifest_path.parent / str(payload.get("packagedAPK") or "")
-        if _package_digest(artifact) != f"sha256:{payload.get('apkSHA256') or ''}":
-            raise ValueError("Android package digest does not match its payload")
-    else:
-        if payload.get("environment") != "prod" or payload.get("target") != "prod-hosted":
-            raise ValueError("Ops Portal package is not bound to prod/prod-hosted")
-        if payload.get("gitRevision") != source_git_sha:
-            raise ValueError("Ops Portal package Git revision mismatch")
-        digests = payload.get("digests")
-        if not isinstance(digests, dict) or any(
-            DIGEST_PATTERN.fullmatch(str(value or "")) is None
-            for value in digests.values()
-        ):
-            raise ValueError("Ops Portal package digests are incomplete")
-        if payload.get("packageDigest") != digests.get("distTree"):
-            raise ValueError("Ops Portal packageDigest does not match its dist evidence")
-    payload["sourceGitSha"] = source_git_sha.strip().lower()
-    payload["sourceTreeDigest"] = source_tree_digest.strip().lower()
-    return payload
-
-
 def validate_bundle(
     *, bundle_dir: Path, source_git_sha: str, source_tree_digest: str
 ) -> None:
     git_sha, tree_digest = _validate_source(source_git_sha, source_tree_digest)
     applications = bundle_dir / "application-packages"
-    actual_files = {
-        path.name for path in applications.glob("*.json") if path.is_file()
-    }
-    expected_files = {
-        f"{environment}--{surface}.json"
-        for environment, surface in GENERIC_PACKAGES
-    }
+    actual_files = {path.name for path in applications.glob("*.json") if path.is_file()}
+    expected_files = {f"{product_id}.json" for product_id in BUILD_PRODUCT_IDS}
     if actual_files != expected_files:
         raise ValueError(
-            "generic application package set mismatch: "
+            "App build product package set mismatch: "
             f"missing={sorted(expected_files - actual_files)}, "
             f"extra={sorted(actual_files - expected_files)}"
         )
-    for environment, surface in GENERIC_PACKAGES:
-        payload = validate_generic(
-            _load_json(applications / f"{environment}--{surface}.json"),
-            environment=environment,
-            surface=surface,
+    expected_payloads = set(BUILD_PRODUCT_IDS)
+    payload_root = bundle_dir / "payloads"
+    actual_payloads = (
+        {path.name for path in payload_root.iterdir() if path.is_dir()}
+        if payload_root.is_dir()
+        else set()
+    )
+    if actual_payloads != expected_payloads:
+        raise ValueError(
+            "App build product payload set mismatch: "
+            f"missing={sorted(expected_payloads - actual_payloads)}, "
+            f"extra={sorted(actual_payloads - expected_payloads)}"
+        )
+    for product_id in BUILD_PRODUCT_IDS:
+        payload = validate_package(
+            _load_json(applications / f"{product_id}.json"),
+            build_product_id=product_id,
             source_git_sha=git_sha,
             source_tree_digest=tree_digest,
         )
-        package = bundle_dir / "payloads" / environment / surface / PAYLOAD_NAMES[surface]
-        if not package.is_file() or _package_digest(package.parent) != payload["packageDigest"]:
-            raise ValueError(
-                f"{environment}/{surface} hosted payload digest mismatch"
-            )
-    special_files = {
-        "publicWeb": bundle_dir / "public-web-manifest.json",
-        "android": bundle_dir / "android-release-manifest.json",
-        "opsPortal": bundle_dir / "ops-portal-provenance.json",
-    }
-    for kind, path in special_files.items():
-        payload = _load_json(path)
-        if payload.get("schema") != SPECIAL_SCHEMAS[kind]:
-            raise ValueError(f"{kind} package schema mismatch")
-        if payload.get("sourceGitSha") != git_sha:
-            raise ValueError(f"{kind} sourceGitSha mismatch")
-        if payload.get("sourceTreeDigest") != tree_digest:
-            raise ValueError(f"{kind} sourceTreeDigest mismatch")
-    public_web = _load_json(special_files["publicWeb"])
-    public = bundle_dir / "payloads/prod/web"
-    if _public_web_tree_digest(public) != "sha256:" + str(
-        public_web.get("contentSHA256") or ""
-    ):
-        raise ValueError("prod public Web hosted payload digest mismatch")
-    android = _load_json(special_files["android"])
-    apk = bundle_dir / "payloads/prod/android" / str(
-        android.get("packagedAPK") or ""
-    )
-    if _package_digest(apk) != "sha256:" + str(android.get("apkSHA256") or ""):
-        raise ValueError("prod Android hosted payload digest mismatch")
-    portal = _load_json(special_files["opsPortal"])
-    portal_root = bundle_dir / "payloads/prod/opsPortal"
-    portal_digests = portal.get("digests") or {}
-    if _sha256_file(portal_root / "manifest.json") != portal_digests.get("manifest"):
-        raise ValueError("prod Ops Portal manifest digest mismatch")
-    if _ops_portal_tree_digest(portal_root / "dist") != portal_digests.get("distTree"):
-        raise ValueError("prod Ops Portal dist digest mismatch")
-    if portal.get("packageDigest") != portal_digests.get("distTree"):
-        raise ValueError("prod Ops Portal packageDigest mismatch")
+        product_root = payload_root / product_id
+        artifact = product_root / PAYLOAD_NAMES[product_id]
+        if not artifact.exists() or _sha256_tree(product_root) != payload["packageDigest"]:
+            raise ValueError(f"{product_id} hosted payload digest mismatch")
+        if _package_digest(artifact) != payload["artifactManifest"]["artifactDigest"]:
+            raise ValueError(f"{product_id} AppArtifactManifest artifact digest mismatch")
 
 
 def main() -> int:
@@ -381,20 +407,11 @@ def main() -> int:
     try:
         if args.command == "render":
             payload = render(
-                environment=args.environment,
-                surface=args.surface,
+                build_product_id=args.build_product_id,
                 package=args.package,
                 source_git_sha=args.source_git_sha,
                 source_tree_digest=args.source_tree_digest,
-            )
-            args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(_canonical_json(payload), encoding="utf-8")
-        elif args.command == "bind-special":
-            payload = bind_special(
-                kind=args.kind,
-                manifest_path=args.manifest,
-                source_git_sha=args.source_git_sha,
-                source_tree_digest=args.source_tree_digest,
+                artifact_manifest=_load_json(args.artifact_manifest),
             )
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(_canonical_json(payload), encoding="utf-8")

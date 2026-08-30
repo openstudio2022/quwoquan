@@ -5,10 +5,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_reader_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_detail_view.dart';
@@ -18,6 +18,16 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/post_
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
+final _articleMediaResolver = MediaDeliveryResolver(
+  MediaEndpointConfig(
+    avatarBaseUrl: 'https://media.example.com/avatar',
+    imageBaseUrl: 'https://media.example.com/image',
+    videoBaseUrl: 'https://media.example.com/video',
+    attachmentBaseUrl: 'https://media.example.com/image',
+  ),
+);
 
 ContentPostViewData _articlePost(String postId) => contentPostViewDataBuilder(
   postId: postId,
@@ -31,12 +41,14 @@ ContentPostViewData _articlePost(String postId) => contentPostViewDataBuilder(
 InMemoryContentPostDetailReader _articleReader(
   ContentPostViewData post, {
   String? markdown,
+  List<PostArticleAsset> articleAssets = const <PostArticleAsset>[],
 }) {
   final detail = contentPostDetailPayloadBuilder(
     post: post,
     articleMarkdown:
         markdown ??
         '# ${post.title}\n\n## 测试章节\n\n${post.body}\n\n用于验证 typed detail hydration。',
+    articleAssets: articleAssets,
   );
   return InMemoryContentPostDetailReader(
     InMemoryContentPostStore(
@@ -47,16 +59,6 @@ InMemoryContentPostDetailReader _articleReader(
 }
 
 void main() {
-  setUp(() {
-    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
-      'MEDIA_AVATAR_CDN_BASE_URL': 'https://media.example.com/avatar',
-      'MEDIA_IMAGE_CDN_BASE_URL': 'https://media.example.com/image',
-      'MEDIA_VIDEO_CDN_BASE_URL': 'https://media.example.com/video',
-    }, enforceNativeLaunchBinding: false);
-  });
-
-  tearDown(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
-
   group('Article getPost hydration contract', () {
     test('Mock getPost 暴露 canonical ContentPostDetailPayload 文章扩展字段', () async {
       final post = _articlePost('web-dev');
@@ -89,7 +91,7 @@ void main() {
           ),
           clientContextProvider: const _ArticleTestClientContext(),
           telemetrySink: const _NoopCloudOperationTelemetrySink(),
-          environment: CloudRuntimeEnvironment(
+          environment: testCloudRuntimeEnvironment(
             environment: CloudEnvironment.gamma,
             gatewayBaseUri: Uri.parse('https://example.com'),
           ),
@@ -105,10 +107,12 @@ void main() {
       final mockView = projectArticleDetailViewFromPayload(
         mockDetail,
         fallbackArticleId: postId,
+        mediaResolver: _articleMediaResolver,
       );
       final remoteView = projectArticleDetailViewFromPayload(
         remoteDetail,
         fallbackArticleId: postId,
+        mediaResolver: _articleMediaResolver,
       );
 
       expect(remoteView.documentSource, ArticleDetailDocumentSource.markdown);
@@ -125,6 +129,9 @@ void main() {
 
     test('Mock getPost 覆盖上文下三图文章详情', () async {
       final post = _articlePost('article-top-three-images');
+      // canonical 真实供稿形态：正文以 asset:// 引用，交付 URL 由
+      // articleAssetManifest 的 publicSliceKey 解析（GWT-016 缺席语义下，
+      // 非 canonical 直链不再被伪装为可加载 URL）。
       final reader = _articleReader(
         post,
         markdown: '''
@@ -132,17 +139,33 @@ void main() {
 
 这里是图片之前的正文。
 
-![图片一](https://media.example.com/image/one.jpg)
+![图片一](asset://one)
 
-![图片二](https://media.example.com/image/two.jpg)
+![图片二](asset://two)
 
-![图片三](https://media.example.com/image/three.jpg)
+![图片三](asset://three)
 ''',
+        articleAssets: const <PostArticleAsset>[
+          PostArticleAsset(
+            assetId: 'one',
+            publicSliceKey: 'media/image/s/archived-image/post/p1/v1/one.webp',
+          ),
+          PostArticleAsset(
+            assetId: 'two',
+            publicSliceKey: 'media/image/s/archived-image/post/p1/v1/two.webp',
+          ),
+          PostArticleAsset(
+            assetId: 'three',
+            publicSliceKey:
+                'media/image/s/archived-image/post/p1/v1/three.webp',
+          ),
+        ],
       );
       final detail = await reader.getPost(postId: post.id);
       final view = projectArticleDetailViewFromPayload(
         detail,
         fallbackArticleId: post.id,
+        mediaResolver: _articleMediaResolver,
       );
       final imageNodes = view.document.nodes
           .where((node) => node.isFigure)
@@ -191,10 +214,12 @@ void main() {
       final before = projectArticleDetailView(
         summaryRaw,
         fallbackArticleId: 'article_hydration_switch',
+        mediaResolver: _articleMediaResolver,
       );
       final after = projectArticleDetailView(
         hydratedRaw,
         fallbackArticleId: 'article_hydration_switch',
+        mediaResolver: _articleMediaResolver,
       );
 
       expect(before.documentSource, ArticleDetailDocumentSource.empty);

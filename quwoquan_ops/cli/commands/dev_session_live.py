@@ -22,6 +22,11 @@ from typing import Any
 from typing import Mapping
 
 
+_VERSION_PINNED_QUWOQUAN_INFRA_IMAGE_PREFIXES = (
+    "quwoquan/elasticsearch-cjk:",
+)
+
+
 def _start_mutable_test_live_runtime(
     *,
     environment: str,
@@ -70,26 +75,82 @@ def _start_mutable_test_live_runtime(
     ]
     for profile in rendered["composeProfiles"]:
         base_command.extend(("--profile", str(profile)))
-    render_command = [*base_command, "config", "--quiet"]
+    render_command = [*base_command, "config", "--format", "json"]
     render_result = _stackctl.run(
         render_command,
         env=dict(rendered["environment"]),
         timeout_seconds=90,
     )
-    phases.append(
-        {
-            "name": "compose-render",
-            "exitCode": render_result.returncode,
-            "summary": "mutable Compose render validated",
-            "details": _stackctl._command_details(render_result),
-            "reportDir": _stackctl.relpath(report_dir),
-        }
-    )
     if render_result.returncode != 0:
+        render_failure_details = [
+            f"docker compose config exited {render_result.returncode}",
+            "rendered Compose output omitted from evidence",
+        ]
+        phases.append(
+            {
+                "name": "compose-render",
+                "exitCode": render_result.returncode,
+                "summary": "mutable Compose render failed",
+                "details": render_failure_details,
+                "reportDir": _stackctl.relpath(report_dir),
+            }
+        )
         return {
             "exitCode": 2,
             "blockerKind": "mutable_compose_render_failed",
-            "details": _stackctl._command_details(render_result),
+            "details": render_failure_details,
+            "phases": phases,
+        }
+    try:
+        compose_model = json.loads(render_result.stdout)
+        if not isinstance(compose_model, Mapping):
+            raise ValueError("runtime Compose model must be a JSON object")
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        invalid_model_details = [
+            "rendered Compose model is not a valid JSON object",
+            f"errorType={type(exc).__name__}",
+        ]
+        phases.append(
+            {
+                "name": "compose-render",
+                "exitCode": 2,
+                "summary": "mutable Compose model validation failed",
+                "details": invalid_model_details,
+                "reportDir": _stackctl.relpath(report_dir),
+            }
+        )
+        return {
+            "exitCode": 2,
+            "blockerKind": "mutable_compose_ownership_invalid",
+            "details": invalid_model_details,
+            "phases": phases,
+        }
+    phases.append(
+        {
+            "name": "compose-render",
+            "exitCode": 0,
+            "summary": "mutable Compose render validated",
+            "details": [
+                "rendered Compose values omitted from evidence",
+                f"serviceCount={len(compose_model.get('services') or {})}",
+                f"networkCount={len(compose_model.get('networks') or {})}",
+                f"volumeCount={len(compose_model.get('volumes') or {})}",
+            ],
+            "reportDir": _stackctl.relpath(report_dir),
+        }
+    )
+    try:
+        plan = _stackctl._dev_session_finalize_runtime_plan(
+            runtime_plan=plan,
+            compose_model=compose_model,
+            report_dir=report_dir,
+        )
+        rendered = {**rendered, "plan": plan}
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        return {
+            "exitCode": 2,
+            "blockerKind": "mutable_compose_ownership_invalid",
+            "details": [str(exc)],
             "phases": phases,
         }
     try:
@@ -163,49 +224,98 @@ def _start_mutable_test_live_runtime(
             "reportDir": _stackctl.relpath(report_dir),
         }
     )
+    compose_up_timeout = float(
+        rendered["environment"].get(
+            "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS", "420"
+        )
+    )
     build_timeout = max(
         float(
             rendered["environment"].get(
                 "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS", "3600"
             )
         ),
-        float(
-            rendered["environment"].get(
-                "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS", "420"
-            )
-        ),
+        compose_up_timeout,
     )
     # A brand-new target has no Product Ops ExperimentPolicyActivated fact.
     # Recommendation intentionally refuses a full runtime without that fact,
-    # so test_live first brings up only the canonical Product Ops public
-    # command owner (and its authored dependencies), activates the exact
-    # run-bound policies, then starts the complete stack.  This is not a DB
-    # seed or a private Recommendation fallback.
-    policy_owner_command = [
-        *base_command,
-        "up",
-        "--build",
-        "-d",
-        "product-ops-service",
-    ]
-    policy_owner_result = _stackctl.run(
-        policy_owner_command,
-        env=dict(rendered["environment"]),
-        timeout_seconds=build_timeout,
+    # while Product Ops readiness requires the service-core hosted User account
+    # security authority.  Start service-core without its Recommendation
+    # dependency closure: the exact account-security health path is already a
+    # pre-admission route, and Product Ops' registered readiness probe consumes
+    # it with the canonical service credential.  Product Ops itself is then
+    # waited healthy before the existing public command activates the exact
+    # run-bound policies.  This is not a DB seed, private Recommendation
+    # fallback, or pre-admission business-route bypass.
+    policy_owner_steps = (
+        (
+            "test-live-policy-owner-dependencies",
+            "Product Ops data dependencies became healthy",
+            [
+                *base_command,
+                "up",
+                "-d",
+                "--wait",
+                "--wait-timeout",
+                str(max(1, int(compose_up_timeout))),
+                "postgres",
+                "mongodb",
+                "redis",
+                "elasticsearch",
+            ],
+        ),
+        (
+            "test-live-policy-owner-mongo-init",
+            "Product Ops Mongo initialization completed",
+            [*base_command, "up", "--no-deps", "mongo-init"],
+        ),
+        (
+            "test-live-policy-authority-bootstrap",
+            "service-core account security authority bootstrap completed",
+            [
+                *base_command,
+                "up",
+                "--build",
+                "-d",
+                "--no-deps",
+                "service-core",
+            ],
+        ),
+        (
+            "test-live-policy-owner-bootstrap",
+            "Product Ops policy command owner became ready",
+            [
+                *base_command,
+                "up",
+                "--build",
+                "-d",
+                "--wait",
+                "--wait-timeout",
+                str(max(1, int(compose_up_timeout))),
+                "--no-deps",
+                "product-ops-service",
+            ],
+        ),
     )
-    phases.append(
-        {
-            "name": "test-live-policy-owner-bootstrap",
-            "exitCode": policy_owner_result.returncode,
-            "summary": "Product Ops policy command owner bootstrap completed",
-            "details": _stackctl._command_details(policy_owner_result),
-            "reportDir": _stackctl.relpath(report_dir),
-        }
-    )
-    if policy_owner_result.returncode != 0:
+    for phase_name, phase_summary, policy_owner_command in policy_owner_steps:
+        policy_owner_result = _stackctl.run(
+            policy_owner_command,
+            env=dict(rendered["environment"]),
+            timeout_seconds=build_timeout,
+        )
+        phases.append(
+            {
+                "name": phase_name,
+                "exitCode": policy_owner_result.returncode,
+                "summary": phase_summary,
+                "details": _stackctl._command_details(policy_owner_result),
+                "reportDir": _stackctl.relpath(report_dir),
+            }
+        )
+        if policy_owner_result.returncode == 0:
+            continue
         failure = (
-            f"Product Ops policy owner bootstrap exited "
-            f"{policy_owner_result.returncode}: "
+            f"{phase_summary} exited {policy_owner_result.returncode}: "
             + "; ".join(_stackctl._command_details(policy_owner_result))
         )
         try:
@@ -228,8 +338,10 @@ def _start_mutable_test_live_runtime(
             "startupAttempt": partial_receipt,
         }
     try:
-        product_ops_port = int(
-            (plan.get("publishedPorts") or {})["product-ops-service"]
+        product_ops_port = _stackctl.require_published_endpoint_port(
+            plan["publishedPorts"],
+            role="product-ops-service",
+            protocol="tcp",
         )
         policy_receipt = _stackctl.activate_test_live_experiment_policies(
             environment=environment,
@@ -513,7 +625,6 @@ def _dev_session_resume_running_mutable_runtime(
     if (
         receipt.get("launchPolicy") != "test_live"
         or receipt.get("nonPromotable") is not True
-        or receipt.get("contentBindingState") != "unbound"
         or receipt.get("environment") != environment
         or receipt.get("target") != target
         or receipt.get("workload") != "full"
@@ -556,6 +667,7 @@ def _dev_session_resume_running_mutable_runtime(
         "publishedPorts",
         "tlsProfile",
         "resolverHandoffDigest",
+        "publicWebPackage",
     ):
         if runtime_plan.get(field) != receipt.get(field):
             raise ValueError(f"running mutable receipt/plan drift: {field}")
@@ -719,10 +831,16 @@ def _dev_session_resume_running_mutable_runtime(
                 raise ValueError(
                     f"running mutable configuration identity drifted: {service}"
                 )
-        if image_ref.startswith("quwoquan/") and not (
-            image_ref.endswith(":" + expected_image_suffix)
-            or image_ref.endswith(
-                f":{environment}-test-live-{expected_image_suffix}"
+        if (
+            image_ref.startswith("quwoquan/")
+            and not image_ref.startswith(
+                _VERSION_PINNED_QUWOQUAN_INFRA_IMAGE_PREFIXES
+            )
+            and not (
+                image_ref.endswith(":" + expected_image_suffix)
+                or image_ref.endswith(
+                    f":{environment}-test-live-{expected_image_suffix}"
+                )
             )
         ):
             raise ValueError(f"running mutable image ref drifted: {service}")

@@ -135,26 +135,97 @@
     "consumers": ["app-navigation", "user-profile-qr", "data-release"]
   },
   "dnsProvider": {
-    "kind": "cloudflare",
+    "kind": "aliyun-dns",
     "apiTokenEnv": "QWQ_DNS_PROVISIONING_API_TOKEN",
-    "zoneIdEnv": "QWQ_DNS_ZONE_ID"
+    "minimumTtlSeconds": 600
   },
+  "publicResolvers": [
+    "https://dns.google/resolve",
+    "https://cloudflare-dns.com/dns-query"
+  ],
+  "prodEdgeAddressEnv": "QWQ_PROD_EDGE_IPV4",
   "nonProdAddress": "127.0.0.1",
   "nonProdIpv6Address": "::1",
   "acmeChallengeAuthority": {
     "mode": "scoped-dns-api-token",
     "apiTokenEnv": "QWQ_ACME_DNS_API_TOKEN",
     "requiredNamePrefix": "_acme-challenge",
-    "forbidProductionZoneMutation": true
+    "forbidNonChallengeMutation": true,
+    "providerEnforcement": "credential-isolation-only"
   },
-  "nonProdMailGuard": {
-    "nullMx": ".",
-    "spf": "v=spf1 -all"
+  "mailGuards": {
+    "null-mx-and-spf-deny": {
+      "nullMx": ".",
+      "spf": "v=spf1 -all",
+      "dmarc": "v=DMARC1; p=reject"
+    },
+    "spf-deny-only": {
+      "spf": "v=spf1 -all",
+      "dmarc": "v=DMARC1; p=reject"
+    }
   },
-  "caa": [
-    {"flags": 0, "tag": "issue", "value": "letsencrypt.org"},
-    {"flags": 0, "tag": "issuewild", "value": "letsencrypt.org"},
-    {"flags": 0, "tag": "iodef", "value": "mailto:security@quwoquan.com"}
+  "caaProfiles": {
+    "letsencrypt-only": [
+      {"flags": 0, "tag": "issue", "value": "letsencrypt.org"},
+      {"flags": 0, "tag": "issuewild", "value": "letsencrypt.org"}
+    ],
+    "deny-all": [
+      {"flags": 0, "tag": "issue", "value": ";"},
+      {"flags": 0, "tag": "issuewild", "value": ";"}
+    ]
+  },
+  "dnsZones": [
+    {
+      "scope": "alpha",
+      "target": "alpha-local",
+      "apex": "alpha.quwoquan.com",
+      "wildcard": "*.alpha.quwoquan.com",
+      "recordShape": "apex-and-wildcard",
+      "addressing": "loopback",
+      "mailGuard": "null-mx-and-spf-deny",
+      "caa": "deny-all"
+    },
+    {
+      "scope": "beta",
+      "target": "beta-local",
+      "apex": "beta.quwoquan.com",
+      "wildcard": "*.beta.quwoquan.com",
+      "recordShape": "apex-and-wildcard",
+      "addressing": "loopback",
+      "mailGuard": "null-mx-and-spf-deny",
+      "caa": "deny-all"
+    },
+    {
+      "scope": "gamma",
+      "target": "gamma-local",
+      "apex": "gamma.quwoquan.com",
+      "wildcard": "*.gamma.quwoquan.com",
+      "recordShape": "apex-and-wildcard",
+      "addressing": "loopback",
+      "mailGuard": "null-mx-and-spf-deny",
+      "caa": "deny-all"
+    },
+    {
+      "scope": "sim",
+      "target": "prod-sim",
+      "apex": "sim.quwoquan.com",
+      "wildcard": "*.sim.quwoquan.com",
+      "recordShape": "apex-and-wildcard",
+      "addressing": "loopback",
+      "mailGuard": "null-mx-and-spf-deny",
+      "caa": "letsencrypt-only"
+    },
+    {
+      "scope": "prod",
+      "target": "prod-hosted",
+      "apex": "quwoquan.com",
+      "wildcard": "*.quwoquan.com",
+      "recordShape": "explicit-topology-hosts",
+      "addressing": "prod-edge",
+      "mailGuard": "spf-deny-only",
+      "caa": "letsencrypt-only",
+      "apexFollowers": ["www.quwoquan.com"]
+    }
   ],
   "tlsProfiles": {
     "local-managed": {
@@ -168,13 +239,23 @@
       "target": "prod-sim",
       "apex": "sim.quwoquan.com",
       "wildcard": "*.sim.quwoquan.com"
+    },
+    "public-ca-prod": {
+      "kind": "dns-01-public-ca",
+      "target": "prod-hosted",
+      "apex": "quwoquan.com",
+      "wildcard": "*.quwoquan.com",
+      "renewBeforeDays": 30
     }
   },
   "acme": {
     "client": "lego",
-    "dnsProvider": "cloudflare",
-    "accountEmailEnv": "QWQ_ACME_ACCOUNT_EMAIL",
+    "dnsProvider": "alidns",
     "directory": "https://acme-v02.api.letsencrypt.org/directory",
-    "renewBeforeDays": 30
+    "renewBeforeDays": 30,
+    "credentialEnvironment": {
+      "ALICLOUD_ACCESS_KEY": "keyId",
+      "ALICLOUD_SECRET_KEY": "keySecret"
+    }
   }
 }

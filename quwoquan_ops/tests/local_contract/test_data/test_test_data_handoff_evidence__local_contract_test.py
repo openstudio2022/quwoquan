@@ -154,6 +154,62 @@ class TestDataHandoffEvidenceContractTest(unittest.TestCase):
                 evidence=evidence,
             )
 
+    def test_candidate_binding_accepts_source_identities_readiness(self) -> None:
+        """新 Data 溯源模型：readiness 以 sourceIdentities/
+        sourceIdentitySetDigest 表达来源，顶层 sourceRevision 已退役。"""
+        readiness = _readiness()
+        readiness.pop("sourceRevision")
+        readiness["sourceIdentities"] = [
+            {"owner": "content", "revision": "c" * 40}
+        ]
+        readiness["sourceIdentitySetDigest"] = "sha256:" + "5" * 64
+        readiness = _with_checksum(readiness)
+
+        candidate = build_candidate_binding(
+            environment="gamma",
+            target="gamma-local",
+            manifest=_manifest(),
+            readiness=readiness,
+        )
+        self.assertEqual(candidate.source_revision, "a" * 40)
+
+        request_document = case_request_document(canonical_acceptance_suite())
+        evidence = {
+            "schema": "qwq.test_data_evidence.v1",
+            "environment": "gamma",
+            "target": "gamma-local",
+            "candidateBindingDigest": candidate.digest,
+            "requestDigest": request_document["requestDigest"],
+            "providerReadinessDigest": "sha256:" + "a" * 64,
+            "providerConformance": {},
+        }
+        evidence["evidenceDigest"] = canonical_digest(evidence)
+        handoff = build_test_data_handoff(
+            candidate=candidate,
+            readiness=readiness,
+            request_document=request_document,
+            evidence=evidence,
+        )
+        self.assertEqual(handoff["sourceRevision"], "a" * 40)
+
+    def test_candidate_binding_rejects_source_identities_without_set_digest(
+        self,
+    ) -> None:
+        readiness = _readiness()
+        readiness.pop("sourceRevision")
+        readiness["sourceIdentities"] = [
+            {"owner": "content", "revision": "c" * 40}
+        ]
+        readiness = _with_checksum(readiness)
+
+        with self.assertRaisesRegex(ValueError, "sourceRevision"):
+            build_candidate_binding(
+                environment="gamma",
+                target="gamma-local",
+                manifest=_manifest(),
+                readiness=readiness,
+            )
+
     def test_candidate_binding_contains_a_complete_receipt_bound_release_closure(
         self,
     ) -> None:

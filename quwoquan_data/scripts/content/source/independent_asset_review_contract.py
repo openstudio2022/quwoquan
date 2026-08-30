@@ -54,6 +54,35 @@ def asset_snapshot(asset: Mapping[str, Any]) -> dict[str, Any]:
     return snapshot
 
 
+def project_research_judgment_to_acquisition_truth(
+    judgment: Mapping[str, Any],
+    *,
+    snapshot: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Keep Research rights as acquisition truth; semantic review owns safety."""
+    projected = dict(judgment)
+    if snapshot.get("distributionDecision") != "research_allowed":
+        return projected
+    projected.update(
+        {
+            "rightsStatus": snapshot.get("rightsStatus"),
+            "authorizationRequired": snapshot.get("authorizationRequired"),
+        }
+    )
+    safety_passed = (
+        projected.get("safetyStatus") == "passed"
+        and projected.get("entityMatch") == "matched"
+        and projected.get("qualityStatus") == "passed"
+        and projected.get("privacyRisk") == "none"
+        and projected.get("minorRisk") == "none"
+        and projected.get("maliciousMediaRisk") == "none"
+        and projected.get("watermarkStatus") == "absent"
+    )
+    if safety_passed:
+        projected["distributionDecision"] = "research_allowed"
+    return projected
+
+
 def assert_video_asset_snapshot_publishable(snapshot: Mapping[str, Any]) -> None:
     probe = snapshot.get("mediaProbe")
     if not isinstance(probe, Mapping) or not all(
@@ -187,6 +216,7 @@ __all__ = [
     "canonical_digest",
     "file_digest",
     "load_document",
+    "project_research_judgment_to_acquisition_truth",
     "resolve_ref",
     "write_create_once",
 ]

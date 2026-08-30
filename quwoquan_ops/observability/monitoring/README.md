@@ -30,8 +30,9 @@ podman compose -f quwoquan_ops/observability/monitoring/docker-compose.prod.yml 
   （content/chat/user/assistant/product-ops/platform-ops/tag/entity）、
   独立进程（search-service、rtc-service）与 `recommendation-service:8000`
   能从观测栈网络访问 `/metrics`；
-- 服务通过 `OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4318` 把 trace/OTLP
-  发到同一观测网络，collector 不承担业务事实存储；
+- 服务通过 `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318` 把 trace/OTLP
+  发到同一观测网络，collector 不承担业务事实存储；scheme 决定传输是否加密，缺
+  scheme 服务判否启动失败；
 - Prometheus 已加载 `alerts/quwoquan_alerts.yaml`，Alertmanager 已能收到一条
   测试告警并完成恢复通知（外部 webhook 与控制面 ingest 双路）；
 - 生产部署 job 注入 `PROD_PROMETHEUS_URL`，供 `stackctl deploy` 做 SLO readback；

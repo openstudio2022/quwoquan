@@ -17,43 +17,47 @@ const (
 // Activity is one durable row in ProfileInteractionActivityView. The composite
 // identity is OwnerPersonaID + Direction + ActivityID.
 type Activity struct {
-	OwnerPersonaID         string     `json:"-" bson:"ownerPersonaId"`
-	ActivityID             string     `json:"activityId" bson:"activityId"`
-	ActivityType           string     `json:"activityType" bson:"activityType"`
-	Direction              string     `json:"direction" bson:"direction"`
-	SourceType             string     `json:"-" bson:"sourceType"`
-	SourceEventID          string     `json:"-" bson:"sourceEventId"`
-	SourceVersion          int64      `json:"-" bson:"sourceVersion"`
-	ViewerReactionVersion  int64      `json:"-" bson:"viewerReactionVersion"`
-	TargetVersion          int64      `json:"-" bson:"targetVersion"`
-	Active                 bool       `json:"-" bson:"active"`
-	CommentKind            string     `json:"commentKind" bson:"commentKind"`
-	CommentID              string     `json:"commentId,omitempty" bson:"commentId,omitempty"`
-	ParentCommentID        string     `json:"parentCommentId,omitempty" bson:"parentCommentId,omitempty"`
-	ViewerReaction         string     `json:"viewerReaction" bson:"viewerReaction"`
-	ActorPersonaID         string     `json:"actorPersonaId" bson:"actorPersonaId"`
-	ActorDisplayName       string     `json:"actorDisplayName" bson:"actorDisplayName"`
-	ActorAvatarURL         string     `json:"actorAvatarUrl,omitempty" bson:"actorAvatarUrl,omitempty"`
-	ActorAvatarVersion     int64      `json:"actorAvatarVersion" bson:"actorAvatarVersion"`
-	CounterpartPersonaID   string     `json:"counterpartPersonaId,omitempty" bson:"counterpartPersonaId,omitempty"`
-	CounterpartDisplayName string     `json:"counterpartDisplayName,omitempty" bson:"counterpartDisplayName,omitempty"`
-	CounterpartAvatarURL   string     `json:"counterpartAvatarUrl,omitempty" bson:"counterpartAvatarUrl,omitempty"`
-	TargetPersonaID        string     `json:"targetPersonaId" bson:"targetPersonaId"`
-	TargetContentID        string     `json:"targetContentId" bson:"targetContentId"`
-	TargetContentType      string     `json:"targetContentType" bson:"targetContentType"`
-	TargetContentSummary   string     `json:"targetContentSummary,omitempty" bson:"targetContentSummary,omitempty"`
-	TargetKind             string     `json:"targetKind" bson:"targetKind"`
-	TargetAvailability     string     `json:"targetAvailability" bson:"targetAvailability"`
-	TargetReplyCount       int64      `json:"targetReplyCount" bson:"targetReplyCount"`
-	DisplayPersonaID       string     `json:"displayPersonaId" bson:"displayPersonaId"`
-	DisplayName            string     `json:"displayName" bson:"displayName"`
-	DisplayAvatarURL       string     `json:"displayAvatarUrl,omitempty" bson:"displayAvatarUrl,omitempty"`
-	DisplayAvatarVersion   int64      `json:"displayAvatarVersion" bson:"displayAvatarVersion"`
-	DisplayUserRouteID     string     `json:"displayUserRouteId,omitempty" bson:"displayUserRouteId,omitempty"`
-	PrimaryText            string     `json:"primaryText" bson:"primaryText"`
-	ContextText            string     `json:"contextText,omitempty" bson:"contextText,omitempty"`
-	PreviewMediaKind       string     `json:"previewMediaKind" bson:"previewMediaKind"`
-	PreviewImageURL        string     `json:"previewImageUrl,omitempty" bson:"previewImageUrl,omitempty"`
+	OwnerPersonaID         string `json:"-" bson:"ownerPersonaId"`
+	ActivityID             string `json:"activityId" bson:"activityId"`
+	ActivityType           string `json:"activityType" bson:"activityType"`
+	Direction              string `json:"direction" bson:"direction"`
+	SourceType             string `json:"-" bson:"sourceType"`
+	SourceEventID          string `json:"-" bson:"sourceEventId"`
+	SourceVersion          int64  `json:"-" bson:"sourceVersion"`
+	ViewerReactionVersion  int64  `json:"-" bson:"viewerReactionVersion"`
+	TargetVersion          int64  `json:"-" bson:"targetVersion"`
+	Active                 bool   `json:"-" bson:"active"`
+	CommentKind            string `json:"commentKind" bson:"commentKind"`
+	CommentID              string `json:"commentId,omitempty" bson:"commentId,omitempty"`
+	ParentCommentID        string `json:"parentCommentId,omitempty" bson:"parentCommentId,omitempty"`
+	ViewerReaction         string `json:"viewerReaction" bson:"viewerReaction"`
+	ActorPersonaID         string `json:"actorPersonaId" bson:"actorPersonaId"`
+	ActorDisplayName       string `json:"actorDisplayName" bson:"actorDisplayName"`
+	ActorAvatarURL         string `json:"actorAvatarUrl,omitempty" bson:"actorAvatarUrl,omitempty"`
+	ActorAvatarVersion     int64  `json:"actorAvatarVersion" bson:"actorAvatarVersion"`
+	CounterpartPersonaID   string `json:"counterpartPersonaId,omitempty" bson:"counterpartPersonaId,omitempty"`
+	CounterpartDisplayName string `json:"counterpartDisplayName,omitempty" bson:"counterpartDisplayName,omitempty"`
+	CounterpartAvatarURL   string `json:"counterpartAvatarUrl,omitempty" bson:"counterpartAvatarUrl,omitempty"`
+	TargetPersonaID        string `json:"targetPersonaId" bson:"targetPersonaId"`
+	TargetContentID        string `json:"targetContentId" bson:"targetContentId"`
+	TargetContentType      string `json:"targetContentType" bson:"targetContentType"`
+	TargetContentSummary   string `json:"targetContentSummary,omitempty" bson:"targetContentSummary,omitempty"`
+	TargetKind             string `json:"targetKind" bson:"targetKind"`
+	TargetAvailability     string `json:"targetAvailability" bson:"targetAvailability"`
+	TargetReplyCount       int64  `json:"targetReplyCount" bson:"targetReplyCount"`
+	DisplayPersonaID       string `json:"displayPersonaId" bson:"displayPersonaId"`
+	DisplayName            string `json:"displayName" bson:"displayName"`
+	DisplayAvatarURL       string `json:"displayAvatarUrl,omitempty" bson:"displayAvatarUrl,omitempty"`
+	DisplayAvatarVersion   int64  `json:"displayAvatarVersion" bson:"displayAvatarVersion"`
+	DisplayUserRouteID     string `json:"displayUserRouteId,omitempty" bson:"displayUserRouteId,omitempty"`
+	PrimaryText            string `json:"primaryText" bson:"primaryText"`
+	ContextText            string `json:"contextText,omitempty" bson:"contextText,omitempty"`
+	PreviewMediaKind       string `json:"previewMediaKind" bson:"previewMediaKind"`
+	PreviewImageURL        string `json:"previewImageUrl,omitempty" bson:"previewImageUrl,omitempty"`
+	// 预览图的配对资产标识与交付访问模式（DEC-033）：research 相位的 post 封面
+	// 是相对私有 CAS 引用，互动卡按 assetId 换短签才渲染得出。
+	PreviewImageAssetID    string     `json:"previewImageAssetId,omitempty" bson:"previewImageAssetId,omitempty"`
+	PreviewImageAccessMode string     `json:"previewImageAccessMode,omitempty" bson:"previewImageAccessMode,omitempty"`
 	PreviewText            string     `json:"previewText,omitempty" bson:"previewText,omitempty"`
 	PreviewUnavailable     bool       `json:"previewUnavailable" bson:"previewUnavailable"`
 	PreviewObjectID        string     `json:"previewObjectId,omitempty" bson:"previewObjectId,omitempty"`

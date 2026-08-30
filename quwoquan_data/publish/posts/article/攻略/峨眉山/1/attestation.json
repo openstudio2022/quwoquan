@@ -1,9 +1,9 @@
 {
   "schema": "quwoquan_data.review_attestation",
   "stage": "5.review",
-  "executionId": "20260803--travel-article-commercial-rights-closure--china--pilot-001",
+  "executionId": "20260816--travel-article-g1--china-sichuan--pilot-011",
   "executionBinding": "frozen",
-  "objectRef": "峨眉山__article_frontier_wikivoyage_zh_042c58c23895",
+  "objectRef": "峨眉山__article_frontier_wikipedia_zh_5a6839e95ac3",
   "decision": "approved",
   "deterministicGate": {
     "status": "passed",
@@ -12,10 +12,10 @@
   "independentReviewer": {
     "status": "passed",
     "provider": "cursor_sdk",
-    "model": "auto",
-    "modelFamily": "auto",
-    "runId": "run-f834eca3-3b9b-4e6e-b2e6-c1b60f39535e",
-    "resultHash": "sha256:a7393946565ab7acd73b71a661370be25efa7898dab8a0dbc664cc3ee7fcfa6b"
+    "model": "grok-4.6",
+    "modelFamily": "grok",
+    "runId": "run-ff230624-5d6a-47fe-aace-6fa80e924601",
+    "resultHash": "sha256:05d5aeb14e062b70a66b87ae6fc85f4e7543ea8432897486e19e249c7d957828"
   },
   "mediaRefReview": {
     "status": "passed",

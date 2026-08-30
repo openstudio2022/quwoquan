@@ -36,18 +36,74 @@ class HomepageUIConfig {
   static const String defaultTabId = "content";
 
   static const List<HomepageTabConfig> tabs = <HomepageTabConfig>[
-    HomepageTabConfig(id: "content", labelKey: "homepage_tab_record", bodySlot: "content", isDefault: true),
-    HomepageTabConfig(id: "discussion", labelKey: "homepage_tab_discussion", bodySlot: "discussion", isDefault: false),
-    HomepageTabConfig(id: "interest_circles", labelKey: "homepage_tab_related_circles", bodySlot: "interest_circles", isDefault: false),
+    HomepageTabConfig(
+      id: "content",
+      labelKey: "homepage_tab_record",
+      bodySlot: "content",
+      isDefault: true,
+    ),
+    HomepageTabConfig(
+      id: "discussion",
+      labelKey: "homepage_tab_discussion",
+      bodySlot: "discussion",
+      isDefault: false,
+    ),
+    HomepageTabConfig(
+      id: "interest_circles",
+      labelKey: "homepage_tab_related_circles",
+      bodySlot: "interest_circles",
+      isDefault: false,
+    ),
   ];
 
   static const List<HomepageSubTabConfig> subTabs = <HomepageSubTabConfig>[
-    HomepageSubTabConfig(id: "all", labelKey: "homepage_sub_all", isDefault: true, homepageTypes: <String>[]),
-    HomepageSubTabConfig(id: "image", labelKey: "homepage_sub_image", isDefault: false, homepageTypes: <String>[]),
-    HomepageSubTabConfig(id: "video", labelKey: "homepage_sub_video", isDefault: false, homepageTypes: <String>[]),
-    HomepageSubTabConfig(id: "opinion", labelKey: "homepage_sub_opinion", isDefault: false, homepageTypes: <String>[]),
-    HomepageSubTabConfig(id: "question", labelKey: "homepage_sub_question", isDefault: false, homepageTypes: <String>[]),
+    HomepageSubTabConfig(
+      id: "all",
+      labelKey: "homepage_sub_all",
+      isDefault: true,
+      homepageTypes: <String>[],
+    ),
+    HomepageSubTabConfig(
+      id: "image",
+      labelKey: "homepage_sub_image",
+      isDefault: false,
+      homepageTypes: <String>[],
+    ),
+    HomepageSubTabConfig(
+      id: "video",
+      labelKey: "homepage_sub_video",
+      isDefault: false,
+      homepageTypes: <String>[],
+    ),
+    HomepageSubTabConfig(
+      id: "opinion",
+      labelKey: "homepage_sub_opinion",
+      isDefault: false,
+      homepageTypes: <String>[],
+    ),
+    HomepageSubTabConfig(
+      id: "question",
+      labelKey: "homepage_sub_question",
+      isDefault: false,
+      homepageTypes: <String>[],
+    ),
   ];
 
-  static const Set<String> wishlistHomepageTypes = <String>{"hotel", "restaurant", "sight", "museum", "heritage_site", "ancient_town", "religious_site", "check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park", "city", "route", "photo_spot"};
+  static const Set<String> wishlistHomepageTypes = <String>{
+    "hotel",
+    "restaurant",
+    "sight",
+    "museum",
+    "heritage_site",
+    "ancient_town",
+    "religious_site",
+    "check_in_spot",
+    "natural_landscape",
+    "park",
+    "hot_spring",
+    "theme_park",
+    "city",
+    "route",
+    "photo_spot",
+  };
 }

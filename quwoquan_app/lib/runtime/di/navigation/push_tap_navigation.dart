@@ -1,54 +1,38 @@
-import 'dart:async';
-
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:quwoquan_app/runtime/platform/firebase_incoming_call_runtime.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 
 /// 设备推送 tap 直达路由（chat-offline-push-delivery REQ-003）。
 ///
-/// 消费平台防腐层的推送打开流（冷启动初始消息 + 后台点开消息），按投递
-/// payload 的语义锚点（`targetType`/`targetId`，与 notification 投递记录
-/// 同源）分发到既有路由；不解析来电信令（`callId`/`action` 帧由来电协调
-/// 器独立消费），目标缺失或不可承接时静默忽略，不进入死路由。
+/// 消费平台防腐层交出的中性 tap intent，按目标语义锚点分发到既有路由；
+/// 来电帧由来电协调器独立消费，不可承接目标静默忽略。
 class PushTapNavigator {
-  PushTapNavigator({required this.messagingClient, required this.push});
+  PushTapNavigator({required this.intentSource, required this.push});
 
-  final FirebasePushMessagingClient? messagingClient;
+  final PushTapIntentSource? intentSource;
   final void Function(String location) push;
-  StreamSubscription<RemoteMessage>? _openedSub;
   bool _started = false;
 
   Future<void> start() async {
-    final client = messagingClient;
-    if (client == null || _started) {
-      // 平台能力不可用（非 Android）或已启动：一致降级，无副作用。
+    final source = intentSource;
+    if (source == null || _started) {
       return;
     }
     _started = true;
-    _openedSub = client.openedMessages.listen(handleTapMessage);
-    final initial = await client.readInitialMessage();
-    if (initial != null) {
-      handleTapMessage(initial);
-    }
+    await source.start(handleTapIntent);
   }
 
-  /// 单条 tap 消息的分发；公开给测试直接驱动。
-  void handleTapMessage(RemoteMessage message) {
-    final data = message.data;
-    if ((data['callId'] ?? '').toString().trim().isNotEmpty) {
-      // 来电帧归来电协调器，不在通用 tap 路由分发。
+  /// 单条 tap intent 的分发；公开给测试直接驱动。
+  void handleTapIntent(PushTapIntent intent) {
+    if (intent.callId.isNotEmpty) {
       return;
     }
-    final targetType = (data['targetType'] ?? '').toString().trim();
-    final targetId = (data['targetId'] ?? '').toString().trim();
-    if (targetType == 'conversation' && targetId.isNotEmpty) {
-      push(AppRoutePaths.chatDetail(id: targetId));
+    if (intent.targetType == 'conversation' && intent.targetId.isNotEmpty) {
+      push(AppRoutePaths.chatDetail(id: intent.targetId));
     }
   }
 
   Future<void> dispose() async {
-    await _openedSub?.cancel();
-    _openedSub = null;
+    await intentSource?.stop();
     _started = false;
   }
 }

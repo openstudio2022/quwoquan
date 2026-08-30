@@ -18,13 +18,294 @@ from .local_assistant_skill_package_keys import (
     KEY_ID,
     prepare_local_assistant_skill_package_keys,
 )
+from .openssl3_resolver import OpenSSL3Executable, resolve_openssl3
 from .output_paths import deployment_target_path
 
 SCHEMA = "stackctl.local_assistant_skill_package_publication.v1"
+PACKAGED_RELEASE_SCHEMA = "stackctl.assistant_skill_package_release.v1"
 TARGET = "alpha-local"
 ENVIRONMENT = "alpha"
 CONTAINER = "quwoquan_alpha_test_live-assistant-service-1"
 PUBLISHER = "service:local-managed-assistant-skill-publisher:alpha-local"
+_REQUIRED_ASSET_KINDS = frozenset(
+    {
+        "manifest",
+        "catalog",
+        "activation",
+        "input",
+        "input_schema",
+        "context",
+        "capability",
+        "orchestration",
+        "trigger",
+        "memory",
+        "presentation",
+        "presentation_template",
+        "evaluation",
+        "prompt",
+        "replay",
+    }
+)
+
+
+def _validated_public_keys(public_keys_json: str) -> dict[str, bytes]:
+    try:
+        payload = json.loads(public_keys_json)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("assistant Skill package trusted public keys are invalid") from exc
+    if not isinstance(payload, dict) or not payload:
+        raise RuntimeError("assistant Skill package trusted public keys are empty")
+    decoded: dict[str, bytes] = {}
+    for key_id, encoded in payload.items():
+        if not isinstance(key_id, str) or not key_id.strip() or not isinstance(encoded, str):
+            raise RuntimeError("assistant Skill package trusted public key identity is invalid")
+        try:
+            public_key = base64.b64decode(encoded, validate=True)
+        except (ValueError, base64.binascii.Error) as exc:
+            raise RuntimeError("assistant Skill package trusted public key is invalid") from exc
+        if len(public_key) != 32:
+            raise RuntimeError("assistant Skill package trusted public key is invalid")
+        decoded[key_id.strip()] = public_key
+    return decoded
+
+
+def derive_official_skill_package_release_identity(
+    *,
+    environment: str,
+    target: str,
+    source_digest: str,
+    source_revision: str,
+    public_keys_json: str,
+    signing_key_id: str = KEY_ID,
+) -> dict[str, str]:
+    valid_target = (
+        environment in {"alpha", "beta", "gamma"}
+        and target == f"{environment}-local"
+    ) or (environment == "prod" and target == "prod-hosted")
+    if not valid_target:
+        raise RuntimeError("assistant Skill package release target identity is invalid")
+    if not source_digest.startswith("sha256:") or len(source_digest) != 71:
+        raise RuntimeError("assistant Skill package source digest is invalid")
+    revision = source_revision.strip()
+    if len(revision) != 40 or any(character not in "0123456789abcdef" for character in revision):
+        raise RuntimeError("assistant Skill package source revision is invalid")
+    trusted = _validated_public_keys(public_keys_json)
+    signing_key_id = signing_key_id.strip()
+    if not signing_key_id or signing_key_id not in trusted:
+        raise RuntimeError("assistant Skill package signing key is absent from the trust root")
+    trust_digest = "sha256:" + hashlib.sha256(public_keys_json.encode("utf-8")).hexdigest()
+    build_id = "-".join(
+        (
+            environment,
+            source_digest.removeprefix("sha256:")[:16],
+            revision[:12],
+            trust_digest.removeprefix("sha256:")[:12],
+            hashlib.sha256(signing_key_id.encode("utf-8")).hexdigest()[:8],
+        )
+    )
+    return {
+        "buildId": build_id,
+        "commandId": "official-bootstrap-" + build_id,
+        "signingKeyId": signing_key_id,
+        "trustedPublicKeysDigest": trust_digest,
+    }
+
+
+def materialize_packaged_official_skill_release(
+    *,
+    output_root: Path,
+    environment: str,
+    target: str,
+    source_digest: str,
+    source_revision: str,
+    public_keys_json: str,
+    build_report: dict[str, Any],
+    signing_key_id: str = KEY_ID,
+) -> dict[str, str]:
+    identity = derive_official_skill_package_release_identity(
+        environment=environment,
+        target=target,
+        source_digest=source_digest,
+        source_revision=source_revision,
+        public_keys_json=public_keys_json,
+        signing_key_id=signing_key_id,
+    )
+    build_id = identity["buildId"]
+    publication_ref = f"releases/{build_id}/publication.json"
+    if build_report.get("buildId") != build_id or build_report.get("publicationRef") != publication_ref:
+        raise RuntimeError("assistant Skill package build report identity drifted")
+    publication_path = output_root / publication_ref
+    if publication_path.is_symlink() or not publication_path.is_file():
+        raise RuntimeError("assistant Skill package publication is missing or unsafe")
+    try:
+        publication = json.loads(publication_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("assistant Skill package publication is unreadable") from exc
+    release = publication.get("release") if isinstance(publication, dict) else None
+    if not isinstance(release, dict):
+        raise RuntimeError("assistant Skill package release descriptor is missing")
+    if (
+        publication.get("commandId") != identity["commandId"]
+        or release.get("packageId") != "assistant.session.skills"
+        or release.get("releaseDigest") != build_report.get("releaseDigest")
+        or (release.get("provenance") or {}).get("buildId") != build_id
+        or (release.get("provenance") or {}).get("sourceRevision") != source_revision
+        or (release.get("signature") or {}).get("keyId") != identity["signingKeyId"]
+    ):
+        raise RuntimeError("assistant Skill package release identity drifted")
+    assets = release.get("assets")
+    if not isinstance(assets, list) or not assets:
+        raise RuntimeError("assistant Skill package release assets are empty")
+    kinds: set[str] = set()
+    for asset in assets:
+        if not isinstance(asset, dict):
+            raise RuntimeError("assistant Skill package asset descriptor is invalid")
+        locator = str(asset.get("locator") or "")
+        prefix = "skill-package://official/"
+        if not locator.startswith(prefix):
+            raise RuntimeError("assistant Skill package asset locator is invalid")
+        relative = locator.removeprefix(prefix)
+        asset_path = output_root / relative
+        if (
+            asset_path.is_symlink()
+            or not asset_path.is_file()
+            or asset_path.resolve().parent == output_root.resolve()
+            or not asset_path.resolve().is_relative_to(output_root.resolve())
+        ):
+            raise RuntimeError("assistant Skill package asset path is missing or unsafe")
+        digest = "sha256:" + hashlib.sha256(asset_path.read_bytes()).hexdigest()
+        if digest != asset.get("assetDigest"):
+            raise RuntimeError("assistant Skill package asset digest mismatch")
+        kinds.add(str(asset.get("kind") or ""))
+    if kinds != _REQUIRED_ASSET_KINDS:
+        raise RuntimeError("assistant Skill package required asset kinds are incomplete")
+    trusted_path = output_root / "trusted_public_keys.json"
+    trusted_path.write_text(public_keys_json + "\n", encoding="utf-8")
+    os.chmod(trusted_path, 0o644)
+    metadata = {
+        "schema": PACKAGED_RELEASE_SCHEMA,
+        "environment": environment,
+        "target": target,
+        "packageId": "assistant.session.skills",
+        "buildId": build_id,
+        "publicationRef": publication_ref,
+        "releaseDigest": str(release["releaseDigest"]),
+        "sourceDigest": source_digest,
+        "sourceRevision": source_revision,
+        "signingKeyId": identity["signingKeyId"],
+        "trustedPublicKeysDigest": identity["trustedPublicKeysDigest"],
+        "trustedPublicKeysRef": "trusted_public_keys.json",
+    }
+    write_json(output_root / "release.json", metadata)
+    return metadata
+
+
+def load_packaged_assistant_skill_package_trust(
+    *,
+    candidate_root: Path,
+    environment: str,
+    target: str,
+) -> str:
+    package_root = (
+        candidate_root
+        / "packages"
+        / "services"
+        / "assistant-service"
+        / "skill-packages"
+    )
+    metadata_path = package_root / "release.json"
+    trusted_path = package_root / "trusted_public_keys.json"
+    if (
+        package_root.is_symlink()
+        or metadata_path.is_symlink()
+        or trusted_path.is_symlink()
+        or not metadata_path.is_file()
+        or not trusted_path.is_file()
+    ):
+        raise RuntimeError("packaged assistant Skill release trust material is missing or unsafe")
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("packaged assistant Skill release identity is unreadable") from exc
+    required = {
+        "schema",
+        "environment",
+        "target",
+        "packageId",
+        "buildId",
+        "publicationRef",
+        "releaseDigest",
+        "sourceDigest",
+        "sourceRevision",
+        "signingKeyId",
+        "trustedPublicKeysDigest",
+        "trustedPublicKeysRef",
+    }
+    if not isinstance(metadata, dict) or set(metadata) != required:
+        raise RuntimeError("packaged assistant Skill release identity fields mismatch")
+    if (
+        metadata.get("schema") != PACKAGED_RELEASE_SCHEMA
+        or metadata.get("environment") != environment
+        or metadata.get("target") != target
+        or metadata.get("packageId") != "assistant.session.skills"
+        or not str(metadata.get("signingKeyId") or "").strip()
+        or metadata.get("trustedPublicKeysRef") != "trusted_public_keys.json"
+    ):
+        raise RuntimeError("packaged assistant Skill release target identity mismatch")
+    public_keys_json = trusted_path.read_text(encoding="utf-8").strip()
+    trusted = _validated_public_keys(public_keys_json)
+    signing_key_id = str(metadata["signingKeyId"])
+    if signing_key_id not in trusted:
+        raise RuntimeError("packaged assistant Skill release trust root is incomplete")
+    actual_digest = "sha256:" + hashlib.sha256(public_keys_json.encode("utf-8")).hexdigest()
+    if actual_digest != metadata.get("trustedPublicKeysDigest"):
+        raise RuntimeError("packaged assistant Skill release trust root digest mismatch")
+    publication_path = package_root / str(metadata["publicationRef"])
+    if publication_path.is_symlink() or not publication_path.is_file():
+        raise RuntimeError("packaged assistant Skill publication is missing or unsafe")
+    publication = json.loads(publication_path.read_text(encoding="utf-8"))
+    release = publication.get("release") if isinstance(publication, dict) else None
+    if (
+        not isinstance(release, dict)
+        or publication.get("commandId")
+        != "official-bootstrap-" + str(metadata["buildId"])
+        or release.get("releaseDigest") != metadata.get("releaseDigest")
+        or (release.get("signature") or {}).get("keyId") != signing_key_id
+    ):
+        raise RuntimeError("packaged assistant Skill publication identity drifted")
+    kinds: set[str] = set()
+    for asset in release.get("assets") or []:
+        if not isinstance(asset, dict):
+            raise RuntimeError("packaged assistant Skill asset descriptor is invalid")
+        locator = str(asset.get("locator") or "")
+        prefix = "skill-package://official/"
+        if not locator.startswith(prefix):
+            raise RuntimeError("packaged assistant Skill asset locator is invalid")
+        asset_path = package_root / locator.removeprefix(prefix)
+        if (
+            asset_path.is_symlink()
+            or not asset_path.is_file()
+            or not asset_path.resolve().is_relative_to(package_root.resolve())
+        ):
+            raise RuntimeError("packaged assistant Skill asset is missing or unsafe")
+        actual_asset_digest = "sha256:" + hashlib.sha256(
+            asset_path.read_bytes()
+        ).hexdigest()
+        if actual_asset_digest != asset.get("assetDigest"):
+            raise RuntimeError("packaged assistant Skill asset digest mismatch")
+        kinds.add(str(asset.get("kind") or ""))
+    if kinds != _REQUIRED_ASSET_KINDS:
+        raise RuntimeError("packaged assistant Skill asset kind closure is incomplete")
+    try:
+        signature = base64.b64decode(
+            str((release.get("signature") or {}).get("value") or ""),
+            validate=True,
+        )
+    except (ValueError, base64.binascii.Error) as exc:
+        raise RuntimeError("packaged assistant Skill signature is invalid") from exc
+    if len(signature) != 64:
+        raise RuntimeError("packaged assistant Skill signature is invalid")
+    return public_keys_json
 
 
 def _run(
@@ -66,19 +347,29 @@ def _source_digest(root: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 
-def _private_key_base64(private_pem: Path, public_keys_json: str) -> str:
+def _private_key_base64(
+    private_pem: Path,
+    public_keys_json: str,
+    *,
+    openssl: OpenSSL3Executable | None = None,
+) -> str:
+    selected = openssl or resolve_openssl3()
     result = subprocess.run(
-        ["openssl", "pkey", "-in", str(private_pem), "-outform", "DER"],
+        selected.argv("pkey", "-in", str(private_pem), "-outform", "DER"),
         capture_output=True,
         check=False,
     )
     if result.returncode != 0 or len(result.stdout) < 32:
         raise RuntimeError("local-managed Assistant Skill private key is invalid")
     seed = result.stdout[-32:]
-    public = base64.b64decode(json.loads(public_keys_json)[KEY_ID], validate=True)
-    if len(public) != 32:
-        raise RuntimeError("local-managed Assistant Skill public key is invalid")
-    return base64.b64encode(seed + public).decode("ascii")
+    trusted = _validated_public_keys(public_keys_json)
+    public = trusted.get(KEY_ID)
+    if public is None:
+        raise RuntimeError("local-managed Assistant Skill public key is absent")
+    private_key = seed + public
+    if len(private_key) != 64:
+        raise RuntimeError("local-managed Assistant Skill private key material is invalid")
+    return base64.b64encode(private_key).decode("ascii")
 
 
 def _container_runtime() -> tuple[
@@ -313,7 +604,10 @@ def publish_alpha_test_live(report_dir: Path) -> dict[str, Any]:
         / "services/assistant-service/resources/skill_packages/official"
     )
     source_digest = _source_digest(source_root)
-    keys = prepare_local_assistant_skill_package_keys(ENVIRONMENT, TARGET)
+    openssl = resolve_openssl3()
+    keys = prepare_local_assistant_skill_package_keys(
+        ENVIRONMENT, TARGET, openssl=openssl
+    )
     runtime_environment, config_root, network, mounts = _container_runtime()
     if (
         runtime_environment.get(
@@ -345,7 +639,9 @@ def publish_alpha_test_live(report_dir: Path) -> dict[str, Any]:
     environment = dict(runtime_environment)
     environment[
         "ASSISTANT_SKILL_PACKAGE_SIGNING_PRIVATE_KEY_BASE64"
-    ] = _private_key_base64(keys.private_key_path, keys.public_keys_json)
+    ] = _private_key_base64(
+        keys.private_key_path, keys.public_keys_json, openssl=openssl
+    )
     build_report: dict[str, Any]
     if publication_path.exists():
         build_report = {

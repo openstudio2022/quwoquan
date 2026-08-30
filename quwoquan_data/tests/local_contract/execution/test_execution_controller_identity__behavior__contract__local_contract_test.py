@@ -60,18 +60,8 @@ def test_controller_entrypoint_loads_coverage_and_baseline_through_execution_bou
         execution_id,
         targets=({"name": "测试实体甲", "entityType": "地点/景区"},),
     )
-    manifest = fixture.build()
+    fixture.build()
     frozen_spec = fixture.spec_payload()
-    frozen_spec["executionPolicy"]["requiredWorkers"] = 3
-    frozen_spec["executionPolicy"]["partitionCount"] = 16
-    from content.execution import workspace
-    from core.source_digest import SourceDigest
-
-    monkeypatch.setattr(
-        workspace,
-        "current_source_digest",
-        lambda: SourceDigest.from_document(manifest["sourceDigest"]),
-    )
 
     monkeypatch.setattr(
         controller_entrypoint.store,
@@ -117,7 +107,10 @@ def test_controller_entrypoint_loads_coverage_and_baseline_through_execution_bou
     )
 
     assert observed["entityIds"] == ["测试实体甲"]
-    assert observed["maxWorkers"] == 3
+    # worker 启动参数只随 execution 冻结，运行时不得另有来源。
+    assert observed["maxWorkers"] == (
+        fixture.spec().execution_policy.fleet_max_concurrent_workers
+    )
 
 
 def test_execution_guards_are_real_context_managers():

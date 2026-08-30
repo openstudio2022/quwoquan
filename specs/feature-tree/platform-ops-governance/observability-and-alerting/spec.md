@@ -34,6 +34,7 @@
 - [`log-metric-trace-unification`](./log-metric-trace-unification/spec.md)：以 requestId 和 traceId 关联日志、指标与追踪，同时限制标签基数并脱敏主体数据。
 - [`slo-error-budget-governance`](./slo-error-budget-governance/spec.md)：定义“SLO 错误预算治理”的可观察主路径、失败语义及父能力交接。
 - [`alert-drill-closure`](./alert-drill-closure/spec.md)：以受控故障演练证明「注入 → 指标/告警命中 → 恢复 → 回执」动态闭环。
+- [`local-runtime-rot-notification`](./local-runtime-rot-notification/spec.md)：本地运行时从健康转为降级时由会话主动告知，而不是等用户从 App 界面发现。
 
 ## 5. 能力要求
 

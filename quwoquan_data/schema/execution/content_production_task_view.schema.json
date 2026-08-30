@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/content_production_task_view.schema.json",
+  "title": "Projection-only content production task query view",
+  "x-spec-ref": "specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-003",
+  "type": "object",
+  "required": [
+    "schema", "projectorVersion", "specRef", "executionId", "workRequestId",
+    "productionReady", "published", "released", "shipped", "currentStage",
+    "terminal", "ownerEvidenceRefs"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.content_production_task_view"},
+    "projectorVersion": {"const": "operation_views_v1"},
+    "specRef": {"const": "specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-003"},
+    "executionId": {"type": "string", "minLength": 1},
+    "workRequestId": {"type": "string", "pattern": "^wr-[0-9a-f]{24}$"},
+    "productionReady": {"type": "boolean"},
+    "published": {"type": "boolean"},
+    "released": {"type": "boolean"},
+    "shipped": {"type": "boolean"},
+    "currentStage": {
+      "enum": [
+        "0.plan", "sources", "1.download", "2.quality", "3.compose",
+        "4.draft", "5.review", "publish", "release", "ship", "END"
+      ]
+    },
+    "terminal": {"enum": ["running", "blocked", "succeeded"]},
+    "ownerEvidenceRefs": {
+      "type": "object",
+      "required": ["productionReady", "published", "released", "shipped"],
+      "additionalProperties": false,
+      "properties": {
+        "productionReady": {"$ref": "#/$defs/evidenceRef"},
+        "published": {"$ref": "#/$defs/evidenceRef"},
+        "released": {"$ref": "#/$defs/evidenceRef"},
+        "shipped": {"$ref": "#/$defs/evidenceRef"}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "evidenceRef": {
+      "type": "object",
+      "required": ["ref", "digest", "verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "digest": {"$ref": "#/$defs/digest"},
+        "verdict": {"enum": ["passed", "failed", "not_observed"]}
+      }
+    }
+  }
+}

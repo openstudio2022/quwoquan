@@ -33,8 +33,20 @@
 - 理由：建立平台侧可观测、配置治理、服务治理、安全隐私、发布回滚的统一治理能力。
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 生产审批 authority 与 rollout ledger、timing ledger 分离：webhook 接收面只 append event，审批 readback 只按 repository/run/head/candidate/environment 查询；部署编排只消费 readback，不拥有 reviewer decision。
+- 私有仓当前套餐下该 authority 是外部硬门，不是 GitHub 原生 branch/environment protection 的副本或兼容层。任何用户可见或机器回执必须保留 `nativeProtection=false`。
 - 关联要求：`REQ-001`
 - 关联能力：[`commercial-readiness-risk-closure`](./commercial-readiness-risk-closure/spec.md)、[`config-and-reliability-governance`](./config-and-reliability-governance/spec.md)、[`observability-and-alerting`](./observability-and-alerting/spec.md)、[`security-privacy-audit`](./security-privacy-audit/spec.md)
+
+<a id="dec-002"></a>
+### DEC-002 HTTP operation 的 SLO 告警口径只由 ContractGraph 派生
+- 决策：`slo.availabilityPercent`（5xx 错误预算）与 `slo.latencyP95Milliseconds` 两个维度的告警只能由 ContractGraph 派生产物承载；手写 PromQL 只承载派生无法表达的口径，且必须在 `handwritten_overlay_manifest.yaml` 登记封闭枚举理由。
+- 理由：阈值与契约声明同源后，改契约即改告警，不存在告警与 SLO 各说各话的第二真相源。
+- 被否决方案：按域手写等价 PromQL。手写副本会在契约调阈值后静默漂移，正是它被判为「可派生残留」的原因。
+- 约束与影响：可派生判定是机械的、没有 allowlist——一条规则消费 `http_server_*` 或契约 record metric、selector 能解析到 operation、形状是 P95 或 5xx 比率，即判定可派生，留在 overlay 由 `verify_contract_alert_overlay.py` BLOCK。业务侧可观测性测试因此断言「契约声明的 SLO 档位有派生告警承载」，不再断言手写告警名。
+- 已被本决策替代的手写告警：`AuthChallengeLatencyHigh`（`user.authentication_challenge.SendOtp`，1200ms）、`AuthLoginLatencyHigh`（`user.account_session.Login*`，1500ms）、`ChatConversationCreateLatencyHigh` 与 `ChatGroupCandidateSource*`（`chat.conversation.*`，800ms/500ms 与 99.9% 可用性）。口径未丢失，改由域 coverage 与待商用 coverage 按 SLO 档位承载；`ChatConversationCreateLatencyHigh` 的手写阈值 500ms 与契约声明的 800ms 本就不一致，以契约为准。
+- 关联要求：`REQ-001`
+- 关联能力：[`observability-and-alerting`](./observability-and-alerting/spec.md)
 
 ## 6. 质量与运行约束
 

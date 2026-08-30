@@ -19,14 +19,8 @@ func requireMessageTransport(
 	router *rtredis.Router,
 	sceneModes map[string]string,
 ) (*runtimemessaging.RedisMessageTransport, error) {
-	binding, found := experimentbinding.ExternalProviderBindingFor(
-		environment,
-		runtimemessaging.RuntimeMessageTransportCapability,
-	)
-	premiumBinding, premiumFound := premiumpoolbinding.ExternalProviderBindingFor(
-		environment,
-		runtimemessaging.RuntimeMessageTransportCapability,
-	)
+	binding, found := experimentbinding.CompiledBindingFor(runtimemessaging.RuntimeMessageTransportCapability)
+	premiumBinding, premiumFound := premiumpoolbinding.CompiledBindingFor(runtimemessaging.RuntimeMessageTransportCapability)
 	if premiumFound != found ||
 		premiumBinding.State != binding.State ||
 		premiumBinding.AdapterID != binding.AdapterID ||

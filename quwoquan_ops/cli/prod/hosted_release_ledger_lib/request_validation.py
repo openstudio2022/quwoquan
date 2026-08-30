@@ -311,6 +311,12 @@ def _validate_request(value: object) -> dict[str, Any]:
         "artifactDigest",
         "fromCandidateDigest",
         "toCandidateDigest",
+        "environmentAcceptanceDigest",
+        "environmentAcceptanceFactId",
+        "gammaPredecessorFactId",
+        "gammaPredecessorDigest",
+        "engineeringEligibilityDigest",
+        "durableApprovalDigest",
         "imageDigest",
         "configDigest",
         "contractGraphDigest",
@@ -318,6 +324,12 @@ def _validate_request(value: object) -> dict[str, Any]:
     ):
         if not isinstance(value.get(field), str) or SHA256_RE.fullmatch(value[field]) is None:
             raise ValueError(f"{field} must be sha256")
+    for field in (
+        "environmentAcceptanceRef",
+        "engineeringEligibilityRef",
+        "durableApprovalRef",
+    ):
+        _require_safe_string(value.get(field), field=field)
     generation = value.get("expectedGeneration")
     if (
         not isinstance(generation, int)

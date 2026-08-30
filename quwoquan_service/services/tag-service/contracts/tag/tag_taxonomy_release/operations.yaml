@@ -1,8 +1,12 @@
 description: 'TagTaxonomyRelease 只接受 Data publish Facade 的版本化导入与激活命令。
 
-  离线导入器（cmd/import）是唯一节点写入口：导入完成后经 Stage 落不可变
+  离线导入器（cmd/import）是唯一节点写入口：导入完成后经 Stage 以完整
 
-  release 记录（canonicalDigest 幂等），再经 Activate 做单 active CAS 切换。
+  release intent 落不可变记录，再经 Activate 按 releaseId 做单 active CAS 切换。
+
+  releaseId 是业务身份；canonicalDigest 只校验 taxonomy snapshot 内容，允许不同
+
+  immutable content release 引用同一 digest。
 
   '
 commercial_defaults:
@@ -52,7 +56,11 @@ api_routes:
     availability_percent: 99.9
   description: '落一条不可变 staged release（releaseId/sourceOwner/canonicalDigest/releaseKind/nodeCount）。
 
-    canonicalDigest 唯一约束承载幂等：同 digest 重复 Stage 返回首次记录。
+    releaseId 是业务身份；只有同 releaseId 的完整 intent（sourceOwner/canonicalDigest/releaseKind/nodeCount）
+
+    完全相同才返回首次记录。不同 releaseId 可引用同一 canonicalDigest，并分别保存为独立 immutable release；
+
+    同 releaseId 的任一 intent 字段漂移均返回幂等冲突。
 
     content 必须至少包含一个节点；release-bound empty_baseline 必须恰好为零节点。
 
@@ -133,17 +141,20 @@ consumers:
 contract_test:
   test_strategy:
     service_side:
-      description: 真实 Mongo 验证 digest 幂等、单 active CAS 切换与状态机
+      description: 真实 Mongo 验证 release intent 幂等、同 digest 多 release、单 active CAS 切换与状态机
       real_engines:
         mongodb: testcontainers (mongo:7)
       scenarios:
-      - name: stage_digest_idempotent
+      - name: stage_release_intent_idempotent
         route: POST /internal/tag/taxonomy-releases
         assertions:
-        - 同 canonicalDigest 重复 Stage 返回首次记录，不落第二条
+        - 同 releaseId 且完整 intent 相同的重复 Stage 返回首次记录，不落第二条
+        - 同 releaseId 任一 intent 字段漂移返回幂等冲突
+        - 不同 releaseId 使用相同 canonicalDigest 时各自成功落一条 immutable release
       - name: activate_single_active_cas
         route: POST /internal/tag/taxonomy-releases/{releaseId}:activate
         assertions:
+        - 激活目标严格按 releaseId 选择，不按 canonicalDigest 选择
         - 激活后旧 active release 变 retired，同一时刻只有一个 active
         - 重复激活 no-op 重放安全
         - release-bound empty_baseline 零节点快照可激活并可重放 retired 历史快照

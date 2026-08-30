@@ -408,6 +408,139 @@ export const platformControlPlane = {
       "source_entity": "ControlPlaneJournal",
       "view_kind": "audit",
       "view_model": "PlatformControlPlaneJournal"
+    },
+    {
+      "deployment_profile": "audit_heavy",
+      "label": "Hosted Human Authority 决定单元",
+      "object_type": "decision_unit",
+      "operations": [
+        {
+          "approval_mode": "single",
+          "auth_mode": "required",
+          "contract_operation_id": "ops.human_authority.CreateHumanDecisionUnit",
+          "danger_level": "high",
+          "method": "POST",
+          "operation": "CreateHumanDecisionUnit",
+          "path": "/control-plane/platform/human-authority/decision-units",
+          "principal": "operator",
+          "scopes": [
+            "ops.human-authority.write"
+          ]
+        },
+        {
+          "auth_mode": "required",
+          "contract_operation_id": "ops.human_authority.ListHumanDecisionUnits",
+          "method": "GET",
+          "operation": "ListHumanDecisionUnits",
+          "path": "/control-plane/platform/human-authority/decision-units",
+          "principal": "operator",
+          "scopes": [
+            "ops.human-authority.read"
+          ]
+        },
+        {
+          "auth_mode": "required",
+          "contract_operation_id": "ops.human_authority.ReadHumanDecisionUnit",
+          "method": "GET",
+          "operation": "ReadHumanDecisionUnit",
+          "path": "/control-plane/platform/human-authority/decision-units/{decisionUnitId}",
+          "principal": "operator",
+          "scopes": [
+            "ops.human-authority.read"
+          ]
+        },
+        {
+          "approval_mode": "single",
+          "auth_mode": "required",
+          "contract_operation_id": "ops.human_authority.SubmitHumanRoleEvidence",
+          "danger_level": "high",
+          "method": "POST",
+          "operation": "SubmitHumanRoleEvidence",
+          "path": "/control-plane/platform/human-authority/decision-units/{decisionUnitId}/submissions",
+          "principal": "operator",
+          "scopes": [
+            "ops.human-authority.write"
+          ]
+        },
+        {
+          "approval_mode": "single",
+          "auth_mode": "required",
+          "contract_operation_id": "ops.human_authority.SealHumanDecisionRound",
+          "danger_level": "high",
+          "method": "POST",
+          "operation": "SealHumanDecisionRound",
+          "path": "/control-plane/platform/human-authority/decision-units/{decisionUnitId}/rounds/{round}:seal",
+          "principal": "operator",
+          "scopes": [
+            "ops.human-authority.write"
+          ]
+        },
+        {
+          "approval_mode": "dual",
+          "auth_mode": "required",
+          "contract_operation_id": "ops.human_authority.FinalizeHumanDecision",
+          "danger_level": "critical",
+          "method": "POST",
+          "operation": "FinalizeHumanDecision",
+          "path": "/control-plane/platform/human-authority/decision-units/{decisionUnitId}:finalize",
+          "principal": "operator",
+          "scopes": [
+            "ops.human-authority.authorize"
+          ]
+        },
+        {
+          "auth_mode": "required",
+          "contract_operation_id": "ops.human_authority.ReadHumanAuthorizationReceipt",
+          "method": "GET",
+          "operation": "ReadHumanAuthorizationReceipt",
+          "path": "/control-plane/platform/human-authority/receipts/{decisionId}",
+          "principal": "operator",
+          "scopes": [
+            "ops.human-authority.read"
+          ]
+        },
+        {
+          "auth_mode": "required",
+          "contract_operation_id": "ops.human_authority.ReadHumanAuthoritySigningPublicKey",
+          "method": "GET",
+          "operation": "ReadHumanAuthoritySigningPublicKey",
+          "path": "/control-plane/platform/human-authority/signing-keys/{keyId}",
+          "principal": "operator",
+          "scopes": [
+            "ops.human-authority.read"
+          ]
+        },
+        {
+          "approval_mode": "dual",
+          "auth_mode": "required",
+          "contract_operation_id": "ops.human_authority.ConsumeHumanAuthorizationReceipt",
+          "danger_level": "critical",
+          "method": "POST",
+          "operation": "ConsumeHumanAuthorizationReceipt",
+          "path": "/control-plane/platform/human-authority/receipts/{decisionId}:consume",
+          "principal": "operator",
+          "scopes": [
+            "ops.human-authority.consume"
+          ]
+        },
+        {
+          "approval_mode": "dual",
+          "auth_mode": "required",
+          "contract_operation_id": "ops.human_authority.RevokeHumanAuthorizationReceipt",
+          "danger_level": "critical",
+          "method": "POST",
+          "operation": "RevokeHumanAuthorizationReceipt",
+          "path": "/control-plane/platform/human-authority/receipts/{decisionId}:revoke",
+          "principal": "operator",
+          "scopes": [
+            "ops.human-authority.revoke"
+          ]
+        }
+      ],
+      "risk_level": "critical",
+      "source_entity": "DecisionUnit",
+      "view_kind": "workflow_case",
+      "view_model": "DecisionUnit"
     }
   ],
   "plane": "platform-control-plane"

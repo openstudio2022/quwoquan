@@ -106,6 +106,8 @@ func TestFeedItemPublicProjectionHasExactCanonicalJSONKeys(t *testing.T) {
 				"mediaUrls", "videoUrl", "mediaAssetId", "mediaAssetVersion",
 				"hlsCmafMasterManifestUrl", "hlsCmafDescriptorVersion", "coverUrl",
 				"thumbnailUrl", "durationMs",
+				// DEC-033：逐媒体交付绑定后，feed 卡 wire 携带 mediaItems。
+				"mediaItems",
 			},
 		},
 	}
@@ -122,7 +124,6 @@ func TestFeedItemPublicProjectionHasExactCanonicalJSONKeys(t *testing.T) {
 			post.Visibility = "public"
 			post.TagRefs = []string{"travel.photography"}
 			post.ContentVertical = "travel"
-			post.SourceTaskId = "internal-source-task"
 			post.LikeCount = 3
 			post.CommentCount = 2
 			post.ShareCount = 1

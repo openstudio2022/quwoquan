@@ -1,0 +1,28 @@
+{
+  "asset": {
+    "bytes": 175022,
+    "height": 1280,
+    "mimeType": "image/webp",
+    "ref": "cas/98dea9a30b69c1be336f65a9a09f2cddf01c9bfa74a8deffdb1ea12f18bddf6c.webp",
+    "sha256": "sha256:98dea9a30b69c1be336f65a9a09f2cddf01c9bfa74a8deffdb1ea12f18bddf6c",
+    "width": 1280
+  },
+  "assetId": "creator-avatar-qwq_creator_pro_guide_001-98dea9a30b69c1be",
+  "checks": {
+    "clarity": "passed",
+    "format": "passed",
+    "readable": "passed",
+    "safety": "passed"
+  },
+  "manifestAsset": {
+    "assetId": "creator-avatar-qwq_creator_pro_guide_001-98dea9a30b69c1be",
+    "sha256": "sha256:98dea9a30b69c1be336f65a9a09f2cddf01c9bfa74a8deffdb1ea12f18bddf6c"
+  },
+  "processResult": "completed",
+  "qualityResult": "passed",
+  "schema": "quwoquan_data.creator_avatar_quality_evidence",
+  "sourceEvidence": {
+    "ref": "entities/地点/景区/南浔镇/rights_snapshots/b119e37bc36ee0897bdd.json",
+    "sha256": "sha256:ea057551619fc486b46e9624a7130b371f2de9189b7bdb9f921defddfa127bbc"
+  }
+}

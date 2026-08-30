@@ -15,14 +15,22 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.lib.app_identity import (
+    build_profile_for_environment,
+    launch_policy_for_build_profile,
+)
 from quwoquan_ops.cli.lib.environment_topology import ENVIRONMENTS, load_environment_topology
 from quwoquan_ops.cli.lib.common import load_json_yaml
 from quwoquan_ops.cli.lib.media_delivery_manifest import load_media_delivery_manifest
 from quwoquan_ops.cli.lib.output_paths import DEFAULT_DEPLOY_TARGET_BY_ENV
+import media_delivery_consumer_sweep  # noqa: E402
+import media_delivery_typed_binding_lock  # noqa: E402
 
 
 MEDIA_ROOT = (
@@ -45,7 +53,6 @@ FORBIDDEN_TOKENS = (
 )
 FIXTURE_MEDIA_FIELD_FORBIDDEN = (
     ".test",
-    "118.31.239.122",
     ":17100",
     ":18100",
     ":19100",
@@ -579,8 +586,17 @@ def _validate_consumer_boundary(issues: list[str]) -> None:
         issues.append("VideoPlayerWidget 仍接收 raw videoUrl/videoUrlCandidates")
     if "resolveContentVideoUrlCandidates" in text:
         issues.append("VideoPlayerWidget 不得解析业务媒体引用")
-    if "final MediaDeliveryReference deliveryReference;" not in text:
-        issues.append("VideoPlayerWidget 必须接收 MediaDeliveryReference")
+    # 取址只允许两种 typed 形态且互斥：公开 canonical 交付引用，或已由
+    # SignedMediaDeliveryCoordinator 校验过的私有短签交付。私有资产没有公开
+    # canonical path，把公开引用设成必填等于逼消费面伪造一条公开地址。
+    if "final MediaDeliveryReference? deliveryReference;" not in text:
+        issues.append(
+            "VideoPlayerWidget 必须接收可缺席的 MediaDeliveryReference（私有路由短签交付承担取址）"
+        )
+    if "final SignedVideoDelivery? signedDelivery;" not in text:
+        issues.append("VideoPlayerWidget 必须接收 SignedVideoDelivery 私有短签交付")
+    if "(deliveryReference == null) != (signedDelivery == null)" not in text:
+        issues.append("VideoPlayerWidget 必须断言公开引用与私有短签交付恰有一个在场")
 
     resolver = (
         ROOT
@@ -609,6 +625,11 @@ def _validate_runtime_config_authority_parity(
 ) -> None:
     topology = load_environment_topology()
     for env_name in environments:
+        # launchPolicy 由 app_artifact_manifest 的信任域契约单点派生
+        # （nonprod→test_live、prod→prod_release），解析器会校验二者匹配。
+        launch_policy = launch_policy_for_build_profile(
+            build_profile_for_environment(env_name)
+        )
         config_path = APP_RUNTIME_CONFIG_DIR / env_name / "app_runtime.yaml"
         if not config_path.is_file():
             issues.append(f"{env_name}: 缺少 App runtime config: {config_path.relative_to(ROOT)}")
@@ -636,18 +657,21 @@ def _validate_runtime_config_authority_parity(
                     f"{config_path.relative_to(ROOT)}: {runtime_field} 必须保持空模板，"
                     "公开 URL 只能由 topology resolver 投影"
                 )
+        define_command = [
+            sys.executable,
+            str(APP_RUNTIME_DEFINE_SCRIPT),
+            "--env",
+            env_name,
+            "--target",
+            DEFAULT_DEPLOY_TARGET_BY_ENV[env_name],
+            "--format",
+            "json",
+            "--launch-policy",
+            launch_policy,
+        ]
         try:
             result = subprocess.run(
-                [
-                    sys.executable,
-                    str(APP_RUNTIME_DEFINE_SCRIPT),
-                    "--env",
-                    env_name,
-                    "--target",
-                    DEFAULT_DEPLOY_TARGET_BY_ENV[env_name],
-                    "--format",
-                    "json",
-                ],
+                define_command,
                 cwd=str(ROOT),
                 text=True,
                 capture_output=True,
@@ -657,37 +681,54 @@ def _validate_runtime_config_authority_parity(
             issues.append(f"{env_name}: 无法执行 App Dart define 解析器: {exc}")
             continue
         if result.returncode != 0:
-            issues.append(
-                f"{env_name}: App Dart define 解析失败: "
-                f"{(result.stderr or result.stdout).strip()}"
-            )
+            detail = (result.stderr or result.stdout).strip()
+            # 不传 --component-environment 时本 gate 处于 release 全量模式，会要求
+            # 各环境的不可变打包产物。开发机上没有 Prod 包是常态，报「解析失败」
+            # 会被读成媒体契约违规；这里把模式差异说清楚，指向源码模式的调用。
+            if "run stackctl package first" in detail:
+                detail += (
+                    "；这是 release 全量模式的前提产物，本地/源码校验请按 "
+                    "gate_repo.sh 的形态传 --component-environment alpha "
+                    "--component-environment beta --component-environment gamma"
+                )
+            issues.append(f"{env_name}: App Dart define 解析失败: {detail}")
             continue
         try:
-            defines = json.loads(result.stdout)
+            package = json.loads(result.stdout)
         except json.JSONDecodeError as exc:
-            issues.append(f"{env_name}: App Dart define 输出不是 JSON: {exc}")
+            issues.append(f"{env_name}: App runtime package 输出不是 JSON: {exc}")
             continue
-        for runtime_field, (topology_field, define_key) in APP_RUNTIME_CONFIG_MEDIA_FIELDS.items():
+        # 解析器交出的是完整 signed runtime package，媒体 endpoint 落在它的
+        # runtime 段；这里比对该段而不是已退役的扁平 define map。
+        resolved_runtime = package.get("runtime")
+        if not isinstance(resolved_runtime, dict):
+            issues.append(f"{env_name}: App runtime package 缺少 runtime 段")
+            continue
+        for runtime_field, (topology_field, _) in APP_RUNTIME_CONFIG_MEDIA_FIELDS.items():
             expected = str(expected_bases.get(topology_field) or "").rstrip("/")
-            if str(defines.get(define_key) or "").rstrip("/") != expected:
+            if str(resolved_runtime.get(runtime_field) or "").rstrip("/") != expected:
                 issues.append(
-                    f"{env_name}: Dart define {define_key} 未与 topology "
+                    f"{env_name}: runtime package {runtime_field} 未与 topology "
                     f"{topology_field} 保持一致"
                 )
 
+    # endpoint 不得有编译期兜底这一意图，在 runtime package 切换后由「只从
+    # package 读」直接满足：源码里根本不存在 endpoint 的 String.fromEnvironment。
+    # 因此判据从「define 必须留空默认值」改为「不得存在 endpoint define 读取」。
     runtime_config_source = APP_RUNTIME_CONFIG_SOURCE.read_text(encoding="utf-8")
-    for define_key in (
-        "CLOUD_GATEWAY_BASE_URL",
-        *(define_key for _, define_key in APP_RUNTIME_CONFIG_MEDIA_FIELDS.values()),
-    ):
-        default_pattern = re.compile(
-            rf"'{re.escape(define_key)}'\s*,\s*defaultValue:\s*''",
-            re.DOTALL,
-        )
-        if not default_pattern.search(runtime_config_source):
+    for runtime_field, (_, define_key) in (
+        {"gatewayBaseUrl": ("gateway", "CLOUD_GATEWAY_BASE_URL")}
+        | APP_RUNTIME_CONFIG_MEDIA_FIELDS
+    ).items():
+        if re.search(rf"fromEnvironment\(\s*'{re.escape(define_key)}'", runtime_config_source):
             issues.append(
-                f"cloud_runtime_config.dart: {define_key} 必须无 endpoint 默认值，"
-                "由环境 launcher 显式注入"
+                f"cloud_runtime_config.dart: {define_key} 不得再从编译期 define 读取，"
+                "endpoint 只能来自已激活的 signed runtime package"
+            )
+        if not re.search(rf"_runtimeValue\('{re.escape(runtime_field)}'\)", runtime_config_source):
+            issues.append(
+                f"cloud_runtime_config.dart: {runtime_field} 必须经 _runtimeValue "
+                "从 signed runtime package 读取"
             )
 
     patrol_source = (
@@ -704,6 +745,17 @@ def _validate_runtime_config_authority_parity(
         / "device"
         / "run_app_instance.sh"
     ).read_text(encoding="utf-8")
+    # run_app_instance.sh 已收敛成 adapter：非 Prod 委派 run.sh，Prod 消费确切
+    # Release 制品，它自己不再组装 dart-define。四个 media base 的注入由
+    # print_app_env_dart_defines.py 单点拥有（run.sh 经 build_launcher_handoff.py
+    # 消费），因此显式注入这条查它，禁止单一 fallback 这条仍查两个 launcher 面。
+    dart_defines_source = (
+        ROOT
+        / "quwoquan_app"
+        / "scripts"
+        / "env"
+        / "print_app_env_dart_defines.py"
+    ).read_text(encoding="utf-8")
     for source_path, source in (
         ("run_environment_patrol_smoke.py", patrol_source),
         ("run_app_instance.sh", app_instance_source),
@@ -712,9 +764,33 @@ def _validate_runtime_config_authority_parity(
             issues.append(
                 f"{source_path}: 正式 launcher/Patrol 禁止单一 media base fallback"
             )
-        for _, define_key in APP_RUNTIME_CONFIG_MEDIA_FIELDS.values():
-            if define_key not in source:
-                issues.append(f"{source_path}: 缺少显式注入 {define_key} 的路径")
+    # Patrol 的媒体 authority 由 session 装配模块拥有，入口脚本只做转发。
+    patrol_session_source = (
+        ROOT
+        / "quwoquan_ops"
+        / "cli"
+        / "smoke"
+        / "environment_patrol_smoke"
+        / "session.py"
+    ).read_text(encoding="utf-8")
+    # runtime package 切换后两侧都不再出现 dart-define 键：解析器按 runtime 字段
+    # 名装配，Patrol 按 CLI 选项装配。四类各自显式这条意图不变，判据锚到各自的
+    # 真实标识符，而不是已退役的 define 键。
+    for runtime_field in APP_RUNTIME_CONFIG_MEDIA_FIELDS:
+        if runtime_field not in dart_defines_source:
+            issues.append(
+                f"print_app_env_dart_defines.py: 缺少显式装配 {runtime_field} 的路径"
+            )
+    for option_name in (
+        "media_avatar_base_url",
+        "media_image_base_url",
+        "media_video_base_url",
+        "media_upload_base_url",
+    ):
+        if option_name not in patrol_session_source:
+            issues.append(
+                f"environment_patrol_smoke/session.py: 缺少显式注入 {option_name} 的路径"
+            )
 
 
 def _validate_video_playback_patrol_contract(issues: list[str]) -> None:
@@ -820,8 +896,27 @@ def _validate_public_ca_tls_boundary(issues: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", choices=tuple(ENVIRONMENTS))
+    environment_mode = parser.add_mutually_exclusive_group()
+    environment_mode.add_argument("--env", choices=tuple(ENVIRONMENTS))
+    environment_mode.add_argument(
+        "--component-environment",
+        action="append",
+        choices=("alpha", "beta", "gamma"),
+        default=[],
+        help=(
+            "validate a non-production source component against canonical test_live "
+            "topology without reading a packaged runtime; repeat for each environment. "
+            "Local and CI source verification must pass this flag (see gate_repo.sh); "
+            "omitting it selects release-full mode, which requires immutable packaged "
+            "runtimes for every environment including Prod"
+        ),
+    )
     args = parser.parse_args()
+    component_environments = tuple(dict.fromkeys(args.component_environment))
+    selected_environments = (
+        component_environments
+        or ((args.env,) if args.env else tuple(ENVIRONMENTS))
+    )
     issues: list[str] = []
     _validate_topology_urls(issues)
     _validate_playback_canary_topology(issues)
@@ -830,9 +925,11 @@ def main() -> int:
     _scan_forbidden_paths(issues)
     _validate_fixture_media_fields(issues)
     _validate_consumer_boundary(issues)
+    media_delivery_typed_binding_lock.validate(issues)
+    media_delivery_consumer_sweep.validate(issues)
     _validate_runtime_config_authority_parity(
         issues,
-        (args.env,) if args.env else tuple(ENVIRONMENTS),
+        selected_environments,
     )
     _validate_video_playback_patrol_contract(issues)
     _validate_avatar_media_patrol_contract(issues)

@@ -38,7 +38,6 @@ from content.post.video.sourced_package import (  # noqa: E402
 from content.source import (
     handler_fetch_video,  # noqa: E402
     sourced_video_admission,  # noqa: E402
-    sourced_video_unit,  # noqa: E402
 )
 from content.source.professional_video_probe import (  # noqa: E402
     probe_professional_video,
@@ -64,7 +63,6 @@ from core.video_source_admission import (  # noqa: E402
 from governance.content_supply_policy import (  # noqa: E402
     load_content_supply_policy,
 )
-from governance.coverage.distribution import ProductLifecycleState  # noqa: E402
 from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 
 EXECUTION_ID = "20260720--travel-video-supply--test-region-a--pilot-001"
@@ -293,15 +291,6 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    monkeypatch.setattr(
-        sourced_video_unit,
-        "load_content_distribution_policy",
-        lambda: type(
-            "CommercialPolicy",
-            (),
-            {"product_lifecycle_state": ProductLifecycleState.COMMERCIAL},
-        )(),
-    )
     _patch_output_root(monkeypatch, tmp_path)
     build_execution_fixture(EXECUTION_ID)
     source = _video(tmp_path / "source.mp4")
@@ -324,10 +313,9 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
         attribution_text="山海旅行者 · Wikimedia Commons · CC BY-SA 4.0",
         rights_basis="CC BY-SA 4.0",
         commercial_authorization_status="verified",
-        publication_admission="commercial_release",
+        distribution_decision="commercial_allowed",
         authorization_proof_url="https://commons.wikimedia.org/wiki/File:West_Lake.webm",
         terms_url="https://creativecommons.org/licenses/by-sa/4.0/",
-        risk_acceptance_id=None,
         audio_rights_status="no_audio",
         audio_authorization_proof_url=None,
         model_release_status="not_required",
@@ -359,9 +347,9 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
     _, forged_issues = SourcedVideoEvidence.from_mapping(
         {**payload, "commercialAuthorizationStatus": "unverified"}
     )
-    assert "sourceVideo unverified authorization requires research or risk acceptance" in forged_issues
+    assert "sourceVideo unverified authorization requires research_allowed" in forged_issues
     assert (
-        "sourceVideo commercial release requires verified HTTPS authorization and terms proof"
+        "sourceVideo commercial_allowed requires verified HTTPS authorization and terms proof"
         in forged_issues
     )
     source_meta = json.loads(
@@ -376,6 +364,7 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
     assert indexed_asset["fileName"] == "source.mp4"
     assert indexed_asset["sha256"] == evidence.sha256
     assert indexed_asset["rightsAuditStatus"] == "verified"
+    assert indexed_asset["distributionDecision"] == "commercial_allowed"
     author_prompt = evidence.author_prompt_dict()
     assert "authorizationProofUrl" not in author_prompt
     assert "commercialAuthorizationStatus" not in author_prompt
@@ -432,6 +421,8 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
     )
     assert manifest["sourceAttribution"]["originalCreatorName"] == "山海旅行者"
     assert manifest["sourceAttribution"]["platform"] == "Wikimedia Commons"
+    assert manifest["sourceAttribution"]["publicationAdmission"] == "commercial_release"
+    assert "distributionDecision" not in manifest["sourceAttribution"]
     assert (output / "assets" / "video.mp4").stat().st_size > 0
     assert (output / "assets" / "poster.webp").stat().st_size > 0
     provenance = json.loads(
@@ -439,21 +430,13 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
     )
     assert provenance["renderStrategy"] == "sourced_video_transcode"
     assert provenance["outputAudioStatus"] == "none"
+    assert provenance["sources"][0]["distributionDecision"] == "commercial_allowed"
 
 
 def test_professional_video_source_unit_preserves_receipt_and_popularity(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    monkeypatch.setattr(
-        sourced_video_unit,
-        "load_content_distribution_policy",
-        lambda: type(
-            "ResearchPolicy",
-            (),
-            {"product_lifecycle_state": ProductLifecycleState.RESEARCH},
-        )(),
-    )
     execution_id = "20260805--travel-video-acquisition--china--pilot-912"
     _patch_output_root(monkeypatch, tmp_path)
     build_execution_fixture(execution_id)
@@ -502,10 +485,9 @@ def test_professional_video_source_unit_preserves_receipt_and_popularity(
         attribution_text="九寨沟实拍 — 摄影师乙 — Pexels Videos",
         rights_basis="platform rights pending verification",
         commercial_authorization_status="unverified",
-        publication_admission="research_release",
+        distribution_decision="research_allowed",
         authorization_proof_url=None,
         terms_url="https://www.pexels.com/terms-of-service/",
-        risk_acceptance_id=None,
         audio_rights_status="no_audio",
         audio_authorization_proof_url=None,
         model_release_status="unverified",
@@ -524,10 +506,9 @@ def test_professional_video_source_unit_preserves_receipt_and_popularity(
     assert asset["usageScope"] == "internal_reference"
 
 
-def test_risk_only_sourced_video_cannot_claim_licensed_adaptation() -> None:
-    with pytest.raises(ValueError, match="risk-only sourced video"):
+def test_unverified_sourced_video_cannot_claim_licensed_adaptation() -> None:
+    with pytest.raises(ValueError, match="verified authorization"):
         _commercial_source_use_mode(
-            publication_admission="risk_accepted_attribution_only",
             commercial_authorization_status="unverified",
             rights_basis="risk_accepted_attribution_only",
             authorization_proof_url=None,
@@ -537,7 +518,6 @@ def test_risk_only_sourced_video_cannot_claim_licensed_adaptation() -> None:
 def test_unknown_video_rights_basis_cannot_claim_licensed_adaptation() -> None:
     with pytest.raises(ValueError, match="licensed rights basis"):
         _commercial_source_use_mode(
-            publication_admission="commercial_release",
             commercial_authorization_status="verified",
             rights_basis="unknown",
             authorization_proof_url="https://rights.example/video",

@@ -41,14 +41,21 @@ def terminal_campaign_predecessor_target_names(
     from core import paths
     from core.io import read_json
     from content.execution.campaign.submission_reconciliation_contract import (
+        campaign_root_for_submission,
         campaigns_root,
+        frozen_plan_workload,
+        frozen_submission_workload,
         load_terminal_submission_documents,
-        predecessor_campaign_root_execution_id,
     )
     from content.execution.identity import parse_execution_id
 
     resolved_output = (output_root or paths.OUTPUT_ROOT).resolve()
-    root_id = predecessor_campaign_root_execution_id(retry_of)
+    root_id = campaign_root_for_submission(
+        retry_of,
+        output_root=resolved_output,
+    )
+    if root_id is None:
+        return None
     campaign = campaigns_root(resolved_output) / root_id
     plan_path = campaign / "campaign_plan.json"
     report_path = campaign / "campaign_report.json"
@@ -79,13 +86,15 @@ def terminal_campaign_predecessor_target_names(
             "predecessor terminal campaign evidence is invalid"
         )
     from content.execution.campaign.plan import sha256_payload
-    from content.execution.campaign.lane import CAMPAIGN_CARRIERS
-
     submissions = load_terminal_submission_documents(
         root_id,
         output_root=resolved_output,
     )
-    if set(submissions) != set(CAMPAIGN_CARRIERS):
+    active_carriers, _workloads, _submission_root = frozen_submission_workload(
+        submissions,
+        root_execution_id=root_id,
+    )
+    if set(submissions) != set(active_carriers):
         raise SystemExit(
             f"[task execute] GATE_BLOCK retryOf={retry_of}: "
             "predecessor terminal submissions are incomplete"
@@ -94,7 +103,7 @@ def terminal_campaign_predecessor_target_names(
     snapshot_lanes = snapshot.get("lanes")
     if (
         not isinstance(lanes, dict)
-        or set(lanes) != set(CAMPAIGN_CARRIERS)
+        or set(lanes) != set(active_carriers)
     ):
         raise SystemExit(
             f"[task execute] GATE_BLOCK retryOf={retry_of}: "
@@ -118,7 +127,7 @@ def terminal_campaign_predecessor_target_names(
         if (
             not plan_path.is_file()
             or not isinstance(snapshot_lanes, dict)
-            or set(snapshot_lanes) != set(CAMPAIGN_CARRIERS)
+            or set(snapshot_lanes) != set(active_carriers)
         ):
             raise SystemExit(
                 f"[task execute] GATE_BLOCK retryOf={retry_of}: "
@@ -132,19 +141,33 @@ def terminal_campaign_predecessor_target_names(
         )
         execution_ids = {
             carrier: str(submissions[carrier].get("executionId") or "")
-            for carrier in CAMPAIGN_CARRIERS
+            for carrier in active_carriers
         }
         submission_digests = {
             carrier: str(submissions[carrier].get("requestDigest") or "")
-            for carrier in CAMPAIGN_CARRIERS
+            for carrier in active_carriers
         }
         plan_digest = str(plan.get("planDigest") or "") if isinstance(plan, dict) else ""
-        representative = submissions["homepage"]
+        representative = submissions[active_carriers[0]]
         source_document = representative.get("sourceDigest")
+        try:
+            plan_carriers, _plan_workloads, plan_ids, plan_root = (
+                frozen_plan_workload(plan, root_execution_id=root_id)
+                if isinstance(plan, dict)
+                else ((), {}, {}, "")
+            )
+        except ValueError as exc:
+            raise SystemExit(
+                f"[task execute] GATE_BLOCK retryOf={retry_of}: "
+                f"predecessor completed campaign workload is invalid: {exc}"
+            ) from exc
         if (
             not isinstance(plan, dict)
             or plan.get("schema") != "quwoquan_data.content_campaign_plan"
             or plan.get("rootExecutionId") != root_id
+            or plan_carriers != active_carriers
+            or plan_ids != execution_ids
+            or plan_root != root_id
             or plan_digest != sha256_payload(stable_plan)
             or report.get("planDigest") != plan_digest
             or snapshot.get("planDigest") != plan_digest
@@ -160,7 +183,7 @@ def terminal_campaign_predecessor_target_names(
                 f"[task execute] GATE_BLOCK retryOf={retry_of}: "
                 "predecessor completed campaign plan evidence is invalid"
             )
-        for carrier in CAMPAIGN_CARRIERS:
+        for carrier in active_carriers:
             execution_id = execution_ids[carrier]
             report_lane = lanes[carrier]
             snapshot_lane = snapshot_lanes[carrier]
@@ -202,7 +225,7 @@ def terminal_campaign_predecessor_target_names(
 
     target_sets = {
         tuple(str(name) for name in submissions[carrier].get("targetNames") or [])
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active_carriers
     }
     if len(target_sets) != 1:
         raise SystemExit(
@@ -223,5 +246,4 @@ def terminal_campaign_predecessor_target_names(
             "predecessor terminal targetNames are invalid"
         )
     return tuple(targets)
-
 

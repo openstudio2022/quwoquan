@@ -14,7 +14,7 @@ A Flutter plugin that provides assets abstraction management APIs.
   s.author           = { 'CaiJingLong' => 'cjl_spy@163.com' }
   s.source           = { :http => 'https://github.com/fluttercandies/flutter_photo_manager/tree/main/ios' }
 
-  s.source_files = "#{package_name}/Sources/#{package_name}/**/*"
+  s.source_files = "#{package_name}/Sources/#{package_name}/**/*.{h,m}"
   s.public_header_files = "#{package_name}/Sources/#{package_name}/**/**/*.h"
 
   s.osx.dependency 'FlutterMacOS'

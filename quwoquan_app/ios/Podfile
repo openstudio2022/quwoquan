@@ -1,3 +1,4 @@
+# 产品安装下限 iOS 16.0（DEC-003）。iOS 16 发布于 2022-09-12，满五年（2027-09-12）前不得抬升。
 # flutter_webrtc / WebRTC-SDK 144.x 需要更高的 iOS 部署版本（与 Podfile.lock 过往版本 137.x 不兼容时需 pod 全量重解）
 platform :ios, '16.0'
 
@@ -5,9 +6,10 @@ platform :ios, '16.0'
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
 project 'Runner', {
-  'Debug' => :debug,
-  'Profile' => :release,
-  'Release' => :release,
+  'Debug-nonprod' => :debug,
+  'Profile-nonprod' => :release,
+  'Release-nonprod' => :release,
+  'Release-prod' => :release,
 }
 
 def flutter_root
@@ -41,9 +43,6 @@ target 'Runner' do
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
     inherit! :search_paths
-  end
-  target 'RunnerUITests' do
-    inherit! :complete
   end
 end
 

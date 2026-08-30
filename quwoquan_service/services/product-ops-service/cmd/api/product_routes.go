@@ -3,8 +3,6 @@ package main
 import (
 	"net/http"
 
-	"quwoquan_service/runtime/health"
-	rtmetrics "quwoquan_service/runtime/metrics"
 	accountenforcementhttp "quwoquan_service/services/product-ops-service/internal/product_ops/account_enforcement_case/adapters/inbound/http"
 	appreleasehttp "quwoquan_service/services/product-ops-service/internal/product_ops/app_release/adapters/inbound/http"
 	eventrecordhttp "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/adapters/inbound/http"
@@ -14,10 +12,8 @@ import (
 	visithttp "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/adapters/inbound/http"
 )
 
-func newServerMux(service *productService, healthChecker *health.Checker) *http.ServeMux {
+func newServerMux(service *productService) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", healthChecker.Handler())
-	mux.Handle("/metrics", rtmetrics.Handler())
 	accountenforcementhttp.NewHandler(service.accountEnforcement).Register(mux)
 	service.assignmentHTTP.Register(mux)
 	visithttp.NewHandler(service.visits).Register(mux)

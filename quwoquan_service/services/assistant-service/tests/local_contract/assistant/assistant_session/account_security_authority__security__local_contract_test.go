@@ -78,8 +78,8 @@ func TestAssistantAccountSecurityAuthorityConfigIsExplicitInEveryEnvironment(t *
 		definitions[key] = definition
 	}
 	for _, key := range []string{
-		"sys.assistant-service.account_security_authority.base_url",
-		"sys.assistant-service.account_security_authority.timeout_ms",
+		"sys.assistant-service.user_account_security_authority.base_url",
+		"sys.assistant-service.user_account_security_authority.timeout_ms",
 	} {
 		definition, exists := definitions[key]
 		if !exists {
@@ -89,7 +89,7 @@ func TestAssistantAccountSecurityAuthorityConfigIsExplicitInEveryEnvironment(t *
 			t.Fatalf("authority setting %q must not have a fallback default", key)
 		}
 	}
-	if definitions["sys.assistant-service.account_security_authority.timeout_ms"]["type"] != "int" {
+	if definitions["sys.assistant-service.user_account_security_authority.timeout_ms"]["type"] != "int" {
 		t.Fatal("authority timeout must be an integer config value")
 	}
 
@@ -109,10 +109,10 @@ func TestAssistantAccountSecurityAuthorityConfigIsExplicitInEveryEnvironment(t *
 				filepath.Join(root, "environments", environment, "config.yaml"),
 				&environmentConfig,
 			)
-			if got := environmentConfig.Overrides["sys.assistant-service.account_security_authority.base_url"]; got != wantBaseURL {
+			if got := environmentConfig.Overrides["sys.assistant-service.user_account_security_authority.base_url"]; got != wantBaseURL {
 				t.Fatalf("base URL=%#v, want=%q", got, wantBaseURL)
 			}
-			if got := environmentConfig.Overrides["sys.assistant-service.account_security_authority.timeout_ms"]; got != 300 {
+			if got := environmentConfig.Overrides["sys.assistant-service.user_account_security_authority.timeout_ms"]; got != 300 {
 				t.Fatalf("timeout=%#v, want=300ms", got)
 			}
 		})
@@ -248,20 +248,16 @@ func TestAssistantAccountSecurityAuthorityReadinessUsesScopedHealthRoute(t *test
 
 func TestAssistantAPIWiresAccountSecurityAuthorityWithoutPIILabels(t *testing.T) {
 	root := assistantServiceRoot(t)
-	source, err := os.ReadFile(filepath.Join(root, "cmd", "api", "main.go"))
+	source, err := os.ReadFile(filepath.Join(root, "cmd", "api", "bootstrap.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	// authority 客户端与其 readiness 检查已上收到 servicekit（DEC-028）：
+	// 服务侧只声明所需 scope，装配与健康注册在骨架一处成立。
 	for _, required := range []string{
-		"rtauth.NewHS256ServiceAuthorizationProvider(",
-		`"assistant-service"`,
+		"AuthorityScopes:",
 		`"user.account.security.read"`,
-		"rtauth.NewHTTPAccountSecurityAuthority(",
-		"BaseURL:     cfg.AccountSecurityAuthority.BaseURL",
-		"Timeout:     accountSecurityAuthorityTimeout",
-		`healthChecker.Register("account_security_authority"`,
-		"return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)",
-		"AccountSecurityAuthority: accountSecurityAuthority",
+		"accountSecurityAuthority: asm.Auth.AccountSecurityAuthority",
 	} {
 		if !strings.Contains(string(source), required) {
 			t.Fatalf("assistant API composition is missing %q", required)
@@ -269,6 +265,36 @@ func TestAssistantAPIWiresAccountSecurityAuthorityWithoutPIILabels(t *testing.T)
 	}
 	if strings.Contains(string(source), "ASSISTANT_ACCOUNT_SECURITY_AUTHORITY") {
 		t.Fatal("account security authority must not use an environment fallback")
+	}
+	kitAuth, err := os.ReadFile(
+		filepath.Join(root, "..", "..", "runtime", "servicekit", "auth.go"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kitBootstrap, err := os.ReadFile(
+		filepath.Join(root, "..", "..", "runtime", "servicekit", "bootstrap.go"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{
+		"rtauth.NewHS256ServiceAuthorizationProvider(",
+		"rtauth.NewHTTPAccountSecurityAuthority(",
+		"BaseURL:     spec.AccountSecurityAuthority.BaseURL",
+	} {
+		if !strings.Contains(string(kitAuth), required) {
+			t.Fatalf("servicekit auth stack is missing %q", required)
+		}
+	}
+	for _, required := range []string{
+		`health.Register("account_security_authority"`,
+		"CheckAccountSecurityAuthority(hctx)",
+		`yaml:"user_account_security_authority"`,
+	} {
+		if !strings.Contains(string(kitBootstrap), required) {
+			t.Fatalf("servicekit bootstrap is missing %q", required)
+		}
 	}
 
 	var sloEvidence struct {
@@ -398,7 +424,7 @@ func assistantServiceRoot(t *testing.T) string {
 		t.Fatal("locate assistant authority contract test")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", ".."))
-	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "main.go")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "bootstrap.go")); err != nil {
 		t.Fatalf("resolve assistant-service root: %v", err)
 	}
 	return root

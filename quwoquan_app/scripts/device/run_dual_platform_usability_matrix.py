@@ -18,6 +18,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
+# 同目录顶层 import：本脚本既被直跑（sys.path[0]=scripts/device）也被
+# 测试经 sys.path 注入同目录后 import，包路径写法在两种场景下均不可达。
+from verify_flutter_run_defines import (
+    RUNTIME_VALUE_DEFINE_KEYS,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 APP = ROOT / "quwoquan_app"
@@ -245,8 +252,8 @@ def _launcher_handoff(environment: str, target: str) -> dict[str, Any]:
             environment,
             "--target",
             target,
-            "--launch-mode",
-            "matrix_uat",
+            "--launch-provenance",
+            "canonical_launcher",
         ],
         cwd=str(APP),
         text=True,
@@ -265,7 +272,12 @@ def _readback_command(
     report_path: Path,
     release_id: str,
 ) -> list[str]:
-    defines = dict(handoff["dartDefines"])
+    # endpoint 取值只来自 handoff 携带的签名 runtime package；编译期 define 已退役。
+    runtime_values = dict(handoff["runtimeConfigPackage"]["runtime"])
+    defines = {
+        define_key: str(runtime_values[value_key])
+        for value_key, define_key in RUNTIME_VALUE_DEFINE_KEYS.items()
+    }
     command = [
         "python3",
         str(READBACK_RUNNER),

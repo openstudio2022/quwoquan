@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/host_source_review_result_input.schema.json",
+  "title": "Host-provided source semantic review result input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "contractVersion", "requestRef", "requestDigest", "actor", "reviewedAt", "verdict"],
+  "properties": {
+    "schema": {"const": "quwoquan_data.host_source_review_result_input"},
+    "contractVersion": {"const": "host-source-review/v1"},
+    "requestRef": {"$ref": "#/$defs/safeRef"},
+    "requestDigest": {"$ref": "#/$defs/sha256"},
+    "actor": {"$ref": "#/$defs/actor"},
+    "reviewedAt": {"type": "string", "format": "date-time", "minLength": 1},
+    "verdict": {"$ref": "#/$defs/verdict"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"},
+    "actor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["host", "sessionId", "modelFamily", "auditRunId"],
+      "properties": {
+        "host": {"enum": ["cursor", "codex"]},
+        "sessionId": {"type": "string", "minLength": 1},
+        "modelFamily": {"type": "string", "minLength": 1},
+        "auditRunId": {"type": "string", "minLength": 1},
+        "runtimeAudit": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "provider": {"type": "string", "minLength": 1},
+            "model": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "verdict": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "status", "entityMatch", "qualityStatus", "privacyRisk", "minorRisk",
+        "maliciousMediaRisk", "watermarkStatus", "findings"
+      ],
+      "properties": {
+        "status": {"enum": ["passed", "blocked"]},
+        "entityMatch": {"enum": ["matched", "mismatch", "unknown"]},
+        "qualityStatus": {"enum": ["passed", "blocked", "unknown"]},
+        "privacyRisk": {"enum": ["none", "present", "unknown"]},
+        "minorRisk": {"enum": ["none", "present", "unknown"]},
+        "maliciousMediaRisk": {"enum": ["none", "present", "unknown"]},
+        "watermarkStatus": {"enum": ["absent", "present", "unknown"]},
+        "findings": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}

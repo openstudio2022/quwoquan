@@ -47,6 +47,9 @@ def submit_campaign_lane(
                 or None
             ),
             semantic_preflight_receipt=preflight_path,
+            retry_unfinished_refs=tuple(
+                getattr(args, "retry_unfinished_refs", ()) or ()
+            ),
         )
     except (
         OSError,

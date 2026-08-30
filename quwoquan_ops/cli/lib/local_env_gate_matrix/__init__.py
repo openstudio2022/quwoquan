@@ -15,6 +15,7 @@
 ``write_timing_bundle`` / ``probe_migration_drift`` / ``_run_commit_gate``），
 包内消费方对这些名字保持包属性延迟访问，禁止改回子模块 from-import 直连。
 """
+
 from __future__ import annotations
 
 # 测试通过 "quwoquan_ops.cli.lib.local_env_gate_matrix.subprocess.run"
@@ -28,19 +29,6 @@ from quwoquan_ops.cli.lib import (  # noqa: F401
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (  # noqa: F401
     validate_packaged_provider_runtime,
 )
-from quwoquan_ops.cli.lib.local_env_gate_timing import (  # noqa: F401
-    PhaseTimer,
-    load_local_env_matrix_budgets,
-    utc_now,
-    write_timing_bundle,
-)
-from quwoquan_ops.cli.lib.local_postgres_migration_drift import (  # noqa: F401
-    format_drift_gate_block,
-    probe_migration_drift,
-)
-from quwoquan_ops.cli.lib.output_paths import output_root  # noqa: F401
-from quwoquan_ops.cli.lib.startup_attempt_receipt import load_startup_attempt  # noqa: F401
-
 from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import (  # noqa: F401
     _acceptance_lease_event,
     _data_cli_runner,
@@ -58,27 +46,30 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.entry import (  # noqa: F401
 from quwoquan_ops.cli.lib.local_env_gate_matrix.evidence import (  # noqa: F401
     _contains_non_unknown_attempt,
     _down_target,
+    _freeze_matrix_package_identity,
     _integration_verify_has_required_test_data_case,
     _live_matrix_evidence_errors,
+    _package_candidate_release_identity,
     _provider_local_functional_errors,
+    _uat_matches_package_identity,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (  # noqa: F401
-    CANONICAL_TARGETS,
-    DEVICE_PROFILE_EMULATOR_ONLY,
-    DEVICE_PROFILE_FULL,
-    DEVICE_PROFILES,
-    DataRunner,
-    EMULATOR_ONLY_CLAIM,
-    EnvRunner,
-    MatrixExecutionLeaseBusy,
-    PROFILE_LOCAL_ENV_GATE,
-    ROOT,
-    SPEC_REFS,
-    TARGET_ENVIRONMENTS,
     _ATTEMPT_ID,
     _PROVIDER_CAPABILITY_ID,
     _PROVIDER_LAYERS,
     _SHA256,
+    CANONICAL_TARGETS,
+    DEVICE_PROFILE_EMULATOR_ONLY,
+    DEVICE_PROFILE_FULL,
+    DEVICE_PROFILES,
+    EMULATOR_ONLY_CLAIM,
+    PROFILE_LOCAL_ENV_GATE,
+    ROOT,
+    SPEC_REFS,
+    TARGET_ENVIRONMENTS,
+    DataRunner,
+    EnvRunner,
+    MatrixExecutionLeaseBusy,
     _evidence_path,
     _matrix_execution_lease,
     _matrix_lease_path,
@@ -98,4 +89,21 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix.preflight import (  # noqa: F401
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.reporting import (  # noqa: F401
     _write_matrix_result,
+)
+from quwoquan_ops.cli.lib.local_env_gate_timing import (  # noqa: F401
+    PhaseTimer,
+    load_local_env_matrix_budgets,
+    utc_now,
+    write_timing_bundle,
+)
+from quwoquan_ops.cli.lib.local_postgres_migration_drift import (  # noqa: F401
+    format_drift_gate_block,
+    probe_migration_drift,
+)
+from quwoquan_ops.cli.lib.output_paths import (  # noqa: F401
+    active_deployment_candidate_snapshot,
+    output_root,  # noqa: F401
+)
+from quwoquan_ops.cli.lib.startup_attempt_receipt import (
+    load_startup_attempt,  # noqa: F401
 )

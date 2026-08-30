@@ -46,12 +46,10 @@ type postManifest struct {
 	SourceCollectionURL   string                             `json:"sourceCollectionUrl"`
 	LicenseProofRef       string                             `json:"licenseProofRef"`
 	Template              string                             `json:"template"`
-	GeneratorModel        string                             `json:"generatorModel"`
 	ArticleDigest         string                             `json:"articleMarkdownDigest"`
 	PublishTitle          string                             `json:"publishTitle"`
 	PublishAngle          string                             `json:"publishAngle"`
 	PublishSeq            int                                `json:"publishSeq"`
-	SourceTaskId          string                             `json:"sourceTaskId"`
 	ArticleAssetManifest  *ArticleAssetManifestDoc           `json:"articleAssetManifest"`
 	CreatedAt             string                             `json:"createdAt"`
 	UpdatedAt             string                             `json:"updatedAt"`
@@ -67,25 +65,6 @@ type ContentAdmission struct {
 }
 
 func normalizeImportedContentPoolRecord(m *postManifest, postRef string) error {
-	fieldsPresent := strings.TrimSpace(m.ContentID) != "" || m.Version != 0 ||
-		strings.TrimSpace(m.PoolSourceType) != "" || strings.TrimSpace(m.VariantPurpose) != "" ||
-		strings.TrimSpace(m.Admission.ProcessResult) != "" || strings.TrimSpace(m.PoolStatus) != ""
-	if !fieldsPresent {
-		// Pre-pool immutable releases remain research-only while the versioned
-		// canonical pool is migrated. New writers always emit the full record.
-		m.ContentID = "qwq_data_" + RuntimePostIDFromPostRef(postRef)
-		m.Version = 1
-		m.PoolSourceType = "data"
-		m.VariantPurpose = "original"
-		m.Admission = ContentAdmission{
-			ProcessResult: "completed",
-			QualityResult: "passed",
-			UsageScope:    "research",
-			EvidenceRef:   "attestation.json",
-		}
-		m.PoolStatus = "active"
-		return nil
-	}
 	if strings.TrimSpace(m.ContentID) == "" || m.Version < 1 ||
 		m.PoolSourceType != "data" || m.PoolStatus != "active" ||
 		m.Admission.ProcessResult != "completed" || m.Admission.QualityResult != "passed" ||
@@ -144,6 +123,100 @@ func validateAssetItem(asset AssetManifestItem, ref string) error {
 	return nil
 }
 
+// validateReleaseMediaDeliveryContract 在 immutable release 导入边界锁定新投影的
+// typed 交付语义（REQ-016/GWT-032）。legacy public 兼容只能位于 App 的具名
+// migration adapter；新 release 不得以缺席 accessMode、URL 形态或路径后缀猜 public。
+func validateReleaseMediaDeliveryContract(
+	assets []AssetManifestItem,
+	releaseClass string,
+	ref string,
+) error {
+	expectedMode := MediaDeliveryAccessModeForReleaseClass(releaseClass)
+	if expectedMode == "" {
+		return fmt.Errorf("%s: releaseClass must explicitly select a media accessMode", ref)
+	}
+	for _, asset := range assets {
+		assetID := strings.TrimSpace(asset.AssetID)
+		mode := strings.TrimSpace(asset.AccessMode)
+		if mode != MediaDeliveryAccessModePublic && mode != MediaDeliveryAccessModeSignedGrant {
+			return fmt.Errorf(
+				"%s: media asset %q accessMode must be public or signed_grant",
+				ref,
+				assetID,
+			)
+		}
+		if mode != expectedMode {
+			return fmt.Errorf(
+				"%s: media asset %q accessMode %q differs from releaseClass %q",
+				ref,
+				assetID,
+				mode,
+				releaseClass,
+			)
+		}
+		if mode == MediaDeliveryAccessModeSignedGrant {
+			if assetID == "" {
+				return fmt.Errorf("%s: signed_grant media asset requires assetId", ref)
+			}
+			if isHLSMediaAsset(asset) {
+				return fmt.Errorf(
+					"%s: private HLS media asset %q is unsupported",
+					ref,
+					assetID,
+				)
+			}
+		}
+	}
+	return nil
+}
+
+// ValidateImportedPostMediaBindings runs after release-authority binding and
+// before any Post/read-model write. It proves every projected media item and
+// article asset has the releaseClass-selected typed mode; raw authoring
+// manifests are not a legacy escape hatch.
+func ValidateImportedPostMediaBindings(posts []PostDoc, releaseClass string) error {
+	if MediaDeliveryAccessModeForReleaseClass(releaseClass) == "" {
+		return fmt.Errorf("releaseClass must be research or commercial")
+	}
+	for _, post := range posts {
+		assets := importedPostAssets(post)
+		if err := validateReleaseMediaDeliveryContract(assets, releaseClass, post.PostRef); err != nil {
+			return err
+		}
+		if post.ArticleAssetManifest != nil {
+			if err := validateReleaseMediaDeliveryContract(
+				post.ArticleAssetManifest.Assets,
+				releaseClass,
+				post.PostRef+" articleAssetManifest",
+			); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func isHLSMediaAsset(asset AssetManifestItem) bool {
+	mimeType := strings.ToLower(strings.TrimSpace(asset.MimeType))
+	if mimeType == "application/vnd.apple.mpegurl" ||
+		mimeType == "application/x-mpegurl" ||
+		mimeType == "application/dash+xml" {
+		return true
+	}
+	for _, raw := range []string{
+		asset.CDNURL,
+		asset.PublicSliceKey,
+		asset.ThumbnailURL,
+		asset.CoverURL,
+	} {
+		path := strings.ToLower(strings.SplitN(strings.TrimSpace(raw), "?", 2)[0])
+		if strings.HasSuffix(path, ".m3u8") || strings.HasSuffix(path, ".mpd") {
+			return true
+		}
+	}
+	return false
+}
+
 func parseRightsAuditStatus(raw string) (RightsAuditStatus, error) {
 	status := RightsAuditStatus(strings.TrimSpace(raw))
 	switch status {
@@ -163,7 +236,7 @@ func hasNonEmptyString(values []string) bool {
 	return false
 }
 
-func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, ref string) error {
+func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, ref string, releaseClass string) error {
 	if len(assets) == 0 || len(assets) > 20 {
 		return fmt.Errorf("%s: image manifest assets must contain 1..20 items", ref)
 	}
@@ -194,11 +267,24 @@ func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, 
 				return fmt.Errorf("%s: verified image asset %q has audit issues", ref, asset.AssetID)
 			}
 		case RightsAuditStatusUnverified:
-			return fmt.Errorf(
-				"%s: unverified image asset %q cannot enter an immutable release",
-				ref,
-				asset.AssetID,
-			)
+			// research release 类别接受未完成商用核验的资产（与 Data 侧
+			// research_allowed 准入同轨），但许可链字段必须完整在场；
+			// commercial 与未声明类别保持 fail closed。
+			if releaseClass != "research" {
+				return fmt.Errorf(
+					"%s: unverified image asset %q cannot enter an immutable release",
+					ref,
+					asset.AssetID,
+				)
+			}
+			if strings.TrimSpace(asset.License) == "" ||
+				(strings.TrimSpace(asset.TermsURL) == "" && strings.TrimSpace(asset.AuthorizationProof) == "") {
+				return fmt.Errorf(
+					"%s: research unverified image asset %q missing license or proof",
+					ref,
+					asset.AssetID,
+				)
+			}
 		}
 	}
 	return nil
@@ -293,7 +379,16 @@ func BindPostAssetURLs(
 			asset.Kind = kind
 			asset.Version = resolved.Version
 			asset.PublicSliceKey = resolved.PublicSliceKey
-			asset.CDNURL = resolved.PublicURL
+			// release authority 的 delivery identity 已由 releaseClass 校验；绑定在
+			// 此处把它写成 projected typed accessMode，不由 URL/path 形态猜测。
+			if resolved.PrivateObjectKey != "" {
+				asset.AccessMode = MediaDeliveryAccessModeSignedGrant
+			} else {
+				asset.AccessMode = MediaDeliveryAccessModePublic
+			}
+			// DEC-031: research bindings carry the relative CAS key instead
+			// of an anonymous public URL.
+			asset.CDNURL = resolved.DeliveryRef
 			asset.ObjectKey = ""
 			byID[asset.AssetID] = asset
 		}

@@ -43,7 +43,7 @@ from core.paths import (
 )
 from support.execution_manifest_fixture import build_execution_fixture
 from support.image_fixture import jpeg_bytes
-from verify.verify_homepage_media_completeness import _manifest_issues
+from verify.homepage_media_fulfillment import manifest_issues
 
 
 def test_repeated_visual_uses_section_aligned_caption_as_single_authority():
@@ -200,9 +200,13 @@ def test_homepage_assets_exclude_watermark_prone_original_provenance():
                 "relevance": f"{entity}湖景",
                 "license": "CC BY 3.0",
                 "termsUrl": "https://creativecommons.org/licenses/by/3.0/",
+                # 判否来自出处类别声明，不来自 URL 里的平台字样：文件名与
+                # 授权串在这里都是干净的。
                 "authorizationProof": (
-                    "https://commons.wikimedia.org/wiki/File:Example_-_panoramio.jpg"
+                    "https://commons.wikimedia.org/wiki/File:Lakeside_view.jpg"
                 ),
+                "creator": "Panoramio upload bot",
+                "credit": "Transferred from Panoramio by Archive Team",
                 "usageScope": "app_publish",
                 "acquisitionStatus": "acquired",
                 "distributionDecision": "research_allowed",
@@ -262,6 +266,11 @@ def test_homepage_assets_keep_indexed_review_rejections_in_disposition_closure()
                 "license": "CC BY 4.0",
                 "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
                 "authorizationProof": "https://commons.wikimedia.org/wiki/File:Safe.jpg",
+                # 本例判的是审阅剔图是否留在处置闭包里，不是出处准入，所以两条素材
+                # 都如实声明「权利人第一手直接上传」，让出处裁决放行。
+                "creator": "Wikimedia contributor 甲",
+                "uploader": "Wikimedia contributor 甲",
+                "credit": "Own work",
                 "usageScope": "app_publish",
                 "acquisitionStatus": "acquired",
                 "distributionDecision": "commercial_allowed",
@@ -274,6 +283,9 @@ def test_homepage_assets_keep_indexed_review_rejections_in_disposition_closure()
                 "license": "CC BY 4.0",
                 "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
                 "authorizationProof": "https://commons.wikimedia.org/wiki/File:Stamped.jpg",
+                "creator": "Wikimedia contributor 乙",
+                "uploader": "Wikimedia contributor 乙",
+                "credit": "Own work",
                 "usageScope": "app_publish",
                 "acquisitionStatus": "acquired",
                 "distributionDecision": "commercial_allowed",
@@ -410,6 +422,8 @@ def test_homepage_assets_exclude_non_cover_image_with_same_visual_subject(monkey
             "authorizationProof": "https://commons.wikimedia.org/wiki/File:Peak.jpg",
             "caption": f"{entity}中央观景平台",
             "sha256": cover_sha256,
+            "creator": "Li Si",
+            "credit": "Own work",
         },
         {
             "researchLane": "homepage_image",
@@ -418,6 +432,8 @@ def test_homepage_assets_exclude_non_cover_image_with_same_visual_subject(monkey
             "authorizationProof": "https://commons.wikimedia.org/wiki/File:Peak_view.jpg",
             "caption": f"{entity}中央观景平台东侧",
             "sha256": detail_sha256,
+            "creator": "Li Si",
+            "credit": "Own work",
         },
     ]
     monkeypatch.setattr(
@@ -457,6 +473,8 @@ def test_homepage_assets_record_unselected_source_unit_disposition(monkeypatch):
             "authorizationProof": "https://commons.wikimedia.org/wiki/File:Primary.jpg",
             "caption": f"{entity}主图",
             "sha256": sha256_text("primary image"),
+            "creator": "Wang Wu",
+            "credit": "Own work",
         },
         {
             "researchLane": "homepage_image",
@@ -466,6 +484,8 @@ def test_homepage_assets_record_unselected_source_unit_disposition(monkeypatch):
             "authorizationProof": "https://commons.wikimedia.org/wiki/File:Independent.jpg",
             "caption": f"{entity}补充图",
             "sha256": sha256_text("independent image"),
+            "creator": "Wang Wu",
+            "credit": "Own work",
         },
     ]
     monkeypatch.setattr(
@@ -505,13 +525,9 @@ def test_homepage_media_dispositions_allow_an_empty_observed_media_set(tmp_path:
     assert payload["assets"] == []
 
 
-def test_homepage_media_contract_allows_no_cover_when_no_asset_was_available(tmp_path: Path):
-    manifest_path = tmp_path / "manifest.json"
-    manifest_path.write_text("{}", encoding="utf-8")
-
-    assert _manifest_issues(
+def test_homepage_media_contract_allows_no_cover_when_no_asset_was_available():
+    assert manifest_issues(
         "无图实体",
-        manifest_path,
         {"assets": []},
         "---\ncoverImage: \n---\n\n# 无图实体\n",
     ) == []

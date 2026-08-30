@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 import yaml
-
 
 ROOT = Path(__file__).resolve().parents[4]
 WORKFLOWS = (
@@ -19,6 +18,7 @@ SUMMARY_JOBS = frozenset(
         "delivery_gate_summary",
     }
 )
+MAX_RUNNER_JOB_TIMEOUT_MINUTES = 40
 
 
 class ReusableWorkflowJobTimeoutContractTest(unittest.TestCase):
@@ -37,7 +37,14 @@ class ReusableWorkflowJobTimeoutContractTest(unittest.TestCase):
                 timeout = job.get("timeout-minutes")
                 self.assertIs(type(timeout), int, f"{relative}:{job_name}")
                 self.assertGreater(timeout, 0, f"{relative}:{job_name}")
-                self.assertLessEqual(timeout, 10, f"{relative}:{job_name}")
+                # App/Service integration jobs intentionally have 20-40 minute
+                # hard guards; the former blanket 10 minute assertion directly
+                # contradicted their reviewed, job-level timeout contracts.
+                self.assertLessEqual(
+                    timeout,
+                    MAX_RUNNER_JOB_TIMEOUT_MINUTES,
+                    f"{relative}:{job_name}",
+                )
                 if job_name in SUMMARY_JOBS:
                     self.assertLessEqual(timeout, 5, f"{relative}:{job_name}")
                 checked.add((relative, str(job_name)))

@@ -89,13 +89,13 @@ func TestReplayRepairRequiresActiveBindingAndExactTransactionalCount(t *testing.
 	}
 }
 
-func TestReplayRepairUsesSourceImportPostBindingsWithoutMigratingIdentity(
+func TestReplayRepairRequiresContentIDDerivedPostBinding(
 	t *testing.T,
 ) {
 	t.Parallel()
 	post := releaseimport.PostDoc{
-		PostRef:         "posts/article/体验/旧发布身份/1",
-		ContentID:       "qwq_data_data_post_legacy_001",
+		PostRef:         "posts/article/体验/发布身份/1",
+		ContentID:       "qwq_data_content_001",
 		ContentVersion:  1,
 		ContentType:     "article",
 		ContentIdentity: "work",
@@ -106,54 +106,24 @@ func TestReplayRepairUsesSourceImportPostBindingsWithoutMigratingIdentity(
 			UsageScope:    "research",
 		},
 	}
-	postRefDerivedID := releaseimport.RuntimePostIDFromPostRef(post.PostRef)
-	bindings := []releaseimport.ImportedPostBinding{{
-		PostRef: "article/体验/旧发布身份/1", PostID: postRefDerivedID,
+	binding := releaseimport.ImportedPostBinding{
+		PostRef:   "article/体验/发布身份/1",
+		PostID:    releaseimport.RuntimePostID(post.ContentID),
 		ContentID: post.ContentID, ContentVersion: 1, UsageScope: "research",
 		ContentType: "article", AuthorID: post.AuthorID,
-	}}
-	if err := releaseimport.ValidateImportedPostReplayBindings(
-		[]releaseimport.PostDoc{post}, bindings,
-	); err != nil {
-		t.Fatalf("legacy source-import binding rejected: %v", err)
 	}
-	if bindings[0].PostID == releaseimport.RuntimePostID(post.ContentID, post.PostRef) {
-		t.Fatal("test precondition: legacy and current runtime identities must differ")
+	if err := releaseimport.ValidateImportedPostReplayBindings(
+		[]releaseimport.PostDoc{post}, []releaseimport.ImportedPostBinding{binding},
+	); err != nil {
+		t.Fatalf("contentId binding rejected: %v", err)
 	}
 
-	drifted := append([]releaseimport.ImportedPostBinding(nil), bindings...)
-	drifted[0].ContentVersion++
+	drifted := binding
+	drifted.PostID = releaseimport.RuntimePostID(post.PostRef)
 	if err := releaseimport.ValidateImportedPostReplayBindings(
-		[]releaseimport.PostDoc{post}, drifted,
+		[]releaseimport.PostDoc{post}, []releaseimport.ImportedPostBinding{drifted},
 	); err == nil || !strings.Contains(err.Error(), "GATE_BLOCK") {
-		t.Fatalf("drifted source-import binding was accepted: %v", err)
-	}
-
-	events, err := releaseimport.BuildImportedPostDeletionLifecycleEvents(
-		fourDeletionSnapshots(),
-		releaseimport.ImportOptions{
-			ReleaseID: "legacy-release", ManifestDigest: "sha256:" + strings.Repeat("a", 64),
-			SourceOwner: "qwq_data", ProjectionVersion: 42,
-		},
-		time.Date(2026, 8, 11, 3, 10, 0, 0, time.UTC),
-	)
-	if err != nil || len(events) != 4 {
-		t.Fatalf("deletion-only replay events=%d err=%v, want 4", len(events), err)
-	}
-	for _, event := range events {
-		if event.EventType != "PostDeleted" {
-			t.Fatalf("repair rail emitted non-deletion event: %#v", event)
-		}
-	}
-	if err := releaseimport.ValidateImportedReleaseApplyResult(
-		releaseimport.ImportedReleaseApplyResult{
-			PostsUpserted: 46, PostDeletionEventsReady: 4,
-			OutboxEventsReady: 4, OutboxEventsRepaired: 4,
-			Replayed: true, RepairReplay: true,
-		},
-		46,
-	); err != nil {
-		t.Fatalf("deletion-only replay result rejected: %v", err)
+		t.Fatalf("postRef-derived binding was accepted: %v", err)
 	}
 }
 
@@ -169,7 +139,7 @@ func TestReplaySourceImportReportIsStrictAndCountBound(t *testing.T) {
 	}
 	binding := releaseimport.ImportedPostBinding{
 		PostRef:   "video/体验/legacy-video/1",
-		PostID:    releaseimport.RuntimePostIDFromPostRef(post.PostRef),
+		PostID:    releaseimport.RuntimePostID(post.ContentID),
 		ContentID: post.ContentID, ContentVersion: 2, UsageScope: "research",
 		ContentType: "video", AuthorID: post.AuthorID,
 	}
@@ -271,7 +241,7 @@ func TestBuildImportedPostLifecycleEventsUsesOneDurablePostFactStream(t *testing
 		}
 	}
 	published := events[byType["PostPublished"]]
-	if published.AggregateID != releaseimport.RuntimePostID(post.ContentID, post.PostRef) {
+	if published.AggregateID != releaseimport.RuntimePostID(post.ContentID) {
 		t.Fatalf("unexpected published event: %#v", published)
 	}
 	var payload map[string]any

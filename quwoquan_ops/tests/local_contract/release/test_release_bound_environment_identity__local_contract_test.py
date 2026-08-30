@@ -60,6 +60,22 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
                 "mediaAuditEventId": "audit-media-001",
             },
         ).start()
+        self.acceptance_authority = mock.patch.object(
+            renderer,
+            "_validate_environment_acceptance_authority",
+            return_value={
+                "factId": DIGEST_A,
+                "ref": "environment-acceptance.json",
+                "digest": DIGEST_B,
+                "requiredRawResults": [
+                    {
+                        "ref": "env/alpha/raw/readiness-case.json",
+                        "digest": DIGEST_A,
+                        "slotId": DIGEST_B,
+                    }
+                ],
+            },
+        ).start()
         self.app_readback_patcher = mock.patch.object(
             renderer,
             "_validate_app_readback_receipts",
@@ -96,8 +112,20 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
                 payload["identity"]["activationEnvelopeDigest"],
                 _document_digest(payload["identity"]["activationEnvelope"]),
             )
+            self.assertNotIn("appUatEnvelope", payload["identity"])
+            self.assertNotIn("appUatEnvelopeDigest", payload["identity"])
+            self.assertNotIn(
+                "appUatEnvelopeDigest", payload["identity"]["activationEnvelope"]
+            )
+            authority = payload["identity"]["environmentAcceptanceFact"]
+            self.assertEqual(authority["factId"], DIGEST_A)
             self.assertEqual(
-                set(payload["identity"]["appArtifacts"]), {"android", "ios"}
+                authority["requiredRawResults"][0]["ref"],
+                "env/alpha/raw/readiness-case.json",
+            )
+            self.assertEqual(
+                set(payload["identity"]["appArtifacts"]),
+                {"android-nonprod-apk", "ios-nonprod-app", "web-shared"},
             )
             self.assertEqual(
                 payload["identity"]["objectIds"]["entityRefs"],
@@ -179,6 +207,7 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             "import",
             "replay",
             "launch",
+            "acceptance",
             "case",
             "telemetry",
             "rollback",

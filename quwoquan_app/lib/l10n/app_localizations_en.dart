@@ -1,5 +1,6 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
+
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -195,6 +196,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get loading => 'TODO: translate';
+
+  @override
+  String get webBootstrapLoading => 'Loading, please wait';
+
+  @override
+  String get webBootstrapUnavailableTitle => 'This page cannot open right now';
+
+  @override
+  String get webBootstrapUnavailableBody =>
+      'A critical resource failed to load, possibly due to an unstable network. Check your connection and reload.';
+
+  @override
+  String get webBootstrapReload => 'Reload';
 
   @override
   String get retry => 'TODO: translate';

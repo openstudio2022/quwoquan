@@ -3,6 +3,7 @@
 // spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-001.t2
 // spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-001.t3
 // spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-001.t4
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t2
 // readiness_case: search-api
 package api_integration
 
@@ -14,11 +15,16 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 
 	rtsearch "quwoquan_service/runtime/search"
 	httpadapter "quwoquan_service/services/search-service/internal/search/search_index_view/adapters/inbound/http"
 	"quwoquan_service/services/search-service/internal/search/search_index_view/application"
 	"quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/searchbackend"
+	requestapplication "quwoquan_service/services/search-service/internal/search/search_request_fact/application"
+	"quwoquan_service/services/search-service/internal/search/search_request_fact/infrastructure/querylogstore"
 )
 
 type testAssignmentPublisher struct{}
@@ -67,6 +73,15 @@ func newServer(
 	cfg searchbackend.ESConfig,
 	testBackend rtsearch.RecallBackend,
 ) http.Handler {
+	return newServerWithRequestFacts(t, cfg, testBackend, nil)
+}
+
+func newServerWithRequestFacts(
+	t *testing.T,
+	cfg searchbackend.ESConfig,
+	testBackend rtsearch.RecallBackend,
+	requestFacts *requestapplication.Recorder,
+) http.Handler {
 	t.Helper()
 	backend := testBackend
 	if cfg.Enabled {
@@ -97,7 +112,12 @@ func newServer(
 		t.Fatalf("ApplyPolicy() error = %v", err)
 	}
 	decorator := application.NewRankingDecorator(nil, experiments, 0, nil)
-	return httpadapter.NewHandler(svc, decorator, nil).Routes()
+	return httpadapter.NewHandlerWithConfig(
+		svc,
+		decorator,
+		nil,
+		httpadapter.HandlerConfig{RequestFacts: requestFacts},
+	).Routes()
 }
 
 func postSearch(t *testing.T, handler http.Handler, body string) (*httptest.ResponseRecorder, map[string]any) {
@@ -374,6 +394,57 @@ func TestSearchEndpointCarriesCanonicalAttribution(t *testing.T) {
 	reasons, ok := hit["rankReasons"].([]any)
 	if !ok || len(reasons) == 0 {
 		t.Fatalf("hit must carry non-empty rankReasons, got %v", hit["rankReasons"])
+	}
+}
+
+func TestSearchEndpointPersistsAuthoritativeExperimentBucketInRequestFact(t *testing.T) {
+	cleanSearchCollections(t)
+	store := querylogstore.NewStore(mongoDB)
+	if _, err := mongoDB.Collection("search_queries").DeleteMany(t.Context(), bson.M{}); err != nil {
+		t.Fatalf("clean search request facts: %v", err)
+	}
+	if err := store.EnsureIndexes(t.Context()); err != nil {
+		t.Fatalf("ensure SearchRequestFact indexes: %v", err)
+	}
+	handler := newServerWithRequestFacts(
+		t,
+		searchbackend.ESConfig{Enabled: false},
+		rtsearch.NewSliceBackend([]rtsearch.Document{{
+			ObjectType: rtsearch.ObjectTypeContentPost,
+			ObjectID:   "post-attribution",
+			Title:      "大理实验归因",
+			Visibility: "public",
+		}}),
+		requestapplication.NewRecorder(store, nil, nil),
+	)
+
+	response, parsed := postSearch(t, handler, `{"query":"大理","objectTypes":["content.post"]}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	requestID := strings.TrimSpace(toString(parsed["requestId"]))
+	responseBucket := strings.TrimSpace(toString(parsed["experimentBucket"]))
+	if requestID == "" || responseBucket == "" {
+		t.Fatalf("response attribution is incomplete: %s", response.Body.String())
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	var persisted bson.M
+	for time.Now().Before(deadline) {
+		err := mongoDB.Collection("search_queries").FindOne(
+			t.Context(),
+			bson.M{"searchRequestId": requestID},
+		).Decode(&persisted)
+		if err == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if persisted == nil {
+		t.Fatalf("SearchRequestFact %q was not persisted", requestID)
+	}
+	if factBucket := strings.TrimSpace(toString(persisted["experimentBucket"])); factBucket != responseBucket {
+		t.Fatalf("fact experimentBucket=%q response=%q", factBucket, responseBucket)
 	}
 }
 

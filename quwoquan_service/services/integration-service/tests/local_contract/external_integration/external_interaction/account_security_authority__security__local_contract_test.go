@@ -30,12 +30,12 @@ func TestIntegrationAccountSecurityAuthorityConfigurationFailsClosed(t *testing.
 		t.Fatalf("missing authority base URL must fail config validation: %v", err)
 	}
 
-	cfg.AccountSecurityAuthority.BaseURL = "https://user-service.internal"
+	cfg.UserAccountSecurityAuthority.BaseURL = "https://user-service.internal"
 	if err := integrationconfig.Validate(cfg); err == nil ||
 		!strings.Contains(err.Error(), "account_security_authority.timeout_ms must be positive") {
 		t.Fatalf("missing authority timeout must fail config validation: %v", err)
 	}
-	cfg.AccountSecurityAuthority.TimeoutMs = 300
+	cfg.UserAccountSecurityAuthority.TimeoutMs = 300
 	if err := integrationconfig.Validate(cfg); err != nil {
 		t.Fatalf("explicit authority config must be valid: %v", err)
 	}
@@ -84,8 +84,8 @@ func TestIntegrationAccountSecurityAuthorityConfigIsExplicitInEveryEnvironment(t
 		definitions[key] = definition
 	}
 	for _, key := range []string{
-		"sys.integration-service.account_security_authority.base_url",
-		"sys.integration-service.account_security_authority.timeout_ms",
+		"sys.integration-service.user_account_security_authority.base_url",
+		"sys.integration-service.user_account_security_authority.timeout_ms",
 	} {
 		definition, exists := definitions[key]
 		if !exists {
@@ -95,7 +95,7 @@ func TestIntegrationAccountSecurityAuthorityConfigIsExplicitInEveryEnvironment(t
 			t.Fatalf("authority setting %q must not have a fallback default", key)
 		}
 	}
-	if definitions["sys.integration-service.account_security_authority.timeout_ms"]["type"] != "int" {
+	if definitions["sys.integration-service.user_account_security_authority.timeout_ms"]["type"] != "int" {
 		t.Fatal("authority timeout must be an integer config value")
 	}
 
@@ -115,10 +115,10 @@ func TestIntegrationAccountSecurityAuthorityConfigIsExplicitInEveryEnvironment(t
 				filepath.Join(root, "environments", environment, "config.yaml"),
 				&environmentConfig,
 			)
-			if got := environmentConfig.Overrides["sys.integration-service.account_security_authority.base_url"]; got != wantBaseURL {
+			if got := environmentConfig.Overrides["sys.integration-service.user_account_security_authority.base_url"]; got != wantBaseURL {
 				t.Fatalf("base URL=%#v, want=%q", got, wantBaseURL)
 			}
-			if got := environmentConfig.Overrides["sys.integration-service.account_security_authority.timeout_ms"]; got != 300 {
+			if got := environmentConfig.Overrides["sys.integration-service.user_account_security_authority.timeout_ms"]; got != 300 {
 				t.Fatalf("timeout=%#v, want=300ms", got)
 			}
 		})
@@ -254,20 +254,18 @@ func TestIntegrationAccountSecurityAuthorityReadinessUsesScopedHealthRoute(t *te
 
 func TestIntegrationAPIWiresAccountSecurityAuthorityWithoutPIILabels(t *testing.T) {
 	root := integrationAuthorityServiceRoot(t)
-	source, err := os.ReadFile(filepath.Join(root, "cmd", "api", "main.go"))
+	source, err := os.ReadFile(filepath.Join(root, "cmd", "api", "bootstrap.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	// 迁移到声明式 servicekit.Bootstrap 后（DEC-028），authority 客户端装配、
+	// 健康检查接线与认证中间件包裹由骨架承担，其必然性由 servicekit 同包白盒
+	// 测试锁定。composition 侧断言收敛为：走声明式骨架、authority 配置段来自
+	// 内嵌 BaseConfig、最小授权范围显式声明。
 	for _, required := range []string{
-		"rtauth.NewHS256ServiceAuthorizationProvider(",
-		`"integration-service"`,
+		`servicekit.Bootstrap(serviceName`,
+		"AuthorityScopes:",
 		`"user.account.security.read"`,
-		"rtauth.NewHTTPAccountSecurityAuthority(",
-		"BaseURL:     cfg.AccountSecurityAuthority.BaseURL",
-		"Timeout:     accountSecurityAuthorityTimeout",
-		`healthChecker.Register("account_security_authority"`,
-		"return accountSecurityAuthority.CheckAccountSecurityAuthority(hctx)",
-		"AccountSecurityAuthority: accountSecurityAuthority",
 	} {
 		if !strings.Contains(string(source), required) {
 			t.Fatalf("integration API composition is missing %q", required)
@@ -275,6 +273,21 @@ func TestIntegrationAPIWiresAccountSecurityAuthorityWithoutPIILabels(t *testing.
 	}
 	if strings.Contains(string(source), "INTEGRATION_ACCOUNT_SECURITY_AUTHORITY") {
 		t.Fatal("account security authority must not use an environment fallback")
+	}
+	// authority 配置段必须是内嵌 BaseConfig 的那一份，不允许服务再声明第二个
+	// authority 配置结构。
+	configSource, err := os.ReadFile(filepath.Join(
+		root, "internal", "external_integration", "external_interaction",
+		"infrastructure", "runtimeconfig", "config.go",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(configSource), "servicekit.BaseConfig") {
+		t.Fatal("integration runtime config must embed servicekit.BaseConfig")
+	}
+	if strings.Contains(string(configSource), "AccountSecurityAuthorityConfig") {
+		t.Fatal("integration must not declare a second authority config structure")
 	}
 
 	var sloEvidence struct {
@@ -404,7 +417,7 @@ func integrationAuthorityServiceRoot(t *testing.T) string {
 		t.Fatal("locate integration authority contract test")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", ".."))
-	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "main.go")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "bootstrap.go")); err != nil {
 		t.Fatalf("resolve integration-service root: %v", err)
 	}
 	return root

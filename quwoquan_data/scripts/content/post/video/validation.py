@@ -10,7 +10,7 @@ from content.post.video.package_common import sha256_file
 from core.io import read_json
 from core.schema import validate_result
 from governance.content_supply_policy import load_content_supply_policy
-from governance.coverage.license import RightsAuditStatus, rights_proof_required
+from governance.coverage.license import RightsAuditStatus
 
 
 def _video_codec(capture: cv2.VideoCapture) -> str:
@@ -32,7 +32,6 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
             str(manifest.get("executionId") or "")
         ).vertical
         policy = load_content_supply_policy(vertical).video_delivery
-        require_rights_proof = rights_proof_required(vertical)
     except (TypeError, ValueError) as exc:
         return [f"video manifest execution identity is invalid: {exc}"]
     issues = validate_result(manifest, "content", "post_manifest")
@@ -70,13 +69,6 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
             "rightsAuditIssues"
         ):
             issues.append("unverified video asset must record rightsAuditIssues")
-        elif require_rights_proof and (
-            status != RightsAuditStatus.VERIFIED.value
-            or bool(media_asset.get("rightsAuditIssues"))
-        ):
-            issues.append(
-                "commercial video asset rights must be verified without issues"
-            )
         elif (
             status == RightsAuditStatus.VERIFIED.value
             and media_asset.get("rightsAuditIssues")
@@ -129,7 +121,7 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
         sources = (
             provenance.get("sources") if isinstance(provenance, dict) else None
         )
-        required = (
+        provenance_required = (
             "originalCreatorName",
             "platform",
             "sourcePostUrl",
@@ -137,11 +129,15 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
             "attributionText",
             "rightsBasis",
             "commercialAuthorizationStatus",
-            "publicationAdmission",
+            "distributionDecision",
             "watermarkStatus",
             "audioRightsStatus",
             "takedownPolicy",
             "collectedAt",
+        )
+        attribution_required = tuple(
+            "publicationAdmission" if field == "distributionDecision" else field
+            for field in provenance_required
         )
         if provenance.get("renderStrategy") != "sourced_video_transcode":
             issues.append("video provenance must use sourced_video_transcode")
@@ -151,13 +147,19 @@ def validate_video_work_package(package_dir: Path) -> list[str]:
             or not isinstance(sources[0], dict)
         ):
             issues.append("sourced video provenance must contain exactly one source")
-        elif any(not sources[0].get(field) for field in required):
+        elif any(not sources[0].get(field) for field in provenance_required):
             issues.append("sourced video provenance attribution is incomplete")
         attribution = manifest.get("sourceAttribution")
         if not isinstance(attribution, dict) or any(
-            not attribution.get(field) for field in required
+            not attribution.get(field) for field in attribution_required
         ):
             issues.append("video manifest sourceAttribution is incomplete")
+        elif "derivedModifications" not in attribution:
+            # 在场为空（空数组 = 逐字节原样）是合法事实，缺席不是：缺席时读不出
+            # 交付副本到底有没有被改过，所以不能与空数组同路放行。
+            issues.append(
+                "video manifest sourceAttribution omits derivedModifications"
+            )
         elif attribution.get("watermarkStatus") != "absent":
             issues.append("video manifest watermark is not absent")
     return issues

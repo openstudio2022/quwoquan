@@ -4,6 +4,7 @@ package taxonomyreleasestore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -24,8 +25,11 @@ func NewStore(db *mongo.Database) *Store {
 	return &Store{releases: db.Collection(releasesCollection)}
 }
 
-// EnsureIndexes establishes the digest, query, and database-enforced single-active indexes.
+// EnsureIndexes establishes the non-unique digest query index and database-enforced single-active index.
 func (s *Store) EnsureIndexes(ctx context.Context) error {
+	if err := s.dropUniqueDigestIndex(ctx); err != nil {
+		return err
+	}
 	_, err := s.releases.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys: bson.D{{Key: "status", Value: 1}},
@@ -36,10 +40,31 @@ func (s *Store) EnsureIndexes(ctx context.Context) error {
 		},
 		{
 			Keys:    bson.D{{Key: "canonicalDigest", Value: 1}},
-			Options: options.Index().SetName("idx_tag_taxonomy_release_digest").SetUnique(true),
+			Options: options.Index().SetName("idx_tag_taxonomy_release_digest"),
 		},
 	})
 	return err
+}
+
+func (s *Store) dropUniqueDigestIndex(ctx context.Context) error {
+	indexes, err := s.releases.Indexes().ListSpecifications(ctx)
+	if err != nil {
+		return fmt.Errorf("list tag taxonomy release indexes: %w", err)
+	}
+	for _, index := range indexes {
+		if index.Name != "idx_tag_taxonomy_release_digest" || index.Unique == nil || !*index.Unique {
+			continue
+		}
+		if err := s.releases.Indexes().DropOne(ctx, index.Name); err != nil {
+			var commandError mongo.CommandError
+			if errors.As(err, &commandError) && (commandError.Code == 26 || commandError.Code == 27) {
+				return nil
+			}
+			return fmt.Errorf("drop unique tag taxonomy release digest index: %w", err)
+		}
+		break
+	}
+	return nil
 }
 
 func (s *Store) Load(ctx context.Context, releaseID string) (model.Release, bool, error) {
@@ -90,18 +115,6 @@ func (s *Store) BackfillReleaseKind(
 	return nil
 }
 
-func (s *Store) FindByDigest(ctx context.Context, canonicalDigest string) (model.Release, bool, error) {
-	var release model.Release
-	err := s.releases.FindOne(ctx, bson.M{"canonicalDigest": strings.TrimSpace(canonicalDigest)}).Decode(&release)
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		return model.Release{}, false, nil
-	}
-	if err != nil {
-		return model.Release{}, false, err
-	}
-	return release, true, nil
-}
-
 func (s *Store) FindActive(ctx context.Context) (model.Release, bool, error) {
 	cursor, err := s.releases.Find(
 		ctx,
@@ -142,10 +155,6 @@ func (s *Store) InsertStaged(ctx context.Context, release model.Release) error {
 		return nil
 	}
 	if mongo.IsDuplicateKeyError(err) {
-		// 区分 digest 唯一索引冲突（幂等重放）与 releaseId 主键冲突。
-		if _, found, findErr := s.FindByDigest(ctx, release.CanonicalDigest); findErr == nil && found {
-			return model.ErrDigestConflict
-		}
 		return model.ErrVersionConflict
 	}
 	return err

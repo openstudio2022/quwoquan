@@ -20,6 +20,15 @@ fields:
 - name: coverUrl
   type: string
   nullable: true
+# cover 的配对媒体资产标识与交付访问模式（DEC-033）：signed_grant 时 App 以
+# coverAssetId 换取短签；禁止以 homepageId 冒充媒体资产标识。
+- name: coverAssetId
+  type: string
+  nullable: true
+- name: coverAccessMode
+  type: enum
+  enum_ref: MediaDeliveryAccessMode
+  nullable: true
 - name: summary
   type: string
 - name: sections

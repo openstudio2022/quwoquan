@@ -9,7 +9,8 @@ class EntityRequestPageIds {
     'CreateHomepageReview': 'entity.create.homepage.review',
     'CreateHomepageStatusReport': 'entity.homepage.status_report.create',
     'DeleteHomepageReview': 'entity.delete.homepage.review',
-    'EvaluateEntityHomepageGatheringHostAuthority': 'entity.evaluate.entity.homepage.gathering.host.authority',
+    'EvaluateEntityHomepageGatheringHostAuthority':
+        'entity.evaluate.entity.homepage.gathering.host.authority',
     'GetEntityImpact': 'entity.get.entity.impact',
     'GetHomepageDetail': 'entity.homepage.detail',
     'GetHomepageIntroduction': 'entity.homepage.introduction',
@@ -34,31 +35,46 @@ class EntityRequestPageIds {
     'UpdateHomepageReview': 'entity.update.homepage.review',
   };
 
-  static const String createHomepageClaimRequest = 'entity.homepage.claim.create';
+  static const String createHomepageClaimRequest =
+      'entity.homepage.claim.create';
   static const String createHomepageReview = 'entity.create.homepage.review';
-  static const String createHomepageStatusReport = 'entity.homepage.status_report.create';
+  static const String createHomepageStatusReport =
+      'entity.homepage.status_report.create';
   static const String deleteHomepageReview = 'entity.delete.homepage.review';
-  static const String evaluateEntityHomepageGatheringHostAuthority = 'entity.evaluate.entity.homepage.gathering.host.authority';
+  static const String evaluateEntityHomepageGatheringHostAuthority =
+      'entity.evaluate.entity.homepage.gathering.host.authority';
   static const String getEntityImpact = 'entity.get.entity.impact';
   static const String getHomepageDetail = 'entity.homepage.detail';
   static const String getHomepageIntroduction = 'entity.homepage.introduction';
-  static const String getHomepageRelatedGroups = 'entity.homepage.related_groups';
-  static const String getHomepageReviewSummary = 'entity.homepage.review_summary';
+  static const String getHomepageRelatedGroups =
+      'entity.homepage.related_groups';
+  static const String getHomepageReviewSummary =
+      'entity.homepage.review_summary';
   static const String getHomepageShell = 'entity.homepage.shell';
   static const String getMyHomepageReview = 'entity.get.my.homepage.review';
-  static const String getMyPendingHomepageClaimRequest = 'entity.homepage.claim.mine';
-  static const String getMyPendingHomepageStatusReport = 'entity.homepage.status_report.mine';
+  static const String getMyPendingHomepageClaimRequest =
+      'entity.homepage.claim.mine';
+  static const String getMyPendingHomepageStatusReport =
+      'entity.homepage.status_report.mine';
   static const String getObjectPageBundle = 'entity.get.object.page.bundle';
-  static const String intakeHomepageCandidate = 'entity.homepage.candidate.intake';
-  static const String listHomepageCandidates = 'entity.list.homepage.candidates';
-  static const String listHomepageClaimRequests = 'entity.list.homepage.claim.requests';
+  static const String intakeHomepageCandidate =
+      'entity.homepage.candidate.intake';
+  static const String listHomepageCandidates =
+      'entity.list.homepage.candidates';
+  static const String listHomepageClaimRequests =
+      'entity.list.homepage.claim.requests';
   static const String listHomepageReviews = 'entity.list.homepage.reviews';
-  static const String listHomepageStatusReports = 'entity.list.homepage.status.reports';
-  static const String publishHomepageCandidate = 'entity.homepage.candidate.publish';
-  static const String reviewHomepageClaimRequest = 'entity.homepage.claim.review';
-  static const String reviewHomepageStatusReport = 'entity.homepage.status_report.review';
+  static const String listHomepageStatusReports =
+      'entity.list.homepage.status.reports';
+  static const String publishHomepageCandidate =
+      'entity.homepage.candidate.publish';
+  static const String reviewHomepageClaimRequest =
+      'entity.homepage.claim.review';
+  static const String reviewHomepageStatusReport =
+      'entity.homepage.status_report.review';
   static const String searchHomepages = 'entity.homepage.search';
   static const String suggestHomepageCandidate = 'entity.homepage.suggest';
-  static const String updateClaimedHomepageBasics = 'entity.homepage.basics.update';
+  static const String updateClaimedHomepageBasics =
+      'entity.homepage.basics.update';
   static const String updateHomepageReview = 'entity.update.homepage.review';
 }

@@ -10,9 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
-	rtmongo "quwoquan_service/internal/platform/mongodb"
-	platformredis "quwoquan_service/internal/platform/redis"
-	rtredis "quwoquan_service/runtime/redis"
 	preferenceports "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference/domain/ports"
 	sessionports "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/persistence"
@@ -47,16 +44,10 @@ func NewDependencyError(dependency, stage string, err error) error {
 	}
 }
 
+// ValidateRuntimeDependenciesConfig 校验领域出向依赖与 Redis scene 声明。
+// mongodb.uri/database 与 postgres.dsn 的必填由 servicekit 的 required 声明
+// 承担，此处不再重复，避免同一约束出现第二处真相源。
 func ValidateRuntimeDependenciesConfig(cfg runtimeconfig.Config) error {
-	if strings.TrimSpace(cfg.MongoDB.URI) == "" {
-		return NewDependencyError("mongodb", "configuration", errors.New("mongodb.uri is required"))
-	}
-	if strings.TrimSpace(cfg.MongoDB.Database) == "" {
-		return NewDependencyError("mongodb", "configuration", errors.New("mongodb.database is required"))
-	}
-	if strings.TrimSpace(cfg.Postgres.DSN) == "" {
-		return NewDependencyError("postgres", "configuration", errors.New("postgres.dsn is required"))
-	}
 	if strings.TrimSpace(cfg.NotificationService.BaseURL) == "" {
 		return NewDependencyError("notification-service", "configuration", errors.New("notification_service.base_url is required"))
 	}
@@ -87,27 +78,14 @@ func ValidateRuntimeDependenciesConfig(cfg runtimeconfig.Config) error {
 	return nil
 }
 
-func BuildRedisRouter(cfg runtimeconfig.Config) (*rtredis.Router, error) {
-	if err := validateRedisSceneConfig("general", cfg.Redis.General); err != nil {
-		return nil, err
+// RedisScenes 把两段声明装配成三个 codegen scene：realtime 复用 general 的
+// 物理实例，rec 独立。scene 名与 rtredis 的 generated 前缀路由同源。
+func RedisScenes(cfg runtimeconfig.Config) map[string]runtimeconfig.RedisSceneConfig {
+	return map[string]runtimeconfig.RedisSceneConfig{
+		"rec":      cfg.Redis.Rec,
+		"general":  cfg.Redis.General,
+		"realtime": cfg.Redis.General,
 	}
-	if err := validateRedisSceneConfig("rec", cfg.Redis.Rec); err != nil {
-		return nil, err
-	}
-	generalScene := runtimeRedisSceneConfig(cfg.Redis.General)
-	router, err := platformredis.NewRouter(rtredis.RouterConfig{
-		Scenes: map[string]rtredis.SceneConfig{
-			"rec":      runtimeRedisSceneConfig(cfg.Redis.Rec),
-			"general":  generalScene,
-			"realtime": generalScene,
-		},
-		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
-		DefaultScene: rtredis.GeneratedDefaultScene,
-	})
-	if err != nil {
-		return nil, NewDependencyError("redis", "initialization", err)
-	}
-	return router, nil
 }
 
 type PersistentDependencies struct {
@@ -115,7 +93,6 @@ type PersistentDependencies struct {
 	SessionStore      sessionports.SessionStore
 	PreferenceStore   preferenceports.Store
 	PreferenceReader  preferenceports.Reader
-	MongoClient       *mongo.Client
 	PostgresPool      *pgxpool.Pool
 }
 
@@ -127,40 +104,29 @@ type SubscriptionStoreFactory func(
 	db *mongo.Database,
 ) (subscriptionports.Store, error)
 
+// OpenPersistentDependencies 在骨架已装配的 Mongo database 与 Postgres 连接池
+// 之上打开领域仓储。连接生命周期归 servicekit 装配面所有，这里只做 schema /
+// index 就绪，失败即 fail-closed 交回上层。
 func OpenPersistentDependencies(
 	ctx context.Context,
-	cfg runtimeconfig.Config,
+	db *mongo.Database,
+	postgresPool *pgxpool.Pool,
 	subscriptionFactory SubscriptionStoreFactory,
 	preferenceFactory PreferenceStoreFactory,
 ) (deps *PersistentDependencies, err error) {
+	if db == nil {
+		return nil, NewDependencyError("mongodb", "composition", errors.New("mongo database handle is required"))
+	}
+	if postgresPool == nil {
+		return nil, NewDependencyError("postgres", "composition", errors.New("postgres pool is required"))
+	}
 	if subscriptionFactory == nil {
 		return nil, NewDependencyError("mongodb.skill_subscriptions", "composition", errors.New("subscription store factory is required"))
 	}
 	if preferenceFactory == nil {
 		return nil, NewDependencyError("mongodb.assistant_preferences", "composition", errors.New("preference store factory is required"))
 	}
-	deps = &PersistentDependencies{}
-	defer func() {
-		if err == nil {
-			return
-		}
-		closeCtx, cancel := context.WithTimeout(context.Background(), DependencyProbeTimeout)
-		defer cancel()
-		_ = deps.Close(closeCtx)
-	}()
-
-	mongoClient, err := rtmongo.Connect(
-		ctx,
-		rtmongo.ConnectConfig{
-			URI:      strings.TrimSpace(cfg.MongoDB.URI),
-			Database: strings.TrimSpace(cfg.MongoDB.Database),
-		},
-	)
-	if err != nil {
-		return nil, NewDependencyError("mongodb", "connectivity", err)
-	}
-	deps.MongoClient = mongoClient
-	db := mongoClient.Database(strings.TrimSpace(cfg.MongoDB.Database))
+	deps = &PersistentDependencies{PostgresPool: postgresPool}
 
 	mongoSubscriptions, err := subscriptionFactory(db)
 	if err != nil {
@@ -185,45 +151,14 @@ func OpenPersistentDependencies(
 	deps.PreferenceStore = preferenceStore
 	deps.PreferenceReader = preferenceReader
 
-	poolCfg, err := pgxpool.ParseConfig(strings.TrimSpace(cfg.Postgres.DSN))
-	if err != nil {
-		return nil, NewDependencyError("postgres", "configuration", err)
-	}
-	if cfg.Postgres.MaxOpenConns > 0 {
-		poolCfg.MaxConns = int32(cfg.Postgres.MaxOpenConns)
-	}
-	if cfg.Postgres.MaxIdleConns > 0 {
-		poolCfg.MinConns = int32(cfg.Postgres.MaxIdleConns)
-	}
-	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
-		poolCfg.MaxConnLifetime = time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute
-	}
-	postgresPool, err := pgxpool.NewWithConfig(ctx, poolCfg)
-	if err != nil {
-		return nil, NewDependencyError("postgres", "connectivity", err)
-	}
-	deps.PostgresPool = postgresPool
-
-	probeCtx, cancel := context.WithTimeout(ctx, DependencyProbeTimeout)
-	defer cancel()
-	if err := pingPostgresUntilReady(probeCtx, postgresPool); err != nil {
-		return nil, NewDependencyError("postgres", "connectivity", err)
-	}
-
 	return deps, nil
 }
 
-func (d *PersistentDependencies) Close(ctx context.Context) error {
-	if d == nil {
-		return nil
-	}
-	if d.PostgresPool != nil {
-		d.PostgresPool.Close()
-	}
-	if d.MongoClient != nil {
-		return d.MongoClient.Disconnect(ctx)
-	}
-	return nil
+// ValidateRedisSceneConfig 保持迁移前的 fail-closed 强度：assistant 的
+// general/rec scene 必须显式声明 standalone 地址或 cluster 地址表，缺失不得
+// 静默回落 memory——会话与推荐上下文落到单实例内存里等于静默丢数据。
+func ValidateRedisSceneConfig(name string, scene runtimeconfig.RedisSceneConfig) error {
+	return validateRedisSceneConfig(name, scene)
 }
 
 func validateRedisSceneConfig(name string, scene runtimeconfig.RedisSceneConfig) error {
@@ -253,40 +188,6 @@ func validateRedisSceneConfig(name string, scene runtimeconfig.RedisSceneConfig)
 		)
 	}
 	return nil
-}
-
-func runtimeRedisSceneConfig(cfg runtimeconfig.RedisSceneConfig) rtredis.SceneConfig {
-	return rtredis.SceneConfig{
-		Mode:           strings.TrimSpace(cfg.Mode),
-		Addr:           strings.TrimSpace(cfg.Addr),
-		Addrs:          nonEmptyStrings(cfg.Addrs),
-		Password:       cfg.Password,
-		DB:             cfg.DB,
-		TLS:            cfg.TLS,
-		PoolSize:       cfg.Pool.Size,
-		MinIdleConns:   cfg.Pool.MinIdle,
-		ReadTimeoutMs:  cfg.Pool.ReadTimeoutMs,
-		WriteTimeoutMs: cfg.Pool.WriteTimeoutMs,
-		DialTimeoutMs:  cfg.Pool.DialTimeoutMs,
-	}
-}
-
-func pingPostgresUntilReady(ctx context.Context, pool *pgxpool.Pool) error {
-	var lastErr error
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		if err := pool.Ping(ctx); err == nil {
-			return nil
-		} else {
-			lastErr = err
-		}
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("postgres readiness probe exhausted: %w", lastErr)
-		case <-ticker.C:
-		}
-	}
 }
 
 func nonEmptyStrings(values []string) []string {

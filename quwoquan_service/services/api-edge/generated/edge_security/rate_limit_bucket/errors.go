@@ -11,6 +11,7 @@ import (
 var (
 	ErrRateLimitStateUnavailable = errors.New("GATEWAY.MIDDLEWARE.rate_limit_state_unavailable")
 	ErrRateLimited               = errors.New("GATEWAY.USER.rate_limited")
+	ErrUpstreamTimeout           = errors.New("GATEWAY.MIDDLEWARE.upstream_timeout")
 	ErrUpstreamUnavailable       = errors.New("GATEWAY.MIDDLEWARE.upstream_unavailable")
 )
 
@@ -24,6 +25,12 @@ func AppErrorFromRateLimitStateUnavailable(debugMessage string) *rterr.AppError 
 func AppErrorFromRateLimited(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("GATEWAY.USER.rate_limited")
 	return rterr.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecoveryDirective("retry", "snackbar", 1)
+}
+
+// AppErrorFromUpstreamTimeout returns *AppError for GATEWAY.MIDDLEWARE.upstream_timeout (user_message from errors.yaml).
+func AppErrorFromUpstreamTimeout(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("GATEWAY.MIDDLEWARE.upstream_timeout")
+	return rterr.NewAppError(code, "服务响应超时，请稍后重试", debugMessage).WithMetadata("upstream_timeout", 504).WithRecoveryDirective("retry", "snackbar", 1)
 }
 
 // AppErrorFromUpstreamUnavailable returns *AppError for GATEWAY.MIDDLEWARE.upstream_unavailable (user_message from errors.yaml).

@@ -1,7 +1,10 @@
 import 'dart:math' as math;
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 import 'dart:ui' show ImageFilter, lerpDouble;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_asset.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_presentation_values.dart';
@@ -11,6 +14,8 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/a
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
+    show MediaDeliveryKind;
 part 'article_reader_page_surfaces_backdrops.dart';
 part 'article_reader_page_surfaces_blocks.dart';
 part 'article_reader_page_surfaces_frontispiece.dart';
@@ -326,6 +331,7 @@ class ArticlePageReadOnlyView extends StatelessWidget {
     this.metrics,
     this.paperTexture,
     this.onEntityTap,
+    this.onImageTap,
   });
 
   final ArticlePageData page;
@@ -334,6 +340,7 @@ class ArticlePageReadOnlyView extends StatelessWidget {
   final ArticleCanvasMetrics? metrics;
   final ArticlePaperTexture? paperTexture;
   final ValueChanged<ArticleInlineSpan>? onEntityTap;
+  final ValueChanged<ArticleDocumentAsset>? onImageTap;
 
   @override
   Widget build(BuildContext context) {
@@ -355,6 +362,7 @@ class ArticlePageReadOnlyView extends StatelessWidget {
               template,
               metrics ?? ArticleCanvasMetrics.snapshot(),
               onEntityTap,
+              onImageTap,
             ),
           ),
         ),
@@ -378,8 +386,7 @@ List<ArticleLayoutFragment> _resolveReadOnlyFragments(ArticlePageData page) {
     );
   }
   for (final block in page.contentBlocks) {
-    if (block.type == ArticleDocumentBlockType.image &&
-        block.imageUrl.trim().isNotEmpty) {
+    if (block.type == ArticleDocumentBlockType.image) {
       fragments.add(
         ArticleLayoutFragment(
           kind:
@@ -389,11 +396,14 @@ List<ArticleLayoutFragment> _resolveReadOnlyFragments(ArticlePageData page) {
               : ArticleLayoutFragmentKind.fullWidthImage,
           text: page.body.trim(),
           asset: ArticleDocumentAsset(
-            id: block.id,
+            id: block.assetId.trim().isNotEmpty ? block.assetId : block.id,
             offset: block.offset,
             imageUrl: block.imageUrl,
             imageLayout: block.imageLayout,
+            accessMode: block.accessMode,
             caption: block.caption,
+            width: block.imageWidth,
+            height: block.imageHeight,
           ),
         ),
       );
@@ -469,6 +479,7 @@ List<Widget> _buildReadOnlyPageFragments(
   ArticleTemplatePreset template,
   ArticleCanvasMetrics metrics,
   ValueChanged<ArticleInlineSpan>? onEntityTap,
+  ValueChanged<ArticleDocumentAsset>? onImageTap,
 ) {
   final fragments = _resolveReadOnlyFragments(page);
   final widgets = <Widget>[];
@@ -498,16 +509,30 @@ List<Widget> _buildReadOnlyPageFragments(
         appended = true;
         break;
       case ArticleLayoutFragmentKind.fullWidthImage:
-        if (!fragment.hasAsset) {
+        if (fragment.asset == null) {
           break;
         }
+        // 缺席图片（imageUrl 空）仍渲染同尺寸缺席态框（GWT-016）：
+        // ArticleAdaptiveImage 对空 URL 呈现缺席态；比例经唯一决定函数，
+        // 与分页测量同源，状态转换不得改变占位框几何。
         widgets.add(
           _ArticlePageImage(
             imageUrl: fragment.asset!.imageUrl.trim(),
+            // 交付形态取自 manifest 声明；私有资产没有公开 URL，绑定必须带
+            // 资产身份，否则会退回公开路把授权判定跳过。
+            binding: MediaDeliveryBinding(
+              assetId: fragment.asset!.id.trim(),
+              accessMode: articleAssetAccessMode(fragment.asset!.accessMode),
+              publicUrl: fragment.asset!.imageUrl.trim(),
+            ),
             borderRadius: 0,
-            aspectRatio: fragment.asset!.imageLayout == 'journalCard'
-                ? metrics.journalImageAspectRatio
-                : metrics.fullWidthImageAspectRatio,
+            aspectRatio: resolveArticleFigureAspectRatio(
+              metrics: metrics,
+              asset: fragment.asset!,
+            ),
+            onTap: fragment.asset!.hasImage
+                ? () => onImageTap?.call(fragment.asset!)
+                : null,
           ),
         );
         if (fragment.asset!.caption.trim().isNotEmpty) {
@@ -532,18 +557,46 @@ List<Widget> _buildReadOnlyPageFragments(
         appended = true;
         break;
       case ArticleLayoutFragmentKind.wrapContent:
-        if (!fragment.hasAsset) {
+        if (fragment.asset == null) {
+          break;
+        }
+        if (!fragment.asset!.hasImage) {
+          // wrap 图缺席：降级为全宽顺序正文（GWT-016），与分页测量同用
+          // articleWrapAbsentFallbackText，文字不得随缺席图一并丢失。
+          final fallbackText = articleWrapAbsentFallbackText(fragment);
+          if (fallbackText.isEmpty) {
+            break;
+          }
+          widgets.add(
+            _ArticleInlineText(
+              text: fallbackText,
+              spans: const <ArticleInlineSpan>[],
+              style: typography.bodyStyle,
+              onEntityTap: onEntityTap,
+            ),
+          );
+          appended = true;
           break;
         }
         widgets.add(
           ArticleWrappedParagraph(
             imageUrl: fragment.asset!.imageUrl.trim(),
+            binding: MediaDeliveryBinding(
+              assetId: fragment.asset!.id.trim(),
+              accessMode: articleAssetAccessMode(fragment.asset!.accessMode),
+              publicUrl: fragment.asset!.imageUrl.trim(),
+            ),
             body: fragment.text.trim(),
             leadingText: fragment.leadingText,
             trailingText: fragment.trailingText,
             imageLayout: fragment.asset!.imageLayout,
             caption: fragment.asset!.caption,
+            figureAspectRatio: resolveArticleFigureAspectRatio(
+              metrics: metrics,
+              asset: fragment.asset!,
+            ),
             metrics: metrics,
+            onImageTap: () => onImageTap?.call(fragment.asset!),
           ),
         );
         appended = true;

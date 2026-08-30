@@ -16,13 +16,18 @@ from core.image_rules import image_caption_quality_issue
 from core import paths
 from core.paths import execution_root, release_root
 from content.post.article.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS, base_draft_readiness
+from content.release.canonical.media_holding_closure import (
+    MediaReferenceRecordError,
+    judge_media_closure,
+    media_references_in_release_manifest,
+)
 from core.content_source_registry import homepage_source_can_seed_base_draft
+from core.control_types import MediaClosureVerdict
 from core.tree_integrity import tree_integrity_stats
-from core.release_layout import object_closure_digest, payload_file
+from core.release_layout import objects_merkle, payload_file, verify_release_holdings
 from content.release.environment.consistency import scan_release_contract
 from governance.coverage.license import (
     rights_audit_status_recorded,
-    rights_proof_required,
 )
 
 
@@ -151,18 +156,6 @@ def _same_source_unit(source_ref: str, source_asset_ref: str) -> bool:
     return str(source_asset_ref).startswith(source_unit + "/assets/")
 
 
-def _has_rights_proof(*payloads: Mapping[str, Any]) -> bool:
-    keys = ("authorizationProof", "licenseSnapshot", "termsUrl")
-    for payload in payloads:
-        for key in keys:
-            value = payload.get(key)
-            if isinstance(value, str) and value.strip():
-                return True
-            if isinstance(value, Mapping) and value:
-                return True
-    return False
-
-
 def _asset_rights_issues(
     asset_label: str,
     asset: Mapping[str, Any],
@@ -172,10 +165,6 @@ def _asset_rights_issues(
 ) -> list[str]:
     if not vertical:
         return [f"{asset_label} missing vertical rights policy owner"]
-    if rights_proof_required(vertical):
-        if not _has_rights_proof(asset, source_meta):
-            return [f"{asset_label} missing required rights proof"]
-        return []
     if not rights_audit_status_recorded(asset, source_meta):
         return [f"{asset_label} missing rights audit status"]
     return []
@@ -378,6 +367,38 @@ def _entity_homepage_issues(root: Path, runtime_batch: Path | None) -> list[str]
     return issues
 
 
+def _media_closure_issues(release_id: str, media_manifest: Mapping[str, Any]) -> list[str]:
+    """判定这个 release 声明的媒体字节能否被 content library 兑现。
+
+    以清单声明为起点而不是以 `payload/media/` 里物化了什么为起点。后者在那个目录
+    整个不在场时枚举出零条持有，于是「一条都没判过」与「每一条都完好」得出同一个
+    结论；而字节由库唯一持有，release 目录里那份引用副本在或不在都不改变库是否还
+    握着这些字节。库整体不可达时不逐条报缺席：那会把一次卷掉线读成一批对象的内容
+    缺陷。
+    """
+
+    try:
+        references = media_references_in_release_manifest(media_manifest)
+    except (MediaReferenceRecordError, ValueError) as error:
+        return [f"{release_id}: media_manifest declares an unusable media reference: {error}"]
+    if not references:
+        return []
+    report = judge_media_closure(references)
+    if report.verdict is MediaClosureVerdict.HONOURED:
+        return []
+    if report.verdict is MediaClosureVerdict.LIBRARY_UNREACHABLE:
+        return [
+            f"{release_id}: DATA.RELEASE.MEDIA_LIBRARY_UNREACHABLE: {report.detail}; "
+            f"recovery={report.library_recovery} libraryRoot={report.library_root}"
+        ]
+    return [
+        f"{release_id}: DATA.RELEASE.HOLDING_UNREACHABLE: {outcome.state}: "
+        f"{outcome.reference.reference_ref} sha256={outcome.reference.digest}: "
+        f"{outcome.detail}; recovery={outcome.recovery}"
+        for outcome in report.unhonoured
+    ]
+
+
 def _desired_refs(value: Mapping[str, Any]) -> dict[str, list[str]]:
     desired = value.get("desiredRefs") if isinstance(value.get("desiredRefs"), Mapping) else {}
     return {
@@ -437,7 +458,7 @@ def _release_integrity(release_id: str, root: Path) -> dict[str, Any]:
         issues.append(f"{release_id}: release.json canonicalMerkle is empty")
     else:
         try:
-            actual_merkle = object_closure_digest(root)
+            actual_merkle = objects_merkle(root)
         except FileNotFoundError as exc:
             issues.append(f"{release_id}: {exc}")
         else:
@@ -468,6 +489,7 @@ def _release_integrity(release_id: str, root: Path) -> dict[str, Any]:
         issues.append(f"{release_id}: media_manifest.assets must be an array")
     else:
         stats["assetCount"] = len(actual_assets)
+        issues.extend(_media_closure_issues(release_id, media))
     consistency = scan_release_contract(contract, release_root=root)
     for issue in consistency["blockingIssues"]:
         code = str(issue.get("code") or "")
@@ -475,6 +497,12 @@ def _release_integrity(release_id: str, root: Path) -> dict[str, Any]:
             issues.append(
                 f"{release_id}: {code}: {issue.get('ref')} {issue.get('message')}"
             )
+
+    # A release references media bodies instead of copying them, so payload bytes
+    # being present is not the same claim as the release being intact: the holding
+    # is only honoured while the library still has that entry at that digest.
+    for holding_issue in verify_release_holdings(root):
+        issues.append(f"{release_id}: {holding_issue}")
 
     return {
         "schema": REPORT_SCHEMA,

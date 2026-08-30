@@ -7,6 +7,8 @@ query ContentPostDetailBase($postId: ID!) {
     authorId
     authorDisplayName
     authorAvatarUrl
+    authorAvatarAssetId
+    authorAvatarAccessMode
     title
     body
     summary

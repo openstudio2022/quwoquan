@@ -35,6 +35,7 @@ type activeSupplyReleaseState struct {
 	Status          string    `bson:"status"`
 	ActiveReleaseID string    `bson:"activeReleaseId"`
 	ManifestDigest  string    `bson:"manifestDigest"`
+	ReleaseClass    string    `bson:"releaseClass"`
 	ActivatedAt     time.Time `bson:"activatedAt"`
 }
 
@@ -124,6 +125,7 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 		if readErr != nil {
 			return empty, readErr
 		}
+		snapshot.ReleaseClass = strings.TrimSpace(state.ReleaseClass)
 		// Re-attest after the expensive counts. A release can switch while the
 		// singleflight leader is reading projections; returning that late old
 		// snapshot would let the in-flight request serve a deactivated release.
@@ -153,7 +155,8 @@ func (r *MongoActiveSupplyReader) readActiveSupplyReleaseState(
 		},
 		options.FindOne().SetProjection(bson.M{
 			"environment": 1, "sourceOwner": 1, "status": 1,
-			"activeReleaseId": 1, "manifestDigest": 1, "activatedAt": 1,
+			"activeReleaseId": 1, "manifestDigest": 1, "releaseClass": 1,
+			"activatedAt": 1,
 		}).SetSort(bson.D{{Key: "activatedAt", Value: -1}}),
 	).Decode(&state)
 	if err != nil {

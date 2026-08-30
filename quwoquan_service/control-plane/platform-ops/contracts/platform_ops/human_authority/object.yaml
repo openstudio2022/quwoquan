@@ -1,0 +1,30 @@
+kind: aggregate_root
+description: 托管 Human Authority 的追加式决定单元、两轮角色证据、决定与一次性授权收据。
+identity:
+  fields: [decisionUnitId]
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships: []
+search_policy:
+  exposed: none
+  not_exposed_reason: 运营控制面 authority 只由 authenticated operator 在职责 scope 内读取，不进入用户检索面。
+assistant_access:
+  read: {mode: none, scopes: []}
+  cite: {mode: none, scopes: []}
+  write: {mode: none, scopes: []}
+  denied_reason: Human Authority 不属于用户助手读写面，且不得由 Agent 代替真实 principal 决定。
+business_rules:
+- Human role、decision kind、responsibility 与 SoD 闭集只从 quwoquan_ops/policies/human_agent_delivery_contract.yaml 生成静态 Go binding。
+- Portal collection/query 按 authenticated principal server-side mapped roles 与 unit scope 过滤；客户端不能扩大职责范围。
+- Portal submission request 不接受 role、actor 或 MFA；服务从 principal 和 unit pending responsibility 推导，并计算 canonical evidence bytes/digest/expiry。
+- DecisionUnit 冻结 authority target、scope、actions、fingerprint、对称 options 与 hard-gate eligibility；finalize request 只能选择仍 eligible 的 option。
+- independent-principal-required 对全部适用 responsibility roles 执行不同 authenticated principal，而不是只检查 actor 数量。
+- Decision、audit、outbox、幂等 original readback 与 AuthorizationReceipt 在单一 PostgreSQL 事务追加。
+- AuthorizationReceipt 使用单一生成协议：claims canonicalBytes 与 state attestationCanonicalBytes 分别由 Ed25519 签名；wrapper 绑定 issuer、provider/contract version、provider/chain commit、strong ETag generation 与 winner idempotency/command identity，只允许 consume 或 revoke 赢得一次 CAS。
+lifecycle:
+  model: append_only_hash_chain
+  optimistic_concurrency: receipt_state_cas
+  idempotency: idempotency_key_plus_exact_request_digest

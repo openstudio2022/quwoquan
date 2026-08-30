@@ -87,20 +87,23 @@ def require_cursor_auto_retry_admission(
     expected_selection = resolve_semantic_preflight_selection(
         CURSOR_GROK_SEMANTIC_SELECTION_ID
     )
+    expected_model = expected_selection.model_selection.model_id
+    expected_parameters = expected_selection.model_selection.parameters_document()
     if (
         manifest.get("executionId") != predecessor_id
         or manifest.get("semanticSelectionId") != CURSOR_GROK_SEMANTIC_SELECTION_ID
         or binding.get("provider") != "cursor_sdk"
-        or binding.get("authorModel") != "grok-4.5"
+        or binding.get("authorModel") != expected_model
         or binding.get("authorModelFamily") != "grok"
-        or binding.get("authorModelParameters") != []
-        or binding.get("reviewerModel") != "grok-4.5"
+        or binding.get("authorModelParameters") != expected_parameters
+        or binding.get("reviewerModel") != expected_model
         or binding.get("reviewerModelFamily") != "grok"
-        or binding.get("reviewerModelParameters") != []
+        or binding.get("reviewerModelParameters") != expected_parameters
     ):
         raise ValueError(
             "GATE_BLOCK DATA.AGENT.CURSOR_AUTO_PREDECESSOR_INVALID: retryOf must "
-            "reference an exact cursor_grok/grok-4.5 execution"
+            f"reference an exact {CURSOR_GROK_SEMANTIC_SELECTION_ID}/"
+            f"{expected_model} execution"
         )
 
     journals_root = predecessor_root / "_shared" / "semantic_tasks"
@@ -123,8 +126,8 @@ def require_cursor_auto_retry_admission(
         if (
             request.get("executionId") != predecessor_id
             or request.get("provider") != "cursor_sdk"
-            or request.get("model") != "grok-4.5"
-            or request.get("modelParameters") != []
+            or request.get("model") != expected_model
+            or request.get("modelParameters") != expected_parameters
             or request.get("semanticSelectionDigest")
             != expected_selection.selection_digest
         ):

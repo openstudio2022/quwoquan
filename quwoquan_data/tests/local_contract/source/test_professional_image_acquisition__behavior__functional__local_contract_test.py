@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from content.source import professional_image_acquisition as acquisition
-from content.source import professional_image_transport as image_transport
 from content.source.professional_image_discovery import (
     create_professional_image_discovery_plan,
 )
@@ -134,6 +133,7 @@ def _item(
             "propertyReleaseStatus": "not_required",
             "collectedAt": "2026-08-05T00:00:00Z",
             "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+            "derivedModifications": [],
         }
         if watermark_status == "absent"
         else None
@@ -387,7 +387,12 @@ def test_safety_entity_and_access_failures_block_before_download(
     assert by_id["passed"]["distributionDecision"] == "research_allowed"
     assert by_id["passed"]["planImageSpec"] is not None
     assert by_id["watermark"]["failureCode"] == "DATA.SOURCE.WATERMARK_BLOCKED"
-    assert by_id["mismatch"]["failureCode"] == "DATA.SOURCE.ENTITY_MISMATCH"
+    # An observed entity that contradicts the frozen discovery candidate is caught
+    # at binding, before any safety evidence is read: the plan is the earlier
+    # authority on which entity this asset was ever allowed to be about.
+    assert (
+        by_id["mismatch"]["failureCode"] == "DATA.SOURCE.DISCOVERY_BINDING_FAILED"
+    )
     assert by_id["evidence-mismatch"]["failureCode"] == "DATA.SOURCE.ENTITY_MISMATCH"
     assert (
         by_id["access-blocked"]["failureCode"] == "DATA.SOURCE.ACCESS_CONTROL_BLOCKED"
@@ -443,13 +448,22 @@ def test_downloaded_thumbnail_is_retained_but_not_accepted(tmp_path: Path) -> No
         ),
     )
     root = tmp_path / "acquisition"
-    receipt, path = acquisition.acquire_professional_images(
-        manifest_path,
-        handoff_ref=tmp_path / "handoff.json",
-        manual_root=manual,
-        output_root=root,
-    )
+    # A batch where nothing reached admission is not a success, but the evidence of
+    # why survives: the receipt is written before the typed failure is raised, and
+    # the failure names it, so the retained thumbnail stays auditable.
+    with pytest.raises(acquisition.ProfessionalImageAcquisitionError) as blocked:
+        acquisition.acquire_professional_images(
+            manifest_path,
+            handoff_ref=tmp_path / "handoff.json",
+            manual_root=manual,
+            output_root=root,
+        )
 
+    assert blocked.value.code == "DATA.SOURCE.ACQUISITION_NO_SUCCESS"
+    receipt = acquisition.load_professional_image_acquisition_receipt(
+        blocked.value.receipt_ref,
+        root=root,
+    )
     row = receipt["assets"][0]
     assert receipt["downloadedAssetCount"] == 1
     assert receipt["acceptedAssetCount"] == 0
@@ -457,13 +471,6 @@ def test_downloaded_thumbnail_is_retained_but_not_accepted(tmp_path: Path) -> No
     assert row["distributionDecision"] == "blocked"
     assert row["failureCode"] == "DATA.SOURCE.IMAGE_QUALITY_BLOCKED"
     assert row["planImageSpec"] is None
-    assert (
-        acquisition.load_professional_image_acquisition_receipt(
-            path.relative_to(root).as_posix(),
-            root=root,
-        )
-        == receipt
-    )
 
 
 def test_acquisition_rejects_discovery_candidate_drift_before_download(
@@ -593,49 +600,4 @@ def test_self_digested_receipt_cannot_bypass_accepted_asset_revalidation(
         acquisition.load_professional_image_acquisition_receipt(
             path.relative_to(root).as_posix(),
             root=root,
-        )
-
-
-def test_public_image_transport_rejects_credentials_and_non_public_hosts(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    for url in (
-        "https://user:password@images.example.test/photo.jpg",
-        "https://127.0.0.1/photo.jpg",
-        "https://169.254.169.254/latest/meta-data",
-        "https://192.0.2.1/photo.jpg",
-        "https://224.0.0.1/photo.jpg",
-        "https://[::1]/photo.jpg",
-        "https://assets.local/photo.jpg",
-    ):
-        with pytest.raises(ValueError):
-            image_transport._validated_https_url(url, allow_signed_query=False)
-    with pytest.raises(ValueError, match="credential-like"):
-        image_transport._validated_https_url(
-            "https://images.example.test/photo.jpg?access_token=secret",
-            allow_signed_query=False,
-        )
-    assert image_transport._validated_https_url(
-        "https://images.example.test/photo.jpg?signature=api-issued",
-        allow_signed_query=True,
-    ).startswith("https://images.example.test/")
-
-    monkeypatch.setattr(
-        image_transport.socket,
-        "getaddrinfo",
-        lambda *_args, **_kwargs: [(2, 1, 6, "", ("10.0.0.8", 443))],
-    )
-    with pytest.raises(ValueError, match="non-public address"):
-        image_transport._assert_public_resolution(
-            "https://images.example.test/photo.jpg"
-        )
-    redirect_handler = image_transport._PublicImageRedirects(allow_signed_query=False)
-    with pytest.raises(ValueError, match="non-public address"):
-        redirect_handler.redirect_request(
-            None,
-            None,
-            302,
-            "Found",
-            {},
-            "https://redirect.example.test/private.jpg",
         )

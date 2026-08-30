@@ -37,6 +37,10 @@ def write_budget(tmp_path: Path) -> Path:
                     "test_gate": {
                         "budgetSeconds": 600,
                         "hardFailSeconds": 1800,
+                        "profileHardFailSeconds": {
+                            "pr_light": 5400,
+                            "mainline_auto_prod": 480,
+                        },
                         "criticalPath": "candidate + environments + prod",
                         "phaseBudgetsSeconds": {"candidate": 120},
                     }
@@ -89,7 +93,13 @@ def complete_args(end_to_end_seconds: int, *, machine_seconds: int = 500) -> lis
     ]
 
 
-def run_renderer(tmp_path: Path, end_to_end_seconds: int, *, complete: bool) -> Dict[str, Any]:
+def run_renderer(
+    tmp_path: Path,
+    end_to_end_seconds: int,
+    *,
+    complete: bool,
+    budget_profile: str = "",
+) -> Dict[str, Any]:
     output_path = tmp_path / "summary.json"
     command = [
         sys.executable,
@@ -112,6 +122,8 @@ def run_renderer(tmp_path: Path, end_to_end_seconds: int, *, complete: bool) -> 
                 "candidate=0",
             ]
         )
+    if budget_profile:
+        command.extend(["--budget-profile", budget_profile])
     command.extend(["--write-json", str(output_path)])
     completed = subprocess.run(
         command,
@@ -242,6 +254,59 @@ def test_soft_and_hard_statuses_come_from_the_budget_file(
     assert payload["budget"]["softSeconds"] == 600
     assert payload["budget"]["hardSeconds"] == 1800
     assert payload["status"] == expected_status
+
+
+@pytest.mark.parametrize(
+    ("profile", "seconds", "expected_hard"),
+    [
+        ("pr_light", 6000, 5400),
+        ("mainline_auto_prod", 500, 480),
+    ],
+)
+def test_profile_hard_budget_is_the_canonical_rendered_gate_outcome(
+    tmp_path: Path,
+    profile: str,
+    seconds: int,
+    expected_hard: int,
+) -> None:
+    payload = run_renderer(
+        tmp_path,
+        seconds,
+        complete=True,
+        budget_profile=profile,
+    )
+
+    assert payload["status"] == "failed"
+    assert payload["budget"]["profile"] == profile
+    assert payload["budget"]["hardSeconds"] == expected_hard
+    assert payload["budget"]["gateHardSeconds"] == 1800
+
+
+def test_unknown_profile_fails_closed_before_writing_summary(tmp_path: Path) -> None:
+    output_path = tmp_path / "summary.json"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--gate-key",
+            "test_gate",
+            "--budget-file",
+            str(write_budget(tmp_path)),
+            "--budget-profile",
+            "unknown",
+            *complete_args(500),
+            "--write-json",
+            str(output_path),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert "canonical profile hard budget is missing: unknown" in completed.stderr
+    assert not output_path.exists()
 
 
 def test_fast_machine_dag_cannot_hide_slow_end_to_end_release(tmp_path: Path) -> None:

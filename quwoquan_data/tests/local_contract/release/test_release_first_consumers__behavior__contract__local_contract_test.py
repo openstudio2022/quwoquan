@@ -12,6 +12,7 @@ from core.media_asset_url import materialize_release_media
 from core.release_media_binding import bind_release_object_media_assets
 from content.release.canonical.build_lookup_indexes import build_publish_lookup_indexes
 from content.release.environment.consistency import scan_release_contract
+from support.media_fixture import admit_media_body
 
 
 def _write(path: Path, payload: dict | str | bytes) -> None:
@@ -38,7 +39,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
     payload = b"asset"
     digest = hashlib.sha256(payload).hexdigest()
     key = f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}.jpg"
-    _write(canonical / key, payload)
+    admit_media_body(payload)
     post = canonical / "posts/article/攻略/甲/1"
     _write(
         post / "manifest.json",
@@ -113,7 +114,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         },
     }
     for name, payload_doc in {
-        "release.json": {"schema": "quwoquan_data.release", "releaseId": "release-a", "sourceOwner": "qwq_data", "releaseKind": "content", "executionIds": ["20260715--travel-homepage-coverage--test-region-a--scale-001"]},
+        "release.json": {"schema": "quwoquan_data.release", "releaseId": "release-a", "sourceOwner": "qwq_data", "releaseKind": "content", "releaseClass": "commercial", "executionIds": ["20260715--travel-homepage-coverage--test-region-a--scale-001"]},
         "desired_state.json": desired,
         "sample_bundle.json": {"schema": "quwoquan_data.release_sample", "tags": ["Topic/旅行"]},
         "index/objects.json": {
@@ -149,7 +150,8 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
 
 def test_release_first_consumer_closure_and_deterministic_index(tmp_path: Path) -> None:
     canonical, release = _fixture(tmp_path)
-    shutil.rmtree(canonical / "media")
+    # Nothing to strip: canonical publish never held the body in the first place.
+    assert not (canonical / "media").exists()
     desired = json.loads((release / "payload" / "desired_state.json").read_text(encoding="utf-8"))
     report = scan_release_contract(
         desired,

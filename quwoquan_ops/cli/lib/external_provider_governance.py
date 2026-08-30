@@ -28,6 +28,8 @@ import json
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
@@ -93,6 +95,9 @@ from quwoquan_ops.cli.lib.external_provider_governance_lib.go_descriptors import
     composition_issues,
     render_go_bindings,
     write_go_bindings,
+)
+from quwoquan_ops.cli.lib.external_provider_governance_lib.single_environment import (  # noqa: E402,F401
+    compile_single_environment_bindings,
 )
 
 

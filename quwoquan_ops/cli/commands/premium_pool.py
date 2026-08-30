@@ -34,11 +34,12 @@ def register_parser(
     )
     premium_pool_parser.add_argument(
         "--launch-policy",
-        choices=("immutable-candidate", "test-live"),
+        choices=("immutable-candidate", "test-live", "release-import"),
         default="immutable-candidate",
         help=(
             "默认保持immutable candidate语义；test-live只接受当前running attempt的"
-            "run-bound nonPromotable content binding"
+            "run-bound nonPromotable content binding；release-import只用于池为空时的"
+            "首次激活，输入为apply已产出的导入报告"
         ),
     )
     premium_pool_parser.add_argument("--readiness-receipt", required=True)
@@ -87,13 +88,25 @@ def command_premium_pool(args: argparse.Namespace) -> dict[str, Any]:
                 readiness_receipt=args.readiness_receipt,
                 content_id=args.content_id,
             )
-        else:
+        elif launch_policy != "release-import":
             raise _stackctl.PremiumPoolReleaseError(
                 "unsupported premium pool launch policy"
             )
         from quwoquan_ops.cli.lib.public_domain_tls import root_certificate_path
 
         ssl_cafile = str(root_certificate_path(args.target))
+        if launch_policy == "release-import":
+            # 空池判定只读内容面，因此必须在取得 CA 之后、任何写入之前完成。
+            binding = _stackctl.load_premium_pool_bootstrap_binding(
+                environment=environment,
+                target=args.target,
+                import_report=args.readiness_receipt,
+                content_id=args.content_id,
+                pool_is_empty=_stackctl.premium_pool_is_empty(
+                    api_base_url=api_base_url,
+                    ssl_cafile=ssl_cafile,
+                ),
+            )
         if str(args.action) == "verify-readback":
             receipt = _stackctl.execute_premium_pool_readback(
                 binding=binding,
@@ -140,6 +153,14 @@ def command_premium_pool(args: argparse.Namespace) -> dict[str, Any]:
         ]
         if launch_policy == "immutable-candidate":
             details.append(f"baselineId={binding.baseline_id}")
+        elif launch_policy == "release-import":
+            details.extend(
+                (
+                    "launchPolicy=release_import",
+                    f"baselineId={binding.baseline_id}",
+                    f"importReportRef={binding.import_report_ref}",
+                )
+            )
         else:
             details.extend(
                 (

@@ -18,6 +18,8 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/conte
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/adapters/content_behavior_command_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_delete_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_publication_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/research_release_readback_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/research_release_readback.dart';
 import 'package:quwoquan_app/service/content_service/trust_safety/report/adapters/report_query_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_delete.dart';
@@ -38,6 +40,7 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/cache
 import 'package:quwoquan_app/service/content_service/content/post/adapters/cached_content_repository.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_cache_services.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/adapters/user_profile_cache_service.dart';
+import 'package:quwoquan_app/service/user_service/account/account_session/application/public/account_session_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     hide ContentDiscoveryFeedQuery;
 
@@ -250,6 +253,18 @@ final class ContentProductionComposition {
       feedQuery: cached,
       postDeleteWriter: cached,
       behaviorWriter: behavior,
+    );
+  }
+
+  static ResearchReleaseReadback researchReleaseReadback({
+    required GeneratedCloudOperationClient client,
+    required AccountSessionResearchIdentityWriter researchIdentityWriter,
+    required ResearchReadbackInvocationContextFactory invocationContext,
+  }) {
+    return RemoteResearchReleaseReadback(
+      client: client,
+      researchIdentityWriter: researchIdentityWriter,
+      invocationContext: invocationContext,
     );
   }
 

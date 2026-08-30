@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	postgraphql "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/graphql"
 )
 
 type persistedBundleBinding struct {
@@ -49,6 +51,52 @@ type persistedBundleBinding struct {
 			Scope   string `yaml:"scope"`
 		} `yaml:"trustedServicePrincipal"`
 	} `yaml:"runtimeRequest"`
+	Response struct {
+		RootField string `yaml:"rootField"`
+	} `yaml:"response"`
+}
+
+func TestContentRuntimeBindingsMatchAuthoringPersistedQueries(t *testing.T) {
+	serviceRoot := findServiceModuleRoot(t)
+	ownerDir := filepath.Join(serviceRoot, "services/content-service/contracts/content/post/persisted_queries")
+	paths, err := filepath.Glob(filepath.Join(ownerDir, "*.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 5 {
+		t.Fatalf("content post persisted authoring files=%d want=5", len(paths))
+	}
+	bindings := make([]postgraphql.PersistedOperationAuthoringBinding, 0, len(paths))
+	for _, path := range paths {
+		encoded, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var source persistedBundleBinding
+		if err := yaml.Unmarshal(encoded, &source); err != nil {
+			t.Fatalf("decode %s: %v", path, err)
+		}
+		document, err := os.ReadFile(filepath.Join(ownerDir, source.Document))
+		if err != nil {
+			t.Fatalf("read %s document: %v", path, err)
+		}
+		digest := sha256.Sum256(document)
+		if source.SHA256Hash != hex.EncodeToString(digest[:]) {
+			t.Fatalf("%s sha256Hash does not bind %s", path, source.Document)
+		}
+		bindings = append(bindings, postgraphql.PersistedOperationAuthoringBinding{
+			OperationName: source.OperationName, CanonicalOperationID: source.CanonicalOperationID,
+			SHA256Hash: source.SHA256Hash, RootField: source.Response.RootField,
+		})
+	}
+	if err := postgraphql.ValidatePersistedOperationAuthoringBindings(bindings); err != nil {
+		t.Fatal(err)
+	}
+	drifted := append([]postgraphql.PersistedOperationAuthoringBinding(nil), bindings...)
+	drifted[0].SHA256Hash = strings.Repeat("f", 64)
+	if err := postgraphql.ValidatePersistedOperationAuthoringBindings(drifted); err == nil {
+		t.Fatal("authoring hash drift from the executable Content runtime binding must fail closed")
+	}
 }
 
 func TestContentPostOwnsTypeAwarePersistedGraphQLBundle(t *testing.T) {

@@ -3,10 +3,17 @@
   "$id": "https://quwoquan.local/contracts/metadata/readiness_receipt.schema.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["binding", "evidenceSha256"],
+  "required": [
+    "binding",
+    "evidenceSha256"
+  ],
   "properties": {
-    "binding": { "$ref": "#/$defs/binding" },
-    "evidenceSha256": { "$ref": "#/$defs/sha256" }
+    "binding": {
+      "$ref": "#/$defs/binding"
+    },
+    "evidenceSha256": {
+      "$ref": "#/$defs/sha256"
+    }
   },
   "$defs": {
     "sha256": {
@@ -28,54 +35,441 @@
     "target": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "id"],
+      "required": [
+        "kind",
+        "id"
+      ],
       "properties": {
-        "kind": { "enum": ["operation", "page", "object"] },
-        "id": { "type": "string", "minLength": 1 }
+        "kind": {
+          "enum": [
+            "operation",
+            "page",
+            "object"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "binding": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "objectId", "specRef", "caseId", "producer", "layer", "status", "target",
-        "commitSha", "contractGraphSourceHash", "deploymentTarget", "baselineId",
-        "packageDigest", "configurationDigest", "candidateManifestSha256", "environment",
-        "platform", "deviceClass", "provider", "startedAt", "completedAt", "runnerIdentity",
-        "runnerSourcePath", "remoteComposition", "fixtureFree", "dependenciesReady",
-        "providerVerified", "physicalDevice"
+        "objectId",
+        "specRef",
+        "caseId",
+        "producer",
+        "layer",
+        "status",
+        "target",
+        "commitSha",
+        "contractGraphSourceHash",
+        "deploymentTarget",
+        "baselineId",
+        "packageDigest",
+        "configurationDigest",
+        "candidateManifestSha256",
+        "environment",
+        "platform",
+        "deviceClass",
+        "provider",
+        "startedAt",
+        "completedAt",
+        "runnerIdentity",
+        "runnerSourcePath",
+        "remoteComposition",
+        "fixtureFree",
+        "dependenciesReady",
+        "providerVerified"
       ],
       "properties": {
-        "objectId": { "type": "string", "minLength": 1 },
-        "specRef": { "type": "string", "minLength": 1 },
-        "caseId": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
-        "producer": { "enum": ["service", "app", "ops"] },
-        "layer": { "enum": ["local_contract", "api_integration", "user_acceptance", "environment_acceptance", "rollback", "replay"] },
-        "status": { "enum": ["passed", "failed", "blocked", "skipped"] },
-        "target": { "$ref": "#/$defs/target" },
-        "commitSha": { "$ref": "#/$defs/gitCommit" },
-        "contractGraphSourceHash": { "$ref": "#/$defs/sha256" },
-        "deploymentTarget": { "$ref": "#/$defs/identity" },
-        "baselineId": { "$ref": "#/$defs/identity" },
-        "packageDigest": { "$ref": "#/$defs/digest" },
-        "configurationDigest": { "$ref": "#/$defs/digest" },
-        "candidateManifestSha256": { "$ref": "#/$defs/sha256" },
-        "candidateDigest": { "$ref": "#/$defs/digest" },
-        "releaseDigest": { "$ref": "#/$defs/digest" },
-        "environment": { "enum": ["alpha", "beta", "gamma", "prod"] },
-        "platform": { "$ref": "#/$defs/identity" },
-        "deviceClass": { "$ref": "#/$defs/identity" },
-        "provider": { "$ref": "#/$defs/identity" },
-        "startedAt": { "type": "string", "format": "date-time" },
-        "completedAt": { "type": "string", "format": "date-time" },
-        "runnerIdentity": { "$ref": "#/$defs/identity" },
-        "runnerSourcePath": { "type": "string", "minLength": 1, "maxLength": 512 },
-        "remoteComposition": { "type": "boolean" },
-        "fixtureFree": { "type": "boolean" },
-        "dependenciesReady": { "type": "boolean" },
-        "providerVerified": { "type": "boolean" },
-        "physicalDevice": { "type": "boolean" }
-      }
+        "objectId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "specRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "caseId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$"
+        },
+        "producer": {
+          "enum": [
+            "service",
+            "app",
+            "ops"
+          ]
+        },
+        "layer": {
+          "enum": [
+            "local_contract",
+            "api_integration",
+            "user_acceptance",
+            "environment_acceptance",
+            "rollback",
+            "replay"
+          ]
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "blocked",
+            "skipped"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "commitSha": {
+          "$ref": "#/$defs/gitCommit"
+        },
+        "contractGraphSourceHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "deploymentTarget": {
+          "$ref": "#/$defs/identity"
+        },
+        "baselineId": {
+          "$ref": "#/$defs/identity"
+        },
+        "packageDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "configurationDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "candidateManifestSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidateDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "releaseDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "releaseId": {
+          "$ref": "#/$defs/identity"
+        },
+        "targetUatBindingDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "entrySurface": {
+          "enum": [
+            "feed",
+            "search",
+            "recommendation",
+            "direct_or_object_route"
+          ]
+        },
+        "carrier": {
+          "enum": [
+            "homepage",
+            "article",
+            "image",
+            "video"
+          ]
+        },
+        "environment": {
+          "enum": [
+            "alpha",
+            "beta",
+            "gamma",
+            "prod"
+          ]
+        },
+        "platform": {
+          "$ref": "#/$defs/identity"
+        },
+        "deviceClass": {
+          "$ref": "#/$defs/identity"
+        },
+        "deviceRegistered": {
+          "type": "boolean"
+        },
+        "provider": {
+          "$ref": "#/$defs/identity"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "runnerIdentity": {
+          "$ref": "#/$defs/identity"
+        },
+        "runnerSourcePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "remoteComposition": {
+          "type": "boolean"
+        },
+        "fixtureFree": {
+          "type": "boolean"
+        },
+        "dependenciesReady": {
+          "type": "boolean"
+        },
+        "providerVerified": {
+          "type": "boolean"
+        },
+        "physicalDevice": {
+          "type": "boolean"
+        },
+        "deviceIdentity": {
+          "$ref": "#/$defs/identity"
+        },
+        "uatProfile": {
+          "enum": [
+            "rehearsal",
+            "promotable",
+            "production"
+          ]
+        },
+        "nonPromotable": {
+          "type": "boolean"
+        },
+        "artifactClass": {
+          "enum": [
+            "production_behavior",
+            "production"
+          ]
+        },
+        "reasonCode": {
+          "$ref": "#/$defs/identity"
+        },
+        "observedOutcome": {
+          "enum": [
+            "content",
+            "empty",
+            "deleted",
+            "offline",
+            "no_active_release",
+            "rollback_restored",
+            "replay_restored"
+          ]
+        },
+        "observedReleaseId": {
+          "$ref": "#/$defs/identity"
+        },
+        "previousReleaseId": {
+          "$ref": "#/$defs/identity"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "releaseDigest"
+            ],
+            "properties": {
+              "producer": {
+                "const": "app"
+              },
+              "layer": {
+                "const": "user_acceptance"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "releaseId",
+              "targetUatBindingDigest",
+              "entrySurface",
+              "carrier",
+              "deviceIdentity",
+              "deviceRegistered",
+              "uatProfile",
+              "nonPromotable",
+              "artifactClass",
+              "physicalDevice"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "uatProfile"
+            ],
+            "properties": {
+              "uatProfile": {
+                "const": "rehearsal"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "nonPromotable",
+              "artifactClass"
+            ],
+            "properties": {
+              "nonPromotable": {
+                "const": true
+              },
+              "artifactClass": {
+                "const": "production_behavior"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "uatProfile"
+            ],
+            "properties": {
+              "uatProfile": {
+                "const": "promotable"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "physicalDevice",
+              "deviceRegistered",
+              "nonPromotable"
+            ],
+            "properties": {
+              "physicalDevice": {
+                "const": true
+              },
+              "deviceRegistered": {
+                "const": true
+              },
+              "nonPromotable": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "uatProfile"
+            ],
+            "properties": {
+              "uatProfile": {
+                "const": "production"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "environment",
+              "artifactClass",
+              "physicalDevice",
+              "deviceRegistered",
+              "nonPromotable"
+            ],
+            "properties": {
+              "environment": {
+                "const": "prod"
+              },
+              "artifactClass": {
+                "const": "production"
+              },
+              "physicalDevice": {
+                "const": true
+              },
+              "deviceRegistered": {
+                "const": true
+              },
+              "nonPromotable": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "enum": [
+                  "failed",
+                  "blocked",
+                  "skipped"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "reasonCode"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "const": "passed"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "reasonCode"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "observedOutcome"
+            ],
+            "properties": {
+              "observedOutcome": {
+                "const": "no_active_release"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "observedReleaseId"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "observedOutcome"
+            ],
+            "properties": {
+              "observedOutcome": {
+                "enum": [
+                  "rollback_restored",
+                  "replay_restored"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "observedReleaseId",
+              "previousReleaseId"
+            ]
+          }
+        }
+      ]
     }
   }
 }

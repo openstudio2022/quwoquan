@@ -1,6 +1,8 @@
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-013
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-013.t1
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-013.t2
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-017
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-017.t5
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/observability/analytics.dart';
@@ -10,62 +12,70 @@ import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_repor
 import 'package:quwoquan_app/runtime/observability/trackers/article_reader_observability.dart';
 
 void main() {
-  test(
-    'reader lifecycle emits catalogued product-ops facts with canonical recovery context',
-    () async {
-      final recorder = _CapturingRecorder();
-      final tracker = ArticleReaderObservability(
-        AnalyticsService.forTesting(),
-        recorder,
-      );
+  test('reader lifecycle emits catalogued product-ops facts with canonical recovery context', () async {
+    final recorder = _CapturingRecorder();
+    final tracker = ArticleReaderObservability(
+      AnalyticsService.forTesting(),
+      recorder,
+    );
 
-      tracker.trackReaderOpen(
-        postId: 'post-1',
-        durationMs: 42,
-        source: 'feed',
-        template: 'standard',
-        fontPreset: 'default',
-        pageCount: 3,
-        bookReaderEnabled: true,
-      );
-      tracker.trackReaderDwell(postId: 'post-1', durationMs: 2000);
-      tracker.trackReaderExit(postId: 'post-1', durationMs: 2100);
-      tracker.trackReaderError(
-        postId: 'post-1',
-        errorCode: 'CONTENT.SYSTEM.required_dependency_unavailable',
-        recoveryAction: 'retry',
-        durationMs: 100,
-      );
-      tracker.trackReaderRecovery(
-        postId: 'post-1',
-        recoveryAction: 'retry',
-        result: 'success',
-        durationMs: 50,
-        errorCode: 'CONTENT.SYSTEM.required_dependency_unavailable',
-      );
+    tracker.trackReaderOpen(
+      postId: 'post-1',
+      durationMs: 42,
+      source: 'feed',
+      template: 'standard',
+      fontPreset: 'default',
+      pageCount: 3,
+      bookReaderEnabled: true,
+    );
+    tracker.trackReaderDwell(postId: 'post-1', durationMs: 2000);
+    tracker.trackReaderExit(postId: 'post-1', durationMs: 2100);
+    tracker.trackImageViewerOpen(postId: 'post-1', assetId: 'asset-3');
+    tracker.trackImageViewerClose(postId: 'post-1', assetId: 'asset-3');
+    tracker.trackReaderError(
+      postId: 'post-1',
+      errorCode: 'CONTENT.SYSTEM.required_dependency_unavailable',
+      recoveryAction: 'retry',
+      durationMs: 100,
+    );
+    tracker.trackReaderRecovery(
+      postId: 'post-1',
+      recoveryAction: 'retry',
+      result: 'success',
+      durationMs: 50,
+      errorCode: 'CONTENT.SYSTEM.required_dependency_unavailable',
+    );
 
-      await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
 
-      expect(recorder.payloads.map((payload) => payload.eventType), <String>[
-        'article_reader_enter',
-        'article_reader_dwell',
-        'article_reader_exit',
-        'article_reader_error',
-        'article_reader_recovery',
-      ]);
-      expect(
-        recorder.payloads.every(
-          (payload) => AppTelemetryCatalog.validate(payload) == null,
-        ),
-        isTrue,
-      );
-      expect(
-        recorder.payloads[3].extensions['errorCode'],
-        'CONTENT.SYSTEM.required_dependency_unavailable',
-      );
-      expect(recorder.payloads[4].extensions['recoveryAction'], 'retry');
-    },
-  );
+    expect(recorder.payloads.map((payload) => payload.eventType), <String>[
+      'article_reader_enter',
+      'article_reader_dwell',
+      'article_reader_exit',
+      'product_action',
+      'product_action',
+      'article_reader_error',
+      'article_reader_recovery',
+    ]);
+    expect(
+      recorder.payloads.every(
+        (payload) => AppTelemetryCatalog.validate(payload) == null,
+      ),
+      isTrue,
+    );
+    expect(
+      recorder.payloads
+          .where((payload) => payload.eventType == 'product_action')
+          .map((payload) => payload.extensions['action']),
+      <String>['image_viewer_open', 'image_viewer_close'],
+    );
+    expect(recorder.payloads[3].extensions['targetId'], 'asset-3');
+    expect(
+      recorder.payloads[5].extensions['errorCode'],
+      'CONTENT.SYSTEM.required_dependency_unavailable',
+    );
+    expect(recorder.payloads[6].extensions['recoveryAction'], 'retry');
+  });
 
   test('reader fallback 去重按 30 分钟 TTL 与 LRU 容量保持有界', () async {
     var now = DateTime.utc(2026, 7, 28, 10);

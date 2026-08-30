@@ -13,6 +13,19 @@ configs:
   rollout: progressive
   sensitive: false
   default: 300
+- key: sys.tag-service.mongo.database
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: quwoquan_tag
+- key: sys.tag-service.mongo.uri
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
 - key: sys.tag-service.redis.general.addr
   type: string
   scope: workload
@@ -42,7 +55,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.tag-service.redis.general.password
   type: string
   scope: workload
@@ -118,7 +130,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.tag-service.redis.rec.password
   type: string
   scope: workload

@@ -26,7 +26,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["role", "carrier", "executionId", "registrationPid", "isRegisteredProcess", "pid", "pgid", "processIdentityDigest", "rssBytes", "openFdCount"],
+        "required": ["role", "carrier", "executionId", "registrationPid", "isRegisteredProcess", "pid", "pgid", "processIdentityDigest", "rssBytes", "cpuPercent", "isCursorSdkBridge", "openFdCount"],
         "properties": {
           "role": {"enum": ["controller", "worker"]},
           "carrier": {"type": ["string", "null"]},
@@ -37,6 +37,8 @@
           "pgid": {"type": "integer", "minimum": 2},
           "processIdentityDigest": {"$ref": "#/$defs/digest"},
           "rssBytes": {"type": "integer", "minimum": 0},
+          "cpuPercent": {"type": "number", "minimum": 0},
+          "isCursorSdkBridge": {"type": "boolean"},
           "openFdCount": {"type": "integer", "minimum": 0}
         }
       }
@@ -91,8 +93,9 @@
       "required": [
         "capturedAt", "controllerRssBytes", "nonVideoWorkerMaxRssBytes",
         "videoWorkerMaxRssBytes", "totalRssBytes", "temporaryWorkspaceBytes",
-        "terminalResidualBytes", "openFdCount", "queueDepth",
-        "oldestReadyAgeSeconds", "progressAgeSeconds", "heartbeatAgeSeconds"
+        "terminalResidualBytes", "hostCpuPercent", "cursorBridgeProcessCount",
+        "openFdCount", "queueDepth", "oldestReadyAgeSeconds",
+        "progressAgeSeconds", "heartbeatAgeSeconds"
       ],
       "properties": {
         "capturedAt": {"type": "string", "minLength": 1},
@@ -102,6 +105,8 @@
         "totalRssBytes": {"type": "integer", "minimum": 0},
         "temporaryWorkspaceBytes": {"type": "integer", "minimum": 0},
         "terminalResidualBytes": {"type": "integer", "minimum": 0},
+        "hostCpuPercent": {"type": "number", "minimum": 0},
+        "cursorBridgeProcessCount": {"type": "integer", "minimum": 0},
         "openFdCount": {"type": "integer", "minimum": 0},
         "queueDepth": {"type": "integer", "minimum": 0},
         "oldestReadyAgeSeconds": {"type": "integer", "minimum": 0},

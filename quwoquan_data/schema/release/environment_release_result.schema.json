@@ -44,6 +44,57 @@
     "baselineApiVerificationRef": {"type": "string"},
     "failedStage": {"type": "string", "minLength": 1},
     "error": {"type": "string", "minLength": 1},
+    "operationAttempts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "attempt", "canonicalErrorCode", "recoveryAction",
+          "recoveryAfterSeconds", "retryAfterSeconds", "operation"
+        ],
+        "properties": {
+          "attempt": {"type": "integer", "minimum": 1, "maximum": 2},
+          "canonicalErrorCode": {
+            "type": "string",
+            "pattern": "^(none|[A-Z][A-Z0-9_]*\\.[A-Z][A-Z0-9_]*\\.[a-z][a-z0-9_]*)$"
+          },
+          "recoveryAction": {
+            "enum": ["none", "retry", "surface", "absorb", "fallback", "escalate", "compensate"]
+          },
+          "recoveryAfterSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400
+          },
+          "retryAfterSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400
+          },
+          "operation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path", "pageId", "status", "requestId", "traceId",
+              "startedAt", "endedAt", "durationMs"
+            ],
+            "properties": {
+              "path": {"const": "/search"},
+              "pageId": {"const": "search.global"},
+              "status": {"type": "integer", "minimum": 100, "maximum": 599},
+              "requestId": {"type": "string", "minLength": 1},
+              "traceId": {"type": "string", "minLength": 1},
+              "startedAt": {"type": "string", "format": "date-time"},
+              "endedAt": {"type": "string", "format": "date-time"},
+              "durationMs": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
     "verificationChecksum": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"

@@ -19,12 +19,13 @@ _SCRIPTS_ROOT = next(
 )
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
-# ``page_disk_scan_paths`` 与本包同处 runtime/page concern 目录。
-_PAGE_DIR = Path(__file__).resolve().parents[1]
+from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT  # noqa: E402,F401
+
+# ``page_disk_scan_paths`` 与本包同处 runtime/page concern 目录；路径从
+# canonical scripts root 派生，避免包继续移动时固定 parents 索引漂移。
+_PAGE_DIR = SCRIPTS_ROOT / "runtime" / "page"
 if str(_PAGE_DIR) not in sys.path:
     sys.path.insert(0, str(_PAGE_DIR))
-
-from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT  # noqa: E402,F401
 
 try:
     import yaml  # type: ignore  # noqa: E402

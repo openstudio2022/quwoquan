@@ -1,0 +1,18 @@
+{
+  "assets": [
+    {
+      "assetId": "成都大熊猫繁育研究基地_detail_成都大熊猫繁育研究基地的圈养成年_333_0d7d451e",
+      "bytes": 7943505,
+      "sha256": "sha256:f23db09bf4c4ee359b10e1c6ccf40989af6072b8190a0e8ee9029d14df506e0a",
+      "objectKey": "media/objects/sha256/f2/3d/f23db09bf4c4ee359b10e1c6ccf40989af6072b8190a0e8ee9029d14df506e0a.mp4",
+      "kind": "video"
+    },
+    {
+      "assetId": "成都大熊猫繁育研究基地_cover_成都大熊猫繁育研究基地的圈养成年_333_93d7746c",
+      "bytes": 831956,
+      "sha256": "sha256:f58b468b2fe39b8b7d9ab2a8c65e14ab5602a2199c7299ded77e6f1ea251f602",
+      "objectKey": "media/objects/sha256/f5/8b/f58b468b2fe39b8b7d9ab2a8c65e14ab5602a2199c7299ded77e6f1ea251f602.webp",
+      "kind": "image"
+    }
+  ]
+}

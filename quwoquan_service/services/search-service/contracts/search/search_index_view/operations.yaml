@@ -27,8 +27,8 @@ api_routes:
       principal: public
       ownership_policy: public_search_discovery
     reliability:
-      # 预算级联由外向内递减：App e2e SLO 1500ms > api-edge GraphQL 入口 3000ms >
-      # SearchPage executor 2000ms > 本操作 1500ms > ES client 800ms；
+      # 预算级联由外向内递减：api-edge GraphQL 入口 3000ms >
+      # SearchPage/owner client 2000ms > 本操作 1500ms > ES client 800ms；
       # 禁止倒挂（外层放弃后内层继续计算是纯容量泄漏）。
       timeout_ms: 1500
       cancellation: supported

@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-002
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-020.t2
 
 import 'dart:io';
 
@@ -47,6 +48,7 @@ void main() {
               template: ArticleTemplatePreset.gentle,
               fontPreset: ArticleFontPreset.clean,
               metrics: ArticleCanvasMetrics.snapshot(),
+              enablePageCurl: true,
               initialPage: initialPage,
               onDebugStateChanged: debugStates.add,
             );
@@ -112,43 +114,67 @@ void main() {
     );
   });
 
-  test('business article readers enter pageflip only through host adapters', () {
-    final libDir = Directory('lib').existsSync()
+  test(
+    'business article readers enter pageflip only through host adapters',
+    () {
+      final libDir = Directory('lib').existsSync()
+          ? Directory('lib')
+          : Directory('quwoquan_app/lib');
+      expect(libDir.existsSync(), isTrue);
+
+      const allowedDirectDeckEntrypoints = <String>{
+        'lib/service/content_service/content/post/presentation/article_reader/pageflip/host/article_read_only_book_deck.dart',
+        'lib/service/content_service/content/post/presentation/article_reader/pageflip/host/article_reader_flip_host.dart',
+      };
+
+      final offenders = <String>[];
+      for (final entity in libDir.listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) {
+          continue;
+        }
+        final normalizedPath = entity.path.replaceAll('\\', '/');
+        final libRelativePath = normalizedPath.contains('quwoquan_app/lib/')
+            ? 'lib/${normalizedPath.split('quwoquan_app/lib/').last}'
+            : normalizedPath.contains('/lib/')
+            ? 'lib/${normalizedPath.split('/lib/').last}'
+            : normalizedPath;
+        if (allowedDirectDeckEntrypoints.contains(libRelativePath)) {
+          continue;
+        }
+        if (entity.readAsStringSync().contains('ArticleReadOnlyBookDeck(')) {
+          offenders.add(libRelativePath);
+        }
+      }
+
+      expect(
+        offenders,
+        isEmpty,
+        reason:
+            '业务页面必须通过 ArticleReaderFlipHost + ArticleReaderHostAdapter 接入；'
+            'diagnostics 入口才允许直连 deck 验证组件本体。',
+      );
+    },
+  );
+
+  test('article page curl effective flag has no host or deck constructor default', () {
+    final appLib = Directory('lib').existsSync()
         ? Directory('lib')
         : Directory('quwoquan_app/lib');
-    expect(libDir.existsSync(), isTrue);
+    final hostAdapter = File(
+      '${appLib.path}/service/content_service/content/post/presentation/article_reader/hosts/article_reader_host_adapter.dart',
+    ).readAsStringSync();
+    final deck = File(
+      '${appLib.path}/service/content_service/content/post/presentation/article_reader/pageflip/host/article_read_only_book_deck.dart',
+    ).readAsStringSync();
 
-    const allowedDirectDeckEntrypoints = <String>{
-      'lib/service/content_service/content/post/presentation/article_reader/pageflip/host/article_read_only_book_deck.dart',
-      'lib/service/content_service/content/post/presentation/article_reader/pageflip/host/article_reader_flip_host.dart',
-    };
-
-    final offenders = <String>[];
-    for (final entity in libDir.listSync(recursive: true)) {
-      if (entity is! File || !entity.path.endsWith('.dart')) {
-        continue;
-      }
-      final normalizedPath = entity.path.replaceAll('\\', '/');
-      final libRelativePath = normalizedPath.contains('quwoquan_app/lib/')
-          ? 'lib/${normalizedPath.split('quwoquan_app/lib/').last}'
-          : normalizedPath.contains('/lib/')
-          ? 'lib/${normalizedPath.split('/lib/').last}'
-          : normalizedPath;
-      if (allowedDirectDeckEntrypoints.contains(libRelativePath)) {
-        continue;
-      }
-      if (entity.readAsStringSync().contains('ArticleReadOnlyBookDeck(')) {
-        offenders.add(libRelativePath);
-      }
+    for (final source in <String>[hostAdapter, deck]) {
+      expect(source, contains('required this.enablePageCurl'));
+      expect(
+        source,
+        isNot(contains('this.enablePageCurl =')),
+        reason: 'effective runtime flag 必须由调用方显式传入，不得在宿主或 deck 建第二默认值',
+      );
     }
-
-    expect(
-      offenders,
-      isEmpty,
-      reason:
-          '业务页面必须通过 ArticleReaderFlipHost + ArticleReaderHostAdapter 接入；'
-          'diagnostics 入口才允许直连 deck 验证组件本体。',
-    );
   });
 
   test('article reader page surface files remain below R03 threshold', () {

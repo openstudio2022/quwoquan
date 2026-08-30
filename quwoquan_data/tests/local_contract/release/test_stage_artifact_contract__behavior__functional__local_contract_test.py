@@ -128,6 +128,79 @@ def test_prompt_snapshot_is_replayable_and_rejects_secret_vars(
     )[1] == tmp_path / "_shared/prompt_snapshots/author/controller-1/prompt_snapshot.json"
 
 
+def test_through_cuts_stage_scope_and_discovers_pre_compose_objects(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """进行式验收（--through）契约：早期对象可见、下游缺失不误报、
+    完成型默认行为不变（无 compose 锚点即不可见）。"""
+    batch = tmp_path / "runtime/batch"
+    obj = batch / "entities/地点/景区/西湖"
+    _touch(obj / "1.download/source_refs.json", json.dumps({"sources": []}))
+    monkeypatch.setattr(stage_artifacts, "execution_root", lambda *_args: batch)
+    common = dict(
+        execution_id="20260823--travel-homepage-through-gate--test-region-a--pilot-001",
+        publish_root=tmp_path / "publish",
+        release_root=tmp_path / "release",
+        commercial=False,
+    )
+
+    report = stage_artifacts.verify_stage_artifacts(**common, through="1.download")
+    assert report["through"] == "1.download"
+    assert report["objectCount"] == 1
+    assert not any("missing 2.quality" in issue for issue in report["issues"])
+    assert not any("missing 3.compose" in issue for issue in report["issues"])
+    assert not any("missing final/" in issue for issue in report["issues"])
+
+    report = stage_artifacts.verify_stage_artifacts(**common, through="2.quality")
+    assert any(
+        "missing 2.quality/quality_analysis.json" in issue
+        for issue in report["issues"]
+    )
+    assert not any("missing 3.compose" in issue for issue in report["issues"])
+
+    report = stage_artifacts.verify_stage_artifacts(**common)
+    assert report["through"] is None
+    assert report["objectCount"] == 0
+
+    with pytest.raises(ValueError, match="unsupported --through stage"):
+        stage_artifacts.verify_stage_artifacts(**common, through="9.bogus")
+
+
+def test_through_before_review_ignores_stale_reject_attestation(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """return_to_stage 回退契约：重做 4.draft 期间磁盘留有上一轮 reject 的
+    5.review 产物，--through 4.draft 不得用完成型 review 断言拦截；
+    截止含 5.review 时断言必须恢复生效。"""
+    batch = tmp_path / "runtime/batch"
+    obj = batch / "entities/地点/景区/西湖"
+    _touch(obj / "3.compose/writing_pack.json", json.dumps({"placeholder": True}))
+    _touch(
+        obj / "5.review/attestation.json",
+        json.dumps(
+            {
+                "independentReviewer": {"status": "failed"},
+                "decision": "rejected",
+            }
+        ),
+    )
+    monkeypatch.setattr(stage_artifacts, "execution_root", lambda *_args: batch)
+    common = dict(
+        execution_id="20260823--travel-article-through-review--test-region-a--pilot-001",
+        publish_root=tmp_path / "publish",
+        release_root=tmp_path / "release",
+        commercial=True,
+    )
+
+    report = stage_artifacts.verify_stage_artifacts(**common, through="4.draft")
+    assert not any("review decision" in issue for issue in report["issues"])
+    assert not any("independent reviewer" in issue for issue in report["issues"])
+
+    report = stage_artifacts.verify_stage_artifacts(**common, through="5.review")
+    assert any("review decision is not approved" in issue for issue in report["issues"])
+    assert any("independent reviewer not passed" in issue for issue in report["issues"])
+
+
 @pytest.mark.parametrize("lane", ["homepage", "article", "image", "video"])
 def test_four_lanes_share_complete_five_stage_contract(tmp_path: Path, lane: str) -> None:
     object_root = tmp_path / lane

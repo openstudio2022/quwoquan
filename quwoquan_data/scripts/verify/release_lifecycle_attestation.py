@@ -14,9 +14,10 @@ from core.paths import RELEASE_ROOT
 from core.release_layout import attestation_root, payload_digest, payload_file
 from core.schema import assert_valid
 from core.source_digest import (
+    SourceDefinitionSnapshot,
     SourceDigest,
     SourceDigestError,
-    parse_source_digest_document,
+    parse_immutable_source_digest_document,
 )
 
 RELEASE_ATTESTATION = "release.json"
@@ -59,7 +60,7 @@ def _source_digests(
     *,
     path: Path,
     issues: list[str],
-) -> tuple[SourceDigest, ...] | None:
+) -> tuple[SourceDigest | SourceDefinitionSnapshot, ...] | None:
     raw_value = document.get("sourceDigests")
     if not isinstance(raw_value, list):
         issues.append(f"{path}: sourceDigests must be an array")
@@ -70,7 +71,7 @@ def _source_digests(
         return None
     try:
         source_digests = tuple(
-            parse_source_digest_document(item) for item in raw_value
+            parse_immutable_source_digest_document(item) for item in raw_value
         )
     except SourceDigestError as exc:
         issues.append(f"{path}: {exc}")

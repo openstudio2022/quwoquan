@@ -184,8 +184,6 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
       },
       child: LoginFrame(
         state: _flow,
-        phoneEntryHasParent:
-            _flow.step == LoginStep.phoneEntry && _rootStep == LoginStep.oneTap,
         socialMethodAvailability: _socialMethodAvailability,
         dismissPolicy: widget.dismissPolicy,
         isInline: widget.surfaceMode == LoginSurfaceMode.inline,

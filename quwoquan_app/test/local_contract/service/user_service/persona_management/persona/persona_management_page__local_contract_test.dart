@@ -11,6 +11,9 @@ import '../../../../../support/service/user_service/persona_management/persona/t
 Widget _wrap(TestPersonaFacets facets) {
   return ProviderScope(
     overrides: [
+      contentRuntimeConfigProvider.overrideWithValue(
+        buildProductionContentRuntimeConfigDefaults(),
+      ),
       personaQueryProvider.overrideWith((ref, surface) => facets),
       personaCommandWriterProvider.overrideWithValue(facets),
     ],

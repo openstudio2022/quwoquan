@@ -22,14 +22,21 @@ def _isolated_env(root: Path) -> dict[str, str]:
         "QWQ_DATA_ROOT": str(root),
         "QWQ_OUTPUT_ROOT": str(root / "output"),
         "QWQ_PUBLISH_ROOT": str(root / "publish"),
+        "QWQ_CARRIED_MEDIA_ROOT": str(root / "carried-media"),
     }
 
 
 def _paths_module(root: Path) -> SimpleNamespace:
+    """替身必须与 ``core.paths`` 的暴露面同构。
+
+    随体媒体根按调用解析而非模块常量，因此这里也必须是 callable——把它做成
+    属性会让隔离自证在替身上取到与生产不同的形态。
+    """
     return SimpleNamespace(
         DATA_ROOT=root,
         OUTPUT_ROOT=root / "output",
         PUBLISH_ROOT=root / "publish",
+        carried_media_root=lambda: root / "carried-media",
     )
 
 
@@ -57,6 +64,18 @@ def test_escaped_paths_constant_is_a_breach(
     assert any("OUTPUT_ROOT escaped" in item for item in breaches), breaches
 
 
+def test_escaped_carried_media_root_is_a_breach(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """随体媒体根写的是受版本控制的仓内目录，逃逸即污染真仓库。"""
+    env = _isolated_env(tmp_path)
+    _apply_env(monkeypatch, env)
+    escaped = _paths_module(tmp_path)
+    escaped.carried_media_root = lambda: Path("/") / "real-repo" / "golden_media"
+    breaches = isolation_gate._isolation_breach_evidence(escaped, env)
+    assert any("carried media root escaped" in item for item in breaches), breaches
+
+
 def test_drifted_env_declaration_is_a_breach(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -78,6 +97,7 @@ def _run_unconfigure(
     breaches: list[str],
     output_diff: bool,
     publish_diff: bool,
+    carried_diff: bool = False,
 ) -> list[str]:
     """驱动 pytest_unconfigure 的三级编排；返回打印的 WARNING 行。"""
     env = _isolated_env(tmp_path)
@@ -91,10 +111,13 @@ def _run_unconfigure(
     baseline_files: dict[str, tuple[int, int]] = {}
     changed_files = {"parallel-task/artifact.json": (1, 1)} if output_diff else {}
     publish_files = {"leaked.json": (1, 1)} if publish_diff else {}
+    carried_files = {"leaked.webp": (1, 1)} if carried_diff else {}
 
     def fake_snapshot(root: Path) -> dict[str, tuple[int, int]]:
         if root.name == "publish":
             return publish_files
+        if root.name == "golden_media":
+            return carried_files
         return changed_files
 
     monkeypatch.setattr(isolation_gate, "_snapshot_files", fake_snapshot)
@@ -104,6 +127,7 @@ def _run_unconfigure(
             for root in isolation_gate._REAL_DATA_OUTPUT_ROOTS
         },
         _qwq_publish_baseline={},
+        _qwq_carried_media_baseline={},
     )
     printed: list[str] = []
     monkeypatch.setattr(
@@ -141,4 +165,19 @@ def test_repo_publish_diff_always_fails(
     with pytest.raises(RuntimeError, match="publish"):
         _run_unconfigure(
             monkeypatch, tmp_path, breaches=[], output_diff=False, publish_diff=True
+        )
+
+
+def test_carried_media_diff_always_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """随体媒体根与 publish 同级：字节留在仓内就会被当成生产资产提交。"""
+    with pytest.raises(RuntimeError, match="golden_media"):
+        _run_unconfigure(
+            monkeypatch,
+            tmp_path,
+            breaches=[],
+            output_diff=False,
+            publish_diff=False,
+            carried_diff=True,
         )

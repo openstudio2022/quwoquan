@@ -3,6 +3,7 @@ fields:
 - {name: windowId, source: windowId, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: subjectId, source: subjectId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
 - {name: scenario, source: scenario, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
+- {name: experimentBucket, source: experimentBucket, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: modelBucket, source: modelBucket, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: modelChannel, source: modelChannel, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read, role: authoritative_state}
 - {name: modelReleaseId, source: modelReleaseId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read, role: authoritative_state, reference: true}
@@ -54,6 +55,7 @@ types:
     fields:
     - {name: windowId, source: windowId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: scenario, source: scenario, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: experimentBucket, source: experimentBucket, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: modelBucket, source: modelBucket, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: modelChannel, source: modelChannel, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: modelReleaseId, source: modelReleaseId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}

@@ -138,7 +138,16 @@ export const eventCatalog = {
       "internal_priority": "critical",
       "log_type": "event",
       "normal_sample_rate": 1,
-      "optional_extensions": [],
+      "optional_extensions": [
+        "environment",
+        "buildMode",
+        "distributionClass",
+        "launchProvenance",
+        "buildNumber",
+        "launchManifestDigest",
+        "terminalState",
+        "contentIdentityOutcome"
+      ],
       "required_extensions": [
         "tClickToFirstFrameMs",
         "tFirstFrameToShellMs",
@@ -425,6 +434,38 @@ export const eventCatalog = {
       ]
     },
     {
+      "always_keep_results": [
+        "failure",
+        "timeout",
+        "retry",
+        "absent"
+      ],
+      "event_type": "media_load_state",
+      "internal_priority": "normal",
+      "log_type": "event",
+      "normal_sample_rate": 0.1,
+      "optional_extensions": [
+        "surfaceId",
+        "objectType",
+        "objectId",
+        "copyKey",
+        "failReasonCode",
+        "recoveryAction",
+        "requestId",
+        "traceId",
+        "mediaFailureKind",
+        "userScene",
+        "retryable"
+      ],
+      "required_extensions": [
+        "mediaType",
+        "result",
+        "durationMs",
+        "candidatesTried"
+      ],
+      "slow_threshold_ms": 3000
+    },
+    {
       "event_type": "rtc_call_outcome",
       "internal_priority": "critical",
       "log_type": "event",
@@ -625,6 +666,18 @@ export const eventCatalog = {
       ],
       "type": "string"
     },
+    "buildMode": {
+      "enum": [
+        "debug",
+        "profile",
+        "release"
+      ],
+      "type": "string"
+    },
+    "buildNumber": {
+      "max_length": 32,
+      "type": "string"
+    },
     "cacheAgeBucket": {
       "enum": [
         "not_applicable",
@@ -665,6 +718,10 @@ export const eventCatalog = {
         "video"
       ],
       "type": "string"
+    },
+    "candidatesTried": {
+      "minimum": 0,
+      "type": "int"
     },
     "catalogSource": {
       "enum": [
@@ -719,6 +776,15 @@ export const eventCatalog = {
     },
     "consentState": {
       "max_length": 32,
+      "type": "string"
+    },
+    "contentIdentityOutcome": {
+      "enum": [
+        "bound",
+        "absent",
+        "protocol_failure",
+        "unavailable"
+      ],
       "type": "string"
     },
     "contentType": {
@@ -787,6 +853,17 @@ export const eventCatalog = {
     },
     "dismissPolicy": {
       "max_length": 64,
+      "type": "string"
+    },
+    "distributionClass": {
+      "enum": [
+        "dev_direct",
+        "simulator",
+        "registered_device",
+        "store",
+        "official_web",
+        "hosted_web"
+      ],
       "type": "string"
     },
     "droppedFrames": {
@@ -880,12 +957,45 @@ export const eventCatalog = {
       "max_length": 128,
       "type": "string"
     },
+    "launchManifestDigest": {
+      "max_length": 80,
+      "type": "string"
+    },
+    "launchProvenance": {
+      "max_length": 64,
+      "type": "string"
+    },
     "limitValue": {
       "minimum": 0,
       "type": "int"
     },
     "mediaConnected": {
       "type": "bool"
+    },
+    "mediaFailureKind": {
+      "enum": [
+        "networkUnavailable",
+        "dnsNxdomain",
+        "handshakeTerminated",
+        "certificateVerifyFailed",
+        "connectionRefused",
+        "noPlayableSource",
+        "controllerSlotTimeout",
+        "initializationTimeout",
+        "decoderInitialization",
+        "http404",
+        "http4xx",
+        "http5xx",
+        "other"
+      ],
+      "type": "string"
+    },
+    "mediaType": {
+      "enum": [
+        "image",
+        "video"
+      ],
+      "type": "string"
     },
     "memberCountBucket": {
       "enum": [
@@ -1054,6 +1164,9 @@ export const eventCatalog = {
       "minimum": 0,
       "type": "int"
     },
+    "retryable": {
+      "type": "bool"
+    },
     "sampledFrames": {
       "minimum": 1,
       "type": "int"
@@ -1165,6 +1278,16 @@ export const eventCatalog = {
         "six_to_fifty",
         "fifty_one_to_five_hundred",
         "five_hundred_one_to_one_thousand"
+      ],
+      "type": "string"
+    },
+    "userScene": {
+      "enum": [
+        "network",
+        "temporary",
+        "busy",
+        "unavailable",
+        "unsupported"
       ],
       "type": "string"
     },

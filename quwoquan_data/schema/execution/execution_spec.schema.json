@@ -98,6 +98,23 @@
                   "title": {"type": "string", "minLength": 1},
                   "url": {"type": "string", "pattern": "^https://"}
                 }
+              },
+              "publishAngle": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^/]+$",
+                "description": "post 载体发布坐标第二段（posts/<carrier>/<angle>/…）；receipt 协议 0.plan 冻结"
+              },
+              "publishTitle": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^/]+$",
+                "description": "post 载体发布坐标第三段（canonical 内同 angle 下唯一）"
+              },
+              "publishSeq": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "post 载体发布坐标第四段；默认 1，同 title 重写递增"
               }
             }
           }
@@ -150,12 +167,6 @@
               "maxItems": 1,
               "uniqueItems": true
             },
-            "maxConcurrency": {"type": "integer", "minimum": 1},
-            "laneConcurrency": {
-              "type": "object",
-              "propertyNames": {"enum": ["homepage", "article", "image", "video"]},
-              "additionalProperties": {"type": "integer", "minimum": 1}
-            },
             "imageAssetStrategy": {
               "enum": [
                 "open_license_publish",
@@ -190,6 +201,18 @@
             "videoWorksPerTarget": {"type": "integer", "minimum": 0},
             "routeArticles": {"type": "integer", "minimum": 0}
           }
+        },
+        "workUnits": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "media_work_unit.schema.json#/$defs/workUnit"}
+        },
+        "workUnitExclusions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "media_work_unit.schema.json#/$defs/exclusion"}
         }
       }
     },
@@ -218,9 +241,9 @@
         "targetObjectCount",
         "approvedQuota",
         "oversampleFactor",
-        "requiredWorkers",
         "partitionCount",
         "capacityPlanDigest",
+        "capacityCalibration",
         "workerHostSetBinding",
         "executionBranch",
         "gitCommitSha"
@@ -232,7 +255,6 @@
         "targetObjectCount": {"type": "integer", "minimum": 0},
         "approvedQuota": {"type": "integer", "minimum": 1},
         "oversampleFactor": {"type": "number", "minimum": 1},
-        "requiredWorkers": {"type": "integer", "minimum": 1},
         "partitionCount": {"enum": [16, 32, 64, 128, 256]},
         "capacityPlanDigest": {
           "type": "string",
@@ -244,10 +266,17 @@
             {"$ref": "governed_worker_host_binding.schema.json"}
           ]
         },
+        "articleCommercialClosure": {
+          "type": "boolean",
+          "description": "本 execution 是否属于 article 商业闭环口径。由 execution identity 的 contentType 推导，冻结后不再改写。"
+        },
+        "capacityCalibration": {
+          "$ref": "governed_capacity_calibration_receipt.schema.json#/$defs/executionPolicyBinding",
+          "description": "两个并行上限、单对象 wall-clock、完成宽限与批次绝对截止的冻结来源。取值只能来自一份 create-once calibration receipt，按 DEC-006 校验摘要与适用范围。DEC-002 已退役把工作单元数当作 worker 数的 requiredWorkers：工作单元数只由 targetObjectCount 承载，进程并行度只由本字段的 frozenCapacity 承载。"
+        },
         "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
         "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
         "sourcePoolSelection": {"$ref": "scale_source_pool_selection.schema.json"},
-        "articleCommercialClosure": {"type": "boolean"},
         "executionBranch": {"type": "string", "minLength": 1},
         "gitCommitSha": {"type": "string", "minLength": 1}
       },

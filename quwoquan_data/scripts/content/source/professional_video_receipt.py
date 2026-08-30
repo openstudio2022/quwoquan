@@ -6,13 +6,20 @@ import json
 import re
 from collections import Counter, defaultdict
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from core.io import read_json
 from core.paths import SOURCE_ACQUISITION_ROOT
 from core.schema import assert_valid
 
+from content.source.acquisition_body_state import (
+    AcquiredBody,
+    ReclaimedBody,
+    assert_unit_reclamation_is_total,
+)
 from content.source.professional_video_popularity import popularity_sort_key
 
 ACQUISITION_ROOT = SOURCE_ACQUISITION_ROOT / "video"
@@ -101,8 +108,15 @@ def load_professional_video_acquisition_receipt(
     receipt_ref: str,
     *,
     root: Path | None = None,
+    require_bodies: bool = True,
+    _verified_asset_digests: dict[Path, str] | None = None,
 ) -> dict[str, Any]:
-    """Verify the receipt identity, funnel and every acquired CAS object."""
+    """Verify the receipt identity, funnel and every acquired CAS object.
+
+    ``require_bodies=False`` admits a receipt whose bodies were all reclaimed
+    after their object adopted them; the receipt itself is still verified in
+    full. A partially reclaimed unit is refused either way.
+    """
     resolved_root = (root or ACQUISITION_ROOT).resolve()
     path = canonical_child(
         resolved_root, receipt_ref, label="professional video receiptRef"
@@ -128,18 +142,44 @@ def load_professional_video_acquisition_receipt(
     ):
         raise ValueError("professional video acquisition receipt path is not canonical")
     assert_funnel_consistent(receipt)
+    verified_asset_digests = (
+        _verified_asset_digests
+        if _verified_asset_digests is not None
+        else {}
+    )
+    bodies: list[AcquiredBody] = []
     for row in receipt["assets"]:
         if row["acquisitionStatus"] != "acquired":
             continue
+        asset_ref = str(row["assetRef"])
         asset_path = canonical_child(
             resolved_root,
-            str(row["assetRef"]),
+            asset_ref,
             label="professional video assetRef",
         )
         if not asset_path.is_file():
-            raise ValueError(f"professional video CAS asset is missing: {row['assetRef']}")
-        if file_digest(asset_path) != row["contentSha256"]:
+            if require_bodies:
+                raise ValueError(
+                    f"professional video CAS asset is missing: {asset_ref}"
+                )
+            bodies.append(ReclaimedBody(asset_ref=asset_ref))
+            continue
+        bodies.append(asset_path)
+        expected_digest = str(row["contentSha256"])
+        already_verified = verified_asset_digests.get(asset_path)
+        if already_verified is not None:
+            if already_verified != expected_digest:
+                raise ValueError(
+                    f"professional video CAS declaration conflicts: {row['assetRef']}"
+                )
+            continue
+        if file_digest(asset_path) != expected_digest:
             raise ValueError(f"professional video CAS digest mismatch: {row['assetRef']}")
+        verified_asset_digests[asset_path] = expected_digest
+    assert_unit_reclamation_is_total(
+        bodies,
+        label="professional video acquisition receipt",
+    )
     return receipt
 
 
@@ -314,41 +354,6 @@ def _assert_publish_grade_video(
         )
 
 
-def acquired_video_specs_for_entity(
-    receipt_refs: list[str],
-    *,
-    entity_id: str,
-    root: Path | None = None,
-    require_popularity_ranking: bool = False,
-) -> list[dict[str, Any]]:
-    """Project playable research assets; scale callers can require real ranking."""
-    specs: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for receipt_ref in receipt_refs:
-        receipt = load_professional_video_acquisition_receipt(receipt_ref, root=root)
-        for row in receipt["assets"]:
-            if (
-                str(row["entityId"]) != entity_id
-                or row["distributionDecision"] not in ACCEPTED_DECISIONS
-            ):
-                continue
-            _assert_publish_grade_video(
-                row,
-                require_popularity_ranking=require_popularity_ranking,
-            )
-            spec = row["planVideoSpec"]
-            if not isinstance(spec, Mapping):
-                raise TypeError(
-                    f"accepted professional video lacks planVideoSpec: {row['assetId']}"
-                )
-            digest = str(row["contentSha256"])
-            if digest in seen:
-                raise ValueError(f"professional video cross-receipt duplicate: {digest}")
-            seen.add(digest)
-            specs.append(dict(spec))
-    return sorted(specs, key=popularity_sort_key)
-
-
 def resolve_professional_video_candidate(
     candidate: Mapping[str, Any],
     *,
@@ -390,7 +395,6 @@ def resolve_professional_video_candidate(
 __all__ = [
     "ACCEPTED_DECISIONS",
     "ACQUISITION_ROOT",
-    "acquired_video_specs_for_entity",
     "assert_funnel_consistent",
     "assert_observed_popularity_signals",
     "assert_publishable_media_probe",

@@ -2,6 +2,7 @@ package homepage
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	homepagemodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model"
@@ -23,22 +24,28 @@ type ViewerFollowSlice struct {
 }
 
 type View struct {
-	ID                   string              `json:"homepageId"`
-	Version              int64               `json:"-"`
-	Title                string              `json:"title"`
-	Subtitle             string              `json:"subtitle,omitempty"`
-	HomepageType         string              `json:"homepageType"`
-	CanonicalEntityID    string              `json:"-"`
-	LookupAliases        []string            `json:"-"`
-	ObjectPageTemplate   string              `json:"-"`
-	Status               string              `json:"status"`
-	SourceType           string              `json:"-"`
-	SourceOwner          string              `json:"-" bson:"sourceOwner,omitempty"`
-	SourceEntityRef      string              `json:"-" bson:"sourceEntityRef,omitempty"`
-	SourceReleaseID      string              `json:"-" bson:"sourceReleaseId,omitempty"`
-	ClaimStatus          string              `json:"claimStatus"`
-	CategoryTags         []string            `json:"categoryTags,omitempty"`
-	CoverURL             string              `json:"coverUrl,omitempty"`
+	ID                 string   `json:"homepageId"`
+	Version            int64    `json:"-"`
+	Title              string   `json:"title"`
+	Subtitle           string   `json:"subtitle,omitempty"`
+	HomepageType       string   `json:"homepageType"`
+	CanonicalEntityID  string   `json:"-"`
+	LookupAliases      []string `json:"-"`
+	ObjectPageTemplate string   `json:"-"`
+	Status             string   `json:"status"`
+	SourceType         string   `json:"-"`
+	SourceOwner        string   `json:"-" bson:"sourceOwner,omitempty"`
+	SourceEntityRef    string   `json:"-" bson:"sourceEntityRef,omitempty"`
+	SourceReleaseID    string   `json:"-" bson:"sourceReleaseId,omitempty"`
+	ClaimStatus        string   `json:"claimStatus"`
+	CategoryTags       []string `json:"categoryTags,omitempty"`
+	CoverURL           string   `json:"coverUrl,omitempty"`
+	// cover 的配对媒体资产标识与交付访问模式（DEC-033，contracts
+	// projections/homepage_detail_view.yaml coverAssetId/coverAccessMode）。
+	// signed_grant 时 App 以 coverAssetId 换取短签；禁止以 homepageId 冒充
+	// 媒体资产标识，也禁止按 coverUrl 形态反推交付形态。
+	CoverAssetID         string              `json:"coverAssetId,omitempty"`
+	CoverAccessMode      string              `json:"coverAccessMode,omitempty"`
 	Address              string              `json:"address,omitempty"`
 	City                 string              `json:"city,omitempty"`
 	Location             *GeoPoint           `json:"location,omitempty"`
@@ -98,17 +105,20 @@ type BasicInput struct {
 }
 
 type SearchItemView struct {
-	HomepageID        string   `json:"homepageId"`
-	CanonicalEntityID string   `json:"-"`
-	Title             string   `json:"title"`
-	Subtitle          string   `json:"subtitle,omitempty"`
-	HomepageType      string   `json:"homepageType"`
-	CoverURL          string   `json:"coverUrl,omitempty"`
-	City              string   `json:"city,omitempty"`
-	Address           string   `json:"address,omitempty"`
-	Status            string   `json:"status"`
-	AverageRating     *float64 `json:"averageRating,omitempty"`
-	RatingCount       int      `json:"ratingCount"`
+	HomepageID        string `json:"homepageId"`
+	CanonicalEntityID string `json:"-"`
+	Title             string `json:"title"`
+	Subtitle          string `json:"subtitle,omitempty"`
+	HomepageType      string `json:"homepageType"`
+	CoverURL          string `json:"coverUrl,omitempty"`
+	// cover 的配对媒体资产标识与交付访问模式（DEC-033），与 HomepageDetailView 同源。
+	CoverAssetID    string   `json:"coverAssetId,omitempty"`
+	CoverAccessMode string   `json:"coverAccessMode,omitempty"`
+	City            string   `json:"city,omitempty"`
+	Address         string   `json:"address,omitempty"`
+	Status          string   `json:"status"`
+	AverageRating   *float64 `json:"averageRating,omitempty"`
+	RatingCount     int      `json:"ratingCount"`
 }
 
 type SearchSlice struct {
@@ -144,7 +154,36 @@ func LifecycleEventPayloadFromSnapshot(
 	}
 }
 
+// detailCoverBinding 把 cover URL 配对回 introductionAssets 的 typed 声明。
+//
+// 与 HomepageIntroduction 同一规则：cover 角色优先，避免同 URL 的 inline/related
+// 项抢占配对；配不上即两字段都缺席（契约 NULLABLE），不猜一个 accessMode。
+func detailCoverBinding(
+	coverURL string,
+	assets []IntroductionAsset,
+) (string, string) {
+	coverURL = strings.TrimSpace(coverURL)
+	if coverURL == "" {
+		return "", ""
+	}
+	for _, asset := range assets {
+		if asset.Role == "cover" && strings.TrimSpace(asset.URL) == coverURL {
+			return strings.TrimSpace(asset.AssetID), strings.TrimSpace(asset.AccessMode)
+		}
+	}
+	for _, asset := range assets {
+		if strings.TrimSpace(asset.URL) == coverURL {
+			return strings.TrimSpace(asset.AssetID), strings.TrimSpace(asset.AccessMode)
+		}
+	}
+	return "", ""
+}
+
 func ViewFromSnapshot(snapshot homepagemodel.Snapshot) View {
+	coverAssetID, coverAccessMode := detailCoverBinding(
+		snapshot.CoverURL,
+		snapshot.IntroductionAssets,
+	)
 	return View{
 		ID:                   snapshot.ID,
 		Version:              snapshot.Version,
@@ -162,6 +201,8 @@ func ViewFromSnapshot(snapshot homepagemodel.Snapshot) View {
 		ClaimStatus:          snapshot.ClaimStatus,
 		CategoryTags:         cloneStrings(snapshot.CategoryTags),
 		CoverURL:             snapshot.CoverURL,
+		CoverAssetID:         coverAssetID,
+		CoverAccessMode:      coverAccessMode,
 		Address:              snapshot.Address,
 		City:                 snapshot.City,
 		Location:             cloneGeo(snapshot.Location),

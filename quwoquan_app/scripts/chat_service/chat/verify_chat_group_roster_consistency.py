@@ -6,6 +6,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _SCRIPTS_ROOT = next(
     parent
     for parent in Path(__file__).resolve().parents
@@ -24,7 +26,12 @@ LOCAL_MEDIA_ORIGIN = ROOT / "quwoquan_ops/cli/lib/local_media_origin.py"
 MEDIA_ROOT = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
 CHAT_OBJECT_BUILDER = (
     ROOT
-    / "quwoquan_app/test/support/runtime/fixtures/object_scenario_builders.dart"
+    / "quwoquan_app/test/support/service/chat_service/chat/conversation/chat_state_seed_builder.dart"
+)
+PHOTO_GROUP_CONTRACT_TEST = (
+    ROOT
+    / "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/"
+    "chat_settings_page_widget__local_contract_test.dart"
 )
 LIB = ROOT / "quwoquan_app/lib"
 
@@ -90,9 +97,16 @@ def _check_builder_contract() -> None:
         _fail(f"missing chat object builder: {CHAT_OBJECT_BUILDER}")
         return
     text = CHAT_OBJECT_BUILDER.read_text(encoding="utf-8")
-    for token in ("fixture_conv_group", "fixture_conv_photo_group", "'members'"):
+    for token in ("fixture_conv_group", "'members'"):
         if token not in text:
             _fail(f"chat object builder must retain {token}")
+    if not PHOTO_GROUP_CONTRACT_TEST.is_file():
+        _fail(f"missing autonomous photo-group contract: {PHOTO_GROUP_CONTRACT_TEST}")
+        return
+    if "fixture_conv_photo_group" not in PHOTO_GROUP_CONTRACT_TEST.read_text(
+        encoding="utf-8"
+    ):
+        _fail("photo-group contract must retain fixture_conv_photo_group")
 
 
 def main() -> int:

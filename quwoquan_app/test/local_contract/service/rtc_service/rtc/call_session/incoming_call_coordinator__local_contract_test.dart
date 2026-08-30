@@ -18,6 +18,7 @@ import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/runtime/platform/push_endpoint_gateway.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/service/rtc_service/rtc/call_session/rtc_contract_test_builders.dart';
 
 void main() {
@@ -535,7 +536,6 @@ final class _PendingNativeBridge implements IncomingCallNativeBridge {
       const IncomingCallNativeCapability(
         nativeUiAvailable: true,
         fullScreenPresentationAllowed: true,
-        backgroundPushConfigured: true,
       );
 
   @override

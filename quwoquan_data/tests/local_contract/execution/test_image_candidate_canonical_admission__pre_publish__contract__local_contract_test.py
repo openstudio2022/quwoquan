@@ -10,7 +10,6 @@ from content.execution.context import ExecutionContext
 from content.execution.controller.content_plan import _auto_content_plan
 from content.execution.controller.content_plan_assets import (
     _canonical_image_asset_issue,
-    normalize_article_media_claims,
 )
 from content.execution.controller.content_plan_prep import (
     _content_capacity_gate_for_entity,
@@ -25,7 +24,7 @@ from core.data_issue import DataIssueCode
 from core.image_deduplication import perceptual_hash, perceptual_hash_distance
 from core.io import read_json, write_json
 from core.paths import execution_entity_object_dir, execution_root
-from core.source_digest import SourceDigest
+from core.source_digest import SourceDefinitionSnapshot
 from PIL import Image, ImageDraw
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
@@ -33,24 +32,6 @@ EXECUTION_ID = (
     "20260810--travel-image-m1--test-canonical-admission--scale-901"
 )
 ENTITY = "图片去重测试景区"
-
-
-def test_article_media_claims_downgrade_atomically_to_text_only() -> None:
-    single = normalize_article_media_claims(
-        (["assets/cover.jpg"], ["cover-sha"], ["source"], ["assets/cover.jpg"])
-    )
-    illustrated = normalize_article_media_claims(
-        (
-            ["assets/cover.jpg", "assets/body.jpg"],
-            ["cover-sha", "body-sha"],
-            ["source"],
-            ["assets/cover.jpg", "assets/body.jpg"],
-        )
-    )
-
-    assert single == ([], [], [], [], "text_only")
-    assert illustrated[-1] == "illustrated"
-    assert illustrated[3] == ["assets/cover.jpg", "assets/body.jpg"]
 
 
 @pytest.fixture(autouse=True)
@@ -291,9 +272,11 @@ def _write_image_source(
         approved_quota=1,
     )
     manifest = fixture.build()
-    frozen_source_digest = SourceDigest.from_document(manifest["sourceDigest"])
+    frozen_source_digest = SourceDefinitionSnapshot.from_document(
+        manifest["sourceDigest"]
+    )
     monkeypatch.setattr(
-        "content.execution.workspace.current_source_digest",
+        "content.execution.workspace.current_source_definition_snapshot",
         lambda: frozen_source_digest,
     )
     write_source_unit(

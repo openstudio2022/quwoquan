@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import io
+import ipaddress
 import json
+import os
+import re
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
 import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 from unittest import mock
 
 import yaml
@@ -175,8 +180,15 @@ class DevUpTest(unittest.TestCase):
             "https://cdn.quwoquan.com/media/image",
         )
         self.assertEqual(overrides["mediaUploadBaseUrl"], "https://upload.quwoquan.com")
-        self.assertNotIn("118.31.239.122", "\n".join(overrides.values()))
-        self.assertNotIn("10.0.2.2", "\n".join(overrides.values()))
+        # 守卫必须覆盖任意裸 IP authority，而不是某一台历史主机的地址；按 host 解析
+        # 而不是拼串匹配，才能同时盖住 IPv4、IPv6 与不带路径的 URL。
+        for field, value in sorted(overrides.items()):
+            hostname = urlsplit(str(value)).hostname or ""
+            try:
+                literal = ipaddress.ip_address(hostname.strip("[]"))
+            except ValueError:
+                continue
+            self.fail(f"{field} must use a canonical hostname, got bare IP {literal}")
 
     def test_gamma_web_uses_local_gamma_public_bases(self) -> None:
         topology = load_environment_topology()
@@ -378,6 +390,9 @@ class DevUpTest(unittest.TestCase):
         instance_launcher = (
             ROOT / "quwoquan_app/scripts/device/run_app_instance.sh"
         ).read_text(encoding="utf-8")
+        canonical_launcher = (ROOT / "quwoquan_app/run.sh").read_text(
+            encoding="utf-8"
+        )
         launcher_handoff_builder = (
             ROOT / "quwoquan_app/scripts/device/build_launcher_handoff.py"
         )
@@ -392,11 +407,11 @@ class DevUpTest(unittest.TestCase):
                 "python3",
                 str(launcher_handoff_builder),
                 "--env",
-                "prod",
+                "alpha",
                 "--target",
-                "prod-hosted",
-                "--launch-mode",
-                "user_acceptance",
+                "alpha-local",
+                "--launch-provenance",
+                "workspace_flutter_run",
             ],
             cwd=ROOT / "quwoquan_app",
             check=True,
@@ -415,10 +430,9 @@ class DevUpTest(unittest.TestCase):
             ROOT / "quwoquan_ops/cli/alpha/content_release_runtime.py"
         ).read_text(encoding="utf-8")
         self.assertIn("tasks.withType<FlutterTask>()", build_gradle)
-        self.assertIn("verifyAndroidLocalLauncherContract", build_gradle)
-        self.assertIn("requireCompleteRuntimeDartDefines", build_gradle)
+        self.assertIn("forbiddenRuntimeDartDefineKeys", build_gradle)
         self.assertIn(
-            'runtimeEnvironment in setOf("alpha", "beta", "gamma", "prod")',
+            'apply(from = rootProject.file("gradle/runtime-config-assets.gradle.kts"))',
             build_gradle,
         )
         self.assertIn(
@@ -437,11 +451,14 @@ class DevUpTest(unittest.TestCase):
         self.assertNotIn("prepareAndroidLocalAlphaStack", build_gradle)
         self.assertNotIn("prepareAndroidLocalAdbReverse", build_gradle)
         self.assertNotIn('loadRuntimePackageDartDefines("alpha")', build_gradle)
-        self.assertIn("android.adbExecutable", build_gradle)
-        self.assertIn('"reverse",', build_gradle)
-        self.assertIn("QWQ_CONSUMER_LEASE_ACQUIRED", build_gradle)
-        self.assertIn("QWQ_ANDROID_LOCAL_PORTS", build_gradle)
-        self.assertIn("build_launcher_handoff.py", instance_launcher)
+        self.assertNotIn("android.adbExecutable", build_gradle)
+        self.assertIn('"reverse", "--list"', canonical_launcher)
+        self.assertIn("QWQ_CONSUMER_LEASE_ACQUIRED", canonical_launcher)
+        self.assertIn("QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT", canonical_launcher)
+        self.assertIn('bash "$APP_DIR/run.sh"', instance_launcher)
+        self.assertIn("launch_release_artifact.py", instance_launcher)
+        self.assertNotIn("build_launcher_handoff.py", instance_launcher)
+        self.assertNotIn("flutter run", instance_launcher)
         self.assertEqual(
             launch_manifest_metadata["target_environment"]["prod-sim"],
             "prod",
@@ -455,6 +472,14 @@ class DevUpTest(unittest.TestCase):
             effective_handoff["entrypoint"],
         )
         self.assertEqual(
+            launcher_handoff["launchProvenance"],
+            effective_handoff["launchProvenance"],
+        )
+        self.assertEqual(
+            launcher_handoff["runtimeConfigSupplyMode"],
+            effective_handoff["runtimeConfigSupplyMode"],
+        )
+        self.assertEqual(
             launcher_handoff["schema"],
             handoff_schema["schema_value"],
         )
@@ -463,9 +488,8 @@ class DevUpTest(unittest.TestCase):
             set(handoff_schema["required_fields"]),
         )
         self.assertNotIn("QWQ_ANDROID_LOCAL_ENV_CA", instance_launcher)
-        self.assertIn("runtimeConfigDigest", instance_launcher)
-        self.assertIn("dartDefinesDigest", instance_launcher)
-        self.assertIn("androidReverseReceiptDigest", instance_launcher)
+        self.assertIn("--launch-receipt", instance_launcher)
+        self.assertIn("--artifact-manifest", instance_launcher)
         self.assertIn("certificate_paths(TARGET)", alpha_script)
         self.assertIn("/etc/caddy/tls/fullchain.pem", alpha_script)
         self.assertNotIn("tls internal", alpha_script)
@@ -515,7 +539,7 @@ class DevUpTest(unittest.TestCase):
                 "--format",
                 "json",
                 "--gateway-base-url",
-                "https://118.31.239.122:19000",
+                "https://192.0.2.10:19000",
             ],
             cwd=str(ROOT),
             text=True,
@@ -526,30 +550,52 @@ class DevUpTest(unittest.TestCase):
         self.assertIn("must equal canonical topology projection", result.stderr)
 
     def test_plain_ios_flutter_run_uses_system_store_without_app_trust_injection(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003
+        # 行为断言：裸命令不注入私有 trust root；未经 facade/canonical handoff 的
+        # 原始 Xcode backend fail-closed 且 blocker 指向合法入口，不改写 bundle。
         project = (
             ROOT / "quwoquan_app/ios/Runner.xcodeproj/project.pbxproj"
-        ).read_text(encoding="utf-8")
-        prepare_defines = (
-            ROOT / "quwoquan_app/scripts/ios/build_prepare_dart_defines.sh"
         ).read_text(encoding="utf-8")
         self.assertNotIn("Prepare Alpha HTTPS Local Plane", project)
         self.assertNotIn("Bundle Local HTTPS Trust Root", project)
         self.assertFalse(
             (ROOT / "quwoquan_app/scripts/ios/prepare_alpha_local_https.sh").exists()
         )
-        self.assertIn("build_launcher_handoff.py", prepare_defines)
-        self.assertIn('DIRECT_TARGET="${DIRECT_ENVIRONMENT}-local"', prepare_defines)
-        self.assertIn('--target "$DIRECT_TARGET"', prepare_defines)
-        self.assertIn("--launch-mode direct_flutter_run", prepare_defines)
-        self.assertIn(
-            'device-trust --target "$DIRECT_TARGET"',
-            prepare_defines,
-        )
-        self.assertIn("--platform ios-simulator", prepare_defines)
-        self.assertIn("--defer-endpoint-probe", prepare_defines)
-        self.assertIn('${CONFIGURATION:-}" == Debug*', prepare_defines)
-        self.assertIn("export FLUTTER_TARGET=", prepare_defines)
-        self.assertIn("lib/main_prod.dart", prepare_defines)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            environment = dict(os.environ)
+            for key in (
+                "QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH",
+                "QWQ_IOS_RUNTIME_CONFIG_PACKAGE_PATH",
+                "QWQ_APP_RUNTIME_TRUSTED_PUBLIC_KEYS_JSON",
+                "QWQ_LAUNCH_HANDOFF_JSON",
+                "DART_DEFINES",
+            ):
+                environment.pop(key, None)
+            environment["CONFIGURATION"] = "Debug-nonprod"
+            environment["QWQ_APP_BUILD_PROFILE"] = "nonprod"
+            environment["TARGET_BUILD_DIR"] = str(Path(tmp_dir) / "build")
+            environment["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
+            environment["QWQ_IOS_STACKCTL_PYTHON"] = sys.executable
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(
+                        ROOT
+                        / "quwoquan_app/scripts/ios/build_prepare_dart_defines.sh"
+                    ),
+                ],
+                cwd=str(ROOT / "quwoquan_app"),
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("trust envelope", result.stderr)
+            self.assertIn("run.sh", result.stderr)
+            self.assertFalse(
+                (Path(tmp_dir) / "build/Runner.app/qwq_runtime").exists()
+            )
 
     def test_local_device_builds_do_not_package_private_trust_roots(self) -> None:
         android_build = (

@@ -6,13 +6,26 @@ import urllib.parse
 from collections.abc import Mapping
 from typing import Any
 
+from core.source_attribution import derived_modifications_value
+
 _ALLOWED_LICENSES = frozenset({"by", "by-sa", "cc0", "pdm"})
 _UUID = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
+# 本仓所有 Openverse 请求都是匿名的（网络准入表只登记 host，无 token 来源）。
+# 匿名单页上限是 20，超限时 Openverse 回 401 并附 page_size 说明——与凭证无效
+# 同码，会把「分页参数越界」伪装成认证失败，所以这里必须显式拦住而不是照发。
+ANONYMOUS_MAX_PAGE_SIZE = 20
 
 
 def openverse_search_url(query: str, *, page_size: int) -> str:
+    if isinstance(page_size, bool) or not isinstance(page_size, int):
+        raise TypeError("Openverse page_size must be an int")
+    if page_size < 1 or page_size > ANONYMOUS_MAX_PAGE_SIZE:
+        raise ValueError(
+            "Openverse anonymous page_size must be within "
+            f"1..{ANONYMOUS_MAX_PAGE_SIZE}: {page_size}"
+        )
     params = urllib.parse.urlencode(
         {
             "q": " ".join(str(query or "").split()),
@@ -104,10 +117,13 @@ def openverse_source_attribution(
         "propertyReleaseStatus": "unverified",
         "collectedAt": str(observed_at),
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        # 采集把 Openverse 原图逐字节存入 CAS，没有任何衍生修改。
+        "derivedModifications": derived_modifications_value(),
     }
 
 
 __all__ = [
+    "ANONYMOUS_MAX_PAGE_SIZE",
     "openverse_detail_url",
     "openverse_metadata",
     "openverse_search_url",

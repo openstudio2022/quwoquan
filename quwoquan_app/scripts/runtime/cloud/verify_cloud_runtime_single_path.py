@@ -4,9 +4,13 @@
 
 from __future__ import annotations
 
-
+import re
 import sys
+from collections import defaultdict
 from pathlib import Path
+from typing import Iterable, NamedTuple
+
+sys.dont_write_bytecode = True
 
 _SCRIPTS_ROOT = next(
     parent
@@ -16,13 +20,27 @@ _SCRIPTS_ROOT = next(
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
+from _common.paths import REPO_ROOT
 
-import re
-from collections import defaultdict
-from pathlib import Path
-from typing import Iterable, NamedTuple
+# 同目录实现单元：owner 发现与归属分析。
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from cloud_runtime_owner_analysis import (  # noqa: E402
+    GENERATED_CLIENT_BINDING_RE,
+    GENERATED_UPGRADE_ID_RE,
+    WEBSOCKET_UPGRADE_EXECUTOR_RE,
+    OwnerReport,
+    UpgradeOwnerReport,
+    _analyze_method_owners,
+    _analyze_upgrade_owners,
+    _canonical_adapter_paths,
+    _collect_method_references,
+    _commercially_blocked_methods,
+    _display_path,
+    _legacy_cloud_paths,
+    _without_dart_non_code,
+)
 
 ROOT = REPO_ROOT
 APP = ROOT / "quwoquan_app"
@@ -66,6 +84,7 @@ EXECUTION_RUNTIME_FILES = (
 
 IMPORT_RE = re.compile(r"^\s*import\s+['\"]([^'\"]+)['\"]", re.MULTILINE)
 EMPTY_CATCH_RE = re.compile(r"catch\s*\([^)]*\)\s*\{\s*\}", re.MULTILINE)
+REMOTE_CONSTRUCTION_RE = re.compile(r"\b(Remote[A-Za-z0-9_]*)\s*\(")
 DART_NON_CODE_RE = re.compile(
     r"//[^\n]*"
     r"|/\*.*?\*/"
@@ -75,46 +94,12 @@ DART_NON_CODE_RE = re.compile(
     r'|r?"(?:\\.|[^"\\])*"',
     re.DOTALL,
 )
-GENERATED_CLIENT_BINDING_RE = re.compile(
-    r"\b(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)?"
-    r"GeneratedCloudOperationClient\s+([A-Za-z_][A-Za-z0-9_]*)\b"
-)
-GENERATED_UPGRADE_ID_RE = re.compile(
-    r"\b(?:AppCloudOperationIds|AppCloudOperationUpgradeDescriptors)"
-    r"\s*\.\s*([A-Za-z][A-Za-z0-9_]*)\b"
-)
-WEBSOCKET_UPGRADE_EXECUTOR_RE = re.compile(
-    r"\bWebSocketChannel\s*\.\s*connect\s*\("
-)
-REMOTE_CONSTRUCTION_RE = re.compile(
-    r"\b(Remote[A-Za-z0-9_]*)\s*\("
-)
 
 
-class OwnerReport(NamedTuple):
-    canonical_paths: tuple[Path, ...]
-    legacy_paths: tuple[Path, ...]
-    canonical_owners: dict[str, tuple[Path, ...]]
-    legacy_references: dict[str, tuple[Path, ...]]
-    missing: frozenset[str]
-    duplicates: dict[str, tuple[Path, ...]]
-    legacy_only: frozenset[str]
-    legacy_overlap: frozenset[str]
-    non_ready: frozenset[str]
-    legacy_non_ready: frozenset[str]
-
-
-class UpgradeOwnerReport(NamedTuple):
-    canonical_paths: tuple[Path, ...]
-    legacy_paths: tuple[Path, ...]
-    canonical_owners: dict[str, tuple[Path, ...]]
-    legacy_references: dict[str, tuple[Path, ...]]
-    executors: dict[str, tuple[Path, ...]]
-    missing: frozenset[str]
-    duplicates: dict[str, tuple[Path, ...]]
-    legacy_only: frozenset[str]
-    legacy_overlap: frozenset[str]
-    missing_executors: frozenset[str]
+class GeneratedMethodMetadata(NamedTuple):
+    canonical_operation_id: str
+    domain: str
+    transport: str
 
 
 def _relative(path: Path) -> str:
@@ -361,182 +346,6 @@ def _check_generated_purity(failures: list[str]) -> None:
             )
 
 
-def _without_dart_non_code(source: str) -> str:
-    """Remove comments and strings while preserving source line numbers."""
-
-    def replace(match: re.Match[str]) -> str:
-        newline_count = match.group(0).count("\n")
-        return "\n" * newline_count if newline_count else " "
-
-    return DART_NON_CODE_RE.sub(replace, source)
-
-
-def _display_path(path: Path, repo_root: Path = ROOT) -> str:
-    try:
-        return path.relative_to(repo_root).as_posix()
-    except ValueError:
-        return path.as_posix()
-
-
-def _canonical_adapter_paths(app_root: Path) -> tuple[Path, ...]:
-    """Discover only exact service/<domain>/<context>/<object>/adapters files."""
-
-    lib_root = app_root / "lib"
-    paths: set[Path] = set()
-    for adapter_root in lib_root.glob("service/*/*/*/adapters"):
-        if adapter_root.is_dir():
-            paths.update(adapter_root.rglob("*.dart"))
-    return tuple(sorted(paths))
-
-
-def _legacy_cloud_paths(app_root: Path) -> tuple[Path, ...]:
-    paths: set[Path] = set()
-    for legacy_root in (
-        app_root / "lib/cloud/remote",
-        app_root / "lib/cloud/services",
-    ):
-        if legacy_root.is_dir():
-            paths.update(legacy_root.rglob("*.dart"))
-    return tuple(sorted(paths))
-
-
-def _typed_generated_method_references(source: str) -> frozenset[str]:
-    code = _without_dart_non_code(source)
-    bindings = set(GENERATED_CLIENT_BINDING_RE.findall(code))
-    methods: set[str] = set()
-    for binding in bindings:
-        method_re = re.compile(
-            rf"(?<![A-Za-z0-9_])(?:this\s*\.\s*)?{re.escape(binding)}"
-            r"\s*\.\s*([A-Za-z][A-Za-z0-9_]*)\s*\("
-        )
-        methods.update(method_re.findall(code))
-    return frozenset(methods)
-
-
-def _collect_method_references(
-    paths: Iterable[Path],
-) -> dict[str, tuple[Path, ...]]:
-    references: defaultdict[str, set[Path]] = defaultdict(set)
-    for source_path in paths:
-        source = source_path.read_text(encoding="utf-8")
-        for method in _typed_generated_method_references(source):
-            references[method].add(source_path)
-    return {
-        method: tuple(sorted(owner_paths))
-        for method, owner_paths in sorted(references.items())
-    }
-
-
-def _collect_upgrade_references(
-    paths: Iterable[Path],
-    generated_upgrades: Iterable[str],
-) -> dict[str, tuple[Path, ...]]:
-    ready_upgrades = frozenset(generated_upgrades)
-    references: defaultdict[str, set[Path]] = defaultdict(set)
-    for source_path in paths:
-        code = _without_dart_non_code(source_path.read_text(encoding="utf-8"))
-        for identifier in GENERATED_UPGRADE_ID_RE.findall(code):
-            if identifier in ready_upgrades:
-                references[identifier].add(source_path)
-    return {
-        identifier: tuple(sorted(owner_paths))
-        for identifier, owner_paths in sorted(references.items())
-    }
-
-
-def _collect_upgrade_executors(
-    canonical_paths: Iterable[Path],
-    owners: dict[str, tuple[Path, ...]],
-) -> dict[str, tuple[Path, ...]]:
-    paths = tuple(canonical_paths)
-    result: dict[str, tuple[Path, ...]] = {}
-    for identifier, owner_paths in owners.items():
-        owner_directories = {path.parent for path in owner_paths}
-        executors = tuple(
-            sorted(
-                path
-                for path in paths
-                if path.parent in owner_directories
-                and WEBSOCKET_UPGRADE_EXECUTOR_RE.search(
-                    _without_dart_non_code(path.read_text(encoding="utf-8"))
-                )
-            )
-        )
-        if executors:
-            result[identifier] = executors
-    return result
-
-
-def _analyze_method_owners(
-    app_root: Path,
-    generated_methods: Iterable[str],
-) -> OwnerReport:
-    ready_methods = frozenset(generated_methods)
-    canonical_paths = _canonical_adapter_paths(app_root)
-    legacy_paths = _legacy_cloud_paths(app_root)
-    canonical_owners = _collect_method_references(canonical_paths)
-    legacy_references = _collect_method_references(legacy_paths)
-    canonical_methods = frozenset(canonical_owners)
-    legacy_methods = frozenset(legacy_references)
-    without_canonical = ready_methods - canonical_methods
-    return OwnerReport(
-        canonical_paths=canonical_paths,
-        legacy_paths=legacy_paths,
-        canonical_owners=canonical_owners,
-        legacy_references=legacy_references,
-        missing=frozenset(without_canonical - legacy_methods),
-        duplicates={
-            method: paths
-            for method, paths in canonical_owners.items()
-            if len(paths) > 1
-        },
-        legacy_only=frozenset(without_canonical & legacy_methods),
-        legacy_overlap=frozenset(
-            ready_methods & canonical_methods & legacy_methods
-        ),
-        non_ready=frozenset(canonical_methods - ready_methods),
-        legacy_non_ready=frozenset(legacy_methods - ready_methods),
-    )
-
-
-def _analyze_upgrade_owners(
-    app_root: Path,
-    generated_upgrades: Iterable[str],
-) -> UpgradeOwnerReport:
-    ready_upgrades = frozenset(generated_upgrades)
-    canonical_paths = _canonical_adapter_paths(app_root)
-    legacy_paths = _legacy_cloud_paths(app_root)
-    canonical_owners = _collect_upgrade_references(
-        canonical_paths,
-        ready_upgrades,
-    )
-    legacy_references = _collect_upgrade_references(
-        legacy_paths,
-        ready_upgrades,
-    )
-    canonical_ids = frozenset(canonical_owners)
-    legacy_ids = frozenset(legacy_references)
-    without_canonical = ready_upgrades - canonical_ids
-    executors = _collect_upgrade_executors(canonical_paths, canonical_owners)
-    return UpgradeOwnerReport(
-        canonical_paths=canonical_paths,
-        legacy_paths=legacy_paths,
-        canonical_owners=canonical_owners,
-        legacy_references=legacy_references,
-        executors=executors,
-        missing=frozenset(without_canonical - legacy_ids),
-        duplicates={
-            identifier: paths
-            for identifier, paths in canonical_owners.items()
-            if len(paths) > 1
-        },
-        legacy_only=frozenset(without_canonical & legacy_ids),
-        legacy_overlap=frozenset(
-            ready_upgrades & canonical_ids & legacy_ids
-        ),
-        missing_executors=frozenset(canonical_ids - frozenset(executors)),
-    )
-
 
 def _parse_generated_surface(
     source: str,
@@ -569,6 +378,96 @@ def _parse_generated_surface(
     if not domains:
         raise ValueError("generated operation contracts expose no App domains")
     return methods, upgrades, domains
+
+
+def _parse_generated_method_metadata(
+    source: str, generated_methods: Iterable[str]
+) -> dict[str, GeneratedMethodMetadata]:
+    canonical_to_identifier = {
+        canonical: identifier
+        for identifier, canonical in re.findall(
+            r"^\s+static\s+const\s+String\s+"
+            r'([A-Za-z][A-Za-z0-9_]*)\s*=\s*"([^"]+)"\s*;',
+            source,
+            re.MULTILINE,
+        )
+    }
+    ready_methods = frozenset(generated_methods)
+    result: dict[str, GeneratedMethodMetadata] = {}
+    for match in re.finditer(
+        r'^ {2}"(?P<canonical>[^"]+)"[ \t]*:[ \t\r\n]*'
+        r"CloudOperationContract\([ \t\r\n]*"
+        r'(?P<body>.*?)(?=^ {2}"[^"]+"[ \t]*:'
+        r"[ \t\r\n]*CloudOperationContract\(|^};)",
+        source,
+        re.MULTILINE | re.DOTALL,
+    ):
+        canonical_id = match.group("canonical")
+        identifier = canonical_to_identifier.get(canonical_id)
+        if identifier not in ready_methods:
+            continue
+        body = match.group("body")
+        fields = tuple(
+            re.search(rf'\b{name}\s*:\s*"([^"]+)"', body)
+            for name in ("domain", "transport")
+        )
+        if any(field is None for field in fields):
+            raise ValueError(
+                f"generated method metadata is incomplete: {canonical_id}"
+            )
+        domain, transport = (field.group(1) for field in fields if field is not None)
+        result[identifier] = GeneratedMethodMetadata(canonical_id, domain, transport)
+    missing = ready_methods - frozenset(result)
+    if missing:
+        raise ValueError("generated methods have no operation metadata: " + ", ".join(sorted(missing)))
+    return result
+
+
+def _check_graphql_method_owners(
+    app_root: Path, metadata: dict[str, GeneratedMethodMetadata], failures: list[str]
+) -> int:
+    graphql_methods = {
+        key: value for key, value in metadata.items() if value.transport == "graphql"
+    }
+    generated_files = tuple(sorted((app_root / "lib/runtime/transport/graphql_read/generated").rglob("*.g.dart")))
+    adapter_paths = _canonical_adapter_paths(app_root)
+    owned = 0
+    for identifier, item in sorted(graphql_methods.items()):
+        descriptor_files = tuple(
+            path for path in generated_files
+            if item.canonical_operation_id in path.read_text(encoding="utf-8")
+        )
+        if len(descriptor_files) != 1:
+            failures.append(
+                "GraphQL operation must have exactly one specialized generated "
+                f"descriptor: {identifier} -> {_format_paths(descriptor_files)}"
+            )
+            continue
+        generated_source = descriptor_files[0].read_text(encoding="utf-8")
+        client_classes = tuple(
+            sorted(set(re.findall(
+                r"\bfinal class (Generated[A-Za-z0-9_]*GraphQLClient)\b",
+                generated_source,
+            )))
+        )
+        if len(client_classes) != 1:
+            failures.append(
+                "GraphQL descriptor must define exactly one generated client: "
+                f"{identifier} -> {_display_path(descriptor_files[0])}"
+            )
+            continue
+        client_class = client_classes[0]
+        owners = tuple(
+            path for path in adapter_paths if client_class in path.read_text(encoding="utf-8")
+        )
+        if len(owners) != 1:
+            failures.append(
+                "GraphQL generated client must have exactly one canonical adapter "
+                f"owner: {identifier} -> {_format_paths(owners)}"
+            )
+            continue
+        owned += 1
+    return owned
 
 
 def _format_paths(paths: Iterable[Path]) -> str:
@@ -828,58 +727,70 @@ def main() -> int:
     generated_methods: frozenset[str] = frozenset()
     generated_upgrades: frozenset[str] = frozenset()
     generated_domains: frozenset[str] = frozenset()
+    generated_method_metadata: dict[str, GeneratedMethodMetadata] = {}
     try:
         generated_source = GENERATED_OPERATION_CONTRACTS.read_text(encoding="utf-8")
-        (
+        generated_methods, generated_upgrades, generated_domains = (
+            _parse_generated_surface(generated_source)
+        )
+        generated_method_metadata = _parse_generated_method_metadata(
+            generated_source,
             generated_methods,
-            generated_upgrades,
-            generated_domains,
-        ) = _parse_generated_surface(generated_source)
+        )
     except (OSError, ValueError) as error:
         failures.append(str(error))
-
     _check_execution_runtime_import_dag(failures)
     _check_generated_purity(failures)
-    owner_report = _analyze_method_owners(APP, generated_methods)
+    graphql_methods = frozenset(
+        key for key, value in generated_method_metadata.items() if value.transport == "graphql"
+    )
+    json_methods = generated_methods - graphql_methods
+    owner_report = _analyze_method_owners(
+        APP,
+        json_methods,
+        _commercially_blocked_methods(generated_source),
+    )
     _check_adapter_owners(owner_report, failures)
+    graphql_owned_methods = _check_graphql_method_owners(APP, generated_method_metadata, failures)
     upgrade_report = _analyze_upgrade_owners(APP, generated_upgrades)
     _check_upgrade_owners(upgrade_report, failures)
+    graphql_domains = {
+        value.domain for value in generated_method_metadata.values()
+        if value.transport == "graphql"
+    }
+    non_graphql_domains = {
+        value.domain for value in generated_method_metadata.values()
+        if value.transport != "graphql"
+    }
+    composition_domains = generated_domains - (graphql_domains - non_graphql_domains)
     composition_expected, composition_present = _check_domain_compositions(
         APP,
-        generated_domains,
+        composition_domains,
         failures,
     )
     provider_constructions = _collect_provider_remote_constructions(APP)
     _check_provider_composition_ownership(provider_constructions, failures)
     _check_runtime_foundation(failures)
 
-    canonical_owner_references = sum(
-        len(paths) for paths in owner_report.canonical_owners.values()
-    )
-    canonical_owned_methods = len(
-        frozenset(owner_report.canonical_owners) & generated_methods
-    )
-    canonical_upgrade_owner_references = sum(
-        len(paths) for paths in upgrade_report.canonical_owners.values()
-    )
+    canonical_owner_references = sum(map(len, owner_report.canonical_owners.values()))
+    canonical_owned_methods = len(frozenset(owner_report.canonical_owners) & json_methods)
+    canonical_upgrade_owner_references = sum(map(len, upgrade_report.canonical_owners.values()))
     canonical_owned_upgrades = len(
         frozenset(upgrade_report.canonical_owners) & generated_upgrades
     )
-    legacy_method_references = sum(
-        len(paths) for paths in owner_report.legacy_references.values()
-    )
-    provider_construction_count = sum(
-        len(observed) for observed in provider_constructions.values()
-    )
+    legacy_method_references = sum(map(len, owner_report.legacy_references.values()))
+    provider_construction_count = sum(map(len, provider_constructions.values()))
     print(
         "[cloud-runtime-single-path] OWNER_MASS: "
         f"generated={len(generated_methods) + len(generated_upgrades)}, "
-        f"json_methods={len(generated_methods)}, "
+        f"json_methods={len(json_methods)}, "
+        f"graphql_methods={len(graphql_methods)}, "
         f"upgrade_descriptors={len(generated_upgrades)}, "
         f"canonical_adapter_files={len(owner_report.canonical_paths)}, "
         f"canonical_owner_references="
         f"{canonical_owner_references + canonical_upgrade_owner_references}, "
-        f"canonical_owned={canonical_owned_methods + canonical_owned_upgrades}, "
+        f"canonical_owned="
+        f"{canonical_owned_methods + graphql_owned_methods + canonical_owned_upgrades}, "
         f"missing={len(owner_report.missing) + len(upgrade_report.missing)}, "
         f"duplicates="
         f"{len(owner_report.duplicates) + len(upgrade_report.duplicates)}, "

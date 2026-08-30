@@ -1,3 +1,6 @@
+@Tags(<String>['serial', 'visual'])
+library;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,7 +15,7 @@ void main() {
   setUpAll(() async {
     final loader = FontLoader(AppTypography.welcomeBrandFontFamily)
       ..addFont(
-        rootBundle.load('assets/fonts/noto_sans_sc/NotoSansSC[wght].ttf'),
+        rootBundle.load('assets/fonts/noto_sans_sc/NotoSansSC-wght.ttf'),
       );
     await loader.load();
   });

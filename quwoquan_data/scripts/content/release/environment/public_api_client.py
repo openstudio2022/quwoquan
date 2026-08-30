@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
+import math
 import ssl
 import time
 import uuid
@@ -11,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
 from core.runtime_policy import active_runtime_policy
@@ -19,6 +21,49 @@ from core.runtime_policy import active_runtime_policy
 
 class PublicApiClientError(ValueError):
     """A public environment API request could not produce a JSON response."""
+
+
+def _public_url_evidence(url: str) -> str:
+    """Return bounded origin/query-free evidence for a public media URL."""
+
+    parsed = urlsplit(url)
+    hostname = parsed.hostname or ""
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        host_class = "dns" if hostname else "missing"
+    else:
+        host_class = "ip"
+    path_hash = hashlib.sha256(parsed.path.encode("utf-8")).hexdigest()
+    return f"hostClass={host_class},pathHash=sha256:{path_hash}"
+
+
+@dataclass(frozen=True)
+class PublicApiRequestIdentity:
+    """One logical operation identity shared by its bounded physical attempts."""
+
+    page_id: str
+    request_id: str
+    trace_id: str
+
+    def __post_init__(self) -> None:
+        for label, value in (
+            ("pageId", self.page_id),
+            ("requestId", self.request_id),
+            ("traceId", self.trace_id),
+        ):
+            if (
+                not value.strip()
+                or len(value) > 256
+                or not all(
+                    character.isascii()
+                    and (character.isalnum() or character in "._:-")
+                    for character in value
+                )
+            ):
+                raise PublicApiClientError(
+                    f"public API logical {label} is invalid"
+                )
 
 
 @dataclass(frozen=True)
@@ -50,6 +95,7 @@ class PublicApiResponse:
     status: int
     payload: Mapping[str, Any]
     operation: PublicApiOperationEvidence | None = None
+    headers: Mapping[str, str] = field(default_factory=dict, repr=False)
 
 
 @dataclass(frozen=True)
@@ -112,6 +158,17 @@ class PublicApiClient:
             .replace("+00:00", "Z")
         )
 
+    def new_request_identity(self, *, page_id: str) -> PublicApiRequestIdentity:
+        """Mint one logical identity; callers may reuse it for bounded retries."""
+        if not page_id.strip():
+            raise PublicApiClientError("public API pageId must not be empty")
+        nonce = uuid.uuid4().hex
+        return PublicApiRequestIdentity(
+            page_id=page_id,
+            request_id=f"DATA.{page_id}.{nonce}",
+            trace_id=f"DATA.{self.session_id}.{page_id}.{nonce}",
+        )
+
     def _request_headers(
         self,
         *,
@@ -130,12 +187,17 @@ class PublicApiClient:
             "X-Session-Id",
         }:
             raise PublicApiClientError("public API session header name is invalid")
+        reserved_headers = {
+            "x-client-session-id",
+            "x-session-id",
+            "x-request-id",
+            "x-trace-id",
+        }
         if extra_headers and any(
-            key.lower() in {"x-client-session-id", "x-session-id"}
-            for key in extra_headers
+            key.lower() in reserved_headers for key in extra_headers
         ):
             raise PublicApiClientError(
-                "public API session header must use the typed request option"
+                "public API identity headers must use typed request options"
             )
         headers = {
             "Accept": "application/json",
@@ -167,6 +229,8 @@ class PublicApiClient:
         body: Mapping[str, Any] | None = None,
         session_header_name: str = "X-Client-Session-Id",
         extra_headers: Mapping[str, str] | None = None,
+        request_identity: PublicApiRequestIdentity | None = None,
+        timeout_seconds: float | None = None,
     ) -> PublicApiResponse:
         normalized_path = f"/{path.lstrip('/')}"
         url = f"{self.base_url.rstrip('/')}{normalized_path}"
@@ -180,9 +244,35 @@ class PublicApiClient:
                 sort_keys=True,
                 separators=(",", ":"),
             ).encode("utf-8")
-        nonce = uuid.uuid4().hex
-        request_id = f"DATA.{page_id}.{nonce}"
-        trace_id = f"DATA.{self.session_id}.{page_id}.{nonce}"
+        identity = request_identity or self.new_request_identity(page_id=page_id)
+        if identity.page_id != page_id:
+            raise PublicApiClientError(
+                "public API logical request identity pageId mismatch"
+            )
+        request_id = identity.request_id
+        trace_id = identity.trace_id
+        runtime_timeout_seconds = float(
+            active_runtime_policy().api_request_timeout_seconds
+        )
+        try:
+            effective_timeout_seconds = (
+                runtime_timeout_seconds
+                if timeout_seconds is None
+                else float(timeout_seconds)
+            )
+        except (TypeError, ValueError) as exc:
+            raise PublicApiClientError(
+                "public API request timeout must be a finite number"
+            ) from exc
+        if (
+            isinstance(timeout_seconds, bool)
+            or not math.isfinite(effective_timeout_seconds)
+            or effective_timeout_seconds <= 0
+            or effective_timeout_seconds > runtime_timeout_seconds
+        ):
+            raise PublicApiClientError(
+                "public API request timeout must be positive and within runtime budget"
+            )
         started_at = self._utc_now()
         started_monotonic = time.monotonic_ns()
         request = Request(
@@ -203,13 +293,21 @@ class PublicApiClient:
         try:
             with opener.open(
                 request,
-                timeout=active_runtime_policy().api_request_timeout_seconds,
+                timeout=effective_timeout_seconds,
             ) as response:  # noqa: S310
                 status = int(response.status)
                 raw = response.read()
+                raw_headers = getattr(response, "headers", {}) or {}
+                response_headers = {
+                    str(key): str(value) for key, value in raw_headers.items()
+                }
         except HTTPError as exc:
             status = int(exc.code)
             raw = exc.read()
+            raw_headers = getattr(exc, "headers", {}) or {}
+            response_headers = {
+                str(key): str(value) for key, value in raw_headers.items()
+            }
         except (URLError, OSError) as exc:
             raise PublicApiClientError(
                 "public API request failed: "
@@ -252,6 +350,7 @@ class PublicApiClient:
                 ended_at=ended_at,
                 duration_ms=duration_ms,
             ),
+            headers=response_headers,
         )
 
     def login_fresh_guest(self) -> PublicGuestSession:
@@ -347,6 +446,8 @@ class PublicApiClient:
         body: Mapping[str, Any],
         session_header_name: str = "X-Client-Session-Id",
         extra_headers: Mapping[str, str] | None = None,
+        request_identity: PublicApiRequestIdentity | None = None,
+        timeout_seconds: float | None = None,
     ) -> PublicApiResponse:
         return self._request_json(
             "POST",
@@ -355,6 +456,8 @@ class PublicApiClient:
             body=body,
             session_header_name=session_header_name,
             extra_headers=extra_headers,
+            request_identity=request_identity,
+            timeout_seconds=timeout_seconds,
         )
 
     def get_bytes(
@@ -385,7 +488,8 @@ class PublicApiClient:
                 body = response.read(max_bytes + 1)
                 if len(body) > max_bytes:
                     raise PublicApiClientError(
-                        f"GET {url} exceeded declared media byte budget"
+                        "public media GET exceeded declared byte budget: "
+                        + _public_url_evidence(url)
                     )
                 return PublicBinaryResponse(
                     status=int(response.status),
@@ -399,7 +503,8 @@ class PublicApiClient:
             body = exc.read(max_bytes + 1)
             if len(body) > max_bytes:
                 raise PublicApiClientError(
-                    f"GET {url} exceeded declared media byte budget"
+                    "public media GET exceeded declared byte budget: "
+                    + _public_url_evidence(url)
                 ) from exc
             return PublicBinaryResponse(
                 status=int(exc.code),
@@ -410,13 +515,17 @@ class PublicApiClient:
                 etag=str(exc.headers.get("ETag") or "").strip(),
             )
         except (URLError, OSError) as exc:
-            raise PublicApiClientError(f"GET {url} failed: {exc}") from exc
+            raise PublicApiClientError(
+                "public media GET failed: "
+                f"{_public_url_evidence(url)},cause={type(exc).__name__}"
+            ) from exc
 
 
 __all__ = [
     "PublicApiClient",
     "PublicApiClientError",
     "PublicApiOperationEvidence",
+    "PublicApiRequestIdentity",
     "PublicApiResponse",
     "PublicBinaryResponse",
     "PublicGuestSession",

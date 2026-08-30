@@ -83,7 +83,9 @@ def execute_offline_local_contract(*, process_runner=subprocess.run) -> None:
         adapter_id=adapter_id,
         typed_port=typed_port,
     )
-    cache_root = ROOT / ".qwq_output/env/repo/local"
+    # local/ 一级只接受 cache/ 与 process/ 或 <target>/{process,cache}；
+    # go 构建缓存属于可丢弃缓存，统一落 local/cache/**。
+    cache_root = ROOT / ".qwq_output/env/repo/local/cache"
     go_cache = cache_root / "go-build/generic-provider-conformance"
     go_tmp = cache_root / "go-tmp/generic-provider-conformance"
     go_cache.mkdir(parents=True, exist_ok=True)

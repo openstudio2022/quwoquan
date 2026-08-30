@@ -61,11 +61,6 @@ extension AppDelegate: PKPushRegistryDelegate, CallkitIncomingAppDelegate {
         }
         incomingCallPushCoordinator.setFlutterReady(ready)
         result(nil)
-      case "readIncomingCallCapability":
-        result([
-          "backgroundPushConfigured":
-            incomingCallPushCoordinator.backgroundPushConfigured,
-        ])
       case "readPushEndpointMutations":
         result(incomingCallPushCoordinator.endpointMutations())
       case "ackPushEndpointMutation":

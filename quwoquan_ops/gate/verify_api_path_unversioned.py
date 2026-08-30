@@ -22,9 +22,15 @@ PROVIDER_ENDPOINT_CONTRACT_ROOT = ROOT / "quwoquan_ops/external"
 VERSIONED_API = re.compile(
     r"(?:^|[\s\"'`(=\[])/(?:internal/|callbacks/)?v[0-9]+/"
 )
-MEDIA_OBJECT_KEY = re.compile(r"(?:^|[\s\"'`(=])media/")
+MEDIA_OBJECT_KEY_ASSIGNMENT = re.compile(
+    r"""^\s*[A-Za-z_][A-Za-z0-9_]*\s*:\s*["'`]media/[^"'`]*["'`]"""
+    r"""(?:\s*\+\s*[A-Za-z_][A-Za-z0-9_]*\s*\+\s*["'`][^"'`]*["'`])*"""
+    r"""\s*,?\s*$"""
+)
 IMMUTABLE_MEDIA_SLICE_ASSERTION = re.compile(
-    r"(?:public\s+(?:slice|fixture)|公共媒体).*(?:canonical|唯一).*/v[0-9]+/",
+    r'''^\s*(?:issues\.append|_add)\(\s*f?["'][^"']*'''
+    r'''(?:public\s+(?:slice|fixture)|公共媒体)[^"']*'''
+    r'''(?:canonical|唯一)[^"']*/v[0-9]+/[^"']*["']\s*\)\s*$''',
     re.I,
 )
 THIRD_PARTY = re.compile(
@@ -40,6 +46,29 @@ FCM_PROVIDER_PATH = re.compile(
 GO_MODULE = re.compile(r"github\.com/.+/v[0-9]+")
 SCHEMA_IDENTITY = re.compile(
     r"""(?:schemaVersion|schema)\s*[:=]\s*["'][^"']*/v?[0-9]+["']"""
+)
+OPEN_METEO_PROTOCOL_FIXTURE = re.compile(
+    r"""^\s*(?:case\s+["']/v1/(?:search|forecast)["']:\s*|"""
+    r"""(?:GeocodingURL|ForecastURL):\s*upstream\.URL\s*\+\s*"""
+    r"""["']/v1/(?:search|forecast)["'],?\s*)$"""
+)
+PROTECTED_OTP_NEGATIVE_GUARD = re.compile(
+    r"""^\s*(?:["'])?(?:uri|brokerUri)\.path\s*!=\s*["']/v1/otp["']"""
+    r"""(?:["'])?\s*(?:\|\||,)?\s*$"""
+)
+CLOUD_HANDOFF_BREAKING_FIXTURE = re.compile(
+    r"""^\s*self\._write_graph\("""
+    r"""path_template=["']/(?:internal/|callbacks/)?v[0-9]+/things["']"""
+    r"""\)\s*$"""
+)
+UNVERSIONED_PATH_NEGATIVE_ASSERTION = re.compile(
+    r'''^\s*self\.assertNotIn\(\s*["']/v1/["']\s*,\s*'''
+    r'''[A-Za-z_][A-Za-z0-9_]*\s*\)\s*$'''
+)
+NOT_FOUND_ROUTE_FIXTURE = re.compile(
+    r'''^\s*\{method:\s*http\.Method[A-Za-z]+,\s*path:\s*["']'''
+    r'''/(?:internal/|callbacks/)?v[0-9]+/[^"']*["'],\s*'''
+    r'''wantStatus:\s*http\.StatusNotFound\},?\s*$'''
 )
 
 SCAN_ROOTS = [
@@ -235,20 +264,28 @@ def line_is_excluded(
     stripped = line.strip()
     if not stripped or stripped.startswith("#") or stripped.startswith("//"):
         return True
-    if MEDIA_OBJECT_KEY.search(line) and re.search(r"/v[0-9]+/", line):
-        if not re.search(r"""["'`\s(=]/(?:internal/|callbacks/)?v[0-9]+/""", line):
-            if not re.search(r"https?://[^/\s\"']+/(?:internal/|callbacks/)?v[0-9]+/", line):
-                return True
-    if IMMUTABLE_MEDIA_SLICE_ASSERTION.search(line):
+    versioned_matches = tuple(VERSIONED_API.finditer(line))
+    if MEDIA_OBJECT_KEY_ASSIGNMENT.fullmatch(line):
         return True
     if (
-        THIRD_PARTY.search(line)
-        or GO_MODULE.search(line)
+        IMMUTABLE_MEDIA_SLICE_ASSERTION.fullmatch(line)
+        and len(versioned_matches) == 1
     ):
+        return True
+    if (THIRD_PARTY.search(line) or GO_MODULE.search(line)) and not versioned_matches:
         return True
     if (
         THIRD_PARTY_PATH.search(line) or FCM_PROVIDER_PATH.search(line)
-    ) and _third_party_path_is_authority_scoped(relative_path, line):
+    ) and len(versioned_matches) == 1 and _third_party_path_is_authority_scoped(
+        relative_path,
+        line,
+    ):
+        return True
+    if (
+        OPEN_METEO_PROTOCOL_FIXTURE.fullmatch(line)
+        and len(versioned_matches) == 1
+        and _third_party_path_is_authority_scoped(relative_path, line)
+    ):
         return True
     provider_authorities = (
         load_external_provider_path_authorities()
@@ -258,20 +295,41 @@ def line_is_excluded(
     for path, role in provider_authorities.items():
         if not _references_exact_path(line, path):
             continue
-        if _provider_reference_is_authority_scoped(relative_path, line, role):
+        if len(versioned_matches) == 1 and _provider_reference_is_authority_scoped(
+            relative_path,
+            line,
+            role,
+        ):
             return True
-    if SCHEMA_IDENTITY.search(line):
+    schema_identity = SCHEMA_IDENTITY.search(line)
+    if schema_identity is not None and (
+        not versioned_matches
+        or (
+            len(versioned_matches) == 1
+            and schema_identity.start() <= versioned_matches[0].start()
+            and versioned_matches[0].end() <= schema_identity.end()
+        )
+    ):
         return True
-    if "versioned API path is forbidden" in line or "media object keys may contain" in line:
+    if (
+        len(versioned_matches) == 1
+        and PROTECTED_OTP_NEGATIVE_GUARD.fullmatch(line)
+    ):
         return True
-    if "VERSIONED_API.search" in line:
+    if (
+        len(versioned_matches) == 1
+        and CLOUD_HANDOFF_BREAKING_FIXTURE.fullmatch(line)
+    ):
         return True
-    # Negative assertions that forbid versioned paths.
-    if "assertNotIn" in line and "/v1/" in line:
+    if (
+        len(versioned_matches) == 1
+        and UNVERSIONED_PATH_NEGATIVE_ASSERTION.fullmatch(line)
+    ):
         return True
-    if 'pathTemplate: "/v1/' in line and "assertNotIn" in line:
-        return True
-    if "/v1/" in line and "StatusNotFound" in line:
+    if (
+        len(versioned_matches) == 1
+        and NOT_FOUND_ROUTE_FIXTURE.fullmatch(line)
+    ):
         return True
     return False
 

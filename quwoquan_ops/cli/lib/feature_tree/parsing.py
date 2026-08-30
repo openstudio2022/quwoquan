@@ -347,10 +347,27 @@ def app_journey_engineering_roots(node: Node) -> list[str]:
     return sorted(roots)
 
 
+def singleton_repository_roots(node: Node) -> list[str]:
+    """解析只用于工程归属的仓库根单例，不扩张通用路径语法。"""
+
+    if node.level != 1 or not node.spec.is_file():
+        return []
+    body = section(node.spec.read_text(encoding="utf-8"), "工程归属")
+    roots: set[str] = set()
+    for line in body.splitlines():
+        if "协作引用" in line:
+            continue
+        match = ENGINEERING_CLAIM_RE.match(line.strip())
+        if match is not None and "`Makefile`" in line:
+            roots.add("Makefile")
+    return sorted(roots)
+
+
 def engineering_roots(node: Node) -> list[str]:
     return sorted(
         {root for _, root in engineering_claims(node)}
         | set(app_journey_engineering_roots(node))
+        | set(singleton_repository_roots(node))
     )
 
 

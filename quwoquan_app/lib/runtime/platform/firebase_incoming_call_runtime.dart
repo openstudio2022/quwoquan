@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -162,6 +163,30 @@ Future<bool> _claimFirebaseDelivery(IncomingCallEnvelope envelope) async {
   }
 }
 
+final class PushTapIntent {
+  const PushTapIntent({
+    required this.targetType,
+    required this.targetId,
+    required this.callId,
+  });
+
+  factory PushTapIntent.fromData(Map<String, dynamic> data) => PushTapIntent(
+    targetType: (data['targetType'] ?? '').toString().trim(),
+    targetId: (data['targetId'] ?? '').toString().trim(),
+    callId: (data['callId'] ?? '').toString().trim(),
+  );
+
+  final String targetType;
+  final String targetId;
+  final String callId;
+}
+
+abstract interface class PushTapIntentSource {
+  Future<void> start(void Function(PushTapIntent intent) onIntent);
+
+  Future<void> stop();
+}
+
 abstract interface class FirebasePushMessagingClient {
   Future<void> initialize();
 
@@ -217,36 +242,180 @@ final class FirebasePluginPushMessagingClient
   }
 }
 
-final class FirebaseIncomingCallRuntimeState {
-  const FirebaseIncomingCallRuntimeState({
-    required this.supported,
-    required this.configured,
+enum FirebasePushMessagingRuntimeAvailability {
+  ready,
+  unsupported,
+  notConfigured,
+  unavailable,
+}
+
+final class FirebasePushMessagingRuntimeState {
+  const FirebasePushMessagingRuntimeState._({
+    required this.availability,
     required this.notificationAuthorized,
   });
 
-  const FirebaseIncomingCallRuntimeState.unsupported()
-    : supported = false,
-      configured = false,
-      notificationAuthorized = false;
+  const FirebasePushMessagingRuntimeState.ready({
+    required bool notificationAuthorized,
+  }) : this._(
+         availability: FirebasePushMessagingRuntimeAvailability.ready,
+         notificationAuthorized: notificationAuthorized,
+       );
 
-  final bool supported;
-  final bool configured;
+  const FirebasePushMessagingRuntimeState.unsupported()
+    : this._(
+        availability: FirebasePushMessagingRuntimeAvailability.unsupported,
+        notificationAuthorized: false,
+      );
+
+  const FirebasePushMessagingRuntimeState.notConfigured()
+    : this._(
+        availability: FirebasePushMessagingRuntimeAvailability.notConfigured,
+        notificationAuthorized: false,
+      );
+
+  const FirebasePushMessagingRuntimeState.unavailable()
+    : this._(
+        availability: FirebasePushMessagingRuntimeAvailability.unavailable,
+        notificationAuthorized: false,
+      );
+
+  final FirebasePushMessagingRuntimeAvailability availability;
   final bool notificationAuthorized;
+
+  bool get supported =>
+      availability != FirebasePushMessagingRuntimeAvailability.unsupported;
+  bool get configured =>
+      availability == FirebasePushMessagingRuntimeAvailability.ready;
+}
+
+final class FirebasePushMessagingRuntime implements PushTapIntentSource {
+  FirebasePushMessagingRuntime({
+    required this.client,
+    AppPlatform Function()? platformReader,
+  }) : _platformReader = platformReader ?? (() => currentAppPlatform);
+
+  final FirebasePushMessagingClient client;
+  final AppPlatform Function() _platformReader;
+  Future<FirebasePushMessagingRuntimeState>? _initializeInFlight;
+  StreamSubscription<RemoteMessage>? _openedSubscription;
+
+  Future<FirebasePushMessagingRuntimeState> initialize() {
+    final active = _initializeInFlight;
+    if (active != null) {
+      return active;
+    }
+    final task = _initialize();
+    _initializeInFlight = task;
+    return task;
+  }
+
+  Future<FirebasePushMessagingRuntimeState> _initialize() async {
+    if (_platformReader() != AppPlatform.android) {
+      return const FirebasePushMessagingRuntimeState.unsupported();
+    }
+    try {
+      await client.initialize();
+      final notificationAuthorized = await client
+          .readNotificationAuthorization();
+      return FirebasePushMessagingRuntimeState.ready(
+        notificationAuthorized: notificationAuthorized,
+      );
+    } on FirebaseException catch (error, stackTrace) {
+      if (error.code == 'no-app' || error.code == 'missing-config') {
+        return const FirebasePushMessagingRuntimeState.notConfigured();
+      }
+      developer.log(
+        'Firebase push initialization unavailable',
+        name: 'quwoquan.firebase_push',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return const FirebasePushMessagingRuntimeState.unavailable();
+    } on PlatformException catch (error, stackTrace) {
+      if (error.code.contains('missing') ||
+          error.code.contains('not_configured')) {
+        return const FirebasePushMessagingRuntimeState.notConfigured();
+      }
+      developer.log(
+        'Firebase push platform initialization unavailable',
+        name: 'quwoquan.firebase_push',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return const FirebasePushMessagingRuntimeState.unavailable();
+    } on MissingPluginException catch (error, stackTrace) {
+      developer.log(
+        'Firebase push plugin unavailable',
+        name: 'quwoquan.firebase_push',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return const FirebasePushMessagingRuntimeState.unavailable();
+    }
+  }
+
+  @override
+  Future<void> start(void Function(PushTapIntent intent) onIntent) async {
+    final state = await initialize();
+    if (!state.configured) {
+      return;
+    }
+    await _openedSubscription?.cancel();
+    try {
+      _openedSubscription = client.openedMessages.listen(
+        (message) => onIntent(PushTapIntent.fromData(message.data)),
+      );
+      final initial = await client.readInitialMessage();
+      if (initial != null) {
+        onIntent(PushTapIntent.fromData(initial.data));
+      }
+    } on FirebaseException catch (error, stackTrace) {
+      await _cancelTapSubscription();
+      developer.log(
+        'Firebase push initial message unavailable',
+        name: 'quwoquan.firebase_push',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } on PlatformException catch (error, stackTrace) {
+      await _cancelTapSubscription();
+      developer.log(
+        'Firebase push initial message platform failure',
+        name: 'quwoquan.firebase_push',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } on MissingPluginException catch (error, stackTrace) {
+      await _cancelTapSubscription();
+      developer.log(
+        'Firebase push initial message plugin unavailable',
+        name: 'quwoquan.firebase_push',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _cancelTapSubscription() async {
+    await _openedSubscription?.cancel();
+    _openedSubscription = null;
+  }
+
+  @override
+  Future<void> stop() => _cancelTapSubscription();
 }
 
 /// Android FCM token/source 生命周期。这里只探测并持久化，不在冷启动请求通知权限。
 final class FirebaseIncomingCallRuntime {
   FirebaseIncomingCallRuntime({
     required this.pushEndpointGateway,
-    FirebasePushMessagingClient? messagingClient,
-    AppPlatform Function()? platformReader,
-  }) : _messagingClient =
-           messagingClient ?? const FirebasePluginPushMessagingClient(),
-       _platformReader = platformReader ?? (() => currentAppPlatform);
+    required this.messagingRuntime,
+  });
 
   final PushEndpointGateway pushEndpointGateway;
-  final FirebasePushMessagingClient _messagingClient;
-  final AppPlatform Function() _platformReader;
+  final FirebasePushMessagingRuntime messagingRuntime;
+  FirebasePushMessagingClient get _messagingClient => messagingRuntime.client;
   final _foregroundIncomingCalls =
       StreamController<IncomingCallEnvelope>.broadcast();
   final _foregroundCancellations =
@@ -254,7 +423,7 @@ final class FirebaseIncomingCallRuntime {
 
   StreamSubscription<String>? _tokenRefreshSubscription;
   StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
-  Future<FirebaseIncomingCallRuntimeState>? _startInFlight;
+  Future<FirebasePushMessagingRuntimeState>? _startInFlight;
 
   Stream<IncomingCallEnvelope> get foregroundIncomingCalls =>
       _foregroundIncomingCalls.stream;
@@ -262,7 +431,7 @@ final class FirebaseIncomingCallRuntime {
   Stream<IncomingCallPushEnvelope> get foregroundCancellations =>
       _foregroundCancellations.stream;
 
-  Future<FirebaseIncomingCallRuntimeState> start() {
+  Future<FirebasePushMessagingRuntimeState> start() {
     final active = _startInFlight;
     if (active != null) {
       return active;
@@ -272,12 +441,12 @@ final class FirebaseIncomingCallRuntime {
     return task;
   }
 
-  Future<FirebaseIncomingCallRuntimeState> _start() async {
-    if (_platformReader() != AppPlatform.android) {
-      return const FirebaseIncomingCallRuntimeState.unsupported();
+  Future<FirebasePushMessagingRuntimeState> _start() async {
+    final initialization = await messagingRuntime.initialize();
+    if (!initialization.configured) {
+      return initialization;
     }
     try {
-      await _messagingClient.initialize();
       await _foregroundMessageSubscription?.cancel();
       _foregroundMessageSubscription = _messagingClient.foregroundMessages
           .listen((message) {
@@ -319,34 +488,34 @@ final class FirebaseIncomingCallRuntime {
           ),
         );
       });
-      final notificationAuthorized = await _messagingClient
-          .readNotificationAuthorization();
-      return FirebaseIncomingCallRuntimeState(
-        supported: true,
-        configured: true,
-        notificationAuthorized: notificationAuthorized,
-      );
-    } on FirebaseException {
+      return initialization;
+    } on FirebaseException catch (error, stackTrace) {
       await _cancelMessagingSubscriptions();
-      return const FirebaseIncomingCallRuntimeState(
-        supported: true,
-        configured: false,
-        notificationAuthorized: false,
+      developer.log(
+        'Firebase incoming call runtime unavailable',
+        name: 'quwoquan.firebase_push',
+        error: error,
+        stackTrace: stackTrace,
       );
-    } on PlatformException {
+      return const FirebasePushMessagingRuntimeState.unavailable();
+    } on PlatformException catch (error, stackTrace) {
       await _cancelMessagingSubscriptions();
-      return const FirebaseIncomingCallRuntimeState(
-        supported: true,
-        configured: false,
-        notificationAuthorized: false,
+      developer.log(
+        'Firebase incoming call platform runtime unavailable',
+        name: 'quwoquan.firebase_push',
+        error: error,
+        stackTrace: stackTrace,
       );
-    } on MissingPluginException {
+      return const FirebasePushMessagingRuntimeState.unavailable();
+    } on MissingPluginException catch (error, stackTrace) {
       await _cancelMessagingSubscriptions();
-      return const FirebaseIncomingCallRuntimeState(
-        supported: true,
-        configured: false,
-        notificationAuthorized: false,
+      developer.log(
+        'Firebase incoming call plugin unavailable',
+        name: 'quwoquan.firebase_push',
+        error: error,
+        stackTrace: stackTrace,
       );
+      return const FirebasePushMessagingRuntimeState.unavailable();
     }
   }
 

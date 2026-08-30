@@ -12,7 +12,7 @@ from content.release.canonical.garbage_collection_contract import (
     write_create_once_json,
 )
 from content.release.canonical.garbage_collection_reference_graph import (
-    _capsule_tree_digest,
+    capsule_tree_digest,
 )
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
@@ -45,10 +45,16 @@ def _capsule(output: Path, marker: str) -> Path:
     lane_digest = "sha256:" + "9" * 64
     stable = {
         "schema": "quwoquan_data.content_campaign_source_capsule",
-        "format": "source-snapshot-v1",
+        "format": "source-capsule-v2",
+        "gitBranch": "main",
         "gitCommitSha": "1" * 40,
         "sourceRevision": "sha256:" + "2" * 64,
         "sourceDigest": "sha256:" + marker * 64,
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "3" * 64,
+            "inputs": ["quwoquan_data"],
+        },
         "entityCatalogDigest": "sha256:" + "4" * 64,
         "roots": ["quwoquan_data"],
         "laneExternalInputs": {
@@ -71,7 +77,7 @@ def _capsule(output: Path, marker: str) -> Path:
     payload = root / "quwoquan_data/source.txt"
     payload.parent.mkdir(parents=True, exist_ok=True)
     payload.write_text(marker, encoding="utf-8")
-    stable["treeDigest"] = _capsule_tree_digest(root)
+    stable["treeDigest"] = capsule_tree_digest(root)
     _write_json(root / ".qwq_campaign_capsule.json", stable)
     return root
 

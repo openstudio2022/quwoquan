@@ -1,431 +1,496 @@
 # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
-#
-# 由 1000 行硬顶拆分：本文件保留 xcode_build 阶段 defines 生成与 canonical
-# handoff 校验组；direct flutter run / xcode wrapper / runtime evidence 组见
-# ios_runtime_dart_defines__direct_debug__local_contract_test.py；共享常量与
-# 构造 helper 下沉 test/support/runtime/launcher/ios_dart_defines_test_support.py。
+
+from __future__ import annotations
 
 import base64
 import json
 import os
-import plistlib
-import shlex
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-
 APP_DIR = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(APP_DIR / "scripts/runtime/platform"))
-sys.path.insert(0, str(APP_DIR / "scripts/device"))
-sys.path.insert(0, str(APP_DIR / "test/support/runtime/launcher"))
-
-from ios_dart_defines_test_support import (
-    REQUIRED_KEYS,
-    SCRIPT,
-    STACKCTL_PYTHON_RESOLVER,
-    _apply_handoff_identity,
-    _bound_test_live_handoff,
-    _decode_export,
-    _encode_defines,
-    _write_preflight_python,
+SCRIPT = APP_DIR / "scripts/ios/build_prepare_dart_defines.sh"
+APP_DELEGATE = APP_DIR / "ios/Runner/AppDelegate.swift"
+# runtime config 原生供给面的真相源。生产 Runner 与 Patrol UAT test host 两个 Xcode 工程
+# 编译同一份，宿主读到的取值因此与生产同源。
+RUNTIME_CONFIG_SUPPLY = APP_DIR / "ios/Runner/NativeRuntimeConfigSupply.swift"
+GENERATED_LAUNCH_CONTRACT = APP_DIR / "ios/Runner/AppLaunchContract.generated.swift"
+GENERATED_LAUNCH_CONTRACT_JSON = (
+    APP_DIR / "tool/app_launch_contract_codegen/app_launch_contract.generated.json"
 )
+RUNNER_PROJECT = APP_DIR / "ios/Runner.xcodeproj/project.pbxproj"
+PATROL_PROJECT = APP_DIR / "test_host/patrol/ios/Runner.xcodeproj/project.pbxproj"
+PATROL_TRUST_SCRIPT = APP_DIR / "scripts/ios/build_test_host_embed_runtime_config_trust.sh"
+STACKCTL_PYTHON_RESOLVER = APP_DIR / "scripts/ios/build_resolve_stackctl_python.sh"
 
 
-class IosRuntimeDartDefinesContractTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.runtime_directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.runtime_directory.cleanup)
-        self.runtime_python = _write_preflight_python(
-            Path(self.runtime_directory.name)
+def _encoded_define(key: str, value: str) -> str:
+    return base64.b64encode(f"{key}={value}".encode()).decode()
+
+
+def _trust_envelope(root: Path, *, build_profile: str = "nonprod") -> Path:
+    trust = root / "runtime-config-trust.json"
+    trust.write_text(
+        json.dumps(
+            {
+                "schema": "app-runtime-config-trust",
+                "buildProfile": build_profile,
+                "signatureAlgorithm": "ed25519",
+                "trustedPublicKeys": {
+                    "test-key": base64.b64encode(bytes(range(32))).decode("ascii")
+                },
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    return trust
+
+
+class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
+    def _environment(self) -> dict[str, str]:
+        environment = dict(os.environ)
+        environment["QWQ_IOS_STACKCTL_PYTHON"] = sys.executable
+        environment["CONFIGURATION"] = "Debug-nonprod"
+        environment["QWQ_APP_BUILD_PROFILE"] = "nonprod"
+        environment["DART_DEFINES"] = _encoded_define("FLUTTER_VERSION", "test")
+        return environment
+
+    def _materialization_environment(
+        self,
+        root: Path,
+        trust: Path,
+    ) -> dict[str, str]:
+        environment = self._environment()
+        environment.update(
+            {
+                "QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH": str(trust),
+                "TARGET_BUILD_DIR": str(root / "build"),
+                "UNLOCALIZED_RESOURCES_FOLDER_PATH": "Runner.app",
+            }
+        )
+        return environment
+
+    def test_script_uses_build_profile_and_has_no_runtime_package_dual_read(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        for configuration in (
+            "Debug-nonprod",
+            "Profile-nonprod",
+            "Release-nonprod",
+            "Release-prod",
+        ):
+            self.assertIn(configuration, source)
+        self.assertNotIn("QWQ_LAUNCH_HANDOFF_JSON", source)
+        self.assertIn("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH", source)
+        self.assertNotIn("QWQ_APP_RUNTIME_CONFIG_TRUST_PATH", source)
+        for retired in (
+            "Debug-alpha",
+            "Debug-beta",
+            "Debug-gamma",
+            "QWQNativeRuntime.plist",
+            "runtimeDefines",
+            "print_app_env_dart_defines.py",
+            "QWQ_APP_RUNTIME_TRUSTED_PUBLIC_KEYS_JSON or",
+        ):
+            self.assertNotIn(retired, source)
+        self.assertIn("Debug-prod|Profile-prod", source)
+        self.assertIn("target runtime package must be activated post-install", source)
+
+    def test_generated_build_profile_identity_is_required(self) -> None:
+        environment = self._environment()
+        environment.pop("QWQ_APP_BUILD_PROFILE")
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            cwd=APP_DIR,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("generated build-profile identity is missing", result.stderr)
+
+    def test_compile_defines_preserve_non_runtime_values_and_add_no_endpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            environment = self._materialization_environment(root, _trust_envelope(root))
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=environment,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        self.assertIn("export FLUTTER_TARGET=lib/main_prod.dart", result.stdout)
+        self.assertIn(environment["DART_DEFINES"], result.stdout)
+        self.assertIn("compileRuntimeDefines=0", result.stderr)
+        self.assertIn("embeddedRuntimePackage=0", result.stderr)
+        for forbidden in (
+            "api.alpha.quwoquan.com",
+            "APP_RUNTIME_ENV=",
+            "APP_LAUNCH_POLICY=",
+            "QWQ_LAUNCH_TARGET=",
+        ):
+            self.assertNotIn(forbidden, result.stdout)
+
+    def test_runtime_and_endpoint_defines_are_rejected(self) -> None:
+        for key, value in (
+            ("APP_RUNTIME_ENV", "alpha"),
+            ("CLOUD_GATEWAY_BASE_URL", "https://api.alpha.example"),
+            ("APP_LAUNCH_POLICY", "test_live"),
+            ("QWQ_LAUNCH_TARGET", "alpha-local"),
+        ):
+            with self.subTest(key=key):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    environment = self._materialization_environment(
+                        root,
+                        _trust_envelope(root),
+                    )
+                    environment["DART_DEFINES"] = _encoded_define(key, value)
+                    result = subprocess.run(
+                        ["bash", str(SCRIPT)],
+                        cwd=APP_DIR,
+                        env=environment,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("compile inputs contain runtime configuration", result.stderr)
+
+    def test_build_materializes_only_profile_trust_envelope(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trust = _trust_envelope(root)
+            environment = self._materialization_environment(root, trust)
+            package = root / "runtime-config-package.json"
+            package.write_text('{"target":"alpha-local"}', encoding="utf-8")
+            subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=environment,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            resource_root = root / "build/Runner.app/qwq_runtime"
+            self.assertEqual(
+                json.loads(
+                    (resource_root / "runtime-config-trust.json").read_text(
+                        encoding="utf-8"
+                    )
+                )["buildProfile"],
+                "nonprod",
+            )
+            self.assertFalse((resource_root / "runtime-config-package.json").exists())
+
+    def test_explicit_target_package_path_is_rejected_without_bundle_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trust = _trust_envelope(root)
+            environment = self._materialization_environment(root, trust)
+            package = root / "runtime-config-package.json"
+            package.write_text('{"target":"alpha-local"}', encoding="utf-8")
+            environment["QWQ_IOS_RUNTIME_CONFIG_PACKAGE_PATH"] = str(package)
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("activated post-install", result.stderr)
+            self.assertFalse(
+                (root / "build/Runner.app/qwq_runtime/runtime-config-package.json").exists()
+            )
+
+    def test_missing_or_invalid_trust_envelope_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            missing = self._environment()
+            missing.update(
+                {
+                    "TARGET_BUILD_DIR": str(root / "build"),
+                    "UNLOCALIZED_RESOURCES_FOLDER_PATH": "Runner.app",
+                }
+            )
+            missing_result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=missing,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(missing_result.returncode, 2)
+            self.assertIn(
+                "APP.LAUNCH.runtime_config_trust_missing",
+                missing_result.stderr,
+            )
+            self.assertIn(
+                "make app-activate-flutter-facade",
+                missing_result.stderr,
+            )
+            self.assertIn("command -v flutter", missing_result.stderr)
+
+            trust = _trust_envelope(root)
+            payload = json.loads(trust.read_text(encoding="utf-8"))
+            payload["environment"] = "alpha"
+            trust.write_text(json.dumps(payload), encoding="utf-8")
+            invalid_result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=self._materialization_environment(root, trust),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(invalid_result.returncode, 0)
+            self.assertIn("canonical schema", invalid_result.stderr)
+            self.assertIn(
+                "APP.LAUNCH.runtime_config_trust_missing",
+                invalid_result.stderr,
+            )
+
+    def test_manual_keyring_protocol_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            environment = self._materialization_environment(root, _trust_envelope(root))
+            environment["QWQ_APP_RUNTIME_TRUSTED_PUBLIC_KEYS_JSON"] = "{}"
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("manual trusted-public-keys JSON is retired", result.stderr)
+
+    def test_debug_prod_and_profile_prod_are_rejected(self) -> None:
+        for configuration in ("Debug-prod", "Profile-prod"):
+            with self.subTest(configuration=configuration):
+                environment = self._environment()
+                environment["CONFIGURATION"] = configuration
+                environment["QWQ_APP_BUILD_PROFILE"] = "prod"
+                result = subprocess.run(
+                    ["bash", str(SCRIPT)],
+                    cwd=APP_DIR,
+                    env=environment,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("supports Release-prod only", result.stderr)
+
+    def test_native_reader_and_cold_start_activation_contract_shape(self) -> None:
+        source = RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
+        app_delegate_source = APP_DELEGATE.read_text(encoding="utf-8")
+        # 退役形态在整个 iOS 原生面都不得复活，因此反向断言同时覆盖 AppDelegate。
+        retired_scan = source + app_delegate_source
+        for required in (
+            "enum NativeRuntimeConfigReadState",
+            "case present(NativeRuntimeConfigActiveProjection)",
+            "case absent(NativeRuntimeConfigTrustProjection)",
+            "case failure(NativeRuntimeConfigReadError)",
+            'case "readRuntimeConfig"',
+            'case "readRuntimeConfigState"',
+            "static func activate(",
+            "package rawPackage: [String: Any]",
+            "try validateRequest(decoded)",
+            "NativeRuntimeConfigStore.activate(",
+            "expectedPackageDigest: packageDigest",
+            "expectedTrustEnvelopeDigest: trustDigest",
+            "expectedActiveDigest: expectedActiveDigest",
+            "Curve25519.Signing.PublicKey",
+            "isValidSignature",
+            "FileHandle(forWritingTo: temporary)",
+            "try handle.synchronize()",
+            "replaceItemAt",
+            "fsync(directoryHandle)",
+            "runtimePackageDestinationURL(createDirectory: true)",
+            "let previousActivePackage = try readCurrentActivePackageData()",
+            "try atomicallyActivate(packageData)",
+            "restorePreviousActivePackage(previousActivePackage, originalError: error)",
+            "activationReadbackFailed",
+            "activationRollbackFailed",
+            "let activatedState = loadActivePackage()",
+            "activated.packageDigest == validated.packageDigest",
+            'subdirectory: nativeRuntimeConfigDirectory',
+            "AppLaunchContract.runtimeConfigPackageRequiredFields",
+            "AppLaunchContract.runtimeConfigPackageRuntimeRequiredFields",
+            "AppLaunchContract.runtimeConfigTrustEnvelopeRequiredFields",
+            "AppLaunchContract.runtimeConfigActivationRequestRequiredFields",
+            "AppLaunchContract.appEffectiveLaunchManifestRequiredFields",
+            "AppLaunchContract.runtimeConfigActivationReceiptRequiredFields",
+            "AppLaunchContract.targetEnvironment[target]",
+            "AppLaunchContract.runtimeConfigErrorCodes[code]",
+            'envelope["launchProvenance"] = identity.launchProvenance',
+            'envelope["runtimeConfigSupplyMode"] = identity.runtimeConfigSupplyMode',
+            'receipt["launchProvenance"]',
+            'receipt["runtimeConfigSupplyMode"]',
+        ):
+            self.assertIn(required, source)
+        for retired_closed_set in (
+            "private static let packageFields: Set<String> = [",
+            "private static let runtimeFields: Set<String> = [",
+            "private static let targetEnvironments = [",
+            '"entrypoint", "launchMode"',
+            "runtime-config-effective-launch-manifest.json",
+        ):
+            self.assertNotIn(retired_closed_set, source)
+        self.assertNotIn('event["launchMode"]', app_delegate_source)
+        self.assertIn('event["launchProvenance"]', app_delegate_source)
+        self.assertIn('event["runtimeConfigSupplyMode"]', app_delegate_source)
+        self.assertNotIn('case "installRuntimeConfigPackage"', retired_scan)
+        self.assertNotIn("installArgumentsInvalid", retired_scan)
+        self.assertNotIn("Set(arguments.keys) == installFields", retired_scan)
+        self.assertNotIn(
+            "Bundle.main.url(\n      forResource: nativeRuntimePackageFileName",
+            retired_scan,
+        )
+        self.assertNotIn("cachedTrustEnvelope", retired_scan)
+        self.assertNotIn("readTrustEnvelope()", retired_scan)
+        self.assertNotIn("dartDefinesDigest", retired_scan)
+        self.assertNotIn("nativeRuntimeConfigDigest", retired_scan)
+        # 启动上报读的是当前生效 package 摘要，属于 AppDelegate 的启动面而非供给面。
+        self.assertIn("nativeActiveRuntimePackageDigest", app_delegate_source)
+        info_plist = (APP_DIR / "ios/Runner/Info.plist").read_text(encoding="utf-8")
+        for retired_key in (
+            "QWQRecoveryBaseURL",
+            "QWQPublicWebURL",
+            "QWQAppDownloadBaseURL",
+            "QWQRuntimeEnvironment",
+        ):
+            self.assertNotIn(retired_key, info_plist)
+        podfile = (APP_DIR / "ios/Podfile").read_text(encoding="utf-8")
+        self.assertIn("platform :ios, '16.0'", podfile)
+        self.assertNotIn(
+            "Bundle.main.url(\n      forResource: nativeRuntimePackageFileName",
+            source,
         )
 
-    def test_xcode_stackctl_python_resolver_skips_incompatible_path_python(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            temporary_root = Path(temporary_directory)
-            invalid_python = temporary_root / "bin" / "python3"
+    def test_runner_and_patrol_compile_the_same_generated_launch_contract(self) -> None:
+        self.assertTrue(GENERATED_LAUNCH_CONTRACT.is_file())
+        runner = RUNNER_PROJECT.read_text(encoding="utf-8")
+        patrol = PATROL_PROJECT.read_text(encoding="utf-8")
+        for project in (runner, patrol):
+            self.assertIn("AppLaunchContract.generated.swift in Sources", project)
+            self.assertIn("NativeRuntimeConfigSupply.swift in Sources", project)
+        self.assertIn(
+            "../../../../ios/Runner/AppLaunchContract.generated.swift",
+            patrol,
+        )
+        phases = patrol[patrol.index("97C146ED1CF9000F007C117D /* Runner */ = {") :]
+        self.assertLess(
+            phases.index("Embed Runtime Config Trust"),
+            phases.index("9740EEB61CF901F6004384FC /* Run Script */"),
+        )
+
+    def test_active_receipt_is_the_only_restart_launch_identity_projection(self) -> None:
+        contract = json.loads(
+            GENERATED_LAUNCH_CONTRACT_JSON.read_text(encoding="utf-8")
+        )
+        receipt_fields = set(
+            contract["schemaRequiredFields"]["runtime_config_activation_receipt"]
+        )
+        self.assertIn("launchProvenance", receipt_fields)
+        self.assertIn("runtimeConfigSupplyMode", receipt_fields)
+        source = RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
+        self.assertIn(
+            '"launchProvenance": effectiveManifest["launchProvenance"]',
+            source,
+        )
+        self.assertIn(
+            '"runtimeConfigSupplyMode": effectiveManifest["runtimeConfigSupplyMode"]',
+            source,
+        )
+        self.assertNotIn("runtime-config-effective-launch-manifest.json", source)
+
+    def test_patrol_host_missing_trust_uses_the_same_first_typed_blocker(self) -> None:
+        environment = dict(os.environ)
+        environment["QWQ_APP_BUILD_PROFILE"] = "nonprod"
+        environment["TARGET_BUILD_DIR"] = "/tmp/qwq-patrol-local-contract"
+        environment["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
+        environment.pop("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH", None)
+        # trust 缺席必须先判否，不能先被 Python/toolchain 差异遮蔽。
+        environment["QWQ_IOS_STACKCTL_PYTHON"] = "/invalid/python"
+        result = subprocess.run(
+            ["bash", str(PATROL_TRUST_SCRIPT)],
+            cwd=APP_DIR,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(
+            "APP.LAUNCH.runtime_config_trust_missing",
+            result.stderr,
+        )
+        self.assertNotIn("requires Python", result.stderr)
+
+    def test_configuration_identity_is_build_profile_and_mode_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            environment = self._materialization_environment(root, _trust_envelope(root))
+            environment["PRODUCT_BUNDLE_IDENTIFIER"] = "com.example.quwoquanApp.nonprod.debug"
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=environment,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0)
+            environment["PRODUCT_BUNDLE_IDENTIFIER"] = "com.example.quwoquanApp.alpha"
+            blocked = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(blocked.returncode, 2)
+            self.assertIn("does not match", blocked.stderr)
+
+    def test_python_resolver_skips_incompatible_path_python(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            invalid_python = root / "bin/python3"
             invalid_python.parent.mkdir()
-            invalid_python.write_text(
-                "#!/usr/bin/env bash\nexit 1\n",
-                encoding="utf-8",
-            )
+            invalid_python.write_text("#!/usr/bin/env bash\nexit 1\n", encoding="utf-8")
             invalid_python.chmod(0o755)
-            compatible_python = (
-                temporary_root / "python-cache" / "quwoquan-data" / "bin" / "python3"
-            )
+            compatible_python = root / "python-cache/quwoquan-data/bin/python3"
             compatible_python.parent.mkdir(parents=True)
             compatible_python.symlink_to(Path(sys.executable))
-            env = dict(os.environ)
-            env.pop("QWQ_IOS_STACKCTL_PYTHON", None)
-            env["PATH"] = (
-                str(invalid_python.parent) + os.pathsep + env["PATH"]
-            )
-            env["QWQ_PYTHON_CACHE_ROOT"] = str(temporary_root / "python-cache")
+            environment = dict(os.environ)
+            environment.pop("QWQ_IOS_STACKCTL_PYTHON", None)
+            environment["PATH"] = str(invalid_python.parent) + os.pathsep + environment["PATH"]
+            environment["QWQ_PYTHON_CACHE_ROOT"] = str(root / "python-cache")
             result = subprocess.run(
                 ["bash", str(STACKCTL_PYTHON_RESOLVER)],
-                cwd=APP_DIR.parent,
-                env=env,
+                cwd=APP_DIR,
+                env=environment,
                 check=False,
                 capture_output=True,
                 text=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(
-                Path(result.stdout.strip()).resolve(),
-                compatible_python.resolve(),
-            )
-
-    def test_all_environment_packages_produce_complete_defines(self) -> None:
-        flutter_define = base64.b64encode(b"FLUTTER_VERSION=test").decode("ascii")
-        for env_name in ("alpha", "beta", "gamma", "prod"):
-            with self.subTest(env=env_name):
-                env = dict(os.environ)
-                env["QWQ_APP_RUNTIME_ENV"] = env_name
-                env["DART_DEFINES"] = flutter_define
-                _apply_handoff_identity(
-                    env,
-                    env_name,
-                    runtime_python=self.runtime_python,
-                )
-                result = subprocess.run(
-                    ["bash", str(SCRIPT)],
-                    cwd=APP_DIR,
-                    env=env,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-                values = _decode_export(result.stdout)
-                self.assertEqual(values["APP_RUNTIME_ENV"], env_name)
-                self.assertEqual(values["QWQ_APP_LAUNCH_MODE"], "xcode_build")
-                self.assertTrue(REQUIRED_KEYS.issubset(values))
-                self.assertEqual(values["FLUTTER_VERSION"], "test")
-                self.assertIn(
-                    "export FLUTTER_TARGET=lib/main_prod.dart",
-                    result.stdout,
-                )
-                self.assertIn(f"env={env_name}", result.stderr)
-
-    def test_xcode_build_writes_native_recovery_manifest(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            env = dict(os.environ)
-            env["QWQ_APP_RUNTIME_ENV"] = "alpha"
-            _apply_handoff_identity(
-                env,
-                "alpha",
-                runtime_python=self.runtime_python,
-            )
-            env["TARGET_BUILD_DIR"] = temporary_directory
-            env["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
-            subprocess.run(
-                ["bash", str(SCRIPT)],
-                cwd=APP_DIR,
-                env=env,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            manifest_path = (
-                Path(temporary_directory)
-                / "Runner.app"
-                / "QWQNativeRuntime.plist"
-            )
-            with manifest_path.open("rb") as stream:
-                manifest = plistlib.load(stream)
-            self.assertEqual(manifest["runtimeEnvironment"], "alpha")
-            self.assertRegex(
-                manifest["runtimeConfigDigest"],
-                r"^sha256:[0-9a-f]{64}$",
-            )
-            self.assertEqual(
-                manifest["recoveryBaseURL"],
-                "https://api.alpha.quwoquan.com:17000",
-            )
-            self.assertEqual(
-                manifest["publicWebURL"],
-                "https://alpha.quwoquan.com:17000",
-            )
-            self.assertEqual(
-                manifest["appDownloadBaseURL"],
-                "https://cdn.alpha.quwoquan.com:17100/download",
-            )
-            self.assertEqual(
-                manifest["runtimeDefines"]["APP_RUNTIME_ENV"],
-                "alpha",
-            )
-            self.assertEqual(
-                manifest["runtimeDefines"]["QWQ_APP_LAUNCH_MODE"],
-                "xcode_build",
-            )
-
-    def test_canonical_handoff_drives_bound_dart_and_native_manifest(self) -> None:
-        handoff = _bound_test_live_handoff()
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            env = dict(os.environ)
-            env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
-            env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(
-                handoff,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
-            env["DART_DEFINES"] = _encode_defines(
-                {
-                    **handoff["dartDefines"],
-                    "FLUTTER_VERSION": "test",
-                }
-            )
-            env["TARGET_BUILD_DIR"] = temporary_directory
-            env["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
-            result = subprocess.run(
-                ["bash", str(SCRIPT)],
-                cwd=APP_DIR,
-                env=env,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            values = _decode_export(result.stdout)
-            self.assertEqual(values["CONTENT_BINDING_STATE"], "bound")
-            self.assertEqual(
-                values["CONTENT_BINDING_STATE"],
-                handoff["dartDefines"]["CONTENT_BINDING_STATE"],
-            )
-            self.assertEqual(values["FLUTTER_VERSION"], "test")
-            manifest_path = (
-                Path(temporary_directory)
-                / "Runner.app"
-                / "QWQNativeRuntime.plist"
-            )
-            with manifest_path.open("rb") as stream:
-                manifest = plistlib.load(stream)
-            self.assertEqual(manifest["contentBindingState"], "bound")
-            self.assertEqual(
-                manifest["runtimeDefines"]["CONTENT_BINDING_STATE"],
-                "bound",
-            )
-            self.assertEqual(
-                manifest["contentReleaseId"],
-                handoff["contentReleaseId"],
-            )
-            self.assertEqual(
-                manifest["contentManifestDigest"],
-                handoff["contentManifestDigest"],
-            )
-            self.assertEqual(
-                manifest["contentReadinessReceiptDigest"],
-                handoff["contentReadinessReceiptDigest"],
-            )
-
-    def test_patrol_handoff_preserves_canonical_test_bundle_entrypoint(self) -> None:
-        handoff = _bound_test_live_handoff()
-        patrol_entrypoint = (
-            APP_DIR / "test/user_acceptance/patrol/test_bundle.dart"
-        ).resolve()
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            env = dict(os.environ)
-            env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
-            env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
-            env["DART_DEFINES"] = _encode_defines(
-                {
-                    **handoff["dartDefines"],
-                    "RUN_PATROL_ACCEPTANCE": "true",
-                }
-            )
-            env["FLUTTER_TARGET"] = str(patrol_entrypoint)
-            env["TARGET_BUILD_DIR"] = temporary_directory
-            env["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
-            result = subprocess.run(
-                ["bash", str(SCRIPT)],
-                cwd=APP_DIR,
-                env=env,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            target_export = next(
-                line
-                for line in result.stdout.splitlines()
-                if line.startswith("export FLUTTER_TARGET=")
-            )
-            target_assignment = shlex.split(
-                target_export.removeprefix("export ")
-            )[0]
-            self.assertEqual(
-                target_assignment.split("=", 1)[1],
-                str(patrol_entrypoint),
-            )
-            manifest_path = (
-                Path(temporary_directory)
-                / "Runner.app"
-                / "QWQNativeRuntime.plist"
-            )
-            with manifest_path.open("rb") as stream:
-                manifest = plistlib.load(stream)
-            self.assertEqual(
-                manifest["entrypoint"],
-                "test/user_acceptance/patrol/test_bundle.dart",
-            )
-
-    def test_patrol_handoff_rejects_noncanonical_test_entrypoint(self) -> None:
-        handoff = _bound_test_live_handoff()
-        env = dict(os.environ)
-        env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
-        env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
-        env["DART_DEFINES"] = _encode_defines(
-            {
-                **handoff["dartDefines"],
-                "RUN_PATROL_ACCEPTANCE": "true",
-            }
-        )
-        env["FLUTTER_TARGET"] = str(
-            APP_DIR
-            / "test/user_acceptance/service/content_service/content/"
-            "feed_delivery_page/feed_load__user_acceptance_test.dart"
-        )
-        result = subprocess.run(
-            ["bash", str(SCRIPT)],
-            cwd=APP_DIR,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 5)
-        self.assertIn(
-            "Patrol build must use the canonical",
-            result.stderr,
-        )
-
-    def test_canonical_handoff_rejects_conflicting_existing_defines(self) -> None:
-        handoff = _bound_test_live_handoff()
-        poisoned_defines = dict(handoff["dartDefines"])
-        poisoned_defines["CONTENT_BINDING_STATE"] = "unbound"
-        env = dict(os.environ)
-        env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
-        env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
-        env["DART_DEFINES"] = _encode_defines(poisoned_defines)
-        result = subprocess.run(
-            ["bash", str(SCRIPT)],
-            cwd=APP_DIR,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn(
-            "DART_DEFINES conflict with canonical launcher handoff",
-            result.stderr,
-        )
-
-    def test_canonical_handoff_rejects_partial_bound_content(self) -> None:
-        handoff = _bound_test_live_handoff()
-        handoff["contentManifestDigest"] = ""
-        env = dict(os.environ)
-        env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
-        env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
-        env["DART_DEFINES"] = _encode_defines(handoff["dartDefines"])
-        result = subprocess.run(
-            ["bash", str(SCRIPT)],
-            cwd=APP_DIR,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn(
-            "contentManifestDigest disagrees with effectiveLaunchManifest",
-            result.stderr,
-        )
-
-    def test_canonical_handoff_rejects_conflicting_environment_identity(self) -> None:
-        handoff = _bound_test_live_handoff()
-        env = dict(os.environ)
-        env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
-        env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
-        env["QWQ_APP_RUNTIME_ENV"] = "beta"
-        env["DART_DEFINES"] = _encode_defines(handoff["dartDefines"])
-        result = subprocess.run(
-            ["bash", str(SCRIPT)],
-            cwd=APP_DIR,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn(
-            "QWQ_APP_RUNTIME_ENV conflicts with canonical launcher handoff",
-            result.stderr,
-        )
-
-    def test_patrol_launch_mode_without_handoff_fails_closed(self) -> None:
-        handoff = _bound_test_live_handoff()
-        env = dict(os.environ)
-        env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
-        env["QWQ_APP_RUNTIME_ENV"] = "alpha"
-        env["QWQ_APP_LAUNCH_MODE"] = "environment_patrol_smoke"
-        env["QWQ_APP_LAUNCH_POLICY"] = "test_live"
-        env["QWQ_LAUNCH_TARGET"] = "alpha-local"
-        env["QWQ_DART_DEFINES_DIGEST"] = str(handoff["dartDefinesDigest"])
-        env["QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST"] = str(
-            handoff["runtimeConfigDigest"]
-        )
-        env["QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST"] = str(
-            handoff["effectiveLaunchManifestDigest"]
-        )
-        env.pop("QWQ_LAUNCH_HANDOFF_JSON", None)
-        result = subprocess.run(
-            ["bash", str(SCRIPT)],
-            cwd=APP_DIR,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn(
-            "environment_patrol_smoke requires QWQ_LAUNCH_HANDOFF_JSON",
-            result.stderr,
-        )
-
-    def test_invalid_environment_fails_before_flutter_build(self) -> None:
-        env = dict(os.environ)
-        env["QWQ_APP_RUNTIME_ENV"] = "staging"
-        result = subprocess.run(
-            ["bash", str(SCRIPT)],
-            cwd=APP_DIR,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("must be alpha|beta|gamma|prod", result.stderr)
-
-    def test_missing_canonical_handoff_fails_closed(self) -> None:
-        env = dict(os.environ)
-        env.pop("QWQ_APP_RUNTIME_ENV", None)
-        env.pop("DART_DEFINES", None)
-        env.pop("CONFIGURATION", None)
-        env.pop("PLATFORM_NAME", None)
-        env.pop("EFFECTIVE_PLATFORM_NAME", None)
-        result = subprocess.run(
-            ["bash", str(SCRIPT)],
-            cwd=APP_DIR,
-            env=env,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("canonical runtime handoff is required", result.stderr)
-        self.assertIn("./run.sh -d <device>", result.stderr)
+            self.assertEqual(Path(result.stdout.strip()).resolve(), compatible_python.resolve())
 
 
 if __name__ == "__main__":

@@ -5,11 +5,21 @@ from __future__ import annotations
 
 import ast
 import re
+import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
+# 直接执行本 gate 时仓库根不在 sys.path 上，实现单元按仓内绝对包名导入。
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.gate.ci_cd_evidence_contracts import (  # noqa: E402
+    constant_resolution,
+)
 CANONICAL_SCHEMAS = frozenset(
     {
         "ci-timing-summary",
@@ -213,6 +223,8 @@ REQUIRED_SOURCE_TOKENS = {
         "machine_critical_path_seconds: Optional[int]",
         'end_to_end_seconds = optional_durations.get("calendarLeadTimeSeconds")',
         'parser.add_argument("--missing-evidence"',
+        'parser.add_argument(\n        "--budget-profile"',
+        'budget_payload["profile"] = normalized_budget_profile',
         "upstream_missing_evidence",
         '"budget"',
         '"missingEvidence"',
@@ -287,7 +299,8 @@ REQUIRED_SOURCE_TOKENS = {
         "--expected-host-digest",
         "--stack-ref \"$STACK_REF\"",
         "--archive-prefix evidence/raw/environments/beta/raw",
-        'if [ "$calendar_lead_time_seconds" -gt 480 ]',
+        '--budget-profile "$VALIDATION_PROFILE"',
+        'canonical App device timing status=${timing_status}',
         '--missing-evidence "$missing_evidence"',
         "timing is historical_incomplete",
         'cron: \'0 18 * * *\'',
@@ -624,25 +637,10 @@ def _relative(path: Path, root: Path = ROOT) -> str:
     return path.relative_to(root).as_posix()
 
 
-def _constant_value(path: Path, constant_name: str) -> object:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    for node in tree.body:
-        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
-            continue
-        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-        if not any(
-            isinstance(target, ast.Name) and target.id == constant_name
-            for target in targets
-        ):
-            continue
-        value = node.value
-        if value is None:
-            return None
-        try:
-            return ast.literal_eval(value)
-        except (ValueError, TypeError):
-            return None
-    return None
+def _constant_value(
+    path: Path, constant_name: str, root: Path = ROOT, depth: int = 0
+) -> object:
+    return constant_resolution.constant_value(path, constant_name, root, depth)
 
 
 def _allowed_validator_lines(path: Path, relative_path: str) -> set[int]:

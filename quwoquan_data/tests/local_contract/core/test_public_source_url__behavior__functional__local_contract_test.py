@@ -81,6 +81,7 @@ def test_homepage_source_catalog_closes_primary_evidence(
                 "propertyReleaseStatus": "not_required",
                 "collectedAt": "2026-07-11T00:00:00Z",
                 "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+                "derivedModifications": [],
             },
         },
     )

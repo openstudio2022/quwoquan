@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+from content.execution.execution_terminal import InvalidTerminalExecutionEvidenceError
 from core.io import write_json
 from verify import verify_homepage_media_completeness as gate
 
@@ -175,7 +178,7 @@ def test_homepage_media_completeness_rejects_typed_fetch_failure(tmp_path: Path,
             }
         ],
     }
-    gate.write_json(meta_path, meta)
+    write_json(meta_path, meta)
     monkeypatch.setattr(gate.paths, "execution_root", lambda _execution: root)
 
     report = gate.homepage_media_completeness_report("execution")
@@ -264,3 +267,111 @@ def test_publishable_object_media_gap_still_blocks(tmp_path: Path, monkeypatch) 
 
     assert scoped["passed"] is False
     assert any(row["ref"].startswith("测试实体丙") for row in scoped["issues"])
+
+
+@pytest.mark.parametrize("terminal_decision", ("interrupted", "superseded", "succeeded"))
+def test_terminal_execution_audit_is_read_only(
+    tmp_path: Path,
+    monkeypatch,
+    terminal_decision: str,
+) -> None:
+    root = tmp_path / "tasks" / "execution"
+    report_root = tmp_path / "data" / "local" / "workspace" / "reports"
+    _write_execution(root, capped=False)
+    monkeypatch.setattr(gate.paths, "execution_root", lambda _execution: root)
+    monkeypatch.setattr(gate.paths, "OUTPUT_ARTIFACTS_ROOT", report_root)
+    monkeypatch.setattr(
+        gate,
+        "load_terminal_execution_evidence",
+        lambda _root: type("Terminal", (), {"decision": terminal_decision})(),
+    )
+    before = {
+        item.relative_to(root).as_posix(): (
+            item.is_dir(),
+            item.read_bytes() if item.is_file() else None,
+        )
+        for item in root.rglob("*")
+    }
+
+    report = gate.homepage_media_completeness_report("execution")
+
+    after = {
+        item.relative_to(root).as_posix(): (
+            item.is_dir(),
+            item.read_bytes() if item.is_file() else None,
+        )
+        for item in root.rglob("*")
+    }
+    assert report["passed"] is True
+    assert "reportPath" not in report
+    assert before == after
+    assert not report_root.exists()
+
+
+def test_active_execution_verifier_is_read_only(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "tasks" / "execution"
+    _write_execution(root, capped=False)
+    monkeypatch.setattr(gate.paths, "execution_root", lambda _execution: root)
+    monkeypatch.setattr(gate, "load_terminal_execution_evidence", lambda _root: None)
+    before = sorted(item.relative_to(root).as_posix() for item in root.rglob("*"))
+
+    report = gate.homepage_media_decision_report("execution")
+
+    assert report["passed"] is True
+    assert "reportPath" not in report
+    assert before == sorted(item.relative_to(root).as_posix() for item in root.rglob("*"))
+
+
+def test_active_combined_audit_is_read_only(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "tasks" / "execution"
+    _write_execution(root, capped=False)
+    monkeypatch.setattr(gate.paths, "execution_root", lambda _execution: root)
+    monkeypatch.setattr(gate, "load_terminal_execution_evidence", lambda _root: None)
+
+    before = sorted(item.relative_to(root).as_posix() for item in root.rglob("*"))
+    report = gate.homepage_media_completeness_report("execution")
+
+    assert report["passed"] is True
+    assert "reportPath" not in report
+    assert before == sorted(item.relative_to(root).as_posix() for item in root.rglob("*"))
+
+
+def test_invalid_terminal_evidence_fails_before_any_report_write(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "tasks" / "execution"
+    report_root = tmp_path / "data" / "local" / "workspace" / "reports"
+    _write_execution(root, capped=False)
+    monkeypatch.setattr(gate.paths, "execution_root", lambda _execution: root)
+    monkeypatch.setattr(gate.paths, "OUTPUT_ARTIFACTS_ROOT", report_root)
+
+    def reject_terminal(_root: Path) -> None:
+        raise InvalidTerminalExecutionEvidenceError(
+            "execution supersession root inventory drift"
+        )
+
+    monkeypatch.setattr(gate, "load_terminal_execution_evidence", reject_terminal)
+    before = {
+        item.relative_to(root).as_posix(): (item.is_dir(), item.read_bytes() if item.is_file() else None)
+        for item in root.rglob("*")
+    }
+
+    with pytest.raises(
+        InvalidTerminalExecutionEvidenceError,
+        match="root inventory drift",
+    ):
+        gate.homepage_media_completeness_report("execution")
+
+    after = {
+        item.relative_to(root).as_posix(): (item.is_dir(), item.read_bytes() if item.is_file() else None)
+        for item in root.rglob("*")
+    }
+    assert before == after
+    assert not report_root.exists()

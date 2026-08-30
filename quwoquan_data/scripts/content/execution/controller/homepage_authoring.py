@@ -45,11 +45,19 @@ class HomepageQuotaVerdict:
         ]
 
 
-def homepage_quota_verdict(ctx: ExecutionContext) -> HomepageQuotaVerdict:
+def homepage_quota_verdict(
+    ctx: ExecutionContext,
+    *,
+    require_independent_review: bool = False,
+) -> HomepageQuotaVerdict:
     """build_homepage / build_validate 共用的唯一配额门判定。
 
     ``validate_entity_pages`` 逐条返回 ``<domain>/<etype>/<name>: ...`` 前缀问题；
     这里按 coverage target 归并，未产生任何问题的对象即达标对象。
+
+    ``require_independent_review`` 区分独立审阅前后两个时点：审阅前 ``pending``
+    是正常中间态，必须放行否则审阅永远跑不到；审阅后 ``pending`` 表示审阅未绑定
+    结果，必须判为不达标，否则未审阅对象会一路走到 publish 才被 pool delivery 拦下。
     """
     from content.homepage.homepage import homepage_runtime_spec
     from content.homepage.homepage_release_validation import validate_entity_pages
@@ -65,7 +73,15 @@ def homepage_quota_verdict(ctx: ExecutionContext) -> HomepageQuotaVerdict:
             continue
         domain, etype = require_domain_etype(target.get("entityType"), context=name)
         labels.append(f"{domain}/{etype}/{name}")
-        issues.extend(_homepage_independent_review_issues(ctx, domain, etype, name))
+        issues.extend(
+            _homepage_independent_review_issues(
+                ctx,
+                domain,
+                etype,
+                name,
+                require_independent_review=require_independent_review,
+            )
+        )
     per_target: dict[str, list[str]] = {label: [] for label in labels}
     unattributed: list[str] = []
     for issue in issues:
@@ -107,6 +123,8 @@ def _homepage_independent_review_issues(
     domain: str,
     etype: str,
     name: str,
+    *,
+    require_independent_review: bool = False,
 ) -> list[str]:
     """审阅结论必须带对象标签前缀。
 
@@ -116,7 +134,13 @@ def _homepage_independent_review_issues(
     """
     return [
         issue if issue.startswith(f"{domain}/{etype}/{name}:") else f"{domain}/{etype}/{name}: {issue}"
-        for issue in _raw_homepage_independent_review_issues(ctx, domain, etype, name)
+        for issue in _raw_homepage_independent_review_issues(
+            ctx,
+            domain,
+            etype,
+            name,
+            require_independent_review=require_independent_review,
+        )
     ]
 
 
@@ -125,6 +149,8 @@ def _raw_homepage_independent_review_issues(
     domain: str,
     etype: str,
     name: str,
+    *,
+    require_independent_review: bool = False,
 ) -> list[str]:
     review_path = (
         execution_root(ctx.execution_id)
@@ -143,7 +169,7 @@ def _raw_homepage_independent_review_issues(
         else {}
     )
     reviewer_status = str((reviewer or {}).get("status") or "pending")
-    if reviewer_status == "pending":
+    if reviewer_status == "pending" and not require_independent_review:
         return []
     if reviewer_status != "passed":
         recorded = [str(item) for item in review.get("issues") or [] if str(item).strip()]
@@ -277,9 +303,20 @@ def _drafts_authored(ctx: ExecutionContext) -> tuple[bool, list[str]]:
         state.last_author_finalize_count = finalized_count
         save_execution_state(state)
     content_refs = content_object.iter_content_refs(ctx.execution_id)
-    active_refs = list(content_refs)
     if not content_refs:
         return False, ["(no content objects; run compose-brief first)"]
+    from content.execution.agent.checkpoint_exclusion import (
+        current_semantic_checkpoint_exclusions,
+    )
+
+    author_exclusions = current_semantic_checkpoint_exclusions(
+        ctx.execution_id,
+        stage="post_author",
+        object_refs=content_refs,
+    )
+    active_refs = [ref for ref in content_refs if ref not in author_exclusions]
+    if not active_refs:
+        return False, ["(all content objects are semantic author shortfalls)"]
     preflight_short_refs = _content_plan_base_draft_shortfall_refs(ctx, active_refs)
     if preflight_short_refs:
         return False, [

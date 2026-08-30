@@ -65,7 +65,12 @@ def _assets() -> list[dict]:
 
 
 def test_homepage_placement_three_segment_contract():
+    """三段版面按 `1.download` 冻结的 role 落位，渲染不再自行裁决（DEC-029）。"""
     assets = _assets()
+    # 冻结处置：有原图注且有章节锚点的两张为 inline，无图注的那张为 related。
+    by_id = {a["assetId"]: a for a in assets}
+    by_id["黄龙_detail_9_bbbb2222"]["role"] = "inline"
+    by_id["黄龙_detail_9_dddd4444"]["role"] = "inline"
     out = place_homepage_assets_in_markdown(
         _BODY,
         assets,
@@ -89,22 +94,18 @@ def test_homepage_placement_three_segment_contract():
     )
     # 封面不进正文。
     assert "黄龙_cover_9_aaaa1111" not in out
-    # 有原图注的两张进正文块级 figure（每章节最多 1 张，两个章节各一张）。
+    # 冻结为 inline 的两张进正文块级 figure。
     assert out.count(":::figure") == 2
     assert 'layout="fullWidth"' in out and "wrapLeft" not in out and "wrapRight" not in out
-    # 无图注的图不进正文，归入页尾相关图片 gallery。
+    # 冻结为 related 的图不进正文，归入页尾相关图片 gallery——即便来源页说它是 inline。
     assert "## 相关图片" in out
     assert ':::gallery ids="黄龙_detail_9_cccc3333" layout="grid"' in out
-    # roles 就地收敛。
-    by_id = {a["assetId"]: a for a in assets}
     assert by_id["黄龙_cover_9_aaaa1111"]["role"] == "cover"
-    assert by_id["黄龙_detail_9_bbbb2222"]["role"] == "inline"
-    assert by_id["黄龙_detail_9_dddd4444"]["role"] == "inline"
     assert by_id["黄龙_detail_9_cccc3333"]["role"] == "related"
 
 
-def test_homepage_placement_overflow_goes_related():
-    """章节数不足时，多余的有图注图也进相关图片区，正文不堆图。"""
+def test_related_assets_all_land_in_one_page_tail_gallery():
+    """冻结为 related 的图一律进页尾单个 gallery，正文不堆图。"""
     assets = [
         {"assetId": f"黄龙_detail_9_e{i}", "role": "related", "caption": f"景点实景{i}", "fileName": f"e{i}.jpg"}
         for i in range(5)
@@ -114,33 +115,19 @@ def test_homepage_placement_overflow_goes_related():
         assets,
         placements=[
             {
-                "assetId": "黄龙_detail_9_e0",
+                "assetId": f"黄龙_detail_9_e{index}",
                 "placementType": "inline",
                 "sectionSlug": "地质地貌",
-            },
-            {
-                "assetId": "黄龙_detail_9_e1",
-                "placementType": "inline",
-                "sectionSlug": "主要景点",
-            },
-            *[
-                {
-                    "assetId": f"黄龙_detail_9_e{index}",
-                    "placementType": "inline",
-                    "sectionSlug": "不存在章节",
-                }
-                for index in range(2, 5)
-            ],
+            }
+            for index in range(5)
         ],
     )
-    # 只有两个图片有可靠章节锚点；其余 3 张进入相关图片区。
-    assert out.count(":::figure") == 2
-    inline = [a for a in assets if a["role"] == "inline"]
-    related = [a for a in assets if a["role"] == "related"]
-    assert len(inline) == 2 and len(related) == 3
+    assert ":::figure" not in out
+    assert out.count(":::gallery") == 1
     ids_attr = [line for line in out.splitlines() if line.startswith(":::gallery")][0]
-    for a in related:
-        assert a["assetId"] in ids_attr
+    for asset in assets:
+        assert asset["assetId"] in ids_attr
+        assert asset["role"] == "related"
 
 
 def _write_entity(tmp: Path, page_text: str) -> Path:

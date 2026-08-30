@@ -120,6 +120,7 @@ def _evidence(
         "propertyReleaseStatus": "not_required",
         "collectedAt": observed_at,
         "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+        "derivedModifications": [],
     }
     stable = {
         **evidence,

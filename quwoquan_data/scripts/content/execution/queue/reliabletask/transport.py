@@ -183,6 +183,8 @@ def _campaign_fleet_binding_from_environment() -> FrozenReliableTaskFleetBinding
 
 
 def _stackctl_fleet_document(*arguments: str) -> Mapping[str, object]:
+    environment = dict(os.environ)
+    environment["QWQ_OUTPUT_ROOT"] = str(REPO_ROOT / ".qwq_output")
     completed = subprocess.run(
         [
             sys.executable,
@@ -196,6 +198,7 @@ def _stackctl_fleet_document(*arguments: str) -> Mapping[str, object]:
         capture_output=True,
         text=True,
         check=False,
+        env=environment,
     )
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip() or "no diagnostic output"

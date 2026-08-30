@@ -103,6 +103,79 @@ def source_ready_runtime_spec(
         for target in targets
         if str(target.get("name") or "").strip() in ready_set
     ]
+    content = runtime_spec.get("content")
+    if isinstance(content, dict) and "workUnits" in content:
+        raw_work_units = content.get("workUnits")
+        if not isinstance(raw_work_units, list):
+            raise ValueError("execution content.workUnits must be an array")
+        work_units_by_id: dict[str, dict[str, Any]] = {}
+        for raw in raw_work_units:
+            if not isinstance(raw, Mapping):
+                raise ValueError("execution content.workUnits must contain objects")
+            work_unit_id = str(raw.get("workUnitId") or "").strip()
+            target = raw.get("coverageTarget")
+            target_name = (
+                str(target.get("name") or "").strip()
+                if isinstance(target, Mapping)
+                else ""
+            )
+            if not work_unit_id or not target_name:
+                raise ValueError("execution media workUnit identity is incomplete")
+            if work_unit_id in work_units_by_id:
+                raise ValueError("execution content.workUnits contains duplicate ids")
+            if target_name in ready_set:
+                work_units_by_id[work_unit_id] = dict(raw)
+
+        raw_ready_work_unit_ids = availability.get("readyWorkUnitIds")
+        if raw_ready_work_unit_ids is None:
+            ready_work_unit_ids = list(work_units_by_id)
+        else:
+            if not isinstance(raw_ready_work_unit_ids, list):
+                raise ValueError("source availability readyWorkUnitIds must be an array")
+            ready_work_unit_ids = [
+                str(value or "").strip() for value in raw_ready_work_unit_ids
+            ]
+            if (
+                any(not value for value in ready_work_unit_ids)
+                or len(ready_work_unit_ids) != len(set(ready_work_unit_ids))
+                or any(value not in work_units_by_id for value in ready_work_unit_ids)
+            ):
+                raise ValueError(
+                    "source availability readyWorkUnitIds must be a unique frozen subset"
+                )
+            ready_work_unit_count = availability.get("readyWorkUnitCount")
+            if (
+                isinstance(ready_work_unit_count, bool)
+                or not isinstance(ready_work_unit_count, int)
+                or ready_work_unit_count != len(ready_work_unit_ids)
+            ):
+                raise ValueError(
+                    "source availability readyWorkUnitCount mismatch"
+                )
+        ready_work_units = [
+            work_units_by_id[work_unit_id]
+            for work_unit_id in ready_work_unit_ids
+        ]
+        content["workUnits"] = ready_work_units
+        unit_target_names = {
+            str((row.get("coverageTarget") or {}).get("name") or "").strip()
+            for row in ready_work_units
+        }
+        scope["coverageTargets"] = [
+            target
+            for target in scope["coverageTargets"]
+            if str(target.get("name") or "").strip() in unit_target_names
+        ]
+        policy = runtime_spec.get("executionPolicy")
+        if not isinstance(policy, dict):
+            raise ValueError("execution executionPolicy must be an object")
+        policy["targetObjectCount"] = len(ready_work_units)
+        policy["targetEntityCount"] = len(scope["coverageTargets"])
+        acceptance = runtime_spec.get("acceptance")
+        if not isinstance(acceptance, dict):
+            raise ValueError("execution acceptance must be an object")
+        acceptance["minEntities"] = len(scope["coverageTargets"])
+        acceptance["minPostsPerEntity"] = 0
     return runtime_spec
 
 

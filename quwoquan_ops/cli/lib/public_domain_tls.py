@@ -16,16 +16,26 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.common import load_json_yaml
+from quwoquan_ops.cli.lib.dns_provider import DnsProviderError, provider_for_kind
 from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
 )
-from quwoquan_ops.cli.lib.output_paths import certificate_export_dir
+from quwoquan_ops.cli.lib.openssl3_resolver import (
+    OpenSSL3Executable,
+    resolve_openssl3,
+)
+from quwoquan_ops.cli.lib.output_paths import (
+    certificate_export_dir,
+    deployment_target_path,
+)
 
 
 POLICY_PATH = ROOT / "quwoquan_ops" / "environments" / "domain_governance.yaml"
@@ -102,6 +112,15 @@ def certificate_dir(target: str) -> Path:
     return certificate_export_dir(target)
 
 
+def certificate_bundle_dir(target: str) -> Path:
+    """加密证书包的落盘目录。
+
+    证书包是待交付的 deployment payload，只能落在仓外受限的部署工作区，不得写回
+    `.qwq_output`。调用方一律从这里取路径，不自己拼。
+    """
+    return deployment_target_path(target, "packages", "tls")
+
+
 def certificate_paths(target: str, *, require_ready: bool = True) -> tuple[Path, Path]:
     root = certificate_dir(target)
     cert = root / "fullchain.pem"
@@ -123,9 +142,14 @@ def root_certificate_path(target: str, *, require_ready: bool = True) -> Path:
     return path
 
 
-def _openssl(command: list[str], *, failure: str) -> subprocess.CompletedProcess[str]:
+def _openssl(
+    openssl: OpenSSL3Executable,
+    command: list[str],
+    *,
+    failure: str,
+) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
-        ["openssl", *command],
+        openssl.argv(*command),
         text=True,
         capture_output=True,
         check=False,
@@ -136,9 +160,12 @@ def _openssl(command: list[str], *, failure: str) -> subprocess.CompletedProcess
     return result
 
 
-def _public_key_digest(arguments: list[str]) -> str:
+def _public_key_digest(
+    openssl: OpenSSL3Executable,
+    arguments: list[str],
+) -> str:
     result = subprocess.run(
-        ["openssl", *arguments],
+        openssl.argv(*arguments),
         capture_output=True,
         check=False,
     )
@@ -147,11 +174,17 @@ def _public_key_digest(arguments: list[str]) -> str:
     return hashlib.sha256(result.stdout).hexdigest()
 
 
-def _certificate_key_pair_matches(certificate: Path, private_key: Path) -> bool:
+def _certificate_key_pair_matches(
+    certificate: Path,
+    private_key: Path,
+    *,
+    openssl: OpenSSL3Executable,
+) -> bool:
     if not certificate.is_file() or not private_key.is_file():
         return False
     try:
         certificate_public_key = _openssl(
+            openssl,
             ["x509", "-in", str(certificate), "-pubkey", "-noout"],
             failure="certificate public-key read failed",
         )
@@ -159,9 +192,11 @@ def _certificate_key_pair_matches(certificate: Path, private_key: Path) -> bool:
             public_key.write(certificate_public_key.stdout.encode("utf-8"))
             public_key.flush()
             certificate_digest = _public_key_digest(
+                openssl,
                 ["pkey", "-pubin", "-in", public_key.name, "-outform", "DER"]
             )
         private_digest = _public_key_digest(
+            openssl,
             ["pkey", "-in", str(private_key), "-pubout", "-outform", "DER"]
         )
     except PublicDomainTlsError:
@@ -169,7 +204,12 @@ def _certificate_key_pair_matches(certificate: Path, private_key: Path) -> bool:
     return certificate_digest == private_digest
 
 
-def verify_certificate(target: str, *, renew_before_days: int | None = None) -> dict[str, Any]:
+def verify_certificate(
+    target: str,
+    *,
+    renew_before_days: int | None = None,
+    openssl: OpenSSL3Executable | None = None,
+) -> dict[str, Any]:
     policy = load_policy()
     profile_name, profile = _profile_for_target(target)
     profile_kind = _profile_kind(profile_name, profile)
@@ -177,6 +217,7 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
         raise PublicDomainTlsError(
             f"GATE_BLOCK: {target} certificate is externally managed"
         )
+    selected = openssl or resolve_openssl3()
     cert, key = certificate_paths(target)
     days = int(
         renew_before_days
@@ -185,7 +226,7 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
         or (policy.get("acme") or {}).get("renewBeforeDays", 30)
     )
     check = subprocess.run(
-        ["openssl", "x509", "-in", str(cert), "-checkend", str(days * 86400), "-noout"],
+        selected.argv("x509", "-in", str(cert), "-checkend", str(days * 86400), "-noout"),
         text=True,
         capture_output=True,
         check=False,
@@ -194,10 +235,10 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
         raise PublicDomainTlsError(
             f"GATE_BLOCK: {target} certificate expires within {days} days"
         )
-    if not _certificate_key_pair_matches(cert, key):
+    if not _certificate_key_pair_matches(cert, key, openssl=selected):
         raise PublicDomainTlsError(f"GATE_BLOCK: {target} certificate/private-key mismatch")
     inspect = subprocess.run(
-        ["openssl", "x509", "-in", str(cert), "-noout", "-ext", "subjectAltName"],
+        selected.argv("x509", "-in", str(cert), "-noout", "-ext", "subjectAltName"),
         text=True,
         capture_output=True,
         check=False,
@@ -213,6 +254,7 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
     if profile_kind == "local-managed":
         root = root_certificate_path(target)
         _openssl(
+            selected,
             ["verify", "-CAfile", str(root), str(cert)],
             failure=f"{target} local-managed certificate chain verification failed",
         )
@@ -233,21 +275,20 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
 def _issue_local_managed_certificate(
     target: str,
     profile: dict[str, Any],
+    *,
+    openssl: OpenSSL3Executable,
 ) -> dict[str, Any]:
-    if shutil.which("openssl") is None:
-        raise PublicDomainTlsError(
-            "GATE_BLOCK: openssl is required for local-managed TLS"
-        )
     output_root = certificate_dir(target)
     output_root.mkdir(parents=True, exist_ok=True)
     root_key = output_root / "root.key"
     root_cert = root_certificate_path(target, require_ready=False)
-    if not _certificate_key_pair_matches(root_cert, root_key):
+    if not _certificate_key_pair_matches(root_cert, root_key, openssl=openssl):
         with tempfile.TemporaryDirectory(dir=output_root) as temporary:
             temporary_root = Path(temporary)
             next_root_key = temporary_root / "root.key"
             next_root_cert = temporary_root / "root.crt"
             _openssl(
+                openssl,
                 [
                     "genpkey",
                     "-algorithm",
@@ -260,6 +301,7 @@ def _issue_local_managed_certificate(
                 failure=f"{target} local-managed root key generation failed",
             )
             _openssl(
+                openssl,
                 [
                     "req", "-x509", "-new", "-sha256", "-days", "3650",
                     "-key", str(next_root_key), "-out", str(next_root_cert),
@@ -281,10 +323,12 @@ def _issue_local_managed_certificate(
         leaf = temporary_root / "leaf.crt"
         extensions = temporary_root / "leaf.ext"
         _openssl(
+            openssl,
             ["genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", str(key)],
             failure=f"{target} local-managed leaf key generation failed",
         )
         _openssl(
+            openssl,
             ["req", "-new", "-key", str(key), "-out", str(csr), "-subj", f"/CN={names[0]}"],
             failure=f"{target} local-managed certificate request failed",
         )
@@ -299,6 +343,7 @@ def _issue_local_managed_certificate(
         )
         serial = secrets.token_hex(16)
         _openssl(
+            openssl,
             [
                 "x509", "-req", "-sha256",
                 "-days", str(int(profile.get("certificateDays") or 90)),
@@ -310,28 +355,83 @@ def _issue_local_managed_certificate(
         )
         cert.write_bytes(leaf.read_bytes() + root_cert.read_bytes())
     key.chmod(0o600)
-    return verify_certificate(target)
+    return verify_certificate(target, openssl=openssl)
+
+
+def _challenge_credential_environment(
+    policy: dict[str, Any],
+    acme: dict[str, Any],
+    challenge_credential: str,
+) -> dict[str, str]:
+    """把中立的 challenge 凭据投影为 ACME 客户端所需的 provider 变量。
+
+    「变量名 -> 部件名」由 policy 的 `acme.credentialEnvironment` 声明，凭据本身
+    的形状由 provider 解释，所以换服务商只加 provider 实现，本模块不动。
+    """
+    mapping = acme.get("credentialEnvironment") or {}
+    if not isinstance(mapping, dict) or not mapping:
+        raise PublicDomainTlsError(
+            "GATE_BLOCK: acme.credentialEnvironment must declare the DNS-01 "
+            "credential projection"
+        )
+    kind = str((policy.get("dnsProvider") or {}).get("kind") or "")
+    try:
+        provider_class = provider_for_kind(kind)
+        return provider_class.challenge_environment(
+            challenge_credential, {str(k): str(v) for k, v in mapping.items()}
+        )
+    except DnsProviderError as exc:
+        raise PublicDomainTlsError(str(exc)) from exc
+
+
+def _lego_command(
+    lego: str,
+    *,
+    acme: dict[str, Any],
+    profile: dict[str, Any],
+    lego_root: Path,
+) -> list[str]:
+    """构造 ACME 客户端调用。
+
+    `run` 同时承担首签与续期：是否真正续期由 `--renew-days` 与 CA 的 ARI 判定，
+    因此调用面不按证书是否已存在分叉。注册邮箱不是签发前提，不予传递。
+    """
+    return [
+        lego,
+        "run",
+        "--accept-tos",
+        "--dns",
+        str(acme.get("dnsProvider") or ""),
+        "--server",
+        str(acme.get("directory") or ""),
+        "--path",
+        str(lego_root),
+        "--domains",
+        str(profile["apex"]),
+        "--domains",
+        str(profile["wildcard"]),
+        "--renew-days",
+        str(int(acme.get("renewBeforeDays", 30))),
+    ]
 
 
 def issue_certificate(target: str) -> dict[str, Any]:
     policy = load_policy()
     profile_name, profile = _profile_for_target(target)
     if _profile_kind(profile_name, profile) == "local-managed":
-        return _issue_local_managed_certificate(target, profile)
+        openssl = resolve_openssl3()
+        return _issue_local_managed_certificate(target, profile, openssl=openssl)
     if profile.get("certificateAutomation") == "external":
         raise PublicDomainTlsError(
             f"GATE_BLOCK: {target} certificate issuance is externally managed"
         )
     acme = policy.get("acme") or {}
-    provider = str(acme.get("dnsProvider") or "")
-    email_env = str(acme.get("accountEmailEnv") or "")
-    email = os.environ.get(email_env, "").strip()
     challenge_authority = policy.get("acmeChallengeAuthority") or {}
     token_env = str(challenge_authority.get("apiTokenEnv") or "")
     token = os.environ.get(token_env, "").strip()
-    if not email or not token:
+    if not token:
         raise PublicDomainTlsError(
-            f"GATE_BLOCK: {email_env} and {token_env} are required for DNS-01 issuance"
+            f"GATE_BLOCK: {token_env} is required for DNS-01 issuance"
         )
     lego = shutil.which(str(acme.get("client") or "lego"))
     if lego is None:
@@ -341,28 +441,9 @@ def issue_certificate(target: str) -> dict[str, Any]:
     lego_root = output_root / "lego"
     output_root.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
-    env["CLOUDFLARE_DNS_API_TOKEN"] = token
+    env.update(_challenge_credential_environment(policy, acme, token))
     source_cert = lego_root / "certificates" / f"{profile['apex']}.crt"
-    action = "renew" if source_cert.is_file() else "run"
-    command = [
-        lego,
-        "--accept-tos",
-        "--email",
-        email,
-        "--dns",
-        provider,
-        "--server",
-        str(acme.get("directory") or ""),
-        "--path",
-        str(lego_root),
-        "--domains",
-        str(profile["apex"]),
-        "--domains",
-        str(profile["wildcard"]),
-        action,
-    ]
-    if action == "renew":
-        command.extend(["--days", str(int(acme.get("renewBeforeDays", 30)))])
+    command = _lego_command(lego, acme=acme, profile=profile, lego_root=lego_root)
     result = subprocess.run(command, env=env, text=True, capture_output=True, check=False)
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
@@ -419,6 +500,8 @@ def main(argv: list[str] | None = None) -> int:
             except PublicDomainTlsError:
                 if not args.allow_missing:
                     raise
+            bundle_dir = certificate_bundle_dir(args.target)
+            payload["bundleDirectory"] = str(bundle_dir)
             if args.format == "shell":
                 print(
                     "export QWQ_PUBLIC_TLS_CERT_FILE="
@@ -427,6 +510,10 @@ def main(argv: list[str] | None = None) -> int:
                 print(
                     "export QWQ_PUBLIC_TLS_KEY_FILE="
                     + shlex.quote(str(key))
+                )
+                print(
+                    "export QWQ_PUBLIC_TLS_BUNDLE_DIR="
+                    + shlex.quote(str(bundle_dir))
                 )
                 if "rootCertificate" in payload:
                     print(

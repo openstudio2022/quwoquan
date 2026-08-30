@@ -2,11 +2,18 @@
 from __future__ import annotations
 
 import runpy
+import sys
 from pathlib import Path
 
 import yaml
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.immutable_image_composition import runtime_image_owner_names
 WORKFLOWS = [
     ROOT / ".github" / "workflows" / "deploy-prod-auto.yml",
 ]
@@ -99,6 +106,21 @@ FORBIDDEN_ROLLOUT_TOKENS = (
 
 
 PROD_ENVIRONMENT_JOBS = ("prod_rollout", "prod_soak_acceptance")
+PROD_ROLLOUT_ENVIRONMENT = (
+    "${{ needs.prepare.outputs.dry_run != 'true' && 'production' || "
+    "'release-validation' }}"
+)
+
+
+def _job_environment_name(spec: object) -> str:
+    if not isinstance(spec, dict):
+        return ""
+    environment = spec.get("environment")
+    if isinstance(environment, str):
+        return environment.strip()
+    if isinstance(environment, dict):
+        return str(environment.get("name") or "").strip()
+    return ""
 
 
 def prod_environment_job_issues(path: Path) -> list[str]:
@@ -109,10 +131,13 @@ def prod_environment_job_issues(path: Path) -> list[str]:
         rel = path.name
     document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     jobs = document.get("jobs") or {}
+    environment_names = {
+        name: _job_environment_name(spec) for name, spec in jobs.items()
+    }
     bound = sorted(
         name
-        for name, spec in jobs.items()
-        if isinstance(spec, dict) and spec.get("environment") == "production"
+        for name, environment_name in environment_names.items()
+        if environment_name == "production" or "'production'" in environment_name
     )
     issues: list[str] = []
     for name in bound:
@@ -120,11 +145,16 @@ def prod_environment_job_issues(path: Path) -> list[str]:
             issues.append(
                 f"{rel} job {name} binds environment: production outside the controlled prod transaction"
             )
-    for name in PROD_ENVIRONMENT_JOBS:
-        if name not in bound:
-            issues.append(
-                f"{rel} job {name} must bind environment: production for manual prod admission"
-            )
+    if environment_names.get("prod_rollout") != PROD_ROLLOUT_ENVIRONMENT:
+        issues.append(
+            f"{rel} job prod_rollout must bind the exact dry-run release-validation / "
+            "real-apply production environment expression"
+        )
+    if environment_names.get("prod_soak_acceptance") != "production":
+        issues.append(
+            f"{rel} job prod_soak_acceptance must bind environment: production "
+            "for manual prod admission"
+        )
     return issues
 
 
@@ -298,11 +328,14 @@ def main() -> int:
             )
 
     access = yaml.safe_load(ACCESS_MANIFEST.read_text(encoding="utf-8")) or {}
-    expected_images = {
+    governed_compose_services = {
         str(service)
         for plane in access.get("planes") or []
         for service in plane.get("rootlessGovernedComposeServices") or []
     }
+    if not governed_compose_services:
+        issues.append("prod access manifest has no governed compose services")
+    expected_images = set(runtime_image_owner_names(ROOT))
     generator_globals = runpy.run_path(str(RELEASE_GENERATOR))
     if generator_globals.get("SCHEMA") != "release-evidence-manifest":
         issues.append(
@@ -311,7 +344,7 @@ def main() -> int:
     declared_images = set(generator_globals.get("DEPLOYED_SERVICES") or ())
     if declared_images != expected_images:
         issues.append(
-            "mainline release image set must equal prod governed compose services: "
+            "mainline release image set must equal canonical runtime image owners: "
             f"missing={sorted(expected_images - declared_images)} "
             f"extra={sorted(declared_images - expected_images)}"
         )
@@ -320,7 +353,7 @@ def main() -> int:
     planned_images = set(planner_globals.get("ALL_SERVICES") or ())
     if planned_images != expected_images:
         issues.append(
-            "service release planner image set must equal prod governed compose services: "
+            "service release planner image set must equal canonical runtime image owners: "
             f"missing={sorted(expected_images - planned_images)} "
             f"extra={sorted(planned_images - expected_images)}"
         )
@@ -330,7 +363,7 @@ def main() -> int:
             item
             for item in build_definitions
             if isinstance(item, dict)
-            and item.get("service") == "recommendation-service"
+            and item.get("runtime_image_owner") == "recommendation-service"
         ),
         None,
     )
@@ -352,7 +385,8 @@ def main() -> int:
         'DOCKER_BUILD_RECORD_UPLOAD: "false"',
         "plan_service_release_images.py",
         "matrix: ${{ fromJSON(needs.prepare-release.outputs.image_matrix) }}",
-        "${{ matrix.service }}",
+        "${{ matrix.trust_domain }}",
+        "${{ matrix.runtime_image_owner }}",
         "${{ matrix.image_name }}",
         "BUILD_IMAGE_COUNT: ${{ needs.prepare-release.outputs.build_count }}",
         "REUSE_IMAGE_COUNT: ${{ needs.prepare-release.outputs.reuse_count }}",
@@ -433,7 +467,7 @@ def main() -> int:
             )
     renderer_text = PROD_RENDERER.read_text(encoding="utf-8")
     for token in (
-        "CONFIG_ACK_REQUIRED_INSTANCES",
+        "PLATFORM_OPS_CONFIG_ACK_REQUIRED_INSTANCES",
         "SERVICE_INSTANCE_ID",
         "PLATFORM_OPS_BASE_URL",
     ):

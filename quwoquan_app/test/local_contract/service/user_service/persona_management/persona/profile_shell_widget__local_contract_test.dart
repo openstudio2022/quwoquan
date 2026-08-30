@@ -35,6 +35,10 @@ import 'package:quwoquan_app/service/user_service/account/user_account/applicati
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/relationship_capability_repository.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart';
+import 'package:quwoquan_app/runtime/di/signed_media_delivery_dependencies.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/application/original_access_quota_gateway.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/application/signed_media_delivery_coordinator.dart';
+import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/signed_grant_image.dart';
 import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/rtc_call_entry_presenter.dart';
 import 'package:go_router/go_router.dart';
@@ -71,12 +75,14 @@ import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/c
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/user_service/persona_management/persona/profile_shell_scroll_utils.dart';
+
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/profile_interaction_selection.dart'
     show InteractionSubTab;
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/presentation/profile_interaction_tab.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_interaction_tab_host.dart'
     show ProfileInteractionTabHost;
 import 'package:quwoquan_app/design_system/navigation/secondary_tab_bar.dart';
+
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
@@ -84,6 +90,7 @@ import '../../../../../support/service/user_service/account/user_account/user_ac
 import '../../../../../support/service/content_service/content/profile_interaction_activity_view/test_profile_interaction_facets.dart';
 import '../../../../../support/service/content_service/content/profile_interaction_activity_view/author_impact_fixtures.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
+import '../../../../../support/runtime/public_content_link_test_scope.dart';
 
 /// 在 UI 测试中使 capability 保持 null（current 关注/私信 布局）
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
@@ -380,6 +387,34 @@ class _ResolvedAvatarProfileRepository
   }
 }
 
+class _SignedUrlLessAvatarProfileRepository
+    extends _ProfileBundleOverrideRepository {
+  const _SignedUrlLessAvatarProfileRepository();
+
+  @override
+  Future<PersonaProfileViewData> profileFor(String userId) async {
+    return _profileView(
+      personaId: userId,
+      displayName: '无 URL 私有头像用户',
+      nicknameCustomized: true,
+      avatarUrl: '',
+      avatarAssetId: 'asset-profile-shell-url-less',
+      avatarAccessMode: MediaDeliveryAccessMode.signedGrant,
+    );
+  }
+}
+
+final class _ShellHangingOriginalAccessGateway
+    implements OriginalAccessQuotaGateway {
+  final Completer<MediaOriginalAccessGrant> _never =
+      Completer<MediaOriginalAccessGrant>();
+
+  @override
+  Future<MediaOriginalAccessGrant> requestOriginalAccess(
+    RequestContentMediaOriginalAccessCommand command,
+  ) => _never.future;
+}
+
 class _CanonicalBlockTargetProfileRepository
     extends _ProfileBundleOverrideRepository {
   const _CanonicalBlockTargetProfileRepository();
@@ -399,6 +434,8 @@ PersonaProfileViewData _profileView({
   required String displayName,
   required bool nicknameCustomized,
   String avatarUrl = '',
+  String? avatarAssetId,
+  MediaDeliveryAccessMode? avatarAccessMode,
   String bio = '',
   List<String> identityTags = const <String>[],
 }) {
@@ -410,6 +447,8 @@ PersonaProfileViewData _profileView({
       displayName: displayName,
       nicknameCustomized: nicknameCustomized,
       avatarUrl: avatarUrl,
+      avatarAssetId: avatarAssetId,
+      avatarAccessMode: avatarAccessMode,
       backgroundUrl: '',
       bio: bio,
       identityTags: identityTags,
@@ -453,8 +492,7 @@ ContentPostViewData _profileBackgroundPost(String authorId) {
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: authorId,
       authorDisplayName: '封面来源用户',
-      authorAvatarUrl:
-          'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+      authorAvatarUrl: 'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
       authorBackgroundUrl:
           'media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png',
       authorRoleLabel: '摄影',
@@ -518,9 +556,7 @@ List<Override> _profileScopeOverrides({
   ];
   return <Override>[
     profileQueryProvider.overrideWith((ref, surface) => profileQuery),
-    authorImpactQueryProvider.overrideWith(
-      (ref, surface) => authorImpactQuery,
-    ),
+    authorImpactQueryProvider.overrideWith((ref, surface) => authorImpactQuery),
     ...mockContentFacetOverrides(
       store: InMemoryContentPostStore(),
       authorPostsReader:
@@ -541,6 +577,7 @@ List<Override> _profileScopeOverrides({
     intersectionRepositoryProvider.overrideWithValue(
       const _EmptyIntersectionRepository(),
     ),
+    ...publicContentLinkOverrides(),
     ...overrides.cast<Override>(),
   ];
 }
@@ -754,6 +791,49 @@ void main() {
             )
             .imageUrl,
         _ResolvedAvatarProfileRepository.resolvedAvatar,
+      );
+    });
+
+    testWidgets('ProfileShell 保留 URL-less signedGrant binding 到主头像和吸顶头像', (
+      tester,
+    ) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          userId: 'fixture_signed_url_less',
+          profileQuery: const _SignedUrlLessAvatarProfileRepository(),
+          overrides: [
+            signedMediaDeliveryCoordinatorProvider.overrideWithValue(
+              SignedMediaDeliveryCoordinator(
+                gateway: _ShellHangingOriginalAccessGateway(),
+              ),
+            ),
+          ],
+        ),
+      );
+      await _pumpFrames(tester, count: 20);
+
+      final mainAvatar = tester.widget<SignedGrantImage>(
+        find.byType(SignedGrantImage).first,
+      );
+      expect(mainAvatar.assetId, 'asset-profile-shell-url-less');
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
+      await _pumpFrames(tester, count: 12);
+      final signedAvatars = tester
+          .widgetList<SignedGrantImage>(find.byType(SignedGrantImage))
+          .map((widget) => widget.assetId)
+          .toList();
+      expect(signedAvatars, contains('asset-profile-shell-url-less'));
+      expect(
+        find.byKey(
+          const ValueKey<String>('profile-shell-compact-avatar-image'),
+        ),
+        findsOneWidget,
       );
     });
 
@@ -1198,9 +1278,8 @@ void main() {
       );
       final tabsDecoration = tabsSurface.decoration! as BoxDecoration;
       final isDark =
-          CupertinoTheme.of(
-            tester.element(find.byType(ProfileShell)),
-          ).brightness ==
+          CupertinoTheme.of(tester.element(find.byType(ProfileShell)))
+              .brightness ==
           Brightness.dark;
       expect(
         tabsDecoration.color,
@@ -1610,9 +1689,9 @@ void main() {
             ownerToken: 'profile-call-entry',
           );
 
-      (container.read(authSessionControllerProvider.notifier)
-              as _FlippableProfileAuthSession)
-          .loginNow();
+      (container.read(
+        authSessionControllerProvider.notifier,
+      ) as _FlippableProfileAuthSession).loginNow();
       await _pumpFrames(tester);
 
       expect(startedIntents, hasLength(1));
@@ -1809,9 +1888,9 @@ void main() {
           ? _pinnedPrimaryTab('互动')
           : _inlinePrimaryTab('互动');
       final creationsTab =
-          _pinnedPrimaryTab(
-            ProfileText.profileTabCreations,
-          ).evaluate().isNotEmpty
+          _pinnedPrimaryTab(ProfileText.profileTabCreations)
+              .evaluate()
+              .isNotEmpty
           ? _pinnedPrimaryTab(ProfileText.profileTabCreations)
           : _inlinePrimaryTab(ProfileText.profileTabCreations);
 
@@ -2062,11 +2141,10 @@ void main() {
       final state = container.read(
         profileNotifierProvider('nature_photographer'),
       );
-      expect(
-        state.creations.map((post) => post.id).toSet(),
-        <String>{'owner-public-article', 'owner-private-article'},
-        reason: '端侧必须直出 reader 全量条目，不得二次过滤（SIT-002.t1）',
-      );
+      expect(state.creations.map((post) => post.id).toSet(), <String>{
+        'owner-public-article',
+        'owner-private-article',
+      }, reason: '端侧必须直出 reader 全量条目，不得二次过滤（SIT-002.t1）');
     });
   });
 }

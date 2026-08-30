@@ -18,6 +18,8 @@ if str(SCRIPTS) not in sys.path:
 
 from core.io import write_json  # noqa: E402
 from core.release_layout import payload_digest  # noqa: E402
+from content.release.environment import post_api_feed_verification as feed_subject  # noqa: E402
+from content.release.environment import post_api_projection_verification as projection_subject  # noqa: E402
 from content.release.environment import post_api_verification as subject  # noqa: E402
 from content.release.environment import public_api_client as public_api_subject  # noqa: E402
 from content.release.environment.public_api_client import (  # noqa: E402
@@ -111,6 +113,10 @@ def _projected_post(row: dict[str, object]) -> dict[str, object]:
 
 def _write_release(root: Path) -> Path:
     release = root / "data/releases" / RELEASE_ID
+    write_json(
+        release / "payload/release.json",
+        {"releaseId": RELEASE_ID, "releaseClass": "commercial"},
+    )
     write_json(
         release / "payload/desired_state.json",
         {
@@ -298,14 +304,28 @@ def _write_creator_import_report(root: Path, *, environment: DeploymentEnvironme
     return report
 
 
-def _operation(path: str, page_id: str, *, status: int = 200) -> PublicApiOperationEvidence:
+def _operation(
+    path: str,
+    page_id: str,
+    *,
+    status: int = 200,
+    request_identity: public_api_subject.PublicApiRequestIdentity | None = None,
+) -> PublicApiOperationEvidence:
     nonce = uuid.uuid4().hex
     return PublicApiOperationEvidence(
         path=f"/{path.lstrip('/')}",
         page_id=page_id,
         status=status,
-        request_id=f"DATA.{page_id}.{nonce}",
-        trace_id=f"DATA.readiness.{page_id}.{nonce}",
+        request_id=(
+            request_identity.request_id
+            if request_identity is not None
+            else f"DATA.{page_id}.{nonce}"
+        ),
+        trace_id=(
+            request_identity.trace_id
+            if request_identity is not None
+            else f"DATA.readiness.{page_id}.{nonce}"
+        ),
         started_at="2026-07-28T00:00:00.000Z",
         ended_at="2026-07-28T00:00:00.001Z",
         duration_ms=1,
@@ -420,7 +440,7 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
     pagination = tmp_path / "service-pagination.yaml"
     _write_pagination_contract(pagination)
     monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
-    monkeypatch.setattr(subject, "CONTENT_POST_OPERATIONS_PATH", pagination)
+    monkeypatch.setattr(feed_subject, "CONTENT_POST_OPERATIONS_PATH", pagination)
 
     def _get_bytes(_client, url: str, **kwargs):
         if url.endswith(".mp4"):
@@ -440,15 +460,53 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
 
     monkeypatch.setattr(subject.PublicApiClient, "get_bytes", _get_bytes)
     monkeypatch.setattr(subject.PublicApiClient, "get_json", _get_json)
+    monkeypatch.setattr(projection_subject, "_sleep_seconds", lambda _seconds: None)
+    search_bodies: list[dict[str, object]] = []
+    search_attempts: dict[str, int] = {}
 
-    def _post_json(_client, path: str, *, page_id: str, body, **_kwargs):
+    def _post_json(_client, path: str, *, page_id: str, body, **kwargs):
         assert path == "search"
         assert page_id == "search.global"
+        search_bodies.append(dict(body))
         object_id = str((body.get("ids") or [""])[0])
+        search_attempts[object_id] = search_attempts.get(object_id, 0) + 1
+        post = next((row for row in POSTS if row["postId"] == object_id), None)
+        if post is not None:
+            assert body["objectTypes"] == ["content.post"]
+            assert body["contentTypes"] == [post["contentType"]]
+        else:
+            assert object_id in {row["personaId"] for row in CREATORS}
+            assert body["objectTypes"] == ["user.profile"]
+            assert "contentTypes" not in body
+        request_identity = kwargs.get("request_identity")
+        if object_id == "post-article-a" and search_attempts[object_id] == 1:
+            return PublicApiResponse(
+                status=503,
+                payload={
+                    "code": "GATEWAY.MIDDLEWARE.upstream_unavailable",
+                    "recovery": {
+                        "action": "retry",
+                        "afterSeconds": 1,
+                        "disruptionLevel": "snackbar",
+                    },
+                },
+                operation=_operation(
+                    path,
+                    page_id,
+                    status=503,
+                    request_identity=request_identity,
+                ),
+                headers={"Retry-After": "1"},
+            )
         return PublicApiResponse(
             status=200,
             payload={"hits": [{"objectId": object_id}]},
-            operation=_operation(path, page_id, status=200),
+            operation=_operation(
+                path,
+                page_id,
+                status=200,
+                request_identity=request_identity,
+            ),
         )
 
     monkeypatch.setattr(subject.PublicApiClient, "post_json", _post_json)
@@ -519,6 +577,30 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
     # App 视频书唯一消费 premium_stream：consumer 与 commercial 都必须携带
     # premium_stream release-bound 读回证据（typed_video 绿不代表视频书绿）。
     assert queries["premium_stream"]["matchedPostIds"] == ["post-video-a"]
+    assert len(payload["searchQueries"]) == len(POSTS) + len(CREATORS)
+    assert all(
+        "attempts" in row and "request" not in row
+        for row in payload["searchQueries"]
+    )
+    assert len(search_bodies) == len(POSTS) + len(CREATORS) + 1
+    retried_search = next(
+        row for row in payload["searchQueries"] if row["targetId"] == "post-article-a"
+    )
+    assert [
+        row["operation"]["status"] for row in retried_search["attempts"]
+    ] == [503, 200]
+    assert len(
+        {
+            row["operation"]["requestId"]
+            for row in retried_search["attempts"]
+        }
+    ) == 1
+    assert len(
+        {
+            row["operation"]["traceId"]
+            for row in retried_search["attempts"]
+        }
+    ) == 1
     assert payload["guestActorHash"] == "sha256:" + "a" * 64
     assert payload["guestLogin"]["pageId"] == "user.login.anonymous"
     assert {request["pageId"] for row in queries.values() for request in row["requests"]} == {
@@ -549,7 +631,7 @@ def test_visible_release_feed__rejects_invalid_object_cards_envelope__local_cont
         subject.PostApiVerificationError,
         match="response payload must be an object|lacks objectCards array",
     ):
-        subject._verify_visible_release_feed(
+        feed_subject._verify_visible_release_feed(
             client,
             cases_by_id={},
             creators_by_author={},
@@ -571,7 +653,7 @@ def test_feed_item_match__accepts_canonical_projection_subset__local_contract() 
         ),
     )
 
-    matched = subject._feed_item_matches_release(
+    matched = feed_subject._feed_item_matches_release(
         {
             "postId": "post-article-a",
             "contentType": "article",
@@ -588,6 +670,63 @@ def test_feed_item_match__accepts_canonical_projection_subset__local_contract() 
     )
 
     assert matched == "post-article-a"
+
+
+@pytest.mark.parametrize(
+    ("served_url_suffix", "served_path", "expected_error"),
+    [
+        ("?v=1", None, "creator avatar authority is incomplete"),
+        ("?v=9", None, "creator avatar authority is incomplete"),
+        ("", None, "creator avatar authority is incomplete"),
+        ("?v=1", "/media/avatar/s/asset/other-avatar/v1/source.jpg", "creator public avatar URL drift"),
+    ],
+)
+def test_author_profile__binds_avatar_path_not_cache_busting_query__local_contract(
+    served_url_suffix: str,
+    served_path: str | None,
+    expected_error: str,
+) -> None:
+    """The persona public profile appends ``?v=<avatarVersion>``; the release binds a path.
+
+    user-service publishes that cache-busting query on every persona avatar URL, so
+    demanding byte equality against the release-bound public slice would make every
+    environment's creator profile look like drift.  Tolerating the query is not
+    tolerating a different body: a served path that is not the bound slice is still
+    drift, which is what the last case pins.
+
+    A tolerated URL is proven by the verification getting far enough to complain about
+    the avatar authority instead, which is the next check after the URL comparison.
+    """
+
+    canonical_url = (
+        "https://media.test/media/avatar/s/asset/creator-avatar-1/v1/source.jpg"
+    )
+    served = canonical_url if served_path is None else f"https://media.test{served_path}"
+    creator = SimpleNamespace(
+        persona_id="author-profile-1",
+        creator_ref="creator-1",
+        author_id="creator-article-a",
+        display_name="内容作者 1",
+        avatar_url=canonical_url,
+        avatar_asset_id="creator-avatar-1",
+        avatar_bytes=None,
+        avatar_sha256=None,
+        avatar_mime_type=None,
+    )
+    client = SimpleNamespace(
+        get_json=lambda *_args, **_kwargs: PublicApiResponse(
+            status=200,
+            payload={
+                "personaId": creator.persona_id,
+                "displayName": creator.display_name,
+                "avatarUrl": f"{served}{served_url_suffix}",
+            },
+            operation=_operation("user/author-profile-1", "user.profile", status=200),
+        )
+    )
+
+    with pytest.raises(subject.PostApiVerificationError, match=expected_error):
+        subject._verify_author_profile(client, creator)
 
 
 @pytest.mark.parametrize("missing_field", ["authorDisplayName", "authorAvatarUrl"])
@@ -619,7 +758,7 @@ def test_feed_item_match__rejects_missing_creator_snapshot__local_contract(
         subject.PostApiVerificationError,
         match=rf"lacks required {missing_field}",
     ):
-        subject._feed_item_matches_release(
+        feed_subject._feed_item_matches_release(
             item,
             cases_by_id={"post-article-a": case},
             creators_by_author={"creator-article-a": creator},
@@ -643,7 +782,7 @@ def test_feed_item_match__rejects_unknown_projection_field__local_contract(
         subject.PostApiVerificationError,
         match=rf"unknown ContentPostProjection fields: {unknown_field}",
     ):
-        subject._feed_item_matches_release(
+        feed_subject._feed_item_matches_release(
             item,
             cases_by_id={},
             creators_by_author={},
@@ -664,7 +803,7 @@ def test_post_api_verification__rejects_incomplete_releaseimport_binding__contra
     pagination = tmp_path / "service-pagination.yaml"
     _write_pagination_contract(pagination)
     monkeypatch.setattr(subject, "OUTPUT_ROOT", tmp_path)
-    monkeypatch.setattr(subject, "CONTENT_POST_OPERATIONS_PATH", pagination)
+    monkeypatch.setattr(feed_subject, "CONTENT_POST_OPERATIONS_PATH", pagination)
 
     with pytest.raises(subject.PostApiVerificationError, match="do not exactly match"):
         subject.write_post_api_verification(
@@ -713,195 +852,4 @@ def test_post_api_verification__rejects_import_manifest_digest_drift__local_cont
             / "consumer-api-digest-drift/post-api-verification.json",
             api_base_url="https://api.test",
             media_delivery_base_url="https://media.test",
-        )
-
-
-def test_video_media_probe_requires_range_and_playable_header() -> None:
-    client = SimpleNamespace(
-        get_bytes=lambda _url, **_kwargs: SimpleNamespace(
-            status=200,
-            content_type="video/mp4",
-            content_range="",
-            body=b"not-a-video",
-        )
-    )
-
-    with pytest.raises(subject.PostApiVerificationError, match="byte ranges"):
-        subject._verify_binary_media(
-            client,
-            "https://media.test/video.mp4",
-            expected_kind="video",
-        )
-
-
-def test_video_source_attribution_drift_blocks_consumer_verification() -> None:
-    case = subject.PostApiCase(
-        post_ref="video/test/1",
-        post_id="post-video",
-        content_type=subject.ContentType.VIDEO,
-        author_id="author-video",
-        source_attribution=VIDEO_ATTRIBUTION,
-    )
-
-    with pytest.raises(subject.PostApiVerificationError, match="sourceAttribution drift"):
-        subject._verify_source_attribution(
-            {"sourceAttribution": {**VIDEO_ATTRIBUTION, "rightsBasis": "unknown"}},
-            case,
-        )
-
-
-def test_public_api_client__fresh_guest_uses_canonical_contract_and_bearer(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    requests = []
-
-    class _Response:
-        def __init__(self, payload: dict) -> None:
-            self.status = 200
-            self._payload = json.dumps(payload).encode("utf-8")
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args: object) -> None:
-            return None
-
-        def read(self) -> bytes:
-            return self._payload
-
-    class _Opener:
-        def open(self, request, *, timeout: float):
-            assert timeout > 0
-            requests.append(request)
-            if request.full_url.endswith("/auth/login/anonymous"):
-                return _Response(
-                    {
-                        "accessToken": "secret-bearer",
-                        "ownerId": "uo_01_ad_30a1_00000000000000000000000000",
-                        "activePersona": {"personaId": "us_01_30a1_00000000000000000000000000"},
-                        "accountState": "anonymous",
-                        "identityOrigin": "anonymous_device",
-                    }
-                )
-            return _Response({"items": []})
-
-    monkeypatch.setattr(
-        public_api_subject,
-        "build_opener",
-        lambda *_handlers: _Opener(),
-    )
-    client = public_api_subject.PublicApiClient(
-        base_url="https://api.example.test",
-        session_id="readiness-run-a",
-        platform="android",
-        app_version="1.0.0-readiness",
-    )
-
-    guest = client.login_fresh_guest()
-    response = client.for_guest(guest).get_json(
-        "content/feed",
-        page_id="content.feed.list",
-        query={"identity": "work", "limit": "20"},
-    )
-
-    login_request, feed_request = requests
-    login_body = json.loads(login_request.data.decode("utf-8"))
-    assert set(login_body) == {
-        "installId",
-        "deviceFingerprintHash",
-        "platform",
-        "appVersion",
-    }
-    assert login_body["deviceFingerprintHash"] == hashlib.sha256(
-        f"qwq-anonymous-device-v1:{login_body['installId']}".encode("utf-8")
-    ).hexdigest()
-    login_headers = {key.lower(): value for key, value in login_request.header_items()}
-    feed_headers = {key.lower(): value for key, value in feed_request.header_items()}
-    assert login_headers["x-client-page-id"] == "user.login.anonymous"
-    assert "authorization" not in login_headers
-    assert feed_headers["x-client-page-id"] == "content.feed.list"
-    assert feed_headers["authorization"] == "Bearer secret-bearer"
-    assert response.operation is not None
-    assert response.operation.request_id == feed_headers["x-request-id"]
-    assert response.operation.trace_id == feed_headers["x-trace-id"]
-    assert guest.guest_actor_hash == "sha256:" + hashlib.sha256(
-        (
-            "qwq-readiness-guest-v1:"
-            "uo_01_ad_30a1_00000000000000000000000000:"
-            "us_01_30a1_00000000000000000000000000"
-        ).encode("utf-8")
-    ).hexdigest()
-
-
-def test_public_api_client__fresh_guest_rejects_missing_active_persona(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        public_api_subject.PublicApiClient,
-        "_request_json",
-        lambda *_args, **_kwargs: public_api_subject.PublicApiResponse(
-            status=200,
-            payload={
-                "accessToken": "secret-bearer",
-                "ownerId": "uo_01_ad_30a1_00000000000000000000000000",
-                "accountState": "anonymous",
-                "identityOrigin": "anonymous_device",
-            },
-        ),
-    )
-
-    with pytest.raises(
-        public_api_subject.PublicApiClientError,
-        match="canonical anonymous session",
-    ):
-        public_api_subject.PublicApiClient(
-            base_url="https://api.example.test"
-        ).login_fresh_guest()
-
-
-def test_public_api_client__fresh_guest_rejects_empty_persona_id(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        public_api_subject.PublicApiClient,
-        "_request_json",
-        lambda *_args, **_kwargs: public_api_subject.PublicApiResponse(
-            status=200,
-            payload={
-                "accessToken": "secret-bearer",
-                "ownerId": "uo_01_ad_30a1_00000000000000000000000000",
-                "activePersona": {"personaId": "   "},
-                "accountState": "anonymous",
-                "identityOrigin": "anonymous_device",
-            },
-        ),
-    )
-
-    with pytest.raises(
-        public_api_subject.PublicApiClientError,
-        match="canonical anonymous session",
-    ):
-        public_api_subject.PublicApiClient(
-            base_url="https://api.example.test"
-        ).login_fresh_guest()
-
-
-def test_research_verification__fails_with_typed_identity_adapter_blocker(
-    tmp_path: Path,
-) -> None:
-    with pytest.raises(
-        subject.PostApiVerificationError,
-        match="DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE",
-    ):
-        subject.write_post_api_verification(
-            environment=DeploymentEnvironment.ALPHA,
-            release_id="research-001",
-            run_id="verify-001",
-            release_root=tmp_path / "release",
-            importer_report_path=tmp_path / "import.json",
-            creator_importer_report_path=tmp_path / "creator-import.json",
-            output_path=tmp_path / "post-api-verification.json",
-            api_base_url="https://api.alpha.example.test",
-            media_delivery_base_url="https://media.alpha.example.test",
-            readiness_phase="research",
         )

@@ -23,8 +23,21 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
     source_git_sha = "a" * 40
     source_tree_digest = "sha1:" + "b" * 40
     contract_graph_digest = "sha256:" + "9" * 64
-    image_digest = "sha256:" + "e" * 64
-    image_ref = "ghcr.io/owner/repo/gateway@" + image_digest
+    # Each environment builds its own gateway image from the shared capsule, so
+    # no two environments may present the same immutable digest.
+    image_digest_by_environment = {
+        "alpha": "sha256:" + "a" * 64,
+        "beta": "sha256:" + "b" * 64,
+        "gamma": "sha256:" + "c" * 63 + "1",
+        "prod": "sha256:" + "e" * 64,
+    }
+
+    def _image(self, environment: str) -> dict[str, str]:
+        digest = self.image_digest_by_environment[environment]
+        return {
+            "ref": f"ghcr.io/owner/repo/gateway-{environment}@{digest}",
+            "digest": digest,
+        }
 
     def _manifest(self, *, status: str = "candidate-ready") -> dict:
         return {
@@ -37,11 +50,12 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
                 "treeDigest": self.source_tree_digest,
                 "repository": "owner/repo",
             },
-            "images": {
-                "gateway": {
-                    "ref": self.image_ref,
-                    "digest": self.image_digest,
+            "environmentArtifacts": {
+                environment: {
+                    "environment": environment,
+                    "images": {"gateway": self._image(environment)},
                 }
+                for environment in self.image_digest_by_environment
             },
         }
 
@@ -55,12 +69,7 @@ class EnvironmentReleaseReceiptTest(unittest.TestCase):
             "contractGraphDigest": self.contract_graph_digest,
             "runtimeMode": "immutable-oci",
             "runtimeCandidateDigest": self.candidate_id,
-            "runtimeImages": {
-                "gateway": {
-                    "ref": self.image_ref,
-                    "digest": self.image_digest,
-                }
-            },
+            "runtimeImages": {"gateway": self._image(environment)},
             "destructiveRepairPerformed": False,
             "destructiveActions": [],
             "endedAt": "2026-07-28T00:00:11Z",

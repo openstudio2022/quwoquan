@@ -25,6 +25,7 @@ def _build_input_manifest(
     return finalizer.seal_manifest(
         {
             "schema": finalizer.SCHEMA,
+            "releaseTrainId": None,
             "candidateId": None,
             "status": "build-input",
             "generatedAt": "2026-07-28T00:00:00Z",
@@ -36,38 +37,53 @@ def _build_input_manifest(
                 "sourceArchiveDigest": None,
             },
             "artifactDigest": None,
-            "images": {
-                "content-service": {
-                    "repository": repository,
-                    "transportRef": transport_ref,
-                }
-            },
-            "configurationPackages": {
+            "environmentArtifacts": {
                 environment: {
-                    "content-service": {
-                        "path": (
-                            f"packages/environments/{environment}/services/"
-                            "content-service/config/config.yaml"
-                        ),
-                        "digest": "sha256:" + ("c" * 64),
-                    }
+                    "environment": environment,
+                    "environmentArtifactDigest": None,
+                    "images": {
+                        "content-service": {
+                            "repository": repository.replace(
+                                "/content-service",
+                                "/content-service-"
+                                + ("prod" if environment == "prod" else "nonprod"),
+                            ),
+                            "transportRef": transport_ref.replace(
+                                "/content-service:",
+                                "/content-service-"
+                                + ("prod" if environment == "prod" else "nonprod")
+                                + ":",
+                            ),
+                        }
+                    },
+                    "configurationPackages": {
+                        "content-service": {
+                            "path": (
+                                f"packages/environments/{environment}/services/"
+                                "content-service/config/config.yaml"
+                            ),
+                            "digest": "sha256:" + ("c" * 64),
+                        }
+                    },
                 }
                 for environment in finalizer.ENVIRONMENTS
             },
-            "applicationPackages": {
-                environment: {} for environment in finalizer.ENVIRONMENTS
-            },
+            "applicationPackages": {},
+            "publicWeb": None,
+            "androidOfficialRelease": None,
+            "opsPortal": None,
             "contractGraphDigest": None,
             "requiredEvidence": {
-                "images": ["content-service"],
+                "environmentArtifacts": {
+                    environment: ["content-service"]
+                    for environment in finalizer.ENVIRONMENTS
+                },
                 "configurationPackages": {
                     environment: ["content-service"]
                     for environment in finalizer.ENVIRONMENTS
                 },
-                "applicationPackages": {
-                    environment: list(finalizer.APPLICATION_PACKAGES[environment])
-                    for environment in finalizer.ENVIRONMENTS
-                },
+                "applicationPackages": list(finalizer.APPLICATION_PACKAGES),
+                "opsPortal": True,
                 "contractGraphDigest": True,
                 "providerEvidence": True,
                 "testEvidence": list(finalizer.TEST_LAYERS),
@@ -85,12 +101,17 @@ def _build_input_manifest(
                 "whole-application-evidence-pending",
             ],
             "missingEvidence": [
-                "images.content-service.digest",
                 *(
-                    f"applicationPackages.{environment}.{surface}"
+                    f"environmentArtifacts.{environment}.images.content-service.digest"
                     for environment in finalizer.ENVIRONMENTS
-                    for surface in finalizer.APPLICATION_PACKAGES[environment]
                 ),
+                *(
+                    f"applicationPackages.{build_product_id}"
+                    for build_product_id in finalizer.APPLICATION_PACKAGES
+                ),
+                "publicWeb",
+                "androidOfficialRelease",
+                "opsPortal",
                 "contractGraphDigest",
                 "providerEvidence",
                 "testEvidence",
@@ -106,36 +127,45 @@ def _build_input_manifest(
 def _component_manifest(config_bytes: bytes) -> dict[str, object]:
     repository = "ghcr.io/owner/repo/content-service"
     transport_ref = repository + ":sha-candidate"
-    digest = "sha256:" + ("d" * 64)
-    ref = f"{repository}@{digest}"
     manifest = _build_input_manifest(
         repository=repository,
         transport_ref=transport_ref,
     )
     manifest["status"] = "component-ready"
-    manifest["images"] = {
-        "content-service": {
-            "repository": repository,
-            "transportRef": transport_ref,
-            "digest": digest,
-            "ref": ref,
-            "attestations": {
-                "spdxSbom": f"oci://{ref}#spdxSbom",
-                "slsaProvenance": f"oci://{ref}#slsaProvenance",
-            },
-        }
-    }
+    # DEC-005：alpha/beta/gamma 共享 nonprod digest，prod digest 分叉。
     for environment in finalizer.ENVIRONMENTS:
-        manifest["configurationPackages"][environment]["content-service"][
-            "digest"
-        ] = "sha256:" + hashlib.sha256(config_bytes).hexdigest()
+        image = manifest["environmentArtifacts"][environment]["images"][
+            "content-service"
+        ]
+        environment_digest = (
+            f"sha256:{2:064x}" if environment == "prod" else f"sha256:{1:064x}"
+        )
+        environment_repository = image["repository"]
+        environment_ref = f"{environment_repository}@{environment_digest}"
+        manifest["environmentArtifacts"][environment]["images"] = {
+            "content-service": {
+                "repository": environment_repository,
+                "transportRef": image["transportRef"],
+                "digest": environment_digest,
+                "ref": environment_ref,
+                "attestations": {
+                    "spdxSbom": f"oci://{environment_ref}#spdxSbom",
+                    "slsaProvenance": f"oci://{environment_ref}#slsaProvenance",
+                },
+            }
+        }
+        manifest["environmentArtifacts"][environment]["configurationPackages"][
+            "content-service"
+        ]["digest"] = "sha256:" + hashlib.sha256(config_bytes).hexdigest()
     manifest["blockers"] = ["whole-application-evidence-pending"]
     manifest["missingEvidence"] = [
         *(
-            f"applicationPackages.{environment}.{surface}"
-            for environment in finalizer.ENVIRONMENTS
-            for surface in finalizer.APPLICATION_PACKAGES[environment]
+            f"applicationPackages.{build_product_id}"
+            for build_product_id in finalizer.APPLICATION_PACKAGES
         ),
+        "publicWeb",
+        "androidOfficialRelease",
+        "opsPortal",
         "contractGraphDigest",
         "providerEvidence",
         "testEvidence",
@@ -211,65 +241,45 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
 
     def test_collector_resolves_ghcr_tag_to_digest_descriptor(self) -> None:
         manifest = _build_input_manifest()
-        digest = "sha256:" + ("a" * 64)
-        completed = subprocess.CompletedProcess(
-            ["docker"],
-            0,
-            stdout=f"Name: image\nMediaType: application/vnd.oci.image.index.v1+json\nDigest: {digest}\n",
-            stderr="",
-        )
+        digest = "sha256:" + f"{1:064x}"
+
+        def resolve(ref: str) -> str:
+            # DEC-005：nonprod 三环境同一 digest，prod 分叉。
+            return f"sha256:{2:064x}" if "-prod:" in ref else digest
+
         with (
             tempfile.TemporaryDirectory() as tmp,
-            mock.patch.object(collector.subprocess, "run", return_value=completed),
+            mock.patch.object(
+                collector,
+                "resolve_registry_digest",
+                side_effect=resolve,
+            ),
             mock.patch.object(collector, "verify_oci_supply_chain") as verify,
         ):
             output = Path(tmp)
             descriptors = collector.collect(manifest, output)
             recorded = json.loads(
-                output.joinpath("content-service.json").read_text(encoding="utf-8")
+                output.joinpath("alpha/content-service.json").read_text(encoding="utf-8")
             )
-        self.assertEqual(descriptors["content-service"]["digest"], digest)
+        self.assertEqual(descriptors["alpha"]["content-service"]["digest"], digest)
         self.assertEqual(
             recorded["ref"],
-            f"ghcr.io/owner/repo/content-service@{digest}",
+            f"ghcr.io/owner/repo/content-service-nonprod@{digest}",
         )
-        verify.assert_called_once_with(
-            f"ghcr.io/owner/repo/content-service@{digest}",
+        self.assertEqual(verify.call_count, 4)
+        verify.assert_any_call(
+            f"ghcr.io/owner/repo/content-service-nonprod@{digest}",
             repository="owner/repo",
             signer_workflow="owner/repo/.github/workflows/service_pipeline.yml",
         )
 
     def test_collector_resolves_independent_images_concurrently(self) -> None:
         manifest = _build_input_manifest()
-        repository = "ghcr.io/owner/repo/user-service"
-        manifest["images"]["user-service"] = {
-            "repository": repository,
-            "transportRef": repository + ":sha-candidate",
-        }
-        manifest["requiredEvidence"]["images"] = [
-            "content-service",
-            "user-service",
-        ]
-        for environment in finalizer.ENVIRONMENTS:
-            manifest["configurationPackages"][environment]["user-service"] = {
-                "path": (
-                    f"packages/environments/{environment}/services/"
-                    "user-service/config/config.yaml"
-                ),
-                "digest": "sha256:" + ("c" * 64),
-            }
-            manifest["requiredEvidence"]["configurationPackages"][environment] = [
-                "content-service",
-                "user-service",
-            ]
-        manifest["missingEvidence"].insert(1, "images.user-service.digest")
-        manifest = finalizer.seal_manifest(manifest)
-        rendezvous = threading.Barrier(2, timeout=2)
-        digest = "sha256:" + ("a" * 64)
+        rendezvous = threading.Barrier(4, timeout=2)
 
-        def resolve(_ref: str) -> str:
+        def resolve(ref: str) -> str:
             rendezvous.wait()
-            return digest
+            return f"sha256:{2:064x}" if "-prod:" in ref else f"sha256:{1:064x}"
 
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -278,9 +288,9 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
         ):
             descriptors = collector.collect(manifest, Path(tmp))
 
-        self.assertEqual(
-            list(descriptors),
-            ["content-service", "user-service"],
+        self.assertEqual(list(descriptors), list(finalizer.ENVIRONMENTS))
+        self.assertTrue(
+            all(list(images) == ["content-service"] for images in descriptors.values())
         )
 
     def test_collector_rejects_latest_and_non_ghcr(self) -> None:
@@ -291,8 +301,8 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "must not use latest"):
                 collector.collect(base, Path(tmp))
             base = _build_input_manifest(
-                repository="docker.io/owner/content",
-                transport_ref="docker.io/owner/content:sha-candidate",
+                repository="docker.io/owner/content-service",
+                transport_ref="docker.io/owner/content-service:sha-candidate",
             )
             with self.assertRaisesRegex(ValueError, "transport reference is invalid"):
                 collector.collect(base, Path(tmp))

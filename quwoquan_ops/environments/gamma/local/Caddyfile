@@ -7,6 +7,17 @@
 }
 
 (media_cors) {
+	# 私有交付前缀（CAS objects / processed）只允许经短签 URL 访问
+	# （DEC-031 网络层边缘守卫）：签名真伪与绝对到期在字节交付边缘经
+	# forward_auth 复算，verifier 由 quwoquan_service/runtime/media 单点
+	# 拥有并挂载在 content-service /internal/media/delivery-auth；签名
+	# 缺失、伪造、篡改或过期均 403。Range 每段请求都会重新复算。
+	@private_media {
+		path /media/objects/* /media/processed/*
+	}
+	forward_auth @private_media content-service:18080 {
+		uri /internal/media/delivery-auth
+	}
 	# ?Cache-Control keeps the default no-store only when the immutable
 	# matcher below did not already set a Cache-Control. A hard-coded
 	# Cache-Control here would overwrite the immutable policy at flush time.
@@ -45,6 +56,9 @@ https://{$QWQ_PUBLIC_WEB_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 		path /api/*
 	}
 	uri @web_api strip_prefix /api
+	handle @web_api {
+		import business_api_edge
+	}
 	# 公开 SEO 读面（public-content-web-entry）：publicWeb host 的对象页、
 	# robots/sitemap 与 UA 分流中转页直连 content-service /public-web/*；
 	# 业务 API 路径所有权不在此复制。
@@ -86,6 +100,101 @@ https://{$QWQ_PUBLIC_WEB_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 		}
 		file_server
 	}
+	@public_web_runtime_config {
+		host {$QWQ_PUBLIC_WEB_HOST}
+		path /runtime-config-trust.json /runtime-config-package.json
+	}
+	handle @public_web_runtime_config {
+		header {
+			Cache-Control "no-store"
+			Content-Type "application/json; charset=utf-8"
+			X-Content-Type-Options "nosniff"
+		}
+		root * /srv/web
+		file_server
+	}
+	@public_web_service_worker {
+		host {$QWQ_PUBLIC_WEB_HOST}
+		path /flutter_service_worker.js
+	}
+	handle @public_web_service_worker {
+		header {
+			Cache-Control "no-cache, no-store, must-revalidate"
+			Content-Type "application/javascript; charset=utf-8"
+			X-Content-Type-Options "nosniff"
+			X-QWQ-Web-Content-Digest "{$QWQ_PUBLIC_WEB_CONTENT_DIGEST}"
+		}
+		root * /srv/web
+		file_server
+	}
+	@public_web_revalidated_font_ttf {
+		host {$QWQ_PUBLIC_WEB_HOST}
+		path *.ttf
+	}
+	handle @public_web_revalidated_font_ttf {
+		header {
+			Cache-Control "no-cache, must-revalidate"
+			Content-Type "font/ttf"
+			X-Content-Type-Options "nosniff"
+			X-QWQ-Web-Content-Digest "{$QWQ_PUBLIC_WEB_CONTENT_DIGEST}"
+		}
+		root * /srv/web
+		file_server
+	}
+	@public_web_revalidated_font_woff2 {
+		host {$QWQ_PUBLIC_WEB_HOST}
+		path *.woff2
+	}
+	handle @public_web_revalidated_font_woff2 {
+		header {
+			Cache-Control "no-cache, must-revalidate"
+			Content-Type "font/woff2"
+			X-Content-Type-Options "nosniff"
+			X-QWQ-Web-Content-Digest "{$QWQ_PUBLIC_WEB_CONTENT_DIGEST}"
+		}
+		root * /srv/web
+		file_server
+	}
+	# Flutter Web emits stable, unversioned URLs for the App shell and asset
+	# tree. The active immutable package may change behind the same public
+	# origin, so those URLs must revalidate instead of retaining an older
+	# package for one year. The package digest remains an evidence header; it
+	# is deliberately not treated as a browser cache key.
+	@public_web_revalidated_asset {
+		host {$QWQ_PUBLIC_WEB_HOST}
+		path /assets/* /canvaskit/* /icons/* /main.dart.js /flutter.js /flutter_bootstrap.js
+	}
+	handle @public_web_revalidated_asset {
+		header {
+			Cache-Control "no-cache, must-revalidate"
+			X-Content-Type-Options "nosniff"
+			X-QWQ-Web-Content-Digest "{$QWQ_PUBLIC_WEB_CONTENT_DIGEST}"
+		}
+		root * /srv/web
+		file_server
+	}
+	@public_web_app host {$QWQ_PUBLIC_WEB_HOST}
+	handle @public_web_app {
+		root * /srv/web
+		# `route` preserves this literal order. The HTML matcher therefore sees
+		# `/index.html` after SPA fallback rewriting, including deep-link refreshes.
+		route {
+			try_files {path} /index.html
+			@public_web_html path /index.html
+			header @public_web_html {
+				Cache-Control "no-cache, must-revalidate"
+				Content-Type "text/html; charset=utf-8"
+				X-Robots-Tag "noindex, nofollow"
+			}
+			header {
+				X-Content-Type-Options "nosniff"
+				X-Frame-Options "DENY"
+				Referrer-Policy "no-referrer"
+				X-QWQ-Web-Content-Digest "{$QWQ_PUBLIC_WEB_CONTENT_DIGEST}"
+			}
+			file_server
+		}
+	}
 	handle {
 		import business_api_edge
 	}
@@ -98,8 +207,13 @@ https://{$QWQ_PUBLIC_RTC_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 
 https://{$QWQ_PUBLIC_OPS_HOST}:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010} {
 	import public_gamma_tls
+	# Product Ops 的非业务探针与 deploy/base 同源，精确转发到 owner；
+	# /ops 与 /control-plane 的业务请求仍唯一进入 api-edge。
 	handle /healthz {
-		import business_api_edge
+		reverse_proxy product-ops-service:18086
+	}
+	handle /readyz {
+		reverse_proxy product-ops-service:18086
 	}
 	handle /ops/* {
 		import business_api_edge

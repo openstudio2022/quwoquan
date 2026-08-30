@@ -43,14 +43,6 @@ final class StartupEagerPluginRegistry {
         flutterEngine,
         "flutter_plugin_android_lifecycle",
         "io.flutter.plugins.flutter_plugin_android_lifecycle.FlutterAndroidLifecyclePlugin");
-    registerOptionalDevelopmentPlugin(
-        flutterEngine,
-        "integration_test",
-        "dev.flutter.plugins.integration_test.IntegrationTestPlugin");
-    registerOptionalDevelopmentPlugin(
-        flutterEngine,
-        "patrol",
-        "pl.leancode.patrol.PatrolPlugin");
   }
 
   private static void registerPlugin(
@@ -70,17 +62,6 @@ final class StartupEagerPluginRegistry {
       flutterEngine.getPlugins().add(typedClass.getDeclaredConstructor().newInstance());
     } catch (Exception | LinkageError error) {
       Log.e(TAG, "Error registering eager plugin " + pluginName + ", " + className, error);
-    }
-  }
-
-  private static void registerOptionalDevelopmentPlugin(
-      @NonNull FlutterEngine flutterEngine,
-      @NonNull String pluginName,
-      @NonNull String className) {
-    try {
-      registerPlugin(flutterEngine, pluginName, className);
-    } catch (LinkageError error) {
-      Log.v(TAG, "Optional development plugin not present: " + pluginName);
     }
   }
 }

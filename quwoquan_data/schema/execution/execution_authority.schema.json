@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/execution_authority.schema.json",
+  "description": "campaign 执行授权，互斥 oneOf：bounded_explicit 只授权 M1–M10 explicit 单 worker 小批执行且永不产生 capacity qualification；governed_calibration 携带受治理容量标定，是 M100+ 的唯一路径。",
+  "oneOf": [
+    { "$ref": "#/$defs/boundedExplicit" },
+    { "$ref": "#/$defs/governedCalibration" }
+  ],
+  "$defs": {
+    "boundedExplicit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "policyId",
+        "policyRef",
+        "policyDigest",
+        "maxTotalObjects",
+        "maxWorkers",
+        "objectWallClockSeconds",
+        "completionGraceSeconds",
+        "sourceDiscoveryHeartbeatIntervalSeconds",
+        "sourceDiscoveryHeartbeatStaleAfterSeconds"
+      ],
+      "properties": {
+        "mode": { "const": "bounded_explicit" },
+        "policyId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "policyRef": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "policyDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "maxTotalObjects": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "本次授权的全 campaign 对象总量上限，来自受版本控制 policy，不可由请求上调。"
+        },
+        "maxWorkers": {
+          "const": 1,
+          "description": "bounded 授权只允许单 worker。"
+        },
+        "objectWallClockSeconds": { "type": "integer", "minimum": 1 },
+        "completionGraceSeconds": { "type": "integer", "minimum": 1 },
+        "sourceDiscoveryHeartbeatIntervalSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "来源发现阶段存活心跳间隔，由受版本控制 policy 声明；bounded 授权不产生 capacity qualification，同样不产生存活标定。"
+        },
+        "sourceDiscoveryHeartbeatStaleAfterSeconds": {
+          "type": "integer",
+          "minimum": 2,
+          "description": "失去心跳的判定阈值，严格大于心跳间隔。"
+        }
+      }
+    },
+    "governedCalibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "calibration"],
+      "properties": {
+        "mode": { "const": "governed_calibration" },
+        "calibration": {
+          "$ref": "governed_capacity_calibration_receipt.schema.json#/$defs/sourceBinding"
+        }
+      }
+    }
+  }
+}

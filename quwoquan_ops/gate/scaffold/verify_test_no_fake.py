@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+sys.dont_write_bytecode = True
+
 _SCAFFOLD_ROOT = Path(__file__).resolve().parent
 if str(_SCAFFOLD_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCAFFOLD_ROOT))

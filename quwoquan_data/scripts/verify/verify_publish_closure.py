@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 
 
+sys.dont_write_bytecode = True
+
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
@@ -29,7 +31,7 @@ def main() -> int:
         for issue in issues:
             print(f"  - {issue['code']}: {issue['ref']}")
         return 1
-    print(f"[verify_publish_closure] OK casObjects={report['casObjectCount']}")
+    print(f"[verify_publish_closure] OK mediaRefs={report['mediaRefCount']}")
     return 0
 
 

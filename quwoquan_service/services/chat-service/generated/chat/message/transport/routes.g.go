@@ -18,6 +18,7 @@ var RouteTable = []RouteEntry{
 	{"POST", "/internal/chat/conversations/{conversationId}/assistant-delivery-messages", "SendAssistantDeliveryMessage"},
 	{"POST", "/chat/conversations/{conversationId}/messages/{messageId}/recall", "RecallMessage"},
 	{"GET", "/chat/conversations/{conversationId}/messages", "ListMessages"},
+	{"GET", "/chat/conversations/{conversationId}/assets", "ListConversationAssets"},
 	{"POST", "/chat/conversations/{conversationId}/sync", "SyncMessages"},
 }
 

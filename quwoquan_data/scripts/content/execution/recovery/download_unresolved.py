@@ -3,6 +3,7 @@ from __future__ import annotations
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, DataIssue, DataIssueCode, DataIssueStage, DataIssueLane, DataRecoveryAction, ExecutionContext, MAX_REACT_REWINDS, Mapping, Path, _active_spec, _download_repair_lanes, data_issue, execution_root, issue_messages, load_execution_state, re, read_json, require_domain_etype, store, write_json
 from content.execution.target_integrity import frozen_target_names
+from content.source.research.source_discovery_scheduler import SINGLE_RUN_OBSERVATION
 
 def _download_plan_unresolved_entities(ctx: ExecutionContext) -> dict[str, dict[str, list[str]]]:
     from content.execution.recovery.download_gate import _download_research_lane_issues
@@ -461,8 +462,15 @@ def _auto_research_wave_summary(
         "updatedCount": len(report.get("updated") or []),
         "readyTargetCount": int((availability or {}).get("readyTargetCount") or 0),
         "ineligibleTargetCount": int((availability or {}).get("ineligibleTargetCount") or 0),
+        # 耗时与每分钟实体数只是这次运行的观测事实，随字段自带声明位一起传递。
+        "factKind": SINGLE_RUN_OBSERVATION,
         "elapsedSeconds": float((throughput or {}).get("elapsedSeconds") or 0),
         "entitiesPerMinute": float((throughput or {}).get("entitiesPerMinute") or 0),
-        "maxWorkers": int((throughput or {}).get("maxWorkers") or 0),
+        "frozenMaxConcurrentWorkers": int(
+            (throughput or {}).get("frozenMaxConcurrentWorkers") or 0
+        ),
+        "peakConcurrentWorkers": int(
+            (throughput or {}).get("peakConcurrentWorkers") or 0
+        ),
         "recordedAt": store.now_iso(),
     }

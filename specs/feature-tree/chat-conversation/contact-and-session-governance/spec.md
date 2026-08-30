@@ -52,9 +52,9 @@
 <a id="req-002"></a>
 ### REQ-002 拉黑门禁级联与取消拉黑不自动恢复关系
 
-- 创建 BlockEdge 幂等，并删除双方 FollowEdge、失效双方 pending GreetingRequest、发布 UserBlocked。
+- 创建 BlockEdge 幂等，并删除双方 FollowEdge、失效双方 pending GreetingRequest、发布 PersonaBlocked。
 - 任一方向存在拉黑时，关注、打招呼、建会话、SendMessage、1v1 RTC 均由服务端拒绝。
-- 取消拉黑只删除 BlockEdge 并发布 UserUnblocked，不恢复关注边和 blocked 请求。
+- 取消拉黑只删除 BlockEdge 并发布 PersonaUnblocked，不恢复关注边和 blocked 请求。
 - 既有 1v1 conversation 只读保留，不能继续发送新消息。
 
 <a id="req-003"></a>
@@ -78,7 +78,7 @@
 
 - metadata、codegen、Go struct、Dart DTO 中不存在旧关系等级字段。
 - CreateConversation、SendMessage、RTC 均定义 relationship/blocked 结构化错误码。
-- UserBlocked/UserUnblocked、GreetingRequestReplied、MessageSent 事件字段可被端云测试引用。
+- PersonaBlocked/PersonaUnblocked、GreetingRequestReplied、MessageSent 事件字段可被端云测试引用。
 
 <a id="req-006"></a>
 ### REQ-006 不因拉黑删除既有消息；既有会话只读保留，禁止继续发送
@@ -117,9 +117,9 @@
 
 - GIVEN 执行“拉黑门禁级联与取消拉黑不自动恢复关系”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“拉黑门禁级联与取消拉黑不自动恢复关系”对应动作。
-- THEN 创建 BlockEdge 幂等，并删除双方 FollowEdge、失效双方 pending GreetingRequest、发布 UserBlocked。
+- THEN 创建 BlockEdge 幂等，并删除双方 FollowEdge、失效双方 pending GreetingRequest、发布 PersonaBlocked。
 - THEN 任一方向存在拉黑时，关注、打招呼、建会话、SendMessage、1v1 RTC 均由服务端拒绝。
-- THEN 取消拉黑只删除 BlockEdge 并发布 UserUnblocked，不恢复关注边和 blocked 请求。
+- THEN 取消拉黑只删除 BlockEdge 并发布 PersonaUnblocked，不恢复关注边和 blocked 请求。
 - THEN 既有 1v1 conversation 只读保留，不能继续发送新消息。
 
 <a id="sit-003"></a>
@@ -149,4 +149,4 @@
 - WHEN 参与者发起“关系治理 metadata 与端云 DTO 一致”对应动作。
 - THEN metadata、codegen、Go struct、Dart DTO 中不存在旧关系等级字段。
 - THEN CreateConversation、SendMessage、RTC 均定义 relationship/blocked 结构化错误码。
-- THEN UserBlocked/UserUnblocked、GreetingRequestReplied、MessageSent 事件字段可被端云测试引用。
+- THEN PersonaBlocked/PersonaUnblocked、GreetingRequestReplied、MessageSent 事件字段可被端云测试引用。

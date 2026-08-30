@@ -132,6 +132,8 @@ func render(operations []ast.Operation) string {
 	builder.WriteString("// Code generated from the unified ContractGraph source. DO NOT EDIT.\n")
 	builder.WriteString("// Regenerate with: go run ./tools/codegen_operation_privacy\n\n")
 	builder.WriteString("package runtimeobservability\n\n")
+	builder.WriteString("// generatedOperationPrivacyPolicyCount 与下表同源，由同一次 normalize 派生。\n")
+	builder.WriteString(fmt.Sprintf("const generatedOperationPrivacyPolicyCount = %d\n\n", len(operations)))
 	builder.WriteString("// generatedOperationPrivacyPolicies 是 operation.privacy 的运行时投影。\n")
 	builder.WriteString("// key 为 ContractGraph operation id；查不到即 fail-closed。\n")
 	builder.WriteString("var generatedOperationPrivacyPolicies = map[string]OperationPrivacyPolicy{\n")
@@ -204,6 +206,11 @@ func renderDart(operations []ast.Operation) string {
 	builder.WriteString("  /// 契约声明的埋点维度白名单；埋点只允许出现这些键。\n")
 	builder.WriteString("  final Set<String> telemetryAttributes;\n")
 	builder.WriteString("}\n\n")
+	builder.WriteString("/// 与下表同源的条目数；完整性测试不得手写第二个计数。\n")
+	builder.WriteString(fmt.Sprintf(
+		"const int generatedOperationPrivacyPolicyCount = %d;\n\n",
+		len(operations),
+	))
 	builder.WriteString("/// operation.privacy 的端侧运行时投影。\n")
 	builder.WriteString("/// key 为 ContractGraph operation id；查不到即 fail-closed。\n")
 	builder.WriteString(

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import shutil
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,6 +14,8 @@ from typing import Any
 from core.io import read_json, write_json
 from core.page_media import HomepageMediaDisposition
 from core.paths import execution_entity_object_dir, execution_root
+
+MEDIA_DISPOSITIONS_REF = Path("evidence") / "media_dispositions.json"
 
 from content.execution.asset_registry import (
     allocate_post_asset_id,
@@ -212,16 +216,12 @@ def select_homepage_assets(
                 f"{acquisition_status or 'unknown'}/"
                 f"{distribution_decision or 'unknown'}"
             )
-        from core.image_safety import watermark_prone_source_reason
+        from core.media_source_provenance import declared_provenance_exclusion_reason
 
-        return watermark_prone_source_reason(
-            (
-                str(image.get("sourceUrl") or ""),
-                str(image.get("collectionPageUrl") or ""),
-                str(image.get("authorizationProof") or ""),
-                str(image.get("termsUrl") or ""),
-            )
-        )
+        # 水印高风险按出处类别裁决（原始平台 / 搬运路径 / 权利人是否第一手声明），
+        # 与采集侧同一判据：出处同类的两张素材不因文件名或 URL 形态得到相反结论。
+        # 素材行没写任何出处声明位时该裁决返回未声明理由，本截面据此判否。
+        return declared_provenance_exclusion_reason(image)
 
     candidates: list[dict[str, Any]] = []
     for image in all_images:
@@ -450,32 +450,57 @@ def select_homepage_assets(
     )
 
 
-def copy_homepage_asset(
+def allocate_homepage_asset_id(
     execution_id: str,
-    entity_dir: Path,
     name: str,
-    image: dict[str, Any],
+    image: Mapping[str, Any],
     *,
-    role: str = "cover",
-) -> dict[str, Any]:
-    src = Path(str(image.get("path") or ""))
-    if not src.is_file():
-        return {}
+    role: str,
+    fallback_ref: str = "",
+) -> str:
+    """在 `1.download` 截面为一张可发布图分配 `assetId`（DEC-029）。
+
+    `execution_sequence` 与 asset registry 在该截面均已在场，所以 id 没有推迟到
+    物化期的理由；推迟会让同一份事实分两次成型，构成双读。返回空串表示运行态
+    未就绪，调用方按缺席处理而不是自造一个 id。
+    """
     manifest = load_execution_runtime_state(execution_id)
     execution_sequence = manifest.execution_sequence if manifest is not None else 0
     if execution_sequence <= 0:
-        return {}
+        return ""
     registry = load_execution_asset_registry(execution_id, execution_sequence)
-    asset_id = allocate_post_asset_id(
+    return allocate_post_asset_id(
         entity_name=name,
         role=role,
-        ref=str(image.get("sourceAssetRef") or image.get("sourceRef") or entity_dir.as_posix()),
+        ref=str(
+            image.get("sourceAssetRef") or image.get("sourceRef") or fallback_ref
+        ),
         execution_sequence=execution_sequence,
         registry=registry,
         caption=str(image.get("caption") or image.get("relevance") or ""),
         section_slug=str(image.get("sectionAnchor") or ""),
         ordinal=int(image.get("sourceOrder") or 0) + 1,
     )
+
+
+def copy_homepage_asset(
+    execution_id: str,
+    entity_dir: Path,
+    name: str,
+    image: dict[str, Any],
+    *,
+    asset_id: str,
+    role: str = "cover",
+) -> dict[str, Any]:
+    """按冻结的 `assetId` 落字节。物化期不分配 id，只兑现 `1.download` 的结论。"""
+    src = Path(str(image.get("path") or ""))
+    if not src.is_file():
+        return {}
+    asset_id = str(asset_id or "").strip()
+    if not asset_id:
+        raise ValueError(
+            f"{name}: homepage asset must carry a frozen assetId before materialization"
+        )
     assets_dir = entity_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
     suffix = src.suffix or ".jpg"
@@ -515,9 +540,14 @@ def write_homepage_media_dispositions(
     entity_dir: Path,
     execution_id: str,
     object_ref: str,
-    records: list[HomepageMediaDisposition],
-) -> None:
-    """Persist one complete, schema-validated disposition per source asset."""
+    records: Sequence[HomepageMediaDisposition],
+) -> dict[str, Any]:
+    """Create-once 落一份完整、逐图唯一、经 schema 校验的处置。
+
+    处置在 `1.download` 成型一次（DEC-029），此后只被消费。所以这里用 create-once
+    而不是覆盖写：重跑写出相同字节是幂等，写出不同字节说明有第二个决策点在改结论，
+    必须当场失败而不是让后写的一方赢。
+    """
 
     from core.schema import assert_valid
 
@@ -536,4 +566,23 @@ def write_homepage_media_dispositions(
         "homepage_media_dispositions",
         label=f"homepage_media_dispositions:{object_ref}",
     )
-    write_json(entity_dir / "evidence" / "media_dispositions.json", payload)
+    _create_once_json(entity_dir / MEDIA_DISPOSITIONS_REF, payload)
+    return payload
+
+
+def _create_once_json(path: Path, payload: Mapping[str, Any]) -> None:
+    body = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    except FileExistsError:
+        existing = path.read_text(encoding="utf-8")
+        if existing != body:
+            raise ValueError(
+                f"homepage media disposition already frozen with different content: {path}"
+            ) from None
+        return
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(body)
+        handle.flush()
+        os.fsync(handle.fileno())

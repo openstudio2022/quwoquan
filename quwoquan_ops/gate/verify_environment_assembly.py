@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
 import yaml
+
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -166,7 +169,13 @@ def validate_service_build_image_contract() -> list[str]:
     service_pipeline = (
         ROOT / ".github/workflows/service_pipeline.yml"
     ).read_text(encoding="utf-8")
-    if 'runtime["targets"]["prod-hosted"]["buildImages"]' not in service_pipeline:
+    # 收敛的是「从受治理的 prod runtime.yaml 取 prod-hosted 构建镜像」这件事本身，
+    # 而不是取值表达式换行在哪里，所以先折叠空白再比对下标链。
+    collapsed_pipeline = re.sub(r"\s+", "", service_pipeline)
+    if (
+        "quwoquan_ops/environments/prod/runtime.yaml" not in service_pipeline
+        or '["targets"]["prod-hosted"]["buildImages"]' not in collapsed_pipeline
+    ):
         issues.append("service pipeline must read prod-hosted governed build images")
     for image_variable, output in (
         ("GO_BASE_IMAGE", "go_base_image"),

@@ -9,6 +9,7 @@ from typing import Iterable
 from core.io import read_json
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, RELEASE_ROOT
 from core.release_layout import payload_file
+from content.release.canonical.canonical_inventory import canonical_inventory_path
 from content.release.canonical.object_transaction_contract import (
     ALLOWED_CANONICAL_ROOTS,
     _safe_id,
@@ -61,6 +62,12 @@ def reset_canonical_publish(
     baseline receipt precondition prevents an operator from deleting objects
     still represented in a target environment, while the publish lock serializes
     reset against the next promotion transaction.
+
+    The inventory sidecar is a derived index of exactly this tree, and every
+    other writer mutates the two together inside the same fence.  Reset is the
+    only sanctioned out-of-band tree mutation, so it must drop the index in the
+    same fenced step; otherwise the next promotion would read entries for files
+    the reset deleted and fail with an inventory CAS drift.
     """
 
     release_id = _safe_id(empty_baseline_release, label="emptyBaselineRelease")
@@ -89,7 +96,7 @@ def reset_canonical_publish(
             raise RuntimeError("GATE_BLOCK empty baseline is not applied in every requested environment")
 
         publish_root.mkdir(parents=True, exist_ok=True)
-        with canonical_publish_lock():
+        with canonical_publish_lock(publish_root):
             unknown_roots = sorted(
                 entry.name
                 for entry in publish_root.iterdir()
@@ -107,6 +114,11 @@ def reset_canonical_publish(
             )
             for root_name in removed_roots:
                 shutil.rmtree(publish_root / root_name)
+            inventory_path = canonical_inventory_path(publish_root)
+            inventory_path.unlink(missing_ok=True)
+            inventory_path.with_name(f"{inventory_path.name}-journal").unlink(
+                missing_ok=True
+            )
     return removed_roots
 
 

@@ -260,7 +260,15 @@ func LoadCreatorsForRelease(
 	if state.Schema != releaseSchema || strings.TrimSpace(state.ReleaseID) == "" {
 		return desiredState{}, nil, fmt.Errorf("invalid immutable release desired state")
 	}
-	releaseAssets, err := runtimemedia.LoadReleaseMediaAssets(releaseRoot, state.ReleaseID)
+	releaseClass, err := loadReleaseClass(releaseRoot)
+	if err != nil {
+		return desiredState{}, nil, err
+	}
+	releaseAssets, err := runtimemedia.LoadReleaseMediaAssets(
+		releaseRoot,
+		state.ReleaseID,
+		releaseClass,
+	)
 	if err != nil {
 		return desiredState{}, nil, fmt.Errorf("load release media authority: %w", err)
 	}
@@ -295,7 +303,7 @@ func LoadCreatorsForRelease(
 					resolveErr,
 				)
 			}
-			profile.AvatarURL = resolved.PublicURL
+			profile.AvatarURL = resolved.DeliveryRef
 			profile.AvatarVersion = resolved.Version
 			profile.AvatarPublicSliceKey = resolved.PublicSliceKey
 		}
@@ -309,6 +317,26 @@ func LoadCreatorsForRelease(
 		return records[left].Profile.CreatorID < records[right].Profile.CreatorID
 	})
 	return state, records, nil
+}
+
+// loadReleaseClass reads the frozen delivery class from the immutable release
+// header; delivery form is asserted from the release, never inferred (DEC-031).
+func loadReleaseClass(releaseRoot string) (string, error) {
+	raw, err := os.ReadFile(filepath.Join(releaseRoot, "payload", "release.json"))
+	if err != nil {
+		return "", fmt.Errorf("read release header: %w", err)
+	}
+	var header struct {
+		ReleaseClass string `json:"releaseClass"`
+	}
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return "", fmt.Errorf("decode release header: %w", err)
+	}
+	releaseClass := strings.TrimSpace(header.ReleaseClass)
+	if releaseClass == "" {
+		return "", fmt.Errorf("release header releaseClass is required")
+	}
+	return releaseClass, nil
 }
 
 func safeRef(ref string) error {

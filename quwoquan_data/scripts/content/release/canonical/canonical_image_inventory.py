@@ -16,6 +16,7 @@ from typing import Any
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _digest_file,
+    object_lineage,
 )
 from core.image_deduplication import perceptual_hash_distance
 from core.image_safety import NEAR_DUP_HAMMING
@@ -317,7 +318,15 @@ def assert_image_manifest_unique(
     manifest: Mapping[str, Any],
     excluded_manifest_path: str,
 ) -> None:
-    """Reject exact and radius-bounded duplicates using indexed candidates."""
+    """Reject exact and radius-bounded duplicates using indexed candidates.
+
+    Duplication is asked of the object, not of the file: the excluded manifest's
+    own lineage covers the version being written and every version of it already
+    published, so a forward-only successor is not a duplicate of what it
+    supersedes while any other object holding the image still is.
+    """
+
+    excluded_lineage = object_lineage(excluded_manifest_path)
     accepted_pending: list[dict[str, Any]] = []
     for identity in _image_identities(manifest):
         candidates: dict[tuple[str, int], sqlite3.Row] = {}
@@ -348,6 +357,7 @@ def assert_image_manifest_unique(
                 "perceptualHash": row[4],
             }
             for row in candidates.values()
+            if object_lineage(str(row[0])) != excluded_lineage
         ] + accepted_pending
         for peer in peers:
             peer_ref = str(peer.get("manifestPath") or "pending-post")

@@ -74,7 +74,6 @@ abstract final class FoundationText {
   static const String loginOtpReadinessChecking = '正在准备…';
   static const String loginOtpReadinessRetry = '重试';
   static const String loginOtpDeliveryQueued = '验证码发送中，请稍候';
-  static const String loginOtpDeliverySent = '验证码已发送，请查看短信';
   static const String loginOtpDeliveryConfirming = '验证码发送中，请稍候';
   static const String loginOtpDeliveryUnknown = '请输入短信中的 6 位验证码';
   static const String loginOtpDeliveryFailedCountdown = '验证码发送失败，请在 %d 秒后重新获取';
@@ -89,7 +88,8 @@ abstract final class FoundationText {
   static const String loginSocialAuthorizingAlipay = '正在前往支付宝';
   static const String loginSocialAuthorizingSubtitle = '请在%s完成授权';
   static const String loginSocialAuthorizationFailed = '授权未完成';
-  static const String loginSocialAuthorizationFailedSubtitle = '请重试';
+  static const String loginSocialAuthorizationFailedSubtitle =
+      '你可以重新授权，或返回选择其他登录方式';
   static const String loginSocialAuthorizationRetry = '重新授权';
   static const String loginSocialAuthorizationCancel = '取消';
   static const String loginBindPhoneTitle = '绑定手机号';
@@ -274,6 +274,15 @@ abstract final class FoundationText {
   static const String runtimeRecoveryUpdateAvailableMessage =
       '可更新后重试，或先使用网页版继续';
   static const String runtimeRecoveryCompleted = '已重新进入应用';
+  static const String startupConfigErrorTitle = '应用配置无效';
+  static const String startupConfigErrorMessage =
+      '当前安装包的运行配置缺失或已过期，无法连接服务。请前往官方渠道重新安装最新版本。';
+  static const String startupConfigErrorKeysLabel = '异常配置项';
+  static const String startupConfigErrorCopyAction = '复制诊断信息';
+  static const String startupConfigErrorCopied = '诊断信息已复制';
+  static const String startupConfigErrorDebugRepair =
+      '开发提示：请从主工作树经 canonical launcher handoff 重新构建，'
+      '不要复用过期构建产物或旧工作树入口。';
   static const String commentPlaceholder = '添加评论...';
   static const String commentTooLong = '评论过长';
   static const String commentEmpty = '评论不能为空';

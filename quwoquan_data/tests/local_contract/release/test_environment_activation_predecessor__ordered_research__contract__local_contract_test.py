@@ -48,10 +48,17 @@ def _previous_receipt(output: Path, environment: str) -> Path:
         "releaseClass": "research",
         "productLifecycleState": "research",
         "readinessPhase": "research",
+        # research 收据的 schema 条件必需字段（allOf: readinessPhase=research）；
+        # 单轨谓词同样要求它们非空。
+        "internalSubjectHash": "sha256:" + "c" * 64,
+        "researchIsolationVerificationRef": (
+            f"env/{environment}/runs/data-release/release-m100/"
+            f"verify-{environment}/research-isolation-verification.json"
+        ),
+        "researchIsolationVerificationDigest": "sha256:" + "d" * 64,
         "verifyRunId": f"verify-{environment}",
         "activationEnvelope": activation,
         "activationEnvelopeDigest": document_digest(activation),
-        "appUatEnvelopeDigest": "sha256:" + "3" * 64,
         "passed": True,
     }
     receipt["verificationChecksum"] = _checksum(receipt)
@@ -86,6 +93,12 @@ def test_beta_freezes_exact_alpha_readiness_bytes(
     assert binding["environment"] == "alpha"
     assert binding["readinessRef"].endswith("/release-readiness.json")
     assert binding["readinessDigest"].startswith("sha256:")
+    assert set(binding) == {
+        "environment",
+        "readinessRef",
+        "readinessDigest",
+        "activationEnvelopeDigest",
+    }
 
 
 def test_environment_sequence_and_identity_drift_fail_closed(
@@ -148,9 +161,7 @@ def test_milestone_envelope_keeps_prod_research_and_requires_gamma() -> None:
             "release-readiness.json"
         ),
         "readinessDigest": "sha256:" + "7" * 64,
-        "verifyRunId": "verify-gamma",
         "activationEnvelopeDigest": "sha256:" + "8" * 64,
-        "appUatEnvelopeDigest": "sha256:" + "9" * 64,
     }
     envelope = build_environment_activation_envelope(
         environment="prod",
@@ -168,7 +179,6 @@ def test_milestone_envelope_keeps_prod_research_and_requires_gamma() -> None:
             "env/prod/runs/data-release/release-m100/import-prod/import.json"
         ),
         import_report_digest="sha256:" + "a" * 64,
-        app_uat_envelope={"executedSamples": 100},
         research_isolation={
             "policyRef": "quwoquan_ops/environments/prod/runtime.yaml",
             "policySha256": "sha256:" + "b" * 64,

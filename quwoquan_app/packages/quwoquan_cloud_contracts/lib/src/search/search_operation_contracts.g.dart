@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
+// ContractGraph SHA256: cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f
 
 library;
 
@@ -15,35 +15,42 @@ export "../generated/search_feedback_event_type.g.dart";
 part '../generated/requests/search/search_operation_contracts.g.requests.g.dart';
 
 final class RecentSearchCommandAck {
-  const RecentSearchCommandAck({
-    required this.status,
-  });
+  const RecentSearchCommandAck({required this.status});
 
   final String status;
 
-  factory RecentSearchCommandAck.fromWire(Map<String, Object?> map, [String path = "RecentSearchCommandAck"]) {
+  factory RecentSearchCommandAck.fromWire(
+    Map<String, Object?> map, [
+    String path = "RecentSearchCommandAck",
+  ]) {
     _rejectUnknownFields(map, const <String>{"status"}, path);
     return RecentSearchCommandAck(
       status: _requiredString(map["status"], '$path.status'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{
-    "status": status,
-  };
+  Map<String, Object?> toWire() => <String, Object?>{"status": status};
 }
 
 final class RecentSearchEntrySlice {
-  const RecentSearchEntrySlice({
-    required this.items,
-  });
+  const RecentSearchEntrySlice({required this.items});
 
   final List<RecentSearchEntryWire> items;
 
-  factory RecentSearchEntrySlice.fromWire(Map<String, Object?> map, [String path = "RecentSearchEntrySlice"]) {
+  factory RecentSearchEntrySlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "RecentSearchEntrySlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items"}, path);
     return RecentSearchEntrySlice(
-      items: List<RecentSearchEntryWire>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => RecentSearchEntryWire.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<RecentSearchEntryWire>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => RecentSearchEntryWire.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -67,13 +74,24 @@ final class RecentSearchEntryWire {
   final String? facet;
   final DateTime updatedAt;
 
-  factory RecentSearchEntryWire.fromWire(Map<String, Object?> map, [String path = "RecentSearchEntryWire"]) {
-    _rejectUnknownFields(map, const <String>{"entryId", "query", "scope", "facet", "updatedAt"}, path);
+  factory RecentSearchEntryWire.fromWire(
+    Map<String, Object?> map, [
+    String path = "RecentSearchEntryWire",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "entryId",
+      "query",
+      "scope",
+      "facet",
+      "updatedAt",
+    }, path);
     return RecentSearchEntryWire(
       entryId: _requiredString(map["entryId"], '$path.entryId'),
       query: _requiredString(map["query"], '$path.query'),
       scope: _requiredString(map["scope"], '$path.scope'),
-      facet: map["facet"] == null ? null : _requiredString(map["facet"], '$path.facet'),
+      facet: map["facet"] == null
+          ? null
+          : _requiredString(map["facet"], '$path.facet'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
     );
   }
@@ -88,15 +106,15 @@ final class RecentSearchEntryWire {
 }
 
 final class SearchFeedbackAck {
-  const SearchFeedbackAck({
-    required this.accepted,
-    required this.requestId,
-  });
+  const SearchFeedbackAck({required this.accepted, required this.requestId});
 
   final bool accepted;
   final String requestId;
 
-  factory SearchFeedbackAck.fromWire(Map<String, Object?> map, [String path = "SearchFeedbackAck"]) {
+  factory SearchFeedbackAck.fromWire(
+    Map<String, Object?> map, [
+    String path = "SearchFeedbackAck",
+  ]) {
     _rejectUnknownFields(map, const <String>{"accepted", "requestId"}, path);
     return SearchFeedbackAck(
       accepted: _requiredBool(map["accepted"], '$path.accepted'),
@@ -111,15 +129,15 @@ final class SearchFeedbackAck {
 }
 
 final class SearchTermHeatItem {
-  const SearchTermHeatItem({
-    required this.query,
-    required this.relevance,
-  });
+  const SearchTermHeatItem({required this.query, required this.relevance});
 
   final String query;
   final double relevance;
 
-  factory SearchTermHeatItem.fromWire(Map<String, Object?> map, [String path = "SearchTermHeatItem"]) {
+  factory SearchTermHeatItem.fromWire(
+    Map<String, Object?> map, [
+    String path = "SearchTermHeatItem",
+  ]) {
     _rejectUnknownFields(map, const <String>{"query", "relevance"}, path);
     return SearchTermHeatItem(
       query: _requiredString(map["query"], '$path.query'),
@@ -134,16 +152,24 @@ final class SearchTermHeatItem {
 }
 
 final class SearchTermHeatSlice {
-  const SearchTermHeatSlice({
-    required this.items,
-  });
+  const SearchTermHeatSlice({required this.items});
 
   final List<SearchTermHeatItem> items;
 
-  factory SearchTermHeatSlice.fromWire(Map<String, Object?> map, [String path = "SearchTermHeatSlice"]) {
+  factory SearchTermHeatSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "SearchTermHeatSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items"}, path);
     return SearchTermHeatSlice(
-      items: List<SearchTermHeatItem>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => SearchTermHeatItem.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<SearchTermHeatItem>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => SearchTermHeatItem.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -153,19 +179,34 @@ final class SearchTermHeatSlice {
 }
 
 RecentSearchCommandAck decodeRecentSearchCommandAck(Object? response) =>
-    RecentSearchCommandAck.fromWire(_requiredObject(response, "RecentSearchCommandAck"), "RecentSearchCommandAck");
+    RecentSearchCommandAck.fromWire(
+      _requiredObject(response, "RecentSearchCommandAck"),
+      "RecentSearchCommandAck",
+    );
 
 RecentSearchEntrySlice decodeRecentSearchEntrySlice(Object? response) =>
-    RecentSearchEntrySlice.fromWire(_requiredObject(response, "RecentSearchEntrySlice"), "RecentSearchEntrySlice");
+    RecentSearchEntrySlice.fromWire(
+      _requiredObject(response, "RecentSearchEntrySlice"),
+      "RecentSearchEntrySlice",
+    );
 
 RecentSearchEntryWire decodeRecentSearchEntryWire(Object? response) =>
-    RecentSearchEntryWire.fromWire(_requiredObject(response, "RecentSearchEntryWire"), "RecentSearchEntryWire");
+    RecentSearchEntryWire.fromWire(
+      _requiredObject(response, "RecentSearchEntryWire"),
+      "RecentSearchEntryWire",
+    );
 
 SearchFeedbackAck decodeSearchFeedbackAck(Object? response) =>
-    SearchFeedbackAck.fromWire(_requiredObject(response, "SearchFeedbackAck"), "SearchFeedbackAck");
+    SearchFeedbackAck.fromWire(
+      _requiredObject(response, "SearchFeedbackAck"),
+      "SearchFeedbackAck",
+    );
 
 SearchTermHeatSlice decodeSearchTermHeatSlice(Object? response) =>
-    SearchTermHeatSlice.fromWire(_requiredObject(response, "SearchTermHeatSlice"), "SearchTermHeatSlice");
+    SearchTermHeatSlice.fromWire(
+      _requiredObject(response, "SearchTermHeatSlice"),
+      "SearchTermHeatSlice",
+    );
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {
@@ -190,7 +231,9 @@ void _rejectUnknownFields(
   final unknown = value.keys.where((key) => !allowed.contains(key)).toList()
     ..sort();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }
 

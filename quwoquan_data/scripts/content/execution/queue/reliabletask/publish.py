@@ -4,7 +4,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from core.paths import OUTPUT_ROOT
-from governance.coverage.distribution import load_content_distribution_policy
 
 from content.execution.queue.model import QueueJob
 
@@ -46,7 +45,6 @@ def _execute_publish(job: QueueJob) -> dict[str, object]:
         evidence_path=OUTPUT_ROOT / transaction["applyReportRef"],
         evidence_root=OUTPUT_ROOT,
     )
-    release_class = load_content_distribution_policy().release_class.value
     return {
         "executionId": job.execution_id,
         "jobId": job.job_id,
@@ -55,6 +53,6 @@ def _execute_publish(job: QueueJob) -> dict[str, object]:
         "objectTransactionId": transaction["transactionId"],
         "poolDeliveryIntentId": intent["intentId"],
         "resultEnvelopeRef": transaction["applyReportRef"],
-        "acceptanceClass": f"{release_class}_canonical",
+        "acceptanceClass": "canonical_pool",
         "completedAt": datetime.now(timezone.utc).isoformat(),
     }

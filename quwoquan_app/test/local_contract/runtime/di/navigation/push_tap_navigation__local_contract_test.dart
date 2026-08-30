@@ -4,101 +4,108 @@
 /// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/chat-offline-push-delivery/spec.md#req-003
 library;
 
-import 'dart:async';
-
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/di/navigation/push_tap_navigation.dart';
 import 'package:quwoquan_app/runtime/platform/firebase_incoming_call_runtime.dart';
 
-final class _ScriptedPushMessagingClient implements FirebasePushMessagingClient {
-  _ScriptedPushMessagingClient({this.initialMessage});
+final class _ScriptedPushTapIntentSource implements PushTapIntentSource {
+  _ScriptedPushTapIntentSource({this.initialIntent, this.available = true});
 
-  final RemoteMessage? initialMessage;
-  final StreamController<RemoteMessage> opened =
-      StreamController<RemoteMessage>.broadcast(sync: true);
-
-  @override
-  Future<void> initialize() async {}
-
-  @override
-  Future<String?> readToken() async => null;
+  final PushTapIntent? initialIntent;
+  final bool available;
+  void Function(PushTapIntent intent)? onIntent;
+  var startCount = 0;
+  var stopCount = 0;
 
   @override
-  Stream<String> get tokenRefreshes => const Stream.empty();
+  Future<void> start(void Function(PushTapIntent intent) onIntent) async {
+    startCount += 1;
+    if (!available) {
+      return;
+    }
+    this.onIntent = onIntent;
+    final initial = initialIntent;
+    if (initial != null) {
+      onIntent(initial);
+    }
+  }
+
+  void emit(PushTapIntent intent) => onIntent?.call(intent);
 
   @override
-  Stream<RemoteMessage> get foregroundMessages => const Stream.empty();
-
-  @override
-  Stream<RemoteMessage> get openedMessages => opened.stream;
-
-  @override
-  Future<RemoteMessage?> readInitialMessage() async => initialMessage;
-
-  @override
-  Future<bool> readNotificationAuthorization() async => false;
+  Future<void> stop() async {
+    stopCount += 1;
+    onIntent = null;
+  }
 }
 
-RemoteMessage _message(Map<String, String> data) =>
-    RemoteMessage(data: data);
-
 void main() {
-  test('conversation 锚点分发到 chatDetail 且冷启动初始消息同链处理', () async {
-    final client = _ScriptedPushMessagingClient(
-      initialMessage: _message({
-        'targetType': 'conversation',
-        'targetId': 'conv_push_1',
-      }),
+  test('conversation 锚点分发到 chatDetail 且冷启动初始 intent 同链处理', () async {
+    final source = _ScriptedPushTapIntentSource(
+      initialIntent: const PushTapIntent(
+        targetType: 'conversation',
+        targetId: 'conv_push_1',
+        callId: '',
+      ),
     );
     final pushed = <String>[];
-    final navigator = PushTapNavigator(
-      messagingClient: client,
-      push: pushed.add,
-    );
+    final navigator = PushTapNavigator(intentSource: source, push: pushed.add);
     addTearDown(navigator.dispose);
 
     await navigator.start();
     expect(pushed, ['/chat/conv_push_1']);
 
-    client.opened.add(
-      _message({'targetType': 'conversation', 'targetId': 'conv_push_2'}),
+    source.emit(
+      const PushTapIntent(
+        targetType: 'conversation',
+        targetId: 'conv_push_2',
+        callId: '',
+      ),
     );
     expect(pushed, ['/chat/conv_push_1', '/chat/conv_push_2']);
   });
 
-  test('来电帧与未知目标不进入通用分发', () async {
-    final client = _ScriptedPushMessagingClient();
+  test('来电 intent 与未知目标不进入通用分发', () async {
+    final source = _ScriptedPushTapIntentSource();
     final pushed = <String>[];
-    final navigator = PushTapNavigator(
-      messagingClient: client,
-      push: pushed.add,
-    );
+    final navigator = PushTapNavigator(intentSource: source, push: pushed.add);
     addTearDown(navigator.dispose);
     await navigator.start();
 
-    client.opened.add(
-      _message({
-        'callId': 'call-1',
-        'targetType': 'conversation',
-        'targetId': 'conv_push_1',
-      }),
+    source.emit(
+      const PushTapIntent(
+        callId: 'call-1',
+        targetType: 'conversation',
+        targetId: 'conv_push_1',
+      ),
     );
-    client.opened.add(_message({'targetType': 'homepage', 'targetId': 'h1'}));
-    client.opened.add(_message({'targetType': 'conversation'}));
+    source.emit(
+      const PushTapIntent(callId: '', targetType: 'homepage', targetId: 'h1'),
+    );
+    source.emit(
+      const PushTapIntent(callId: '', targetType: 'conversation', targetId: ''),
+    );
 
-    expect(
-      pushed,
-      isEmpty,
-      reason: '来电帧归来电协调器；不可承接目标必须静默忽略而非死路由',
-    );
+    expect(pushed, isEmpty);
   });
 
   test('平台能力不可用时 start 为一致降级 no-op', () async {
     final pushed = <String>[];
-    final navigator = PushTapNavigator(messagingClient: null, push: pushed.add);
+    final navigator = PushTapNavigator(intentSource: null, push: pushed.add);
     await navigator.start();
     await navigator.dispose();
+    expect(pushed, isEmpty);
+  });
+
+  test('source 未配置时不产生 tap intent 且不阻断 Shell', () async {
+    final source = _ScriptedPushTapIntentSource(available: false);
+    final pushed = <String>[];
+    final navigator = PushTapNavigator(intentSource: source, push: pushed.add);
+    addTearDown(navigator.dispose);
+
+    await expectLater(navigator.start(), completes);
+
+    expect(source.startCount, 1);
     expect(pushed, isEmpty);
   });
 }

@@ -1,8 +1,7 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
+// ContractGraph SHA256: cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f
 
 part of '../../../gateway/gateway_operation_contracts.g.dart';
-
 
 void _generatedRequestRejectUnknownFields(
   Map<String, Object?> map,
@@ -16,18 +15,15 @@ void _generatedRequestRejectUnknownFields(
   }
 }
 
-
 String _generatedRequestString(Object? value, String path) {
   if (value is String) return value;
   throw FormatException('$path must be a string');
 }
 
-
 int _generatedRequestInt(Object? value, String path) {
   if (value is int) return value;
   throw FormatException('$path must be an integer');
 }
-
 
 List<Object?> _generatedRequestList(Object? value, String path) {
   if (value is List) return List<Object?>.from(value);
@@ -44,9 +40,12 @@ final class SearchPageInput {
   }) : query = query,
        first = first,
        after = after,
-       objectTypes = objectTypes == null ? null : List.unmodifiable(objectTypes),
-       contentTypes = contentTypes == null ? null : List.unmodifiable(contentTypes) {
-  }
+       objectTypes = objectTypes == null
+           ? null
+           : List.unmodifiable(objectTypes),
+       contentTypes = contentTypes == null
+           ? null
+           : List.unmodifiable(contentTypes) {}
 
   final String query;
   final int? first;
@@ -54,14 +53,51 @@ final class SearchPageInput {
   final List<String>? objectTypes;
   final List<String>? contentTypes;
 
-  factory SearchPageInput.fromWire(Map<String, Object?> map, [String path = "SearchPageInput"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"query", "first", "after", "objectTypes", "contentTypes"}, path);
+  factory SearchPageInput.fromWire(
+    Map<String, Object?> map, [
+    String path = "SearchPageInput",
+  ]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "query",
+      "first",
+      "after",
+      "objectTypes",
+      "contentTypes",
+    }, path);
     return SearchPageInput(
       query: _generatedRequestString(map["query"], '$path.query'),
-      first: map["first"] == null ? null : _generatedRequestInt(map["first"], '$path.first'),
-      after: map["after"] == null ? null : _generatedRequestString(map["after"], '$path.after'),
-      objectTypes: map["objectTypes"] == null ? null : List<String>.unmodifiable(_generatedRequestList(map["objectTypes"], '$path.objectTypes').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.objectTypes' + '[${entry.key}]'))),
-      contentTypes: map["contentTypes"] == null ? null : List<String>.unmodifiable(_generatedRequestList(map["contentTypes"], '$path.contentTypes').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.contentTypes' + '[${entry.key}]'))),
+      first: map["first"] == null
+          ? null
+          : _generatedRequestInt(map["first"], '$path.first'),
+      after: map["after"] == null
+          ? null
+          : _generatedRequestString(map["after"], '$path.after'),
+      objectTypes: map["objectTypes"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _generatedRequestList(
+                map["objectTypes"],
+                '$path.objectTypes',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.objectTypes' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      contentTypes: map["contentTypes"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _generatedRequestList(
+                map["contentTypes"],
+                '$path.contentTypes',
+              ).asMap().entries.map(
+                (entry) => _generatedRequestString(
+                  entry.value,
+                  '$path.contentTypes' + '[${entry.key}]',
+                ),
+              ),
+            ),
     );
   }
 
@@ -69,20 +105,34 @@ final class SearchPageInput {
     "query": this.query,
     if (this.first != null) "first": this.first!,
     if (this.after != null) "after": this.after!,
-    if (this.objectTypes != null) "objectTypes": this.objectTypes!.map((value) => value).toList(growable: false),
-    if (this.contentTypes != null) "contentTypes": this.contentTypes!.map((value) => value).toList(growable: false),
+    if (this.objectTypes != null)
+      "objectTypes": this.objectTypes!
+          .map((value) => value)
+          .toList(growable: false),
+    if (this.contentTypes != null)
+      "contentTypes": this.contentTypes!
+          .map((value) => value)
+          .toList(growable: false),
   };
 }
 
-CloudOperationRequestPayload encodeGatewayPersistedQueryExecutionSearchPageGeneratedRequest(SearchPageInput request) {
+CloudOperationRequestPayload
+encodeGatewayPersistedQueryExecutionSearchPageGeneratedRequest(
+  SearchPageInput request,
+) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
       "query": request.query,
       if (request.first != null) "first": request.first!,
       if (request.after != null) "after": request.after!,
-      if (request.objectTypes != null) "objectTypes": request.objectTypes!.map((value) => value).toList(growable: false),
-      if (request.contentTypes != null) "contentTypes": request.contentTypes!.map((value) => value).toList(growable: false),
+      if (request.objectTypes != null)
+        "objectTypes": request.objectTypes!
+            .map((value) => value)
+            .toList(growable: false),
+      if (request.contentTypes != null)
+        "contentTypes": request.contentTypes!
+            .map((value) => value)
+            .toList(growable: false),
     },
   );
 }
-

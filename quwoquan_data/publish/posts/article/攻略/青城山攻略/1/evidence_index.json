@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260822--travel-article-workload-article-1--china-cultural-deep-tour--scale-007",
+  "executionBinding": "frozen",
+  "objectRef": "青城山__article-source-e148d9091f46b5f28617",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:34863627a8406ed7e10a8d12f2bba0b4ade99cf2d92885a4af5a05989a777258"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:009792c4fcb589838f7502980c12d5ceac3a3e3e61a2c3cd36de8223fa13f73a"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:9476eb43b9892f55b3c36386746aa61e5c3741183ccd89d09898da6acd7c8142"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:0d3fbe2df8975b597b7841b8a7afe4d64e58257fbb50539b08f27c2207b1bd50"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:b054887b7d45810b2866c40734dd7e4c8dbf08a8674983e23297488a65cc9cda"
+    }
+  ]
+}

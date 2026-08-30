@@ -2,8 +2,8 @@
 // spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-002.t1
 // spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-003.t4
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/service/api_edge/graphql_read/persisted_query_execution/application/public/persisted_search_page_query.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/remote_search_page_repository.dart';
-import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_page_query_facet.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_cloud_contracts/generated/gateway_contracts.dart';
@@ -97,7 +97,7 @@ void main() {
   });
 }
 
-final class _RecordingSearchPageFacet implements SearchPageQueryFacet {
+final class _RecordingSearchPageFacet implements PersistedSearchPageQuery {
   _RecordingSearchPageFacet(this.result);
 
   final SearchPageSlice result;

@@ -13,6 +13,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import sys
+
+sys.dont_write_bytecode = True
+
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     canonical_candidate_digest,
     canonical_manifest_digest,

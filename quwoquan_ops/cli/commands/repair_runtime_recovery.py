@@ -1,11 +1,7 @@
 """stackctl repair 运行时恢复域: 操作锁、端口释放探测与 orphan compose 收敛。
 
 从 stackctl.py 逐字迁出（改写规则与 down_domain 相同）:
-- 操作锁家族: `_prod_release_lock` / `_local_stack_operation_lock` /
-  `_global_local_operation_lock` / `_global_local_build_cache_lock` /
-  `_global_output_layout_reconciliation_lock`;
-- 端口探测: `socket_probe` / `_wait_for_network_ports_released` /
-  `_wait_for_exact_tcp_ports_released`;
+- production release 锁与本机全局 scope wrapper；
 - orphan compose 收敛: `_current_runtime_health_scope` /
   `_orphan_compose_runtime_gate` / `_wait_for_attested_orphan_compose_ports_released` /
   `_complete_orphan_compose_audit_convergence` / `_repair_orphaned_compose`。
@@ -22,10 +18,8 @@ import contextlib
 import fcntl
 import os
 import re
-import socket
 import time
 
-from collections.abc import Callable
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -69,86 +63,6 @@ def _prod_release_lock() -> Any:
 
 
 @contextlib.contextmanager
-def _local_stack_operation_lock(target_name: str) -> Any:
-    """为本机所有本地环境操作保留唯一的 Compose/package 临界区。"""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    target = str(target_name).strip()
-    if target not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
-        raise ValueError(f"local stack operation lock does not support {target!r}")
-    lock_path = _stackctl.local_runtime_operation_lock_path()
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    owner = f"pid={os.getpid()} target={target} startedAt={_stackctl.utc_now()}"
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as error:
-            handle.seek(0)
-            holder = handle.read().strip() or "unknown"
-            raise RuntimeError(
-                f"local stack operation is already running: {holder}"
-            ) from error
-        handle.seek(0)
-        handle.truncate()
-        handle.write(owner + "\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-        try:
-            yield
-        finally:
-            handle.seek(0)
-            handle.truncate()
-            handle.flush()
-            os.fsync(handle.fileno())
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-
-
-@contextlib.contextmanager
-def _global_local_operation_lock(
-    *,
-    scope: str,
-    affected_targets: Sequence[str],
-) -> Any:
-    """Reserve the one host-global boundary shared by runtime and repair work."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    lock_path = _stackctl.local_runtime_operation_lock_path()
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    owner = (
-        f"pid={os.getpid()} scope={scope} mode=exclusive "
-        f"startedAt={_stackctl.utc_now()}"
-    )
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as error:
-            handle.seek(0)
-            holder = handle.read().strip() or "unknown"
-            raise RuntimeError(
-                "local runtime operation is already running: " + holder
-            ) from error
-        handle.seek(0)
-        handle.truncate()
-        handle.write(owner + "\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-        try:
-            yield {
-                "path": _stackctl.relpath(lock_path),
-                "mode": "exclusive",
-                "scope": scope,
-                "owner": owner,
-                "affectedTargets": list(affected_targets),
-            }
-        finally:
-            handle.seek(0)
-            handle.truncate()
-            handle.flush()
-            os.fsync(handle.fileno())
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-
-
-@contextlib.contextmanager
 def _global_local_build_cache_lock() -> Any:
     """Exclusively reserve the daemon-global local BuildKit cache boundary."""
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -172,58 +86,6 @@ def _global_output_layout_reconciliation_lock() -> Any:
         affected_targets=(*_stackctl.LOCAL_BUILD_CACHE_TARGETS, "repo"),
     ) as evidence:
         yield evidence
-
-
-def socket_probe(port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(1.2)
-        return sock.connect_ex(("127.0.0.1", port)) == 0
-
-
-def _wait_for_network_ports_released(
-    target_name: str,
-    *,
-    timeout_seconds: float = 45.0,
-    poll_interval_seconds: float = 0.5,
-    port_reporter: Callable[[str], dict[str, Any]] | None = None,
-) -> list[dict[str, Any]]:
-    """Wait for target-owned host forwards to converge after compose down.
-
-    Docker Desktop/Colima can remove containers before its host forwarding
-    process closes the corresponding listening sockets. A single immediate
-    probe therefore creates a false cleanup failure. The bounded wait keeps
-    the fail-closed resource-release contract without restarting or otherwise
-    mutating the shared container runtime.
-    """
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    deadline = time.monotonic() + timeout_seconds
-    reporter = port_reporter or _stackctl._network_report
-    while True:
-        occupied = [
-            item for item in reporter(target_name)["ports"] if item["open"]
-        ]
-        if not occupied or time.monotonic() >= deadline:
-            return occupied
-        time.sleep(poll_interval_seconds)
-
-
-def _wait_for_exact_tcp_ports_released(
-    ports: Sequence[int],
-    *,
-    timeout_seconds: float = 45.0,
-    poll_interval_seconds: float = 0.5,
-) -> list[int]:
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    exact_ports = sorted(set(ports))
-    deadline = time.monotonic() + timeout_seconds
-    while True:
-        occupied = [port for port in exact_ports if _stackctl.socket_probe(port)]
-        if not occupied or time.monotonic() >= deadline:
-            return occupied
-        time.sleep(poll_interval_seconds)
 
 
 def _current_runtime_health_scope(target_name: str) -> str:
@@ -274,8 +136,146 @@ def _current_runtime_health_scope(target_name: str) -> str:
     return "full"
 
 
+def _normal_down_structurally_impossible(
+    target_name: str,
+    startup: Mapping[str, Any],
+) -> str:
+    """Name the defect that makes candidate-bound down unusable for this receipt.
+
+    Normal down replays the receipt's own candidate topology under the receipt's
+    own workload, so it is objectively impossible in two shapes. The candidate
+    may be gone or unreadable, which is what a reclaim of the candidate store
+    leaves behind. Or the candidate may still project into a service carrying
+    neither an image nor a build context and no gating profile, which makes
+    `docker compose` reject the whole project. Either way down can never
+    converge while up refuses to run before down, so the receipt is frozen
+    evidence no governed path can retire.
+
+    A non-empty reason is the objective evidence that the orphan path is the
+    only remaining governed exit; "" keeps the normal path mandatory. An
+    unreadable candidate must never collapse into "": that would report the
+    normal path as usable precisely when it cannot work.
+    """
+
+    import yaml
+
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.runtime_topology_package import (
+        RuntimeTopologyPackageError,
+        load_runtime_topology_package,
+    )
+
+    candidate_digest = str(startup.get("candidateDigest") or "").strip()
+    workload = str(startup.get("workload") or "full").strip()
+    if not candidate_digest:
+        return ""
+    try:
+        candidate_root = _stackctl.deployment_candidate_dir(
+            target_name,
+            candidate_digest,
+        ).resolve()
+    except ValueError:
+        # 非法 digest 说明回执自身损坏，而不是 candidate 被回收；这不是本出口的
+        # 判据，仍然交给 normal down 报出它自己的身份校验失败。
+        return ""
+    if not candidate_root.is_dir():
+        return (
+            f"candidate {candidate_digest} is no longer present at "
+            f"{candidate_root}; the receipt's own topology cannot be replayed"
+        )
+    try:
+        topology = load_runtime_topology_package(
+            candidate_root,
+            environment=target_name.removesuffix("-local"),
+            target=target_name,
+            workload=workload,
+        )
+    except (OSError, RuntimeTopologyPackageError, ValueError) as exc:
+        return (
+            f"candidate {candidate_digest} cannot project workload={workload} "
+            f"into a runtime topology: {exc}"
+        )
+    merged: dict[str, dict[str, Any]] = {}
+    for path in topology["composeFiles"]:
+        try:
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError) as exc:
+            return (
+                f"candidate {candidate_digest} carries an unreadable Compose "
+                f"file {path}: {exc}"
+            )
+        if not isinstance(document, Mapping):
+            return (
+                f"candidate {candidate_digest} Compose file {path} is not a "
+                "mapping document"
+            )
+        for name, definition in (document.get("services") or {}).items():
+            if isinstance(definition, Mapping):
+                merged.setdefault(str(name), {}).update(definition)
+    broken = sorted(
+        name
+        for name, definition in merged.items()
+        if "image" not in definition
+        and "build" not in definition
+        and not definition.get("profiles")
+    )
+    if not broken:
+        return ""
+    return (
+        f"candidate {candidate_digest} projects workload={workload} into an "
+        "invalid Compose project; services without image, build or gating "
+        "profile: " + ",".join(broken)
+    )
+
+
+def _close_orphan_reclaimed_startup_receipt(
+    target_name: str,
+    startup: Mapping[str, Any] | None,
+) -> tuple[Mapping[str, Any] | None, str]:
+    """Retire a non-stopped receipt whose runtime the orphan path just removed.
+
+    A receipt admitted through the structurally-impossible-down exit still
+    claims live resources after teardown removed them, whether the exit was
+    taken because the candidate is gone or because it projected an invalid
+    Compose project. Leaving it non-stopped would keep blocking every later up,
+    so the receipt is transitioned to stopped with the reclaim named as its
+    failure. Already-stopped receipts and absent receipts need nothing.
+    """
+
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    if startup is None:
+        return None, ""
+    if not isinstance(startup, Mapping):
+        raise ValueError("startup receipt must be an object")
+    status = str(startup.get("status") or "").strip()
+    if status == "stopped":
+        return startup, ""
+    attempt_id = str(startup.get("attemptId") or "").strip()
+    if not attempt_id:
+        raise ValueError("non-stopped startup receipt requires attemptId")
+    stopped = _stackctl.transition_startup_attempt(
+        env=str(startup.get("env") or target_name.removesuffix("-local")),
+        target=target_name,
+        attempt_id=attempt_id,
+        status="stopped",
+        failure=(
+            "reclaimed by governed orphan Compose teardown; candidate-bound "
+            "down was structurally impossible for this receipt"
+        ),
+    )
+    return stopped, f"retired startup receipt status={status} attempt={attempt_id}"
+
+
 def _orphan_compose_runtime_gate(target_name: str) -> dict[str, Any] | None:
-    """Return the stopped receipt when normal candidate-bound down cannot apply."""
+    """Return the receipt when normal candidate-bound down cannot apply.
+
+    An absent or stopped receipt claims nothing, so exact-resource recovery owns
+    the residue outright. A non-stopped receipt still claims the runtime, and it
+    keeps priority: recovery is admitted only when that receipt's own candidate
+    is objectively unusable, never on an operator's word. Otherwise the residue
+    belongs to candidate-bound normal down.
+    """
     import quwoquan_ops.cli.stackctl as _stackctl
 
 
@@ -297,7 +297,10 @@ def _orphan_compose_runtime_gate(target_name: str) -> dict[str, Any] | None:
     if startup is None:
         return None
     status = str(startup.get("status") or "").strip()
-    if status != "stopped":
+    if status != "stopped" and not _stackctl._normal_down_structurally_impossible(
+        target_name,
+        startup,
+    ):
         raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
             "orphan Compose teardown requires an absent or stopped startup receipt; "
             f"status={status or '<missing>'} must use candidate-bound normal down"
@@ -311,37 +314,29 @@ def _wait_for_attested_orphan_compose_ports_released(
 ) -> None:
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    canonical_occupied = _stackctl._wait_for_network_ports_released(
-        target_name,
-        port_reporter=_stackctl._canonical_port_occupancy_report,
-    )
-    if canonical_occupied:
-        raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
-            "canonical target ports remain occupied after bounded teardown wait: "
-            + ", ".join(
-                f"{item['name']}:{item['port']}" for item in canonical_occupied
-            )
-        )
     snapshot = attestation.get("snapshot")
     if not isinstance(snapshot, Mapping):
         raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
             "orphan Compose attestation snapshot is missing"
         )
-    noncanonical_ports = snapshot.get("nonCanonicalPublishedHostPorts")
-    if not isinstance(noncanonical_ports, list) or any(
-        isinstance(item, bool) or not isinstance(item, int)
-        for item in noncanonical_ports
-    ):
-        raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
-            "attested non-canonical port inventory is invalid"
+    published_endpoints = (
+        _stackctl.orphan_compose_teardown._normalize_published_endpoints(
+            snapshot.get("publishedEndpoints")
         )
-    noncanonical_occupied = _stackctl._wait_for_exact_tcp_ports_released(
-        noncanonical_ports
     )
-    if noncanonical_occupied:
+    if not published_endpoints:
+        return
+    occupied = _stackctl._wait_for_published_endpoints_released(
+        published_endpoints
+    )
+    if occupied:
         raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
-            "attested non-canonical TCP ports remain occupied after bounded teardown wait: "
-            + ", ".join(str(item) for item in noncanonical_occupied)
+            "attested project published endpoints remain occupied after bounded "
+            "teardown wait: "
+            + ", ".join(
+                f"{item['role']}:{item['hostPort']}/{item['protocol']}"
+                for item in occupied
+            )
         )
 
 
@@ -352,6 +347,8 @@ def _complete_orphan_compose_audit_convergence(
     attestation: Mapping[str, Any],
     consumption: Mapping[str, Any],
     canonical_ports: Sequence[Mapping[str, Any]],
+    port_manifest: dict[str, Any],
+    port_profile: str,
     other_target_port_blocks: Sequence[Mapping[str, Any]],
     report_dir: Path,
     startup: Mapping[str, Any] | None,
@@ -361,59 +358,158 @@ def _complete_orphan_compose_audit_convergence(
     _stackctl._wait_for_attested_orphan_compose_ports_released(target_name, attestation)
     post_snapshot = _stackctl.orphan_compose_teardown.sample_snapshot(
         target=target_name,
+        project=str(attestation.get("project") or ""),
         canonical_ports=canonical_ports,
+        port_manifest=port_manifest,
+        port_profile=port_profile,
         run_command=_stackctl.run,
         require_removable=False,
         other_target_port_blocks=other_target_port_blocks,
-        port_probe=_stackctl.socket_probe,
+        port_probe=_stackctl._published_endpoint_is_occupied,
     )
     _stackctl.orphan_compose_teardown.assert_post_teardown_state(
         attestation,
         post_snapshot,
-        port_probe=_stackctl.socket_probe,
+        port_probe=_stackctl._published_endpoint_is_occupied,
     )
-    convergence_path = _stackctl.orphan_compose_teardown.write_convergence_create_once(
+    canonical_startup, closure = _stackctl._close_orphan_reclaimed_startup_receipt(
+        target_name,
+        startup,
+    )
+    convergence_path = attestation_path.with_name(
+        "orphaned-compose-teardown-convergence.json"
+    )
+    convergence_ref = _stackctl.relpath(convergence_path)
+    report_dir_ref = _stackctl.relpath(report_dir)
+    summary = f"stackctl orphan Compose audit convergence passed for {target_name}"
+    details = [
+        "audit-only convergence completed; no Docker removal command was executed",
+        f"partialConsumptionDigest={consumption['consumptionDigest']}",
+        f"convergence={convergence_ref}",
+    ]
+    if closure:
+        details.append(closure)
+    report = {
+        "command": "repair",
+        "target": target_name,
+        "fix": "reclaim-orphaned-compose",
+        "status": "passed",
+        "auditOnly": True,
+        "destructiveRepairPerformed": False,
+        "startupAttempt": canonical_startup,
+        "attestation": _stackctl.relpath(attestation_path),
+        "attestationDigest": attestation["attestationDigest"],
+        "consumptionDigest": consumption["consumptionDigest"],
+        "convergence": convergence_ref,
+        "details": details,
+    }
+    _stackctl.orphan_compose_teardown.write_convergence_create_once(
         attestation_path,
         attestation=attestation,
         consumption=consumption,
         current_snapshot=post_snapshot,
     )
-    details = [
-        "audit-only convergence completed; no Docker removal command was executed",
-        f"partialConsumptionDigest={consumption['consumptionDigest']}",
-        f"convergence={_stackctl.relpath(convergence_path)}",
-    ]
-    _stackctl.write_json(
-        report_dir / "report.json",
-        {
-            "command": "repair",
-            "target": target_name,
-            "fix": "reclaim-orphaned-compose",
-            "status": "passed",
-            "auditOnly": True,
-            "destructiveRepairPerformed": False,
-            "startupAttempt": startup,
-            "attestation": _stackctl.relpath(attestation_path),
-            "attestationDigest": attestation["attestationDigest"],
-            "consumptionDigest": consumption["consumptionDigest"],
-            "convergence": _stackctl.relpath(convergence_path),
-            "details": details,
-        },
-    )
-    _stackctl._write_summary_bundle(
-        report_dir,
-        command="repair",
-        target=target_name,
-        status="ok",
-        summary=f"stackctl orphan Compose audit convergence passed for {target_name}",
+    publication_issues = _stackctl._publish_orphan_terminal_success(
+        report_dir=report_dir,
+        target_name=target_name,
+        summary=summary,
         details=details,
+        report=report,
     )
+    # 终态成功事实不因派生报告发布失败而降级，但发布问题必须留在 details 里可读；
+    # 这里显式收敛，避免依赖被调用方对 details 的原地修改。
+    details.extend(issue for issue in publication_issues if issue not in details)
     return {
         "exitCode": 0,
-        "summary": f"stackctl orphan Compose audit convergence passed for {target_name}",
+        "summary": summary,
         "details": details,
-        "reportDir": _stackctl.relpath(report_dir),
-        "convergence": _stackctl.relpath(convergence_path),
+        "reportDir": report_dir_ref,
+        "convergence": convergence_ref,
+    }
+
+
+def _commit_orphan_compose_terminal_consumption(
+    *,
+    target_name: str,
+    fix: str,
+    attestation_path: Path,
+    attestation: Mapping[str, Any],
+    startup: Mapping[str, Any] | None,
+    execution_journal: Path,
+    destructive_steps: Sequence[Mapping[str, Any]],
+    report_dir: Path,
+    recovered_execution: bool,
+) -> dict[str, Any]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    snapshot = attestation["snapshot"]
+    container_ids = [item["id"] for item in snapshot["containers"]]
+    network_ids = [item["id"] for item in snapshot["networks"]]
+    canonical_startup, closure = _stackctl._close_orphan_reclaimed_startup_receipt(
+        target_name,
+        startup,
+    )
+    consumption_path = attestation_path.with_name(
+        "orphaned-compose-teardown-consumption.json"
+    )
+    consumption_ref = _stackctl.relpath(consumption_path)
+    journal_ref = _stackctl.relpath(execution_journal)
+    report_dir_ref = _stackctl.relpath(report_dir)
+    summary = (
+        f"stackctl reconciled exact orphan Compose removal for {target_name}"
+        if recovered_execution
+        else f"stackctl removed exact orphan Compose resources for {target_name}"
+    )
+    details = [
+        (
+            "reconciled completed exact removal from create-once journal and step receipts; "
+            "no Docker removal command was replayed"
+            if recovered_execution
+            else f"removed exact attested containers={','.join(container_ids) or 'none'}"
+        ),
+        f"removed exact attested networks={','.join(network_ids) or 'none'}",
+        "preserved named volumes="
+        + (",".join(item["name"] for item in snapshot["volumes"]) or "none"),
+        f"consumption={consumption_ref}",
+    ]
+    if closure:
+        details.append(closure)
+    report = {
+        "command": "repair",
+        "target": target_name,
+        "fix": fix,
+        "status": "passed",
+        "destructiveRepairPerformed": True,
+        "startupAttempt": canonical_startup,
+        "attestation": _stackctl.relpath(attestation_path),
+        "attestationDigest": attestation["attestationDigest"],
+        "consumption": consumption_ref,
+        "executionJournal": journal_ref,
+        "steps": list(destructive_steps),
+        "details": details,
+    }
+    _stackctl.orphan_compose_teardown.write_consumption_create_once(
+        attestation_path,
+        attestation=attestation,
+        removed_containers=container_ids,
+        removed_networks=network_ids,
+        status="passed",
+        removal_outcome="complete",
+    )
+    publication_issues = _stackctl._publish_orphan_terminal_success(
+        report_dir=report_dir,
+        target_name=target_name,
+        summary=summary,
+        details=details,
+        report=report,
+    )
+    details.extend(issue for issue in publication_issues if issue not in details)
+    return {
+        "exitCode": 0,
+        "summary": summary,
+        "details": details,
+        "reportDir": report_dir_ref,
+        "consumption": consumption_ref,
     }
 
 
@@ -450,18 +546,76 @@ def _repair_orphaned_compose(
     confirmed_container_ids: list[str] = []
     confirmed_network_ids: list[str] = []
     destructive_steps: list[dict[str, Any]] = []
+    step_receipt_issues: list[str] = []
+    recovering_from_journal = False
+    removal_verified = False
+    step_evidence_verified = False
     try:
         with _stackctl._local_stack_operation_lock(target_name):
             startup = _stackctl._orphan_compose_runtime_gate(target_name)
-            canonical_ports = _stackctl._canonical_port_occupancy_report(target_name)["ports"]
+            status = str((startup or {}).get("status") or "").strip()
+            require_removable = startup is None or status == "stopped"
+            consumption_path = attestation_path.with_name(
+                "orphaned-compose-teardown-consumption.json"
+            )
+            journal_path = attestation_path.with_name(
+                "orphaned-compose-teardown-journal.json"
+            )
+            consumption_exists = consumption_path.exists() or consumption_path.is_symlink()
+            journal_exists = journal_path.exists() or journal_path.is_symlink()
+            if confirmed:
+                attestation = _stackctl.orphan_compose_teardown.load_attestation(
+                    attestation_path,
+                    allowed_root=allowed_root,
+                    expected_target=target_name,
+                    allow_expired=consumption_exists or journal_exists,
+                )
+                active_attestation = attestation
+                project = _stackctl.orphan_compose_teardown.require_canonical_project(
+                    target_name,
+                    attestation.get("project"),
+                )
+                if startup is not None:
+                    receipt_project = (
+                        _stackctl.orphan_compose_teardown.require_canonical_project(
+                            target_name,
+                            startup.get("composeProject"),
+                        )
+                    )
+                    if project != receipt_project:
+                        raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
+                            "orphan Compose attestation project differs from the current startup receipt"
+                        )
+            elif startup is None:
+                project = _stackctl.orphan_compose_teardown.discover_exact_project(
+                    target=target_name,
+                    run_command=_stackctl.run,
+                )
+            else:
+                project = _stackctl.orphan_compose_teardown.require_canonical_project(
+                    target_name,
+                    startup.get("composeProject"),
+                )
+            canonical_report = _stackctl._canonical_port_occupancy_report(target_name)
+            canonical_ports = canonical_report["ports"]
+            port_profile = str(canonical_report.get("profile") or "").strip()
+            if not port_profile:
+                raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
+                    "orphan Compose target port profile is required"
+                )
+            port_manifest = _stackctl.load_port_manifest()
             other_target_port_blocks = _stackctl._other_local_target_port_blocks(target_name)
             if not confirmed:
                 snapshot = _stackctl.orphan_compose_teardown.sample_snapshot(
                     target=target_name,
+                    project=project,
                     canonical_ports=canonical_ports,
+                    port_manifest=port_manifest,
+                    port_profile=port_profile,
                     run_command=_stackctl.run,
+                    require_removable=require_removable,
                     other_target_port_blocks=other_target_port_blocks,
-                    port_probe=_stackctl.socket_probe,
+                    port_probe=_stackctl._published_endpoint_is_occupied,
                 )
                 attestation = _stackctl.orphan_compose_teardown.seal_attestation(snapshot)
                 written_path = _stackctl.orphan_compose_teardown.write_attestation_create_once(
@@ -528,21 +682,6 @@ def _repair_orphaned_compose(
                     "attestation": _stackctl.relpath(written_path),
                 }
 
-            consumption_exists = (
-                attestation_path.with_name(
-                    "orphaned-compose-teardown-consumption.json"
-                ).exists()
-                or attestation_path.with_name(
-                    "orphaned-compose-teardown-consumption.json"
-                ).is_symlink()
-            )
-            attestation = _stackctl.orphan_compose_teardown.load_attestation(
-                attestation_path,
-                allowed_root=allowed_root,
-                expected_target=target_name,
-                allow_expired=consumption_exists,
-            )
-            active_attestation = attestation
             if consumption_exists:
                 consumption = (
                     _stackctl.orphan_compose_teardown.load_partial_consumption_for_convergence(
@@ -560,17 +699,70 @@ def _repair_orphaned_compose(
                     attestation=attestation,
                     consumption=consumption,
                     canonical_ports=canonical_ports,
+                    port_manifest=port_manifest,
+                    port_profile=port_profile,
                     other_target_port_blocks=other_target_port_blocks,
                     report_dir=report_dir,
                     startup=startup,
                 )
+            if journal_exists:
+                recovering_from_journal = True
+                execution_journal = journal_path
+                _stackctl.orphan_compose_teardown.validate_execution_journal_for_recovery(
+                    attestation_path,
+                    attestation=attestation,
+                )
+                _stackctl._wait_for_attested_orphan_compose_ports_released(
+                    target_name,
+                    attestation,
+                )
+                recovered_snapshot = _stackctl.orphan_compose_teardown.sample_snapshot(
+                    target=target_name,
+                    project=project,
+                    canonical_ports=canonical_ports,
+                    port_manifest=port_manifest,
+                    port_profile=port_profile,
+                    run_command=_stackctl.run,
+                    require_removable=False,
+                    other_target_port_blocks=other_target_port_blocks,
+                    port_probe=_stackctl._published_endpoint_is_occupied,
+                )
+                _stackctl.orphan_compose_teardown.assert_post_teardown_state(
+                    attestation,
+                    recovered_snapshot,
+                    port_probe=_stackctl._published_endpoint_is_occupied,
+                )
+                removal_verified = True
+                _stackctl.orphan_compose_teardown.complete_execution_step_receipts(
+                    attestation_path,
+                    attestation=attestation,
+                    step_writer=(
+                        _stackctl.orphan_compose_teardown.write_step_receipt_create_once
+                    ),
+                )
+                step_evidence_verified = True
+                return _stackctl._commit_orphan_compose_terminal_consumption(
+                    target_name=target_name,
+                    fix=args.fix,
+                    attestation_path=attestation_path,
+                    attestation=attestation,
+                    startup=startup,
+                    execution_journal=journal_path,
+                    destructive_steps=[],
+                    report_dir=report_dir,
+                    recovered_execution=True,
+                )
             _stackctl.orphan_compose_teardown.assert_not_consumed(attestation_path)
             current_snapshot = _stackctl.orphan_compose_teardown.sample_snapshot(
                 target=target_name,
+                project=project,
                 canonical_ports=canonical_ports,
+                port_manifest=port_manifest,
+                port_profile=port_profile,
                 run_command=_stackctl.run,
+                require_removable=require_removable,
                 other_target_port_blocks=other_target_port_blocks,
-                port_probe=_stackctl.socket_probe,
+                port_probe=_stackctl._published_endpoint_is_occupied,
             )
             _stackctl.orphan_compose_teardown.assert_snapshot_unchanged(
                 attestation,
@@ -604,83 +796,58 @@ def _repair_orphaned_compose(
                     confirmed_container_ids.append(command[-1])
                 else:
                     confirmed_network_ids.append(command[-1])
-                _stackctl.orphan_compose_teardown.write_step_receipt_create_once(
-                    attestation_path,
-                    attestation=attestation,
-                    index=index,
-                    command=command,
-                )
                 attempted_command = []
+                try:
+                    _stackctl.orphan_compose_teardown.write_step_receipt_create_once(
+                        attestation_path,
+                        attestation=attestation,
+                        index=index,
+                        command=command,
+                    )
+                except (OSError, RuntimeError, TypeError, ValueError) as step_exc:
+                    step_receipt_issues.append(
+                        f"step {index} receipt publication failed: {step_exc}"
+                    )
             _stackctl._wait_for_attested_orphan_compose_ports_released(
                 target_name,
                 attestation,
             )
             post_snapshot = _stackctl.orphan_compose_teardown.sample_snapshot(
                 target=target_name,
-                canonical_ports=_stackctl._canonical_port_occupancy_report(target_name)["ports"],
+                project=project,
+                canonical_ports=canonical_ports,
+                port_manifest=port_manifest,
+                port_profile=port_profile,
                 run_command=_stackctl.run,
                 require_removable=False,
                 other_target_port_blocks=other_target_port_blocks,
-                port_probe=_stackctl.socket_probe,
+                port_probe=_stackctl._published_endpoint_is_occupied,
             )
             _stackctl.orphan_compose_teardown.assert_post_teardown_state(
                 attestation,
                 post_snapshot,
-                port_probe=_stackctl.socket_probe,
+                port_probe=_stackctl._published_endpoint_is_occupied,
             )
-            snapshot = attestation["snapshot"]
-            container_ids = [item["id"] for item in snapshot["containers"]]
-            network_ids = [item["id"] for item in snapshot["networks"]]
-            consumption_path = _stackctl.orphan_compose_teardown.write_consumption_create_once(
+            removal_verified = True
+            _stackctl.orphan_compose_teardown.complete_execution_step_receipts(
                 attestation_path,
                 attestation=attestation,
-                removed_containers=container_ids,
-                removed_networks=network_ids,
-                status="passed",
-                removal_outcome="complete",
-            )
-            details = [
-                f"removed exact attested containers={','.join(container_ids) or 'none'}",
-                f"removed exact attested networks={','.join(network_ids) or 'none'}",
-                "preserved named volumes="
-                + (
-                    ",".join(item["name"] for item in snapshot["volumes"])
-                    or "none"
+                step_writer=(
+                    _stackctl.orphan_compose_teardown.write_step_receipt_create_once
                 ),
-                f"consumption={_stackctl.relpath(consumption_path)}",
-            ]
-            _stackctl.write_json(
-                report_dir / "report.json",
-                {
-                    "command": "repair",
-                    "target": target_name,
-                    "fix": args.fix,
-                    "status": "passed",
-                    "destructiveRepairPerformed": True,
-                    "startupAttempt": startup,
-                    "attestation": _stackctl.relpath(attestation_path),
-                    "attestationDigest": attestation["attestationDigest"],
-                    "consumption": _stackctl.relpath(consumption_path),
-                    "executionJournal": _stackctl.relpath(execution_journal),
-                    "steps": destructive_steps,
-                    "details": details,
-                },
             )
-            _stackctl._write_summary_bundle(
-                report_dir,
-                command="repair",
-                target=target_name,
-                status="ok",
-                summary=f"stackctl removed exact orphan Compose resources for {target_name}",
-                details=details,
+            step_evidence_verified = True
+            return _stackctl._commit_orphan_compose_terminal_consumption(
+                target_name=target_name,
+                fix=args.fix,
+                attestation_path=attestation_path,
+                attestation=attestation,
+                startup=startup,
+                execution_journal=execution_journal,
+                destructive_steps=destructive_steps,
+                report_dir=report_dir,
+                recovered_execution=False,
             )
-            return {
-                "exitCode": 0,
-                "summary": f"stackctl removed exact orphan Compose resources for {target_name}",
-                "details": details,
-                "reportDir": _stackctl.relpath(report_dir),
-                "consumption": _stackctl.relpath(consumption_path),
-            }
     except (
         OSError,
         RuntimeError,
@@ -692,21 +859,38 @@ def _repair_orphaned_compose(
         consumption_issue = ""
         removal_outcome = "none"
         destructive_performed: bool | None = False
-        if active_attestation is not None and execution_journal is not None:
+        if recovering_from_journal or removal_verified:
             removal_outcome = (
-                "partial_failure"
-                if confirmed_container_ids or confirmed_network_ids
-                else "unknown_after_attempt"
-                if attempted_command
-                else "aborted_before_attempt"
+                "complete_terminal_fact_pending"
+                if step_evidence_verified
+                else "complete_step_fact_pending"
+                if removal_verified
+                else "journal_evidence_unverified"
             )
-            destructive_performed = (
-                True
-                if confirmed_container_ids or confirmed_network_ids
-                else None
-                if attempted_command
-                else False
-            )
+            destructive_performed = True if removal_verified else None
+        if (
+            active_attestation is not None
+            and execution_journal is not None
+            and not recovering_from_journal
+            and (not removal_verified or step_evidence_verified)
+        ):
+            # 已证完整的销毁不得被回写成 partial_failure：此处只有终态事实待写，
+            # removal 本身仍是 complete_*，覆写会把假失败刻进 create-once 回执。
+            if not removal_verified:
+                removal_outcome = (
+                    "partial_failure"
+                    if confirmed_container_ids or confirmed_network_ids
+                    else "unknown_after_attempt"
+                    if attempted_command
+                    else "aborted_before_attempt"
+                )
+                destructive_performed = (
+                    True
+                    if confirmed_container_ids or confirmed_network_ids
+                    else None
+                    if attempted_command
+                    else False
+                )
             try:
                 consumption_path = (
                     _stackctl.orphan_compose_teardown.write_consumption_create_once(
@@ -721,7 +905,19 @@ def _repair_orphaned_compose(
                 )
             except (OSError, RuntimeError, TypeError, ValueError) as receipt_exc:
                 consumption_issue = str(receipt_exc)
-        details = [str(exc)]
+        details = [str(exc), *step_receipt_issues]
+        if step_evidence_verified:
+            details.append(
+                "complete exact removal remains proven by the create-once journal, step receipts, and post-state; no Docker removal command was replayed"
+            )
+        elif removal_verified:
+            details.append(
+                "complete exact removal is proven by post-state, but one or more create-once step receipts remain unpublished; no consumption fact was written"
+            )
+        elif recovering_from_journal:
+            details.append(
+                "existing execution evidence did not validate; no Docker removal command was replayed and no consumption fact was written"
+            )
         if confirmed_container_ids or confirmed_network_ids:
             details.append(
                 "confirmed removed exact resources before failure: "
@@ -736,47 +932,14 @@ def _repair_orphaned_compose(
             details.append(f"partial consumption={_stackctl.relpath(consumption_path)}")
         if consumption_issue:
             details.append(f"partial consumption receipt failure={consumption_issue}")
-        _stackctl.write_json(
-            report_dir / "report.json",
-            {
-                "command": "repair",
-                "target": target_name,
-                "fix": args.fix,
-                "status": "gate_block",
-                "destructiveRepairPerformed": destructive_performed,
-                "destructiveRepairOutcome": removal_outcome,
-                "executionJournal": (
-                    _stackctl.relpath(execution_journal) if execution_journal else ""
-                ),
-                "consumption": (
-                    _stackctl.relpath(consumption_path) if consumption_path else ""
-                ),
-                "steps": destructive_steps,
-                "details": details,
-            },
-        )
-        _stackctl.write_json(
-            report_dir / "repair_plan.json",
-            {
-                "target": target_name,
-                "fix": args.fix,
-                "actions": [
-                    "resolve the recorded identity, receipt, lease, expiry, or live-resource drift",
-                    "create a new attestation only after the prior path is preserved for audit",
-                ],
-            },
-        )
-        _stackctl._write_summary_bundle(
-            report_dir,
-            command="repair",
-            target=target_name,
-            status="failed",
-            summary=f"stackctl orphan Compose repair is GATE_BLOCK for {target_name}",
+        return _stackctl._finish_orphan_repair_gate_block(
+            report_dir=report_dir,
+            target_name=target_name,
+            fix=args.fix,
             details=details,
+            destructive_performed=destructive_performed,
+            removal_outcome=removal_outcome,
+            execution_journal=execution_journal,
+            consumption_path=consumption_path,
+            destructive_steps=destructive_steps,
         )
-        return {
-            "exitCode": 2,
-            "summary": f"stackctl orphan Compose repair is GATE_BLOCK for {target_name}",
-            "details": details,
-            "reportDir": _stackctl.relpath(report_dir),
-        }

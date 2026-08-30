@@ -53,7 +53,7 @@ from content.source.research.source_quality import (  # noqa: E402
     _candidate_gate,
     _collection_gate,
     _collection_admissible_image_urls,
-    _license_allows_app_publish,
+    license_allows_commercial_distribution,
     _select_article_plan_sources,
 )
 from content.source.research.homepage_source_policy import _homepage_can_seed_base_draft  # noqa: E402

@@ -4,10 +4,9 @@
 ///
 /// 对应 AppRoot Journey：profile-private-activity-history 与
 /// content-discovery-to-consumption 的 content-detail-profile-handoff。
-/// 本用例在真实设备 + 真实 gamma 后端上守护 flutter_test 无法替代的端到端行为：
-/// 底栏进入我的主页真实 bundle 渲染、交集资产面（我的交集/我的行动/共同经历/成行力）
-/// 真实读面渲染与诚实分支、编辑资料入口可达、feed 作者头像进入他人主页后的
-/// 真实关注/取关往返。
+/// 本用例在真实设备 + 当前 alpha/beta/gamma 后端上守护 flutter_test 无法替代的端到端行为：
+/// 三环境 P0 覆盖我的主页身份/Tab/终态，以及 feed 作者头像、作品与作者主页终态；
+/// Gamma P1 继续覆盖交集资产面、编辑资料保存回读与真实关注/取关往返。
 ///
 /// 与 local_contract 的映射（R12 一体性）：
 ///   - 主页壳层骨架/统计行/操作条渲染   <- profile_shell_widget__local_contract_test
@@ -18,19 +17,23 @@
 ///     my_experience_asset_card、creator_flywheel_proof_row、
 ///     intersection_actionable_reasons 各 local_contract 组
 ///
-/// 执行方式：由 `run_environment_patrol_smoke.py` 消费 `gamma-local` topology
+/// 执行方式：由 `run_environment_patrol_smoke.py` 消费所选 target topology
 /// 投影全部 canonical HTTPS/WSS endpoint，并在 Android 上安装 target 端口的
 /// `adb reverse`。禁止手工注入 HTTP 或私有 IP URL。
 library;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:patrol/patrol.dart';
+import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart'
+    show appImageLoadErrorKey, appImageLoadSuccessKey;
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_statement_row.dart';
 import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import '../../../support/runtime/patrol/patrol_app_content_screenshot.dart';
 import '../../../support/runtime/patrol/patrol_test_support.dart';
 import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/my_gatherings_entry_card.dart';
@@ -40,12 +43,13 @@ import 'package:quwoquan_app/service/recommendation_service/recommendation/recom
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_experience_asset_card.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_card.dart';
 
-const _apiContractEnv = String.fromEnvironment(
-  'API_CONTRACT_ENV',
-  defaultValue: 'gamma',
+const _apiContractEnv = String.fromEnvironment('API_CONTRACT_ENV');
+const _appRuntimeEnv = String.fromEnvironment('APP_RUNTIME_ENV');
+const _appContentProfileP0Only = bool.fromEnvironment(
+  'APP_CONTENT_PROFILE_P0_ONLY',
 );
 
-const _kHomeSearchChrome = ValueKey<String>('home-search-chrome');
+const _kHomeSearchChrome = ValueKey<String>('home-primary-tab-chrome');
 const _kFeedCard0 = ValueKey<String>('home-feed-card-0');
 const _kRelationHeader = ValueKey<String>('home-relation-card-header');
 const _kEditProfileNicknameRow = ValueKey<String>('edit-profile-nickname-row');
@@ -57,6 +61,13 @@ const _kProfileKeys = <ValueKey<String>>[
   ValueKey<String>('profile-header-avatar'),
   ValueKey<String>('profile-shell-summary-card'),
 ];
+const _kProfilePrimaryTabKeys = <ValueKey<String>>[
+  ValueKey<String>('profile-shell-primary-tabs-inline'),
+  ValueKey<String>('profile-shell-primary-tabs-pinned'),
+];
+
+bool get _runsGammaProfileP1 =>
+    _apiContractEnv == 'gamma' && !_appContentProfileP0Only;
 
 void main() {
   patrolTest(
@@ -66,41 +77,56 @@ void main() {
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 12)),
     ($) async {
       await launchPatrolAppOnce($);
-      assert(
-        _apiContractEnv == 'gamma',
-        'Patrol user_acceptance journey must run with API_CONTRACT_ENV=gamma',
-      );
+      _expectSelectedNonProdEnvironment();
       await _recoverToHomeFeed($);
 
       // 底栏「我」进入我的主页：真实 homepage-bundle 渲染壳层骨架。
       final tappedProfileTab = await _tapBottomProfileTab($);
       expect(tappedProfileTab, isTrue, reason: '应能点击底栏「我」进入我的主页');
-      final reachedProfile = await _waitForAnyKeyInTree(
+      for (final identityKey in _kProfileKeys) {
+        final identityMounted = await _waitForKeyInTree(
+          $,
+          identityKey,
+          timeout: const Duration(seconds: 20),
+        );
+        expect(
+          identityMounted,
+          isTrue,
+          reason: '我的主页必须渲染头像与身份摘要（真实 bundle 非空态）',
+        );
+      }
+      final primaryTabsMounted = await _waitForAnyKeyInTree(
         $,
-        _kProfileKeys,
+        _kProfilePrimaryTabKeys,
         timeout: const Duration(seconds: 20),
       );
+      expect(primaryTabsMounted, isTrue, reason: '我的主页必须渲染 canonical 一级 Tab');
+      final terminalProfile = find.byKey(_kProfileKeys.first);
       expect(
-        reachedProfile,
-        isTrue,
-        reason: '我的主页必须渲染壳层骨架（头像/身份卡，真实 bundle 非空态）',
+        GoRouterState.of($.tester.element(terminalProfile.first)).uri.path,
+        AppRoutePaths.profile,
+        reason: '我的主页 P0 终态必须保持在 profile route',
       );
-      await _verifyAuthorImpactEvidence($);
-      await _verifyIntersectionAssetSurfaces($);
 
-      // 编辑资料真实保存并回读：入口、字段编辑、远端写入及主页刷新缺一不可。
-      final editEntry = find.text(ProfileText.profileEditLabel);
-      expect(editEntry.evaluate(), isNotEmpty, reason: '我的主页必须提供编辑资料入口');
-      await $.tester.tap(editEntry.first);
-      await $.pump(const Duration(milliseconds: 400));
-      await $.pump(const Duration(seconds: 1));
-      final reachedEdit = await _waitForFinderInTree(
-        $,
-        find.text(ProfileText.editProfileSaveAction),
-        timeout: const Duration(seconds: 12),
-      );
-      expect(reachedEdit, isTrue, reason: '编辑资料页应可从我的主页进入');
-      await _editNicknameAndVerifyProfileRefresh($);
+      // Gamma P1 保留额外投影与写交互；Alpha/Beta 精简 P0 不执行这些 mutation。
+      if (_runsGammaProfileP1) {
+        await _verifyAuthorImpactEvidence($);
+        await _verifyIntersectionAssetSurfaces($);
+
+        // 编辑资料真实保存并回读：入口、字段编辑、远端写入及主页刷新缺一不可。
+        final editEntry = find.text(ProfileText.profileEditLabel);
+        expect(editEntry.evaluate(), isNotEmpty, reason: '我的主页必须提供编辑资料入口');
+        await $.tester.tap(editEntry.first);
+        await $.pump(const Duration(milliseconds: 400));
+        await $.pump(const Duration(seconds: 1));
+        final reachedEdit = await _waitForFinderInTree(
+          $,
+          find.text(ProfileText.editProfileSaveAction),
+          timeout: const Duration(seconds: 12),
+        );
+        expect(reachedEdit, isTrue, reason: '编辑资料页应可从我的主页进入');
+        await _editNicknameAndVerifyProfileRefresh($);
+      }
     },
   );
 
@@ -111,6 +137,7 @@ void main() {
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 12)),
     ($) async {
       await launchPatrolAppOnce($);
+      _expectSelectedNonProdEnvironment();
       await _recoverToHomeFeed($);
 
       // feed 首卡作者头像进入他人主页（对象跳转链路）。
@@ -124,6 +151,36 @@ void main() {
         timeout: const Duration(seconds: 15),
       );
       expect(reachedProfile, isTrue, reason: '作者头像应跳转到用户主页');
+
+      const profileAvatarImageKey = ValueKey<String>(
+        'profile-header-avatar-image',
+      );
+      final profileAvatar = find.byKey(profileAvatarImageKey);
+      final avatarMounted = await _waitForFinderInTree(
+        $,
+        profileAvatar,
+        timeout: const Duration(seconds: 15),
+      );
+      expect(avatarMounted, isTrue, reason: 'release 作者主页必须挂载真实头像媒体');
+      final avatarDecoded = await _waitForFinderInTree(
+        $,
+        find.descendant(
+          of: profileAvatar,
+          matching: find.byKey(appImageLoadSuccessKey),
+        ),
+        timeout: const Duration(seconds: 20),
+      );
+      expect(avatarDecoded, isTrue, reason: 'release 作者头像必须真实解码成功');
+      expect(
+        find
+            .descendant(
+              of: profileAvatar,
+              matching: find.byKey(appImageLoadErrorKey),
+            )
+            .evaluate(),
+        isEmpty,
+        reason: 'release 作者头像不得停留在显式加载失败态',
+      );
 
       // 记录 tab（默认二级容器）：feed 作者必有已发布作品，ListUserPosts 真实
       // wire 必须能被 generated decoder 解码并渲染作品网格。回归背景：契约
@@ -149,6 +206,31 @@ void main() {
         isEmpty,
         reason: '有作品作者不得显示「共有 0 条记录」伪空态',
       );
+
+      final p0TerminalKey = _kProfileKeys.firstWhere(
+        (key) => find.byKey(key).evaluate().isNotEmpty,
+      );
+      final p0TerminalProfile = find.byKey(p0TerminalKey);
+      final p0TerminalRoute = GoRouterState.of(
+        $.tester.element(p0TerminalProfile.first),
+      ).uri.path;
+      expect(
+        p0TerminalRoute,
+        startsWith(AppRoutePaths.userProfilePathTemplate.split('{').first),
+        reason: '作者主页 P0 终态必须保持在 author profile route',
+      );
+
+      if (!_runsGammaProfileP1) {
+        await emitPatrolAppContentPageScreenshotReady(
+          $,
+          environment: _apiContractEnv,
+          suite: 'profile-journey',
+          route: p0TerminalRoute,
+          terminalKey: p0TerminalKey.value,
+          terminalFinder: p0TerminalProfile,
+        );
+        return;
+      }
 
       // 关注/取关真实往返：无论 seed 初态如何，都先归一为未关注，再验证完整往返。
       final followEntry = find.text(FoundationText.follow);
@@ -187,8 +269,26 @@ void main() {
         timeout: const Duration(seconds: 10),
       );
       expect(unfollowed, isTrue, reason: '取关后应回到可关注态（状态往返无脏残留）');
-
-      await patrolGoTo($, AppRoutePaths.home);
+      final terminalKey = _kProfileKeys.firstWhere(
+        (key) => find.byKey(key).evaluate().isNotEmpty,
+      );
+      final terminalProfile = find.byKey(terminalKey);
+      final terminalRoute = GoRouterState.of(
+        $.tester.element(terminalProfile.first),
+      ).uri.path;
+      expect(
+        terminalRoute,
+        startsWith(AppRoutePaths.userProfilePathTemplate.split('{').first),
+        reason: 'profile screenshot terminal must remain on an author profile',
+      );
+      await emitPatrolAppContentPageScreenshotReady(
+        $,
+        environment: _apiContractEnv,
+        suite: 'profile-journey',
+        route: terminalRoute,
+        terminalKey: terminalKey.value,
+        terminalFinder: terminalProfile,
+      );
     },
   );
 }
@@ -200,7 +300,11 @@ Future<void> _verifyAuthorImpactEvidence(PatrolIntegrationTester $) async {
     card,
     timeout: const Duration(seconds: 20),
   );
-  expect(reachedCard, isTrue, reason: '我的主页必须回读并展示 Gamma AuthorImpact 摘要');
+  expect(
+    reachedCard,
+    isTrue,
+    reason: '我的主页必须回读并展示 $_apiContractEnv AuthorImpact 摘要',
+  );
 
   final statement = find.descendant(
     of: card.first,
@@ -211,7 +315,11 @@ Future<void> _verifyAuthorImpactEvidence(PatrolIntegrationTester $) async {
     statement,
     timeout: const Duration(seconds: 15),
   );
-  expect(reachedStatement, isTrue, reason: 'Gamma AuthorImpact 摘要必须包含可下钻的权威事实');
+  expect(
+    reachedStatement,
+    isTrue,
+    reason: '$_apiContractEnv AuthorImpact 摘要必须包含可下钻的权威事实',
+  );
   await $.tester.ensureVisible(statement.first);
   await $.tester.tap(statement.first);
   await $.pump(const Duration(milliseconds: 400));
@@ -263,11 +371,7 @@ Future<void> _verifyIntersectionAssetSurfaces(PatrolIntegrationTester $) async {
     find.text(GatheringText.myGatheringsSegmentUpcoming),
     timeout: const Duration(seconds: 12),
   );
-  expect(
-    reachedSegments,
-    isTrue,
-    reason: '我的行动分组页必须渲染三分组（即将开始/已结束/已取消）而非错误态',
-  );
+  expect(reachedSegments, isTrue, reason: '我的行动分组页必须渲染三分组（即将开始/已结束/已取消）而非错误态');
   expect(
     find.text(GatheringText.myGatheringsSegmentCancelled).evaluate(),
     isNotEmpty,
@@ -321,7 +425,7 @@ Future<void> _editNicknameAndVerifyProfileRefresh(
   PatrolIntegrationTester $,
 ) async {
   final updatedNickname =
-      'gamma${DateTime.now().millisecondsSinceEpoch % 1000000000}';
+      '$_apiContractEnv${DateTime.now().millisecondsSinceEpoch % 1000000000}';
   final nicknameRow = find.byKey(_kEditProfileNicknameRow);
   expect(nicknameRow.evaluate(), isNotEmpty, reason: '编辑资料页必须提供昵称编辑项');
   await $.tester.tap(nicknameRow.first);
@@ -353,6 +457,19 @@ Future<void> _editNicknameAndVerifyProfileRefresh(
     timeout: const Duration(seconds: 15),
   );
   expect(refreshedProfile, isTrue, reason: '资料保存后主页必须回读远端昵称，不能只停留在本地编辑态');
+}
+
+void _expectSelectedNonProdEnvironment() {
+  expect(
+    _apiContractEnv,
+    anyOf('alpha', 'beta', 'gamma'),
+    reason: 'profile P0 only accepts alpha/beta/gamma',
+  );
+  expect(
+    _appRuntimeEnv,
+    _apiContractEnv,
+    reason: 'APP_RUNTIME_ENV and API_CONTRACT_ENV must name the same target',
+  );
 }
 
 Future<bool> _waitForKeyInTree(

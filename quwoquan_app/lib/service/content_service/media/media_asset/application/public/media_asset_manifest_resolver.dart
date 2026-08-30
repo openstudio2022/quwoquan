@@ -1,12 +1,11 @@
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_asset_url_resolver.dart';
 
-typedef MediaAssetReferenceResolver =
-    String Function(
-      String raw, {
-      String? gatewayBaseUrl,
-      String? imageCdnBaseUrl,
-      String? videoCdnBaseUrl,
-    });
+typedef MediaAssetReferenceResolver = String Function(
+  String raw, {
+  String? gatewayBaseUrl,
+  String? imageCdnBaseUrl,
+  String? videoCdnBaseUrl,
+});
 
 enum MediaAssetVariantProfile {
   thumbnail,
@@ -50,13 +49,31 @@ class MediaAssetVariants {
     required this.assetId,
     required this.kind,
     required this.variants,
+    this.accessMode = '',
     this.fallbackUrl = '',
+    this.width,
+    this.height,
   });
 
   final String assetId;
   final String kind;
   final Map<String, MediaAssetVariant> variants;
+
+  /// 契约声明的交付访问模式（PostArticleAsset.accessMode，DEC-033）。
+  /// 空串表示契约缺席（存量 public 交付）；消费面按 typed 绑定分流，
+  /// 不从 URL 形态反推。
+  final String accessMode;
+
   final String fallbackUrl;
+
+  /// manifest 顶层资产行声明的像素宽高（PostArticleAsset.width/height，
+  /// NULLABLE 契约字段）；缺席保持 null，不得塌陷为 0。
+  final int? width;
+  final int? height;
+
+  /// 展示用途的像素宽高：优先 display variant 的实测尺寸，缺席回退顶层声明。
+  int? get displayWidth => variants['display']?.width ?? width;
+  int? get displayHeight => variants['display']?.height ?? height;
 
   String urlFor(MediaAssetVariantProfile profile) {
     final preferred = _profileName(profile);
@@ -141,14 +158,27 @@ class MediaAssetManifestResolver implements MediaAssetUrlResolver {
       }
       final fallbackUrl = resolveAssetRowUrl(row);
       final variants = _resolveRowVariants(row);
-      if (variants.isEmpty && fallbackUrl.isEmpty) {
+      final width = _intValue(row['width']);
+      final height = _intValue(row['height']);
+      final accessMode = (row['accessMode'] ?? '').toString().trim();
+      // 交付 URL 全缺席但声明了像素宽高的行仍需保留（REQ-017）：
+      // 缺席态占位框比例由元数据派生，不得连同几何一起丢弃。
+      // 私有交付的行同样必须保留：它本就没有公开 URL，按「无 URL 即丢弃」
+      // 处理会让 research 相位的文章内嵌图整片消失。
+      if (variants.isEmpty &&
+          fallbackUrl.isEmpty &&
+          accessMode.isEmpty &&
+          (width == null || height == null)) {
         continue;
       }
       out[assetId] = MediaAssetVariants(
         assetId: assetId,
         kind: (row['kind'] ?? '').toString().trim(),
         variants: variants,
+        accessMode: accessMode,
         fallbackUrl: fallbackUrl,
+        width: width,
+        height: height,
       );
     }
     return Map<String, MediaAssetVariants>.unmodifiable(out);

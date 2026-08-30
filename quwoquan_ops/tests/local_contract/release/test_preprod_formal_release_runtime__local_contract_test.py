@@ -11,13 +11,43 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib import read_only_user_availability
 
 
 DIGEST = "sha256:" + "a" * 64
 
+_AVAILABILITY_LAYERS = (
+    "build_ready",
+    "runtime_full_ready",
+    "provider_ready",
+    "release_active",
+    "content_exact_queries_ready",
+    "device_bound",
+    "content_live_passed",
+)
+
 
 def completed(returncode: int = 0) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess([], returncode, stdout="", stderr="")
+
+
+def ready_availability_report(target: str, environment: str) -> dict[str, object]:
+    """A ready read-only availability aggregate, so health exit code isolates one layer."""
+    return {
+        "schema": read_only_user_availability.SCHEMA,
+        "target": target,
+        "environment": environment,
+        "observedAt": "2026-08-18T00:00:00Z",
+        "status": "ready",
+        "firstBlockerClass": "",
+        "firstBlocker": "",
+        "userAvailability": [
+            {"name": name, "status": "ready", "issues": []}
+            for name in _AVAILABILITY_LAYERS
+        ],
+        "metrics": [],
+        "evidence": {},
+    }
 
 
 class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
@@ -163,10 +193,13 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                         "_local_stack_operation_lock",
                         return_value=contextlib.nullcontext(),
                     ),
-                    mock.patch.object(
+                    # 本用例断言的是 OCI 闭包缺失时的阻断。immutable up 还会读
+                    # test-live 回执做端口互斥判定，不声明它就等于让断言依赖开发机上
+                    # 是否恰好留着一个未释放的 dev-session，结论会随环境飘。
+                    mock.patch.multiple(
                         stackctl,
-                        "load_startup_attempt",
-                        return_value=None,
+                        load_startup_attempt=mock.Mock(return_value=None),
+                        load_test_live_startup_attempt=mock.Mock(return_value=None),
                     ),
                     mock.patch.object(stackctl, "assert_local_runtime_available"),
                     mock.patch.object(
@@ -278,13 +311,21 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
             "candidateId": DIGEST,
             "artifactDigest": "sha256:" + "b" * 64,
             "contractGraphDigest": DIGEST,
-            "images": {
-                service: {
-                    "repository": f"ghcr.io/owner/repo/{service}",
-                    "digest": DIGEST,
-                    "ref": f"ghcr.io/owner/repo/{service}@{DIGEST}",
+            "environmentArtifacts": {
+                "gamma": {
+                    "environmentArtifactDigest": "sha256:" + "d" * 64,
+                    "images": {
+                        service: {
+                            "repository": f"ghcr.io/owner/repo/{service}-gamma",
+                            "digest": f"sha256:{index:064x}",
+                            "ref": (
+                                f"ghcr.io/owner/repo/{service}-gamma@"
+                                f"sha256:{index:064x}"
+                            ),
+                        }
+                        for index, (service, _) in enumerate(services, start=1)
+                    },
                 }
-                for service, _ in services
             },
         }
         both_started = threading.Event()
@@ -303,7 +344,7 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             manifest_path = Path(temp) / "manifest.json"
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-            environment: dict[str, str] = {}
+            environment: dict[str, str] = {"QWQ_LOCAL_RELEASE_ENV": "gamma"}
             with (
                 mock.patch.object(
                     stackctl,
@@ -322,6 +363,10 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                     stackctl,
                     "packaged_configuration_digest",
                     return_value="sha256:" + "c" * 64,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_bind_artifact_identity_mount_material",
                 ),
                 mock.patch.object(stackctl, "run", side_effect=concurrent_pull),
             ):
@@ -635,13 +680,21 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                     "fetch_url",
                     side_effect=fetch_concurrently,
                 ),
+                # HTTP 探测的并发与顺序是本用例的被测面。read-only user
+                # availability 聚合读工作站真实候选/运行态，不隔离会让
+                # exitCode 随本机状态漂移。
+                mock.patch.object(
+                    stackctl,
+                    "_read_only_user_availability_report",
+                    return_value=ready_availability_report("beta-local", "beta"),
+                ),
                 mock.patch.object(stackctl, "_write_summary_bundle"),
                 mock.patch.object(stackctl, "_write_stdout_markdown"),
                 mock.patch.object(stackctl, "relpath", side_effect=str),
             ):
                 result = stackctl.command_health(args)
 
-            self.assertEqual(result["exitCode"], 0)
+            self.assertEqual(result["exitCode"], 0, result["details"])
             report = json.loads((report_dir / "report.json").read_text())
             self.assertEqual(report["httpProbeConcurrency"], 2)
             self.assertEqual(

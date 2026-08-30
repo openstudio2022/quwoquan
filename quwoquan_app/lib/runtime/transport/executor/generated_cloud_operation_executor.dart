@@ -6,13 +6,17 @@ import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/runtime/context/cloud_operation_header_factory.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/runtime/transport/cloud_json_transport.dart';
 import 'package:quwoquan_app/runtime/transport/cloud_retry_policy.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
-typedef CloudTelemetryFailureObserver =
-    void Function(Object error, StackTrace stackTrace);
+typedef CloudTelemetryFailureObserver = void Function(
+  Object error,
+  StackTrace stackTrace,
+);
 
 final class AppGeneratedCloudOperationExecutor
     implements CloudOperationExecutor, CloudOperationStreamExecutor {
@@ -631,8 +635,7 @@ final class AppGeneratedCloudOperationExecutor
         pathTemplate.contains('?') ||
         pathTemplate.contains('#')) {
       throw CloudErrorMapper.invalidResponse(
-        message:
-            'Operation path template must be an absolute path without query/fragment',
+        message: 'Operation path template must be an absolute path without query/fragment',
         requestPath: pathTemplate,
         functionModule: 'generated_cloud_operation_executor',
       );
@@ -784,15 +787,28 @@ final class AppGeneratedCloudOperationExecutor
   String? _retryReason(CloudException error) {
     final statusCode = error.statusCode;
     if (statusCode == 401) return 'authorization_refresh';
+    if (statusCode == 429) return 'retry_after';
+    if (_isTerminalUnavailable(error)) return null;
     if (statusCode != null && retryPolicy.canRetryStatus(statusCode)) {
-      return statusCode == 429 ? 'retry_after' : 'retryable_status';
+      return 'retryable_status';
     }
-    return switch (error.type) {
-      CloudErrorType.timeout => 'timeout',
-      CloudErrorType.network => 'network',
-      CloudErrorType.rateLimited => 'retry_after',
-      _ => null,
-    };
+    return error.type == CloudErrorType.rateLimited ? 'retry_after' : null;
+  }
+
+  bool _isTerminalUnavailable(CloudException error) {
+    final kind = error.runtimeFailure.kind;
+    if (kind == RuntimeFailureKind.cancelled ||
+        kind == RuntimeFailureKind.network ||
+        kind == RuntimeFailureKind.timeout) {
+      return true;
+    }
+    if (kind != RuntimeFailureKind.unavailable) {
+      return false;
+    }
+    final reason = error.runtimeFailure.semanticReason;
+    return error.domainErrorCode?.value ==
+            ContentErrorCode.requiredDependencyUnavailable ||
+        (error.statusCode == 503 && reason.endsWith('_owner_unavailable'));
   }
 
   Duration _retryDelay(CloudException error, {required int completedAttempt}) {
@@ -825,11 +841,12 @@ final class AppGeneratedCloudOperationExecutor
       await _sleeper(delay);
       return;
     }
-    final outcome =
-        await Future.any<_RetryWaitOutcome>(<Future<_RetryWaitOutcome>>[
-          _sleeper(delay).then((_) => _RetryWaitOutcome.elapsed),
-          cancellation.whenCancelled.then((_) => _RetryWaitOutcome.cancelled),
-        ]);
+    final outcome = await Future.any<_RetryWaitOutcome>(
+      <Future<_RetryWaitOutcome>>[
+        _sleeper(delay).then((_) => _RetryWaitOutcome.elapsed),
+        cancellation.whenCancelled.then((_) => _RetryWaitOutcome.cancelled),
+      ],
+    );
     if (outcome == _RetryWaitOutcome.cancelled) {
       throw const CloudOperationCancelledException();
     }

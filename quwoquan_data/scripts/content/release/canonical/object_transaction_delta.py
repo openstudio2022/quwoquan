@@ -15,7 +15,6 @@ from typing import Any
 
 from content.release.canonical.canonical_inventory import apply_inventory_delta
 from content.release.canonical.object_transaction_contract import (
-    ALLOWED_CANONICAL_ROOTS,
     ObjectTransactionError,
     _collect_tag_refs,
     _digest_bytes,
@@ -25,6 +24,15 @@ from content.release.canonical.object_transaction_contract import (
     _read_json,
     _safe_rel,
     _write_json,
+    canonical_destination,
+    is_canonical_document,
+)
+from core.content_library import (
+    MEDIA_KIND,
+    MediaHoldingError,
+    admit_library_entry,
+    carry_media_reference,
+    file_sha256,
 )
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
 from core.schema import assert_valid
@@ -32,8 +40,30 @@ from core.schema import assert_valid
 DELTA_SCHEMA = "quwoquan_data.canonical_transaction_delta"
 
 
+
 def _delta_root(run_root: Path) -> Path:
     return run_root / "delta"
+
+
+def _own_media_body(source: Path, *, sha256: str) -> None:
+    """Give one body both of the homes an approved object needs, or fail the transaction.
+
+    The library answers every runtime resolution but lives outside the working
+    tree and cannot be rebuilt from version control; the carried reference is what
+    a fresh checkout rebuilds from. An object that reaches `approved` with only
+    one of the two is approved but not deliverable — the failure mode is that a
+    later release build reports the digest missing, long after the evidence that
+    would explain it was reclaimed. Both homes are therefore preconditions of the
+    apply, not follow-up chores.
+    """
+
+    try:
+        admit_library_entry(source, kind=MEDIA_KIND, sha256=sha256)
+        carry_media_reference(source, sha256=sha256, suffix=source.suffix)
+    except (MediaHoldingError, OSError, ValueError) as exc:
+        raise ObjectTransactionError(
+            f"media body cannot be owned for publish: {sha256}: {exc}"
+        ) from exc
 
 
 def _blob_ref(digest: str) -> Path:
@@ -65,10 +95,7 @@ def _ingest_blob(*, source: Path, run_root: Path) -> dict[str, Any]:
 
 
 def _destination(value: str) -> Path:
-    relative = _safe_rel(value, label="delta.destination")
-    if relative.parts[0] not in ALLOWED_CANONICAL_ROOTS:
-        raise ObjectTransactionError(f"delta destination is outside canonical roots: {value}")
-    return relative
+    return canonical_destination(value, label="delta.destination")
 
 
 def _register_source(
@@ -116,19 +143,29 @@ def build_transaction_delta(
             Path(str(package["objectKind"]))
             / _safe_rel(str(package["objectRef"]), label="objectRef")
         )
+        # This loop is where a transaction decides what canonical publish will
+        # own. A package carries both the documents that describe the object and
+        # the bodies those documents point at; only the former become canonical
+        # files. Every body — the ones nested in the object surface and the ones
+        # the package staged under `cas/` — is admitted into the content library
+        # instead, so the digest already recorded in the object's JSON resolves
+        # after this transaction's run root is reclaimed.
         for source in _files(object_root):
+            relative = source.relative_to(object_root)
+            if not is_canonical_document(relative):
+                _own_media_body(source, sha256=file_sha256(source))
+                continue
             _register_source(
                 sources,
-                destination=object_prefix / source.relative_to(object_root),
+                destination=object_prefix / relative,
                 source=source,
                 allow_replace=True,
             )
 
         for row in package["casRows"]:
-            _register_source(
-                sources,
-                destination=_destination(str(row["objectKey"])),
-                source=package_root / _safe_rel(str(row["sourceRef"]), label="cas.sourceRef"),
+            _own_media_body(
+                package_root / _safe_rel(str(row["sourceRef"]), label="cas.sourceRef"),
+                sha256=str(row["sha256"]),
             )
 
         taxonomy_root = Path(
@@ -320,6 +357,14 @@ def load_transaction_delta(
 
 
 def _materialize_blob(blob: Path, destination: Path) -> None:
+    """Materialize one canonical destination from its frozen transaction blob.
+
+    Every blob that reaches here is a document the tree itself owns, because
+    ``build_transaction_delta`` only registers documents and ``_destination``
+    refuses anything else, so linking the blob straight into place cannot make
+    the tree the owner of a media body.
+    """
+
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(f".{destination.name}.{os.getpid()}.transaction.tmp")
     temporary.unlink(missing_ok=True)

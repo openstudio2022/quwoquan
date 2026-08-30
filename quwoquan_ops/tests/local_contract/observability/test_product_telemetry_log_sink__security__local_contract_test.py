@@ -27,12 +27,12 @@ UNDECLARED_PROVIDER_ENVIRONMENT = {
 DIGEST = "sha256:" + "a" * 64
 
 
-def _local_composition(environment: str, target: str) -> dict[str, object]:
+def _local_composition(target: str) -> dict[str, object]:
     return {
         "schema": "stackctl-observability-log-sink-package",
         "adapterId": "ext.obs.elasticsearch",
         "bindingDigest": DIGEST,
-        "endpointRef": f"local_topology:{environment}.elasticsearch",
+        "endpointRef": "local_topology:elasticsearch",
         "endpointEnvironmentKey": "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT",
         "secretEnvironmentKeys": [],
         "deploymentMode": "package-bound-local",
@@ -66,6 +66,33 @@ def _sha256_digest(payload: str) -> str:
     return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _release_binding(label: str) -> dict[str, str]:
+    return {
+        "releaseId": f"pilot-{label}",
+        "releaseDigest": _sha256_digest(f"release/{label}"),
+        "attestationRef": f"/candidate/attestations/{label}.json",
+        "attestationDigest": _sha256_digest(f"attestation/{label}"),
+        "releaseClass": "commercial",
+        "productLifecycleState": "commercial",
+    }
+
+
+def _candidate_snapshot(target: str) -> dict[str, object]:
+    """A fixed candidate snapshot as `active_deployment_candidate_snapshot` returns it."""
+    return {
+        "candidateDir": f"/candidate/{target}",
+        "manifest": {
+            "packageDigest": _sha256_digest(f"package/{target}"),
+            "release": {
+                "candidate": _release_binding("candidate"),
+                "rollback": _release_binding("rollback"),
+            },
+            "releaseInputClassification": "commercial_inputs",
+            "contractGraphDigest": _sha256_digest(f"contract-graph/{target}"),
+        },
+    }
+
+
 class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
     def test_contract_declares_one_elasticsearch_adapter_for_four_environments(
         self,
@@ -95,10 +122,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                 bundle = load_product_telemetry_log_sink(
                     environment,
                     target,
-                    runtime_composition=_local_composition(
-                        environment,
-                        target,
-                    ),
+                    runtime_composition=_local_composition(target),
                     process_environment=UNDECLARED_PROVIDER_ENVIRONMENT,
                     home=home,
                 )
@@ -124,7 +148,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
             load_product_telemetry_log_sink(
                 "beta",
                 "gamma-local",
-                runtime_composition=_local_composition("beta", "beta-local"),
+                runtime_composition=_local_composition("beta-local"),
             )
 
     def test_full_workload_missing_binding_returns_redacted_gate_block(self) -> None:
@@ -148,7 +172,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                 mock.patch.object(
                     stackctl,
                     "active_deployment_candidate_snapshot",
-                    return_value={"candidateDir": "/candidate/gamma-local"},
+                    return_value=_candidate_snapshot("gamma-local"),
                 ),
                 mock.patch.object(
                     stackctl,
@@ -304,8 +328,16 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                 )
 
     def test_cold_start_reuses_package_bound_images(self) -> None:
+        # 没有 running full 回执是本用例的显式前置：不得从工作站
+        # `.qwq_output` 读到真实 startup attempt，否则 cold-start 会走
+        # reuse 分支，断言对象随本机运行状态漂移。
         with (
             tempfile.TemporaryDirectory() as temporary_dir,
+            mock.patch.object(
+                stackctl,
+                "load_startup_attempt",
+                return_value=None,
+            ),
             mock.patch.object(
                 stackctl,
                 "command_up",
@@ -401,7 +433,7 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
             "alpha",
             "alpha-local",
             include_services=True,
-            require_workspace_match=False,
+            purpose="self_verify",
             candidate_root=Path(snapshot["candidateDir"]),
         )
         pointer_check.assert_called_once_with(snapshot)

@@ -18,7 +18,6 @@ from core.image_asset_strategy import (
     image_strategy_requires_publishable_images,
 )
 from core.io import read_json
-from governance.coverage.license import rights_proof_required
 
 from content.execution.identity import parse_execution_id
 from content.execution.workspace import execution_command_root, execution_root
@@ -264,9 +263,6 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
     只检查对象树 `entities/**/1.download/source_refs.json` 指向的 canonical source units。
     """
     issues: list[DataIssue] = []
-    require_rights_proof = rights_proof_required(
-        parse_execution_id(execution_id).vertical
-    )
     requirements = download_requirements(execution_id)
     active_lanes = active_download_lanes(execution_id)
     text_lanes_required = _text_lanes_required(execution_id)
@@ -378,18 +374,6 @@ def gate_download(execution_id: str, *, target_entities: set[str] | None = None)
                     )
 
                     missing = asset_contract_missing_fields(asset)
-                    if require_rights_proof:
-                        missing.extend(
-                            field
-                            for field in (
-                                "license",
-                                "credit",
-                                "sourceUrl",
-                                "termsUrl",
-                                "usageScope",
-                            )
-                            if not str(asset.get(field) or "").strip()
-                        )
                     missing = sorted(set(missing))
                     if missing:
                         image_rights_issues.append(

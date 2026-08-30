@@ -133,7 +133,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.entity-service.redis.general.password
   type: string
   scope: workload
@@ -176,82 +175,6 @@ configs:
   sensitive: false
   default: 200
 - key: sys.entity-service.redis.general.tls
-  type: bool
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: false
-- key: sys.entity-service.redis.rec.addr
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: ''
-- key: sys.entity-service.redis.rec.addrs
-  type: list
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: []
-- key: sys.entity-service.redis.rec.db
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 0
-- key: sys.entity-service.redis.rec.mode
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: standalone
-- key: sys.entity-service.redis.rec.password
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: true
-- key: sys.entity-service.redis.rec.pool.dial_timeout_ms
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 500
-- key: sys.entity-service.redis.rec.pool.min_idle
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 0
-- key: sys.entity-service.redis.rec.pool.read_timeout_ms
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 100
-- key: sys.entity-service.redis.rec.pool.size
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 0
-- key: sys.entity-service.redis.rec.pool.write_timeout_ms
-  type: int
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 100
-- key: sys.entity-service.redis.rec.tls
   type: bool
   scope: workload
   reload: restart

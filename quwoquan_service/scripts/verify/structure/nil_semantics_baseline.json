@@ -1,0 +1,216 @@
+{
+  "_governance": {
+    "owner": "system-architecture-and-engineering-guide",
+    "reason": "三笔存量：领域端口以 (nil, nil) 兼作未命中信号；契约字段的可空性无法从约束确定；出站 struct 的数组字段带 omitempty 使空列表消失。前者改成 sentinel error 或 AppError 需要逐端口裁决「未命中」是否属于调用方必须处理的业务分支——90 处里有相当一部分是合法的「可选/跳过」语义（非 card 消息没有 card 字段、事件不在投影矩阵内），盲目改成失败会把正常分支变成错误；后者补 NOT_NULL / NULLABLE 会把字段从推定可空变成 fail-closed 必填，属于行为变更，须先由 api_integration 验证云侧确实总是下发该字段。收敛按服务 owner 分批，天然切分点是 user-service 9 处、chat-service 16 处、content-service 16 处、notification-service 16 处、assistant-service 21 处。出站列表 19 处集中在 content post 详情 wire（7 处）、entity homepage 视图（4 处）、circle feed（3 处），每处都要同时确认构造点不会传 nil。",
+    "expires_when": "三笔均归零后删除本文件，门禁转为无基线硬 BLOCK：application/domain/adapters 三层无二元 return nil, nil，每个 fields.yaml 字段都能从约束确定可空性，且出站 struct 的数组字段都不带 omitempty 并在构造期归一化为空切片。",
+    "measure": "三类计数合并为一张 path -> {identity -> count} 表；身份而不是文件总数才是配额单位，因为按文件计数时「同一文件内删一处、在另一个函数里添一处」总数不变，门禁看不见。(1) Go：扫描 quwoquan_service 下非 _test.go、非 vendor、Git 元数据与 disposable output 的 *.go，路径 parts 命中 application/domain/adapters 之一且不含 infrastructure 的文件，按正则 \\breturn\\s+nil,\\s*nil\\s*(?!,) 逐行计数，身份取所在 func 声明名（闭包归属外层函数）；(?!,) 排除 return nil, nil, err 这类三返回值，它们的第三个返回值已经在表达失败，不属于「空返回值兼作未命中信号」。infrastructure 层单列不计入。(2) 契约：扫描 services/**/contracts/**/fields.yaml 的顶层 fields，身份取字段名，统计 constraints 不含 NOT_NULL / NULLABLE / PK 中任意一个的字段；PK 计入已声明，因为主键非空是关系模型的定义而非推断。(3) 出站列表：从 writeJSON / httpcodec.WriteJSON / json.NewEncoder(w).Encode 的实参按数据流回溯到 struct 定义（变量赋值、函数与方法返回类型、复合字面量），沿字段类型递归展开嵌套 struct 与列表元素，对可达 struct 中带 omitempty 的数组字段计数，身份为 wire-list:类型名.字段名；[]byte 不计（序列化为 base64 字符串而非数组）。同一遍扫描里值类型 bool + omitempty 是硬 BLOCK 不入基线：端侧 codegen 对必填 bool 生成 fail-closed 校验，键消失就是解码失败，且修复只是删掉 omitempty；列表入基线是因为删掉 omitempty 后 nil 切片会序列化成 null，仍然违反 REQ-003，必须连着构造期归一化一起改，逐个 DTO 裁决。实测这 19 处的端侧解码均为可空列表（如 mediaUrls 是 List<String>?），缺键落到 null 而不是解码失败，所以是「缺席与空列表混淆」的语义债，不是线上故障。口径下实测：Go return nil,nil 90 处 / 43 文件 / 69 个函数身份，契约 6 处 / 4 文件，出站列表 19 处 / 10 文件，合计 115。出站类型解析覆盖 314 个序列化调用点中的 265 个（410 个根类型、337 个可达 struct），其余 49 个无法静态定位者单独报告不计入基线，由 GWT-003 的响应体断言兜底。按文件计数且不排除三返回值的口径下实测为 Go 123 处 / 49 文件，两者相差的 33 处全部是 return nil, nil, err 误计，其中 6 个文件（assistant_policy_rollout/domain/model/rollout.go 7 处、assistant_session 的 user_delivery_policy_client.go 4 处、chat conversation_membership_access.go 4 处、assistant_preference/preference_query_facade.go 2 处、chat group_avatar_support.go 1 处、product_ops alert_policy.go 1 处）的真实二元计数为 0 却仍占着配额。"
+  },
+  "control-plane/platform-ops/internal/platform_ops/config_snapshot/application/config_layer/facade.go": {
+    "wire-list:ConfigDomainItem.Services": 1
+  },
+  "control-plane/platform-ops/internal/platform_ops/config_snapshot/application/config_layer/snapshot_source.go": {
+    "ReleaseFiles": 2,
+    "ServiceConfigFiles": 1,
+    "readSnapshotDir": 1,
+    "readSnapshotFile": 1
+  },
+  "runtime/health/health.go": {
+    "wire-list:Result.FailedChecks": 1
+  },
+  "runtime/recommendation/engine.go": {
+    "wire-list:FeedItem.Tags": 1
+  },
+  "services/api-edge/internal/edge_security/rate_limit_bucket/adapters/inbound/http/owner_proxy.go": {
+    "validatedOwnerRoutes": 1
+  },
+  "services/api-edge/internal/edge_security/rollout_assignment/application/runtime_config.go": {
+    "AllocationKey": 1
+  },
+  "services/assistant-service/internal/assistant/assistant_run/application/context_resolver.go": {
+    "cloneJSONMap": 1,
+    "decodeIntersectionEvidenceRefs": 1
+  },
+  "services/assistant-service/internal/assistant/assistant_run/application/orchestration/agent_loop.go": {
+    "emitReactObservation": 3
+  },
+  "services/assistant-service/internal/assistant/assistant_run/application/orchestration/durable_run_presentation.go": {
+    "buildExecutionPresentation": 2
+  },
+  "services/assistant-service/internal/assistant/assistant_run/application/orchestration/subagent_execution.go": {
+    "streamMultiSkillTurn": 1
+  },
+  "services/assistant-service/internal/assistant/assistant_run/application/orchestration/subagent_orchestration.go": {
+    "PlanSubagents": 7
+  },
+  "services/assistant-service/internal/assistant/assistant_run/application/orchestration/tool_coordinator.go": {
+    "modelToolDeclarationsFor": 1
+  },
+  "services/assistant-service/internal/assistant/assistant_run/application/runruntime/managed_execution.go": {
+    "FenceAndList": 1
+  },
+  "services/assistant-service/internal/assistant/assistant_run/domain/model/confirmed_slots.go": {
+    "NewAssistantRunConfirmedSlots": 1
+  },
+  "services/assistant-service/internal/assistant/page_context/application/facade.go": {
+    "Current": 2
+  },
+  "services/assistant-service/internal/assistant/skill_activity_view/domain/model/activity.go": {
+    "ParseCursor": 1
+  },
+  "services/chat-service/internal/chat/conversation/adapters/inbound/http/circle_list_resolver_client.go": {
+    "ListCircles": 1
+  },
+  "services/chat-service/internal/chat/conversation/adapters/inbound/http/contact_intersection_resolver_client.go": {
+    "ListContactIntersections": 1
+  },
+  "services/chat-service/internal/chat/conversation/adapters/inbound/http/social_contact_resolver_client.go": {
+    "ListContacts": 1,
+    "discoveryContactSeeds": 2
+  },
+  "services/chat-service/internal/chat/conversation/application/circle_list_resolver.go": {
+    "ListCircles": 1
+  },
+  "services/chat-service/internal/chat/conversation/application/contact_intersection_resolver.go": {
+    "ListContactIntersections": 1
+  },
+  "services/chat-service/internal/chat/conversation/application/contact_pagination.go": {
+    "socialContactSeedsToHits": 1
+  },
+  "services/chat-service/internal/chat/conversation/application/conversation_surface_facets.go": {
+    "findDirectConversationBetween": 1
+  },
+  "services/chat-service/internal/chat/conversation/application/member_contact_service.go": {
+    "ListContactHomeCircles": 1,
+    "socialContactHits": 2
+  },
+  "services/chat-service/internal/chat/conversation/application/message_service.go": {
+    "canonicalMentions": 1,
+    "validateMessageCardObjectRef": 1,
+    "validateMessageCommand": 1
+  },
+  "services/chat-service/internal/chat/conversation/application/social_contact_resolver.go": {
+    "ListContacts": 1
+  },
+  "services/circle-service/contracts/circle_management/gathering_plan/fields.yaml": {
+    "currentRevisionDigest": 1,
+    "currentRevisionId": 1,
+    "gatheringId": 1
+  },
+  "services/circle-service/internal/circle_management/circle/application/storage_ports.go": {
+    "wire-list:CircleFeedPost.AuthorIdentityTags": 1,
+    "wire-list:CircleFeedPost.ImageURLs": 1,
+    "wire-list:CircleFeedPost.IntersectionReasons": 1
+  },
+  "services/content-service/internal/content/comment/application/comment_query_service.go": {
+    "viewerBlockedPersonaIDs": 1
+  },
+  "services/content-service/internal/content/content_reaction/application/reaction/service.go": {
+    "reactionOutboxFacts": 1
+  },
+  "services/content-service/internal/content/intersection_visit_state/application/intersection/intersection_service.go": {
+    "AffinityReasons": 1,
+    "FactReasons": 1,
+    "ObjectIntersections": 1,
+    "ObjectReasons": 1
+  },
+  "services/content-service/internal/content/post/adapters/inbound/graphql/internal_persisted_projection.go": {
+    "projectAttribution": 1
+  },
+  "services/content-service/internal/content/post/adapters/inbound/http/content_handler.go": {
+    "wire-list:postDetailClientWire.EntityMentions": 1,
+    "wire-list:postDetailClientWire.EntityRefs": 1,
+    "wire-list:postDetailClientWire.MediaAssetIDs": 1,
+    "wire-list:postDetailClientWire.MediaItems": 1,
+    "wire-list:postDetailClientWire.MediaURLs": 1,
+    "wire-list:postDetailClientWire.SemanticMentions": 1,
+    "wire-list:postDetailClientWire.TagRefs": 1
+  },
+  "services/content-service/internal/content/post/application/feed/feed_delivery_policy_helpers.go": {
+    "resolveViewerBlockedPersonaIDs": 1
+  },
+  "services/content-service/internal/content/post/application/feed/feed_object_cards.go": {
+    "resolveObjectCards": 3
+  },
+  "services/content-service/internal/content/post/application/post_service_config_search.go": {
+    "wire-list:ContentAppConfig.HomeChannels": 1
+  },
+  "services/content-service/internal/content/post/application/post_value_objects.go": {
+    "decodePostMediaItems": 1,
+    "decodePostSemanticMentions": 1,
+    "objectRows": 1
+  },
+  "services/content-service/internal/content/post/application/searchprojection/post_projection.go": {
+    "Candidates": 1
+  },
+  "services/content-service/internal/trust_safety/report/application/report_service.go": {
+    "decodeMyReportCursor": 1
+  },
+  "services/entity-service/internal/entity_homepage/homepage/application/types.go": {
+    "wire-list:View.CategoryTags": 1,
+    "wire-list:View.IntroductionAssets": 1
+  },
+  "services/entity-service/internal/entity_homepage/homepage/domain/model/structured_facts.go": {
+    "SanitizeStructuredFacts": 1
+  },
+  "services/entity-service/internal/entity_homepage/homepage_review/application/facade.go": {
+    "wire-list:ReviewView.TagRefs": 1
+  },
+  "services/entity-service/internal/entity_homepage/homepage_status_report/application/facade.go": {
+    "wire-list:StatusReportView.EvidenceURLs": 1
+  },
+  "services/notification-service/internal/notification_delivery/notification/adapters/inbound/http/handler.go": {
+    "parseOptionalBool": 1
+  },
+  "services/notification-service/internal/notification_delivery/notification/application/interaction_notification_projection.go": {
+    "Project": 1,
+    "projectCircleJoined": 1,
+    "projectCircleMembershipDecision": 1,
+    "projectCommentPinChanged": 2,
+    "projectFollowChanged": 1,
+    "projectGatheringRecapNudge": 2,
+    "projectGreetingSent": 1,
+    "projectGroupMembership": 1,
+    "projectInvitationInviterReceipt": 1,
+    "projectQuotedPublish": 2,
+    "projectReactionSet": 2
+  },
+  "services/product-ops-service/internal/product_ops/event_record/application/telemetry_service.go": {
+    "wire-list:EventDrilldownItem.CallStack": 1
+  },
+  "services/search-service/internal/search/search_index_view/application/experiments.go": {
+    "optionalPolicyTime": 1
+  },
+  "services/tag-service/contracts/tag/tag_node_view/fields.yaml": {
+    "maxDepth": 1
+  },
+  "services/tag-service/internal/tag/tag_node_view/application/tag_service.go": {
+    "Resolve": 2
+  },
+  "services/tag-service/internal/tag/tag_node_view/domain/lifecycle/lifecycle.go": {
+    "parseWindow": 1
+  },
+  "services/user-service/contracts/account/device_registration/fields.yaml": {
+    "accountId": 1
+  },
+  "services/user-service/contracts/persona_management/persona/fields.yaml": {
+    "userId": 1
+  },
+  "services/user-service/internal/account/user_account/application/account_orchestration/persona_service.go": {
+    "GetMeProfileView": 1,
+    "GetPersonaProfileView": 2,
+    "resolvePublicPersona": 1
+  },
+  "services/user-service/internal/account/user_account/application/account_orchestration/profile_service.go": {
+    "GetProfile": 1,
+    "GetStats": 1
+  },
+  "services/user-service/internal/persona_management/profile_update_proposal/adapters/inbound/http/handler.go": {
+    "decodeProfileProposalCursor": 1
+  },
+  "services/user-service/internal/relationship/contact_discovery_record/application/contact_discovery_service.go": {
+    "GetLatest": 1
+  },
+  "services/user-service/internal/relationship/greeting_request/application/greeting_service.go": {
+    "ResolveGreetingIntersection": 1
+  }
+}

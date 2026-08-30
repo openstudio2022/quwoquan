@@ -107,6 +107,7 @@ class _HomeImagePostCard extends ConsumerWidget {
     MediaEndpointConfig? endpointConfig,
   ) {
     final urls = item.mediaImageUrls;
+    final deliveryIndex = _feedImageDeliveryIndex(item);
     if (_isMomentGridPost(item)) {
       final visibleCount = _momentGridVisibleCount(urls.length);
       final sparseWidthFactor = urls.length <= 2
@@ -117,7 +118,12 @@ class _HomeImagePostCard extends ConsumerWidget {
         aspectRatio: _momentGridAspectRatio(urls.length),
         fullWidth: sparseWidthFactor == null,
         widthFactor: sparseWidthFactor,
-        child: _HomeMomentGridCard(urls: urls, isDark: isDark, onTap: onTap),
+        child: _HomeMomentGridCard(
+          urls: urls,
+          deliveryIndex: deliveryIndex,
+          isDark: isDark,
+          onTap: onTap,
+        ),
       );
     }
     if (urls.length > 1) {
@@ -126,6 +132,7 @@ class _HomeImagePostCard extends ConsumerWidget {
         fullWidth: true,
         child: _HomeFeedImageCarousel(
           urls: urls,
+          deliveryIndex: deliveryIndex,
           isDark: isDark,
           onTap: onTap,
           aspectRatio: _mediaAspectRatio(item),
@@ -134,6 +141,7 @@ class _HomeImagePostCard extends ConsumerWidget {
     }
     final url = item.primaryVisualUrl;
     if (url.isEmpty) return null;
+    final delivery = deliveryIndex[url];
     return _ConstrainedMediaBox(
       aspectRatio: _mediaAspectRatio(item),
       fullWidth: true,
@@ -144,23 +152,103 @@ class _HomeImagePostCard extends ConsumerWidget {
           borderRadius: BorderRadius.circular(
             DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
           ),
-          child: AppCachedNetworkImage(
-            imageUrl: url,
-            imageUrlCandidates: resolveContentMediaUrlCandidates(
-              url,
-              endpointConfig: endpointConfig,
-            ),
-            cdnPreset: CdnImagePreset.cover,
-            fit: BoxFit.cover,
-            placeholder: _mediaPlaceholder(isDark),
-            // 失败态必须与加载占位可区分：静默灰块会把「media-edge 缺对象」
-            // 伪装成加载中，用户与 UAT 都无法发现（errorWidget 缺省时使用
-            // AppCachedNetworkImage 的显式失败件）。
+          // DEC-033：signedGrant 资产分流到私有媒体桥接原子，公开资产
+          // 维持既有公开候选路径完全不变。
+          child: _feedDeliveryImage(
+            binding: _feedBinding(url, delivery),
+            isDark: isDark,
+            endpointConfig: endpointConfig,
           ),
         ),
       ),
     );
   }
+}
+
+/// feed 图片渲染点的私有媒体交付绑定（DEC-033）。
+///
+/// 只承载 typed 声明分流所需的两字段；绑定与 URL 的关联由投影
+/// `mediaItems` 提供，App 不从 URL 形态推断交付形态。缺席保持 contract failure。
+class _FeedImageDelivery {
+  const _FeedImageDelivery({required this.assetId, required this.accessMode});
+
+  final String assetId;
+  final MediaDeliveryAccessMode? accessMode;
+
+  bool get isSignedGrant =>
+      accessMode == MediaDeliveryAccessMode.signedGrant && assetId.isNotEmpty;
+}
+
+/// 从投影 `mediaItems` 建立「渲染 URL → 交付绑定」查找表：
+/// 逐条媒体 url→(mediaAssetId, accessMode)，封面 coverUrl→(coverAssetId,
+/// accessMode)。契约缺席 accessMode 保持 fail closed；legacy public 必须由已确认
+/// contract version 的具名 adapter 进入。
+Map<String, _FeedImageDelivery> _feedImageDeliveryIndex(
+  ContentPostViewData item,
+) {
+  final index = <String, _FeedImageDelivery>{};
+  for (final media in item.mediaItems) {
+    final url = media.url.trim();
+    if (url.isNotEmpty) {
+      index[url] = _FeedImageDelivery(
+        assetId: media.mediaAssetId?.trim() ?? '',
+        accessMode: media.accessMode,
+      );
+    }
+    final coverUrl = media.coverUrl?.trim() ?? '';
+    if (coverUrl.isNotEmpty) {
+      index[coverUrl] = _FeedImageDelivery(
+        assetId: media.coverAssetId?.trim() ?? '',
+        accessMode: media.accessMode,
+      );
+    }
+  }
+  return index;
+}
+
+/// signedGrant feed 图与封面的统一桥接调用（kind 固定 image；头像面另走 avatar）。
+/// 首页信息流媒体的 typed 交付原子（DEC-033）。
+///
+/// 公开与私有两路都从这里出去：消费点只交出绑定，不再自己判 accessMode。
+/// 每个调用点手写一次 `isSignedGrant ? 私有 : 公开`，就等于把「什么算私有」
+/// 复制成了第二真相源——新增一处消费点漏判就是一次私有资产泄漏或空图。
+Widget _feedDeliveryImage({
+  required MediaDeliveryBinding binding,
+  required bool isDark,
+  required MediaEndpointConfig? endpointConfig,
+  BoxFit fit = BoxFit.cover,
+  CdnImagePreset cdnPreset = CdnImagePreset.cover,
+  Widget? placeholder,
+}) {
+  final waiting = placeholder ?? _mediaPlaceholder(isDark);
+  return mediaDeliveryImage(
+    binding: binding,
+    kind: MediaDeliveryKind.image,
+    fit: fit,
+    placeholder: waiting,
+    // 失败态必须与加载占位可区分：静默灰块会把「media-edge 缺对象」伪装成
+    // 加载中，用户与 UAT 都无法发现，因此公开路沿用原子自带的显式失败件。
+    publicBuilder: (context, publicUrl) => AppCachedNetworkImage(
+      imageUrl: publicUrl,
+      imageUrlCandidates: resolveContentMediaUrlCandidates(
+        publicUrl,
+        endpointConfig: endpointConfig,
+      ),
+      cdnPreset: cdnPreset,
+      fit: fit,
+      placeholder: waiting,
+    ),
+  );
+}
+
+/// 把信息流交付索引项收敛成 typed 绑定；索引缺该 URL 时保持 contract failure，
+/// 不在此处替它猜一个 accessMode。
+MediaDeliveryBinding _feedBinding(String url, _FeedImageDelivery? delivery) {
+  return MediaDeliveryBinding(
+    assetId: delivery?.assetId ?? '',
+    accessMode: delivery?.accessMode,
+    publicUrl: url,
+  );
 }
 
 class _HomeFeedVideoPlaybackState {
@@ -294,6 +382,7 @@ class _HomeArticlePostCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final coverUrl = item.mediaCoverUrl;
     final hasCover = coverUrl.isNotEmpty;
+    final coverDelivery = _feedImageDeliveryIndex(item)[coverUrl];
     final useTopImage = hasCover && _articlePrefersTopImage(item);
     final layoutKey = !hasCover
         ? 'home-article-layout-text-only'
@@ -310,8 +399,8 @@ class _HomeArticlePostCard extends StatelessWidget {
         child: !hasCover
             ? _buildTextOnlyLayout()
             : (useTopImage
-                  ? _buildTopImageLayout(coverUrl)
-                  : _buildSideImageLayout(context, coverUrl)),
+                  ? _buildTopImageLayout(coverUrl, coverDelivery)
+                  : _buildSideImageLayout(context, coverUrl, coverDelivery)),
       ),
     );
   }
@@ -325,7 +414,7 @@ class _HomeArticlePostCard extends StatelessWidget {
     );
   }
 
-  Widget _buildTopImageLayout(String coverUrl) {
+  Widget _buildTopImageLayout(String coverUrl, _FeedImageDelivery? delivery) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -338,6 +427,7 @@ class _HomeArticlePostCard extends StatelessWidget {
         const SizedBox(height: AppSpacing.intraGroupMd),
         _ArticleThumb(
           url: coverUrl,
+          delivery: delivery,
           isDark: isDark,
           aspectRatio: DiscoveryFeedSpacing.homeFeedMediaMaxAspectRatio,
         ),
@@ -345,7 +435,11 @@ class _HomeArticlePostCard extends StatelessWidget {
     );
   }
 
-  Widget _buildSideImageLayout(BuildContext context, String coverUrl) {
+  Widget _buildSideImageLayout(
+    BuildContext context,
+    String coverUrl,
+    _FeedImageDelivery? delivery,
+  ) {
     final title = item.normalizedTitle;
     final body = item.articlePreviewText;
     final contextObjectName = title.isNotEmpty ? title : body;
@@ -388,7 +482,11 @@ class _HomeArticlePostCard extends StatelessWidget {
                     child: AspectRatio(
                       aspectRatio: DiscoveryFeedSpacing
                           .homeFeedArticleSideThumbAspectRatio,
-                      child: _ArticleCoverImage(url: coverUrl, isDark: isDark),
+                      child: _ArticleCoverImage(
+                        url: coverUrl,
+                        delivery: delivery,
+                        isDark: isDark,
+                      ),
                     ),
                   ),
                 ],
@@ -404,7 +502,11 @@ class _HomeArticlePostCard extends StatelessWidget {
                   child: AspectRatio(
                     aspectRatio: DiscoveryFeedSpacing
                         .homeFeedArticleSideThumbAspectRatio,
-                    child: _ArticleCoverImage(url: coverUrl, isDark: isDark),
+                    child: _ArticleCoverImage(
+                      url: coverUrl,
+                      delivery: delivery,
+                      isDark: isDark,
+                    ),
                   ),
                 ),
               ),
@@ -618,44 +720,47 @@ class _ArticleThumb extends StatelessWidget {
   const _ArticleThumb({
     required this.url,
     required this.isDark,
+    this.delivery,
     this.aspectRatio,
   });
 
   final String url;
   final bool isDark;
+  final _FeedImageDelivery? delivery;
   final double? aspectRatio;
 
   @override
   Widget build(BuildContext context) {
     return AspectRatio(
       aspectRatio: aspectRatio ?? AppSpacing.one,
-      child: _ArticleCoverImage(url: url, isDark: isDark),
+      child: _ArticleCoverImage(url: url, delivery: delivery, isDark: isDark),
     );
   }
 }
 
 class _ArticleCoverImage extends ConsumerWidget {
-  const _ArticleCoverImage({required this.url, required this.isDark});
+  const _ArticleCoverImage({
+    required this.url,
+    required this.isDark,
+    this.delivery,
+  });
 
   final String url;
   final bool isDark;
+  final _FeedImageDelivery? delivery;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final signedDelivery = delivery;
     return ClipRRect(
       borderRadius: BorderRadius.circular(
         DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
       ),
-      child: AppCachedNetworkImage(
-        imageUrl: url,
-        imageUrlCandidates: resolveContentMediaUrlCandidates(
-          url,
-          endpointConfig: ref.watch(mediaEndpointConfigProvider),
-        ),
-        cdnPreset: CdnImagePreset.cover,
-        fit: BoxFit.cover,
-        placeholder: _mediaPlaceholder(isDark),
-        // 失败态走 AppCachedNetworkImage 显式失败件，与加载占位可区分。
+      // DEC-033：signedGrant 封面分流到私有媒体桥接原子，公开封面不变。
+      child: _feedDeliveryImage(
+        binding: _feedBinding(url, signedDelivery),
+        isDark: isDark,
+        endpointConfig: ref.watch(mediaEndpointConfigProvider),
       ),
     );
   }

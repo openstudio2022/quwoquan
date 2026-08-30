@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -62,7 +63,7 @@ def _arrange(monkeypatch, *, verdicts, precondition=()):
     monkeypatch.setattr(
         homepage_authoring,
         "homepage_quota_verdict",
-        lambda _ctx: pending.pop(0) if len(pending) > 1 else pending[0],
+        lambda _ctx, **_kwargs: pending.pop(0) if len(pending) > 1 else pending[0],
     )
     return ctx, media_scope
 
@@ -184,7 +185,7 @@ def _arrange_verdict(monkeypatch, *, review_issue_for, review_text, quota=3):
     monkeypatch.setattr(
         homepage_authoring,
         "_raw_homepage_independent_review_issues",
-        lambda _ctx, _domain, _etype, name: (
+        lambda _ctx, _domain, _etype, name, **_kwargs: (
             [review_text] if name == review_issue_for else []
         ),
     )
@@ -231,3 +232,44 @@ def test_batch_level_issue_still_zeroes_the_verdict__functional__local_contract(
     assert not verdict.passed
     assert verdict.qualified_count == 0
     assert "<execution>" in verdict.discarded
+
+
+def test_pending_reviewer_is_qualified_only_before_independent_review__functional__local_contract(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """``pending`` 在独立审阅前是中间态，在审阅后表示审阅未绑定结果。
+
+    审阅前必须放行，否则 build_validate 的采纳门会在审阅开始前就把整批清零，
+    独立审阅永远跑不到。审阅后必须判为不达标，否则未绑定审阅结果的对象会一路
+    走到 publish 才被 pool delivery 拦下，执行停在 manual_required 且零 canonical 对象。
+    """
+    review_dir = tmp_path / "execution/entities/地点/景区/杭州西湖/5.review"
+    review_dir.mkdir(parents=True)
+    (review_dir / "review.json").write_text(
+        json.dumps(
+            {
+                "decision": "approved",
+                "independentReviewer": {"status": "pending", "resultHash": None},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        homepage_authoring,
+        "execution_root",
+        lambda _eid: tmp_path / "execution",
+    )
+    ctx = SimpleNamespace(execution_id="execution")
+
+    before_review = homepage_authoring._raw_homepage_independent_review_issues(
+        ctx, "地点", "景区", "杭州西湖"
+    )
+    after_review = homepage_authoring._raw_homepage_independent_review_issues(
+        ctx, "地点", "景区", "杭州西湖", require_independent_review=True
+    )
+
+    assert before_review == []
+    assert after_review, "审阅后仍为 pending 必须产生阻断问题"
+    assert "pending" in after_review[0]

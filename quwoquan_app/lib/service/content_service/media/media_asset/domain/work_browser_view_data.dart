@@ -6,9 +6,11 @@ final class WorkBrowserMediaViewData {
     required this.kind,
     required this.url,
     this.coverUrl,
+    this.coverAssetId,
     this.durationMs,
     this.mediaAssetId,
     this.mediaAssetVersion,
+    this.accessMode,
     this.previewTrackManifestUrl,
     this.previewTrackVersion,
     this.hlsCmafMasterManifestUrl,
@@ -23,9 +25,11 @@ final class WorkBrowserMediaViewData {
         kind: wire.kind,
         url: wire.url,
         coverUrl: wire.coverUrl,
+        coverAssetId: wire.coverAssetId,
         durationMs: wire.durationMs,
         mediaAssetId: wire.mediaAssetId,
         mediaAssetVersion: wire.mediaAssetVersion,
+        accessMode: wire.accessMode,
         hlsCmafMasterManifestUrl: wire.hlsCmafMasterManifestUrl,
         hlsCmafDescriptorVersion: wire.hlsCmafDescriptorVersion,
         width: wire.width,
@@ -36,9 +40,15 @@ final class WorkBrowserMediaViewData {
   final String kind;
   final String url;
   final String? coverUrl;
+
+  /// poster/封面资产标识（DEC-033）：契约缺席即为 null，不以 postId 冒充。
+  final String? coverAssetId;
   final int? durationMs;
   final String? mediaAssetId;
   final int? mediaAssetVersion;
+
+  /// 该条媒体的交付形态（DEC-033）：typed 声明，缺席为 null（存量 public）。
+  final MediaDeliveryAccessMode? accessMode;
   final String? previewTrackManifestUrl;
   final int? previewTrackVersion;
   final String? hlsCmafMasterManifestUrl;
@@ -95,10 +105,17 @@ final class WorkBrowserViewData {
                   kind: map['kind']?.toString() ?? '',
                   url: map['url']?.toString() ?? '',
                   coverUrl: map['coverUrl']?.toString(),
+                  coverAssetId: map['coverAssetId']?.toString(),
                   durationMs: (map['durationMs'] as num?)?.toInt(),
                   mediaAssetId: map['mediaAssetId']?.toString(),
                   mediaAssetVersion: (map['mediaAssetVersion'] as num?)
                       ?.toInt(),
+                  accessMode: map['accessMode'] == null
+                      ? null
+                      : MediaDeliveryAccessMode.fromWire(
+                          map['accessMode'],
+                          'WorkBrowserMediaViewData.accessMode',
+                        ),
                   previewTrackManifestUrl: map['previewTrackManifestUrl']
                       ?.toString(),
                   previewTrackVersion: (map['previewTrackVersion'] as num?)

@@ -1,9 +1,4 @@
-"""campaign release selector 合约测试共享常量与 campaign fixture。
-
-由 test_campaign_release__selector_* 场景组与
-terminal_unpublished_partial_retry / mixed_terminal_retry 兄弟测试共享；
-从原单体测试文件逐字下沉，不改变任何 fixture 逻辑。
-"""
+"""Active-workload campaign release selector 合约测试共享 fixture。"""
 from __future__ import annotations
 
 import hashlib
@@ -13,6 +8,12 @@ from pathlib import Path
 from content.release.canonical.campaign_release import CampaignReleaseRoots
 from core.runtime_policy import runtime_profile_digest
 from core.schema import assert_valid
+from core.source_digest import ExecutionBundleIdentity, SourceDefinitionSnapshot
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
+from support.scale_source_pool_projection_fixture import _media_admission_row
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 
@@ -22,18 +23,15 @@ CATALOG_DIGEST = "sha256:" + "b" * 64
 RUN_ID = "campaign-run-current"
 FENCE = "sha256:" + "f" * 64
 RELEASE_ID = "campaign-release-selector-001"
-
+SOURCE_DOCUMENT = SourceDefinitionSnapshot(SOURCE_DIGEST).to_document()
+EXECUTION_BUNDLE = ExecutionBundleIdentity("sha256:" + "c" * 64).to_document()
 
 def _digest(value: object, *, prefix: bool = True) -> str:
     encoded = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
     digest = hashlib.sha256(encoded).hexdigest()
     return "sha256:" + digest if prefix else digest
-
 
 def _file_digest(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
@@ -47,8 +45,13 @@ def _write(path: Path, payload: object) -> None:
     )
 
 
-def _execution_id(carrier: str, sequence: int = 201) -> str:
-    return f"20260805--travel-{carrier}-m100--china--scale-{sequence:03d}"
+def _execution_id(
+    carrier: str,
+    sequence: int = 201,
+    *,
+    intent: str = "m100",
+) -> str:
+    return f"20260805--travel-{carrier}-{intent}--china--scale-{sequence:03d}"
 
 
 def _target_set(execution_id: str) -> dict[str, object]:
@@ -74,6 +77,7 @@ def _manifest(
         "executionId": execution_id,
         "familyRef": {"ref": "content/travel/test", "sha256": "c" * 64},
         "sourceDigest": source_document,
+        "executionBundle": EXECUTION_BUNDLE,
         "modelBinding": {
             "provider": "codex_sdk",
             "authorModel": "gpt-5.6-terra",
@@ -105,10 +109,33 @@ def _published_refs(carrier: str) -> dict[str, list[str]]:
     }
 
 
+def _source_attribution(carrier: str) -> dict[str, object]:
+    return {
+        "isOriginal": False,
+        "originalCreatorName": f"fixture-{carrier}",
+        "platform": "fixture",
+        "sourcePostUrl": f"https://example.com/{carrier}/post",
+        "originalAssetUrl": f"https://example.com/{carrier}/asset",
+        "attributionText": f"fixture {carrier} attribution",
+        "rightsBasis": "fixture licensed source",
+        "commercialAuthorizationStatus": "verified",
+        "publicationAdmission": "research_release",
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_applicable",
+        "propertyReleaseStatus": "not_applicable",
+        "collectedAt": "2026-08-05T00:00:00+00:00",
+        "takedownPolicy": "remove_on_verified_request",
+        "derivedModifications": [],
+    }
+
+
 def _scale_source_pool(
     output_root: Path,
     *,
     source_revision: str,
+    active_carriers: tuple[str, ...],
+    workloads: dict[str, int],
 ) -> tuple[dict[str, object], str, dict[str, dict[str, object]]]:
     evidence_root = (
         output_root / "data/local/workspace/scale-source-pools/m100/evidence"
@@ -132,7 +159,33 @@ def _scale_source_pool(
         _write(path, document)
         return ref, _digest(document), _file_digest(path)
 
-    for carrier in CARRIERS:
+    identity = {
+        "sourceRevision": source_revision,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": CATALOG_DIGEST,
+    }
+    for carrier in active_carriers:
+        # image/video 的物理证据是一份 admission receipt，池契约禁止它们携带 source-ready
+        # 套件字段；receipt 必须真实铸出并与引用它的候选同形，否则校验期整批 shortfall。
+        if carrier in {"image", "video"}:
+            admission = _media_admission_row(
+                evidence_root=evidence_root,
+                carrier=carrier,
+                index=1,
+                provider="fixture_provider",
+                candidate_id=f"{carrier}-candidate-001",
+                object_ref=object_refs[carrier],
+                identity=identity,
+                comparison_count=2,
+            )
+            candidates.append(
+                {
+                    **admission,
+                    "entityRef": "地点/景区/测试实体",
+                    "observedEntityRef": "地点/景区/测试实体",
+                }
+            )
+            continue
         source_unit = evidence(carrier, "source_unit")
         acquisition = evidence(carrier, "acquisition")
         rights = evidence(carrier, "rights")
@@ -199,17 +252,24 @@ def _scale_source_pool(
         }
         if carrier in {"homepage", "article"}:
             candidate["sourceReadyEvidenceRootRef"] = "."
+            candidate["sourceAttribution"] = _source_attribution(carrier)
+        if carrier == "article":
+            candidate["publishMediaMode"] = "text_only"
         candidates.append(candidate)
     pool_stable: dict[str, object] = {
         "schema": "quwoquan_data.scale_source_pool",
         "poolId": "campaign-release-selector-m100-pool",
-        "targetScale": "M100",
+        "targetScale": "WORKLOAD",
+        "workloadMode": "explicit",
+        "activeCarriers": list(active_carriers),
+        "workloadTargets": workloads,
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
         "entityCatalogDigest": CATALOG_DIGEST,
         "createdAt": "2026-08-05T00:00:00+00:00",
         "waveCandidateCounts": [
-            {"carrier": carrier, "minimumCandidateCount": 1} for carrier in CARRIERS
+            {"carrier": carrier, "minimumCandidateCount": 1}
+            for carrier in active_carriers
         ],
         "candidates": candidates,
     }
@@ -220,6 +280,9 @@ def _scale_source_pool(
     binding: dict[str, object] = {
         "poolId": pool["poolId"],
         "targetScale": pool["targetScale"],
+        "workloadMode": pool["workloadMode"],
+        "activeCarriers": pool["activeCarriers"],
+        "workloadTargets": pool["workloadTargets"],
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
         "entityCatalogDigest": CATALOG_DIGEST,
@@ -228,7 +291,7 @@ def _scale_source_pool(
         "planFileSha256": _file_digest(pool_path),
     }
     selections: dict[str, dict[str, object]] = {}
-    for carrier in CARRIERS:
+    for carrier in active_carriers:
         stable = {
             "carrier": carrier,
             "candidateIds": [f"{carrier}-candidate-001"],
@@ -238,7 +301,20 @@ def _scale_source_pool(
     return binding, evidence_root.relative_to(output_root).as_posix(), selections
 
 
-def _fixture(tmp_path: Path) -> dict[str, object]:
+def _fixture(
+    tmp_path: Path,
+    *,
+    active_carriers: tuple[str, ...] = CARRIERS,
+    workloads: dict[str, int] | None = None,
+    scale: str = "M100",
+    intent: str = "m100",
+) -> dict[str, object]:
+    active = tuple(carrier for carrier in CARRIERS if carrier in active_carriers)
+    if active != active_carriers or not active:
+        raise ValueError("fixture active carriers must be canonical and non-empty")
+    exact_workloads = dict(workloads or {carrier: 1 for carrier in active})
+    if set(exact_workloads) != set(active):
+        raise ValueError("fixture workloads must exactly match active carriers")
     output_root = tmp_path / "output"
     _preflight_path, semantic_preflight_binding = ready_semantic_preflight(
         "default",
@@ -253,14 +329,12 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
         publish_root=tmp_path / "publish",
         release_root=output_root / "data/releases",
     )
-    execution_ids = {carrier: _execution_id(carrier) for carrier in CARRIERS}
-    root_id = execution_ids["homepage"]
-    campaign_root = roots.campaigns_root / root_id
-    source_document: dict[str, object] = {
-        "algorithm": "sha256",
-        "digest": SOURCE_DIGEST,
-        "inputs": ["quwoquan_data/reference/travel"],
+    execution_ids = {
+        carrier: _execution_id(carrier, intent=intent) for carrier in active
     }
+    root_id = execution_ids[active[0]]
+    campaign_root = roots.campaigns_root / root_id
+    source_document = dict(SOURCE_DOCUMENT)
     source_revision = _digest(
         {
             "schema": "quwoquan_data.campaign_content_source_revision",
@@ -277,20 +351,25 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
             "externalInputRefs": [],
             "externalInputsDigest": empty_external,
         }
-        for carrier in CARRIERS
+        for carrier in active
     }
     pool_binding, pool_evidence_ref, pool_selections = _scale_source_pool(
         output_root,
         source_revision=source_revision,
+        active_carriers=active,
+        workloads=exact_workloads,
     )
     submissions: dict[str, dict[str, object]] = {}
     older_image_id = _execution_id("image", 200)
-    for carrier in CARRIERS:
+    for carrier in active:
         execution_id = execution_ids[carrier]
         retry_of = older_image_id if carrier == "image" else None
         stable: dict[str, object] = {
             "schema": "quwoquan_data.content_execution_submission",
-            "scale": "M100",
+            "scale": scale,
+            "workloadMode": "explicit",
+            "activeCarriers": list(active),
+            "workloads": exact_workloads,
             "rootExecutionId": root_id,
             "executionId": execution_id,
             "operation": f"{carrier}.generate",
@@ -298,11 +377,9 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
             "familyRef": "content/travel/test",
             "regionRef": "china",
             "selector": "auto",
-            "quota": 1,
-            "count": 1,
-            "requiredWorkers": 1,
-            "partitionCount": 16,
-            "capacityPlanDigest": "sha256:" + "6" * 64,
+            "quota": exact_workloads[carrier],
+            "count": exact_workloads[carrier],
+            "executionAuthority": synthetic_governed_execution_authority(),
             "workerHostSetBinding": None,
             "topic": None,
             "targetNames": ["测试实体"],
@@ -313,10 +390,12 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
             "sourcePoolEvidenceRootRef": pool_evidence_ref,
             "sourcePoolSelection": pool_selections[carrier],
             "retryOf": retry_of,
+            "retryUnfinishedRefs": [],
             "gitBranch": "dev1.0",
             "gitCommitSha": "d" * 40,
             "sourceRevision": source_revision,
             "sourceDigest": source_document,
+            "executionBundle": EXECUTION_BUNDLE,
             "entityCatalogDigest": CATALOG_DIGEST,
             "externalInputRefs": [],
             "externalInputsDigest": empty_external,
@@ -334,26 +413,32 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
             roots.tasks_root / execution_id / "execution_manifest.json",
             _manifest(execution_id, source_document, retry_of=retry_of),
         )
-    _write(
-        roots.tasks_root / older_image_id / "0.plan/target_set.json",
-        _target_set(older_image_id),
-    )
-    _write(
-        roots.tasks_root / older_image_id / "execution_manifest.json",
-        _manifest(older_image_id, source_document, retry_of=None),
-    )
+    if "image" in active:
+        _write(
+            roots.tasks_root / older_image_id / "0.plan/target_set.json",
+            _target_set(older_image_id),
+        )
+        _write(
+            roots.tasks_root / older_image_id / "execution_manifest.json",
+            _manifest(older_image_id, source_document, retry_of=None),
+        )
     plan_stable: dict[str, object] = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": root_id,
         "executionMode": "central",
-        "scale": "M100",
+        "scale": scale,
+        "workloadMode": "explicit",
+        "activeCarriers": list(active),
+        "workloads": exact_workloads,
         "gitBranch": "dev1.0",
         "gitCommitSha": "d" * 40,
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": EXECUTION_BUNDLE,
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
+        "executionAuthority": synthetic_governed_execution_authority(),
         "scaleSourcePool": pool_binding,
         "sourcePoolEvidenceRootRef": pool_evidence_ref,
         "laneSourcePoolSelections": pool_selections,
@@ -365,7 +450,7 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
             }
         ),
         "submissionDigests": {
-            carrier: submissions[carrier]["requestDigest"] for carrier in CARRIERS
+            carrier: submissions[carrier]["requestDigest"] for carrier in active
         },
         "executionIds": execution_ids,
         "frozenAt": "2026-08-05T00:00:00+00:00",
@@ -374,10 +459,12 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
     _write(campaign_root / "campaign_plan.json", plan)
     capsule_stable: dict[str, object] = {
         "schema": "quwoquan_data.content_campaign_source_capsule",
-        "format": "source-snapshot-v1",
+        "format": "source-capsule-v2",
+        "gitBranch": plan["gitBranch"],
         "gitCommitSha": plan["gitCommitSha"],
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": EXECUTION_BUNDLE,
         "entityCatalogDigest": CATALOG_DIGEST,
         "roots": ["quwoquan_data"],
         "laneExternalInputs": {
@@ -386,7 +473,7 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
                 "externalInputRefs": [],
                 "externalInputsDigest": empty_external,
             }
-            for carrier in CARRIERS
+            for carrier in active
         },
         "externalInputsDigest": plan["externalInputsDigest"],
         "scaleSourcePool": pool_binding,
@@ -418,6 +505,8 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
         {
             "schema": "quwoquan_data.content_campaign_report",
             "rootExecutionId": root_id,
+            "activeCarriers": list(active),
+            "workloads": exact_workloads,
             "campaignRunId": RUN_ID,
             "campaignGeneration": 3,
             "campaignFencingToken": FENCE,
@@ -442,17 +531,18 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
                     "sourceCapsuleReadOnly": True,
                     "executionRootRef": f"data/tasks/{execution_ids[carrier]}",
                     "cleanupStatus": "cleaned",
-                    "approvedQuota": 1,
+                    "approvedQuota": exact_workloads[carrier],
                     "qualifiedCount": 1,
                     "finalizedCount": 1,
                     "selectedCount": 1,
                     "discardedCount": 0,
-                    "shortfallCount": 0,
+                    "shortfallCount": exact_workloads[carrier] - 1,
                     "error": None,
                 }
-                for carrier in CARRIERS
+                for carrier in active
             },
             "failure": None,
+            "revisionAudits": [],
             "startedAt": "2026-08-05T00:00:00+00:00",
             "updatedAt": "2026-08-05T00:01:00+00:00",
         },
@@ -469,7 +559,7 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
         "failure": None,
     }
     _write(campaign_root / "runtime/snapshot.json", runtime)
-    for carrier in CARRIERS:
+    for carrier in active:
         execution_id = execution_ids[carrier]
         _write(
             campaign_root / "runtime/lanes" / f"{carrier}.json",
@@ -494,8 +584,9 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
             {
                 "schema": "quwoquan_data.execution_publish_ref",
                 "executionId": execution_id,
-                "canonicalPublishRoot": "quwoquan_data/publish",
+                "canonicalPublishRoot": "canonical-publish",
                 "publishedRefs": refs,
+                "publishDiscards": [],
             },
         )
         kind = "entities" if carrier == "homepage" else "posts"
@@ -515,14 +606,18 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
                 "executionId": execution_id,
                 "carrier": carrier,
                 "phase": "publish",
-                "status": "finalized",
-                "approvedQuota": 1,
+                "status": (
+                    "finalized" if exact_workloads[carrier] == 1 else "partial"
+                ),
+                "approvedQuota": exact_workloads[carrier],
                 "qualifiedCount": 1,
+                "reviewQualifiedCount": 1,
                 "finalizedCount": 1,
                 "selectedCount": 1,
                 "discardedCount": 0,
-                "shortfallCount": 0,
+                "shortfallCount": exact_workloads[carrier] - 1,
                 "discards": [],
+                "publishDiscards": [],
                 "executionPublishRef": publish_path.relative_to(
                     roots.output_root
                 ).as_posix(),

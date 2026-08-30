@@ -26,23 +26,26 @@ class RecallResult {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'topK': topK.map((c) => c.toJson()).toList(growable: false),
-        'recallMethod': recallMethod,
-        'totalCandidates': totalCandidates,
-        'scores': scores,
-      };
+    'topK': topK.map((c) => c.toJson()).toList(growable: false),
+    'recallMethod': recallMethod,
+    'totalCandidates': totalCandidates,
+    'scores': scores,
+  };
 
   factory RecallResult.fromJson(Map<String, dynamic> json) {
     return RecallResult(
-      topK: (json['topK'] as List?)
+      topK:
+          (json['topK'] as List?)
               ?.whereType<Map>()
               .map((m) => RecallCandidate.fromJson(m.cast<String, dynamic>()))
               .toList(growable: false) ??
           const <RecallCandidate>[],
       recallMethod: (json['recallMethod'] as String?)?.trim() ?? "rule",
       totalCandidates: (json['totalCandidates'] as num?)?.toInt() ?? 0,
-      scores: (json['scores'] as Map?)
-              ?.map((k, v) => MapEntry(k.toString(), (v as num).toDouble())) ??
+      scores:
+          (json['scores'] as Map?)?.map(
+            (k, v) => MapEntry(k.toString(), (v as num).toDouble()),
+          ) ??
           const <String, double>{},
     );
   }
@@ -64,12 +67,12 @@ class RecallCandidate {
   final String matchReason;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'domainId': domainId,
-        'description': description,
-        'mode': mode,
-        'score': score,
-        'matchReason': matchReason,
-      };
+    'domainId': domainId,
+    'description': description,
+    'mode': mode,
+    'score': score,
+    'matchReason': matchReason,
+  };
 
   factory RecallCandidate.fromJson(Map<String, dynamic> json) {
     return RecallCandidate(

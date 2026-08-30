@@ -1,14 +1,16 @@
 .PHONY: gate build test test-all-services test-unit test-contract test-contract-local test-integration test-runtime-api-integration test-chat-ready-index-alpha-beta lint service-contract-view verify-metadata verify-actor-persona-vocabulary verify-openapi verify-contract-graph verify-contract-graph-commercial verify-contract-graph-single-track verify-observability-catalog verify-assistant-service-errors verify-assistant-runtime-enums verify-shared-contract-enums verify-storage-keyset-single-track verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-ddd-cqrs-baseline verify-codegen-contract-graph-source verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission verify-content-architecture verify-redis-routes codegen-redis-routes codegen codegen-openapi codegen-contract-graph codegen-observability-catalog codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-reader-descriptors codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop verify-operation-privacy-redaction codegen-operation-privacy
 .PHONY: verify-assistant-citation-destinations codegen-assistant-citation-destinations
 .PHONY: verify-storage-index-governance
-.PHONY: verify-graphql-read-rest-command-single-track verify-graphql-read-rest-command-zero
+.PHONY: verify-graphql-read-rest-command-single-track verify-graphql-read-rest-command-structural-zero verify-graphql-read-rest-command-migration-ratchet verify-graphql-read-rest-command-zero
 .PHONY: verify-graphql-read-registry codegen-graphql-read-registry verify-graphql-app-client codegen-graphql-app-client
 .PHONY: verify-link-templates-go codegen-link-templates-go
 .PHONY: verify-api-edge-errors codegen-api-edge-errors
 .PHONY: verify-assistant-tool-catalog codegen-assistant-tool-catalog
 .PHONY: codegen-event-constants
-.PHONY: verify-app-shell-navigation codegen-app-shell-navigation
+.PHONY: verify-app-shell-navigation codegen-app-shell-navigation verify-app-identity codegen-app-identity
+.PHONY: verify-app-launch-contract codegen-app-launch-contract
 .PHONY: verify-domain-model-compatibility
+.PHONY: verify-platform-ops-human-contract-binding codegen-platform-ops-human-contract-binding test-platform-ops-local-contract test-platform-ops-api-integration
 
 SCENARIO ?= content_feed
 DB ?= quwoquan_content
@@ -25,6 +27,8 @@ ML_DRIFT_OUT ?=
 FLYWHEEL_REQUIRE_CLOSED ?= false
 FLYWHEEL_OUT ?=
 GRAPHQL_READ_REGISTRY_EXAMPLE_CANDIDATE_DIGEST ?= sha256:1111111111111111111111111111111111111111111111111111111111111111
+GRAPHQL_MIGRATION_BASE_SHA ?= $(shell git -C "$(REPO_ROOT)" merge-base HEAD origin/main 2>/dev/null || git -C "$(REPO_ROOT)" rev-parse HEAD)
+GRAPHQL_MIGRATION_CANDIDATE_SHA ?=
 DOMAIN_MODEL_BASELINE_RECEIPT ?=
 DOMAIN_MODEL_BASELINE_GRAPH ?=
 DOMAIN_MODEL_CURRENT_GRAPH ?= generated/contract_graph.json
@@ -51,8 +55,9 @@ export QWQ_OUTPUT_ROOT
 export PYTHONDONTWRITEBYTECODE ?= 1
 
 # ─── Quality Gate ────────────────────────────────────────────────────
-gate: verify-metadata verify-redis-routes verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission
+gate: verify-metadata verify-redis-routes verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission verify-nullability-single-semantics
 	@PYTHONDONTWRITEBYTECODE=1 python3 ../quwoquan_ops/gate/verify_service_architecture.py
+	@$(MAKE) -C control-plane/platform-ops build
 	@set -e; for service in $(DOMAIN_SERVICES); do \
 		echo "[gate] $$service"; \
 		$(MAKE) -C "services/$$service" gate; \
@@ -108,6 +113,18 @@ lint:
 	go vet ./tools/...
 
 # ─── Metadata ────────────────────────────────────────────────────────
+verify-platform-ops-human-contract-binding:
+	$(MAKE) -C control-plane/platform-ops verify-human-contract-binding
+
+codegen-platform-ops-human-contract-binding:
+	$(MAKE) -C control-plane/platform-ops codegen-human-contract-binding
+
+test-platform-ops-local-contract:
+	$(MAKE) -C control-plane/platform-ops test-local-contract
+
+test-platform-ops-api-integration:
+	$(MAKE) -C control-plane/platform-ops test-api-integration
+
 service-contract-view:
 	@python3 scripts/contracts/build_service_contract_view.py --output "$(CONTRACT_VIEW)"
 
@@ -115,7 +132,7 @@ verify-ddd-cqrs-baseline:
 	go test ./internal/metadata/load ./internal/metadata/graph ./internal/metadata/validate
 	go test ./services/content-service/internal/trust_safety/report/domain/... ./services/content-service/internal/trust_safety/report/application
 
-verify-metadata: service-contract-view verify-actor-persona-vocabulary verify-codegen-contract-graph-source verify-contract-graph-single-track verify-observability-catalog verify-api-edge-errors verify-assistant-service-errors verify-assistant-runtime-enums verify-assistant-tool-catalog verify-assistant-citation-destinations verify-link-templates-go verify-shared-contract-enums verify-storage-keyset-single-track verify-storage-index-governance verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-graphql-read-registry
+verify-metadata: service-contract-view verify-platform-ops-human-contract-binding verify-actor-persona-vocabulary verify-codegen-contract-graph-source verify-contract-graph-single-track verify-observability-catalog verify-api-edge-errors verify-assistant-service-errors verify-assistant-runtime-enums verify-assistant-tool-catalog verify-assistant-citation-destinations verify-link-templates-go verify-shared-contract-enums verify-storage-keyset-single-track verify-storage-index-governance verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-graphql-read-registry verify-graphql-read-rest-command-structural-zero verify-graphql-read-rest-command-migration-ratchet
 	@$(MAKE) verify-contract-graph-commercial
 	go run ./tools/verify_metadata/ "$(CONTRACT_VIEW)"
 
@@ -161,6 +178,11 @@ verify-shared-contract-enums: service-contract-view
 verify-storage-keyset-single-track:
 	go test ./tools/codegen_storage -run 'TestStorageSchemaKeepsTopLevelKeySetClosed|TestCodegenStorageReaderKeySetIsSubsetOfSchema|TestStorageSchemaKeysArePartitionedByCodegenConsumption|TestCodegenStorageReaderHasNoDeadKeys' -count=1
 
+# 契约可空性只有一种读法：必填缺失 fail-closed，可空的缺席与空值不得互相塌陷，
+# 生成器不得补入契约未声明的默认值。没有这条过滤目标时，这些测试只是躺在树里。
+verify-nullability-single-semantics:
+	go test ./tools/codegen_app_metadata -run 'TestAssistantWireRequiredScalarsFailClosedOnAbsence|TestAssistantWireNullableScalarsKeepAbsenceDistinctFromEmpty|TestRtcPayloadWithoutDefaultKeepsAbsence|TestRtcPayloadWithDefaultUsesDeclaredValue' -count=1
+
 verify-storage-index-governance:
 	go run ./tools/storage_index_governance -repo-root "$(REPO_ROOT)"
 
@@ -188,6 +210,25 @@ verify-openapi: service-contract-view
 verify-graphql-read-rest-command-single-track:
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/structure/verify_graphql_read_rest_command_single_track.py --service-root "$(CURDIR)"
 
+# Source-only gate: structural violations are strict-zero.  Existing App/public
+# REST reads are migration obligations and are governed by the immutable-SHA
+# identity ratchet below, not converted into structural exceptions.
+verify-graphql-read-rest-command-structural-zero:
+	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/structure/verify_graphql_read_rest_command_single_track.py --service-root "$(CURDIR)" --require-structural-zero --summary-only
+
+verify-graphql-read-rest-command-migration-ratchet:
+	@test -n "$(GRAPHQL_MIGRATION_BASE_SHA)" || { echo "GRAPHQL_MIGRATION_BASE_SHA is required" >&2; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/structure/verify_graphql_read_rest_command_single_track.py \
+		--service-root "$(CURDIR)" \
+		--migration-base-sha "$(GRAPHQL_MIGRATION_BASE_SHA)" \
+		$(if $(strip $(GRAPHQL_MIGRATION_CANDIDATE_SHA)),--migration-candidate-sha "$(GRAPHQL_MIGRATION_CANDIDATE_SHA)",) \
+		--require-no-migration-growth \
+		--summary-only
+
+# Release-cutover predicate only.  It intentionally stays outside
+# verify-metadata: a release caller must compose it with hosted GraphQL
+# readiness and the canonical minimum-build/zero-call compatibility window.
+# Source-only CI cannot fabricate those lifecycle inputs.
 verify-graphql-read-rest-command-zero:
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/structure/verify_graphql_read_rest_command_single_track.py --service-root "$(CURDIR)" --require-zero
 
@@ -199,6 +240,10 @@ verify-graphql-read-registry: service-contract-view
 		-candidate-digest "$(GRAPHQL_READ_REGISTRY_EXAMPLE_CANDIDATE_DIGEST)" \
 		-output services/api-edge/resources/policies/graphql_read/persisted_query_registry.example.json \
 		-check
+	go test ./services/api-edge/tests/local_contract/graphql_read/persisted_query_execution \
+		-run '^TestCheckedInGeneratedRegistryEntriesUseRealRuntimeBindings$$' -count=1
+	go test ./services/content-service/tests/local_contract/content/post/adapters/inbound/graphql \
+		-run '^TestContentRuntimeBindingsMatchAuthoringPersistedQueries$$' -count=1
 
 verify-graphql-app-client: service-contract-view
 	go run ./tools/codegen_graphql_app_client \
@@ -223,7 +268,7 @@ verify-contract-graph: verify-openapi
 	go run ./tools/qwq_contract check --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile baseline --input generated/contract_graph.json
 	go run ./tools/qwq_contract coverage --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
 
-verify-contract-graph-commercial: verify-openapi verify-graphql-read-rest-command-zero
+verify-contract-graph-commercial: verify-openapi
 	go run ./tools/qwq_contract validate --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile commercial
 	go run ./tools/qwq_contract check --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile commercial --input generated/contract_graph.json
 	go run ./tools/qwq_contract coverage --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
@@ -277,7 +322,9 @@ verify-redis-routes:
 codegen-redis-routes:
 	python3 scripts/codegen/gen_redis_router_config.py
 
-codegen: codegen-redis-routes codegen-contract-graph codegen-observability-catalog codegen-api-edge-errors codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-reader-descriptors codegen-assistant-tool-catalog codegen-assistant-citation-destinations codegen-link-templates-go codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-event-constants codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+codegen: codegen-platform-ops-human-contract-binding codegen-redis-routes codegen-observability-catalog codegen-api-edge-errors codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-reader-descriptors codegen-assistant-tool-catalog codegen-assistant-citation-destinations codegen-link-templates-go codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-event-constants codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+	# ContractGraph 消费上述生成器可能更新的全部 metadata，必须作为最终固定点生成。
+	$(MAKE) codegen-contract-graph
 
 codegen-openapi: service-contract-view
 	go run ./tools/qwq_contract generate-openapi --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
@@ -304,7 +351,7 @@ codegen-product-ops-service codegen-platform-ops-service codegen-user-service \
 codegen-chat-service codegen-chat-domain-events codegen-event-constants codegen-rec-model-python \
 codegen-storage: service-contract-view
 
-codegen-app: codegen-contract-graph
+codegen-app: codegen-contract-graph codegen-app-identity
 
 codegen-observability-catalog:
 	go run ./tools/codegen_observability_catalog --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
@@ -320,6 +367,19 @@ codegen-impact:
 
 codegen-app:
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --contract-graph generated/contract_graph.json --contract-graph-lock ../quwoquan_app/tool/cloud_codegen/contract_graph.lock.json --app-dir ../quwoquan_app --generated-manifest ../quwoquan_app/tool/cloud_codegen/generated_manifest.json
+
+codegen-app-identity: service-contract-view
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --app-identity-only --app-identity-manifest ../quwoquan_app/tool/app_identity_codegen/generated_manifest.json
+
+verify-app-identity: service-contract-view
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --app-identity-only --check-app-identity --app-identity-manifest ../quwoquan_app/tool/app_identity_codegen/generated_manifest.json
+
+codegen-app-launch-contract: service-contract-view
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --app-launch-contract-only --app-launch-contract-manifest ../quwoquan_app/tool/app_launch_contract_codegen/generated_manifest.json
+
+verify-app-launch-contract: service-contract-view
+	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --app-launch-contract-only --check-app-launch-contract --app-launch-contract-manifest ../quwoquan_app/tool/app_launch_contract_codegen/generated_manifest.json
+	PYTHONDONTWRITEBYTECODE=1 python3 ../quwoquan_app/test/local_contract/runtime/app_generated_manifest_gate__local_contract_test.py
 
 codegen-app-shell-navigation: service-contract-view
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --app-dir ../quwoquan_app --shell-navigation-metadata-only --shell-navigation-manifest ../quwoquan_app/tool/shell_navigation_codegen/generated_manifest.json

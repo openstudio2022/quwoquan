@@ -13,10 +13,10 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from core.control_types import OBJECT_STAGE_SEQUENCE, ReceiptStage
 from core.data_root import DataRoot
 
 # 代码仓库 data 根：schema 是受版本控制、不可手改的契约真相源，必须跟代码走，
@@ -54,6 +54,7 @@ CONTENT_CAMPAIGN_WORKSPACES_ROOT = DATA_CACHE_ROOT / "content-campaign-workspace
 CONTENT_CAMPAIGN_CAPSULES_ROOT = (
     CONTENT_CAMPAIGN_WORKSPACES_ROOT / "content-addressed-capsules"
 )
+CANONICAL_PUBLISH_SIDECAR_ROOT = DATA_CACHE_ROOT / "canonical-publish"
 RESEARCH_SCALE_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "research-scale"
 CAMPAIGN_SCALE_EVIDENCE_ROOT = (
     RESEARCH_SCALE_WORKSPACE_ROOT / "campaign-evidence"
@@ -69,10 +70,55 @@ DATA_GC_WORKSPACE_ROOT = DATA_WORKSPACE_ROOT / "gc"
 DATA_QUARANTINE_ROOT = DATA_WORKSPACE_ROOT / "quarantine"
 RELEASE_ROOT = DATA_OUTPUT_ROOT / "releases"
 
+# ─── content_library：内容字节的唯一物理归属 ──────────────────────────
+# 库把「每个阶段复制一份字节」换成「一次入库、多处引用」：入库条目按 sha256 内容
+# 寻址，一旦写入即不可变，任何阶段只保存指向库内条目的引用。
+#
+# 库根必须落在仓库工作树之外。媒体原始字节已刻意移出 Git（release 用 holdings
+# 引用而非复制字节），库因此是这些字节的唯一持有者、无法从受版本控制真相源重建。
+# 而 `.qwq_output/` 的契约恰恰是「随时可整个删除并重建」，仓库工作树内的其他
+# gitignored 目录同样在 `git clean -xdf` 射程内——把不可重建资产放进任一处，都会
+# 让一次例行清理静默销毁唯一副本。QWQ_LIBRARY_ROOT 覆盖默认位置（例如挂到独立
+# 卷）；库与其引用方必须同卷，跨卷由 reference_library_entry 显式 fail-closed。
+def _default_library_root() -> Path:
+    xdg_data_home = str(os.environ.get("XDG_DATA_HOME") or "").strip()
+    base = Path(xdg_data_home) if xdg_data_home else Path.home() / ".local" / "share"
+    return base / "quwoquan" / "content_library"
+
+
+LIBRARY_ROOT = Path(
+    os.environ.get("QWQ_LIBRARY_ROOT") or _default_library_root()
+).expanduser()
+# 媒体字节：source 阶段下载一次入库，成品与 publish 只引用同一条目。
+LIBRARY_MEDIA_CAS_ROOT = LIBRARY_ROOT / "_media_cas"
+# 受治理代码/输入字节：campaign capsule 与 execution bundle 共享同一份入库字节。
+LIBRARY_SOURCE_CAS_ROOT = LIBRARY_ROOT / "_source_cas"
+LIBRARY_CAS_ROOT_BY_KIND = {
+    "media": LIBRARY_MEDIA_CAS_ROOT,
+    "source": LIBRARY_SOURCE_CAS_ROOT,
+}
+# carried media：canonical 引用字节的受版本控制随体，不是库镜像。库落在仓外且不可
+# 从版本控制重建，而 canonical 引用的编码视频、poster 与头像都是无上游可逐字节复现
+# 的派生物——库一丢，已 approved 的对象就永久不可交付，所以这个子集随树受控。
+# 按调用解析而非导入即冻结：它是发布事务的写入目标，冻结成模块常量会让「默认写真
+# 仓库」对任何执行 apply 的进程生效。QWQ_CARRIED_MEDIA_ROOT 把随体指向临时根。
+def carried_media_root() -> Path:
+    override = str(os.environ.get("QWQ_CARRIED_MEDIA_ROOT") or "").strip()
+    if override:
+        return Path(override).expanduser()
+    return _REPO_DATA_ROOT / "reference" / "golden_media"
+
+# canonical publish 根的逻辑身份。物理位置是环境事实（QWQ_PUBLISH_ROOT / DATA_ROOT），
+# 只由本模块解析；receipt 文档记录这个与位置无关的身份，不再内嵌仓库相对路径。
+CANONICAL_PUBLISH_ROOT_REF = "canonical-publish"
+
 CAMPAIGN_SCALE_EVIDENCE_OUTPUT_REF = CAMPAIGN_SCALE_EVIDENCE_ROOT.relative_to(
     OUTPUT_ROOT
 ).as_posix()
 RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF = RESEARCH_SCALE_PROMOTIONS_ROOT.relative_to(
+    OUTPUT_ROOT
+).as_posix()
+CANONICAL_PUBLISH_SIDECAR_OUTPUT_REF = CANONICAL_PUBLISH_SIDECAR_ROOT.relative_to(
     OUTPUT_ROOT
 ).as_posix()
 
@@ -158,16 +204,18 @@ def now_iso() -> str:
 
 
 NOW_ISO = now_iso()
-EXECUTION_ROOT_ALLOWED_ENTRIES = frozenset({
-    "0.plan",
-    "sources",
+EXECUTION_ROOT_DIRECTORIES = (
+    ReceiptStage.PLAN.value,
+    ReceiptStage.SOURCES.value,
     "entities",
     "posts",
     "_shared",
     "evidence",
-    "execution_manifest.json",
-    "publish_ref.json",
-})
+)
+EXECUTION_ROOT_FILES = ("execution_manifest.json", "publish_ref.json")
+EXECUTION_ROOT_ALLOWED_ENTRIES = frozenset(
+    (*EXECUTION_ROOT_DIRECTORIES, *EXECUTION_ROOT_FILES)
+)
 
 # Discovery and deduplication facts remain execution evidence.  They are not
 # provider accounting and must stay distinct from any billing concern.
@@ -210,6 +258,9 @@ EXECUTION_SHARED_AUTHORITATIVE_ENTRIES = frozenset({
     # bytes and are the only authority that permits global gates to ignore a
     # non-resumable work package.
     "reconciliation",
+    # DEC-005 阶段交接回执链（stage_receipt.schema.json）：跨会话交接与恢复的
+    # 唯一状态源，由 `task stage-record` create-once 原子写入，不可重算。
+    "receipts",
     # 执行级真相源（人工决策记录 / 放弃归因 / 账本，均不可重算）
     "source_catalog.json",
     "asset_id_registry.json",
@@ -252,6 +303,9 @@ EXECUTION_SHARED_RECLAIMABLE_ENTRIES = frozenset({
     "controller_lease.json",
     "controller_lease.lock",
     "execution_state.lock",
+    # single-writer lane claim（orchestration.md）：心跳过 TTL 即死 lane，
+    # 删除后按 receipt 链重新 claim 即可重建。
+    "claims",
 })
 
 
@@ -325,19 +379,31 @@ def execution_lock_path(execution_id: str) -> Path:
     return execution_root(execution_id) / ".lock"
 
 
-def publish_lock_path(publish_root: Path | None = None) -> Path:
-    """Return one process lock shared by every clone of the same publish root.
+def canonical_publish_sidecar_root(publish_root: Path | None = None) -> Path:
+    """Return the governed disposable sidecar directory for one publish root.
 
-    The lock cannot live in an execution output root because detached campaign
-    lanes use different output roots. It also cannot live inside canonical
-    ``publish/`` because that tree is audited and version controlled. A stable
-    digest of the resolved publish root gives all clones the same external
-    fence without adding a second publish artifact.
+    The process fence and the inventory index are derived state: both are
+    rebuilt from the canonical tree whenever they are absent. They still cannot
+    live inside canonical ``publish/`` (that tree is audited and version
+    controlled) nor inside one execution work package (lanes of the same
+    campaign are separate executions publishing to one tree), so they belong in
+    the disposable cache under the governed output root. Anywhere outside
+    ``.qwq_output`` — the system temporary directory in particular — they are
+    exempt from the output budget, invisible to ``release gc``, outside the
+    pytest isolation root, and free to accumulate across repositories and
+    sessions. A stable digest of the resolved publish root keeps every clone of
+    the same tree on one fence and one index.
     """
 
     resolved_root = (publish_root or PUBLISH_ROOT).resolve()
     digest = hashlib.sha256(str(resolved_root).encode("utf-8")).hexdigest()
-    return Path(tempfile.gettempdir()) / f"qwq-canonical-publish-{digest[:20]}.lock"
+    return OUTPUT_ROOT / CANONICAL_PUBLISH_SIDECAR_OUTPUT_REF / digest[:20]
+
+
+def publish_lock_path(publish_root: Path | None = None) -> Path:
+    """Return one process lock shared by every clone of the same publish root."""
+
+    return canonical_publish_sidecar_root(publish_root) / "publish.lock"
 
 
 # ─── publish 单一主线（已去版本化）───────────────────────────────
@@ -409,19 +475,13 @@ _INTENT_LABEL_MAX = 64
 # 实体对象 = tasks/{executionId}/entities/{domain}/{type}/{name}/
 # 内容对象 = tasks/{executionId}/posts/{contentType}/{angle}/{title}/{seq}/
 # 对象目录下过程阶段统一编号；成品落对象根（promote 时与 publish 同名直拷）。
-STAGE_DOWNLOAD = "1.download"
-STAGE_QUALITY = "2.quality"
-STAGE_COMPOSE = "3.compose"
-STAGE_DRAFT = "4.draft"
-STAGE_REVIEW = "5.review"
-# 对象过程阶段统一线性枚举；实体/内容共享同一阶段骨架，差异只体现在阶段产物内容。
-OBJECT_STAGES = (
-    STAGE_DOWNLOAD,
-    STAGE_QUALITY,
-    STAGE_COMPOSE,
-    STAGE_DRAFT,
-    STAGE_REVIEW,
-)
+STAGE_DOWNLOAD = ReceiptStage.DOWNLOAD.value
+STAGE_QUALITY = ReceiptStage.QUALITY.value
+STAGE_COMPOSE = ReceiptStage.COMPOSE.value
+STAGE_DRAFT = ReceiptStage.DRAFT.value
+STAGE_REVIEW = ReceiptStage.REVIEW.value
+# 实体/内容共享同一阶段骨架，差异只体现在阶段产物内容；阶段名来自 receipt 协议闭集。
+OBJECT_STAGES = tuple(stage.value for stage in OBJECT_STAGE_SEQUENCE)
 
 
 

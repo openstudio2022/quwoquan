@@ -1,0 +1,480 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/environment_acceptance_fact.schema.json",
+  "title": "Ops append-only EnvironmentAcceptanceFact v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "factId",
+    "environment",
+    "target",
+    "releaseId",
+    "releaseDigest",
+    "samplePlanRef",
+    "samplePlanDigest",
+    "targetBindingRefs",
+    "requiredRawResults",
+    "dataReadiness",
+    "activeCas",
+    "lifecycleExit",
+    "providerReadiness",
+    "observabilityReadiness",
+    "rollbackReadiness",
+    "predecessorAcceptance",
+    "resourceFinalization",
+    "prodReleaseFacts",
+    "createdAt",
+    "sourceFingerprint"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_ops.environment_acceptance_fact.v1"
+    },
+    "factId": {
+      "$ref": "#/$defs/digest"
+    },
+    "environment": {
+      "enum": [
+        "alpha",
+        "beta",
+        "gamma",
+        "prod"
+      ]
+    },
+    "target": {
+      "$ref": "#/$defs/identity"
+    },
+    "releaseId": {
+      "$ref": "#/$defs/identity"
+    },
+    "releaseDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "samplePlanRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "samplePlanDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "targetBindingRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ref",
+          "digest",
+          "platform",
+          "deviceProfile"
+        ],
+        "properties": {
+          "ref": {
+            "$ref": "#/$defs/ref"
+          },
+          "digest": {
+            "$ref": "#/$defs/digest"
+          },
+          "platform": {
+            "enum": [
+              "android",
+              "ios"
+            ]
+          },
+          "deviceProfile": {
+            "enum": [
+              "rehearsal",
+              "promotable",
+              "production"
+            ]
+          }
+        }
+      }
+    },
+    "requiredRawResults": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ref",
+          "digest",
+          "slotId",
+          "status"
+        ],
+        "properties": {
+          "ref": {
+            "$ref": "#/$defs/ref"
+          },
+          "digest": {
+            "$ref": "#/$defs/digest"
+          },
+          "slotId": {
+            "$ref": "#/$defs/digest"
+          },
+          "status": {
+            "const": "passed"
+          }
+        }
+      }
+    },
+    "dataReadiness": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "activeCas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest",
+        "readbackRef",
+        "readbackDigest",
+        "releaseId",
+        "releaseDigest"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "readbackRef": {
+          "$ref": "#/$defs/ref"
+        },
+        "readbackDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "releaseId": {
+          "$ref": "#/$defs/identity"
+        },
+        "releaseDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "lifecycleExit": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "providerReadiness": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "observabilityReadiness": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "rollbackReadiness": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "predecessorAcceptance": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "environment",
+            "factId",
+            "ref",
+            "digest"
+          ],
+          "properties": {
+            "environment": {
+              "enum": [
+                "alpha",
+                "beta",
+                "gamma"
+              ]
+            },
+            "factId": {
+              "$ref": "#/$defs/digest"
+            },
+            "ref": {
+              "$ref": "#/$defs/ref"
+            },
+            "digest": {
+              "$ref": "#/$defs/digest"
+            }
+          }
+        }
+      ]
+    },
+    "resourceFinalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "leaseRevocationRefs",
+        "lockReleaseRefs",
+        "gcProtectionRefs"
+      ],
+      "properties": {
+        "leaseRevocationRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/exactRef"
+          }
+        },
+        "lockReleaseRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/exactRef"
+          }
+        },
+        "gcProtectionRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/exactRef"
+          }
+        }
+      }
+    },
+    "prodReleaseFacts": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "engineeringEligibility",
+            "durableApproval",
+            "rolloutStages",
+            "rollbackReadiness"
+          ],
+          "properties": {
+            "engineeringEligibility": {
+              "$ref": "#/$defs/exactRef"
+            },
+            "durableApproval": {
+              "$ref": "#/$defs/exactRef"
+            },
+            "rolloutStages": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/canaryStage"
+                },
+                {
+                  "$ref": "#/$defs/stage5"
+                },
+                {
+                  "$ref": "#/$defs/stage20"
+                },
+                {
+                  "$ref": "#/$defs/stage50"
+                },
+                {
+                  "$ref": "#/$defs/stage100"
+                }
+              ],
+              "items": false,
+              "minItems": 5,
+              "maxItems": 5
+            },
+            "rollbackReadiness": {
+              "$ref": "#/$defs/exactRef"
+            }
+          }
+        }
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sourceFingerprint": {
+      "$ref": "#/$defs/digest"
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "identity": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"
+    },
+    "ref": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+$"
+    },
+    "exactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "canaryStage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "stage": {
+          "const": "canary"
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "stage5": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "stage": {
+          "const": "5"
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "stage20": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "stage": {
+          "const": "20"
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "stage50": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "stage": {
+          "const": "50"
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "stage100": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "stage": {
+          "const": "100"
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "environment": {
+            "const": "alpha"
+          }
+        },
+        "required": [
+          "environment"
+        ]
+      },
+      "then": {
+        "properties": {
+          "predecessorAcceptance": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "predecessorAcceptance": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "environment": {
+            "const": "prod"
+          }
+        },
+        "required": [
+          "environment"
+        ]
+      },
+      "then": {
+        "properties": {
+          "prodReleaseFacts": {
+            "type": "object"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "prodReleaseFacts": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

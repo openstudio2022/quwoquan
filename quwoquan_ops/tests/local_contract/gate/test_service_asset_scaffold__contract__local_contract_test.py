@@ -89,6 +89,7 @@ class ServiceAssetScaffoldContractTest(unittest.TestCase):
                 capture_output=True,
                 text=True,
                 check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(
@@ -112,6 +113,8 @@ class ServiceAssetScaffoldContractTest(unittest.TestCase):
             for required in (
                 "AGENTS.md",
                 "Makefile",
+                "cmd/api/bootstrap.go",
+                "cmd/standalone-api/main.go",
                 "config/schema.yaml",
                 "deploy/base/kustomization.yaml",
                 "deploy/base/deployment.yaml",
@@ -139,6 +142,22 @@ class ServiceAssetScaffoldContractTest(unittest.TestCase):
             )
             self.assertIn("_IMAGE:?fixed contract-probe-service image", compose)
             self.assertIn("QWQ_COMPOSE_IMAGE_VERSION:?immutable image identity", compose)
+            # Dockerfile 构建入口必须与生成的 standalone 壳同源：入口路径漂移
+            # 会让镜像构建到不存在的 main 包。
+            dockerfile = (service / "build/Dockerfile").read_text(encoding="utf-8")
+            self.assertIn(
+                "./services/contract-probe-service/cmd/standalone-api",
+                dockerfile,
+            )
+            standalone_main = (service / "cmd/standalone-api/main.go").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("package main", standalone_main)
+            self.assertIn("servicekit.RunStandalone", standalone_main)
+            bootstrap_source = (service / "cmd/api/bootstrap.go").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("package bootstrap", bootstrap_source)
 
     def test_scaffold_declares_object_first_single_track_contract(self) -> None:
         text = SCAFFOLD.read_text(encoding="utf-8")

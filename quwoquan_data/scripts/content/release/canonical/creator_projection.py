@@ -14,18 +14,17 @@ from content.release.canonical.object_transaction_contract import (
     _safe_id,
     _safe_rel,
 )
+from core.content_library import MediaHoldingError, resolve_media_holding
 from core.io import write_json
-from core.media_asset_url import is_cas_media_object_key, sha256_file
-from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT, PUBLISH_ROOT
+from core.media_asset_url import is_cas_media_object_key
+from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT
 
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
-def _creator_profile_path(creator_ref: str) -> Path:
+def _creator_profile_path(creator_ref: str, *, creator_pool_root: Path) -> Path:
     matches: list[Path] = []
-    for path in sorted(
-        (CONTROL_PLANE_CREATOR_POOL_ROOT / "profiles").rglob("*.creator.yaml")
-    ):
+    for path in sorted((creator_pool_root / "profiles").rglob("*.creator.yaml")):
         try:
             payload = yaml.safe_load(path.read_text(encoding="utf-8"))
         except (OSError, yaml.YAMLError) as exc:
@@ -46,6 +45,9 @@ def _creator_profile_path(creator_ref: str) -> Path:
 
 def _avatar_asset_projection(
     payload: Mapping[str, object],
+    *,
+    creator_pool_root: Path,
+    publish_root: Path | None,
 ) -> tuple[dict[str, object], dict[str, object], Path] | None:
     raw = payload.get("avatarAsset")
     if raw is None:
@@ -91,16 +93,30 @@ def _avatar_asset_projection(
         raise ObjectTransactionError(
             "creator avatarAsset objectKey does not bind sha256"
         )
-    physical = PUBLISH_ROOT / object_key
-    if (
-        not physical.is_file()
-        or physical.stat().st_size != byte_count
-        or sha256_file(physical) != sha256
-    ):
-        raise ObjectTransactionError(
-            "creator avatarAsset CAS bytes are missing or drifted"
-        )
-    evidence_source = CONTROL_PLANE_CREATOR_POOL_ROOT / evidence_ref
+    # The library is content-addressed and verifies a body against its digest at
+    # admission, so reaching the entry at this digest is the identity check;
+    # re-hashing it here would only re-derive the address it was found under.
+    # A generation being bootstrapped resolves against the tree it is building
+    # instead, because its bodies were admitted from an explicitly named library
+    # that the ambient one knows nothing about.
+    if publish_root is None:
+        try:
+            resolve_media_holding(sha256, expected_bytes=byte_count)
+        except (MediaHoldingError, ValueError) as exc:
+            raise ObjectTransactionError(
+                "creator avatarAsset body is not reachable in the content library"
+            ) from exc
+    else:
+        body = publish_root / _safe_rel(object_key, label="avatarAsset.objectKey")
+        if (
+            body.is_symlink()
+            or not body.is_file()
+            or body.stat().st_size != byte_count
+        ):
+            raise ObjectTransactionError(
+                "creator avatarAsset body is not reachable in the generation tree"
+            )
+    evidence_source = creator_pool_root / evidence_ref
     try:
         evidence = json.loads(evidence_source.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -128,10 +144,28 @@ def _avatar_asset_projection(
     return profile_ref, asset_ref, evidence_source
 
 
-def project_creator_object(creator_ref: str, target: Path) -> Path:
-    """Write the immutable consumer projection for one referenced creator."""
+def project_creator_object(
+    creator_ref: str,
+    target: Path,
+    *,
+    publish_root: Path | None = None,
+    creator_pool_root: Path | None = None,
+) -> Path:
+    """Write the immutable consumer projection for one referenced creator.
+
+    Both roots default to the repository's own control plane and content library.
+    A generation bootstrap names them explicitly instead, so one projection writer
+    serves the ambient tree and an isolated generation without either inheriting
+    the other's holdings.
+    """
+
     creator_ref = _safe_id(creator_ref, label="creatorRef")
-    source = _creator_profile_path(creator_ref)
+    pool_root = (
+        Path(creator_pool_root)
+        if creator_pool_root is not None
+        else CONTROL_PLANE_CREATOR_POOL_ROOT
+    )
+    source = _creator_profile_path(creator_ref, creator_pool_root=pool_root)
     payload = yaml.safe_load(source.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ObjectTransactionError(f"creator profile is invalid: {creator_ref}")
@@ -191,7 +225,11 @@ def project_creator_object(creator_ref: str, target: Path) -> Path:
         "publicProfileTagRefs": tag_refs,
         "disclosure": dict(payload.get("disclosure") or {}),
     }
-    avatar_projection = _avatar_asset_projection(payload)
+    avatar_projection = _avatar_asset_projection(
+        payload,
+        creator_pool_root=pool_root,
+        publish_root=Path(publish_root) if publish_root is not None else None,
+    )
     asset_refs: list[dict[str, object]] = []
     if avatar_projection is not None:
         avatar_asset, asset_ref, evidence_source = avatar_projection

@@ -839,7 +839,7 @@ beta_manual_start_entity_service() {
       ENTITY_SERVICE_ADDR="${listen_host}:${ENTITY_PORT}" \
       ENTITY_MONGO_URI="mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true" \
       ENTITY_MONGO_DATABASE=quwoquan_entity \
-      ENTITY_REDIS_ADDR="127.0.0.1:${BETA_REDIS_PORT}" \
+      ENTITY_REDIS_GENERAL_ADDR="127.0.0.1:${BETA_REDIS_PORT}" \
       ENTITY_USER_ACCOUNT_SECURITY_AUTHORITY_BASE_URL="http://127.0.0.1:${USER_PORT}" \
       SEARCH_ES_ENABLED=false \
       go run ./cmd/api

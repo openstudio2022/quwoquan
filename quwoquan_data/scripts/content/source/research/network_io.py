@@ -7,6 +7,7 @@ import subprocess
 import urllib.parse
 from typing import Any
 
+from core.rate_limit import shared_rate_limiter
 from core.runtime_policy import active_runtime_policy
 from content.source.research import network_breaker
 
@@ -14,6 +15,35 @@ from content.source.research import network_breaker
 USER_AGENT = "quwoquan-data/1.0 (+https://github.com/quwoquan; contact: data-ops@quwoquan.example)"
 _HTTP_METADATA_MARKER = b"\n__QWQ_HTTP_META__"
 _HTTP_METADATA_FORMAT = "\n__QWQ_HTTP_META__%{http_code}\t%{url_effective}"
+_MEDIAWIKI_LIMITER_ID = "mediawiki_api"
+
+
+class NetworkFetchError(RuntimeError):
+    """An outbound request did not complete, so there is no result to return.
+
+    Decoding helpers collapse a rich `HttpFetchResult` into a plain dict or str,
+    which leaves failure with nowhere to live. Returning an empty value there
+    would make "the host refused us" indistinguishable from "the host says there
+    is nothing", and a caller cannot retry or report what it cannot see. Failure
+    is raised so it stays a distinct state from present-but-empty.
+    """
+
+    def __init__(
+        self,
+        url: str,
+        *,
+        status_code: int,
+        returncode: int,
+        reason: str,
+    ) -> None:
+        super().__init__(
+            f"outbound fetch did not complete: {reason} "
+            f"(status={status_code}, curl={returncode}, url={url[:240]})"
+        )
+        self.url = url
+        self.status_code = status_code
+        self.returncode = returncode
+        self.reason = reason
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +64,7 @@ def fetch_http(
     timeout: int,
     headers: dict[str, str] | None = None,
 ) -> HttpFetchResult:
-    if network_breaker.BREAKER.is_open(url) or network_breaker.wave_budget_exceeded():
+    if network_breaker.BREAKER.is_open(url):
         return HttpFetchResult(returncode=-1, status_code=0, final_url="", body=b"")
     effective_timeout = max(1, int(timeout))
     policy = active_runtime_policy()
@@ -92,14 +122,32 @@ def fetch_http(
 
 
 def curl_json(url: str, *, timeout: int) -> dict[str, Any]:
+    """Fetch and decode one JSON object; an empty object means the host said so."""
     response = fetch_http(url, timeout=timeout)
     if not response.ok:
-        return {}
+        raise NetworkFetchError(
+            url,
+            status_code=response.status_code,
+            returncode=response.returncode,
+            reason="transport or status failure",
+        )
     try:
-        data = json.loads(response.body.decode("utf-8", errors="replace") or "{}")
-    except json.JSONDecodeError:
-        return {}
-    return data if isinstance(data, dict) else {}
+        data = json.loads(response.body.decode("utf-8", errors="replace"))
+    except json.JSONDecodeError as exc:
+        raise NetworkFetchError(
+            url,
+            status_code=response.status_code,
+            returncode=response.returncode,
+            reason="response body is not JSON",
+        ) from exc
+    if not isinstance(data, dict):
+        raise NetworkFetchError(
+            url,
+            status_code=response.status_code,
+            returncode=response.returncode,
+            reason=f"response JSON is {type(data).__name__}, not an object",
+        )
+    return data
 
 
 def post_form_json(
@@ -109,8 +157,13 @@ def post_form_json(
     timeout: int,
 ) -> dict[str, Any]:
     """POST form fields once and decode JSON; the source adapter owns retries."""
-    if network_breaker.BREAKER.is_open(url) or network_breaker.wave_budget_exceeded():
-        return {}
+    if network_breaker.BREAKER.is_open(url):
+        raise NetworkFetchError(
+            url,
+            status_code=0,
+            returncode=-1,
+            reason="network breaker is open",
+        )
     policy = active_runtime_policy()
     command = [
         "curl",
@@ -136,24 +189,60 @@ def post_form_json(
     elif proc.returncode in network_breaker.NETWORK_CURL_EXIT_CODES:
         network_breaker.BREAKER.record_network_failure(url)
     if proc.returncode != 0:
-        return {}
+        raise NetworkFetchError(
+            url,
+            status_code=0,
+            returncode=int(proc.returncode),
+            reason="transport failure",
+        )
     try:
-        payload = json.loads(proc.stdout.decode("utf-8", errors="replace") or "{}")
-    except json.JSONDecodeError:
-        return {}
-    return payload if isinstance(payload, dict) else {}
+        payload = json.loads(proc.stdout.decode("utf-8", errors="replace"))
+    except json.JSONDecodeError as exc:
+        raise NetworkFetchError(
+            url,
+            status_code=0,
+            returncode=int(proc.returncode),
+            reason="response body is not JSON",
+        ) from exc
+    if not isinstance(payload, dict):
+        raise NetworkFetchError(
+            url,
+            status_code=0,
+            returncode=int(proc.returncode),
+            reason=f"response JSON is {type(payload).__name__}, not an object",
+        )
+    return payload
 
 
 def curl_text(url: str, *, timeout: int) -> str:
+    """Fetch one document as text; an empty string means the host served nothing."""
     response = fetch_http(url, timeout=timeout)
     if not response.ok:
-        return ""
+        raise NetworkFetchError(
+            url,
+            status_code=response.status_code,
+            returncode=response.returncode,
+            reason="transport or status failure",
+        )
     return response.body.decode("utf-8", errors="replace")
 
 
 def wiki_api(host: str, params: dict[str, str | int]) -> dict[str, Any]:
+    """Call one MediaWiki API host under the pacing that host is owed.
+
+    Every research provider reaches MediaWiki through here, so this is where the
+    interval belongs: paced per host and shared process-wide, the callers cannot
+    add up into a burst no single one of them intended.
+    """
     query = urllib.parse.urlencode(params)
+    policy = active_runtime_policy()
+    shared_rate_limiter(
+        _MEDIAWIKI_LIMITER_ID,
+        f"https://{host}",
+        max_requests_per_second=0.0,
+        crawl_delay=policy.mediawiki_inter_request_delay_seconds,
+    ).wait()
     return curl_json(
         f"https://{host}/w/api.php?{query}",
-        timeout=active_runtime_policy().provider_timeouts.mediawiki_seconds,
+        timeout=policy.provider_timeouts.mediawiki_seconds,
     )

@@ -19,6 +19,7 @@ from core.video_source_admission import (
     assert_video_distribution_use_allowed,
 )
 
+from content.post.video.source_video import distribution_decision_for_admission
 from content.source.professional_video_receipt import (
     resolve_professional_video_candidate,
 )
@@ -252,7 +253,10 @@ def fetch_admitted_sourced_videos(
             publication_admission = str(
                 candidate.get("publicationAdmission") or ""
             )
-            research_release = publication_admission == "research_release"
+            distribution_decision = str(
+                candidate.get("distributionDecision") or ""
+            ) or distribution_decision_for_admission(publication_admission)
+            research_release = distribution_decision == "research_allowed"
             audio_rights_status = str(
                 candidate.get("audioRightsStatus")
                 or (
@@ -287,13 +291,12 @@ def fetch_admitted_sourced_videos(
                     commercial_authorization_status=str(
                         candidate.get("commercialAuthorizationStatus") or ""
                     ),
-                    publication_admission=publication_admission,
+                    distribution_decision=distribution_decision,
                     authorization_proof_url=str(
                         candidate.get("authorizationProofUrl") or ""
                     )
                     or None,
                     terms_url=terms_url or None,
-                    risk_acceptance_id=None,
                     audio_rights_status=audio_rights_status,
                     audio_authorization_proof_url=audio_proof,
                     model_release_status=str(

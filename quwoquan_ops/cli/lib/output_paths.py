@@ -460,6 +460,49 @@ def env_run_dir(env_name: str, command_name: str, *, target: str = "local") -> P
     )
 
 
+def validate_env_run_evidence_dir(
+    configured_path: str | Path,
+    *,
+    env_name: str,
+) -> Path:
+    """Validate one explicit evidence directory inside an env runs subtree."""
+
+    raw = str(configured_path or "").strip()
+    if not raw:
+        raise ValueError("report directory is absent or empty")
+    candidate_input = Path(raw).expanduser()
+    if any(part == ".." for part in candidate_input.parts):
+        raise ValueError("report directory cannot contain parent traversal")
+
+    root = output_root().expanduser().resolve()
+    expected_runs_root = (root / "env" / normalize_env(env_name) / "runs").resolve()
+    if candidate_input.is_absolute():
+        candidate = candidate_input.resolve()
+    else:
+        candidate = (ROOT / candidate_input).resolve()
+    if not _is_within(candidate, expected_runs_root) or candidate == expected_runs_root:
+        raise ValueError(
+            "report directory must stay inside the canonical environment runs subtree: "
+            f"{expected_runs_root}"
+        )
+
+    current = expected_runs_root
+    try:
+        relative_parts = candidate.relative_to(expected_runs_root).parts
+    except ValueError as exc:
+        raise ValueError(
+            f"report directory escapes canonical environment runs subtree: {candidate}"
+        ) from exc
+    for part in relative_parts:
+        current /= part
+        if current.is_symlink():
+            raise ValueError(
+                "report directory cannot traverse a symbolic link: "
+                f"{current}"
+            )
+    return candidate
+
+
 def env_observability_root(env_name: str) -> Path:
     return env_root(env_name) / "observability"
 
@@ -755,7 +798,24 @@ def portal_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
 
 
 def web_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
-    return deployment_package_root(env_name, target=target) / "public-web"
+    """Return the only home of the immutable public Web package for one target.
+
+    Unlike app/service/legal packages, the Web package is not a member of a
+    runtime candidate: `stackctl package --kind web` builds it in its own
+    standalone root, it carries its own content digest plus a `current` pointer,
+    and CI produces it in a separate job from the runtime shard.  Routing it
+    through `deployment_package_root` made the writer follow the standalone
+    override while every reader resolved the active candidate instead, so the
+    package was always written where nobody looked for it.
+    """
+    target_name = deployment_target_for_env(env_name, target=target)
+    return deployment_target_path(
+        target_name,
+        "standalone-packages",
+        "web",
+        "packages",
+        "public-web",
+    )
 
 
 def deployment_render_dir(

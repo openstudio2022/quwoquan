@@ -179,3 +179,105 @@ def test_a_horizontal_governance_function_is_a_valid_owner(
 def test_every_real_baseline_in_the_repository_is_governed() -> None:
     """真实仓库里的棘轮基线必须已经全部留痕，否则这道门只是摆设。"""
     assert gate.main() == 0
+
+
+def head_with(entries: dict[str, object]) -> str:
+    return json.dumps({"_governance": COMPLETE, **entries})
+
+
+def test_raising_a_debt_count_blocks(
+    gate_root: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    """`_governance` 文字写得再完整，也不能替代单调性检查。
+
+    留痕字段齐全时门禁放行，等于把「债只能减」交给作者自觉——而改基线数字恰好是
+    最省事的绕过方式。
+    """
+    path = gate_root / "sample_baseline.json"
+    path.write_text(
+        json.dumps({"_governance": COMPLETE, "some/file.dart": 4}, indent=2),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate, "head_revision", lambda _: head_with({"some/file.dart": 3})
+    )
+
+    assert gate.main() == 1
+    output = capsys.readouterr().out
+    assert "债务条目相对 HEAD 变大或新增" in output
+    assert "some/file.dart: 3 -> 4" in output
+
+
+def test_lowering_a_debt_count_passes(
+    gate_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = gate_root / "sample_baseline.json"
+    path.write_text(
+        json.dumps({"_governance": COMPLETE, "some/file.dart": 2}, indent=2),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate, "head_revision", lambda _: head_with({"some/file.dart": 3})
+    )
+
+    assert gate.main() == 0
+
+
+def test_same_file_identity_swap_blocks(
+    gate_root: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    """同文件内删一处、换个函数再加一处，总数不变——按文件计数时门禁看不见。"""
+    path = gate_root / "sample_baseline.json"
+    path.write_text(
+        json.dumps(
+            {"_governance": COMPLETE, "some/port.go": {"FindLater": 1}}, indent=2
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate,
+        "head_revision",
+        lambda _: head_with({"some/port.go": {"FindEarlier": 1}}),
+    )
+
+    assert gate.main() == 1
+    assert "some/port.go::FindLater" in capsys.readouterr().out
+
+
+def test_adding_a_new_debt_file_blocks(
+    gate_root: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    path = gate_root / "sample_baseline.json"
+    path.write_text(
+        json.dumps(
+            {"_governance": COMPLETE, "some/file.dart": 3, "another/file.dart": 1},
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate, "head_revision", lambda _: head_with({"some/file.dart": 3})
+    )
+
+    assert gate.main() == 1
+    assert "another/file.dart: 0 -> 1" in capsys.readouterr().out
+
+
+def test_timing_budget_keys_are_not_treated_as_debt(
+    gate_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """耗时预算的键是场景名而不是文件路径，调高预算不是「债增长」。
+
+    两者形状相同（都是 名字 -> 数字），靠键里有没有 `/` 区分；混判会让预算调整
+    被当成债务增长，把门禁变成噪音源。
+    """
+    path = gate_root / "timing_budget.json"
+    path.write_text(
+        json.dumps({"_governance": COMPLETE, "cold_start": 900}, indent=2),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate, "head_revision", lambda _: head_with({"cold_start": 800})
+    )
+
+    assert gate.main() == 0

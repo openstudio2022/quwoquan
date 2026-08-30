@@ -1,6 +1,11 @@
 """local gamma 启动编排、release 生命周期与配置身份合约。
 """
+# spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t4
+# spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t5
+
 from __future__ import annotations
+
+import yaml
 
 from quwoquan_ops.tests.support.local_gamma_content_service_config_test_support import (
     CADDYFILE,
@@ -235,7 +240,7 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
         self.assertNotIn("tag-service:", gamma_proxy)
         self.assertIn("gamma_full_workload_dependencies_ready", start_script)
         self.assertIn(
-            'curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_TAG_PORT:-19270}/healthz"',
+            'curl -fsS -H "Host: tag-service" "http://127.0.0.1:${LOCAL_GAMMA_TAG_PORT:-19270}/healthz"',
             start_script,
         )
         self.assertIn(
@@ -246,7 +251,14 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
         self.assertNotIn("ENABLE_FIXTURE_SEEDS", start_script)
 
     def test_host_probe_services_attach_edge_publish_network(self) -> None:
-        """default is internal:true; host/Colima probes need the edge bridge."""
+        """default is internal:true; host/Colima probes need the edge bridge.
+
+        The assertion reads the parsed service map rather than a literal text
+        shape, because a registry entry may also carry the `profiles` gate that
+        keeps a projected-away fragment from degrading into an image-less
+        service. Gating changes which workloads start the service; it never
+        changes that a started service must reach the host through `edge`.
+        """
         gamma_compose = COMPOSE_FILE.read_text(encoding="utf-8")
         self.assertIn("internal: true", gamma_compose)
         self.assertIn("\n  edge:\n", gamma_compose)
@@ -254,7 +266,7 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
             "# Host/Colima readiness probes hit these published ports through the edge"
         )
         self.assertIn(marker, gamma_compose)
-        block = gamma_compose[gamma_compose.index(marker) : gamma_compose.index("\nnetworks:")]
+        services = yaml.safe_load(gamma_compose)["services"]
         for service in (
             "user-service",
             "product-ops-service",
@@ -263,7 +275,7 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
             "notification-service",
             "tag-service",
         ):
-            self.assertIn(f"  {service}:\n    networks:\n      - default\n      - edge", block)
+            self.assertEqual(services[service]["networks"], ["default", "edge"])
 
     def test_product_ops_receives_local_elasticsearch_endpoint(self) -> None:
         service_block = service_compose("product-ops-service")
@@ -375,10 +387,11 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
         self.assertIn("recommendation-service", inspect_list)
 
     def test_gamma_up_bootstraps_policy_owner_before_full_stack(self) -> None:
-        """Gamma 冷启动 policy 死锁：投影拓扑 product-ops -> service-core(healthy)
-        -> recommendation(healthy)，而 recommendation full runtime 又硬性要求
-        Product Ops 已激活 rec_model_vs_rule。全栈 compose up 前必须先经
-        loopback published port 用公开 command 激活 canonical 政策。
+        """Gamma 冷启动 policy 死锁：service-core 内 Search 等策略事实，
+        Product Ops 又等 service-core 内 UserAccount authority。先拉起
+        service-core 进程完成 Build/Bind/Start 并暴露内部 pre-admission health，
+        再用公开 command 激活 canonical 政策；只等 shallow /healthz，不等
+        aggregate /readyz 或 Compose dependency graph。
         """
 
         source = START_SCRIPT.read_text(encoding="utf-8")
@@ -403,6 +416,42 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
             'up -d --no-build --no-deps product-ops-service',
             bootstrap_block,
         )
+        self.assertIn(
+            'up -d --no-build --no-deps service-core',
+            bootstrap_block,
+        )
+        authority_index = bootstrap_block.index(
+            'up -d --no-build --no-deps service-core'
+        )
+        product_ops_index = bootstrap_block.index(
+            'up -d --no-build --no-deps product-ops-service'
+        )
+        activation_index = bootstrap_block.index(
+            "activate_search_experiment_policy_via_published_port"
+        )
+        self.assertLess(authority_index, product_ops_index)
+        self.assertLess(product_ops_index, activation_index)
+        shallow_health_index = bootstrap_block.index(
+            "service-core did not reach shallow health"
+        )
+        self.assertLess(authority_index, shallow_health_index)
+        self.assertLess(shallow_health_index, product_ops_index)
+        self.assertIn(
+            "{{if .State.Health}}{{.State.Health.Status}}"
+            "{{else}}missing-healthcheck{{end}} {{.State.Status}}",
+            bootstrap_block,
+        )
+        self.assertIn(
+            'ps -a -q service-core',
+            bootstrap_block,
+        )
+        self.assertIn(
+            "service-core container is missing during policy owner bootstrap",
+            bootstrap_block,
+        )
+        self.assertIn('[[ "$state" == "healthy running" ]]', bootstrap_block)
+        # 文档注释必须解释为什么不等 aggregate /readyz；禁止的是实际探测。
+        self.assertNotRegex(bootstrap_block, r"(?:curl|wget)[^\n]*/readyz")
         # 激活只允许走公开 command 的 loopback 变体；禁止直写 Mongo/Redis。
         self.assertIn(
             "activate_search_experiment_policy_via_published_port",
@@ -560,4 +609,3 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
                     "QWQ_OUTPUT_ROOT/env/gamma/runs",
                 ):
                     module.resolve_release_consumer_report_path(str(forbidden))
-

@@ -123,7 +123,33 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: authoritative_state
+enums:
+  SmsOtpDeliveryAvailability:
+  - ready
+  - temporarily_unavailable
 types:
+  SmsOtpDeliveryReadiness:
+    description: identity.sms.otp 能力对第一方 service caller 暴露的有界就绪切片；内部检查详情与 Provider 身份不得进入 wire。
+    fields:
+    - name: availability
+      source: availability
+      type: enum
+      enum_ref: SmsOtpDeliveryAvailability
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: retryAfterSeconds
+      source: retryAfterSeconds
+      type: int
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
   ExternalInteractionResultReportedEvent:
     description: provider attempt 与结果 outbox 同事务提交后，由 durable relay 发布的唯一外部交互结果事件。
     fields:

@@ -1,6 +1,6 @@
 """Environment-owner runtime probe for one research release isolation proof.
 
-本模块对一个本地环境（alpha-local/beta-local/gamma-local）执行 12 个真实 HTTP
+本模块对一个本地环境（alpha-local/beta-local/gamma-local）执行 15 个真实 HTTP
 探针操作，并把 create-once 的 ``research-isolation-runtime-proof.json`` 写入
 canonical verify run 目录。文档语义（字段、状态码、唯一性、checksum）与
 ``quwoquan_data/scripts/content/release/environment/research_isolation_proof.py``
@@ -26,7 +26,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 from urllib import error, request
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, quote, urlencode, urlsplit
 from uuid import uuid4
 
 from .common import ROOT, load_json_yaml
@@ -286,7 +286,7 @@ def collect_research_isolation_probe_segments(
     policy_ttl_seconds: int,
     timeout_seconds: float = 12.0,
 ) -> dict[str, Any]:
-    """执行 12 个真实 HTTP 探针并返回 PASS 文档的 10 个证据段。
+    """执行 15 个真实 HTTP 探针并返回 PASS 文档的 10 个证据段。
 
     任何一个探针不满足预期状态或响应语义时立即抛出
     ``ResearchIsolationProbeError``；调用方不得在失败后写出任何文件。
@@ -523,7 +523,8 @@ def collect_research_isolation_probe_segments(
     }
 
     # 7. anonymousMediaProbe：按环境 media 交付形态对一个 release 资产匿名 GET。
-    anonymous_media_url = media_base + "/" + media_asset_ids[0]
+    # assetId 可含非 ASCII（data release 使用中文标识），URL 段必须 percent-encode。
+    anonymous_media_url = media_base + "/" + quote(media_asset_ids[0], safe="")
     _status, _payload, anonymous_media_operation = _perform_operation(
         segment="anonymous_media_probe",
         path=_url_path(anonymous_media_url, segment="anonymous_media_probe"),
@@ -544,7 +545,9 @@ def collect_research_isolation_probe_segments(
 
     # 8. signedMedia issuance：研究态预留一次原图访问授权（Idempotency-Key 必填）。
     signed_asset_id = media_asset_ids[0]
-    issuance_media_path = f"/content/media/{signed_asset_id}/original:access"
+    issuance_media_path = (
+        "/content/media/" + quote(signed_asset_id, safe="") + "/original:access"
+    )
     idempotency_key = new_probe_identity()
     _status, grant_payload, media_issuance_operation = _perform_operation(
         segment="signed_media_issuance",
@@ -592,6 +595,38 @@ def collect_research_isolation_probe_segments(
             "signed_media_issuance",
             "originalUrl must be a signed short-lived URL",
         )
+    # 共享私有交付协议（DEC-031）：签发方 query 固定为 sign+t，负例探针
+    # 据此构造伪签名与篡改到期变体，断言边缘复算判定面真实生效。
+    signed_query = parse_qs(split_original.query, keep_blank_values=True)
+    query_sign = (signed_query.get("sign") or [""])[0].strip()
+    query_expiry = (signed_query.get("t") or [""])[0].strip()
+    if not query_sign or not query_expiry:
+        raise _response_invalid(
+            "signed_media_issuance",
+            "originalUrl query must carry sign and t per the shared "
+            "private delivery protocol",
+        )
+
+    def _query_variant(**overrides: str) -> str:
+        merged = {key: values[0] for key, values in signed_query.items()}
+        merged.update(overrides)
+        return urlencode(merged)
+
+    forged_signature_url = split_original._replace(
+        query=_query_variant(sign="0" * 64),
+        fragment="",
+    ).geturl()
+    try:
+        tampered_expiry_value = str(int(query_expiry) + 1)
+    except ValueError as exc:
+        raise _response_invalid(
+            "signed_media_issuance",
+            "originalUrl t query must be a unix timestamp",
+        ) from exc
+    tampered_expiry_url = split_original._replace(
+        query=_query_variant(t=tampered_expiry_value),
+        fragment="",
+    ).geturl()
 
     # 9. deniedCapabilities.export：研究态未持 grant 直接访问 original 媒体
     #    URL（剥去签名 query）必须 deny。
@@ -658,7 +693,53 @@ def collect_research_isolation_probe_segments(
         ),
     )
 
-    # 12. signedMedia audit readback：审计事实必须可回读。
+    # 12. signedMedia range access：同一签名 URL 的 Range 段请求必须在
+    #     边缘按段复算后交付 206/200（DEC-031 性能预算：不缓存放行判定）。
+    _status, _payload, media_range_operation = _perform_operation(
+        segment="signed_media_range_access",
+        path=original_path,
+        expected_statuses=frozenset({200, 206}),
+        invoke=lambda headers: (
+            fetch_media_status(
+                original_url,
+                headers={**headers, "Range": "bytes=0-1"},
+                timeout_seconds=timeout_seconds,
+            ),
+            None,
+        ),
+    )
+
+    # 13. forged signature：伪造 sign 摘要必须被边缘复算拒绝。
+    _status, _payload, forged_signature_operation = _perform_operation(
+        segment="forged_signature_probe",
+        path=original_path,
+        expected_statuses=frozenset({401, 403}),
+        invoke=lambda headers: (
+            fetch_media_status(
+                forged_signature_url,
+                headers=headers,
+                timeout_seconds=timeout_seconds,
+            ),
+            None,
+        ),
+    )
+
+    # 14. tampered expiry：篡改 t 破坏摘要，必须被边缘复算拒绝。
+    _status, _payload, tampered_expiry_operation = _perform_operation(
+        segment="tampered_expiry_probe",
+        path=original_path,
+        expected_statuses=frozenset({401, 403}),
+        invoke=lambda headers: (
+            fetch_media_status(
+                tampered_expiry_url,
+                headers=headers,
+                timeout_seconds=timeout_seconds,
+            ),
+            None,
+        ),
+    )
+
+    # 15. signedMedia audit readback：审计事实必须可回读。
     audit_path = f"/content/media/original-access-audits/{audit_event_id}"
     _status, audit_payload, audit_operation = _perform_operation(
         segment="signed_media_audit_readback",
@@ -686,6 +767,9 @@ def collect_research_isolation_probe_segments(
         "auditEventId": audit_event_id,
         "issuanceOperation": media_issuance_operation,
         "accessOperation": media_access_operation,
+        "rangeAccessOperation": media_range_operation,
+        "forgedSignatureOperation": forged_signature_operation,
+        "tamperedExpiryOperation": tampered_expiry_operation,
         "auditReadbackOperation": audit_operation,
     }
 
@@ -760,7 +844,7 @@ def run_research_isolation_runtime_probe(
     manifest_digest: str,
     timeout_seconds: float = 12.0,
 ) -> dict[str, Any]:
-    """环境 owner 侧一次完整探针执行：登录、12 探针、组装、create-once 写入。"""
+    """环境 owner 侧一次完整探针执行：登录、15 探针、组装、create-once 写入。"""
 
     environment = _safe_segment(environment, label="environment")
     release_id = _safe_segment(release_id, label="releaseId")

@@ -13,11 +13,11 @@ from core.control_types import (
     ModalityContract,
 )
 
-from content.execution.planning.source_pool_policy import (
-    allows_scale_source_pool,
-    requires_scale_source_pool,
-)
 from content.execution.planning.spec_execution_policy import ExecutionPolicy
+from content.execution.planning.media_work_units import (
+    validate_frozen_work_unit_exclusions,
+    validate_frozen_work_units,
+)
 from content.source.contracts import QualifiedHomepageSource
 
 EXECUTION_SPEC_SCHEMA = "quwoquan.content.execution_spec"
@@ -90,9 +90,17 @@ class CoverageTarget:
     type_tag_refs: tuple[str, ...] = ()
     aliases: tuple[str, ...] = ()
     qualified_homepage_source: QualifiedHomepageSource | None = None
+    publish_angle: str | None = None
+    publish_title: str | None = None
+    publish_seq: int | None = None
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "CoverageTarget":
+        publish_seq = payload.get("publishSeq")
+        if publish_seq is not None and (
+            not isinstance(publish_seq, int) or publish_seq < 1
+        ):
+            raise ValueError("coverage target publishSeq must be a positive integer")
         return cls(
             name=_string(payload, "name"),
             entity_type=_string(payload, "entityType"),
@@ -105,6 +113,9 @@ class CoverageTarget:
                 if isinstance(raw := payload.get("qualifiedHomepageSource"), Mapping)
                 else None
             ),
+            publish_angle=_optional_string(payload, "publishAngle"),
+            publish_title=_optional_string(payload, "publishTitle"),
+            publish_seq=publish_seq,
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -122,6 +133,12 @@ class CoverageTarget:
             payload["aliases"] = list(self.aliases)
         if self.qualified_homepage_source is not None:
             payload["qualifiedHomepageSource"] = self.qualified_homepage_source.to_dict()
+        if self.publish_angle:
+            payload["publishAngle"] = self.publish_angle
+        if self.publish_title:
+            payload["publishTitle"] = self.publish_title
+        if self.publish_seq is not None:
+            payload["publishSeq"] = self.publish_seq
         return payload
 
 
@@ -194,8 +211,6 @@ class ContentQuotas:
 @dataclass(frozen=True, slots=True)
 class ResearchPolicy:
     lanes: tuple[ContentType, ...]
-    max_concurrency: int | None
-    lane_concurrency: tuple[tuple[ContentType, int], ...]
     image_asset_strategy: ImageAssetStrategy | None
     image_count_policy: ImageCountPolicy | None
     minimum_publishable_images_per_target: int | None
@@ -205,24 +220,6 @@ class ResearchPolicy:
     def from_mapping(cls, payload: Mapping[str, Any]) -> "ResearchPolicy":
         lane_values = _strings(payload.get("lanes"), field="content.research.lanes")
         lanes = tuple(ContentType(value) for value in lane_values)
-        raw_max = payload.get("maxConcurrency")
-        max_concurrency = None
-        if raw_max is not None:
-            max_concurrency = _non_negative_int(payload, "maxConcurrency")
-            if max_concurrency < 1:
-                raise ValueError("execution spec content.research.maxConcurrency must be positive")
-        raw_lane_concurrency = payload.get("laneConcurrency") or {}
-        if not isinstance(raw_lane_concurrency, Mapping):
-            raise TypeError("execution spec content.research.laneConcurrency must be an object")
-        lane_concurrency = tuple(
-            sorted(
-                (
-                    ContentType(str(key)),
-                    _non_negative_int(raw_lane_concurrency, str(key)),
-                )
-                for key in raw_lane_concurrency
-            )
-        )
         raw_ai = payload.get("allowAiImages")
         if not isinstance(raw_ai, bool):
             raise TypeError("execution spec content.research.allowAiImages must be boolean")
@@ -237,8 +234,6 @@ class ResearchPolicy:
             )
         return cls(
             lanes=lanes,
-            max_concurrency=max_concurrency,
-            lane_concurrency=lane_concurrency,
             image_asset_strategy=ImageAssetStrategy(strategy) if strategy else None,
             image_count_policy=ImageCountPolicy(count_policy) if count_policy else None,
             minimum_publishable_images_per_target=minimum_publishable_images,
@@ -250,12 +245,6 @@ class ResearchPolicy:
             "lanes": [lane.value for lane in self.lanes],
             "allowAiImages": self.allow_ai_images,
         }
-        if self.max_concurrency is not None:
-            payload["maxConcurrency"] = self.max_concurrency
-        if self.lane_concurrency:
-            payload["laneConcurrency"] = {
-                lane.value: count for lane, count in self.lane_concurrency
-            }
         if self.image_asset_strategy:
             payload["imageAssetStrategy"] = self.image_asset_strategy.value
         if self.image_count_policy:
@@ -275,6 +264,8 @@ class ExecutionContent:
     quotas: ContentQuotas
     angles: tuple[str, ...]
     audiences: tuple[str, ...]
+    work_units: tuple[dict[str, Any], ...]
+    work_unit_exclusions: tuple[dict[str, Any], ...]
 
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "ExecutionContent":
@@ -288,6 +279,10 @@ class ExecutionContent:
             quotas=ContentQuotas.from_mapping(_object(payload, "quotas")),
             angles=_strings(payload.get("angles"), field="content.angles"),
             audiences=_strings(payload.get("audiences"), field="content.audiences"),
+            work_units=validate_frozen_work_units(payload.get("workUnits")),
+            work_unit_exclusions=validate_frozen_work_unit_exclusions(
+                payload.get("workUnitExclusions")
+            ),
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -301,6 +296,12 @@ class ExecutionContent:
             payload["angles"] = list(self.angles)
         if self.audiences:
             payload["audiences"] = list(self.audiences)
+        if self.work_units:
+            payload["workUnits"] = [dict(row) for row in self.work_units]
+        if self.work_unit_exclusions:
+            payload["workUnitExclusions"] = [
+                dict(row) for row in self.work_unit_exclusions
+            ]
         return payload
 
 
@@ -469,33 +470,56 @@ class ExecutionSpec:
                     + ", ".join(missing)
                 )
         objects_per_target = self.content.quotas.for_type(positive_carriers[0])
-        expected_object_count = target_count * objects_per_target
+        work_units = self.content.work_units
+        if work_units:
+            if positive_carriers[0] not in {ContentType.IMAGE, ContentType.VIDEO}:
+                raise ValueError("content.workUnits are supported only for media carriers")
+            if any(
+                str(row.get("carrier") or "") != positive_carriers[0].value
+                for row in work_units
+            ):
+                raise ValueError("content.workUnits carrier must match content.carriers")
+            unit_target_names = {
+                str((row.get("coverageTarget") or {}).get("name") or "").strip()
+                for row in work_units
+            }
+            if unit_target_names != {
+                target.name for target in self.scope.coverage_targets
+            }:
+                raise ValueError(
+                    "content.workUnits must exactly cover scope.coverageTargets"
+                )
+        expected_object_count = (
+            len(work_units) if work_units else target_count * objects_per_target
+        )
         if self.execution_policy.target_object_count != expected_object_count:
             raise ValueError(
                 "executionPolicy.targetObjectCount must equal the frozen quota total"
             )
-        if self.acceptance.min_entities != self.execution_policy.approved_quota:
+        expected_min_entities = (
+            target_count if work_units else self.execution_policy.approved_quota
+        )
+        if self.acceptance.min_entities != expected_min_entities:
             raise ValueError(
-                "acceptance.minEntities must equal executionPolicy.approvedQuota"
+                "acceptance.minEntities must equal the frozen coverage target count"
             )
-        if self.acceptance.min_posts_per_entity != objects_per_target:
+        expected_min_posts = 0 if work_units else objects_per_target
+        if self.acceptance.min_posts_per_entity != expected_min_posts:
             raise ValueError(
-                "acceptance.minPostsPerEntity must equal the per-target quota total"
+                "acceptance.minPostsPerEntity does not match the work-unit mode"
+            )
+        if (
+            not work_units
+            and self.execution_policy.approved_quota > target_count
+        ):
+            raise ValueError(
+                "non-work-unit execution approvedQuota cannot exceed "
+                "targetEntityCount"
             )
         if self.queue_policy.heartbeat_seconds >= self.queue_policy.lease_seconds:
             raise ValueError(
                 "queuePolicy.heartbeatSeconds must be less than leaseSeconds"
             )
-        scale_pool_required = requires_scale_source_pool(self.execution_id)
-        scale_pool_allowed = allows_scale_source_pool(self.execution_id)
-        has_scale_pool = self.execution_policy.scale_source_pool is not None
-        if (scale_pool_required and not has_scale_pool) or (
-            has_scale_pool and not scale_pool_allowed
-        ):
-            raise ValueError(
-                "DATA.SOURCE.POOL_SHORTFALL: executionPolicy source pool intent drift"
-            )
-
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "ExecutionSpec":
         return cls(

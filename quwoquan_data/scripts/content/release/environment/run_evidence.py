@@ -47,7 +47,9 @@ def create_run(
     if environment not in valid_environments:
         raise SystemExit(f"[ship] environment 非法：{environment}")
     run = output_root / "env" / environment / "runs" / "data-release" / release_id / run_id
-    if run.exists():
+    # create-once 的对象是 run 记录本身，不是承载它的目录：research 校验会把 runtime
+    # proof 预存进同一 run 目录再创建 run，把目录在场当成 run 已存在会让这条链无法开始。
+    if (run / "run.json").exists():
         raise SystemExit(f"[ship] append-only run 已存在：{run}")
     write_release_evidence(
         run / "run.json",

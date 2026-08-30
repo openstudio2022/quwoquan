@@ -29,6 +29,8 @@ import re
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
@@ -129,10 +131,8 @@ _REGRESSION_FACES = (
 
 
 # 批次级来源单元可读命名（spec §3）：{实体名}__{sourceKind}__{hash8}。
-# 阶段树完整性（opt-in，--require-stage-tree）：每类对象必须物化的过程阶段。
-# 内容对象：1.download 证据快照 → 5.review 全链；实体对象：补 2.quality/4.draft/5.review。
-_POST_REQUIRED_STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
-_ENTITY_REQUIRED_STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
+# 阶段树完整性（opt-in，--require-stage-tree）：内容对象与实体对象共享同一阶段骨架，
+# 取值来自 core.paths.OBJECT_STAGES。
 
 
 def _orphan_post_object_issues(execution_id: str, execution: Path) -> list[str]:
@@ -225,7 +225,6 @@ def stage_completeness_issues(execution: Path) -> list[str]:
             has_gallery = (obj / "gallery.md").exists()
             if not (manifest_present or has_article or has_gallery):
                 continue
-            required = _POST_REQUIRED_STAGES
             carrier = _post_object_carrier(obj)
             is_image = carrier == "image"
             is_video = carrier == "video"
@@ -240,10 +239,9 @@ def stage_completeness_issues(execution: Path) -> list[str]:
         elif parts and parts[0] == "entities":
             if not ((obj / "page.md").exists() or (obj / "_entity.json").exists()):
                 continue
-            required = _ENTITY_REQUIRED_STAGES
         else:
             continue
-        missing = [stage for stage in required if not (obj / stage).is_dir()]
+        missing = [stage for stage in OBJECT_STAGES if not (obj / stage).is_dir()]
         if missing:
             issues.append(f"{rel}: 阶段树不完整，缺过程阶段 {missing}（须物化 1-5 全链证据）")
     return issues

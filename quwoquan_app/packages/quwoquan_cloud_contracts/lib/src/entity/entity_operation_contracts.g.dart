@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
+// ContractGraph SHA256: cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f
 
 library;
 
@@ -140,7 +140,8 @@ enum HomepageStructuredFactField {
     return switch (value) {
       "openingHours" => HomepageStructuredFactField.openinghours,
       "ticketPriceRange" => HomepageStructuredFactField.ticketpricerange,
-      "recommendedDurationMinutes" => HomepageStructuredFactField.recommendeddurationminutes,
+      "recommendedDurationMinutes" =>
+        HomepageStructuredFactField.recommendeddurationminutes,
       "bestSeasonTagRefs" => HomepageStructuredFactField.bestseasontagrefs,
       "altitudeMeters" => HomepageStructuredFactField.altitudemeters,
       "officialWebsite" => HomepageStructuredFactField.officialwebsite,
@@ -158,11 +159,15 @@ enum HomepageStructuredFactSourceClass {
 
   final String wireName;
 
-  static HomepageStructuredFactSourceClass fromWire(Object? value, String path) {
+  static HomepageStructuredFactSourceClass fromWire(
+    Object? value,
+    String path,
+  ) {
     return switch (value) {
       "encyclopedia" => HomepageStructuredFactSourceClass.encyclopedia,
       "official_site" => HomepageStructuredFactSourceClass.officialSite,
-      "government_tourism" => HomepageStructuredFactSourceClass.governmentTourism,
+      "government_tourism" =>
+        HomepageStructuredFactSourceClass.governmentTourism,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -254,26 +259,114 @@ final class EntityImpactItem {
   final IntersectionPropagationPath? propagationPath;
   final String iconKey;
 
-  factory EntityImpactItem.fromWire(Map<String, Object?> map, [String path = "EntityImpactItem"]) {
-    _rejectUnknownFields(map, const <String>{"helpType", "action", "intersectionDimension", "tagRef", "source", "count", "primaryText", "subtitleText", "impactId", "primarySpans", "sampleVisuals", "representativeActor", "actionHints", "countTarget", "evidenceSnapshotId", "countObjectKind", "propagationPath", "iconKey"}, path);
+  factory EntityImpactItem.fromWire(
+    Map<String, Object?> map, [
+    String path = "EntityImpactItem",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "helpType",
+      "action",
+      "intersectionDimension",
+      "tagRef",
+      "source",
+      "count",
+      "primaryText",
+      "subtitleText",
+      "impactId",
+      "primarySpans",
+      "sampleVisuals",
+      "representativeActor",
+      "actionHints",
+      "countTarget",
+      "evidenceSnapshotId",
+      "countObjectKind",
+      "propagationPath",
+      "iconKey",
+    }, path);
     return EntityImpactItem(
       helpType: _requiredString(map["helpType"], '$path.helpType'),
       action: _requiredString(map["action"], '$path.action'),
-      intersectionDimension: _requiredString(map["intersectionDimension"], '$path.intersectionDimension'),
+      intersectionDimension: _requiredString(
+        map["intersectionDimension"],
+        '$path.intersectionDimension',
+      ),
       tagRef: _requiredString(map["tagRef"], '$path.tagRef'),
       source: _requiredString(map["source"], '$path.source'),
       count: _requiredInt(map["count"], '$path.count'),
       primaryText: _requiredString(map["primaryText"], '$path.primaryText'),
       subtitleText: _requiredString(map["subtitleText"], '$path.subtitleText'),
       impactId: _requiredString(map["impactId"], '$path.impactId'),
-      primarySpans: List<IntersectionTextSpan>.unmodifiable(_requiredList(map["primarySpans"], '$path.primarySpans').asMap().entries.map((entry) => IntersectionTextSpan.fromWire(_requiredObject(entry.value, '$path.primarySpans' + '[${entry.key}]'), '$path.primarySpans' + '[${entry.key}]'))),
-      sampleVisuals: List<IntersectionVisual>.unmodifiable(_requiredList(map["sampleVisuals"], '$path.sampleVisuals').asMap().entries.map((entry) => IntersectionVisual.fromWire(_requiredObject(entry.value, '$path.sampleVisuals' + '[${entry.key}]'), '$path.sampleVisuals' + '[${entry.key}]'))),
-      representativeActor: map["representativeActor"] == null ? null : IntersectionRepresentativeActor.fromWire(_requiredObject(map["representativeActor"], '$path.representativeActor'), '$path.representativeActor'),
-      actionHints: List<IntersectionActionHint>.unmodifiable(_requiredList(map["actionHints"], '$path.actionHints').asMap().entries.map((entry) => IntersectionActionHint.fromWire(_requiredObject(entry.value, '$path.actionHints' + '[${entry.key}]'), '$path.actionHints' + '[${entry.key}]'))),
-      countTarget: map["countTarget"] == null ? null : IntersectionTarget.fromWire(_requiredObject(map["countTarget"], '$path.countTarget'), '$path.countTarget'),
-      evidenceSnapshotId: _requiredString(map["evidenceSnapshotId"], '$path.evidenceSnapshotId'),
-      countObjectKind: _requiredString(map["countObjectKind"], '$path.countObjectKind'),
-      propagationPath: map["propagationPath"] == null ? null : IntersectionPropagationPath.fromWire(_requiredObject(map["propagationPath"], '$path.propagationPath'), '$path.propagationPath'),
+      primarySpans: List<IntersectionTextSpan>.unmodifiable(
+        _requiredList(
+          map["primarySpans"],
+          '$path.primarySpans',
+        ).asMap().entries.map(
+          (entry) => IntersectionTextSpan.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.primarySpans' + '[${entry.key}]',
+            ),
+            '$path.primarySpans' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      sampleVisuals: List<IntersectionVisual>.unmodifiable(
+        _requiredList(
+          map["sampleVisuals"],
+          '$path.sampleVisuals',
+        ).asMap().entries.map(
+          (entry) => IntersectionVisual.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.sampleVisuals' + '[${entry.key}]',
+            ),
+            '$path.sampleVisuals' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      representativeActor: map["representativeActor"] == null
+          ? null
+          : IntersectionRepresentativeActor.fromWire(
+              _requiredObject(
+                map["representativeActor"],
+                '$path.representativeActor',
+              ),
+              '$path.representativeActor',
+            ),
+      actionHints: List<IntersectionActionHint>.unmodifiable(
+        _requiredList(
+          map["actionHints"],
+          '$path.actionHints',
+        ).asMap().entries.map(
+          (entry) => IntersectionActionHint.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.actionHints' + '[${entry.key}]',
+            ),
+            '$path.actionHints' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      countTarget: map["countTarget"] == null
+          ? null
+          : IntersectionTarget.fromWire(
+              _requiredObject(map["countTarget"], '$path.countTarget'),
+              '$path.countTarget',
+            ),
+      evidenceSnapshotId: _requiredString(
+        map["evidenceSnapshotId"],
+        '$path.evidenceSnapshotId',
+      ),
+      countObjectKind: _requiredString(
+        map["countObjectKind"],
+        '$path.countObjectKind',
+      ),
+      propagationPath: map["propagationPath"] == null
+          ? null
+          : IntersectionPropagationPath.fromWire(
+              _requiredObject(map["propagationPath"], '$path.propagationPath'),
+              '$path.propagationPath',
+            ),
       iconKey: _requiredString(map["iconKey"], '$path.iconKey'),
     );
   }
@@ -288,10 +381,17 @@ final class EntityImpactItem {
     "primaryText": primaryText,
     "subtitleText": subtitleText,
     "impactId": impactId,
-    "primarySpans": primarySpans.map((value) => value.toWire()).toList(growable: false),
-    "sampleVisuals": sampleVisuals.map((value) => value.toWire()).toList(growable: false),
-    if (representativeActor != null) "representativeActor": representativeActor!.toWire(),
-    "actionHints": actionHints.map((value) => value.toWire()).toList(growable: false),
+    "primarySpans": primarySpans
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    "sampleVisuals": sampleVisuals
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    if (representativeActor != null)
+      "representativeActor": representativeActor!.toWire(),
+    "actionHints": actionHints
+        .map((value) => value.toWire())
+        .toList(growable: false),
     if (countTarget != null) "countTarget": countTarget!.toWire(),
     "evidenceSnapshotId": evidenceSnapshotId,
     "countObjectKind": countObjectKind,
@@ -311,12 +411,26 @@ final class EntityImpactSummary {
   final int total;
   final List<EntityImpactItem> items;
 
-  factory EntityImpactSummary.fromWire(Map<String, Object?> map, [String path = "EntityImpactSummary"]) {
-    _rejectUnknownFields(map, const <String>{"homepageId", "total", "items"}, path);
+  factory EntityImpactSummary.fromWire(
+    Map<String, Object?> map, [
+    String path = "EntityImpactSummary",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "homepageId",
+      "total",
+      "items",
+    }, path);
     return EntityImpactSummary(
       homepageId: _requiredString(map["homepageId"], '$path.homepageId'),
       total: _requiredInt(map["total"], '$path.total'),
-      items: List<EntityImpactItem>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => EntityImpactItem.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      items: List<EntityImpactItem>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => EntityImpactItem.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -348,17 +462,45 @@ final class HomepageClaimRequestView {
   final DateTime createdAt;
   final DateTime? reviewedAt;
 
-  factory HomepageClaimRequestView.fromWire(Map<String, Object?> map, [String path = "HomepageClaimRequestView"]) {
-    _rejectUnknownFields(map, const <String>{"claimRequestId", "homepageId", "requesterPersonaId", "claimTier", "status", "reviewNote", "createdAt", "reviewedAt"}, path);
+  factory HomepageClaimRequestView.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageClaimRequestView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "claimRequestId",
+      "homepageId",
+      "requesterPersonaId",
+      "claimTier",
+      "status",
+      "reviewNote",
+      "createdAt",
+      "reviewedAt",
+    }, path);
     return HomepageClaimRequestView(
-      claimRequestId: _requiredNonBlankString(map["claimRequestId"], '$path.claimRequestId'),
-      homepageId: _requiredNonBlankString(map["homepageId"], '$path.homepageId'),
-      requesterPersonaId: _requiredNonBlankString(map["requesterPersonaId"], '$path.requesterPersonaId'),
-      claimTier: HomepageClaimTier.fromWire(map["claimTier"], '$path.claimTier'),
+      claimRequestId: _requiredNonBlankString(
+        map["claimRequestId"],
+        '$path.claimRequestId',
+      ),
+      homepageId: _requiredNonBlankString(
+        map["homepageId"],
+        '$path.homepageId',
+      ),
+      requesterPersonaId: _requiredNonBlankString(
+        map["requesterPersonaId"],
+        '$path.requesterPersonaId',
+      ),
+      claimTier: HomepageClaimTier.fromWire(
+        map["claimTier"],
+        '$path.claimTier',
+      ),
       status: HomepageClaimReviewStatus.fromWire(map["status"], '$path.status'),
-      reviewNote: map["reviewNote"] == null ? null : _requiredString(map["reviewNote"], '$path.reviewNote'),
+      reviewNote: map["reviewNote"] == null
+          ? null
+          : _requiredString(map["reviewNote"], '$path.reviewNote'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
-      reviewedAt: map["reviewedAt"] == null ? null : _requiredTimestamp(map["reviewedAt"], '$path.reviewedAt'),
+      reviewedAt: map["reviewedAt"] == null
+          ? null
+          : _requiredTimestamp(map["reviewedAt"], '$path.reviewedAt'),
     );
   }
 
@@ -395,17 +537,52 @@ final class HomepageContentPreview {
   final int likeCount;
   final List<IntersectionReason>? intersectionReasons;
 
-  factory HomepageContentPreview.fromWire(Map<String, Object?> map, [String path = "HomepageContentPreview"]) {
-    _rejectUnknownFields(map, const <String>{"postId", "title", "summary", "contentType", "coverUrl", "authorName", "likeCount", "intersectionReasons"}, path);
+  factory HomepageContentPreview.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageContentPreview",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "postId",
+      "title",
+      "summary",
+      "contentType",
+      "coverUrl",
+      "authorName",
+      "likeCount",
+      "intersectionReasons",
+    }, path);
     return HomepageContentPreview(
       postId: _requiredString(map["postId"], '$path.postId'),
       title: _requiredString(map["title"], '$path.title'),
-      summary: map["summary"] == null ? null : _requiredString(map["summary"], '$path.summary'),
-      contentType: map["contentType"] == null ? null : _requiredString(map["contentType"], '$path.contentType'),
-      coverUrl: map["coverUrl"] == null ? null : _requiredString(map["coverUrl"], '$path.coverUrl'),
-      authorName: map["authorName"] == null ? null : _requiredString(map["authorName"], '$path.authorName'),
+      summary: map["summary"] == null
+          ? null
+          : _requiredString(map["summary"], '$path.summary'),
+      contentType: map["contentType"] == null
+          ? null
+          : _requiredString(map["contentType"], '$path.contentType'),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      authorName: map["authorName"] == null
+          ? null
+          : _requiredString(map["authorName"], '$path.authorName'),
       likeCount: _requiredInt(map["likeCount"], '$path.likeCount'),
-      intersectionReasons: map["intersectionReasons"] == null ? null : List<IntersectionReason>.unmodifiable(_requiredList(map["intersectionReasons"], '$path.intersectionReasons').asMap().entries.map((entry) => IntersectionReason.fromWire(_requiredObject(entry.value, '$path.intersectionReasons' + '[${entry.key}]'), '$path.intersectionReasons' + '[${entry.key}]'))),
+      intersectionReasons: map["intersectionReasons"] == null
+          ? null
+          : List<IntersectionReason>.unmodifiable(
+              _requiredList(
+                map["intersectionReasons"],
+                '$path.intersectionReasons',
+              ).asMap().entries.map(
+                (entry) => IntersectionReason.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.intersectionReasons' + '[${entry.key}]',
+                  ),
+                  '$path.intersectionReasons' + '[${entry.key}]',
+                ),
+              ),
+            ),
     );
   }
 
@@ -417,7 +594,10 @@ final class HomepageContentPreview {
     if (coverUrl != null) "coverUrl": coverUrl!,
     if (authorName != null) "authorName": authorName!,
     "likeCount": likeCount,
-    if (intersectionReasons != null) "intersectionReasons": intersectionReasons!.map((value) => value.toWire()).toList(growable: false),
+    if (intersectionReasons != null)
+      "intersectionReasons": intersectionReasons!
+          .map((value) => value.toWire())
+          .toList(growable: false),
   };
 }
 
@@ -431,6 +611,8 @@ final class HomepageDetailView {
     required this.claimStatus,
     required this.categoryTags,
     this.coverUrl,
+    this.coverAssetId,
+    this.coverAccessMode,
     this.address,
     this.city,
     this.location,
@@ -466,6 +648,8 @@ final class HomepageDetailView {
   final String claimStatus;
   final List<String> categoryTags;
   final String? coverUrl;
+  final String? coverAssetId;
+  final MediaDeliveryAccessMode? coverAccessMode;
   final String? address;
   final String? city;
   final HomepageGeoPoint? location;
@@ -492,42 +676,225 @@ final class HomepageDetailView {
   final DateTime? publishedAt;
   final DateTime? offlineAt;
 
-  factory HomepageDetailView.fromWire(Map<String, Object?> map, [String path = "HomepageDetailView"]) {
-    _rejectUnknownFields(map, const <String>{"homepageId", "title", "subtitle", "homepageType", "status", "claimStatus", "categoryTags", "coverUrl", "address", "city", "location", "ownerUserId", "ownerPersonaId", "viewerFollow", "verified", "establishedYear", "averageRating", "ratingCount", "reviewSummary", "contentPreview", "questionPreview", "relatedGroups", "structuredFacts", "relationEdges", "assistantContext", "introductionMarkdown", "introductionAssets", "primarySource", "sourceUrls", "createdAt", "updatedAt", "publishedAt", "offlineAt"}, path);
+  factory HomepageDetailView.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageDetailView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "homepageId",
+      "title",
+      "subtitle",
+      "homepageType",
+      "status",
+      "claimStatus",
+      "categoryTags",
+      "coverUrl",
+      "coverAssetId",
+      "coverAccessMode",
+      "address",
+      "city",
+      "location",
+      "ownerUserId",
+      "ownerPersonaId",
+      "viewerFollow",
+      "verified",
+      "establishedYear",
+      "averageRating",
+      "ratingCount",
+      "reviewSummary",
+      "contentPreview",
+      "questionPreview",
+      "relatedGroups",
+      "structuredFacts",
+      "relationEdges",
+      "assistantContext",
+      "introductionMarkdown",
+      "introductionAssets",
+      "primarySource",
+      "sourceUrls",
+      "createdAt",
+      "updatedAt",
+      "publishedAt",
+      "offlineAt",
+    }, path);
     return HomepageDetailView(
       homepageId: _requiredString(map["homepageId"], '$path.homepageId'),
       title: _requiredString(map["title"], '$path.title'),
-      subtitle: map["subtitle"] == null ? null : _requiredString(map["subtitle"], '$path.subtitle'),
+      subtitle: map["subtitle"] == null
+          ? null
+          : _requiredString(map["subtitle"], '$path.subtitle'),
       homepageType: _requiredString(map["homepageType"], '$path.homepageType'),
       status: _requiredString(map["status"], '$path.status'),
       claimStatus: _requiredString(map["claimStatus"], '$path.claimStatus'),
-      categoryTags: List<String>.unmodifiable(_requiredList(map["categoryTags"], '$path.categoryTags').asMap().entries.map((entry) => _requiredString(entry.value, '$path.categoryTags' + '[${entry.key}]'))),
-      coverUrl: map["coverUrl"] == null ? null : _requiredString(map["coverUrl"], '$path.coverUrl'),
-      address: map["address"] == null ? null : _requiredString(map["address"], '$path.address'),
-      city: map["city"] == null ? null : _requiredString(map["city"], '$path.city'),
-      location: map["location"] == null ? null : HomepageGeoPoint.fromWire(_requiredObject(map["location"], '$path.location'), '$path.location'),
-      ownerUserId: map["ownerUserId"] == null ? null : _requiredString(map["ownerUserId"], '$path.ownerUserId'),
-      ownerPersonaId: map["ownerPersonaId"] == null ? null : _requiredString(map["ownerPersonaId"], '$path.ownerPersonaId'),
-      viewerFollow: HomepageViewerFollowSlice.fromWire(_requiredObject(map["viewerFollow"], '$path.viewerFollow'), '$path.viewerFollow'),
+      categoryTags: List<String>.unmodifiable(
+        _requiredList(
+          map["categoryTags"],
+          '$path.categoryTags',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.categoryTags' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      coverAssetId: map["coverAssetId"] == null
+          ? null
+          : _requiredString(map["coverAssetId"], '$path.coverAssetId'),
+      coverAccessMode: map["coverAccessMode"] == null
+          ? null
+          : MediaDeliveryAccessMode.fromWire(
+              map["coverAccessMode"],
+              '$path.coverAccessMode',
+            ),
+      address: map["address"] == null
+          ? null
+          : _requiredString(map["address"], '$path.address'),
+      city: map["city"] == null
+          ? null
+          : _requiredString(map["city"], '$path.city'),
+      location: map["location"] == null
+          ? null
+          : HomepageGeoPoint.fromWire(
+              _requiredObject(map["location"], '$path.location'),
+              '$path.location',
+            ),
+      ownerUserId: map["ownerUserId"] == null
+          ? null
+          : _requiredString(map["ownerUserId"], '$path.ownerUserId'),
+      ownerPersonaId: map["ownerPersonaId"] == null
+          ? null
+          : _requiredString(map["ownerPersonaId"], '$path.ownerPersonaId'),
+      viewerFollow: HomepageViewerFollowSlice.fromWire(
+        _requiredObject(map["viewerFollow"], '$path.viewerFollow'),
+        '$path.viewerFollow',
+      ),
       verified: _requiredBool(map["verified"], '$path.verified'),
-      establishedYear: map["establishedYear"] == null ? null : _requiredInt(map["establishedYear"], '$path.establishedYear'),
-      averageRating: map["averageRating"] == null ? null : _requiredDouble(map["averageRating"], '$path.averageRating'),
+      establishedYear: map["establishedYear"] == null
+          ? null
+          : _requiredInt(map["establishedYear"], '$path.establishedYear'),
+      averageRating: map["averageRating"] == null
+          ? null
+          : _requiredDouble(map["averageRating"], '$path.averageRating'),
       ratingCount: _requiredInt(map["ratingCount"], '$path.ratingCount'),
-      reviewSummary: map["reviewSummary"] == null ? null : HomepageReviewSummaryView.fromWire(_requiredObject(map["reviewSummary"], '$path.reviewSummary'), '$path.reviewSummary'),
-      contentPreview: List<HomepageContentPreview>.unmodifiable(_requiredList(map["contentPreview"], '$path.contentPreview').asMap().entries.map((entry) => HomepageContentPreview.fromWire(_requiredObject(entry.value, '$path.contentPreview' + '[${entry.key}]'), '$path.contentPreview' + '[${entry.key}]'))),
-      questionPreview: List<HomepageQuestionPreview>.unmodifiable(_requiredList(map["questionPreview"], '$path.questionPreview').asMap().entries.map((entry) => HomepageQuestionPreview.fromWire(_requiredObject(entry.value, '$path.questionPreview' + '[${entry.key}]'), '$path.questionPreview' + '[${entry.key}]'))),
-      relatedGroups: List<HomepageRelatedGroupSummary>.unmodifiable(_requiredList(map["relatedGroups"], '$path.relatedGroups').asMap().entries.map((entry) => HomepageRelatedGroupSummary.fromWire(_requiredObject(entry.value, '$path.relatedGroups' + '[${entry.key}]'), '$path.relatedGroups' + '[${entry.key}]'))),
-      structuredFacts: map["structuredFacts"] == null ? null : HomepageStructuredFactsView.fromWire(_requiredObject(map["structuredFacts"], '$path.structuredFacts'), '$path.structuredFacts'),
-      relationEdges: List<ObjectRelationEdge>.unmodifiable(_requiredList(map["relationEdges"], '$path.relationEdges').asMap().entries.map((entry) => ObjectRelationEdge.fromWire(_requiredObject(entry.value, '$path.relationEdges' + '[${entry.key}]'), '$path.relationEdges' + '[${entry.key}]'))),
-      assistantContext: map["assistantContext"] == null ? null : _requiredObject(map["assistantContext"], '$path.assistantContext'),
-      introductionMarkdown: map["introductionMarkdown"] == null ? null : _requiredString(map["introductionMarkdown"], '$path.introductionMarkdown'),
-      introductionAssets: List<HomepageIntroductionAsset>.unmodifiable(_requiredList(map["introductionAssets"], '$path.introductionAssets').asMap().entries.map((entry) => HomepageIntroductionAsset.fromWire(_requiredObject(entry.value, '$path.introductionAssets' + '[${entry.key}]'), '$path.introductionAssets' + '[${entry.key}]'))),
-      primarySource: map["primarySource"] == null ? null : HomepageSource.fromWire(_requiredObject(map["primarySource"], '$path.primarySource'), '$path.primarySource'),
-      sourceUrls: List<String>.unmodifiable(_requiredList(map["sourceUrls"], '$path.sourceUrls').asMap().entries.map((entry) => _requiredString(entry.value, '$path.sourceUrls' + '[${entry.key}]'))),
+      reviewSummary: map["reviewSummary"] == null
+          ? null
+          : HomepageReviewSummaryView.fromWire(
+              _requiredObject(map["reviewSummary"], '$path.reviewSummary'),
+              '$path.reviewSummary',
+            ),
+      contentPreview: List<HomepageContentPreview>.unmodifiable(
+        _requiredList(
+          map["contentPreview"],
+          '$path.contentPreview',
+        ).asMap().entries.map(
+          (entry) => HomepageContentPreview.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.contentPreview' + '[${entry.key}]',
+            ),
+            '$path.contentPreview' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      questionPreview: List<HomepageQuestionPreview>.unmodifiable(
+        _requiredList(
+          map["questionPreview"],
+          '$path.questionPreview',
+        ).asMap().entries.map(
+          (entry) => HomepageQuestionPreview.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.questionPreview' + '[${entry.key}]',
+            ),
+            '$path.questionPreview' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      relatedGroups: List<HomepageRelatedGroupSummary>.unmodifiable(
+        _requiredList(
+          map["relatedGroups"],
+          '$path.relatedGroups',
+        ).asMap().entries.map(
+          (entry) => HomepageRelatedGroupSummary.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.relatedGroups' + '[${entry.key}]',
+            ),
+            '$path.relatedGroups' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      structuredFacts: map["structuredFacts"] == null
+          ? null
+          : HomepageStructuredFactsView.fromWire(
+              _requiredObject(map["structuredFacts"], '$path.structuredFacts'),
+              '$path.structuredFacts',
+            ),
+      relationEdges: List<ObjectRelationEdge>.unmodifiable(
+        _requiredList(
+          map["relationEdges"],
+          '$path.relationEdges',
+        ).asMap().entries.map(
+          (entry) => ObjectRelationEdge.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.relationEdges' + '[${entry.key}]',
+            ),
+            '$path.relationEdges' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      assistantContext: map["assistantContext"] == null
+          ? null
+          : _requiredObject(map["assistantContext"], '$path.assistantContext'),
+      introductionMarkdown: map["introductionMarkdown"] == null
+          ? null
+          : _requiredString(
+              map["introductionMarkdown"],
+              '$path.introductionMarkdown',
+            ),
+      introductionAssets: List<HomepageIntroductionAsset>.unmodifiable(
+        _requiredList(
+          map["introductionAssets"],
+          '$path.introductionAssets',
+        ).asMap().entries.map(
+          (entry) => HomepageIntroductionAsset.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.introductionAssets' + '[${entry.key}]',
+            ),
+            '$path.introductionAssets' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      primarySource: map["primarySource"] == null
+          ? null
+          : HomepageSource.fromWire(
+              _requiredObject(map["primarySource"], '$path.primarySource'),
+              '$path.primarySource',
+            ),
+      sourceUrls: List<String>.unmodifiable(
+        _requiredList(
+          map["sourceUrls"],
+          '$path.sourceUrls',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.sourceUrls' + '[${entry.key}]',
+          ),
+        ),
+      ),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
-      publishedAt: map["publishedAt"] == null ? null : _requiredTimestamp(map["publishedAt"], '$path.publishedAt'),
-      offlineAt: map["offlineAt"] == null ? null : _requiredTimestamp(map["offlineAt"], '$path.offlineAt'),
+      publishedAt: map["publishedAt"] == null
+          ? null
+          : _requiredTimestamp(map["publishedAt"], '$path.publishedAt'),
+      offlineAt: map["offlineAt"] == null
+          ? null
+          : _requiredTimestamp(map["offlineAt"], '$path.offlineAt'),
     );
   }
 
@@ -540,6 +907,8 @@ final class HomepageDetailView {
     "claimStatus": claimStatus,
     "categoryTags": categoryTags.map((value) => value).toList(growable: false),
     if (coverUrl != null) "coverUrl": coverUrl!,
+    if (coverAssetId != null) "coverAssetId": coverAssetId!,
+    if (coverAccessMode != null) "coverAccessMode": coverAccessMode!.wireName,
     if (address != null) "address": address!,
     if (city != null) "city": city!,
     if (location != null) "location": location!.toWire(),
@@ -551,19 +920,31 @@ final class HomepageDetailView {
     if (averageRating != null) "averageRating": averageRating!,
     "ratingCount": ratingCount,
     if (reviewSummary != null) "reviewSummary": reviewSummary!.toWire(),
-    "contentPreview": contentPreview.map((value) => value.toWire()).toList(growable: false),
-    "questionPreview": questionPreview.map((value) => value.toWire()).toList(growable: false),
-    "relatedGroups": relatedGroups.map((value) => value.toWire()).toList(growable: false),
+    "contentPreview": contentPreview
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    "questionPreview": questionPreview
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    "relatedGroups": relatedGroups
+        .map((value) => value.toWire())
+        .toList(growable: false),
     if (structuredFacts != null) "structuredFacts": structuredFacts!.toWire(),
-    "relationEdges": relationEdges.map((value) => value.toWire()).toList(growable: false),
+    "relationEdges": relationEdges
+        .map((value) => value.toWire())
+        .toList(growable: false),
     if (assistantContext != null) "assistantContext": assistantContext!,
-    if (introductionMarkdown != null) "introductionMarkdown": introductionMarkdown!,
-    "introductionAssets": introductionAssets.map((value) => value.toWire()).toList(growable: false),
+    if (introductionMarkdown != null)
+      "introductionMarkdown": introductionMarkdown!,
+    "introductionAssets": introductionAssets
+        .map((value) => value.toWire())
+        .toList(growable: false),
     if (primarySource != null) "primarySource": primarySource!.toWire(),
     "sourceUrls": sourceUrls.map((value) => value).toList(growable: false),
     "createdAt": createdAt.toUtc().toIso8601String(),
     "updatedAt": updatedAt.toUtc().toIso8601String(),
-    if (publishedAt != null) "publishedAt": publishedAt!.toUtc().toIso8601String(),
+    if (publishedAt != null)
+      "publishedAt": publishedAt!.toUtc().toIso8601String(),
     if (offlineAt != null) "offlineAt": offlineAt!.toUtc().toIso8601String(),
   };
 }
@@ -577,7 +958,10 @@ final class HomepageDurationRange {
   final int minMinutes;
   final int maxMinutes;
 
-  factory HomepageDurationRange.fromWire(Map<String, Object?> map, [String path = "HomepageDurationRange"]) {
+  factory HomepageDurationRange.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageDurationRange",
+  ]) {
     _rejectUnknownFields(map, const <String>{"minMinutes", "maxMinutes"}, path);
     return HomepageDurationRange(
       minMinutes: _requiredInt(map["minMinutes"], '$path.minMinutes'),
@@ -610,16 +994,42 @@ final class HomepageFactSource {
   final double confidence;
   final List<String>? conflictsWithSourceIds;
 
-  factory HomepageFactSource.fromWire(Map<String, Object?> map, [String path = "HomepageFactSource"]) {
-    _rejectUnknownFields(map, const <String>{"field", "sourceId", "sourceClass", "sourceUrl", "observedAt", "confidence", "conflictsWithSourceIds"}, path);
+  factory HomepageFactSource.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageFactSource",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "field",
+      "sourceId",
+      "sourceClass",
+      "sourceUrl",
+      "observedAt",
+      "confidence",
+      "conflictsWithSourceIds",
+    }, path);
     return HomepageFactSource(
       field: HomepageStructuredFactField.fromWire(map["field"], '$path.field'),
       sourceId: _requiredString(map["sourceId"], '$path.sourceId'),
-      sourceClass: HomepageStructuredFactSourceClass.fromWire(map["sourceClass"], '$path.sourceClass'),
+      sourceClass: HomepageStructuredFactSourceClass.fromWire(
+        map["sourceClass"],
+        '$path.sourceClass',
+      ),
       sourceUrl: _requiredString(map["sourceUrl"], '$path.sourceUrl'),
       observedAt: _requiredTimestamp(map["observedAt"], '$path.observedAt'),
       confidence: _requiredDouble(map["confidence"], '$path.confidence'),
-      conflictsWithSourceIds: map["conflictsWithSourceIds"] == null ? null : List<String>.unmodifiable(_requiredList(map["conflictsWithSourceIds"], '$path.conflictsWithSourceIds').asMap().entries.map((entry) => _requiredString(entry.value, '$path.conflictsWithSourceIds' + '[${entry.key}]'))),
+      conflictsWithSourceIds: map["conflictsWithSourceIds"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["conflictsWithSourceIds"],
+                '$path.conflictsWithSourceIds',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.conflictsWithSourceIds' + '[${entry.key}]',
+                ),
+              ),
+            ),
     );
   }
 
@@ -630,20 +1040,23 @@ final class HomepageFactSource {
     "sourceUrl": sourceUrl,
     "observedAt": observedAt.toUtc().toIso8601String(),
     "confidence": confidence,
-    if (conflictsWithSourceIds != null) "conflictsWithSourceIds": conflictsWithSourceIds!.map((value) => value).toList(growable: false),
+    if (conflictsWithSourceIds != null)
+      "conflictsWithSourceIds": conflictsWithSourceIds!
+          .map((value) => value)
+          .toList(growable: false),
   };
 }
 
 final class HomepageGeoPoint {
-  const HomepageGeoPoint({
-    required this.latitude,
-    required this.longitude,
-  });
+  const HomepageGeoPoint({required this.latitude, required this.longitude});
 
   final double latitude;
   final double longitude;
 
-  factory HomepageGeoPoint.fromWire(Map<String, Object?> map, [String path = "HomepageGeoPoint"]) {
+  factory HomepageGeoPoint.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageGeoPoint",
+  ]) {
     _rejectUnknownFields(map, const <String>{"latitude", "longitude"}, path);
     return HomepageGeoPoint(
       latitude: _requiredDouble(map["latitude"], '$path.latitude'),
@@ -663,6 +1076,8 @@ final class HomepageIntroduction {
     required this.displayName,
     required this.homepageType,
     this.coverUrl,
+    this.coverAssetId,
+    this.coverAccessMode,
     required this.summary,
     required this.sections,
     required this.relatedObjects,
@@ -675,6 +1090,8 @@ final class HomepageIntroduction {
   final String displayName;
   final String homepageType;
   final String? coverUrl;
+  final String? coverAssetId;
+  final MediaDeliveryAccessMode? coverAccessMode;
   final String summary;
   final List<HomepageIntroductionSection> sections;
   final List<HomepageRelatedGroupSummary> relatedObjects;
@@ -682,18 +1099,80 @@ final class HomepageIntroduction {
   final List<String> sourceUrls;
   final String updatedAt;
 
-  factory HomepageIntroduction.fromWire(Map<String, Object?> map, [String path = "HomepageIntroduction"]) {
-    _rejectUnknownFields(map, const <String>{"homepageId", "displayName", "homepageType", "coverUrl", "summary", "sections", "relatedObjects", "primarySource", "sourceUrls", "updatedAt"}, path);
+  factory HomepageIntroduction.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageIntroduction",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "homepageId",
+      "displayName",
+      "homepageType",
+      "coverUrl",
+      "coverAssetId",
+      "coverAccessMode",
+      "summary",
+      "sections",
+      "relatedObjects",
+      "primarySource",
+      "sourceUrls",
+      "updatedAt",
+    }, path);
     return HomepageIntroduction(
       homepageId: _requiredString(map["homepageId"], '$path.homepageId'),
       displayName: _requiredString(map["displayName"], '$path.displayName'),
       homepageType: _requiredString(map["homepageType"], '$path.homepageType'),
-      coverUrl: map["coverUrl"] == null ? null : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      coverAssetId: map["coverAssetId"] == null
+          ? null
+          : _requiredString(map["coverAssetId"], '$path.coverAssetId'),
+      coverAccessMode: map["coverAccessMode"] == null
+          ? null
+          : MediaDeliveryAccessMode.fromWire(
+              map["coverAccessMode"],
+              '$path.coverAccessMode',
+            ),
       summary: _requiredString(map["summary"], '$path.summary'),
-      sections: List<HomepageIntroductionSection>.unmodifiable(_requiredList(map["sections"], '$path.sections').asMap().entries.map((entry) => HomepageIntroductionSection.fromWire(_requiredObject(entry.value, '$path.sections' + '[${entry.key}]'), '$path.sections' + '[${entry.key}]'))),
-      relatedObjects: List<HomepageRelatedGroupSummary>.unmodifiable(_requiredList(map["relatedObjects"], '$path.relatedObjects').asMap().entries.map((entry) => HomepageRelatedGroupSummary.fromWire(_requiredObject(entry.value, '$path.relatedObjects' + '[${entry.key}]'), '$path.relatedObjects' + '[${entry.key}]'))),
-      primarySource: map["primarySource"] == null ? null : HomepageSource.fromWire(_requiredObject(map["primarySource"], '$path.primarySource'), '$path.primarySource'),
-      sourceUrls: List<String>.unmodifiable(_requiredList(map["sourceUrls"], '$path.sourceUrls').asMap().entries.map((entry) => _requiredString(entry.value, '$path.sourceUrls' + '[${entry.key}]'))),
+      sections: List<HomepageIntroductionSection>.unmodifiable(
+        _requiredList(map["sections"], '$path.sections').asMap().entries.map(
+          (entry) => HomepageIntroductionSection.fromWire(
+            _requiredObject(entry.value, '$path.sections' + '[${entry.key}]'),
+            '$path.sections' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      relatedObjects: List<HomepageRelatedGroupSummary>.unmodifiable(
+        _requiredList(
+          map["relatedObjects"],
+          '$path.relatedObjects',
+        ).asMap().entries.map(
+          (entry) => HomepageRelatedGroupSummary.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.relatedObjects' + '[${entry.key}]',
+            ),
+            '$path.relatedObjects' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      primarySource: map["primarySource"] == null
+          ? null
+          : HomepageSource.fromWire(
+              _requiredObject(map["primarySource"], '$path.primarySource'),
+              '$path.primarySource',
+            ),
+      sourceUrls: List<String>.unmodifiable(
+        _requiredList(
+          map["sourceUrls"],
+          '$path.sourceUrls',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.sourceUrls' + '[${entry.key}]',
+          ),
+        ),
+      ),
       updatedAt: _requiredString(map["updatedAt"], '$path.updatedAt'),
     );
   }
@@ -703,9 +1182,13 @@ final class HomepageIntroduction {
     "displayName": displayName,
     "homepageType": homepageType,
     if (coverUrl != null) "coverUrl": coverUrl!,
+    if (coverAssetId != null) "coverAssetId": coverAssetId!,
+    if (coverAccessMode != null) "coverAccessMode": coverAccessMode!.wireName,
     "summary": summary,
     "sections": sections.map((value) => value.toWire()).toList(growable: false),
-    "relatedObjects": relatedObjects.map((value) => value.toWire()).toList(growable: false),
+    "relatedObjects": relatedObjects
+        .map((value) => value.toWire())
+        .toList(growable: false),
     if (primarySource != null) "primarySource": primarySource!.toWire(),
     "sourceUrls": sourceUrls.map((value) => value).toList(growable: false),
     "updatedAt": updatedAt,
@@ -716,21 +1199,40 @@ final class HomepageIntroductionAsset {
   const HomepageIntroductionAsset({
     required this.assetId,
     required this.url,
+    this.accessMode,
     this.caption,
     required this.role,
   });
 
   final String assetId;
   final String url;
+  final MediaDeliveryAccessMode? accessMode;
   final String? caption;
   final String role;
 
-  factory HomepageIntroductionAsset.fromWire(Map<String, Object?> map, [String path = "HomepageIntroductionAsset"]) {
-    _rejectUnknownFields(map, const <String>{"assetId", "url", "caption", "role"}, path);
+  factory HomepageIntroductionAsset.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageIntroductionAsset",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "assetId",
+      "url",
+      "accessMode",
+      "caption",
+      "role",
+    }, path);
     return HomepageIntroductionAsset(
       assetId: _requiredString(map["assetId"], '$path.assetId'),
       url: _requiredString(map["url"], '$path.url'),
-      caption: map["caption"] == null ? null : _requiredString(map["caption"], '$path.caption'),
+      accessMode: map["accessMode"] == null
+          ? null
+          : MediaDeliveryAccessMode.fromWire(
+              map["accessMode"],
+              '$path.accessMode',
+            ),
+      caption: map["caption"] == null
+          ? null
+          : _requiredString(map["caption"], '$path.caption'),
       role: _requiredString(map["role"], '$path.role'),
     );
   }
@@ -738,6 +1240,7 @@ final class HomepageIntroductionAsset {
   Map<String, Object?> toWire() => <String, Object?>{
     "assetId": assetId,
     "url": url,
+    if (accessMode != null) "accessMode": accessMode!.wireName,
     if (caption != null) "caption": caption!,
     "role": role,
   };
@@ -758,14 +1261,45 @@ final class HomepageIntroductionSection {
   final List<HomepageIntroductionAsset> assets;
   final List<HomepageIntroductionTimelineItem> timelineItems;
 
-  factory HomepageIntroductionSection.fromWire(Map<String, Object?> map, [String path = "HomepageIntroductionSection"]) {
-    _rejectUnknownFields(map, const <String>{"kind", "title", "bodyMarkdown", "assets", "timelineItems"}, path);
+  factory HomepageIntroductionSection.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageIntroductionSection",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "kind",
+      "title",
+      "bodyMarkdown",
+      "assets",
+      "timelineItems",
+    }, path);
     return HomepageIntroductionSection(
       kind: _requiredString(map["kind"], '$path.kind'),
       title: _requiredString(map["title"], '$path.title'),
-      bodyMarkdown: map["bodyMarkdown"] == null ? null : _requiredString(map["bodyMarkdown"], '$path.bodyMarkdown'),
-      assets: List<HomepageIntroductionAsset>.unmodifiable(_requiredList(map["assets"], '$path.assets').asMap().entries.map((entry) => HomepageIntroductionAsset.fromWire(_requiredObject(entry.value, '$path.assets' + '[${entry.key}]'), '$path.assets' + '[${entry.key}]'))),
-      timelineItems: List<HomepageIntroductionTimelineItem>.unmodifiable(_requiredList(map["timelineItems"], '$path.timelineItems').asMap().entries.map((entry) => HomepageIntroductionTimelineItem.fromWire(_requiredObject(entry.value, '$path.timelineItems' + '[${entry.key}]'), '$path.timelineItems' + '[${entry.key}]'))),
+      bodyMarkdown: map["bodyMarkdown"] == null
+          ? null
+          : _requiredString(map["bodyMarkdown"], '$path.bodyMarkdown'),
+      assets: List<HomepageIntroductionAsset>.unmodifiable(
+        _requiredList(map["assets"], '$path.assets').asMap().entries.map(
+          (entry) => HomepageIntroductionAsset.fromWire(
+            _requiredObject(entry.value, '$path.assets' + '[${entry.key}]'),
+            '$path.assets' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      timelineItems: List<HomepageIntroductionTimelineItem>.unmodifiable(
+        _requiredList(
+          map["timelineItems"],
+          '$path.timelineItems',
+        ).asMap().entries.map(
+          (entry) => HomepageIntroductionTimelineItem.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.timelineItems' + '[${entry.key}]',
+            ),
+            '$path.timelineItems' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
@@ -774,7 +1308,9 @@ final class HomepageIntroductionSection {
     "title": title,
     if (bodyMarkdown != null) "bodyMarkdown": bodyMarkdown!,
     "assets": assets.map((value) => value.toWire()).toList(growable: false),
-    "timelineItems": timelineItems.map((value) => value.toWire()).toList(growable: false),
+    "timelineItems": timelineItems
+        .map((value) => value.toWire())
+        .toList(growable: false),
   };
 }
 
@@ -789,12 +1325,21 @@ final class HomepageIntroductionTimelineItem {
   final String text;
   final String? assetUrl;
 
-  factory HomepageIntroductionTimelineItem.fromWire(Map<String, Object?> map, [String path = "HomepageIntroductionTimelineItem"]) {
-    _rejectUnknownFields(map, const <String>{"dateLabel", "text", "assetUrl"}, path);
+  factory HomepageIntroductionTimelineItem.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageIntroductionTimelineItem",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "dateLabel",
+      "text",
+      "assetUrl",
+    }, path);
     return HomepageIntroductionTimelineItem(
       dateLabel: _requiredString(map["dateLabel"], '$path.dateLabel'),
       text: _requiredString(map["text"], '$path.text'),
-      assetUrl: map["assetUrl"] == null ? null : _requiredString(map["assetUrl"], '$path.assetUrl'),
+      assetUrl: map["assetUrl"] == null
+          ? null
+          : _requiredString(map["assetUrl"], '$path.assetUrl'),
     );
   }
 
@@ -822,14 +1367,46 @@ final class HomepageOpeningHoursEntry {
   final int closeMinuteOfDay;
   final bool closed;
 
-  factory HomepageOpeningHoursEntry.fromWire(Map<String, Object?> map, [String path = "HomepageOpeningHoursEntry"]) {
-    _rejectUnknownFields(map, const <String>{"appliesFrom", "appliesTo", "weekdays", "openMinuteOfDay", "closeMinuteOfDay", "closed"}, path);
+  factory HomepageOpeningHoursEntry.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageOpeningHoursEntry",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "appliesFrom",
+      "appliesTo",
+      "weekdays",
+      "openMinuteOfDay",
+      "closeMinuteOfDay",
+      "closed",
+    }, path);
     return HomepageOpeningHoursEntry(
-      appliesFrom: map["appliesFrom"] == null ? null : _requiredString(map["appliesFrom"], '$path.appliesFrom'),
-      appliesTo: map["appliesTo"] == null ? null : _requiredString(map["appliesTo"], '$path.appliesTo'),
-      weekdays: map["weekdays"] == null ? null : List<int>.unmodifiable(_requiredList(map["weekdays"], '$path.weekdays').asMap().entries.map((entry) => _requiredInt(entry.value, '$path.weekdays' + '[${entry.key}]'))),
-      openMinuteOfDay: _requiredInt(map["openMinuteOfDay"], '$path.openMinuteOfDay'),
-      closeMinuteOfDay: _requiredInt(map["closeMinuteOfDay"], '$path.closeMinuteOfDay'),
+      appliesFrom: map["appliesFrom"] == null
+          ? null
+          : _requiredString(map["appliesFrom"], '$path.appliesFrom'),
+      appliesTo: map["appliesTo"] == null
+          ? null
+          : _requiredString(map["appliesTo"], '$path.appliesTo'),
+      weekdays: map["weekdays"] == null
+          ? null
+          : List<int>.unmodifiable(
+              _requiredList(
+                map["weekdays"],
+                '$path.weekdays',
+              ).asMap().entries.map(
+                (entry) => _requiredInt(
+                  entry.value,
+                  '$path.weekdays' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      openMinuteOfDay: _requiredInt(
+        map["openMinuteOfDay"],
+        '$path.openMinuteOfDay',
+      ),
+      closeMinuteOfDay: _requiredInt(
+        map["closeMinuteOfDay"],
+        '$path.closeMinuteOfDay',
+      ),
       closed: _requiredBool(map["closed"], '$path.closed'),
     );
   }
@@ -837,7 +1414,8 @@ final class HomepageOpeningHoursEntry {
   Map<String, Object?> toWire() => <String, Object?>{
     if (appliesFrom != null) "appliesFrom": appliesFrom!,
     if (appliesTo != null) "appliesTo": appliesTo!,
-    if (weekdays != null) "weekdays": weekdays!.map((value) => value).toList(growable: false),
+    if (weekdays != null)
+      "weekdays": weekdays!.map((value) => value).toList(growable: false),
     "openMinuteOfDay": openMinuteOfDay,
     "closeMinuteOfDay": closeMinuteOfDay,
     "closed": closed,
@@ -855,12 +1433,21 @@ final class HomepageQuestionPreview {
   final String title;
   final String? summary;
 
-  factory HomepageQuestionPreview.fromWire(Map<String, Object?> map, [String path = "HomepageQuestionPreview"]) {
-    _rejectUnknownFields(map, const <String>{"postId", "title", "summary"}, path);
+  factory HomepageQuestionPreview.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageQuestionPreview",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "postId",
+      "title",
+      "summary",
+    }, path);
     return HomepageQuestionPreview(
       postId: _requiredString(map["postId"], '$path.postId'),
       title: _requiredString(map["title"], '$path.title'),
-      summary: map["summary"] == null ? null : _requiredString(map["summary"], '$path.summary'),
+      summary: map["summary"] == null
+          ? null
+          : _requiredString(map["summary"], '$path.summary'),
     );
   }
 
@@ -894,18 +1481,47 @@ final class HomepageRelatedGroupSummary {
   final String ownerAvatarUrlSnapshot;
   final String evidenceSnapshotId;
 
-  factory HomepageRelatedGroupSummary.fromWire(Map<String, Object?> map, [String path = "HomepageRelatedGroupSummary"]) {
-    _rejectUnknownFields(map, const <String>{"circleId", "name", "memberCount", "linkedHomepageId", "linkedHomepageTitle", "ownerUserId", "ownerDisplayNameSnapshot", "ownerAvatarUrlSnapshot", "evidenceSnapshotId"}, path);
+  factory HomepageRelatedGroupSummary.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageRelatedGroupSummary",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "circleId",
+      "name",
+      "memberCount",
+      "linkedHomepageId",
+      "linkedHomepageTitle",
+      "ownerUserId",
+      "ownerDisplayNameSnapshot",
+      "ownerAvatarUrlSnapshot",
+      "evidenceSnapshotId",
+    }, path);
     return HomepageRelatedGroupSummary(
       circleId: _requiredString(map["circleId"], '$path.circleId'),
       name: _requiredString(map["name"], '$path.name'),
       memberCount: _requiredInt(map["memberCount"], '$path.memberCount'),
-      linkedHomepageId: map["linkedHomepageId"] == null ? null : _requiredString(map["linkedHomepageId"], '$path.linkedHomepageId'),
-      linkedHomepageTitle: map["linkedHomepageTitle"] == null ? null : _requiredString(map["linkedHomepageTitle"], '$path.linkedHomepageTitle'),
+      linkedHomepageId: map["linkedHomepageId"] == null
+          ? null
+          : _requiredString(map["linkedHomepageId"], '$path.linkedHomepageId'),
+      linkedHomepageTitle: map["linkedHomepageTitle"] == null
+          ? null
+          : _requiredString(
+              map["linkedHomepageTitle"],
+              '$path.linkedHomepageTitle',
+            ),
       ownerUserId: _requiredString(map["ownerUserId"], '$path.ownerUserId'),
-      ownerDisplayNameSnapshot: _requiredString(map["ownerDisplayNameSnapshot"], '$path.ownerDisplayNameSnapshot'),
-      ownerAvatarUrlSnapshot: _requiredString(map["ownerAvatarUrlSnapshot"], '$path.ownerAvatarUrlSnapshot'),
-      evidenceSnapshotId: _requiredString(map["evidenceSnapshotId"], '$path.evidenceSnapshotId'),
+      ownerDisplayNameSnapshot: _requiredString(
+        map["ownerDisplayNameSnapshot"],
+        '$path.ownerDisplayNameSnapshot',
+      ),
+      ownerAvatarUrlSnapshot: _requiredString(
+        map["ownerAvatarUrlSnapshot"],
+        '$path.ownerAvatarUrlSnapshot',
+      ),
+      evidenceSnapshotId: _requiredString(
+        map["evidenceSnapshotId"],
+        '$path.evidenceSnapshotId',
+      ),
     );
   }
 
@@ -914,7 +1530,8 @@ final class HomepageRelatedGroupSummary {
     "name": name,
     "memberCount": memberCount,
     if (linkedHomepageId != null) "linkedHomepageId": linkedHomepageId!,
-    if (linkedHomepageTitle != null) "linkedHomepageTitle": linkedHomepageTitle!,
+    if (linkedHomepageTitle != null)
+      "linkedHomepageTitle": linkedHomepageTitle!,
     "ownerUserId": ownerUserId,
     "ownerDisplayNameSnapshot": ownerDisplayNameSnapshot,
     "ownerAvatarUrlSnapshot": ownerAvatarUrlSnapshot,
@@ -923,38 +1540,61 @@ final class HomepageRelatedGroupSummary {
 }
 
 final class HomepageRelatedGroupSummaryView {
-  const HomepageRelatedGroupSummaryView({
-    this.groups,
-  });
+  const HomepageRelatedGroupSummaryView({this.groups});
 
   final List<HomepageRelatedGroupSummary>? groups;
 
-  factory HomepageRelatedGroupSummaryView.fromWire(Map<String, Object?> map, [String path = "HomepageRelatedGroupSummaryView"]) {
+  factory HomepageRelatedGroupSummaryView.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageRelatedGroupSummaryView",
+  ]) {
     _rejectUnknownFields(map, const <String>{"groups"}, path);
     return HomepageRelatedGroupSummaryView(
-      groups: map["groups"] == null ? null : List<HomepageRelatedGroupSummary>.unmodifiable(_requiredList(map["groups"], '$path.groups').asMap().entries.map((entry) => HomepageRelatedGroupSummary.fromWire(_requiredObject(entry.value, '$path.groups' + '[${entry.key}]'), '$path.groups' + '[${entry.key}]'))),
+      groups: map["groups"] == null
+          ? null
+          : List<HomepageRelatedGroupSummary>.unmodifiable(
+              _requiredList(map["groups"], '$path.groups').asMap().entries.map(
+                (entry) => HomepageRelatedGroupSummary.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.groups' + '[${entry.key}]',
+                  ),
+                  '$path.groups' + '[${entry.key}]',
+                ),
+              ),
+            ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
-    if (groups != null) "groups": groups!.map((value) => value.toWire()).toList(growable: false),
+    if (groups != null)
+      "groups": groups!.map((value) => value.toWire()).toList(growable: false),
   };
 }
 
 final class HomepageReviewPageSlice {
-  const HomepageReviewPageSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const HomepageReviewPageSlice({required this.items, this.nextCursor});
 
   final List<HomepageReviewView> items;
   final String? nextCursor;
 
-  factory HomepageReviewPageSlice.fromWire(Map<String, Object?> map, [String path = "HomepageReviewPageSlice"]) {
+  factory HomepageReviewPageSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageReviewPageSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return HomepageReviewPageSlice(
-      items: List<HomepageReviewView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => HomepageReviewView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<HomepageReviewView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => HomepageReviewView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -975,19 +1615,40 @@ final class HomepageReviewSummaryData {
   final int ratingCount;
   final List<String> highlightTags;
 
-  factory HomepageReviewSummaryData.fromWire(Map<String, Object?> map, [String path = "HomepageReviewSummaryData"]) {
-    _rejectUnknownFields(map, const <String>{"averageRating", "ratingCount", "highlightTags"}, path);
+  factory HomepageReviewSummaryData.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageReviewSummaryData",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "averageRating",
+      "ratingCount",
+      "highlightTags",
+    }, path);
     return HomepageReviewSummaryData(
-      averageRating: map["averageRating"] == null ? null : _requiredDouble(map["averageRating"], '$path.averageRating'),
+      averageRating: map["averageRating"] == null
+          ? null
+          : _requiredDouble(map["averageRating"], '$path.averageRating'),
       ratingCount: _requiredInt(map["ratingCount"], '$path.ratingCount'),
-      highlightTags: List<String>.unmodifiable(_requiredList(map["highlightTags"], '$path.highlightTags').asMap().entries.map((entry) => _requiredString(entry.value, '$path.highlightTags' + '[${entry.key}]'))),
+      highlightTags: List<String>.unmodifiable(
+        _requiredList(
+          map["highlightTags"],
+          '$path.highlightTags',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.highlightTags' + '[${entry.key}]',
+          ),
+        ),
+      ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     if (averageRating != null) "averageRating": averageRating!,
     "ratingCount": ratingCount,
-    "highlightTags": highlightTags.map((value) => value).toList(growable: false),
+    "highlightTags": highlightTags
+        .map((value) => value)
+        .toList(growable: false),
   };
 }
 
@@ -1002,19 +1663,43 @@ final class HomepageReviewSummaryView {
   final int ratingCount;
   final List<String>? highlightTags;
 
-  factory HomepageReviewSummaryView.fromWire(Map<String, Object?> map, [String path = "HomepageReviewSummaryView"]) {
-    _rejectUnknownFields(map, const <String>{"averageRating", "ratingCount", "highlightTags"}, path);
+  factory HomepageReviewSummaryView.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageReviewSummaryView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "averageRating",
+      "ratingCount",
+      "highlightTags",
+    }, path);
     return HomepageReviewSummaryView(
-      averageRating: map["averageRating"] == null ? null : _requiredDouble(map["averageRating"], '$path.averageRating'),
+      averageRating: map["averageRating"] == null
+          ? null
+          : _requiredDouble(map["averageRating"], '$path.averageRating'),
       ratingCount: _requiredInt(map["ratingCount"], '$path.ratingCount'),
-      highlightTags: map["highlightTags"] == null ? null : List<String>.unmodifiable(_requiredList(map["highlightTags"], '$path.highlightTags').asMap().entries.map((entry) => _requiredString(entry.value, '$path.highlightTags' + '[${entry.key}]'))),
+      highlightTags: map["highlightTags"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["highlightTags"],
+                '$path.highlightTags',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.highlightTags' + '[${entry.key}]',
+                ),
+              ),
+            ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     if (averageRating != null) "averageRating": averageRating!,
     "ratingCount": ratingCount,
-    if (highlightTags != null) "highlightTags": highlightTags!.map((value) => value).toList(growable: false),
+    if (highlightTags != null)
+      "highlightTags": highlightTags!
+          .map((value) => value)
+          .toList(growable: false),
   };
 }
 
@@ -1045,20 +1730,70 @@ final class HomepageReviewView {
   final String? body;
   final List<String>? tagRefs;
 
-  factory HomepageReviewView.fromWire(Map<String, Object?> map, [String path = "HomepageReviewView"]) {
-    _rejectUnknownFields(map, const <String>{"id", "homepageId", "authorPersonaId", "rating", "status", "createdAt", "updatedAt", "authorDisplayNameSnapshot", "authorAvatarUrlSnapshot", "body", "tagRefs"}, path);
+  factory HomepageReviewView.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageReviewView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "id",
+      "homepageId",
+      "authorPersonaId",
+      "rating",
+      "status",
+      "createdAt",
+      "updatedAt",
+      "authorDisplayNameSnapshot",
+      "authorAvatarUrlSnapshot",
+      "body",
+      "tagRefs",
+    }, path);
     return HomepageReviewView(
       id: _requiredNonBlankString(map["id"], '$path.id'),
-      homepageId: _requiredNonBlankString(map["homepageId"], '$path.homepageId'),
-      authorPersonaId: _requiredNonBlankString(map["authorPersonaId"], '$path.authorPersonaId'),
-      rating: _requiredBoundedInt(map["rating"], '$path.rating', min: 1, max: 5),
+      homepageId: _requiredNonBlankString(
+        map["homepageId"],
+        '$path.homepageId',
+      ),
+      authorPersonaId: _requiredNonBlankString(
+        map["authorPersonaId"],
+        '$path.authorPersonaId',
+      ),
+      rating: _requiredBoundedInt(
+        map["rating"],
+        '$path.rating',
+        min: 1,
+        max: 5,
+      ),
       status: HomepageReviewStatus.fromWire(map["status"], '$path.status'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
-      authorDisplayNameSnapshot: map["authorDisplayNameSnapshot"] == null ? null : _requiredString(map["authorDisplayNameSnapshot"], '$path.authorDisplayNameSnapshot'),
-      authorAvatarUrlSnapshot: map["authorAvatarUrlSnapshot"] == null ? null : _requiredString(map["authorAvatarUrlSnapshot"], '$path.authorAvatarUrlSnapshot'),
-      body: map["body"] == null ? null : _requiredString(map["body"], '$path.body'),
-      tagRefs: map["tagRefs"] == null ? null : List<String>.unmodifiable(_requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'))),
+      authorDisplayNameSnapshot: map["authorDisplayNameSnapshot"] == null
+          ? null
+          : _requiredString(
+              map["authorDisplayNameSnapshot"],
+              '$path.authorDisplayNameSnapshot',
+            ),
+      authorAvatarUrlSnapshot: map["authorAvatarUrlSnapshot"] == null
+          ? null
+          : _requiredString(
+              map["authorAvatarUrlSnapshot"],
+              '$path.authorAvatarUrlSnapshot',
+            ),
+      body: map["body"] == null
+          ? null
+          : _requiredString(map["body"], '$path.body'),
+      tagRefs: map["tagRefs"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["tagRefs"],
+                '$path.tagRefs',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.tagRefs' + '[${entry.key}]',
+                ),
+              ),
+            ),
     );
   }
 
@@ -1070,10 +1805,13 @@ final class HomepageReviewView {
     "status": status.wireName,
     "createdAt": createdAt.toUtc().toIso8601String(),
     "updatedAt": updatedAt.toUtc().toIso8601String(),
-    if (authorDisplayNameSnapshot != null) "authorDisplayNameSnapshot": authorDisplayNameSnapshot!,
-    if (authorAvatarUrlSnapshot != null) "authorAvatarUrlSnapshot": authorAvatarUrlSnapshot!,
+    if (authorDisplayNameSnapshot != null)
+      "authorDisplayNameSnapshot": authorDisplayNameSnapshot!,
+    if (authorAvatarUrlSnapshot != null)
+      "authorAvatarUrlSnapshot": authorAvatarUrlSnapshot!,
     if (body != null) "body": body!,
-    if (tagRefs != null) "tagRefs": tagRefs!.map((value) => value).toList(growable: false),
+    if (tagRefs != null)
+      "tagRefs": tagRefs!.map((value) => value).toList(growable: false),
   };
 }
 
@@ -1085,6 +1823,8 @@ final class HomepageSearchItemView {
     this.subtitle,
     required this.homepageType,
     this.coverUrl,
+    this.coverAssetId,
+    this.coverAccessMode,
     this.city,
     this.address,
     required this.status,
@@ -1098,25 +1838,69 @@ final class HomepageSearchItemView {
   final String? subtitle;
   final HomepageType homepageType;
   final String? coverUrl;
+  final String? coverAssetId;
+  final MediaDeliveryAccessMode? coverAccessMode;
   final String? city;
   final String? address;
   final HomepageStatus status;
   final double? averageRating;
   final int ratingCount;
 
-  factory HomepageSearchItemView.fromWire(Map<String, Object?> map, [String path = "HomepageSearchItemView"]) {
-    _rejectUnknownFields(map, const <String>{"homepageId", "canonicalEntityId", "title", "subtitle", "homepageType", "coverUrl", "city", "address", "status", "averageRating", "ratingCount"}, path);
+  factory HomepageSearchItemView.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageSearchItemView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "homepageId",
+      "canonicalEntityId",
+      "title",
+      "subtitle",
+      "homepageType",
+      "coverUrl",
+      "coverAssetId",
+      "coverAccessMode",
+      "city",
+      "address",
+      "status",
+      "averageRating",
+      "ratingCount",
+    }, path);
     return HomepageSearchItemView(
       homepageId: _requiredString(map["homepageId"], '$path.homepageId'),
-      canonicalEntityId: _requiredString(map["canonicalEntityId"], '$path.canonicalEntityId'),
+      canonicalEntityId: _requiredString(
+        map["canonicalEntityId"],
+        '$path.canonicalEntityId',
+      ),
       title: _requiredString(map["title"], '$path.title'),
-      subtitle: map["subtitle"] == null ? null : _requiredString(map["subtitle"], '$path.subtitle'),
-      homepageType: HomepageType.fromWire(map["homepageType"], '$path.homepageType'),
-      coverUrl: map["coverUrl"] == null ? null : _requiredString(map["coverUrl"], '$path.coverUrl'),
-      city: map["city"] == null ? null : _requiredString(map["city"], '$path.city'),
-      address: map["address"] == null ? null : _requiredString(map["address"], '$path.address'),
+      subtitle: map["subtitle"] == null
+          ? null
+          : _requiredString(map["subtitle"], '$path.subtitle'),
+      homepageType: HomepageType.fromWire(
+        map["homepageType"],
+        '$path.homepageType',
+      ),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      coverAssetId: map["coverAssetId"] == null
+          ? null
+          : _requiredString(map["coverAssetId"], '$path.coverAssetId'),
+      coverAccessMode: map["coverAccessMode"] == null
+          ? null
+          : MediaDeliveryAccessMode.fromWire(
+              map["coverAccessMode"],
+              '$path.coverAccessMode',
+            ),
+      city: map["city"] == null
+          ? null
+          : _requiredString(map["city"], '$path.city'),
+      address: map["address"] == null
+          ? null
+          : _requiredString(map["address"], '$path.address'),
       status: HomepageStatus.fromWire(map["status"], '$path.status'),
-      averageRating: map["averageRating"] == null ? null : _requiredDouble(map["averageRating"], '$path.averageRating'),
+      averageRating: map["averageRating"] == null
+          ? null
+          : _requiredDouble(map["averageRating"], '$path.averageRating'),
       ratingCount: _requiredInt(map["ratingCount"], '$path.ratingCount'),
     );
   }
@@ -1128,6 +1912,8 @@ final class HomepageSearchItemView {
     if (subtitle != null) "subtitle": subtitle!,
     "homepageType": homepageType.wireName,
     if (coverUrl != null) "coverUrl": coverUrl!,
+    if (coverAssetId != null) "coverAssetId": coverAssetId!,
+    if (coverAccessMode != null) "coverAccessMode": coverAccessMode!.wireName,
     if (city != null) "city": city!,
     if (address != null) "address": address!,
     "status": status.wireName,
@@ -1137,19 +1923,28 @@ final class HomepageSearchItemView {
 }
 
 final class HomepageSearchSlice {
-  const HomepageSearchSlice({
-    required this.items,
-    this.nextCursor,
-  });
+  const HomepageSearchSlice({required this.items, this.nextCursor});
 
   final List<HomepageSearchItemView> items;
   final String? nextCursor;
 
-  factory HomepageSearchSlice.fromWire(Map<String, Object?> map, [String path = "HomepageSearchSlice"]) {
+  factory HomepageSearchSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageSearchSlice",
+  ]) {
     _rejectUnknownFields(map, const <String>{"items", "nextCursor"}, path);
     return HomepageSearchSlice(
-      items: List<HomepageSearchItemView>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => HomepageSearchItemView.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
-      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      items: List<HomepageSearchItemView>.unmodifiable(
+        _requiredList(map["items"], '$path.items').asMap().entries.map(
+          (entry) => HomepageSearchItemView.fromWire(
+            _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
+            '$path.items' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      nextCursor: map["nextCursor"] == null
+          ? null
+          : _requiredString(map["nextCursor"], '$path.nextCursor'),
     );
   }
 
@@ -1174,23 +1969,94 @@ final class HomepageShellView {
   final List<HomepageQuestionPreview>? questionPreview;
   final List<HomepageRelatedGroupSummary>? relatedGroups;
 
-  factory HomepageShellView.fromWire(Map<String, Object?> map, [String path = "HomepageShellView"]) {
-    _rejectUnknownFields(map, const <String>{"homepage", "reviewSummary", "contentPreview", "questionPreview", "relatedGroups"}, path);
+  factory HomepageShellView.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageShellView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "homepage",
+      "reviewSummary",
+      "contentPreview",
+      "questionPreview",
+      "relatedGroups",
+    }, path);
     return HomepageShellView(
-      homepage: HomepageDetailView.fromWire(_requiredObject(map["homepage"], '$path.homepage'), '$path.homepage'),
-      reviewSummary: map["reviewSummary"] == null ? null : HomepageReviewSummaryData.fromWire(_requiredObject(map["reviewSummary"], '$path.reviewSummary'), '$path.reviewSummary'),
-      contentPreview: map["contentPreview"] == null ? null : List<HomepageContentPreview>.unmodifiable(_requiredList(map["contentPreview"], '$path.contentPreview').asMap().entries.map((entry) => HomepageContentPreview.fromWire(_requiredObject(entry.value, '$path.contentPreview' + '[${entry.key}]'), '$path.contentPreview' + '[${entry.key}]'))),
-      questionPreview: map["questionPreview"] == null ? null : List<HomepageQuestionPreview>.unmodifiable(_requiredList(map["questionPreview"], '$path.questionPreview').asMap().entries.map((entry) => HomepageQuestionPreview.fromWire(_requiredObject(entry.value, '$path.questionPreview' + '[${entry.key}]'), '$path.questionPreview' + '[${entry.key}]'))),
-      relatedGroups: map["relatedGroups"] == null ? null : List<HomepageRelatedGroupSummary>.unmodifiable(_requiredList(map["relatedGroups"], '$path.relatedGroups').asMap().entries.map((entry) => HomepageRelatedGroupSummary.fromWire(_requiredObject(entry.value, '$path.relatedGroups' + '[${entry.key}]'), '$path.relatedGroups' + '[${entry.key}]'))),
+      homepage: HomepageDetailView.fromWire(
+        _requiredObject(map["homepage"], '$path.homepage'),
+        '$path.homepage',
+      ),
+      reviewSummary: map["reviewSummary"] == null
+          ? null
+          : HomepageReviewSummaryData.fromWire(
+              _requiredObject(map["reviewSummary"], '$path.reviewSummary'),
+              '$path.reviewSummary',
+            ),
+      contentPreview: map["contentPreview"] == null
+          ? null
+          : List<HomepageContentPreview>.unmodifiable(
+              _requiredList(
+                map["contentPreview"],
+                '$path.contentPreview',
+              ).asMap().entries.map(
+                (entry) => HomepageContentPreview.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.contentPreview' + '[${entry.key}]',
+                  ),
+                  '$path.contentPreview' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      questionPreview: map["questionPreview"] == null
+          ? null
+          : List<HomepageQuestionPreview>.unmodifiable(
+              _requiredList(
+                map["questionPreview"],
+                '$path.questionPreview',
+              ).asMap().entries.map(
+                (entry) => HomepageQuestionPreview.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.questionPreview' + '[${entry.key}]',
+                  ),
+                  '$path.questionPreview' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      relatedGroups: map["relatedGroups"] == null
+          ? null
+          : List<HomepageRelatedGroupSummary>.unmodifiable(
+              _requiredList(
+                map["relatedGroups"],
+                '$path.relatedGroups',
+              ).asMap().entries.map(
+                (entry) => HomepageRelatedGroupSummary.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.relatedGroups' + '[${entry.key}]',
+                  ),
+                  '$path.relatedGroups' + '[${entry.key}]',
+                ),
+              ),
+            ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
     "homepage": homepage.toWire(),
     if (reviewSummary != null) "reviewSummary": reviewSummary!.toWire(),
-    if (contentPreview != null) "contentPreview": contentPreview!.map((value) => value.toWire()).toList(growable: false),
-    if (questionPreview != null) "questionPreview": questionPreview!.map((value) => value.toWire()).toList(growable: false),
-    if (relatedGroups != null) "relatedGroups": relatedGroups!.map((value) => value.toWire()).toList(growable: false),
+    if (contentPreview != null)
+      "contentPreview": contentPreview!
+          .map((value) => value.toWire())
+          .toList(growable: false),
+    if (questionPreview != null)
+      "questionPreview": questionPreview!
+          .map((value) => value.toWire())
+          .toList(growable: false),
+    if (relatedGroups != null)
+      "relatedGroups": relatedGroups!
+          .map((value) => value.toWire())
+          .toList(growable: false),
   };
 }
 
@@ -1213,16 +2079,33 @@ final class HomepageSource {
   final String policyRevision;
   final String sourceUseMode;
 
-  factory HomepageSource.fromWire(Map<String, Object?> map, [String path = "HomepageSource"]) {
-    _rejectUnknownFields(map, const <String>{"sourceKind", "sourceUrl", "title", "fetchedAt", "snapshotHash", "policyRevision", "sourceUseMode"}, path);
+  factory HomepageSource.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageSource",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "sourceKind",
+      "sourceUrl",
+      "title",
+      "fetchedAt",
+      "snapshotHash",
+      "policyRevision",
+      "sourceUseMode",
+    }, path);
     return HomepageSource(
       sourceKind: _requiredString(map["sourceKind"], '$path.sourceKind'),
       sourceUrl: _requiredString(map["sourceUrl"], '$path.sourceUrl'),
       title: _requiredString(map["title"], '$path.title'),
       fetchedAt: _requiredString(map["fetchedAt"], '$path.fetchedAt'),
       snapshotHash: _requiredString(map["snapshotHash"], '$path.snapshotHash'),
-      policyRevision: _requiredString(map["policyRevision"], '$path.policyRevision'),
-      sourceUseMode: _requiredString(map["sourceUseMode"], '$path.sourceUseMode'),
+      policyRevision: _requiredString(
+        map["policyRevision"],
+        '$path.policyRevision',
+      ),
+      sourceUseMode: _requiredString(
+        map["sourceUseMode"],
+        '$path.sourceUseMode',
+      ),
     );
   }
 
@@ -1262,19 +2145,63 @@ final class HomepageStatusReportView {
   final DateTime createdAt;
   final DateTime? reviewedAt;
 
-  factory HomepageStatusReportView.fromWire(Map<String, Object?> map, [String path = "HomepageStatusReportView"]) {
-    _rejectUnknownFields(map, const <String>{"reportId", "homepageId", "reporterPersonaId", "reason", "status", "description", "evidenceUrls", "reviewNote", "createdAt", "reviewedAt"}, path);
+  factory HomepageStatusReportView.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageStatusReportView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "reportId",
+      "homepageId",
+      "reporterPersonaId",
+      "reason",
+      "status",
+      "description",
+      "evidenceUrls",
+      "reviewNote",
+      "createdAt",
+      "reviewedAt",
+    }, path);
     return HomepageStatusReportView(
       reportId: _requiredNonBlankString(map["reportId"], '$path.reportId'),
-      homepageId: _requiredNonBlankString(map["homepageId"], '$path.homepageId'),
-      reporterPersonaId: _requiredNonBlankString(map["reporterPersonaId"], '$path.reporterPersonaId'),
-      reason: HomepageStatusReportReason.fromWire(map["reason"], '$path.reason'),
-      status: HomepageStatusReportStatus.fromWire(map["status"], '$path.status'),
-      description: map["description"] == null ? null : _requiredString(map["description"], '$path.description'),
-      evidenceUrls: map["evidenceUrls"] == null ? null : List<String>.unmodifiable(_requiredList(map["evidenceUrls"], '$path.evidenceUrls').asMap().entries.map((entry) => _requiredString(entry.value, '$path.evidenceUrls' + '[${entry.key}]'))),
-      reviewNote: map["reviewNote"] == null ? null : _requiredString(map["reviewNote"], '$path.reviewNote'),
+      homepageId: _requiredNonBlankString(
+        map["homepageId"],
+        '$path.homepageId',
+      ),
+      reporterPersonaId: _requiredNonBlankString(
+        map["reporterPersonaId"],
+        '$path.reporterPersonaId',
+      ),
+      reason: HomepageStatusReportReason.fromWire(
+        map["reason"],
+        '$path.reason',
+      ),
+      status: HomepageStatusReportStatus.fromWire(
+        map["status"],
+        '$path.status',
+      ),
+      description: map["description"] == null
+          ? null
+          : _requiredString(map["description"], '$path.description'),
+      evidenceUrls: map["evidenceUrls"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["evidenceUrls"],
+                '$path.evidenceUrls',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.evidenceUrls' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      reviewNote: map["reviewNote"] == null
+          ? null
+          : _requiredString(map["reviewNote"], '$path.reviewNote'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
-      reviewedAt: map["reviewedAt"] == null ? null : _requiredTimestamp(map["reviewedAt"], '$path.reviewedAt'),
+      reviewedAt: map["reviewedAt"] == null
+          ? null
+          : _requiredTimestamp(map["reviewedAt"], '$path.reviewedAt'),
     );
   }
 
@@ -1285,7 +2212,10 @@ final class HomepageStatusReportView {
     "reason": reason.wireName,
     "status": status.wireName,
     if (description != null) "description": description!,
-    if (evidenceUrls != null) "evidenceUrls": evidenceUrls!.map((value) => value).toList(growable: false),
+    if (evidenceUrls != null)
+      "evidenceUrls": evidenceUrls!
+          .map((value) => value)
+          .toList(growable: false),
     if (reviewNote != null) "reviewNote": reviewNote!,
     "createdAt": createdAt.toUtc().toIso8601String(),
     if (reviewedAt != null) "reviewedAt": reviewedAt!.toUtc().toIso8601String(),
@@ -1311,27 +2241,111 @@ final class HomepageStructuredFactsView {
   final String? officialWebsite;
   final List<HomepageFactSource>? factSources;
 
-  factory HomepageStructuredFactsView.fromWire(Map<String, Object?> map, [String path = "HomepageStructuredFactsView"]) {
-    _rejectUnknownFields(map, const <String>{"openingHours", "ticketPriceRange", "recommendedDurationMinutes", "bestSeasonTagRefs", "altitudeMeters", "officialWebsite", "factSources"}, path);
+  factory HomepageStructuredFactsView.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageStructuredFactsView",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "openingHours",
+      "ticketPriceRange",
+      "recommendedDurationMinutes",
+      "bestSeasonTagRefs",
+      "altitudeMeters",
+      "officialWebsite",
+      "factSources",
+    }, path);
     return HomepageStructuredFactsView(
-      openingHours: map["openingHours"] == null ? null : List<HomepageOpeningHoursEntry>.unmodifiable(_requiredList(map["openingHours"], '$path.openingHours').asMap().entries.map((entry) => HomepageOpeningHoursEntry.fromWire(_requiredObject(entry.value, '$path.openingHours' + '[${entry.key}]'), '$path.openingHours' + '[${entry.key}]'))),
-      ticketPriceRange: map["ticketPriceRange"] == null ? null : HomepageTicketPriceRange.fromWire(_requiredObject(map["ticketPriceRange"], '$path.ticketPriceRange'), '$path.ticketPriceRange'),
-      recommendedDurationMinutes: map["recommendedDurationMinutes"] == null ? null : HomepageDurationRange.fromWire(_requiredObject(map["recommendedDurationMinutes"], '$path.recommendedDurationMinutes'), '$path.recommendedDurationMinutes'),
-      bestSeasonTagRefs: map["bestSeasonTagRefs"] == null ? null : List<String>.unmodifiable(_requiredList(map["bestSeasonTagRefs"], '$path.bestSeasonTagRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.bestSeasonTagRefs' + '[${entry.key}]'))),
-      altitudeMeters: map["altitudeMeters"] == null ? null : _requiredInt(map["altitudeMeters"], '$path.altitudeMeters'),
-      officialWebsite: map["officialWebsite"] == null ? null : _requiredString(map["officialWebsite"], '$path.officialWebsite'),
-      factSources: map["factSources"] == null ? null : List<HomepageFactSource>.unmodifiable(_requiredList(map["factSources"], '$path.factSources').asMap().entries.map((entry) => HomepageFactSource.fromWire(_requiredObject(entry.value, '$path.factSources' + '[${entry.key}]'), '$path.factSources' + '[${entry.key}]'))),
+      openingHours: map["openingHours"] == null
+          ? null
+          : List<HomepageOpeningHoursEntry>.unmodifiable(
+              _requiredList(
+                map["openingHours"],
+                '$path.openingHours',
+              ).asMap().entries.map(
+                (entry) => HomepageOpeningHoursEntry.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.openingHours' + '[${entry.key}]',
+                  ),
+                  '$path.openingHours' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      ticketPriceRange: map["ticketPriceRange"] == null
+          ? null
+          : HomepageTicketPriceRange.fromWire(
+              _requiredObject(
+                map["ticketPriceRange"],
+                '$path.ticketPriceRange',
+              ),
+              '$path.ticketPriceRange',
+            ),
+      recommendedDurationMinutes: map["recommendedDurationMinutes"] == null
+          ? null
+          : HomepageDurationRange.fromWire(
+              _requiredObject(
+                map["recommendedDurationMinutes"],
+                '$path.recommendedDurationMinutes',
+              ),
+              '$path.recommendedDurationMinutes',
+            ),
+      bestSeasonTagRefs: map["bestSeasonTagRefs"] == null
+          ? null
+          : List<String>.unmodifiable(
+              _requiredList(
+                map["bestSeasonTagRefs"],
+                '$path.bestSeasonTagRefs',
+              ).asMap().entries.map(
+                (entry) => _requiredString(
+                  entry.value,
+                  '$path.bestSeasonTagRefs' + '[${entry.key}]',
+                ),
+              ),
+            ),
+      altitudeMeters: map["altitudeMeters"] == null
+          ? null
+          : _requiredInt(map["altitudeMeters"], '$path.altitudeMeters'),
+      officialWebsite: map["officialWebsite"] == null
+          ? null
+          : _requiredString(map["officialWebsite"], '$path.officialWebsite'),
+      factSources: map["factSources"] == null
+          ? null
+          : List<HomepageFactSource>.unmodifiable(
+              _requiredList(
+                map["factSources"],
+                '$path.factSources',
+              ).asMap().entries.map(
+                (entry) => HomepageFactSource.fromWire(
+                  _requiredObject(
+                    entry.value,
+                    '$path.factSources' + '[${entry.key}]',
+                  ),
+                  '$path.factSources' + '[${entry.key}]',
+                ),
+              ),
+            ),
     );
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
-    if (openingHours != null) "openingHours": openingHours!.map((value) => value.toWire()).toList(growable: false),
-    if (ticketPriceRange != null) "ticketPriceRange": ticketPriceRange!.toWire(),
-    if (recommendedDurationMinutes != null) "recommendedDurationMinutes": recommendedDurationMinutes!.toWire(),
-    if (bestSeasonTagRefs != null) "bestSeasonTagRefs": bestSeasonTagRefs!.map((value) => value).toList(growable: false),
+    if (openingHours != null)
+      "openingHours": openingHours!
+          .map((value) => value.toWire())
+          .toList(growable: false),
+    if (ticketPriceRange != null)
+      "ticketPriceRange": ticketPriceRange!.toWire(),
+    if (recommendedDurationMinutes != null)
+      "recommendedDurationMinutes": recommendedDurationMinutes!.toWire(),
+    if (bestSeasonTagRefs != null)
+      "bestSeasonTagRefs": bestSeasonTagRefs!
+          .map((value) => value)
+          .toList(growable: false),
     if (altitudeMeters != null) "altitudeMeters": altitudeMeters!,
     if (officialWebsite != null) "officialWebsite": officialWebsite!,
-    if (factSources != null) "factSources": factSources!.map((value) => value.toWire()).toList(growable: false),
+    if (factSources != null)
+      "factSources": factSources!
+          .map((value) => value.toWire())
+          .toList(growable: false),
   };
 }
 
@@ -1348,12 +2362,26 @@ final class HomepageTicketPriceRange {
   final int maxAmountCents;
   final bool free;
 
-  factory HomepageTicketPriceRange.fromWire(Map<String, Object?> map, [String path = "HomepageTicketPriceRange"]) {
-    _rejectUnknownFields(map, const <String>{"currency", "minAmountCents", "maxAmountCents", "free"}, path);
+  factory HomepageTicketPriceRange.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageTicketPriceRange",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "currency",
+      "minAmountCents",
+      "maxAmountCents",
+      "free",
+    }, path);
     return HomepageTicketPriceRange(
       currency: _requiredString(map["currency"], '$path.currency'),
-      minAmountCents: _requiredInt(map["minAmountCents"], '$path.minAmountCents'),
-      maxAmountCents: _requiredInt(map["maxAmountCents"], '$path.maxAmountCents'),
+      minAmountCents: _requiredInt(
+        map["minAmountCents"],
+        '$path.minAmountCents',
+      ),
+      maxAmountCents: _requiredInt(
+        map["maxAmountCents"],
+        '$path.maxAmountCents',
+      ),
       free: _requiredBool(map["free"], '$path.free'),
     );
   }
@@ -1375,10 +2403,19 @@ final class HomepageViewerFollowSlice {
   final bool viewerFollowsHomepage;
   final int followerCount;
 
-  factory HomepageViewerFollowSlice.fromWire(Map<String, Object?> map, [String path = "HomepageViewerFollowSlice"]) {
-    _rejectUnknownFields(map, const <String>{"viewerFollowsHomepage", "followerCount"}, path);
+  factory HomepageViewerFollowSlice.fromWire(
+    Map<String, Object?> map, [
+    String path = "HomepageViewerFollowSlice",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "viewerFollowsHomepage",
+      "followerCount",
+    }, path);
     return HomepageViewerFollowSlice(
-      viewerFollowsHomepage: _requiredBool(map["viewerFollowsHomepage"], '$path.viewerFollowsHomepage'),
+      viewerFollowsHomepage: _requiredBool(
+        map["viewerFollowsHomepage"],
+        '$path.viewerFollowsHomepage',
+      ),
       followerCount: _requiredInt(map["followerCount"], '$path.followerCount'),
     );
   }
@@ -1426,25 +2463,128 @@ final class ObjectPageBundle {
   final ObjectPageContext? assistantContext;
   final ObjectPageRolloutContext? rolloutContext;
 
-  factory ObjectPageBundle.fromWire(Map<String, Object?> map, [String path = "ObjectPageBundle"]) {
-    _rejectUnknownFields(map, const <String>{"objectType", "objectId", "canonicalEntityId", "title", "subtitle", "coverUrl", "objectPageTemplate", "tagRefs", "stats", "intersectionReasons", "highlightItems", "contentSections", "relatedObjects", "relationEdges", "assistantContext", "rolloutContext"}, path);
+  factory ObjectPageBundle.fromWire(
+    Map<String, Object?> map, [
+    String path = "ObjectPageBundle",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "objectType",
+      "objectId",
+      "canonicalEntityId",
+      "title",
+      "subtitle",
+      "coverUrl",
+      "objectPageTemplate",
+      "tagRefs",
+      "stats",
+      "intersectionReasons",
+      "highlightItems",
+      "contentSections",
+      "relatedObjects",
+      "relationEdges",
+      "assistantContext",
+      "rolloutContext",
+    }, path);
     return ObjectPageBundle(
       objectType: _requiredString(map["objectType"], '$path.objectType'),
       objectId: _requiredString(map["objectId"], '$path.objectId'),
-      canonicalEntityId: _requiredString(map["canonicalEntityId"], '$path.canonicalEntityId'),
+      canonicalEntityId: _requiredString(
+        map["canonicalEntityId"],
+        '$path.canonicalEntityId',
+      ),
       title: _requiredString(map["title"], '$path.title'),
-      subtitle: map["subtitle"] == null ? null : _requiredString(map["subtitle"], '$path.subtitle'),
-      coverUrl: map["coverUrl"] == null ? null : _requiredString(map["coverUrl"], '$path.coverUrl'),
-      objectPageTemplate: _requiredString(map["objectPageTemplate"], '$path.objectPageTemplate'),
-      tagRefs: List<String>.unmodifiable(_requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'))),
+      subtitle: map["subtitle"] == null
+          ? null
+          : _requiredString(map["subtitle"], '$path.subtitle'),
+      coverUrl: map["coverUrl"] == null
+          ? null
+          : _requiredString(map["coverUrl"], '$path.coverUrl'),
+      objectPageTemplate: _requiredString(
+        map["objectPageTemplate"],
+        '$path.objectPageTemplate',
+      ),
+      tagRefs: List<String>.unmodifiable(
+        _requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map(
+          (entry) =>
+              _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'),
+        ),
+      ),
       stats: _requiredObject(map["stats"], '$path.stats'),
-      intersectionReasons: List<IntersectionReason>.unmodifiable(_requiredList(map["intersectionReasons"], '$path.intersectionReasons').asMap().entries.map((entry) => IntersectionReason.fromWire(_requiredObject(entry.value, '$path.intersectionReasons' + '[${entry.key}]'), '$path.intersectionReasons' + '[${entry.key}]'))),
-      highlightItems: List<HomepageContentPreview>.unmodifiable(_requiredList(map["highlightItems"], '$path.highlightItems').asMap().entries.map((entry) => HomepageContentPreview.fromWire(_requiredObject(entry.value, '$path.highlightItems' + '[${entry.key}]'), '$path.highlightItems' + '[${entry.key}]'))),
-      contentSections: _requiredObject(map["contentSections"], '$path.contentSections'),
-      relatedObjects: List<HomepageRelatedGroupSummary>.unmodifiable(_requiredList(map["relatedObjects"], '$path.relatedObjects').asMap().entries.map((entry) => HomepageRelatedGroupSummary.fromWire(_requiredObject(entry.value, '$path.relatedObjects' + '[${entry.key}]'), '$path.relatedObjects' + '[${entry.key}]'))),
-      relationEdges: List<ObjectRelationEdge>.unmodifiable(_requiredList(map["relationEdges"], '$path.relationEdges').asMap().entries.map((entry) => ObjectRelationEdge.fromWire(_requiredObject(entry.value, '$path.relationEdges' + '[${entry.key}]'), '$path.relationEdges' + '[${entry.key}]'))),
-      assistantContext: map["assistantContext"] == null ? null : ObjectPageContext.fromWire(_requiredObject(map["assistantContext"], '$path.assistantContext'), '$path.assistantContext'),
-      rolloutContext: map["rolloutContext"] == null ? null : ObjectPageRolloutContext.fromWire(_requiredObject(map["rolloutContext"], '$path.rolloutContext'), '$path.rolloutContext'),
+      intersectionReasons: List<IntersectionReason>.unmodifiable(
+        _requiredList(
+          map["intersectionReasons"],
+          '$path.intersectionReasons',
+        ).asMap().entries.map(
+          (entry) => IntersectionReason.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.intersectionReasons' + '[${entry.key}]',
+            ),
+            '$path.intersectionReasons' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      highlightItems: List<HomepageContentPreview>.unmodifiable(
+        _requiredList(
+          map["highlightItems"],
+          '$path.highlightItems',
+        ).asMap().entries.map(
+          (entry) => HomepageContentPreview.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.highlightItems' + '[${entry.key}]',
+            ),
+            '$path.highlightItems' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      contentSections: _requiredObject(
+        map["contentSections"],
+        '$path.contentSections',
+      ),
+      relatedObjects: List<HomepageRelatedGroupSummary>.unmodifiable(
+        _requiredList(
+          map["relatedObjects"],
+          '$path.relatedObjects',
+        ).asMap().entries.map(
+          (entry) => HomepageRelatedGroupSummary.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.relatedObjects' + '[${entry.key}]',
+            ),
+            '$path.relatedObjects' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      relationEdges: List<ObjectRelationEdge>.unmodifiable(
+        _requiredList(
+          map["relationEdges"],
+          '$path.relationEdges',
+        ).asMap().entries.map(
+          (entry) => ObjectRelationEdge.fromWire(
+            _requiredObject(
+              entry.value,
+              '$path.relationEdges' + '[${entry.key}]',
+            ),
+            '$path.relationEdges' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      assistantContext: map["assistantContext"] == null
+          ? null
+          : ObjectPageContext.fromWire(
+              _requiredObject(
+                map["assistantContext"],
+                '$path.assistantContext',
+              ),
+              '$path.assistantContext',
+            ),
+      rolloutContext: map["rolloutContext"] == null
+          ? null
+          : ObjectPageRolloutContext.fromWire(
+              _requiredObject(map["rolloutContext"], '$path.rolloutContext'),
+              '$path.rolloutContext',
+            ),
     );
   }
 
@@ -1458,12 +2598,21 @@ final class ObjectPageBundle {
     "objectPageTemplate": objectPageTemplate,
     "tagRefs": tagRefs.map((value) => value).toList(growable: false),
     "stats": stats,
-    "intersectionReasons": intersectionReasons.map((value) => value.toWire()).toList(growable: false),
-    "highlightItems": highlightItems.map((value) => value.toWire()).toList(growable: false),
+    "intersectionReasons": intersectionReasons
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    "highlightItems": highlightItems
+        .map((value) => value.toWire())
+        .toList(growable: false),
     "contentSections": contentSections,
-    "relatedObjects": relatedObjects.map((value) => value.toWire()).toList(growable: false),
-    "relationEdges": relationEdges.map((value) => value.toWire()).toList(growable: false),
-    if (assistantContext != null) "assistantContext": assistantContext!.toWire(),
+    "relatedObjects": relatedObjects
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    "relationEdges": relationEdges
+        .map((value) => value.toWire())
+        .toList(growable: false),
+    if (assistantContext != null)
+      "assistantContext": assistantContext!.toWire(),
     if (rolloutContext != null) "rolloutContext": rolloutContext!.toWire(),
   };
 }
@@ -1495,20 +2644,78 @@ final class ObjectPageContext {
   final String experimentBucket;
   final String rolloutCohort;
 
-  factory ObjectPageContext.fromWire(Map<String, Object?> map, [String path = "ObjectPageContext"]) {
-    _rejectUnknownFields(map, const <String>{"objectType", "objectId", "canonicalEntityId", "tagRefs", "entityRefs", "relationEdgeIds", "referralSource", "feedRequestId", "recommendationTraceId", "experimentBucket", "rolloutCohort"}, path);
+  factory ObjectPageContext.fromWire(
+    Map<String, Object?> map, [
+    String path = "ObjectPageContext",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "objectType",
+      "objectId",
+      "canonicalEntityId",
+      "tagRefs",
+      "entityRefs",
+      "relationEdgeIds",
+      "referralSource",
+      "feedRequestId",
+      "recommendationTraceId",
+      "experimentBucket",
+      "rolloutCohort",
+    }, path);
     return ObjectPageContext(
       objectType: _requiredString(map["objectType"], '$path.objectType'),
       objectId: _requiredString(map["objectId"], '$path.objectId'),
-      canonicalEntityId: _requiredString(map["canonicalEntityId"], '$path.canonicalEntityId'),
-      tagRefs: List<String>.unmodifiable(_requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'))),
-      entityRefs: List<String>.unmodifiable(_requiredList(map["entityRefs"], '$path.entityRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.entityRefs' + '[${entry.key}]'))),
-      relationEdgeIds: List<String>.unmodifiable(_requiredList(map["relationEdgeIds"], '$path.relationEdgeIds').asMap().entries.map((entry) => _requiredString(entry.value, '$path.relationEdgeIds' + '[${entry.key}]'))),
-      referralSource: _requiredString(map["referralSource"], '$path.referralSource'),
-      feedRequestId: _requiredString(map["feedRequestId"], '$path.feedRequestId'),
-      recommendationTraceId: _requiredString(map["recommendationTraceId"], '$path.recommendationTraceId'),
-      experimentBucket: _requiredString(map["experimentBucket"], '$path.experimentBucket'),
-      rolloutCohort: _requiredString(map["rolloutCohort"], '$path.rolloutCohort'),
+      canonicalEntityId: _requiredString(
+        map["canonicalEntityId"],
+        '$path.canonicalEntityId',
+      ),
+      tagRefs: List<String>.unmodifiable(
+        _requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map(
+          (entry) =>
+              _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'),
+        ),
+      ),
+      entityRefs: List<String>.unmodifiable(
+        _requiredList(
+          map["entityRefs"],
+          '$path.entityRefs',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.entityRefs' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      relationEdgeIds: List<String>.unmodifiable(
+        _requiredList(
+          map["relationEdgeIds"],
+          '$path.relationEdgeIds',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.relationEdgeIds' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      referralSource: _requiredString(
+        map["referralSource"],
+        '$path.referralSource',
+      ),
+      feedRequestId: _requiredString(
+        map["feedRequestId"],
+        '$path.feedRequestId',
+      ),
+      recommendationTraceId: _requiredString(
+        map["recommendationTraceId"],
+        '$path.recommendationTraceId',
+      ),
+      experimentBucket: _requiredString(
+        map["experimentBucket"],
+        '$path.experimentBucket',
+      ),
+      rolloutCohort: _requiredString(
+        map["rolloutCohort"],
+        '$path.rolloutCohort',
+      ),
     );
   }
 
@@ -1518,7 +2725,9 @@ final class ObjectPageContext {
     "canonicalEntityId": canonicalEntityId,
     "tagRefs": tagRefs.map((value) => value).toList(growable: false),
     "entityRefs": entityRefs.map((value) => value).toList(growable: false),
-    "relationEdgeIds": relationEdgeIds.map((value) => value).toList(growable: false),
+    "relationEdgeIds": relationEdgeIds
+        .map((value) => value)
+        .toList(growable: false),
     "referralSource": referralSource,
     "feedRequestId": feedRequestId,
     "recommendationTraceId": recommendationTraceId,
@@ -1552,8 +2761,22 @@ final class ObjectPageRolloutContext {
   final bool assistantProactiveEnabled;
   final bool relationEvidenceEnabled;
 
-  factory ObjectPageRolloutContext.fromWire(Map<String, Object?> map, [String path = "ObjectPageRolloutContext"]) {
-    _rejectUnknownFields(map, const <String>{"enabled", "cohort", "region", "city", "campus", "appVersion", "experimentBucket", "objectType", "assistantProactiveEnabled", "relationEvidenceEnabled"}, path);
+  factory ObjectPageRolloutContext.fromWire(
+    Map<String, Object?> map, [
+    String path = "ObjectPageRolloutContext",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "enabled",
+      "cohort",
+      "region",
+      "city",
+      "campus",
+      "appVersion",
+      "experimentBucket",
+      "objectType",
+      "assistantProactiveEnabled",
+      "relationEvidenceEnabled",
+    }, path);
     return ObjectPageRolloutContext(
       enabled: _requiredBool(map["enabled"], '$path.enabled'),
       cohort: _requiredString(map["cohort"], '$path.cohort'),
@@ -1561,10 +2784,19 @@ final class ObjectPageRolloutContext {
       city: _requiredString(map["city"], '$path.city'),
       campus: _requiredString(map["campus"], '$path.campus'),
       appVersion: _requiredString(map["appVersion"], '$path.appVersion'),
-      experimentBucket: _requiredString(map["experimentBucket"], '$path.experimentBucket'),
+      experimentBucket: _requiredString(
+        map["experimentBucket"],
+        '$path.experimentBucket',
+      ),
       objectType: _requiredString(map["objectType"], '$path.objectType'),
-      assistantProactiveEnabled: _requiredBool(map["assistantProactiveEnabled"], '$path.assistantProactiveEnabled'),
-      relationEvidenceEnabled: _requiredBool(map["relationEvidenceEnabled"], '$path.relationEvidenceEnabled'),
+      assistantProactiveEnabled: _requiredBool(
+        map["assistantProactiveEnabled"],
+        '$path.assistantProactiveEnabled',
+      ),
+      relationEvidenceEnabled: _requiredBool(
+        map["relationEvidenceEnabled"],
+        '$path.relationEvidenceEnabled',
+      ),
     );
   }
 
@@ -1609,20 +2841,70 @@ final class ObjectRelationEdge {
   final double confidence;
   final DateTime? createdAt;
 
-  factory ObjectRelationEdge.fromWire(Map<String, Object?> map, [String path = "ObjectRelationEdge"]) {
-    _rejectUnknownFields(map, const <String>{"edgeId", "edgeType", "sourceObjectType", "sourceObjectId", "targetObjectType", "targetObjectId", "canonicalEntityId", "tagRefs", "evidenceRefs", "confidence", "createdAt"}, path);
+  factory ObjectRelationEdge.fromWire(
+    Map<String, Object?> map, [
+    String path = "ObjectRelationEdge",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "edgeId",
+      "edgeType",
+      "sourceObjectType",
+      "sourceObjectId",
+      "targetObjectType",
+      "targetObjectId",
+      "canonicalEntityId",
+      "tagRefs",
+      "evidenceRefs",
+      "confidence",
+      "createdAt",
+    }, path);
     return ObjectRelationEdge(
       edgeId: _requiredString(map["edgeId"], '$path.edgeId'),
-      edgeType: ObjectRelationEdgeType.fromWire(map["edgeType"], '$path.edgeType'),
-      sourceObjectType: _requiredString(map["sourceObjectType"], '$path.sourceObjectType'),
-      sourceObjectId: _requiredString(map["sourceObjectId"], '$path.sourceObjectId'),
-      targetObjectType: _requiredString(map["targetObjectType"], '$path.targetObjectType'),
-      targetObjectId: _requiredString(map["targetObjectId"], '$path.targetObjectId'),
-      canonicalEntityId: _requiredString(map["canonicalEntityId"], '$path.canonicalEntityId'),
-      tagRefs: List<String>.unmodifiable(_requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'))),
-      evidenceRefs: List<String>.unmodifiable(_requiredList(map["evidenceRefs"], '$path.evidenceRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.evidenceRefs' + '[${entry.key}]'))),
+      edgeType: ObjectRelationEdgeType.fromWire(
+        map["edgeType"],
+        '$path.edgeType',
+      ),
+      sourceObjectType: _requiredString(
+        map["sourceObjectType"],
+        '$path.sourceObjectType',
+      ),
+      sourceObjectId: _requiredString(
+        map["sourceObjectId"],
+        '$path.sourceObjectId',
+      ),
+      targetObjectType: _requiredString(
+        map["targetObjectType"],
+        '$path.targetObjectType',
+      ),
+      targetObjectId: _requiredString(
+        map["targetObjectId"],
+        '$path.targetObjectId',
+      ),
+      canonicalEntityId: _requiredString(
+        map["canonicalEntityId"],
+        '$path.canonicalEntityId',
+      ),
+      tagRefs: List<String>.unmodifiable(
+        _requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map(
+          (entry) =>
+              _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'),
+        ),
+      ),
+      evidenceRefs: List<String>.unmodifiable(
+        _requiredList(
+          map["evidenceRefs"],
+          '$path.evidenceRefs',
+        ).asMap().entries.map(
+          (entry) => _requiredString(
+            entry.value,
+            '$path.evidenceRefs' + '[${entry.key}]',
+          ),
+        ),
+      ),
       confidence: _requiredDouble(map["confidence"], '$path.confidence'),
-      createdAt: map["createdAt"] == null ? null : _requiredTimestamp(map["createdAt"], '$path.createdAt'),
+      createdAt: map["createdAt"] == null
+          ? null
+          : _requiredTimestamp(map["createdAt"], '$path.createdAt'),
     );
   }
 
@@ -1642,40 +2924,77 @@ final class ObjectRelationEdge {
 }
 
 EntityImpactSummary decodeEntityImpactSummary(Object? response) =>
-    EntityImpactSummary.fromWire(_requiredObject(response, "EntityImpactSummary"), "EntityImpactSummary");
+    EntityImpactSummary.fromWire(
+      _requiredObject(response, "EntityImpactSummary"),
+      "EntityImpactSummary",
+    );
 
 HomepageClaimRequestView decodeHomepageClaimRequestView(Object? response) =>
-    HomepageClaimRequestView.fromWire(_requiredObject(response, "HomepageClaimRequestView"), "HomepageClaimRequestView");
+    HomepageClaimRequestView.fromWire(
+      _requiredObject(response, "HomepageClaimRequestView"),
+      "HomepageClaimRequestView",
+    );
 
 HomepageDetailView decodeHomepageDetailView(Object? response) =>
-    HomepageDetailView.fromWire(_requiredObject(response, "HomepageDetailView"), "HomepageDetailView");
+    HomepageDetailView.fromWire(
+      _requiredObject(response, "HomepageDetailView"),
+      "HomepageDetailView",
+    );
 
 HomepageIntroduction decodeHomepageIntroduction(Object? response) =>
-    HomepageIntroduction.fromWire(_requiredObject(response, "HomepageIntroduction"), "HomepageIntroduction");
+    HomepageIntroduction.fromWire(
+      _requiredObject(response, "HomepageIntroduction"),
+      "HomepageIntroduction",
+    );
 
-HomepageRelatedGroupSummaryView decodeHomepageRelatedGroupSummaryView(Object? response) =>
-    HomepageRelatedGroupSummaryView.fromWire(_requiredObject(response, "HomepageRelatedGroupSummaryView"), "HomepageRelatedGroupSummaryView");
+HomepageRelatedGroupSummaryView decodeHomepageRelatedGroupSummaryView(
+  Object? response,
+) => HomepageRelatedGroupSummaryView.fromWire(
+  _requiredObject(response, "HomepageRelatedGroupSummaryView"),
+  "HomepageRelatedGroupSummaryView",
+);
 
 HomepageReviewPageSlice decodeHomepageReviewPageSlice(Object? response) =>
-    HomepageReviewPageSlice.fromWire(_requiredObject(response, "HomepageReviewPageSlice"), "HomepageReviewPageSlice");
+    HomepageReviewPageSlice.fromWire(
+      _requiredObject(response, "HomepageReviewPageSlice"),
+      "HomepageReviewPageSlice",
+    );
 
 HomepageReviewSummaryView decodeHomepageReviewSummaryView(Object? response) =>
-    HomepageReviewSummaryView.fromWire(_requiredObject(response, "HomepageReviewSummaryView"), "HomepageReviewSummaryView");
+    HomepageReviewSummaryView.fromWire(
+      _requiredObject(response, "HomepageReviewSummaryView"),
+      "HomepageReviewSummaryView",
+    );
 
 HomepageReviewView decodeHomepageReviewView(Object? response) =>
-    HomepageReviewView.fromWire(_requiredObject(response, "HomepageReviewView"), "HomepageReviewView");
+    HomepageReviewView.fromWire(
+      _requiredObject(response, "HomepageReviewView"),
+      "HomepageReviewView",
+    );
 
 HomepageSearchSlice decodeHomepageSearchSlice(Object? response) =>
-    HomepageSearchSlice.fromWire(_requiredObject(response, "HomepageSearchSlice"), "HomepageSearchSlice");
+    HomepageSearchSlice.fromWire(
+      _requiredObject(response, "HomepageSearchSlice"),
+      "HomepageSearchSlice",
+    );
 
 HomepageShellView decodeHomepageShellView(Object? response) =>
-    HomepageShellView.fromWire(_requiredObject(response, "HomepageShellView"), "HomepageShellView");
+    HomepageShellView.fromWire(
+      _requiredObject(response, "HomepageShellView"),
+      "HomepageShellView",
+    );
 
 HomepageStatusReportView decodeHomepageStatusReportView(Object? response) =>
-    HomepageStatusReportView.fromWire(_requiredObject(response, "HomepageStatusReportView"), "HomepageStatusReportView");
+    HomepageStatusReportView.fromWire(
+      _requiredObject(response, "HomepageStatusReportView"),
+      "HomepageStatusReportView",
+    );
 
 ObjectPageBundle decodeObjectPageBundle(Object? response) =>
-    ObjectPageBundle.fromWire(_requiredObject(response, "ObjectPageBundle"), "ObjectPageBundle");
+    ObjectPageBundle.fromWire(
+      _requiredObject(response, "ObjectPageBundle"),
+      "ObjectPageBundle",
+    );
 
 Map<String, Object?> _requiredObject(Object? value, String path) {
   if (value is! Map<Object?, Object?>) {
@@ -1700,7 +3019,9 @@ void _rejectUnknownFields(
   final unknown = value.keys.where((key) => !allowed.contains(key)).toList()
     ..sort();
   if (unknown.isNotEmpty) {
-    throw FormatException('$path contains unknown fields: ${unknown.join(', ')}');
+    throw FormatException(
+      '$path contains unknown fields: ${unknown.join(', ')}',
+    );
   }
 }
 
@@ -1731,12 +3052,7 @@ int _requiredInt(Object? value, String path) {
   return value;
 }
 
-int _requiredBoundedInt(
-  Object? value,
-  String path, {
-  int? min,
-  int? max,
-}) {
+int _requiredBoundedInt(Object? value, String path, {int? min, int? max}) {
   final result = _requiredInt(value, path);
   if (min != null && result < min) {
     throw FormatException('$path must be at least $min');

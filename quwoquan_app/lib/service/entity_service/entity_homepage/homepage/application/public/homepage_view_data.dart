@@ -45,11 +45,18 @@ class HomepageSummary extends HomepageCanonicalReference {
     super.coverUrl,
     super.status,
     super.canonicalEntityId,
+    this.coverAssetId,
+    this.coverAccessMode,
     this.city,
     this.address,
     this.averageRating,
     this.ratingCount = 0,
   });
+
+  /// 封面的配对媒体资产标识与交付访问模式（DEC-033）；research 相位的
+  /// coverUrl 是相对私有 CAS 引用，消费面按 coverAssetId 换短签。
+  final String? coverAssetId;
+  final wire.MediaDeliveryAccessMode? coverAccessMode;
 
   final String? city;
   final String? address;
@@ -64,6 +71,8 @@ class HomepageSummary extends HomepageCanonicalReference {
       canonicalEntityId: source.canonicalEntityId,
       subtitle: source.subtitle,
       coverUrl: source.coverUrl,
+      coverAssetId: source.coverAssetId,
+      coverAccessMode: source.coverAccessMode,
       city: source.city,
       address: source.address,
       status: source.status.wireName,
@@ -82,6 +91,8 @@ class HomepageDetail extends HomepageCanonicalReference {
     super.coverUrl,
     super.status,
     super.canonicalEntityId,
+    this.coverAssetId,
+    this.coverAccessMode,
     this.sourceType,
     this.claimStatus,
     this.categoryTags = const <String>[],
@@ -105,6 +116,12 @@ class HomepageDetail extends HomepageCanonicalReference {
     this.publishedAt,
     this.offlineAt,
   });
+
+  /// hero 封面的配对媒体资产标识与交付访问模式（DEC-033）。
+  /// signed_grant 时按 coverAssetId 换取短签；两者缺席即存量 public 交付，
+  /// 不得按 coverUrl 形态反推交付形态。
+  final String? coverAssetId;
+  final wire.MediaDeliveryAccessMode? coverAccessMode;
 
   final String? sourceType;
   final String? claimStatus;
@@ -140,6 +157,8 @@ class HomepageDetail extends HomepageCanonicalReference {
       title: source.title,
       subtitle: source.subtitle,
       coverUrl: source.coverUrl,
+      coverAssetId: source.coverAssetId,
+      coverAccessMode: source.coverAccessMode,
       status: source.status,
       claimStatus: source.claimStatus,
       categoryTags: source.categoryTags,

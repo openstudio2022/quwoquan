@@ -126,25 +126,6 @@ def _write_data_readiness_fixture(
         for name, query, post_ids in feed_queries
     ]
     guest_actor_hash = "sha256:" + "3" * 64
-    app_uat_envelope = {
-        "releaseId": release_id,
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
-        "homepageId": "homepage-west-lake",
-        "homepageTitle": "西湖",
-        "articleWorkId": "post-article",
-        "articleTitle": "西湖文章",
-        "imageWorkId": "post-image",
-        "imageTitle": "西湖图片",
-        "videoWorkId": "post-video",
-        "videoTitle": "西湖视频",
-        "creatorName": "西湖创作者",
-        "creatorUserHandle": "west_lake_creator",
-        "creatorPersonaId": "persona-west-lake",
-        "creatorAvatarAssetId": "creator-avatar-1",
-        "tagLabel": "西湖",
-        "videoAttribution": "测试来源",
-    }
     post_verification_path = output_root / refs["postApiVerificationRef"]
     post_verification_path.write_text(
         json.dumps(
@@ -251,10 +232,6 @@ def _write_data_readiness_fixture(
         "feedQueries": feed_query_evidence,
         **refs,
         "mediaManifestRef": media_path.relative_to(output_root).as_posix(),
-        "appUatEnvelope": app_uat_envelope,
-        "appUatEnvelopeDigest": stackctl._canonical_document_checksum(
-            app_uat_envelope
-        ),
         "verifiedAt": "2026-07-28T00:00:00Z",
         "passed": True,
     }
@@ -275,7 +252,6 @@ def _write_data_readiness_fixture(
         "importReportRef": import_ref,
         "importReportDigest": "sha256:"
         + hashlib.sha256((output_root / import_ref).read_bytes()).hexdigest(),
-        "appUatEnvelopeDigest": receipt["appUatEnvelopeDigest"],
     }
     receipt["activationEnvelopeDigest"] = (
         stackctl._canonical_document_checksum(receipt["activationEnvelope"])
@@ -301,12 +277,6 @@ def _convert_data_readiness_fixture_to_research(
     receipt["internalSubjectHash"] = "sha256:" + "7" * 64
     receipt.pop("guestActorHash", None)
     receipt.pop("guestLogin", None)
-    app_uat = receipt["appUatEnvelope"]
-    app_uat["releaseClass"] = "research"
-    app_uat["productLifecycleState"] = "research"
-    receipt["appUatEnvelopeDigest"] = stackctl._canonical_document_checksum(
-        app_uat
-    )
     attestation_path = (
         output_root
         / "data/releases"
@@ -322,6 +292,22 @@ def _convert_data_readiness_fixture_to_research(
     post["internalSubjectHash"] = receipt["internalSubjectHash"]
     post.pop("guestActorHash", None)
     post.pop("guestLogin", None)
+    # DEC-031：research 私有交付下 avatar 以相对 CAS key 闭合（probeCount=0），
+    # 图片以匿名 401/403 拒绝探测 + expectedSha256 闭合。
+    for row in post.get("creators") or []:
+        if row.get("avatarMediaReady") is True:
+            row["avatarProbeCount"] = 0
+            row["avatarProbe"] = None
+            row["avatarUrl"] = (
+                "media/objects/sha256/aa/aa/" + "a" * 64 + ".jpg"
+            )
+    for post_row in post.get("posts") or []:
+        for probe in post_row.get("mediaProbes") or []:
+            if probe.get("kind") == "image":
+                probe["deliveryRef"] = (
+                    "media/objects/sha256/88/88/" + "8" * 64 + ".jpg"
+                )
+                probe["anonymousStatus"] = 403
     post_path.write_text(json.dumps(post), encoding="utf-8")
     isolation_ref = (
         Path("env")
@@ -351,7 +337,6 @@ def _convert_data_readiness_fixture_to_research(
             "releaseClass": "research",
             "productLifecycleState": "research",
             "readinessPhase": "research",
-            "appUatEnvelopeDigest": receipt["appUatEnvelopeDigest"],
             "researchIsolationPolicy": {
                 "policyRef": isolation["policyRef"],
                 "policyDigest": isolation["policySha256"],
@@ -601,7 +586,35 @@ def test_data_release_readiness__projects_live_exact_query_expectations__local_c
     }
 
 
-def test_data_release_readiness__consumer_does_not_require_premium_supply(
+def _reseal_consumer_receipt(
+    receipt_path: Path,
+    *,
+    output_root: Path,
+    drop_premium_supply: bool,
+) -> None:
+    """Rewrite the fixture as a consumer-phase receipt and re-sign every digest."""
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["readinessPhase"] = "consumer"
+    receipt["activationEnvelope"]["readinessPhase"] = "consumer"
+    if drop_premium_supply:
+        receipt["feedQueries"] = [
+            row for row in receipt["feedQueries"] if row["name"] != "premium_stream"
+        ]
+        receipt["counts"]["premiumPlayableVideos"] = 0
+    receipt["activationEnvelopeDigest"] = stackctl._canonical_document_checksum(
+        receipt["activationEnvelope"]
+    )
+    post_path = output_root / receipt["postApiVerificationRef"]
+    post = json.loads(post_path.read_text(encoding="utf-8"))
+    post["feedQueries"] = list(receipt["feedQueries"])
+    post_path.write_text(json.dumps(post), encoding="utf-8")
+    unsigned = dict(receipt)
+    unsigned.pop("verificationChecksum")
+    receipt["verificationChecksum"] = stackctl._canonical_document_checksum(unsigned)
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+
+def test_data_release_readiness__consumer_accepts_release_bound_premium_supply(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -609,28 +622,11 @@ def test_data_release_readiness__consumer_does_not_require_premium_supply(
     receipt_path, manifest_digest = _write_data_readiness_fixture(
         output_root=tmp_path
     )
-    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-    receipt["readinessPhase"] = "consumer"
-    receipt["feedQueries"] = [
-        row
-        for row in receipt["feedQueries"]
-        if row["name"] != "premium_stream"
-    ]
-    receipt["counts"]["premiumPlayableVideos"] = 0
-    receipt["activationEnvelope"]["readinessPhase"] = "consumer"
-    receipt["activationEnvelopeDigest"] = stackctl._canonical_document_checksum(
-        receipt["activationEnvelope"]
+    _reseal_consumer_receipt(
+        receipt_path,
+        output_root=tmp_path,
+        drop_premium_supply=False,
     )
-    post_path = tmp_path / receipt["postApiVerificationRef"]
-    post = json.loads(post_path.read_text(encoding="utf-8"))
-    post["feedQueries"] = list(receipt["feedQueries"])
-    post_path.write_text(json.dumps(post), encoding="utf-8")
-    unsigned = dict(receipt)
-    unsigned.pop("verificationChecksum")
-    receipt["verificationChecksum"] = stackctl._canonical_document_checksum(
-        unsigned
-    )
-    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
 
     loaded, _ = stackctl._load_data_release_readiness(
         environment="gamma",
@@ -640,13 +636,50 @@ def test_data_release_readiness__consumer_does_not_require_premium_supply(
         readiness_phase=stackctl.ReadinessPhase.CONSUMER,
     )
 
+    assert loaded["readinessPhase"] == "consumer"
+    # consumer 起 premium_stream 就要有 release-bound 读回期望，实时探测与 receipt
+    # 校验器同源；少了 premium_feed 就说明实时探测又退回了自己那一套分档。
     assert stackctl._release_feed_post_expectations(
         loaded,
         readiness_phase=stackctl.ReadinessPhase.CONSUMER,
     ) == {
         "content_feed": {"post-article", "post-image", "post-video"},
         "video_book_feed": {"post-video"},
+        "premium_feed": {"post-video"},
     }
+
+
+def test_data_release_readiness__consumer_requires_premium_supply(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    # environment-topology-and-packaging REQ-002：四环境内容 consumer/commercial
+    # readiness 都必须校验 premium_stream 的 release-bound 非空读回，任一 exact
+    # query 为空不得产生通过回执。视频书唯一消费该池，typed_video 绿不代表其绿。
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    receipt_path, manifest_digest = _write_data_readiness_fixture(
+        output_root=tmp_path
+    )
+    _reseal_consumer_receipt(
+        receipt_path,
+        output_root=tmp_path,
+        drop_premium_supply=True,
+    )
+
+    try:
+        stackctl._load_data_release_readiness(
+            environment="gamma",
+            release_id="pilot-002",
+            verify_run_id="verify-001",
+            manifest_digest=manifest_digest,
+            readiness_phase=stackctl.ReadinessPhase.CONSUMER,
+        )
+    except ValueError as exc:
+        assert "premium_stream has no release-bound playable video" in str(exc)
+    else:
+        raise AssertionError(
+            "consumer readiness without premium supply must be rejected"
+        )
 
 
 def _write_lifecycle_exit_fixture(

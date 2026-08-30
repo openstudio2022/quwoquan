@@ -1,4 +1,4 @@
-"""Deterministic four-slot semantic scheduling projection for pool inspection."""
+"""Deterministic workload-backed semantic scheduling for pool inspection."""
 
 from __future__ import annotations
 
@@ -7,15 +7,10 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from content.execution.campaign.lane import normalize_workloads
+
 _CARRIERS = ("homepage", "article", "image", "video")
 _WAVE_SIZE = 12
-_INITIAL_SLOTS = {
-    "M100": {"homepage": 2, "article": 1, "image": 1, "video": 0},
-    "M1000": {"homepage": 1, "article": 1, "image": 1, "video": 1},
-    # This projection is one local wave only. Governed M10000 campaigns bind
-    # the horizontally scalable host set/capacity plan at execution dispatch.
-    "M10000": {"homepage": 1, "article": 1, "image": 1, "video": 1},
-}
 
 
 def _nonnegative_int(value: object) -> int:
@@ -33,17 +28,20 @@ def _positive_rate(value: object) -> float | None:
 
 
 def _select_distinct_entity_candidates(
-    rows: list[Mapping[str, Any]], *, limit: int
+    rows: list[Mapping[str, Any]],
+    *,
+    limit: int,
+    claimed_entity_refs: set[str],
 ) -> list[dict[str, Any]]:
-    """Select one candidate per canonical entity for a single semantic wave."""
+    """Select one mutation per canonical entity across the current wave."""
+
     selected: list[dict[str, Any]] = []
-    seen: set[str] = set()
     for raw in rows:
         entity_ref = str(raw.get("entityRef") or "").strip()
-        if not entity_ref or entity_ref in seen:
+        if not entity_ref or entity_ref in claimed_entity_refs:
             continue
         selected.append(dict(raw))
-        seen.add(entity_ref)
+        claimed_entity_refs.add(entity_ref)
         if len(selected) == limit:
             break
     return selected
@@ -58,27 +56,48 @@ def semantic_scheduling_projection(
     source_ready_candidates: Mapping[str, list[Mapping[str, Any]]] | None = None,
     source_ready_input: Mapping[str, Any] | None = None,
     throughput_input: Mapping[str, str] | None = None,
+    workload_targets: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     """Allocate only slots backed by physical source-ready inputs."""
 
-    initial = dict(_INITIAL_SLOTS[milestone])
+    if milestone not in {"WORKLOAD", "M100", "M1000", "M10000"}:
+        raise ValueError(f"unsupported semantic milestone: {milestone}")
+    workloads = (
+        normalize_workloads(workload_targets)
+        if workload_targets is not None
+        else normalize_workloads(
+            {
+                carrier: max(
+                    1,
+                    _nonnegative_int(row.get("target"))
+                    or _nonnegative_int(row.get("gap")),
+                )
+                for carrier, row in supply.items()
+            }
+        )
+    )
+    active = tuple(workloads)
     backlog_input = source_ready_backlog or {}
     rate_input = p10_per_slot_throughput or {}
     backlog = {
         carrier: _nonnegative_int(backlog_input.get(carrier))
-        for carrier in _CARRIERS
+        for carrier in active
     }
     rates = {
         carrier: _positive_rate(rate_input.get(carrier))
-        for carrier in _CARRIERS
+        for carrier in active
     }
-    gaps = {
-        carrier: _nonnegative_int(supply[carrier].get("gap"))
-        for carrier in _CARRIERS
-    }
+    gaps = (
+        dict(workloads)
+        if workload_targets is not None
+        else {
+            carrier: _nonnegative_int(supply[carrier].get("gap"))
+            for carrier in active
+        }
+    )
     launchable = {
         carrier
-        for carrier in _CARRIERS
+        for carrier in active
         if gaps[carrier] > 0 and backlog[carrier] > 0
     }
     slot_capacity = {
@@ -87,55 +106,25 @@ def semantic_scheduling_projection(
             if carrier in launchable
             else 0
         )
-        for carrier in _CARRIERS
+        for carrier in active
     }
-    assigned = {
-        carrier: (
-            min(initial[carrier], slot_capacity[carrier])
-            if carrier in launchable
-            else 0
-        )
-        for carrier in _CARRIERS
-    }
+    # slot 只隔离失败域，不声明 Provider、主机或 carrier 容量；所有有物理
+    # 来源的 work unit 都进入本次可调度集合。
+    assigned = dict(slot_capacity)
     remaining_hours = {
         carrier: (
             round(gaps[carrier] / (rates[carrier] * 3600), 6)
             if rates[carrier] is not None
             else None
         )
-        for carrier in _CARRIERS
+        for carrier in active
     }
-    while sum(assigned.values()) < 4:
-        reallocatable = {
-            carrier
-            for carrier in launchable
-            if assigned[carrier] < min(4, slot_capacity[carrier])
-        }
-        if not reallocatable:
-            break
-        carrier = max(
-            reallocatable,
-            key=lambda item: (
-                remaining_hours[item]
-                if remaining_hours[item] is not None
-                else float(gaps[item]),
-                gaps[item],
-                -_CARRIERS.index(item),
-            ),
-        )
-        assigned[carrier] += 1
     inventory = source_ready_candidates or {}
-    distinct_capacity = {
-        carrier: len(
-            {
-                str(row.get("entityRef") or "").strip()
-                for row in inventory.get(carrier, [])
-                if str(row.get("entityRef") or "").strip()
-            }
-        )
-        for carrier in _CARRIERS
+    physical_capacity = {
+        carrier: len(inventory.get(carrier, []))
+        for carrier in active
     }
-    rows = [
+    rows: list[dict[str, Any]] = [
         {
             "carrier": carrier,
             "gap": gaps[carrier],
@@ -143,44 +132,30 @@ def semantic_scheduling_projection(
             "p10PerSlotThroughput": rates[carrier],
             "remainingSemanticHours": remaining_hours[carrier],
             "assignedSlots": assigned[carrier],
-            "sourceReadyHighWater": (
-                max(initial[carrier], assigned[carrier]) * _WAVE_SIZE * 2
-            ),
-            "dispatchCandidateCount": min(
-                gaps[carrier],
-                backlog[carrier],
-                distinct_capacity[carrier],
-                assigned[carrier] * _WAVE_SIZE,
-            ),
+            "sourceReadyHighWater": min(gaps[carrier], backlog[carrier]),
+            "dispatchCandidateCount": 0,
         }
-        for carrier in _CARRIERS
+        for carrier in active
     ]
-    candidates = [row for row in rows if row["assignedSlots"] > 0]
-    next_carrier = (
-        max(
-            candidates,
-            key=lambda row: (
-                row["remainingSemanticHours"]
-                if row["remainingSemanticHours"] is not None
-                else float(row["gap"]),
-                row["gap"],
-                -_CARRIERS.index(str(row["carrier"])),
-            ),
-        )["carrier"]
-        if candidates
-        else None
-    )
-    selected_candidates = [
-        dict(candidate)
-        for row in rows
-        for candidate in _select_distinct_entity_candidates(
+    selected_candidates: list[dict[str, Any]] = []
+    claimed_entity_refs: set[str] = set()
+    for row in rows:
+        selected = _select_distinct_entity_candidates(
             list(inventory.get(str(row["carrier"]), [])),
-            limit=int(row["dispatchCandidateCount"]),
+            limit=min(
+                int(row["gap"]),
+                int(row["sourceReadyBacklog"]),
+                physical_capacity[str(row["carrier"])],
+            ),
+            claimed_entity_refs=claimed_entity_refs,
         )
-    ]
+        row["dispatchCandidateCount"] = len(selected)
+        selected_candidates.extend(selected)
     wave_stable = {
         "schema": "quwoquan_data.pool_semantic_wave_input",
         "milestone": milestone,
+        "activeCarriers": list(active),
+        "workloadTargets": workloads,
         "sourcePoolRef": (source_ready_input or {}).get("sourcePoolRef"),
         "sourcePoolDigest": (source_ready_input or {}).get("sourcePoolDigest"),
         "sourcePoolEvidenceRootRef": (source_ready_input or {}).get(
@@ -197,17 +172,20 @@ def semantic_scheduling_projection(
         ).encode("utf-8")
     ).hexdigest()
     return {
-        "totalSemanticSlots": 4,
+        "totalSemanticSlots": sum(assigned.values()),
         "researchWaveSize": _WAVE_SIZE,
-        "initialSlots": initial,
-        "idleSlots": 4 - sum(assigned.values()),
-        "nextReallocationCarrier": next_carrier,
         "dispatchBlockedWithoutPhysicalBacklog": not bool(launchable),
         "carriers": rows,
         "sourceReadyInput": dict(
             source_ready_input
             or {
                 "status": "not_provided",
+                "targetScale": milestone,
+                "workloadMode": (
+                    "explicit" if milestone == "WORKLOAD" else "milestone_preset"
+                ),
+                "activeCarriers": list(active),
+                "workloadTargets": workloads,
                 "sourcePoolRef": None,
                 "sourcePoolFileSha256": None,
                 "sourcePoolDigest": None,

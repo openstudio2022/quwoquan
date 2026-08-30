@@ -75,6 +75,57 @@ privacy_contract:
     recovery: source_stream_pending_reference_only
     logs: digest_only
 api_routes:
+- method: GET
+  path: /internal/integrations/external-requests/capabilities/identity.sms.otp/readiness
+  operation: GetSmsOtpDeliveryReadiness
+  actor: none
+  transport_role: readiness
+  application:
+    kind: query
+    facet: ExternalInteractionQueryFacade
+    method: getSmsOtpDeliveryReadiness
+    reader: SmsOtpDeliveryReadinessReader
+    slice: SmsOtpDeliveryReadiness
+  authorization:
+    principal: service
+    scopes:
+    - integration.identity.sms.otp.readiness.read
+    ownership_policy: trusted_user_service_sms_otp_readiness_only
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 800
+    cancellation: supported
+    retry_mode: none
+    max_attempts: 1
+    idempotency: none
+  error_codes:
+  - INTEGRATION.USER.external_interaction_readiness_forbidden
+  - INTEGRATION.SYSTEM.external_interaction_internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: integration_sms_otp_delivery_readiness
+    trace: true
+    attributes:
+    - outcome
+    - capability
+  slo:
+    latency_p95_ms: 300
+    availability_percent: 99.9
+  description: 仅供 user-service 以 capability-scoped service principal 查询 identity.sms.otp 的 binding、运行时材料、Provider probe 与结果 relay；不返回 Provider 标识、endpoint、secret 或通用服务健康状态。
+  response_entity: SmsOtpDeliveryReadiness
+  response_fields:
+  - availability
+  - retryAfterSeconds
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
 - method: POST
   path: /integrations/external-requests
   operation: SubmitExternalInteractionRequest
@@ -427,6 +478,22 @@ contract_test:
       - POST /integrations/push-deliveries 返回 404
       - POST /integrations/sms-otp:send 返回 404
 readiness_cases:
+- case_id: get-sms-otp-delivery-readiness-local
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-012
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: GetSmsOtpDeliveryReadiness}
+  runner_source_path: quwoquan_service/services/integration-service/tests/local_contract/external_integration/external_interaction/sms_otp_delivery_readiness__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: get-sms-otp-delivery-readiness-api
+  spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-012
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: GetSmsOtpDeliveryReadiness}
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/sms_otp_delivery_readiness__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: https-provider, digest_binding: candidate}
 - case_id: submit-external-interaction-local
   spec_ref: specs/feature-tree/runtime/runtime-external-integration/integration-service-foundation/spec.md#gwt-001
   producer: service

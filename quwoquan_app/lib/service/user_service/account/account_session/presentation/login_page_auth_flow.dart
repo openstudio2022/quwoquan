@@ -233,11 +233,9 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
       case LoginStep.socialPhoneOtp:
         _cancelSocialBindingAndRestoreRoot();
       case LoginStep.blocked:
-        if (_isAccountSuspensionSurface) {
-          _dismissLogin();
-        } else {
-          _enterPhoneEntry(preservePhone: false);
-        }
+        // REQ-012：blocked 终态顶栏为关闭（X），统一执行宿主关闭策略；
+        // 换方式登录的出口由页面内动作与 footer 提供，不复用关闭控件。
+        _dismissLogin();
       case LoginStep.completing:
         _cancelActiveAttempt();
         _restoreRoot();

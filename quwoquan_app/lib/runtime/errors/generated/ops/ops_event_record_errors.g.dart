@@ -3,26 +3,66 @@
 
 enum OpsEventRecordErrorCode {
   eventBatchInvalid('OPS.USER.event_batch_invalid', '事件批次不符合目录契约', 422),
-  runtimeLogBatchInvalid('OPS.USER.runtime_log_batch_invalid', '诊断日志批次不符合统一日志目录', 422),
+  runtimeLogBatchInvalid(
+    'OPS.USER.runtime_log_batch_invalid',
+    '诊断日志批次不符合统一日志目录',
+    422,
+  ),
   idempotencyKeyInvalid('OPS.USER.idempotency_key_invalid', '事件批次校验失败', 400),
   queryWindowInvalid('OPS.USER.query_window_invalid', '日志查询时间范围无效', 400),
-  eventDrilldownForbidden('OPS.USER.event_drilldown_forbidden', '没有日志明细查询权限', 403),
+  eventDrilldownForbidden(
+    'OPS.USER.event_drilldown_forbidden',
+    '没有日志明细查询权限',
+    403,
+  ),
   logstoreUnavailable('OPS.SYSTEM.logstore_unavailable', '日志服务暂时不可用', 503),
-  eventProjectionUnavailable('OPS.SYSTEM.event_projection_unavailable', '产品事件运营投影暂时不可用', 503),
-  runtimeLogstoreUnavailable('OPS.SYSTEM.runtime_logstore_unavailable', '诊断日志服务暂时不可用', 503),
-  startupConfigurationInvalid('OPS.SYSTEM.startup_configuration_invalid', '启动配置不可用，请检查网络后重试', 0),
-  startupInitializationFailed('OPS.SYSTEM.startup_initialization_failed', '应用启动遇到问题，请重试', 0),
-  startupRouterUnavailable('OPS.SYSTEM.startup_router_unavailable', '页面暂时无法打开，请重试', 0),
-  startupNativeFirstFrameTimeout('OPS.SYSTEM.startup_native_first_frame_timeout', '应用界面未能及时显示，请重试', 0),
+  eventProjectionUnavailable(
+    'OPS.SYSTEM.event_projection_unavailable',
+    '产品事件运营投影暂时不可用',
+    503,
+  ),
+  runtimeLogstoreUnavailable(
+    'OPS.SYSTEM.runtime_logstore_unavailable',
+    '诊断日志服务暂时不可用',
+    503,
+  ),
+  startupConfigurationInvalid(
+    'OPS.SYSTEM.startup_configuration_invalid',
+    '启动配置不可用，请检查网络后重试',
+    0,
+  ),
+  startupInitializationFailed(
+    'OPS.SYSTEM.startup_initialization_failed',
+    '应用启动遇到问题，请重试',
+    0,
+  ),
+  startupRouterUnavailable(
+    'OPS.SYSTEM.startup_router_unavailable',
+    '页面暂时无法打开，请重试',
+    0,
+  ),
+  startupNativeFirstFrameTimeout(
+    'OPS.SYSTEM.startup_native_first_frame_timeout',
+    '应用界面未能及时显示，请重试',
+    0,
+  ),
   startupEventInvalid('OPS.USER.startup_event_invalid', '启动诊断事件无效', 400),
-  startupTelemetryUnavailable('OPS.SYSTEM.startup_telemetry_unavailable', '启动诊断暂时不可用', 503),
+  startupTelemetryUnavailable(
+    'OPS.SYSTEM.startup_telemetry_unavailable',
+    '启动诊断暂时不可用',
+    503,
+  ),
   unknown('', '启动诊断暂时不可用，请稍后重试', 500);
 
   final String code;
   final String defaultMessage;
   final int httpStatus;
 
-  const OpsEventRecordErrorCode(this.code, this.defaultMessage, this.httpStatus);
+  const OpsEventRecordErrorCode(
+    this.code,
+    this.defaultMessage,
+    this.httpStatus,
+  );
 
   static OpsEventRecordErrorCode fromCode(String code) {
     for (final value in values) {
@@ -36,37 +76,53 @@ enum OpsEventRecordErrorCode {
 class OpsEventRecordErrorMessages {
   const OpsEventRecordErrorMessages._();
 
-  static const Map<OpsEventRecordErrorCode, String> zh = <OpsEventRecordErrorCode, String>{
-    OpsEventRecordErrorCode.eventBatchInvalid: '事件批次不符合目录契约',
-    OpsEventRecordErrorCode.runtimeLogBatchInvalid: '诊断日志批次不符合统一日志目录',
-    OpsEventRecordErrorCode.idempotencyKeyInvalid: '事件批次校验失败',
-    OpsEventRecordErrorCode.queryWindowInvalid: '日志查询时间范围无效',
-    OpsEventRecordErrorCode.eventDrilldownForbidden: '没有日志明细查询权限',
-    OpsEventRecordErrorCode.logstoreUnavailable: '日志服务暂时不可用',
-    OpsEventRecordErrorCode.eventProjectionUnavailable: '产品事件运营投影暂时不可用',
-    OpsEventRecordErrorCode.runtimeLogstoreUnavailable: '诊断日志服务暂时不可用',
-    OpsEventRecordErrorCode.startupConfigurationInvalid: '启动配置不可用，请检查网络后重试',
-    OpsEventRecordErrorCode.startupInitializationFailed: '应用启动遇到问题，请重试',
-    OpsEventRecordErrorCode.startupRouterUnavailable: '页面暂时无法打开，请重试',
-    OpsEventRecordErrorCode.startupNativeFirstFrameTimeout: '应用界面未能及时显示，请重试',
-    OpsEventRecordErrorCode.startupEventInvalid: '启动诊断事件无效',
-    OpsEventRecordErrorCode.startupTelemetryUnavailable: '启动诊断暂时不可用',
-  };
+  static const Map<OpsEventRecordErrorCode, String> zh =
+      <OpsEventRecordErrorCode, String>{
+        OpsEventRecordErrorCode.eventBatchInvalid: '事件批次不符合目录契约',
+        OpsEventRecordErrorCode.runtimeLogBatchInvalid: '诊断日志批次不符合统一日志目录',
+        OpsEventRecordErrorCode.idempotencyKeyInvalid: '事件批次校验失败',
+        OpsEventRecordErrorCode.queryWindowInvalid: '日志查询时间范围无效',
+        OpsEventRecordErrorCode.eventDrilldownForbidden: '没有日志明细查询权限',
+        OpsEventRecordErrorCode.logstoreUnavailable: '日志服务暂时不可用',
+        OpsEventRecordErrorCode.eventProjectionUnavailable: '产品事件运营投影暂时不可用',
+        OpsEventRecordErrorCode.runtimeLogstoreUnavailable: '诊断日志服务暂时不可用',
+        OpsEventRecordErrorCode.startupConfigurationInvalid: '启动配置不可用，请检查网络后重试',
+        OpsEventRecordErrorCode.startupInitializationFailed: '应用启动遇到问题，请重试',
+        OpsEventRecordErrorCode.startupRouterUnavailable: '页面暂时无法打开，请重试',
+        OpsEventRecordErrorCode.startupNativeFirstFrameTimeout:
+            '应用界面未能及时显示，请重试',
+        OpsEventRecordErrorCode.startupEventInvalid: '启动诊断事件无效',
+        OpsEventRecordErrorCode.startupTelemetryUnavailable: '启动诊断暂时不可用',
+      };
 
-  static const Map<OpsEventRecordErrorCode, String> en = <OpsEventRecordErrorCode, String>{
-    OpsEventRecordErrorCode.eventBatchInvalid: 'The event batch does not match the telemetry catalog.',
-    OpsEventRecordErrorCode.runtimeLogBatchInvalid: 'The runtime diagnostic batch does not match the log catalog.',
-    OpsEventRecordErrorCode.idempotencyKeyInvalid: 'The event batch digest is invalid.',
-    OpsEventRecordErrorCode.queryWindowInvalid: 'The telemetry query window is invalid.',
-    OpsEventRecordErrorCode.eventDrilldownForbidden: 'You do not have permission to query telemetry details.',
-    OpsEventRecordErrorCode.logstoreUnavailable: 'Telemetry storage is temporarily unavailable.',
-    OpsEventRecordErrorCode.eventProjectionUnavailable: 'The product event operations projection is temporarily unavailable.',
-    OpsEventRecordErrorCode.runtimeLogstoreUnavailable: 'Runtime diagnostics storage is temporarily unavailable.',
+  static const Map<OpsEventRecordErrorCode, String>
+  en = <OpsEventRecordErrorCode, String>{
+    OpsEventRecordErrorCode.eventBatchInvalid:
+        'The event batch does not match the telemetry catalog.',
+    OpsEventRecordErrorCode.runtimeLogBatchInvalid:
+        'The runtime diagnostic batch does not match the log catalog.',
+    OpsEventRecordErrorCode.idempotencyKeyInvalid:
+        'The event batch digest is invalid.',
+    OpsEventRecordErrorCode.queryWindowInvalid:
+        'The telemetry query window is invalid.',
+    OpsEventRecordErrorCode.eventDrilldownForbidden:
+        'You do not have permission to query telemetry details.',
+    OpsEventRecordErrorCode.logstoreUnavailable:
+        'Telemetry storage is temporarily unavailable.',
+    OpsEventRecordErrorCode.eventProjectionUnavailable:
+        'The product event operations projection is temporarily unavailable.',
+    OpsEventRecordErrorCode.runtimeLogstoreUnavailable:
+        'Runtime diagnostics storage is temporarily unavailable.',
     OpsEventRecordErrorCode.startupConfigurationInvalid: 'Startup configuration is unavailable. Check your connection and retry.',
-    OpsEventRecordErrorCode.startupInitializationFailed: 'The app could not start. Please retry.',
-    OpsEventRecordErrorCode.startupRouterUnavailable: 'The page is temporarily unavailable. Please retry.',
-    OpsEventRecordErrorCode.startupNativeFirstFrameTimeout: 'The app interface did not appear in time. Please retry.',
-    OpsEventRecordErrorCode.startupEventInvalid: 'The startup diagnostic event is invalid.',
-    OpsEventRecordErrorCode.startupTelemetryUnavailable: 'Startup diagnostics are temporarily unavailable.',
+    OpsEventRecordErrorCode.startupInitializationFailed:
+        'The app could not start. Please retry.',
+    OpsEventRecordErrorCode.startupRouterUnavailable:
+        'The page is temporarily unavailable. Please retry.',
+    OpsEventRecordErrorCode.startupNativeFirstFrameTimeout:
+        'The app interface did not appear in time. Please retry.',
+    OpsEventRecordErrorCode.startupEventInvalid:
+        'The startup diagnostic event is invalid.',
+    OpsEventRecordErrorCode.startupTelemetryUnavailable:
+        'Startup diagnostics are temporarily unavailable.',
   };
 }

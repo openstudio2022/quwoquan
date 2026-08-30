@@ -67,6 +67,10 @@
 - [`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md)：ContractGraph validate/generate/check 可在 clean checkout 幂等重生。
 - [`domain-service-directory-ownership`](./domain-service-directory-ownership/spec.md)：从每个服务的 `contracts/domain.yaml` 和 L1 工程归属直接定位唯一责任领域。
 - [`repository-layout-hygiene-and-retirement`](./repository-layout-hygiene-and-retirement/spec.md)：报告包含固定九类分类、WIP 清单、候选引用证据和最小验证命令。
+- [`absent-empty-failure-nullability`](./absent-empty-failure-nullability/spec.md)：缺席、空值与失败在端云保持三种不可互换的结果状态。
+- [`local-worktree-lifecycle-governance`](./local-worktree-lifecycle-governance/spec.md)：新建工作副本需显式授权，未合入工作按滞留时长分级提醒。
+- [`explicit-semantics-no-implicit-inference`](./explicit-semantics-no-implicit-inference/spec.md)：行为分支只读显式声明，值的在场与形态不构成声明。
+- [`model-attribute-semantics`](./model-attribute-semantics/spec.md)：模型属性的闭集取值在每条消费管线上类型化，四种输入形态各自独立判定。
 
 ## 5. 能力要求
 
@@ -86,6 +90,7 @@
 - 该判据只接受对象契约内的正向声明，不接受集中 allowlist；对象非不可变、存在实例级可变不变式或 command 未登记时一律阻断，该 command 属于聚合根写入口，应改挂对应 aggregate_root
 - enum 仅允许 global/service/object 三级最近 owner 解析，同名 shadow、同 owner 重复、跨对象私有重复、悬空引用和 dead definition 均 fail-closed
 - fields 中所有 type/semantic_type 必须能解析且语义兼容；projection 必须显式声明 `read_model` 与非空字段 shape，客户端 `dart_class + output_path` 成对且全图唯一
+- 契约中的每个字段都必须有明确语义与真实消费方；未定的产品决策不得以「先留个字段」的方式固化进契约，无语义或无消费方的新增字段判否
 
 <a id="req-002"></a>
 ### REQ-002 服务目录、DDD 依赖与 CQRS 规则
@@ -117,6 +122,7 @@
 ### REQ-003 配置、四环境与唯一运行拓扑
 
 - 每个服务配置键只在本服务 config/schema.yaml 定义，四环境 config.yaml 只保存 override、secret reference 与 external binding
+- 配置取值分四层且每层都是显式声明：服务环境 override、环境级跨服务默认、全局跨服务默认（`quwoquan_ops/environments/config-defaults.yaml`）、服务 schema `default`；跨服务默认只提供取值不定义键——未命中本服务 schema 声明的键时不写入快照，命中 `sensitive` 键即判否，任一生效值都能指回一处写下它的文件（[DEC-029](design.md#dec-029)）
 - 环境集合精确等于 alpha/beta/gamma/prod，不存在 dev 或 prod-gray
 - prod gray 仅是 rollout stage
 - 每个服务以 environments/<env> 作为该环境唯一入口，四环境只依赖公共 config/resources/deploy 基线，环境之间不继承
@@ -217,6 +223,7 @@
 - GIVEN 执行“配置、四环境与唯一运行拓扑”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“配置、四环境与唯一运行拓扑”对应动作。
 - THEN 每个服务配置键只在本服务 config/schema.yaml 定义，四环境 config.yaml 只保存 override、secret reference 与 external binding
+- THEN 配置取值按「服务环境 override → 环境级跨服务默认 → 全局跨服务默认 → schema default」四层生效，跨服务默认未命中本服务 schema 声明的键时不写入快照、命中 `sensitive` 键时渲染判否，且每个生效值的来源指向唯一一处文件
 - THEN 环境集合精确等于 alpha/beta/gamma/prod，不存在 dev 或 prod-gray
 - THEN prod gray 仅是 rollout stage
 - THEN 每个服务以 environments/<env> 作为该环境唯一入口，环境之间不存在引用或继承
@@ -320,4 +327,62 @@
 - 准出影响：`block`
 - 影响或价值：当前三层入口和静态 evidence 尚不能分别证明 App 与服务的对象级测试完整性，也没有把结构入口与 runner CaseResult、四环境和用户验收回执完整分字段承载；缺结果证据时不得把对象升为 commercial-ready。
 - 完成判定：`SIT-006` 的 9 条 THEN 组全部具备子句级 `spec_ref`（`sit-006.t1..t9`）绑定的真实测试或可执行门证据，且结构入口与 runner CaseResult、四环境和用户验收回执分字段承载，缺结果证据的对象不得升为 commercial-ready。
+
+<a id="open-007"></a>
+### OPEN-007 环境巡检与 App 预检探针尚未切到 `/readyz`
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 `/healthz` 在 servicekit 迁移后是浅层 liveness（恒 200），只有 `/readyz` 回答依赖就绪（[DEC-028](design.md#dec-028)）。`quwoquan_ops/cli/commands/diagnostics_shared.py` 的环境巡检与 `app_preflight_debug.py` 的 App 预检仍按 `/healthz` 判定第一方服务可用，因此依赖未连上的服务会被判为健康，巡检与预检的结论不再等价于「环境可用」。内容发布运行时的就绪等待已切到 `/readyz`；巡检与预检两条链路的切换会把「依赖缺失」从静默通过变为显式失败，必须与四环境实跑一起验证，不能只做静态改动。
+- 完成判定：巡检与 App 预检对第一方服务改判 `/readyz`，且在 alpha 与 gamma 两个环境实跑证明「依赖缺失时巡检失败、依赖就绪时巡检通过」，回执落入 `SIT-006` 的四环境字段。
+
+### OPEN-008 运行时包身份与资源定位键尚未进入声明面
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：当前 servicekit 声明面只覆盖服务配置键，运行时包身份与资源定位键仍是装配代码里的 `os.Getenv` 裸读——chat 的 `MODULE_PACKAGE`、`RELIABLE_TASK_MODULES`、`RELIABLE_TASK_CATALOG_PATH`、`RELIABLE_TASK_RETENTION_POLICY_PATH`，assistant 的 `ASSISTANT_SHUTDOWN_TIMEOUT_SECONDS`。裸读的键不进 `DeclaredEnvKeys()`，注入键双向对账（[DEC-028](design.md#dec-028)）对它们只能退到源码字面量兜底轨道：键名重命名时声明面无从发现消费者，`MODULE_PACKAGE` 这类同时被 compose 与 gamma mirror 注入的键因此没有声明侧判据。它们确实不是服务配置（包身份决定装配哪些模块，资源路径指向包内资产），把它们塞进服务 config 会混淆两类语义，所以需要的是一个独立的包身份声明位而非直接并入现有 config 段。
+- 完成判定：servicekit 提供包身份与资源定位的声明位，上述五个键改为声明式读取并进入 `DeclaredEnvKeys()`，`SIT-003` 的 `sit-003.t1`（每个服务配置键只在本服务 schema 定义）对它们具备子句级绑定证据，注入键双向对账对它们不再依赖源码字面量兜底，且 chat 与 assistant 的键集等价断言覆盖新增键。
+
+### OPEN-009 user-service 的 Mongo 是隐性可选依赖
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：当前 `servicekit.MongoConfig` 把 uri/database 声明为 `required`，未注入即拒绝启动；user-service 现有装配相反——`USER_MONGO_URI` 缺席时它照常启动，兴趣画像读取、following_subjects 与 followed_subject_visit 投影、creator runtime profile、账号注销的 Mongo 清理等 8 处功能静默降级为「无该能力」，`mongodb` 就绪检查也随之不登记，因此 `/readyz` 不会暴露这次降级。为保持迁移等价，user-service 自带一份不带 `required` 的 Mongo 声明并按 URI 在场条件调用 `Assembly.Mongo`，可选性因此只存在于装配代码里，配置 schema 与声明面都读不出「这些能力在本环境是关的」。可选依赖本身是合理的（部分环境确实不带 Mongo），缺的是把它显式化的声明位：需要能声明「按能力分组的可选依赖」，并让降级出现在就绪与配置面上，而不是把 8 处功能的开关藏在一个字符串是否为空里。
+- 完成判定：servicekit 提供按能力分组的可选依赖声明位，user-service 的 Mongo 段改为显式声明可选并在未注入时产生可观测的降级声明（就绪面登记降级项或配置面标注能力关闭），`SIT-003` 的 `sit-003.t1`（每个服务配置键只在本服务 schema 定义）对该声明具备子句级绑定证据，且 user-service 的键集等价断言覆盖改动后的键集。
+
+### OPEN-010 认证直接拒绝的请求在对外入口不再产生访问日志
+
+- 类型：`risk`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：servicekit 把观测栈固定在认证中间件**内侧**（[DEC-028](design.md#dec-028)），因此被凭据校验直接拒掉的请求（401/403）不再经过访问日志与进程日志中间件，只留下认证侧的拒绝计数——而把访问日志放在认证外层时，这类请求会带完整 path、来源与耗时进日志。api-edge 是全站唯一对外业务入口，它承接全部未认证与伪造凭据流量，因此「凭据类拒绝没有访问日志」在这里的后果与内部服务不同级：凭据喷洒、过期 token 风暴与客户端签名回归都失去按 path/来源聚合的一手证据，线上异常巡检只能从计数看到总量、看不到打哪个面。九个已迁移服务同构承受该变化，但只有 api-edge 处在对外面上。
+- 完成判定：servicekit 让认证拒绝进入访问日志（把访问日志层移到认证外侧，或由认证层自行产出同字段的访问日志记录），并以 api_integration 证明「携带无效凭据请求 api-edge 的某个业务 path 时，访问日志出现该请求的 path、状态码与来源」，回执落入 `SIT-006` 的 api_integration 鉴权边界字段。
+
+### OPEN-011 配置分发的机器面 operation 不在 ContractGraph 内
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 platform-ops 的 `resolve-for-instance` 是全体受管服务 config sync 与发布 ACK 的入口，但它不在 `PlatformOperationSecurityDescriptors` 里——该表由运营台门户 metadata 派生，只覆盖人面 operation。交给 default-deny 的 operation guard 会直接 404 掐断所有服务的配置解析与发布收敛，因此它挂在 `Assembly.Unguarded()`，准入靠 handler 自身的 service principal 与 env/service 绑定校验。后果是这条机器面的鉴权判据存在于 handler 代码里而不是 contracts：它的 operation 身份、超时预算与错误码不进 ContractGraph，`operationsecurity` 的 default-deny 覆盖率对它没有约束力，改动时也没有契约侧的回归判据。同类机器面 operation 在其他控制面服务上会重复这个形态。
+- 完成判定：配置分发的机器面 operation 进入所属服务 `contracts/**` 并经 codegen 出现在 operation descriptor 表中，`resolve-for-instance` 回到 operation guard 内，`SIT-003` 的 `sit-003.t1`（每个服务配置键只在本服务 schema 定义）与 operation 契约边界测试对它具备子句级绑定证据。
+
+### OPEN-012 本地 onebox 的 prod 档缺发布身份注入
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：当前 `quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh` 在 `STAGE=prod` 档下不注入 `RELEASE_MANIFEST_DIGEST` 与 `PLATFORM_OPS_BASE_URL`，而 servicekit 的身份校验与 config sync 注册对 `prod` 环境要求两者在场（[DEC-028](design.md#dec-028)）。platform-ops 与 product-ops 因此在该档位下 fail-closed 起不来。这是四环境注入面的缺口而非服务侧问题：脚本按环境分档注入，prod 档缺少受管服务身份所需的两个键，且缺失只在运行该档位时显形，静态检查不覆盖。
+- 完成判定：该脚本的 prod 档为受管服务注入 `RELEASE_MANIFEST_DIGEST` 与 `PLATFORM_OPS_BASE_URL`，并在本地 onebox 的 prod 档实跑证明 platform-ops 与 product-ops 通过身份校验并完成一次配置解析，回执落入 `SIT-006` 的四环境字段。
+
+<a id="open-014"></a>
+### OPEN-014 云上 prod 的 Redis 集群种子没有注入轨
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 11 个服务的 `environments/prod/config.yaml` 声明了 `redis.<scene>.mode: cluster`，但只有 api-edge 在快照里给出了集群种子地址；其余服务的 `secretRefs` 只声明 Redis 密码，`deploy/base/**` 也没有地址注入，因此云上 prod 的集群种子没有任何来源。这些 scene 已按 [DEC-028](design.md#dec-028) 在装配期判否，会在首次部署时启动失败——失败本身是正确暴露，但缺的是种子地址在 prod 的注入归属：它既不在服务自治的环境入口，也不在 k8s 侧的 secret 声明里。同一个缺口还有反向形态：entity-service 的 prod 快照声明 `standalone` + 明文，与其余服务的 `cluster` + TLS 口径相反，两种声明都没有部署事实支撑，说明云上 prod 的 Redis 拓扑归属本身没有被裁决过。prod plane（自托管 onebox 形态）已按明文单点显式降档，该缺口只影响云上 prod 拓扑。circle-service 与 api-edge 不由 prod plane 部署，它们的 prod 地址注入同样只能落在云上，因此 `test_redis_scene_address_provenance` 对「不在 prod plane 服务清单里的服务」跳过 prod 判定——那段判定归本缺口，服务一旦迁入 prod plane 就自动纳入。按 [DEC-029](design.md#dec-029) 删除 schema 的 `standalone` 默认值后，`mode` 的兜底声明位改为全局跨服务默认，因此「声明了 cluster 却无种子」这一形态不再可能被降级为单点静默连接——它只会判否。
+- 完成判定：云上 prod 的每个 `cluster` scene 的种子地址在服务 `environments/prod/**` 或 k8s secret 声明里有唯一注入归属，`SIT-003` 的 `sit-003.t1`（每个服务配置键只在本服务 schema 定义）对该注入归属具备子句级绑定证据，实跑回执落入 `SIT-006` 的四环境字段。
 

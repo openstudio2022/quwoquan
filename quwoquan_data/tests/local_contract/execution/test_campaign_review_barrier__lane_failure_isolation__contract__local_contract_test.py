@@ -19,6 +19,9 @@ from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 
 _PLAN = {
     "planDigest": "sha256:" + "a" * 64,
+    # 冻结 plan 必带 activeCarriers；barrier 用下标读它是 fail-closed 契约，
+    # fixture 省略它就等于测了一份真实流水线不会产生的 plan。
+    "activeCarriers": list(CAMPAIGN_CARRIERS),
     "executionIds": {
         carrier: f"20260813--travel-{carrier}-m100--china--scale-004"
         for carrier in CAMPAIGN_CARRIERS
@@ -84,6 +87,29 @@ def test_missing_claim_still_times_out() -> None:
 
     with pytest.raises(TimeoutError, match="homepage"):
         _barrier(claims)
+
+
+def test_missing_claim_has_no_implicit_batch_deadline() -> None:
+    claims = {carrier: _claim(carrier, "active") for carrier in CAMPAIGN_CARRIERS}
+    homepage_reads = 0
+
+    def read_claim(_runtime, _root, carrier):
+        nonlocal homepage_reads
+        if carrier == "homepage":
+            homepage_reads += 1
+            if homepage_reads == 1:
+                return None
+        return claims[carrier]
+
+    wait_for_parallel_review_claims(
+        None,  # type: ignore[arg-type]  # reader 不使用 runtime
+        "root-1",
+        plan=_PLAN,
+        timeout_seconds=None,
+        read_claim=read_claim,
+    )
+
+    assert homepage_reads == 2
 
 
 def test_identity_drift_still_fails_closed() -> None:

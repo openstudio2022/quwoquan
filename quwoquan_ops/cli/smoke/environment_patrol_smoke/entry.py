@@ -1,15 +1,13 @@
-"""CLI 入口：main 编排（设备矩阵、证据采集、报告落盘）与 write_report。
-
-正文自 run_environment_patrol_smoke.py 逐字搬入。
-"""
+"""CLI 入口：main 编排（设备矩阵、证据采集、报告落盘）与 write_report。"""
 from __future__ import annotations
 
 import atexit
 import base64
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from quwoquan_ops.ci.device_matrix.evidence import (
     capture_device_screenshot,
@@ -30,22 +28,25 @@ from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
 from quwoquan_ops.cli.lib.local_runtime_reservation import (
     acquire_local_runtime_use_lock,
 )
+from quwoquan_ops.cli.lib.patrol_cli import resolve_patrol_cli
+
 # PATROL_EXECUTION_LOCK 是原入口的历史 import，运行时无调用点；随包保留。
 from quwoquan_ops.cli.lib.patrol_execution_lock import (
     PATROL_EXECUTION_LOCK,  # noqa: F401
+)
+from quwoquan_ops.cli.lib.patrol_execution_lock import (
     acquire_patrol_execution_lock as _acquire_patrol_execution_lock,
 )
-from quwoquan_ops.cli.lib.patrol_cli import resolve_patrol_cli
 
+from . import artifact_binding_report, host_activation
 from .cli_args import (
     _load_release_uat_cases_b64,
     _redact_command,
     parse_args,
 )
 from .constants import (
-    ACCOUNT_ENFORCEMENT_CANDIDATE_DIGEST_PATTERN,
-    APP_DIR,
     CONTROLLED_EDGE_RESTORE_REQUEST_PREFIX,
+    PATROL_HOST_DIR,
     REPO_ROOT,
     RUNTIME_RECOVERY_EVIDENCE_FIELDS,
     utc_now,
@@ -64,14 +65,17 @@ from .devices import (
     ensure_patrol_ios_products_bridge,
 )
 from .evidence import (
-    _IosDeviceEvidenceStream,
-    _is_ios_device,
+    _AppContentPageScreenshotCapture,
+    _AppUatPerMarkerScreenshotCapture,
+    _apply_feed_content_evidence_gate,
+    _device_evidence_stream,
     _output_evidence_ref,
     _read_account_enforcement_evidence,
     _read_controlled_edge_fault_evidence,
     _read_feed_content_evidence,
     _read_runtime_recovery_evidence,
     _read_video_playback_evidence,
+    _structured_evidence_log_path,
     _validate_account_enforcement_device_matrix,
     _validate_runtime_recovery_device_matrix,
     load_remote_api_evidence,
@@ -81,30 +85,36 @@ from .execution import (
     apply_patrol_test_execution_summary,
     run_command,
 )
+from .external_aut_entry import (
+    decode_external_aut_request,
+    external_aut_case_result,
+    record_external_aut_journey,
+    validate_external_aut_device_count,
+)
 from .handoff import (
     _apply_launcher_handoff_to_command_env,
     _provider_patrol_launcher_handoff,
     _validated_provider_patrol_runtime_identity,
 )
+from .report_state import finish_report, new_report, write_report
+from .request_validation import static_request_issue
 from .session import (
     TypedTestDataActor,
+    TypedTestDataConversation,
     _account_enforcement_phase,
-    _account_enforcement_subject_digest,
-    _evidence_class_for_runtime,
     _is_account_enforcement_target,
     _is_controlled_edge_fault_target,
-    _is_feed_load_target,
     _is_local_target,
     _is_runtime_recovery_target,
     _local_target_for_environment_alias,
     _missing_required_args,
     _prepare_execution_session,
-    _requires_account_closure,
+    _requires_typed_test_data_conversation,
     _requires_video_playback_canary,
-    _resolved_media_base_urls,
     _resolved_owner_id,
     _resolved_persona_id,
     _runtime_env_for_alias,
+    _typed_test_data_conversation_from_environment,
     _uses_persisted_device_session,
     _uses_runtime_anonymous_session,
     _validate_video_playback_canary_work_id,
@@ -118,11 +128,6 @@ from .wrapper import (
     _purge_typed_actor_credential_artifacts,
     patrol_command,
 )
-
-
-def write_report(path: Path, report: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def main() -> int:
@@ -155,115 +160,66 @@ def main() -> int:
 
     runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
     api_contract_env = args.api_contract_env.strip() or runtime_env
-    report: dict[str, Any] = {
-        "suiteId": "environment_page_smoke",
-        "status": "failed",
-        "startedAt": utc_now(),
-        "endedAt": "",
-        "environmentAlias": args.env_name,
-        "rolloutStage": getattr(args, "rollout_stage", ""),
-        "runtimeEnv": runtime_env,
-        "apiContractEnv": api_contract_env,
-        "composition": "production_remote",
-        "evidenceClass": _evidence_class_for_runtime(runtime_env),
-        "target": args.target,
-        "platform": args.platform,
-        "gatewayBaseUrl": args.gateway_base_url,
-        "productOpsBaseUrl": args.product_ops_base_url,
-        "rtcMediaConnectionUrl": args.rtc_media_connection_url,
-        **_resolved_media_base_urls(args),
-        "videoPlaybackCanaryWorkId": str(
-            getattr(args, "video_playback_canary_work_id", "") or ""
-        ).strip(),
-        "accountClosureDisposableAck": (
-            bool(getattr(args, "account_closure_disposable_ack", False))
-            if _requires_account_closure(args)
-            else False
-        ),
-        "persistedDeviceSession": _uses_persisted_device_session(args),
-        "candidateDigest": str(getattr(args, "candidate_digest", "") or "").strip(),
-        "controlledEdgeFault": {
-            "requested": bool(getattr(args, "stackctl_controlled_edge_fault", False)),
-            "receipt": {},
-        },
-        "controlledSubjectDigest": _account_enforcement_subject_digest(args),
-        "hasCurrentOwnerIdentity": bool(_resolved_owner_id(args)),
-        "hasCurrentPersonaIdentity": bool(_resolved_persona_id(args)),
-        "sessionSource": "",
-        "releaseUatCasesPath": "",
-        "remoteApiEvidence": {},
-        "devices": [],
-        "runs": [],
-        "caseResults": [],
-        "failureReason": "",
-        "deviceInventoryPath": "",
-        "evidenceRoot": "",
-    }
-    if bool(getattr(args, "stackctl_controlled_edge_fault", False)):
-        controlled_edge_issues: list[str] = []
-        if not _is_controlled_edge_fault_target(args):
-            controlled_edge_issues.append(
-                "controlled edge fault requires the canonical feed recovery Patrol target"
-            )
-        if _local_target_for_environment_alias(args.env_name) not in {
-            "alpha-local",
-            "beta-local",
-            "gamma-local",
-        }:
-            controlled_edge_issues.append(
-                "controlled edge fault accepts only Alpha/Beta/Gamma local targets"
-            )
-        if len([item for item in args.device_id if str(item).strip()]) != 1:
-            controlled_edge_issues.append(
-                "controlled edge fault requires exactly one explicit device"
-            )
-        if controlled_edge_issues:
-            report["status"] = "gate_block"
-            report["failureReason"] = "; ".join(controlled_edge_issues)
-            report["endedAt"] = utc_now()
-            write_report(report_path, report)
-            return 2
-    if _is_account_enforcement_target(args):
-        account_enforcement_issues = []
-        if args.dry_run:
-            account_enforcement_issues.append(
-                "account-enforcement Gamma UAT forbids dry-run evidence"
-            )
-        if runtime_env != "gamma" or api_contract_env != "gamma":
-            account_enforcement_issues.append(
-                "account-enforcement UAT requires Gamma runtime and Gamma API contract"
-            )
-        if ACCOUNT_ENFORCEMENT_CANDIDATE_DIGEST_PATTERN.fullmatch(
-            report["candidateDigest"]
-        ) is None:
-            account_enforcement_issues.append(
-                "account-enforcement UAT requires a canonical immutable candidate digest"
-            )
-        if account_enforcement_issues:
-            report["status"] = "gate_block"
-            report["failureReason"] = "; ".join(account_enforcement_issues)
-            report["endedAt"] = utc_now()
-            write_report(report_path, report)
-            return 2
+    (
+        external_aut_required,
+        external_aut_canonical_binding,
+        external_aut_decode_error,
+    ) = decode_external_aut_request(args)
+    report = new_report(
+        args=args,
+        runtime_env=runtime_env,
+        api_contract_env=api_contract_env,
+        external_aut_required=external_aut_required,
+    )
+    if external_aut_decode_error is not None:
+        return finish_report(
+            report_path,
+            report,
+            status="gate_block",
+            reason=external_aut_decode_error,
+            exit_code=2,
+        )
+    request_issue = static_request_issue(
+        args,
+        runtime_env=runtime_env,
+        api_contract_env=api_contract_env,
+        candidate_digest=report["candidateDigest"],
+    )
+    if request_issue:
+        return finish_report(
+            report_path,
+            report,
+            status="gate_block",
+            reason=request_issue,
+            exit_code=2,
+        )
     try:
         report["remoteApiEvidence"] = load_remote_api_evidence(
             str(getattr(args, "remote_api_evidence_report", "") or "")
         )
     except ValueError as exc:
-        report["status"] = "gate_block"
-        report["failureReason"] = str(exc)
-        report["endedAt"] = utc_now()
-        write_report(report_path, report)
-        return 2
+        return finish_report(
+            report_path, report, status="gate_block", reason=exc, exit_code=2
+        )
+    typed_conversation: TypedTestDataConversation | None = None
     if not args.dry_run:
         try:
             report["sessionSource"] = _prepare_execution_session(args)
+            typed_conversation = _typed_test_data_conversation_from_environment()
+            conversation_required = _requires_typed_test_data_conversation(args)
+            if conversation_required and typed_conversation is None:
+                raise ValueError(
+                    "typed message UAT requires a stackctl TestDataSession "
+                    "conversation handoff"
+                )
+            if not conversation_required and typed_conversation is not None:
+                raise ValueError(
+                    "typed test-data conversation handoff is not valid for this target"
+                )
         except Exception as exc:  # noqa: BLE001
-            report["status"] = "gate_block"
-            report["failureReason"] = str(exc)
-            report["endedAt"] = utc_now()
-            write_report(report_path, report)
-            return 2
+            return finish_report(
+                report_path, report, status="gate_block", reason=exc, exit_code=2
+            )
         report["hasCurrentOwnerIdentity"] = bool(_resolved_owner_id(args))
         report["hasCurrentPersonaIdentity"] = bool(
             _resolved_persona_id(args)
@@ -278,65 +234,74 @@ def main() -> int:
         try:
             args.release_uat_cases_b64 = _load_release_uat_cases_b64(args.release_uat_cases)
         except ValueError as exc:
-            report["status"] = "gate_block"
-            report["failureReason"] = str(exc)
-            report["endedAt"] = utc_now()
-            write_report(report_path, report)
-            return 2
+            return finish_report(
+                report_path, report, status="gate_block", reason=exc, exit_code=2
+            )
         report["releaseUatCasesPath"] = _output_evidence_ref(Path(args.release_uat_cases).expanduser())
     else:
         args.release_uat_cases_b64 = ""
 
     if not args.dry_run:
         if patrol_resolution.executable is None:
-            report["status"] = "gate_block"
-            report["failureReason"] = patrol_resolution.error
-            report["endedAt"] = utc_now()
-            write_report(report_path, report)
-            return 2
+            return finish_report(
+                report_path,
+                report,
+                status="gate_block",
+                reason=patrol_resolution.error,
+                exit_code=2,
+            )
         missing = _missing_required_args(args)
         if missing:
-            report["status"] = "gate_block"
-            report["failureReason"] = f"missing required args: {', '.join(missing)}"
-            report["endedAt"] = utc_now()
-            write_report(report_path, report)
-            return 2
+            return finish_report(
+                report_path,
+                report,
+                status="gate_block",
+                reason=f"missing required args: {', '.join(missing)}",
+                exit_code=2,
+            )
         if _requires_video_playback_canary(args):
             try:
                 args.video_playback_canary_work_id = (
                     _validate_video_playback_canary_work_id(args, runtime_env)
                 )
             except ValueError as exc:
-                report["status"] = "gate_block"
-                report["failureReason"] = str(exc)
-                report["endedAt"] = utc_now()
-                write_report(report_path, report)
-                return 2
+                return finish_report(
+                    report_path,
+                    report,
+                    status="gate_block",
+                    reason=exc,
+                    exit_code=2,
+                )
     try:
         devices = dry_run_devices(args) if args.dry_run else discover_devices(args.platform, args.device_id)
     except Exception as exc:  # noqa: BLE001
-        report["status"] = "failed"
-        report["failureReason"] = str(exc)
-        report["endedAt"] = utc_now()
-        write_report(report_path, report)
-        return 1
+        return finish_report(
+            report_path, report, status="failed", reason=exc, exit_code=1
+        )
 
     if not devices:
-        report["status"] = "gate_block"
-        report["failureReason"] = "no mobile Flutter devices available on self-hosted Mac runner"
-        report["endedAt"] = utc_now()
-        write_report(report_path, report)
-        return 2
+        return finish_report(
+            report_path,
+            report,
+            status="gate_block",
+            reason="no mobile Flutter devices available on self-hosted Mac runner",
+            exit_code=2,
+        )
     try:
+        validate_external_aut_device_count(
+            required=external_aut_required, devices=devices
+        )
         _validate_runtime_recovery_device_matrix(args, devices)
         _validate_account_enforcement_device_matrix(args, devices)
     except RuntimeError as exc:
-        report["status"] = "gate_block"
-        report["failureReason"] = str(exc)
-        report["devices"] = devices
-        report["endedAt"] = utc_now()
-        write_report(report_path, report)
-        return 2
+        return finish_report(
+            report_path,
+            report,
+            status="gate_block",
+            reason=exc,
+            exit_code=2,
+            devices=devices,
+        )
 
     report["devices"] = devices
     evidence_root = report_path.parent / "runs"
@@ -486,12 +451,18 @@ def main() -> int:
                                 command_env,
                                 launcher_handoff,
                             )
+                        # 与生产同构的两阶段冷启动：宿主先激活 runtime config，patrol test
+                        # 随后的正常启动才读得到真实后端配置。
+                        host_activation.ensure_patrol_host_runtime_config(
+                            args, device, launcher_handoff, command_env, run_dir, report
+                        )
             patrol_target = _patrol_bundler_target(args.target)
             if not args.dry_run:
                 _, patrol_target, patrol_wrapper_cleanup = (
                     _create_patrol_target_wrapper(
                         args.target,
                         typed_actor=typed_actor,
+                        typed_conversation=typed_conversation,
                     )
                 )
             command = patrol_command(
@@ -525,7 +496,7 @@ def main() -> int:
                 f"{device['name']} ({device['id']}, {device['targetPlatform']})",
                 flush=True,
             )
-        except BaseException:
+        except BaseException as exc:
             _cleanup_patrol_target_wrapper(patrol_wrapper_cleanup)
             if consumer_lease is not None:
                 release_consumer_lease(
@@ -535,13 +506,21 @@ def main() -> int:
                 )
             if secret_define_path is not None and not args.dry_run:
                 secret_define_path.unlink(missing_ok=True)
-            raise
+            if not isinstance(exc, host_activation.PatrolHostActivationError):
+                raise
+            host_activation.record_patrol_host_activation_gate_block(
+                exc, report, device, device_manifest_path,
+                tls_trust, android_port_reverse, release_uat_state_reset,
+            )
+            failed = True
+            gate_blocked = True
+            continue
         if args.dry_run:
             log_path = run_dir / "patrol.log"
             log_path.write_text("dry-run\n", encoding="utf-8")
             result = {
                 "command": _redact_command(command),
-                "cwd": str(APP_DIR),
+                "cwd": str(PATROL_HOST_DIR),
                 "exitCode": 0,
                 "timedOut": False,
                 "durationMs": 0,
@@ -562,8 +541,24 @@ def main() -> int:
             device_evidence_capture: dict[str, Any] = {
                 "status": "not-required",
             }
-            device_evidence_stream: _IosDeviceEvidenceStream | None = None
+            device_evidence_stream = None
             credential_cleanup_error = ""
+            page_screenshot_capture = _AppContentPageScreenshotCapture(
+                args=args,
+                runtime_env=runtime_env,
+                capture=lambda _device=device, _run_dir=run_dir: capture_device_screenshot(
+                    _device,
+                    _run_dir / "after.png",
+                ),
+            )
+            app_uat_per_marker_capture = _AppUatPerMarkerScreenshotCapture(
+                args=args,
+                run_dir=run_dir,
+                capture=lambda output_path, _device=device: capture_device_screenshot(
+                    _device,
+                    output_path,
+                ),
+            )
 
             def handle_controlled_edge_output(line: str) -> None:
                 nonlocal restore_request_count
@@ -589,13 +584,19 @@ def main() -> int:
                         "controlled edge restore request identity is invalid"
                     )
                 restore_request_count += 1
-                if restore_request_count != 1 or controlled_fault is None:
+                if restore_request_count != 1 or controlled_fault is None:  # noqa: B023
                     raise RuntimeError(
                         "controlled edge restore request must occur exactly once"
                     )
                 report["controlledEdgeFault"]["receipt"] = (
-                    controlled_fault.restore()
+                    controlled_fault.restore()  # noqa: B023
                 )
+
+            def handle_device_evidence_output(line: str) -> None:
+                page_screenshot_capture.handle_line(line)  # noqa: B023
+                app_uat_per_marker_capture.handle_line(line)  # noqa: B023
+                if controlled_fault is not None:  # noqa: B023
+                    handle_controlled_edge_output(line)
 
             try:
                 if bool(getattr(args, "stackctl_controlled_edge_fault", False)):
@@ -606,20 +607,16 @@ def main() -> int:
                         controlled_fault.receipt()
                     )
                 try:
-                    if _is_ios_device(device):
-                        device_evidence_stream = _IosDeviceEvidenceStream(
-                            device_id=str(device.get("id") or ""),
-                            log_path=run_dir / "device-evidence.log",
-                            output_line_handler=(
-                                handle_controlled_edge_output
-                                if controlled_fault is not None
-                                else None
-                            ),
-                        )
+                    device_evidence_stream = _device_evidence_stream(
+                        device,
+                        log_path=run_dir / "device-evidence.log",
+                        output_line_handler=handle_device_evidence_output,
+                    )
+                    if device_evidence_stream is not None:
                         device_evidence_stream.start()
                     result = run_command(
                         command,
-                        cwd=APP_DIR,
+                        cwd=PATROL_HOST_DIR,
                         env=command_env,
                         timeout_seconds=args.timeout_seconds,
                         log_path=run_dir / "patrol.log",
@@ -628,19 +625,23 @@ def main() -> int:
                             args.test_refresh_token.strip(),
                             _resolved_owner_id(args),
                             _resolved_persona_id(args),
+                            *(
+                                typed_conversation.artifact_values()
+                                if typed_conversation is not None
+                                else ()
+                            ),
                             *_provider_uat_secret_values(),
                         ),
                         output_line_handler=(
-                            handle_controlled_edge_output
-                            if controlled_fault is not None
-                            and device_evidence_stream is None
+                            handle_device_evidence_output
+                            if device_evidence_stream is None
                             else None
                         ),
                     )
                 except Exception as error:  # noqa: BLE001
                     result = {
                         "command": _redact_command(command),
-                        "cwd": str(APP_DIR),
+                        "cwd": str(PATROL_HOST_DIR),
                         "exitCode": 2,
                         "timedOut": False,
                         "durationMs": 0,
@@ -650,7 +651,7 @@ def main() -> int:
             except Exception as error:  # noqa: BLE001
                 result = {
                     "command": _redact_command(command),
-                    "cwd": str(APP_DIR),
+                    "cwd": str(PATROL_HOST_DIR),
                     "exitCode": 2,
                     "timedOut": False,
                     "durationMs": 0,
@@ -658,6 +659,9 @@ def main() -> int:
                     "logPath": repo_relative(run_dir / "patrol.log"),
                 }
             finally:
+                tested_app_artifact_binding, artifact_binding_blocker = artifact_binding_report.attach_tested_app_artifact_binding(report, result, device, command, command_env, False)
+                if artifact_binding_blocker:
+                    failed = gate_blocked = True
                 if device_evidence_stream is not None:
                     try:
                         device_evidence_capture = device_evidence_stream.stop()
@@ -687,23 +691,27 @@ def main() -> int:
                 if secret_define_path is not None:
                     secret_define_path.unlink(missing_ok=True)
                 _cleanup_patrol_target_wrapper(patrol_wrapper_cleanup)
+                typed_handoff_values = (
+                    *(
+                        typed_actor.secret_values()
+                        if typed_actor is not None
+                        else ()
+                    ),
+                    *(
+                        typed_conversation.artifact_values()
+                        if typed_conversation is not None
+                        else ()
+                    ),
+                )
                 generated_secret_values = tuple(
                     dict.fromkeys(
                         (
-                            *(
-                                typed_actor.secret_values()
-                                if typed_actor is not None
-                                else ()
-                            ),
+                            *typed_handoff_values,
                             *(
                                 base64.b64encode(value.encode("utf-8")).decode(
                                     "ascii"
                                 )
-                                for value in (
-                                    typed_actor.secret_values()
-                                    if typed_actor is not None
-                                    else ()
-                                )
+                                for value in typed_handoff_values
                             ),
                             *_provider_uat_secret_values(),
                         )
@@ -736,7 +744,7 @@ def main() -> int:
                 result["exitCode"] = 2
                 result["outputSummary"] = (
                     str(result.get("outputSummary") or "")
-                    + "\nexact-device iOS evidence stream failed: "
+                    + "\nexact-device evidence stream failed: "
                     + device_evidence_error
                 ).strip()
             if controlled_fault is not None and restore_request_count != 1:
@@ -753,11 +761,9 @@ def main() -> int:
                     + credential_cleanup_error
                 ).strip()
         raw_log_path = run_dir / "patrol.log"
-        device_evidence_log_path = run_dir / "device-evidence.log"
-        structured_evidence_log_path = (
-            device_evidence_log_path
-            if _is_ios_device(device) and device_evidence_log_path.is_file()
-            else raw_log_path
+        structured_evidence_log_path = _structured_evidence_log_path(
+            device,
+            run_dir,
         )
         raw_log = (
             raw_log_path.read_text(encoding="utf-8")
@@ -769,16 +775,52 @@ def main() -> int:
             raw_log,
             dry_run=args.dry_run,
         )
-        typed_blocker = (
+        patrol_typed_blocker = (
             _first_typed_patrol_blocker(raw_log)
-            if result["exitCode"] != 0 and not args.dry_run
+            if result.get("patrolExitCode") != 0 and not args.dry_run
             else {}
         )
-        after_screenshot = (
-            capture_device_screenshot(device, run_dir / "after.png")
-            if result["exitCode"] == 0 and not args.dry_run
-            else {"status": "skipped", "reason": "command failed"}
+        if args.dry_run:
+            tested_app_artifact_binding, artifact_binding_blocker = artifact_binding_report.attach_tested_app_artifact_binding(report, result, device, command, command_env, True)
+        (
+            external_aut_journey,
+            external_aut_driver_result,
+            external_aut_screenshot,
+            external_aut_blocker,
+            external_aut_gate_blocked,
+        ) = record_external_aut_journey(
+            required=external_aut_required,
+            args=args,
+            device=device,
+            run_dir=run_dir,
+            patrol_output=raw_log,
+            canonical_binding=external_aut_canonical_binding,
+            runtime_env=runtime_env,
+            command_env=command_env,
+            tested_app_artifact_binding=tested_app_artifact_binding,
+            report=report,
+            result=result,
         )
+        if external_aut_gate_blocked:
+            failed = gate_blocked = True
+        typed_blocker = (
+            patrol_typed_blocker
+            or artifact_binding_blocker
+            or external_aut_blocker
+        )
+        if args.dry_run:
+            after_screenshot = {"status": "skipped", "reason": "dry-run"}
+        else:
+            page_screenshot_capture.apply_success_gate(result, dry_run=False)
+            app_uat_per_marker_capture.apply_success_gate(result, dry_run=False)
+            if page_screenshot_capture.required:
+                after_screenshot = page_screenshot_capture.evidence
+            else:
+                after_screenshot = (
+                    capture_device_screenshot(device, run_dir / "after.png")
+                    if result["exitCode"] == 0
+                    else {"status": "skipped", "reason": "command failed"}
+                )
         failure_screenshot = (
             capture_device_screenshot(device, run_dir / "failure.png")
             if result["exitCode"] != 0 and not args.dry_run
@@ -822,16 +864,11 @@ def main() -> int:
                 str(result.get("outputSummary") or "")
                 + "\nruntime recovery UAT did not emit a complete passed evidence marker"
             ).strip()
-        if (
-            _is_feed_load_target(args)
-            and not args.dry_run
-            and not feed_content_evidence
-        ):
-            result["exitCode"] = 1
-            result["outputSummary"] = (
-                str(result.get("outputSummary") or "")
-                + "\nfeed UAT did not emit a release-bound visible-card evidence marker"
-            ).strip()
+        _apply_feed_content_evidence_gate(
+            result,
+            args,
+            feed_content_evidence,
+        )
         if _is_account_enforcement_target(args) and not account_enforcement_evidence:
             result["exitCode"] = 1
             result["outputSummary"] = (
@@ -900,9 +937,28 @@ def main() -> int:
             "runtimeRecovery": runtime_recovery_evidence,
             "accountEnforcement": account_enforcement_evidence,
             "credentialArtifactCleanup": credential_artifact_cleanup,
+            "testedAppArtifactBinding": tested_app_artifact_binding,
+            "externalProductionAutJourney": external_aut_journey,
+            "externalProductionAutDriver": external_aut_driver_result,
+            "externalProductionAutDriverArtifact": report.get(
+                "externalProductionAutDriverArtifact", {}
+            ),
+            "externalProductionAutScreenshot": external_aut_screenshot,
+            "artifactBindingBlocker": artifact_binding_blocker,
             "typedBlocker": typed_blocker,
         }
         report["runs"].append(result)
+        external_case = external_aut_case_result(
+            required=external_aut_required,
+            dry_run=args.dry_run,
+            device_id=sanitize_device_id(str(device.get("id", ""))),
+            journey=external_aut_journey,
+            driver_result=external_aut_driver_result,
+            screenshot=external_aut_screenshot,
+            blocker=external_aut_blocker,
+        )
+        if external_case is not None:
+            report["caseResults"].append(external_case)
         report["caseResults"].append(
             {
                 "caseId": (
@@ -923,6 +979,8 @@ def main() -> int:
                     "runtimeRecovery": runtime_recovery_evidence,
                     "accountEnforcement": account_enforcement_evidence,
                     "controlledEdgeFault": controlled_edge_fault_evidence,
+                    "testedAppArtifactBinding": tested_app_artifact_binding,
+                    "externalProductionAutJourney": external_aut_journey,
                 },
             }
         )
@@ -940,5 +998,14 @@ def main() -> int:
             else "one or more Patrol runs failed"
         )
     report["endedAt"] = utc_now()
-    write_report(report_path, report)
-    return 2 if gate_blocked else (1 if failed else 0)
+    write_report(
+        report_path,
+        report,
+        app_uat_page_evidence_resolver=(
+            app_uat_per_marker_capture.page_evidence
+            if "app_uat_per_marker_capture" in locals()
+            and app_uat_per_marker_capture.required
+            else None
+        ),
+    )
+    return 2 if report["status"] == "gate_block" else (1 if failed else 0)

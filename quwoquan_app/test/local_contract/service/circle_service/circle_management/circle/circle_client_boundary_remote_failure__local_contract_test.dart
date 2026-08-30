@@ -9,8 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart'
-    show resolvedOwnerUserIdProvider;
 import 'package:quwoquan_app/runtime/di/circle_shell_presentation_slots.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/errors/domain_error_code.dart';
@@ -142,9 +140,7 @@ Widget _scopedApp() {
 }
 
 void main() {
-  testWidgets('圈子快照已展示后成员请求失败保留快照与恢复面且不注入 Mock', (
-    tester,
-  ) async {
+  testWidgets('圈子快照已展示后成员请求失败保留快照与恢复面且不注入 Mock', (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);

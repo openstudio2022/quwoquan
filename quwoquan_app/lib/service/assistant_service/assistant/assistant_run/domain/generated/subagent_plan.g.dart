@@ -60,20 +60,21 @@ class SubagentPlan {
   SearchIntensity get searchIntensityType =>
       parseSearchIntensity(searchIntensity);
 
-  ProviderPolicy get providerPolicyType =>
-      parseProviderPolicy(providerPolicy);
+  ProviderPolicy get providerPolicyType => parseProviderPolicy(providerPolicy);
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'subagentId': subagentId,
     'domainId': domainId,
     'problemClass': problemClass,
     'goal': goal,
-        if (role.trim().isNotEmpty) 'role': role,
-        if (taskBrief.trim().isNotEmpty) 'taskBrief': taskBrief,
-        if (routeNarrative.trim().isNotEmpty) 'routeNarrative': routeNarrative,
-        if (localContextSeed.trim().isNotEmpty) 'localContextSeed': localContextSeed,
-        if (needClarify) 'needClarify': needClarify,
-        if (pendingClarifications.isNotEmpty) 'pendingClarifications': pendingClarifications,
+    if (role.trim().isNotEmpty) 'role': role,
+    if (taskBrief.trim().isNotEmpty) 'taskBrief': taskBrief,
+    if (routeNarrative.trim().isNotEmpty) 'routeNarrative': routeNarrative,
+    if (localContextSeed.trim().isNotEmpty)
+      'localContextSeed': localContextSeed,
+    if (needClarify) 'needClarify': needClarify,
+    if (pendingClarifications.isNotEmpty)
+      'pendingClarifications': pendingClarifications,
     'mode': mode,
     'timeoutMs': timeoutMs,
     'maxIterations': maxIterations,
@@ -113,7 +114,10 @@ class SubagentPlan {
       stopPolicy: (json['stopPolicy'] as String?)?.trim() ?? "balanced",
       searchIntensity: (json['searchIntensity'] as String?)?.trim() ?? "medium",
       providerPolicy: (json['providerPolicy'] as String?)?.trim() ?? "",
-      freshnessHoursMax: _nonNegativeInt(json['freshnessHoursMax'], fallback: 0),
+      freshnessHoursMax: _nonNegativeInt(
+        json['freshnessHoursMax'],
+        fallback: 0,
+      ),
       answerThreshold: _normalizedThreshold(json['answerThreshold']),
       dependencies:
           (json['dependencies'] as List?)

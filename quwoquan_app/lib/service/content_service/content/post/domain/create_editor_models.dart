@@ -85,7 +85,16 @@ List<String> extractArticleImagePathsFromDocument(
   ArticleDocumentData document,
 ) {
   return document.assets
-      .map((asset) => asset.imageUrl.trim())
+      .map((asset) {
+        final path = asset.imageUrl.trim();
+        if (path.isNotEmpty) {
+          return path;
+        }
+        // 创作域 canonical 中间形态：尚未取得交付 URL 的资产以
+        // asset://<assetId> 表达引用，由创作媒体投影映射到本地文件。
+        final assetId = asset.id.trim();
+        return assetId.isEmpty ? '' : 'asset://$assetId';
+      })
       .where((path) => path.isNotEmpty)
       .toList(growable: false);
 }

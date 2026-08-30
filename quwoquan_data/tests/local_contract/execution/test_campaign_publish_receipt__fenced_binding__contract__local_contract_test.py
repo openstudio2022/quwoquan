@@ -19,10 +19,17 @@ from content.execution.campaign.workspace import (
     CampaignRuntimePaths,
     lane_execution_root,
 )
+from content.release.canonical.campaign_release_contract import CampaignReleaseRoots
+from content.release.canonical.campaign_release_publish import validate_lane_publish
 from core.io import read_json, write_json
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 CARRIERS = ("homepage", "article", "image", "video")
+WORKLOADS = {carrier: 1 for carrier in CARRIERS}
 ROOT_ID = "20260805--travel-homepage-m100--china--scale-301"
 EXECUTION_IDS = {
     carrier: (
@@ -69,6 +76,9 @@ def _fixture(tmp_path: Path) -> tuple[CampaignRuntimePaths, Path, Path]:
         "schema": "quwoquan_data.scale_source_pool",
         "poolId": "publish-receipt-m100-pool",
         "targetScale": "M100",
+        "workloadMode": "milestone_preset",
+        "activeCarriers": list(CARRIERS),
+        "workloadTargets": WORKLOADS,
         "sourceRevision": "sha256:" + "b" * 64,
         "sourceDigest": "sha256:" + "c" * 64,
         "entityCatalogDigest": "sha256:" + "d" * 64,
@@ -85,6 +95,9 @@ def _fixture(tmp_path: Path) -> tuple[CampaignRuntimePaths, Path, Path]:
     pool_binding = {
         "poolId": pool["poolId"],
         "targetScale": pool["targetScale"],
+        "workloadMode": pool["workloadMode"],
+        "activeCarriers": pool["activeCarriers"],
+        "workloadTargets": pool["workloadTargets"],
         "sourceRevision": pool["sourceRevision"],
         "sourceDigest": pool["sourceDigest"],
         "entityCatalogDigest": pool["entityCatalogDigest"],
@@ -108,10 +121,19 @@ def _fixture(tmp_path: Path) -> tuple[CampaignRuntimePaths, Path, Path]:
         "rootExecutionId": ROOT_ID,
         "executionMode": "central",
         "scale": "M100",
+        "workloadMode": "milestone_preset",
+        "activeCarriers": list(CARRIERS),
+        "workloads": WORKLOADS,
+        "executionAuthority": synthetic_governed_execution_authority(),
         "gitBranch": "dev1.0",
         "gitCommitSha": "a" * 40,
         "sourceRevision": "sha256:" + "b" * 64,
         "sourceDigest": "sha256:" + "c" * 64,
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "e" * 64,
+            "inputs": ["quwoquan_data/scripts"],
+        },
         "entityCatalogDigest": "sha256:" + "d" * 64,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
@@ -159,11 +181,12 @@ def _fixture(tmp_path: Path) -> tuple[CampaignRuntimePaths, Path, Path]:
         {
             "schema": "quwoquan_data.execution_publish_ref",
             "executionId": EXECUTION_IDS["image"],
-            "canonicalPublishRoot": "quwoquan_data/publish",
+            "canonicalPublishRoot": "canonical-publish",
             "publishedRefs": {
                 "entities": [],
                 "posts": ["image/测试/image-001/001"],
             },
+            "publishDiscards": [],
         },
     )
     write_json(
@@ -311,6 +334,151 @@ def test_publish_receipt_projects_distributed_lane_claim(
     assert receipt["campaignRunId"] == "distributed-campaign-run"
     assert receipt["campaignGeneration"] == 1
     assert receipt["campaignFencingToken"] == "sha256:" + "7" * 64
+
+
+def test_publish_receipt_freezes_review_count_and_per_object_publish_discards(
+    tmp_path: Path,
+) -> None:
+    runtime, publish_path, _checkpoint_path = _fixture(tmp_path)
+    review_path = lane_receipt_path(
+        ROOT_ID,
+        "image",
+        "review",
+        root=runtime.campaigns_root,
+    )
+    review = read_json(review_path)
+    review.update(
+        {
+            "approvedQuota": 3,
+            "qualifiedCount": 3,
+            "selectedCount": 3,
+            "shortfallCount": 0,
+        }
+    )
+    write_json(review_path, review)
+    publish = read_json(publish_path)
+    publish["publishedRefs"]["posts"] = [
+        "image/测试/image-001/001",
+        "image/测试/image-002/001",
+    ]
+    publish["publishDiscards"] = [
+        {
+            "objectRef": "image/测试/image-003/001",
+            "issues": ["DATA.PUBLISH.OBJECT_APPLY_FAILED"],
+        }
+    ]
+    write_json(publish_path, publish)
+
+    path = write_publish_receipt(
+        root_execution_id=ROOT_ID,
+        execution_id=EXECUTION_IDS["image"],
+        runtime_paths=runtime,
+    )
+    receipt = read_json(path)
+
+    assert receipt["status"] == "partial"
+    assert receipt["reviewQualifiedCount"] == receipt["qualifiedCount"] == 3
+    assert receipt["finalizedCount"] == 2
+    assert receipt["publishDiscards"] == publish["publishDiscards"]
+
+
+def test_partial_publish_receipt_closes_campaign_release_with_success_refs_only(
+    tmp_path: Path,
+) -> None:
+    runtime, publish_path, _checkpoint_path = _fixture(tmp_path)
+    campaign = runtime.campaigns_root / ROOT_ID
+    review_path = lane_receipt_path(
+        ROOT_ID, "image", "review", root=runtime.campaigns_root
+    )
+    review = read_json(review_path)
+    review.update(
+        {
+            "approvedQuota": 3,
+            "qualifiedCount": 3,
+            "selectedCount": 3,
+            "shortfallCount": 0,
+        }
+    )
+    write_json(review_path, review)
+    succeeded = [
+        "image/测试/image-001/001",
+        "image/测试/image-002/001",
+    ]
+    publish = read_json(publish_path)
+    publish["publishedRefs"]["posts"] = succeeded
+    publish["publishDiscards"] = [
+        {
+            "objectRef": "image/测试/image-003/001",
+            "issues": ["DATA.PUBLISH.OBJECT_APPLY_FAILED"],
+        }
+    ]
+    write_json(publish_path, publish)
+    receipt_path = write_publish_receipt(
+        root_execution_id=ROOT_ID,
+        execution_id=EXECUTION_IDS["image"],
+        runtime_paths=runtime,
+    )
+    source_digest = {"algorithm": "sha256", "digest": "c" * 64}
+    for ref in succeeded:
+        write_json(
+            runtime.publish_root / "posts" / ref / "manifest.json",
+            {
+                "executionId": EXECUTION_IDS["image"],
+                "sourceDigest": source_digest,
+                "contentType": "image",
+            },
+        )
+    plan = read_json(campaign / "campaign_plan.json")
+    runtime_snapshot = read_json(campaign / "runtime/snapshot.json")
+    roots = CampaignReleaseRoots(
+        output_root=runtime.output_root,
+        campaigns_root=runtime.campaigns_root,
+        tasks_root=runtime.output_root / "data/tasks",
+        publish_root=runtime.publish_root,
+        release_root=runtime.output_root / "data/releases",
+    )
+
+    closure = validate_lane_publish(
+        ROOT_ID,
+        "image",
+        plan,
+        {"quota": 3, "sourceDigest": source_digest},
+        runtime_snapshot,
+        roots=roots,
+    )
+
+    assert closure["finalizedCount"] == 2
+    assert closure["reviewQualifiedCount"] == 3
+    assert closure["publishDiscardedCount"] == 1
+    assert closure["publishReceiptSha256"] == _digest(receipt_path)
+
+
+def test_publish_receipt_freezes_zero_success_as_blocked_not_partial(
+    tmp_path: Path,
+) -> None:
+    runtime, publish_path, _checkpoint_path = _fixture(tmp_path)
+    publish = read_json(publish_path)
+    publish["publishedRefs"]["posts"] = []
+    publish["publishDiscards"] = [
+        {
+            "objectRef": "image/测试/image-001/001",
+            "issues": ["DATA.PUBLISH.OBJECT_APPLY_FAILED"],
+        }
+    ]
+    write_json(publish_path, publish)
+
+    receipt = read_json(
+        write_publish_receipt(
+            root_execution_id=ROOT_ID,
+            execution_id=EXECUTION_IDS["image"],
+            runtime_paths=runtime,
+        )
+    )
+
+    assert receipt["status"] == "blocked"
+    assert receipt["reviewQualifiedCount"] == receipt["qualifiedCount"] == 1
+    assert receipt["finalizedCount"] == 0
+    assert len(receipt["publishDiscards"]) == 1
 
 
 def test_publish_receipt_blocks_stale_checkpoint_before_writing(tmp_path: Path) -> None:

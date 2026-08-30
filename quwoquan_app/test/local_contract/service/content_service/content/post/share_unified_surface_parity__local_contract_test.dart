@@ -4,6 +4,8 @@ import 'package:quwoquan_app/runtime/di/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/content_share_template.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../../../support/runtime/public_content_link_test_scope.dart';
+
 ContentPostViewData _post({
   required String id,
   required String contentType,
@@ -46,6 +48,7 @@ void main() {
       final template = ContentShareTemplateBuilder.build(
         surfaceView: ContentSurfaceViewMapper.fromDto(dto, wire: wire),
         enableIdentityTemplate: true,
+        publicLinks: testPublicContentLinks,
       );
       expect(
         template.shareTitle,

@@ -23,7 +23,7 @@ func TestCircleHandlerRoutesCoverMetadataPathTemplates(t *testing.T) {
 		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle_post_placement/adapters/inbound/http/handler.go")) +
 		readFile(t, filepath.Join(root, "services/circle-service/internal/circle_management/circle_behavior_fact/adapters/inbound/http/handler.go")) +
 		readFile(t, filepath.Join(root, "services/circle-service/cmd/api/circle_object_routes.go")) +
-		readFile(t, filepath.Join(root, "services/circle-service/cmd/api/main.go"))
+		readFile(t, filepath.Join(root, "services/circle-service/cmd/api/bootstrap.go"))
 
 	metadataDir := filepath.Join(root, "services/circle-service/contracts/circle_management")
 	subResources := map[string]struct{}{}

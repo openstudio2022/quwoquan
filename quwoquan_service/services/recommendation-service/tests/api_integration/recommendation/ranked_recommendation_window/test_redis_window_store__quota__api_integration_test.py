@@ -29,6 +29,7 @@ def _window(window_id: str, subject_id: str) -> RankedRecommendationWindow:
         scenario="content_feed",
         request_digest=f"request-{window_id}",
         ranking=RankingResult(
+            experiment_bucket="rule",
             model_bucket="rule",
             model_channel=None,
             model_release_id=None,

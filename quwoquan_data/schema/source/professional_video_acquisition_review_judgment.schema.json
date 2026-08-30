@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_video_acquisition_review_judgment.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "rightsStatus", "authorizationRequired", "distributionDecision",
+    "safetyStatus", "entityMatch", "qualityStatus", "privacyRisk",
+    "minorRisk", "maliciousMediaRisk", "watermarkStatus", "findings"
+  ],
+  "properties": {
+    "rightsStatus": {"enum": ["verified", "unverified", "restricted", "unknown"]},
+    "authorizationRequired": {"type": "boolean"},
+    "distributionDecision": {"enum": ["research_allowed", "commercial_allowed", "blocked"]},
+    "safetyStatus": {"enum": ["passed", "blocked"]},
+    "entityMatch": {"enum": ["matched", "mismatch", "unknown"]},
+    "qualityStatus": {"enum": ["passed", "blocked"]},
+    "privacyRisk": {"enum": ["none", "present", "unknown"]},
+    "minorRisk": {"enum": ["none", "present", "unknown"]},
+    "maliciousMediaRisk": {"enum": ["none", "present", "unknown"]},
+    "watermarkStatus": {"enum": ["absent", "present", "unknown"]},
+    "findings": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

@@ -2,27 +2,102 @@
 
 from __future__ import annotations
 
-from argparse import Namespace
+from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
 import pytest
 from content.execution.campaign import prepare as prepare_campaign
 from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from core.io import write_json
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
+
+
+def test_prepare_campaign_defaults_new_campaigns_to_cursor_grok() -> None:
+    parser = ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    prepare_campaign.register_prepare_campaign_parser(commands)
+
+    args = parser.parse_args(
+        [
+            "prepare-campaign",
+            "--phase",
+            "handoff",
+            "--workload",
+            "image=1",
+            "--region-ref",
+            "china",
+            "--run-date",
+            "20260814",
+            "--sequence",
+            "1",
+        ]
+    )
+
+    assert args.semantic_selection_id == "cursor_grok"
+
+
+def test_prepare_campaign_defaults_new_campaigns_to_cursor_grok() -> None:
+    parser = ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    prepare_campaign.register_prepare_campaign_parser(commands)
+
+    args = parser.parse_args(
+        [
+            "prepare-campaign",
+            "--phase",
+            "handoff",
+            "--workload",
+            "image=1",
+            "--region-ref",
+            "china",
+            "--run-date",
+            "20260814",
+            "--sequence",
+            "1",
+        ]
+    )
+
+    assert args.semantic_selection_id == "cursor_grok"
+
+
+def test_prepare_campaign_defaults_new_campaigns_to_cursor_grok() -> None:
+    parser = ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    prepare_campaign.register_prepare_campaign_parser(commands)
+
+    args = parser.parse_args(
+        [
+            "prepare-campaign",
+            "--phase",
+            "handoff",
+            "--workload",
+            "image=1",
+            "--region-ref",
+            "china",
+            "--run-date",
+            "20260814",
+            "--sequence",
+            "1",
+        ]
+    )
+
+    assert args.semantic_selection_id == "cursor_grok"
 
 
 def _args(tmp_path: Path) -> Namespace:
     return Namespace(
         phase="envelopes",
         scale="M3",
-        region_ref="china",
         run_date="20260806",
         sequence=2,
-        topic="川西",
         target_names=["四姑娘山", "九寨沟"],
         source_providers=["pinterest", "manual_file"],
         semantic_selection_id="default",
         semantic_preflight_receipt=str(tmp_path / "semantic-preflight.json"),
+        capacity_calibration_receipt=str(tmp_path / "capacity-calibration.json"),
         handoff_id=None,
         handoff_revision=None,
         supersedes_handoff_ref=None,
@@ -48,6 +123,9 @@ def _fake_envelopes(tmp_path: Path) -> dict[str, Path]:
             path,
             {
                 "scale": "M3",
+                "workloadMode": "explicit",
+                "activeCarriers": list(CAMPAIGN_CARRIERS),
+                "workloads": {selected: 3 for selected in CAMPAIGN_CARRIERS},
                 "rootExecutionId": (
                     "20260806--travel-homepage-m3--china--scale-002"
                 ),
@@ -58,9 +136,7 @@ def _fake_envelopes(tmp_path: Path) -> dict[str, Path]:
                 "selector": "all",
                 "quota": 3,
                 "count": 6,
-                "requiredWorkers": 1,
-                "partitionCount": 16,
-                "capacityPlanDigest": "sha256:" + "9" * 64,
+                "executionAuthority": synthetic_governed_execution_authority(),
                 "topic": "川西",
                 "targetNames": ["九寨沟", "四姑娘山"],
                 "sourceProviders": ["manual_file", "pinterest"],
@@ -104,6 +180,9 @@ def test_prepare_campaign_maps_only_governed_external_input_kinds(
     assert captured["semantic_preflight_receipt"] == (
         tmp_path / "semantic-preflight.json"
     ).resolve()
+    assert captured["capacity_calibration_receipt"] == (
+        tmp_path / "capacity-calibration.json"
+    )
     assert captured["pre_acquisition_handoff"] == (
         tmp_path / "handoff.json"
     ).resolve()
@@ -172,7 +251,15 @@ def test_prepare_campaign_handoff_revision_never_writes_envelopes(
     args.supersedes_handoff_ref = str(tmp_path / "manual-revision-1.json")
     args.campaign_retry_of = None
     args.handoff_ref = None
+    args.vertical = "travel"
+    args.lifecycle = "research"
+    args.scope_type = "region"
+    args.region_ref = "china"
+    args.primary_topic_ref = None
+    args.related_topic_refs = []
+    args.source_selection_rows = ["homepage=site_primary:wikipedia"]
     args.semantic_preflight_receipt = None
+    args.capacity_calibration_receipt = None
     args.homepage_image_input = None
     args.image_input = None
     args.video_input = None

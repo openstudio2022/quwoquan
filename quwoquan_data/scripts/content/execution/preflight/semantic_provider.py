@@ -102,12 +102,7 @@ def semantic_agent_startup_probe(
         )
     else:  # pragma: no cover - AgentProvider is closed
         raise ValueError(f"unsupported semantic agent provider: {resolved.value}")
-    result = {"provider": resolved.value, **dict(report)}
-    if bool(result.get("ready")):
-        from content.execution.agent.capacity_broker import SemanticCapacityBroker
-
-        SemanticCapacityBroker().close_circuit(resolved)
-    return result
+    return {"provider": resolved.value, **dict(report)}
 
 
 def semantic_agent_environment_preflight(
@@ -187,6 +182,23 @@ def semantic_agent_environment_preflight(
             "endpoints": [],
             "issues": [],
         }
+    def _skipped_catalog(reason: str) -> dict[str, object]:
+        return {
+            "checked": False,
+            "ready": True,
+            "modelCount": None,
+            "selectionSupport": {
+                "checked": False,
+                "supported": True,
+                "requestedModel": selection.model_id,
+                "requestedParameters": selection.parameters_document(),
+                "issues": [],
+            },
+            "issues": [],
+            "skipReason": reason,
+        }
+
+    model_catalog = _skipped_catalog("startup_probe_not_requested")
     if check_startup and not issues and require_credential:
         startup = semantic_agent_startup_probe(
             provider=resolved,
@@ -195,6 +207,15 @@ def semantic_agent_environment_preflight(
             timeout_seconds=startup_timeout,
         )
         issues.extend(str(item) for item in startup.get("issues") or [])
+        if resolved is AgentProvider.CURSOR_SDK:
+            # A successful startup does not prove the reasoning tier exists:
+            # the account catalog must declare this exact model/parameter pair.
+            from core.cursor_workspace_probe import cursor_model_catalog
+
+            model_catalog = cursor_model_catalog(selection)
+            issues.extend(str(item) for item in model_catalog.get("issues") or [])
+        else:
+            model_catalog = _skipped_catalog("provider_not_cursor_sdk")
     else:
         startup = {
             "checked": False,
@@ -218,6 +239,7 @@ def semantic_agent_environment_preflight(
         "semanticAgentCredential": credential,
         "network": network,
         "semanticAgentStartup": startup,
+        "modelCatalog": model_catalog,
         "ready": not issues,
         "issues": issues,
     }
@@ -233,7 +255,6 @@ def semantic_agent_probe_suite(
     cwd: Path | None = None,
 ) -> dict[str, object]:
     resolved = _provider(provider)
-    policy = active_runtime_policy()
     if resolved is AgentProvider.CURSOR_SDK:
         from core.cursor_startup_probe_suite import cursor_startup_probe_suite
 
@@ -254,7 +275,7 @@ def semantic_agent_probe_suite(
             attempts=attempts,
             timeout_seconds=timeout_seconds,
             cwd=cwd,
-            concurrency=min(attempts, policy.campaign_lane_workers),
+            concurrency=attempts,
         )
     else:  # pragma: no cover
         raise ValueError(f"unsupported semantic agent provider: {resolved.value}")

@@ -99,7 +99,7 @@
 - 合并排序：事实优先（`strength` + 新鲜度），概率其次（`score`）；统一经过推荐窗口/冷却过滤。
 - **七触点统一矩阵**（密度 + 行动重心，本条即唯一口径）：视频书底部单句 / 首页紧凑 chip / 用户主页证据组 / 我的主页收件箱 / 圈子主页证据卡 + 成员簇 / 实体主页证据卡 + 记录单句 / 交集配对 launcher（不产候选）。四主页表达仍复用 `ObjectIntersectionSection` / `ObjectIntersectionCard`，不新增第四套抽象。前台用户维度收敛为「交集 / 打动」、入口统一「交集配对」、收件箱统一「我的交集」；“今日”只作最小时间粒度的次级说明，机器标识 `interest_match` / `impact` 内部保留。
 - 七触点端侧必须消费同一交集表达与对象页行动分发契约；云侧只下发 canonical `actionHint`。
-- `IntersectionTargetNavigator.openActionHint` 只按当前生成闭集中的 `dispatch` 分发；navigate/assistant 的 login 等门不在交集组件拦截，导航到承接页由承接页复用既有 gate + `AuthContinuation` 续接（口径见 `.cursor/rules/15-auth-entry-no-loop.mdc`），关注/加入/进入讨论/看共同来源等 login 门轻行动保持可见可点
+- `IntersectionTargetNavigator.openActionHint` 只按当前生成闭集中的 `dispatch` 分发；navigate/assistant 的 login 等门不在交集组件拦截，导航到承接页由承接页复用既有 gate + `AuthContinuation` 续接（口径见 [`post-login-landing`](../../user-identity-profile-relationship/onboarding-and-identity-entry/post-login-landing/spec.md)），关注/加入/进入讨论/看共同来源等 login 门轻行动保持可见可点
 - action dispatch 闭集仅为 `assistant/navigate/message/gathering`；未登记 dispatch 一律 fail-closed，死参数 gateResolver/gated 已移除（R26）
 - `ObjectIntersectionPreviewCard` 只能是 `ObjectIntersectionSection` 的薄包装；`start_gathering` 和 `message_person` 只有在真实承接页与权限门成立时才可展示。
 - `safetyGate`、moment 意图时态和行动阶梯以 metadata 模型为准，所有主页和交集入口必须消费同一模型。

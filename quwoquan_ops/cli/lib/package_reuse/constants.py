@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from quwoquan_ops.cli.lib.currentness import (
+    CURRENTNESS_TIMEOUT_DETAIL_PREFIX,
+    CURRENTNESS_TIMEOUT_SECONDS,
+)
+
 # 本文件位于包目录内，比原单文件多一层，因此取 parents[4] 才是仓库根。
 ROOT = Path(__file__).resolve().parents[4]
 FINGERPRINT_NAME = "package-fingerprint.json"
 FINGERPRINT_SCHEMA = "stackctl-package-reuse-fingerprint"
 PACKAGE_INPUT_CAPSULE_SCHEMA = "stackctl-package-input-capsule.v1"
 PACKAGE_INPUT_CAPSULE_DIRECTORY = "input-capsule"
-CURRENTNESS_TIMEOUT_SECONDS = 10.0
 PACKAGE_VALIDATION_PURPOSES = frozenset({"self_verify", "currentness"})
 _FINGERPRINT_FIELDS = frozenset(
     {
@@ -29,6 +33,7 @@ _FINGERPRINT_FIELDS = frozenset(
         "releaseInputClassification",
         "contractGraphDigest",
         "graphqlReadRegistry",
+        "appLaunchBundle",
     }
 )
 _DIGEST_FIELDS = frozenset({"digest", "fileCount"})

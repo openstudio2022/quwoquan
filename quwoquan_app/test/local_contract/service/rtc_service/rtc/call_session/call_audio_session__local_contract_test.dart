@@ -17,7 +17,6 @@ import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/runtime/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_session_provider.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/media_device_provider.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/rtc_service/rtc/call_session/call_session_typed_double.dart';
 
@@ -77,7 +76,11 @@ void main() {
 
     await container.read(callSessionProvider.notifier).hangupCall();
     await Future<void>.delayed(Duration.zero);
-    expect(gateway.deactivateCount, greaterThanOrEqualTo(1), reason: '收尾必须释放音频会话');
+    expect(
+      gateway.deactivateCount,
+      greaterThanOrEqualTo(1),
+      reason: '收尾必须释放音频会话',
+    );
   });
 
   test('中断 began 本地静音，ended(shouldResume) 恢复采集', () async {
@@ -106,11 +109,7 @@ void main() {
     gateway.emit(CallAudioSessionEvent.interruptionBegan);
     gateway.emit(CallAudioSessionEvent.interruptionEndedShouldResume);
     await Future<void>.delayed(Duration.zero);
-    expect(
-      room.micValues,
-      isEmpty,
-      reason: '用户主动静音期间中断往返不得改动采集状态',
-    );
+    expect(room.micValues, isEmpty, reason: '用户主动静音期间中断往返不得改动采集状态');
   });
 
   test('becomingNoisy 从扬声器切回听筒防外放', () async {
@@ -118,7 +117,10 @@ void main() {
     await answerSeedCall(container);
     final mediaDevice = container.read(mediaDeviceProvider.notifier);
     await mediaDevice.setAudioOutput(AudioOutput.speaker);
-    expect(container.read(mediaDeviceProvider).audioOutput, AudioOutput.speaker);
+    expect(
+      container.read(mediaDeviceProvider).audioOutput,
+      AudioOutput.speaker,
+    );
     room.speakerValues.clear();
 
     gateway.emit(CallAudioSessionEvent.becameNoisy);

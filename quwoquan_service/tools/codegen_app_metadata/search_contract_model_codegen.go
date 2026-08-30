@@ -267,7 +267,10 @@ func canonicalSearchClientField(
 		}
 		field.DartType = field.EnumRef
 		switch field.EnumRef {
-		case "ContentType", "ContentIdentity":
+		// MediaDeliveryAccessMode 的唯一真相源是 contracts/metadata/_shared/
+		// types.yaml：搜索结果卡要按 coverAssetId 换短签，就必须能声明该封面
+		// 是不是私有交付，否则 research 相位的搜索封面只能按公开 URL 直连。
+		case "ContentType", "ContentIdentity", "MediaDeliveryAccessMode":
 			field.DartEnumDecoderWithPath = true
 			field.DartEnumWireGetter = "wireName"
 		default:
@@ -457,6 +460,10 @@ func canonicalSearchModelImports(
 			switch field.EnumRef {
 			case "ContentType", "ContentIdentity":
 				add("../../content/content_operation_contracts.g.dart")
+			case "MediaDeliveryAccessMode":
+				// 跨服务共享 enum 直接引 shared owner，不经某个业务域中转：
+				// 搜索命中与 content/entity 引用的是同一个 canonical 定义。
+				add("../shared_operation_enums.g.dart")
 			default:
 				return nil, fmt.Errorf(
 					"enum_ref %s has no canonical Search import owner",

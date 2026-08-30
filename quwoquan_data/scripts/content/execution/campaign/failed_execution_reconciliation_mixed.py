@@ -1,4 +1,4 @@
-"""Evidence contract for three finalized lanes plus one failed lane."""
+"""Evidence contract for finalized active lanes plus one failed active lane."""
 
 from __future__ import annotations
 
@@ -19,10 +19,11 @@ from content.execution.campaign.failed_execution_reconciliation_common import (
 from content.execution.campaign.failed_execution_reconciliation_mixed_manifest import (
     canonical_manifests,
 )
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.submission_reconciliation_contract import (
     campaigns_root,
     canonical_digest,
+    frozen_plan_workload,
+    frozen_submission_workload,
     typed,
 )
 from content.release.canonical.campaign_release_contract import (
@@ -51,13 +52,23 @@ def _campaign_documents(
     stable_plan = {key: value for key, value in plan.items() if key != "planDigest"}
     source_digest = (original.get("sourceDigest") or {}).get("digest")
     distributed = plan.get("distributedRun")
+    active_carriers, _workloads, plan_execution_ids, _root = frozen_plan_workload(
+        plan,
+        root_execution_id=root_execution_id,
+    )
+    submission_carriers, _submission_workloads, _submission_root = (
+        frozen_submission_workload(
+            submissions,
+            root_execution_id=root_execution_id,
+        )
+    )
     expected_ids = {
         carrier: str(submissions[carrier]["executionId"])
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active_carriers
     }
     expected_digests = {
         carrier: str(submissions[carrier]["requestDigest"])
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active_carriers
     }
     if (
         plan.get("rootExecutionId") != root_execution_id
@@ -65,6 +76,8 @@ def _campaign_documents(
         or plan.get("sourceRevision") != original.get("sourceRevision")
         or plan.get("sourceDigest") != source_digest
         or plan.get("entityCatalogDigest") != original.get("entityCatalogDigest")
+        or active_carriers != submission_carriers
+        or plan_execution_ids != expected_ids
         or plan.get("executionIds") != expected_ids
         or plan.get("submissionDigests") != expected_digests
         or not isinstance(distributed, Mapping)
@@ -75,7 +88,7 @@ def _campaign_documents(
     lanes = report.get("lanes")
     failed_carriers = [
         carrier
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active_carriers
         if isinstance(lanes, Mapping)
         and isinstance(lanes.get(carrier), Mapping)
         and lanes[carrier].get("status") == "blocked"
@@ -104,9 +117,10 @@ def _campaign_documents(
         != distributed.get("campaignFencingToken")
         or report.get("sourceDigest") != source_digest
         or report.get("entityCatalogDigest") != original.get("entityCatalogDigest")
+        or not isinstance(lanes, Mapping)
+        or set(lanes) != set(active_carriers)
         or not expected_failure
         or report.get("failure") != expected_failure
-        or not isinstance(lanes, Mapping)
     ):
         raise typed(
             "CAMPAIGN_EVIDENCE_INVALID",
@@ -408,7 +422,7 @@ def mixed_finalized_partial_terminal_evidence(
     output_root: Path,
     publish_root: Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Bind three preserved finalized objects without adopting or releasing them."""
+    """Bind preserved finalized objects without adopting or releasing them."""
 
     campaign, plan, report, runtime, failed_carrier = _campaign_documents(
         root_execution_id,
@@ -418,7 +432,7 @@ def mixed_finalized_partial_terminal_evidence(
     )
     execution_ids = {
         carrier: str(submissions[carrier]["executionId"])
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in plan["executionIds"]
     }
     _assert_no_release_or_adoption(
         campaign, execution_ids, output_root=output_root
@@ -432,7 +446,7 @@ def mixed_finalized_partial_terminal_evidence(
     )
     lanes: list[dict[str, Any]] = []
     claims: dict[str, dict[str, str]] = {}
-    for carrier in CAMPAIGN_CARRIERS:
+    for carrier in plan["executionIds"]:
         row = (
             _finalized_lane(
                 campaign,
@@ -477,7 +491,9 @@ def mixed_finalized_partial_terminal_evidence(
         campaign_evidence,
         {
             "lanes": lanes,
-            "observedFinalizedCount": 3,
+            "observedFinalizedCount": sum(
+                int(row.get("observedFinalizedCount") or 0) for row in lanes
+            ),
             "immutableReleaseEvidencePresent": False,
             "reviewedClosureAdoptionPresent": False,
             "evidenceDisposition": "preserved_unadopted",

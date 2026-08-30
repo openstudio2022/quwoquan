@@ -11,9 +11,10 @@ from content.release.environment.release_media_consistency import (
     release_media_issues,
     release_private_storage_issues,
 )
+from core.content_library import MediaHoldingError, resolve_media_holding
 from core.io import read_json, write_json
 from core.paths import PUBLISH_ROOT
-from core.release_layout import payload_file, payload_root
+from core.release_layout import PAYLOAD_DIR, payload_file, payload_root
 
 DESIRED_SCHEMA = "quwoquan_data.release_desired_state"
 
@@ -37,7 +38,6 @@ def _creator_issues(
     root: Path,
     ref: str,
     *,
-    media_root: Path | None = None,
     check_private_assets: bool = True,
 ) -> list[dict[str, str]]:
     issues: list[dict[str, str]] = []
@@ -81,7 +81,7 @@ def _creator_issues(
             )
     assets_path = local_paths.get("assetsRef")
     if assets_path is not None and check_private_assets:
-        issues.extend(_cas_issues(media_root or root, read_json(assets_path), ref))
+        issues.extend(_cas_issues(read_json(assets_path), ref))
     works_path = local_paths.get("worksRefsRef")
     if works_path is not None:
         for line_number, line in enumerate(works_path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -110,7 +110,12 @@ def _creator_issues(
     return issues
 
 
-def _cas_issues(root: Path, value: Any, source: str) -> list[dict[str, str]]:
+def _cas_issues(value: Any, source: str) -> list[dict[str, str]]:
+    """Check every canonical asset reference against the library that owns bodies.
+
+    A canonical object names its media by digest; the bytes live in the content
+    library. Resolvability is therefore asked of the library, not of the tree.
+    """
     issues: list[dict[str, str]] = []
     if isinstance(value, dict):
         key = value.get("objectKey")
@@ -120,13 +125,18 @@ def _cas_issues(root: Path, value: Any, source: str) -> list[dict[str, str]]:
                 issues.append(_issue("asset_ref_path_escape", "asset ref 发生路径逃逸", source))
             elif not key.startswith("media/objects/sha256/"):
                 issues.append(_issue("non_cas_asset_ref", "asset ref 不是 canonical CAS", source))
-            elif not (root / key).is_file():
-                issues.append(_issue("dangling_asset_ref", f"CAS object 不存在: {key}", source))
+            else:
+                try:
+                    resolve_media_holding(candidate.stem)
+                except (MediaHoldingError, ValueError):
+                    issues.append(
+                        _issue("dangling_asset_ref", f"CAS object 不存在: {key}", source)
+                    )
         for child in value.values():
-            issues.extend(_cas_issues(root, child, source))
+            issues.extend(_cas_issues(child, source))
     elif isinstance(value, list):
         for child in value:
-            issues.extend(_cas_issues(root, child, source))
+            issues.extend(_cas_issues(child, source))
     return issues
 
 
@@ -233,7 +243,7 @@ def scan_release_contract(
                         issues.append(_issue("dangling_tag_ref", tag_ref, ref))
             asset_refs_path = object_root / str(manifest.get("assetRefsRef") or "")
             if asset_refs_path.is_file() and release_root is None:
-                issues.extend(_cas_issues(media_root, read_json(asset_refs_path), ref))
+                issues.extend(_cas_issues(read_json(asset_refs_path), ref))
             action = actions.get((kind[:-1], ref)) or actions.get((kind, ref))
             if action is not None and not action.get("sourceHash"):
                 issues.append(_issue("missing_source_hash", "release action 缺少 sourceHash", ref))
@@ -242,7 +252,6 @@ def scan_release_contract(
             _creator_issues(
                 objects,
                 ref,
-                media_root=media_root,
                 check_private_assets=release_root is None,
             )
         )
@@ -260,9 +269,13 @@ def scan_release_contract(
                 if isinstance(item, Mapping)
                 and str(item.get("creatorRef") or "").strip()
             )
+            # pool selection release（target_environment/all_publishable/milestone）
+            # 的 creators 允许为 admitted 作者池全集，只要与 release 头 authors 一致；
+            # 判据是 selectionScope 而非 targetEnvironment——环境无关 pool release
+            # 没有 targetEnvironment 字段。
             if (
                 release_header.get("poolDigest")
-                and release_header.get("targetEnvironment")
+                and release_header.get("selectionScope")
                 and pool_creator_refs == creators
             ):
                 required_creators.update(creators)
@@ -367,10 +380,19 @@ def scan_release_file(
     phase: str = "preflight",
     metadata_root: Path | None = None,
 ) -> dict[str, Any]:
+    if release_root is None:
+        # release_layout 唯一布局：desired_state.json 只存在于 <releaseRoot>/payload/ 下，
+        # 且禁止 flat release tree 回退，因此 release root 必是 payload 的父目录。
+        if path.parent.name != PAYLOAD_DIR:
+            raise SystemExit(
+                "[data-release-consistency] desired state 必须位于 "
+                f"<releaseRoot>/{PAYLOAD_DIR}/ 下，收到: {path}"
+            )
+        release_root = path.parent.parent
     return scan_release_contract(
         read_json(path),
         publish_root=publish_root,
-        release_root=release_root or path.parent,
+        release_root=release_root,
         env_run_root=env_run_root,
         phase=phase,
         metadata_root=metadata_root,

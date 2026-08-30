@@ -63,7 +63,11 @@ func isOriginalAccessDenialReason(reason string) bool {
 	case "asset_not_ready",
 		"asset_policy",
 		"post_visibility",
-		"unsupported_media_type":
+		"unsupported_media_type",
+		// DEC-031 research 分流：research principal 只允许 purpose=view，
+		// 且资产必须属于当前 active research release 闭包。
+		"research_purpose",
+		"research_release_membership":
 		return true
 	default:
 		return false

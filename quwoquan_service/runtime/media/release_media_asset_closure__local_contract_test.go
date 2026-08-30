@@ -1,4 +1,5 @@
-// spec_ref: specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/spec.md#gwt-001.t2
 package runtimemedia
 
 import (
@@ -138,7 +139,7 @@ func releaseMediaClosureFixture(
 
 func TestReleaseMediaAuthorityClosesAllGeoContentCarriers(t *testing.T) {
 	root, expected := releaseMediaClosureFixture(t)
-	assets, err := LoadReleaseMediaAssets(root, "release-geo-media")
+	assets, err := LoadReleaseMediaAssets(root, "release-geo-media", "commercial")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,6 +293,7 @@ func TestReleaseMediaAuthorityRejectsBrokenRightsClosure(t *testing.T) {
 			if _, err := LoadReleaseMediaAssets(
 				root,
 				"release-geo-media",
+				"commercial",
 			); err == nil {
 				t.Fatal("broken rights closure must fail closed")
 			}

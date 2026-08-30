@@ -38,14 +38,47 @@ class CircleUIConfig {
   static const String defaultTabId = "content";
 
   static const List<CircleTabConfig> tabs = <CircleTabConfig>[
-    CircleTabConfig(id: "content", labelKey: "circle_tab_record", bodySlot: "creations", sectionTypes: <String>['works'], isDefault: true),
-    CircleTabConfig(id: "discussion", labelKey: "circle_tab_discussion", bodySlot: "discussion", sectionTypes: <String>['chat'], isDefault: false),
-    CircleTabConfig(id: "members", labelKey: "circle_tab_members", bodySlot: "members", sectionTypes: <String>['members'], isDefault: false),
+    CircleTabConfig(
+      id: "content",
+      labelKey: "circle_tab_record",
+      bodySlot: "creations",
+      sectionTypes: <String>['works'],
+      isDefault: true,
+    ),
+    CircleTabConfig(
+      id: "discussion",
+      labelKey: "circle_tab_discussion",
+      bodySlot: "discussion",
+      sectionTypes: <String>['chat'],
+      isDefault: false,
+    ),
+    CircleTabConfig(
+      id: "members",
+      labelKey: "circle_tab_members",
+      bodySlot: "members",
+      sectionTypes: <String>['members'],
+      isDefault: false,
+    ),
   ];
 
   static const List<CircleSectionConfig> sections = <CircleSectionConfig>[
-    CircleSectionConfig(sectionType: "works", labelKey: "circle_section_works", icon: "sparkles", tabId: "content"),
-    CircleSectionConfig(sectionType: "members", labelKey: "circle_section_members", icon: "person_3", tabId: "members"),
-    CircleSectionConfig(sectionType: "chat", labelKey: "circle_section_chat", icon: "chat_bubble_2", tabId: "discussion"),
+    CircleSectionConfig(
+      sectionType: "works",
+      labelKey: "circle_section_works",
+      icon: "sparkles",
+      tabId: "content",
+    ),
+    CircleSectionConfig(
+      sectionType: "members",
+      labelKey: "circle_section_members",
+      icon: "person_3",
+      tabId: "members",
+    ),
+    CircleSectionConfig(
+      sectionType: "chat",
+      labelKey: "circle_section_chat",
+      icon: "chat_bubble_2",
+      tabId: "discussion",
+    ),
   ];
 }

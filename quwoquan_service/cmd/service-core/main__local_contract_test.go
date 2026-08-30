@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"os"
 	"reflect"
 	"testing"
@@ -103,6 +105,58 @@ func TestPrepareVirtualHTTPRoutingSealsHiddenListeners(t *testing.T) {
 	}
 	if got := os.Getenv("USER_SERVICE_ADDR"); got != "127.0.0.1:28081" {
 		t.Fatalf("USER_SERVICE_ADDR = %q, want hidden listener", got)
+	}
+}
+
+type preflightTestModule struct {
+	name      string
+	validated bool
+	migrated  bool
+	bound     bool
+}
+
+func (module *preflightTestModule) Name() string         { return module.name }
+func (module *preflightTestModule) ConfigDigest() string { return "sha256:test" }
+func (module *preflightTestModule) ValidateConfig(context.Context) error {
+	module.validated = true
+	return nil
+}
+func (module *preflightTestModule) PrepareMigration(context.Context) error {
+	if !module.validated {
+		return errors.New("migration ran before validation")
+	}
+	module.migrated = true
+	return nil
+}
+func (module *preflightTestModule) Bind(context.Context) error {
+	module.bound = true
+	return errors.New("preflight must not bind")
+}
+func (module *preflightTestModule) Start(context.Context) error         { return nil }
+func (module *preflightTestModule) Ready(context.Context) error         { return nil }
+func (module *preflightTestModule) OpenAdmission(context.Context) error { return nil }
+func (module *preflightTestModule) Shutdown(context.Context) error      { return nil }
+
+func TestRunPreflightValidatesAndMigratesWithoutBindingListeners(t *testing.T) {
+	module := &preflightTestModule{name: "assistant-service"}
+	composition, err := servicehost.NewComposition(
+		"service-core-preflight",
+		servicehost.ModuleFactory{
+			Name: module.name,
+			New:  func() (servicehost.Module, error) { return module, nil },
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runPreflight(composition); err != nil {
+		t.Fatalf("runPreflight() error = %v", err)
+	}
+	if !module.validated || !module.migrated {
+		t.Fatalf("preflight did not validate and migrate: %#v", module)
+	}
+	if module.bound {
+		t.Fatal("preflight bound a listener")
 	}
 }
 

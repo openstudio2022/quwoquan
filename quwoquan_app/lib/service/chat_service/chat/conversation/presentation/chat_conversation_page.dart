@@ -29,6 +29,7 @@ import 'package:quwoquan_app/design_system/feedback/error_states/app_error_state
 import 'package:quwoquan_app/design_system/layout/web_page_max_width_frame.dart';
 import 'package:quwoquan_app/design_system/semantics/design_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/design_system/surfaces/app_modal_presenter.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
@@ -630,7 +631,8 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
     var intersectionText = _isGroupChat
         ? null
         : _conversationDto?.originIntersectionSnapshot?.primaryText.trim();
-    if (!_isGroupChat && (intersectionText == null || intersectionText.isEmpty)) {
+    if (!_isGroupChat &&
+        (intersectionText == null || intersectionText.isEmpty)) {
       final facts = _conversationDto?.intersectionFacts;
       if (facts != null && facts.isNotEmpty) {
         intersectionText = facts.first.primaryText.trim();

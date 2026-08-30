@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+
+sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -12,14 +15,54 @@ from quwoquan_ops.cli.lib.observability import (
     LOG_FILE_SUFFIX,
     LOG_KINDS,
     OBSERVABILITY_ROOT,
+    append_log_line,
+    write_run_manifest,
 )
-from quwoquan_ops.cli.lib.output_paths import ENV_SEGMENTS
+from quwoquan_ops.cli.lib.output_paths import ENV_SEGMENTS, safe_segment
 
 ALLOWED_RUN_ENTRIES = frozenset({"manifest.json", "logs", "metrics", "traces", "attachments"})
 ALLOWED_METRICS_FILES = frozenset({"snapshot.json", "prometheus.prom"})
 ALLOWED_TRACE_FILES = frozenset({"links.json"})
 ALLOWED_ATTACHMENT_FILES = frozenset({"stdout.log", "stderr.log"})
 ALLOWED_ATTACHMENT_DIRS = frozenset({"screenshots"})
+
+
+def materialize_repo_gate_observability_run(
+    root: Path = OBSERVABILITY_ROOT,
+) -> Path:
+    """Record this real repository gate before validating an otherwise clean checkout."""
+    identity = "-".join(
+        part
+        for part in (
+            os.environ.get("GITHUB_RUN_ID", ""),
+            os.environ.get("GITHUB_JOB", ""),
+            os.environ.get("GITHUB_RUN_ATTEMPT", ""),
+        )
+        if part
+    ) or f"local-{os.getpid()}"
+    run_id = safe_segment(f"repo-gate-{identity}")
+    run = root / "env" / "repo" / "observability" / run_id
+    report_dir = root / "env" / "repo" / "runs" / run_id
+    write_run_manifest(
+        run,
+        env_name="repo",
+        run_id=run_id,
+        command="gate_repo",
+        target="repo",
+        report_dir=report_dir,
+    )
+    append_log_line(
+        run / "logs" / "ci" / "repo-gate" / "runtime.log",
+        {
+            "event": "repository_gate_observability_validation",
+            "result": "started",
+            "message": "repository gate observability validation started",
+            "attributes": {"gate": "gate_repo"},
+        },
+        resource={"sourceType": "ops", "service": "repo-gate"},
+        signal="ops.runtime.process",
+    )
+    return run
 
 
 def layout_issues(root: Path = OBSERVABILITY_ROOT) -> list[str]:
@@ -149,6 +192,7 @@ def _rel(path: Path) -> str:
 
 
 def main() -> int:
+    materialize_repo_gate_observability_run()
     issues = layout_issues()
     if issues:
         print("[verify_observability_layout] FAIL")

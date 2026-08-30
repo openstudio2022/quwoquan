@@ -11,12 +11,13 @@ from typing import Any
 from core.io import read_json, write_json
 from core.schema import assert_valid
 
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.runtime_process import _pid_alive
 from content.execution.campaign.submission_reconciliation_contract import (
     campaigns_root,
     canonical_digest,
     file_digest,
+    frozen_plan_workload,
+    frozen_submission_workload,
     safe_regular_ref,
     typed,
 )
@@ -69,7 +70,7 @@ def _terminalize_superseded_dead_claims(
     original_digest: object,
     output_root: Path,
 ) -> None:
-    """Close stale active claims only after all four executions are superseded.
+    """Close stale active claims only after every active execution is superseded.
 
     A lane wrapper can disappear before its context-manager writes the terminal
     claim. Reconciliation may close that bookkeeping gap, but only after every
@@ -79,7 +80,7 @@ def _terminalize_superseded_dead_claims(
     """
 
     pending: list[tuple[Path, dict[str, Any]]] = []
-    for carrier in CAMPAIGN_CARRIERS:
+    for carrier in expected_ids:
         execution_id = expected_ids[carrier]
         path = campaign / "claims" / f"{carrier}.json"
         claim = read_json(path)
@@ -196,7 +197,7 @@ def claimed_execution_source_drift_evidence(
     *,
     output_root: Path,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Bind four failed claims to four current-code supersession receipts.
+    """Bind active failed claims to current-code supersession receipts.
 
     The only permitted mutation is an atomic-after-validation terminal update
     for stale claims whose processes are dead and whose executions are already
@@ -233,6 +234,16 @@ def claimed_execution_source_drift_evidence(
     )
     distributed = plan.get("distributedRun")
     report_lanes = report.get("lanes")
+    active_carriers, _workloads, plan_execution_ids, _root = frozen_plan_workload(
+        plan,
+        root_execution_id=root_execution_id,
+    )
+    submission_carriers, _submission_workloads, _submission_root = (
+        frozen_submission_workload(
+            submissions,
+            root_execution_id=root_execution_id,
+        )
+    )
     if (
         plan.get("rootExecutionId") != root_execution_id
         or plan.get("sourceRevision")
@@ -246,19 +257,22 @@ def claimed_execution_source_drift_evidence(
         raise typed("IDENTITY_DRIFT", "claimed campaign plan identity drifted")
     expected_ids = {
         carrier: str(submissions[carrier]["executionId"])
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active_carriers
     }
     expected_digests = {
         carrier: str(submissions[carrier]["requestDigest"])
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active_carriers
     }
     if (
-        plan.get("executionIds") != expected_ids
+        active_carriers != submission_carriers
+        or plan_execution_ids != expected_ids
+        or plan.get("executionIds") != expected_ids
         or plan.get("submissionDigests") != expected_digests
+        or set(report_lanes) != set(active_carriers)
     ):
         raise typed(
             "IDENTITY_DRIFT",
-            "claimed campaign plan is not bound to the four submissions",
+            "claimed campaign plan is not bound to the active submissions",
         )
     _terminalize_superseded_dead_claims(
         campaign,
@@ -307,7 +321,7 @@ def claimed_execution_source_drift_evidence(
     claim_bindings: dict[str, dict[str, str]] = {}
     execution_rows: list[dict[str, Any]] = []
     capsule_ref: str | None = None
-    for carrier in CAMPAIGN_CARRIERS:
+    for carrier in active_carriers:
         execution_id = expected_ids[carrier]
         claim_path = campaign / "claims" / f"{carrier}.json"
         claim = read_json(claim_path)

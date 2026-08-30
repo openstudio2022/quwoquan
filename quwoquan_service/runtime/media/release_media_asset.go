@@ -15,16 +15,26 @@ const (
 	releaseMediaSourceOwner    = "qwq_data"
 )
 
-var releaseMediaSHA256Pattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+var (
+	releaseMediaSHA256Pattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	// DEC-031: research delivery reuses the CAS object key that the private
+	// delivery signer already accepts as its only non-public key layout.
+	releaseMediaCASKeyPattern = regexp.MustCompile(
+		`^media/objects/sha256/([0-9a-f]{2})/([0-9a-f]{2})/([0-9a-f]{64})(\.[a-z0-9]+)?$`,
+	)
+)
 
 // ReleaseMediaAsset is the immutable Data release authority consumed by
-// service importers. Private CAS/object-storage fields are intentionally absent.
+// service importers. Exactly one delivery identity is present per asset
+// (DEC-031): a derived publicSliceKey for commercial releases or the CAS
+// privateObjectKey for research releases.
 type ReleaseMediaAsset struct {
 	AssetID            string   `json:"assetId"`
 	Kind               string   `json:"kind"`
 	Version            int64    `json:"version"`
 	ContentType        string   `json:"contentType"`
-	PublicSliceKey     string   `json:"publicSliceKey"`
+	PublicSliceKey     string   `json:"publicSliceKey,omitempty"`
+	PrivateObjectKey   string   `json:"privateObjectKey,omitempty"`
 	SHA256             string   `json:"sha256"`
 	Bytes              int64    `json:"bytes"`
 	OwnerRefs          []string `json:"ownerRefs"`
@@ -52,17 +62,24 @@ type MediaDeliveryBases struct {
 	Video  string
 }
 
-// ResolvedReleaseMediaAsset contains the public-safe projection of one
-// release-authorized media binding.
+// ResolvedReleaseMediaAsset contains the delivery-safe projection of one
+// release-authorized media binding. DeliveryRef is the value object bindings
+// must store: the absolute public URL for commercial delivery or the relative
+// CAS key for research delivery, which is only consumable via the short-lived
+// signed grant operation.
 type ResolvedReleaseMediaAsset struct {
 	ReleaseMediaAsset
-	PublicURL string
+	PublicURL   string
+	DeliveryRef string
 }
 
 // LoadReleaseMediaAssets decodes and validates one immutable release authority.
+// The caller passes the release header's releaseClass so the delivery identity
+// form is asserted, never inferred (DEC-031).
 func LoadReleaseMediaAssets(
 	releaseRoot string,
 	expectedReleaseID string,
+	releaseClass string,
 ) (map[string]ReleaseMediaAsset, error) {
 	path := filepath.Join(releaseRoot, "payload", "media_manifest.json")
 	file, err := os.Open(path)
@@ -78,6 +95,11 @@ func LoadReleaseMediaAssets(
 		return nil, fmt.Errorf("decode release media manifest: %w", err)
 	}
 	expectedReleaseID = strings.TrimSpace(expectedReleaseID)
+	releaseClass = strings.TrimSpace(releaseClass)
+	if releaseClass != "research" && releaseClass != "commercial" {
+		return nil, fmt.Errorf("release class %q is invalid", releaseClass)
+	}
+	privateDelivery := releaseClass == "research"
 	if manifest.Schema != releaseMediaManifestSchema ||
 		expectedReleaseID == "" ||
 		manifest.ReleaseID != expectedReleaseID ||
@@ -95,23 +117,37 @@ func LoadReleaseMediaAssets(
 		asset.Kind = strings.ToLower(strings.TrimSpace(asset.Kind))
 		asset.ContentType = strings.ToLower(strings.TrimSpace(asset.ContentType))
 		asset.PublicSliceKey = strings.TrimSpace(asset.PublicSliceKey)
+		asset.PrivateObjectKey = strings.TrimSpace(asset.PrivateObjectKey)
 		asset.SHA256 = strings.TrimSpace(asset.SHA256)
-		expectedSlice := BuildContentMediaPublicSliceKey(
-			asset.Kind,
-			asset.AssetID,
-			asset.Version,
-			asset.ContentType,
-		)
 		if asset.AssetID == "" ||
 			asset.Version <= 0 ||
 			asset.Bytes <= 0 ||
 			!releaseMediaSHA256Pattern.MatchString(asset.SHA256) ||
 			!releaseKindMatchesContentType(asset.Kind, asset.ContentType) ||
-			expectedSlice == "" ||
-			asset.PublicSliceKey != expectedSlice ||
 			!nonEmptyReleaseRefs(asset.OwnerRefs) ||
 			!nonEmptyReleaseRefs(asset.RightsSnapshotRefs) {
 			return nil, fmt.Errorf("release MediaAsset %q is invalid", asset.AssetID)
+		}
+		if privateDelivery {
+			if asset.PublicSliceKey != "" ||
+				!releaseCASKeyBindsDigest(asset.PrivateObjectKey, asset.SHA256) {
+				return nil, fmt.Errorf(
+					"release MediaAsset %q research delivery identity is invalid",
+					asset.AssetID,
+				)
+			}
+		} else {
+			expectedSlice := BuildContentMediaPublicSliceKey(
+				asset.Kind,
+				asset.AssetID,
+				asset.Version,
+				asset.ContentType,
+			)
+			if asset.PrivateObjectKey != "" ||
+				expectedSlice == "" ||
+				asset.PublicSliceKey != expectedSlice {
+				return nil, fmt.Errorf("release MediaAsset %q is invalid", asset.AssetID)
+			}
 		}
 		if err := validateReleaseMediaAssetClosure(releaseRoot, asset); err != nil {
 			return nil, fmt.Errorf(
@@ -123,17 +159,32 @@ func LoadReleaseMediaAssets(
 		if _, exists := result[asset.AssetID]; exists {
 			return nil, fmt.Errorf("release MediaAsset identity is duplicated: %s", asset.AssetID)
 		}
-		if owner, exists := sliceOwners[asset.PublicSliceKey]; exists {
-			return nil, fmt.Errorf(
-				"release public media slice is shared by %s and %s",
-				owner,
-				asset.AssetID,
-			)
+		// CAS keys are content-addressed and may be shared by multiple assets;
+		// only derived public slices must stay exclusive.
+		if !privateDelivery {
+			if owner, exists := sliceOwners[asset.PublicSliceKey]; exists {
+				return nil, fmt.Errorf(
+					"release public media slice is shared by %s and %s",
+					owner,
+					asset.AssetID,
+				)
+			}
+			sliceOwners[asset.PublicSliceKey] = asset.AssetID
 		}
 		result[asset.AssetID] = asset
-		sliceOwners[asset.PublicSliceKey] = asset.AssetID
 	}
 	return result, nil
+}
+
+func releaseCASKeyBindsDigest(key string, sha256 string) bool {
+	match := releaseMediaCASKeyPattern.FindStringSubmatch(key)
+	if match == nil {
+		return false
+	}
+	digest := match[3]
+	return match[1] == digest[:2] &&
+		match[2] == digest[2:4] &&
+		sha256 == "sha256:"+digest
 }
 
 // ResolveReleaseMediaAsset validates an object-level binding against the
@@ -183,6 +234,14 @@ func ResolveReleaseMediaAsset(
 			expectedOwnerRef,
 		)
 	}
+	if asset.PrivateObjectKey != "" {
+		// Research delivery: bindings store the relative CAS key; the only
+		// consumption path is the short-lived signed grant (DEC-031).
+		return ResolvedReleaseMediaAsset{
+			ReleaseMediaAsset: asset,
+			DeliveryRef:       asset.PrivateObjectKey,
+		}, nil
+	}
 	base := bases.forKind(asset.Kind)
 	if base == "" {
 		return ResolvedReleaseMediaAsset{}, fmt.Errorf(
@@ -190,9 +249,11 @@ func ResolveReleaseMediaAsset(
 			asset.Kind,
 		)
 	}
+	publicURL := BuildPublicMediaURL(base, asset.PublicSliceKey, asset.Version)
 	return ResolvedReleaseMediaAsset{
 		ReleaseMediaAsset: asset,
-		PublicURL:         BuildPublicMediaURL(base, asset.PublicSliceKey, asset.Version),
+		PublicURL:         publicURL,
+		DeliveryRef:       publicURL,
 	}, nil
 }
 

@@ -1,0 +1,92 @@
+backend: postgres
+tables:
+  human_authority_units:
+    publication_role: not_published
+    entity: DecisionUnit
+    role: authoritative
+    description: immutable header 与当前 append-only aggregate projection；历史由 events 保留。
+    pk: [decision_unit_id]
+    columns:
+    - {name: decision_unit_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
+    - {name: unit, type: JSONB, constraints: [NOT_NULL]}
+    - {name: last_sequence, type: BIGINT, constraints: [NOT_NULL]}
+    - {name: last_hash, type: VARCHAR(72), constraints: [NOT_NULL]}
+    - {name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+  human_authority_events:
+    publication_role: transactional_event_log
+    entity: DecisionUnit
+    role: append_only
+    description: 带 previous hash 的 append-only authority event stream，retention 前保持 exact bytes。
+    pk: [event_id]
+    columns:
+    - {name: event_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
+    - {name: decision_unit_id, type: VARCHAR(128), constraints: [NOT_NULL]}
+    - {name: sequence, type: BIGINT, constraints: [NOT_NULL]}
+    - {name: event_type, type: VARCHAR(96), constraints: [NOT_NULL]}
+    - {name: actor_id, type: VARCHAR(256), constraints: [NOT_NULL]}
+    - {name: payload, type: BYTEA, constraints: [NOT_NULL]}
+    - {name: previous_hash, type: VARCHAR(72), constraints: [NOT_NULL]}
+    - {name: event_hash, type: VARCHAR(72), constraints: [NOT_NULL]}
+    - {name: occurred_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+  human_authority_receipts:
+    publication_role: not_published
+    entity: AuthorizationReceipt
+    role: authoritative
+    description: immutable signed exact-byte receipt 与 consume/revoke state CAS；release eligibility 在 live blocker 闭合前为 false。
+    pk: [decision_id]
+    columns:
+    - {name: decision_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
+    - {name: decision_unit_id, type: VARCHAR(128), constraints: [NOT_NULL]}
+    - {name: key_id, type: VARCHAR(128), constraints: [NOT_NULL]}
+    - {name: canonical_bytes, type: TEXT, constraints: [NOT_NULL]}
+    - {name: payload_digest, type: VARCHAR(72), constraints: [NOT_NULL]}
+    - {name: signature, type: TEXT, constraints: [NOT_NULL]}
+    - {name: state, type: VARCHAR(24), constraints: [NOT_NULL]}
+    - {name: previous_generation, type: BIGINT, constraints: [NOT_NULL]}
+    - {name: generation, type: BIGINT, constraints: [NOT_NULL]}
+    - {name: winner_idempotency_key, type: VARCHAR(256), constraints: [NOT_NULL]}
+    - {name: winner_command_digest, type: VARCHAR(72), constraints: [NOT_NULL]}
+    - {name: state_actor, type: VARCHAR(256), constraints: [NOT_NULL]}
+    - {name: state_at, type: TIMESTAMPTZ}
+    - {name: chain_commit, type: VARCHAR(72), constraints: [NOT_NULL]}
+    - {name: issued_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    - {name: expires_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    - {name: release_eligible, type: BOOLEAN, constraints: [NOT_NULL]}
+  human_authority_idempotency:
+    publication_role: not_published
+    entity: DecisionUnit
+    role: authoritative
+    description: operation 与 Idempotency-Key 绑定 exact request digest 和原始 committed readback bytes。
+    pk: [operation, idempotency_key]
+    columns:
+    - {name: operation, type: VARCHAR(192), constraints: [PK, NOT_NULL]}
+    - {name: idempotency_key, type: VARCHAR(256), constraints: [PK, NOT_NULL]}
+    - {name: request_digest, type: VARCHAR(72), constraints: [NOT_NULL]}
+    - {name: status_code, type: INTEGER, constraints: [NOT_NULL]}
+    - {name: response_bytes, type: BYTEA, constraints: [NOT_NULL]}
+  human_authority_signing_keys:
+    publication_role: not_published
+    entity: AuthorizationReceipt
+    role: authoritative
+    description: Ed25519 public key immutable history；旧 receipt retention 结束前不得删除相应 key。
+    pk: [key_id]
+    columns:
+    - {name: key_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
+    - {name: public_key, type: BYTEA, constraints: [NOT_NULL]}
+    - {name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+  human_authority_outbox:
+    publication_role: transactional_event_log
+    entity: DecisionUnit
+    role: append_only
+    description: 仅投递已提交 authority facts；稳定 event identity 幂等并暴露 retry/dispatched readback。
+    pk: [event_id]
+    columns:
+    - {name: event_id, type: VARCHAR(128), constraints: [PK, NOT_NULL]}
+    - {name: event_type, type: VARCHAR(128), constraints: [NOT_NULL]}
+    - {name: aggregate_id, type: VARCHAR(128), constraints: [NOT_NULL]}
+    - {name: payload, type: JSONB, constraints: [NOT_NULL]}
+    - {name: occurred_at, type: TIMESTAMPTZ, constraints: [NOT_NULL]}
+    - {name: dispatched_at, type: TIMESTAMPTZ}
+    - {name: retry_count, type: INTEGER, constraints: [NOT_NULL], default: "0"}
+    - {name: last_error, type: TEXT, constraints: [NOT_NULL], default: ""}
+role: authoritative

@@ -28,17 +28,17 @@ class AssistantSessionWire {
   final String updatedAt;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'sessionId': sessionId,
-        'userId': userId,
-        'state': state,
-        'activeTurnId': activeTurnId,
-        'lastTurnId': lastTurnId,
-        'summary': summary,
-        'summarySourceSequence': summarySourceSequence,
-        'summaryVersion': summaryVersion,
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-      };
+    'sessionId': sessionId,
+    'userId': userId,
+    'state': state,
+    'activeTurnId': activeTurnId,
+    'lastTurnId': lastTurnId,
+    'summary': summary,
+    'summarySourceSequence': summarySourceSequence,
+    'summaryVersion': summaryVersion,
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+  };
 
   factory AssistantSessionWire.fromJson(Map<String, dynamic> json) {
     const allowedFields = <String>{
@@ -57,37 +57,79 @@ class AssistantSessionWire {
         .where((key) => !allowedFields.contains(key))
         .toList(growable: false);
     if (unknownFields.isNotEmpty) {
-      throw FormatException('AssistantSessionWire response contains unknown fields: ${unknownFields.join(', ')}');
+      throw FormatException(
+        'AssistantSessionWire response contains unknown fields: ${unknownFields.join(', ')}',
+      );
     }
-    if (!json.containsKey('sessionId') || json['sessionId'] == null || (json['sessionId'] is! String)) {
-      throw const FormatException('AssistantSessionWire field sessionId has an invalid wire value');
+    if (!json.containsKey('sessionId') ||
+        json['sessionId'] == null ||
+        (json['sessionId'] is! String)) {
+      throw const FormatException(
+        'AssistantSessionWire field sessionId has an invalid wire value',
+      );
     }
-    if (!json.containsKey('userId') || json['userId'] == null || (json['userId'] is! String)) {
-      throw const FormatException('AssistantSessionWire field userId has an invalid wire value');
+    if (!json.containsKey('userId') ||
+        json['userId'] == null ||
+        (json['userId'] is! String)) {
+      throw const FormatException(
+        'AssistantSessionWire field userId has an invalid wire value',
+      );
     }
-    if (json.containsKey('state') && json['state'] != null && (json['state'] is! String)) {
-      throw const FormatException('AssistantSessionWire field state has an invalid wire value');
+    if (json.containsKey('state') &&
+        json['state'] != null &&
+        (json['state'] is! String)) {
+      throw const FormatException(
+        'AssistantSessionWire field state has an invalid wire value',
+      );
     }
-    if (json.containsKey('activeTurnId') && json['activeTurnId'] != null && (json['activeTurnId'] is! String)) {
-      throw const FormatException('AssistantSessionWire field activeTurnId has an invalid wire value');
+    if (json.containsKey('activeTurnId') &&
+        json['activeTurnId'] != null &&
+        (json['activeTurnId'] is! String)) {
+      throw const FormatException(
+        'AssistantSessionWire field activeTurnId has an invalid wire value',
+      );
     }
-    if (json.containsKey('lastTurnId') && json['lastTurnId'] != null && (json['lastTurnId'] is! String)) {
-      throw const FormatException('AssistantSessionWire field lastTurnId has an invalid wire value');
+    if (json.containsKey('lastTurnId') &&
+        json['lastTurnId'] != null &&
+        (json['lastTurnId'] is! String)) {
+      throw const FormatException(
+        'AssistantSessionWire field lastTurnId has an invalid wire value',
+      );
     }
-    if (json.containsKey('summary') && json['summary'] != null && (json['summary'] is! String)) {
-      throw const FormatException('AssistantSessionWire field summary has an invalid wire value');
+    if (json.containsKey('summary') &&
+        json['summary'] != null &&
+        (json['summary'] is! String)) {
+      throw const FormatException(
+        'AssistantSessionWire field summary has an invalid wire value',
+      );
     }
-    if (json.containsKey('summarySourceSequence') && json['summarySourceSequence'] != null && (json['summarySourceSequence'] is! num)) {
-      throw const FormatException('AssistantSessionWire field summarySourceSequence has an invalid wire value');
+    if (json.containsKey('summarySourceSequence') &&
+        json['summarySourceSequence'] != null &&
+        (json['summarySourceSequence'] is! num)) {
+      throw const FormatException(
+        'AssistantSessionWire field summarySourceSequence has an invalid wire value',
+      );
     }
-    if (json.containsKey('summaryVersion') && json['summaryVersion'] != null && (json['summaryVersion'] is! num)) {
-      throw const FormatException('AssistantSessionWire field summaryVersion has an invalid wire value');
+    if (json.containsKey('summaryVersion') &&
+        json['summaryVersion'] != null &&
+        (json['summaryVersion'] is! num)) {
+      throw const FormatException(
+        'AssistantSessionWire field summaryVersion has an invalid wire value',
+      );
     }
-    if (!json.containsKey('createdAt') || json['createdAt'] == null || (json['createdAt'] is! String)) {
-      throw const FormatException('AssistantSessionWire field createdAt has an invalid wire value');
+    if (!json.containsKey('createdAt') ||
+        json['createdAt'] == null ||
+        (json['createdAt'] is! String)) {
+      throw const FormatException(
+        'AssistantSessionWire field createdAt has an invalid wire value',
+      );
     }
-    if (!json.containsKey('updatedAt') || json['updatedAt'] == null || (json['updatedAt'] is! String)) {
-      throw const FormatException('AssistantSessionWire field updatedAt has an invalid wire value');
+    if (!json.containsKey('updatedAt') ||
+        json['updatedAt'] == null ||
+        (json['updatedAt'] is! String)) {
+      throw const FormatException(
+        'AssistantSessionWire field updatedAt has an invalid wire value',
+      );
     }
     return AssistantSessionWire(
       sessionId: (json['sessionId'] as String?)?.trim() ?? "",
@@ -96,7 +138,8 @@ class AssistantSessionWire {
       activeTurnId: (json['activeTurnId'] as String?)?.trim() ?? "",
       lastTurnId: (json['lastTurnId'] as String?)?.trim() ?? "",
       summary: (json['summary'] as String?)?.trim() ?? "",
-      summarySourceSequence: (json['summarySourceSequence'] as num?)?.toInt() ?? 0,
+      summarySourceSequence:
+          (json['summarySourceSequence'] as num?)?.toInt() ?? 0,
       summaryVersion: (json['summaryVersion'] as num?)?.toInt() ?? 0,
       createdAt: (json['createdAt'] as String?)?.trim() ?? "",
       updatedAt: (json['updatedAt'] as String?)?.trim() ?? "",
@@ -117,10 +160,11 @@ class AssistantSessionWireFields {
   static const String updatedAt = 'updatedAt';
 }
 
-
 AssistantSessionWire decodeAssistantSessionWire(Object? response) {
   if (response is! Map) {
-    throw const FormatException('AssistantSessionWire response must be an object');
+    throw const FormatException(
+      'AssistantSessionWire response must be an object',
+    );
   }
   return AssistantSessionWire.fromJson(response.cast<String, dynamic>());
 }

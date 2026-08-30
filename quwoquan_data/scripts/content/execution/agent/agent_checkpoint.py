@@ -1,13 +1,7 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from content.execution.coverage import coverage_entity_type
 from content.execution.support import Any, Callable, ExecutionContext, ExecutionStateStatus, ExecutionStateTransition, Mapping, Sequence, _active_spec, _active_target, _download_repair_lanes, image_asset_strategy, image_strategy_allows_ai_generated, issue_messages, json, re, read_json, require_domain_etype, save_execution_state, store, write_json
-
-if TYPE_CHECKING:
-    from content.execution.agent.outcome import ManagedAgentJobOutcome
 
 
 def _checkpoint_is_done(ctx: ExecutionContext, stage: str) -> tuple[bool, list[str]]:
@@ -23,19 +17,20 @@ def _checkpoint_is_done(ctx: ExecutionContext, stage: str) -> tuple[bool, list[s
     return checker(ctx) if checker else (False, [f"unsupported managed checkpoint {stage}"])
 
 def _managed_author_ref(prompt: str) -> str:
+    """Read the content ref out of either declared author prompt grammar.
+
+    `prompts/*/checkpoint_author_*.task.md` writes the ref as a bare line, while
+    `prompts/video/video_author.task.md` writes it as a backticked list item. Both
+    are authored templates, so both are the contract; anything else yields no ref
+    and the caller drops the prompt instead of guessing an identity.
+    """
     for line in prompt.splitlines():
-        prefix = "内容 ref:"
-        if line.startswith(prefix):
-            return line[len(prefix):].strip()
+        managed = re.match(r"^\s*(?:-\s*)?内容 ref:\s*(.+?)\s*$", line)
+        if managed:
+            return managed.group(1).strip().strip("`").strip()
         task_ref = re.match(r"^\s*-\s*ref:\s*`([^`]+)`", line)
         if task_ref:
             return task_ref.group(1).strip()
-        localized_task_ref = re.match(
-            r"^\s*-\s*内容\s*ref:\s*`([^`]+)`",
-            line,
-        )
-        if localized_task_ref:
-            return localized_task_ref.group(1).strip()
     return ""
 
 def _managed_author_failure_refs(
@@ -177,12 +172,7 @@ def _managed_checkpoint_job_issues(
         entity = _managed_prompt_entity(prompt)
         if lane not in {"homepage", "article", "image", "video"} or not entity:
             return [f"download_plan prompt missing target lane/entity: lane={lane!r}, entity={entity!r}"]
-        target = _active_target(ctx, entity)
-        domain, entity_type = require_domain_etype(
-            target.get("entityType") or coverage_entity_type(ctx.spec),
-            context=entity,
-        )
-        etype = f"{domain}/{entity_type}"
+        etype = coverage_entity_type(ctx.spec)
         issues = issue_messages(
             _download_research_lane_issues(ctx, entity, etype, lane)
         )
@@ -293,8 +283,7 @@ def _finalize_managed_author_outputs(
                 ref,
                 run_id=outcome.run_id or str(meta.get("agentRunId") or ""),
                 agent_id=outcome.agent_id or meta.get("agentId"),
-                model=str(ctx.model or meta.get("model") or ""),
-                provider=outcome.provider.value,
+                model=str(meta.get("model") or ctx.model or ""),
             )
             write_post_author_evidence(ctx, ref=ref, outcome=outcome)
             continue
@@ -335,8 +324,8 @@ def _finalize_managed_author_outputs(
                     "ref": ref,
                     "generator": "image_evidence_pack",
                     "status": "completed",
-                    "provider": outcome.provider.value,
-                    "model": ctx.model,
+                    "provider": "cursor_sdk",
+                    "model": meta.get("model") or ctx.model,
                     "agentRunId": outcome.run_id or meta.get("agentRunId"),
                     "agentId": outcome.agent_id or meta.get("agentId"),
                     "citedSourcePaths": [str(item) for item in cited_paths],
@@ -374,8 +363,8 @@ def _finalize_managed_author_outputs(
                 "ref": ref,
                 "generator": "agent",
                 "status": "completed",
-                "provider": outcome.provider.value,
-                "model": ctx.model,
+                "provider": "cursor_sdk",
+                "model": meta.get("model") or ctx.model,
                 "agentRunId": outcome.run_id or meta.get("agentRunId"),
                 "agentId": outcome.agent_id or meta.get("agentId"),
                 "citedSourcePaths": [str(item) for item in cited_paths],

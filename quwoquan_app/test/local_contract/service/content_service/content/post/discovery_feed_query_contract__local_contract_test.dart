@@ -8,11 +8,7 @@ void main() {
       final query = toDiscoveryFeedQuery('moment');
       expect(query.identity, 'moment');
       expect(query.type, isNull);
-      expect(
-        query.channel,
-        isNull,
-        reason: '发现页浏览流走时间线具名查询，不携带频道路由',
-      );
+      expect(query.channel, isNull, reason: '发现页浏览流走时间线具名查询，不携带频道路由');
     });
 
     test('work format tabs map to identity=work with typed filters', () {
@@ -38,6 +34,7 @@ void main() {
       for (final channelId in [
         'following',
         'recommend',
+        'premium',
         'campus',
         'travel',
         'photography',
@@ -58,8 +55,8 @@ void main() {
       for (final channel in ContentUIConfig.homeChannels) {
         expect(
           channel.feedQuery['channel'],
-          channel.id,
-          reason: '${channel.id} 的 feed_query.channel 必须等于频道 id',
+          channel.id == 'featured' ? 'premium' : channel.id,
+          reason: '${channel.id} 必须路由到声明的 canonical 推荐频道',
         );
         expect(
           channel.feedQuery.containsKey('identity'),

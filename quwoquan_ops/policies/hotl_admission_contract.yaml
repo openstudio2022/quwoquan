@@ -1,0 +1,161 @@
+schema_id: hotl-admission-contract
+schema_version: 1
+owner_story: specs/feature-tree/runtime/development-workflow-governance/hotl-expansion-control/spec.md
+human_authority_source: quwoquan_ops/policies/human_agent_delivery_contract.yaml
+objective_admission_source: quwoquan_ops/policies/objective_execution_contract.yaml#admission.readback_contract
+evidence_fingerprint_source: quwoquan_ops/policies/agent_governance_contract.yaml#evidence_fingerprint
+
+closed_sets:
+  risk_tier: [R0, R1, R2, R3, R4]
+  status: [blocked, not_admitted, eligible_for_activation, admitted]
+  allowed_mode: [manual, observe_only, hotl]
+  control_action: [pause, deny, abort, revoke]
+  readback_status: [present, absent, failed]
+  human_calibration_status: [observed, not_observed]
+  wait_event_kind: [decision_requested, decision_recorded, runner_queue, job_started]
+  authority_provider_kind: [authenticated_external, projection, test]
+  checkpoint_resolution: [resolved, unresolved]
+  effect_status: [applied, not_applied, unknown]
+
+schemas:
+  inspection_input:
+    required_fields: [subject, risk_tier, requested_write_concurrency, authority_readback, role_responsibility_proof, cohort_proof, checkpoint_policy, control_proofs, commercial_authority_readback, activation_receipt]
+  subject:
+    required_fields: [subject_id, scope_id, action_id]
+  authority_readback:
+    required_fields: [status, provider_kind, authenticated, exact_bytes_verified, release_evidence_eligible, expired, subject_id, scope_id, allowed_action_id, decision_kind]
+  role_responsibility_proof:
+    required_fields: [status, seven_responsibilities_closed, sod_required, sod_satisfied]
+  cohort_proof:
+    required_fields: [status, cohort_id, member_count, member_ids, selection_query_frozen, bottleneck_rule_frozen, threshold_frozen, coverage_basis_points, human_calibration, wait_event_kinds, cohort_digest_before, cohort_digest_after]
+  checkpoint_policy:
+    required_fields: [status, resolution, checkpoint_delta_id, removable_decision_kinds, resume_requested, new_human_decision_id, human_override, requested_reduction]
+  control_proof:
+    required_fields: [proof_id, action, command_ack, effect_readback, connected, audit_passed, ack_timed_out, post_revoke_new_action_count]
+  command_ack:
+    required_fields: [status, exact, subject_id, scope_id, action_id, command_id]
+  effect_readback:
+    required_fields: [status, effect_status, independent, subject_id, scope_id, action_id, command_id]
+  commercial_authority_readback:
+    required_fields: [status, authenticated, exact_bytes_verified, release_evidence_eligible, commercial_readiness_closed, production_campaign_closed]
+  activation_receipt:
+    required_fields: [status, receipt_id, authenticated, exact_bytes_verified, release_evidence_eligible, evaluation_digest, evaluation_bytes_sha256]
+  contract_terminal:
+    required_fields: [result, error_code, terminal, recovery, detail, blockers]
+  inspection_result:
+    required_fields: [schema_id, schema_version, result, error_code, detail, subject, risk_tier, status, allowed_mode, checkpoint_reduction_allowed, max_write_concurrency, grant_executable, mutation_allowed, activation_required, evaluation_digest, evaluation_fingerprint_ref, evaluation_bytes_sha256, blockers, s4_readback]
+
+admission_policy:
+  evaluable_risk_tiers: [R0, R1]
+  blocked_risk_tiers: [R2, R3, R4]
+  coverage_threshold_basis_points: 9000
+  current_fallback:
+    status: not_admitted
+    allowed_mode: manual
+    checkpoint_reduction_allowed: false
+    max_write_concurrency: 1
+    grant_executable: false
+    mutation_allowed: false
+  allowed_authority_decision_kinds: [delivery_authorization]
+  immutable_decision_kinds:
+    - problem_acceptance
+    - product_scope
+    - experience_direction
+    - solution_risk
+    - delivery_authorization
+    - quality_uat_acceptance
+    - integration_acceptance
+    - artifact_acceptance
+    - nonproduction_acceptance
+    - commercial_readiness
+    - production_campaign_approval
+    - channel_publication
+    - outcome_acceptance
+    - knowledge_landing
+  future_candidate_decision_kinds: [routine_execution]
+  human_wait_sources: [decision_requested, decision_recorded]
+  forbidden_human_wait_sources: [runner_queue, job_started]
+  control_actions: [pause, deny, abort, revoke]
+  control_effect_requires_ack_and_readback: true
+  checkpoint_resume_requires_new_human_decision: true
+  revoke_requires_zero_new_actions: true
+  human_override_priority: true
+  fail_closed_on: [disconnect, audit_failure, ack_timeout]
+  activation:
+    provider_available: false
+    supplied_receipt_trust: audit_only
+    external_authenticated_receipt_required: true
+    exact_evaluation_bytes_required: true
+    exact_evaluation_digest_required: true
+    local_activation_command_available: false
+    local_grant_command_available: false
+    local_resume_command_available: false
+  objective_admission:
+    dynamic_inspect_required: true
+    readback_contract_required: true
+    requested_concurrency_must_not_exceed_readback: true
+    duplicated_admission_facts: forbidden
+  evidence:
+    canonical_digest_function: quwoquan_ops.cli.lib.evidence_fingerprint.canonical_digest
+    fingerprint_ref_function: quwoquan_ops.cli.lib.evidence_fingerprint.fingerprint_ref
+    collection_order: stable_id
+
+blocker_priority:
+  - CANONICAL_CONTRACT_INVALID
+  - INPUT_CONTRACT_INVALID
+  - RISK_TIER_NOT_ELIGIBLE
+  - AUTHORITY_READBACK_FAILED
+  - AUTHORITY_PROVIDER_UNAVAILABLE
+  - AUTHORITY_READBACK_INVALID
+  - ROLE_RESPONSIBILITY_READBACK_FAILED
+  - ROLE_RESPONSIBILITY_PROOF_MISSING
+  - SEGREGATION_OF_DUTIES_FAILED
+  - COHORT_READBACK_FAILED
+  - HUMAN_BOTTLENECK_COHORT_MISSING
+  - COHORT_SELECTION_UNFROZEN
+  - COHORT_THRESHOLD_UNFROZEN
+  - COHORT_COVERAGE_INSUFFICIENT
+  - COHORT_DRIFTED
+  - HUMAN_WAIT_SOURCE_INVALID
+  - HUMAN_CALIBRATION_NOT_OBSERVED
+  - CONTROL_PROOF_MISSING
+  - CONTROL_ACK_READBACK_FAILED
+  - CONTROL_ACK_MISSING
+  - CONTROL_ACK_NOT_EXACT
+  - CONTROL_EFFECT_READBACK_FAILED
+  - CONTROL_EFFECT_READBACK_MISSING
+  - CONTROL_EFFECT_NOT_APPLIED
+  - CONTROL_EFFECT_NOT_INDEPENDENT
+  - CONTROL_IDENTITY_DRIFTED
+  - CONTROL_DISCONNECTED
+  - CONTROL_AUDIT_FAILED
+  - CONTROL_ACK_TIMEOUT
+  - REVOKE_ZERO_ACTIONS_UNPROVEN
+  - COMMERCIAL_AUTHORITY_READBACK_FAILED
+  - COMMERCIAL_AUTHORITY_NOT_CLOSED
+  - HUMAN_OVERRIDE_ACTIVE
+  - CHECKPOINT_READBACK_FAILED
+  - CHECKPOINT_POLICY_UNRESOLVED
+  - IMMUTABLE_CHECKPOINT_REMOVAL_FORBIDDEN
+  - RESUME_REQUIRES_NEW_HUMAN_DECISION
+  - OBJECTIVE_ADMISSION_BLOCKED
+  - EVALUATION_IDENTITY_FAILED
+  - REQUESTED_WRITE_CONCURRENCY_EXCEEDED
+  - WRITE_EXPANSION_NOT_ADMITTED
+  - ACTIVATION_READBACK_FAILED
+  - ACTIVATION_PROVIDER_UNAVAILABLE
+  - ACTIVATION_RECEIPT_INVALID
+  - ACTIVATION_RECEIPT_MISMATCH
+
+errors:
+  HOTL.CANONICAL_CONTRACT_INVALID: {terminal: blocked, recovery: repair_canonical_hotl_contract}
+  HOTL.CONTRACT_INVALID: {terminal: blocked, recovery: repair_inspection_input_or_source}
+  HOTL.RISK_TIER_BLOCKED: {terminal: blocked, recovery: keep_manual_and_route_to_human_authority}
+  HOTL.AUTHORITY_BLOCKED: {terminal: not_admitted, recovery: attach_authenticated_release_eligible_authority}
+  HOTL.COHORT_BLOCKED: {terminal: not_admitted, recovery: freeze_and_observe_nonzero_human_cohort}
+  HOTL.CONTROL_BLOCKED: {terminal: not_admitted, recovery: prove_ack_and_independent_effect_readback_for_all_controls}
+  HOTL.CHECKPOINT_BLOCKED: {terminal: not_admitted, recovery: resolve_checkpoint_policy_without_immutable_decision_removal}
+  HOTL.COMMERCIAL_BLOCKED: {terminal: not_admitted, recovery: close_external_commercial_and_campaign_authority}
+  HOTL.OBJECTIVE_ADMISSION_BLOCKED: {terminal: blocked, recovery: keep_single_writer_and_reinspect_dynamic_s4}
+  HOTL.EVALUATION_IDENTITY_FAILED: {terminal: blocked, recovery: repair_evidence_fingerprint_contract_or_serializer}
+  HOTL.ACTIVATION_BLOCKED: {terminal: not_admitted, recovery: wait_for_versioned_authenticated_activation_provider}

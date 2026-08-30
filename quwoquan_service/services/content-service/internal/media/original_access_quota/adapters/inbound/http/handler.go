@@ -64,6 +64,7 @@ func (handler *Handler) Reserve(writer http.ResponseWriter, request *http.Reques
 	}
 	result, err := handler.service.Reserve(request.Context(), quotaapp.Command{
 		AssetID: mediaID, ViewerID: viewerID, Purpose: strings.TrimSpace(body.Purpose),
+		ResearchPrincipal: principalHasResearchRole(principal),
 	})
 	if err != nil {
 		writeError(writer, request, err)
@@ -106,6 +107,17 @@ func (handler *Handler) GetAudit(writer http.ResponseWriter, request *http.Reque
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(writer).Encode(view)
+}
+
+// principalHasResearchRole 从已验签 principal 派生 research 分流标志
+// （DEC-032）：role 由服务端签发进 access token，客户端无法自选。
+func principalHasResearchRole(principal rtauth.Principal) bool {
+	for _, role := range principal.Roles {
+		if role == rtauth.RoleResearch {
+			return true
+		}
+	}
+	return false
 }
 
 func writeError(writer http.ResponseWriter, request *http.Request, err error) {

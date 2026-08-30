@@ -16,6 +16,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
@@ -27,7 +29,7 @@ from startup_environment_matrix import (  # noqa: E402,F401
     ENVIRONMENTS,
     OBSERVABILITY_EVIDENCE_SCHEMA,
     READBACK_EVIDENCE_SCHEMA,
-    REQUIRED_DEFINES,
+    REQUIRED_RUNTIME_FIELDS,
     RUNTIME_CASES,
     RUNTIME_EVIDENCE_SCHEMA,
     RUNTIME_TARGETS,
@@ -35,13 +37,14 @@ from startup_environment_matrix import (  # noqa: E402,F401
     SPEC_REFS,
     _case,
     _case_counts,
-    _ios_defines,
+    _ios_compile_defines,
     _launcher_handoff,
     _missing_spec_refs,
     _report_status,
     _run,
-    _runtime_defines,
-    _validate_defines,
+    _runtime_package,
+    _validate_compile_defines,
+    _validate_runtime_package,
     _validate_observability_evidence,
     _validate_readback_evidence,
     _validate_runtime_evidence,

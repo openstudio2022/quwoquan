@@ -45,10 +45,7 @@ func LoadOpenAICompatibleBinding(
 			"embedding binding has no runtime config provider",
 		)
 	}
-	descriptor, found := contentgenerated.ExternalProviderBindingFor(
-		appEnv,
-		embeddingCapabilityID,
-	)
+	descriptor, found := contentgenerated.CompiledBindingFor(embeddingCapabilityID)
 	if !found || descriptor.State != "enabled" || descriptor.AdapterID != OpenAICompatibleAdapterID {
 		return OpenAICompatibleBinding{}, contentgenerated.AppErrorFromRequiredDependencyUnavailable(
 			"embedding binding is unavailable for the current environment",

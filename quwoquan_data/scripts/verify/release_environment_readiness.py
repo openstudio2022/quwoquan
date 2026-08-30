@@ -10,13 +10,9 @@ from typing import Any
 
 from content.release.environment.activation_envelope import (
     EnvironmentActivationEnvelopeError,
-    build_environment_activation_envelope,
+    build_release_activation_envelope,
     document_digest,
     file_digest,
-)
-from content.release.environment.app_uat_envelope import (
-    AppUatEnvelopeError,
-    build_app_uat_envelope,
 )
 from content.release.environment.release_readiness_closure import (
     ReleaseReadinessClosureError,
@@ -29,6 +25,7 @@ from content.release.environment.research_isolation_verification import (
 )
 from core.io import read_json
 from core.release_layout import payload_file
+from verify.release_publishability import phase_lifecycle_alignment_issue
 
 
 def _read_object(path: Path, *, label: str, issues: list[str]) -> dict[str, Any]:
@@ -80,15 +77,27 @@ def environment_release_readiness_issues(
         label="release header",
         issues=issues,
     )
-    for field in (
+    identity_fields = (
+        ("sourceIdentities", "sourceIdentitySetDigest")
+        if "sourceIdentities" in release_header
+        else ("sourceRevision", "sourceDigest", "entityCatalogDigest")
+    )
+    header_projection_fields = (
         "releaseClass",
         "productLifecycleState",
-        "sourceRevision",
-        "sourceDigest",
-        "entityCatalogDigest",
-    ):
+        "containsUnverifiedAssets",
+        "rightsStatusCounts",
+        "authorizationRequiredAssetIds",
+        "researchAcceptedCount",
+        "commercialAcceptedCount",
+        *identity_fields,
+        *(("milestone",) if "milestone" in release_header else ()),
+    )
+    for field in header_projection_fields:
         if readiness.get(field) != release_header.get(field):
             issues.append(f"{path}: {field} drifts from immutable release closure")
+    if "milestone" not in release_header and "milestone" in readiness:
+        issues.append(f"{path}: milestone is absent from immutable release header")
     if readiness.get("guestActorHash") != post_verification.get("guestActorHash"):
         issues.append(f"{path}: guestActorHash drift from post verification")
     if readiness.get("guestLogin") != post_verification.get("guestLogin"):
@@ -96,18 +105,13 @@ def environment_release_readiness_issues(
     if readiness.get("feedQueries") != post_verification.get("feedQueries"):
         issues.append(f"{path}: feedQueries drift from post verification")
     readiness_phase = str(readiness.get("readinessPhase") or "")
-    expected_lifecycle = {
-        "research": "research",
-        "commercial": "commercial",
-    }.get(readiness_phase)
-    if expected_lifecycle is not None and any(
-        readiness.get(field) != expected_lifecycle
-        for field in ("releaseClass", "productLifecycleState")
-    ):
-        issues.append(
-            f"{path}: readinessPhase={readiness_phase} requires "
-            f"releaseClass=productLifecycleState={expected_lifecycle}"
-        )
+    alignment_issue = phase_lifecycle_alignment_issue(
+        readiness_phase,
+        str(readiness.get("releaseClass") or ""),
+        str(readiness.get("productLifecycleState") or ""),
+    )
+    if alignment_issue is not None:
+        issues.append(f"{path}: {alignment_issue}")
     isolation_fields = (
         "internalSubjectHash",
         "researchIsolationVerificationRef",
@@ -337,85 +341,49 @@ def environment_release_readiness_issues(
         issues.append(f"{path}: counts drift from bound evidence")
 
     readiness_phase = str(readiness.get("readinessPhase") or "")
-    video_query_name = (
-        "typed_video" if readiness_phase == "consumer" else "premium_stream"
-    )
     try:
-        expected_app_uat_envelope = build_app_uat_envelope(
-            release_root=release,
+        import_report_ref = (
+            (import_run / "import.json").relative_to(output_root).as_posix()
+        )
+        observed_envelope = readiness.get("activationEnvelope")
+        previous_environment_activation = (
+            observed_envelope.get("previousEnvironmentActivation")
+            if isinstance(observed_envelope, Mapping)
+            else None
+        )
+        expected_activation_envelope = build_release_activation_envelope(
+            header=release_header,
+            environment=environment,
             release_id=release_id,
-            entity_refs=desired_refs["entities"],
-            post_refs=desired_refs["posts"],
-            creator_ids=desired_refs["creators"],
-            tag_refs=desired_refs["tags"],
-            bindings=list(bindings),
-            homepage_report=homepage_verification,
-            queries_by_name=feed_queries,
-            video_query_name=video_query_name,
-            verified_playable_video_ids=verified_playable_video_ids,
-            illustrated_article_ids=illustrated_article_ids,
-            verified_image_work_ids=verified_image_work_ids,
+            manifest_digest=str(attestation.get("payloadSha256") or ""),
             release_class=str(release_header.get("releaseClass") or ""),
             product_lifecycle_state=str(
                 release_header.get("productLifecycleState") or ""
             ),
+            readiness_phase=readiness_phase,
+            import_run_id=import_run_id,
+            verify_run_id=verify_run_id,
+            import_report_ref=import_report_ref,
+            import_report_digest=file_digest(import_run / "import.json"),
+            research_isolation=isolation,
+            research_isolation_verification_ref=str(
+                readiness.get("researchIsolationVerificationRef") or ""
+            ),
+            research_isolation_verification_digest=str(
+                readiness.get("researchIsolationVerificationDigest") or ""
+            ),
+            previous_environment_activation=previous_environment_activation,
         )
-    except AppUatEnvelopeError as exc:
-        issues.append(f"{path}: cannot project appUatEnvelope: {exc}")
+    except (ValueError, EnvironmentActivationEnvelopeError) as exc:
+        issues.append(f"{path}: cannot project activationEnvelope: {exc}")
     else:
-        if readiness.get("appUatEnvelope") != expected_app_uat_envelope:
+        if readiness.get("activationEnvelope") != expected_activation_envelope:
             issues.append(
-                f"{path}: appUatEnvelope drifts from immutable release closure"
+                f"{path}: activationEnvelope drifts from release/import/readback"
             )
-        expected_app_uat_digest = document_digest(expected_app_uat_envelope)
-        if readiness.get("appUatEnvelopeDigest") != expected_app_uat_digest:
-            issues.append(f"{path}: appUatEnvelopeDigest drift")
-        try:
-            import_report_ref = (
-                (import_run / "import.json").relative_to(output_root).as_posix()
-            )
-            expected_activation_envelope = build_environment_activation_envelope(
-                environment=environment,
-                release_id=release_id,
-                manifest_digest=str(attestation.get("payloadSha256") or ""),
-                source_revision=str(release_header.get("sourceRevision") or ""),
-                source_digest=str(release_header.get("sourceDigest") or ""),
-                entity_catalog_digest=str(
-                    release_header.get("entityCatalogDigest") or ""
-                ),
-                release_class=str(release_header.get("releaseClass") or ""),
-                product_lifecycle_state=str(
-                    release_header.get("productLifecycleState") or ""
-                ),
-                readiness_phase=readiness_phase,
-                import_run_id=import_run_id,
-                verify_run_id=verify_run_id,
-                import_report_ref=import_report_ref,
-                import_report_digest=file_digest(import_run / "import.json"),
-                app_uat_envelope=expected_app_uat_envelope,
-                research_isolation=isolation,
-                research_isolation_verification_ref=str(
-                    readiness.get("researchIsolationVerificationRef") or ""
-                ),
-                research_isolation_verification_digest=str(
-                    readiness.get("researchIsolationVerificationDigest") or ""
-                ),
-            )
-        except (ValueError, EnvironmentActivationEnvelopeError) as exc:
-            issues.append(f"{path}: cannot project activationEnvelope: {exc}")
-        else:
-            if readiness.get("activationEnvelope") != expected_activation_envelope:
-                issues.append(
-                    f"{path}: activationEnvelope drifts from release/import/readback"
-                )
-            expected_activation_digest = document_digest(
-                expected_activation_envelope
-            )
-            if (
-                readiness.get("activationEnvelopeDigest")
-                != expected_activation_digest
-            ):
-                issues.append(f"{path}: activationEnvelopeDigest drift")
+        expected_activation_digest = document_digest(expected_activation_envelope)
+        if readiness.get("activationEnvelopeDigest") != expected_activation_digest:
+            issues.append(f"{path}: activationEnvelopeDigest drift")
 
     unsigned = dict(readiness)
     declared_checksum = str(unsigned.pop("verificationChecksum", ""))

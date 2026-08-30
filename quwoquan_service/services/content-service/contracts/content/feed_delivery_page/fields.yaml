@@ -123,6 +123,17 @@ fields:
   ops_exposure: read
   role: append_only_fact
   description: 本次推荐唯一策略内容摘要；非推荐具名查询为空
+- name: experimentBucket
+  source: experimentBucket
+  type: string
+  max_utf8_bytes: 64
+  constraints: [NULLABLE]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: append_only_fact
+  description: 推荐页的服务端权威实验分桶；非推荐具名查询为空，且不得由实际 modelBucket 降级结果反推
 - name: createdAt
   source: createdAt
   type: timestamp
@@ -293,6 +304,7 @@ types:
     - {name: personaId, source: personaId, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read}
     - {name: scenario, source: scenario, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: windowId, source: windowId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: experimentBucket, source: experimentBucket, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: modelBucket, source: modelBucket, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: modelChannel, source: modelChannel, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: modelReleaseId, source: modelReleaseId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}

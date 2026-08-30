@@ -12,7 +12,7 @@ app-domain-api-integration)。
 
 candidate/test-live 内容证据解析与 release probe 家族
 (`_resolve_active_app_content_evidence` /
-`_resolve_test_live_app_content_evidence` / `_app_content_uat_envelope` /
+`_resolve_test_live_app_content_evidence` / `_app_content_uat_sample_plan` /
 `_app_content_readback_summary` / `_run_app_content_release_probe`)在
 `commands/app_preflight_evidence.py`;`command_app_debug_preflight` 与
 `_execute_otp_login_journey` 在 `commands/app_preflight_debug.py`;本模块
@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -43,7 +44,8 @@ from quwoquan_ops.cli.commands.app_preflight_debug import (
 )
 from quwoquan_ops.cli.commands.app_preflight_evidence import (
     _app_content_readback_summary,
-    _app_content_uat_envelope,
+    _app_content_uat_sample_plan,
+    _load_active_release_uat_contract,
     _resolve_active_app_content_evidence,
     _resolve_test_live_app_content_evidence,
     _run_app_content_release_probe,
@@ -115,6 +117,9 @@ def register_parser(
             "可重复指定，未指定时执行全部受治理领域"
         ),
     )
+    app_domain_api_parser.add_argument("--data-release-id", default="")
+    app_domain_api_parser.add_argument("--data-verify-run-id", default="")
+    app_domain_api_parser.add_argument("--data-manifest-digest", default="")
 
 
 def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
@@ -140,14 +145,51 @@ def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
             candidate, readiness, readiness_path, lifecycle_ref = (
                 _stackctl._resolve_test_live_app_content_evidence(target, content_binding)
             )
+            release_uat_contract = {
+                "releasePayloadSha256": content_binding.get("manifestDigest"),
+                "releaseHeader": content_binding.get("releaseHeader"),
+                "releaseHeaderRef": content_binding.get("releaseHeaderRef"),
+                "releaseHeaderDigest": content_binding.get("releaseHeaderDigest"),
+                "releaseUatSamplePlanRef": content_binding.get(
+                    "releaseUatSamplePlanRef"
+                ),
+                "releaseUatSamplePlanDigest": content_binding.get(
+                    "releaseUatSamplePlanDigest"
+                ),
+            }
+            if release_uat_contract["releaseHeader"]:
+                raise ValueError(
+                    "test_live content binding must not promote immutable release header"
+                )
+            app_uat_plan = content_binding.get("appUatPlan")
+            if (
+                not isinstance(app_uat_plan, Mapping)
+                or content_binding.get("appUatPlanDigest")
+                != _stackctl._canonical_document_checksum(dict(app_uat_plan))
+                or app_uat_plan.get("releaseUatSamplePlanRef")
+                != release_uat_contract["releaseUatSamplePlanRef"]
+                or app_uat_plan.get("releaseUatSamplePlanDigest")
+                != release_uat_contract["releaseUatSamplePlanDigest"]
+            ):
+                raise ValueError("test_live ReleaseUatSamplePlan binding drifted")
+            app_uat_plan = dict(app_uat_plan)
         elif runtime_mode == "immutable_candidate":
             candidate, readiness, readiness_path, lifecycle_ref = (
                 _stackctl._resolve_active_app_content_evidence(target)
             )
+            release = candidate.get("release")
+            release_candidate = (
+                release.get("candidate") if isinstance(release, Mapping) else None
+            )
+            if not isinstance(release_candidate, Mapping):
+                raise ValueError("active candidate does not bind a Data candidate release")
+            release_uat_contract = _load_active_release_uat_contract(release_candidate)
+            app_uat_plan = _app_content_uat_sample_plan(
+                release_contract=release_uat_contract,
+                readiness=readiness,
+            )
         else:
             raise ValueError("App content preflight runtime mode is invalid")
-        app_uat_envelope = _stackctl._app_content_uat_envelope(readiness)
-        app_uat_plan = _stackctl.build_app_content_uat_plan(readiness)
     except (OSError, ValueError) as exc:
         details = [str(exc)]
         payload = {
@@ -182,7 +224,11 @@ def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
     )
     passed = int(readiness_result.get("exitCode", 2)) == 0
     release_probe: dict[str, Any] = {}
-    details = list(readiness_result.get("details", []))
+    # content-readiness uses details for both PASS summaries and blockers.
+    # App preflight findings must contain only failure evidence.
+    details = (
+        [] if passed else list(readiness_result.get("details", []))
+    )
     if passed and purpose == "content_live":
         try:
             release_probe = _stackctl._run_app_content_release_probe(
@@ -238,9 +284,27 @@ def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
             readiness.get("activationEnvelopeDigest") or ""
         ),
         "lifecycleExitRef": lifecycle_ref,
-        "appUatEnvelope": app_uat_envelope,
-        "appUatEnvelopeDigest": str(
-            readiness.get("appUatEnvelopeDigest") or ""
+        **(
+            {
+                "releaseHeader": dict(release_uat_contract["releaseHeader"]),
+                "releaseHeaderRef": str(
+                    release_uat_contract.get("releaseHeaderRef") or ""
+                ),
+                "releaseHeaderDigest": str(
+                    release_uat_contract.get("releaseHeaderDigest") or ""
+                ),
+                "releaseUatSamplePlan": dict(
+                    release_uat_contract.get("releaseUatSamplePlan") or {}
+                ),
+            }
+            if runtime_mode == "immutable_candidate"
+            else {}
+        ),
+        "releaseUatSamplePlanRef": str(
+            release_uat_contract.get("releaseUatSamplePlanRef") or ""
+        ),
+        "releaseUatSamplePlanDigest": str(
+            release_uat_contract.get("releaseUatSamplePlanDigest") or ""
         ),
         "appUatPlan": app_uat_plan,
         "appUatPlanDigest": _stackctl._canonical_document_checksum(app_uat_plan),
@@ -266,6 +330,84 @@ def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "reportDir": _stackctl.relpath(report_dir),
     }
+
+
+def _run_managed_gathering_plan_remote_api(
+    args: argparse.Namespace,
+    *,
+    environment: str,
+    target_name: str,
+    api_base_url: str,
+    active_candidate: Mapping[str, Any],
+    report_dir: Path,
+    command_prefix: list[str],
+    test_paths: list[str],
+) -> tuple[Any, list[str]]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    manifest = _stackctl.load_candidate_manifest(
+        environment,
+        target_name,
+        str(active_candidate.get("baselineId") or ""),
+        require_full=True,
+    )
+    readiness, _ = _stackctl._load_test_data_release_readiness(
+        environment=environment,
+        release_id=str(args.data_release_id),
+        verify_run_id=str(args.data_verify_run_id),
+        manifest_digest=str(args.data_manifest_digest),
+    )
+    candidate = _stackctl.build_candidate_binding(
+        environment=environment,
+        target=target_name,
+        manifest=manifest,
+        readiness=readiness,
+    )
+    instance_id = uuid.uuid4().hex
+    runtime = _stackctl.TestDataRuntime()
+    context = _stackctl.TestDataContext(
+        candidate=candidate,
+        base_url=api_base_url,
+        output_root=report_dir / "managed-test-data",
+        runtime=runtime,
+        test_data_instance_id=instance_id,
+    )
+    case = _stackctl.circle_gathering_plan_case()
+    if case.case_id is not _stackctl.AcceptanceCaseId.CIRCLE_GATHERING_PLAN:
+        raise TypeError("managed GatheringPlan case identity drifted")
+    session = _stackctl.TestDataSession.for_case(case.case_id, context=context)
+    with session.provision(case.request) as provisioned:
+        value = provisioned.value
+        if not isinstance(value, _stackctl.CircleGatheringPlanResult):
+            raise TypeError("managed GatheringPlan provision result is invalid")
+        actor_handle = runtime.actor_for(
+            test_data_instance_id=instance_id,
+            role=_stackctl.ActorRole.SENDER,
+        )
+        actor = runtime.actor(actor_handle)
+        return _stackctl.run_remote_api_with_private_defines(
+            {
+                "QWQ_GATHERING_PLAN_ACCESS_TOKEN": actor.session.access_token,
+                "QWQ_GATHERING_PLAN_ACCOUNT_ID": actor.session.owner_id,
+                "QWQ_GATHERING_PLAN_PERSONA_ID": actor.session.persona_id,
+                "QWQ_GATHERING_PLAN_GATHERING_ID": value.gathering.object_id,
+                "QWQ_GATHERING_PLAN_PLAN_ID": value.plan.object_id,
+                "QWQ_GATHERING_PLAN_VERSION": value.plan_version,
+                "QWQ_GATHERING_PLAN_CURRENT_REVISION_ID": (
+                    value.current_revision.object_id
+                ),
+                "QWQ_GATHERING_PLAN_CURRENT_REVISION_NUMBER": (
+                    value.current_revision_number
+                ),
+                "QWQ_GATHERING_PLAN_CURRENT_REVISION_DIGEST": (
+                    value.current_revision_digest
+                ),
+            },
+            command_prefix=command_prefix,
+            test_paths=test_paths,
+            runner=_stackctl.run,
+            cwd=_stackctl.ROOT / "quwoquan_app",
+        )
 
 
 def command_app_domain_api_integration(args: argparse.Namespace) -> dict[str, Any]:
@@ -358,6 +500,37 @@ def command_app_domain_api_integration(args: argparse.Namespace) -> dict[str, An
         issues.append(f"ContractGraph Remote API evidence is invalid: {error}")
 
     covered_domains = {case.domain for case in cases}
+    managed_case_ids = _stackctl.managed_remote_api_readiness_case_ids(cases)
+    if managed_case_ids:
+        managed_output_root = _stackctl.output_root().expanduser().resolve()
+        managed_report_dir = report_dir.expanduser().resolve()
+        try:
+            managed_report_dir.relative_to(managed_output_root)
+        except ValueError:
+            issues.append(
+                "managed readiness report_dir must stay below QWQ_OUTPUT_ROOT"
+            )
+            report_dir = _stackctl.artifact_run_dir(
+                environment,
+                args.command,
+                target=target_name,
+            )
+        else:
+            report_dir = managed_report_dir
+        missing_managed_inputs = [
+            flag
+            for flag, value in (
+                ("--data-release-id", getattr(args, "data_release_id", "")),
+                ("--data-verify-run-id", getattr(args, "data_verify_run_id", "")),
+                ("--data-manifest-digest", getattr(args, "data_manifest_digest", "")),
+            )
+            if not str(value or "").strip()
+        ]
+        if missing_managed_inputs:
+            issues.append(
+                "managed readiness case requires explicit Data identity: "
+                + ", ".join(missing_managed_inputs)
+            )
     if not selected_test_paths:
         missing_domains = sorted(
             set(_stackctl.REMOTE_API_INTEGRATION_DOMAINS) - covered_domains
@@ -384,7 +557,7 @@ def command_app_domain_api_integration(args: argparse.Namespace) -> dict[str, An
             tls_defines.append(
                 f"--dart-define=QWQ_LOCAL_TLS_ROOT_FILE={local_tls_root}"
             )
-        command = [
+        command_prefix = [
             "flutter",
             "test",
             "--reporter=expanded",
@@ -392,21 +565,48 @@ def command_app_domain_api_integration(args: argparse.Namespace) -> dict[str, An
             "--dart-define=API_CONTRACT_ENV=gamma",
             f"--dart-define=API_CONTRACT_BASE_URL={api_base_url}",
             *tls_defines,
-            *[
-                str((_stackctl.ROOT / case.test_path).relative_to(_stackctl.ROOT / "quwoquan_app"))
-                for case in cases
-            ],
         ]
-        result = _stackctl.run(command, cwd=_stackctl.ROOT / "quwoquan_app")
-        return_code = result.returncode
-        stdout = result.stdout
-        stderr = result.stderr
-        if return_code != 0:
-            issues.append(
-                stderr.strip()
-                or stdout.strip()
-                or f"{run_label} failed"
+        test_paths = [
+            str(
+                (_stackctl.ROOT / case.test_path).relative_to(
+                    _stackctl.ROOT / "quwoquan_app"
+                )
             )
+            for case in cases
+        ]
+        try:
+            if managed_case_ids:
+                if not isinstance(active_candidate, Mapping):
+                    raise RuntimeError(
+                        "managed readiness case requires active immutable candidate"
+                    )
+                result, command = _run_managed_gathering_plan_remote_api(
+                    args,
+                    environment=environment,
+                    target_name=target_name,
+                    api_base_url=api_base_url,
+                    active_candidate=active_candidate,
+                    report_dir=report_dir,
+                    command_prefix=command_prefix,
+                    test_paths=test_paths,
+                )
+            else:
+                command = [*command_prefix, *test_paths]
+                result = _stackctl.run(
+                    command,
+                    cwd=_stackctl.ROOT / "quwoquan_app",
+                )
+            return_code = result.returncode
+            stdout = result.stdout
+            stderr = result.stderr
+            if return_code != 0:
+                issues.append(
+                    stderr.strip()
+                    or stdout.strip()
+                    or f"{run_label} failed"
+                )
+        except (OSError, RuntimeError, TypeError, ValueError) as error:
+            issues.append(f"managed Remote API execution failed: {error}")
 
     timing = _stackctl._finish_timing(started_monotonic, started_at)
     passed = return_code == 0 and not issues

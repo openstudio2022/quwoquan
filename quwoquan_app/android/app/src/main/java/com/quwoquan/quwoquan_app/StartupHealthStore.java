@@ -65,7 +65,7 @@ final class StartupHealthStore {
       return;
     }
     SharedPreferences preferences = preferences(context);
-    String identity = currentArtifactIdentity();
+    String identity = currentArtifactIdentity(context);
     String previousIdentity = preferences.getString(BUILD_IDENTITY_KEY, "");
     long previousStartedAt = preferences.getLong(STARTED_AT_KEY, 0L);
     boolean previousSafeShell = preferences.getBoolean(SAFE_SHELL_KEY, true);
@@ -122,11 +122,11 @@ final class StartupHealthStore {
     if (fatalIdentity == null || fatalIdentity.isEmpty()) {
       return false;
     }
-    if (!currentArtifactIdentity().equals(fatalIdentity)) {
+    if (!currentArtifactIdentity(context).equals(fatalIdentity)) {
       clearFatalMarker(preferences, "artifact_mismatch");
       return false;
     }
-    if (!currentArtifactIdentity().equals(preferences.getString(BUILD_IDENTITY_KEY, ""))) {
+    if (!currentArtifactIdentity(context).equals(preferences.getString(BUILD_IDENTITY_KEY, ""))) {
       clearFatalMarker(preferences, "artifact_mismatch");
       return false;
     }
@@ -140,7 +140,7 @@ final class StartupHealthStore {
   static void markCurrentArtifactStarting(Context context) {
     preferences(context)
         .edit()
-        .putString(BUILD_IDENTITY_KEY, currentArtifactIdentity())
+        .putString(BUILD_IDENTITY_KEY, currentArtifactIdentity(context))
         .putLong(STARTED_AT_KEY, System.currentTimeMillis())
         .putBoolean(SAFE_SHELL_KEY, false)
         .commit();
@@ -148,7 +148,7 @@ final class StartupHealthStore {
 
   static boolean markCurrentArtifactFatal(Context context) {
     SharedPreferences preferences = preferences(context);
-    String identity = currentArtifactIdentity();
+    String identity = currentArtifactIdentity(context);
     if (!identity.equals(preferences.getString(BUILD_IDENTITY_KEY, ""))
         || preferences.getBoolean(SAFE_SHELL_KEY, false)) {
       return false;
@@ -163,7 +163,7 @@ final class StartupHealthStore {
   static void markCurrentArtifactSafeShell(Context context) {
     preferences(context)
         .edit()
-        .putString(BUILD_IDENTITY_KEY, currentArtifactIdentity())
+        .putString(BUILD_IDENTITY_KEY, currentArtifactIdentity(context))
         .putBoolean(SAFE_SHELL_KEY, true)
         .remove(FATAL_BUILD_IDENTITY_KEY)
         .remove(FATAL_AT_KEY)
@@ -173,7 +173,7 @@ final class StartupHealthStore {
 
   static boolean enqueueConfirmedStartupFatal(Context context) {
     SharedPreferences preferences = preferences(context);
-    String identity = currentArtifactIdentity();
+    String identity = currentArtifactIdentity(context);
     if (!identity.equals(preferences.getString(FATAL_BUILD_IDENTITY_KEY, ""))) {
       return false;
     }
@@ -265,10 +265,10 @@ final class StartupHealthStore {
   static void seedConfirmedStartupFatalForInstrumentedTest(Context context) {
     preferences(context)
         .edit()
-        .putString(FATAL_BUILD_IDENTITY_KEY, currentArtifactIdentity())
+        .putString(FATAL_BUILD_IDENTITY_KEY, currentArtifactIdentity(context))
         .putLong(FATAL_AT_KEY, System.currentTimeMillis())
         .putBoolean(SAFE_SHELL_KEY, false)
-        .putString(BUILD_IDENTITY_KEY, currentArtifactIdentity())
+        .putString(BUILD_IDENTITY_KEY, currentArtifactIdentity(context))
         .putLong(STARTED_AT_KEY, System.currentTimeMillis() - 1_000L)
         .commit();
   }
@@ -277,11 +277,11 @@ final class StartupHealthStore {
   static void seedSafeShellConflictForInstrumentedTest(Context context) {
     preferences(context)
         .edit()
-        .putString(FATAL_BUILD_IDENTITY_KEY, currentArtifactIdentity())
+        .putString(FATAL_BUILD_IDENTITY_KEY, currentArtifactIdentity(context))
         .putLong(FATAL_AT_KEY, System.currentTimeMillis())
-        .putString(FATAL_QUEUED_IDENTITY_KEY, currentArtifactIdentity())
+        .putString(FATAL_QUEUED_IDENTITY_KEY, currentArtifactIdentity(context))
         .putBoolean(SAFE_SHELL_KEY, true)
-        .putString(BUILD_IDENTITY_KEY, currentArtifactIdentity())
+        .putString(BUILD_IDENTITY_KEY, currentArtifactIdentity(context))
         .commit();
   }
 
@@ -331,18 +331,10 @@ final class StartupHealthStore {
     return context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE);
   }
 
-  private static String currentArtifactIdentity() {
+  private static String currentArtifactIdentity(Context context) {
     return BuildConfig.VERSION_CODE
         + "|"
-        + BuildConfig.QWQ_RUNTIME_ENVIRONMENT
-        + "|"
-        + BuildConfig.QWQ_RUNTIME_CONFIG_DIGEST
-        + "|"
-        + BuildConfig.QWQ_DART_DEFINES_DIGEST
-        + "|"
-        + BuildConfig.QWQ_LAUNCH_TARGET
-        + "|"
-        + BuildConfig.QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST;
+        + AndroidRuntimeConfig.createStore(context).currentIdentity();
   }
 
   private static JSONArray readRecoveryQueue(String raw) {

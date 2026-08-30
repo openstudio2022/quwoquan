@@ -52,7 +52,7 @@ def _governed_acquisition_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
-        "content.execution.controller.execute.pre_acquisition_handoff.bind_pre_acquisition_handoff",
+        "content.source.pre_acquisition_handoff.bind_pre_acquisition_handoff",
         lambda *_args, **_kwargs: (
             {
                 "carrierRequirements": {
@@ -184,6 +184,7 @@ def _acquisition(tmp_path: Path) -> tuple[Path, list[dict[str, object]]]:
                     "propertyReleaseStatus": "not_required",
                     "collectedAt": "2026-08-05T00:00:00Z",
                     "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+                    "derivedModifications": [],
                 },
             }
         ],

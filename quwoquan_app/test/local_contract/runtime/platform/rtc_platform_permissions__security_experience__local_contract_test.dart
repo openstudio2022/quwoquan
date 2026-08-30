@@ -31,15 +31,12 @@ void main() {
   });
 
   test('iOS 用途说明和后台能力明确覆盖音视频通话与 VoIP 来电', () {
-    final infoPlist = File(
-      '${appRoot.path}/ios/Runner/Info.plist',
-    ).readAsStringSync();
-    final entitlements = File(
-      '${appRoot.path}/ios/Runner/Runner.entitlements',
-    ).readAsStringSync();
-    final appDelegate = File(
-      '${appRoot.path}/ios/Runner/AppDelegate.swift',
-    ).readAsStringSync();
+    final infoPlist = File('${appRoot.path}/ios/Runner/Info.plist')
+        .readAsStringSync();
+    final entitlements = File('${appRoot.path}/ios/Runner/Runner.entitlements')
+        .readAsStringSync();
+    final appDelegate = File('${appRoot.path}/ios/Runner/AppDelegate.swift')
+        .readAsStringSync();
     final incomingCallDelegate = File(
       '${appRoot.path}/ios/Runner/AppDelegate+IncomingCall.swift',
     ).readAsStringSync();
@@ -98,9 +95,8 @@ void main() {
       contains('QuwoquanIncomingCallBootstrapPlugin'),
     );
     expect(
-      RegExp(
-        r'forPlugin:\s*"FlutterCallkitIncomingPlugin"',
-      ).hasMatch(incomingCallDelegate),
+      RegExp(r'forPlugin:\s*"FlutterCallkitIncomingPlugin"')
+          .hasMatch(incomingCallDelegate),
       isFalse,
       reason: '官方 CallKit plugin key 必须只由 GeneratedPluginRegistrant 占用',
     );
@@ -140,12 +136,10 @@ void main() {
     final incomingCallPresenter = File(
       '${appRoot.path}/lib/runtime/platform/incoming_call_native_presenter.dart',
     ).readAsStringSync();
-    final androidSettings = File(
-      '${appRoot.path}/android/settings.gradle.kts',
-    ).readAsStringSync();
-    final androidAppBuild = File(
-      '${appRoot.path}/android/app/build.gradle.kts',
-    ).readAsStringSync();
+    final androidSettings = File('${appRoot.path}/android/settings.gradle.kts')
+        .readAsStringSync();
+    final androidAppBuild = File('${appRoot.path}/android/app/build.gradle.kts')
+        .readAsStringSync();
     final androidNativeBridge = File(
       '${appRoot.path}/android/app/src/main/java/com/quwoquan/quwoquan_app/'
       'IncomingCallNativeBridgePlugin.java',
@@ -250,8 +244,8 @@ void main() {
         'production Android build requires android/app/google-services.json',
       ),
     );
-    expect(androidNativeBridge, contains('"backgroundPushConfigured"'));
-    expect(androidNativeBridge, contains('"google_app_id"'));
+    expect(androidNativeBridge, isNot(contains('"backgroundPushConfigured"')));
+    expect(androidNativeBridge, isNot(contains('"google_app_id"')));
     expect(androidNativeBridge, isNot(contains('startActivity(')));
     expect(iosCallKitPlugin, contains('registeredMessengerIds'));
     expect(

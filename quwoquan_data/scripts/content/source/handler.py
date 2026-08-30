@@ -36,6 +36,7 @@ from core.source_catalog import (
     vertical_from_task_id,
 )
 from governance.coverage.entity_extract import require_domain_etype
+from content.source.handler_fetch_failure import entity_fetch_issue
 from content.source.source_inputs import content_type_for_lane
 
 
@@ -144,10 +145,7 @@ def handle_download(
 
     Output: entities/*/1.download/source_refs.json plus source-unit evidence.
     """
-    from core.runtime_policy import active_runtime_policy
-
     entity_ids = [str(entity_id).strip() for entity_id in entity_ids if str(entity_id).strip()]
-    max_workers = max_workers or active_runtime_policy().download_concurrency
     selected_lanes = selected_download_lanes(lane)
     from content.execution.campaign.external_input_runtime import (
         bound_runtime_external_input_context,
@@ -285,6 +283,7 @@ def handle_download(
         context=f"source entity_type for execution={execution_id}",
     )
     fetched_sources: list[dict] = []
+    successful_entity_ids: set[str] = set()
     quality_by_entity: dict[str, list[dict]] = defaultdict(list)
     failed_image_entities: list[str] = []
     typed_fetch_issues: list[DataIssue] = []
@@ -294,7 +293,10 @@ def handle_download(
         entity_count=len(entity_ids),
         message="download_fetch started",
     )
-    max_workers = max(1, min(int(max_workers or 1), len(entity_ids) or 1))
+    requested_workers = len(entity_ids) if max_workers is None else int(max_workers)
+    if requested_workers < 1 and entity_ids:
+        raise ValueError("download max_workers must be positive when work is present")
+    max_workers = min(requested_workers, len(entity_ids)) if entity_ids else 0
     entity_order = {entity_id: index for index, entity_id in enumerate(entity_ids, start=1)}
 
     def _merge_fetch_result(result: Mapping[str, Any]) -> None:
@@ -303,6 +305,8 @@ def handle_download(
         entity_quality_rows = list(result.get("qualityRows") or [])
         fetched_sources.extend(entity_sources)
         quality_by_entity[entity_id].extend(entity_quality_rows)
+        if entity_sources:
+            successful_entity_ids.add(entity_id)
         _write_fetch_result_screen_outputs(
             execution_id=execution_id,
             entity_id=entity_id,
@@ -343,6 +347,27 @@ def handle_download(
             message="typed source fetch failure recorded",
         )
 
+    def _record_entity_fetch_exception(
+        entity_id: str,
+        entity_index: int,
+        exc: Exception,
+    ) -> None:
+        issue = entity_fetch_issue(
+            entity_id,
+            exc,
+            selected_lanes=selected_lanes,
+        )
+        print(
+            f"[download] Entity excluded {entity_index}/{len(entity_ids)}: {issue}",
+            file=sys.stderr,
+            flush=True,
+        )
+        _record_typed_fetch_failure(
+            entity_id,
+            entity_index,
+            DataIssueError([issue]),
+        )
+
     if max_workers == 1 or len(entity_ids) <= 1:
         for entity_index, entity_id in enumerate(entity_ids, start=1):
             try:
@@ -360,6 +385,9 @@ def handle_download(
                 )
             except DataIssueError as exc:
                 _record_typed_fetch_failure(entity_id, entity_index, exc)
+                continue
+            except Exception as exc:  # noqa: BLE001
+                _record_entity_fetch_exception(entity_id, entity_index, exc)
                 continue
             _merge_fetch_result(result)
     else:
@@ -395,35 +423,7 @@ def handle_download(
                     _record_typed_fetch_failure(entity_id, entity_index, exc)
                     continue
                 except Exception as exc:  # noqa: BLE001
-                    issue = f"downloadFetch: {entity_id} raised {type(exc).__name__}: {exc}"
-                    print(f"[download] Entity failed {entity_index}/{len(entity_ids)}: {issue}", file=sys.stderr, flush=True)
-                    quality_by_entity[entity_id].extend([])
-                    failed_image_entities.append(entity_id)
-                    write_gate_report(
-                        execution_id=execution_id,
-                        command="source",
-                        step="image_fetch",
-                        ref=entity_id,
-                        passed=False,
-                        issues=[data_issue(
-                            DataIssueCode.MEDIA_FETCH_FAILED,
-                            stage=DataIssueStage.IMAGE_FETCH,
-                            ref=entity_id,
-                            lane=DataIssueLane.IMAGE,
-                            recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
-                            message=issue,
-                        )],
-                        evidence_summary={"entityIndex": entity_index, "workerException": type(exc).__name__},
-                        next_step="quality_analysis",
-                    )
-                    _write_download_progress(
-                        execution_id,
-                        status="running",
-                        entity_id=entity_id,
-                        entity_index=entity_index,
-                        entity_count=len(entity_ids),
-                        message=issue,
-                    )
+                    _record_entity_fetch_exception(entity_id, entity_index, exc)
                     continue
                 _merge_fetch_result(result)
         except KeyboardInterrupt:
@@ -540,8 +540,13 @@ def handle_download(
         )
         print("[source] Execution gate deferred until all entity-type groups finish", flush=True)
         return
-    gate_issues = gate_download(execution_id, target_entities=set(entity_ids))
-    gate_issues.extend(typed_fetch_issues)
+    gate_targets = successful_entity_ids or set(entity_ids)
+    gate_issues = gate_download(execution_id, target_entities=gate_targets)
+    if not successful_entity_ids:
+        seen_gate_issues = set(gate_issues)
+        gate_issues.extend(
+            issue for issue in typed_fetch_issues if issue not in seen_gate_issues
+        )
     gate_issues.extend(
         data_issue(
             DataIssueCode.MEDIA_FETCH_FAILED,

@@ -53,6 +53,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     release_receipt_path: Path | None = None
     release_state_snapshot: dict[str, str] = {}
     release_candidate_digests: dict[str, str] = {}
+    environment_acceptance: dict[str, str] = {}
     from_release_evidence_ref = ""
     to_release_evidence_ref = ""
     from_image_transport_tag = ""
@@ -181,6 +182,37 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     "details": [str(error)],
                     **timing,
                 }
+        acceptance_ref = str(
+            getattr(args, "environment_acceptance_ref", "") or ""
+        ).strip()
+        acceptance_digest = str(
+            getattr(args, "environment_acceptance_sha256", "") or ""
+        ).strip()
+        acceptance_root_value = str(
+            getattr(args, "environment_acceptance_root", "")
+            or os.environ.get("QWQ_ENVIRONMENT_ACCEPTANCE_ROOT", "")
+        ).strip()
+        if bool(acceptance_ref) != bool(acceptance_digest):
+            timing = _stackctl._finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": "stackctl deploy blocked: acceptance ref and digest must be paired",
+                "details": [],
+                **timing,
+            }
+        if not dry_run_requested and (
+            not acceptance_ref or not acceptance_digest or not acceptance_root_value
+        ):
+            timing = _stackctl._finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": "stackctl deploy blocked: canonical Prod EnvironmentAcceptanceFact is required",
+                "details": [
+                    "provide --environment-acceptance-ref, "
+                    "--environment-acceptance-sha256 and a protected acceptance root"
+                ],
+                **timing,
+            }
         required = [
             args.service,
             args.from_candidate_digest,
@@ -223,6 +255,24 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             ):
                 if re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None:
                     raise RuntimeError(f"{label} digest is invalid")
+            if acceptance_ref:
+                if not acceptance_root_value:
+                    raise RuntimeError(
+                        "explicit EnvironmentAcceptanceFact requires a protected acceptance root"
+                    )
+                release_id = str(
+                    release_manifest_payload.get("releaseTrainId")
+                    or release_manifest_payload.get("candidateId")
+                    or ""
+                )
+                environment_acceptance = _stackctl._load_prod_environment_acceptance(
+                    acceptance_ref,
+                    expected_digest=acceptance_digest,
+                    evidence_root=Path(acceptance_root_value).expanduser(),
+                    release_id=release_id,
+                    release_digest=release_artifact_digest,
+                    candidate_digest=str(args.to_candidate_digest or "").strip(),
+                )
             if not dry_run_requested:
                 evidence_path_value = str(
                     getattr(args, "promotion_evidence", "") or ""
@@ -339,6 +389,13 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 from_candidate_digest=args.from_candidate_digest,
                 to_candidate_digest=args.to_candidate_digest,
                 stage=rollout_stage,
+                acceptance_digest=environment_acceptance.get("digest", ""),
+                engineering_eligibility_digest=environment_acceptance.get(
+                    "engineeringEligibilityDigest", ""
+                ),
+                durable_approval_digest=environment_acceptance.get(
+                    "durableApprovalDigest", ""
+                ),
             )
             if not dry_run_requested:
                 _stackctl._verify_release_registry_attestations(
@@ -360,6 +417,9 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
         release_receipt_id = hashlib.sha256(
             (
                 f"{args.service}\0{release_artifact_digest}\0{rollout_stage}\0"
+                f"{environment_acceptance.get('digest', '')}\0"
+                f"{environment_acceptance.get('engineeringEligibilityDigest', '')}\0"
+                f"{environment_acceptance.get('durableApprovalDigest', '')}\0"
                 f"{expected_generation + (0 if transition_action == 'replay' else 1)}"
             ).encode("utf-8")
         ).hexdigest()
@@ -408,6 +468,8 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 "releaseReceiptAuthority": "prod-hosted-service-plane",
                 "releaseReceiptPath": str(release_receipt_path),
                 "releaseState": release_state_snapshot,
+                "environmentAcceptance": environment_acceptance,
+                "releaseEligibility": "eligible",
                 "wiredWorkloads": _stackctl._prod_rollout_workloads(),
                 "providerReadiness": provider_readiness,
                 "postDeployChecks": [],
@@ -783,6 +845,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             "promotion_deadline_epoch": promotion_deadline_epoch,
             "release_artifact_digest": release_artifact_digest,
             "release_candidate_digests": release_candidate_digests,
+            "environment_acceptance": environment_acceptance,
             "release_receipt_id": release_receipt_id,
             "release_receipt_path": release_receipt_path,
             "report_dir": report_dir,
@@ -857,6 +920,12 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 str(release_receipt_path) if release_receipt_path is not None else ""
             ),
             "releaseState": committed_release_state or {},
+            "environmentAcceptance": environment_acceptance,
+            "releaseEligibility": (
+                "non-eligible"
+                if dry_run_requested
+                else ("eligible" if environment_acceptance else "blocked")
+            ),
             "wiredWorkloads": _stackctl._prod_rollout_workloads() if args.target == "prod-hosted" else [],
             "providerReadiness": provider_readiness,
             "postDeployChecks": post_deploy_checks,

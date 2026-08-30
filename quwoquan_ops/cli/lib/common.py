@@ -68,6 +68,8 @@ def _load_simple_yaml(text: str) -> Any:
             raise ValueError(f"expected indent {indent}, got {line_indent}")
         if content.startswith("- "):
             return parse_list(index, indent)
+        if content.startswith("[") or content.startswith("{"):
+            return parse_flow_block(index, indent)
         return parse_mapping(index, indent)
 
     def parse_mapping(index: int, indent: int) -> tuple[dict[str, Any], int]:
@@ -247,6 +249,10 @@ def _load_simple_yaml(text: str) -> Any:
                     return payload
                 if delimiter != ",":
                     raise ValueError("flow mapping entries must be comma-separated")
+                skip_whitespace()
+                if cursor < len(value) and value[cursor] == "}":
+                    cursor += 1
+                    return payload
 
         def parse_list() -> list[Any]:
             nonlocal cursor
@@ -267,12 +273,52 @@ def _load_simple_yaml(text: str) -> Any:
                     return payload
                 if delimiter != ",":
                     raise ValueError("flow list entries must be comma-separated")
+                skip_whitespace()
+                if cursor < len(value) and value[cursor] == "]":
+                    cursor += 1
+                    return payload
 
         result = parse_value()
         skip_whitespace()
         if cursor != len(value):
             raise ValueError("unexpected trailing flow content")
         return result
+
+    def parse_flow_block(index: int, indent: int) -> tuple[Any, int]:
+        fragments: list[str] = []
+        expected_closer = "]" if lines[index][1].startswith("[") else "}"
+        balance = 0
+        quote = ""
+        escaped = False
+        while index < len(lines):
+            line_indent, content = lines[index]
+            if line_indent < indent:
+                raise ValueError("flow collection continuation escaped its parent block")
+            fragments.append(content)
+            for character in content:
+                if quote:
+                    if quote == '"' and character == "\\" and not escaped:
+                        escaped = True
+                        continue
+                    if character == quote and not escaped:
+                        quote = ""
+                    escaped = False
+                    continue
+                if character in {'"', "'"}:
+                    quote = character
+                    continue
+                if character in "[{":
+                    balance += 1
+                elif character in "]}":
+                    balance -= 1
+                    if balance < 0:
+                        raise ValueError("unexpected flow collection closer")
+            index += 1
+            if balance == 0:
+                break
+        if quote or balance != 0 or not fragments[-1].endswith(expected_closer):
+            raise ValueError("unterminated flow collection block")
+        return parse_flow_value(" ".join(fragments)), index
 
     def parse_scalar(value: str) -> Any:
         value = value.strip()

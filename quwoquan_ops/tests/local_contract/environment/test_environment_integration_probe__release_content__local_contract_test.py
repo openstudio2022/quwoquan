@@ -175,6 +175,93 @@ def test_release_content_probe__rejects_empty_feed_envelopes__local_contract() -
     assert issue == 'response payload has empty "items"'
 
 
+def test_research_convergence__accepts_no_active_release_empty_page__local_contract() -> (
+    None
+):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
+    issue, count = probe._research_anonymous_convergence_issue(
+        json.dumps(
+            {
+                "items": [],
+                "objectCards": [],
+                "outcome": "empty",
+                "emptyReason": "no_active_release",
+                "feedRequestId": "frq_01",
+            }
+        )
+    )
+
+    assert issue is None
+    assert count == 0
+
+
+def test_research_convergence__rejects_leaked_items__local_contract() -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
+    issue, count = probe._research_anonymous_convergence_issue(
+        json.dumps(
+            {
+                "items": [{"postId": "research-post"}],
+                "objectCards": [],
+                "outcome": "content",
+            }
+        )
+    )
+
+    assert count == 1
+    assert issue is not None and "research isolation leak" in issue
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_fragment"),
+    [
+        (
+            {
+                "items": [],
+                "objectCards": [],
+                "outcome": "empty",
+                "emptyReason": "no_eligible_content",
+            },
+            'expects emptyReason "no_active_release"',
+        ),
+        (
+            {
+                "items": [],
+                "objectCards": [],
+                "outcome": "empty",
+                "emptyReason": "no_active_release",
+                "releaseId": "rel-research-001",
+            },
+            "echoes release identity",
+        ),
+        (
+            {"items": [], "objectCards": [], "outcome": "content"},
+            'expects outcome "empty"',
+        ),
+    ],
+)
+def test_research_convergence__rejects_wrong_empty_semantics__local_contract(
+    payload: dict[str, object],
+    expected_fragment: str,
+) -> None:
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
+    issue, _count = probe._research_anonymous_convergence_issue(json.dumps(payload))
+
+    assert issue is not None and expected_fragment in issue
+
+
+def test_research_convergence__mode_builds_feed_checks_and_report_flag__local_contract() -> (
+    None
+):
+    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
+    args = _args()
+    args.require_non_empty_content_feed = False
+    args.research_anonymous_convergence = True
+
+    checks = {item["name"] for item in probe.build_checks(args)}
+
+    assert {"content_feed", "video_book_feed", "premium_feed"} <= checks
+
+
 def test_release_content_probe__rejects_non_release_item_even_when_non_empty__local_contract() -> (
     None
 ):
@@ -645,3 +732,103 @@ def test_author_posts_contract__leaked_field_fails_run__local_contract() -> None
         and "unknown ContentPostProjection fields: status" in finding
         for finding in report["findings"]
     )
+
+
+def _runtime_error_body(nature: str, action: str, after_seconds: object) -> str:
+    return json.dumps(
+        {
+            "code": "GATEWAY.MIDDLEWARE.upstream_unavailable",
+            "origin": "remoteDependency",
+            "nature": nature,
+            "module": "GATEWAY",
+            "kind": "unavailable",
+            "reason": "upstream_unavailable",
+            "recovery": {"action": action, "afterSeconds": after_seconds},
+        }
+    )
+
+
+def test_transient_retry__declared_recovery_directive_is_honoured__local_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """服务端声明 nature=transient + recovery.action=retry 时必须重试，
+    且重试留痕，不把瞬时抖动误判为准出失败也不静默掩盖它。"""
+    delay = probe._declared_transient_retry_delay(
+        _runtime_error_body("transient", "retry", 1)
+    )
+    assert delay == 1.0
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        _runtime_error_body("permanent", "retry", 1),
+        _runtime_error_body("requiresPermission", "retry", 1),
+        _runtime_error_body("bug", "retry", 1),
+        _runtime_error_body("transient", "reauthenticate", 1),
+        "not-json",
+        "",
+    ],
+)
+def test_transient_retry__non_transient_or_non_retry_stays_terminal__local_contract(
+    body: str,
+) -> None:
+    assert probe._declared_transient_retry_delay(body) is None
+
+
+def test_transient_retry__five_hundred_retries_and_four_hundred_does_not__local_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import urllib.error
+
+    from quwoquan_ops.cli.probes import environment_probe_transport as transport
+
+    monkeypatch.setattr(transport.time, "sleep", lambda _seconds: None)
+    transient_body = _runtime_error_body("transient", "retry", 1).encode("utf-8")
+
+    class _Body:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+        def close(self) -> None:
+            return None
+
+    def _raise(status: int, payload: bytes):
+        def _open(_request, timeout=None):
+            raise urllib.error.HTTPError(
+                "https://api.invalid/probe", status, "err", {}, _Body(payload)
+            )
+
+        return _open
+
+    monkeypatch.setattr(
+        transport.urllib.request, "urlopen", _raise(503, transient_body)
+    )
+    trace: list[dict[str, object]] = []
+    ok, status, _payload = probe.request(
+        "POST",
+        "https://api.invalid/probe",
+        retry_attempts=3,
+        retry_sleep_seconds=0.0,
+        retry_trace=trace,
+    )
+    assert (ok, status) == (False, 503)
+    assert [item["attempt"] for item in trace] == [1, 2]
+
+    # 4xx 即使声明 transient 也不重试：客户端请求错误不是上游抖动。
+    monkeypatch.setattr(
+        transport.urllib.request, "urlopen", _raise(400, transient_body)
+    )
+    client_trace: list[dict[str, object]] = []
+    ok, status, _payload = probe.request(
+        "POST",
+        "https://api.invalid/probe",
+        retry_attempts=3,
+        retry_sleep_seconds=0.0,
+        retry_trace=client_trace,
+    )
+    assert (ok, status) == (False, 400)
+    assert client_trace == []

@@ -38,23 +38,49 @@ class ExecutionPolicy:
     target_object_count: int
     approved_quota: int
     oversample_factor: float
-    required_workers: int
     partition_count: int
     capacity_plan_digest: str
+    capacity_calibration: Mapping[str, Any]
     execution_branch: str
     git_commit_sha: str
     scale_source_pool: Mapping[str, Any] | None = None
     source_pool_evidence_root_ref: str | None = None
     source_pool_selection: Mapping[str, Any] | None = None
-    article_commercial_closure: bool = False
 
     def __post_init__(self) -> None:
-        if not 1 <= self.approved_quota <= self.target_entity_count:
+        if self.approved_quota < 1:
             raise ValueError(
-                "executionPolicy.approvedQuota must be between 1 and targetEntityCount"
+                "executionPolicy.approvedQuota must be positive"
             )
-        if self.oversample_factor < 1 or self.required_workers < 1:
-            raise ValueError("executionPolicy factor/workers are invalid")
+        if self.oversample_factor < 1:
+            raise ValueError("executionPolicy oversampleFactor is invalid")
+        from content.execution.planning.capacity_calibration import (
+            assert_capacity_source_binding,
+            freeze_capacity_source_binding,
+        )
+
+        source_binding = {
+            key: value
+            for key in (
+                "calibrationId",
+                "calibrationReceiptRef",
+                "calibrationReceiptDigest",
+                "applicability",
+                "frozenCapacity",
+                "frozenLiveness",
+            )
+            if (value := self.capacity_calibration.get(key)) is not None
+        }
+        assert_capacity_source_binding(source_binding)
+        frozen = freeze_capacity_source_binding(
+            source_binding,
+            work_unit_count=self.target_object_count,
+            frozen_at_epoch_seconds=int(
+                self.capacity_calibration["frozenAtEpochSeconds"]
+            ),
+        )
+        if frozen != dict(self.capacity_calibration):
+            raise ValueError("executionPolicy capacityCalibration drift")
         if self.partition_count not in {16, 32, 64, 128, 256}:
             raise ValueError("executionPolicy.partitionCount is not governed")
         digest = self.capacity_plan_digest
@@ -72,23 +98,60 @@ class ExecutionPolicy:
         ):
             raise ValueError("executionPolicy source pool binding is incomplete")
 
+    @property
+    def auto_research_max_concurrent_workers(self) -> int:
+        return int(
+            self.capacity_calibration["frozenCapacity"][
+                "autoResearchMaxConcurrentWorkers"
+            ]
+        )
+
+    @property
+    def fleet_max_concurrent_workers(self) -> int:
+        return int(
+            self.capacity_calibration["frozenCapacity"][
+                "fleetMaxConcurrentWorkers"
+            ]
+        )
+
+    @property
+    def fleet_batch_deadline_epoch_seconds(self) -> int:
+        return int(self.capacity_calibration["fleetBatchDeadlineEpochSeconds"])
+
+    @property
+    def source_discovery_heartbeat_interval_seconds(self) -> int:
+        return int(
+            self.capacity_calibration["frozenLiveness"][
+                "sourceDiscoveryHeartbeatIntervalSeconds"
+            ]
+        )
+
+    @property
+    def source_discovery_heartbeat_stale_after_seconds(self) -> int:
+        return int(
+            self.capacity_calibration["frozenLiveness"][
+                "sourceDiscoveryHeartbeatStaleAfterSeconds"
+            ]
+        )
+
     @classmethod
     def from_mapping(cls, payload: Mapping[str, Any]) -> "ExecutionPolicy":
         factor = payload.get("oversampleFactor")
         if isinstance(factor, bool) or not isinstance(factor, (int, float)):
             raise ValueError("executionPolicy.oversampleFactor must be a number")
-        article = payload.get("articleCommercialClosure", False)
-        if not isinstance(article, bool):
-            raise ValueError("executionPolicy.articleCommercialClosure must be boolean")
         return cls(
             selection_policy=SelectionPolicy(_string(payload, "selectionPolicy")),
             target_entity_count=_integer(payload, "targetEntityCount"),
             target_object_count=_integer(payload, "targetObjectCount"),
             approved_quota=_integer(payload, "approvedQuota"),
             oversample_factor=float(factor),
-            required_workers=_integer(payload, "requiredWorkers"),
             partition_count=_integer(payload, "partitionCount"),
             capacity_plan_digest=_string(payload, "capacityPlanDigest"),
+            capacity_calibration=(
+                dict(payload["capacityCalibration"])
+                if isinstance(payload.get("capacityCalibration"), Mapping)
+                else {}
+            ),
             execution_branch=_string(payload, "executionBranch"),
             git_commit_sha=_string(payload, "gitCommitSha"),
             scale_source_pool=(
@@ -104,7 +167,6 @@ class ExecutionPolicy:
                 if isinstance(payload.get("sourcePoolSelection"), Mapping)
                 else None
             ),
-            article_commercial_closure=article,
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -114,12 +176,11 @@ class ExecutionPolicy:
             "targetObjectCount": self.target_object_count,
             "approvedQuota": self.approved_quota,
             "oversampleFactor": self.oversample_factor,
-            "requiredWorkers": self.required_workers,
             "partitionCount": self.partition_count,
             "capacityPlanDigest": self.capacity_plan_digest,
+            "capacityCalibration": dict(self.capacity_calibration),
             "executionBranch": self.execution_branch,
             "gitCommitSha": self.git_commit_sha,
-            "articleCommercialClosure": self.article_commercial_closure,
         }
         if self.scale_source_pool is not None:
             result.update(

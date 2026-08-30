@@ -11,6 +11,7 @@ import (
 )
 
 // spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
+// spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001.t3
 func TestExperimentPolicyPublisherUsesOnlyDurableObjectOwnedStream(t *testing.T) {
 	ctx := context.Background()
 	client := rtredis.NewMemoryClient()

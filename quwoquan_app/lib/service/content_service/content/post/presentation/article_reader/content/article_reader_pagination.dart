@@ -5,6 +5,10 @@ import 'package:quwoquan_app/service/content_service/content/post/domain/article
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_presentation_values.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_reader/templates/article_reader_template_theme.dart';
 
+/// [canvasMetrics] / [stageWidth]：宿主已解析的画布几何单源（GWT-015）。
+/// 沉浸阅读等「渲染几何 != 0.72 纸比」的宿主必须传入渲染消费的同一几何，
+/// 分页不得在此再造第二套纸比或 stage 宽度。缺席时按 variant 自行解析
+/// （预览/编辑器等纸比场景）。
 List<ArticlePageData> resolvePaginatedArticlePages({
   required BuildContext context,
   required BoxConstraints constraints,
@@ -15,6 +19,8 @@ List<ArticlePageData> resolvePaginatedArticlePages({
   ArticleCanvasVariant variant = ArticleCanvasVariant.preview,
   double? contentHeightOverride,
   ArticlePaperTexture? paperTexture,
+  ArticleCanvasMetrics? canvasMetrics,
+  double? stageWidth,
 }) {
   final visibleTitle = document.titleStyle == ArticleDocumentTitleStyle.none
       ? ''
@@ -37,28 +43,27 @@ List<ArticlePageData> resolvePaginatedArticlePages({
   if (preferStructuredFallbackPages) {
     return fallbackPages;
   }
-  final metrics = resolveArticleCanvasMetrics(
-    context,
-    constraints,
-    variant: variant,
-  );
+  final metrics =
+      canvasMetrics ??
+      resolveArticleCanvasMetrics(context, constraints, variant: variant);
   final typography = paperTexture != null
       ? resolveArticleTypographyForPaper(context, paperTexture, fontPreset)
       : resolveArticleTypography(context, template, fontPreset);
-  final stagePadding = articleReaderStagePagePadding();
-  final stageWidth = resolveArticlePaperStageWidth(
-    context,
-    constraints,
-    stagePadding: stagePadding,
-    allowLandscapeSpread: variant != ArticleCanvasVariant.editor,
-  );
+  final resolvedStageWidth =
+      stageWidth ??
+      resolveArticlePaperStageWidth(
+        context,
+        constraints,
+        stagePadding: articleReaderStagePagePadding(),
+        allowLandscapeSpread: variant != ArticleCanvasVariant.editor,
+      );
   final viewportSliceHeight =
       contentHeightOverride ??
-      metrics.contentSizeForStageWidth(stageWidth).height;
+      metrics.contentSizeForStageWidth(resolvedStageWidth).height;
   final pages = ArticleFlowLayoutEngine.buildPageSlicesForViewport(
     document: document,
     metrics: metrics,
-    stageWidth: stageWidth,
+    stageWidth: resolvedStageWidth,
     titleStyle: typography.titleStyle,
     bodyStyle: typography.bodyStyle,
     viewportSliceHeight: viewportSliceHeight,

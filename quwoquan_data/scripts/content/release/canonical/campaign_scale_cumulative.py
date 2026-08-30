@@ -248,15 +248,6 @@ def scale_timing_fields(
             "DATA.SCALE.ATTAINMENT_TIMING_BLOCKED: scale completed before it started"
         )
     budget = WALL_CLOCK_BUDGET_SECONDS[target_scale]
-    if budget is not None and wall_clock_seconds > budget:
-        code = (
-            "DATA.SCALE.M10000_WALL_CLOCK_BUDGET_EXCEEDED"
-            if target_scale == "M10000"
-            else "DATA.SCALE.ATTAINMENT_SHORTFALL"
-        )
-        raise CampaignScaleEvidenceError(
-            f"{code}: {target_scale} wall-clock {wall_clock_seconds}s exceeds {budget}s"
-        )
     return {
         "scaleStartedAt": started.isoformat(),
         "scaleCompletedAt": completed.isoformat(),

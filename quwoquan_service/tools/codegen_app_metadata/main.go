@@ -23,6 +23,12 @@ func main() {
 	var shellNavigationMetadataOnly bool
 	var checkShellNavigationMetadata bool
 	var shellNavigationManifestPath string
+	var appIdentityOnly bool
+	var checkAppIdentity bool
+	var appIdentityManifestPath string
+	var appLaunchContractOnly bool
+	var checkAppLaunchContract bool
+	var appLaunchContractManifestPath string
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
 	flag.StringVar(&appDir, "app-dir", "../quwoquan_app", "app root directory")
 	flag.StringVar(&contractGraphPath, "contract-graph", "generated/contract_graph.json", "fixed ContractGraph JSON bundle")
@@ -39,6 +45,42 @@ func main() {
 		"shell-navigation-manifest",
 		"",
 		"shell/navigation metadata-only generated output manifest",
+	)
+	flag.BoolVar(
+		&appIdentityOnly,
+		"app-identity-only",
+		false,
+		"generate only Android/iOS App identity artifacts from app_artifact_manifest metadata",
+	)
+	flag.BoolVar(
+		&checkAppIdentity,
+		"check-app-identity",
+		false,
+		"verify generated Android/iOS App identity artifacts are current",
+	)
+	flag.StringVar(
+		&appIdentityManifestPath,
+		"app-identity-manifest",
+		"",
+		"App identity codegen output manifest",
+	)
+	flag.BoolVar(
+		&appLaunchContractOnly,
+		"app-launch-contract-only",
+		false,
+		"generate only App/Ops/native launch contract projections",
+	)
+	flag.BoolVar(
+		&checkAppLaunchContract,
+		"check-app-launch-contract",
+		false,
+		"verify generated App/Ops/native launch contract projections are current",
+	)
+	flag.StringVar(
+		&appLaunchContractManifestPath,
+		"app-launch-contract-manifest",
+		"",
+		"App launch contract codegen freshness manifest",
 	)
 	flag.StringVar(
 		&assistantRuntimeEnumsGoOutput,
@@ -101,6 +143,48 @@ func main() {
 		exitErr(fmt.Errorf(
 			"--check-shell-navigation-metadata requires --shell-navigation-metadata-only",
 		))
+	}
+	if checkAppIdentity && !appIdentityOnly {
+		exitErr(fmt.Errorf(
+			"--check-app-identity requires --app-identity-only",
+		))
+	}
+	if checkAppLaunchContract && !appLaunchContractOnly {
+		exitErr(fmt.Errorf(
+			"--check-app-launch-contract requires --app-launch-contract-only",
+		))
+	}
+	if appIdentityOnly && (appLaunchContractOnly || shellNavigationMetadataOnly || serviceOutputRequested) {
+		exitErr(fmt.Errorf(
+			"--app-identity-only cannot be combined with other output modes",
+		))
+	}
+	if appIdentityOnly {
+		if err := runAppIdentityMode(
+			metadataDir,
+			appDir,
+			appIdentityManifestPath,
+			checkAppIdentity,
+		); err != nil {
+			exitErr(err)
+		}
+		return
+	}
+	if appLaunchContractOnly && (shellNavigationMetadataOnly || serviceOutputRequested) {
+		exitErr(fmt.Errorf(
+			"--app-launch-contract-only cannot be combined with other output modes",
+		))
+	}
+	if appLaunchContractOnly {
+		if err := runAppLaunchContractMode(
+			metadataDir,
+			appDir,
+			appLaunchContractManifestPath,
+			checkAppLaunchContract,
+		); err != nil {
+			exitErr(err)
+		}
+		return
 	}
 	if shellNavigationMetadataOnly && serviceOutputRequested {
 		exitErr(fmt.Errorf(
@@ -327,6 +411,9 @@ func main() {
 		runtimeErrorOutputPath(appDir, "circle", "circle_membership_errors.g.dart"),
 		renderSimpleErrorsDart("CircleMembershipErrorCode", "circle/circle_management/circle_membership/errors.yaml", "圈子成员关系暂时不可用，请稍后重试", circleMembershipErrs),
 	)
+	if err := writeGatheringPlanErrorsDart(metadataDir, appDir); err != nil {
+		exitErr(err)
+	}
 	if entityErrs, err := readMergedErrors([]string{
 		filepath.Join(metadataDir, "entity", "entity_homepage", "homepage", "errors.yaml"),
 		filepath.Join(metadataDir, "entity", "entity_homepage", "homepage_claim_request", "errors.yaml"),
@@ -640,6 +727,9 @@ func main() {
 	if err := removeUntrackedGeneratedOutputs(); err != nil {
 		exitErr(err)
 	}
+	if err := formatGeneratedDartOutputs(); err != nil {
+		exitErr(err)
+	}
 	if err := writeFieldBindingReport(fieldBindingReportPath); err != nil {
 		exitErr(err)
 	}
@@ -656,6 +746,24 @@ func writeContentErrorsDart(metadataDir string, appDir string) error {
 	writeFile(
 		runtimeErrorOutputPath(appDir, "content", "content_errors.g.dart"),
 		renderContentErrorsDart(errorsDefinition),
+	)
+	return nil
+}
+
+func writeGatheringPlanErrorsDart(metadataDir string, appDir string) error {
+	const sourcePath = "circle/circle_management/gathering_plan/errors.yaml"
+	errorsDefinition, err := readErrors(filepath.Join(metadataDir, filepath.FromSlash(sourcePath)))
+	if err != nil {
+		return fmt.Errorf("read GatheringPlan errors metadata: %w", err)
+	}
+	writeFile(
+		runtimeErrorOutputPath(appDir, "circle", "gathering_plan_errors.g.dart"),
+		renderSimpleErrorsDart(
+			"GatheringPlanErrorCode",
+			sourcePath,
+			"协作计划暂时不可用，请稍后重试",
+			errorsDefinition,
+		),
 	)
 	return nil
 }

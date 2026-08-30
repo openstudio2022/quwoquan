@@ -32,7 +32,7 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
       if (_acquireControllerSlot()) {
         final slotLeaseId = _controllerSlotLeaseId;
         if (mounted && generation == _videoInitGeneration) {
-          setState(() {
+          _updateRuntimeState(() {
             _isDeferredWaitingForSlot = false;
           });
           await _initializeVideoWithHeldSlot(generation, slotLeaseId);
@@ -200,7 +200,7 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
             candidateSnapshot: candidateSnapshot,
             source: source.label,
           );
-          setState(() {
+          _updateRuntimeState(() {
             _isInitialized = true;
             _hasError = false;
             _isDeferredWaitingForSlot = false;
@@ -241,18 +241,20 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
       }
 
       if (mounted && generation == _videoInitGeneration) {
-        _reportPlaybackFailure(
+        startupStopwatch.stop();
+        _reportInitializationFailure(
           MediaPlaybackFailure.select(
             observedFailures,
             candidatesTried: candidates.length,
           ),
+          durationMs: startupStopwatch.elapsedMilliseconds,
         );
       }
     } catch (error, stackTrace) {
       if (mounted && generation == _videoInitGeneration) {
         final kind = _classifyPlaybackFailure(
           error,
-          widget.deliveryReference.url,
+          widget.playbackUrl,
         );
         _logCandidateFailure(
           index: 0,
@@ -262,11 +264,13 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
           error: error,
           stackTrace: stackTrace,
         );
-        _reportPlaybackFailure(
+        startupStopwatch.stop();
+        _reportInitializationFailure(
           MediaPlaybackFailure.select(<MediaCandidateFailureKind>[
             ...observedFailures,
             kind,
           ], candidatesTried: candidates.length),
+          durationMs: startupStopwatch.elapsedMilliseconds,
         );
       }
     } finally {
@@ -394,7 +398,7 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
     }
     if (canFallbackToProgressive) {
       _forceProgressiveForCurrentDelivery = true;
-      setState(() {
+      _updateRuntimeState(() {
         _isInitialized = false;
         _hasError = false;
         _playbackFailure = null;
@@ -411,17 +415,52 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
     _pendingSourceSwitchPosition = null;
   }
 
+  void _reportInitializationFailure(
+    MediaPlaybackFailure failure, {
+    required int durationMs,
+  }) {
+    ref
+        .read(pageLifecycleObservabilityProvider)
+        .recordMediaLoad(
+          mediaType: 'video',
+          result: 'failure',
+          durationMs: durationMs,
+          error: failure.runtimeFailure,
+          candidatesTried: failure.candidatesTried,
+          mediaFailureKind: failure.kind.name,
+          userScene: failure.userScene.name,
+          retryable: failure.isRetryable,
+        );
+    _reportPlaybackFailure(failure);
+  }
+
   void _reportPlaybackFailure(MediaPlaybackFailure failure) {
     _finishInitializationWait();
     _playbackSession.markFailure();
+    final signedReSign = widget.signedDelivery?.onReSignRequested;
+    if (signedReSign != null) {
+      // 私有交付失败先当作签名过期处理：换签编排在协调器一侧，播放器只发起
+      // 一次请求。判否与负缓存交给换签后的重试结果，避免把可恢复的 TTL 到期
+      // 记成终态失败、把该资产在本次会话里永久钉死。
+      signedReSign();
+      _updateRuntimeState(() {
+        _isDeferredWaitingForSlot = false;
+        _isRetrying = false;
+        _showCompactProgress = false;
+        _isInitializationSlow = false;
+      });
+      // 失败仍要上报：换签是恢复动作，不是「没发生失败」。
+      widget.onPlaybackFailed?.call(failure);
+      return;
+    }
     if (failure.shouldNegativeCache) {
       MediaLoadFailureCache.instance.recordTerminalFailure(
-        widget.deliveryReference.cacheIdentity,
+        widget.playbackCacheIdentity,
         kind: failure.kind,
         statusCode: failure.runtimeFailure.transportStatus,
       );
     }
-    setState(() {
+    _updateRuntimeState(() {
       _isDeferredWaitingForSlot = false;
       _hasError = true;
       _isInitialized = false;
@@ -430,17 +469,6 @@ extension _VideoPlayerWidgetControllerRuntime on _VideoPlayerWidgetState {
       _showCompactProgress = false;
       _isInitializationSlow = false;
     });
-    ref
-        .read(pageLifecycleObservabilityProvider)
-        .recordMediaLoad(
-          mediaType: 'video',
-          result: 'failure',
-          error: failure.runtimeFailure,
-          candidatesTried: failure.candidatesTried,
-          mediaFailureKind: failure.kind.name,
-          userScene: failure.userScene.name,
-          retryable: failure.isRetryable,
-        );
     widget.onPlaybackFailed?.call(failure);
     if (_controller == null && !_qoeReportedForController) {
       _qoeReportedForController = true;

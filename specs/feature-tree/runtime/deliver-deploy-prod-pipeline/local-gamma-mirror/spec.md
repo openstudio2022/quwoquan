@@ -115,11 +115,14 @@
 - 每个删除步骤必须先写一次性 execution journal，并在成功后写精确 resource ID step receipt；
   中途失败必须把已确认删除项、失败命令与 unknown/partial outcome 写入消费回执，禁止报告为
   “未执行破坏性动作”或用同一 attestation 静默重放。
-- 全部删除命令成功后，须有界等待 canonical 与 attested non-canonical TCP ports 释放再做最终
-  postcheck。若 create-once partial consumption 已精确记录全部容器/网络删除成功、failedCommand
-  为空且失败仅来自该即时 postcheck，则允许同一 confirm 做 audit-only convergence：不得重跑删除，
-  只重采零容器/网络、volume 全等和端口全释放，并写绑定原 attestation/consumption digest 的
-  create-once convergence receipt；其他 partial/unknown 形状一律禁止收敛。
+- 全部删除命令成功后，须有界等待目标 runtime 自有的 published endpoint 释放再做最终 postcheck。
+  该集合是 transport-exact 的 `role:hostPort/protocol`，由目标 port profile 的 canonical publisher
+  闭包排除 Data fleet 自有 role 后并上 attested 的非 canonical 端口构成；Data fleet 是长驻栈，
+  同 profile 端口不等于目标 runtime 所有权，TCP/UDP 不得合并判定。若 create-once partial consumption 已精确记录
+  全部容器/网络删除成功、failedCommand 为空且失败仅来自该即时 postcheck，则允许同一 confirm 做
+  audit-only convergence：不得重跑删除，只重采零容器/网络、volume 全等和上述 endpoint 集合全释放，
+  并写绑定原 attestation/consumption digest 的 create-once convergence receipt；其他 partial/unknown
+  形状一律禁止收敛。
 
 ## 4. 契约引用
 
@@ -192,22 +195,29 @@
 <a id="gwt-005"></a>
 ### GWT-005 本地孤儿 Compose 栈只按一次性精确清单恢复
 
-- GIVEN Alpha、Beta 或 Gamma 没有 active consumer lease，canonical startup receipt 不存在或
-  状态为 stopped，且 canonical target project 仍有带完整 Compose labels 的残留资源。
+- GIVEN Alpha、Beta 或 Gamma 没有 active consumer lease，canonical startup receipt 不存在、
+  状态为 stopped，或状态非 stopped 但其 candidate 已不可用，且 canonical target project 仍有
+  带完整 Compose labels 的残留资源。
 - WHEN 运维先以显式 canonical attestation path 运行 orphan Compose repair plan。
 - THEN 只生成 create-once、短时有效、带自身 digest 的完整资源清单和人工复核计划，不删除任何
   容器、网络或 volume。
 - WHEN 运维使用同一路径和显式 teardown confirmation 再次执行，且实时重采与 attestation
   完全一致。
 - THEN 只删除 attestation 列出的容器 ID 与网络 ID，保留全部 named volumes，并写入一次性消费
-  回执；运行中 receipt、active lease、过期/重放、额外资源或任一 identity/config/image/port
+  回执；active lease、过期/重放、额外资源或任一 identity/config/image/port
   漂移均在删除前 `GATE_BLOCK`；中途失败则以 create-once journal、逐步 success receipt 与
   partial-failure consumption 保存实际成功 ID 和未确定命令，禁止把部分删除记为零变更。
   非 canonical published host port 还必须绑定唯一实时 Docker publisher，且不得落入另一环境的
-  canonical block；执行后 canonical 与该项目全部 published TCP ports 均须实测释放。
+  canonical block；执行后目标 runtime 自有的 published endpoint 须逐条按 `role:hostPort/protocol`
+  实测释放，该集合为 canonical publisher 闭包排除 Data fleet 自有 role 后并上 attested 非 canonical 端口。
   全删除成功但即时端口转发尚未释放时必须保留 partial receipt；仅在全部 success step、完整 removed
   ID、空 failedCommand、零资源重现、volume 全等且有界端口复验通过时，后续同一 confirm 才可写
   audit-only convergence receipt，且不得再次执行任何删除命令。
+- AND 状态非 stopped 的 receipt 只在它自己的 candidate 已不可用时进入本恢复路径，判据是
+  candidate 目录缺失或其 runtime 拓扑不可加载这一客观事实，而不是任何操作者声明；candidate
+  仍可用的运行中 receipt 一律在采样前 `GATE_BLOCK`，必须改走 candidate-bound normal down。
+- AND 经该出口完成删除后 receipt 转为 stopped 并把 reclaim 原因写入 failure，named volumes
+  全部保留，后续 up 不再被这份已失效的运行中 receipt 阻断。
 
 ## 6. 依赖
 
@@ -234,3 +244,12 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：真实远端复验只允许在 prod `canary` rollout stage 产生，不能用 gamma-local 证据替代。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 startup receipt 不记录 candidate 所属 deployment work root
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前 receipt 只记 `candidateDigest`，不记该 candidate 当时所在的 `QWQ_DEPLOY_WORK_ROOT`。于是同一 digest 在不同 work root 下不可寻址：一次在 hermetic 打包工作区（`$TMPDIR/quwoquan-deploy.XXXXXX`）里完成的 up 会写下引用该临时 candidate 的运行中 receipt，而之后任何在默认 work root（`~/.cache/quwoquan/deploy`）下执行的 down 都只能报 candidate 缺失。gamma-local 已实测落入该状态并触发三路互锁：normal down 强绑 candidate 重放拓扑而 candidate 不可寻址，orphan Compose 恢复当时只接受不存在或 stopped 的 receipt，`reclaim-undownable-startup-receipt` 又要求运行时残留为零而 18 个容器仍在运行。`GWT-005` 的 t10 到 t12 已把「candidate 客观不可用时的合法拆除」补成受治理出口并解开本次死锁，但只要 receipt 不携带 work root 归属，同样的互锁就还会由下一次 hermetic 打包再造出来。
+- 完成判定：`GWT-005` 断言 receipt 记录 candidate 所属 deployment work root，且 candidate 在其记录的 work root 下可寻址时 normal down 必须走 candidate-bound 路径、不得落入 orphan 出口；并且 gamma-local 经恢复后 `stackctl health --scope full` 复验 mongodb 与 postgres 均 healthy。

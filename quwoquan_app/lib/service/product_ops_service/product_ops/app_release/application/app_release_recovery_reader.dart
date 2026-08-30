@@ -12,6 +12,10 @@ final class AppReleaseRecoveryQuery {
 
 enum AppReleaseUpdateState { none, available, required }
 
+enum AppReleaseRecoveryPlatform { android, ios, web }
+
+enum AppReleaseRecoveryChannel { nativeUpdate, webOnly }
+
 final class AppReleaseRecoveryFacts {
   const AppReleaseRecoveryFacts({
     required this.platform,
@@ -20,16 +24,18 @@ final class AppReleaseRecoveryFacts {
     required this.minimumSupportedVersion,
     required this.minimumSupportedBuild,
     required this.updateState,
+    required this.updateChannel,
     required this.updateUrl,
     required this.recoveryUrl,
   });
 
-  final String platform;
+  final AppReleaseRecoveryPlatform platform;
   final String latestVersion;
   final int latestBuild;
   final String minimumSupportedVersion;
   final int minimumSupportedBuild;
   final AppReleaseUpdateState updateState;
+  final AppReleaseRecoveryChannel updateChannel;
   final String? updateUrl;
   final String recoveryUrl;
 }

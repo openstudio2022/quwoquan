@@ -28,10 +28,19 @@ def compile_governance(
     registry: Mapping[str, Any],
     bindings: Mapping[str, Any],
     conformance_manifest: Mapping[str, Any],
+    *,
+    source_root: Path | None = None,
+    environments: tuple[str, ...] = ENVIRONMENTS,
 ) -> tuple[dict[str, Any], list[ProviderGovernanceIssue]]:
+    source_base = ROOT if source_root is None else Path(source_root).resolve()
     issues = [
         *registry_issues(registry),
-        *binding_issues(registry, bindings),
+        *binding_issues(
+            registry,
+            bindings,
+            source_root=source_root,
+            environments_to_validate=environments,
+        ),
         *conformance_manifest_issues(registry, conformance_manifest),
     ]
     capabilities = [item for item in registry.get("capabilities", []) if isinstance(item, Mapping)]
@@ -46,12 +55,16 @@ def compile_governance(
     selected: dict[str, dict[str, dict[str, Any]]] = {}
     selected_roots: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
     readiness: dict[str, dict[str, dict[str, Any]]] = {}
-    environments = bindings.get("environments") or {}
-    for env in ENVIRONMENTS:
+    binding_environments = bindings.get("environments") or {}
+    for env in environments:
         selected[env] = {}
         selected_roots[env] = {}
         readiness[env] = {}
-        scope = environments.get(env) if isinstance(environments, Mapping) else {}
+        scope = (
+            binding_environments.get(env)
+            if isinstance(binding_environments, Mapping)
+            else {}
+        )
         if not isinstance(scope, Mapping):
             continue
         for capability in capabilities:
@@ -64,7 +77,9 @@ def compile_governance(
             adapter = adapter_by_key.get((capability_id, adapter_id), {})
             contract = adapter.get("contract") or {}
             selected[env][capability_id] = _binding_record(binding, contract)
-            source_path = ROOT / str(adapter.get("implementation_path") or "")
+            source_path = source_base / str(
+                adapter.get("implementation_path") or ""
+            )
             state = str(binding.get("state") or "")
             required = state != "not_required"
             ready = state == "enabled" and bool(adapter_id) and source_path.exists()
@@ -125,12 +140,14 @@ def load_and_compile(
     registry_path: Path | None = None,
     bindings_path: Path | None = None,
     conformance_path: Path | None = None,
+    source_root: Path | None = None,
 ) -> tuple[dict[str, Any], list[ProviderGovernanceIssue]]:
     if registry_path is not None or conformance_path is not None:
         raise ValueError("manual registry and conformance manifest inputs are forbidden")
-    registry = load_registry()
+    registry = load_registry(source_root=source_root)
     return compile_governance(
         registry,
-        load_bindings(bindings_path),
-        load_conformance_manifest(),
+        load_bindings(bindings_path, source_root=source_root),
+        load_conformance_manifest(source_root=source_root),
+        source_root=source_root,
     )

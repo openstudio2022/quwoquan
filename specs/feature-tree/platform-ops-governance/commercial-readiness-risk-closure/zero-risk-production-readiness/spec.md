@@ -81,7 +81,9 @@
 <a id="gwt-003"></a>
 ### GWT-003 不可提升的第一方容器预验证
 
-- GIVEN reviewed main 的 deployable ReleaseManifest、GHCR digest、四平面 SSH key 与满足阈值的 prod-hosted 主机。
+- GIVEN reviewed main 的 deployable ReleaseManifest、GHCR digest、用于 `first-party`
+  预演范围的 edge/service SSH key 与满足阈值的 prod-hosted 主机；正式发布仍按
+  edge/media/service/data 四平面凭据分别准入。
 - WHEN 执行 `stackctl deploy --target prod-hosted --mode prevalidate --prevalidate-scope first-party`。
 - THEN 镜像传输前硬校验账号隔离、CPU、内存、容器空间、架构与端口，任一不足即 `GATE_BLOCK`。
 - THEN 当前可用空间、可回收空间和回收后实测空间分别可见；Buildah external working container 只有在 `storage`、`PID=0`、名称与最小年龄全部匹配时才进入回收范围，任何 volume、恢复容器或运行中容器都不进入回收范围。

@@ -13,6 +13,12 @@ configs:
   rollout: progressive
   sensitive: false
   default: :18088
+- key: sys.platform-ops-service.redis.general.mode
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
 - key: sys.platform-ops-service.redis.general.addr
   type: string
   scope: workload
@@ -20,3 +26,51 @@ configs:
   rollout: progressive
   sensitive: false
   default: redis:6379
+- key: sys.platform-ops-service.human_authority.signing_key_id
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.platform-ops-service.human_authority.issuer
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.platform-ops-service.human_authority.provider_version
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.platform-ops-service.human_authority.provider_commit
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.platform-ops-service.human_authority.signing_private_key_file
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
+- key: sys.platform-ops-service.human_authority.github_webhook_secret
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
+- key: sys.platform-ops-service.human_authority.role_mappings
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.platform-ops-service.human_authority.github_mappings
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false

@@ -5,7 +5,7 @@ overrides:
   sys.api-edge.graphql_read.schema_file: graphql-read-schema.graphqls
   sys.api-edge.graphql_read.schema_digest: package-required
   sys.api-edge.graphql_read.trusted_public_keys_json: package-required
-  sys.api-edge.graphql_read.owner_timeout_ms: 1500
+  sys.api-edge.graphql_read.owner_timeout_ms: 2000
   sys.api-edge.minimum_build.source_digest: sha256:58e1a1719f13584026275e3d901a0050b05431aedc305911df50dc6c227ae381
   sys.api-edge.minimum_build.android: 1
   sys.api-edge.minimum_build.ios: 1

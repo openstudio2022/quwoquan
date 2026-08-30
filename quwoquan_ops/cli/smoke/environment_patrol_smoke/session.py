@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 from dataclasses import dataclass
 from typing import Any
@@ -26,6 +27,8 @@ from .constants import (
     RUNTIME_RECOVERY_TARGET,
     TYPED_AUTHENTICATED_SESSION_TARGETS,
     TYPED_TEST_DATA_ACTOR_ENV,
+    TYPED_TEST_DATA_CONVERSATION_ENV,
+    TYPED_TEST_DATA_CONVERSATION_TARGETS,
 )
 
 
@@ -278,6 +281,35 @@ class TypedTestDataActor:
         )
 
 
+@dataclass(frozen=True)
+class TypedTestDataConversation:
+    conversation_id: str
+    message_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.conversation_id.strip():
+            raise ValueError("typed test-data conversation id is required")
+        if (
+            not self.message_ids
+            or any(not item.strip() for item in self.message_ids)
+            or len(self.message_ids) != len(set(self.message_ids))
+        ):
+            raise ValueError(
+                "typed test-data conversation messages must be non-empty and unique"
+            )
+
+    def artifact_values(self) -> tuple[str, ...]:
+        return (
+            self.conversation_id,
+            *self.message_ids,
+            json.dumps(
+                list(self.message_ids),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+        )
+
+
 def _typed_test_data_actor_from_environment() -> TypedTestDataActor | None:
     values = {
         field: os.environ.get(environment_key, "").strip()
@@ -292,6 +324,45 @@ def _typed_test_data_actor_from_environment() -> TypedTestDataActor | None:
             "typed test-data actor handoff is incomplete: " + ", ".join(missing)
         )
     return TypedTestDataActor(**values)
+
+
+def _typed_test_data_conversation_from_environment(
+) -> TypedTestDataConversation | None:
+    values = {
+        field: os.environ.get(environment_key, "").strip()
+        for field, environment_key in TYPED_TEST_DATA_CONVERSATION_ENV.items()
+    }
+    populated = [field for field, value in values.items() if value]
+    if not populated:
+        return None
+    missing = sorted(set(values) - set(populated))
+    if missing:
+        raise ValueError(
+            "typed test-data conversation handoff is incomplete: "
+            + ", ".join(missing)
+        )
+    try:
+        raw_message_ids = json.loads(values["message_ids_json"])
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "typed test-data conversation message ids are invalid"
+        ) from exc
+    if not isinstance(raw_message_ids, list) or any(
+        not isinstance(item, str) for item in raw_message_ids
+    ):
+        raise ValueError("typed test-data conversation message ids are invalid")
+    return TypedTestDataConversation(
+        conversation_id=values["conversation_id"],
+        message_ids=tuple(raw_message_ids),
+    )
+
+
+def _requires_typed_test_data_conversation(args: argparse.Namespace) -> bool:
+    target = str(getattr(args, "target", "") or "").replace("\\", "/")
+    return any(
+        target.endswith(candidate)
+        for candidate in TYPED_TEST_DATA_CONVERSATION_TARGETS
+    )
 
 
 def _bind_typed_test_data_actor(args: argparse.Namespace) -> TypedTestDataActor:

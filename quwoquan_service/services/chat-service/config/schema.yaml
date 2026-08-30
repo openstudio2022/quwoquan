@@ -26,7 +26,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.chat-service.redis.realtime.addr
   type: string
   scope: workload
@@ -40,7 +39,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.chat-service.redis.reliable_task.addr
   type: string
   scope: workload
@@ -50,13 +48,6 @@ configs:
   default: localhost:6379
 - key: sys.chat-service.redis.reliable_task.mode
   type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: standalone
-- key: sys.chat-service.runtime.auth.account_security_authority.timeout_ms
-  type: int
   scope: workload
   reload: restart
   rollout: progressive
@@ -144,3 +135,15 @@ configs:
   rollout: progressive
   sensitive: false
   default: :18081
+- key: sys.chat-service.user_account_security_authority.base_url
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.chat-service.user_account_security_authority.timeout_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false

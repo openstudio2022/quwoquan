@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/governance/canonical_gc_tombstone_backfill.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "backfillId", "backfilledAt", "publishRoot", "releaseRoot",
+    "tombstones", "tombstoneCount", "receiptDigest"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.canonical_gc_tombstone_backfill"},
+    "backfillId": {"type": "string", "minLength": 1},
+    "backfilledAt": {"type": "string", "format": "date-time"},
+    "publishRoot": {"type": "string", "minLength": 1},
+    "releaseRoot": {"type": "string", "minLength": 1},
+    "tombstones": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/tombstone"}
+    },
+    "tombstoneCount": {"type": "integer", "minimum": 0},
+    "receiptDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "tombstone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "executionId", "tombstoneRef", "tombstoneDigest", "referrerCount",
+        "created"
+      ],
+      "properties": {
+        "executionId": {"type": "string", "minLength": 1},
+        "tombstoneRef": {
+          "type": "string",
+          "pattern": "^data/local/workspace/gc/tombstones/"
+        },
+        "tombstoneDigest": {"$ref": "#/$defs/digest"},
+        "referrerCount": {"type": "integer", "minimum": 1},
+        "created": {"type": "boolean"}
+      }
+    }
+  }
+}

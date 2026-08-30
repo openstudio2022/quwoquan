@@ -55,13 +55,18 @@ class MarkdownSeoHtmlRenderer {
   const MarkdownSeoHtmlRenderer(
     this._assetUrlResolver, {
     QwqMarkdownParser? parser,
+    this.publicLinks,
   }) : _parser = parser ?? const QwqMarkdownParser();
 
   final QwqMarkdownParser _parser;
   final MediaAssetUrlResolver _assetUrlResolver;
 
+  /// 站外 canonical URL 的 origin 来源；为空时取运行时配置（生产唯一来源）。
+  final PublicContentLinkBuilder? publicLinks;
+
   SeoHtmlDocument render(MarkdownSeoRenderInput input) {
-    final canonicalUrl = AppPublicContentLinks.postWebUrl(input.postId);
+    final links = publicLinks ?? PublicContentLinkBuilder.fromRuntimeConfig();
+    final canonicalUrl = links.postWebUrl(input.postId);
     final visibility = _visibility(input.visibility);
     if (visibility == _SeoVisibility.private) {
       return SeoHtmlDocument(

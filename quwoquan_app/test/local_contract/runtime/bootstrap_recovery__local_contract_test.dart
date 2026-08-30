@@ -1,6 +1,9 @@
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-002
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/shell/recovery/bootstrap_recovery.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
@@ -41,25 +44,66 @@ void main() {
     );
   });
 
-  testWidgets('恢复根不依赖 Router 或远端 Provider 即可展示网页版安全出口', (tester) async {
+  testWidgets('配置失效必须呈现阻断式配置错误页，而不是网络/版本恢复页', (tester) async {
     await tester.pumpWidget(
       BootstrapRecoveryApp(
         failure: BootstrapFailure.fromError(
           CloudRuntimeConfigurationException(
             runtimeEnv: '',
-            invalidKeys: const <String>['CLOUD_GATEWAY_BASE_URL'],
+            invalidKeys: const <String>[
+              'CLOUD_GATEWAY_BASE_URL',
+              'CONTENT_BINDING_STATE',
+            ],
           ),
         ),
       ),
     );
 
     await tester.pump();
-    expect(find.text('使用网页版'), findsOneWidget);
-    expect(find.text('重新尝试'), findsNothing);
+    // 阻断页写明缺失/多余键与修复方向，且不提供依赖失效配置的外部出口。
+    expect(find.text(FoundationText.startupConfigErrorTitle), findsOneWidget);
+    expect(find.text('CLOUD_GATEWAY_BASE_URL'), findsOneWidget);
+    expect(find.text('CONTENT_BINDING_STATE'), findsOneWidget);
+    expect(
+      find.text(FoundationText.startupConfigErrorCopyAction),
+      findsOneWidget,
+    );
+    expect(find.text(FoundationText.startupRecoveryWebAction), findsNothing);
+    expect(find.text(FoundationText.startupRecoveryTitle), findsNothing);
+  });
+
+  testWidgets('非配置类启动失败仍走网络/版本恢复页并保留网页版安全出口', (tester) async {
+    await tester.pumpWidget(
+      BootstrapRecoveryApp(
+        failure: BootstrapFailure.fromError(StateError('init failed')),
+      ),
+    );
+
+    await tester.pump();
+    expect(find.text(FoundationText.startupRecoveryWebAction), findsOneWidget);
+    expect(find.text(FoundationText.startupConfigErrorTitle), findsNothing);
+  });
+
+  test('原生回读的配置失效 failure 恢复出结构化键集合', () {
+    final failure = BootstrapFailure.fromRuntimeFailure(
+      BootstrapFailure.fromError(
+        CloudRuntimeConfigurationException(
+          runtimeEnv: '',
+          invalidKeys: const <String>['APP_RUNTIME_ENV', 'APP_LEGAL_BASE_URL'],
+        ),
+      ).runtimeFailure,
+    );
+
+    expect(failure.isConfigurationInvalid, isTrue);
+    expect(failure.invalidKeys, <String>[
+      'APP_LEGAL_BASE_URL',
+      'APP_RUNTIME_ENV',
+    ]);
   });
 
   test('首帧前 Flutter、Platform 和 root isolate 错误都会调度恢复根', () {
-    final source = File('lib/runtime/shell/startup/app_bootstrap.dart').readAsStringSync();
+    final source = File('lib/runtime/shell/startup/app_bootstrap.dart')
+        .readAsStringSync();
 
     expect(source, contains('_scheduleBootstrapRecoveryBeforeFirstFrame('));
     final flutterHandler = source.indexOf('FlutterError.onError =');
@@ -93,9 +137,8 @@ void main() {
   });
 
   test('未捕获异常只允许单写：diagnostics 接管后 bootstrap 记录必须让位', () {
-    final bootstrap = File(
-      'lib/runtime/shell/startup/app_bootstrap.dart',
-    ).readAsStringSync();
+    final bootstrap = File('lib/runtime/shell/startup/app_bootstrap.dart')
+        .readAsStringSync();
     final diagnostics = File(
       'lib/runtime/observability/runtime_diagnostics.dart',
     ).readAsStringSync();
@@ -130,7 +173,8 @@ void main() {
   });
 
   test('重试复用首次 bootstrap Zone，避免 Zone mismatch', () {
-    final source = File('lib/runtime/shell/startup/app_bootstrap.dart').readAsStringSync();
+    final source = File('lib/runtime/shell/startup/app_bootstrap.dart')
+        .readAsStringSync();
 
     expect(source, contains('Zone? _bootstrapZone'));
     expect(source, contains('_bootstrapZone = Zone.current'));

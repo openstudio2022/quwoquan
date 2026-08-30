@@ -15,7 +15,8 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart' show ConversationAssetView;
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart'
+    show ConversationAssetView;
 import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/conversation_message_search_sheet.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
@@ -176,11 +177,10 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       return;
     }
     unawaited(
-      showGeneralDialog<void>(
+      showAppFloatingModal<void>(
         context: context,
         barrierDismissible: false,
-        barrierColor: AppColors.black,
-        pageBuilder: (dialogContext, _, _) {
+        builder: (dialogContext) {
           return ColoredBox(
             key: const ValueKey<String>('chat_image_viewer_surface'),
             color: AppColors.black,
@@ -558,7 +558,8 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     participantCount: memberCount,
                   ),
                   // 活动群空间：绑定 Gathering 的会话直达 Board（DEC-002）。
-                  onOpenBoard: (groupHome?.gatheringId.trim().isNotEmpty ?? false)
+                  onOpenBoard:
+                      (groupHome?.gatheringId.trim().isNotEmpty ?? false)
                       ? () => context.push(
                           AppRoutePaths.gatheringBoard(
                             id: widget.conversationId,

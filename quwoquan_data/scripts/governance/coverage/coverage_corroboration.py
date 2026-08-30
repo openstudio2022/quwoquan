@@ -4,11 +4,6 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from core.runtime_policy import active_runtime_policy
-
-_RESEARCH_WORKERS = active_runtime_policy().research_workers
-
-
 def candidate_corroboration_key(candidate: dict[str, Any]) -> tuple[str, ...]:
     """返回跨来源核验与唯一计数共用的稳定候选身份。"""
     identity = (
@@ -93,13 +88,16 @@ def discover_baike_corroborations(
         }
 
     out: list[dict[str, Any]] = []
-    workers = max(1, min(_RESEARCH_WORKERS, len(selected)))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(resolve, candidate) for candidate in selected]
-        for future in as_completed(futures):
-            result = future.result()
-            if result is not None:
-                out.append(result)
+    if selected:
+        with ThreadPoolExecutor(max_workers=len(selected)) as pool:
+            futures = [pool.submit(resolve, candidate) for candidate in selected]
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                except Exception:  # noqa: BLE001 - isolate one failed corroboration.
+                    continue
+                if result is not None:
+                    out.append(result)
     return sorted(
         out,
         key=lambda item: (

@@ -11,13 +11,14 @@ for path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(path))
 
 from content.execution.controller.execute import runner
+from content.execution.model_contract import governed_cursor_grok_model
 
 
 EXECUTION_ID = "20260714--travel-homepage-coverage--test-region-a--pilot-001"
 RECIPE = {
     "execution": {
         "runtime": "local",
-        "model": "grok-4.5",
+        "model": governed_cursor_grok_model(),
         "modelFamily": "grok",
         "modelParameters": [
             {"id": "effort", "value": "high"},

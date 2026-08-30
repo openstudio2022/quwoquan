@@ -1,10 +1,15 @@
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/runtime/observability/analytics.dart';
+import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/runtime/observability/analytics.dart';
+import 'package:quwoquan_app/runtime/observability/generated/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/runtime/observability/telemetry/app_page_experience_tracker.dart';
+import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class PageLifecycleEventNames {
@@ -19,11 +24,14 @@ class PageLifecycleEventNames {
 class PageLifecycleObservability {
   PageLifecycleObservability({
     required this.analytics,
+    required AppTelemetryRecorder telemetryRecorder,
     AppPageExperienceTracker? pageExperienceTracker,
-  }) : _pageExperienceTracker =
+  }) : _telemetryRecorder = telemetryRecorder,
+       _pageExperienceTracker =
            pageExperienceTracker ?? AppPageExperienceTracker.instance;
 
   final AnalyticsService analytics;
+  final AppTelemetryRecorder _telemetryRecorder;
   final AppPageExperienceTracker _pageExperienceTracker;
 
   void recordPageState({
@@ -129,36 +137,67 @@ class PageLifecycleObservability {
   void recordMediaLoad({
     required String mediaType,
     required String result,
+    required int durationMs,
+    required int candidatesTried,
     String? pageName,
-    String? entityId,
+    String? surfaceId,
+    String? objectType,
+    String? objectId,
     String? copyKey,
     Object? error,
-    int? durationMs,
-    int? candidatesTried,
     String? mediaFailureKind,
     String? userScene,
     bool? retryable,
   }) {
-    final properties = <String, dynamic>{
-      'mediaType': mediaType,
-      'result': result,
-    };
-    if (pageName != null) properties['pageName'] = pageName;
-    if (entityId != null) properties['entityId'] = entityId;
-    if (copyKey != null) properties['copyKey'] = copyKey;
-    if (durationMs != null) properties['durationMs'] = durationMs;
-    if (candidatesTried != null) {
-      properties['candidatesTried'] = candidatesTried;
-    }
-    if (mediaFailureKind != null) {
-      properties['mediaFailureKind'] = mediaFailureKind;
-    }
-    if (userScene != null) properties['userScene'] = userScene;
-    if (retryable != null) properties['retryable'] = retryable;
-    properties.addAll(_failureProperties(error));
+    final failureProperties = _failureProperties(error);
+    final failReasonCode = failureProperties['sourceCode']?.toString();
+    final recoveryAction = failureProperties['recoveryAction']?.toString();
+    final requestId = failureProperties['requestId']?.toString();
+    final traceId = failureProperties['traceId']?.toString();
+    final payload = AppTelemetryPayload.mediaLoadState(
+      mediaType: mediaType,
+      result: result,
+      durationMs: durationMs,
+      candidatesTried: candidatesTried,
+      surfaceId: surfaceId,
+      objectType: objectType,
+      objectId: objectId,
+      copyKey: copyKey,
+      failReasonCode: failReasonCode,
+      recoveryAction: recoveryAction,
+      requestId: requestId,
+      traceId: traceId,
+      mediaFailureKind: mediaFailureKind,
+      userScene: userScene,
+      retryable: retryable,
+    );
+    final resolvedPageName = pageName?.trim();
+    unawaited(
+      _telemetryRecorder.record(
+        payload,
+        pageName: resolvedPageName == null || resolvedPageName.isEmpty
+            ? null
+            : resolvedPageName,
+      ),
+    );
     _track(
       eventName: PageLifecycleEventNames.mediaLoadState,
-      properties: properties,
+      properties: <String, dynamic>{
+        'mediaType': mediaType,
+        'result': result,
+        'durationMs': durationMs,
+        'candidatesTried': candidatesTried,
+        if (resolvedPageName != null && resolvedPageName.isNotEmpty)
+          'pageName': resolvedPageName,
+        'surfaceId': ?surfaceId,
+        'objectType': ?objectType,
+        'objectId': ?objectId,
+        'copyKey': ?copyKey,
+        'mediaFailureKind': ?mediaFailureKind,
+        'userScene': ?userScene,
+        'retryable': ?retryable,
+        ...failureProperties,
+      },
     );
   }
 
@@ -270,6 +309,9 @@ class PageLifecycleObservability {
 
 final pageLifecycleObservabilityProvider = Provider<PageLifecycleObservability>(
   (ref) {
-    return PageLifecycleObservability(analytics: ref.read(analyticsProvider));
+    return PageLifecycleObservability(
+      analytics: ref.read(analyticsProvider),
+      telemetryRecorder: ref.read(appTelemetryReporterProvider),
+    );
   },
 );

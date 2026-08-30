@@ -39,6 +39,9 @@ type DataContentFleetReport struct {
 	RequiredQuota                      int                      `json:"requiredQuota"`
 	FinalizedObjectCount               int                      `json:"finalizedObjectCount"`
 	IdempotencyKey                     string                   `json:"idempotencyKey"`
+	FleetPeakConcurrentWorkers         int                      `json:"fleetPeakConcurrentWorkers"`
+	FleetWaveCount                     int                      `json:"fleetWaveCount,omitempty"`
+	FleetBatchDeadlineEpochSeconds     int64                    `json:"fleetBatchDeadlineEpochSeconds,omitempty"`
 	TaskOutcomes                       []DataContentTaskOutcome `json:"taskOutcomes"`
 	ExecutionCreatedAt                 string                   `json:"executionCreatedAt"`
 	FleetStartedAt                     string                   `json:"fleetStartedAt"`
@@ -48,6 +51,12 @@ type DataContentFleetReport struct {
 	CompletedAt                        string                   `json:"completedAt"`
 }
 
+// BindDataContentFleetReport binds one measured run to the exact attempt that
+// froze it. fleetWaveCount and fleetBatchDeadlineEpochSeconds come from the
+// frozen execution policy rather than from this run, so a report that cannot
+// name both is not a report at all: reliabletask_fleet_report.schema.json
+// validates them whenever they are carried, and a run may not publish a peak
+// without the frozen cap and deadline it was measured against.
 func BindDataContentFleetReport(
 	report DataContentFleetReport,
 	executionID string,
@@ -55,6 +64,8 @@ func BindDataContentFleetReport(
 	jobSetEnvelopeDigest string,
 	jobSetDigest string,
 	actualTaskDigest string,
+	fleetWaveCount int,
+	fleetBatchDeadlineEpochSeconds int64,
 ) (DataContentFleetReport, error) {
 	if strings.TrimSpace(executionID) == "" ||
 		(strings.TrimSpace(stage) != "author" && strings.TrimSpace(stage) != "publish") ||
@@ -65,11 +76,25 @@ func BindDataContentFleetReport(
 			"data content fleet report attempt binding is invalid",
 		)
 	}
+	if fleetWaveCount < 1 {
+		return DataContentFleetReport{}, fmt.Errorf(
+			"data content fleet report fleetWaveCount=%d is not a frozen wave count",
+			fleetWaveCount,
+		)
+	}
+	if fleetBatchDeadlineEpochSeconds < 1 {
+		return DataContentFleetReport{}, fmt.Errorf(
+			"data content fleet report fleetBatchDeadlineEpochSeconds=%d is not a frozen absolute deadline",
+			fleetBatchDeadlineEpochSeconds,
+		)
+	}
 	report.ExecutionID = strings.TrimSpace(executionID)
 	report.Stage = strings.TrimSpace(stage)
 	report.JobSetEnvelopeDigest = strings.TrimSpace(jobSetEnvelopeDigest)
 	report.JobSetDigest = strings.TrimSpace(jobSetDigest)
 	report.ActualTaskDigest = strings.TrimSpace(actualTaskDigest)
+	report.FleetWaveCount = fleetWaveCount
+	report.FleetBatchDeadlineEpochSeconds = fleetBatchDeadlineEpochSeconds
 	return report, nil
 }
 
@@ -88,7 +113,10 @@ type DataContentTaskOutcome struct {
 // author batch once succeeded tasks reach it. Objects below the quota line are
 // discarded by the caller, so a batch is oversampled instead of retried.
 // finalizedObjectCount is an observation of on-disk finished objects and never
-// participates in the gate.
+// participates in the gate, and neither does peakConcurrentWorkers: the latter
+// is the measured process peak of this run, taken from
+// DataContentConcurrencyObserver, and is a required caller input so an
+// unobserved run cannot silently report a peak of zero.
 func BuildDataContentFleetReport(
 	tasks []ReliableAsyncTask,
 	executionCreatedAt time.Time,
@@ -98,6 +126,7 @@ func BuildDataContentFleetReport(
 	missingObjectCount int,
 	requiredQuota int,
 	finalizedObjectCount int,
+	peakConcurrentWorkers int,
 ) DataContentFleetReport {
 	if completedAt.Before(startedAt) {
 		completedAt = startedAt
@@ -112,6 +141,9 @@ func BuildDataContentFleetReport(
 	publishTasks := 0
 	transactionResults := 0
 	researchAccepted := 0
+	// reliabletask_fleet_report.schema.json requires commercialAcceptedCount,
+	// but no acceptance class in data_content_worker_response.schema.json means
+	// commercial acceptance, so no batch can raise this above zero today.
 	commercialAccepted := 0
 	recoveryEligible := 0
 	automaticRecovered := 0
@@ -145,18 +177,12 @@ func BuildDataContentFleetReport(
 		if task.Status == TaskStatusSucceeded && dataContentObjectTransactionResultRecorded(task) {
 			transactionResults++
 		}
-		if task.Status == TaskStatusSucceeded &&
-			(dataContentResultResearchAccepted(task) ||
-				dataContentResultCommerciallyAccepted(task)) {
+		if task.Status == TaskStatusSucceeded && dataContentResultResearchAccepted(task) {
 			acceptedAt, err := time.Parse(time.RFC3339Nano, task.Result["completedAt"])
 			if err == nil &&
 				!executionCreatedAt.IsZero() &&
 				acceptedAt.After(executionCreatedAt) {
-				if dataContentResultResearchAccepted(task) {
-					researchAccepted++
-				} else {
-					commercialAccepted++
-				}
+				researchAccepted++
 				if canonicalFinalizedAt.IsZero() || acceptedAt.After(canonicalFinalizedAt) {
 					canonicalFinalizedAt = acceptedAt
 				}
@@ -242,6 +268,7 @@ func BuildDataContentFleetReport(
 		RequiredQuota:                      requiredQuota,
 		FinalizedObjectCount:               finalizedObjectCount,
 		IdempotencyKey:                     "executionId+entity+carrier+sourceRevision+stage",
+		FleetPeakConcurrentWorkers:         peakConcurrentWorkers,
 		TaskOutcomes:                       outcomes,
 		ExecutionCreatedAt:                 executionCreatedAt.UTC().Format(time.RFC3339Nano),
 		FleetStartedAt:                     startedAt.UTC().Format(time.RFC3339Nano),
@@ -281,19 +308,11 @@ func dataContentObjectTransactionResultRecorded(task ReliableAsyncTask) bool {
 		result["objectTransactionId"] != ""
 }
 
-func dataContentResultCommerciallyAccepted(task ReliableAsyncTask) bool {
-	result := task.Result
-	return dataContentObjectTransactionResultRecorded(task) &&
-		result["status"] == "accepted" &&
-		result["acceptanceClass"] == DataContentAcceptanceCommercialCanonical &&
-		validDataContentSHA256(result["canonicalObjectSha256"])
-}
-
 func dataContentResultResearchAccepted(task ReliableAsyncTask) bool {
 	result := task.Result
 	return dataContentObjectTransactionResultRecorded(task) &&
 		result["status"] == "accepted" &&
-		result["acceptanceClass"] == DataContentAcceptanceResearchCanonical &&
+		result["acceptanceClass"] == DataContentAcceptanceCanonicalPool &&
 		validDataContentSHA256(result["canonicalObjectSha256"])
 }
 

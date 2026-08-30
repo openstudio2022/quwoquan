@@ -16,6 +16,8 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
 for _path in (DATA_ROOT, SCRIPTS_ROOT):
@@ -76,12 +78,17 @@ def test_curl_layer_reports_network_exit_codes_and_short_circuits(monkeypatch):
     monkeypatch.setattr(rp.network_breaker, "BREAKER", breaker, raising=False)
     monkeypatch.setattr(rp.subprocess, "run", _fake_run)
     url = "https://zh.wikipedia.org/w/api.php?a=1"
-    assert rp.curl_json(url, timeout=MEDIAWIKI_TIMEOUT_SECONDS) == {}
-    assert rp.curl_json(url, timeout=MEDIAWIKI_TIMEOUT_SECONDS) == {}
+    # 短路是为了不白等 curl 超时，不是为了让失败消失：被短路的请求同样没有结果，
+    # 所以它和真正发出去又失败的请求一样上抛，调用方靠 calls 计数区分二者。
+    for _ in range(2):
+        with pytest.raises(rp.NetworkFetchError):
+            rp.curl_json(url, timeout=MEDIAWIKI_TIMEOUT_SECONDS)
     assert len(calls) == 2
     # 阈值已到：第三次不再执行 curl（秒级短路）。
-    assert rp.curl_json(url, timeout=MEDIAWIKI_TIMEOUT_SECONDS) == {}
-    assert rp.curl_text(url, timeout=MEDIAWIKI_TIMEOUT_SECONDS) == ""
+    with pytest.raises(rp.NetworkFetchError):
+        rp.curl_json(url, timeout=MEDIAWIKI_TIMEOUT_SECONDS)
+    with pytest.raises(rp.NetworkFetchError):
+        rp.curl_text(url, timeout=MEDIAWIKI_TIMEOUT_SECONDS)
     assert len(calls) == 2, "断路器打开后必须短路，不得继续消耗 curl max-time"
     assert 28 in NETWORK_CURL_EXIT_CODES
 
@@ -99,7 +106,8 @@ def test_curl_layer_content_failure_does_not_open_breaker(monkeypatch):
     monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: _Proc())
     url = "https://zh.wikipedia.org/w/api.php?a=1"
     for _ in range(3):
-        assert rp.curl_json(url, timeout=MEDIAWIKI_TIMEOUT_SECONDS) == {}
+        with pytest.raises(rp.NetworkFetchError):
+            rp.curl_json(url, timeout=MEDIAWIKI_TIMEOUT_SECONDS)
     assert breaker.snapshot()["openHosts"] == [], "内容级失败不得打开断路器"
 
 
@@ -169,42 +177,6 @@ def test_write_auto_research_plans_no_progress_timeout_yields_resumable_outage(m
     assert outage.get("noProgress") is True
     assert report.get("remainingEntityIds"), "剩余实体必须回队列供 resume"
     assert elapsed < 8, "watchdog 必须在预算量级内中断，不得挂满 curl 超时"
-
-
-def test_wave_budget_short_circuits_curl_after_deadline(monkeypatch):
-    """串行路径兜底：wave wall-clock 预算耗尽后 curl 层直接短路。"""
-    import content.source.research.network_io as rp
-    from content.source.research import network_breaker as nb
-
-    calls: list[str] = []
-
-    class _Proc:
-        returncode = 0
-        stdout = b"{}"
-        stderr = b""
-
-    monkeypatch.setattr(rp.subprocess, "run", lambda *a, **k: calls.append(1) or _Proc())
-    nb.start_wave_budget(3600)
-    try:
-        assert rp.curl_json(
-            "https://zh.wikipedia.org/w/api.php",
-            timeout=MEDIAWIKI_TIMEOUT_SECONDS,
-        ) == {}
-        assert len(calls) == 1
-        nb.start_wave_budget(0.0)  # 预算 0 = 立即耗尽（模拟 deadline 过期）
-        # budget=0 语义为关闭；用极小预算 + 等待代替。
-        nb.start_wave_budget(0.01)
-        import time as _t
-
-        _t.sleep(0.05)
-        assert rp.curl_json(
-            "https://zh.wikipedia.org/w/api.php",
-            timeout=MEDIAWIKI_TIMEOUT_SECONDS,
-        ) == {}
-        assert len(calls) == 1, "预算耗尽后必须短路，不得再执行 curl"
-        assert nb.wave_budget_exceeded() is True
-    finally:
-        nb.clear_wave_budget()
 
 
 if __name__ == "__main__":

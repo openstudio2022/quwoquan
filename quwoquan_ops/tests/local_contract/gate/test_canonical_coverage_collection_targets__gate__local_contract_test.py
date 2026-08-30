@@ -11,6 +11,7 @@ Python coverage 工具链单一精确锁与漂移阻断、App source closure 绑
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -22,6 +23,7 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.gate import object_path_map as opm
 from quwoquan_ops.gate import verify_canonical_coverage as vcr
+from quwoquan_ops.gate.canonical_coverage import provenance as coverage_provenance
 
 
 RECOMMENDATION_SERVICE_ROOT = (
@@ -213,6 +215,107 @@ def test_python_toolchain_state_blocks_missing_marker_and_version_drift(
         "pluggy==1.6.0",
         "pytest==9.1.1",
     ]
+
+
+def test_flutter_toolchain_identity_ignores_transient_stderr_and_canonicalizes_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    outputs = iter(
+        [
+            subprocess.CompletedProcess(
+                args=["flutter"],
+                returncode=0,
+                stdout='{"frameworkVersion":"3.47.0","channel":"stable"}\n',
+                stderr="Waiting for another flutter command to release the startup lock...\n",
+            ),
+            subprocess.CompletedProcess(
+                args=["flutter"],
+                returncode=0,
+                stdout=' { "channel": "stable", "frameworkVersion": "3.47.0" } ',
+                stderr="",
+            ),
+        ]
+    )
+
+    def fake_run(
+        command: list[str],
+        *,
+        cwd: Path,
+        text: bool,
+        capture_output: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        assert command == ["flutter", "--version", "--machine"]
+        assert cwd == vcr.APP_ROOT
+        assert text is True
+        assert capture_output is True
+        assert check is False
+        return next(outputs)
+
+    monkeypatch.setattr(coverage_provenance.subprocess, "run", fake_run)
+
+    first = vcr._flutter_toolchain_identity()
+    second = vcr._flutter_toolchain_identity()
+
+    assert first == second == {
+        "channel": "stable",
+        "frameworkVersion": "3.47.0",
+    }
+
+
+@pytest.mark.parametrize(
+    ("completed", "message"),
+    [
+        (
+            subprocess.CompletedProcess(
+                args=["flutter"], returncode=1, stdout="", stderr="SDK unavailable"
+            ),
+            "Flutter identity command 失败",
+        ),
+        (
+            subprocess.CompletedProcess(
+                args=["flutter"], returncode=0, stdout="not-json", stderr=""
+            ),
+            "machine identity 不是合法 JSON",
+        ),
+        (
+            subprocess.CompletedProcess(
+                args=["flutter"], returncode=0, stdout="[]", stderr=""
+            ),
+            "machine identity 必须是非空对象",
+        ),
+        (
+            subprocess.CompletedProcess(
+                args=["flutter"], returncode=0, stdout="{}", stderr=""
+            ),
+            "machine identity 必须是非空对象",
+        ),
+    ],
+)
+def test_flutter_toolchain_identity_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    completed: subprocess.CompletedProcess[str],
+    message: str,
+) -> None:
+    def fake_run(
+        command: list[str],
+        *,
+        cwd: Path,
+        text: bool,
+        capture_output: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        assert command == ["flutter", "--version", "--machine"]
+        assert cwd == vcr.APP_ROOT
+        assert text is True
+        assert capture_output is True
+        assert check is False
+        return completed
+
+    monkeypatch.setattr(coverage_provenance.subprocess, "run", fake_run)
+
+    with pytest.raises(vcr.CoverageError, match=message):
+        vcr._flutter_toolchain_identity()
 
 
 def test_a_test_only_go_service_never_becomes_a_collection_target(

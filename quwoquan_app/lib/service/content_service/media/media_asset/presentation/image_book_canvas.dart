@@ -1,9 +1,16 @@
 import 'dart:async';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/di/signed_media_delivery_dependencies.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart'
+    show MediaDeliveryKind;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show MediaDeliveryAccessMode;
 import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/cdn_image_url_builder.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/image_book_page_surface.dart';
 import 'package:quwoquan_app/design_system/gestures/immersive_gesture_intent_controller.dart';
@@ -13,40 +20,64 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/design_system/spacing/immersive_media_wait_motion.dart';
+import 'package:quwoquan_app/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/runtime/shell/loading/app_request_wait_controller.dart';
 import 'package:quwoquan_app/runtime/transport/media/content_media_url.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 
-typedef ImageBookImageLoader =
-    Future<ui.Image> Function({
-      required BuildContext context,
-      required int pageIndex,
-      required List<String> candidates,
-      required Size pageSize,
-    });
+typedef ImageBookImageLoader = ImageBookImageLoadOperation Function({
+  required BuildContext context,
+  required int pageIndex,
+  required List<String> candidates,
+  required Size pageSize,
+});
+
+abstract interface class ImageBookImageLoadOperation {
+  Future<ImageBookImageLoadResult> get result;
+  int get candidatesTried;
+  void cancel();
+}
+
+@immutable
+class ImageBookImageLoadResult {
+  const ImageBookImageLoadResult({
+    required this.image,
+    required this.candidatesTried,
+  });
+
+  final ui.Image image;
+  final int candidatesTried;
+}
 
 @immutable
 class ImageBookMediaLoadEvent {
   const ImageBookMediaLoadEvent({
     required this.result,
+    required this.durationMs,
+    required this.candidatesTried,
     this.error,
-    this.durationMs,
-    this.candidatesTried,
   });
 
   final String result;
+  final int durationMs;
+  final int candidatesTried;
   final Object? error;
-  final int? durationMs;
-  final int? candidatesTried;
 }
 
 /// 图片作品的书页式沉浸画布。
 ///
 /// 每页只保留一条解码链；静态页和翻页纹理共享同一个 [ui.Image] 与 cover
 /// source rect，避免图片晚到时发生裁剪或亮度切换。
-class ImageBookCanvas extends StatefulWidget {
+///
+/// 每页的取址形态由 typed 交付绑定决定（DEC-033）：公开页走候选推导 + CDN
+/// cover 变体，私有页由 SignedMediaDeliveryCoordinator 兑换短签地址后单候选
+/// 直传，短签地址不进入候选推导也不经 CDN 变体处理器。本画布不从 URL 形态
+/// 反推交付形态，也不在私有页失败时回退公开 URL。
+class ImageBookCanvas extends ConsumerStatefulWidget {
   const ImageBookCanvas({
     super.key,
-    required this.imageUrls,
+    required this.deliveries,
     required this.onImageChanged,
     this.initialIndex = 0,
     this.onPageflipMotion,
@@ -55,9 +86,11 @@ class ImageBookCanvas extends StatefulWidget {
     this.gestureIntentController,
     this.imageLoader,
     this.onMediaLoad,
-  });
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
 
-  final List<String> imageUrls;
+  /// 逐页 typed 交付绑定。顺序即页序。
+  final List<MediaDeliveryBinding> deliveries;
   final int initialIndex;
   final ValueChanged<int> onImageChanged;
   final ValueChanged<MediaPageFlipMotionEvent>? onPageflipMotion;
@@ -66,19 +99,15 @@ class ImageBookCanvas extends StatefulWidget {
   final ImmersiveGestureIntentController? gestureIntentController;
   final ImageBookImageLoader? imageLoader;
   final ValueChanged<ImageBookMediaLoadEvent>? onMediaLoad;
+  final DateTime Function() _now;
 
   @override
-  State<ImageBookCanvas> createState() => _ImageBookCanvasState();
+  ConsumerState<ImageBookCanvas> createState() => _ImageBookCanvasState();
 }
 
-class _ImageBookCanvasState extends State<ImageBookCanvas> {
+class _ImageBookCanvasState extends ConsumerState<ImageBookCanvas> {
   static const ImageBookPageSurfaceFactory _pageSurfaceFactory =
       ImageBookPageSurfaceFactory();
-  static const Duration _loadingOverlayDelay = Duration(milliseconds: 300);
-  static const Duration _imageFadeDuration = Duration(milliseconds: 160);
-  static const Duration _reducedMotionImageFadeDuration = Duration(
-    milliseconds: 120,
-  );
 
   final Map<int, _ImageBookPageResource> _resources =
       <int, _ImageBookPageResource>{};
@@ -90,10 +119,10 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
   Object? _scheduledWindowSignature;
 
   int get _safeInitialIndex {
-    if (widget.imageUrls.length <= 1) {
+    if (widget.deliveries.length <= 1) {
       return 0;
     }
-    return widget.initialIndex.clamp(0, widget.imageUrls.length - 1).toInt();
+    return widget.initialIndex.clamp(0, widget.deliveries.length - 1).toInt();
   }
 
   @override
@@ -105,7 +134,7 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
   @override
   void didUpdateWidget(covariant ImageBookCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!listEquals(widget.imageUrls, oldWidget.imageUrls)) {
+    if (!listEquals(widget.deliveries, oldWidget.deliveries)) {
       _disposeResources();
       _textureRevision += 1;
       _scheduledWindowSignature = null;
@@ -131,10 +160,7 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
 
   @override
   Widget build(BuildContext context) {
-    final images = widget.imageUrls
-        .map((url) => url.trim())
-        .where((url) => url.isNotEmpty)
-        .toList(growable: false);
+    final images = widget.deliveries;
     if (images.isEmpty) {
       return const ColoredBox(color: AppColors.worksBackground);
     }
@@ -162,7 +188,7 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
                 return _buildTexturePair(
                   context: context,
                   pageIndex: index,
-                  imageUrl: images[index],
+                  binding: images[index],
                   pageSize: size,
                   pixelRatio: pixelRatio,
                 );
@@ -178,6 +204,11 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
               gestureIntentController: widget.gestureIntentController,
               pageBuilder: (context, index) {
                 final resource = _resources[index];
+                final reduceMotion = _reduceMotionEnabled;
+                // 滞回转场（REQ-020）：指示出现过则经交叉淡出呈现，
+                // 静默期内完成用快速淡入，感知为瞬时且无硬切。
+                final indicatorShown =
+                    resource?.presentedLoadingOverlayReady ?? false;
                 return _ImageBookPage(
                   key: ValueKey<String>('image-book-page-$index'),
                   resource: resource,
@@ -188,12 +219,15 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
                           pageSize,
                         ),
                   hideStatusOverlay: _presentationFrozen,
-                  fadeDuration: _reduceMotionEnabled
-                      ? _reducedMotionImageFadeDuration
-                      : _imageFadeDuration,
+                  fadeDuration: reduceMotion
+                      ? ImmersiveMediaWaitMotion.reducedMotionTransition
+                      : indicatorShown
+                      ? ImmersiveMediaWaitMotion.crossFade
+                      : ImmersiveMediaWaitMotion.quickReveal,
+                  reduceMotion: reduceMotion,
                   onRetry: () => _retryPage(
                     index: index,
-                    imageUrl: images[index],
+                    binding: images[index],
                     pageSize: pageSize,
                   ),
                 );
@@ -208,6 +242,8 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
     );
   }
 
+  DateTime get _now => widget._now();
+
   bool get _reduceMotionEnabled {
     return MediaQuery.maybeOf(context)?.disableAnimations ??
         WidgetsBinding
@@ -217,7 +253,7 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
             .disableAnimations;
   }
 
-  void _scheduleLoadWindow(List<String> images, Size pageSize) {
+  void _scheduleLoadWindow(List<MediaDeliveryBinding> images, Size pageSize) {
     final signature = Object.hash(
       _currentIndex,
       pageSize.width.round(),
@@ -236,7 +272,11 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
     });
   }
 
-  void _handlePageChanged(int index, List<String> images, Size pageSize) {
+  void _handlePageChanged(
+    int index,
+    List<MediaDeliveryBinding> images,
+    Size pageSize,
+  ) {
     final changed = index != _currentIndex;
     _currentIndex = index;
     _scheduledWindowSignature = null;
@@ -287,13 +327,13 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
     });
   }
 
-  void _ensureLoadWindow(List<String> images, Size pageSize) {
+  void _ensureLoadWindow(List<MediaDeliveryBinding> images, Size pageSize) {
     final retained = <int>{_currentIndex - 1, _currentIndex, _currentIndex + 1}
       ..removeWhere((index) => index < 0 || index >= images.length);
     for (final index in retained) {
       _ensurePageLoad(
         index: index,
-        imageUrl: images[index],
+        binding: images[index],
         pageSize: pageSize,
       );
     }
@@ -307,11 +347,11 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
   Future<MediaPageFlipTexturePair?> _buildTexturePair({
     required BuildContext context,
     required int pageIndex,
-    required String imageUrl,
+    required MediaDeliveryBinding binding,
     required Size pageSize,
     required double pixelRatio,
   }) async {
-    _ensurePageLoad(index: pageIndex, imageUrl: imageUrl, pageSize: pageSize);
+    _ensurePageLoad(index: pageIndex, binding: binding, pageSize: pageSize);
     final resource = _resources[pageIndex];
     if (resource == null ||
         resource.availability == _ImageBookPageAvailability.pending) {
@@ -337,100 +377,227 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
 
   void _ensurePageLoad({
     required int index,
-    required String imageUrl,
+    required MediaDeliveryBinding binding,
     required Size pageSize,
     bool force = false,
+    bool immediateIndicator = false,
   }) {
     final resource = _resources.putIfAbsent(
       index,
-      () => _ImageBookPageResource(imageUrl),
+      () => _ImageBookPageResource(binding),
     );
+    final signed = binding.isSignedGrant;
+    // 私有页的地址要等 grant 兑换才有，候选推导只服务公开页；短签地址不进入
+    // 候选推导也不经 CDN 变体，否则签名会被改写。
+    final candidates = signed
+        ? const <String>[]
+        : _processedCoverCandidates(binding.publicUrl);
+    if (binding.isSignedGrantWithoutAsset) {
+      // 投影声明私有却没有资产身份：自相矛盾，落显式判否，不回退公开 URL。
+      _presentContradictoryBinding(index: index, resource: resource);
+      return;
+    }
+    if (!signed && candidates.isEmpty) {
+      if (resource.availability == _ImageBookPageAvailability.absent) {
+        return;
+      }
+      resource
+        ..cancelWaitTimers()
+        ..cancelActiveLoad()
+        ..loadInFlight = false
+        ..availability = _ImageBookPageAvailability.absent
+        ..error = null
+        ..applyPresentation();
+      _textureRevision += 1;
+      widget.onMediaLoad?.call(
+        const ImageBookMediaLoadEvent(
+          result: 'absent',
+          durationMs: 0,
+          candidatesTried: 0,
+        ),
+      );
+      return;
+    }
     if (!force &&
         (resource.loadInFlight ||
             resource.availability != _ImageBookPageAvailability.pending)) {
       return;
     }
     resource
+      ..cancelWaitTimers()
+      ..cancelActiveLoad()
       ..loadInFlight = true
-      ..loadingOverlayReady = false
+      ..loadingOverlayReady = immediateIndicator
+      ..indicatorShownAt = immediateIndicator ? _now : null
+      ..slowHintReady = false
       ..error = null
       ..generation += 1;
     if (!resource.presentationDirty) {
       resource.applyPresentation();
     }
     final generation = resource.generation;
-    resource.loadingTimer?.cancel();
-    resource.loadingTimer = Timer(_loadingOverlayDelay, () {
-      if (!mounted ||
-          _resources[index] != resource ||
-          resource.generation != generation ||
-          resource.availability != _ImageBookPageAvailability.pending) {
+    final startedAt = _now;
+    bool stale() =>
+        !mounted ||
+        _resources[index] != resource ||
+        resource.generation != generation ||
+        resource.availability != _ImageBookPageAvailability.pending;
+
+    if (!immediateIndicator) {
+      resource.loadingTimer = Timer(
+        ImmersiveMediaWaitMotion.imageIndicatorDelay,
+        () {
+          if (stale()) {
+            return;
+          }
+          resource
+            ..loadingOverlayReady = true
+            ..indicatorShownAt = _now;
+          _syncPresentation(resource);
+        },
+      );
+    }
+    resource.slowHintTimer = Timer(AppRequestWaitTimings.blockedSlowHint, () {
+      if (stale()) {
         return;
       }
-      resource.loadingOverlayReady = true;
+      resource.slowHintReady = true;
       _syncPresentation(resource);
     });
-    final candidates = _processedCoverCandidates(imageUrl);
-    unawaited(
-      _loadPage(
-        context: context,
-        index: index,
-        resource: resource,
-        generation: generation,
-        candidates: candidates,
-        pageSize: pageSize,
-      ),
+    resource.deadlineTimer = Timer(
+      AppRequestWaitTimings.foregroundReadDeadline,
+      () {
+        if (stale() || resource.pendingReadyImage != null) {
+          return;
+        }
+        final candidatesTried = resource.activeLoad?.candidatesTried ?? 0;
+        resource.generation += 1;
+        resource
+          ..cancelWaitTimers()
+          ..cancelActiveLoad()
+          ..loadInFlight = false
+          ..availability = _ImageBookPageAvailability.failed
+          ..error = TimeoutException(
+            'image book load deadline exceeded',
+            AppRequestWaitTimings.foregroundReadDeadline,
+          );
+        _textureRevision += 1;
+        _syncPresentation(resource);
+        widget.onMediaLoad?.call(
+          ImageBookMediaLoadEvent(
+            result: 'timeout',
+            durationMs:
+                AppRequestWaitTimings.foregroundReadDeadline.inMilliseconds,
+            candidatesTried: candidatesTried,
+          ),
+        );
+      },
+    );
+    if (signed) {
+      unawaited(
+        _loadSignedPage(
+          index: index,
+          resource: resource,
+          generation: generation,
+          binding: binding,
+          pageSize: pageSize,
+          startedAt: startedAt,
+          forceResign: force,
+        ),
+      );
+      return;
+    }
+    _startPageOperation(
+      index: index,
+      resource: resource,
+      generation: generation,
+      candidates: candidates,
+      pageSize: pageSize,
+      startedAt: startedAt,
     );
   }
 
-  Future<void> _loadPage({
-    required BuildContext context,
+  void _startPageOperation({
     required int index,
     required _ImageBookPageResource resource,
     required int generation,
     required List<String> candidates,
     required Size pageSize,
+    required DateTime startedAt,
+  }) {
+    final operation =
+        widget.imageLoader?.call(
+          context: context,
+          pageIndex: index,
+          candidates: candidates,
+          pageSize: pageSize,
+        ) ??
+        _DefaultImageBookImageLoadOperation(
+          context: context,
+          candidates: candidates,
+          pageSize: pageSize,
+        );
+    resource.activeLoad = operation;
+    unawaited(
+      _loadPage(
+        index: index,
+        resource: resource,
+        generation: generation,
+        operation: operation,
+        startedAt: startedAt,
+      ),
+    );
+  }
+
+  /// 私有页的解码链：先经 coordinator 兑换短签地址，再进入同一条解码/呈现链。
+  ///
+  /// 兑换耗时计入本页等待窗口（指示延迟、慢提示与读取死线都已在调用方开启），
+  /// 因此私有页与公开页的等待观感一致。用户驱动的重试走强制换签：旧签名已被
+  /// 交付边缘拒绝，复用缓存只会重复失败。
+  Future<void> _loadSignedPage({
+    required int index,
+    required _ImageBookPageResource resource,
+    required int generation,
+    required MediaDeliveryBinding binding,
+    required Size pageSize,
+    required DateTime startedAt,
+    required bool forceResign,
   }) async {
-    final startedAt = DateTime.now();
+    final coordinator = ref.read(signedMediaDeliveryCoordinatorProvider);
+    bool stale() =>
+        !mounted ||
+        _resources[index] != resource ||
+        resource.generation != generation;
     try {
-      final image =
-          await (widget.imageLoader?.call(
-                context: context,
-                pageIndex: index,
-                candidates: candidates,
-                pageSize: pageSize,
-              ) ??
-              _loadFirstCandidate(context, candidates, pageSize));
-      if (!mounted ||
-          _resources[index] != resource ||
-          resource.generation != generation) {
-        image.dispose();
+      final lease = forceResign
+          ? await coordinator.refresh(
+              assetId: binding.assetId,
+              kind: MediaDeliveryKind.image,
+            )
+          : await coordinator.resolve(
+              assetId: binding.assetId,
+              kind: MediaDeliveryKind.image,
+              accessMode: MediaDeliveryAccessMode.signedGrant,
+            );
+      if (stale()) {
         return;
       }
-      resource
-        ..loadingTimer?.cancel()
-        ..loadInFlight = false
-        ..availability = _ImageBookPageAvailability.ready
-        ..image?.dispose()
-        ..image = image
-        ..error = null;
-      _textureRevision += 1;
-      _syncPresentation(resource);
-      widget.onMediaLoad?.call(
-        ImageBookMediaLoadEvent(
-          result: 'success',
-          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-          candidatesTried: candidates.length,
-        ),
+      _startPageOperation(
+        index: index,
+        resource: resource,
+        generation: generation,
+        // 短签地址单候选直传：不推导候选，不经 CDN 变体。
+        candidates: <String>[lease.deliveryUri.toString()],
+        pageSize: pageSize,
+        startedAt: startedAt,
       );
-    } catch (error) {
-      if (!mounted ||
-          _resources[index] != resource ||
-          resource.generation != generation) {
+    } on Object catch (error) {
+      if (stale()) {
         return;
       }
       resource
-        ..loadingTimer?.cancel()
+        ..cancelWaitTimers()
+        ..cancelActiveLoad()
         ..loadInFlight = false
         ..availability = _ImageBookPageAvailability.failed
         ..error = error;
@@ -440,64 +607,155 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
         ImageBookMediaLoadEvent(
           result: 'failure',
           error: error,
-          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
-          candidatesTried: candidates.length,
+          durationMs: _now.difference(startedAt).inMilliseconds,
+          candidatesTried: 0,
         ),
       );
     }
   }
 
-  Future<ui.Image> _loadFirstCandidate(
-    BuildContext context,
-    List<String> candidates,
-    Size pageSize,
-  ) async {
-    Object? lastError;
-    for (final candidate in candidates) {
-      try {
-        return await _resolveImageProvider(
-          context: context,
-          provider: CachedNetworkImageProvider(
-            candidate,
-            cacheManager: AppImageCacheController.cacheManagerForPreset(
-              CdnImagePreset.cover,
-            ),
-          ),
-          pageSize: pageSize,
-        );
-      } catch (error) {
-        lastError = error;
-      }
+  void _presentContradictoryBinding({
+    required int index,
+    required _ImageBookPageResource resource,
+  }) {
+    final error = StateError(
+      'image book page $index declares signed_grant delivery without an asset id',
+    );
+    if (resource.availability == _ImageBookPageAvailability.failed) {
+      return;
     }
-    throw lastError ?? StateError('image book has no loadable candidates');
+    resource
+      ..cancelWaitTimers()
+      ..cancelActiveLoad()
+      ..loadInFlight = false
+      ..availability = _ImageBookPageAvailability.failed
+      ..error = error
+      ..applyPresentation();
+    _textureRevision += 1;
+    widget.onMediaLoad?.call(
+      ImageBookMediaLoadEvent(
+        result: 'failure',
+        error: error,
+        durationMs: 0,
+        candidatesTried: 0,
+      ),
+    );
   }
 
-  Future<ui.Image> _resolveImageProvider({
-    required BuildContext context,
-    required ImageProvider provider,
-    required Size pageSize,
-  }) {
-    final completer = Completer<ui.Image>();
-    final stream = provider.resolve(
-      createLocalImageConfiguration(context, size: pageSize),
-    );
-    late final ImageStreamListener listener;
-    listener = ImageStreamListener(
-      (ImageInfo info, bool synchronousCall) {
-        stream.removeListener(listener);
-        if (!completer.isCompleted) {
-          completer.complete(info.image.clone());
+  Future<void> _loadPage({
+    required int index,
+    required _ImageBookPageResource resource,
+    required int generation,
+    required ImageBookImageLoadOperation operation,
+    required DateTime startedAt,
+  }) async {
+    try {
+      final result = await operation.result;
+      final durationMs = _now.difference(startedAt).inMilliseconds;
+      if (!mounted ||
+          _resources[index] != resource ||
+          resource.generation != generation) {
+        result.image.dispose();
+        return;
+      }
+      resource.activeLoad = null;
+
+      void present() {
+        resource
+          ..cancelWaitTimers()
+          ..loadInFlight = false
+          ..availability = _ImageBookPageAvailability.ready
+          ..image?.dispose()
+          ..image = result.image
+          ..pendingReadyImage = null
+          ..error = null;
+        _textureRevision += 1;
+        _syncPresentation(resource);
+        widget.onMediaLoad?.call(
+          ImageBookMediaLoadEvent(
+            result: 'success',
+            durationMs: durationMs,
+            candidatesTried: result.candidatesTried,
+          ),
+        );
+      }
+
+      final indicatorShownAt = resource.indicatorShownAt;
+      if (indicatorShownAt == null) {
+        present();
+        return;
+      }
+      final remaining = ImmersiveMediaWaitMotion.remainingIndicatorDisplay(
+        indicatorShownAt,
+        now: _now,
+      );
+      if (remaining <= Duration.zero) {
+        present();
+        return;
+      }
+      resource
+        ..pendingReadyImage = result.image
+        ..slowHintTimer?.cancel()
+        ..deadlineTimer?.cancel();
+      resource.minDisplayTimer?.cancel();
+      resource.minDisplayTimer = Timer(remaining, () {
+        if (!mounted ||
+            _resources[index] != resource ||
+            resource.generation != generation) {
+          return;
         }
-      },
-      onError: (Object error, StackTrace? stackTrace) {
-        stream.removeListener(listener);
-        if (!completer.isCompleted) {
-          completer.completeError(error, stackTrace);
+        present();
+      });
+    } catch (error) {
+      final durationMs = _now.difference(startedAt).inMilliseconds;
+      final candidatesTried = operation.candidatesTried;
+      if (!mounted ||
+          _resources[index] != resource ||
+          resource.generation != generation) {
+        return;
+      }
+      resource.activeLoad = null;
+
+      void presentFailure() {
+        if (!mounted ||
+            _resources[index] != resource ||
+            resource.generation != generation) {
+          return;
         }
-      },
-    );
-    stream.addListener(listener);
-    return completer.future;
+        resource
+          ..cancelWaitTimers()
+          ..loadInFlight = false
+          ..availability = _ImageBookPageAvailability.failed
+          ..error = error;
+        _textureRevision += 1;
+        _syncPresentation(resource);
+        widget.onMediaLoad?.call(
+          ImageBookMediaLoadEvent(
+            result: 'failure',
+            error: error,
+            durationMs: durationMs,
+            candidatesTried: candidatesTried,
+          ),
+        );
+      }
+
+      final indicatorShownAt = resource.indicatorShownAt;
+      final remaining = indicatorShownAt == null
+          ? Duration.zero
+          : ImmersiveMediaWaitMotion.remainingIndicatorDisplay(
+              indicatorShownAt,
+              now: _now,
+            );
+      if (remaining <= Duration.zero) {
+        presentFailure();
+        return;
+      }
+      resource
+        ..slowHintTimer?.cancel()
+        ..deadlineTimer?.cancel();
+      resource.minDisplayTimer?.cancel();
+      resource.minDisplayTimer = Timer(remaining, presentFailure);
+    }
   }
 
   void _syncPresentation(_ImageBookPageResource resource) {
@@ -513,7 +771,7 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
 
   void _retryPage({
     required int index,
-    required String imageUrl,
+    required MediaDeliveryBinding binding,
     required Size pageSize,
   }) {
     final resource = _resources[index];
@@ -521,20 +779,31 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
       return;
     }
     resource
+      ..cancelWaitTimers()
+      ..cancelActiveLoad()
       ..image?.dispose()
       ..image = null
       ..availability = _ImageBookPageAvailability.pending
       ..error = null
       ..loadingOverlayReady = false
+      ..slowHintReady = false
+      ..indicatorShownAt = null
       ..applyPresentation();
     _textureRevision += 1;
-    widget.onMediaLoad?.call(const ImageBookMediaLoadEvent(result: 'retry'));
+    widget.onMediaLoad?.call(
+      const ImageBookMediaLoadEvent(
+        result: 'retry',
+        durationMs: 0,
+        candidatesTried: 0,
+      ),
+    );
     setState(() {});
     _ensurePageLoad(
       index: index,
-      imageUrl: imageUrl,
+      binding: binding,
       pageSize: pageSize,
       force: true,
+      immediateIndicator: true,
     );
   }
 
@@ -542,7 +811,8 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
     final processed = <String>[];
     for (final candidate in resolveContentMediaUrlCandidates(imageUrl)) {
       final normalized = candidate.trim();
-      if (normalized.isEmpty) {
+      final uri = Uri.tryParse(normalized);
+      if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
         continue;
       }
       final coverUrl = CdnImageUrlBuilder.cover(normalized);
@@ -561,22 +831,181 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
   }
 }
 
-enum _ImageBookPageAvailability { pending, ready, failed }
+final class _DefaultImageBookImageLoadOperation
+    implements ImageBookImageLoadOperation {
+  _DefaultImageBookImageLoadOperation({
+    required this.context,
+    required List<String> candidates,
+    required this.pageSize,
+  }) : candidates = List<String>.unmodifiable(candidates) {
+    unawaited(_run());
+  }
+
+  final BuildContext context;
+  final List<String> candidates;
+  final Size pageSize;
+  final Completer<ImageBookImageLoadResult> _resultCompleter =
+      Completer<ImageBookImageLoadResult>();
+
+  ImageStream? _activeStream;
+  ImageStreamListener? _activeListener;
+  Completer<ui.Image>? _activeCandidateCompleter;
+  bool _cancelled = false;
+  int _candidatesTried = 0;
+
+  @override
+  Future<ImageBookImageLoadResult> get result => _resultCompleter.future;
+
+  @override
+  int get candidatesTried => _candidatesTried;
+
+  Future<void> _run() async {
+    Object? lastError;
+    StackTrace? lastStackTrace;
+    for (final candidate in candidates) {
+      if (_cancelled) {
+        return;
+      }
+      _candidatesTried += 1;
+      try {
+        final image = await _resolveCandidate(candidate);
+        if (_cancelled) {
+          image.dispose();
+          return;
+        }
+        if (!_resultCompleter.isCompleted) {
+          _resultCompleter.complete(
+            ImageBookImageLoadResult(
+              image: image,
+              candidatesTried: _candidatesTried,
+            ),
+          );
+        } else {
+          image.dispose();
+        }
+        return;
+      } catch (error, stackTrace) {
+        if (_cancelled) {
+          return;
+        }
+        lastError = error;
+        lastStackTrace = stackTrace;
+      }
+    }
+    if (!_resultCompleter.isCompleted) {
+      _resultCompleter.completeError(
+        lastError ?? StateError('image book has no loadable candidates'),
+        lastStackTrace ?? StackTrace.current,
+      );
+    }
+  }
+
+  Future<ui.Image> _resolveCandidate(String candidate) {
+    final completer = Completer<ui.Image>();
+    final provider = CachedNetworkImageProvider(
+      candidate,
+      cacheManager: AppImageCacheController.cacheManagerForPreset(
+        CdnImagePreset.cover,
+      ),
+    );
+    final stream = provider.resolve(
+      createLocalImageConfiguration(context, size: pageSize),
+    );
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener(
+      (ImageInfo info, bool synchronousCall) {
+        _detachCandidate(stream, listener, completer);
+        final image = info.image.clone();
+        if (!completer.isCompleted) {
+          completer.complete(image);
+        } else {
+          image.dispose();
+        }
+      },
+      onError: (Object error, StackTrace? stackTrace) {
+        _detachCandidate(stream, listener, completer);
+        if (!completer.isCompleted) {
+          completer.completeError(error, stackTrace);
+        }
+      },
+    );
+    _activeStream = stream;
+    _activeListener = listener;
+    _activeCandidateCompleter = completer;
+    stream.addListener(listener);
+    return completer.future;
+  }
+
+  void _detachCandidate(
+    ImageStream stream,
+    ImageStreamListener listener,
+    Completer<ui.Image> completer,
+  ) {
+    stream.removeListener(listener);
+    if (identical(_activeStream, stream) &&
+        identical(_activeListener, listener) &&
+        identical(_activeCandidateCompleter, completer)) {
+      _activeStream = null;
+      _activeListener = null;
+      _activeCandidateCompleter = null;
+    }
+  }
+
+  @override
+  void cancel() {
+    if (_cancelled) {
+      return;
+    }
+    _cancelled = true;
+    final stream = _activeStream;
+    final listener = _activeListener;
+    final candidateCompleter = _activeCandidateCompleter;
+    if (stream != null && listener != null) {
+      stream.removeListener(listener);
+    }
+    _activeStream = null;
+    _activeListener = null;
+    _activeCandidateCompleter = null;
+    const cancellation = _ImageBookImageLoadCancelled();
+    if (candidateCompleter != null && !candidateCompleter.isCompleted) {
+      candidateCompleter.completeError(cancellation, StackTrace.current);
+    }
+    if (!_resultCompleter.isCompleted) {
+      _resultCompleter.completeError(cancellation, StackTrace.current);
+    }
+  }
+}
+
+final class _ImageBookImageLoadCancelled implements Exception {
+  const _ImageBookImageLoadCancelled();
+}
+
+enum _ImageBookPageAvailability { pending, ready, failed, absent }
 
 class _ImageBookPageResource {
-  _ImageBookPageResource(this.imageUrl);
+  _ImageBookPageResource(this.binding);
 
-  final String imageUrl;
+  final MediaDeliveryBinding binding;
   _ImageBookPageAvailability availability = _ImageBookPageAvailability.pending;
   _ImageBookPageAvailability presentedAvailability =
       _ImageBookPageAvailability.pending;
   ui.Image? image;
+
+  /// 滞回最短展示窗口内暂存的已解码图（REQ-020）：指示保持满窗口后呈现。
+  ui.Image? pendingReadyImage;
+  ImageBookImageLoadOperation? activeLoad;
   Object? error;
   Object? presentedError;
   Timer? loadingTimer;
+  Timer? slowHintTimer;
+  Timer? deadlineTimer;
+  Timer? minDisplayTimer;
+  DateTime? indicatorShownAt;
   bool loadInFlight = false;
   bool loadingOverlayReady = false;
   bool presentedLoadingOverlayReady = false;
+  bool slowHintReady = false;
+  bool presentedSlowHintReady = false;
   bool presentationDirty = false;
   int generation = 0;
 
@@ -584,14 +1013,30 @@ class _ImageBookPageResource {
     presentedAvailability = availability;
     presentedError = error;
     presentedLoadingOverlayReady = loadingOverlayReady;
+    presentedSlowHintReady = slowHintReady;
     presentationDirty = false;
+  }
+
+  void cancelWaitTimers() {
+    loadingTimer?.cancel();
+    slowHintTimer?.cancel();
+    deadlineTimer?.cancel();
+    minDisplayTimer?.cancel();
+  }
+
+  void cancelActiveLoad() {
+    activeLoad?.cancel();
+    activeLoad = null;
   }
 
   void dispose() {
     generation += 1;
-    loadingTimer?.cancel();
+    cancelWaitTimers();
+    cancelActiveLoad();
     image?.dispose();
     image = null;
+    pendingReadyImage?.dispose();
+    pendingReadyImage = null;
   }
 }
 
@@ -602,6 +1047,7 @@ class _ImageBookPage extends StatelessWidget {
     required this.coverSourceRect,
     required this.hideStatusOverlay,
     required this.fadeDuration,
+    required this.reduceMotion,
     required this.onRetry,
   });
 
@@ -609,6 +1055,7 @@ class _ImageBookPage extends StatelessWidget {
   final Rect? coverSourceRect;
   final bool hideStatusOverlay;
   final Duration fadeDuration;
+  final bool reduceMotion;
   final VoidCallback onRetry;
 
   @override
@@ -618,6 +1065,11 @@ class _ImageBookPage extends StatelessWidget {
     final image = availability == _ImageBookPageAvailability.ready
         ? resource?.image
         : null;
+    final showLoading =
+        availability == _ImageBookPageAvailability.pending &&
+        (resource?.presentedLoadingOverlayReady ?? false);
+    final showFailure = availability == _ImageBookPageAvailability.failed;
+    final showAbsent = availability == _ImageBookPageAvailability.absent;
     return ColoredBox(
       color: AppColors.imageBookPlaceholderBackdrop,
       child: Stack(
@@ -639,13 +1091,42 @@ class _ImageBookPage extends StatelessWidget {
                     child: const SizedBox.expand(),
                   ),
           ),
-          if (!hideStatusOverlay &&
-              availability == _ImageBookPageAvailability.pending &&
-              (resource?.presentedLoadingOverlayReady ?? false))
-            const _ImageBookLoadingOverlay(),
-          if (!hideStatusOverlay &&
-              availability == _ImageBookPageAvailability.failed)
-            _ImageBookFailureOverlay(onRetry: onRetry),
+          // 状态层滞回转场（REQ-020）：指示 200ms 淡入登场、250ms 交叉淡出
+          // 退场，无硬切；翻页冻结期间整层立即隐藏，几何与纹理不受影响。
+          if (!hideStatusOverlay)
+            Positioned.fill(
+              child: AnimatedSwitcher(
+                duration: reduceMotion
+                    ? ImmersiveMediaWaitMotion.reducedMotionTransition
+                    : ImmersiveMediaWaitMotion.indicatorFadeIn,
+                reverseDuration: reduceMotion
+                    ? ImmersiveMediaWaitMotion.reducedMotionTransition
+                    : ImmersiveMediaWaitMotion.crossFade,
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                child: showAbsent
+                    ? const _ImageBookFailureOverlay(
+                        key: ValueKey<String>('image-book-status-absent'),
+                      )
+                    : showFailure
+                    ? _ImageBookFailureOverlay(
+                        key: const ValueKey<String>('image-book-status-failed'),
+                        onRetry: onRetry,
+                      )
+                    : showLoading
+                    ? _ImageBookLoadingOverlay(
+                        key: const ValueKey<String>(
+                          'image-book-status-loading',
+                        ),
+                        slowHintVisible:
+                            resource?.presentedSlowHintReady ?? false,
+                        reduceMotion: reduceMotion,
+                      )
+                    : const SizedBox.shrink(
+                        key: ValueKey<String>('image-book-status-idle'),
+                      ),
+              ),
+            ),
         ],
       ),
     );
@@ -680,26 +1161,54 @@ class _ImageBookDecodedPagePainter extends CustomPainter {
 }
 
 class _ImageBookLoadingOverlay extends StatelessWidget {
-  const _ImageBookLoadingOverlay();
+  const _ImageBookLoadingOverlay({
+    super.key,
+    required this.slowHintVisible,
+    required this.reduceMotion,
+  });
+
+  final bool slowHintVisible;
+  final bool reduceMotion;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       key: const ValueKey<String>('image-book-loading-overlay'),
-      child: Opacity(
-        opacity: 0.36,
-        child: AppRequestFeedback.inline(
-          indicatorColor: AppColors.immersiveForeground,
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Opacity(
+            opacity: 0.36,
+            child: AppRequestFeedback.inline(
+              indicatorColor: AppColors.immersiveForeground,
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          // 慢提示槽位常驻（REQ-020）：3s 时文字淡入，不引起布局重排。
+          AnimatedOpacity(
+            key: const ValueKey<String>('image-book-slow-hint'),
+            opacity: slowHintVisible ? 1 : 0,
+            duration: reduceMotion
+                ? ImmersiveMediaWaitMotion.reducedMotionTransition
+                : ImmersiveMediaWaitMotion.indicatorFadeIn,
+            child: Text(
+              FoundationText.requestWaitSlow,
+              style: TextStyle(
+                color: AppColors.immersiveForeground.withValues(alpha: 0.7),
+                fontSize: AppTypography.sm,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _ImageBookFailureOverlay extends StatelessWidget {
-  const _ImageBookFailureOverlay({required this.onRetry});
+  const _ImageBookFailureOverlay({super.key, this.onRetry});
 
-  final VoidCallback onRetry;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {

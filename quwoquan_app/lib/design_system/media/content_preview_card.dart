@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/design_system/media/media_aspect_ratio.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 
@@ -33,6 +32,9 @@ class ContentPreviewCard extends StatelessWidget {
   final String coverUrl;
   final double mediaAspectRatio;
   final bool showVideoBadge;
+  /// 媒体渲染插槽。design_system 是被服务层复用的壳层，不能反向依赖 service
+  /// 对象，因此这里不做 release 媒体的交付分流：消费 release 媒体的调用方必须
+  /// 把已分流的渲染件从这里传进来（DEC-033）。
   final Widget? mediaContent;
   final Widget? mediaOverlay;
 
@@ -108,16 +110,8 @@ class ContentPreviewCard extends StatelessWidget {
                       fit: StackFit.expand,
                       children: [
                         mediaContent ??
-                            AppCachedNetworkImage(
-                              imageUrl: coverUrl,
-                              fit: BoxFit.cover,
-                              cdnPreset: CdnImagePreset.cover,
-                              placeholder: ColoredBox(
-                                color: fgSecondary.withValues(alpha: 0.12),
-                              ),
-                              errorWidget: ColoredBox(
-                                color: fgSecondary.withValues(alpha: 0.12),
-                              ),
+                            ColoredBox(
+                              color: fgSecondary.withValues(alpha: 0.12),
                             ),
                         if (showVideoBadge)
                           Positioned(

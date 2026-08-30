@@ -329,6 +329,8 @@ extension _ProfileShellBuilders on _ProfileShellState {
     BuildContext context, {
     required bool isDark,
     required String? avatarUrl,
+    required String? avatarAssetId,
+    required MediaDeliveryAccessMode? avatarAccessMode,
     required String displayName,
     required String? bio,
     required ProfileState state,
@@ -392,6 +394,8 @@ extension _ProfileShellBuilders on _ProfileShellState {
                   ProfileHeader(
                     isDark: isDark,
                     avatarUrl: avatarUrl,
+                    avatarAssetId: avatarAssetId,
+                    avatarAccessMode: avatarAccessMode,
                     displayName: displayName,
                     identityTags: effectiveIdentityTags,
                     verified: state.profile?.verified ?? false,
@@ -588,16 +592,14 @@ extension _ProfileShellBuilders on _ProfileShellState {
                 onPressed: onCoverPrompt,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: AppColors.iosSystemBackground(
-                      context,
-                    ).withValues(alpha: isDark ? 0.22 : 0.82),
+                    color: AppColors.iosSystemBackground(context)
+                        .withValues(alpha: isDark ? 0.22 : 0.82),
                     borderRadius: BorderRadius.circular(
                       AppSpacing.radiusNinetyNine,
                     ),
                     border: Border.all(
-                      color: AppColors.iosSeparator(
-                        context,
-                      ).withValues(alpha: isDark ? 0.24 : 0.18),
+                      color: AppColors.iosSeparator(context)
+                          .withValues(alpha: isDark ? 0.24 : 0.18),
                       width: AppSpacing.hairline,
                     ),
                   ),
@@ -662,6 +664,8 @@ extension _ProfileShellBuilders on _ProfileShellState {
     required Color border,
     required String displayName,
     required String? avatarUrl,
+    required String? avatarAssetId,
+    required MediaDeliveryAccessMode? avatarAccessMode,
     required double opacity,
     required double backgroundOpacity,
     required bool contentForegroundIsDark,
@@ -783,57 +787,87 @@ extension _ProfileShellBuilders on _ProfileShellState {
                                           child: SizedBox(
                                             width: AppSpacing.avatarUserSm,
                                             height: AppSpacing.avatarUserSm,
+                                            // DEC-033：signedGrant 头像分流到
+                                            // 私有媒体桥接原子，与主头像同一
+                                            // 绑定来源；公开头像路径不变。
                                             child:
-                                                avatarUrl != null &&
-                                                    avatarUrl.isNotEmpty
-                                                ? (isLocalFileImageSource(
-                                                        avatarUrl,
-                                                      )
-                                                      ? AppMediaImage(
-                                                          key:
-                                                              const ValueKey<
-                                                                String
-                                                              >(
-                                                                'profile-shell-compact-avatar-image',
-                                                              ),
-                                                          imageSource:
-                                                              avatarUrl,
-                                                          fit: BoxFit.cover,
-                                                          errorWidget: ColoredBox(
-                                                            color:
-                                                                actionBackground,
-                                                            child: Icon(
-                                                              CupertinoIcons
-                                                                  .person_crop_circle_fill,
-                                                              size: AppSpacing
-                                                                  .iconMedium,
-                                                              color:
-                                                                  compactForeground,
-                                                            ),
-                                                          ),
+                                                avatarAccessMode ==
+                                                        MediaDeliveryAccessMode
+                                                            .signedGrant ||
+                                                    (avatarUrl?.isNotEmpty ??
+                                                        false)
+                                                ? mediaDeliveryImage(
+                                                    key: const ValueKey<String>(
+                                                      'profile-shell-compact-avatar-image',
+                                                    ),
+                                                    binding:
+                                                        MediaDeliveryBinding(
+                                                          assetId:
+                                                              avatarAssetId
+                                                                  ?.trim() ??
+                                                              '',
+                                                          accessMode:
+                                                              avatarAccessMode,
+                                                          publicUrl:
+                                                              avatarUrl ?? '',
+                                                        ),
+                                                    kind: MediaDeliveryKind
+                                                        .avatar,
+                                                    width:
+                                                        AppSpacing.avatarUserSm,
+                                                    height:
+                                                        AppSpacing.avatarUserSm,
+                                                    fit: BoxFit.cover,
+                                                    publicBuilder: (context, publicUrl) =>
+                                                        isLocalFileImageSource(
+                                                          publicUrl,
                                                         )
-                                                      : AppCachedNetworkImage(
-                                                          key:
-                                                              const ValueKey<
-                                                                String
-                                                              >(
-                                                                'profile-shell-compact-avatar-image',
-                                                              ),
-                                                          imageUrl: avatarUrl,
-                                                          fit: BoxFit.cover,
-                                                          errorWidget: ColoredBox(
-                                                            color:
-                                                                actionBackground,
-                                                            child: Icon(
-                                                              CupertinoIcons
-                                                                  .person_crop_circle_fill,
-                                                              size: AppSpacing
-                                                                  .iconMedium,
+                                                        ? AppMediaImage(
+                                                            key:
+                                                                const ValueKey<
+                                                                  String
+                                                                >(
+                                                                  'profile-shell-compact-avatar-image',
+                                                                ),
+                                                            imageSource:
+                                                                publicUrl,
+                                                            fit: BoxFit.cover,
+                                                            errorWidget: ColoredBox(
                                                               color:
-                                                                  compactForeground,
+                                                                  actionBackground,
+                                                              child: Icon(
+                                                                CupertinoIcons
+                                                                    .person_crop_circle_fill,
+                                                                size: AppSpacing
+                                                                    .iconMedium,
+                                                                color:
+                                                                    compactForeground,
+                                                              ),
+                                                            ),
+                                                          )
+                                                        : AppCachedNetworkImage(
+                                                            key:
+                                                                const ValueKey<
+                                                                  String
+                                                                >(
+                                                                  'profile-shell-compact-avatar-image',
+                                                                ),
+                                                            imageUrl: publicUrl,
+                                                            fit: BoxFit.cover,
+                                                            errorWidget: ColoredBox(
+                                                              color:
+                                                                  actionBackground,
+                                                              child: Icon(
+                                                                CupertinoIcons
+                                                                    .person_crop_circle_fill,
+                                                                size: AppSpacing
+                                                                    .iconMedium,
+                                                                color:
+                                                                    compactForeground,
+                                                              ),
                                                             ),
                                                           ),
-                                                        ))
+                                                  )
                                                 : ColoredBox(
                                                     color: actionBackground,
                                                     child: Icon(

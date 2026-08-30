@@ -24,8 +24,14 @@ import json
 import re
 import sys
 import urllib.parse
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+
+from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
+    load_launch_manifest_contract,
+)
+from quwoquan_ops.cli.lib.content_release_readiness import ReadinessPhase
 
 
 def _execute_otp_login_journey(
@@ -182,6 +188,60 @@ def _execute_otp_login_journey(
     }
 
 
+def _runtime_container_liveness_evidence(
+    startup: Mapping[str, Any],
+) -> dict[str, Any]:
+    """复验 running receipt 声明的容器现况，供编译安装前阻断使用。"""
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.runtime_container_liveness import (
+        RUNTIME_DEPENDENCY_BLOCKER,
+        ComposeProjectAbsent,
+        verify_running_receipt_liveness,
+    )
+
+    empty = {
+        "status": "not_applicable",
+        "composeProject": str(startup.get("composeProject") or ""),
+        "blocker": "",
+        "containers": [],
+        "issues": [],
+        "warnings": [],
+    }
+    try:
+        report = verify_running_receipt_liveness(startup, runner=_stackctl.run)
+    except ComposeProjectAbsent:
+        # receipt 合法性归 startup receipt 契约（composeProject 是必填非空），
+        # 这里不重复判定，只如实记为未命中，避免建立第二真相源。
+        return empty
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        return {
+            **empty,
+            "status": "unavailable",
+            "blocker": RUNTIME_DEPENDENCY_BLOCKER,
+            "issues": [f"runtime container liveness is unverifiable: {exc}"],
+        }
+    if report is None:
+        return empty
+    return {
+        "status": report.status,
+        "composeProject": report.compose_project,
+        "blocker": report.blocker,
+        "containers": [
+            {
+                "service": item.service or item.name,
+                "state": item.state,
+                "health": item.health,
+                "exitCode": item.exit_code,
+                "live": item.is_live,
+                "completedTask": item.is_completed_task,
+            }
+            for item in report.containers
+        ],
+        "issues": report.issues(),
+        "warnings": [],
+    }
+
+
 def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
     """Validate runtime health plus a real SendOtp/Login/session journey."""
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -205,28 +265,90 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
     content_preflight: dict[str, Any] = {}
     provider_runtime_binding: dict[str, Any] | None = None
     login_journey: dict[str, Any] = {}
+    container_liveness: dict[str, Any] = {
+        "status": "not_applicable",
+        "composeProject": "",
+        "blocker": "",
+        "containers": [],
+        "issues": [],
+        "warnings": [],
+    }
+    launch_blockers = set(load_launch_manifest_contract()["launch_blockers"])
+    first_launch_blocker = ""
 
-    def record_readiness_finding(message: str) -> None:
-        if runtime_mode == "test_live" and purpose == "runtime":
-            warnings.append(message)
+    def canonical_launch_blocker(code: str) -> str:
+        if code not in launch_blockers:
+            raise RuntimeError(
+                f"app-debug-preflight selected undeclared launch blocker: {code}"
+            )
+        return code
+
+    def record_launch_blocker(code: str, message: str) -> None:
+        nonlocal first_launch_blocker
+        details.append(message)
+        if not first_launch_blocker:
+            first_launch_blocker = canonical_launch_blocker(code)
+
+    def readiness_diagnostic(category: str, message: str) -> str:
+        return f"readiness.{category}: {message}"
+
+    def record_readiness_finding(category: str, message: str) -> None:
+        diagnostic = readiness_diagnostic(category, message)
+        if runtime_mode == "test_live":
+            warnings.append(diagnostic)
         else:
-            details.append(message)
+            details.append(diagnostic)
 
     if environment not in {"alpha", "beta", "gamma"}:
-        details.append("app-debug-preflight only supports non-production targets")
+        record_launch_blocker(
+            "APP.LAUNCH.prod_debug_forbidden"
+            if environment == "prod"
+            else "APP.LAUNCH.launch_surface_unsupported",
+            "app-debug-preflight only supports non-production targets",
+        )
     if runtime_mode not in {"immutable_candidate", "test_live"}:
-        details.append("app-debug-preflight runtime mode is invalid")
+        record_launch_blocker(
+            "APP.LAUNCH.launch_surface_unsupported",
+            "app-debug-preflight runtime mode is invalid",
+        )
     if purpose not in {"runtime", "content_live"}:
-        details.append("app-debug-preflight purpose is invalid")
+        record_launch_blocker(
+            "APP.LAUNCH.launch_surface_unsupported",
+            "app-debug-preflight purpose is invalid",
+        )
     public_bases = target.get("publicBases") or {}
     expected_host = f"{environment}.quwoquan.com"
     for role, raw_url in sorted(public_bases.items()):
-        parsed = urllib.parse.urlparse(str(raw_url))
+        raw_endpoint = str(raw_url).strip()
+        try:
+            parsed = urllib.parse.urlparse(raw_endpoint)
+            port = parsed.port
+        except ValueError:
+            parsed = urllib.parse.urlparse("")
+            port = None
         hostname = str(parsed.hostname or "").lower()
-        if hostname != expected_host and not hostname.endswith(f".{expected_host}"):
-            details.append(
+        path = parsed.path or "/"
+        endpoint_is_canonical = (
+            parsed.scheme in {"https", "wss"}
+            and bool(hostname)
+            and (
+                hostname == expected_host
+                or hostname.endswith(f".{expected_host}")
+            )
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.query == ""
+            and parsed.fragment == ""
+            and path.startswith("/")
+            and "//" not in path
+            and ".." not in Path(urllib.parse.unquote(path)).parts
+            and port is not None
+        )
+        if not endpoint_is_canonical:
+            record_launch_blocker(
+                "APP.LAUNCH.runtime_config_activation_failed",
                 f"{runtime_mode or 'unknown'} {role} endpoint escapes the selected "
-                f"{environment} namespace"
+                f"{environment} namespace",
             )
 
     try:
@@ -244,21 +366,28 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                 ),
             }
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
-        record_readiness_finding(f"selected Provider runtime is invalid: {exc}")
+        record_readiness_finding(
+            "provider", f"selected Provider runtime is invalid: {exc}"
+        )
     try:
         if runtime_mode == "immutable_candidate":
             startup = _stackctl.load_startup_attempt(target_name) or {}
         else:
             startup = _stackctl.load_test_live_startup_attempt(target_name) or {}
     except (OSError, ValueError) as exc:
-        record_readiness_finding(f"selected startup receipt is unreadable: {exc}")
+        record_readiness_finding(
+            "runtime", f"selected startup receipt is unreadable: {exc}"
+        )
     if not startup:
-        record_readiness_finding("target has no selected runtime startup receipt")
+        record_readiness_finding(
+            "runtime", "target has no selected runtime startup receipt"
+        )
     else:
         if startup.get("status") != "running":
             record_readiness_finding(
+                "runtime",
                 "target startup status is not running: "
-                + str(startup.get("status") or "missing")
+                + str(startup.get("status") or "missing"),
             )
         if (
             startup.get(
@@ -267,15 +396,26 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             != environment
             or startup.get("target") != target_name
         ):
-            record_readiness_finding("startup receipt target/environment mismatch")
+            record_readiness_finding(
+                "drift", "startup receipt target/environment mismatch"
+            )
         if startup.get("workload") != "full":
-            record_readiness_finding("full runtime is not running")
+            record_readiness_finding("service", "full runtime is not running")
         if re.fullmatch(
             r"sha256:[0-9a-f]{64}",
             str(startup.get("configurationDigest") or ""),
         ) is None:
             record_readiness_finding(
+                "drift",
                 "startup receipt has no canonical configuration digest"
+            )
+        if re.fullmatch(
+            r"sha256:[0-9a-f]{64}",
+            str(startup.get("observabilityLogSinkDigest") or ""),
+        ) is None:
+            record_readiness_finding(
+                "observability",
+                "startup receipt has no canonical observability log-sink digest",
             )
         expected_provider_digest = str(
             (provider_runtime_binding or {}).get("composition", {}).get(
@@ -288,13 +428,34 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             or startup.get("providerRuntimeDigest") != expected_provider_digest
         ):
             record_readiness_finding(
+                "drift",
                 "startup receipt Provider runtime differs from selected runtime"
             )
         if runtime_mode == "immutable_candidate" and (
             startup.get("candidateDigest")
             != (provider_runtime_binding or {}).get("baselineId")
         ):
-            details.append("startup receipt does not bind the active candidate")
+            record_readiness_finding(
+                "drift", "startup receipt does not bind the active candidate"
+            )
+        # 以上 receipt 只证明「启动过」；必需容器现况仍需复验。环境可用性
+        # 判定本身保留 typed blocker，test_live App preflight 只投影为 warning。
+        container_liveness = _runtime_container_liveness_evidence(startup)
+        for issue in container_liveness["issues"]:
+            record_readiness_finding("service", str(issue))
+        warnings.extend(
+            readiness_diagnostic("service", str(item))
+            for item in container_liveness["warnings"]
+        )
+    # 容量事实不依赖 startup receipt，因此放在 receipt 分支之外。candidate/Prod
+    # 仍严格；Alpha/Beta/Gamma test_live 只保留诊断并继续真实构建。
+    capacity = _stackctl.local_runtime_capacity_evidence(target)
+    for issue in capacity["issues"]:
+        record_readiness_finding("capacity", str(issue))
+    warnings.extend(
+        readiness_diagnostic("capacity", str(item))
+        for item in capacity["warnings"]
+    )
 
     try:
         tls_evidence = _stackctl.verify_certificate(target_name)
@@ -306,7 +467,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         ValueError,
     ) as exc:
         tls_evidence = {"status": "gate_block"}
-        record_readiness_finding(f"target TLS is not ready: {exc}")
+        record_readiness_finding("tls", f"target TLS is not ready: {exc}")
 
     profile_name = str(target.get("portProfile") or "")
     try:
@@ -318,6 +479,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         ports = {}
         record_readiness_finding(
+            "transport",
             f"target local port topology is unavailable: {exc}"
         )
     public_bases = target.get("publicBases") or {}
@@ -349,10 +511,10 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         try:
             composition = provider_runtime_binding.get("composition")
             if not isinstance(composition, Mapping):
-                raise ValueError("Provider runtime composition is missing")
+                raise TypeError("Provider runtime composition is missing")
             workloads = composition.get("workloads")
             if not isinstance(workloads, list):
-                raise ValueError("Provider runtime workloads are missing")
+                raise TypeError("Provider runtime workloads are missing")
             provider_roles = [
                 str(item["role"])
                 for item in workloads
@@ -378,6 +540,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             )
         except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
             record_readiness_finding(
+                "provider",
                 f"selected Provider runtime diagnostics are unavailable: {exc}"
             )
     provider_readback: dict[str, Any] = {}
@@ -387,7 +550,10 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             check_receipts.append(
                 {"name": name, "ready": False, "statusCode": None}
             )
-            record_readiness_finding(f"{name} topology is incomplete")
+            record_readiness_finding(
+                "provider" if name in provider_roles else "transport",
+                f"{name} topology is incomplete",
+            )
             continue
         probe_failed = False
         try:
@@ -403,14 +569,20 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             ok, status_code, body = False, None, ""
             probe_failed = True
             record_readiness_finding(
-                f"{name} readiness probe failed: {exc}"
+                "provider" if name in provider_roles else "transport",
+                f"{name} readiness probe failed: {exc}",
             )
         check_receipts.append(
             {"name": name, "ready": ok, "statusCode": status_code}
         )
         if not ok and not probe_failed:
             record_readiness_finding(
-                f"{name} is not ready: {status_code or 'network_error'}"
+                "provider"
+                if name in provider_roles
+                else "transport"
+                if status_code is None
+                else "service",
+                f"{name} is not ready: {status_code or 'network_error'}",
             )
         if not ok:
             continue
@@ -419,11 +591,14 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                 decoded = json.loads(body)
             except json.JSONDecodeError:
                 record_readiness_finding(
+                    "provider",
                     "SMS substitute health readback is not JSON"
                 )
                 continue
             if not isinstance(decoded, dict):
-                record_readiness_finding("SMS substitute health readback is invalid")
+                record_readiness_finding(
+                    "provider", "SMS substitute health readback is invalid"
+                )
                 continue
             provider_readback = {
                 "adapterId": str(decoded.get("adapterId") or ""),
@@ -451,6 +626,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                 "timeout",
             }:
                 record_readiness_finding(
+                    "provider",
                     "SMS substitute adapter/environment/readiness mismatch"
                 )
 
@@ -466,7 +642,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                 report_dir=report_dir,
             )
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
-            record_readiness_finding(str(exc))
+            record_readiness_finding("provider", str(exc))
 
     runtime_ready = (
         not details
@@ -485,10 +661,12 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             content_binding = {}
             record_readiness_finding(
+                "content",
                 f"test-live content binding is invalid and was ignored: {exc}"
             )
         if not content_binding:
             record_readiness_finding(
+                "content",
                 "test_live content is unbound; no explicit release identity was selected"
             )
 
@@ -502,7 +680,24 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         "readiness": None,
     }
     blocked_content_components: list[str] = []
-    if purpose == "content_live":
+    if purpose == "content_live" and runtime_mode == "test_live":
+        # test_live 只做 launch-safe 诊断，不能把商业内容 UAT 变成编译前门。
+        # 首页真实 Remote outcome 在启动后观察；这里不把未探测解释为可用。
+        content_live_components = {
+            "runtime": runtime_ready,
+            "binding": bool(content_binding),
+            "api": None,
+            "media": None,
+            "search": None,
+            "recommendation": None,
+            "readiness": None,
+        }
+        blocked_content_components = sorted(
+            name
+            for name in ("runtime", "binding")
+            if content_live_components[name] is not True
+        )
+    elif purpose == "content_live":
         try:
             content_preflight = _stackctl.command_app_content_preflight(
                 argparse.Namespace(
@@ -519,6 +714,16 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                 "status": "gate_block",
                 "details": [str(exc)],
             }
+        if (
+            int(content_preflight.get("exitCode", 2)) != 0
+            or content_preflight.get("status") != "passed"
+        ):
+            for issue in content_preflight.get("details") or []:
+                record_readiness_finding("content", str(issue))
+        warnings.extend(
+            readiness_diagnostic("content", str(item))
+            for item in content_preflight.get("warnings") or []
+        )
 
         readback = content_preflight.get("contentReadback")
         readback = readback if isinstance(readback, Mapping) else {}
@@ -542,6 +747,14 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         probed_media = release_probe.get("mediaChecks")
         probed_media = probed_media if isinstance(probed_media, Mapping) else {}
         probed_search = release_probe.get("searchCanaries")
+        consumer_probe = (
+            runtime_mode == "test_live"
+            and content_binding.get("readinessPhase")
+            == ReadinessPhase.CONSUMER.value
+            and release_probe.get("readinessPhase")
+            == ReadinessPhase.CONSUMER.value
+            and release_probe.get("searchCanariesRequired") is False
+        )
         binding_ready = (
             (
                 bool(content_binding)
@@ -561,6 +774,9 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                 bool((provider_runtime_binding or {}).get("baselineId"))
                 and content_preflight.get("packageBaseline")
                 == (provider_runtime_binding or {}).get("baselineId")
+                and bool(login_journey.get("sourceRevision"))
+                and content_preflight.get("sourceRevision")
+                == login_journey.get("sourceRevision")
             )
         )
         content_live_components = {
@@ -572,7 +788,9 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             and matched_query("typed_video"),
             "search": release_probe.get("exitCode") == 0
             and isinstance(probed_search, list)
-            and len(probed_search) == 3,
+            and len(probed_search) == 4
+            if not consumer_probe
+            else None,
             "recommendation": release_probe.get("exitCode") == 0
             and matched_query("homepage_recommend"),
             "readiness": int(content_preflight.get("exitCode", 2)) == 0
@@ -584,28 +802,38 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             name
             for name, ready in content_live_components.items()
             if ready is not True
+            and not (name == "search" and consumer_probe and ready is None)
         )
         if blocked_content_components:
-            details.append(
+            record_readiness_finding(
+                "content",
                 "content-live components are GATE_BLOCK: "
-                + ", ".join(blocked_content_components)
+                + ", ".join(blocked_content_components),
             )
-    content_state = "bound" if content_binding else "unbound"
+    # test_live 的已验证源是 run-bound content binding；immutable_candidate
+    # content-live 的已验证源则是上面的 strict app-content-preflight。两条轨道
+    # 不共享存储，但必须向下游投影同一组 release/readiness/App UAT 身份。
+    content_payload_source: Mapping[str, Any] = content_binding
+    if runtime_mode == "immutable_candidate" and purpose == "content_live":
+        content_payload_source = content_preflight
+    content_state = "bound" if content_payload_source else "unbound"
     status = "gate_block" if details else "warning" if warnings else "passed"
     content_live_status = (
-        "gate_block"
+        "warning"
+        if purpose == "content_live" and runtime_mode == "test_live" and warnings
+        else "gate_block"
         if purpose == "content_live" and blocked_content_components
         else "passed"
         if purpose == "content_live"
         else "not_requested"
     )
-    first_blocker = (
-        "APP.CONTENT_LIVE."
-        + blocked_content_components[0].upper()
-        + "_BLOCKED"
-        if blocked_content_components
-        else ("APP.RUNTIME.PREFLIGHT_BLOCKED" if details else "")
-    )
+    # firstBlocker 只承载 App launch manifest 声明的稳定码。严格 readiness
+    # 的底层 typed blocker 留在诊断 evidence，不得泄漏成 App attempt 自由码。
+    first_blocker = first_launch_blocker
+    if details and not first_blocker:
+        first_blocker = canonical_launch_blocker(
+            "APP.LAUNCH.runtime_dependency_unavailable"
+        )
     recovery_command = (
         "python3 quwoquan_ops/cli/stackctl.py --output-format json "
         f"app-debug-preflight --purpose {purpose} --target {target_name} "
@@ -634,6 +862,8 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             startup.get("providerRuntimeDigest") or ""
         ),
         "runtimeChecks": check_receipts,
+        "runtimeContainerLiveness": container_liveness,
+        "capacity": capacity["evidence"],
         "tls": {
             "profile": str(tls_evidence.get("profile") or ""),
             "status": str(tls_evidence.get("status") or ""),
@@ -648,9 +878,11 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         "contentAvailability": (
             {
                 "state": "bound",
-                "readinessPhase": content_binding.get("readinessPhase", ""),
+                "readinessPhase": content_payload_source.get(
+                    "readinessPhase", ""
+                ),
             }
-            if content_binding
+            if content_payload_source
             else (
                 {"state": "unbound", "emptyReason": "no_active_release"}
                 if runtime_mode == "test_live"
@@ -670,37 +902,59 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "sourceRevision": str(
             login_journey.get("sourceRevision")
+            or content_payload_source.get("sourceRevision")
             or (
                 (content_binding.get("startupIdentity") or {}).get("sourceRevision")
                 if isinstance(content_binding.get("startupIdentity"), Mapping)
                 else ""
             )
         ),
-        "releaseId": content_binding.get("releaseId", ""),
-        "manifestDigest": content_binding.get("manifestDigest", ""),
-        "readinessReceiptRef": content_binding.get("readinessReceiptRef", ""),
-        "readinessReceiptDigest": content_binding.get("readinessReceiptDigest", ""),
-        "lifecycleExitRef": content_binding.get("lifecycleExitRef", ""),
-        "appUatEnvelope": content_binding.get("appUatEnvelope", {}),
-        "appUatPlan": (
-            content_preflight.get("appUatPlan", {})
-            if purpose == "content_live"
-            else content_binding.get("appUatPlan", {})
+        "releaseId": content_payload_source.get("releaseId", ""),
+        "manifestDigest": content_payload_source.get("manifestDigest", ""),
+        "readinessReceiptRef": content_payload_source.get(
+            "readinessReceiptRef", ""
         ),
-        "appUatPlanDigest": (
-            content_preflight.get("appUatPlanDigest", "")
-            if purpose == "content_live"
-            else content_binding.get("appUatPlanDigest", "")
+        "readinessReceiptDigest": content_payload_source.get(
+            "readinessReceiptDigest", ""
         ),
+        "dataSourceIdentity": content_payload_source.get(
+            "dataSourceIdentity", {}
+        ),
+        "activationEnvelope": content_payload_source.get(
+            "activationEnvelope", {}
+        ),
+        "activationEnvelopeDigest": content_payload_source.get(
+            "activationEnvelopeDigest", ""
+        ),
+        "lifecycleExitRef": content_payload_source.get("lifecycleExitRef", ""),
+        "releaseHeader": content_payload_source.get("releaseHeader", {}),
+        "releaseHeaderRef": content_payload_source.get("releaseHeaderRef", ""),
+        "releaseHeaderDigest": content_payload_source.get("releaseHeaderDigest", ""),
+        "releaseUatSamplePlanRef": content_payload_source.get(
+            "releaseUatSamplePlanRef", ""
+        ),
+        "releaseUatSamplePlanDigest": content_payload_source.get(
+            "releaseUatSamplePlanDigest", ""
+        ),
+        "releaseUatSamplePlan": content_payload_source.get(
+            "releaseUatSamplePlan", {}
+        ),
+        "appUatPlan": content_payload_source.get("appUatPlan", {}),
+        "appUatPlanDigest": content_payload_source.get("appUatPlanDigest", ""),
         "contentReadback": (
-            content_preflight.get("contentReadback", {})
+            content_payload_source.get("contentReadback", {})
             if purpose == "content_live"
             else {}
         ),
         "contentReadinessReportRef": (
-            content_preflight.get("contentReadinessReportRef", "")
+            content_payload_source.get("contentReadinessReportRef", "")
             if purpose == "content_live"
             else ""
+        ),
+        "releaseProbe": (
+            content_payload_source.get("releaseProbe", {})
+            if purpose == "content_live"
+            else {}
         ),
     }
     _stackctl.write_json(report_dir / "report.json", payload)

@@ -86,6 +86,7 @@ def test_campaign_source_capsule_imports_canonical_release_without_ops_tree(
             roots=roots,
             expected_digest=source_digest,
             expected_execution_bundle=execution_bundle,
+            library_root=tmp_path / "content_library",
         )
 
         assert (

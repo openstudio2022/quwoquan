@@ -96,9 +96,17 @@ def test_homepage_object_publish_reads_incremental_inventory_before_apply(
         lambda _root: None,
     )
 
+    # 唯一入池路径：publish 只消费 reviewed pool delivery intent；
+    # 事务包构建已被对象级替身接管，这里直接注入最小 intent。
     result = publish_module.publish_homepage_object(
         EXECUTION_ID,
         "/entity/地点/景区/测试实体甲",
+        pool_delivery_intent={
+            "schema": "quwoquan_data.pool_delivery_intent",
+            "executionId": EXECUTION_ID,
+            "carrier": "homepage",
+            "objectRef": "/entity/地点/景区/测试实体甲",
+        },
     )
 
     assert inventory_calls == [publish_root]
@@ -157,6 +165,9 @@ def test_publish_absorbs_dead_jobs_when_fleet_passed_quota(monkeypatch) -> None:
             "requiredQuota": 3,
             "finalizedObjectCount": 0,
             "idempotencyKey": "test",
+            "fleetPeakConcurrentWorkers": 3,
+            "fleetWaveCount": 1,
+            "fleetBatchDeadlineEpochSeconds": 1_784_500_000,
             "taskOutcomes": [
                 {"jobId": f"job-{index}", "status": "succeeded", "attempts": 1}
                 for index in range(3)

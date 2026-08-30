@@ -68,7 +68,7 @@ class ContentServiceSearchRuntimeTopologyTest(unittest.TestCase):
                 )
                 content = yaml.safe_load(environment_compose.read_text(encoding="utf-8"))
                 self.assertEqual(
-                    content["services"]["content-service"]["depends_on"][
+                    content["services"]["service-core"]["depends_on"][
                         "elasticsearch"
                     ],
                     {"condition": "service_healthy"},

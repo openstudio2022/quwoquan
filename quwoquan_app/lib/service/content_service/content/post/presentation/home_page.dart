@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Material, MaterialType;
@@ -7,15 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/startup/app_startup_runtime.dart';
-import 'package:quwoquan_app/design_system/icons/app_custom_icons.dart';
-import 'package:quwoquan_app/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
+import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/runtime/shell/navigation/main_tab_activation.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/home_featured_immersive_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/design_system/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/design_system/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
@@ -32,7 +29,6 @@ import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart'
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart'
     show runtimeFailureFromError;
 import 'package:quwoquan_app/runtime/observability/trackers/journey_event_tracker.dart';
-import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/transport/cloud_retry_policy.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
@@ -75,8 +71,7 @@ class _HomePageState extends ConsumerState<HomePage>
   final Map<String, Object> _automaticRecoveryConsumedErrors =
       <String, Object>{};
   final Set<String> _automaticRecoveryInFlightChannels = <String>{};
-  final Map<String, Timer> _automaticRecoveryTimers = <String, Timer>{};
-  final math.Random _automaticRecoveryJitter = math.Random();
+  Timer? _automaticRecoveryBackoffTimer;
   bool _wasBackgrounded = false;
   int _activeChannelReconcileGeneration = 0;
   int _surfaceActivityGeneration = 0;
@@ -106,18 +101,9 @@ class _HomePageState extends ConsumerState<HomePage>
         }
         if (next[channelId]?.value?.blockingError == null) {
           _automaticRecoveryConsumedErrors.remove(channelId);
-          _automaticRecoveryTimers.remove(channelId)?.cancel();
         }
       }
-      for (final entry in next.entries) {
-        final value = entry.value.value;
-        final error = value?.items.isEmpty == true
-            ? value?.blockingError
-            : null;
-        if (error != null) {
-          _scheduleAutomaticRecovery(entry.key, error);
-        }
-      }
+      _scheduleAutomaticRecoveryBackoff(next);
     }, fireImmediately: true);
     WidgetsBinding.instance.addObserver(this);
     _networkSubscription = ref
@@ -144,11 +130,8 @@ class _HomePageState extends ConsumerState<HomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _feedStateSubscription.close();
+    _automaticRecoveryBackoffTimer?.cancel();
     unawaited(_networkSubscription?.cancel());
-    for (final timer in _automaticRecoveryTimers.values) {
-      timer.cancel();
-    }
-    _automaticRecoveryTimers.clear();
     _surfaceActivityGeneration += 1;
     _feedNotifier.cancelChannelRequests(_activeChannelId);
     // R20 · 页面级停留：离开首页时上报停留时长（含异常退出路径）。
@@ -185,12 +168,43 @@ class _HomePageState extends ConsumerState<HomePage>
     }
   }
 
+  /// transient 阻断态出现后，按 canonical backoff 给一次自动重取机会。
+  ///
+  /// connectivity 恢复与前后台恢复这两个既有信号在「一直弱网、用户一直停留」的
+  /// 静默期都不会到来，用户会卡在错误态直到手动重试。退避只 arm 一次，且真正的
+  /// 重取仍由 [_automaticRecoveryConsumedErrors] 判定同一阻断态只消费一次，
+  /// 因此不会退化成轮询。
+  void _scheduleAutomaticRecoveryBackoff(
+    Map<String, AsyncValue<DiscoveryFeedState>> feedStates,
+  ) {
+    if (_automaticRecoveryBackoffTimer != null) {
+      return;
+    }
+    final channelId = _activeChannelId;
+    final current = feedStates[channelId]?.value;
+    final error = current?.items.isEmpty == true
+        ? current?.blockingError
+        : null;
+    if (error == null || !_isAutomaticRecoveryCandidate(error)) {
+      return;
+    }
+    if (identical(_automaticRecoveryConsumedErrors[channelId], error)) {
+      return;
+    }
+    _automaticRecoveryBackoffTimer = Timer(
+      const CloudRetryPolicy().maxBackoff,
+      () {
+        _automaticRecoveryBackoffTimer = null;
+        unawaited(_recoverActiveChannelOnce());
+      },
+    );
+  }
+
   Future<void> _recoverActiveChannelOnce() async {
     if (!mounted || !widget.isStartupHomeActive) {
       return;
     }
     final channelId = _activeChannelId;
-    _automaticRecoveryTimers.remove(channelId)?.cancel();
     final current = ref.read(discoveryFeedMapProvider)[channelId]?.value;
     final error = current?.items.isEmpty == true
         ? current?.blockingError
@@ -246,33 +260,6 @@ class _HomePageState extends ConsumerState<HomePage>
         failure.kind == RuntimeFailureKind.timeout ||
         failure.kind == RuntimeFailureKind.unavailable ||
         failure.kind == RuntimeFailureKind.rateLimited;
-  }
-
-  void _scheduleAutomaticRecovery(String channelId, Object error) {
-    if (!mounted ||
-        !widget.isStartupHomeActive ||
-        channelId != _activeChannelId ||
-        !_isAutomaticRecoveryCandidate(error) ||
-        identical(_automaticRecoveryConsumedErrors[channelId], error) ||
-        _automaticRecoveryInFlightChannels.contains(channelId) ||
-        _automaticRecoveryTimers.containsKey(channelId)) {
-      return;
-    }
-    late final Timer timer;
-    timer = Timer(
-      const CloudRetryPolicy().delayFor(
-        attempt: 0,
-        jitterUnit: _automaticRecoveryJitter.nextDouble(),
-      ),
-      () {
-        if (!identical(_automaticRecoveryTimers[channelId], timer)) {
-          return;
-        }
-        _automaticRecoveryTimers.remove(channelId);
-        unawaited(_recoverActiveChannelOnce());
-      },
-    );
-    _automaticRecoveryTimers[channelId] = timer;
   }
 
   @override
@@ -491,89 +478,79 @@ class _HomePageState extends ConsumerState<HomePage>
       _scheduleActiveChannelReconciliation(effectiveActiveChannelId);
     }
     final bg = SettingsSemanticConstants.conversationSheetCardSurface(isDark);
-    final searchChromeColor = isDark ? bg : AppColors.primaryColor;
-    final searchChromeSurface = AppChromeSurface.immersive;
-    final searchToTabGap = AppSpacing.intraGroupXs;
+    // 三处 overlay 字段只有「底色亮度」与「其上前景的反色」两种取值。各写一遍
+    // isDark 三元会把同一个明暗判断摊成三处，调深浅时容易改一处漏两处。
+    final barBrightness = isDark ? Brightness.dark : Brightness.light;
+    final barForegroundBrightness = switch (barBrightness) {
+      Brightness.dark => Brightness.light,
+      Brightness.light => Brightness.dark,
+    };
     final statusBarStyle = SystemUiOverlayStyle(
       statusBarColor: AppColors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      statusBarBrightness: Brightness.dark,
+      statusBarIconBrightness: barForegroundBrightness,
+      statusBarBrightness: barBrightness,
       systemNavigationBarColor: AppColors.transparent,
-      systemNavigationBarIconBrightness: isDark
-          ? Brightness.light
-          : Brightness.dark,
+      systemNavigationBarIconBrightness: barForegroundBrightness,
     );
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: statusBarStyle,
-      child: CupertinoPageScaffold(
-        backgroundColor: bg,
-        child: Material(
-          type: MaterialType.transparency,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                key: const ValueKey<String>('home-search-chrome'),
-                height:
-                    effectiveTopInset +
-                    AppSpacing.globalSearchFieldHeight +
-                    searchToTabGap,
-                padding: EdgeInsets.only(top: effectiveTopInset),
-                color: searchChromeColor,
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.feedContentHorizontal(context),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: GlobalXiaoquSearchBar(
-                            initialSearchScope: GlobalSearchScope.content,
-                            surface: searchChromeSurface,
+    return Semantics(
+      container: true,
+      identifier: AppNavigationSemanticConstants.homeSurfaceIdentifier,
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: statusBarStyle,
+        child: CupertinoPageScaffold(
+          backgroundColor: bg,
+          child: Material(
+            type: MaterialType.transparency,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  key: const ValueKey<String>('home-primary-tab-chrome'),
+                  height:
+                      effectiveTopInset +
+                      AppSpacing.primaryTopBarHeight(context),
+                  padding: EdgeInsets.only(top: effectiveTopInset),
+                  decoration: BoxDecoration(color: bg),
+                  child: SizedBox(
+                    height: AppSpacing.primaryTopBarHeight(context),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.feedContentHorizontal(context),
+                      ),
+                      child: Row(
+                        children: [
+                          // 频道条自身横向滚动，因此让出右侧固定宽度给全局搜索与小趣，
+                          // 频道再多也不会把这两个入口挤出屏幕。
+                          Expanded(
+                            child: HomePrimaryTabStrip(
+                              activeChannelId: effectiveActiveChannelId,
+                              onChannelChanged: _handleChannelChange,
+                              onHorizontalDragEnd: _handleTabSwipeDragEnd,
+                              isDark: isDark,
+                              channels: channels,
+                            ),
                           ),
-                        ),
-                        SizedBox(width: AppSpacing.intraGroupSm),
-                        // 视频书固定入口：视频书退出底栏后由此进入沉浸流
-                        //（心动供给），底栏第二格让位给线下行动与发现。
-                        const _HomeFeaturedEntryButton(),
-                      ],
+                          SizedBox(width: AppSpacing.intraGroupXs),
+                          const GlobalTopActions(),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Container(
-                key: const ValueKey<String>('home-primary-tab-chrome'),
-                height: AppSpacing.primaryTopBarHeight(context),
-                decoration: BoxDecoration(color: bg),
-                child: SizedBox(
-                  height: AppSpacing.primaryTopBarHeight(context),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.feedContentHorizontal(context),
-                    ),
-                    child: HomePrimaryTabStrip(
-                      activeChannelId: effectiveActiveChannelId,
-                      onChannelChanged: _handleChannelChange,
-                      onHorizontalDragEnd: _handleTabSwipeDragEnd,
-                      isDark: isDark,
-                      channels: channels,
-                    ),
+                Expanded(
+                  child: TabSwipeSwitchRegion(
+                    enabled:
+                        effectiveActiveChannelId !=
+                        HomePrimaryTabStrip.featuredChannelId,
+                    onSwipe: _handleTabSwipe,
+                    child: widget.isStartupHomeActive
+                        ? _buildBody(isDark, channels, effectiveActiveChannelId)
+                        : const SizedBox.shrink(),
                   ),
                 ),
-              ),
-              Expanded(
-                child: TabSwipeSwitchRegion(
-                  enabled: true,
-                  onSwipe: _handleTabSwipe,
-                  child: widget.isStartupHomeActive
-                      ? _buildBody(isDark, channels, effectiveActiveChannelId)
-                      : const SizedBox.shrink(),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -596,6 +573,12 @@ class _HomePageState extends ConsumerState<HomePage>
     }
     if (channel == null) {
       return const SizedBox.shrink();
+    }
+    if (channel.id == HomePrimaryTabStrip.featuredChannelId) {
+      return HomeFeaturedImmersivePage(
+        key: const ValueKey<String>('home-featured-channel-body'),
+        onExitToHome: () => _handleChannelChange(_defaultChannelId),
+      );
     }
     return HomeMultiFormFeed(
       key: ValueKey<String>('home-feed-${channel.id}'),
@@ -653,46 +636,6 @@ class _HomePageState extends ConsumerState<HomePage>
       mediaIndex: mediaIndex,
       channelId: _activeChannelId,
       feedPosts: feedPosts,
-    );
-  }
-}
-
-// HomeFeaturedImmersivePage 已迁移至 home_featured_immersive_page.dart
-// （页面契约 content.home_featured_immersive 唯一拥有）。
-
-/// 视频书顶部固定入口：请求主壳切换到 featured 内存态目的地。
-class _HomeFeaturedEntryButton extends ConsumerWidget {
-  const _HomeFeaturedEntryButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Semantics(
-      button: true,
-      label: AppConceptConstants.premium,
-      child: CupertinoButton(
-        key: const ValueKey<String>('home-featured-entry'),
-        padding: EdgeInsets.zero,
-        minimumSize: Size.square(AppSpacing.minInteractiveSize),
-        onPressed: () =>
-            ref.read(featuredImmersiveActivationProvider.notifier).request(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppOpenWindowIcon(
-              size: AppSpacing.iconSmall,
-              color: AppColors.white,
-            ),
-            Text(
-              AppConceptConstants.premium,
-              style: TextStyle(
-                fontSize: AppTypography.iosCaption2,
-                color: AppColors.white,
-                height: AppTypography.lineHeightTight,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

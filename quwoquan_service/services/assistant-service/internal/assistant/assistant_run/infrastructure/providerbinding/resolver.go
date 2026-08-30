@@ -28,7 +28,7 @@ func Resolve(
 	if configProvider == nil {
 		return ResolvedBinding{}, fmt.Errorf("provider binding %s has no runtime config provider", capabilityID)
 	}
-	binding, found := assistantgenerated.ExternalProviderBindingFor(appEnv, capabilityID)
+	binding, found := assistantgenerated.CompiledBindingFor(capabilityID)
 	if !found {
 		return ResolvedBinding{}, fmt.Errorf(
 			"provider binding is missing for environment=%s capability=%s",

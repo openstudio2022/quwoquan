@@ -108,7 +108,6 @@ abstract final class RuntimeLogCatalog {
     RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'shareCount', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
     RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'sourceAttribution', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
     RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'sourcePostId', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
-    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'sourceTaskId', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
     RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'sourceType', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
     RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'status', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
     RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'summary', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),

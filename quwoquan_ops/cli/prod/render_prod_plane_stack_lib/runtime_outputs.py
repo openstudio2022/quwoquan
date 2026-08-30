@@ -16,7 +16,7 @@ from quwoquan_ops.cli.lib.environment_topology import get_target, load_environme
 from quwoquan_ops.cli.lib.output_paths import deployment_target_path
 from quwoquan_ops.cli.lib.output_paths import remove_deployment_tree
 
-from .constants import OBSERVABILITY_SOURCE_ROOT, ROOT
+from .constants import OBSERVABILITY_SOURCE_ROOT, PROD_PLANE_ADMIN_PORTS, ROOT
 from .package_inputs import _plane_spec
 from .public_hosts import _prod_public_hosts
 
@@ -70,7 +70,7 @@ def _write_env_file(
                 "LOCAL_GAMMA_PRODUCT_OPS_PORT=39010",
                 "LOCAL_GAMMA_MEDIA_EDGE_PORT=39100",
                 "LOCAL_GAMMA_HTTPS_PORT=38443",
-                "LOCAL_GAMMA_ADMIN_PORT=32019",
+                f"LOCAL_GAMMA_ADMIN_PORT={PROD_PLANE_ADMIN_PORTS['prevalidate']}",
                 "LOCAL_GAMMA_CHAT_PORT=39200",
                 "LOCAL_GAMMA_USER_PORT=39210",
                 "LOCAL_GAMMA_CONTENT_PORT=39220",
@@ -138,7 +138,7 @@ def _write_env_file(
                 "LOCAL_GAMMA_PRODUCT_OPS_PORT=29010",
                 "LOCAL_GAMMA_MEDIA_EDGE_PORT=29100",
                 "LOCAL_GAMMA_HTTPS_PORT=28443",
-                "LOCAL_GAMMA_ADMIN_PORT=22019",
+                f"LOCAL_GAMMA_ADMIN_PORT={PROD_PLANE_ADMIN_PORTS['gray']}",
                 "LOCAL_GAMMA_CHAT_PORT=29200",
                 "LOCAL_GAMMA_USER_PORT=29210",
                 "LOCAL_GAMMA_CONTENT_PORT=29220",
@@ -163,7 +163,7 @@ def _write_env_file(
                 "LOCAL_GAMMA_PRODUCT_OPS_PORT=19010",
                 "LOCAL_GAMMA_MEDIA_EDGE_PORT=19100",
                 "LOCAL_GAMMA_HTTPS_PORT=18443",
-                "LOCAL_GAMMA_ADMIN_PORT=12019",
+                f"LOCAL_GAMMA_ADMIN_PORT={PROD_PLANE_ADMIN_PORTS['prod']}",
                 "LOCAL_GAMMA_CHAT_PORT=19200",
                 "LOCAL_GAMMA_USER_PORT=19210",
                 "LOCAL_GAMMA_CONTENT_PORT=19220",

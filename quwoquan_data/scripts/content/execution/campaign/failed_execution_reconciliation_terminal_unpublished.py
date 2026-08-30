@@ -16,10 +16,11 @@ from content.execution.campaign.failed_execution_reconciliation_claimed import (
 from content.execution.campaign.failed_execution_reconciliation_common import (
     file_binding,
 )
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.submission_reconciliation_contract import (
     campaigns_root,
     canonical_digest,
+    frozen_plan_workload,
+    frozen_submission_workload,
     typed,
 )
 
@@ -43,13 +44,23 @@ def _campaign_documents(
     stable_plan = {key: value for key, value in plan.items() if key != "planDigest"}
     distributed = plan.get("distributedRun")
     source_digest = (original.get("sourceDigest") or {}).get("digest")
+    active_carriers, _workloads, plan_execution_ids, _root = frozen_plan_workload(
+        plan,
+        root_execution_id=root_execution_id,
+    )
+    submission_carriers, _submission_workloads, _submission_root = (
+        frozen_submission_workload(
+            submissions,
+            root_execution_id=root_execution_id,
+        )
+    )
     expected_ids = {
         carrier: str(submissions[carrier]["executionId"])
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active_carriers
     }
     expected_digests = {
         carrier: str(submissions[carrier]["requestDigest"])
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in active_carriers
     }
     if (
         plan.get("rootExecutionId") != root_execution_id
@@ -57,6 +68,8 @@ def _campaign_documents(
         or plan.get("sourceRevision") != original.get("sourceRevision")
         or plan.get("sourceDigest") != source_digest
         or plan.get("entityCatalogDigest") != original.get("entityCatalogDigest")
+        or active_carriers != submission_carriers
+        or plan_execution_ids != expected_ids
         or plan.get("executionIds") != expected_ids
         or plan.get("submissionDigests") != expected_digests
         or not isinstance(distributed, Mapping)
@@ -78,7 +91,7 @@ def _campaign_documents(
         or report.get("sourceDigest") != source_digest
         or report.get("entityCatalogDigest") != original.get("entityCatalogDigest")
         or not isinstance(lanes, Mapping)
-        or set(lanes) != set(CAMPAIGN_CARRIERS)
+        or set(lanes) != set(active_carriers)
         or not str(report.get("failure") or "").strip()
     ):
         raise typed(
@@ -471,7 +484,7 @@ def terminal_unpublished_source_drift_evidence(
     )
     execution_ids = {
         str(submissions[carrier]["executionId"])
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in plan["executionIds"]
     }
     _assert_no_release(campaign, execution_ids, output_root=output_root)
     lanes = [
@@ -483,16 +496,16 @@ def terminal_unpublished_source_drift_evidence(
             carrier,
             output_root=output_root,
         )
-        for carrier in CAMPAIGN_CARRIERS
+        for carrier in plan["executionIds"]
     ]
     qualified_lanes = sum(row["reviewQualifiedCount"] > 0 for row in lanes)
     prepared_transaction_count = sum(
         len(row["preparedObjectTransactions"]) for row in lanes
     )
-    if not 1 <= qualified_lanes < len(CAMPAIGN_CARRIERS):
+    if qualified_lanes < 1:
         raise typed(
             "EXECUTION_EVIDENCE_INVALID",
-            "terminal unpublished partial requires one to three review-qualified lanes",
+            "terminal unpublished partial requires a review-qualified active lane",
         )
     campaign_evidence = {
         "plan": file_binding(

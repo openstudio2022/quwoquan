@@ -14,8 +14,9 @@ import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 
-/// 首页壳（HomePage = 底部导航落地 tab）的搜索 chrome key。
-const homeSearchChromeKey = ValueKey<String>('home-search-chrome');
+/// 首页壳（HomePage = 底部导航落地 tab）的顶栏 chrome key：频道条 + 全局搜索
+/// 与小趣入口同处一个容器，UAT 用它判定首页首帧已渲染。
+const homeSearchChromeKey = ValueKey<String>('home-primary-tab-chrome');
 
 /// 等待首页壳就绪（落地后首帧路由完成）。
 ///

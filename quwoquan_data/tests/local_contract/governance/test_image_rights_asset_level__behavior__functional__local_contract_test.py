@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -13,11 +12,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from governance.coverage.license import (  # noqa: E402
-    audit_image_rights as validate_image_rights,
-    rights_proof_required,
-)
-from governance.coverage import distribution  # noqa: E402
+from governance.coverage.license import audit_image_rights as validate_image_rights  # noqa: E402
 
 
 def test_discovery_platform_is_not_blocked_by_source_name_when_asset_rights_are_complete():
@@ -36,41 +31,6 @@ def test_discovery_platform_is_not_blocked_by_source_name_when_asset_rights_are_
         vertical="travel",
     )
     assert issues == []
-
-
-def test_travel_rights_policy_is_fail_closed_for_commercial_publish(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    research_policy = distribution.load_content_distribution_policy()
-    commercial_policy = replace(
-        research_policy,
-        product_lifecycle_state=distribution.ProductLifecycleState.COMMERCIAL,
-        release_class=distribution.ReleaseClass.COMMERCIAL,
-    )
-    monkeypatch.setattr(
-        distribution,
-        "load_content_distribution_policy",
-        lambda: commercial_policy,
-    )
-
-    assert rights_proof_required("travel") is True
-
-
-def test_travel_rights_policy_keeps_unverified_assets_auditable_in_research(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    research_policy = distribution.load_content_distribution_policy()
-    research_only = replace(
-        research_policy,
-        product_lifecycle_state=distribution.ProductLifecycleState.RESEARCH,
-        release_class=distribution.ReleaseClass.RESEARCH,
-    )
-    monkeypatch.setattr(
-        distribution,
-        "load_content_distribution_policy",
-        lambda: research_only,
-    )
-    assert rights_proof_required("travel") is False
 
 
 def test_attribution_no_watermark_payload_passes_with_complete_pinterest_evidence():

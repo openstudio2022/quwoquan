@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -50,7 +51,6 @@ class MediaCaptionBlock extends StatelessWidget {
     return ImmersiveViewerLayout.alignToRail(
       context: context,
       layoutSpec: layoutSpec,
-      includeBottomSafeSideInset: true,
       child: SizedBox(
         key: railKey,
         width: double.infinity,
@@ -114,6 +114,13 @@ class MediaCaptionBlock extends StatelessWidget {
     );
   }
 
+  /// 「全文」/「收起」入口样式：沉浸前景次级层级（REQ-019，非品牌色），
+  /// 以字重与透明度区别于正文，不喧宾夺主。
+  TextStyle _entryStyle(TextStyle captionStyle) => captionStyle.copyWith(
+    color: AppColors.immersiveForeground.withValues(alpha: 0.7),
+    fontWeight: AppTypography.medium,
+  );
+
   Widget _buildExpandableCaption(
     BuildContext context, {
     required String caption,
@@ -137,6 +144,8 @@ class MediaCaptionBlock extends StatelessWidget {
           return Text(caption, style: captionStyle);
         }
 
+        final entryStyle = _entryStyle(captionStyle);
+
         return GestureDetector(
           onTap: onToggle,
           child: isExpanded
@@ -152,10 +161,7 @@ class MediaCaptionBlock extends StatelessWidget {
                           TextSpan(text: caption, style: captionStyle),
                           TextSpan(
                             text: CommunityText.collapse,
-                            style: captionStyle.copyWith(
-                              color: AppColors.primaryColor,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: entryStyle,
                           ),
                         ],
                       ),
@@ -167,19 +173,20 @@ class MediaCaptionBlock extends StatelessWidget {
                     children: [
                       TextSpan(
                         text: _truncateCaption(
-                          caption,
-                          overflowPainter,
-                          constraints.maxWidth,
+                          caption: caption,
+                          captionStyle: captionStyle,
+                          entryStyle: entryStyle,
+                          basePainter: overflowPainter,
+                          maxWidth: constraints.maxWidth,
+                          maxLines: captionOverflowMaxLines,
                         ),
                         style: captionStyle,
                       ),
                       TextSpan(
-                        text: CommunityText.fullText,
-                        style: captionStyle.copyWith(
-                          color: AppColors.primaryColor,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        text: CommunityText.ellipsis,
+                        style: captionStyle,
                       ),
+                      TextSpan(text: CommunityText.fullText, style: entryStyle),
                     ],
                   ),
                 ),
@@ -188,17 +195,67 @@ class MediaCaptionBlock extends StatelessWidget {
     );
   }
 
-  String _truncateCaption(
-    String caption,
-    TextPainter textPainter,
-    double maxWidth,
-  ) {
-    final position = textPainter.getPositionForOffset(
-      Offset(maxWidth, textPainter.height),
-    );
-    final truncatedLength = (position.offset - 4).clamp(0, caption.length);
-    return '${caption.substring(0, truncatedLength)}${CommunityText.ellipsis}';
+  /// 截断正文，保证「…全文」完整落在收起态最后一行行尾（REQ-019）：
+  /// 先按入口文本实际宽度在末行预留截断锚点，再对完整 rich text 做
+  /// maxLines 布局验证，不满足则按字素回退——任何字体/字号/内容组合下
+  /// 「全文」都不会断字或被挤到下一行。
+  String _truncateCaption({
+    required String caption,
+    required TextStyle captionStyle,
+    required TextStyle entryStyle,
+    required TextPainter basePainter,
+    required double maxWidth,
+    required int maxLines,
+  }) {
+    final entryPainter = TextPainter(
+      text: TextSpan(
+        children: [
+          TextSpan(text: CommunityText.ellipsis, style: captionStyle),
+          TextSpan(text: CommunityText.fullText, style: entryStyle),
+        ],
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final reservedWidth = entryPainter.width;
+
+    var cut = basePainter
+        .getPositionForOffset(
+          Offset(
+            math.max(0, maxWidth - reservedWidth),
+            basePainter.height,
+          ),
+        )
+        .offset
+        .clamp(0, caption.length);
+    // getPositionForOffset 返回 UTF-16 位点，避免切断 surrogate pair。
+    while (cut > 0 && _isLowSurrogate(caption.codeUnitAt(cut - 1))) {
+      cut -= 1;
+    }
+
+    bool fits(String truncated) {
+      final probe = TextPainter(
+        text: TextSpan(
+          children: [
+            TextSpan(text: truncated, style: captionStyle),
+            TextSpan(text: CommunityText.ellipsis, style: captionStyle),
+            TextSpan(text: CommunityText.fullText, style: entryStyle),
+          ],
+        ),
+        maxLines: maxLines,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: maxWidth);
+      return !probe.didExceedMaxLines;
+    }
+
+    var truncated = caption.substring(0, cut);
+    while (truncated.isNotEmpty && !fits(truncated)) {
+      truncated = truncated.characters.skipLast(1).toString();
+    }
+    return truncated;
   }
+
+  static bool _isLowSurrogate(int codeUnit) =>
+      (codeUnit & 0xFC00) == 0xDC00;
 }
 
 class MediaBlurCaptionOverlay extends StatelessWidget {

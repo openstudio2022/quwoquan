@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
 from core.source_digest import current_source_definition_snapshot
 from governance.coverage.coverage_runtime import coverage_workspace_root, now_iso
@@ -285,6 +284,7 @@ def qualify_source_ready_candidates(
     candidate_files: list[Path],
     sources: list[str],
     minimum_per_province: int,
+    max_concurrent_workers: int,
     include_master_list: bool,
     exhaust_input: bool,
     resume: bool,
@@ -292,6 +292,14 @@ def qualify_source_ready_candidates(
 ) -> dict[str, Any]:
     if not _RUN_ID_RE.fullmatch(run_id):
         raise ValueError("source-readiness run-id 不合法")
+    if (
+        isinstance(max_concurrent_workers, bool)
+        or not isinstance(max_concurrent_workers, int)
+        or max_concurrent_workers < 1
+    ):
+        raise ValueError(
+            "source-readiness max-concurrent-workers 必须由调用方显式给出正整数"
+        )
     normalized_sources = tuple(dict.fromkeys(str(item).strip() for item in sources))
     unsupported = sorted(set(normalized_sources) - _ALLOWED_SOURCES)
     if unsupported or not normalized_sources:
@@ -405,9 +413,9 @@ def qualify_source_ready_candidates(
         )
     ]
 
-    policy = active_runtime_policy()
-    wave_size = max(policy.research_wave_size, policy.research_workers)
-    workers = max(1, policy.research_workers)
+    # 一个 wave 就是一次满并发：规模增长只增加 wave 数，不增加同时运行的进程数。
+    wave_size = max_concurrent_workers
+    workers = max_concurrent_workers
     with (
         ready_path.open("a", encoding="utf-8") as ready_handle,
         inconclusive_path.open("a", encoding="utf-8") as inconclusive_handle,

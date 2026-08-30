@@ -39,6 +39,19 @@ home_channels:
   mood_copy_key: home_mood_recommend
   order: 1
   runtime_overridable: true
+- id: featured
+  label_key: home_tab_featured
+  template: premium_immersive
+  layout_template: immersivePremiumStream
+  phone_columns: 1
+  supports_full_span_modules: true
+  intersection_module_policy: inlineOnly
+  content_card_policy: premiumImmersive
+  feed_query:
+    channel: premium
+  mood_copy_key: home_mood_recommend
+  order: 2
+  runtime_overridable: true
 - id: campus
   label_key: home_tab_campus
   template: single_column_multiform
@@ -50,7 +63,7 @@ home_channels:
   feed_query:
     channel: campus
   mood_copy_key: home_mood_campus
-  order: 2
+  order: 3
   runtime_overridable: true
 - id: travel
   label_key: home_tab_travel
@@ -66,7 +79,7 @@ home_channels:
   feed_query:
     channel: travel
   mood_copy_key: home_mood_travel
-  order: 3
+  order: 4
   runtime_overridable: true
 - id: photography
   label_key: home_tab_photography
@@ -79,7 +92,7 @@ home_channels:
   feed_query:
     channel: photography
   mood_copy_key: home_mood_photography
-  order: 4
+  order: 5
   runtime_overridable: true
 - id: tech
   label_key: home_tab_tech
@@ -92,7 +105,7 @@ home_channels:
   feed_query:
     channel: tech
   mood_copy_key: home_mood_tech
-  order: 5
+  order: 6
   runtime_overridable: true
 - id: car
   label_key: home_tab_car
@@ -105,7 +118,7 @@ home_channels:
   feed_query:
     channel: car
   mood_copy_key: home_mood_car
-  order: 6
+  order: 7
   runtime_overridable: true
 feed_request_type_by_category:
   recommended: micro
@@ -445,7 +458,7 @@ feature_flags:
   runtime_overridable: true
   description: 启用文章全屏书本阅读器舞台
 - flag: enable_article_page_curl
-  default: false
+  default: true
   runtime_overridable: true
   description: 启用文章翻页卷角动效
 - flag: enable_shared_video_timeline

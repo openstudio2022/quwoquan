@@ -210,10 +210,12 @@ class GatheringBoardNavigationTarget {
   final String conversationId;
 }
 
-typedef GatheringBoardTargetNavigation =
-    Future<void> Function(GatheringBoardNavigationTarget target);
-typedef GatheringBoardAssetNavigation =
-    Future<void> Function(GatheringBoardAssetIndexItem asset);
+typedef GatheringBoardTargetNavigation = Future<void> Function(
+  GatheringBoardNavigationTarget target,
+);
+typedef GatheringBoardAssetNavigation = Future<void> Function(
+  GatheringBoardAssetIndexItem asset,
+);
 
 /// Board 自身不写 owner 状态；所有操作只交给 owner 页面或 typed command 入口。
 class GatheringBoardNavigationCallbacks {

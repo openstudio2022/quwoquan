@@ -87,7 +87,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.rtc-service.redis.realtime.addr
   type: string
   scope: workload
@@ -109,7 +108,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: standalone
 - key: sys.rtc-service.service.http.addr
   type: string
   scope: workload

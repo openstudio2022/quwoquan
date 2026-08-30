@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/runtime/shell/recovery/startup_configuration_error_page.dart';
 import 'package:quwoquan_app/runtime/shell/recovery/startup_recovery_page.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
@@ -13,13 +14,20 @@ import 'package:quwoquan_cloud_contracts/generated/ops_contracts.dart'
 ///
 /// 该边界只能消费已由 metadata 生成的稳定错误码，不能显示原始异常或堆栈。
 final class BootstrapFailure {
-  const BootstrapFailure._({
+  BootstrapFailure._({
     required this.errorCode,
     required this.runtimeFailure,
-  });
+    Iterable<String> invalidKeys = const <String>[],
+  }) : invalidKeys = List<String>.unmodifiable(invalidKeys);
 
   final OpsEventRecordErrorCode errorCode;
   final RuntimeFailureBase runtimeFailure;
+
+  /// 配置失效时的脱敏键集合（只有键名，绝无 URL/值），供阻断页呈现。
+  final List<String> invalidKeys;
+
+  bool get isConfigurationInvalid =>
+      errorCode == OpsEventRecordErrorCode.startupConfigurationInvalid;
 
   factory BootstrapFailure.fromError(Object error) {
     final errorCode = error is CloudRuntimeConfigurationException
@@ -59,7 +67,16 @@ final class BootstrapFailure {
               OpsEventRecordErrorCode.startupInitializationFailed.code
         ? OpsEventRecordErrorCode.startupInitializationFailed
         : OpsEventRecordErrorCode.startupRouterUnavailable;
-    return BootstrapFailure._(errorCode: errorCode, runtimeFailure: failure);
+    final invalidDefineKeys = failure.context.attributes
+        .where((attribute) => attribute.key == 'invalidDefineKeys')
+        .map((attribute) => attribute.value)
+        .expand((value) => value.split(','))
+        .where((key) => key.isNotEmpty);
+    return BootstrapFailure._(
+      errorCode: errorCode,
+      runtimeFailure: failure,
+      invalidKeys: invalidDefineKeys,
+    );
   }
 
   factory BootstrapFailure._fromCode(
@@ -82,6 +99,7 @@ final class BootstrapFailure {
     ];
     return BootstrapFailure._(
       errorCode: errorCode,
+      invalidKeys: invalidKeys,
       runtimeFailure: RuntimeFailure(
         code: errorCode.code,
         semanticReason: errorCode.name,
@@ -111,14 +129,22 @@ class BootstrapRecoveryApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 配置失效走独立阻断页：此时 runtime 配置内的 Web/更新 URL 本身不可信，
+    // 不得复用依赖这些 URL 的网络/版本恢复页，防止把配置故障呈现成网络故障。
+    final home = failure.isConfigurationInvalid
+        ? StartupConfigurationErrorPage(
+            failureCode: failure.runtimeFailure.code,
+            invalidKeys: failure.invalidKeys,
+          )
+        : StartupRecoveryPage(
+            mount: ops_contracts.StartupRecoveryMount.bootstrap,
+            failureCode: failure.runtimeFailure.code,
+            failureSource: 'bootstrap',
+          );
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: FoundationText.welcomeTitle,
-      home: StartupRecoveryPage(
-        mount: ops_contracts.StartupRecoveryMount.bootstrap,
-        failureCode: failure.runtimeFailure.code,
-        failureSource: 'bootstrap',
-      ),
+      home: home,
     );
   }
 }

@@ -8,7 +8,10 @@ from typing import Any
 from core import paths
 from core.io import read_json, write_json
 from core.schema import assert_valid
-from core.source_digest import current_source_digest
+from core.source_digest import (
+    current_execution_bundle_identity,
+    current_source_definition_snapshot,
+)
 
 from content.execution.campaign.external_inputs import (
     content_source_revision,
@@ -36,6 +39,7 @@ def write_adoption_submission(
     output_root: Path | None = None,
     root: Path | None = None,
     frozen_source_identity: Mapping[str, Any] | None = None,
+    frozen_execution_bundle: Mapping[str, Any] | None = None,
     git_branch: str | None = None,
     git_commit_sha: str | None = None,
 ) -> Path:
@@ -59,8 +63,7 @@ def write_adoption_submission(
     identity = parse_execution_id(execution_id)
     carrier = identity.content_type.value
     if (
-        root_identity.content_type.value != "homepage"
-        or identity.vertical != root_identity.vertical
+        identity.vertical != root_identity.vertical
         or carrier not in ADOPTION_OPERATIONS
     ):
         raise ValueError("reviewed closure campaign lane identity is invalid")
@@ -74,18 +77,30 @@ def write_adoption_submission(
         str(row["carrier"]): str(row["executionId"])
         for row in receipt_document["laneExecutions"]
     }
+    active_carriers = tuple(expected_execution_ids)
     if (
-        expected_execution_ids.get("homepage") != root_identity.execution_id
+        root_identity.content_type.value != active_carriers[0]
+        or expected_execution_ids.get(active_carriers[0])
+        != root_identity.execution_id
         or expected_execution_ids.get(carrier) != identity.execution_id
     ):
         raise ValueError("reviewed closure receipt lane identity drift")
     source = (
         dict(frozen_source_identity)
         if frozen_source_identity is not None
-        else current_source_digest(repo_root=source_repo).to_document()
+        else current_source_definition_snapshot(repo_root=source_repo).to_document()
+    )
+    execution_bundle = (
+        dict(frozen_execution_bundle)
+        if frozen_execution_bundle is not None
+        else current_execution_bundle_identity(repo_root=source_repo).to_document()
     )
     if frozen_source_identity is None:
-        _require_stable_source_inputs(source, repo_root=source_repo)
+        _require_stable_source_inputs(
+            source,
+            execution_bundle=execution_bundle,
+            repo_root=source_repo,
+        )
     discovery = (
         source_repo
         / "quwoquan_data/reference"
@@ -109,14 +124,17 @@ def write_adoption_submission(
         binding=binding,
     )
     refs = lane_refs[carrier]
-    root_refs = lane_refs["homepage"]
+    workloads = {item: len(lane_refs[item]) for item in active_carriers}
     scale = execution_campaign_scale(
         root_identity.execution_id,
-        quota=len(root_refs),
+        quota=max(workloads.values()),
     )
     stable: dict[str, Any] = {
         "schema": SUBMISSION_SCHEMA,
         "scale": scale,
+        "workloadMode": "explicit",
+        "activeCarriers": list(active_carriers),
+        "workloads": workloads,
         "rootExecutionId": root_identity.execution_id,
         "executionId": identity.execution_id,
         "operation": ADOPTION_OPERATIONS[carrier],
@@ -126,15 +144,18 @@ def write_adoption_submission(
         "selector": "reviewed-closure",
         "quota": len(refs),
         "count": len(refs),
+        "workerHostSetBinding": None,
         "topic": None,
         "targetNames": list(refs),
         "sourceProviders": [],
         "semanticSelectionId": "not_applicable",
         "retryOf": None,
+        "retryUnfinishedRefs": [],
         "gitBranch": git_branch or _git_branch(source_repo),
         "gitCommitSha": git_commit_sha or _git_commit(source_repo),
         "sourceRevision": source_revision,
         "sourceDigest": source,
+        "executionBundle": execution_bundle,
         "entityCatalogDigest": catalog_digest,
         "externalInputRefs": [],
         "externalInputsDigest": external_inputs_digest([]),
@@ -148,7 +169,11 @@ def write_adoption_submission(
     )
     with _submission_lock(campaigns_dir):
         if frozen_source_identity is None:
-            _require_stable_source_inputs(source, repo_root=source_repo)
+            _require_stable_source_inputs(
+                source,
+                execution_bundle=execution_bundle,
+                repo_root=source_repo,
+            )
         _assert_no_cross_campaign_collision(
             campaigns_dir=campaigns_dir,
             root_execution_id=root_identity.execution_id,

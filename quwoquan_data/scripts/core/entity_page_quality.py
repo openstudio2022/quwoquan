@@ -36,8 +36,23 @@ FORBIDDEN_ENTITY_PAGE_PHRASES = (
 )
 
 
+PRODUCTION_VOCABULARY_PHRASES = (
+    "底稿",
+    "sourceUseMode",
+    "prompt.md",
+    "source.md",
+    "source.clean.md",
+    "4.draft",
+)
+
+
 def entity_page_quality_issues(page_path: Path, *, label: str = "") -> list[str]:
-    """拦截工程提示词/模板污染进入面向读者的实体主页。"""
+    """拦截工程提示词/模板污染进入面向读者的实体主页。
+
+    ``PRODUCTION_VOCABULARY_PHRASES`` 是我们与创作方之间指代生产过程的内部称谓。
+    读者无从理解它们指向什么，一旦进入正文就把编辑痕迹当成了可引用的出处。修复动作
+    与工程短语不同：不是整段重写，而是把该处换成读者可独立识别的表述。
+    """
     if not page_path.is_file():
         return [f"{label}: page.md 缺失" if label else "page.md 缺失"]
     text = page_path.read_text(encoding="utf-8")
@@ -46,6 +61,12 @@ def entity_page_quality_issues(page_path: Path, *, label: str = "") -> list[str]
     for phrase in FORBIDDEN_ENTITY_PAGE_PHRASES:
         if phrase in text:
             issues.append(f"{prefix}entity homepage contains engineering/template phrase: {phrase}")
+    for phrase in PRODUCTION_VOCABULARY_PHRASES:
+        if phrase in text:
+            issues.append(
+                f"{prefix}正文出现生产过程称谓「{phrase}」；"
+                "改为读者可独立识别的表述或直接陈述该事实"
+            )
     if "## 为什么值得关注" in text and "属于「" in text and "实体" in text:
         issues.append(f"{prefix}entity homepage looks like generated system explainer, not reader-facing copy")
     issues.extend(f"{prefix}{issue}" for issue in qg.intra_doc_repetition_issues(text))

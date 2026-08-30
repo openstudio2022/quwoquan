@@ -22,6 +22,8 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[3]
 PORTAL_DIR = ROOT / "quwoquan_ops" / "portal"
 sys.path.insert(0, str(ROOT / "quwoquan_ops" / "cli"))

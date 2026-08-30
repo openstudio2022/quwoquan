@@ -75,11 +75,13 @@ type AuthService struct {
 	otpCodeSealer            OTPCodeSealer
 	otpCodeGenerator         func() (string, error)
 	externalClient           ExternalInteractionClient
+	smsOtpReadiness          SMSOTPDeliveryReadinessQuery
 	accessSigner             *rtauth.Signer
 	accountSecurity          accountports.AccountSecurityReader
 	nicknamePrefix           string
 	managedAcceptancePhone   string
 	managedAcceptanceOwnerID string
+	researchAccountIDs       map[string]struct{}
 }
 
 type AuthServiceOption func(*AuthService)
@@ -201,6 +203,25 @@ func WithManagedAcceptanceIdentity(phone, ownerID string) AuthServiceOption {
 	}
 }
 
+// WithResearchAccountAllowlist 绑定 research 身份账号闭集（DEC-032）：登录与
+// refresh 的 access token 签发单点在账号命中该闭集时向 token roles 附加
+// research，能力面由 operation guard 按 role 收敛，与客户端请求头无关。
+// 空闭集表示 research 身份未启用，不影响任何账号。
+func WithResearchAccountAllowlist(accountIDs []string) AuthServiceOption {
+	return func(service *AuthService) {
+		allowlist := make(map[string]struct{}, len(accountIDs))
+		for _, raw := range accountIDs {
+			accountID := strings.TrimSpace(raw)
+			if accountID != "" {
+				allowlist[accountID] = struct{}{}
+			}
+		}
+		if len(allowlist) > 0 {
+			service.researchAccountIDs = allowlist
+		}
+	}
+}
+
 // WithAccountSessionCommands 注入 AccountSession 对象 Facet。登录协调器只传递
 // 瞬时 token，哈希、轮换 lineage、吊销与 outbox 均由对象 packet 持有。
 func WithAccountSessionCommands(facet sessionapp.CommandFacet) AuthServiceOption {
@@ -261,6 +282,14 @@ func WithAuthenticationChallenges(
 func WithExternalInteractionClient(client ExternalInteractionClient) AuthServiceOption {
 	return func(s *AuthService) {
 		s.externalClient = client
+	}
+}
+
+func WithSMSOTPDeliveryReadinessQuery(
+	query SMSOTPDeliveryReadinessQuery,
+) AuthServiceOption {
+	return func(s *AuthService) {
+		s.smsOtpReadiness = query
 	}
 }
 

@@ -1,0 +1,152 @@
+description: Hosted Human Authority 的身份、闭集、证据、SoD、CAS 与存储失败语义。
+errors:
+- code: OPS.USER.human_authority_invalid
+  reason: human_authority_invalid
+  http_status: 400
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateHumanDecisionUnit
+    - SubmitHumanRoleEvidence
+    - SealHumanDecisionRound
+    - FinalizeHumanDecision
+    - ConsumeHumanAuthorizationReceipt
+    - RevokeHumanAuthorizationReceipt
+    - IngestGitHubHumanAuthorityWebhook
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: humanAuthorityInvalid
+  go_const: ErrHumanAuthorityInvalid
+  user_message:
+    zh: 人工授权请求无效
+    en: The human authority request is invalid
+- code: OPS.USER.human_authority_unauthorized
+  reason: human_authority_unauthorized
+  http_status: 401
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateHumanDecisionUnit
+    - ListHumanDecisionUnits
+    - SubmitHumanRoleEvidence
+    - SealHumanDecisionRound
+    - FinalizeHumanDecision
+    - ReadHumanDecisionUnit
+    - ReadHumanAuthorizationReceipt
+    - ReadHumanAuthoritySigningPublicKey
+    - ConsumeHumanAuthorizationReceipt
+    - RevokeHumanAuthorizationReceipt
+    - IngestGitHubHumanAuthorityWebhook
+  recovery_action: escalate
+  disruption_level: inlineCard
+  dart_const: humanAuthorityUnauthorized
+  go_const: ErrHumanAuthorityUnauthorized
+  user_message:
+    zh: 人工授权身份未授权
+    en: The human authority identity is unauthorized
+- code: OPS.USER.human_authority_wrong_role
+  reason: human_authority_wrong_role
+  http_status: 403
+  emitted_by:
+  - surface: http
+    operations:
+    - ListHumanDecisionUnits
+    - ReadHumanDecisionUnit
+    - SubmitHumanRoleEvidence
+    - SealHumanDecisionRound
+    - FinalizeHumanDecision
+  recovery_action: escalate
+  disruption_level: inlineCard
+  dart_const: humanAuthorityWrongRole
+  go_const: ErrHumanAuthorityWrongRole
+  user_message:
+    zh: 当前身份不具备所需人工角色
+    en: The current identity does not have the required human role
+- code: OPS.USER.human_authority_conflict
+  reason: human_authority_conflict
+  http_status: 409
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateHumanDecisionUnit
+    - SubmitHumanRoleEvidence
+    - SealHumanDecisionRound
+    - FinalizeHumanDecision
+    - ConsumeHumanAuthorizationReceipt
+    - RevokeHumanAuthorizationReceipt
+    - IngestGitHubHumanAuthorityWebhook
+  recovery_action: retry
+  disruption_level: inlineCard
+  dart_const: humanAuthorityConflict
+  go_const: ErrHumanAuthorityConflict
+  user_message:
+    zh: 人工授权状态冲突
+    en: The human authority state conflicts with this command
+- code: OPS.USER.human_authority_hard_veto
+  reason: human_authority_hard_veto
+  http_status: 422
+  emitted_by:
+  - surface: http
+    operations:
+    - FinalizeHumanDecision
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: humanAuthorityHardVeto
+  go_const: ErrHumanAuthorityHardVeto
+  user_message:
+    zh: 硬否决条件未通过
+    en: A hard veto condition did not pass
+- code: OPS.USER.human_authority_sod_failed
+  reason: human_authority_sod_failed
+  http_status: 422
+  emitted_by:
+  - surface: http
+    operations:
+    - FinalizeHumanDecision
+  recovery_action: escalate
+  disruption_level: inlineCard
+  dart_const: humanAuthoritySodFailed
+  go_const: ErrHumanAuthoritySodFailed
+  user_message:
+    zh: 职责分离要求未满足
+    en: Separation of duties is not satisfied
+- code: OPS.USER.human_authority_evidence_expired
+  reason: human_authority_evidence_expired
+  http_status: 422
+  emitted_by:
+  - surface: http
+    operations:
+    - SubmitHumanRoleEvidence
+    - FinalizeHumanDecision
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: humanAuthorityEvidenceExpired
+  go_const: ErrHumanAuthorityEvidenceExpired
+  user_message:
+    zh: 人工证据已过期
+    en: Human authority evidence has expired
+- code: OPS.SYSTEM.human_authority_storage_failed
+  reason: human_authority_storage_failed
+  http_status: 500
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateHumanDecisionUnit
+    - ListHumanDecisionUnits
+    - SubmitHumanRoleEvidence
+    - SealHumanDecisionRound
+    - FinalizeHumanDecision
+    - ReadHumanDecisionUnit
+    - ReadHumanAuthorizationReceipt
+    - ReadHumanAuthoritySigningPublicKey
+    - ConsumeHumanAuthorizationReceipt
+    - RevokeHumanAuthorizationReceipt
+    - IngestGitHubHumanAuthorityWebhook
+  recovery_action: retry
+  disruption_level: snackbar
+  recovery_after_seconds: 2
+  dart_const: humanAuthorityStorageFailed
+  go_const: ErrHumanAuthorityStorageFailed
+  user_message:
+    zh: 人工授权记录保存失败
+    en: The human authority record could not be stored

@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 import 'package:quwoquan_app/service/content_service/content/comment/presentation/comment_viewer_modal.dart';
 import 'package:quwoquan_app/service/content_service/content/comment/presentation/immersive_comment_split_sheet.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
@@ -121,10 +122,11 @@ abstract final class HomeFeedCrossObjectComposition {
 
   static Widget videoPlayer({
     Key? key,
-    required MediaDeliveryReference deliveryReference,
+    MediaDeliveryReference? deliveryReference,
+    SignedVideoDelivery? signedDelivery,
     MediaDeliveryReference? adaptiveDeliveryReference,
     int adaptiveDescriptorVersion = 0,
-    MediaDeliveryReference? thumbnailReference,
+    MediaDeliveryBinding thumbnailBinding = const MediaDeliveryBinding.absent(),
     required bool initialize,
     required bool autoPlay,
     required bool inlineOverlay,
@@ -139,9 +141,10 @@ abstract final class HomeFeedCrossObjectComposition {
     return VideoPlayerWidget(
       key: key,
       deliveryReference: deliveryReference,
+      signedDelivery: signedDelivery,
       adaptiveDeliveryReference: adaptiveDeliveryReference,
       adaptiveDescriptorVersion: adaptiveDescriptorVersion,
-      thumbnailReference: thumbnailReference,
+      thumbnailBinding: thumbnailBinding,
       initialize: initialize,
       autoPlay: autoPlay,
       showControls: false,

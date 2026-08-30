@@ -15,29 +15,29 @@ import (
 	"gopkg.in/yaml.v3"
 
 	rtauth "quwoquan_service/runtime/auth"
-	contentaccountsecurity "quwoquan_service/services/content-service/internal/content/post/infrastructure/accountsecurity"
 )
 
 const contentAccountSecurityAuthorityScope = "user.account.security.read"
 
 func TestContentAccountSecurityAuthorityFailsClosedAtConstruction(t *testing.T) {
 	accessConfig := contentAuthorityAccessTokenConfig()
-	for _, config := range []contentaccountsecurity.Config{
+	for _, config := range []struct {
+		baseURL   string
+		timeoutMS int
+	}{
 		{},
-		{BaseURL: "http://user-service:18081"},
-		{BaseURL: "http://user-service:18081", TimeoutMS: 0},
-		{BaseURL: "http://user-service:18081/path", TimeoutMS: 300},
+		{baseURL: "http://user-service:18081"},
+		{baseURL: "http://user-service:18081", timeoutMS: 0},
+		{baseURL: "http://user-service:18081/path", timeoutMS: 300},
 	} {
-		if _, err := contentaccountsecurity.NewAuthority(accessConfig, config); err == nil {
+		if _, err := buildContentAccountSecurityAuthority(
+			accessConfig, config.baseURL, config.timeoutMS,
+		); err == nil {
 			t.Fatalf("config=%+v constructed despite missing or invalid authority settings", config)
 		}
 	}
-	if _, err := contentaccountsecurity.NewAuthority(
-		rtauth.TokenConfig{},
-		contentaccountsecurity.Config{
-			BaseURL:   "http://user-service:18081",
-			TimeoutMS: 300,
-		},
+	if _, err := buildContentAccountSecurityAuthority(
+		rtauth.TokenConfig{}, "http://user-service:18081", 300,
 	); err == nil {
 		t.Fatal("missing service credential material must fail authority construction")
 	}
@@ -288,8 +288,8 @@ func TestContentAccountSecurityAuthorityConfigurationAndAPIWiring(t *testing.T) 
 		definitions[key] = definition
 	}
 	for _, key := range []string{
-		"sys.content-service.accountSecurityAuthority.baseUrl",
-		"sys.content-service.accountSecurityAuthority.timeoutMs",
+		"sys.content-service.user_account_security_authority.base_url",
+		"sys.content-service.user_account_security_authority.timeout_ms",
 	} {
 		definition, exists := definitions[key]
 		if !exists {
@@ -299,7 +299,7 @@ func TestContentAccountSecurityAuthorityConfigurationAndAPIWiring(t *testing.T) 
 			t.Fatalf("authority setting %q must not have a fallback default", key)
 		}
 	}
-	if definitions["sys.content-service.accountSecurityAuthority.timeoutMs"]["type"] != "int" {
+	if definitions["sys.content-service.user_account_security_authority.timeout_ms"]["type"] != "int" {
 		t.Fatal("authority timeout must be an integer config value")
 	}
 
@@ -319,39 +319,49 @@ func TestContentAccountSecurityAuthorityConfigurationAndAPIWiring(t *testing.T) 
 				filepath.Join(root, "environments", environment, "config.yaml"),
 				&environmentConfig,
 			)
-			if got := environmentConfig.Overrides["sys.content-service.accountSecurityAuthority.baseUrl"]; got != wantBaseURL {
+			if got := environmentConfig.Overrides["sys.content-service.user_account_security_authority.base_url"]; got != wantBaseURL {
 				t.Fatalf("base URL=%#v, want=%q", got, wantBaseURL)
 			}
-			if got := environmentConfig.Overrides["sys.content-service.accountSecurityAuthority.timeoutMs"]; got != 300 {
+			if got := environmentConfig.Overrides["sys.content-service.user_account_security_authority.timeout_ms"]; got != 300 {
 				t.Fatalf("timeout=%#v, want=300ms", got)
 			}
 		})
 	}
 
-	mainSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "main.go"))
+	bootstrapSource, err := os.ReadFile(filepath.Join(root, "cmd", "api", "bootstrap.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpSource, err := os.ReadFile(
-		filepath.Join(root, "cmd", "api", "main_http_runtime.go"),
+	configSource, err := os.ReadFile(
+		filepath.Join(root, "cmd", "api", "main_config_types.go"),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// 迁移后 authority 客户端、凭据 scope、认证中间件与 readiness 检查全部由
+	// servicekit 按声明装配，服务侧只声明 scope 与内嵌通用配置段；取证对象随之
+	// 从服务自建客户端改为这两处声明。
+	source := string(bootstrapSource)
 	for _, required := range []string{
-		"accountsecurity.NewAuthority(",
-		`"account-security-authority"`,
-		"accountSecurityAuthority.CheckAccountSecurityAuthority",
+		`servicekit.Bootstrap(serviceName`,
+		"AuthorityScopes:      []string{accountSecurityReadScope}",
 	} {
-		if !strings.Contains(string(mainSource), required) {
+		if !strings.Contains(source, required) {
 			t.Fatalf("content API composition is missing %q", required)
 		}
 	}
-	if !strings.Contains(
-		string(httpSource),
-		"AccountSecurityAuthority: accountSecurityAuthority",
-	) {
-		t.Fatal("content HTTP middleware does not enforce the account security authority")
+	declaration := string(configSource)
+	for _, required := range []string{
+		`accountSecurityReadScope = "user.account.security.read"`,
+		"servicekit.BaseConfig `yaml:\",inline\"`",
+	} {
+		if !strings.Contains(declaration, required) {
+			t.Fatalf("content config declaration is missing %q", required)
+		}
+	}
+	if strings.Contains(source, "CONTENT_ACCOUNT_SECURITY") ||
+		strings.Contains(declaration, "CONTENT_ACCOUNT_SECURITY") {
+		t.Fatal("account security authority must not use an environment fallback")
 	}
 }
 
@@ -361,14 +371,38 @@ func newContentAccountSecurityAuthority(
 	accessConfig rtauth.TokenConfig,
 ) *rtauth.HTTPAccountSecurityAuthority {
 	t.Helper()
-	authority, err := contentaccountsecurity.NewAuthority(
-		accessConfig,
-		contentaccountsecurity.Config{BaseURL: baseURL, TimeoutMS: 300},
-	)
+	authority, err := buildContentAccountSecurityAuthority(accessConfig, baseURL, 300)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return authority
+}
+
+// buildContentAccountSecurityAuthority 复刻 servicekit 装配 authority 的输入
+// 形状（BaseConfig.user_account_security_authority + AuthorityScopes），让本
+// 合约测试与骨架实际走的构造路径同源。
+func buildContentAccountSecurityAuthority(
+	accessConfig rtauth.TokenConfig,
+	baseURL string,
+	timeoutMS int,
+) (*rtauth.HTTPAccountSecurityAuthority, error) {
+	credentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessConfig,
+		"content-service",
+		[]string{contentAccountSecurityAuthorityScope},
+	)
+	if err != nil {
+		return nil, err
+	}
+	timeout := time.Duration(timeoutMS) * time.Millisecond
+	return rtauth.NewHTTPAccountSecurityAuthority(
+		rtauth.HTTPAccountSecurityAuthorityConfig{
+			BaseURL:     baseURL,
+			HTTPClient:  &http.Client{Timeout: timeout},
+			Credentials: credentials,
+			Timeout:     timeout,
+		},
+	)
 }
 
 func contentAuthorityMiddleware(
@@ -498,7 +532,7 @@ func contentServiceRoot(t *testing.T) string {
 	root := filepath.Clean(
 		filepath.Join(filepath.Dir(file), "..", "..", "..", ".."),
 	)
-	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "main.go")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, "cmd", "api", "bootstrap.go")); err != nil {
 		t.Fatal(err)
 	}
 	return root

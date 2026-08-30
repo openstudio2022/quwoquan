@@ -21,7 +21,9 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from content.release.canonical import creator_projection
+from core.content_library import resolve_media_holding
 from governance.creators import avatar
+from support.media_fixture import admit_media_body
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -47,7 +49,6 @@ def _fixture(
     monkeypatch.setattr(avatar, "CONTROL_PLANE_CREATOR_POOL_ROOT", pool)
     monkeypatch.setattr(avatar, "PUBLISH_ROOT", publish)
     monkeypatch.setattr(creator_projection, "CONTROL_PLANE_CREATOR_POOL_ROOT", pool)
-    monkeypatch.setattr(creator_projection, "PUBLISH_ROOT", publish)
 
     creator_ref = "creator_test"
     profile = pool / "profiles/system_builtin/creator_test.creator.yaml"
@@ -89,9 +90,7 @@ def _fixture(
     object_key = (
         f"media/objects/sha256/{digest_hex[:2]}/{digest_hex[2:4]}/{digest_hex}.jpg"
     )
-    physical = publish / object_key
-    physical.parent.mkdir(parents=True, exist_ok=True)
-    physical.write_bytes(source)
+    admit_media_body(source)
     source_asset_id = "source-landscape"
     _write_json(
         source_root / "asset.refs.json",
@@ -176,7 +175,10 @@ def test_materialize_creator_avatar_is_traceable_and_idempotent(
     assert second["idempotent"] is True
     assert first["cropBox"] == [100, 0, 1500, 1400]
     assert first["dimensions"] == [1280, 1280]
-    assert (publish / str(first["objectKey"])).is_file()
+    # Materialization gives the derivative body to the library and leaves the
+    # versioned tree holding only the profile that cites it.
+    assert not (publish / str(first["objectKey"])).exists()
+    assert resolve_media_holding(str(first["sha256"])).is_file()
     evidence = json.loads(
         (pool / str(first["evidenceRef"])).read_text(encoding="utf-8")
     )
@@ -195,6 +197,29 @@ def test_materialize_creator_avatar_is_traceable_and_idempotent(
         (publish / "creators/creator_test/profile.json").read_text(encoding="utf-8")
     )
     assert profile["avatarAsset"]["sha256"] == first["sha256"]
+
+
+def test_materialize_creator_avatar_preserves_append_only_pool_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, publish, source_object_ref, source_asset_id = _fixture(
+        tmp_path,
+        monkeypatch,
+    )
+    history = publish / "creators/creator_test/_pool/versions/1.json"
+    history_body = b'{"recordSequence":1}\n'
+    history.parent.mkdir(parents=True, exist_ok=True)
+    history.write_bytes(history_body)
+
+    avatar.materialize_creator_avatar(
+        creator_ref="creator_test",
+        source_object_ref=source_object_ref,
+        source_asset_id=source_asset_id,
+        confirm_non_identifiable_person=True,
+    )
+
+    assert history.read_bytes() == history_body
 
 
 def test_materialize_creator_avatar_requires_subject_attestation(
@@ -264,4 +289,4 @@ def test_materialize_creator_avatar_rolls_back_new_artifacts_on_projection_failu
     assert "avatarAsset" not in profile.read_text(encoding="utf-8")
     assert unexpected.read_text(encoding="utf-8") == "user-owned"
     assert not list((pool / "evidence/avatar_rights").rglob("*.json"))
-    assert not list((publish / "media/objects/sha256").rglob("*.webp"))
+    assert not list(publish.rglob("*.webp"))

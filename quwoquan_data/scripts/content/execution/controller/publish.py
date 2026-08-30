@@ -86,6 +86,7 @@ def publish_homepage_object(
         package_root=package_root,
         pool_delivery_intent=pool_delivery_intent,
     )
+    admission_result = "replayed"
     if apply_report.is_file() and (canonical_object / "manifest.json").is_file():
         if (
             tree_integrity_stats(canonical_object)["merkleRoot"]
@@ -96,6 +97,7 @@ def publish_homepage_object(
             )
         applied = read_json(apply_report)
     else:
+        admission_result = "appended"
         before = load_or_bootstrap_inventory(PUBLISH_ROOT)["stats"]["merkleRoot"]
         audit = audit_object_transaction(
             publish_root=PUBLISH_ROOT,
@@ -119,6 +121,7 @@ def publish_homepage_object(
             tree_integrity_stats(canonical_object)["merkleRoot"]
         ),
         "objectClosureDigest": str(applied.get("objectClosureDigest") or ""),
+        "admissionResult": admission_result,
     }
 
 def _entity_ref_from_entity_rel(raw: object) -> str:

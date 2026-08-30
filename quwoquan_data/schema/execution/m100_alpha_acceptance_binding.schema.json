@@ -4,42 +4,105 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema", "promotionId", "promotionReceiptRef", "promotionReceiptDigest",
-    "releaseId", "manifestDigest",
-    "appUatEnvelopeDigest", "activationEnvelopeDigest", "exactCounts",
-    "readinessReceiptRef", "readinessReceiptFileSha256", "readinessReceiptDigest",
-    "appUatReceiptRef", "appUatReceiptFileSha256", "appUatReceiptDigest",
-    "appUatPlanDigest", "executedSampleCount", "sampleExecutionDigest"
+    "schema",
+    "promotionId",
+    "promotionReceiptRef",
+    "promotionReceiptDigest",
+    "releaseId",
+    "manifestDigest",
+    "releaseUatSamplePlanRef",
+    "releaseUatSamplePlanDigest",
+    "dataReadinessRef",
+    "dataReadinessExactByteDigest",
+    "alphaEnvironmentAcceptanceRef",
+    "alphaEnvironmentAcceptanceExactByteDigest",
+    "requiredRawResultRefs",
+    "requiredRawResultDigests",
+    "executedSampleCount"
   ],
   "properties": {
-    "schema": {"const": "quwoquan_data.m100_alpha_acceptance_binding"},
-    "promotionId": {"type": "string", "minLength": 1},
-    "promotionReceiptRef": {"type": "string", "minLength": 1},
-    "promotionReceiptDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-    "releaseId": {"type": "string", "minLength": 1},
-    "manifestDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-    "appUatEnvelopeDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-    "activationEnvelopeDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-    "exactCounts": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["homepage", "article", "image", "video", "posts"],
-      "properties": {
-        "homepage": {"const": 100},
-        "article": {"const": 100},
-        "image": {"const": 100},
-        "video": {"const": 10},
-        "posts": {"const": 210}
+    "schema": {
+      "const": "quwoquan_data.m100_alpha_acceptance_binding"
+    },
+    "promotionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "promotionReceiptRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "promotionReceiptDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "releaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manifestDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "releaseUatSamplePlanRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "releaseUatSamplePlanDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "dataReadinessRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "dataReadinessExactByteDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "alphaEnvironmentAcceptanceRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "alphaEnvironmentAcceptanceExactByteDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "requiredRawResultRefs": {
+      "type": "array",
+      "minItems": 100,
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/ref"
       }
     },
-    "readinessReceiptRef": {"type": "string", "minLength": 1},
-    "readinessReceiptFileSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-    "readinessReceiptDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-    "appUatReceiptRef": {"type": "string", "minLength": 1},
-    "appUatReceiptFileSha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-    "appUatReceiptDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-    "appUatPlanDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-    "executedSampleCount": {"const": 100},
-    "sampleExecutionDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+    "requiredRawResultDigests": {
+      "type": "array",
+      "minItems": 100,
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/digest"
+      }
+    },
+    "appUatCompletenessProjectionRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "appUatCompletenessProjectionDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "executedSampleCount": {
+      "const": 100
+    }
+  },
+  "dependentRequired": {
+    "appUatCompletenessProjectionRef": [
+      "appUatCompletenessProjectionDigest"
+    ],
+    "appUatCompletenessProjectionDigest": [
+      "appUatCompletenessProjectionRef"
+    ]
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "ref": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    }
   }
 }

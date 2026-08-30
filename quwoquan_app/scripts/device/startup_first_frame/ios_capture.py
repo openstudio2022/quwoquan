@@ -177,7 +177,12 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         else launch_pid is not None
     )
     attempt_id = str(watchdog_evidence.get("attemptId") or "").strip()
-    launch_mode = str(watchdog_evidence.get("launchMode") or "").strip()
+    launch_provenance = str(
+        watchdog_evidence.get("launchProvenance") or ""
+    ).strip()
+    runtime_config_supply_mode = str(
+        watchdog_evidence.get("runtimeConfigSupplyMode") or ""
+    ).strip()
     runtime_configuration_complete = (
         watchdog_evidence.get("runtimeConfigurationState") == "complete"
         and not watchdog_evidence.get("missingDefineKeys")
@@ -241,7 +246,8 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
                 and overlay_removed_within_deadline
                 and safe_terminal_within_deadline
                 and attempt_id not in {"", "unknown"}
-                and launch_mode not in {"", "unknown"}
+                and launch_provenance not in {"", "unknown"}
+                and runtime_config_supply_mode == "external_runtime_package"
                 and runtime_configuration_complete
                 and effective_manifest_bound
             )

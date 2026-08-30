@@ -65,6 +65,32 @@ func TestAppReleaseVersionResponseContainsOnlyRecoveryContractFields(t *testing.
 	}
 }
 
+func TestIOSRecoveryResponseKeepsAppStoreChannelOutOfPublicStartupWire(t *testing.T) {
+	service := newAppReleaseService(t)
+	mux := http.NewServeMux()
+	httpadapter.NewHandler(service).Register(mux)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(
+		http.MethodGet,
+		"/ops/app-recovery/version?platform=ios&appVersion=1.8.1&buildNumber=18100",
+		nil,
+	))
+	if response.Code != http.StatusOK {
+		t.Fatalf("ios version status=%d body=%s", response.Code, response.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode ios version response: %v", err)
+	}
+	if value, present := payload["updateUrl"]; !present || value != nil {
+		t.Fatalf("public ios updateUrl must be explicit null, payload=%v", payload)
+	}
+	if payload["updateState"] != "available" ||
+		payload["recoveryUrl"] != "https://download.quwoquan.example/download/ios" {
+		t.Fatalf("ios recovery policy=%v", payload)
+	}
+}
+
 func TestAppReleaseDerivesUpdateStateFromBuildOnly(t *testing.T) {
 	service := newAppReleaseService(t)
 	for _, test := range []struct {
@@ -97,7 +123,7 @@ func TestAppReleaseSupportsWebAsAnIndependentPlatform(t *testing.T) {
 		t.Fatalf("web version: %v", err)
 	}
 	if result.Platform != "web" || result.UpdateState != apprelease.UpdateStateAvailable ||
-		result.UpdateURL != "https://download.quwoquan.example/" {
+		result.UpdateURL == nil || *result.UpdateURL != "https://download.quwoquan.example/" {
 		t.Fatalf("web version=%+v", result)
 	}
 }
@@ -214,6 +240,58 @@ func TestAppReleaseRejectsUntrustedAndroidAPKAndIncompleteProof(t *testing.T) {
 	catalog.Web.MinimumSupportedBuild = "19000"
 	if _, err := apprelease.NewService(catalog); err == nil {
 		t.Fatal("minimum supported build above latest must be rejected")
+	}
+}
+
+func TestIOSInstallPageOffersAppStoreAndPWAWithoutSideload(t *testing.T) {
+	service := newAppReleaseService(t)
+	mux := http.NewServeMux()
+	httpadapter.NewHandler(service).Register(mux)
+	request := httptest.NewRequest(http.MethodGet, "/download/ios", nil)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("ios install status=%d body=%s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	// 已登记 iOS release 时必须同时提供 App Store 跳转与 PWA 添加主屏指引。
+	if !strings.Contains(body, "https://apps.apple.com/app/id1234567890") {
+		t.Fatalf("ios install page must link the registered App Store release, body=%q", body)
+	}
+	if !strings.Contains(body, "添加到主屏幕") {
+		t.Fatalf("ios install page must keep the PWA guidance, body=%q", body)
+	}
+	// iOS 网页版不提供二进制下载：不得出现 IPA 侧载或 APK 链接。
+	for _, forbidden := range []string{".ipa", ".apk", "itms-services"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("ios install page must not offer sideload %q, body=%q", forbidden, body)
+		}
+	}
+}
+
+func TestIOSInstallPageWithoutRegisteredReleaseKeepsPWAOnly(t *testing.T) {
+	catalog := appReleaseCatalog()
+	catalog.IOS = apprelease.Release{}
+	service, err := apprelease.NewService(catalog)
+	if err != nil {
+		t.Fatalf("android-only release service: %v", err)
+	}
+	mux := http.NewServeMux()
+	httpadapter.NewHandler(service).Register(mux)
+	request := httptest.NewRequest(http.MethodGet, "/download/ios", nil)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("ios install status=%d body=%s", response.Code, response.Body.String())
+	}
+	body := response.Body.String()
+	if strings.Contains(body, "apps.apple.com") {
+		t.Fatalf("without a registered ios release the page must not fabricate an App Store link, body=%q", body)
+	}
+	if !strings.Contains(body, "添加到主屏幕") {
+		t.Fatalf("ios install page must keep the PWA guidance, body=%q", body)
 	}
 }
 
@@ -374,7 +452,7 @@ func appReleaseCatalog() apprelease.Catalog {
 			RecoveryURL:                 "https://download.quwoquan.example/download",
 			APKURL:                      "https://cdn.quwoquan.example/releases/quwoquan-18201.apk",
 			APKHostAllowlist:            []string{"cdn.quwoquan.example"},
-			APKPackageName:              "com.quwoquan.quwoquan_app",
+			APKPackageName:              "com.leadwise.quwoquan",
 			APKSHA256:                   testSHA256,
 			APKSizeBytes:                42,
 			APKSigningCertificateSHA256: testCertificate,

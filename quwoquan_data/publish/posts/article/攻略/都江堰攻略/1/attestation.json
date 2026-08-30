@@ -1,9 +1,9 @@
 {
   "schema": "quwoquan_data.review_attestation",
   "stage": "5.review",
-  "executionId": "20260810--travel-article-m1--china-dujiangyan-research-062aa4a3-epoch10-not-m100--scale-010",
+  "executionId": "20260822--travel-article-workload-article-1--china-cultural-deep-tour--scale-007",
   "executionBinding": "frozen",
-  "objectRef": "都江堰__article_frontier_wikipedia_zh_1826e2249455",
+  "objectRef": "都江堰__article-source-bec7871d52c0454f09a0",
   "decision": "approved",
   "deterministicGate": {
     "status": "passed",
@@ -12,10 +12,10 @@
   "independentReviewer": {
     "status": "passed",
     "provider": "cursor_sdk",
-    "model": "auto",
-    "modelFamily": "auto",
-    "runId": "run-bda85b5b-c5f1-49e3-9997-ecee5ab239e2",
-    "resultHash": "sha256:01c2488f79e08483ce52721934ce39f53bbc8c596d8b2533ee4a2cb6ba677d2a"
+    "model": "grok-4.6",
+    "modelFamily": "grok",
+    "runId": "run-c7dcf03f-f9b5-422d-95d9-51f4304e5147",
+    "resultHash": "sha256:6d6d91bea314873ad318aa0d8a82a303781ecbe5cda13813390f0e33220c05f3"
   },
   "mediaRefReview": {
     "status": "passed",

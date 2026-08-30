@@ -17,7 +17,7 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/a
 /// - 页面角色稳定：bottomLayer = 3，flippingLayer = 2
 /// - backwardFoldX 随手势单调推进，落在右页内
 ///
-/// 这套不变量直接对应 `.cursor/rules/12-pageflip-backward-mainline.mdc`
+/// 这套不变量直接对应 dual-rail-discovery-redesign DEC-002。
 /// 中的「真相源不变量驱动」要求，禁止再倒推 sheet 内 front/back 切分。
 void main() {
   testWidgets(
@@ -47,6 +47,7 @@ void main() {
                 template: ArticleTemplatePreset.tech,
                 fontPreset: ArticleFontPreset.mono,
                 metrics: metrics,
+                enablePageCurl: true,
                 pagePadding: articleReaderStagePagePadding(),
                 initialPage: 2,
                 coverUrl: '',
@@ -82,10 +83,11 @@ void main() {
 
       // 路线 B baseline 层 ValueKey 必须存在（previous front 铺满右页）。
       expect(
-        find.byKey(const ValueKey<String>('article_backward_previous_front_baseline')),
+        find.byKey(
+          const ValueKey<String>('article_backward_previous_front_baseline'),
+        ),
         findsNothing,
-        reason:
-            'baseline 层只在 BACK 主线绘制期间出现；read state 下不应渲染。',
+        reason: 'baseline 层只在 BACK 主线绘制期间出现；read state 下不应渲染。',
       );
 
       // 启动后翻拖拽，进入 paperFoldBackwardMainline 渲染。
@@ -123,10 +125,11 @@ void main() {
       // BACK 不允许 full previous-front baseline 替换 current page；
       // previous front 只能通过 moving sheet 内 recto slice 出现。
       expect(
-        find.byKey(const ValueKey<String>('article_backward_previous_front_baseline')),
+        find.byKey(
+          const ValueKey<String>('article_backward_previous_front_baseline'),
+        ),
         findsNothing,
-        reason:
-            'full previous-front baseline must not appear during BACK mainline.',
+        reason: 'full previous-front baseline must not appear during BACK mainline.',
       );
 
       // 角色稳定：bottomLayer = 3，flippingLayer = 2，全程不漂移。

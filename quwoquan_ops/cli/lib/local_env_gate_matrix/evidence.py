@@ -1,4 +1,5 @@
 """Provider 本地功能面、live 矩阵证据身份与 down 收口校验（自原单文件逐字搬移）。"""
+
 from __future__ import annotations
 
 import json
@@ -9,19 +10,18 @@ from quwoquan_ops.cli.lib import provider_conformance
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
     validate_packaged_provider_runtime,
 )
-
 from quwoquan_ops.cli.lib.local_env_gate_matrix.data_phases import _invoke_env
 from quwoquan_ops.cli.lib.local_env_gate_matrix.identity import (
-    CANONICAL_TARGETS,
-    DEVICE_PROFILE_FULL,
-    EnvRunner,
-    ROOT,
-    TARGET_ENVIRONMENTS,
     _ATTEMPT_ID,
-    _namespace,
     _PROVIDER_CAPABILITY_ID,
     _PROVIDER_LAYERS,
     _SHA256,
+    CANONICAL_TARGETS,
+    DEVICE_PROFILE_FULL,
+    ROOT,
+    TARGET_ENVIRONMENTS,
+    EnvRunner,
+    _namespace,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix.preflight import _device_uat_bindings
 
@@ -98,10 +98,7 @@ def _provider_local_functional_errors(
             errors.append(f"Provider local functional cell[{index}] is malformed")
             continue
         observed.append((capability_id, str(layer)))
-    if (
-        len(observed) != len(set(observed))
-        or set(observed) != expected
-    ):
+    if len(observed) != len(set(observed)) or set(observed) != expected:
         errors.append(
             "Provider local functional cells must contain every compiled capability "
             "exactly once across all three layers"
@@ -125,10 +122,156 @@ def _down_target(target: str, *, down_fn: EnvRunner) -> dict[str, Any]:
     )
 
 
+def _package_candidate_release_identity(
+    package: dict[str, Any],
+    active_candidate: object,
+    *,
+    target: str,
+) -> dict[str, str]:
+    """Bind one fresh package result to its just-activated candidate manifest.
+
+    ``baselineId`` is intentionally target-scoped.  The cross-target identity is
+    ``environmentArtifact.releaseTrainId``; accepting a baseline from another
+    target would conflate environment configuration bytes with source-train
+    identity and make every honest Alpha/Beta/Gamma package matrix fail.
+    """
+
+    environment = TARGET_ENVIRONMENTS[target]
+    if not isinstance(active_candidate, dict):
+        raise TypeError(f"{target}: fresh active candidate is missing")
+    manifest = active_candidate.get("manifest")
+    if not isinstance(manifest, dict):
+        raise TypeError(f"{target}: fresh active candidate manifest is missing")
+    artifact = manifest.get("environmentArtifact")
+    if not isinstance(artifact, dict):
+        raise TypeError(f"{target}: environmentArtifact is missing")
+    source_capsule = artifact.get("sourceCapsule")
+    if not isinstance(source_capsule, dict):
+        raise TypeError(f"{target}: environmentArtifact sourceCapsule is missing")
+
+    if (
+        active_candidate.get("target") != target
+        or manifest.get("target") != target
+        or manifest.get("environment") != environment
+        or artifact.get("target") != target
+        or artifact.get("environment") != environment
+    ):
+        raise ValueError(f"{target}: active candidate target identity drifted")
+
+    package_baseline = str(package.get("baselineId") or "").strip()
+    candidate_baseline = str(active_candidate.get("baselineId") or "").strip()
+    manifest_baseline = str(manifest.get("baselineId") or "").strip()
+    capsule_baseline = str(source_capsule.get("baselineId") or "").strip()
+    baselines = {
+        package_baseline,
+        candidate_baseline,
+        manifest_baseline,
+        capsule_baseline,
+    }
+    if (
+        any(_SHA256.fullmatch(value) is None for value in baselines)
+        or len(baselines) != 1
+    ):
+        raise ValueError(
+            f"{target}: package baselineId does not match active manifest/sourceCapsule"
+        )
+
+    package_candidate_dir = str(package.get("candidateDir") or "").strip()
+    active_candidate_dir = str(active_candidate.get("candidateDir") or "").strip()
+    if (
+        not package_candidate_dir
+        or not active_candidate_dir
+        or package_candidate_dir != active_candidate_dir
+    ):
+        raise ValueError(f"{target}: package result is not the fresh active candidate")
+    package_digest = str(package.get("packageDigest") or "").strip()
+    manifest_package_digest = str(manifest.get("packageDigest") or "").strip()
+    artifact_package_digest = str(artifact.get("packageDigest") or "").strip()
+    if (
+        _SHA256.fullmatch(package_digest) is None
+        or package_digest != manifest_package_digest
+        or package_digest != artifact_package_digest
+    ):
+        raise ValueError(f"{target}: package digest does not match environmentArtifact")
+
+    release_train_id = str(artifact.get("releaseTrainId") or "").strip()
+    artifact_digest = str(artifact.get("environmentArtifactDigest") or "").strip()
+    if _SHA256.fullmatch(release_train_id) is None:
+        raise ValueError(f"{target}: environmentArtifact releaseTrainId is invalid")
+    if _SHA256.fullmatch(artifact_digest) is None:
+        raise ValueError(f"{target}: environmentArtifact digest is invalid")
+    return {
+        "target": target,
+        "environment": environment,
+        "baselineId": package_baseline,
+        "releaseTrainId": release_train_id,
+        "environmentArtifactDigest": artifact_digest,
+        "candidateDir": active_candidate_dir,
+    }
+
+
+def _freeze_matrix_package_identity(
+    identity: dict[str, str],
+    *,
+    release_train_id: str,
+    package_baselines: dict[str, str],
+) -> str:
+    """Freeze one common source train while retaining target-scoped baselines."""
+
+    target = str(identity.get("target") or "")
+    observed_train = str(identity.get("releaseTrainId") or "")
+    baseline = str(identity.get("baselineId") or "")
+    if (
+        target not in CANONICAL_TARGETS
+        or _SHA256.fullmatch(baseline) is None
+        or _SHA256.fullmatch(observed_train) is None
+    ):
+        raise ValueError("matrix package identity target/baseline is invalid")
+    if release_train_id and observed_train != release_train_id:
+        raise ValueError(
+            "Alpha/Beta/Gamma releaseTrainId drifted during the serial matrix; "
+            f"expected={release_train_id}; actual={observed_train}"
+        )
+    if target in package_baselines:
+        raise ValueError(
+            f"{target}: matrix package identity was recorded more than once"
+        )
+    package_baselines[target] = baseline
+    return observed_train
+
+
+def _uat_matches_package_identity(
+    uat: object,
+    *,
+    target: str,
+    release_train_id: str,
+    baseline_id: str,
+) -> bool:
+    """Reject scalar/Alpha-default UAT identity and bind the exact target."""
+
+    if not isinstance(uat, dict):
+        return False
+    package_baselines = uat.get("packageBaselines")
+    runtime_bindings = uat.get("runtimeBindings")
+    runtime_binding = (
+        runtime_bindings.get(target) if isinstance(runtime_bindings, dict) else None
+    )
+    return (
+        _SHA256.fullmatch(release_train_id) is not None
+        and _SHA256.fullmatch(baseline_id) is not None
+        and uat.get("releaseTrainId") == release_train_id
+        and isinstance(package_baselines, dict)
+        and package_baselines.get(target) == baseline_id
+        and isinstance(runtime_binding, dict)
+        and runtime_binding.get("candidateDigest") == baseline_id
+    )
+
+
 def _live_matrix_evidence_errors(
     environments: dict[str, Any],
     *,
-    baseline_id: str,
+    release_train_id: str,
+    package_baselines: dict[str, str],
     device_profile: str = DEVICE_PROFILE_FULL,
 ) -> list[str]:
     errors: list[str] = []
@@ -169,8 +312,25 @@ def _live_matrix_evidence_errors(
             or block.get("environment") != TARGET_ENVIRONMENTS[target]
         ):
             errors.append(f"{target}: environment evidence identity drifted")
+        expected_baseline = str(package_baselines.get(target) or "")
+        package_identity = block.get("packageIdentity")
+        if (
+            _SHA256.fullmatch(release_train_id) is None
+            or _SHA256.fullmatch(expected_baseline) is None
+            or not isinstance(package_identity, dict)
+            or package_identity.get("target") != target
+            or package_identity.get("environment") != TARGET_ENVIRONMENTS[target]
+            or package_identity.get("releaseTrainId") != release_train_id
+            or package_identity.get("baselineId") != expected_baseline
+        ):
+            errors.append(
+                f"{target}: package release-train identity is missing or drifted"
+            )
         package = block.get("package")
-        if not isinstance(package, dict) or package.get("baselineId") != baseline_id:
+        if (
+            not isinstance(package, dict)
+            or package.get("baselineId") != expected_baseline
+        ):
             errors.append(f"{target}: package baselineId is missing or drifted")
         elif (
             _SHA256.fullmatch(str(package.get("packageDigest") or "")) is None
@@ -184,9 +344,7 @@ def _live_matrix_evidence_errors(
             errors.append(f"{target}: package/OCI/Elasticsearch identity is incomplete")
         else:
             try:
-                candidate_dir = Path(
-                    str(package.get("candidateDir") or "")
-                ).resolve()
+                candidate_dir = Path(str(package.get("candidateDir") or "")).resolve()
                 validate_packaged_provider_runtime(
                     package.get("providerRuntime"),
                     expected_environment=TARGET_ENVIRONMENTS[target],
@@ -206,13 +364,16 @@ def _live_matrix_evidence_errors(
                 or evidence.get("exitCode") != 0
                 or not str(evidence.get("reportDir") or "").strip()
             ):
-                errors.append(f"{target}: {step} has no successful report-bound evidence")
+                errors.append(
+                    f"{target}: {step} has no successful report-bound evidence"
+                )
         attempt = block.get("startupAttempt")
         if (
             not isinstance(attempt, dict)
             or attempt.get("status") != "running"
             or attempt.get("target") != target
             or attempt.get("env") != TARGET_ENVIRONMENTS[target]
+            or attempt.get("candidateDigest") != expected_baseline
         ):
             errors.append(f"{target}: running startup attempt evidence is missing")
         homepage = block.get("homepageReleaseEvidence")
@@ -242,7 +403,9 @@ def _live_matrix_evidence_errors(
                 or int(telemetry.get("executed") or 0) <= 0
                 or int(telemetry.get("skipped") or 0) != 0
             ):
-                errors.append(f"{target}: {step} has no Elasticsearch execution evidence")
+                errors.append(
+                    f"{target}: {step} has no Elasticsearch execution evidence"
+                )
         for step, _, _ in _device_uat_bindings(
             device_profile=device_profile,
             ios_simulator_device="ios-simulator",
@@ -255,7 +418,12 @@ def _live_matrix_evidence_errors(
                 or uat.get("status") != "passed"
                 or int(uat.get("executed") or 0) <= 0
                 or int(uat.get("skipped") or 0) != 0
-                or uat.get("packageBaseline") != baseline_id
+                or not _uat_matches_package_identity(
+                    uat,
+                    target=target,
+                    release_train_id=release_train_id,
+                    baseline_id=expected_baseline,
+                )
                 or not _contains_non_unknown_attempt(uat)
             ):
                 errors.append(f"{target}: {step} has no release-bound device attempt")

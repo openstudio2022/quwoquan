@@ -308,7 +308,6 @@ class _WorksVideoBottomChromeState extends State<_WorksVideoBottomChrome> {
           child: ImmersiveViewerLayout.alignToRail(
             context: context,
             layoutSpec: widget.layoutSpec,
-            includeBottomSafeSideInset: true,
             child: SizedBox(
               width: double.infinity,
               child: _WorksVideoControlRow(

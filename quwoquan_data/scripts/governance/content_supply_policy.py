@@ -87,6 +87,9 @@ class ContentSupplyPolicy:
     homepage_minimum_fact_chars: int
     homepage_minimum_section_chars: int
     homepage_source_outline_section_chars: int
+    homepage_max_source_paragraph_overlap: float
+    homepage_max_intra_body_paragraph_similarity: float
+    homepage_derivation_paragraph_minimum_chars: int
     media_subject: MediaSubjectPolicy
     video_delivery: VideoDeliveryPolicy
 
@@ -175,6 +178,18 @@ def load_content_supply_policy(vertical: str) -> ContentSupplyPolicy:
         homepage_source_outline_section_chars=_positive_int(
             quality["homepageSourceOutlineSectionChars"],
             label="quality.homepageSourceOutlineSectionChars",
+        ),
+        homepage_max_source_paragraph_overlap=_ratio(
+            quality["homepageMaxSourceParagraphOverlap"],
+            label="quality.homepageMaxSourceParagraphOverlap",
+        ),
+        homepage_max_intra_body_paragraph_similarity=_ratio(
+            quality["homepageMaxIntraBodyParagraphSimilarity"],
+            label="quality.homepageMaxIntraBodyParagraphSimilarity",
+        ),
+        homepage_derivation_paragraph_minimum_chars=_positive_int(
+            quality["homepageDerivationParagraphMinimumChars"],
+            label="quality.homepageDerivationParagraphMinimumChars",
         ),
         media_subject=MediaSubjectPolicy(
             representative_indicators=tuple(

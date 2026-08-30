@@ -6,10 +6,12 @@ package tag_taxonomy_release_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	releasehttp "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/adapters/inbound/http"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/application/taxonomyrelease"
@@ -48,6 +50,103 @@ func TestTaxonomyReleaseCommandsOwnTheHTTPBoundary(t *testing.T) {
 	}
 	if got := store.releases["release-readiness"]; got.Status != releasemodel.StatusActive {
 		t.Fatalf("release status = %q, want active", got.Status)
+	}
+}
+
+func TestTaxonomyReleaseStageAllowsDifferentReleaseIDsToShareDigest(t *testing.T) {
+	store := &readinessReleaseStore{releases: map[string]releasemodel.Release{}}
+	facade, err := taxonomyrelease.NewFacade(store, readinessSnapshotReader{})
+	if err != nil {
+		t.Fatalf("NewFacade() error = %v", err)
+	}
+	ctx := context.Background()
+	command := taxonomyrelease.StageCommand{
+		ReleaseID:       "release-first",
+		SourceOwner:     "quwoquan_data",
+		CanonicalDigest: "sha256:shared-taxonomy-snapshot",
+		ReleaseKind:     releasemodel.ReleaseKindContent,
+		NodeCount:       1,
+	}
+	if _, err := facade.Stage(ctx, command); err != nil {
+		t.Fatalf("stage first release: %v", err)
+	}
+	command.ReleaseID = "release-second"
+	if _, err := facade.Stage(ctx, command); err != nil {
+		t.Fatalf("stage second release with shared digest: %v", err)
+	}
+	if len(store.releases) != 2 {
+		t.Fatalf("stored releases = %d, want 2", len(store.releases))
+	}
+	if _, err := facade.Activate(ctx, "release-second"); err != nil {
+		t.Fatalf("activate second release: %v", err)
+	}
+	if store.activeID != "release-second" {
+		t.Fatalf("active release = %q, want release-second", store.activeID)
+	}
+
+	command.ReleaseID = "release-first"
+	command.NodeCount = 2
+	if _, err := facade.Stage(ctx, command); err != releasemodel.ErrDigestConflict {
+		t.Fatalf("same releaseId drift error = %v, want idempotency conflict", err)
+	}
+}
+
+func TestTaxonomyReleaseStageResolvesConcurrentReleaseIDVersionConflict(t *testing.T) {
+	command := taxonomyrelease.StageCommand{
+		ReleaseID:       "release-concurrent",
+		SourceOwner:     "quwoquan_data",
+		CanonicalDigest: "sha256:concurrent-taxonomy-snapshot",
+		ReleaseKind:     releasemodel.ReleaseKindContent,
+		NodeCount:       1,
+	}
+	existing, err := releasemodel.NewStaged(
+		command.ReleaseID,
+		command.SourceOwner,
+		command.CanonicalDigest,
+		command.ReleaseKind,
+		command.NodeCount,
+		time.Unix(1, 0),
+	)
+	if err != nil {
+		t.Fatalf("build concurrent release: %v", err)
+	}
+
+	for _, test := range []struct {
+		name     string
+		existing releasemodel.Release
+		wantErr  error
+	}{
+		{name: "identical intent replays", existing: existing},
+		{
+			name: "drifted intent conflicts",
+			existing: func() releasemodel.Release {
+				drifted := existing
+				drifted.CanonicalDigest = "sha256:drifted-taxonomy-snapshot"
+				return drifted
+			}(),
+			wantErr: releasemodel.ErrDigestConflict,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := &versionConflictReleaseStore{
+				readinessReleaseStore: readinessReleaseStore{releases: map[string]releasemodel.Release{}},
+				existing:              test.existing,
+			}
+			facade, err := taxonomyrelease.NewFacade(store, readinessSnapshotReader{})
+			if err != nil {
+				t.Fatalf("NewFacade() error = %v", err)
+			}
+			replayed, err := facade.Stage(context.Background(), command)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("Stage() error = %v, want %v", err, test.wantErr)
+			}
+			if test.wantErr == nil && replayed.ReleaseID != existing.ReleaseID {
+				t.Fatalf("Stage() release = %+v, want existing release", replayed)
+			}
+			if store.loadCalls != 2 {
+				t.Fatalf("Load() calls = %d, want initial miss plus conflict reload", store.loadCalls)
+			}
+		})
 	}
 }
 
@@ -92,6 +191,30 @@ func TestTaxonomyReleaseErrorPathUsesCompleteRuntimeErrorEnvelope(t *testing.T) 
 	}
 }
 
+type versionConflictReleaseStore struct {
+	readinessReleaseStore
+	existing  releasemodel.Release
+	loadCalls int
+}
+
+func (store *versionConflictReleaseStore) Load(
+	_ context.Context,
+	_ string,
+) (releasemodel.Release, bool, error) {
+	store.loadCalls++
+	if store.loadCalls == 1 {
+		return releasemodel.Release{}, false, nil
+	}
+	return store.existing, true, nil
+}
+
+func (store *versionConflictReleaseStore) InsertStaged(
+	_ context.Context,
+	_ releasemodel.Release,
+) error {
+	return releasemodel.ErrVersionConflict
+}
+
 type readinessSnapshotReader struct{}
 
 func (readinessSnapshotReader) HasCompleteSnapshot(context.Context, string, int) (bool, error) {
@@ -118,18 +241,6 @@ func (store *readinessReleaseStore) Load(
 ) (releasemodel.Release, bool, error) {
 	release, found := store.releases[releaseID]
 	return release, found, nil
-}
-
-func (store *readinessReleaseStore) FindByDigest(
-	_ context.Context,
-	digest string,
-) (releasemodel.Release, bool, error) {
-	for _, release := range store.releases {
-		if release.CanonicalDigest == digest {
-			return release, true, nil
-		}
-	}
-	return releasemodel.Release{}, false, nil
 }
 
 func (store *readinessReleaseStore) InsertStaged(

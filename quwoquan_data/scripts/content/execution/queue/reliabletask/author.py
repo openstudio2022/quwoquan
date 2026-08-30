@@ -25,6 +25,7 @@ from content.execution.production_contracts import (
 )
 from content.execution.queue.completion import author_completion_issues
 from content.execution.queue.model import QueueJob
+from content.execution.queue.reliabletask.author_retry_feedback import article_retry_review_feedback_addendum as _render_retry_review_feedback
 
 WorkerAgentRunner = Callable[[ExecutionContext, str], AgentRunOutcome]
 _DURABLE_OUTPUT_SETTLE_SECONDS = 1.5
@@ -34,10 +35,7 @@ _DURABLE_OUTPUT_SETTLE_SAMPLES = 8
 def _execution_context(
     execution_id: str, *, semantic_max_attempts: int
 ) -> ExecutionContext:
-    from core.runtime_policy import active_runtime_policy
-
     spec = store.load_spec(execution_id)
-    policy = active_runtime_policy()
     semantic_binding = semantic_execution_binding_for_execution(execution_id)
     model = semantic_binding.pair.author
     return ExecutionContext(
@@ -46,7 +44,6 @@ def _execution_context(
         spec=spec,
         managed=True,
         runtime=semantic_binding.runtime,
-        max_workers=policy.author_workers,
         model=model.model_id,
         model_parameters=model.parameters,
         agent_provider=model.provider,
@@ -117,10 +114,10 @@ def _homepage_repair_addendum(job: QueueJob, object_dir: Path) -> str:
     rendered_issues = "\n".join(f"- [{issue.code.value}] {issue.message}" for issue in issues)
     rebuild_from_base = repair_strategies == {"rebuild_from_frozen_base"}
     repair_strategy = (
-        "本次是底稿留存不足。不得在低保真旧 page.md 上继续扩写；必须以 prompt.md "
-        "中完整的『底稿材料』重新构建 page.md：先按原顺序恢复全部必需标题、正文段落"
-        "与每个图片占位符，再仅对约四分之一句子做局部润色。每个底稿段落至少保留"
-        "三分之二原句骨架，不得摘要、合并或省略后半部分。"
+        "本次必须整份重建。不得在旧 page.md 上继续扩写；必须以 prompt.md 中完整的"
+        "『底稿材料』重新构建 page.md：按原顺序覆盖全部必需标题与每个图片占位符，"
+        "正文沿用底稿原文的尺度只按 prompt.md 里 sourceUseMode 那一条指令执行，"
+        "不得丢失该指令要求保留的事实。"
         if rebuild_from_base
         else (
             "请在现有 page.md 基础上逐项修订，保留已通过的底稿和图片占位符，"
@@ -235,6 +232,10 @@ def _article_repair_addendum(job: QueueJob, object_dir: Path) -> str:
     )
 
 
+def _article_retry_review_feedback_addendum(job: QueueJob, object_dir: Path) -> str:
+    return _render_retry_review_feedback(job, object_dir, execution_root(job.execution_id))
+
+
 def _author_prompt(_ctx: ExecutionContext, job: QueueJob) -> tuple[str, str]:
     """Read the single frozen prompt bound to a ReliableTask author job.
 
@@ -277,6 +278,7 @@ def _author_prompt(_ctx: ExecutionContext, job: QueueJob) -> tuple[str, str]:
     if checkpoint == "build_homepage":
         prompt += _homepage_repair_addendum(job, object_dir)
     elif checkpoint == "post_author":
+        prompt += _article_retry_review_feedback_addendum(job, object_dir)
         prompt += _article_repair_addendum(job, object_dir)
     return checkpoint, prompt
 

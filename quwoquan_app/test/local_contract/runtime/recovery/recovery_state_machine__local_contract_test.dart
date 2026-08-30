@@ -18,10 +18,12 @@ void main() {
     expect(machine.snapshot.phase, RecoveryPhase.startupVersionUnavailable);
     expect(
       machine.confirmVersion(
+        platform: RecoveryVersionPlatform.android,
         currentBuild: 18100,
         latestBuild: 18201,
         minimumSupportedBuild: 18000,
         updateState: RecoveryUpdateState.available,
+        updateChannel: RecoveryVersionChannel.nativeUpdate,
         updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
         recoveryUrl: 'https://quwoquan.com/',
         trustedBaseUrls: trustedBaseUrls,
@@ -32,10 +34,12 @@ void main() {
 
     expect(
       machine.confirmVersion(
+        platform: RecoveryVersionPlatform.android,
         currentBuild: 18100,
         latestBuild: 18300,
         minimumSupportedBuild: 18000,
         updateState: RecoveryUpdateState.available,
+        updateChannel: RecoveryVersionChannel.nativeUpdate,
         updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
         recoveryUrl: 'https://quwoquan.com/',
         trustedBaseUrls: trustedBaseUrls,
@@ -61,10 +65,12 @@ void main() {
       expect(machine.snapshot.phase, RecoveryPhase.runtimeVersionUnavailable);
       expect(
         machine.confirmVersion(
+          platform: RecoveryVersionPlatform.android,
           currentBuild: 18100,
           latestBuild: 18201,
           minimumSupportedBuild: 18000,
           updateState: RecoveryUpdateState.available,
+          updateChannel: RecoveryVersionChannel.nativeUpdate,
           updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
           recoveryUrl: 'https://quwoquan.com/',
           trustedBaseUrls: trustedBaseUrls,
@@ -80,10 +86,12 @@ void main() {
     final machine = RecoveryStateMachine();
     expect(
       machine.confirmVersion(
+        platform: RecoveryVersionPlatform.android,
         currentBuild: 18100,
         latestBuild: 18201,
         minimumSupportedBuild: 18000,
         updateState: RecoveryUpdateState.available,
+        updateChannel: RecoveryVersionChannel.nativeUpdate,
         updateUrl: 'javascript:alert(1)',
         recoveryUrl: 'https://quwoquan.com/',
         trustedBaseUrls: trustedBaseUrls,
@@ -93,10 +101,12 @@ void main() {
     expect(machine.snapshot.phase, RecoveryPhase.startupChecking);
     expect(
       machine.confirmVersion(
+        platform: RecoveryVersionPlatform.android,
         currentBuild: 18100,
         latestBuild: 18201,
         minimumSupportedBuild: 18000,
         updateState: RecoveryUpdateState.available,
+        updateChannel: RecoveryVersionChannel.nativeUpdate,
         updateUrl: 'https://attacker.example/quwoquan.apk',
         recoveryUrl: 'https://quwoquan.com/',
         trustedBaseUrls: trustedBaseUrls,
@@ -105,15 +115,17 @@ void main() {
     );
   });
 
-  test('confirmed latest build does not require a native update url', () {
+  test('confirmed latest Android build retains its canonical channel', () {
     final machine = RecoveryStateMachine();
     expect(
       machine.confirmVersion(
+        platform: RecoveryVersionPlatform.android,
         currentBuild: 18201,
         latestBuild: 18201,
         minimumSupportedBuild: 18000,
         updateState: RecoveryUpdateState.none,
-        updateUrl: '',
+        updateChannel: RecoveryVersionChannel.nativeUpdate,
+        updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
         recoveryUrl: 'https://quwoquan.com/',
         trustedBaseUrls: trustedBaseUrls,
       ),
@@ -123,14 +135,91 @@ void main() {
     expect(machine.snapshot.updateUrl, isEmpty);
   });
 
-  test('build below minimum is marked as a required update', () {
+  test('typed Web-only channel settles a newer build without inference', () {
     final machine = RecoveryStateMachine();
     expect(
       machine.confirmVersion(
+        platform: RecoveryVersionPlatform.ios,
+        currentBuild: 18100,
+        latestBuild: 18201,
+        minimumSupportedBuild: 18000,
+        updateState: RecoveryUpdateState.available,
+        updateChannel: RecoveryVersionChannel.webOnly,
+        updateUrl: null,
+        recoveryUrl: 'https://quwoquan.com/ios',
+        trustedBaseUrls: trustedBaseUrls,
+      ),
+      isTrue,
+    );
+    expect(machine.snapshot.phase, RecoveryPhase.startupWebOnly);
+    expect(machine.snapshot.phase.name, 'startupWebOnly');
+    expect(machine.snapshot.isWebOnly, isTrue);
+    expect(machine.snapshot.showsUpdate, isFalse);
+    expect(machine.snapshot.showsWebSecondary, isFalse);
+    expect(machine.snapshot.recoveryUrl, 'https://quwoquan.com/ios');
+    expect(machine.markVersionUnavailable(), isFalse);
+    expect(machine.restartVersionCheckAfterUpdate(), isFalse);
+  });
+
+  test('native-update channel rejects a missing update URL', () {
+    final machine = RecoveryStateMachine();
+    expect(
+      machine.confirmVersion(
+        platform: RecoveryVersionPlatform.android,
+        currentBuild: 18100,
+        latestBuild: 18201,
+        minimumSupportedBuild: 18000,
+        updateState: RecoveryUpdateState.available,
+        updateChannel: RecoveryVersionChannel.nativeUpdate,
+        updateUrl: null,
+        recoveryUrl: 'https://quwoquan.com/',
+        trustedBaseUrls: trustedBaseUrls,
+      ),
+      isFalse,
+    );
+    expect(machine.snapshot.phase, RecoveryPhase.startupChecking);
+  });
+
+  test('runtime iOS Web-only is terminal after the single reentry budget', () {
+    final machine = RecoveryStateMachine(
+      initial: const RecoverySnapshot(phase: RecoveryPhase.runtimeUnavailable),
+    );
+    expect(machine.beginRuntimeReentry(), isTrue);
+    expect(machine.failRuntimeReentry(), isTrue);
+    expect(
+      machine.confirmVersion(
+        platform: RecoveryVersionPlatform.ios,
         currentBuild: 17000,
         latestBuild: 18201,
         minimumSupportedBuild: 18000,
         updateState: RecoveryUpdateState.required,
+        updateChannel: RecoveryVersionChannel.webOnly,
+        updateUrl: null,
+        recoveryUrl: 'https://quwoquan.com/ios',
+        trustedBaseUrls: trustedBaseUrls,
+      ),
+      isTrue,
+    );
+    expect(machine.snapshot.phase, RecoveryPhase.runtimeWebOnly);
+    expect(machine.snapshot.phase.name, 'runtimeWebOnly');
+    expect(machine.snapshot.isWebOnly, isTrue);
+    expect(machine.snapshot.showsUpdate, isFalse);
+    expect(machine.snapshot.showsWebSecondary, isFalse);
+    expect(machine.beginRuntimeReentry(), isFalse);
+    expect(machine.restartVersionCheckAfterUpdate(), isFalse);
+    expect(machine.markVersionUnavailable(), isFalse);
+  });
+
+  test('build below minimum is marked as a required update', () {
+    final machine = RecoveryStateMachine();
+    expect(
+      machine.confirmVersion(
+        platform: RecoveryVersionPlatform.android,
+        currentBuild: 17000,
+        latestBuild: 18201,
+        minimumSupportedBuild: 18000,
+        updateState: RecoveryUpdateState.required,
+        updateChannel: RecoveryVersionChannel.nativeUpdate,
         updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
         recoveryUrl: 'https://quwoquan.com/',
         trustedBaseUrls: trustedBaseUrls,
@@ -149,10 +238,12 @@ void main() {
     );
     expect(
       machine.confirmVersion(
+        platform: RecoveryVersionPlatform.android,
         currentBuild: 18100,
         latestBuild: 18201,
         minimumSupportedBuild: 18000,
         updateState: RecoveryUpdateState.available,
+        updateChannel: RecoveryVersionChannel.nativeUpdate,
         requiredUpdateOnly: true,
         updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
         recoveryUrl: 'https://quwoquan.com/',
@@ -164,10 +255,12 @@ void main() {
 
     expect(
       machine.confirmVersion(
+        platform: RecoveryVersionPlatform.android,
         currentBuild: 17000,
         latestBuild: 18201,
         minimumSupportedBuild: 18000,
         updateState: RecoveryUpdateState.required,
+        updateChannel: RecoveryVersionChannel.nativeUpdate,
         requiredUpdateOnly: true,
         updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
         recoveryUrl: 'https://quwoquan.com/',
@@ -177,5 +270,46 @@ void main() {
     );
     expect(machine.snapshot.phase, RecoveryPhase.runtimeUpdateRequired);
     expect(machine.snapshot.requiresUpdate, isTrue);
+  });
+
+  test('platform and update channel must match the canonical matrix', () {
+    final iosMachine = RecoveryStateMachine();
+    expect(
+      iosMachine.confirmVersion(
+        platform: RecoveryVersionPlatform.ios,
+        currentBuild: 18100,
+        latestBuild: 18201,
+        minimumSupportedBuild: 18000,
+        updateState: RecoveryUpdateState.available,
+        updateChannel: RecoveryVersionChannel.nativeUpdate,
+        updateUrl: 'https://cdn.quwoquan.com/download/ios/latest.json',
+        recoveryUrl: 'https://quwoquan.com/ios',
+        trustedBaseUrls: trustedBaseUrls,
+      ),
+      isFalse,
+    );
+    expect(iosMachine.snapshot.phase, RecoveryPhase.startupChecking);
+
+    for (final platform in <RecoveryVersionPlatform>[
+      RecoveryVersionPlatform.android,
+      RecoveryVersionPlatform.web,
+    ]) {
+      final machine = RecoveryStateMachine();
+      expect(
+        machine.confirmVersion(
+          platform: platform,
+          currentBuild: 18100,
+          latestBuild: 18201,
+          minimumSupportedBuild: 18000,
+          updateState: RecoveryUpdateState.available,
+          updateChannel: RecoveryVersionChannel.webOnly,
+          updateUrl: null,
+          recoveryUrl: 'https://quwoquan.com/',
+          trustedBaseUrls: trustedBaseUrls,
+        ),
+        isFalse,
+      );
+      expect(machine.snapshot.phase, RecoveryPhase.startupChecking);
+    }
   });
 }

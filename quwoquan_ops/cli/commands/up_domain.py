@@ -29,10 +29,288 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from quwoquan_ops.cli.commands.up_runtime import _command_up_impl as _command_up_impl
+from quwoquan_ops.cli.commands.up_runtime import _command_up_impl as _runtime_command_up_impl
+
+
+def _app_launch_projection(*, skip_app: bool, steps: list[dict[str, Any]]) -> dict[str, Any]:
+    """Report App execution independently from service startup success."""
+
+    if skip_app:
+        return {
+            "status": "not_executed",
+            "reason": "--skip-app explicitly disabled App launch",
+        }
+    app_steps = [
+        step
+        for step in steps
+        if isinstance(step, Mapping)
+        and (
+            str(step.get("name") or "") == "app-launch"
+            or "app-launch" in " ".join(str(item) for item in step.get("argv") or [])
+        )
+    ]
+    if not app_steps:
+        return {
+            "status": "not_executed",
+            "reason": "no App launch attempt was created",
+        }
+    return {
+        "status": "executed",
+        "attempts": len(app_steps),
+        "passed": all(int(step.get("exitCode") or 0) == 0 for step in app_steps),
+    }
+
+
+def _up_evidence_projection(
+    args: argparse.Namespace,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Independently read back runtime identity and attach one evidence envelope."""
+
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.evidence_generation import (
+        build_evidence_generation_envelope,
+        sha256_file,
+    )
+    from quwoquan_ops.cli.lib.runtime_container_liveness import (
+        ComposeProjectAbsent,
+        verify_running_receipt_liveness,
+    )
+
+    requested_target = str(getattr(args, "target", "") or "").strip()
+    requested_env = str(getattr(args, "env", "") or "").strip()
+    selectors_resolved = bool(requested_target) != bool(requested_env)
+    if selectors_resolved and not requested_target:
+        requested_target = str(_stackctl.DEV_UP_STACK_TARGETS.get(requested_env) or "")
+        if not requested_target:
+            requested_target = _stackctl.app_target_for_env(requested_env)
+    if not requested_target:
+        return payload
+
+    # Missing evidence allocation is a typed in-memory result, never an alias
+    # for the current working directory.  Selector validation also completes
+    # before candidate/startup readback so an invalid command cannot inherit
+    # stale runtime evidence from an earlier attempt.
+    report_ref = str(payload.get("reportDir") or "").strip()
+    if not report_ref or not selectors_resolved:
+        return payload
+    resolved_env = (
+        requested_env
+        or str(payload.get("environment") or "").strip()
+        or _stackctl.env_for_target(requested_target)
+    )
+    try:
+        report_dir = _stackctl.validate_up_report_dir(
+            report_ref,
+            env_name=resolved_env,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        return {
+            **payload,
+            "exitCode": 2,
+            "summary": f"stackctl up is GATE_BLOCK for {requested_env or requested_target}",
+            "details": [f"unsafe up report directory: {exc}"],
+        }
+    report_path = report_dir / "report.json"
+    report: dict[str, Any] = {}
+    report_was_loaded = False
+    if report_path.is_file() and not report_path.is_symlink():
+        try:
+            loaded = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            loaded = {}
+        if isinstance(loaded, dict) and loaded:
+            report = loaded
+            report_was_loaded = True
+    if not report:
+        # Early failures may not own a persisted report.  Preserve their typed
+        # result instead of manufacturing an empty successful document.
+        report = {
+            "command": "up",
+            "target": requested_env or requested_target,
+            "resolvedTarget": requested_target,
+            "status": (
+                "ok"
+                if int(payload.get("exitCode") or 0) == 0
+                else "gate_block"
+                if int(payload.get("exitCode") or 0) == 2
+                else "failed"
+            ),
+            "details": list(payload.get("details") or []),
+        }
+
+    steps = [item for item in report.get("steps") or [] if isinstance(item, dict)]
+    app_launch = _app_launch_projection(
+        skip_app=bool(getattr(args, "skip_app", False)),
+        steps=steps,
+    )
+
+    candidate_snapshot: Mapping[str, Any] | None = None
+    candidate_error = ""
+    try:
+        candidate_snapshot = _stackctl.active_deployment_candidate_snapshot(
+            requested_target
+        )
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        candidate_error = str(exc)
+
+    startup_receipt: Mapping[str, Any] | None = None
+    startup_error = ""
+    startup_path = _stackctl.startup_attempt_path(requested_target)
+    try:
+        startup_receipt = _stackctl.read_startup_attempt(requested_target)
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        startup_error = str(exc)
+
+    startup_readback: dict[str, Any]
+    liveness_report: dict[str, Any]
+    if isinstance(startup_receipt, Mapping):
+        startup_readback = {
+            "status": "executed",
+            "receiptRef": str(startup_path.resolve()),
+            "receiptDigest": (
+                sha256_file(startup_path)
+                if startup_path.is_file() and not startup_path.is_symlink()
+                else ""
+            ),
+            "identity": {
+                field: startup_receipt.get(field)
+                for field in (
+                    "attemptId",
+                    "candidateDigest",
+                    "configurationDigest",
+                    "providerRuntimeDigest",
+                    "observabilityLogSinkDigest",
+                    "composeProject",
+                    "imageTransportTag",
+                    "imageComposition",
+                    "status",
+                )
+            },
+        }
+        try:
+            liveness = verify_running_receipt_liveness(
+                startup_receipt, runner=_stackctl.run
+            )
+        except ComposeProjectAbsent as exc:
+            liveness_report = {"status": "not_applicable", "reason": str(exc)}
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            liveness_report = {"status": "executed", "result": "failed", "issues": [str(exc)]}
+        else:
+            if liveness is None:
+                liveness_report = {
+                    "status": "not_applicable",
+                    "reason": "startup receipt is not in running state",
+                }
+            else:
+                liveness_report = {
+                    "status": "executed",
+                    "result": liveness.status,
+                    "composeProject": liveness.compose_project,
+                    "containers": [
+                        {
+                            "name": item.name,
+                            "service": item.service,
+                            "state": item.state,
+                            "health": item.health,
+                            "exitCode": item.exit_code,
+                            "declaredOneShot": item.declared_one_shot,
+                        }
+                        for item in liveness.containers
+                    ],
+                    "issues": list(liveness.issues()),
+                }
+    else:
+        startup_readback = {
+            "status": "not_executed",
+            "reason": startup_error or "no startup receipt was produced",
+        }
+        liveness_report = {
+            "status": "not_applicable",
+            "reason": "runtime liveness requires a running startup receipt",
+        }
+
+    candidate_digest = str(
+        (candidate_snapshot or {}).get("baselineId") or ""
+    ).strip()
+    startup_candidate = str(
+        (startup_receipt or {}).get("candidateDigest") or ""
+    ).strip()
+    generation_issues: list[str] = []
+    if candidate_error:
+        generation_issues.append(f"active candidate readback failed: {candidate_error}")
+    if startup_error:
+        generation_issues.append(f"startup receipt readback failed: {startup_error}")
+    if candidate_digest and startup_candidate and candidate_digest != startup_candidate:
+        generation_issues.append(
+            "startup receipt candidateDigest does not match the active candidate"
+        )
+
+    envelope = build_evidence_generation_envelope(
+        command="up",
+        candidate_snapshot=candidate_snapshot,
+        startup_receipt=startup_receipt,
+        startup_status=(
+            "executed" if isinstance(startup_receipt, Mapping) else "not_executed"
+        ),
+        startup_reason=startup_error or "no startup receipt was produced",
+        upstream_status="not_applicable",
+        upstream_reason="up is the startup evidence producer",
+    )
+    report.update(
+        {
+            "appLaunch": app_launch,
+            "evidenceEnvelope": envelope,
+            "startupReadback": startup_readback,
+            "runtimeLiveness": liveness_report,
+            "generationIssues": generation_issues,
+        }
+    )
+    if generation_issues and int(payload.get("exitCode") or 0) == 0:
+        payload.update(
+            {
+                "exitCode": 2,
+                "summary": f"stackctl up is GATE_BLOCK for {requested_env or requested_target}",
+                "details": generation_issues,
+            }
+        )
+        report["status"] = "gate_block"
+        report["details"] = generation_issues
+    _stackctl.write_json(report_path, report)
+    if not report_was_loaded:
+        projected_exit_code = int(payload.get("exitCode") or 0)
+        projected_status = (
+            "ok"
+            if projected_exit_code == 0
+            else "gate_block"
+            if projected_exit_code == 2
+            else "failed"
+        )
+        _stackctl._write_summary_bundle(
+            report_dir,
+            command="up",
+            target=requested_env or requested_target,
+            status=projected_status,
+            summary=str(payload.get("summary") or "stackctl up result"),
+            details=[str(item) for item in payload.get("details") or []],
+        )
+    payload.update(
+        {
+            "appLaunch": app_launch,
+            "evidenceEnvelope": envelope,
+            "startupReadback": startup_readback,
+            "runtimeLiveness": liveness_report,
+        }
+    )
+    return payload
+
+
+def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
+    return _up_evidence_projection(args, _runtime_command_up_impl(args))
 
 
 def register_parser(
@@ -171,7 +449,7 @@ def _reuse_running_full_for_bounded_workload(
             "exitCode": 2,
             "summary": f"stackctl up is GATE_BLOCK for {report_target}",
             "details": details,
-            "reportDir": _stackctl.relpath(report_dir),
+            "reportDir": str(report_dir.resolve()),
             "blockerKind": "runtime_receipt_unreadable",
             **timing,
         }
@@ -219,7 +497,7 @@ def _reuse_running_full_for_bounded_workload(
             "exitCode": 2,
             "summary": f"stackctl up is GATE_BLOCK for {report_target}",
             "details": details,
-            "reportDir": _stackctl.relpath(report_dir),
+            "reportDir": str(report_dir.resolve()),
             "runtimeReused": False,
             "blockerKind": blocker_kind,
             **timing,
@@ -331,7 +609,7 @@ def _reuse_running_full_for_bounded_workload(
         "exitCode": 0,
         "summary": f"stackctl up reused full runtime for {report_target}",
         "details": details,
-        "reportDir": _stackctl.relpath(report_dir),
+        "reportDir": str(report_dir.resolve()),
         "sessionKind": "hot",
         "runtimeReused": True,
         **timing,
@@ -344,6 +622,10 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
 
     requested_target = str(getattr(args, "target", "") or "").strip()
     requested_env = str(getattr(args, "env", "") or "").strip()
+    if requested_target == "prod-hosted" or requested_env == "prod":
+        from quwoquan_ops.cli.commands.hosted_read_only import rejection
+
+        return rejection("up")
     if requested_target and requested_env:
         # Selector validation must run before target resolution, locks or
         # availability probes so an invalid command cannot be misreported as
@@ -387,11 +669,21 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     target = _stackctl.get_target(topology, requested_target)
     env_name = str(target["env"])
     report_target = requested_env or requested_target
-    report_dir = _stackctl.resolve_report_dir(args, env_name, report_target)
     details = [
         str(lock_error),
         "wait for the active operation or stop the conflicting local runtime",
     ]
+    try:
+        report_dir = _stackctl.validate_up_report_dir(
+            _stackctl.resolve_report_dir(args, env_name, report_target),
+            env_name=env_name,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl up is GATE_BLOCK for {report_target}",
+            "details": [f"unsafe up report directory: {exc}", *details],
+        }
     _stackctl.write_json(
         report_dir / "report.json",
         {
@@ -415,5 +707,5 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         "exitCode": 2,
         "summary": f"stackctl up is GATE_BLOCK for {report_target}",
         "details": details,
-        "reportDir": _stackctl.relpath(report_dir),
+        "reportDir": str(report_dir.resolve()),
     }

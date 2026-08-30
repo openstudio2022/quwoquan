@@ -16,7 +16,6 @@ from content.release.canonical.object_transaction_contract import (
 )
 from core.source_digest import (
     ExecutionBundleIdentity,
-    SourceDigest,
     SourceDefinitionSnapshot,
     SourceDigestError,
     content_source_revision,
@@ -127,17 +126,9 @@ def validate_object_source_identity(
     if identity["executionId"] != str(manifest.get("executionId") or "").strip():
         raise ObjectTransactionError("DATA.POOL.SOURCE_IDENTITY_DRIFT: executionId")
     try:
-        try:
-            frozen_digest = SourceDefinitionSnapshot.from_document(
-                manifest.get("sourceDigest")
-            ).digest
-        except SourceDigestError:
-            # Historical canonical objects remain readable. New object
-            # transactions are admitted only through the v2 snapshot+bundle
-            # branch above, so this compatibility path cannot create objects.
-            frozen_digest = SourceDigest.from_document(
-                manifest.get("sourceDigest")
-            ).digest
+        frozen_digest = SourceDefinitionSnapshot.from_document(
+            manifest.get("sourceDigest")
+        ).digest
         expected_revision = content_source_revision(
             source_digest=identity["sourceDigest"],
             entity_catalog_digest=identity["entityCatalogDigest"],

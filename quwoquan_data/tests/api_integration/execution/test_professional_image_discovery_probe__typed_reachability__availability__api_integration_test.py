@@ -54,10 +54,18 @@ def test_professional_image_discovery_probe_keeps_dns_distinct_from_access_contr
     assert [row["errorCode"] for row in receipt["probes"]] == [
         "access_controlled",
         "dns_unavailable",
+        "dns_unavailable",
+        "dns_unavailable",
     ]
     assert receipt["providerProbeCounts"] == [
         {"provider": "pinterest", "plannedProbeCount": 1, "reachableProbeCount": 0},
         {"provider": "tuchong", "plannedProbeCount": 1, "reachableProbeCount": 0},
+        {
+            "provider": "wikimedia_commons",
+            "plannedProbeCount": 1,
+            "reachableProbeCount": 0,
+        },
+        {"provider": "openverse", "plannedProbeCount": 1, "reachableProbeCount": 0},
     ]
 
 

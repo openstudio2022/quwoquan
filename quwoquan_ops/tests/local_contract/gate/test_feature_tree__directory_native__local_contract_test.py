@@ -5,7 +5,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[4]
 MODULE_PATH = ROOT / "quwoquan_ops" / "cli" / "feature_tree.py"
 SPEC = importlib.util.spec_from_file_location("feature_tree", MODULE_PATH)
@@ -103,7 +102,7 @@ def test_feature_context_outputs_parent_chain_acceptance_and_open(
     )
     monkeypatch.setattr(ft_context, "REPO_ROOT", root)
     monkeypatch.setattr(ft_context, "TREE_ROOT", tree)
-    monkeypatch.setattr(ft_gitio, "git_changed_paths", lambda: [])
+    monkeypatch.setattr(ft_gitio, "git_changed_paths", list)
     outputs: dict[str, str] = {}
 
     def capture_output(name: str, content: str) -> Path:
@@ -120,7 +119,10 @@ def test_feature_context_outputs_parent_chain_acceptance_and_open(
 
     # L3 目标输出完整父链、相关验收与当前 OPEN。
     exit_code = feature_tree.command_context(
-        argparse.Namespace(target="specs/feature-tree/domain/capability/story/spec.md")
+        argparse.Namespace(
+            target="specs/feature-tree/domain/capability/story/spec.md",
+            format="expanded",
+        )
     )
     capsys.readouterr()
 
@@ -133,6 +135,328 @@ def test_feature_context_outputs_parent_chain_acceptance_and_open(
     # 相关验收与当前 OPEN 一并输出。
     assert "GWT-001 演示验收" in context_md
     assert "OPEN-001 未完成主路径" in context_md
+
+
+def test_l2_dec_owner_rejects_same_priority_ambiguity(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t2
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-004
+    root = build_tree(tmp_path)
+    tree = root / "specs/feature-tree"
+    code_path = root / "quwoquan_app/lib/design_system/pageflip/geometry.dart"
+    write(code_path, "class Geometry {}\n")
+    (tree / "domain/spec.md").write_text(
+        "# L1 Domain Service：领域 (`domain`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- App：`quwoquan_app/lib/design_system/pageflip`\n",
+        encoding="utf-8",
+    )
+    for capability in ("capability", "other-capability"):
+        write(
+            tree / f"domain/{capability}/spec.md",
+            f"# L2 Business Capability：能力 (`{capability}`)\n",
+        )
+        write(
+            tree / f"domain/{capability}/story/spec.md",
+            "# L3 Story：故事 (`story`)\n\n"
+            '<a id="req-003"></a>\n'
+            "### REQ-003 要求\n\n- 行为。\n\n"
+            '<a id="gwt-003"></a>\n'
+            "### GWT-003 验收\n\n- THEN 结果。\n",
+        )
+        write(
+            tree / f"domain/{capability}/design.md",
+            f"# L2 Design：能力 (`{capability}`)\n\n"
+            '<a id="dec-002"></a>\n'
+            "### DEC-002 同优先级归属\n\n"
+            "- 适用工程根：`quwoquan_app/lib/design_system/pageflip`\n"
+            "- 影响 Story：[`story`](./story/spec.md)\n"
+            "- 关联要求：`REQ-003`\n"
+            "- 关联验收：`GWT-003`\n",
+        )
+    monkeypatch.setattr(ft_context, "REPO_ROOT", root)
+    monkeypatch.setattr(ft_context, "TREE_ROOT", tree)
+
+    try:
+        feature_tree.resolve_target(code_path, feature_tree.discover_nodes())
+    except ValueError as error:
+        assert "多个 L2 DEC 同优先级认领" in str(error)
+    else:
+        raise AssertionError("same-priority L2 DEC ownership must be blocked")
+
+    try:
+        feature_tree.resolve_target(
+            root / "quwoquan_app/lib/unowned/object.dart",
+            feature_tree.discover_nodes(),
+        )
+    except ValueError as error:
+        assert str(error).startswith("GATE_BLOCK:")
+        assert "未被任何 L1 工程归属认领" in str(error)
+    else:
+        raise AssertionError("unowned target must be blocked")
+
+
+def test_repository_pageflip_roots_resolve_to_one_story_with_exact_anchors() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
+    nodes = feature_tree.discover_nodes()
+    targets = (
+        "quwoquan_app/lib/design_system/pageflip/geometry.dart",
+        (
+            "quwoquan_app/lib/service/content_service/content/post/presentation/"
+            "article_reader/pageflip/host/article_read_only_book_deck.dart"
+        ),
+        (
+            "quwoquan_app/test/local_contract/design_system/pageflip/"
+            "pageflip_core__local_contract_test.dart"
+        ),
+        (
+            "quwoquan_app/test/local_contract/service/content_service/content/post/"
+            "presentation/article_reader/pageflip/host/"
+            "article_read_only_book_deck__local_contract_test.dart"
+        ),
+    )
+
+    resolutions = [feature_tree.resolve_target_details(target, nodes) for target in targets]
+
+    assert {
+        resolution.node.rel for resolution in resolutions
+    } == {
+        (
+            "specs/feature-tree/discovery-content/dual-rail-discovery-redesign/"
+            "works-immersive-viewer/spec.md"
+        )
+    }
+    assert {
+        resolution.design_ownership.anchor
+        for resolution in resolutions
+        if resolution.design_ownership is not None
+    } == {"dec-002"}
+    assert all(
+        resolution.design_ownership is not None
+        and resolution.design_ownership.requirement_anchors
+        == (
+            "req-003",
+            "req-009",
+            "req-011",
+            "req-016",
+            "req-017",
+            "req-018",
+            "req-019",
+            "req-020",
+            "req-021",
+        )
+        and resolution.design_ownership.acceptance_anchors
+        == (
+            "gwt-003",
+            "gwt-010",
+            "gwt-015",
+            "gwt-016",
+            "gwt-017",
+            "gwt-018",
+            "gwt-019",
+            "gwt-020",
+        )
+        for resolution in resolutions
+    )
+    args = feature_tree.build_parser().parse_args(
+        ["context", "--target", targets[0]]
+    )
+    assert args.format == "manifest"
+
+
+def test_repository_governance_pipeline_roots_resolve_to_runtime_stories() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
+    nodes = feature_tree.discover_nodes()
+    expected = {
+        "quwoquan_ops/cli/review_dispatch.py": (
+            "agent-skill-review-context-organization",
+            "dec-003",
+            ("req-003", "req-004", "req-006"),
+            ("gwt-003", "gwt-004", "gwt-006"),
+        ),
+        "quwoquan_ops/cli/lib/human_agent_delivery/contract.py": (
+            "human-agent-delivery-interaction",
+            "dec-008",
+            ("req-001", "req-002", "req-003", "req-004", "req-005", "req-006"),
+            ("gwt-001", "gwt-002", "gwt-003"),
+        ),
+        "quwoquan_ops/cli/evidence_runner.py": (
+            "agent-skill-review-context-organization",
+            "dec-004",
+            ("req-002", "req-005"),
+            ("gwt-002", "gwt-005"),
+        ),
+        "quwoquan_ops/cli/lib/objective_execution/executor.py": (
+            "objective-execution",
+            "dec-009",
+            ("req-001", "req-002", "req-003"),
+            ("gwt-001", "gwt-002", "gwt-003"),
+        ),
+        "quwoquan_ops/cli/lib/hotl_admission/evaluator.py": (
+            "hotl-expansion-control",
+            "dec-010",
+            ("req-001", "req-002", "req-003"),
+            ("gwt-001", "gwt-002", "gwt-003"),
+        ),
+        "quwoquan_ops/ci/local_readiness_planner.py": (
+            "local-continuous-integration",
+            "dec-011",
+            ("req-001", "req-002", "req-003"),
+            ("gwt-001", "gwt-002", "gwt-003"),
+        ),
+        "quwoquan_ops/cli/lib/workflow_resolution/resolver.py": (
+            "workflow-resolution",
+            "dec-012",
+            ("req-001", "req-002", "req-003"),
+            ("gwt-001", "gwt-002", "gwt-003"),
+        ),
+        "quwoquan_ops/cli/lib/governance_pipeline_admission/evaluator.py": (
+            "governance-pipeline-observe-only",
+            "dec-013",
+            ("req-001", "req-002", "req-003"),
+            ("gwt-001", "gwt-002", "gwt-003"),
+        ),
+    }
+
+    for target, (story, dec, requirements, acceptances) in expected.items():
+        resolution = feature_tree.resolve_target_details(target, nodes)
+        assert resolution.l1_owner is not None
+        assert resolution.l1_owner.node_id == "runtime"
+        assert resolution.node.node_id == story
+        assert resolution.design_ownership is not None
+        assert resolution.design_ownership.anchor == dec
+        assert resolution.design_ownership.requirement_anchors == requirements
+        assert resolution.design_ownership.acceptance_anchors == acceptances
+
+
+def test_repository_governance_test_and_gate_roots_follow_their_runtime_stories() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
+    nodes = feature_tree.discover_nodes()
+    expected = {
+        (
+            "quwoquan_ops/tests/local_contract/gate/"
+            "test_named_evidence_runner__local_contract_test.py"
+        ): "agent-skill-review-context-organization",
+        (
+            "quwoquan_ops/tests/local_contract/gate/"
+            "test_objective_execution__executor_admission__local_contract_test.py"
+        ): "objective-execution",
+        "quwoquan_ops/gate/verify_objective_execution.py": "objective-execution",
+        "quwoquan_ops/gate/verify_hotl_admission.py": "hotl-expansion-control",
+        (
+            "quwoquan_ops/tests/local_contract/ci/"
+            "test_local_readiness__core__local_contract_test.py"
+        ): "local-continuous-integration",
+        "quwoquan_ops/gate/verify_workflow_resolution.py": "workflow-resolution",
+        (
+            "quwoquan_ops/tests/local_contract/gate/"
+            "test_governance_pipeline_admission__contract_cli_gate__local_contract_test.py"
+        ): "governance-pipeline-observe-only",
+    }
+
+    for target, story in expected.items():
+        resolution = feature_tree.resolve_target_details(target, nodes)
+        assert resolution.l1_owner is not None
+        assert resolution.l1_owner.node_id == "runtime"
+        assert resolution.node.node_id == story
+        assert resolution.design_ownership is not None
+
+
+def test_hosted_authority_adapter_stays_with_platform_ops_owner() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t2
+    nodes = feature_tree.discover_nodes()
+    targets = (
+        "quwoquan_ops/cli/lib/hosted_authority/client.py",
+        "quwoquan_ops/tests/local_contract/gate/test_hosted_authority_adapter__local_contract_test.py",
+        (
+            "quwoquan_service/control-plane/platform-ops/internal/platform_ops/"
+            "human_authority/application/facade.go"
+        ),
+    )
+
+    for target in targets:
+        resolution = feature_tree.resolve_target_details(target, nodes)
+        assert resolution.l1_owner is not None
+        assert resolution.l1_owner.node_id == "platform-ops-governance"
+        assert resolution.node.node_id == "hosted-human-authority"
+        assert resolution.design_ownership is not None
+        assert resolution.design_ownership.anchor == "dec-005"
+
+
+def test_repository_root_makefile_has_exact_runtime_l1_ownership() -> None:
+    # spec_ref: specs/feature-tree/runtime/spec.md#dom-001
+    nodes = feature_tree.discover_nodes()
+
+    resolution = feature_tree.resolve_target_details("Makefile", nodes)
+
+    assert resolution.l1_owner is not None
+    assert resolution.l1_owner.node_id == "runtime"
+    assert resolution.node.node_id == "runtime"
+    assert resolution.design_ownership is None
+
+    for target in ("report.json", "Makefile.extra", "Makefile/nested"):
+        try:
+            feature_tree.resolve_target_details(target, nodes)
+        except ValueError as error:
+            assert str(error).startswith("GATE_BLOCK:")
+            assert "未被任何 L1 工程归属认领" in str(error)
+        else:
+            raise AssertionError(f"non-exact repository root was swallowed: {target}")
+
+
+def test_repository_root_makefile_rejects_duplicate_exact_l1_claims(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    # spec_ref: specs/feature-tree/runtime/spec.md#dom-001
+    root = build_tree(tmp_path)
+    write(root / "Makefile", ".PHONY: all\n")
+    for node_id in ("domain", "other-domain"):
+        write(
+            root / f"specs/feature-tree/{node_id}/spec.md",
+            f"# L1 Domain Service：领域 (`{node_id}`)\n\n"
+            "## 7. 工程归属\n\n"
+            "- Ops：`Makefile`\n",
+        )
+        write(
+            root / f"specs/feature-tree/{node_id}/design.md",
+            f"# L1 Design：领域 (`{node_id}`)\n",
+        )
+    monkeypatch.setattr(ft_context, "REPO_ROOT", root)
+    monkeypatch.setattr(ft_context, "TREE_ROOT", root / "specs/feature-tree")
+
+    try:
+        feature_tree.resolve_target_details("Makefile", feature_tree.discover_nodes())
+    except ValueError as error:
+        message = str(error)
+        assert message.startswith("GATE_BLOCK:")
+        assert "被多个 L1 同优先级认领" in message
+        assert "domain" in message
+        assert "other-domain" in message
+    else:
+        raise AssertionError("duplicate exact Makefile owners were not rejected")
+
+
+def test_repository_owner_representative_paths_remain_exact_and_unique() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
+    nodes = feature_tree.discover_nodes()
+    expected = {
+        "quwoquan_ops/cli/lib/human_agent_delivery/contract.py": "human-agent-delivery-interaction",
+        "quwoquan_ops/cli/review_dispatch.py": "agent-skill-review-context-organization",
+        "quwoquan_ops/cli/lib/objective_execution/executor.py": "objective-execution",
+        "quwoquan_ops/cli/lib/hotl_admission/evaluator.py": "hotl-expansion-control",
+        "quwoquan_ops/ci/local_readiness_planner.py": "local-continuous-integration",
+        "quwoquan_ops/cli/lib/workflow_resolution/resolver.py": "workflow-resolution",
+        "quwoquan_ops/cli/lib/governance_pipeline_admission/evaluator.py": "governance-pipeline-observe-only",
+        "quwoquan_ops/cli/lib/hosted_authority/client.py": "hosted-human-authority",
+    }
+
+    for target, story in expected.items():
+        resolution = feature_tree.resolve_target_details(target, nodes)
+        assert resolution.node.node_id == story
+        assert resolution.design_ownership is not None
 
 
 def test_code_path_resolves_from_l1_engineering_ownership(tmp_path: Path, monkeypatch) -> None:
@@ -155,6 +479,26 @@ def test_code_path_resolves_from_l1_engineering_ownership(tmp_path: Path, monkey
     )
 
     assert owner.node_id == "domain"
+
+
+def test_agent_asset_path_resolves_from_l1_agent_ownership(tmp_path: Path, monkeypatch) -> None:
+    # spec_ref: specs/feature-tree/runtime/runtime-agentpack/feature-context-discovery/spec.md#gwt-001
+    root = build_tree(tmp_path)
+    write(root / ".agents" / "skills" / "review" / "SKILL.md", "# skill\n")
+    write(root / ".cursor" / "skills" / "demo" / "SKILL.md", "# stub\n")
+    l1_spec = root / "specs" / "feature-tree" / "domain" / "spec.md"
+    l1_spec.write_text(
+        "# L1 Domain Service：领域 (`domain`)\n\n"
+        "## 7. 工程归属\n\n"
+        "- Agent：`.agents`、`.codex`、`.cursor`\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ft_context, "REPO_ROOT", root)
+    monkeypatch.setattr(ft_context, "TREE_ROOT", root / "specs" / "feature-tree")
+    nodes = feature_tree.discover_nodes()
+
+    assert feature_tree.resolve_target(".agents/skills/review/SKILL.md", nodes).node_id == "domain"
+    assert feature_tree.resolve_target(".cursor/skills/demo/SKILL.md", nodes).node_id == "domain"
 
 
 def test_canonical_app_object_test_resolves_from_its_production_domain(
@@ -675,4 +1019,65 @@ def test_semantic_anchor_changes_detects_added_and_removed_ids(
         "added": ["REQ-002"],
         "modified": [],
         "deleted": ["REQ-001"],
+    }
+
+
+def test_outcome_clause_split_ignores_separators_inside_code_spans() -> None:
+    """中文子句误切负例：反引号内的分隔符是标识符的一部分，不是子句边界。"""
+    # spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
+    from quwoquan_ops.cli.lib.feature_tree.parsing import outcome_sub_clauses
+
+    assert outcome_sub_clauses("回读 `a；b` 字段，且校验通过") == [
+        "回读 `a；b` 字段",
+        "校验通过",
+    ]
+    assert outcome_sub_clauses("写入成功，并发请求不阻塞") == ["写入成功，并发请求不阻塞"]
+    assert outcome_sub_clauses("A 成立；B 成立") == ["A 成立", "B 成立"]
+
+
+def test_bare_string_literal_spec_ref_is_not_evidence(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """显式单行/列表块计证据；裸字符串、相似 token 与 readiness 字段不计。"""
+    # spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-001
+    from quwoquan_ops.cli.lib.feature_tree import evidence as ft_evidence
+
+    root = tmp_path / "repo"
+    # fixture 内 marker token 用源码级相邻字符串拆开：本文件自身也在证据扫描
+    # 范围内，同行完整 marker 会把 fixture 行泄漏为本文件的假绑定（test 复审
+    # 实证 uat-002 曾被计入 coverage map）。
+    write(
+        root / "quwoquan_ops" / "tests" / "sample__local_contract_test.py",
+        "# spec_" "ref: specs/feature-tree/spec.md#uat-001\n"
+        "SPEC_" 'REF = "specs/feature-tree/spec.md#uat-002"\n'
+        "spec_ref:\n"
+        "  - specs/feature-tree/spec.md#uat-006\n"
+        "  - specs/feature-tree/spec.md#uat-007\n"
+        "spec_ref:\n"
+        "\n"
+        "  - specs/feature-tree/spec.md#uat-009\n"
+        'bare = "specs/feature-tree/spec.md#uat-003"\n'
+        'msg = "见 specs/feature-tree/spec.md#uat-004 锚点"\n'
+        'not_a_spec_ref = "specs/feature-tree/spec.md#uat-008"\n',
+    )
+    write(
+        root / "quwoquan_service" / "x" / "readiness__contract__local_contract_test.go",
+        'SpecRef: "specs/feature-tree/spec.md#uat-005",\n',
+    )
+    monkeypatch.setattr(ft_context, "REPO_ROOT", root)
+
+    # `.mjs` 不在 canonical evidence suffix 闭集；Portal 的直接可执行绑定必须
+    # 落到职责匹配的 Python local_contract/gate，不能靠扫描器不可见的 JS 注释。
+    write(
+        root / "quwoquan_ops" / "portal" / "src" / "role_card.test.mjs",
+        "// spec_ref: specs/feature-tree/spec.md#uat-010\n",
+    )
+
+    assert ft_evidence.test_spec_refs() == {
+        "quwoquan_ops/tests/sample__local_contract_test.py": {
+            "specs/feature-tree/spec.md#uat-001",
+            "specs/feature-tree/spec.md#uat-002",
+            "specs/feature-tree/spec.md#uat-006",
+            "specs/feature-tree/spec.md#uat-007",
+        }
     }

@@ -17,6 +17,10 @@ import yaml
 
 ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
 SECRET_REF_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
+CROSS_SERVICE_DEFAULTS_FILENAME = "config-defaults.yaml"
+
+# 未匹配到任何跨服务默认时的哨兵。None 是合法的 YAML 值，不能兼作「没有」。
+MISSING = object()
 
 
 def repository_root() -> Path:
@@ -82,6 +86,65 @@ def validate_scalar_type(path: Path, key: str, definition: dict[str, Any], value
         raise ValueError(f"{path}: {key} must be {declared}, got {type(value).__name__}")
 
 
+# 跨服务默认的声明位：全局一层、每环境一层。两层都只给服务 schema 已声明的键
+# 供值，不引入新键——键的真相源仍是各服务 config/schema.yaml。
+def cross_service_defaults_paths(root: Path, environment: str) -> tuple[Path, Path]:
+    base = root / "quwoquan_ops/environments"
+    return (
+        base / CROSS_SERVICE_DEFAULTS_FILENAME,
+        base / environment / CROSS_SERVICE_DEFAULTS_FILENAME,
+    )
+
+
+def load_cross_service_defaults(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    payload = load_yaml(path)
+    defaults = payload.get("defaults", {}) or {}
+    if not isinstance(defaults, dict):
+        raise ValueError(f"{path}: defaults must be a mapping")
+    for pattern in defaults:
+        if not isinstance(pattern, str) or not pattern.strip():
+            raise ValueError(f"{path}: every default pattern must be a non-empty string")
+    return defaults
+
+
+def pattern_matches(pattern: str, rendered_key: str) -> bool:
+    pattern_parts = pattern.split(".")
+    key_parts = rendered_key.split(".")
+    if len(pattern_parts) != len(key_parts):
+        return False
+    return all(
+        expected == "*" or expected == actual
+        for expected, actual in zip(pattern_parts, key_parts)
+    )
+
+
+# 同层内多个模式命中同一个键时取更具体的那个（通配段更少）。并列即声明歧义，
+# 判否而不是挑一个——挑哪个都是代码替声明者做决定。
+def resolve_layer_default(path: Path, defaults: dict[str, Any], rendered_key: str) -> Any:
+    matches = [
+        (pattern, value)
+        for pattern, value in defaults.items()
+        if pattern_matches(pattern, rendered_key)
+    ]
+    if not matches:
+        return MISSING
+    best_specificity = min(pattern.count("*") for pattern, _ in matches)
+    finalists = [
+        (pattern, value)
+        for pattern, value in matches
+        if pattern.count("*") == best_specificity
+    ]
+    if len(finalists) > 1:
+        patterns = sorted(pattern for pattern, _ in finalists)
+        raise ValueError(
+            f"{path}: ambiguous defaults for {rendered_key}: {patterns}; "
+            "make one pattern more specific"
+        )
+    return finalists[0][1]
+
+
 def canonical_dump(payload: dict[str, Any]) -> bytes:
     return yaml.safe_dump(
         payload,
@@ -133,6 +196,18 @@ def render_workload(root: Path, environment: str, workload: str, output_path: Pa
     if overlap:
         raise ValueError(f"{environment_path}: keys cannot be override and secretRef: {sorted(overlap)}")
 
+    global_defaults_path, environment_defaults_path = cross_service_defaults_paths(
+        root, environment
+    )
+    if not global_defaults_path.is_file():
+        raise ValueError(
+            f"missing required global cross-service defaults: {global_defaults_path}"
+        )
+    layered_defaults = (
+        (environment_defaults_path, load_cross_service_defaults(environment_defaults_path)),
+        (global_defaults_path, load_cross_service_defaults(global_defaults_path)),
+    )
+
     rendered: dict[str, Any] = {}
     for key, entry in sorted(definitions.items()):
         if key in secret_refs:
@@ -144,13 +219,32 @@ def render_workload(root: Path, environment: str, workload: str, output_path: Pa
             continue
         if entry.get("sensitive") and key in overrides:
             raise ValueError(f"{environment_path}: sensitive key must use secretRef: {key}")
+        # 取值优先级：服务环境自定义 > 环境跨服务默认 > 全局跨服务默认 > 服务 schema
+        # default。每一层都是显式声明，生效值必然能指回一处写下它的文件。
+        source_path = environment_path
+        value = MISSING
         if key in overrides:
             value = overrides[key]
-        elif "default" in entry:
-            value = entry["default"]
         else:
-            continue
-        validate_scalar_type(environment_path, key, entry, value)
+            for defaults_path, defaults in layered_defaults:
+                candidate = resolve_layer_default(
+                    defaults_path, defaults, rendered_path(workload, key)
+                )
+                if candidate is not MISSING:
+                    if entry.get("sensitive"):
+                        raise ValueError(
+                            f"{defaults_path}: sensitive key must use secretRef, "
+                            f"cross-service defaults cannot supply it: {key}"
+                        )
+                    source_path = defaults_path
+                    value = candidate
+                    break
+        if value is MISSING:
+            if "default" not in entry:
+                continue
+            source_path = schema_path
+            value = entry["default"]
+        validate_scalar_type(source_path, key, entry, value)
         # CONFIG_VERSION 是最终有效配置摘要，旧的手工 version 定义不参与渲染。
         if rendered_path(workload, key) == "config.version":
             continue

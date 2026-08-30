@@ -43,6 +43,10 @@ from content.execution.runtime_evidence.sampling import (
 from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
+from support.capacity_calibration_fixture import (
+    synthetic_capacity_source_binding,
+    synthetic_governed_execution_authority,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 ROOT_ID = "20260805--travel-homepage-p3--china--scale-901"
@@ -236,13 +240,27 @@ def _fixture(tmp_path: Path) -> Fixture:
         "rootExecutionId": ROOT_ID,
         "executionMode": "central",
         "scale": "M100",
+        "workloadMode": "milestone_preset",
+        "activeCarriers": list(CARRIERS),
+        "workloads": {
+            "homepage": 100,
+            "article": 100,
+            "image": 100,
+            "video": 10,
+        },
         "gitBranch": "dev1.0",
         "gitCommitSha": "1" * 40,
         "sourceRevision": source_revision,
         "sourceDigest": source_digest,
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "7" * 64,
+            "inputs": ["quwoquan_data/scripts"],
+        },
         "entityCatalogDigest": entity_digest,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": preflight_binding,
+        "executionAuthority": synthetic_governed_execution_authority(),
         "laneExternalInputs": lane_inputs,
         "externalInputsDigest": canonical_digest(
             {
@@ -269,6 +287,7 @@ def _fixture(tmp_path: Path) -> Fixture:
         command=f"python quwoquan_data/scripts/cli.py task execute {ROOT_ID}",
         start_token="controller-start",
         rss_bytes=100 * 1024**2,
+        cpu_percent=12.5,
         open_fd_count=20,
     )
     snapshot = {
@@ -319,6 +338,7 @@ def _fixture(tmp_path: Path) -> Fixture:
             ),
             start_token=f"{carrier}-start",
             rss_bytes=(100 + index * 10) * 1024**2,
+            cpu_percent=5.0 + index,
             open_fd_count=10 + index,
         )
     staging = (
@@ -453,6 +473,7 @@ def test_resource_samples_are_observed_create_once_and_raw_consumer_ready(
         command="ffmpeg -i input.mp4 output.mp4",
         start_token="video-child-start",
         rss_bytes=60 * 1024**2,
+        cpu_percent=18.0,
         open_fd_count=7,
     )
     third, _third_path = capture_resource_sample(
@@ -482,6 +503,7 @@ def test_resource_samples_are_observed_create_once_and_raw_consumer_ready(
         command=original.command + " --reused",
         start_token=original.start_token,
         rss_bytes=original.rss_bytes,
+        cpu_percent=original.cpu_percent,
         open_fd_count=original.open_fd_count,
     )
     with pytest.raises(RuntimeEvidenceError, match="process identity changed"):

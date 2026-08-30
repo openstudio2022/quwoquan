@@ -298,6 +298,9 @@ abstract final class ProfileText {
   static const String profileSharePrivate = '该记录已设为私密';
   static const String profileShareReviewing = '该记录正在审核';
   static const String profileShareAuthorDeactivated = '作者已注销，内容不可查看';
+  // 本端未声明该可用性取值时用这句。不能复用「已删除」一类断言，
+  // 否则会把「客户端版本落后」谎报成「内容发生了变化」。
+  static const String profileShareUnsupportedAvailability = '当前版本暂不支持打开，请更新后重试';
   static const String profileShareImageUnavailable = '图片暂不可加载';
   static const String profileShareVideo = '视频';
   static const String profileShareDiscussionRepliesSuffix = '条回复';

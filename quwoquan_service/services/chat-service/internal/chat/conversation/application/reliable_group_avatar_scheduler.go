@@ -12,6 +12,7 @@ import (
 
 	"quwoquan_service/runtime/reliabletask"
 	event "quwoquan_service/services/chat-service/generated/chat/conversation/contract/event"
+	conversationmodel "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 )
 
 const (
@@ -563,7 +564,7 @@ func (s *ReliableGroupAvatarTaskScheduler) handleNotification(ctx context.Contex
 	}
 	if s.storage.Conversations != nil {
 		conv, err := s.storage.Conversations.FindConversationByID(ctx, notification.AggregateID)
-		if err == nil && conv != nil && strings.TrimSpace(string(conv.Status)) != "active" {
+		if err == nil && conv != nil && conv.Status != conversationmodel.ConversationStatusActive {
 			return s.store.CompleteNotification(ctx, notification.NotificationID, notification.LeaseToken)
 		}
 	}

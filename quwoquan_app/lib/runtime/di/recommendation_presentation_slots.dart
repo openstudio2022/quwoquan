@@ -10,6 +10,7 @@ import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/pre
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/author_impact_card.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_reason_chip.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_recommendation_slots.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/my_gatherings_entry_card.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/creator_flywheel_proof_row.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_experience_asset_card.dart';
@@ -87,6 +88,10 @@ Widget _buildOtherProfileIntersection({required String userId}) =>
 Widget _buildMyProfileIntersection({required bool isDark}) =>
     MyIntersectionInboxCard(isDark: isDark);
 
+/// Gathering source owner 的 Recommendation participant binding。
+Widget buildGatheringIntersectionInboxSlot({required bool isDark}) =>
+    MyIntersectionInboxCard(isDark: isDark);
+
 Widget _buildMyProfileGatherings({required bool isDark}) =>
     MyGatheringsEntryCard(isDark: isDark);
 
@@ -116,6 +121,12 @@ const HomepageRecommendationSlots homepageRecommendationSlots =
       buildIntersectionReason: _buildIntersectionReason,
       buildObjectIntersection: _buildHomepageObjectIntersection,
       buildObjectImpact: _buildHomepageObjectImpact,
+    );
+
+/// Gathering 行动发现页的 production Recommendation participant 绑定。
+const GatheringRecommendationSlots gatheringRecommendationSlots =
+    GatheringRecommendationSlots(
+      buildMyIntersection: _buildMyProfileIntersection,
     );
 
 /// Persona source owner 的 production participant 绑定（Recommendation + Circle）。

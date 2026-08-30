@@ -4,7 +4,6 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -29,12 +28,15 @@ from core.control_types import AgentProvider
 from core.cursor_credentials import CURSOR_SENSITIVE_PROCESS_ENV_KEYS
 from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy
+from support.capacity_calibration_fixture import (
+    synthetic_governed_execution_authority,
+)
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 
-def _cursor_required_concurrency() -> int:
-    """cursor_auto 的容量契约是主机级 bridge 数，跟随 runtime policy 而非常量。"""
-    return active_runtime_policy().cursor_bridge_instances
+def _requested_probe_attempts() -> int:
+    """Probe 数是显式诊断请求，不是 Provider 或主机并发上限。"""
+    return active_runtime_policy().startup_probe_suite_attempts
 
 
 def _args(tmp_path: Path, **overrides: object) -> argparse.Namespace:
@@ -48,6 +50,7 @@ def _args(tmp_path: Path, **overrides: object) -> argparse.Namespace:
         "semantic_agent_startup": True,
         "soak": True,
         "workspace_smoke": True,
+        "workspace_smoke_carrier": ["homepage", "video"],
         "report_out": str(tmp_path / "compact.json"),
         "receipt_out": str(tmp_path / "receipt.json"),
     }
@@ -84,6 +87,19 @@ def _ready_preflight(**kwargs: object) -> dict[str, object]:
     }
 
 
+def _ready_workspace_probe(**kwargs: object) -> dict[str, object]:
+    workspaces = tuple(kwargs.get("workspaces") or ())
+    count = len(workspaces)
+    return {
+        "ready": True,
+        "workspaceCount": count,
+        "successCount": count,
+        "configuredConcurrency": count,
+        "effectiveConcurrency": count,
+        "issues": [],
+    }
+
+
 def test_selector_resolves_default_sol_grok_and_auto_without_fallback() -> None:
     default = resolve_semantic_preflight_selection("default")
     calibration = resolve_semantic_preflight_selection(
@@ -99,8 +115,11 @@ def test_selector_resolves_default_sol_grok_and_auto_without_fallback() -> None:
     assert calibration.model_selection.model_id == "gpt-5.6-sol"
     assert calibration.requires_new_retry_of is False
     assert grok.provider is AgentProvider.CURSOR_SDK
-    assert grok.model_selection.model_id == "grok-4.5"
-    assert grok.model_selection.parameters_document() == []
+    assert grok.model_selection.model_id.startswith("grok-")
+    assert all(
+        set(row) == {"id", "value"} and row["id"] and row["value"]
+        for row in grok.model_selection.parameters_document()
+    )
     assert grok.requires_new_retry_of is False
     assert cursor.provider is AgentProvider.CURSOR_SDK
     assert cursor.model_selection.model_id == "auto"
@@ -259,7 +278,7 @@ def test_cursor_auto_preflight_and_soak_bind_exact_runtime_and_receipt(
         return {
             "attempts": 8,
             "successCount": 8,
-            "effectiveConcurrency": _cursor_required_concurrency(),
+            "effectiveConcurrency": _requested_probe_attempts(),
             "bridgeDisconnectCount": 0,
             "issues": [],
             "ready": True,
@@ -269,14 +288,7 @@ def test_cursor_auto_preflight_and_soak_bind_exact_runtime_and_receipt(
     monkeypatch.setattr(
         preflight_handler,
         "semantic_agent_workspace_probe_suite",
-        lambda **_kwargs: {
-            "ready": True,
-            "workspaceCount": 4,
-            "successCount": 4,
-            "configuredConcurrency": 4,
-            "effectiveConcurrency": 4,
-            "issues": [],
-        },
+        _ready_workspace_probe,
     )
 
     preflight_handler.handle_ready(_args(tmp_path))
@@ -304,22 +316,27 @@ def test_cursor_auto_preflight_and_soak_bind_exact_runtime_and_receipt(
     assert receipt["provider"] == "cursor_sdk"
     assert receipt["model"] == "auto"
     assert receipt["soakRequested"] is True
-    assert receipt["capacitySoakReady"] is True
     assert receipt["schema"] == "quwoquan_data.semantic_provider_preflight_receipt"
     assert receipt["preflightProfile"] == "semantic"
-    assert receipt["semanticExecutionReady"] is True
+    assert compact["workspaceSmoke"]["workspaceCount"] == 2
+    assert compact["workspaceSmoke"]["successCount"] == 2
     assert "reliableTaskFleet" not in receipt["evidence"]
     validate_semantic_preflight_receipt(
         receipt,
         expected_selection=resolve_semantic_preflight_selection("cursor_auto"),
-        require_semantic_execution_ready=True,
     )
-    with pytest.raises(ValueError, match="outside its validity window"):
-        validate_semantic_preflight_receipt(
-            receipt,
-            require_semantic_execution_ready=True,
-            now=datetime.now(timezone.utc) + timedelta(hours=1),
-        )
+    expired_receipt = {
+        **receipt,
+        "recordedAt": "2020-01-01T00:00:00Z",
+        "validUntil": "2020-01-01T00:10:00Z",
+    }
+    expired_receipt["receiptId"] = preflight_receipt._digest(
+        {key: value for key, value in expired_receipt.items() if key != "receiptId"}
+    )
+    validate_semantic_preflight_receipt(
+        expired_receipt,
+        expected_selection=resolve_semantic_preflight_selection("cursor_auto"),
+    )
 
 
 def test_existing_manifest_review_to_run_and_resume_reuse_expired_binding(
@@ -332,7 +349,6 @@ def test_existing_manifest_review_to_run_and_resume_reuse_expired_binding(
     receipt = {
         "receiptId": "sha256:" + "1" * 64,
         "selectionDigest": selection.selection_digest,
-        "semanticExecutionReady": True,
     }
     receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
     binding = {
@@ -341,18 +357,15 @@ def test_existing_manifest_review_to_run_and_resume_reuse_expired_binding(
         "receiptId": receipt["receiptId"],
         "selectionDigest": receipt["selectionDigest"],
     }
-    freshness_checks: list[bool] = []
+    validation_checks: list[str] = []
 
     def validate(
         _receipt: object,
         *,
         expected_selection: object,
-        require_semantic_execution_ready: bool,
     ) -> None:
         assert expected_selection == selection
-        freshness_checks.append(require_semantic_execution_ready)
-        if require_semantic_execution_ready:
-            raise ValueError("semantic preflight receipt is outside its validity window")
+        validation_checks.append(selection.selection_digest)
 
     monkeypatch.setattr(
         semantic_preflight_admission,
@@ -368,10 +381,10 @@ def test_existing_manifest_review_to_run_and_resume_reuse_expired_binding(
             output_root=tmp_path,
         )
         assert resolved == binding
-    assert freshness_checks == [False, False, False, False, False, False]
+    assert validation_checks == [selection.selection_digest] * 6
 
 
-def test_frozen_campaign_admission_allows_delayed_first_lane_but_direct_expires(
+def test_frozen_and_direct_admission_reuse_expired_receipt_identity(
     tmp_path: Path,
 ) -> None:
     output_root = tmp_path / "output"
@@ -390,14 +403,13 @@ def test_frozen_campaign_admission_allows_delayed_first_lane_but_direct_expires(
         receipt_path,
         semantic_selection_id="cursor_auto",
         output_root=output_root,
-        require_fresh=False,
     )
-    with pytest.raises(ValueError, match="outside its validity window"):
-        semantic_preflight_admission.bind_semantic_preflight_receipt(
-            receipt_path,
-            semantic_selection_id="cursor_auto",
-            output_root=output_root,
-        )
+    direct_binding = semantic_preflight_admission.bind_semantic_preflight_receipt(
+        receipt_path,
+        semantic_selection_id="cursor_auto",
+        output_root=output_root,
+    )
+    assert direct_binding == binding
 
     root_id = "20200101--travel-homepage-m1--china--scale-001"
     execution_ids = {
@@ -416,13 +428,26 @@ def test_frozen_campaign_admission_allows_delayed_first_lane_but_direct_expires(
         "rootExecutionId": root_id,
         "executionMode": "central",
         "scale": "M1",
+        "workloadMode": "explicit",
+        "activeCarriers": list(execution_ids),
+        "workloads": {carrier: 1 for carrier in execution_ids},
         "gitBranch": "dev1.0",
         "gitCommitSha": "a" * 40,
         "sourceRevision": "sha256:" + "b" * 64,
         "sourceDigest": "sha256:" + "c" * 64,
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "9" * 64,
+            "inputs": ["semantic-preflight-test-fixture"],
+        },
         "entityCatalogDigest": "sha256:" + "d" * 64,
         "semanticSelectionId": "cursor_auto",
         "semanticPreflightReceipt": binding,
+        # A frozen plan carries its governed execution authority; this test is
+        # about preflight receipt identity, so the synthetic one stands in.
+        "executionAuthority": synthetic_governed_execution_authority(
+            provider_tier="cursor_auto"
+        ),
         "laneExternalInputs": {
             carrier: {
                 "executionId": execution_ids[carrier],
@@ -459,13 +484,12 @@ def test_frozen_campaign_admission_allows_delayed_first_lane_but_direct_expires(
             requested_binding=admitted,
             semantic_selection_id="cursor_auto",
             output_root=output_root,
-            require_requested_fresh=False,
         )
     )
     assert first_manifest_binding == binding
 
 
-def test_semantic_preflight_ignores_queue_and_environment_status(
+def test_semantic_preflight_ignores_queue_environment_and_diagnostic_failures(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -511,24 +535,33 @@ def test_semantic_preflight_ignores_queue_and_environment_status(
         "semantic_agent_probe_suite",
         lambda **_kwargs: {
             "attempts": 8,
-            "successCount": 8,
-            "effectiveConcurrency": _cursor_required_concurrency(),
-            "bridgeDisconnectCount": 0,
-            "issues": [],
-            "ready": True,
+            "successCount": 1,
+            "effectiveConcurrency": 1,
+            "bridgeDisconnectCount": 1,
+            "issues": ["diagnostic capacity probe observed failures"],
+            "ready": False,
         },
     )
+
+    def failed_workspace_probe(**kwargs: object) -> dict[str, object]:
+        workspaces = tuple(kwargs.get("workspaces") or ())
+        assert [Path(workspace).name for workspace in workspaces] == [
+            "homepage",
+            "video",
+        ]
+        return {
+            "ready": False,
+            "workspaceCount": len(workspaces),
+            "successCount": 1,
+            "configuredConcurrency": len(workspaces),
+            "effectiveConcurrency": 1,
+            "issues": ["diagnostic workspace probe observed failures"],
+        }
+
     monkeypatch.setattr(
         preflight_handler,
         "semantic_agent_workspace_probe_suite",
-        lambda **_kwargs: {
-            "ready": True,
-            "workspaceCount": 4,
-            "successCount": 4,
-            "configuredConcurrency": 4,
-            "effectiveConcurrency": 4,
-            "issues": [],
-        },
+        failed_workspace_probe,
     )
 
     preflight_handler.handle_ready(_args(tmp_path))
@@ -537,10 +570,13 @@ def test_semantic_preflight_ignores_queue_and_environment_status(
     compact = json.loads((tmp_path / "compact.json").read_text(encoding="utf-8"))
     receipt = json.loads((tmp_path / "receipt.json").read_text(encoding="utf-8"))
     assert output["ready"] is True
-    assert compact["workspaceSmoke"]["ready"] is True
+    assert compact["capacitySoak"]["ready"] is False
+    assert compact["workspaceSmoke"]["ready"] is False
+    assert compact["workspaceSmoke"]["workspaceCount"] == 2
     assert "reliableTaskFleet" not in compact
     assert "reliableTaskFleet" not in receipt["evidence"]
-    assert receipt["semanticExecutionReady"] is True
+    assert receipt["ready"] is True
+    validate_semantic_preflight_receipt(receipt)
     mixed_receipt = {
         **receipt,
         "evidence": {**receipt["evidence"], "mongoReady": False},
@@ -577,7 +613,7 @@ def test_sol_calibration_preflight_binds_exact_model_without_real_provider_call(
         or {
             "attempts": 8,
             "successCount": 8,
-            "effectiveConcurrency": 4,
+            "effectiveConcurrency": _requested_probe_attempts(),
             "bridgeDisconnectCount": 0,
             "issues": [],
             "ready": True,
@@ -586,14 +622,7 @@ def test_sol_calibration_preflight_binds_exact_model_without_real_provider_call(
     monkeypatch.setattr(
         preflight_handler,
         "semantic_agent_workspace_probe_suite",
-        lambda **_kwargs: {
-            "ready": True,
-            "workspaceCount": 4,
-            "successCount": 4,
-            "configuredConcurrency": 4,
-            "effectiveConcurrency": 4,
-            "issues": [],
-        },
+        _ready_workspace_probe,
     )
 
     preflight_handler.handle_ready(
@@ -618,7 +647,6 @@ def test_sol_calibration_preflight_binds_exact_model_without_real_provider_call(
     validate_semantic_preflight_receipt(
         receipt,
         expected_selection=selection,
-        require_semantic_execution_ready=True,
     )
 
 
@@ -648,7 +676,7 @@ def test_preflight_receipt_is_create_once(
         lambda **_kwargs: {
             "attempts": 8,
             "successCount": 8,
-            "effectiveConcurrency": _cursor_required_concurrency(),
+            "effectiveConcurrency": _requested_probe_attempts(),
             "bridgeDisconnectCount": 0,
             "issues": [],
             "ready": True,
@@ -657,14 +685,7 @@ def test_preflight_receipt_is_create_once(
     monkeypatch.setattr(
         preflight_handler,
         "semantic_agent_workspace_probe_suite",
-        lambda **_kwargs: {
-            "ready": True,
-            "workspaceCount": 4,
-            "successCount": 4,
-            "configuredConcurrency": 4,
-            "effectiveConcurrency": 4,
-            "issues": [],
-        },
+        _ready_workspace_probe,
     )
     args = _args(tmp_path, json=False, report_out=None, receipt_out=str(destination))
     preflight_handler.handle_ready(args)
@@ -705,7 +726,7 @@ def test_preflight_receipt_is_create_once(
                 "ready": True,
                 "attempts": 8,
                 "successCount": 8,
-                "effectiveConcurrency": 4,
+                "effectiveConcurrency": _requested_probe_attempts(),
                 "bridgeDisconnectCount": 0,
                 "issues": [],
             },
@@ -713,10 +734,10 @@ def test_preflight_receipt_is_create_once(
         ),
         "workspaceSmoke": {
             "ready": True,
-            "workspaceCount": 4,
-            "successCount": 4,
-            "configuredConcurrency": 4,
-            "effectiveConcurrency": 4,
+            "workspaceCount": 2,
+            "successCount": 2,
+            "configuredConcurrency": 2,
+            "effectiveConcurrency": 2,
             "cleanupStatus": "cleaned",
             "issues": [],
         },
@@ -734,18 +755,35 @@ def test_preflight_receipt_is_create_once(
             selection=default,
             report=inconsistent_report,
         )
-    with pytest.raises(ValueError, match="requires workspaceSmokeReady"):
-        build_semantic_preflight_receipt(
-            selection=default,
-            report={
-                **default_report,
-                "workspaceSmoke": {
-                    **default_report["workspaceSmoke"],
-                    "workspaceCount": 3,
-                    "successCount": 3,
-                },
+    diagnostic_failure_report = {
+        **default_report,
+        "capacitySoak": bind_semantic_preflight_selection(
+            {
+                "ready": False,
+                "attempts": 8,
+                "successCount": 1,
+                "effectiveConcurrency": 1,
+                "bridgeDisconnectCount": 1,
+                "issues": ["diagnostic capacity probe observed failures"],
             },
-        )
+            default,
+        ),
+        "workspaceSmoke": {
+            **default_report["workspaceSmoke"],
+            "ready": False,
+            "successCount": 1,
+            "effectiveConcurrency": 1,
+            "issues": ["diagnostic workspace probe observed failures"],
+        },
+    }
+    diagnostic_failure = build_semantic_preflight_receipt(
+        selection=default,
+        report=diagnostic_failure_report,
+    )
+    assert diagnostic_failure["ready"] is True
+    assert diagnostic_failure["evidence"]["capacitySoak"]["ready"] is False
+    assert diagnostic_failure["evidence"]["workspaceSmoke"]["ready"] is False
+    validate_semantic_preflight_receipt(diagnostic_failure)
     skipped_startup = build_semantic_preflight_receipt(
         selection=default,
         report={
@@ -759,12 +797,7 @@ def test_preflight_receipt_is_create_once(
         },
     )
     assert skipped_startup["ready"] is True
-    assert skipped_startup["semanticExecutionReady"] is False
-    with pytest.raises(ValueError, match="not execution-ready"):
-        validate_semantic_preflight_receipt(
-            skipped_startup,
-            require_semantic_execution_ready=True,
-        )
+    validate_semantic_preflight_receipt(skipped_startup)
     conflicting = build_semantic_preflight_receipt(
         selection=default,
         report=default_report,

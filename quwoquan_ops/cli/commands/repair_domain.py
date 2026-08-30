@@ -17,12 +17,128 @@ import json
 import shutil
 import time
 
+from pathlib import Path
 from typing import Any
 from typing import Mapping
 
 
+def _publish_orphan_terminal_success(
+    *,
+    report_dir: Path,
+    target_name: str,
+    summary: str,
+    details: list[str],
+    report: Mapping[str, Any],
+) -> list[str]:
+    """Publish derived reports without downgrading a terminal success fact."""
+
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    issues: list[str] = []
+    try:
+        _stackctl._write_summary_bundle(
+            report_dir,
+            command="repair",
+            target=target_name,
+            status="ok",
+            summary=summary,
+            details=details,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        issue = f"terminal success report publication failed for summary bundle: {exc}"
+        issues.append(issue)
+        details.append(issue)
+    try:
+        _stackctl.write_json(report_dir / "report.json", report)
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        issue = f"terminal success report publication failed for report.json: {exc}"
+        issues.append(issue)
+        details.append(issue)
+    return issues
+
+
+def _finish_orphan_repair_gate_block(
+    *,
+    report_dir: Path,
+    target_name: str,
+    fix: str,
+    details: list[str],
+    destructive_performed: bool | None,
+    removal_outcome: str,
+    execution_journal: Path | None,
+    consumption_path: Path | None,
+    destructive_steps: list[dict[str, Any]],
+) -> dict[str, Any]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    _stackctl.write_json(
+        report_dir / "report.json",
+        {
+            "command": "repair",
+            "target": target_name,
+            "fix": fix,
+            "status": "gate_block",
+            "destructiveRepairPerformed": destructive_performed,
+            "destructiveRepairOutcome": removal_outcome,
+            "executionJournal": (
+                _stackctl.relpath(execution_journal) if execution_journal else ""
+            ),
+            "consumption": _stackctl.relpath(consumption_path) if consumption_path else "",
+            "steps": destructive_steps,
+            "details": details,
+        },
+    )
+    _stackctl.write_json(
+        report_dir / "repair_plan.json",
+        {
+            "target": target_name,
+            "fix": fix,
+            "actions": [
+                {
+                    "argv": ["python3", "quwoquan_ops/cli/stackctl.py", "doctor", "--target", target_name],
+                    "intent": (
+                        "re-read the recorded identity, receipt, lease, expiry, and "
+                        "live-resource drift that blocked this attestation"
+                    ),
+                    "deletes": "nothing",
+                    "preserves": ["containers", "networks", "volumes", "receipts"],
+                },
+                {
+                    "argv": ["python3", "quwoquan_ops/cli/stackctl.py", "repair", "--target", target_name, "--fix", fix],
+                    "intent": (
+                        "create a new attestation only after the blocking drift is "
+                        "resolved; the prior report path stays for audit"
+                    ),
+                    "deletes": "nothing until a fresh attestation is confirmed",
+                    "preserves": ["the prior attestation and consumption receipts"],
+                },
+            ],
+        },
+    )
+    summary = f"stackctl orphan Compose repair is GATE_BLOCK for {target_name}"
+    _stackctl._write_summary_bundle(
+        report_dir,
+        command="repair",
+        target=target_name,
+        status="failed",
+        summary=summary,
+        details=details,
+    )
+    return {
+        "exitCode": 2,
+        "summary": summary,
+        "details": details,
+        "reportDir": _stackctl.relpath(report_dir),
+    }
+
+
 def command_repair(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
+
+    if str(getattr(args, "target", "") or "") == "prod-hosted":
+        from quwoquan_ops.cli.commands.hosted_read_only import rejection
+
+        return rejection("repair")
 
     if args.fix == "reconcile-output-layout":
         report_dir = _stackctl.resolve_report_dir(args, "repo", "repo")
@@ -68,6 +184,15 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
     target = _stackctl.get_target(topology, args.target)
     env_name = str(target["env"])
     report_dir = _stackctl.resolve_report_dir(args, env_name, args.target)
+    if (
+        args.fix == "reclaim-undownable-startup-receipt"
+        and not str(getattr(args, "report_dir", "") or "").strip()
+    ):
+        # The auto path is collision-resistant and owned by this invocation.
+        # Create it once so the attestation path validator can require an
+        # existing, non-symlink parent without weakening its create-once file
+        # publication contract. Explicit report paths remain validator-owned.
+        report_dir.mkdir(parents=True, exist_ok=False)
     steps: list[dict[str, Any]] = []
     if args.fix == "service-core-cutover":
         try:
@@ -188,6 +313,18 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
             environment=env_name,
             report_dir=report_dir,
         )
+    if args.fix == "reclaim-stale-test-live-receipt":
+        return _stackctl._repair_stale_test_live_receipt(
+            args,
+            environment=env_name,
+            report_dir=report_dir,
+        )
+    if args.fix == "reclaim-undownable-startup-receipt":
+        return _stackctl._repair_undownable_startup_receipt(
+            args,
+            environment=env_name,
+            report_dir=report_dir,
+        )
     if args.fix == "reclaim-orphaned-processes":
         if args.target != "alpha-local":
             summary = "reclaim-orphaned-processes is only available for alpha-local"
@@ -300,7 +437,16 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
                 "target": args.target,
                 "fix": args.fix,
                 "actions": [
-                    "terminate only ledger-less Alpha wrappers matching the repository path and canonical port signatures"
+                    {
+                        "argv": ["kill", "-TERM", "--", f"-{record['pgid']}"],
+                        "intent": (
+                            "terminate one ledger-less Alpha wrapper matched by "
+                            f"repository path and canonical port signature: role={name}"
+                        ),
+                        "deletes": f"process group {record['pgid']} only",
+                        "preserves": ["containers", "images", "volumes", "runtime-data"],
+                    }
+                    for name, record in sorted(reclaimed.items())
                 ],
             },
         )
@@ -356,7 +502,27 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
         _stackctl.write_json(report_dir / "report.json", {"command": "repair", "nested": payload})
         _stackctl.write_json(
             report_dir / "repair_plan.json",
-            {"target": args.target, "fix": args.fix, "actions": ["rebuild environment packages"]},
+            {
+                "target": args.target,
+                "fix": args.fix,
+                "actions": [
+                    {
+                        "argv": [
+                            "python3",
+                            "quwoquan_ops/cli/stackctl.py",
+                            "package",
+                            "--env",
+                            env_name,
+                            "--target",
+                            args.target,
+                            "--include-services",
+                        ],
+                        "intent": "rebuild the environment packages this repair just ran",
+                        "deletes": "previous package render output only",
+                        "preserves": ["containers", "images", "volumes", "runtime-data"],
+                    }
+                ],
+            },
         )
         return payload
     if args.fix == "restart-stack":
@@ -388,8 +554,39 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
                         "target": args.target,
                         "fix": args.fix,
                         "actions": [
-                            "ensure the declared local Provider topology is available and QWQ_DEPLOY_WORK_ROOT is writable when materialization is required",
-                            "rerun stackctl doctor before restart-stack",
+                            {
+                                "argv": [
+                                    "python3",
+                                    "quwoquan_ops/cli/stackctl.py",
+                                    "doctor",
+                                    "--target",
+                                    args.target,
+                                ],
+                                "intent": (
+                                    "confirm the declared local Provider topology is "
+                                    "available and QWQ_DEPLOY_WORK_ROOT is writable "
+                                    "before restart-stack stops anything"
+                                ),
+                                "deletes": "nothing",
+                                "preserves": ["the currently running stack"],
+                            },
+                            {
+                                "argv": [
+                                    "python3",
+                                    "quwoquan_ops/cli/stackctl.py",
+                                    "repair",
+                                    "--target",
+                                    args.target,
+                                    "--fix",
+                                    "restart-stack",
+                                ],
+                                "intent": (
+                                    "rerun restart-stack only after doctor passes; "
+                                    "this repair stopped before touching the stack"
+                                ),
+                                "deletes": "local stack containers and networks on rerun",
+                                "preserves": ["named volumes"],
+                            },
                         ],
                     },
                 )
@@ -446,8 +643,29 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
                     "target": args.target,
                     "fix": args.fix,
                     "actions": [
-                        "resolve the recorded down failure",
-                        "rerun restart-stack only after resources are stopped",
+                        {
+                            "argv": ["python3", "quwoquan_ops/cli/stackctl.py", "down", "--target", args.target],
+                            "intent": (
+                                "resolve the recorded down failure; restart-stack "
+                                "stopped here and did not start anything back up"
+                            ),
+                            "deletes": "local stack containers and networks",
+                            "preserves": ["named volumes"],
+                        },
+                        {
+                            "argv": [
+                                "python3",
+                                "quwoquan_ops/cli/stackctl.py",
+                                "repair",
+                                "--target",
+                                args.target,
+                                "--fix",
+                                "restart-stack",
+                            ],
+                            "intent": "rerun restart-stack only after resources are stopped",
+                            "deletes": "local stack containers and networks on rerun",
+                            "preserves": ["named volumes"],
+                        },
                     ],
                 },
             )
@@ -470,7 +688,33 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
         _stackctl.write_json(report_dir / "report.json", {"command": "repair", "steps": steps})
         _stackctl.write_json(
             report_dir / "repair_plan.json",
-            {"target": args.target, "fix": args.fix, "actions": ["stop stack", "start stack"]},
+            {
+                "target": args.target,
+                "fix": args.fix,
+                "actions": [
+                    {
+                        "argv": ["python3", "quwoquan_ops/cli/stackctl.py", "down", "--target", args.target],
+                        "intent": "the stop half of the restart this repair just ran",
+                        "deletes": "local stack containers and networks",
+                        "preserves": ["named volumes"],
+                    },
+                    {
+                        "argv": [
+                            "python3",
+                            "quwoquan_ops/cli/stackctl.py",
+                            "up",
+                            "--target",
+                            args.target,
+                            "--workload",
+                            "full",
+                            "--skip-app",
+                        ],
+                        "intent": "the start half of the restart this repair just ran",
+                        "deletes": "nothing",
+                        "preserves": ["named volumes"],
+                    },
+                ],
+            },
         )
         _stackctl._write_summary_bundle(
             report_dir,
@@ -500,7 +744,22 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
             {
                 "target": args.target,
                 "fix": args.fix,
-                "actions": [f"inspect listener on {item['name']}:{item['port']}" for item in occupied],
+                # reclaim-ports 只做诊断，不杀任何监听者；给出的是可直接执行的取证
+                # 命令，让操作员先看清占用方是谁，再自行决定走哪条支持的 teardown。
+                "actions": [
+                    {
+                        "argv": [
+                            "lsof",
+                            "-nP",
+                            f"-iTCP:{item['port']}",
+                            "-sTCP:LISTEN",
+                        ],
+                        "intent": f"identify the listener holding role {item['name']}",
+                        "deletes": "nothing",
+                        "preserves": ["every running process and container"],
+                    }
+                    for item in occupied
+                ],
             },
         )
         _stackctl._write_summary_bundle(
@@ -538,6 +797,8 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
             "reclaim-build-cache",
             "reclaim-orphaned-processes",
             "reclaim-orphaned-compose",
+            "reclaim-stale-test-live-receipt",
+            "reclaim-undownable-startup-receipt",
             "service-core-cutover",
             "restart-stack",
             "reclaim-ports",
@@ -628,6 +889,26 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         ),
     )
     repair_parser.add_argument(
+        "--confirm-stale-test-live-receipt-reclaim",
+        action="store_true",
+        help=(
+            "Confirm removal of one test-live startup receipt the current contract "
+            "cannot admit, after a live probe proves the project owns no container, "
+            "network or canonical port. The receipt is archived first and named "
+            "volumes remain preserved."
+        ),
+    )
+    repair_parser.add_argument(
+        "--confirm-undownable-startup-receipt-reclaim",
+        action="store_true",
+        help=(
+            "Confirm the attested orphan Compose recovery delegated by the "
+            "undownable receipt repair entry. Pass the exact create-once path returned by "
+            "planning through --orphaned-compose-attestation; named volumes remain "
+            "preserved."
+        ),
+    )
+    repair_parser.add_argument(
         "--output-layout-action",
         choices=("plan", "apply"),
         default="plan",
@@ -652,4 +933,3 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
             "layout plan. Named volumes, environment runtime, Data, and source are excluded."
         ),
     )
-

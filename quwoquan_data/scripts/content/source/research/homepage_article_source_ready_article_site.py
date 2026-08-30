@@ -8,7 +8,11 @@ import urllib.parse
 from collections.abc import Mapping
 from typing import Any
 
-from core.source_attribution import canonical_source_attribution
+from core.runtime_policy import active_runtime_policy
+from core.source_attribution import (
+    canonical_source_attribution,
+    derived_modifications_value,
+)
 
 from content.post.article.base_draft import base_draft_readiness
 from content.post.article.evidence_text import score_source_markdown
@@ -85,6 +89,8 @@ def _article_attribution(
             "propertyReleaseStatus": "not_required",
             "collectedAt": captured_at,
             "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+            # 站点来源承载的是正文事实引用，本身不落媒体字节，因此没有衍生修改。
+            "derivedModifications": derived_modifications_value(),
         }
     )
 
@@ -124,7 +130,10 @@ def _candidate_batches(
             + urllib.parse.quote(entity_name)
         )
         try:
-            search_html = network_io.curl_text(search_url, timeout=15)
+            search_html = network_io.curl_text(
+                search_url,
+                timeout=active_runtime_policy().provider_timeouts.qunar_seconds,
+            )
         except Exception as exc:  # noqa: BLE001 - provider shard checkpoint
             search_html = ""
             search_error = f"{type(exc).__name__}: {exc}"

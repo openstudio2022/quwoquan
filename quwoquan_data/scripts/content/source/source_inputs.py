@@ -10,8 +10,7 @@
 """
 from __future__ import annotations
 
-import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -20,11 +19,20 @@ from core.control_types import ContentType
 from core.io import read_json
 from core.paths import STAGE_DOWNLOAD
 
+from content.source.source_input_text import (
+    SOURCE_USE_BLOCKED,
+    SOURCE_USE_FACTUAL_REFERENCE,
+    SOURCE_USE_LICENSED_ADAPTATION,
+    VALID_SOURCE_USE_MODES,
+    manual_body_note,
+    source_frontmatter,
+)
 from content.source.external_acquisition_inputs import (
     external_input_error,
     professional_image_specs_from_plan,
     professional_video_plan_binding,
 )
+from content.source.rights_decision_projection import projected_distribution_decision
 from content.source.source_unit import resolve_entity_object_dir
 
 if TYPE_CHECKING:
@@ -32,14 +40,6 @@ if TYPE_CHECKING:
         ExternalInputRuntimeContext,
     )
 
-SOURCE_USE_LICENSED_ADAPTATION = "licensed_adaptation"
-SOURCE_USE_FACTUAL_REFERENCE = "factual_reference_only"
-SOURCE_USE_BLOCKED = "blocked"
-VALID_SOURCE_USE_MODES = {
-    SOURCE_USE_LICENSED_ADAPTATION,
-    SOURCE_USE_FACTUAL_REFERENCE,
-    SOURCE_USE_BLOCKED,
-}
 RESEARCH_PLAN_FILES = research_plan_files()
 
 
@@ -195,7 +195,7 @@ def curated_sources_for_entity(
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
-            out.append(
+            row: dict[str, Any] = (
                 {
                     "source_id": source_id,
                     "platform": src.get("platform") or "web",
@@ -233,6 +233,14 @@ def curated_sources_for_entity(
                     "imageUrls": _normalize_image_specs(src.get("imageUrls") or []),
                 }
             )
+            # 这个投影是白名单：没列出的字段在 fetch 阶段就消失了。计划阶段已为
+            # 非百科来源铸好的 sourceAttribution 一旦在这里丢掉，写单元时就只剩
+            # 百科兜底解析器，携程/维基导游必然 fail-closed 并连带踢掉整个实体。
+            # 缺席与在场必须可区分，所以只在计划真的带了归因时才落这个键。
+            planned_attribution = src.get("sourceAttribution")
+            if isinstance(planned_attribution, Mapping) and planned_attribution:
+                row["sourceAttribution"] = dict(planned_attribution)
+            out.append(row)
     return out
 
 
@@ -292,7 +300,7 @@ def _normalize_image_specs(raw: Any) -> list[dict[str, Any]]:
                 "acquisitionStatus": item.get("acquisitionStatus", ""),
                 "rightsStatus": item.get("rightsStatus", ""),
                 "authorizationRequired": item.get("authorizationRequired"),
-                "distributionDecision": item.get("distributionDecision", ""),
+                **projected_distribution_decision(item),
                 "rightsAuditStatus": item.get("rightsAuditStatus") or item.get("rightsStatus") or "",
                 "rightsIssues": list(item.get("rightsIssues") or []),
                 "acquisitionReceiptRef": item.get("acquisitionReceiptRef", ""),
@@ -528,32 +536,6 @@ def curated_homepage_media_for_entity(
     return specs
 
 
-def source_frontmatter(source: dict[str, Any], entity_id: str) -> str:
-    """来源 frontmatter：只记录真实抓取元信息，source.md 正文不再允许 task body 冒充。"""
-    use_mode = str(source.get("sourceUseMode") or SOURCE_USE_FACTUAL_REFERENCE)
-    allowed_use = (
-        "licensed_adaptation"
-        if use_mode == SOURCE_USE_LICENSED_ADAPTATION
-        else "facts_only"
-    )
-    return (
-        f"---\n"
-        f"url: {source.get('url', '')}\n"
-        f"platform: {source.get('platform', 'web')}\n"
-        f"sourceUseMode: {use_mode}\n"
-        f"license: {source.get('license') or 'reference-only'}\n"
-        f"allowedUse: {allowed_use}\n"
-        f"credit: {source.get('credit', '')}\n"
-        f"termsUrl: {source.get('termsUrl', '')}\n"
-        f"licenseSnapshot: {source.get('licenseSnapshot', '')}\n"
-        f"authorizationProof: {source.get('authorizationProof', '')}\n"
-        f"entity: {entity_id}\n"
-        f"retained: false\n"
-        f"taskProvidedBody: {'true' if str(source.get('body') or '').strip() else 'false'}\n"
-        f"---\n\n"
-    )
-
-
 def source_plan_rights_issues(
     execution_id: str,
     entity_id: str,
@@ -584,14 +566,3 @@ def source_plan_rights_issues(
                 if not str(source.get(field) or "").strip():
                     issues.append(f"{sid}: licensed_adaptation missing {field}")
     return issues
-
-
-def manual_body_note(source: dict[str, Any], *, max_chars: int = 180) -> str:
-    """task/source_plan 里的 body 仅作为人工计划备注，不得充当 source.md 正文。"""
-    body = re.sub(r"\s+", " ", str(source.get("body") or "")).strip()
-    if not body:
-        return ""
-    clipped = body[:max_chars]
-    if len(body) > max_chars:
-        clipped += "..."
-    return f"manual_source_plan_note: {clipped}"

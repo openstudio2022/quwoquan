@@ -98,7 +98,7 @@
 - GIVEN 当前用户进入我的主页互动 Tab。
 - WHEN 二级控制行完成渲染并选择转发。
 - THEN 一级保持记录/互动/足迹。
-- THEN 二级为点赞/评论/转发/浏览和收到的/我发起的。
+- THEN 二级项与方向项以 user-service `account/user_account/ui_config.yaml` 的 `profile_tabs[interaction]` 为准，即点赞/评论/转发加收到的/我发起的，转发只对 owner 可见。
 - THEN 页面不存在全部、互动明细、第三行导航或独立转发页。
 
 <a id="gwt-002"></a>
@@ -113,10 +113,11 @@
 <a id="gwt-003"></a>
 ### GWT-003 预览与失效降级完整
 
-- GIVEN 图片、视频、文本、讨论和四种 availability fixture 已加载。
+- GIVEN 图片、视频、文本、讨论、四种已声明 availability 与一个本端未声明的 availability 取值 fixture 已加载。
 - WHEN 转发行或媒体加载失败被渲染。
 - THEN 图片使用 aspectFill，视频只显示封面和播放图标，文本和讨论最多两行。
 - THEN deleted/private/reviewing/author_deactivated 显示明确文本，不显示空白灰图或加载失败大块。
+- THEN 本端未声明的 availability 取值落显式未知态且不可打开，文案说明本端打不开并给出更新出路，不复用断言内容已被删除或作者已注销的措辞。
 
 <a id="gwt-004"></a>
 ### GWT-004 received 未读和真实影响归因
@@ -141,7 +142,8 @@
 
 - GIVEN shareRecord、原目标和失效目标三类 fixture 已准备。
 - WHEN 用户点击整行、预览、头像、昵称或影响结果。
-- THEN 行和预览统一按可用 shareRecord、可用原目标、失效不跳转解析。
+- THEN 行和预览共用同一次解析，只有可用原目标可进入，失效不跳转。
+- THEN 站外分享事实只作观测，不构成第二条跳转路径。
 - THEN 头像和昵称按方向进入 actor 或 counterpart 主页。
 - THEN 影响结果只进入 metadata 枚举的传播来源明细。
 
@@ -160,7 +162,7 @@
 - GIVEN 用户进入转发、切方向、曝光、点击、刷新和分页。
 - WHEN 对应动作发生。
 - THEN 上报规格定义的 8 个 share interaction 事件。
-- THEN 公共参数包含 personaId/direction/interactionId/targetKind/targetId/shareRecordId/source。
+- THEN 公共参数包含 personaId/direction/interactionId/targetKind/targetId/outboundShareEventId/source。
 - THEN 列表浏览事件不复用执行转发行为事件。
 
 ## 6. 依赖

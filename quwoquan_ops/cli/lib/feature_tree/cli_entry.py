@@ -17,6 +17,12 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     context_parser = subparsers.add_parser("context", help="生成目标最小完整上下文")
     context_parser.add_argument("--target", required=True)
+    context_parser.add_argument(
+        "--format",
+        choices=("manifest", "expanded"),
+        default="manifest",
+        help="默认仅生成渐进加载 manifest；expanded 仅供人工诊断",
+    )
     context_parser.set_defaults(func=command_context)
     overview_parser = subparsers.add_parser("overview", help="生成动态特性树总览")
     overview_parser.set_defaults(func=command_overview)

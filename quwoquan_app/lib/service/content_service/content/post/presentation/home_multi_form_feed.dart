@@ -1,5 +1,8 @@
 // ignore_for_file: unnecessary_non_null_assertion
 import 'dart:async';
+import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
+import 'package:quwoquan_app/runtime/di/media_delivery_cover_slot.dart';
+import 'package:quwoquan_app/runtime/di/content_post_media_binding.dart';
 import 'dart:math' show max, min;
 import 'dart:ui' show ImageFilter;
 
@@ -68,6 +71,8 @@ import 'package:quwoquan_app/service/content_service/content/post/domain/home_fe
 import 'package:quwoquan_app/service/content_service/content/post/domain/home_feed_impression_sampling_clock.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/home_feed_scroll_anchor.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/home_feed_video_autoplay_policy.dart';
+import 'package:quwoquan_app/runtime/observability/trackers/feed_performance_observability.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_tracker_port.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_feed_video_focus_coordinator.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/entity_wishlist_action.dart';
 import 'package:go_router/go_router.dart';
@@ -78,7 +83,6 @@ import 'package:quwoquan_app/service/content_service/content/post/application/fe
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/generated/homepage_ui_config.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/home_feed_scroll_anchor_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/following_subject_strip.dart';
-
 part 'home_multi_form_feed_scroll.dart';
 part 'home_multi_form_feed_scroll_anchor.dart';
 part 'home_multi_form_feed_local_actions.dart';
@@ -284,12 +288,10 @@ class HomeMultiFormFeed extends ConsumerWidget {
       if (emptyReason == ContentFeedEmptyReason.noActiveRelease) {
         return _HomeFeedNoActiveReleaseState(
           isDark: isDark,
-          onRetry: () {
-            unawaited(
-              ref
-                  .read(discoveryFeedMapProvider.notifier)
-                  .load(channelId, force: true),
-            );
+          onRefresh: () async {
+            await ref
+                .read(discoveryFeedMapProvider.notifier)
+                .load(channelId, force: true);
           },
         );
       }

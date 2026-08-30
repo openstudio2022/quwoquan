@@ -20,18 +20,22 @@ CHECKPOINT_POLICY: Mapping[str, object] = {
 }
 
 
-def partition_count(required_workers: int) -> int:
-    """Return the governed power-of-two partition count for one fleet."""
-    from core.runtime_policy import active_runtime_policy
+def partition_count(work_unit_count: int) -> int:
+    """Return logical hash topology for the exact frozen work-unit count.
 
-    if isinstance(required_workers, bool) or not isinstance(required_workers, int):
-        raise TypeError("requiredWorkers must be an integer")
-    if required_workers < 1:
-        raise ValueError("requiredWorkers must be positive")
-    requested = max(
-        MIN_PARTITION_COUNT,
-        active_runtime_policy().partitions_per_worker * required_workers,
-    )
+    Partitions isolate queue/checkpoint state; they are not worker capacity and
+    therefore must not be multiplied by a configured per-worker resource ratio.
+
+    The governed bands live in ``schema/execution/data_content_fleet_request``
+    and are implemented on the Service side by ``data_fleet.go``'s
+    ``dataContentPartitionCount``; both implementations are pinned to that
+    single declaration by local_contract tests.
+    """
+    if isinstance(work_unit_count, bool) or not isinstance(work_unit_count, int):
+        raise TypeError("work unit count must be an integer")
+    if work_unit_count < 1:
+        raise ValueError("work unit count must be positive")
+    requested = max(MIN_PARTITION_COUNT, work_unit_count)
     if requested >= MAX_PARTITION_COUNT:
         return MAX_PARTITION_COUNT
     return 1 << (requested - 1).bit_length()

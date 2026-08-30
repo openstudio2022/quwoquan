@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
+import json
+import ssl
+import urllib.error
 from pathlib import Path
+from unittest import mock
 
+import pytest
 
 ROOT = Path(__file__).resolve().parents[4]
 SETUP_PATH = ROOT / "quwoquan_ops/ci/setup_flutter_sdk.py"
@@ -17,7 +24,9 @@ def _load_setup_module():
 
 
 def test_delivery_gate_bootstrap_uses_pinned_cache_and_portal_lockfile() -> None:
-    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
 
     assert "subosito/flutter-action@" not in workflow
     assert "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830" in workflow
@@ -27,12 +36,13 @@ def test_delivery_gate_bootstrap_uses_pinned_cache_and_portal_lockfile() -> None
     assert "FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn" in workflow
     assert "flutter pub get --enforce-lockfile" in workflow
     assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in workflow
-    assert "QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy" in workflow
+    assert 'echo "QWQ_DEPLOY_WORK_ROOT=$RUNNER_TEMP/quwoquan-deploy"' in workflow
 
 
 def test_contract_metadata_bootstrap_creates_cache_parent_before_mktemp() -> None:
     script = (
-        ROOT / "quwoquan_service/scripts/contract/verify_contract_metadata.sh"
+        ROOT
+        / "quwoquan_service/scripts/verify/contract_graph/verify_contract_metadata.sh"
     ).read_text(encoding="utf-8")
 
     mkdir_index = script.index('mkdir -p "$CONTRACT_VIEW_CACHE"')
@@ -66,7 +76,9 @@ def test_ff_config_contract_uses_portable_grep() -> None:
     assert "rg -n" not in script
 
 
-def test_flutter_release_resolution_requires_official_checksum_and_architecture() -> None:
+def test_flutter_release_resolution_requires_official_checksum_and_architecture() -> (
+    None
+):
     setup = _load_setup_module()
     manifest = {
         "current_release": {"stable": "abc123"},
@@ -88,7 +100,9 @@ def test_flutter_release_resolution_requires_official_checksum_and_architecture(
         ],
     }
 
-    release = setup.select_current_release(manifest, channel="stable", architecture="x64")
+    release = setup.select_current_release(
+        manifest, channel="stable", architecture="x64"
+    )
 
     assert release == {
         "archive": "stable/linux/flutter_linux_1.2.3-stable.tar.xz",
@@ -96,6 +110,62 @@ def test_flutter_release_resolution_requires_official_checksum_and_architecture(
         "sha256": "a" * 64,
         "version": "1.2.3",
     }
+
+
+def test_manifest_download_retries_transient_transport_failures() -> None:
+    setup = _load_setup_module()
+    manifest = {"current_release": {"stable": "abc123"}, "releases": []}
+    attempts: list[str] = []
+
+    def flaky_urlopen(request, timeout):  # noqa: ANN001, ARG001
+        attempts.append(request.full_url)
+        if len(attempts) < 3:
+            raise ssl.SSLEOFError("EOF occurred in violation of protocol")
+        return contextlib.closing(io.BytesIO(json.dumps(manifest).encode("utf-8")))
+
+    with (
+        mock.patch.object(setup.urllib.request, "urlopen", flaky_urlopen),
+        mock.patch.object(setup.time, "sleep") as sleep,
+    ):
+        assert setup._download_json("https://example.invalid/releases.json") == manifest
+
+    assert len(attempts) == 3
+    assert [call.args[0] for call in sleep.call_args_list] == [2, 4]
+
+
+def test_manifest_download_does_not_retry_deterministic_http_failures() -> None:
+    setup = _load_setup_module()
+    attempts: list[str] = []
+
+    def failing_urlopen(request, timeout):  # noqa: ANN001, ARG001
+        attempts.append(request.full_url)
+        raise urllib.error.HTTPError(
+            request.full_url, 404, "Not Found", hdrs=None, fp=None
+        )
+
+    with (
+        mock.patch.object(setup.urllib.request, "urlopen", failing_urlopen),
+        mock.patch.object(setup.time, "sleep") as sleep,
+        pytest.raises(urllib.error.HTTPError),
+    ):
+        setup._download_json("https://example.invalid/releases.json")
+
+    assert len(attempts) == 1
+    sleep.assert_not_called()
+
+
+def test_manifest_download_fails_closed_after_exhausting_retries() -> None:
+    setup = _load_setup_module()
+
+    def always_failing(request, timeout):  # noqa: ANN001, ARG001
+        raise ssl.SSLEOFError("EOF occurred in violation of protocol")
+
+    with (
+        mock.patch.object(setup.urllib.request, "urlopen", always_failing),
+        mock.patch.object(setup.time, "sleep"),
+        pytest.raises(RuntimeError, match="unreachable after 4 attempts"),
+    ):
+        setup._download_json("https://example.invalid/releases.json")
 
 
 def test_flutter_release_resolution_honors_repository_pinned_version() -> None:

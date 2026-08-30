@@ -15,6 +15,18 @@ APP_TEST_ROOT = ROOT / "quwoquan_app" / "test" / "local_contract"
 
 DEFAULT_FLUTTER_CAP = 40
 MIN_FLUTTER_CAP = 24
+PYTEST_CAP = 80
+
+DATA_LOCAL_CONTRACT_ROOT = "quwoquan_data/tests/local_contract"
+
+# 这四处实现面被 data local_contract 的每个子目录引用，影响面就是全域。给它们
+# 编一份「相关目录」清单只会假装收敛：清单外的目录同样会因这里的改动而红。
+DATA_CROSSCUTTING_PREFIXES = (
+    "quwoquan_data/scripts/verify/",
+    "quwoquan_data/scripts/cli.py",
+    "quwoquan_data/scripts/content/review/",
+    "quwoquan_data/scripts/content/templates/",
+)
 
 SMOKE_STATIC = [
     "verify-app-mock-isolation",
@@ -26,6 +38,22 @@ SMOKE_STATIC = [
     "verify-app-enum-typed-binding",
     "verify-app-assistant-search-weak-typing-ratchet",
 ]
+
+# 就绪路由与 readinessProbe 分处两棵树，任一侧单独改动都能造成探针错配，
+# 因此两侧任一被触及都必须跑同源门禁（纯静态，亚秒级）。
+SERVICE_PROBE_SUFFIXES = (
+    "deploy/base/deployment.yaml",
+    "quwoquan_ops/cli/lib/service_runtime_probes.py",
+    ".go",
+)
+
+# UAT key 与实现侧 key 分处两棵树，任一侧单独改动都能造成 UAT 引用不存在的
+# widget（find.byKey 永远 findsNothing），因此两侧任一被触及都跑同源门禁。
+UAT_WIDGET_KEY_PREFIXES = (
+    "quwoquan_app/lib/",
+    "quwoquan_app/test/user_acceptance/",
+    "quwoquan_app/test/support/runtime/patrol/",
+)
 
 PAGEFLIP_PREFIXES = (
     "quwoquan_app/lib/design_system/pageflip/",
@@ -97,7 +125,14 @@ def classify(paths: list[str]) -> dict[str, bool]:
         "has_portal": False,
         "has_contracts": False,
         "has_app_contracts": False,
+        "has_app_dart": False,
         "has_pageflip": False,
+        "has_app_scripts": False,
+        "has_service_scripts": False,
+        "has_ops_scripts": False,
+        "has_data_scripts": False,
+        "has_service_probes": False,
+        "has_app_uat_widget_keys": False,
     }
     for path in paths:
         if path.startswith("quwoquan_service/"):
@@ -106,44 +141,66 @@ def classify(paths: list[str]) -> dict[str, bool]:
                 "quwoquan_service/contracts/"
             ):
                 flags["has_contracts"] = True
+            if "/tests/" not in path and path.endswith((".py", ".sh")):
+                flags["has_service_scripts"] = True
         if path.startswith("quwoquan_app/"):
             flags["has_app"] = True
+            if path.endswith(".dart"):
+                flags["has_app_dart"] = True
             if "contracts" in path or path.startswith(
                 "quwoquan_app/packages/quwoquan_cloud_contracts/"
             ):
                 flags["has_app_contracts"] = True
+            if "/tests/" not in path and "/test/" not in path and path.endswith((".py", ".sh")):
+                flags["has_app_scripts"] = True
         if path.startswith("quwoquan_data/"):
             flags["has_data"] = True
+            if "/tests/" not in path and path.endswith((".py", ".sh")):
+                flags["has_data_scripts"] = True
         if path.startswith("quwoquan_ops/") or path.startswith("specs/"):
             flags["has_ops"] = True
+        if (
+            path.startswith("quwoquan_ops/")
+            and "/tests/" not in path
+            and path.endswith((".py", ".sh"))
+        ):
+            flags["has_ops_scripts"] = True
         if path.startswith("specs/"):
             flags["has_specs"] = True
         if path.startswith("quwoquan_ops/portal/"):
             flags["has_portal"] = True
         if any(path.startswith(prefix) for prefix in PAGEFLIP_PREFIXES):
             flags["has_pageflip"] = True
+        if any(path.endswith(suffix) for suffix in SERVICE_PROBE_SUFFIXES):
+            flags["has_service_probes"] = True
+        if path.endswith(".dart") and any(
+            path.startswith(prefix) for prefix in UAT_WIDGET_KEY_PREFIXES
+        ):
+            flags["has_app_uat_widget_keys"] = True
     return flags
 
 
 def static_checks(flags: dict[str, bool]) -> list[str]:
-    checks = [
-        "branch_policy",
-        "feature_tree",
-        "python_script_governance",
-        "entrypoint_script_paths",
-    ]
+    checks = ["branch_policy", "local_worktree_lifecycle", "entrypoint_script_paths"]
+    if flags["has_specs"]:
+        checks.append("feature_tree")
+    for scope in ("app", "service", "ops", "data"):
+        if flags[f"has_{scope}_scripts"]:
+            checks.append(f"python_script_governance_{scope}")
     if flags["has_service"] or flags["has_ops"]:
         checks.append("service_architecture")
+    if flags["has_service_probes"]:
+        checks.append("service_probe_homology")
+    if flags["has_app_contracts"] or flags["has_contracts"]:
+        checks.append("app_generated_manifest")
     if flags["has_app"] or flags["has_app_contracts"]:
-        checks.extend(
-            [
-                "app_generated_manifest",
-                "app_contract_handoff",
-                *SMOKE_STATIC,
-            ]
-        )
-    if flags["has_contracts"] or flags["has_service"]:
+        checks.append("app_contract_handoff")
+    if flags["has_app_dart"]:
+        checks.extend(SMOKE_STATIC)
+    if flags["has_contracts"]:
         checks.extend(["metadata_contract", "commercial_contract"])
+    if flags["has_app_uat_widget_keys"]:
+        checks.append("app_uat_widget_key_references")
     if flags["has_pageflip"]:
         checks.append("pageflip_backward_mainline")
     if flags["has_data"]:
@@ -234,40 +291,234 @@ def select_go_services(paths: list[str]) -> list[str]:
     return services
 
 
-def select_pytest_paths(paths: list[str]) -> list[str]:
+def select_pytest_paths(paths: list[str]) -> tuple[list[str], list[str]]:
+    """返回 (本地跑的测试路径, 交给 Delivery Gate 的 data 全域回归)。
+
+    第二个返回值不是可选的诊断信息：commit gate 的硬顶是 15 分钟而 data
+    `local_contract` 全量约 21 分钟，横切实现面（`verify/`、`cli.py`、
+    `content/review/`、`content/templates/`）的影响面就是全域，本地无论怎么选都
+    覆盖不全。把它登记成 deferred 而不是选 80 条了事，是为了让「本地绿」不被读成
+    「data 全域绿」——后者只有 Delivery Gate 的四片能给。
+    """
     selected: list[str] = []
     seen: set[str] = set()
+    deferred: list[str] = []
+    # worktree 生命周期治理的实现散在 hooks、cli/lib 与 policies 三处，决策表却只有一份。
+    # 不显式映射的话，改 hook 或改阈值都不会触发它——最需要回归的两类改动恰好都漏掉。
+    worktree_lifecycle_tests = (
+        "quwoquan_ops/tests/local_contract/gate/"
+        "test_local_worktree_lifecycle__gate__local_contract_test.py",
+    )
+    source_mappings = (
+        ("quwoquan_ops/hooks/worktree_", worktree_lifecycle_tests),
+        ("quwoquan_ops/hooks/post-commit", worktree_lifecycle_tests),
+        ("quwoquan_ops/hooks/run_install_hooks.sh", worktree_lifecycle_tests),
+        ("quwoquan_ops/cli/lib/local_worktree_inventory.py", worktree_lifecycle_tests),
+        ("quwoquan_ops/policies/worktree_policy.yaml", worktree_lifecycle_tests),
+        (
+            "quwoquan_ops/gate/commit_gate",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_commit_gate_fast_path__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_commit_gate_select__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/ci/local_readiness_planner.py",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_local_readiness__core__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/local_readiness.py",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_local_readiness__core__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/lib/local_readiness/",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_local_readiness__core__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/hooks/local_readiness_after_edit.py",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_local_readiness__core__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/policies/local_readiness_contract.yaml",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_local_readiness__core__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/gate/verify_github_supply_chain.py",
+            (
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_service_supply_chain_provenance__supply_chain__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/ci/provider_conformance/provider_patrol_lib/",
+            (
+                "quwoquan_ops/tests/local_contract/provider/"
+                "test_provider_patrol_runtime_identity__contract__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/commands/dev_session",
+            (
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_dev_session_mutable_startup_gate__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_dev_session_resume_compose__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_dev_session_runtime_reuse__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/commands/down_shared.py",
+            (
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_mutable_test_live_teardown__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/lib/test_live_startup_attempt_receipt.py",
+            (
+                "quwoquan_ops/tests/local_contract/test_data/"
+                "test_live_startup_attempt_receipt__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/test_data/"
+                "test_test_live_content_binding__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/lib/web_official_release.py",
+            (
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_web_official_release__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/stackctl.py",
+            (
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_test_live_content_binding_wiring__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_web_official_release__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml",
+            (
+                "quwoquan_ops/tests/local_contract/environment/"
+                "test_environment_package_entrypoints__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/environment/"
+                "test_local_gamma_service_runtime_bindings__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/environment/"
+                "test_runtime_topology_package__security__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/environments/gamma/local/Caddyfile",
+            (
+                "quwoquan_ops/tests/local_contract/environment/"
+                "test_local_media_origin_cache_policy__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_api_edge_single_track__local_contract_test.py",
+            ),
+        ),
+        ("quwoquan_ops/gate/", ("quwoquan_ops/tests/local_contract/gate",)),
+        (
+            "quwoquan_ops/policies/gates/",
+            ("quwoquan_ops/tests/local_contract/gate",),
+        ),
+        ("quwoquan_ops/ci/", ("quwoquan_ops/tests/local_contract/ci",)),
+        (
+            "quwoquan_ops/environments/",
+            ("quwoquan_ops/tests/local_contract/environment",),
+        ),
+        ("quwoquan_ops/cli/", ("quwoquan_ops/tests/local_contract/stackctl",)),
+        ("quwoquan_data/scripts/core/", ("quwoquan_data/tests/local_contract/core",)),
+        (
+            "quwoquan_data/scripts/content/execution/",
+            ("quwoquan_data/tests/local_contract/execution",),
+        ),
+        (
+            "quwoquan_data/scripts/content/release/",
+            ("quwoquan_data/tests/local_contract/release",),
+        ),
+        (
+            "quwoquan_data/scripts/content/source/",
+            ("quwoquan_data/tests/local_contract/source",),
+        ),
+        (
+            "quwoquan_data/scripts/governance/",
+            ("quwoquan_data/tests/local_contract/governance",),
+        ),
+        (
+            "quwoquan_data/scripts/content/homepage/",
+            ("quwoquan_data/tests/local_contract/homepage",),
+        ),
+        (
+            "quwoquan_data/scripts/content/post/",
+            ("quwoquan_data/tests/local_contract/post",),
+        ),
+        (
+            "quwoquan_data/scripts/content/filter_catalog/",
+            ("quwoquan_data/tests/local_contract/filter_catalog",),
+        ),
+    )
     for path in paths:
-        for root in ("quwoquan_data/tests/local_contract", "quwoquan_ops/tests/local_contract"):
+        for root in (
+            "quwoquan_data/tests/local_contract",
+            "quwoquan_ops/tests/local_contract",
+        ):
             if path.startswith(root + "/") and path.endswith(".py"):
                 # A staged deletion still shows up as a changed path; handing it to
                 # pytest aborts the whole run with "file or directory not found".
                 if path not in seen and (ROOT / path).exists():
                     seen.add(path)
                     selected.append(path)
-            elif path.startswith(root.split("/tests/")[0] + "/"):
-                # Map source tree touch to corresponding tests dir if present.
-                domain = root
-                if domain not in seen and (ROOT / domain).is_dir():
-                    # Only add whole domain once when non-test source under domain changes.
-                    if "/tests/" not in path:
-                        seen.add(domain)
-                        selected.append(domain)
-    return selected[:80]
+        if "/tests/" in path:
+            continue
+        if any(path.startswith(prefix) for prefix in DATA_CROSSCUTTING_PREFIXES):
+            if DATA_LOCAL_CONTRACT_ROOT not in deferred:
+                deferred.append(DATA_LOCAL_CONTRACT_ROOT)
+        for source_prefix, test_targets in source_mappings:
+            if path.startswith(source_prefix):
+                for test_target in test_targets:
+                    if test_target in seen or not (ROOT / test_target).exists():
+                        continue
+                    seen.add(test_target)
+                    selected.append(test_target)
+                break
+    if len(selected) > PYTEST_CAP:
+        deferred.extend(selected[PYTEST_CAP:])
+    return selected[:PYTEST_CAP], deferred
 
 
 def build_plan(paths: list[str], cap: int) -> dict:
     flags = classify(paths)
     flutter_tests, deferred = select_flutter_tests(paths, cap)
+    pytest_paths, pytest_deferred = select_pytest_paths(paths)
     return {
         "changed_files": paths,
         "flags": flags,
         "static_checks": static_checks(flags),
         "flutter_tests": flutter_tests,
-        "deferred_to_ci": deferred,
+        "deferred_to_ci": deferred + pytest_deferred,
         "flutter_cap": cap,
         "go_services": select_go_services(paths),
-        "pytest_paths": select_pytest_paths(paths),
+        "pytest_paths": pytest_paths,
         "run_portal": flags["has_portal"] and not (
             flags["has_app"] or flags["has_service"] or flags["has_data"]
         ),

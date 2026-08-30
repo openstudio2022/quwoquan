@@ -206,7 +206,8 @@ def _promotion_source_pool_chain(
     )
     if (
         promotion.get("campaignEvidenceDigest") != evidence.get("evidenceDigest")
-        or promotion.get("sourcePoolDigest") != evidence.get("sourcePoolDigest")
+        or promotion.get("campaignSourcePoolDigest")
+        != evidence.get("sourcePoolDigest")
     ):
         raise CampaignScaleEvidenceError("predecessor source-pool evidence binding drift")
     chain: list[dict[str, Any]] = []

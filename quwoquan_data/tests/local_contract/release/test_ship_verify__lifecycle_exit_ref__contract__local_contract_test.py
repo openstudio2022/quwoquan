@@ -32,7 +32,10 @@ from content.release.environment.topology import (  # noqa: E402
 from content.release.model import DeploymentEnvironment, ReleaseKind  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
 from core.release_layout import payload_digest  # noqa: E402
-from core.source_digest import SourceDigest, content_source_revision  # noqa: E402
+from core.source_digest import (  # noqa: E402
+    SourceDefinitionSnapshot,
+    content_source_revision,
+)
 
 _LIFECYCLE_EXIT_REF = (
     "env/gamma/runs/release-lifecycle-exit/"
@@ -44,7 +47,7 @@ _SOURCE_REVISION = content_source_revision(
     source_digest=_SOURCE_DIGEST,
     entity_catalog_digest=_ENTITY_CATALOG_DIGEST,
 )
-_SOURCE_DIGEST_DOCUMENT = SourceDigest(_SOURCE_DIGEST).to_document()
+_SOURCE_DIGEST_DOCUMENT = SourceDefinitionSnapshot(_SOURCE_DIGEST).to_document()
 
 
 def _release(root: Path, *, research: bool = False) -> Path:
@@ -282,7 +285,7 @@ def test_ship_verify__research_writes_typed_isolation_blocker_before_post_api(
 
     with pytest.raises(
         SystemExit,
-        match="DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE",
+        match="DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE",
     ):
         verify_release_consumers(
             argparse.Namespace(
@@ -304,7 +307,7 @@ def test_ship_verify__research_writes_typed_isolation_blocker_before_post_api(
     assert receipt["outcome"] == "GATE_BLOCK"
     assert (
         receipt["blocker"]["code"]
-        == "DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE"
+        == "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE"
     )
     assert observed["runtime_proof_path"] == (
         tmp_path

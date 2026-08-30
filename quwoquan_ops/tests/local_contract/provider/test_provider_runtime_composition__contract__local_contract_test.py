@@ -1,12 +1,19 @@
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001.t3
 from __future__ import annotations
 
 import re
+import shutil
+import tempfile
 import unittest
 from copy import deepcopy
+from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli.lib import provider_runtime_composition as subject
 from quwoquan_ops.cli.lib.external_provider_governance import load_and_compile
+from quwoquan_ops.cli.lib.external_provider_governance_lib.derived_sources import (
+    load_environment_bindings,
+)
 from quwoquan_ops.cli.lib.provider_runtime_composition import (
     compile_provider_runtime_composition,
     validate_provider_runtime_composition,
@@ -53,25 +60,22 @@ class ProviderRuntimeCompositionContractTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     len(by_role["provider-protocol-substitute"]["capabilityIds"]),
-                    10 if environment == "alpha" else 9,
+                    9,
                 )
-                if environment == "alpha":
-                    binding_by_capability = {
-                        binding["capabilityId"]: binding
-                        for binding in result["bindings"]
-                    }
+                binding_by_capability = {
+                    binding["capabilityId"]: binding
+                    for binding in result["bindings"]
+                }
+                for capability_id in (
+                    "location.poi.search",
+                    "location.route.read",
+                ):
                     self.assertEqual(
-                        binding_by_capability["location.poi.search"]["adapterId"],
-                        "ext.map.nominatim.protocol_substitute",
-                    )
-                    # route.read 保持未启用（App 无路线消费页面），不进入
-                    # alpha substitute workload。
-                    self.assertEqual(
-                        binding_by_capability["location.route.read"]["state"],
+                        binding_by_capability[capability_id]["state"],
                         "not_required",
                     )
                     self.assertEqual(
-                        binding_by_capability["location.route.read"]["adapterId"],
+                        binding_by_capability[capability_id]["adapterId"],
                         "",
                     )
                 self.assertIn(
@@ -98,6 +102,64 @@ class ProviderRuntimeCompositionContractTest(unittest.TestCase):
             "local_capture",
             " ".join(binding["adapterId"] for binding in result["bindings"]),
         )
+
+    def test_runtime_composition_reads_bindings_and_contracts_only_from_source_root(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            capsule_root = Path(temporary) / "capsule"
+            shutil.copytree(
+                subject.ROOT / "quwoquan_service",
+                capsule_root / "quwoquan_service",
+                ignore=shutil.ignore_patterns(
+                    ".git",
+                    ".qwq_output",
+                    "generated",
+                    "tests",
+                ),
+            )
+            shutil.copytree(
+                subject.ROOT / "quwoquan_ops" / "external",
+                capsule_root / "quwoquan_ops" / "external",
+            )
+            expected = compile_provider_runtime_composition(
+                environment="alpha",
+                target="alpha-local",
+                source_root=capsule_root,
+            )
+            live_root = subject.ROOT.resolve()
+            original_read_text = Path.read_text
+            original_read_bytes = Path.read_bytes
+
+            def reject_live_text(
+                path: Path,
+                *args: object,
+                **kwargs: object,
+            ) -> str:
+                if path.resolve().is_relative_to(live_root):
+                    raise AssertionError(f"capsule composition read live workspace: {path}")
+                return original_read_text(path, *args, **kwargs)
+
+            def reject_live_bytes(path: Path) -> bytes:
+                if path.resolve().is_relative_to(live_root):
+                    raise AssertionError(f"capsule composition read live workspace: {path}")
+                return original_read_bytes(path)
+
+            from quwoquan_ops.cli.lib import external_provider_governance as governance
+
+            governance.load_registry.cache_clear()
+            governance.load_conformance_manifest.cache_clear()
+            load_environment_bindings.cache_clear()
+            with (
+                mock.patch.object(Path, "read_text", reject_live_text),
+                mock.patch.object(Path, "read_bytes", reject_live_bytes),
+            ):
+                repeated = compile_provider_runtime_composition(
+                    environment="alpha",
+                    target="alpha-local",
+                    source_root=capsule_root,
+                )
+            self.assertEqual(repeated, expected)
 
     def test_prod_fails_closed_when_binding_selects_local_capture(self) -> None:
         compiled = deepcopy(self.compiled)
@@ -213,15 +275,15 @@ class ProviderRuntimeCompositionContractTest(unittest.TestCase):
                 compiled=compiled,
             )
 
-    def test_nonprod_elasticsearch_cannot_cross_environment(self) -> None:
+    def test_nonprod_elasticsearch_requires_shared_trust_domain_authority(self) -> None:
         compiled = deepcopy(self.compiled)
         compiled["selectedBindings"]["beta"]["runtime.log.sink"][
             "endpoint_ref"
-        ] = "local_topology:alpha.elasticsearch"
+        ] = "local_topology:beta.elasticsearch"
 
         with self.assertRaisesRegex(
             ValueError,
-            "Elasticsearch endpoint crosses target isolation",
+            "Elasticsearch endpoint must use the shared trust-domain authority",
         ):
             compile_provider_runtime_composition(
                 environment="beta",
@@ -260,6 +322,36 @@ class ProviderRuntimeCompositionContractTest(unittest.TestCase):
                 expected_environment="alpha",
                 expected_target="alpha-local",
             )
+
+    def test_validator_can_read_current_contracts_from_capsule_source_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            capsule_root = Path(temporary) / "capsule"
+            shutil.copytree(
+                subject.ROOT / "quwoquan_service",
+                capsule_root / "quwoquan_service",
+                ignore=shutil.ignore_patterns(
+                    ".git",
+                    ".qwq_output",
+                    "generated",
+                    "tests",
+                ),
+            )
+            shutil.copytree(
+                subject.ROOT / "quwoquan_ops" / "external",
+                capsule_root / "quwoquan_ops" / "external",
+            )
+            composition = compile_provider_runtime_composition(
+                environment="alpha",
+                target="alpha-local",
+                source_root=capsule_root,
+            )
+            validated = validate_provider_runtime_composition(
+                composition,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                source_root=capsule_root,
+            )
+        self.assertEqual(validated, composition)
 
     def test_package_self_verify_does_not_read_current_endpoint_contracts(self) -> None:
         composition = compile_provider_runtime_composition(
