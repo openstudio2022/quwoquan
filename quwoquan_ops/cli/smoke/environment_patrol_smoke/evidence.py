@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -13,6 +14,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+from collections.abc import Mapping
 from typing import Any, Callable
 
 from quwoquan_ops.ci.device_matrix.android import resolve_android_debug_bridge
@@ -27,6 +29,8 @@ from .constants import (
     ANDROID_DEVICE_EVIDENCE_LOG_TAG,
     ANDROID_DEVICE_EVIDENCE_TOKENS,
     APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX,
+    APP_UAT_PAGE_EVIDENCE_READY_PREFIX,
+    RELEASE_SAMPLE_MATRIX_TARGET,
     CONTROLLED_EDGE_FAULT_COPY_KEYS,
     CONTROLLED_EDGE_FAULT_EVIDENCE_PREFIX,
     CORE_READBACK_TARGET,
@@ -191,6 +195,115 @@ def _parse_app_content_page_screenshot_marker(
         "route": route,
         "terminalKey": terminal_key,
     }
+
+
+
+_APP_UAT_PAGE_EVIDENCE_READY_SCHEMA = (
+    "quwoquan_app.app_uat_page_evidence_ready.v1"
+)
+
+
+def _parse_app_uat_page_evidence_ready(line: str) -> dict[str, str] | None:
+    marker = line.find(APP_UAT_PAGE_EVIDENCE_READY_PREFIX)
+    if marker < 0:
+        return None
+    try:
+        payload = json.loads(
+            line[marker + len(APP_UAT_PAGE_EVIDENCE_READY_PREFIX) :].strip()
+        )
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("App UAT page evidence marker is not valid JSON") from exc
+    required = {
+        "schema", "sampleId", "entrySurface", "carrier", "objectId",
+        "runtimeObjectId", "specRef", "runnerIdentity", "route",
+        "terminalKey", "captureId",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise RuntimeError("App UAT page evidence marker fields are invalid")
+    if payload.get("schema") != _APP_UAT_PAGE_EVIDENCE_READY_SCHEMA:
+        raise RuntimeError("App UAT page evidence marker schema is invalid")
+    normalized = {key: str(value or "").strip() for key, value in payload.items()}
+    if any(not value for value in normalized.values()):
+        raise RuntimeError("App UAT page evidence marker values are invalid")
+    expected_capture = "--".join(
+        (
+            normalized["sampleId"],
+            normalized["entrySurface"],
+            normalized["carrier"],
+        )
+    )
+    if normalized["captureId"] != expected_capture:
+        raise RuntimeError("App UAT page evidence marker captureId drifted")
+    return normalized
+
+
+class _AppUatPerMarkerScreenshotCapture:
+    """Capture exactly one distinct image for every release sample slot marker."""
+
+    def __init__(
+        self,
+        *,
+        args: argparse.Namespace,
+        capture: Callable[[Path], dict[str, Any]],
+        run_dir: Path,
+    ) -> None:
+        self.required = str(getattr(args, "target", "") or "") == RELEASE_SAMPLE_MATRIX_TARGET
+        self.capture = capture
+        self.run_dir = run_dir
+        self.evidence_by_capture_id: dict[str, dict[str, str]] = {}
+
+    def handle_line(self, line: str) -> None:
+        marker = _parse_app_uat_page_evidence_ready(line)
+        if marker is None:
+            return
+        if not self.required:
+            raise RuntimeError("per-case App UAT screenshot marker came from unsupported target")
+        capture_id = marker["captureId"]
+        if capture_id in self.evidence_by_capture_id:
+            raise RuntimeError("duplicate App UAT page evidence captureId")
+        output_path = self.run_dir / "case-page-evidence" / f"{capture_id}.png"
+        captured = self.capture(output_path)
+        if captured.get("status") != "captured" or not output_path.is_file():
+            raise RuntimeError("App UAT per-case screenshot capture failed")
+        encoded = output_path.read_bytes()
+        if not encoded:
+            raise RuntimeError("App UAT per-case screenshot is empty")
+        screenshot_digest = "sha256:" + hashlib.sha256(encoded).hexdigest()
+        if any(
+            item.get("sha256") == screenshot_digest
+            for item in self.evidence_by_capture_id.values()
+        ):
+            raise RuntimeError(
+                "App UAT per-case screenshot bytes were reused across slots"
+            )
+        ref = _output_evidence_ref(output_path)
+        self.evidence_by_capture_id[capture_id] = {
+            "status": "present",
+            "ref": ref,
+            "sha256": screenshot_digest,
+        }
+
+    def page_evidence(self, marker: Mapping[str, Any]) -> dict[str, str]:
+        page = marker.get("pageEvidence")
+        if not isinstance(page, Mapping):
+            raise RuntimeError("App UAT marker pageEvidence is invalid")
+        if page.get("status") != "host_captured":
+            return {str(key): str(value) for key, value in page.items()}
+        capture_id = str(page.get("captureId") or "").strip()
+        evidence = self.evidence_by_capture_id.get(capture_id)
+        if evidence is None:
+            raise RuntimeError("App UAT passed marker lacks its independent host screenshot")
+        return dict(evidence)
+
+    def apply_success_gate(self, result: dict[str, Any], *, dry_run: bool) -> None:
+        if not self.required or dry_run or int(result.get("exitCode", 1)) != 0:
+            return
+        if len(self.evidence_by_capture_id) != 16:
+            result["exitCode"] = 1
+            result["outputSummary"] = (
+                str(result.get("outputSummary") or "")
+                + f"\nApp UAT captured {len(self.evidence_by_capture_id)}/16 independent page frames"
+            ).strip()
 
 
 class _AppContentPageScreenshotCapture:

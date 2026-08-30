@@ -3,16 +3,16 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
-# Pin disposable-output root for the whole hook. A polluted shell export can
-# otherwise redirect make/stackctl into pytest isolation dirs and fail later
-# gates with incomplete report.json artifacts.
 export QWQ_OUTPUT_ROOT="$ROOT/.qwq_output"
 export PYTHONDONTWRITEBYTECODE=1
 
-# L0 commit gate: parallel static + impacted tests. Never make gate / scope=all.
-if ! git diff --cached --name-only | grep -q .; then
-  exit 0
+if ! git diff --cached --quiet; then
+  recovery="python3 quwoquan_ops/cli/local_readiness.py scope --staged"
+  if ! python3 -B quwoquan_ops/cli/local_readiness.py staged-boundary || \
+     ! python3 -B quwoquan_ops/cli/local_readiness.py verify --level scope --staged >/dev/null 2>&1; then
+    echo "[pre-commit] GATE_BLOCK: staged boundary or fresh Review-terminal scope_ready receipt failed" >&2
+    echo "[pre-commit] RECOVER: $recovery" >&2
+    exit 1
+  fi
+  echo "[pre-commit] fresh staged Review-terminal scope_ready receipt accepted"
 fi
-
-echo "[pre-commit] running commit_gate (L0, target ≤10m)"
-bash quwoquan_ops/gate/commit_gate.sh

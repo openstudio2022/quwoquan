@@ -84,10 +84,11 @@ func (b Built) EnsureIndex(ctx context.Context) error {
 	return b.Client.EnsureIndex(ctx)
 }
 
-// HealthPing returns an ES liveness probe when ES is enabled, else nil.
-func (b Built) HealthPing() func(context.Context) error {
+// ReadinessCheck returns the functional ES query probe required by the search
+// serving path when Elasticsearch is enabled, else nil.
+func (b Built) ReadinessCheck() func(context.Context) error {
 	if b.Client == nil {
 		return nil
 	}
-	return b.Client.Ping
+	return b.Client.CheckSearchReady
 }

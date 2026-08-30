@@ -91,6 +91,7 @@ class _Recorder:
 
     def __init__(self) -> None:
         self.commands: list[list[str]] = []
+        self.command_kwargs: list[dict[str, Any]] = []
         self.driver_kwargs: dict[str, Any] = {}
         self.activation_kwargs: dict[str, Any] = {}
 
@@ -107,8 +108,9 @@ def _install_doubles(
 ) -> None:
     """把编排的四个外部边界替换为 typed double：构建、安装、driver、激活。"""
 
-    def fake_run_command(command, **_kwargs):
+    def fake_run_command(command, **kwargs):
         recorder.commands.append(list(command))
+        recorder.command_kwargs.append(dict(kwargs))
         index = len(recorder.commands) - 1
         exit_code = (
             command_exit_codes[min(index, len(command_exit_codes) - 1)]
@@ -176,6 +178,9 @@ class PatrolHostActivationTest(unittest.TestCase):
         self.flutter = self.log_root / "flutter"
         self.flutter.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         self.flutter.chmod(0o700)
+        self.adb = self.log_root / "adb"
+        self.adb.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        self.adb.chmod(0o700)
         self.flutter_identity = {
             "executable": str(self.flutter),
             "flutterVersion": "3.47.0",
@@ -198,6 +203,13 @@ class PatrolHostActivationTest(unittest.TestCase):
             dependency_environment={},
             command_environment={},
         )
+        adb_patch = mock.patch.object(
+            host_activation,
+            "resolve_android_debug_bridge",
+            return_value=str(self.adb),
+        )
+        self.resolve_adb = adb_patch.start()
+        self.addCleanup(adb_patch.stop)
         self.args = argparse.Namespace()
 
     def test_error_code_set_is_canonical_and_closed(self) -> None:
@@ -244,7 +256,7 @@ class PatrolHostActivationTest(unittest.TestCase):
             [command[:3] for command in self.recorder.commands],
             [
                 [str(self.flutter), "build", "apk"],
-                ["adb", "-s", "emulator-5554"],
+                [str(self.adb), "-s", "emulator-5554"],
             ],
         )
         self.assertEqual(
@@ -263,6 +275,43 @@ class PatrolHostActivationTest(unittest.TestCase):
             self.recorder.driver_kwargs["device_kind"],
             "android_emulator",
         )
+
+    def test_android_install_uses_absolute_adb_from_env_without_path_mutation(
+        self,
+    ) -> None:
+        _install_doubles(
+            self,
+            self.recorder,
+            activation_result=_activation_receipt(),
+        )
+        original_environment = dict(self.command_env)
+
+        self._activate(ANDROID_DEVICE)
+
+        install_command = self.recorder.commands[1]
+        self.assertEqual(install_command[0], str(self.adb))
+        self.assertTrue(Path(install_command[0]).is_absolute())
+        self.assertEqual(self.command_env, original_environment)
+        self.assertEqual(
+            self.recorder.command_kwargs[1]["env"]["PATH"],
+            original_environment["PATH"],
+        )
+        resolver_environment = self.resolve_adb.call_args.kwargs["environ"]
+        self.assertEqual(resolver_environment["PATH"], original_environment["PATH"])
+
+    def test_android_adb_resolution_fails_before_install_command(self) -> None:
+        _install_doubles(self, self.recorder)
+        self.resolve_adb.return_value = None
+
+        with self.assertRaises(host_activation.PatrolHostActivationError) as caught:
+            host_activation._install_host(
+                ANDROID_DEVICE,
+                self.command_env,
+                self.log_root,
+            )
+
+        self.assertEqual(caught.exception.code, INSTALL_BLOCKER)
+        self.assertEqual(self.recorder.commands, [])
 
     def test_android_physical_uses_the_physical_driver_kind(self) -> None:
         _install_doubles(
@@ -310,6 +359,35 @@ class PatrolHostActivationTest(unittest.TestCase):
             ],
         )
         self.assertEqual(self.recorder.commands[1][:2], ["xcrun", "simctl"])
+
+    def test_ios_physical_uses_iphoneos_and_devicectl_actor(self) -> None:
+        _install_doubles(
+            self,
+            self.recorder,
+            activation_result=_activation_receipt(),
+        )
+
+        self._activate({**IOS_DEVICE, "id": "PHYSICAL-IOS-UDID", "emulator": False})
+
+        self.assertEqual(
+            self.recorder.commands[0],
+            [str(self.flutter), "build", "ios", "--debug", "--no-pub"],
+        )
+        self.assertEqual(
+            self.recorder.commands[1][:7],
+            [
+                "xcrun",
+                "devicectl",
+                "device",
+                "install",
+                "app",
+                "--device",
+                "PHYSICAL-IOS-UDID",
+            ],
+        )
+        self.assertIn("build/ios/iphoneos/Runner.app", self.recorder.commands[1][-1])
+        self.assertEqual(self.recorder.driver_kwargs["device_kind"], "ios-physical")
+        self.assertEqual(self.recorder.driver_kwargs["activation_component"], "")
 
     def test_build_failure_is_a_gate_block(self) -> None:
         _install_doubles(self, self.recorder, command_exit_code=1)

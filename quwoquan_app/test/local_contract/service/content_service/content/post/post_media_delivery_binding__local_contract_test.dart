@@ -5,6 +5,8 @@
 // 缺席时保持缺席，禁止以 postId/personaId 冒充媒体资产标识。
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/runtime/di/content_post_media_binding.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_binding.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/content_surface_view_mapper.dart';
@@ -104,6 +106,45 @@ void main() {
       expect(copied.authorAvatarAssetId, 'asset-avatar-1');
       expect(copied.authorAvatarAccessMode, MediaDeliveryAccessMode.public);
       expect(copied.mediaItems.single.mediaAssetId, 'asset-img-1');
+    });
+  });
+
+  group('ContentPost media binding — normal 与 legacy 边界', () {
+    test('null accessMode + URL 保持 contract failure，不隐式公开', () {
+      final dto = ContentPostViewData.fromWire(
+        contentPostProjectionFixture(
+          postId: 'photo-null-mode',
+          contentType: 'image',
+          mediaUrls: const <String>[_imageUrl],
+          mediaItems: const <PostMediaItem>[
+            PostMediaItem(kind: 'image', url: _imageUrl),
+          ],
+        ),
+      );
+
+      final binding = contentPostMediaBinding(dto, _imageUrl);
+      expect(binding.accessMode, isNull);
+      expect(binding.isContractFailure, isTrue);
+      expect(binding.isPublic, isFalse);
+    });
+
+    test('typed public 与具名 legacy public 都显式进入 public 状态', () {
+      const typed = MediaDeliveryBinding.public(publicUrl: _imageUrl);
+      const legacy = MediaDeliveryBinding.legacyPublic(publicUrl: _imageUrl);
+
+      expect(typed.isPublic, isTrue);
+      expect(legacy.isPublic, isTrue);
+      expect(typed.accessMode, MediaDeliveryAccessMode.public);
+      expect(legacy.accessMode, MediaDeliveryAccessMode.public);
+    });
+
+    test('article accessMode unknown 保持 null contract failure sentinel', () {
+      expect(articleAssetAccessMode('unknown'), isNull);
+      expect(articleAssetAccessMode(''), isNull);
+      expect(
+        articleAssetAccessMode('signed_grant'),
+        MediaDeliveryAccessMode.signedGrant,
+      );
     });
   });
 

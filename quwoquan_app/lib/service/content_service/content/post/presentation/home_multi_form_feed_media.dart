@@ -168,7 +168,7 @@ class _HomeImagePostCard extends ConsumerWidget {
 /// feed 图片渲染点的私有媒体交付绑定（DEC-033）。
 ///
 /// 只承载 typed 声明分流所需的两字段；绑定与 URL 的关联由投影
-/// `mediaItems` 提供，App 不从 URL 形态推断交付形态。
+/// `mediaItems` 提供，App 不从 URL 形态推断交付形态。缺席保持 contract failure。
 class _FeedImageDelivery {
   const _FeedImageDelivery({required this.assetId, required this.accessMode});
 
@@ -181,7 +181,8 @@ class _FeedImageDelivery {
 
 /// 从投影 `mediaItems` 建立「渲染 URL → 交付绑定」查找表：
 /// 逐条媒体 url→(mediaAssetId, accessMode)，封面 coverUrl→(coverAssetId,
-/// accessMode)。契约缺席 accessMode（存量 public 投影）自然落回公开路径。
+/// accessMode)。契约缺席 accessMode 保持 fail closed；legacy public 必须由已确认
+/// contract version 的具名 adapter 进入。
 Map<String, _FeedImageDelivery> _feedImageDeliveryIndex(
   ContentPostViewData item,
 ) {
@@ -240,8 +241,8 @@ Widget _feedDeliveryImage({
   );
 }
 
-/// 把信息流交付索引项收敛成 typed 绑定；索引缺该 URL 时资产身份缺席，
-/// 由统一入口按四形态判定，不在此处替它猜一个 accessMode。
+/// 把信息流交付索引项收敛成 typed 绑定；索引缺该 URL 时保持 contract failure，
+/// 不在此处替它猜一个 accessMode。
 MediaDeliveryBinding _feedBinding(String url, _FeedImageDelivery? delivery) {
   return MediaDeliveryBinding(
     assetId: delivery?.assetId ?? '',

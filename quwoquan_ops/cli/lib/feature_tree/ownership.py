@@ -134,7 +134,8 @@ def owners_for_path(target: Path, nodes: Iterable[Node]) -> list[Node]:
     for node in nodes:
         for root in engineering_roots(node):
             root = root.rstrip("/")
-            if rel == root or rel.startswith(root + "/"):
+            exact_singleton = root == "Makefile"
+            if rel == root or (not exact_singleton and rel.startswith(root + "/")):
                 matches.append((len(root), node))
     if not matches:
         return []
@@ -215,6 +216,69 @@ def _field(block: str, label: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def _anchor_references(
+    field: str,
+    pattern: re.Pattern[str],
+    *,
+    story_id: str,
+) -> tuple[str, ...]:
+    """解析显式锚点及同类 ``A 至 B`` 范围，并稳定去重。"""
+
+    matches = list(pattern.finditer(field))
+    qualified = [
+        (match, match.start() - len(story_id) - 1)
+        for match in matches
+        if field[max(0, match.start() - len(story_id) - 1) : match.start()]
+        == f"{story_id}/"
+    ]
+    if qualified and "至" in field[qualified[0][0].start() :]:
+        start = qualified[0][1]
+        tail = field[qualified[0][0].end() :]
+        next_qualified_story = next(
+            (
+                match
+                for match in re.finditer(
+                    r"(?P<story>[A-Za-z0-9_.-]+)/"
+                    r"(?=(?:REQ|UAT|DOM|SIT|GWT)-\d{3,}\b)",
+                    tail,
+                )
+                if match.group("story") != story_id
+            ),
+            None,
+        )
+        end = (
+            qualified[0][0].end() + next_qualified_story.start()
+            if next_qualified_story is not None
+            else len(field)
+        )
+        field = field[start:end]
+        matches = list(pattern.finditer(field))
+
+    anchors: list[str] = []
+    previous: re.Match[str] | None = None
+    for match in matches:
+        kind, raw_number = match.group(0).split("-", 1)
+        anchor = match.group(0).lower()
+        if previous is not None:
+            previous_kind, previous_number = previous.group(0).split("-", 1)
+            separator = field[previous.end() : match.start()]
+            if (
+                kind == previous_kind
+                and "至" in separator
+                and int(previous_number) <= int(raw_number)
+            ):
+                width = max(len(previous_number), len(raw_number), 3)
+                anchors.extend(
+                    f"{kind.lower()}-{number:0{width}d}"
+                    for number in range(int(previous_number) + 1, int(raw_number) + 1)
+                )
+                previous = match
+                continue
+        anchors.append(anchor)
+        previous = match
+    return tuple(dict.fromkeys(anchors))
+
+
 def _design_ownerships(
     nodes: Iterable[Node],
     l1_owner: Node | None = None,
@@ -261,12 +325,15 @@ def _design_ownerships(
                     f"当前={story_ids or '无'}"
                 )
             story = next(iter(story_nodes))
-            requirement_anchors = tuple(
-                item.lower() for item in _REQ_RE.findall(_field(block, "关联要求"))
+            requirement_anchors = _anchor_references(
+                _field(block, "关联要求"),
+                _REQ_RE,
+                story_id=story.node_id,
             )
-            acceptance_anchors = tuple(
-                item.lower()
-                for item in _ACCEPTANCE_RE.findall(_field(block, "关联验收"))
+            acceptance_anchors = _anchor_references(
+                _field(block, "关联验收"),
+                _ACCEPTANCE_RE,
+                story_id=story.node_id,
             )
             story_anchors = headings(story.spec)
             missing = sorted(

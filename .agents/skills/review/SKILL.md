@@ -24,6 +24,12 @@ registry 唯一声明 workflow primary、profile specialist、预算和命名 ev
 `references/reviewer-executor.md`。manifest、plan、terminal 和 tracked projection schema 来自
 `quwoquan_ops/policies/agent_governance_contract.yaml`，Cursor/Codex adapter 仅是生成投影。
 
+
+
+自然语言触发与显式 Skill 调用同轨，字段、闭集与审计隔离只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.review`：
+
+- PRE：`progress_update` / `quality_business_uat` / `quality_owner`。
+
 ## 执行
 
 1. **解析 owner**：Review POST 必须消费与开发 PRE 相同的 manifest；profile 只选 specialist/evidence，不重新定义 Feature owner。
@@ -43,11 +49,17 @@ registry 唯一声明 workflow primary、profile specialist、预算和命名 ev
 5. **汇总**：按 `grading.md` 合并重复 finding，保留最高等级、精确 path/anchor、finding owner 和恢复动作。不自动进行第二轮复审或超时重试。
 6. **定向复审**：修复后只能直接引用 initial plan，为首次 Reviewer 中的 finding owner 生成 `--round rereview --finding-owner <role>`。initial、复审与累计调用上限均读取 registry `limits`；不允许 rereview chain。
 
+- 执行中：`exception_escalation` / `quality_business_uat` / `$route`。
+
+`$route` 表示按当前决定责任动态路由；Skill 不复制 envelope schema，所有可见输出统一由 canonical projector 生成。
+
 ## 完成证据
 
 完整 `plan.json` 必须符合 canonical agent governance contract。交付每条 evidence 的实际结果、每个已启动角色的完成/不完整状态、去重 finding 与最终 typed 等级。
 
 只有 required evidence 全部通过、required Reviewer 完成、指纹仍匹配且无 `GATE_BLOCK` finding 时才可准出。optional specialist incomplete 可产生 `PR_WARN`，但不得记为它已通过。
+
+- POST：`completion_report` / `quality_business_uat` / `quality_owner`。
 
 ## 失败与停止
 
@@ -57,4 +69,6 @@ registry 唯一声明 workflow primary、profile specialist、预算和命名 ev
 
 ## 条件性交接
 
-普通闭环 Review 只交付 plan 身份、证据、finding 和未决项。只有跨会话未完成、环境/发布、多人并行、外部阻断或证据需复用时，才持久化 `plan.json`、evidence 回执、finding-owner、指纹、incomplete 终态和唯一恢复动作。
+六类触发（跨会话未完成、多人并行、环境/发布、外部阻断、证据复用、用户显式要求）统一调用 canonical handoff producer；普通闭环不落持久交接。
+
+仅当路由结果要求真实人类责任时，使用统一 `$route`、project/card 与 hosted authority readback；routine execution 不新造 checkpoint。Reviewer PASS 只是评审证据，不能签发或替代 authority receipt。

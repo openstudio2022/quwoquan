@@ -26,7 +26,7 @@ from .dependency_projection_contract import (
     read_lock,
     typed,
 )
-from .dependency_projection_prepare import pub_identity, scan_pods
+from .dependency_projection_prepare import _pub_transient, pub_identity, scan_pods
 from .ios_pod_capsule import _canonical_bytes, _digest_bytes
 from .patrol_command_envelope import (
     PATROL_COMMAND_ENVELOPE_DIGEST_ENV,
@@ -37,7 +37,6 @@ from .pub_cache_capsule import build_pub_cache_snapshot
 
 _GRADLE_VERSION = re.compile(r"^[0-9]+(?:\.[0-9]+){1,2}$")
 _TRANSIENT_SUFFIXES = (".lock", ".lck", ".part", ".tmp")
-_PUB_TRANSIENT_ROOTS = frozenset({"active_roots", "_temp", "log"})
 
 
 def _audit_extra_nodes(
@@ -77,13 +76,6 @@ def _audit_extra_nodes(
         ) from error
 
 
-def _pub_transient(relative: str, is_directory: bool) -> bool:
-    parts = PurePosixPath(relative).parts
-    return bool(parts and parts[0] in _PUB_TRANSIENT_ROOTS) or (
-        relative == "README.md" and not is_directory
-    )
-
-
 def _revalidate_pub(
     *, root: Path, component: str, expected: Mapping[str, Any]
 ) -> dict[str, Any]:
@@ -96,7 +88,7 @@ def _revalidate_pub(
         snapshot = build_pub_cache_snapshot(
             lock_path=lock,
             cache_root=cache,
-            reject_unlocked=False,
+            admitted_extra=_pub_transient,
         )
     except (OSError, TypeError, ValueError) as error:
         raise typed(
@@ -116,13 +108,6 @@ def _revalidate_pub(
     }
     if identity != declared:
         raise typed(CAS_BLOCKER, f"{component} locked package bytes drifted")
-    _audit_extra_nodes(
-        root=cache,
-        expected_files={item.relative for item in snapshot.files},
-        expected_directories=set(snapshot.directories),
-        admitted_extra=_pub_transient,
-        component=component,
-    )
     return identity
 
 
@@ -324,6 +309,77 @@ def _revalidate_patrol_command_envelope(
     if environment.get(PATROL_COMMAND_ENVELOPE_DIGEST_ENV) != expected_digest:
         raise typed(CAS_BLOCKER, "Patrol command envelope selection drifted")
     return expected_digest
+
+
+def readback_from_expectation(
+    *,
+    expectation: object,
+    observed_components: Mapping[str, Mapping[str, Any]],
+    command_environment_owner: str | None = None,
+    command_environment: Mapping[str, str] | None = None,
+) -> DependencyProjectionReadback:
+    """Build a readback from identities captured by the same safe tree scan."""
+
+    manifest = getattr(expectation, "manifest", None)
+    projection = getattr(expectation, "projection_root", None)
+    evidence_digest = getattr(expectation, "evidence_digest", None)
+    if (
+        not isinstance(manifest, Mapping)
+        or not isinstance(projection, Path)
+        or not isinstance(evidence_digest, str)
+    ):
+        raise typed(EVIDENCE_BLOCKER, "dependency expectation object is invalid")
+    source = manifest["source"]
+    components = manifest["components"]
+    if not isinstance(source, Mapping) or not isinstance(components, Mapping):
+        raise typed(EVIDENCE_BLOCKER, "dependency expectation fields are invalid")
+    _revalidate_source(source)
+    _revalidate_environment(
+        manifest=manifest,
+        owner=command_environment_owner,
+        environment=command_environment,
+    )
+    patrol_digest = _revalidate_patrol_command_envelope(
+        manifest=manifest,
+        owner=command_environment_owner,
+        environment=command_environment,
+    )
+    observed = {key: dict(value) for key, value in sorted(observed_components.items())}
+    if set(observed) != set(components):
+        raise typed(EVIDENCE_BLOCKER, "captured dependency component set drifted")
+    for component, raw in sorted(components.items()):
+        if not isinstance(raw, Mapping):
+            raise typed(EVIDENCE_BLOCKER, f"{component} expectation is invalid")
+        identity_fields = {
+            "pub": (
+                "manifestDigest",
+                "treeDigest",
+                "entryCount",
+                "directoryCount",
+                "lockDigest",
+            ),
+            "iosPods": ("treeDigest", "entryCount", "lockDigest"),
+            "androidGradle": ("manifestDigest", "treeDigest", "entryCount"),
+        }.get(str(raw.get("kind") or ""))
+        if identity_fields is None:
+            raise typed(EVIDENCE_BLOCKER, f"{component} expectation kind is unsupported")
+        declared = {key: raw.get(key) for key in identity_fields}
+        if observed[component] != declared:
+            raise typed(CAS_BLOCKER, f"{component} captured identity drifted")
+    result = {
+        "schema": READBACK_SCHEMA,
+        "expectationDigest": evidence_digest,
+        "projectionRoot": str(projection),
+        "sourceManifestDigest": source.get("manifestDigest"),
+        "components": observed,
+        "patrolCommandEnvelopeDigest": patrol_digest,
+    }
+    encoded = _canonical_bytes(result)
+    return DependencyProjectionReadback(
+        expectation_digest=evidence_digest,
+        manifest=result,
+        encoded_manifest=encoded,
+    )
 
 
 def revalidate_dependency_projection_cas(

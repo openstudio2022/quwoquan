@@ -13,7 +13,7 @@
 
 | 磁盘事实 | 下一动作 |
 | --- | --- |
-| 无 `_shared/receipts/` 或目录为空 | 从 `0.plan` 契约开始（先 `task preflight --json`） |
+| 无 `_shared/receipts/` 或目录为空 | 工作包已由 `task init` 原子创建时从 `0.plan` 契约开始；三文件缺失则 `GATE_BLOCK` |
 | 最新 receipt `verdict=pass` 且 `next≠END` | 进入 `next` 指向的阶段 |
 | 最新 receipt `verdict=pass` 且 `next=END` | execution 已完成；只做只读核验，不得再写 |
 | 最新 receipt `verdict=blocked` | 读 `openItems`：`return_to_stage` → 进入 `returnStage`；`gate_block` → 停，报告用户；`out_of_scope` → 按剩余项处置 |
@@ -30,11 +30,10 @@ resume 即按上表进入断点阶段，重复执行同一阶段是幂等安全�
 
 `succeeded` / `superseded` 不可 resume、不可改写。需要新尝试时创建**新的
 executionId**（同前缀 sequence+1，命名见 [execution-layout.md](execution-layout.md)），
-从 [`0.plan` 契约](stage-contracts/0.plan.md)重新开始（先
-`task preflight --json`），并在新工作包的 `execution_manifest.json` 声明
+经已实现的 `task init` 原子创建新工作包后，从 [`0.plan` 契约](stage-contracts/0.plan.md)重新开始，并在新工作包的 `execution_manifest.json` 声明
 `retryOf: <原 executionId>`。重试没有第二条路径。
 
-- [MUST NOT] 经由旧编排入口（`task execute` 等自动推进状态机）重试；
+- [MUST NOT] 经由旧编排入口（`task execute`、pool-dispatch/campaign 等自动推进状态机）重试；
   重试唯一路径是上述「新 executionId + `0.plan`」。
 - [MUST NOT] 手写阶段产物、补写缺失的 source/rights/review/release 证据。
 - [MUST NOT] 创建平行状态根或第二任务身份。

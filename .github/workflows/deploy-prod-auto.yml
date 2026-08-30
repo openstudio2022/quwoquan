@@ -781,7 +781,6 @@ jobs:
             --target alpha-local \
             --kind all \
             --profile smoke \
-            --reuse-package \
             --report-dir "$QWQ_OUTPUT_ROOT/env/alpha/runs/mainline-verify"
       - id: receipt
         name: Seal Alpha environment receipt from raw stackctl evidence
@@ -942,7 +941,6 @@ jobs:
             --target gamma-local \
             --kind all \
             --profile release \
-            --reuse-package \
             --report-dir "$QWQ_OUTPUT_ROOT/env/gamma/runs/mainline-verify"
       - id: receipt
         name: Seal Gamma environment receipt from raw stackctl evidence

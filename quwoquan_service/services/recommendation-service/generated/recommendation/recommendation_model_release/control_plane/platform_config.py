@@ -3366,6 +3366,46 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "key": "sys.platform-ops-service.human_authority.github_mappings",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.github_webhook_secret",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.role_mappings",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.signing_key_id",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.signing_private_key_file",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
       "key": "sys.platform-ops-service.postgres.dsn",
       "reload": "restart",
       "rollout": "progressive",

@@ -219,6 +219,9 @@ def _pool_digest(candidates: Sequence[PoolCandidate]) -> str:
             "authorId": row.author_id,
             "variantPurpose": row.variant_purpose,
             "usageScope": row.usage_scope,
+            "selectionIdentityDigest": row.selection_identity_digest,
+            "canonicalObjectDigest": row.canonical_object_digest,
+            "contentLibraryBindingDigest": row.content_library_binding_digest,
         }
         for row in sorted(
             candidates,
@@ -266,6 +269,10 @@ def select_environment_release_posts(
     )
     excluded.extend(version_exclusions)
     ordered = _stable_balanced_order(latest)
+    eligible_counts = {
+        content_type: sum(row.content_type == content_type for row in latest)
+        for content_type in _CONTENT_TYPES
+    }
     cap = DATA_POST_CAPS[env]
     selected = ordered if cap is None else ordered[:cap]
     counts = {
@@ -284,6 +291,7 @@ def select_environment_release_posts(
         # differ.
         pool_digest=_pool_digest(candidates),
         eligible_count=len(latest),
+        eligible_counts=eligible_counts,
         counts=counts,
         excluded=tuple(
             sorted(excluded, key=lambda row: (row.gate, row.code, row.post_ref))
@@ -315,6 +323,10 @@ def select_all_publishable_release_posts(
     )
     excluded.extend(version_exclusions)
     selected = _stable_balanced_order(latest)
+    eligible_counts = {
+        content_type: sum(row.content_type == content_type for row in latest)
+        for content_type in _CONTENT_TYPES
+    }
     counts = {
         content_type: sum(row.content_type == content_type for row in selected)
         for content_type in _CONTENT_TYPES
@@ -327,6 +339,7 @@ def select_all_publishable_release_posts(
         candidates=tuple(selected),
         pool_digest=_pool_digest(candidates),
         eligible_count=len(latest),
+        eligible_counts=eligible_counts,
         counts=counts,
         excluded=tuple(
             sorted(excluded, key=lambda row: (row.gate, row.code, row.post_ref))
@@ -361,6 +374,10 @@ def select_milestone_release_posts(
     )
     excluded.extend(version_exclusions)
     ordered = _stable_balanced_order(latest)
+    eligible_counts = {
+        content_type: sum(row.content_type == content_type for row in latest)
+        for content_type in _CONTENT_TYPES
+    }
     remaining = {carrier: targets[carrier] for carrier in _CONTENT_TYPES}
     selected: list[PoolCandidate] = []
     selected_entity_refs: set[str] = set()
@@ -413,6 +430,7 @@ def select_milestone_release_posts(
         candidates=tuple(selected),
         pool_digest=_pool_digest(candidates),
         eligible_count=len(latest),
+        eligible_counts=eligible_counts,
         counts=counts,
         excluded=tuple(
             sorted(excluded, key=lambda row: (row.gate, row.code, row.post_ref))

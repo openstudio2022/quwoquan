@@ -105,7 +105,13 @@ REQUIRED_SOURCES = (
     "quwoquan_ops/cli/feature_tree.py",
     "quwoquan_ops/cli/lib/feature_tree/commands.py",
     "quwoquan_ops/cli/lib/agent_governance_contract.py",
+    "quwoquan_ops/cli/lib/evidence_fingerprint.py",
+    "quwoquan_ops/cli/lib/feature_context_fingerprint.py",
+    "quwoquan_ops/cli/evidence_runner.py",
+    "quwoquan_ops/cli/handoff_manifest.py",
     "quwoquan_ops/policies/agent_governance_contract.yaml",
+    "quwoquan_ops/cli/lib/human_agent_delivery/contract.py",
+    "quwoquan_ops/policies/human_agent_delivery_contract.yaml",
     ".agents/skills/review/references/registry.yaml",
     ".agents/skills/review/references/reviewer-executor.md",
     "quwoquan_ops/tools/generate_agent_adapters.py",
@@ -291,20 +297,46 @@ def check_manifest_budget() -> list[str]:
         if str(cli_root) not in sys.path:
             sys.path.insert(0, str(cli_root))
         try:
-            from lib.feature_tree.commands import _context_manifest
+            from lib.feature_tree.commands import (
+                _context_manifest,
+                _serialize_context_manifest,
+            )
             from lib.feature_tree.nodes import discover_nodes
             from lib.feature_tree.ownership import resolve_target_details
 
             nodes = discover_nodes()
+            budget_fingerprint = None
             for node in _manifest_budget_nodes(nodes):
                 target = node.spec.relative_to(ROOT).as_posix()
                 resolution = resolve_target_details(target, nodes)
-                payload = _context_manifest(target, resolution, nodes)
+                payload = _context_manifest(
+                    target,
+                    resolution,
+                    nodes,
+                    fingerprint_receipt=budget_fingerprint,
+                )
+                if budget_fingerprint is None:
+                    budget_fingerprint = payload["evidence_fingerprint"]["receipt"]
                 if set(payload) != set(required_fields):
                     issues.append(
                         f"{target}: manifest 字段与 agent governance contract 不一致"
                     )
-                size = len((json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+                size = len(
+                    (_serialize_context_manifest(payload) + "\n").encode("utf-8")
+                )
+                if size > MANIFEST_BYTE_BUDGET:
+                    from lib.feature_context_fingerprint import referenced_fingerprint_binding
+
+                    payload["evidence_fingerprint"] = referenced_fingerprint_binding(
+                        payload["evidence_fingerprint"]["receipt"],
+                        receipt_ref=(
+                            ".qwq_output/env/repo/runs/feature-tree/"
+                            "context-manifest.evidence-fingerprint.json"
+                        ),
+                    )
+                    size = len(
+                        (_serialize_context_manifest(payload) + "\n").encode("utf-8")
+                    )
                 if size > MANIFEST_BYTE_BUDGET:
                     issues.append(f"{target}: 默认 manifest {size} bytes 超过 8192 bytes")
         except (ImportError, OSError, ValueError) as error:

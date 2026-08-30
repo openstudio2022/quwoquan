@@ -371,18 +371,9 @@ def execution_state_status(state: ExecutionStateTransition) -> ExecutionStateSta
     return state.status
 
 
-def save_execution_state(state: ExecutionStateTransition) -> Path:
-    state.updated_at = store.now_iso()
-    payload = state.freeze().to_dict()
-    loaded = save_execution_state_document(
-        _state_path(state.execution_id),
-        payload,
-        expected=getattr(state, "_journal_identity", None),
+def save_execution_state(*_args: object, **_kwargs: object) -> Path:
+    """Reject legacy business writers; stage receipts own the projection."""
+    raise ValueError(
+        "GATE_BLOCK DATA.EXECUTION.STATE_WRITER_RETIRED: "
+        "execution_state is derived only by task stage-record receipt reducer"
     )
-    state.replace_with(ExecutionState.from_mapping(loaded.payload).open_transition())
-    state._journal_identity = ExecutionStateIdentity(
-        loaded.identity.sequence,
-        loaded.identity.event_digest,
-        loaded.identity.snapshot_digest,
-    )
-    return _state_path(state.execution_id)

@@ -96,6 +96,20 @@ export const portalMenu = {
       ]
     },
     {
+      "menu_id": "platform-delivery-decision",
+      "parent_menu_id": "platform-ops",
+      "label": "交付决策",
+      "domain": "platform-ops",
+      "route_path": "/platform/delivery-decision",
+      "icon": "badge-check",
+      "order": 24,
+      "permission_scope": "ops.platform.delivery_decision.read",
+      "object_types": [
+        "decision_unit",
+        "human_authority_card"
+      ]
+    },
+    {
       "menu_id": "platform-observability",
       "parent_menu_id": "platform-ops",
       "label": "可观测与 SLO",

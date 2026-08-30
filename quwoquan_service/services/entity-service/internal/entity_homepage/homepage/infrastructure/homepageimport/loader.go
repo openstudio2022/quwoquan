@@ -85,7 +85,6 @@ type entityHeader struct {
 	Type            string                       `json:"type"`
 	City            string                       `json:"city"`
 	Coordinates     *entityCoordinates           `json:"coordinates"`
-	SourceTaskId    string                       `json:"sourceTaskId"`
 	TagRefs         []string                     `json:"tagRefs"`
 	StructuredFacts *application.StructuredFacts `json:"structuredFacts"`
 	PrimarySource   *application.HomepageSource  `json:"primarySource"`
@@ -166,8 +165,7 @@ type entityManifestAsset struct {
 }
 
 type entityHomepageManifest struct {
-	ExecutionID string                `json:"executionId"`
-	Assets      []entityManifestAsset `json:"assets"`
+	Assets []entityManifestAsset `json:"assets"`
 }
 
 func loadIntroductionAssets(
@@ -176,17 +174,17 @@ func loadIntroductionAssets(
 	releaseAssets map[string]runtimemedia.ReleaseMediaAsset,
 	mediaBases runtimemedia.MediaDeliveryBases,
 	accessMode string,
-) ([]application.HomepageIntroductionAsset, string, error) {
+) ([]application.HomepageIntroductionAsset, error) {
 	rawManifest, err := os.ReadFile(filepath.Join(entityDir, "manifest.json"))
 	if err != nil {
-		return nil, "", fmt.Errorf("%s: read semantic manifest.json: %w", entityRef, err)
+		return nil, fmt.Errorf("%s: read semantic manifest.json: %w", entityRef, err)
 	}
 	var manifest entityHomepageManifest
 	if err := json.Unmarshal(rawManifest, &manifest); err != nil {
-		return nil, "", fmt.Errorf("%s: invalid semantic manifest.json: %w", entityRef, err)
+		return nil, fmt.Errorf("%s: invalid semantic manifest.json: %w", entityRef, err)
 	}
 	if len(manifest.Assets) == 0 {
-		return nil, "", fmt.Errorf("%s: semantic manifest.json has no homepage assets", entityRef)
+		return nil, fmt.Errorf("%s: semantic manifest.json has no homepage assets", entityRef)
 	}
 
 	assets := make([]application.HomepageIntroductionAsset, 0, len(manifest.Assets))
@@ -194,10 +192,10 @@ func loadIntroductionAssets(
 	for index, asset := range manifest.Assets {
 		assetID := strings.TrimSpace(asset.AssetID)
 		if assetID == "" {
-			return nil, "", fmt.Errorf("%s: manifest assets[%d] lacks assetId", entityRef, index)
+			return nil, fmt.Errorf("%s: manifest assets[%d] lacks assetId", entityRef, index)
 		}
 		if strings.TrimSpace(asset.ObjectKey) != "" {
-			return nil, "", fmt.Errorf(
+			return nil, fmt.Errorf(
 				"%s: manifest asset %s contains forbidden objectKey",
 				entityRef,
 				assetID,
@@ -205,7 +203,7 @@ func loadIntroductionAssets(
 		}
 		role, ok := assetRoleToIntroductionRole[strings.TrimSpace(asset.Role)]
 		if !ok {
-			return nil, "", fmt.Errorf("%s: manifest asset %s has unsupported role %q", entityRef, assetID, asset.Role)
+			return nil, fmt.Errorf("%s: manifest asset %s has unsupported role %q", entityRef, assetID, asset.Role)
 		}
 		resolved, resolveErr := runtimemedia.ResolveReleaseMediaAsset(
 			releaseAssets,
@@ -216,7 +214,7 @@ func loadIntroductionAssets(
 			"entities/"+entityRef,
 		)
 		if resolveErr != nil {
-			return nil, "", fmt.Errorf(
+			return nil, fmt.Errorf(
 				"%s: manifest asset %s differs from release media authority: %w",
 				entityRef,
 				assetID,
@@ -235,9 +233,9 @@ func loadIntroductionAssets(
 		})
 	}
 	if coverCount != 1 {
-		return nil, "", fmt.Errorf("%s: semantic manifest must contain exactly one cover asset, got %d", entityRef, coverCount)
+		return nil, fmt.Errorf("%s: semantic manifest must contain exactly one cover asset, got %d", entityRef, coverCount)
 	}
-	return assets, strings.TrimSpace(manifest.ExecutionID), nil
+	return assets, nil
 }
 
 func frontmatterCoverAssetID(page []byte) (string, error) {
@@ -333,7 +331,7 @@ func LoadHomepageProjections(
 			title = segs[len(segs)-1]
 		}
 
-		assets, executionID, assetErr := loadIntroductionAssets(
+		assets, assetErr := loadIntroductionAssets(
 			entityRef,
 			filepath.Dir(path),
 			releaseAssets,
@@ -356,10 +354,6 @@ func LoadHomepageProjections(
 		}
 		if !coverMatches {
 			return fmt.Errorf("%s: page.md coverImage %q does not match semantic cover asset", entityRef, coverID)
-		}
-		sourceTask := strings.TrimSpace(header.SourceTaskId)
-		if sourceTask == "" {
-			sourceTask = executionID
 		}
 		// WP3 统一打标：_entity.json.tagRefs → categoryTags 投影，
 		// 与 content-service import 导 entities.tagRefs 同源（消除双轨不一致）。
@@ -389,7 +383,6 @@ func LoadHomepageProjections(
 			IntroductionAssets:   assets,
 			StructuredFacts:      facts,
 			CategoryTags:         categoryTags,
-			SourceTaskID:         sourceTask,
 			PrimarySource:        header.PrimarySource,
 			SourceURLs:           append([]string(nil), header.SourceURLs...),
 		})

@@ -17,6 +17,7 @@ from .local_environment_auth import (
     mint_local_product_ops_operator_token,
 )
 from .output_paths import active_deployment_candidate, env_runs_root, output_root
+from .app_content_uat_plan import build_app_content_uat_plan, load_release_uat_sample_plan
 from .test_live_content_binding import load_test_live_content_binding
 
 
@@ -39,6 +40,125 @@ def _require_sha256_digest(value: object, *, label: str) -> str:
             f"{label} must be sha256:<64 lowercase hex>"
         )
     return digest
+
+
+def _load_release_sample_plan_documents_from_attestation(
+    *,
+    release_id: str,
+    manifest_digest: str,
+    attestation_ref: object,
+    attestation_digest: object,
+) -> dict[str, Any]:
+    ref = str(attestation_ref or "").strip()
+    digest = _require_sha256_digest(
+        attestation_digest, label="release attestation digest"
+    )
+    source = Path(ref).expanduser()
+    if not ref or source.is_symlink():
+        raise PremiumPoolReleaseError("release attestation reference is unsafe")
+    try:
+        path = source.resolve(strict=True)
+        raw = path.read_bytes()
+        attestation = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise PremiumPoolReleaseError("release attestation is unreadable") from exc
+    if "sha256:" + hashlib.sha256(raw).hexdigest() != digest:
+        raise PremiumPoolReleaseError("release attestation digest drifted")
+    if (
+        not isinstance(attestation, Mapping)
+        or attestation.get("schema") != "quwoquan_data.release_attestation"
+        or attestation.get("sourceOwner") != "qwq_data"
+        or attestation.get("releaseKind") != "content"
+        or attestation.get("releaseId") != release_id
+        or attestation.get("payloadSha256") != manifest_digest
+        or path.name != "release.json"
+        or path.parent.name != "attestations"
+    ):
+        raise PremiumPoolReleaseError("release attestation identity drifted")
+    release_root = path.parents[1]
+    header_path = release_root / "payload/release.json"
+    if header_path.is_symlink():
+        raise PremiumPoolReleaseError("release header is unsafe")
+    try:
+        header = json.loads(header_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise PremiumPoolReleaseError("release header is unreadable") from exc
+    if not isinstance(header, Mapping):
+        raise PremiumPoolReleaseError("release header must be a JSON object")
+    try:
+        sample_plan, _, sample_plan_digest = load_release_uat_sample_plan(
+            release_root=header_path.parent, release_header=header
+        )
+        if (
+            sample_plan.get("schema") != "quwoquan_data.release_uat_sample_plan"
+            or sample_plan.get("releaseId") != release_id
+        ):
+            raise ValueError("ReleaseUatSamplePlan identity drifted")
+        return dict(header), sample_plan, sample_plan_digest
+    except (OSError, ValueError) as exc:
+        raise PremiumPoolReleaseError(
+            "release UAT sample plan binding is invalid"
+        ) from exc
+
+
+def _load_release_sample_plan_from_attestation(
+    *,
+    release_id: str,
+    manifest_digest: str,
+    readiness: Mapping[str, Any],
+    attestation_ref: object,
+    attestation_digest: object,
+) -> dict[str, Any]:
+    header, sample_plan, sample_plan_digest = (
+        _load_release_sample_plan_documents_from_attestation(
+            release_id=release_id,
+            manifest_digest=manifest_digest,
+            attestation_ref=attestation_ref,
+            attestation_digest=attestation_digest,
+        )
+    )
+    try:
+        return build_app_content_uat_plan(
+            readiness,
+            release_header=header,
+            release_uat_sample_plan=sample_plan,
+            release_uat_sample_plan_digest=sample_plan_digest,
+            release_payload_sha256=manifest_digest,
+        )
+    except ValueError as exc:
+        raise PremiumPoolReleaseError(
+            "release UAT sample plan binding is invalid"
+        ) from exc
+
+
+def _required_video_sample(app_uat_plan: object) -> str:
+    if not isinstance(app_uat_plan, Mapping):
+        raise PremiumPoolReleaseError("ReleaseUatSamplePlan derived App UAT plan is missing")
+    samples = app_uat_plan.get("orderedSamples")
+    if not isinstance(samples, list):
+        raise PremiumPoolReleaseError("ReleaseUatSamplePlan ordered samples are missing")
+    video_ids = [
+        str(sample.get("objectId") or "").strip()
+        for sample in samples
+        if isinstance(sample, Mapping) and sample.get("carrier") == "video"
+    ]
+    if not video_ids or not video_ids[0]:
+        raise PremiumPoolReleaseError(
+            "ReleaseUatSamplePlan has no required video sample"
+        )
+    return video_ids[0]
+
+
+def _required_raw_video_sample(sample_plan: Mapping[str, Any]) -> str:
+    samples = sample_plan.get("samples")
+    if not isinstance(samples, list):
+        raise PremiumPoolReleaseError("ReleaseUatSamplePlan samples are missing")
+    for sample in samples:
+        if isinstance(sample, Mapping) and sample.get("carrier") == "video":
+            video_id = str(sample.get("objectId") or "").strip()
+            if video_id:
+                return video_id
+    raise PremiumPoolReleaseError("ReleaseUatSamplePlan has no required video sample")
 
 
 @dataclass(frozen=True)
@@ -155,20 +275,18 @@ def load_premium_pool_candidate_binding(
         raise PremiumPoolReleaseError(
             "readiness receipt does not match the active candidate release"
         )
+    app_uat_plan = _load_release_sample_plan_from_attestation(
+        release_id=release_id,
+        manifest_digest=manifest_digest,
+        readiness=readiness,
+        attestation_ref=candidate_release.get("attestationRef"),
+        attestation_digest=candidate_release.get("attestationDigest"),
+    )
+    video_work_id = _required_video_sample(app_uat_plan)
     canonical_content_id = str(content_id or "").strip()
-    if not canonical_content_id:
-        raise PremiumPoolReleaseError("contentId is required")
-    typed_video_ids: set[str] = set()
-    for row in readiness.get("feedQueries") or []:
-        if isinstance(row, dict) and row.get("name") == "typed_video":
-            typed_video_ids.update(
-                str(item).strip()
-                for item in row.get("matchedPostIds") or []
-                if str(item).strip()
-            )
-    if canonical_content_id not in typed_video_ids:
+    if not canonical_content_id or canonical_content_id != video_work_id:
         raise PremiumPoolReleaseError(
-            "contentId is not a release-bound video in the readiness receipt"
+            "contentId must be the exact ReleaseUatSamplePlan video sample"
         )
     import_run_id = str(readiness.get("importRunId") or "").strip()
     verify_run_id = str(readiness.get("verifyRunId") or "").strip()
@@ -259,19 +377,30 @@ def load_premium_pool_bootstrap_binding(
         raise PremiumPoolReleaseError(
             "import report does not match the active candidate release"
         )
+    _header, sample_plan, _sample_plan_digest = (
+        _load_release_sample_plan_documents_from_attestation(
+            release_id=release_id,
+            manifest_digest=manifest_digest,
+            attestation_ref=candidate_release.get("attestationRef"),
+            attestation_digest=candidate_release.get("attestationDigest"),
+        )
+    )
+    video_work_id = _required_raw_video_sample(sample_plan)
     canonical_content_id = str(content_id or "").strip()
-    if not canonical_content_id:
-        raise PremiumPoolReleaseError("contentId is required")
-    video_ids = {
+    if not canonical_content_id or canonical_content_id != video_work_id:
+        raise PremiumPoolReleaseError(
+            "contentId must be the exact ReleaseUatSamplePlan video sample"
+        )
+    imported_video_ids = {
         str(row.get("postId") or "").strip()
         for row in report.get("postBindings") or []
         if isinstance(row, dict)
         and row.get("contentType") == "video"
         and str(row.get("postId") or "").strip()
     }
-    if canonical_content_id not in video_ids:
+    if canonical_content_id not in imported_video_ids:
         raise PremiumPoolReleaseError(
-            "contentId is not a release-bound video in the import report"
+            "ReleaseUatSamplePlan video sample is absent from the import report"
         )
     return PremiumPoolBootstrapBinding(
         environment=environment,
@@ -418,7 +547,6 @@ def load_premium_pool_test_live_binding(
     if (
         readiness_phase not in {"consumer", "commercial"}
         or any(readiness.get(field) != value for field, value in expected_readiness.items())
-        or readiness.get("appUatEnvelope") != content_binding.get("appUatEnvelope")
     ):
         raise PremiumPoolReleaseError(
             "readiness receipt does not match the current test-live content evidence"
@@ -426,34 +554,19 @@ def load_premium_pool_test_live_binding(
     import_run_id = str(readiness.get("importRunId") or "").strip()
     if not import_run_id:
         raise PremiumPoolReleaseError("readiness receipt lacks importRunId")
-    canonical_content_id = str(content_id or "").strip()
-    envelope = readiness.get("appUatEnvelope")
-    video_work_id = (
-        str(envelope.get("videoWorkId") or "").strip()
-        if isinstance(envelope, Mapping)
-        else ""
+    _require_sha256_digest(
+        content_binding.get("releaseUatSamplePlanDigest"),
+        label="test-live ReleaseUatSamplePlan digest",
     )
-    typed_video_rows = [
-        row
-        for row in readiness.get("feedQueries") or []
-        if isinstance(row, Mapping) and row.get("name") == "typed_video"
-    ]
-    typed_video_ids = {
-        str(item).strip()
-        for item in (
-            typed_video_rows[0].get("matchedPostIds")
-            if len(typed_video_rows) == 1
-            else []
-        )
-        if str(item).strip()
-    }
-    if (
-        not canonical_content_id
-        or canonical_content_id != video_work_id
-        or canonical_content_id not in typed_video_ids
-    ):
+    if not str(content_binding.get("releaseUatSamplePlanRef") or "").strip():
         raise PremiumPoolReleaseError(
-            "contentId must be the typed videoWorkId in the exact readiness envelope"
+            "test-live content binding lacks ReleaseUatSamplePlan identity"
+        )
+    video_work_id = _required_video_sample(content_binding.get("appUatPlan"))
+    canonical_content_id = str(content_id or "").strip()
+    if not canonical_content_id or canonical_content_id != video_work_id:
+        raise PremiumPoolReleaseError(
+            "contentId must be the exact ReleaseUatSamplePlan video sample"
         )
     return PremiumPoolTestLiveBinding(
         environment=environment,

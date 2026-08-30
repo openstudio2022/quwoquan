@@ -150,6 +150,60 @@ func TestSignedReceiptResolverVerifiesExactReceiptAndEvidenceBytes(t *testing.T)
 		}
 	})
 
+	t.Run("content release UAT binding drift", func(t *testing.T) {
+		mutations := map[string]func(*readiness.ReadinessCaseResult){
+			"releaseId": func(result *readiness.ReadinessCaseResult) {
+				result.ReleaseID = "content-release-drifted"
+			},
+			"targetUatBindingDigest": func(result *readiness.ReadinessCaseResult) {
+				result.TargetUATBindingDigest = "sha256:" + strings.Repeat("f", 64)
+			},
+			"entrySurface": func(result *readiness.ReadinessCaseResult) {
+				result.EntrySurface = "search"
+			},
+			"carrier": func(result *readiness.ReadinessCaseResult) {
+				result.Carrier = "video"
+			},
+			"deviceIdentity": func(result *readiness.ReadinessCaseResult) {
+				result.DeviceIdentity = "device.drifted"
+			},
+			"uatProfile": func(result *readiness.ReadinessCaseResult) {
+				result.UATProfile = "production"
+			},
+			"nonPromotable": func(result *readiness.ReadinessCaseResult) {
+				result.NonPromotable = !result.NonPromotable
+			},
+			"artifactClass": func(result *readiness.ReadinessCaseResult) {
+				result.ArtifactClass = "production"
+			},
+			"physicalDevice": func(result *readiness.ReadinessCaseResult) {
+				result.PhysicalDevice = !result.PhysicalDevice
+			},
+			"observedOutcome": func(result *readiness.ReadinessCaseResult) {
+				result.ObservedOutcome = "empty"
+			},
+			"observedReleaseId": func(result *readiness.ReadinessCaseResult) {
+				result.ObservedReleaseID = "content-release-drifted"
+			},
+			"previousReleaseId": func(result *readiness.ReadinessCaseResult) {
+				result.PreviousReleaseID = "content-release-previous"
+			},
+			"reasonCode": func(result *readiness.ReadinessCaseResult) {
+				result.ReasonCode = "stale_failure"
+			},
+		}
+		for name, mutate := range mutations {
+			t.Run(name, func(t *testing.T) {
+				fixture := newReceiptFixture(t)
+				drifted := fixture.result
+				mutate(&drifted)
+				if _, err := fixture.resolver.Resolve(context.Background(), drifted); err == nil {
+					t.Fatalf("signed receipt with drifted %s unexpectedly trusted", name)
+				}
+			})
+		}
+	})
+
 	t.Run("receipt tamper", func(t *testing.T) {
 		fixture := newReceiptFixture(t)
 		appendFile(t, fixture.receiptPath, []byte("\n"))
@@ -317,7 +371,18 @@ func newReceiptFixture(t *testing.T) receiptFixture {
 		DeploymentTarget: "assistant-alpha", BaselineID: "baseline-2026-08-05",
 		PackageDigest: "sha256:" + strings.Repeat("9", 64), ConfigurationDigest: "sha256:" + strings.Repeat("c", 64),
 		CandidateManifestSHA256: strings.Repeat("8", 64), CandidateDigest: "sha256:" + strings.Repeat("d", 64),
-		Environment: "alpha", Platform: "android", DeviceClass: "physical",
+		ReleaseDigest:          "sha256:" + strings.Repeat("e", 64),
+		ReleaseID:              "content-release-2026-08-29",
+		TargetUATBindingDigest: "sha256:" + strings.Repeat("7", 64),
+		EntrySurface:           "feed", Carrier: "article",
+		DeviceIdentity:    "device.pixel-9.fixture",
+		UATProfile:        "rehearsal",
+		NonPromotable:     true,
+		ArtifactClass:     "production_behavior",
+		PhysicalDevice:    false,
+		ObservedOutcome:   "content",
+		ObservedReleaseID: "content-release-2026-08-29",
+		Environment:       "alpha", Platform: "android", DeviceClass: "physical",
 		Provider: "provider-live", StartedAt: testStartedAt,
 		CompletedAt: testStartedAt.Add(time.Minute), RunnerIdentity: testRunnerIdentity,
 		ArtifactPath: "physical-uat.json",
@@ -332,6 +397,18 @@ func newReceiptFixture(t *testing.T) receiptFixture {
 			PackageDigest: result.PackageDigest, ConfigurationDigest: result.ConfigurationDigest,
 			CandidateManifestSHA256: result.CandidateManifestSHA256,
 			CandidateDigest:         result.CandidateDigest,
+			ReleaseDigest:           result.ReleaseDigest,
+			ReleaseID:               result.ReleaseID,
+			TargetUATBindingDigest:  result.TargetUATBindingDigest,
+			EntrySurface:            result.EntrySurface,
+			Carrier:                 result.Carrier,
+			DeviceIdentity:          result.DeviceIdentity,
+			UATProfile:              result.UATProfile,
+			NonPromotable:           result.NonPromotable,
+			ArtifactClass:           result.ArtifactClass,
+			PhysicalDevice:          result.PhysicalDevice,
+			ObservedOutcome:         result.ObservedOutcome,
+			ObservedReleaseID:       result.ObservedReleaseID,
 			Environment:             result.Environment, Platform: result.Platform,
 			DeviceClass: result.DeviceClass, Provider: result.Provider,
 			StartedAt: result.StartedAt, CompletedAt: result.CompletedAt,

@@ -1,0 +1,431 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/quwoquan_ops/environments/evidence/target_uat_binding.schema.json",
+  "title": "Ops-owned create-once TargetUatBinding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "bindingId",
+    "releaseId",
+    "releaseDigest",
+    "releaseUatSamplePlanRef",
+    "releaseUatSamplePlanDigest",
+    "environment",
+    "target",
+    "candidateDigest",
+    "packageDigest",
+    "configurationDigest",
+    "runtimeConfigDigest",
+    "environmentRuntimeDigest",
+    "activeCas",
+    "readback",
+    "artifact",
+    "platform",
+    "provider",
+    "device",
+    "runner",
+    "profile",
+    "nonPromotable",
+    "createdAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_ops.target_uat_binding.v1"
+    },
+    "bindingId": {
+      "$ref": "#/$defs/digest"
+    },
+    "releaseId": {
+      "$ref": "#/$defs/identity"
+    },
+    "releaseDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "releaseUatSamplePlanRef": {
+      "$ref": "#/$defs/ref"
+    },
+    "releaseUatSamplePlanDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "environment": {
+      "enum": [
+        "alpha",
+        "beta",
+        "gamma",
+        "prod"
+      ]
+    },
+    "target": {
+      "$ref": "#/$defs/identity"
+    },
+    "candidateDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "packageDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "configurationDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "runtimeConfigDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "environmentRuntimeDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "activeCas": {
+      "$ref": "#/$defs/source"
+    },
+    "readback": {
+      "$ref": "#/$defs/source"
+    },
+    "artifact": {
+      "$ref": "#/$defs/artifact"
+    },
+    "platform": {
+      "enum": [
+        "android",
+        "ios"
+      ]
+    },
+    "provider": {
+      "$ref": "#/$defs/provider"
+    },
+    "device": {
+      "$ref": "#/$defs/device"
+    },
+    "runner": {
+      "$ref": "#/$defs/runner"
+    },
+    "profile": {
+      "enum": [
+        "rehearsal",
+        "promotable",
+        "production"
+      ]
+    },
+    "nonPromotable": {
+      "type": "boolean"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "identity": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,255}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "ref": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class",
+        "digest",
+        "applicationId",
+        "buildMode",
+        "buildProfile"
+      ],
+      "properties": {
+        "class": {
+          "enum": [
+            "production_behavior",
+            "production"
+          ]
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "applicationId": {
+          "$ref": "#/$defs/identity"
+        },
+        "buildMode": {
+          "enum": [
+            "debug",
+            "profile",
+            "release"
+          ]
+        },
+        "buildProfile": {
+          "enum": [
+            "nonprod",
+            "prod"
+          ]
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "class",
+        "type",
+        "registered",
+        "conformanceEvidence"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "class": {
+          "enum": [
+            "first_party",
+            "external",
+            "test_fixture"
+          ]
+        },
+        "type": {
+          "$ref": "#/$defs/identity"
+        },
+        "registered": {
+          "type": "boolean"
+        },
+        "conformanceEvidence": {
+          "$ref": "#/$defs/source"
+        }
+      }
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "class",
+        "registered"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "class": {
+          "enum": [
+            "physical",
+            "emulator",
+            "simulator"
+          ]
+        },
+        "registered": {
+          "type": "boolean"
+        }
+      }
+    },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity",
+        "sourcePath",
+        "digest",
+        "registered"
+      ],
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "sourcePath": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "registered": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "rehearsal"
+          }
+        },
+        "required": [
+          "profile"
+        ]
+      },
+      "then": {
+        "properties": {
+          "nonPromotable": {
+            "const": true
+          },
+          "artifact": {
+            "properties": {
+              "class": {
+                "const": "production_behavior"
+              }
+            }
+          },
+          "device": {
+            "properties": {
+              "class": {
+                "enum": [
+                  "emulator",
+                  "simulator"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "promotable"
+          }
+        },
+        "required": [
+          "profile"
+        ]
+      },
+      "then": {
+        "properties": {
+          "nonPromotable": {
+            "const": false
+          },
+          "artifact": {
+            "properties": {
+              "class": {
+                "const": "production_behavior"
+              }
+            }
+          },
+          "provider": {
+            "properties": {
+              "registered": {
+                "const": true
+              }
+            }
+          },
+          "device": {
+            "properties": {
+              "class": {
+                "const": "physical"
+              },
+              "registered": {
+                "const": true
+              }
+            }
+          },
+          "runner": {
+            "properties": {
+              "registered": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "production"
+          }
+        },
+        "required": [
+          "profile"
+        ]
+      },
+      "then": {
+        "properties": {
+          "environment": {
+            "const": "prod"
+          },
+          "nonPromotable": {
+            "const": false
+          },
+          "artifact": {
+            "properties": {
+              "class": {
+                "const": "production"
+              },
+              "buildMode": {
+                "const": "release"
+              },
+              "buildProfile": {
+                "const": "prod"
+              }
+            }
+          },
+          "provider": {
+            "properties": {
+              "registered": {
+                "const": true
+              }
+            }
+          },
+          "device": {
+            "properties": {
+              "class": {
+                "const": "physical"
+              },
+              "registered": {
+                "const": true
+              }
+            }
+          },
+          "runner": {
+            "properties": {
+              "registered": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "environment": {
+            "const": "prod"
+          }
+        },
+        "required": [
+          "environment"
+        ]
+      },
+      "then": {
+        "properties": {
+          "profile": {
+            "const": "production"
+          }
+        }
+      }
+    }
+  ]
+}

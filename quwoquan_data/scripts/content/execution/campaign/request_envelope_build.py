@@ -33,7 +33,7 @@ from content.execution.campaign.retry_submission import (
 )
 from content.execution.campaign.scale import CampaignScaleError, resolve_campaign_scale
 from content.execution.campaign.source_pool_binding import bind_scale_source_pool
-from content.execution.controller.execute.pre_acquisition_handoff import (
+from content.source.pre_acquisition_handoff import (
     carrier_source_providers,
     freeze_carrier_pre_acquisition_inputs,
     load_pre_acquisition_handoff,

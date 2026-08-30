@@ -27,6 +27,8 @@ from quwoquan_ops.cli.lib.graphql_read_registry_signing import (
     SigningMaterial,
     resolve_signing_material,
 )
+from quwoquan_ops.cli.lib.openssl3_resolver import resolve_openssl3
+from quwoquan_ops.cli.lib.currentness import CURRENTNESS_TIMEOUT_SECONDS
 from quwoquan_ops.cli.lib.graphql_read_registry_signing import (
     decode_keyring as _decode_keyring,
 )
@@ -521,14 +523,25 @@ def _build_graphql_read_registry_artifacts(
 ) -> dict[str, Any]:
     if environment not in {"alpha", "beta", "gamma", "prod"}:
         raise ValueError("GraphQL registry package environment is invalid")
-    expected_target = "prod-hosted" if environment == "prod" else f"{environment}-local"
-    if target != expected_target:
+    allowed_targets = (
+        {"prod-sim", "prod-hosted"}
+        if environment == "prod"
+        else {f"{environment}-local"}
+    )
+    if target not in allowed_targets:
         raise ValueError("GraphQL registry package target/environment mismatch")
     if _DIGEST.fullmatch(candidate_digest) is None:
         raise ValueError("GraphQL registry candidate digest must be canonical sha256")
-    resolved_signing = signing or resolve_signing_material(repo_root)
+    openssl = resolve_openssl3()
+    if environment == "prod" and signing is None:
+        raise ValueError(
+            "Prod GraphQL registry package requires explicit signing material"
+        )
+    resolved_signing = signing or resolve_signing_material(
+        repo_root, openssl=openssl
+    )
     private_bytes, keyring_bytes, keyring = _validate_signing_material(
-        repo_root, resolved_signing
+        repo_root, resolved_signing, openssl=openssl
     )
     payload_bytes = _generate_payload(
         repo_root,
@@ -541,7 +554,7 @@ def _build_graphql_read_registry_artifacts(
     schema_bytes = (repo_root / SCHEMA_SOURCE).read_bytes()
     if _sha256_bytes(schema_bytes) != schema_digest:
         raise ValueError("GraphQL generator schema digest differs from source bytes")
-    signature = _sign_payload(private_bytes, payload_bytes)
+    signature = _sign_payload(private_bytes, payload_bytes, openssl=openssl)
     envelope = {
         "keyId": resolved_signing.key_id,
         "payloadSha256": _sha256_bytes(payload_bytes),
@@ -768,7 +781,7 @@ def validate_packaged_graphql_read_registry(
     expected_candidate_digest: str,
     expected_descriptor: object | None = None,
     purpose: str = "self_verify",
-    currentness_timeout_seconds: float = 120.0,
+    currentness_timeout_seconds: float = CURRENTNESS_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Verify package bytes; only explicit currentness reruns source generators."""
 
@@ -849,10 +862,12 @@ def validate_packaged_graphql_read_registry(
         raise ValueError("GraphQL registry envelope base64 is invalid") from exc
     if embedded_payload != payload_bytes:
         raise ValueError("GraphQL registry envelope payload drifted")
+    openssl = resolve_openssl3()
     _verify_signature(
         base64.b64decode(keyring[key_id], validate=True),
         payload_bytes,
         signature,
+        openssl=openssl,
     )
     config = yaml.safe_load((candidate_root / CONFIG_REF).read_text(encoding="utf-8"))
     graph = config.get("graphql_read") if isinstance(config, dict) else None

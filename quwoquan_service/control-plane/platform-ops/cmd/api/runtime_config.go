@@ -43,6 +43,19 @@ type config struct {
 	RepoRoot              string `yaml:"-" envAbsolute:"REPO_ROOT" required:"true"`
 	ReleaseManifestDigest string `yaml:"-" envAbsolute:"RELEASE_MANIFEST_DIGEST"`
 	AlertIngestToken      string `yaml:"-" envAbsolute:"ALERT_INGEST_TOKEN"`
+
+	HumanAuthority struct {
+		Issuer                  string `yaml:"issuer" env:"ISSUER"`
+		ProviderVersion         string `yaml:"provider_version" env:"PROVIDER_VERSION"`
+		ProviderCommit          string `yaml:"provider_commit" env:"PROVIDER_COMMIT"`
+		SigningKeyID            string `yaml:"signing_key_id" env:"SIGNING_KEY_ID"`
+		SigningPrivateKeyFile   string `yaml:"signing_private_key_file" env:"SIGNING_PRIVATE_KEY_FILE"`
+		SigningPrivateKeyBase64 string `yaml:"-" env:"SIGNING_PRIVATE_KEY_BASE64"`
+		SigningTestKey          bool   `yaml:"signing_test_key" env:"SIGNING_TEST_KEY"`
+		GitHubWebhookSecret     string `yaml:"-" env:"GITHUB_WEBHOOK_SECRET"`
+		RoleMappings            string `yaml:"role_mappings" env:"ROLE_MAPPINGS"`
+		GitHubMappings          string `yaml:"github_mappings" env:"GITHUB_MAPPINGS"`
+	} `yaml:"human_authority" envPrefix:"HUMAN_AUTHORITY"`
 }
 
 const (
@@ -97,6 +110,17 @@ func validatePlatformOpsConfig(cfg *config) error {
 	// 无法证明「当前发布包已下发」。
 	if cfg.Environment == "prod" && !isCanonicalSHA256(cfg.ReleaseManifestDigest) {
 		return fmt.Errorf("RELEASE_MANIFEST_DIGEST is required in prod")
+	}
+	if cfg.Environment == "prod" || strings.TrimSpace(cfg.HumanAuthority.SigningKeyID) != "" {
+		if strings.TrimSpace(cfg.HumanAuthority.Issuer) == "" || strings.TrimSpace(cfg.HumanAuthority.ProviderVersion) == "" || !isCanonicalSHA256(cfg.HumanAuthority.ProviderCommit) ||
+			strings.TrimSpace(cfg.HumanAuthority.SigningKeyID) == "" ||
+			(strings.TrimSpace(cfg.HumanAuthority.SigningPrivateKeyFile) == "") == (strings.TrimSpace(cfg.HumanAuthority.SigningPrivateKeyBase64) == "") ||
+			len(strings.TrimSpace(cfg.HumanAuthority.GitHubWebhookSecret)) < 16 || strings.TrimSpace(cfg.HumanAuthority.RoleMappings) == "" {
+			return fmt.Errorf("human_authority signing, webhook and role mapping configuration is incomplete")
+		}
+		if cfg.Environment == "prod" && cfg.HumanAuthority.SigningTestKey {
+			return fmt.Errorf("human_authority test signing key is release-ineligible in prod")
+		}
 	}
 	return nil
 }

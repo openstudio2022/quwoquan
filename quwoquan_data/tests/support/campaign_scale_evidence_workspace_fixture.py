@@ -15,10 +15,7 @@ from content.execution.campaign.source_pool_binding import (
 from content.release.canonical.campaign_scale_evidence import (
     write_campaign_scale_evidence,
 )
-from content.release.canonical.object_source_identity import (
-    source_identity_digest,
-    source_identity_set,
-)
+from content.release.canonical.object_source_identity import source_identity_set
 from support.campaign_scale_evidence_fixture import (
     CARRIERS,
     CATALOG_DIGEST,
@@ -707,9 +704,6 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
     source_identities, source_identity_set_digest = source_identity_set(
         object_source_identities
     )
-    source_identity_digest_value = source_identity_digest(
-        object_source_identities[0]
-    )
     milestone_post_refs = {
         "article": _publish_refs("article")["posts"],
         "image": _publish_refs("image")["posts"],
@@ -720,8 +714,15 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
             "contentId": f"content-{carrier}-{index:03d}",
             "version": 1,
             "postRef": raw_ref,
-            "executionId": execution_ids[carrier],
-            "sourceIdentityDigest": source_identity_digest_value,
+            "selectionIdentityDigest": _digest(
+                {"kind": "selection", "carrier": carrier, "postRef": raw_ref}
+            ),
+            "canonicalObjectDigest": _digest(
+                {"kind": "canonical", "carrier": carrier, "postRef": raw_ref}
+            ),
+            "contentLibraryBindingDigest": _digest(
+                {"kind": "content_library", "carrier": carrier, "postRef": raw_ref}
+            ),
         }
         for carrier, refs in milestone_post_refs.items()
         for index, raw_ref in enumerate(refs)
@@ -768,6 +769,8 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
             },
             "contents": release_contents,
             "authors": [],
+            "samplePlanRef": "uat/sample_plan.json",
+            "samplePlanDigest": _digest({"releaseId": "research-release", "kind": "sample-plan"}),
             "buildResult": "completed",
         },
     )

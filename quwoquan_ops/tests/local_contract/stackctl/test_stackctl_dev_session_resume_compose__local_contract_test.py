@@ -771,16 +771,17 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                 }
             ],
         )
-        self.assertEqual(len(executions), 7)
-        self.assertEqual(timeouts, [90.0, *([3600.0] * 6)])
+        self.assertEqual(len(executions), 8)
+        self.assertEqual(timeouts, [90.0, *([3600.0] * 7)])
         for command in executions:
             self.assertEqual(command[:5], ["docker", "compose", "-p", "quwoquan_alpha_test_live", "-f"])
             self.assertNotIn("package", command)
             self.assertNotIn("candidate", " ".join(command))
         self.assertEqual(executions[0][-3:], ["config", "--format", "json"])
-        # The policy owner is brought up in three staged steps before the
-        # project-wide build, because Recommendation refuses a full runtime
-        # until Product Ops has published the run-bound policy facts.
+        # The policy owner is brought up in four staged steps before the
+        # project-wide build. Service Core first exposes the canonical account
+        # security authority, then Product Ops can publish run-bound policy
+        # facts before Recommendation joins the full runtime.
         self.assertEqual(
             executions[1][-9:],
             [
@@ -798,11 +799,24 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
         self.assertEqual(executions[2][-3:], ["up", "--no-deps", "mongo-init"])
         self.assertEqual(
             executions[3][-5:],
-            ["up", "--build", "-d", "--no-deps", "product-ops-service"],
+            ["up", "--build", "-d", "--no-deps", "service-core"],
         )
-        self.assertEqual(executions[4][-1:], ["build"])
-        self.assertEqual(executions[5][-3:], ["up", "-d", "--no-deps"])
-        self.assertEqual(executions[6][-3:], ["up", "-d", "--remove-orphans"])
+        self.assertEqual(
+            executions[4][-8:],
+            [
+                "up",
+                "--build",
+                "-d",
+                "--wait",
+                "--wait-timeout",
+                "45",
+                "--no-deps",
+                "product-ops-service",
+            ],
+        )
+        self.assertEqual(executions[5][-1:], ["build"])
+        self.assertEqual(executions[6][-3:], ["up", "-d", "--no-deps"])
+        self.assertEqual(executions[7][-3:], ["up", "-d", "--remove-orphans"])
         self.assertEqual(
             [row["status"] for row in receipt_transitions],
             ["prepared", "partial", "running"],

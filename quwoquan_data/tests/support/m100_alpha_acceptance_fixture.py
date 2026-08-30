@@ -19,10 +19,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from content.release.canonical.object_source_identity import (
-    source_identity_digest,
-    source_identity_set,
-)
+from content.release.canonical.object_source_identity import source_identity_set
 from content.release.canonical.research_scale_promotion import (
     write_research_scale_promotion,
 )
@@ -122,14 +119,20 @@ def write_m100_milestone_release(
     source_identities, source_identity_set_digest = source_identity_set(
         expanded_identities
     )
-    identity_digest = source_identity_digest(expanded_identities[0])
     contents = [
         {
             "contentId": f"content-{carrier}-{index:03d}",
             "version": 1,
             "postRef": _post_ref(carrier, index),
-            "executionId": f"{carrier}-execution",
-            "sourceIdentityDigest": identity_digest,
+            "selectionIdentityDigest": _claim_digest(
+                f"selection:{carrier}:{index:03d}"
+            ),
+            "canonicalObjectDigest": _claim_digest(
+                f"canonical:{carrier}:{index:03d}"
+            ),
+            "contentLibraryBindingDigest": _claim_digest(
+                f"content-library:{carrier}:{index:03d}"
+            ),
         }
         for carrier in POST_CARRIERS
         for index in range(accepted[carrier])
@@ -166,6 +169,8 @@ def write_m100_milestone_release(
         "counts": {**post_counts, "total": sum(post_counts.values())},
         "contents": contents,
         "authors": [],
+        "samplePlanRef": "uat/sample_plan.json",
+        "samplePlanDigest": _claim_digest(f"sample-plan:{release_id}"),
         "buildResult": "completed",
         "sourceIdentities": source_identities,
         "sourceIdentitySetDigest": source_identity_set_digest,
@@ -270,14 +275,24 @@ def unproven_acceptance_binding(
     app_uat_receipt_ref: str,
     overrides: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """A shape-complete acceptance binding whose digests prove nothing.
+    """Shape-complete canonical authority binding whose refs prove nothing.
 
-    Every digest is derived from the label of the thing it claims, so the document
-    is internally coherent and yet stands for no receipt that exists. Tests use it
-    to show the validator re-reads the referenced bytes rather than trusting a
-    frozen claim; it is deliberately unusable as a stand-in for real evidence.
+    ``readiness_receipt_ref`` and ``app_uat_receipt_ref`` retain the old helper
+    signature for direct campaign-family tests only.  They are reinterpreted as
+    Data-readiness and Alpha EnvironmentAcceptanceFact refs; no retired envelope
+    or aggregate App-UAT field is emitted.
     """
 
+    raw_refs = [
+        f"env/alpha/raw/m100-{carrier}-{ordinal:03d}.json"
+        for carrier, count in (
+            ("homepage", 25),
+            ("article", 25),
+            ("image", 40),
+            ("video", 10),
+        )
+        for ordinal in range(1, count + 1)
+    ]
     binding: dict[str, Any] = {
         "schema": "quwoquan_data.m100_alpha_acceptance_binding",
         "promotionId": promotion_id,
@@ -285,23 +300,21 @@ def unproven_acceptance_binding(
         "promotionReceiptDigest": _claim_digest("promotion receipt"),
         "releaseId": release_id,
         "manifestDigest": _claim_digest("manifest"),
-        "appUatEnvelopeDigest": _claim_digest("app uat envelope"),
-        "activationEnvelopeDigest": _claim_digest("activation envelope"),
-        "exactCounts": {
-            **m100_targets(),
-            "posts": sum(
-                m100_targets()[carrier] for carrier in POST_CARRIERS
-            ),
-        },
-        "readinessReceiptRef": readiness_receipt_ref,
-        "readinessReceiptFileSha256": _claim_digest("readiness bytes"),
-        "readinessReceiptDigest": _claim_digest("readiness document"),
-        "appUatReceiptRef": app_uat_receipt_ref,
-        "appUatReceiptFileSha256": _claim_digest("app uat bytes"),
-        "appUatReceiptDigest": _claim_digest("app uat document"),
-        "appUatPlanDigest": _claim_digest("app uat plan"),
+        "releaseUatSamplePlanRef": (
+            f"data/releases/{release_id}/payload/uat/sample_plan.json"
+        ),
+        "releaseUatSamplePlanDigest": _claim_digest("release uat sample plan"),
+        "dataReadinessRef": readiness_receipt_ref,
+        "dataReadinessExactByteDigest": _claim_digest("data readiness"),
+        "alphaEnvironmentAcceptanceRef": app_uat_receipt_ref,
+        "alphaEnvironmentAcceptanceExactByteDigest": _claim_digest(
+            "alpha environment acceptance"
+        ),
+        "requiredRawResultRefs": raw_refs,
+        "requiredRawResultDigests": [
+            _claim_digest(f"required raw result {ref}") for ref in raw_refs
+        ],
         "executedSampleCount": 100,
-        "sampleExecutionDigest": _claim_digest("sample execution"),
     }
     binding.update(overrides or {})
     return binding

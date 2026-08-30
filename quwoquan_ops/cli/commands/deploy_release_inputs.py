@@ -33,6 +33,103 @@ from pathlib import Path
 from typing import Any
 
 
+def _load_prod_environment_acceptance(
+    ref: str,
+    *,
+    expected_digest: str,
+    evidence_root: Path,
+    release_id: str,
+    release_digest: str,
+    candidate_digest: str,
+) -> dict[str, Any]:
+    """Load the one canonical Prod acceptance fact used by rollout.
+
+    The fact validator follows every exact-byte authority, including the exact
+    Gamma predecessor and the durable J0/J1/J2 source facts.  This adapter adds
+    the deployment-specific release/candidate tuple checks; no bundle or
+    workflow verdict can enter this path.
+    """
+    from quwoquan_ops.cli.lib import environment_acceptance_fact
+
+    normalized_ref = str(ref or "").strip()
+    normalized_digest = str(expected_digest or "").strip()
+    if not normalized_ref or re.fullmatch(r"sha256:[0-9a-f]{64}", normalized_digest) is None:
+        raise RuntimeError(
+            "prod rollout requires --environment-acceptance-ref and exact "
+            "--environment-acceptance-sha256"
+        )
+    try:
+        fact, actual_digest = environment_acceptance_fact.load_environment_acceptance_fact(
+            normalized_ref,
+            evidence_root=evidence_root,
+            verify_references=True,
+        )
+    except (
+        environment_acceptance_fact.EnvironmentAcceptanceFactError,
+        OSError,
+    ) as error:
+        raise RuntimeError(
+            f"canonical EnvironmentAcceptanceFact validation failed: {error}"
+        ) from error
+    if actual_digest != normalized_digest:
+        raise RuntimeError(
+            "canonical EnvironmentAcceptanceFact exact-byte digest drifted"
+        )
+    expected = {
+        "schema": environment_acceptance_fact.SCHEMA,
+        "environment": "prod",
+        "target": "prod-hosted",
+        "releaseId": release_id,
+        "releaseDigest": release_digest,
+    }
+    for field, value in expected.items():
+        if fact.get(field) != value:
+            raise RuntimeError(
+                f"canonical EnvironmentAcceptanceFact deployment binding drifted at {field}"
+            )
+    if candidate_digest != release_id:
+        raise RuntimeError(
+            "deployment candidate does not match the canonical acceptance releaseId"
+        )
+    predecessor = fact.get("predecessorAcceptance")
+    if (
+        not isinstance(predecessor, dict)
+        or predecessor.get("environment") != "gamma"
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", str(predecessor.get("factId") or "")) is None
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", str(predecessor.get("digest") or "")) is None
+    ):
+        raise RuntimeError(
+            "canonical Prod acceptance lacks exact Gamma predecessor binding"
+        )
+    prod_facts = fact.get("prodReleaseFacts")
+    if not isinstance(prod_facts, dict):
+        raise RuntimeError(
+            "canonical Prod acceptance lacks J0/J1/J2 source facts"
+        )
+    stages = prod_facts.get("rolloutStages")
+    if (
+        not isinstance(stages, list)
+        or [item.get("stage") for item in stages if isinstance(item, dict)]
+        != list(environment_acceptance_fact.PROD_ROLLOUT_STAGES)
+    ):
+        raise RuntimeError(
+            "canonical Prod acceptance rollout facts are not canary/5/20/50/100"
+        )
+    return {
+        "ref": normalized_ref,
+        "digest": actual_digest,
+        "factId": str(fact["factId"]),
+        "releaseId": str(fact["releaseId"]),
+        "releaseDigest": str(fact["releaseDigest"]),
+        "gammaPredecessorFactId": str(predecessor["factId"]),
+        "gammaPredecessorDigest": str(predecessor["digest"]),
+        "engineeringEligibilityRef": str(prod_facts["engineeringEligibility"]["ref"]),
+        "engineeringEligibilityDigest": str(prod_facts["engineeringEligibility"]["digest"]),
+        "durableApprovalRef": str(prod_facts["durableApproval"]["ref"]),
+        "durableApprovalDigest": str(prod_facts["durableApproval"]["digest"]),
+    }
+
+
 def _validate_release_artifacts(
     manifest: dict[str, Any],
     *,

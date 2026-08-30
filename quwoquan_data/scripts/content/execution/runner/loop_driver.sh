@@ -41,7 +41,10 @@ for ((round = 1; round <= MAX_ROUNDS; round++)); do
   if [[ "$VERDICT" == "blocked" ]]; then echo "loop_driver: blocked, stopping"; exit 2; fi
   if [[ "$NEXT" == "END" ]]; then echo "loop_driver: execution completed"; exit 0; fi
   echo "loop_driver: round $round/$MAX_ROUNDS (next=$NEXT)"
-  run_round || echo "loop_driver: host session exited non-zero; receipt chain decides" >&2
+  if ! run_round; then
+    echo "loop_driver: host session exited non-zero; stopping without automatic retry" >&2
+    exit 5
+  fi
 done
 echo "loop_driver: max rounds reached without terminal receipt" >&2
 exit 3

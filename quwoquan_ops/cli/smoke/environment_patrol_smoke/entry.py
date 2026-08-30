@@ -66,6 +66,7 @@ from .devices import (
 )
 from .evidence import (
     _AppContentPageScreenshotCapture,
+    _AppUatPerMarkerScreenshotCapture,
     _apply_feed_content_evidence_gate,
     _device_evidence_stream,
     _output_evidence_ref,
@@ -550,6 +551,14 @@ def main() -> int:
                     _run_dir / "after.png",
                 ),
             )
+            app_uat_per_marker_capture = _AppUatPerMarkerScreenshotCapture(
+                args=args,
+                run_dir=run_dir,
+                capture=lambda output_path, _device=device: capture_device_screenshot(
+                    _device,
+                    output_path,
+                ),
+            )
 
             def handle_controlled_edge_output(line: str) -> None:
                 nonlocal restore_request_count
@@ -585,6 +594,7 @@ def main() -> int:
 
             def handle_device_evidence_output(line: str) -> None:
                 page_screenshot_capture.handle_line(line)  # noqa: B023
+                app_uat_per_marker_capture.handle_line(line)  # noqa: B023
                 if controlled_fault is not None:  # noqa: B023
                     handle_controlled_edge_output(line)
 
@@ -802,6 +812,7 @@ def main() -> int:
             after_screenshot = {"status": "skipped", "reason": "dry-run"}
         else:
             page_screenshot_capture.apply_success_gate(result, dry_run=False)
+            app_uat_per_marker_capture.apply_success_gate(result, dry_run=False)
             if page_screenshot_capture.required:
                 after_screenshot = page_screenshot_capture.evidence
             else:
@@ -987,5 +998,14 @@ def main() -> int:
             else "one or more Patrol runs failed"
         )
     report["endedAt"] = utc_now()
-    write_report(report_path, report)
+    write_report(
+        report_path,
+        report,
+        app_uat_page_evidence_resolver=(
+            app_uat_per_marker_capture.page_evidence
+            if "app_uat_per_marker_capture" in locals()
+            and app_uat_per_marker_capture.required
+            else None
+        ),
+    )
     return 2 if report["status"] == "gate_block" else (1 if failed else 0)

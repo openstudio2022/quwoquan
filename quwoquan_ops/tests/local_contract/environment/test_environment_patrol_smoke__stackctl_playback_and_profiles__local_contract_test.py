@@ -359,6 +359,62 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         )
         self.assertNotIn("env", command)
 
+    def test_stackctl_patrol_profile_forwards_exact_app_uat_authority(self) -> None:
+        target = {
+            "env": "alpha",
+            "publicBases": {
+                "api": "https://api.alpha.quwoquan.com:17000",
+                "productOps": "https://ops.alpha.quwoquan.com:17010",
+                "rtc": "wss://rtc.alpha.quwoquan.com:17000",
+                "mediaAvatar": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaImage": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaVideo": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaUpload": "https://upload.alpha.quwoquan.com:17130",
+            },
+        }
+        authority = {
+            "releaseId": "release-a",
+            "samplePlanRef": "data/releases/release-a/uat/sample_plan.json",
+            "samplePlanSha256": "sha256:" + "1" * 64,
+            "targetUatBindingRef": "target-uat-bindings/binding.json",
+            "targetUatBindingSha256": "sha256:" + "2" * 64,
+            "targetUatBindingDigest": "sha256:" + "2" * 64,
+            "releaseDigest": "sha256:" + "3" * 64,
+            "sourceIdentitySetDigest": "sha256:" + "4" * 64,
+            "commitSha": "a" * 40,
+            "contractGraphSourceHash": "b" * 64,
+            "candidateManifestSha256": "c" * 64,
+        }
+        with (
+            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+            mock.patch.object(stackctl, "get_target", return_value=target),
+            mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
+        ):
+            command = stackctl._environment_page_smoke_profile_command(
+                "alpha",
+                "alpha-local",
+                Path("/tmp/alpha-authority"),
+                app_uat_authority=authority,
+            )
+
+        self.assertIsNotNone(command)
+        argv = command["argv"]
+        expected = {
+            "releaseId": "--data-release-id",
+            "samplePlanRef": "--app-uat-sample-plan-ref",
+            "samplePlanSha256": "--app-uat-sample-plan-sha256",
+            "targetUatBindingRef": "--app-uat-target-binding-ref",
+            "targetUatBindingSha256": "--app-uat-target-binding-sha256",
+            "targetUatBindingDigest": "--app-uat-target-binding-digest",
+            "releaseDigest": "--app-uat-release-digest",
+            "sourceIdentitySetDigest": "--app-uat-source-identity-set-digest",
+            "commitSha": "--app-uat-commit-sha",
+            "contractGraphSourceHash": "--app-uat-contract-graph-source-hash",
+            "candidateManifestSha256": "--app-uat-candidate-manifest-sha256",
+        }
+        for field, option in expected.items():
+            self.assertEqual(argv[argv.index(option) + 1], authority[field])
+
     def test_stackctl_home_video_smoke_injects_the_release_video_work_id(self) -> None:
         target = {
             "env": "alpha",

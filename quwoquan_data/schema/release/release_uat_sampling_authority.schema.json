@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/release_uat_sampling_authority.schema.json",
+  "title": "Release-bound M1000 sampling authority projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "milestone",
+    "releaseId",
+    "releaseDigest",
+    "strategy",
+    "productOwner",
+    "qualityOwner"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.release_uat_sampling_authority"
+    },
+    "milestone": {
+      "const": "M1000"
+    },
+    "releaseId": {
+      "$ref": "#/$defs/identity"
+    },
+    "releaseDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "strategy": {
+      "$ref": "#/$defs/strategyBinding"
+    },
+    "productOwner": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/authorityBinding"
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "product_owner"
+            }
+          }
+        }
+      ]
+    },
+    "qualityOwner": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/authorityBinding"
+        },
+        {
+          "properties": {
+            "role": {
+              "const": "quality_owner"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "identity": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,255}$"
+    },
+    "ref": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)(?!.*\\\\).+$"
+    },
+    "positiveCarrierCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "homepage",
+        "article",
+        "image",
+        "video"
+      ],
+      "properties": {
+        "homepage": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "article": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "image": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "video": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "strategyBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "digest",
+        "strategyId",
+        "sampleDistribution"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "strategyId": {
+          "$ref": "#/$defs/identity"
+        },
+        "sampleDistribution": {
+          "$ref": "#/$defs/positiveCarrierCounts"
+        }
+      }
+    },
+    "authorityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "ref",
+        "digest",
+        "authorityId",
+        "authenticationContextDigest",
+        "observedAt"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "product_owner",
+            "quality_owner"
+          ]
+        },
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "authorityId": {
+          "$ref": "#/$defs/identity"
+        },
+        "authenticationContextDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "observedAt": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

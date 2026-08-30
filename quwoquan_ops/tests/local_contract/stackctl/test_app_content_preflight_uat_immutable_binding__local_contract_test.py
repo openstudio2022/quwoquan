@@ -2,6 +2,7 @@
 
 spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 """
+
 from __future__ import annotations
 
 import argparse
@@ -32,11 +33,15 @@ PROVIDER_DIGEST = _digest("8")
 OBSERVABILITY_DIGEST = _digest("9")
 ARTIFACT_DIGEST = _digest("a")
 SOURCE_CAPSULE_DIGEST = _digest("b")
+CONTRACT_GRAPH_DIGEST = _digest("e")
 
 
 class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
     def _fixture(self, root: Path) -> dict[str, object]:
-        readiness_path = root / "env/alpha/runs/data-release/release-a/verify-a/release-readiness.json"
+        readiness_path = (
+            root
+            / "env/alpha/runs/data-release/release-a/verify-a/release-readiness.json"
+        )
         readiness_path.parent.mkdir(parents=True)
         readiness: dict[str, object] = {
             "passed": True,
@@ -48,15 +53,11 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
             "releaseClass": "research",
             "productLifecycleState": "research",
             "importRunId": "import-a",
-            "appUatEnvelope": {
-                "releaseId": "release-a",
-                "videoWorkId": "video-a",
-            },
-            "appUatEnvelopeDigest": _digest("c"),
+            "sourceIdentities": [{"executionId": "execution-a"}],
             "sourceIdentitySetDigest": _digest("d"),
-            "postIds": ["post-a"],
+            "postIds": ["article-a", "image-a", "video-a"],
             "creatorIds": ["creator-a"],
-            "entityRefs": ["entity-a"],
+            "entityRefs": ["/entity/entity-a"],
             "tagRefs": ["tag-a"],
             "mediaAssetIds": ["media-a"],
         }
@@ -65,9 +66,176 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
             unsigned
         )
         readiness_path.write_text(json.dumps(readiness), encoding="utf-8")
-        plan = {
+        selection_evidence = {
+            "poolDigest": _digest("1"),
+            "sourceIdentitySetDigest": _digest("d"),
+            "canonicalMerkle": _digest("2"),
+            "releaseContentsDigest": _digest("3"),
+            "releaseEntityCohortDigest": _digest("4"),
+        }
+        release_digest = stackctl._canonical_document_checksum(
+            {
+                "schema": "quwoquan_data.release_uat_sample_plan_identity",
+                "releaseId": "release-a",
+                "canonicalMerkle": selection_evidence["canonicalMerkle"],
+                "selectionEvidence": selection_evidence,
+            }
+        )
+        sample_distribution = {
+            "homepage": 1,
+            "article": 1,
+            "image": 1,
+            "video": 1,
+        }
+        entry_carrier_cells = [
+            {
+                "entry": entry,
+                "carrier": carrier,
+                "applicability": "required",
+                "specRef": (
+                    "specs/feature-tree/runtime/runtime-config/"
+                    "environment-topology-and-packaging/spec.md#req-006"
+                ),
+                "runnerClass": f"qwq_app.content_uat.{entry}.{carrier}.v1",
+            }
+            for entry in (
+                "feed",
+                "search",
+                "recommendation",
+                "direct_or_object_route",
+            )
+            for carrier in ("homepage", "article", "image", "video")
+        ]
+        samples = [
+            {
+                "sampleId": "canary-homepage-001",
+                "carrier": "homepage",
+                "objectId": "/entity/entity-a",
+                "objectRef": "objects/entities/entity-a",
+                "objectDigest": "sha256:" + "8" * 64,
+            },
+            {
+                "sampleId": "canary-article-001",
+                "carrier": "article",
+                "objectId": "article-a",
+                "objectRef": "objects/posts/article/work-a/1",
+                "objectDigest": "sha256:" + "7" * 64,
+            },
+            {
+                "sampleId": "canary-image-001",
+                "carrier": "image",
+                "objectId": "image-a",
+                "objectRef": "objects/posts/image/work-a/1",
+                "objectDigest": "sha256:" + "5" * 64,
+            },
+            {
+                "sampleId": "canary-video-001",
+                "carrier": "video",
+                "objectId": "video-a",
+                "objectRef": "objects/posts/video/work-a/1",
+                "objectDigest": "sha256:" + "5" * 64,
+            },
+        ]
+        sample_plan = {
+            "schema": "quwoquan_data.release_uat_sample_plan",
             "releaseId": "release-a",
-            "videoPagination": {"expectedWorkIds": ["video-a"]},
+            "releaseDigest": release_digest,
+            "milestone": None,
+            "selectionEvidence": selection_evidence,
+            "eligiblePopulationCounts": dict(sample_distribution),
+            "exactCohortCounts": dict(sample_distribution),
+            "entryCarrierCells": entry_carrier_cells,
+            "sampleStrategy": {
+                "name": "baseline_per_required_carrier",
+                "version": 1,
+                "seedDigest": stackctl._canonical_document_checksum(
+                    {
+                        "releaseDigest": release_digest,
+                        "sampleDistribution": sample_distribution,
+                    }
+                ),
+                "carrierOrder": ["homepage", "article", "image", "video"],
+                "sortKey": "identity",
+                "direction": "ascending",
+                "objectDigestAlgorithm": "sha256-path-blob-merkle",
+                "sampleDistribution": sample_distribution,
+            },
+            "sampleCount": 4,
+            "samples": samples,
+        }
+        sample_plan_path = root / "release/payload/uat/sample_plan.json"
+        sample_plan_path.parent.mkdir(parents=True)
+        sample_plan_path.write_text(
+            json.dumps(sample_plan, sort_keys=True, separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+        sample_plan_digest = (
+            "sha256:"
+            + __import__("hashlib").sha256(sample_plan_path.read_bytes()).hexdigest()
+        )
+        release_header = {
+            "schema": "quwoquan_data.release",
+            "releaseId": "release-a",
+            "sourceOwner": "qwq_data",
+            "releaseKind": "content",
+            "releaseClass": "research",
+            "productLifecycleState": "research",
+            "selectionScope": "target_environment",
+            "poolDigest": selection_evidence["poolDigest"],
+            "canonicalMerkle": selection_evidence["canonicalMerkle"],
+            "sourceIdentities": readiness["sourceIdentities"],
+            "sourceIdentitySetDigest": readiness["sourceIdentitySetDigest"],
+            "contents": [
+                {"contentId": "article-a", "postRef": "article/work-a/1"},
+                {"contentId": "image-a", "postRef": "image/work-a/1"},
+                {"contentId": "video-a", "postRef": "video/work-a/1"},
+            ],
+            "samplePlanRef": "uat/sample_plan.json",
+            "samplePlanDigest": sample_plan_digest,
+        }
+        release_header_path = root / "release/payload/release.json"
+        release_header_path.write_text(json.dumps(release_header), encoding="utf-8")
+        release_header_digest = (
+            "sha256:"
+            + __import__("hashlib").sha256(release_header_path.read_bytes()).hexdigest()
+        )
+        carrier_identities = {
+            "homepage": "/entity/entity-a",
+            "article": "article-a",
+            "image": "image-a",
+            "video": "video-a",
+        }
+        plan = {
+            "releaseIdentity": {
+                "releaseId": "release-a",
+                "payloadSha256": MANIFEST_DIGEST,
+                "milestone": None,
+            },
+            "releaseUatSamplePlanRef": "uat/sample_plan.json",
+            "releaseUatSamplePlanDigest": sample_plan_digest,
+            "orderedSamples": samples,
+            "requiredCasePlan": entry_carrier_cells,
+            "carrierIdentities": carrier_identities,
+            "searchCanaries": [
+                {
+                    "kind": carrier,
+                    "query": object_id,
+                    "expectedObjectType": (
+                        "entity.homepage" if carrier == "homepage" else "content.post"
+                    ),
+                    "expectedObjectId": object_id,
+                }
+                for carrier, object_id in carrier_identities.items()
+            ],
+            "videoPagination": {
+                "pageSize": 20,
+                "expectedWorkIds": ["video-a"],
+            },
+            "mediaChecks": {
+                "automatic": True,
+                "imageWorkId": "image-a",
+                "videoWorkIds": ["video-a"],
+            },
         }
         manifest = {
             "environment": "alpha",
@@ -78,6 +246,7 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
             "configurationDigest": CONFIGURATION_DIGEST,
             "runtimeConfigDigest": RUNTIME_CONFIG_DIGEST,
             "environmentRuntimeDigest": ENVIRONMENT_RUNTIME_DIGEST,
+            "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
             "release": {
                 "candidate": {
                     "releaseId": "release-a",
@@ -89,6 +258,7 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
                 "target": "alpha-local",
                 "releaseTrainId": RELEASE_TRAIN,
                 "environmentArtifactDigest": ARTIFACT_DIGEST,
+                "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
                 "sourceCapsule": {
                     "baselineId": BASELINE,
                     "digest": SOURCE_CAPSULE_DIGEST,
@@ -136,12 +306,14 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
             "releaseId": "release-a",
             "manifestDigest": MANIFEST_DIGEST,
             "readinessReceiptRef": readiness_path.relative_to(root).as_posix(),
-            "readinessReceiptDigest": stackctl._canonical_document_checksum(
-                readiness
-            ),
+            "readinessReceiptDigest": stackctl._canonical_document_checksum(readiness),
             "lifecycleExitRef": "",
-            "appUatEnvelope": readiness["appUatEnvelope"],
-            "appUatEnvelopeDigest": readiness["appUatEnvelopeDigest"],
+            "releaseHeader": release_header,
+            "releaseHeaderRef": str(release_header_path),
+            "releaseHeaderDigest": release_header_digest,
+            "releaseUatSamplePlan": sample_plan,
+            "releaseUatSamplePlanRef": "uat/sample_plan.json",
+            "releaseUatSamplePlanDigest": sample_plan_digest,
             "appUatPlan": plan,
             "appUatPlanDigest": stackctl._canonical_document_checksum(plan),
         }
@@ -224,8 +396,14 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
         self.assertEqual(binding["candidateDigest"], BASELINE)
         self.assertEqual(binding["releaseTrainId"], RELEASE_TRAIN)
         self.assertEqual(binding["environmentArtifactDigest"], ARTIFACT_DIGEST)
+        self.assertEqual(binding["contractGraphDigest"], CONTRACT_GRAPH_DIGEST)
         self.assertEqual(binding["startupAttemptId"], "alpha-candidate-attempt")
         self.assertEqual(binding["composeProject"], "quwoquan_alpha_release_1")
+        self.assertEqual(
+            binding["releaseUatSamplePlan"],
+            fixture["preflight"]["releaseUatSamplePlan"],
+        )
+        self.assertNotIn("appUatEnvelope", binding)
         self.assertEqual(
             binding["startupIdentity"],
             {
@@ -314,7 +492,7 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
         self.assertEqual(context.candidate.readiness_phase, "research")
         self.assertEqual(
             tuple(item.object_id for item in context.candidate.release_posts),
-            ("post-a",),
+            ("article-a", "image-a", "video-a"),
         )
         self.assertEqual(
             context.provider_evidence[
@@ -420,10 +598,6 @@ class AppContentPreflightUatImmutableBindingTest(unittest.TestCase):
                     "environment": environment,
                     "releaseId": "release-a",
                     "manifestDigest": MANIFEST_DIGEST,
-                    "appUatEnvelope": {
-                        "releaseId": "release-a",
-                        "videoWorkId": "video-a",
-                    },
                     "appUatPlan": plan,
                 }
 

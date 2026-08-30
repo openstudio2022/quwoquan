@@ -100,6 +100,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         {
             "schema": "quwoquan_data.entity_manifest",
             "entityId": entity_ref,
+            "entityRef": f"/entity/{entity_ref}",
             "version": 1,
             "admission": {
                 "processResult": "completed",
@@ -469,6 +470,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         {
             "schema": "quwoquan_data.entity_manifest",
             "entityId": standalone_entity_ref,
+            "entityRef": f"/entity/{standalone_entity_ref}",
             "version": 1,
             "executionId": standalone_execution,
             "sourceDigest": frozen_source_digest,

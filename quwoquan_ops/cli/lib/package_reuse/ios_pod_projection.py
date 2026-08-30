@@ -20,6 +20,7 @@ from .ios_pod_capsule import (
     _digest_bytes,
     _read_regular_nofollow,
     build_verified_ios_pod_snapshot,
+    is_ephemeral_xcode_user_state,
 )
 from .ios_pod_inputs import (
     IOS_FLUTTER_SWIFT_PACKAGE_MANAGER,
@@ -150,6 +151,7 @@ def materialize_ios_pod_projection(
     upstream_dependency_digest: str,
     dependency_host: str = IOS_POD_PRODUCTION_HOST,
     build_projection_root: Path | None = None,
+    verified_snapshot: IosPodSnapshot | None = None,
 ) -> IosPodProjection:
     """Copy a verified Pod CAS into one fresh writable build projection."""
 
@@ -192,6 +194,7 @@ def materialize_ios_pod_projection(
         resolution_inputs=resolution_inputs,
         upstream_dependency_digest=upstream_dependency_digest,
         dependency_host=host,
+        verified_snapshot=verified_snapshot,
     )
     if (ios / "Pods").exists() or (ios / "Pods").is_symlink():
         raise ValueError("iOS Pod build projection Pods destination must be fresh")
@@ -200,6 +203,8 @@ def materialize_ios_pod_projection(
     cache = private / "cache"
     user_home = private / "user-home"
     user_home.mkdir(mode=0o700)
+    (user_home / ".config").mkdir(mode=0o700)
+    (user_home / ".cache").mkdir(mode=0o700)
     copy_ios_pod_component(
         snapshot,
         component="pods",
@@ -300,6 +305,10 @@ def _pods_by_path(snapshot: IosPodSnapshot) -> dict[str, IosPodNode]:
         node.relative: node
         for node in snapshot.nodes
         if node.relative.startswith("pods/")
+        # CocoaPods/Xcode may materialize per-user workspace state during an
+        # otherwise byte-stable install. The iOS workspace ignores xcuserdata;
+        # it is not dependency payload and must not affect convergence proof.
+        and not is_ephemeral_xcode_user_state(node.relative)
     }
 
 
@@ -337,9 +346,15 @@ def _allowed_project_roots(
         Path("/usr"),
         Path("/opt/homebrew"),
     ]
-    flutter = shutil.which("flutter", path=environment.get("PATH", ""))
+    declared_flutter = environment.get("QWQ_REAL_FLUTTER")
+    flutter = declared_flutter or shutil.which(
+        "flutter", path=environment.get("PATH", "")
+    )
     if flutter:
-        roots.append(Path(flutter).resolve(strict=True).parent.parent)
+        executable = Path(flutter).expanduser().resolve(strict=True)
+        if executable.name != "flutter" or not executable.is_file():
+            raise ValueError("iOS Pod Flutter executable identity is invalid")
+        roots.append(executable.parent.parent)
     pub_cache = environment.get("PUB_CACHE")
     if pub_cache:
         cache = Path(pub_cache).expanduser().absolute()
@@ -372,13 +387,6 @@ def _validate_projected_project(
     forbidden = (projection.snapshot_root, projection.snapshot_root.parent)
     if any(str(path) in text for path in forbidden):
         raise ValueError("iOS Pod projected project references sealed dependency root")
-    seed_marker = projection.snapshot_root.parent.name
-    if (
-        seed_marker
-        and seed_marker not in projection.projection_root.parts
-        and seed_marker in text
-    ):
-        raise ValueError("iOS Pod projected project references online seed root")
     allowed = _allowed_project_roots(
         projection=projection,
         environment=environment,

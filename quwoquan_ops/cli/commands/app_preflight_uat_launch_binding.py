@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 from collections.abc import Callable, Mapping
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from quwoquan_app.scripts.device.startup_terminal_receipt import (
@@ -19,15 +19,14 @@ from quwoquan_ops.cli.commands.app_preflight_uat_process import (
     observe_canonical_app_process_id,
 )
 from quwoquan_ops.cli.commands.app_preflight_uat_projection_path import (
-    canonical_projection_evidence_path,
     canonical_source_projection_root,
+    load_canonical_projection_evidence,
 )
 from quwoquan_ops.cli.lib.app_launch_attempt import read_app_launch_attempt
 from quwoquan_ops.cli.lib.package_reuse.dependency_bundle_projection_verify import (
-    load_dependency_projection_cas_evidence,
-    load_dependency_projection_cas_readback,
+    load_dependency_projection_cas_evidence_bytes,
+    load_dependency_projection_cas_readback_bytes,
 )
-from quwoquan_ops.cli.lib.package_reuse.dependency_fs import read_regular_nofollow
 
 from .app_preflight_uat_binding_contract import (
     _BUILD_PROJECTION_SEAL_FIELDS,
@@ -71,6 +70,97 @@ _PLATFORM_REQUIRED_DEPENDENCY_COMPONENTS = {
         }
     ),
 }
+_CONTRACT_GRAPH_LOGICAL_PATH = "quwoquan_service/generated/contract_graph.json"
+
+
+def _exact_receipt_string(value: Any, *, label: str) -> str:
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise ValueError(f"APP.LAUNCH.receipt_invalid: {label} is invalid")
+    return value
+
+
+def _canonical_absolute_posix_ref(value: Any, *, label: str) -> str:
+    """Validate signed path bytes before constructing any ``Path`` object."""
+
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise ValueError(f"APP.LAUNCH.receipt_invalid: {label} is invalid")
+    segments = value.split("/")
+    if (
+        not value.startswith("/")
+        or PurePosixPath(value).as_posix() != value
+        or segments[0] != ""
+        or any(segment in {"", ".", ".."} for segment in segments[1:])
+    ):
+        raise ValueError(
+            f"APP.LAUNCH.receipt_invalid: {label} is not a canonical absolute POSIX path"
+        )
+    return value
+
+
+def _load_stable_absolute_file(
+    raw_ref: str,
+    *,
+    label: str,
+    loader: Callable[[Path, bytes, int], Any],
+) -> Any:
+    """Read one exact absolute file with stable ancestor and name identity."""
+
+    path = Path(raw_ref)
+    parent = canonical_source_projection_root(str(path.parent))
+    return load_canonical_projection_evidence(
+        raw_ref,
+        projection_root=parent,
+        output_root=parent,
+        label=label,
+        loader=loader,
+    )
+
+
+def _exact_source_capsule_manifest_ref(
+    expectation_ref: Any,
+    launch_ref: Any,
+) -> str:
+    expectation = _canonical_absolute_posix_ref(
+        expectation_ref,
+        label="dependency expectation source capsule manifest reference",
+    )
+    launch = _canonical_absolute_posix_ref(
+        launch_ref,
+        label="launch source capsule manifest reference",
+    )
+    if expectation != launch:
+        raise ValueError("dependency expectation source identity drifted")
+    return expectation
+
+
+def _contract_graph_operation_failures(encoded: bytes) -> dict[str, frozenset[str]]:
+    try:
+        graph = json.loads(encoded)
+        operations = graph["operations"]
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("candidate ContractGraph is invalid") from exc
+    if not isinstance(operations, list):
+        raise TypeError("candidate ContractGraph operations are invalid")
+    registry: dict[str, frozenset[str]] = {}
+    for item in operations:
+        if not isinstance(item, Mapping):
+            raise TypeError("candidate ContractGraph operation is invalid")
+        operation_id = item.get("id")
+        error_codes = item.get("errorCodes")
+        if (
+            not isinstance(operation_id, str)
+            or not operation_id
+            or operation_id != operation_id.strip()
+            or not isinstance(error_codes, list)
+            or any(
+                not isinstance(code, str) or not code or code != code.strip()
+                for code in error_codes
+            )
+            or operation_id in registry
+        ):
+            raise ValueError("candidate ContractGraph operation registry is invalid")
+        registry[operation_id] = frozenset(error_codes)
+    return registry
 
 
 def _launch_evidence_path(value: str | Path, *, label: str) -> Path:
@@ -91,21 +181,23 @@ def _launch_evidence_path(value: str | Path, *, label: str) -> Path:
     return resolved
 
 
-def _dependency_projection_evidence_path(
-    value: str | Path,
+def _load_dependency_projection_evidence(
+    value: Any,
     *,
     label: str,
     output_root: Path,
     projection_root: Path,
-) -> Path:
+    loader: Callable[[Path, bytes, int], Any],
+) -> Any:
     """Validate and read dependency evidence through its exact projection fd."""
 
     try:
-        return canonical_projection_evidence_path(
+        return load_canonical_projection_evidence(
             value,
             projection_root=projection_root,
             output_root=output_root,
             label=label,
+            loader=loader,
         )
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         raise ValueError(
@@ -146,10 +238,15 @@ def _verified_dependency_projection_binding(
 
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    values = {
-        field: str(report.get(field) or "").strip()
-        for field in _DEPENDENCY_PROJECTION_EVIDENCE_FIELDS
-    }
+    values: dict[str, str] = {}
+    for field in _DEPENDENCY_PROJECTION_EVIDENCE_FIELDS:
+        raw = report.get(field)
+        if not isinstance(raw, str) or not raw or raw != raw.strip():
+            raise ValueError(
+                "APP.LAUNCH.receipt_invalid: dependency projection binding is "
+                f"missing or invalid: {field}"
+            )
+        values[field] = raw
     invalid = [
         field
         for field, value in values.items()
@@ -171,61 +268,91 @@ def _verified_dependency_projection_binding(
         raise ValueError(
             "APP.LAUNCH.receipt_invalid: current dependency projection root is invalid"
         ) from exc
-    paths = {
-        field: _dependency_projection_evidence_path(
-            values[field],
-            label=field,
+    try:
+        expectation = _load_dependency_projection_evidence(
+            values["dependencyProjectionExpectationRef"],
+            label="dependencyProjectionExpectationRef",
             output_root=output_root,
             projection_root=projection_root,
+            loader=lambda path, encoded, mode: (
+                load_dependency_projection_cas_evidence_bytes(
+                    projection_root=projection_root,
+                    evidence_path=path,
+                    encoded=encoded,
+                    evidence_mode=mode,
+                    expected_digest=values["dependencyProjectionExpectationDigest"],
+                )
+            ),
         )
-        for field in _DEPENDENCY_PROJECTION_EVIDENCE_FIELDS
-        if field.endswith("Ref")
-    }
-    if len(set(paths.values())) != len(paths):
-        raise ValueError(
-            "APP.LAUNCH.receipt_invalid: dependency projection evidence references overlap"
-        )
-    try:
-        expectation = load_dependency_projection_cas_evidence(
+        prebuild = _load_dependency_projection_evidence(
+            values["dependencyProjectionPrebuildReadbackRef"],
+            label="dependencyProjectionPrebuildReadbackRef",
+            output_root=output_root,
             projection_root=projection_root,
-            evidence_path=paths["dependencyProjectionExpectationRef"],
-            expected_digest=values["dependencyProjectionExpectationDigest"],
+            loader=lambda path, encoded, mode: (
+                load_dependency_projection_cas_readback_bytes(
+                    evidence_path=path,
+                    encoded=encoded,
+                    evidence_mode=mode,
+                    expected_digest=values[
+                        "dependencyProjectionPrebuildReadbackDigest"
+                    ],
+                    expected_expectation_digest=expectation.evidence_digest,
+                )
+            ),
         )
-        prebuild = load_dependency_projection_cas_readback(
-            evidence_path=paths["dependencyProjectionPrebuildReadbackRef"],
-            expected_digest=values["dependencyProjectionPrebuildReadbackDigest"],
-            expected_expectation_digest=expectation.evidence_digest,
+        postbuild = _load_dependency_projection_evidence(
+            values["dependencyProjectionPostbuildReadbackRef"],
+            label="dependencyProjectionPostbuildReadbackRef",
+            output_root=output_root,
+            projection_root=projection_root,
+            loader=lambda path, encoded, mode: (
+                load_dependency_projection_cas_readback_bytes(
+                    evidence_path=path,
+                    encoded=encoded,
+                    evidence_mode=mode,
+                    expected_digest=values[
+                        "dependencyProjectionPostbuildReadbackDigest"
+                    ],
+                    expected_expectation_digest=expectation.evidence_digest,
+                )
+            ),
         )
-        postbuild = load_dependency_projection_cas_readback(
-            evidence_path=paths["dependencyProjectionPostbuildReadbackRef"],
-            expected_digest=values["dependencyProjectionPostbuildReadbackDigest"],
-            expected_expectation_digest=expectation.evidence_digest,
-        )
+        paths = {
+            "dependencyProjectionExpectationRef": expectation.evidence_path,
+            "dependencyProjectionPrebuildReadbackRef": prebuild.evidence_path,
+            "dependencyProjectionPostbuildReadbackRef": postbuild.evidence_path,
+        }
+        if len(set(paths.values())) != len(paths):
+            raise ValueError("dependency projection evidence references overlap")
         source = expectation.manifest.get("source")
         components = expectation.manifest.get("components")
         if not isinstance(source, Mapping) or not isinstance(components, Mapping):
             raise TypeError("dependency expectation identity is invalid")
-        source_manifest_digest = str(source.get("manifestDigest") or "")
-        source_manifest_path = (
-            Path(str(source.get("manifestPath") or "")).expanduser().absolute()
+        raw_source_manifest_digest = source.get("manifestDigest")
+        if (
+            not isinstance(raw_source_manifest_digest, str)
+            or _DIGEST_RE.fullmatch(raw_source_manifest_digest) is None
+        ):
+            raise ValueError("dependency expectation source identity is invalid")
+        raw_source_manifest_ref = _exact_source_capsule_manifest_ref(
+            source.get("manifestPath"),
+            launch_projection.get("sourceCapsuleManifestRef"),
         )
-        launch_source_manifest_path = (
-            Path(str(launch_projection.get("sourceCapsuleManifestRef") or ""))
-            .expanduser()
-            .absolute()
-        )
-        encoded_source_manifest, _source_manifest_mode = read_regular_nofollow(
-            source_manifest_path,
+        source_manifest_digest = raw_source_manifest_digest
+        source_manifest_path, encoded_source_manifest = _load_stable_absolute_file(
+            raw_source_manifest_ref,
             label="strict UAT source capsule manifest",
+            loader=lambda path, encoded, _mode: (path, encoded),
         )
         source_manifest = json.loads(encoded_source_manifest)
-        raw_source_manifest_digest = (
+        observed_source_manifest_digest = (
             "sha256:" + hashlib.sha256(encoded_source_manifest).hexdigest()
         )
         if (
             expectation.projection_root != projection_root
-            or source_manifest_path != launch_source_manifest_path
-            or raw_source_manifest_digest != source_manifest_digest
+            or str(source_manifest_path) != raw_source_manifest_ref
+            or observed_source_manifest_digest != source_manifest_digest
             or not isinstance(source_manifest, Mapping)
             or _stackctl._canonical_document_checksum(source_manifest)
             != launch_projection.get("sourceCapsuleManifestDigest")
@@ -254,15 +381,93 @@ def _verified_dependency_projection_binding(
         raise ValueError(f"APP.LAUNCH.receipt_invalid: {detail}") from exc
     return {
         **values,
-        "dependencyProjectionExpectationRef": str(
-            paths["dependencyProjectionExpectationRef"]
-        ),
-        "dependencyProjectionPrebuildReadbackRef": str(
-            paths["dependencyProjectionPrebuildReadbackRef"]
-        ),
-        "dependencyProjectionPostbuildReadbackRef": str(
-            paths["dependencyProjectionPostbuildReadbackRef"]
-        ),
+        "dependencyProjectionExpectationRef": str(expectation.evidence_path),
+        "dependencyProjectionPrebuildReadbackRef": str(prebuild.evidence_path),
+        "dependencyProjectionPostbuildReadbackRef": str(postbuild.evidence_path),
+    }
+
+
+def _verified_candidate_contract_graph_binding(
+    *,
+    runtime_binding: Mapping[str, Any],
+    launch_projection: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Bind candidate manifest, capsule entry, and projected Graph bytes."""
+
+    expected_digest = _exact_receipt_string(
+        runtime_binding.get("contractGraphDigest"),
+        label="candidate ContractGraph digest",
+    )
+    if _DIGEST_RE.fullmatch(expected_digest) is None:
+        raise ValueError(
+            "APP.LAUNCH.receipt_invalid: candidate ContractGraph digest is invalid"
+        )
+    raw_manifest_ref = _canonical_absolute_posix_ref(
+        launch_projection.get("sourceCapsuleManifestRef"),
+        label="launch source capsule manifest reference",
+    )
+    _manifest_path, encoded_manifest = _load_stable_absolute_file(
+        raw_manifest_ref,
+        label="candidate source capsule manifest",
+        loader=lambda path, encoded, _mode: (path, encoded),
+    )
+    try:
+        manifest = json.loads(encoded_manifest)
+        entries = manifest["entries"]
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            "APP.LAUNCH.receipt_invalid: source capsule manifest is invalid"
+        ) from exc
+    if not isinstance(entries, list):
+        raise TypeError(
+            "APP.LAUNCH.receipt_invalid: source capsule entries are invalid"
+        )
+    matching = [
+        entry
+        for entry in entries
+        if isinstance(entry, Mapping)
+        and entry.get("logicalPath") == _CONTRACT_GRAPH_LOGICAL_PATH
+    ]
+    if len(matching) != 1:
+        raise ValueError(
+            "APP.LAUNCH.receipt_invalid: candidate ContractGraph entry is ambiguous"
+        )
+    entry = matching[0]
+    if (
+        entry.get("capsulePath") != f"repo/{_CONTRACT_GRAPH_LOGICAL_PATH}"
+        or entry.get("kind") != "file"
+        or entry.get("digest") != expected_digest
+        or entry.get("mode") not in {0o444, 0o555}
+        or not isinstance(entry.get("size"), int)
+        or isinstance(entry.get("size"), bool)
+        or entry.get("size") < 0
+    ):
+        raise ValueError(
+            "APP.LAUNCH.receipt_invalid: candidate ContractGraph entry drifted"
+        )
+
+    projection_root = canonical_source_projection_root(
+        launch_projection.get("sourceProjectionRoot")
+    )
+    raw_graph_ref = f"{projection_root}/{_CONTRACT_GRAPH_LOGICAL_PATH}"
+    graph_ref, encoded_graph = load_canonical_projection_evidence(
+        raw_graph_ref,
+        projection_root=projection_root,
+        output_root=projection_root,
+        label="candidate ContractGraph projection",
+        loader=lambda path, encoded, _mode: (path, encoded),
+    )
+    observed_digest = "sha256:" + hashlib.sha256(encoded_graph).hexdigest()
+    if observed_digest != expected_digest or len(encoded_graph) != entry.get("size"):
+        raise ValueError(
+            "APP.LAUNCH.receipt_invalid: candidate ContractGraph projection drifted"
+        )
+    registry = _contract_graph_operation_failures(encoded_graph)
+    return {
+        "contractGraphDigest": expected_digest,
+        "contractGraphRef": str(graph_ref),
+        "contractGraphOperationCount": len(registry),
+        "sourceProjectionRoot": str(projection_root),
     }
 
 
@@ -279,9 +484,18 @@ def _verified_app_content_projection_build_seal(
         verify_app_content_projection_build_seal,
     )
 
-    seal_ref = str(launch_control.get("buildProjectionSealRef") or "")
-    seal_digest = str(report.get("buildProjectionSealDigest") or "")
-    policy_id = str(launch_control.get("buildProjectionPolicyId") or "")
+    seal_ref = _exact_receipt_string(
+        launch_control.get("buildProjectionSealRef"),
+        label="build projection seal reference",
+    )
+    seal_digest = _exact_receipt_string(
+        report.get("buildProjectionSealDigest"),
+        label="build projection seal digest",
+    )
+    policy_id = _exact_receipt_string(
+        launch_control.get("buildProjectionPolicyId"),
+        label="build projection policy",
+    )
     if (
         not seal_ref
         or report.get("launchAttemptRef") != str(attempt_ref)
@@ -292,8 +506,17 @@ def _verified_app_content_projection_build_seal(
         raise ValueError(
             "APP.LAUNCH.receipt_invalid: build projection seal binding is incomplete"
         )
-    issued_control_ref = str(launch_control.get("controlRef") or "")
-    issued_control_digest = str(launch_control.get("controlDigest") or "")
+    issued_control_ref = launch_control.get("controlRef")
+    issued_control_digest = launch_control.get("controlDigest")
+    if issued_control_ref is not None:
+        issued_control_ref = _exact_receipt_string(
+            issued_control_ref,
+            label="issued launch control reference",
+        )
+        issued_control_digest = _exact_receipt_string(
+            issued_control_digest,
+            label="issued launch control digest",
+        )
     if issued_control_ref and (
         report.get("canonicalLaunchControlRef") != issued_control_ref
         or report.get("canonicalLaunchControlDigest") != issued_control_digest
@@ -334,7 +557,10 @@ def _verified_app_content_projection_build_seal(
         )
     attempt_name = Path(attempt_ref).parent.name
     expected_digest = launch_control.get("expectedBuildProjectionDigest")
-    prebuild_digest = str(report.get("prebuildProjectionDigest") or "")
+    prebuild_digest = _exact_receipt_string(
+        report.get("prebuildProjectionDigest"),
+        label="pre-build projection digest",
+    )
     if _DIGEST_RE.fullmatch(prebuild_digest) is None:
         raise ValueError(
             "APP.LAUNCH.receipt_invalid: pre-build projection digest is invalid"
@@ -381,9 +607,10 @@ def _app_content_launch_binding(
     report = _stackctl._read_json_object(str(report_path))
     attempt = read_app_launch_attempt(attempt_path)
     attempt_digest = _stackctl._canonical_document_checksum(attempt)
-    report_attempt_ref = str(report.get("launchAttemptRef") or "").strip()
-    if not report_attempt_ref:
-        raise ValueError("App content UAT launch attempt reference is missing")
+    report_attempt_ref = _exact_receipt_string(
+        report.get("launchAttemptRef"),
+        label="launch attempt reference",
+    )
     report_attempt_path = _launch_evidence_path(
         report_attempt_ref,
         label="report launch attempt",
@@ -391,7 +618,7 @@ def _app_content_launch_binding(
     if report_attempt_path != attempt_path:
         raise ValueError("App content UAT launch attempt reference drifted")
 
-    expected_platform = "ios" if platform == "ios-simulator" else platform
+    expected_platform = "ios" if platform.startswith("ios-") else "android"
     expected_identity = {
         "environment": str(runtime_binding.get("environment") or ""),
         "target": str(runtime_binding.get("target") or ""),
@@ -451,7 +678,7 @@ def _app_content_launch_binding(
     report_expected = {
         "schema": "quwoquan_app.test_live_launch",
         "runMode": "content-live",
-        "nonPromotable": True,
+        "nonPromotable": platform in {"ios-simulator", "android"},
         "launchPolicy": "test_live",
         "compileStatus": "compiled",
         "installStatus": "installed",
@@ -509,7 +736,11 @@ def _app_content_launch_binding(
         "sourceProjectionEvidenceDigest",
         "sourceProjectionDigest",
     ):
-        if _DIGEST_RE.fullmatch(str(report.get(field) or "")) is None:
+        raw_digest = _exact_receipt_string(
+            report.get(field),
+            label=f"launch {field}",
+        )
+        if _DIGEST_RE.fullmatch(raw_digest) is None:
             raise ValueError(f"App content UAT launch {field} is invalid")
     if re.fullmatch(r"[0-9a-f]{40}", expected_identity["sourceGitSha"]) is None:
         raise ValueError("App content UAT launch source identity is invalid")
@@ -518,6 +749,10 @@ def _app_content_launch_binding(
         report=report,
         launch_projection=launch_projection,
         platform=platform,
+    )
+    contract_graph_binding = _verified_candidate_contract_graph_binding(
+        runtime_binding=runtime_binding,
+        launch_projection=launch_projection,
     )
 
     terminal_path = _launch_evidence_path(
@@ -535,7 +770,10 @@ def _app_content_launch_binding(
     ):
         raise ValueError("App content UAT safe-terminal evidence drifted")
     projection_evidence_path = _launch_evidence_path(
-        str(launch_projection.get("sourceProjectionEvidenceRef") or ""),
+        _exact_receipt_string(
+            launch_projection.get("sourceProjectionEvidenceRef"),
+            label="source projection evidence reference",
+        ),
         label="source projection evidence",
     )
     projection_evidence = _stackctl._read_json_object(str(projection_evidence_path))
@@ -555,7 +793,10 @@ def _app_content_launch_binding(
     ):
         raise ValueError("App content UAT source projection evidence drifted")
     control_path = _launch_evidence_path(
-        str(report.get("canonicalLaunchControlRef") or ""),
+        _exact_receipt_string(
+            report.get("canonicalLaunchControlRef"),
+            label="canonical launch control reference",
+        ),
         label="canonical launch control",
     )
     control = _stackctl._read_json_object(str(control_path))
@@ -672,6 +913,7 @@ def _app_content_launch_binding(
         "sourceProjectionFileCount": int(
             launch_projection["sourceProjectionFileCount"]
         ),
+        **contract_graph_binding,
         **dependency_projection_binding,
         "buildProjectionSeal": {
             field: value

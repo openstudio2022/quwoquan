@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from quwoquan_ops.ci.device_matrix.android import resolve_android_debug_bridge
 from quwoquan_ops.cli.lib.flutter_android_device_proxy import REAL_FLUTTER_ENV
 from quwoquan_ops.cli.lib.package_reuse.patrol_command_envelope import (
     validate_patrol_command_environment,
@@ -102,8 +103,6 @@ def _canonical_device_shape(device: dict[str, Any]) -> tuple[str, bool]:
     emulator = device.get("emulator")
     if type(emulator) is not bool:
         raise PatrolHostActivationError("APP.LAUNCH.compile_failed")
-    if platform == "ios" and emulator is not True:
-        raise PatrolHostActivationError("APP.LAUNCH.compile_failed")
     return platform, emulator
 
 
@@ -137,6 +136,58 @@ def _canonical_flutter_executable(command_env: dict[str, str]) -> str:
     return value
 
 
+def _canonical_android_debug_bridge(command_env: dict[str, str]) -> str:
+    """Resolve adb only from locations authorized by the sealed command env."""
+
+    home_value = str(command_env.get("HOME") or "").strip()
+    home_dir = Path(home_value) if home_value else Path("/__qwq_missing_home__")
+    try:
+        raw = resolve_android_debug_bridge(
+            environ=dict(command_env),
+            home_dir=home_dir,
+        )
+    except (OSError, TypeError, ValueError) as error:
+        raise PatrolHostActivationError("APP.LAUNCH.install_failed") from error
+    if not isinstance(raw, str) or not raw:
+        raise PatrolHostActivationError("APP.LAUNCH.install_failed")
+    candidate = Path(raw)
+    if (
+        not candidate.is_absolute()
+        or str(candidate) != raw
+        or any(part in {"", ".", ".."} for part in candidate.parts[1:])
+    ):
+        raise PatrolHostActivationError("APP.LAUNCH.install_failed")
+
+    executable = "adb.exe" if os.name == "nt" else "adb"
+    allowed: set[Path] = set()
+    for entry in str(command_env.get("PATH") or "").split(os.pathsep):
+        if entry:
+            allowed.add(Path(entry) / executable)
+    for key in ("ANDROID_SDK_ROOT", "ANDROID_HOME"):
+        sdk_root = str(command_env.get(key) or "").strip()
+        if sdk_root:
+            allowed.add(Path(sdk_root) / "platform-tools" / executable)
+    if home_value:
+        allowed.update(
+            {
+                home_dir
+                / "Library"
+                / "Android"
+                / "sdk"
+                / "platform-tools"
+                / executable,
+                home_dir / "Android" / "Sdk" / "platform-tools" / executable,
+            }
+        )
+    if (
+        candidate not in allowed
+        or not candidate.is_file()
+        or not os.access(candidate, os.X_OK)
+    ):
+        raise PatrolHostActivationError("APP.LAUNCH.install_failed")
+    return raw
+
+
 def _host_artifact(device: dict[str, Any]) -> Path:
     if _is_android(device):
         return (
@@ -147,7 +198,8 @@ def _host_artifact(device: dict[str, Any]) -> Path:
             / "flutter-apk"
             / "app-debug.apk"
         )
-    return PATROL_HOST_DIR / "build" / "ios" / "iphonesimulator" / "Runner.app"
+    ios_product = "iphonesimulator" if device.get("emulator") is True else "iphoneos"
+    return PATROL_HOST_DIR / "build" / "ios" / ios_product / "Runner.app"
 
 
 def _build_host(
@@ -159,15 +211,10 @@ def _build_host(
     if _is_android(device):
         command = [flutter, "build", "apk", "--debug", "--no-pub"]
     else:
-        command = [
-            flutter,
-            "build",
-            "ios",
-            "--debug",
-            "--simulator",
-            "--no-codesign",
-            "--no-pub",
-        ]
+        command = [flutter, "build", "ios", "--debug"]
+        if device.get("emulator") is True:
+            command.extend(["--simulator", "--no-codesign"])
+        command.append("--no-pub")
     try:
         result = run_command(
             command,
@@ -197,9 +244,15 @@ def _install_host(
         raise PatrolHostActivationError("APP.LAUNCH.install_failed")
     artifact = _host_artifact(device)
     if _is_android(device):
-        command = ["adb", "-s", device_id, "install", "-r", str(artifact)]
-    else:
+        adb = _canonical_android_debug_bridge(command_env)
+        command = [adb, "-s", device_id, "install", "-r", str(artifact)]
+    elif device.get("emulator") is True:
         command = ["xcrun", "simctl", "install", device_id, str(artifact)]
+    else:
+        command = [
+            "xcrun", "devicectl", "device", "install", "app",
+            "--device", device_id, str(artifact),
+        ]
     try:
         result = run_command(
             command,
@@ -271,7 +324,7 @@ def activate_patrol_host_runtime_config(
         activation_component = PATROL_ANDROID_ACTIVATION_COMPONENT
         application_id = PATROL_ANDROID_PACKAGE
     else:
-        device_kind = "ios-simulator"
+        device_kind = "ios-simulator" if emulator else "ios-physical"
         activation_component = ""
         application_id = PATROL_IOS_BUNDLE_ID
 

@@ -319,9 +319,32 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
     public_bases = target.get("publicBases") or {}
     expected_host = f"{environment}.quwoquan.com"
     for role, raw_url in sorted(public_bases.items()):
-        parsed = urllib.parse.urlparse(str(raw_url))
+        raw_endpoint = str(raw_url).strip()
+        try:
+            parsed = urllib.parse.urlparse(raw_endpoint)
+            port = parsed.port
+        except ValueError:
+            parsed = urllib.parse.urlparse("")
+            port = None
         hostname = str(parsed.hostname or "").lower()
-        if hostname != expected_host and not hostname.endswith(f".{expected_host}"):
+        path = parsed.path or "/"
+        endpoint_is_canonical = (
+            parsed.scheme in {"https", "wss"}
+            and bool(hostname)
+            and (
+                hostname == expected_host
+                or hostname.endswith(f".{expected_host}")
+            )
+            and parsed.username is None
+            and parsed.password is None
+            and parsed.query == ""
+            and parsed.fragment == ""
+            and path.startswith("/")
+            and "//" not in path
+            and ".." not in Path(urllib.parse.unquote(path)).parts
+            and port is not None
+        )
+        if not endpoint_is_canonical:
             record_launch_blocker(
                 "APP.LAUNCH.runtime_config_activation_failed",
                 f"{runtime_mode or 'unknown'} {role} endpoint escapes the selected "
@@ -691,8 +714,12 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                 "status": "gate_block",
                 "details": [str(exc)],
             }
-        for issue in content_preflight.get("details") or []:
-            record_readiness_finding("content", str(issue))
+        if (
+            int(content_preflight.get("exitCode", 2)) != 0
+            or content_preflight.get("status") != "passed"
+        ):
+            for issue in content_preflight.get("details") or []:
+                record_readiness_finding("content", str(issue))
         warnings.extend(
             readiness_diagnostic("content", str(item))
             for item in content_preflight.get("warnings") or []
@@ -761,7 +788,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             and matched_query("typed_video"),
             "search": release_probe.get("exitCode") == 0
             and isinstance(probed_search, list)
-            and len(probed_search) == 3
+            and len(probed_search) == 4
             if not consumer_probe
             else None,
             "recommendation": release_probe.get("exitCode") == 0
@@ -900,9 +927,17 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             "activationEnvelopeDigest", ""
         ),
         "lifecycleExitRef": content_payload_source.get("lifecycleExitRef", ""),
-        "appUatEnvelope": content_payload_source.get("appUatEnvelope", {}),
-        "appUatEnvelopeDigest": content_payload_source.get(
-            "appUatEnvelopeDigest", ""
+        "releaseHeader": content_payload_source.get("releaseHeader", {}),
+        "releaseHeaderRef": content_payload_source.get("releaseHeaderRef", ""),
+        "releaseHeaderDigest": content_payload_source.get("releaseHeaderDigest", ""),
+        "releaseUatSamplePlanRef": content_payload_source.get(
+            "releaseUatSamplePlanRef", ""
+        ),
+        "releaseUatSamplePlanDigest": content_payload_source.get(
+            "releaseUatSamplePlanDigest", ""
+        ),
+        "releaseUatSamplePlan": content_payload_source.get(
+            "releaseUatSamplePlan", {}
         ),
         "appUatPlan": content_payload_source.get("appUatPlan", {}),
         "appUatPlanDigest": content_payload_source.get("appUatPlanDigest", ""),

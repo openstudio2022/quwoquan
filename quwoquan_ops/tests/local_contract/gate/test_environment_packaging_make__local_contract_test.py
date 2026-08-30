@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -311,3 +312,198 @@ def test_prod_packaging_contract_and_runtime_readiness_are_separate_and_wired() 
     assert package_step < verify_step
     assert "--kind packaging" in prod_workflow[verify_step:]
     assert "--profile smoke" in prod_workflow[verify_step:]
+
+
+
+def _make_recipe(target: str) -> str:
+    makefile = MAKEFILE.read_text(encoding="utf-8")
+    start = makefile.index(f"{target}:\n")
+    end = makefile.index("\n\n", start)
+    return makefile[start:end]
+
+
+def _run_adapter_with_python_shim(
+    tmp_path: Path,
+    target: str,
+    *assignments: str,
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    shim_dir = tmp_path / "adapter-bin"
+    shim_dir.mkdir(parents=True)
+    invocation_log = tmp_path / "stackctl-invocations"
+    python_shim = shim_dir / "python3"
+    python_shim.write_text(
+        """#!/bin/sh
+printf '%s\\n' "$*" >> "$QWQ_TEST_STACKCTL_INVOCATIONS"
+exit 0
+""",
+        encoding="utf-8",
+    )
+    python_shim.chmod(0o755)
+    result = subprocess.run(
+        ["make", target, *assignments],
+        cwd=ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{shim_dir}:{os.environ['PATH']}",
+            "QWQ_TEST_STACKCTL_INVOCATIONS": str(invocation_log),
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    invocations = (
+        invocation_log.read_text(encoding="utf-8").splitlines()
+        if invocation_log.exists()
+        else []
+    )
+    return result, invocations
+
+
+def test_app_dev_is_a_thin_stackctl_argument_adapter(tmp_path: Path) -> None:
+    makefile = MAKEFILE.read_text(encoding="utf-8")
+    recipe = _make_recipe("app-dev")
+
+    assert ".PHONY: app-dev app-uat" in makefile
+    assert "python3 quwoquan_ops/cli/stackctl.py dev-session" in recipe
+    assert '--env "$(or $(ENV),alpha)"' in recipe
+    assert "--launch-app" in recipe
+    assert '--app-mode "$(or $(MODE),content-live)"' in recipe
+    assert '$(if $(DEVICE_ID),--device-id "$(DEVICE_ID)",)' in recipe
+    for forbidden in (
+        "flutter devices",
+        "--target",
+        "receipt",
+        "read ",
+        "select ",
+        "while ",
+    ):
+        assert forbidden not in recipe
+
+    default_result, default_invocations = _run_adapter_with_python_shim(
+        tmp_path,
+        "app-dev",
+    )
+    assert default_result.returncode == 0, default_result.stdout + default_result.stderr
+    assert default_invocations == [
+        "quwoquan_ops/cli/stackctl.py dev-session --env alpha --launch-app "
+        "--app-mode content-live"
+    ]
+
+
+def test_app_dev_forwards_explicit_env_mode_and_optional_device(tmp_path: Path) -> None:
+    result, invocations = _run_adapter_with_python_shim(
+        tmp_path,
+        "app-dev",
+        "ENV=gamma",
+        "MODE=ui-only",
+        "DEVICE_ID=ios-contract-device",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert invocations == [
+        "quwoquan_ops/cli/stackctl.py dev-session --env gamma --launch-app "
+        "--app-mode ui-only --device-id ios-contract-device"
+    ]
+
+
+def test_app_dev_invalid_env_and_mode_fail_in_canonical_stackctl_argparse() -> None:
+    invalid_assignments = (
+        "ENV=prod",
+        "MODE=preview",
+    )
+    for assignment in invalid_assignments:
+        result = subprocess.run(
+            ["make", "app-dev", assignment],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 2
+        assert "stackctl.py dev-session" in result.stderr
+        assert "invalid choice" in result.stderr
+
+
+def test_app_uat_requires_explicit_inputs_before_stackctl_invocation(tmp_path: Path) -> None:
+    cases = (
+        ("PLATFORM=ios-simulator", "DEVICE_ID=device-a", "TARGETS is required"),
+        ("TARGETS=alpha-local", "DEVICE_ID=device-a", "PLATFORM is required"),
+        ("TARGETS=alpha-local", "PLATFORM=ios-simulator", "DEVICE_ID is required"),
+    )
+    for first, second, expected in cases:
+        result, invocations = _run_adapter_with_python_shim(
+            tmp_path / expected.split()[0],
+            "app-uat",
+            first,
+            second,
+        )
+        assert result.returncode == 2
+        assert expected in result.stdout + result.stderr
+        assert invocations == []
+
+
+def test_app_uat_forwards_only_explicit_stackctl_arguments(tmp_path: Path) -> None:
+    recipe = _make_recipe("app-uat")
+    assert (
+        "python3 quwoquan_ops/cli/stackctl.py --output-format json app-content-uat"
+        in recipe
+    )
+    assert recipe.index("--output-format json") < recipe.index("app-content-uat")
+    assert '--targets "$(TARGETS)"' in recipe
+    assert '--platform "$(PLATFORM)"' in recipe
+    assert '--device-id "$(DEVICE_ID)"' in recipe
+    assert recipe.count("$(TARGETS)") == 2  # one usage check and one direct forwarding
+    for forbidden in (
+        "alpha-local,beta-local,gamma-local",
+        "prod-hosted",
+        "flutter devices",
+        "receipt",
+        "read ",
+        "select ",
+        "for ",
+    ):
+        assert forbidden not in recipe
+
+    result, invocations = _run_adapter_with_python_shim(
+        tmp_path,
+        "app-uat",
+        "TARGETS=alpha-local,gamma-local",
+        "PLATFORM=android-physical",
+        "DEVICE_ID=android-contract-device",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert invocations == [
+        "quwoquan_ops/cli/stackctl.py --output-format json app-content-uat "
+        "--targets alpha-local,gamma-local --platform android-physical "
+        "--device-id android-contract-device"
+    ]
+
+
+def test_app_uat_prod_target_is_rejected_by_stackctl_domain(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "quwoquan_ops/cli/stackctl.py"),
+            "--output-format",
+            "json",
+            "--report-dir",
+            str(tmp_path / "report"),
+            "app-content-uat",
+            "--targets",
+            "prod-hosted",
+            "--platform",
+            "ios-simulator",
+            "--device-id",
+            "simulator-contract",
+        ],
+        cwd=ROOT,
+        env={**os.environ, "QWQ_OUTPUT_ROOT": str(tmp_path / "output")},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    payload = __import__("json").loads(result.stdout)
+    assert payload["exitCode"] == 2
+    assert "unsupported App content UAT targets: prod-hosted" in payload["details"]

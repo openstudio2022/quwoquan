@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/m1000_four_environment_proof_request.schema.json",
+  "title": "Explicit prove-m1000-four-env read-only request",
+  "description": "Caller-selected current-candidate evidence. The evaluator discovers no latest evidence and writes no business state.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "candidateVersion",
+    "sourceFingerprint",
+    "m1000ReleaseHeader",
+    "m1000SamplePlan",
+    "m1000Promotion",
+    "m100PredecessorPromotion",
+    "sampleStrategyFreeze",
+    "sampleStrategyApproval",
+    "environmentGates"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.m1000_four_environment_proof_request"},
+    "candidateVersion": {"$ref": "#/$defs/identity"},
+    "sourceFingerprint": {"$ref": "#/$defs/digest"},
+    "m1000ReleaseHeader": {"$ref": "#/$defs/exactRef"},
+    "m1000SamplePlan": {"$ref": "#/$defs/exactRef"},
+    "m1000Promotion": {"$ref": "#/$defs/exactRef"},
+    "m100PredecessorPromotion": {"$ref": "#/$defs/exactRef"},
+    "sampleStrategyFreeze": {"$ref": "#/$defs/exactRef"},
+    "sampleStrategyApproval": {"$ref": "#/$defs/exactRef"},
+    "environmentGates": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"$ref": "#/$defs/alphaGate"},
+        {"$ref": "#/$defs/betaGate"},
+        {"$ref": "#/$defs/gammaGate"},
+        {"$ref": "#/$defs/prodGate"}
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "identity": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,255}$"},
+    "ref": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)(?!.*\\\\).+$"},
+    "exactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "digest"],
+      "properties": {
+        "ref": {"$ref": "#/$defs/ref"},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "environmentGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environment",
+        "target",
+        "environmentAcceptanceFact",
+        "capacityTimeliness",
+        "faultRecovery",
+        "responsibilityAcceptances"
+      ],
+      "properties": {
+        "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+        "target": {"$ref": "#/$defs/identity"},
+        "environmentAcceptanceFact": {"$ref": "#/$defs/exactRef"},
+        "capacityTimeliness": {"$ref": "#/$defs/exactRef"},
+        "faultRecovery": {"$ref": "#/$defs/exactRef"},
+        "responsibilityAcceptances": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "prefixItems": [
+            {"$ref": "#/$defs/productAcceptance"},
+            {"$ref": "#/$defs/contentOperationsAcceptance"},
+            {"$ref": "#/$defs/qualityUserAcceptance"},
+            {"$ref": "#/$defs/environmentOperationsAcceptance"},
+            {"$ref": "#/$defs/releaseAcceptance"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "alphaGate": {"allOf": [{"$ref": "#/$defs/environmentGate"}, {"properties": {"environment": {"const": "alpha"}}}]},
+    "betaGate": {"allOf": [{"$ref": "#/$defs/environmentGate"}, {"properties": {"environment": {"const": "beta"}}}]},
+    "gammaGate": {"allOf": [{"$ref": "#/$defs/environmentGate"}, {"properties": {"environment": {"const": "gamma"}}}]},
+    "prodGate": {"allOf": [{"$ref": "#/$defs/environmentGate"}, {"properties": {"environment": {"const": "prod"}}}]},
+    "responsibilityAcceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "ref", "digest"],
+      "properties": {
+        "role": {"enum": [
+          "product_owner",
+          "data_content_operations_owner",
+          "quality_user_representative",
+          "environment_reliability_owner",
+          "release_owner"
+        ]},
+        "ref": {"$ref": "#/$defs/ref"},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "productAcceptance": {"allOf": [{"$ref": "#/$defs/responsibilityAcceptance"}, {"properties": {"role": {"const": "product_owner"}}}]},
+    "contentOperationsAcceptance": {"allOf": [{"$ref": "#/$defs/responsibilityAcceptance"}, {"properties": {"role": {"const": "data_content_operations_owner"}}}]},
+    "qualityUserAcceptance": {"allOf": [{"$ref": "#/$defs/responsibilityAcceptance"}, {"properties": {"role": {"const": "quality_user_representative"}}}]},
+    "environmentOperationsAcceptance": {"allOf": [{"$ref": "#/$defs/responsibilityAcceptance"}, {"properties": {"role": {"const": "environment_reliability_owner"}}}]},
+    "releaseAcceptance": {"allOf": [{"$ref": "#/$defs/responsibilityAcceptance"}, {"properties": {"role": {"const": "release_owner"}}}]}
+  }
+}

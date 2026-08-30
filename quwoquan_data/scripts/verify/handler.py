@@ -22,6 +22,9 @@ from content.release.environment.consistency import (
 from core import paths
 from verify.gate import gate_verify
 from verify.verify_execution_readiness import READINESS_MODES
+from verify.legacy_runtime_zero_evidence import (
+    register_legacy_runtime_zero_evidence_parser,
+)
 
 
 _HOMEPAGE_MEDIA_HELP = {
@@ -481,6 +484,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("publish-closure", help="校验 canonical publish 无孤立 creator/media 或悬空引用")
     sub.add_parser("cli-first", help="校验业务能力只经 Data CLI 入口暴露")
     sub.add_parser("script-architecture", help="校验脚本目录职责、模块尺寸与 core 依赖方向")
+    register_legacy_runtime_zero_evidence_parser(sub)
     sub.add_parser("python-symbols", help="校验 Data Python 运行时符号均有明确所有者")
     sub.add_parser("control-literals", help="校验双省链路控制字面量只有一个真相源")
     sub.add_parser(

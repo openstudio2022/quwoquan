@@ -120,6 +120,7 @@ def _validate_runtime_package_identity_readback(
             "releaseInputClassification": str(classification),
             "contractGraphDigest": str(graph_digest),
             "graphqlReadRegistry": payload.get("graphqlReadRegistry"),
+            "appLaunchBundle": payload.get("appLaunchBundle"),
         }
         if not isinstance(identities[label]["graphqlReadRegistry"], dict):
             raise ValueError(f"{label} graphqlReadRegistry is invalid")

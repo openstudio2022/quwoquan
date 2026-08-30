@@ -20,7 +20,7 @@ func TestMongoImportMigratesLegacyPostRefIDToStableContentID(t *testing.T) {
 	contentID := "qwq_data_stable_content_001"
 	postRefIdentity := "posts/article/攻略/测试景区攻略/3"
 	nextRef := "posts/article/攻略/测试景区攻略/4"
-	postRefDerivedID := RuntimePostIDFromPostRef(postRefIdentity)
+	postRefDerivedID := RuntimePostID(postRefIdentity)
 
 	if _, err := posts.InsertOne(ctx, bson.M{
 		"_id": postRefDerivedID, "postId": postRefDerivedID, "postRef": postRefIdentity,
@@ -40,7 +40,7 @@ func TestMongoImportMigratesLegacyPostRefIDToStableContentID(t *testing.T) {
 		t.Fatalf("migrate stable content identity: %v", err)
 	}
 
-	stableID := RuntimePostID(contentID, nextRef)
+	stableID := RuntimePostID(contentID)
 	if count, err := posts.CountDocuments(ctx, bson.M{}); err != nil || count != 1 {
 		t.Fatalf("rewrite must update one logical Post: count=%d err=%v", count, err)
 	}
@@ -57,7 +57,7 @@ func TestMongoImportMigratesLegacyPostRefIDToStableContentID(t *testing.T) {
 
 	feed := db.Collection("rm_discovery_feed")
 	if _, err := feed.InsertOne(ctx, bson.M{
-		"postId": RuntimePostIDFromPostRef(postRefIdentity), "postRef": postRefIdentity,
+		"postId": RuntimePostID(postRefIdentity), "postRef": postRefIdentity,
 		"contentId": contentID, "sourceOwner": "qwq_data",
 	}); err != nil {
 		t.Fatalf("seed legacy discovery identity: %v", err)

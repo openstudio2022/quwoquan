@@ -540,3 +540,8 @@ def test_m100_selector_builds_exact_deterministic_research_cohort(
         "total": 210,
     }
     assert first.post_refs == second.post_refs
+    assert first.eligible_counts == {
+        "article": 105,
+        "image": 105,
+        "video": 15,
+    }

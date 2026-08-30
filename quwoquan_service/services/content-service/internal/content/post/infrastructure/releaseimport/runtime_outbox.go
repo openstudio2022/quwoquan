@@ -560,7 +560,7 @@ func BuildImportedPostLifecycleEvents(
 			body = post.Body
 			summary = post.Body
 		}
-		postID := RuntimePostID(post.ContentID, post.PostRef)
+		postID := RuntimePostID(post.ContentID)
 		if postID == "" {
 			return nil, fmt.Errorf("imported Post postRef is required")
 		}

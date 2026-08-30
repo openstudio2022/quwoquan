@@ -16,7 +16,7 @@ import pytest
 
 from quwoquan_ops.cli.commands import app_preflight_uat_launch as launch
 from quwoquan_ops.cli.commands.app_preflight_uat import (
-    _app_content_android_launch_command,
+    _app_content_canonical_launch_command,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -384,7 +384,7 @@ def test_projected_run_sh_uses_canonical_output_root_for_private_control(
         expected_build_projection_digest=None,
     )
     projected_app = Path(projection["sourceProjectionRoot"]) / "quwoquan_app"
-    command, child_environment = _app_content_android_launch_command(
+    command, child_environment = _app_content_canonical_launch_command(
         environment="alpha",
         target="alpha-local",
         device_id="emulator-5554",

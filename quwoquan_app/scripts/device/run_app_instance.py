@@ -3,9 +3,7 @@
 
 from __future__ import annotations
 
-import argparse
 import json
-import math
 import os
 import queue
 import shlex
@@ -40,7 +38,11 @@ from canonical_app_instance.activation import (
 from canonical_app_instance.activation import (
     bounded_payload as _bounded_payload,
 )
-from canonical_app_instance.arguments import sanitize_attach_arguments
+from canonical_app_instance.arguments import (
+    build_parser as _parser,
+    positive_finite_seconds as _positive_finite_seconds,
+    sanitize_attach_arguments,
+)
 from canonical_app_instance.launch_io import (
     is_flutter_app_started_event as _is_flutter_app_started_event,
 )
@@ -126,8 +128,20 @@ class CommandPlatformDriver:
     def artifact_path(self) -> Path:
         raise NotImplementedError
 
+    def requires_cocoapods(self) -> bool:
+        return False
+
+    def child_environment(self, environment: Mapping[str, str]) -> dict[str, str]:
+        return compile_environment(
+            environment,
+            require_cocoapods=self.requires_cocoapods(),
+        )
+
     def build(self, environment: dict[str, str]) -> None:
-        _run_checked(self.build_command(), environment=environment)
+        _run_checked(
+            self.build_command(),
+            environment=self.child_environment(environment),
+        )
         artifact = self.artifact_path()
         if not artifact.exists():
             raise CanonicalExecutorError(
@@ -180,7 +194,7 @@ class CommandPlatformDriver:
             process = subprocess.Popen(
                 command,
                 cwd=APP_DIR,
-                env=compile_environment(os.environ),
+                env=self.child_environment(os.environ),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -458,6 +472,9 @@ class AndroidPlatformDriver(CommandPlatformDriver):
 
 
 class IOSSimulatorPlatformDriver(CommandPlatformDriver):
+    def requires_cocoapods(self) -> bool:
+        return True
+
     def build_command(self) -> list[str]:
         return [
             _flutter_executable(),
@@ -586,6 +603,9 @@ class IOSSimulatorPlatformDriver(CommandPlatformDriver):
 
 
 class IOSPhysicalPlatformDriver(CommandPlatformDriver):
+    def requires_cocoapods(self) -> bool:
+        return True
+
     def build_command(self) -> list[str]:
         return [
             _flutter_executable(),
@@ -832,52 +852,6 @@ def build_platform_driver(
     raise CanonicalExecutorError(
         f"unsupported canonical launch device kind: {device_kind}"
     )
-
-
-def _positive_finite_seconds(raw_value: str) -> float:
-    try:
-        value = float(raw_value)
-    except ValueError as error:
-        raise argparse.ArgumentTypeError(
-            "timeout must be a positive finite number"
-        ) from error
-    if not math.isfinite(value) or value <= 0:
-        raise argparse.ArgumentTypeError(
-            "timeout must be a positive finite number"
-        )
-    return value
-
-
-def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--device-kind",
-        choices=(
-            "android_physical",
-            "android_emulator",
-            "ios-simulator",
-            "ios-physical",
-        ),
-        required=True,
-    )
-    parser.add_argument("--device", required=True)
-    parser.add_argument("--application-id", required=True)
-    parser.add_argument("--entrypoint", required=True)
-    parser.add_argument("--handoff-file", type=Path)
-    parser.add_argument("--vm-service-info-file", type=Path)
-    parser.add_argument("--vm-service-info-allowed-root", type=Path)
-    parser.add_argument(
-        "--activation-timeout-seconds",
-        type=_positive_finite_seconds,
-        default=30.0,
-    )
-    parser.add_argument(
-        "--attach-timeout-seconds",
-        type=_positive_finite_seconds,
-        default=900.0,
-    )
-    parser.add_argument("attach_arguments", nargs=argparse.REMAINDER)
-    return parser
 
 
 def main() -> int:

@@ -14,9 +14,11 @@
 
 ### In Scope
 
-- provider policy 与文本、插图的 source/rights 闭包
-- Agent authoring、独立 review、canonical promotion 与 immutable release
-- request 驱动规模下的 import/API/consumer/rollback/replay 证据
+- provider policy 与文本、插图的 source/rights consumer closure
+- immutable release 到 importer/API/consumer/rollback/replay 的跨域同 identity 证据
+- 既有 `GWT-004` 的文章 media-mode consumer 判据
+
+> execution、reviewed delivery、pool、M100/M1000、release build/promotion 与 UAT/acceptance 业务 owner 已迁至 discovery `multi-carrier-release`；本 Story 保留既有锚点以承接已绑定测试，不再据此拥有里程碑或环境完成结论。
 
 ### Out of Scope
 

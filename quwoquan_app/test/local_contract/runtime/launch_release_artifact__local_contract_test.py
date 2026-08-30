@@ -15,6 +15,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[4]
 SCRIPT = ROOT / "quwoquan_app/scripts/device/launch_release_artifact.py"
+CANDIDATE_DIGEST = "sha256:" + "c" * 64
 
 
 def _load_module():
@@ -109,6 +110,17 @@ def _write_inputs(module, root: Path):
     return manifest_path, handoff_path
 
 
+def _load_exact_inputs(module, manifest_path: Path, handoff_path: Path):
+    return module._load_inputs(
+        manifest_path,
+        "android",
+        handoff_path,
+        candidate_digest=CANDIDATE_DIGEST,
+        artifact_manifest_digest=module._digest(manifest_path),
+        launcher_handoff_digest=module._digest(handoff_path),
+    )
+
+
 def _new_launching_attempt(module, path: Path) -> dict[str, object]:
     attempt = module.create_app_launch_attempt(
         path,
@@ -127,6 +139,9 @@ def _new_launching_attempt(module, path: Path) -> dict[str, object]:
         command_resolution_digest="sha256:" + "6" * 64,
         device_id="android-device-1",
         artifact_digest="sha256:" + "1" * 64,
+        candidate_digest=CANDIDATE_DIGEST,
+        artifact_manifest_digest="sha256:" + "d" * 64,
+        launcher_handoff_digest="sha256:" + "e" * 64,
         launch_digest="sha256:" + "8" * 64,
         non_promotable=True,
     )
@@ -199,7 +214,13 @@ class LaunchReleaseArtifactTest(unittest.TestCase):
                 ValueError,
                 "APP.LAUNCH.ios_release_simulator_unsupported",
             ):
-                module._load_inputs(missing_manifest, "ios")
+                module._load_inputs(
+                    missing_manifest,
+                    "ios",
+                    candidate_digest=CANDIDATE_DIGEST,
+                    artifact_manifest_digest="sha256:" + "d" * 64,
+                    launcher_handoff_digest="sha256:" + "e" * 64,
+                )
 
     def test_exact_build_receipt_manifest_artifact_and_handoff_are_bound(self) -> None:
         module = _load_module()
@@ -214,9 +235,9 @@ class LaunchReleaseArtifactTest(unittest.TestCase):
             ), mock.patch.object(
                 module, "validate_dependency_projection_receipt"
             ) as dependency_validator:
-                inputs = module._load_inputs(
+                inputs = _load_exact_inputs(
+                    module,
                     manifest_path,
-                    "android",
                     handoff_path,
                 )
             dependency_validator.assert_called_once_with(
@@ -251,7 +272,7 @@ class LaunchReleaseArtifactTest(unittest.TestCase):
                 ValueError,
                 "dependencyProjectionPostbuildReadbackDigest",
             ):
-                module._load_inputs(manifest_path, "android", handoff_path)
+                _load_exact_inputs(module, manifest_path, handoff_path)
 
     def test_build_receipt_rejects_tampered_dependency_projection(self) -> None:
         module = _load_module()
@@ -268,7 +289,7 @@ class LaunchReleaseArtifactTest(unittest.TestCase):
                 "APP.LAUNCH.prod_artifact_invalid: build receipt dependency "
                 "projection invalid: expectation evidence digest drifted",
             ):
-                module._load_inputs(manifest_path, "android", handoff_path)
+                _load_exact_inputs(module, manifest_path, handoff_path)
 
     def test_retired_artifact_environment_is_not_dual_read(self) -> None:
         module = _load_module()
@@ -282,7 +303,7 @@ class LaunchReleaseArtifactTest(unittest.TestCase):
                 ValueError,
                 "APP.LAUNCH.prod_artifact_invalid",
             ):
-                module._load_inputs(manifest_path, "android", handoff_path)
+                _load_exact_inputs(module, manifest_path, handoff_path)
 
     def test_release_launcher_cannot_skip_activation_or_accept_rollout(self) -> None:
         launcher = SCRIPT.read_text(encoding="utf-8")
@@ -622,6 +643,9 @@ class LaunchReleaseArtifactTest(unittest.TestCase):
                     command_resolution_digest="sha256:" + "6" * 64,
                     device_id="android-device-1",
                     artifact_digest="sha256:" + "1" * 64,
+                    candidate_digest=CANDIDATE_DIGEST,
+                    artifact_manifest_digest="sha256:" + "d" * 64,
+                    launcher_handoff_digest="sha256:" + "e" * 64,
                     launch_digest="sha256:" + "8" * 64,
                     non_promotable=True,
                 )
@@ -641,6 +665,12 @@ class LaunchReleaseArtifactTest(unittest.TestCase):
                 "android",
                 "--receipt",
                 str(receipt),
+                "--candidate-digest",
+                CANDIDATE_DIGEST,
+                "--artifact-manifest-digest",
+                "sha256:" + "d" * 64,
+                "--launcher-handoff-digest",
+                "sha256:" + "e" * 64,
             ]
             with mock.patch.object(sys, "argv", argv), mock.patch.object(
                 module,

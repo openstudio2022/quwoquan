@@ -77,16 +77,13 @@
   A 档人工调试同样只经原子命令进入汇合段，规则不变。
 - 观测：`task fleet-status` 只读聚合 receipt 链，输出产出率、阶段分布、
   失败原因 TopN，对所有宿主同一格式；失败形态回流 `incident-inspection` 工作流。
-- 分级晋升门：M1 → M10 → M100 → M1k → M10k → M100k，每级用真实运行数据标定
-  （成功率、单内容成本、blocked 原因收敛）后才允许提并发上限，不允许跳级。
-- 容量治理（DEC-028）：并发上限只来自 dispatcher 显式 `--max-parallel` 参数，
-  标定证据只来自上一级 milestone 的 fleet 回执与 receipt 链；本轨不读取、
-  不生成旧治理轨的 calibration receipt 或 execution policy 容量字段。
+- 宿主并发上限只来自 dispatcher 显式 `--max-parallel` 参数，真实 fleet receipt 只作人工吞吐/失败诊断，不是 execution 或 milestone authority。
+- M1000 start gate 独立于宿主并发：同一 M100 exact release 必须先完成必要前序、Gamma import/readback、registered physical-device raw App UAT 与 Gamma acceptance；此前 M1000 仅可只读查询，生产副作用为 0。gate 后本轮首 slot 只推进到 `0.plan pass -> next=sources`。
 
 ## 模型策略：主控与运行时分离
 
 - **两层解耦**：IDE 主会话用什么模型与运行时无关。运行时模型由派发参数决定
-  （`cursor-agent --model <m>`、SDK model 字段、子会话 model 参数），每轮可不同。
+  （`cursor-agent --model <m>`、`codex exec` 或宿主子会话 model 参数），每轮可不同；仓内 SDK/provider 不参与。
 - **默认 auto**：所有阶段默认 `--model auto`，由宿主按任务自动路由；除非用户
   显式指定 gpt / claude 系模型，或命中下述强制规则。skill 不硬编码具体模型名。
 - **每阶段画像（hint，不是锁定）**：

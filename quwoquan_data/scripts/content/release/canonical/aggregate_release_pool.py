@@ -21,6 +21,9 @@ from content.release.canonical.aggregate_release_pool_closure import (
 from content.release.canonical.content_pool_record import (
     is_pool_record_admitted,
 )
+from content.release.canonical.content_pool_handoff import (
+    project_content_pool_handoff,
+)
 from content.release.canonical.effective_admission import (
     effective_admission_record as _effective_record,
 )
@@ -133,6 +136,44 @@ def _pool_source_identity_closure(
     )
 
 
+def pool_audit_provenance(
+    publish_root: Path,
+    *,
+    entity_refs: set[str],
+    post_refs: set[str],
+) -> tuple[
+    list[str],
+    tuple[SourceDefinitionSnapshot, ...],
+    tuple[dict[str, object], ...],
+    str,
+]:
+    """Read producer lineage for release audit, outside eligibility candidates.
+
+    This query runs only after the cohort has been selected through
+    ``ContentPoolHandoffQuery``.  Its result may attest the immutable release,
+    but cannot add, remove, de-duplicate, or reorder any selected object.
+    """
+
+    execution_ids = pool_execution_ids(
+        publish_root,
+        entity_refs=entity_refs,
+        post_refs=post_refs,
+    )
+    source_digests, source_identities, source_identity_set_digest = (
+        _pool_source_identity_closure(
+            publish_root,
+            entity_refs=entity_refs,
+            post_refs=post_refs,
+        )
+    )
+    return (
+        execution_ids,
+        source_digests,
+        source_identities,
+        source_identity_set_digest,
+    )
+
+
 def release_contents(
     selection: EnvironmentReleaseSelection | None,
 ) -> list[dict[str, object]] | None:
@@ -143,8 +184,11 @@ def release_contents(
             "contentId": candidate.content_id,
             "version": candidate.version,
             "postRef": candidate.post_ref,
-            "executionId": candidate.execution_id,
-            "sourceIdentityDigest": candidate.source_identity_digest,
+            "selectionIdentityDigest": candidate.selection_identity_digest,
+            "canonicalObjectDigest": candidate.canonical_object_digest,
+            "contentLibraryBindingDigest": (
+                candidate.content_library_binding_digest
+            ),
         }
         for candidate in selection.candidates
     ]
@@ -363,34 +407,33 @@ def prepare_pool_release(
     for entity_ref in pool_entity_refs(publish_root):
         root = object_root(publish_root, "entities", entity_ref)
         try:
-            manifest = _read_json(root / "manifest.json")
-            record = _effective_record(
-                root,
-                manifest,
+            handoff = project_content_pool_handoff(
+                publish_root=publish_root,
                 object_type="homepage",
+                object_ref=entity_ref,
             )
-            if not is_pool_record_admitted(record):
+            if handoff is None:
                 continue
-            source_identity = record.get("sourceIdentity")
             pool_entity_snapshot_rows.append(
                 {
-                    "objectRef": entity_ref,
-                    "objectId": str(record.get("objectId") or ""),
-                    "contentVersion": record.get("contentVersion"),
-                    "usageScope": record.get("usageScope"),
-                    "canonicalObjectDigest": record.get(
-                        "canonicalObjectDigest"
+                    "objectRef": handoff.object_ref,
+                    "objectId": handoff.object_id,
+                    "contentVersion": handoff.content_version,
+                    "usageScope": handoff.usage_scope,
+                    "selectionIdentityDigest": (
+                        handoff.selection_identity_digest
                     ),
-                    "sourceIdentityDigest": (
-                        source_identity.get("identityDigest")
-                        if isinstance(source_identity, dict)
-                        else None
+                    "canonicalObjectDigest": (
+                        handoff.canonical_object_digest
+                    ),
+                    "contentLibraryBindingDigest": (
+                        handoff.content_library_binding_digest
                     ),
                 }
             )
             if (
                 environment_selection.release_mode == "commercial"
-                and record.get("usageScope") != "commercial"
+                and handoff.usage_scope != "commercial"
             ):
                 excluded.append(
                     {
@@ -459,17 +502,26 @@ def prepare_pool_release(
             remaining[: homepage_target - len(post_entity_refs)]
         )
         standalone_entity_refs = set(entity_refs)
-    execution_ids = pool_execution_ids(
+    environment_selection = replace(
+        environment_selection,
+        eligible_counts={
+            **environment_selection.eligible_counts,
+            "homepage": (
+                len(standalone_entity_refs)
+                if milestone is not None
+                else len(entity_refs)
+            ),
+        },
+    )
+    (
+        execution_ids,
+        source_digests,
+        source_identities,
+        source_identity_set_digest,
+    ) = pool_audit_provenance(
         publish_root,
         entity_refs=entity_refs,
         post_refs=post_refs,
-    )
-    source_digests, source_identities, source_identity_set_digest = (
-        _pool_source_identity_closure(
-            publish_root,
-            entity_refs=entity_refs,
-            post_refs=post_refs,
-        )
     )
     # Pool-wide releases preserve the exact per-object source identity closure.
     # A scalar source identity remains reserved for execution-scoped aggregate
@@ -541,6 +593,7 @@ def prepare_pool_release(
 __all__ = [
     "PoolReleasePreparation",
     "admitted_pool_author_refs",
+    "pool_audit_provenance",
     "prepare_pool_release",
     "release_authors",
     "release_contents",

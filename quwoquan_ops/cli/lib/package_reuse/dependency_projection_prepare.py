@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from pathlib import Path
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .android_gradle_capsule import build_android_gradle_snapshot, digest_bytes
@@ -32,6 +33,7 @@ from .ios_pod_capsule import (
     _digest_bytes,
     _scan_component,
     _validate_symlink_closure,
+    is_ephemeral_xcode_user_state,
 )
 from .ios_pod_inputs import (
     IOS_POD_PATROL_HOST,
@@ -54,6 +56,16 @@ def pub_identity(snapshot: PubCacheSnapshot) -> dict[str, Any]:
     }
 
 
+_PUB_TRANSIENT_ROOTS = frozenset({"active_roots", "_temp", "log"})
+
+
+def _pub_transient(relative: str, is_directory: bool) -> bool:
+    parts = PurePosixPath(relative).parts
+    return bool(parts and parts[0] in _PUB_TRANSIENT_ROOTS) or (
+        relative == "README.md" and not is_directory
+    )
+
+
 def _pub_component(
     *, root: Path, component: str, cache_root: Path, lock_path: Path
 ) -> dict[str, Any]:
@@ -61,7 +73,7 @@ def _pub_component(
         snapshot = build_pub_cache_snapshot(
             lock_path=lock_path,
             cache_root=cache_root,
-            reject_unlocked=True,
+            admitted_extra=_pub_transient,
         )
     except (OSError, TypeError, ValueError) as error:
         raise typed(
@@ -102,7 +114,11 @@ def scan_pods(pods_root: Path, lock_path: Path, *, component: str) -> dict[str, 
         )
         if manifest_lock != lock:
             raise ValueError("Podfile.lock and Pods/Manifest.lock differ")
-        nodes = _scan_component("pods", pods_root)
+        nodes = [
+            node
+            for node in _scan_component("pods", pods_root)
+            if not is_ephemeral_xcode_user_state(node.relative)
+        ]
         _validate_symlink_closure(nodes)
     except (OSError, ValueError) as error:
         raise typed(
@@ -265,15 +281,21 @@ def _patrol_command_envelope(dependency_projection: Any) -> dict[str, Any] | Non
         ) from error
 
 
-def prepare_dependency_projection_cas_evidence(
+@dataclass(frozen=True, slots=True)
+class PreparedDependencyProjectionEvidence:
+    expectation: DependencyProjectionExpectation
+    observed_components: dict[str, dict[str, Any]]
+
+
+def prepare_dependency_projection_cas_evidence_with_observed_components(
     *,
     projection_root: Path,
     source_manifest_path: Path,
     dependency_projection: Any,
     evidence_path: Path,
     ios_install_results: Sequence[tuple[str, Any]] | None = None,
-) -> DependencyProjectionExpectation:
-    """Write a canonical private expectation before the first build command."""
+) -> PreparedDependencyProjectionEvidence:
+    """Write expectation and retain identities from its exact safe scans."""
 
     root = normalize_projection_root(projection_root)
     components: dict[str, dict[str, Any]] = {
@@ -314,8 +336,46 @@ def prepare_dependency_projection_cas_evidence(
         ),
         "patrolCommandEnvelope": _patrol_command_envelope(dependency_projection),
     }
-    return write_expectation(
+    expectation = write_expectation(
         root=root,
         manifest=manifest,
         evidence_path=evidence_path,
     )
+    observed: dict[str, dict[str, Any]] = {}
+    for component, value in sorted(components.items()):
+        kind = value["kind"]
+        fields = {
+            "pub": (
+                "manifestDigest",
+                "treeDigest",
+                "entryCount",
+                "directoryCount",
+                "lockDigest",
+            ),
+            "iosPods": ("treeDigest", "entryCount", "lockDigest"),
+            "androidGradle": ("manifestDigest", "treeDigest", "entryCount"),
+        }[kind]
+        observed[component] = {field: value[field] for field in fields}
+    return PreparedDependencyProjectionEvidence(
+        expectation=expectation,
+        observed_components=observed,
+    )
+
+
+def prepare_dependency_projection_cas_evidence(
+    *,
+    projection_root: Path,
+    source_manifest_path: Path,
+    dependency_projection: Any,
+    evidence_path: Path,
+    ios_install_results: Sequence[tuple[str, Any]] | None = None,
+) -> DependencyProjectionExpectation:
+    """Write a canonical private expectation before the first build command."""
+
+    return prepare_dependency_projection_cas_evidence_with_observed_components(
+        projection_root=projection_root,
+        source_manifest_path=source_manifest_path,
+        dependency_projection=dependency_projection,
+        evidence_path=evidence_path,
+        ios_install_results=ios_install_results,
+    ).expectation

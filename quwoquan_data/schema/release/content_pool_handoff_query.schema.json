@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/content_pool_handoff_query.schema.json",
+  "title": "ContentPoolHandoffQuery read-only projection",
+  "x-spec-ref": "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-008",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "projectorVersion", "specRef", "identity", "lifecycle",
+    "admission", "scope", "digests", "refs", "contentLibrary"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.content_pool_handoff_query"},
+    "projectorVersion": {"const": "content_pool_handoff_v1"},
+    "specRef": {"const": "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-008"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "objectType", "objectId", "objectRef", "carrier", "contentVersion",
+        "recordSequence"
+      ],
+      "properties": {
+        "objectType": {"enum": ["homepage", "content"]},
+        "objectId": {"type": "string", "minLength": 1},
+        "objectRef": {"type": "string", "minLength": 1},
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "contentVersion": {"type": "integer", "minimum": 1},
+        "recordSequence": {"type": "integer", "minimum": 1},
+        "authorId": {"type": "string", "minLength": 1}
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {"status": {"const": "active"}}
+    },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "processResult", "qualityResult", "eligibilityResult",
+        "rightsResult", "evidenceRef", "evidenceDigest"
+      ],
+      "properties": {
+        "processResult": {"const": "completed"},
+        "qualityResult": {"const": "passed"},
+        "eligibilityResult": {"const": "passed"},
+        "rightsResult": {"const": "passed"},
+        "evidenceRef": {"type": "string", "minLength": 1},
+        "evidenceDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["usageScope", "variantPurpose"],
+      "properties": {
+        "usageScope": {"enum": ["research", "commercial"]},
+        "variantPurpose": {"enum": ["not_applicable", "original", "commercial_variant"]}
+      }
+    },
+    "digests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "payloadDigest", "canonicalObjectDigest", "selectionIdentityDigest"
+      ],
+      "properties": {
+        "payloadDigest": {"$ref": "#/$defs/digest"},
+        "canonicalObjectDigest": {"$ref": "#/$defs/digest"},
+        "selectionIdentityDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonicalObjectRef", "manifestRef", "poolRecordRef"],
+      "properties": {
+        "canonicalObjectRef": {"type": "string", "minLength": 1},
+        "manifestRef": {"type": "string", "minLength": 1},
+        "poolRecordRef": {"type": "string", "minLength": 1}
+      }
+    },
+    "contentLibrary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["holder", "bindingDigest", "bindings"],
+      "properties": {
+        "holder": {"const": "content_library"},
+        "bindingRef": {"type": "string", "minLength": 1},
+        "bindingDigest": {"$ref": "#/$defs/digest"},
+        "bindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["assetId", "objectKey", "sha256"],
+            "properties": {
+              "assetId": {"type": "string", "minLength": 1},
+              "objectKey": {"type": "string", "pattern": "^media/objects/sha256/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{64}\\.[A-Za-z0-9]+$"},
+              "sha256": {"$ref": "#/$defs/digest"}
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"identity": {"properties": {"objectType": {"const": "content"}}}}},
+      "then": {"properties": {"identity": {"required": ["authorId"]}}}
+    },
+    {
+      "if": {"properties": {"identity": {"properties": {"objectType": {"const": "homepage"}}}}},
+      "then": {
+        "properties": {
+          "identity": {"properties": {"carrier": {"const": "homepage"}}},
+          "scope": {"properties": {"variantPurpose": {"const": "not_applicable"}}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

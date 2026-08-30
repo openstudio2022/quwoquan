@@ -14,9 +14,11 @@
 
 ### In Scope
 
-- 四类内容的单 execution 五阶段结构。
-- source unit、图片权利、creator/tag/entity 引用与 review 闭包。
-- 失败对象隔离和成功对象独立发布。
+- 四类内容 source/right/creator/tag/entity/media 闭包的 runtime consumer contract。
+- immutable release importer/API/media/rollback/replay 的同 identity readback。
+- 既有 GWT 锚点作为跨域 consumer 测试绑定。
+
+> 四载体 execution、pool、milestone、release build/promotion 与 UAT/acceptance 业务 owner 已迁至 discovery `multi-carrier-release`；本 Story 不再拥有这些状态或完成结论。
 
 ### Out of Scope
 

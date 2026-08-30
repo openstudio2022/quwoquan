@@ -16,6 +16,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from content.execution.execution_terminal import (  # noqa: E402
+    InvalidTerminalExecutionEvidenceError,
     TerminalExecutionEvidence,
 )
 from core.control_types import ContentType  # noqa: E402
@@ -208,3 +209,104 @@ def test_readiness_opt_in_preserves_invalid_terminal_evidence_issue(
 
     assert len(issues) == 1
     assert "invalid terminal execution evidence: terminal digest drift" in issues[0]
+
+
+def test_global_layout_ignores_auxiliary_evidence_namespace(monkeypatch, tmp_path):
+    tasks_root = tmp_path / "tasks"
+    evidence = tasks_root / "video" / "evidence" / "asset_reviews" / "review.json"
+    evidence.parent.mkdir(parents=True)
+    evidence.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(layout, "DATA_EXECUTIONS_ROOT", tasks_root)
+    monkeypatch.setattr(layout, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        layout,
+        "load_terminal_execution_evidence",
+        lambda _root: pytest.fail("auxiliary namespace was treated as execution"),
+    )
+
+    assert layout.content_execution_layout_issues() == []
+
+
+def test_global_layout_still_checks_manifest_bearing_noncanonical_root(
+    monkeypatch,
+    tmp_path,
+):
+    tasks_root = tmp_path / "tasks"
+    entry = tasks_root / "noncanonical"
+    entry.mkdir(parents=True)
+    (entry / "execution_manifest.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(layout, "DATA_EXECUTIONS_ROOT", tasks_root)
+    monkeypatch.setattr(layout, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(layout, "load_terminal_execution_evidence", lambda _root: None)
+    monkeypatch.setattr(
+        layout,
+        "_execution_work_package_issues",
+        lambda observed: [f"checked:{observed.name}"],
+    )
+
+    assert layout.content_execution_layout_issues() == ["checked:noncanonical"]
+
+
+def test_invalid_terminal_candidate_is_only_layout_blocker(
+    monkeypatch,
+    tmp_path,
+):
+    execution_id = "20260715--travel-homepage-coverage--test-region-a--pilot-007"
+    tasks_root = tmp_path / "tasks"
+    entry = tasks_root / execution_id
+    entry.mkdir(parents=True)
+    (entry / "execution_manifest.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(layout, "DATA_EXECUTIONS_ROOT", tasks_root)
+    monkeypatch.setattr(layout, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        layout,
+        "load_terminal_execution_evidence",
+        lambda _root: (_ for _ in ()).throw(
+            InvalidTerminalExecutionEvidenceError(
+                "execution supersession root inventory drift"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        layout,
+        "_execution_work_package_issues",
+        lambda _entry: (_ for _ in ()).throw(
+            AssertionError("current layout schema must not reinterpret invalid terminal")
+        ),
+    )
+
+    assert layout.content_execution_layout_issues() == [
+        f"{entry.relative_to(tmp_path)}: invalid terminal execution evidence: "
+        "execution supersession root inventory drift"
+    ]
+
+
+def test_valid_terminal_execution_skips_current_layout_schema(
+    monkeypatch,
+    tmp_path,
+):
+    execution_id = "20260715--travel-homepage-coverage--test-region-a--pilot-008"
+    tasks_root = tmp_path / "tasks"
+    entry = tasks_root / execution_id
+    entry.mkdir(parents=True)
+    (entry / "execution_manifest.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(layout, "DATA_EXECUTIONS_ROOT", tasks_root)
+    monkeypatch.setattr(layout, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        layout,
+        "load_terminal_execution_evidence",
+        lambda root: TerminalExecutionEvidence(
+            decision="superseded",
+            receipt={"decision": "superseded"},
+            path=root / "_shared" / "reconciliation" / "supersession.json",
+        ),
+    )
+    monkeypatch.setattr(
+        layout,
+        "_execution_work_package_issues",
+        lambda _entry: (_ for _ in ()).throw(
+            AssertionError("terminal execution was revalidated with current layout schema")
+        ),
+    )
+
+    assert layout.content_execution_layout_issues() == []

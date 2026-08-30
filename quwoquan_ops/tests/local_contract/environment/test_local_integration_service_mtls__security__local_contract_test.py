@@ -13,7 +13,6 @@ from quwoquan_ops.cli.lib.local_integration_service_mtls import (
 )
 from quwoquan_ops.cli.lib.public_domain_tls import issue_certificate
 
-
 ROOT = Path(__file__).resolve().parents[4]
 
 
@@ -41,9 +40,7 @@ class LocalIntegrationServiceMTLSSecurityTest(unittest.TestCase):
             cert = Path(
                 material.environment["INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE"]
             )
-            key = Path(
-                material.environment["INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE"]
-            )
+            key = Path(material.environment["INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE"])
             self.assertTrue(ca.is_file())
             self.assertTrue(cert.is_file())
             self.assertTrue(key.is_file())
@@ -89,8 +86,7 @@ class LocalIntegrationServiceMTLSSecurityTest(unittest.TestCase):
 
     def test_user_service_compose_requires_mtls_host_files(self) -> None:
         compose = (
-            ROOT
-            / "quwoquan_service/services/user-service/deploy/compose.yaml"
+            ROOT / "quwoquan_service/services/user-service/deploy/compose.yaml"
         ).read_text(encoding="utf-8")
         self.assertIn(
             "INTEGRATION_SERVICE_MTLS_CA_FILE:?INTEGRATION_SERVICE_MTLS_CA_FILE is required}",
@@ -109,18 +105,22 @@ class LocalIntegrationServiceMTLSSecurityTest(unittest.TestCase):
             compose,
         )
         self.assertIn(
-            "INTEGRATION_EXTERNAL_INTERACTION_BASE_URL: \"${INTEGRATION_EXTERNAL_INTERACTION_BASE_URL:-}\"",
+            'INTEGRATION_EXTERNAL_INTERACTION_BASE_URL: "${INTEGRATION_EXTERNAL_INTERACTION_BASE_URL:-}"',
             compose,
         )
 
-    def test_material_ready_accepts_libressl_without_checkhost(self) -> None:
+    def test_mtls_consumes_shared_openssl3_resolver_without_checkhost(self) -> None:
         source = (
             ROOT / "quwoquan_ops/cli/lib/local_integration_service_mtls.py"
         ).read_text(encoding="utf-8")
+        resolver = (ROOT / "quwoquan_ops/cli/lib/openssl3_resolver.py").read_text(
+            encoding="utf-8"
+        )
         self.assertNotIn('"-checkhost"', source)
         self.assertIn("_certificate_binds_client_cn", source)
-        self.assertIn("_openssl_bin", source)
-        self.assertIn("/opt/homebrew/opt/openssl@3/bin/openssl", source)
+        self.assertIn("resolve_openssl3", source)
+        self.assertIn("/opt/homebrew/opt/openssl@3/bin/openssl", resolver)
+        self.assertNotIn("_openssl_bin", source)
 
     def test_stackctl_binds_mtls_before_content_workload_early_return(self) -> None:
         stackctl = (

@@ -30,7 +30,7 @@ from content.execution.campaign.request_envelope_identity import (
     assert_one_source_identity as _assert_one_source_identity,
 )
 from content.execution.campaign.scale import campaign_workload_targets, resolve_campaign_scale
-from content.execution.controller.execute.pre_acquisition_handoff import (
+from content.source.pre_acquisition_handoff import (
     load_pre_acquisition_handoff,
 )
 from content.execution.identity import parse_execution_id

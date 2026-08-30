@@ -891,18 +891,6 @@ fields:
     recommend_feature: true
     description: 最近活跃时间（发帖 / 评论 / 回复都会刷新）
     role: projection
-  - name: sourceTaskId
-    source: sourceTaskId
-    type: string
-    constraints:
-      - NULLABLE
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read
-    ops_exposure: read
-    recommend_feature: true
-    description: 内容溯源——生成此内容的数据工程任务 id（task trace / 效果回流按 sourceTask 归因）
-    role: authoritative_state
   - name: deletedAt
     source: deletedAt
     type: timestamp
@@ -970,10 +958,13 @@ value_objects:
         constraints: [NULLABLE]
   PostMediaItem:
     description: >-
-      Post 统一媒体序列中的交付引用。accessMode=public（含 null 兼容语义）时
-      url/coverUrl 为 canonical public slice；accessMode=signed_grant 时字段存
-      release authority 的相对私有引用，App 必须按 mediaAssetId 经
-      ReserveOriginalImageAccessGrant 换取短时签名 URL 后消费（DEC-031/DEC-033）。
+      Post 统一媒体序列中的 typed 交付引用。新 release/projected item 必须显式
+      声明 accessMode=public|signed_grant；null/absent 不得隐式解释为 public，只能
+      在具名 legacy-public migration adapter 边界适配。public 时 url/coverUrl 为
+      canonical public slice；signed_grant 时字段存 release authority 的相对私有
+      引用，mediaAssetId 必须在场，App 经 ReserveOriginalImageAccessGrant 换取
+      短时签名 URL。private HLS（m3u8/mpd/manifest）当前 unsupported 并 fail closed
+      （DEC-031/DEC-033/DEC-040）。
     fields:
       - name: kind
         type: string
@@ -988,7 +979,7 @@ value_objects:
         type: enum
         enum_ref: MediaDeliveryAccessMode
         constraints: [NULLABLE]
-        description: 交付访问模式；null 只允许出现在存量 public 交付，signed_grant 必须显式在场。
+        description: 新 release/projected item 必须显式 public 或 signed_grant；null 仅允许在具名 legacy-public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 mediaAssetId，private HLS 当前 unsupported。
       - name: url
         type: string
         constraints: [NOT_NULL]
@@ -1034,10 +1025,12 @@ value_objects:
         constraints: [NULLABLE]
   PostArticleAsset:
     description: >-
-      文章素材清单中的单个不可变媒体引用。accessMode=public（含 null 兼容语义）
-      时 publicSliceKey 为 canonical public slice；accessMode=signed_grant 时该
-      字段存 release authority 的相对私有引用，App 必须按 assetId 经
-      ReserveOriginalImageAccessGrant 换取短时签名 URL 后消费（DEC-033）。
+      文章素材清单中的单个不可变 typed 媒体引用。新 release/projected asset 必须
+      显式声明 accessMode=public|signed_grant；null/absent 只允许由具名
+      legacy-public migration adapter 适配，正常消费必须 fail closed。public 时
+      publicSliceKey 为 canonical public slice；signed_grant 时 assetId 为必需的
+      release authority，App 经 ReserveOriginalImageAccessGrant 换取短时签名 URL。
+      private HLS 当前 unsupported 并 fail closed（DEC-033/DEC-040）。
     fields:
       - name: assetId
         type: string
@@ -1049,7 +1042,7 @@ value_objects:
         type: enum
         enum_ref: MediaDeliveryAccessMode
         constraints: [NULLABLE]
-        description: 交付访问模式；null 只允许出现在存量 public 交付，signed_grant 必须显式在场。
+        description: 新 release/projected asset 必须显式 public 或 signed_grant；null 仅允许在具名 legacy-public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 assetId，private HLS 当前 unsupported。
       - name: publicSliceKey
         type: string
         constraints: [NULLABLE]

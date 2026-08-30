@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass
 import json
 import os
-from pathlib import Path
 import re
 import stat
 import subprocess
 import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from .openssl3_resolver import OpenSSL3Executable, resolve_openssl3
 
 SIGNING_KEY_ID_ENV = "QWQ_APP_RUNTIME_CONFIG_SIGNING_KEY_ID"
 SIGNING_PRIVATE_KEY_FILE_ENV = "QWQ_APP_RUNTIME_CONFIG_SIGNING_PRIVATE_KEY_FILE"
@@ -81,36 +82,19 @@ def decode_keyring(encoded: bytes) -> dict[str, str]:
     return normalized
 
 
-def _openssl_identity() -> str:
-    """PATH 上解析到的 openssl 自述，用于把工具链问题指名道姓。"""
-
-    probe = subprocess.run(
-        ["openssl", "version"],
-        capture_output=True,
-        check=False,
-    )
-    if probe.returncode != 0:
-        return "openssl version 不可执行"
-    return (probe.stdout or b"").decode("utf-8", "replace").strip() or "未知实现"
-
-
-def _derive_public_key(private_key: bytes) -> bytes:
+def _derive_public_key(
+    private_key: bytes,
+    *,
+    openssl: OpenSSL3Executable | None = None,
+) -> bytes:
+    selected = openssl or resolve_openssl3()
     result = subprocess.run(
-        ["openssl", "pkey", "-pubout", "-outform", "DER"],
+        selected.argv("pkey", "-pubout", "-outform", "DER"),
         input=private_key,
         capture_output=True,
         check=False,
     )
     if result.returncode != 0:
-        # macOS 自带 /usr/bin/openssl 是 LibreSSL，不实现 Ed25519：它对一把
-        # 完全合法的密钥同样退非零。把这种情况报成「密钥非法」会把排查引向
-        # 密钥材料，而真正要换的是 PATH 上解析到的 openssl。
-        stderr = (result.stderr or b"").decode("utf-8", "replace")
-        if "unsupported" in stderr.lower():
-            raise ValueError(
-                "PATH 上的 openssl 不支持 Ed25519（macOS 自带的是 LibreSSL），"
-                f"无法派生 App runtime signing 公钥；实现: {_openssl_identity()}"
-            )
         raise ValueError("App runtime signing private key is not a valid Ed25519 PEM")
     if not result.stdout.startswith(_ED25519_SPKI_PREFIX) or len(result.stdout) != (
         len(_ED25519_SPKI_PREFIX) + _RAW_ED25519_PUBLIC_KEY_SIZE
@@ -122,6 +106,8 @@ def _derive_public_key(private_key: bytes) -> bytes:
 def resolve_signing_material(
     repo_root: Path,
     getenv: Callable[[str], str | None] = os.getenv,
+    *,
+    openssl: OpenSSL3Executable | None = None,
 ) -> SigningMaterial:
     """Resolve one explicit external authority without serializing secret refs."""
 
@@ -157,7 +143,8 @@ def resolve_signing_material(
     if key_id not in keyring:
         raise ValueError("App runtime signing keyId is absent from trusted keyring")
     expected_public = base64.b64decode(keyring[key_id], validate=True)
-    if _derive_public_key(private_bytes) != expected_public:
+    selected = openssl or resolve_openssl3()
+    if _derive_public_key(private_bytes, openssl=selected) != expected_public:
         raise ValueError("App runtime signing private key does not match keyring")
     return SigningMaterial(key_id, private_path, keyring_path)
 
@@ -165,6 +152,8 @@ def resolve_signing_material(
 def validate_signing_material(
     repo_root: Path,
     signing: SigningMaterial,
+    *,
+    openssl: OpenSSL3Executable | None = None,
 ) -> tuple[bytes, bytes, dict[str, str]]:
     resolved = resolve_signing_material(
         repo_root,
@@ -173,6 +162,7 @@ def validate_signing_material(
             SIGNING_PRIVATE_KEY_FILE_ENV: str(signing.private_key_path),
             TRUSTED_PUBLIC_KEYS_FILE_ENV: str(signing.trusted_public_keys_path),
         }.get,
+        openssl=openssl,
     )
     private_bytes = resolved.private_key_path.read_bytes()
     keyring_bytes = resolved.trusted_public_keys_path.read_bytes()
@@ -191,14 +181,19 @@ def canonical_signed_payload(package: Mapping[str, Any]) -> bytes:
     ).encode("utf-8")
 
 
-def sign_payload(private_key: bytes, payload: bytes) -> bytes:
+def sign_payload(
+    private_key: bytes,
+    payload: bytes,
+    *,
+    openssl: OpenSSL3Executable | None = None,
+) -> bytes:
+    selected = openssl or resolve_openssl3()
     with tempfile.TemporaryDirectory(prefix="qwq-app-runtime-sign-") as temporary:
         payload_path = Path(temporary) / "payload.json"
         signature_path = Path(temporary) / "signature.bin"
         payload_path.write_bytes(payload)
         result = subprocess.run(
-            [
-                "openssl",
+            selected.argv(
                 "pkeyutl",
                 "-sign",
                 "-rawin",
@@ -208,7 +203,7 @@ def sign_payload(private_key: bytes, payload: bytes) -> bytes:
                 str(payload_path),
                 "-out",
                 str(signature_path),
-            ],
+            ),
             input=private_key,
             capture_output=True,
             check=False,
@@ -221,12 +216,19 @@ def sign_payload(private_key: bytes, payload: bytes) -> bytes:
     return signature
 
 
-def verify_signature(public_key: bytes, payload: bytes, signature: bytes) -> None:
+def verify_signature(
+    public_key: bytes,
+    payload: bytes,
+    signature: bytes,
+    *,
+    openssl: OpenSSL3Executable | None = None,
+) -> None:
     if (
         len(public_key) != _RAW_ED25519_PUBLIC_KEY_SIZE
         or len(signature) != _ED25519_SIGNATURE_SIZE
     ):
         raise ValueError("App runtime configuration signature material is invalid")
+    selected = openssl or resolve_openssl3()
     with tempfile.TemporaryDirectory(prefix="qwq-app-runtime-verify-") as temporary:
         root = Path(temporary)
         public_path = root / "public.der"
@@ -236,8 +238,7 @@ def verify_signature(public_key: bytes, payload: bytes, signature: bytes) -> Non
         payload_path.write_bytes(payload)
         signature_path.write_bytes(signature)
         result = subprocess.run(
-            [
-                "openssl",
+            selected.argv(
                 "pkeyutl",
                 "-verify",
                 "-rawin",
@@ -250,7 +251,7 @@ def verify_signature(public_key: bytes, payload: bytes, signature: bytes) -> Non
                 str(payload_path),
                 "-sigfile",
                 str(signature_path),
-            ],
+            ),
             capture_output=True,
             check=False,
         )

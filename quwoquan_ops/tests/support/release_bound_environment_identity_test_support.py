@@ -73,24 +73,6 @@ def _checksum(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _research_activation_fields(environment: str) -> dict[str, Any]:
-    app_uat = {
-        "releaseId": RELEASE_ID,
-        "releaseClass": "research",
-        "productLifecycleState": "research",
-        "homepageId": "entity:west-lake",
-        "homepageTitle": "杭州西湖",
-        "articleWorkId": "post-article",
-        "articleTitle": "西湖图文",
-        "imageWorkId": "post-image",
-        "imageTitle": "西湖图片",
-        "videoWorkId": "post-video",
-        "videoTitle": "西湖视频",
-        "creatorId": "creator-1",
-        "creatorDisplayName": "创作者一号",
-        "tagLabel": "旅行",
-        "videoAttribution": "研究素材来源",
-    }
-    app_uat_digest = _document_digest(app_uat)
     verification_ref = (
         f"env/{environment}/runs/data-release/{RELEASE_ID}/verify-001/"
         "research-isolation-verification.json"
@@ -112,7 +94,6 @@ def _research_activation_fields(environment: str) -> dict[str, Any]:
             f"env/{environment}/runs/data-release/{RELEASE_ID}/import-001/import.json"
         ),
         "importReportDigest": DIGEST_B,
-        "appUatEnvelopeDigest": app_uat_digest,
         "researchIsolationPolicy": {
             "policyRef": f"quwoquan_ops/environments/{environment}/runtime.yaml",
             "policyDigest": ISOLATION_DIGEST,
@@ -128,8 +109,6 @@ def _research_activation_fields(environment: str) -> dict[str, Any]:
         "sourceDigest": SOURCE_DIGEST,
         "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
         "readinessPhase": "research",
-        "appUatEnvelope": app_uat,
-        "appUatEnvelopeDigest": app_uat_digest,
         "activationEnvelope": activation,
         "activationEnvelopeDigest": _document_digest(activation),
         "internalSubjectHash": SUBJECT_HASH,
@@ -387,6 +366,25 @@ class Fixture:
         manifest["artifactDigest"] = canonical_manifest_digest(manifest)
         self.paths["manifest"] = _write(self.root / "manifest.json", manifest)
 
+        self.paths["acceptance"] = _write(
+            self.root / "environment-acceptance.json",
+            {
+                "schema": "quwoquan_ops.environment_acceptance_fact.v1",
+                "factId": DIGEST_A,
+                "environment": self.environment,
+                "target": self.target,
+                "releaseId": RELEASE_ID,
+                "releaseDigest": RELEASE_DIGEST,
+                "requiredRawResults": [
+                    {
+                        "ref": f"env/{self.environment}/raw/readiness-case.json",
+                        "digest": DIGEST_B,
+                        "slotId": DIGEST_A,
+                        "status": "passed",
+                    }
+                ],
+            },
+        )
         self.paths["readiness"] = _write(
             self.root / "release-readiness.json",
             _checksum(
@@ -793,6 +791,8 @@ class Fixture:
             str(self.paths["replay"]),
             "--effective-launch-manifest",
             str(self.paths["launch"]),
+            "--environment-acceptance-fact",
+            str(self.paths["acceptance"]),
         ]
         for path in self.app_paths:
             values.extend(["--app-artifact-receipt", str(path)])

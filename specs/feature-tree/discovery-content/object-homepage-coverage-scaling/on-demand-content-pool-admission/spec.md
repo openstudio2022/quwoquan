@@ -16,7 +16,7 @@
 
 - article lane 在冻结 target set 之前完成实体级来源预筛，并把候选级拒绝原因聚合为实体级单一首要失败原因。
 - image/video 的媒体来源准入、workUnit 冻结与 execution 后独立内容审核。
-- 新内容唯一写路径：reviewed delivery intent → drain → canonical 单对象事务；历史 raw backfill 不进入正常生产装配。
+- 宿主 Agent 按十阶段完成来源、创作与独立 review；新内容唯一写路径为 reviewed delivery intent → drain → canonical 单对象事务，历史 raw backfill 不进入正常生产装配。
 - homepage 正文在 `4.draft` 自检截面的派生度准入：段落相对底稿的逐字重合与正文内部的段落自我重复。
 - 单对象结果互斥五态与非成功终态的结构化 `nextAction + reentryRef`。
 - 同一冻结请求的 exact replay 零增量验证。
@@ -60,12 +60,12 @@
 <a id="req-002"></a>
 ### REQ-002 唯一入池路径、结果五态与可重入恢复面
 
-- 新内容的唯一写路径固定为 reviewed delivery intent → drain → canonical 单对象事务。drain 是可 partial 的 process manager，单对象事务是原子与幂等单位。current WorkRequest execution 不得经历史 raw backfill/pool-append 直写路径绕过 reviewed delivery intent，backfill 只保留历史迁移能力。
+- 新内容的唯一写路径固定为宿主 Agent 十阶段产出 accepted independent review → reviewed delivery intent → drain → canonical 单对象事务。drain 是可 partial 的 process manager，单对象事务是原子与幂等单位。current WorkRequest execution 不得经历史 raw backfill/pool-append、campaign delivery 或其它直写路径绕过 reviewed delivery intent，backfill 只保留历史迁移能力。
 - 单对象结果互斥为 `appended|replayed|pending|excluded|blocked`，满足 `total = appended + replayed + pending + excluded + blocked`、`poolDelta = appended`。用户汇总只从既有 handoff、SourcePool、review 与 drain facts 的只读投影派生，不新增可写台账。
 - compile 与 drain 的所有非成功终态必须提供结构化 `nextAction + reentryRef`；action 取值来自最小闭集（补输入、重试来源发现、扩范围、换来源策略、采集或重试、修证据、修 identity、选新 identity、恢复交付、无动作），`reentryRef` 必须绑定原 handoff/request/intent 摘要。
 - 入池冻结证据必须绑定 batch 输入摘要、逐对象 record（`contentVersion/recordSequence/结果态`）与 post-apply 池 readback，不得只引用一次终端输出；追加过程中断（含尾部快照刷新失败窗口）必须可重入且不产生半可见对象。
 - 同一冻结请求 exact replay 时全部已入池对象 `poolDelta=0`、record-set digest 与既有 record 字节不变；漂移返回 typed conflict 且零写入。
-- lineage 不复制：submission/envelope 不新增请求摘要冗余字段，回溯沿既有 execution 身份 join（compile receipt ↔ envelope ↔ delivery intent ↔ pool record）。
+- lineage 不复制：carrier demand 不新增请求摘要冗余字段，producer 内部沿 `compile receipt ↔ execution manifest ↔ delivery intent ↔ pool record` 回溯；release consumer 只读 canonical object package + append-only pool record 的字段白名单 projection。SourcePool、execution/campaign/provider/model 不进入 consumer identity、eligibility 或 App DTO。
 - 池内每个对象只有「在可选集内」与「已留回执退役」两种终态，不存在既不可选又不可退役的第三态。退役对 receipt 协议之前入池、无入池事务回执因而无法 rollback 的历史对象同样可用，它逐对象写一份 create-once 退役回执，只声明该对象退出可选集，并冻结退役当时的 payloadDigest 与退役前由发现层给出的 typed 不可准入判据。
 - 退役路径不接受也不写 manifest、`generator` 与审核回执，因此不能用来伪造溯源。退役请求必须先观测到发现层已给出所声明的那条 typed 判否，因此也不能把合格对象移出可选集。同参数重入 replay 出同一份回执，参数漂移返回 typed conflict 且零写入。
 - 已退役与未准入是两个独立结论。退役对象不再产出 quality/eligibility 判否而计入报告的退役计数，且仍不进入可选集与任何供给计数。退役回执缺席、不可读、缺必需字段、reason 落在闭集外与 payloadDigest 漂移各自是独立 typed 结论，既不静默恢复成未准入，也不默认判为已退役。
@@ -105,7 +105,8 @@
 - media workload object：`quwoquan_data/schema/execution/media_work_unit.schema.json`
 - compile result：`quwoquan_data/schema/execution/work_request_compile_result.schema.json`
 - drain result：`quwoquan_data/schema/execution/pool_delivery_drain_result.schema.json`
-- lane receipt：`quwoquan_data/schema/execution/content_campaign_lane_receipt.schema.json`
+- canonical pool record：`quwoquan_data/schema/release/pool_object_record.schema.json`
+- stage receipt：`quwoquan_data/schema/execution/stage_receipt.schema.json`
 
 ## 5. 验收场景
 
@@ -148,6 +149,7 @@
 - GIVEN 干净输出根中没有可复用的 Image/Video independent review receipt，运营者为同一目标实体取得全新媒体，并分别冻结 acquisition、像素或运动媒体探测、rights attribution 与 source-scoped semantic review。
 - WHEN 系统从这些证据构建首个 media SourcePool、编译 WorkRequest 并执行 author/reviewer。
 - THEN catalog、acquisition、source review 与其 path evidence 均可从一个 portable evidence root 逐字节解析；绝对路径、`..`、symlink、缺失 ref 或 digest drift 返回 typed blocked，且零 SourcePool candidate 可见。
+- THEN source review 只接受当前宿主会话基于冻结 request 与实际媒体/采样证据写回的 `host-source-review/v1` result；request freeze 零 semantic 判断，record command 只校验/create-once，缺 request/exact asset/probe/rights ref、actor/session 或任一摘要漂移均 fail closed。仓内 source live graph 无 SDK/runtime import、provider/model 选择与自动重试；旧 SDK result 对新 admission 判否。
 - THEN SourcePool 只确认物理来源可供 execution 使用，不把 source-scoped review 表述为内容级 independent review；execution manifest、author evidence 或 reviewer evidence 尚未形成时，SourcePool 可调度但 canonical publish 仍为零。
 - THEN execution 后 acquisition、author、reviewer 使用三个互异且可回读的 runId，accepted `independent_asset_review_receipt` 精确绑定同一 asset bytes、对象、模型身份与判断；该 receipt 缺失、blocked 或 identity drift 时 publish/release fail closed。
 - THEN Image 与 Video 各自独立满足上述链路；任一 Video `entityMatch=mismatch` 即保持 `DATA.SOURCE.SAFETY_REVIEW_BLOCKED`，不得因 playable、4K、premium eligible 或已有下载字节进入 SourcePool。
@@ -157,11 +159,11 @@
 ### GWT-005 唯一入池路径的结果五态、恢复重入与 exact replay 零增量
 
 - GIVEN 一份 confirmed 按需请求的载体生产已产出若干 reviewed delivery intent，其中部分对象合格、部分因证据或身份问题不可入池，且随后同一冻结请求被 exact replay。
-- WHEN drain 消费这些 intent 并执行 canonical 单对象事务，随后运营者读取汇总并执行 replay。
+- WHEN 宿主 Agent 完成独立 review，drain 消费这些 intent 并执行 canonical 单对象事务，随后运营者读取汇总并执行 replay。
 - THEN 每个对象恰好落入 `appended|replayed|pending|excluded|blocked` 之一，`total = appended + replayed + pending + excluded + blocked` 且 `poolDelta = appended`；任一失败对象不撤销同批其他已合格对象。
 - THEN 每个非成功终态携带最小闭集内的结构化 `nextAction` 与绑定原 handoff/request/intent 摘要的 `reentryRef`；运营者只读终态即可执行恢复，不需要读运行日志。
 - THEN 入池证据绑定 batch 输入摘要、逐对象 record 与 post-apply 池 readback；追加过程在尾部快照刷新窗口被中断后重入，不产生半可见对象或重复 record。
-- THEN current WorkRequest execution 尝试经 raw backfill 直写路径入池被拒绝为 typed blocked；唯一合法路径仍是 reviewed delivery intent → drain → 单对象事务。
+- THEN current WorkRequest execution 尝试经 raw backfill、campaign delivery 或 pool-append 直写路径入池被拒绝为 typed blocked；唯一合法路径仍是 accepted independent review → reviewed delivery intent → drain → 单对象事务。
 - THEN exact replay 得到 `appended=0`、全部既有对象 `replayed`、`poolDelta=0`，record-set digest 与既有 record 字节不变；任一输入漂移返回 typed conflict 且零写入。
 - THEN 池内存在 receipt 协议之前入池、无事务回执因而无法 rollback 的历史对象时该子句仍可判定：这些对象经逐对象退役写出 create-once 回执后，`pool-inspect` 的 `quality` 与 `eligibility` 转 `passed`，累计供给计数逐项不变，对象目录除该回执外字节不变且 `generator` 原样保留。
 - THEN 合格可选对象的退役请求、观测到另一条 typed 判否的退役请求与闭集外 reason 各自判否且零写入，同参数重入 replay 出同一份回执，参数漂移返回 typed conflict。
@@ -182,7 +184,7 @@
 
 - 前置要求：[`work-request-compilation`](../work-request-compilation/spec.md) 交付的 confirmed WorkRequest 与逐载体 envelope。
 - 上游事实：来源发现产出的 source-ready SourcePool、独立审核结果与权利证据。
-- 下游结果：canonical 内容池的合格唯一对象 record，供 [`multi-carrier-release`](../multi-carrier-release/spec.md) 构建 immutable release。
+- 下游结果：canonical object package + append-only pool record，并通过无写权限、字段白名单 handoff query 供 [`multi-carrier-release`](../multi-carrier-release/spec.md) 构建 immutable release。
 - 父级设计：`DEC-022`、`DEC-026`
 
 ## 7. 开放事项
@@ -214,15 +216,15 @@
 - 依赖：对象边界与时序由 [L2 DEC-022](../design.md#dec-022) 冻结；Video 仍需一个与目标实体语义匹配且权利链可治理的真实候选，当前铁路视频的 `DATA.SOURCE.SAFETY_REVIEW_BLOCKED` 不得重包装为通过。
 
 <a id="open-004"></a>
-### OPEN-004 恢复面、唯一入池路径与首次真实入池证据未闭合
+### OPEN-004 宿主 reviewed delivery 的首次真实入池证据未闭合
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：仍未有一次 confirmed WorkRequest → compile → drain → pool-append 的完整走通。入池冻结证据只引用终端输出，且从未有一份 confirmed 请求身份的对象沿该链通过 exact replay 零增量验证。对象可经 receipt 协议 publish 路径（`release publish-execution`）真实进入 canonical 池并构建 immutable release，故本缺口只阻断 WorkRequest 驱动的按需入池，不阻断 publish 驱动的入池与发布。
+- 影响或价值：唯一入池判据和 receipt 协议 publish 已实现，但仍未有一次 confirmed WorkRequest → candidate-backed `task init` → 宿主十阶段 → accepted independent review → reviewed delivery → canonical append 的完整走通，也未以同一请求做 exact replay 零增量。缺口是目标单轨的真实 evidence，不是五态/原子事务机制本身。
 - 已达成的部分：两条写路径判据已单轨。compile 的五态与 drain 的逐对象终态共用同一恢复动作闭集（schema 真相源 `quwoquan_data/schema/execution/recovery_next_action.schema.json`，Python 侧 `core.control_types.RecoveryNextAction`），非成功终态各自携带 `nextAction` 与绑定 request/handoff 摘要的 `reentryRef`，成功终态则显式为 `none` 与缺席。`pool-append` 在结构校验后、任何写入前判定该批对象是否被某份已编译 WorkRequest 声明驱动，命中即整批判否为 `DATA.POOL.DELIVERY_INTENT_REQUIRED` 并点名 execution 与 WorkRequest 身份；判据只读编译包里的显式声明，不看执行工作区是否还在磁盘上。
-- 完成判定：`GWT-005` 全部结果子句由 local_contract（五态守恒、nextAction/reentry、重入窗口、backfill 拒绝、replay 单义）与真实 typed 请求的 api_integration（首次 Article M1 入池 `appended=1/poolDelta=1`、exact replay `poolDelta=0`）直接 `spec_ref`。前者已达成，后者仍缺。
-- 依赖：入池原子性与唯一写路径由 [L2 DEC-026](../design.md#dec-026) 冻结；编译面阻断由 [`work-request-compilation`](../work-request-compilation/spec.md) 的 `OPEN-003` 先行关闭。
+- 完成判定：[`GWT-005`](#gwt-005) 的 reviewed delivery 单写入池与 replay 语义保持成立；保持已达成的五态、nextAction/reentry、重入窗口、legacy 写入口拒绝与 replay local_contract；新增 api_integration 用目标 `task init` 和宿主 Agent 完成 Article M1 首次入池 `appended=1/poolDelta=1`、exact replay `poolDelta=0`，并断言 consumer projection 无 SourcePool/execution/campaign/provider/model 字段。
+- 依赖：入池原子性与唯一写路径由 [L2 DEC-026](../design.md#dec-026) 冻结；中性初始化由 [`work-request-compilation`](../work-request-compilation/spec.md) 的 `OPEN-003` 先行关闭。
 
 <a id="open-006"></a>
 ### OPEN-006 homepage 目标集冻结前不预筛图片供给

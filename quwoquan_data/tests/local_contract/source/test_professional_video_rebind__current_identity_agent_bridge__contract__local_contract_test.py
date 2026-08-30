@@ -26,7 +26,7 @@ from typing import Any
 import pytest
 from content.execution.agent.outcome import AgentRunOutcome
 from content.execution.campaign.scale import campaign_workload_targets
-from content.execution.controller.execute.pre_acquisition_handoff import (
+from content.source.pre_acquisition_handoff import (
     write_pre_acquisition_handoff,
 )
 from content.source import professional_video_rebind as rebind

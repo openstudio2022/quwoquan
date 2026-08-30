@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 from content.execution.campaign.scale import campaign_workload_targets
-from content.execution.controller.execute.pre_acquisition_handoff import (
+from content.source.pre_acquisition_handoff import (
     write_pre_acquisition_handoff,
 )
 from content.source.professional_image_discovery_governed import (

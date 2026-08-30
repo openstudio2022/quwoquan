@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -256,6 +257,26 @@ def test_three_active_carriers_dispatch_without_video_or_campaign(
     ]
     assert all(slot["carrier"] != "video" for slot in manifest["slots"])
     assert all("--campaign-root-execution-id" not in slot["argv"] for slot in manifest["slots"])
+    assert all(
+        slot["argv"][1:7]
+        == [
+            "quwoquan_data/scripts/cli.py",
+            "task",
+            "execute",
+            "--stage",
+            "plan-only",
+            "--execution-id",
+        ]
+        for slot in manifest["slots"]
+    ), "pool dispatch may materialize work packages only; the host Agent owns all ten stages"
+    assert all(
+        not any(
+            retired in str(argument)
+            for argument in slot["argv"]
+            for retired in ("agent", "queue", "controller", "recovery", "campaign")
+        )
+        for slot in manifest["slots"]
+    )
     assert all(slot["queueBackend"] == "local_file" for slot in manifest["slots"])
     assert all(
         slot["poolDeliveryBackend"] == "reliabletask"
@@ -489,7 +510,7 @@ def test_retry_dispatch_binds_exact_predecessor_slots_and_selection(
         assert slot["taskRequest"]["sourcePoolSelection"] == frozen["taskRequest"][
             "sourcePoolSelection"
         ]
-        assert slot["argv"][6:8] == ["--retry-of", frozen["executionId"]]
+        assert slot["argv"][-2:] == ["--retry-of", frozen["executionId"]]
     assert retry["predecessorMappings"] == [
         {
             "slotId": slot["slotId"],
@@ -579,8 +600,186 @@ def test_retry_dispatch_can_narrow_one_exhausted_slot_to_exact_unfinished_ref(
     assert slot["taskRequest"]["count"] == 1
     assert slot["taskRequest"]["quota"] == 1
     assert slot["retryUnfinishedRefs"] == [failed_object_ref]
-    assert slot["argv"][8:10] == ["--retry-unfinished-ref", failed_object_ref]
+    assert slot["argv"][-4:] == [
+        "--retry-of",
+        failed_slot["executionId"],
+        "--retry-unfinished-ref",
+        failed_object_ref,
+    ]
     assert retry["predecessorMappings"][0]["unfinishedRefs"] == [failed_object_ref]
+
+
+def _redigest_dispatch(manifest: dict[str, object]) -> None:
+    slots = manifest["slots"]
+    assert isinstance(slots, list)
+    for raw_slot in slots:
+        assert isinstance(raw_slot, dict)
+        stable_slot = {
+            key: value for key, value in raw_slot.items() if key != "slotDigest"
+        }
+        raw_slot["slotDigest"] = "sha256:" + hashlib.sha256(
+            json.dumps(
+                stable_slot,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+    stable = {
+        key: value for key, value in manifest.items() if key != "manifestDigest"
+    }
+    manifest["manifestDigest"] = "sha256:" + hashlib.sha256(
+        json.dumps(
+            stable,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _retry_manifest(
+    tmp_path: Path,
+) -> tuple[dict[str, object], dict[str, object]]:
+    output, publish, inspection, preflight = _inputs(tmp_path)
+    predecessor, predecessor_path = write_create_once_semantic_wave_dispatch(
+        **_kwargs(output, publish, inspection, preflight)
+    )
+    kwargs = _kwargs(output, publish, inspection, preflight)
+    kwargs.update(
+        dispatch_id="m100-current-wave-retry-negative",
+        sequence_start=201,
+        predecessor_dispatch_ref=predecessor_path.relative_to(output).as_posix(),
+        predecessor_execution_ids={
+            slot["slotId"]: slot["executionId"]
+            for slot in predecessor["slots"]
+        },
+    )
+    return build_semantic_wave_dispatch(**kwargs), predecessor
+
+
+def _remove_retry_of(argv: list[str], _wrong: str) -> None:
+    index = argv.index("--retry-of")
+    del argv[index : index + 2]
+
+
+def _duplicate_retry_of(argv: list[str], _wrong: str) -> None:
+    argv.extend(("--retry-of", argv[argv.index("--retry-of") + 1]))
+
+
+def _replace_retry_of(argv: list[str], wrong: str) -> None:
+    argv[argv.index("--retry-of") + 1] = wrong
+
+
+@pytest.mark.parametrize(
+    ("case", "mutate"),
+    [
+        ("lineage-missing", _remove_retry_of),
+        ("lineage-duplicate", _duplicate_retry_of),
+        ("wrong-predecessor", _replace_retry_of),
+    ],
+)
+def test_retry_dispatch_validator_rejects_non_exact_retry_of_tokens(
+    tmp_path: Path,
+    case: str,
+    mutate: Callable[[list[str], str], None],
+) -> None:
+    retry, predecessor = _retry_manifest(tmp_path / case)
+    slot = retry["slots"][0]
+    wrong_predecessor = predecessor["slots"][1]["executionId"]
+    mutate(slot["argv"], wrong_predecessor)
+    _redigest_dispatch(retry)
+
+    with pytest.raises(SemanticWaveDispatchError) as captured:
+        from content.release.canonical.semantic_wave_dispatch import (
+            validate_semantic_wave_dispatch,
+        )
+
+        validate_semantic_wave_dispatch(retry)
+
+    assert captured.value.code == DISPATCH_INVALID
+    assert "retry lineage drift" in str(captured.value)
+
+
+def _remove_unfinished_ref(argv: list[str], _wrong: str) -> None:
+    index = argv.index("--retry-unfinished-ref")
+    del argv[index : index + 2]
+
+
+def _duplicate_unfinished_ref(argv: list[str], _wrong: str) -> None:
+    argv.extend(
+        (
+            "--retry-unfinished-ref",
+            argv[argv.index("--retry-unfinished-ref") + 1],
+        )
+    )
+
+
+def _replace_unfinished_ref(argv: list[str], wrong: str) -> None:
+    argv[argv.index("--retry-unfinished-ref") + 1] = wrong
+
+
+def _move_unfinished_before_retry(argv: list[str], _wrong: str) -> None:
+    unfinished_index = argv.index("--retry-unfinished-ref")
+    unfinished = argv[unfinished_index : unfinished_index + 2]
+    del argv[unfinished_index : unfinished_index + 2]
+    retry_index = argv.index("--retry-of")
+    argv[retry_index:retry_index] = unfinished
+
+
+@pytest.mark.parametrize(
+    ("case", "mutate"),
+    [
+        ("unfinished-missing", _remove_unfinished_ref),
+        ("unfinished-duplicate", _duplicate_unfinished_ref),
+        ("unfinished-tampered", _replace_unfinished_ref),
+        ("unfinished-before-retry", _move_unfinished_before_retry),
+    ],
+)
+def test_retry_dispatch_validator_rejects_non_exact_unfinished_tokens(
+    tmp_path: Path,
+    case: str,
+    mutate: Callable[[list[str], str], None],
+) -> None:
+    retry, _predecessor = _retry_manifest(tmp_path / case)
+    slot = retry["slots"][0]
+    unfinished_ref = "homepage-001__source-unit-001"
+    slot["retryUnfinishedRefs"] = [unfinished_ref]
+    slot["argv"].extend(("--retry-unfinished-ref", unfinished_ref))
+    retry["predecessorMappings"][0]["unfinishedRefs"] = [unfinished_ref]
+    _redigest_dispatch(retry)
+    mutate(slot["argv"], "homepage-999__source-unit-999")
+    _redigest_dispatch(retry)
+
+    with pytest.raises(SemanticWaveDispatchError) as captured:
+        from content.release.canonical.semantic_wave_dispatch import (
+            validate_semantic_wave_dispatch,
+        )
+
+        validate_semantic_wave_dispatch(retry)
+
+    assert captured.value.code == DISPATCH_INVALID
+    assert "retry lineage drift" in str(captured.value)
+
+
+def test_retry_dispatch_validator_rejects_non_plan_only_stage(
+    tmp_path: Path,
+) -> None:
+    retry, _predecessor = _retry_manifest(tmp_path)
+    slot = retry["slots"][0]
+    stage_index = slot["argv"].index("--stage")
+    slot["argv"][stage_index + 1] = "campaign-run"
+    _redigest_dispatch(retry)
+
+    with pytest.raises(SemanticWaveDispatchError) as captured:
+        from content.release.canonical.semantic_wave_dispatch import (
+            validate_semantic_wave_dispatch,
+        )
+
+        validate_semantic_wave_dispatch(retry)
+
+    assert captured.value.code == DISPATCH_INVALID
+    assert "dispatch stage drift" in str(captured.value)
 
 
 def test_retry_dispatch_rejects_wrong_predecessor_mapping(

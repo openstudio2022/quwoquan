@@ -74,24 +74,32 @@ if [[ "$scope" != "service" && "$service_phase" != "all" ]]; then
 fi
 
 data_phase="${GATE_DATA_PHASE:-all}"
-case "$data_phase" in
-  all|verify|local_contract) ;;
-  *)
-    echo "[gate] FAIL: invalid GATE_DATA_PHASE=$data_phase (expected all|verify|local_contract)" >&2
-    exit 2
-    ;;
-esac
-if [[ "$scope" != "data" && "$data_phase" != "all" ]]; then
-  echo "[gate] FAIL: GATE_DATA_PHASE is only valid with --scope data" >&2
-  exit 2
-fi
-# 分片下标与总数必须同时给出。只给一个时判否而不是替调用方补另一个——补出来的
-# 那一份会让 CI 静默只跑一片，而四片全绿的表象与全量绿无法区分。
-if [[ -n "${DATA_TEST_TOTAL_SHARDS:-}" && -z "${DATA_TEST_SHARD_INDEX:-}" ]] \
-  || [[ -z "${DATA_TEST_TOTAL_SHARDS:-}" && -n "${DATA_TEST_SHARD_INDEX:-}" ]]; then
-  echo "[gate] FAIL: DATA_TEST_TOTAL_SHARDS and DATA_TEST_SHARD_INDEX must be provided together" >&2
-  exit 2
-fi
+validate_data_phase_configuration() {
+  case "$data_phase" in
+    all|verify|local_contract) ;;
+    *)
+      echo "[gate] FAIL: invalid GATE_DATA_PHASE=$data_phase (expected all|verify|local_contract)" >&2
+      return 2
+      ;;
+  esac
+  if [[ "$scope" != "data" && "$data_phase" != "all" ]]; then
+    echo "[gate] FAIL: GATE_DATA_PHASE is only valid with --scope data" >&2
+    return 2
+  fi
+  # 分片下标与总数必须同时给出。只给一个时判否而不是替调用方补另一个——补出来的
+  # 那一份会让 CI 静默只跑一片，而四片全绿的表象与全量绿无法区分。
+  if [[ -n "${DATA_TEST_TOTAL_SHARDS:-}" && -z "${DATA_TEST_SHARD_INDEX:-}" ]] \
+    || [[ -z "${DATA_TEST_TOTAL_SHARDS:-}" && -n "${DATA_TEST_SHARD_INDEX:-}" ]]; then
+    echo "[gate] FAIL: DATA_TEST_TOTAL_SHARDS and DATA_TEST_SHARD_INDEX must be provided together" >&2
+    return 2
+  fi
+  if [[ -n "${DATA_TEST_TOTAL_SHARDS:-}" ]] \
+    && [[ "$scope" != "data" || "$data_phase" != "local_contract" ]]; then
+    echo "[gate] FAIL: DATA_TEST_TOTAL_SHARDS and DATA_TEST_SHARD_INDEX are only valid with --scope data and GATE_DATA_PHASE=local_contract" >&2
+    return 2
+  fi
+}
+validate_data_phase_configuration || exit $?
 
 # Python script governance derives independent app/service/ops/data
 # boundaries. A scoped Delivery job validates its own boundary; the aggregate
@@ -136,6 +144,15 @@ bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
 python3 quwoquan_ops/gate/verify_git_branch_policy.py
 python3 quwoquan_ops/gate/verify_github_supply_chain.py
 python3 quwoquan_ops/gate/verify_agent_context_budget.py
+python3 -B quwoquan_ops/gate/verify_human_agent_delivery_eval.py
+python3 -B quwoquan_ops/gate/verify_objective_execution.py
+python3 -B quwoquan_ops/gate/verify_hotl_admission.py
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-005.t1
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-005.t2
+make verify-local-readiness
+python3 -B quwoquan_ops/gate/verify_workflow_resolution.py
+python3 -B quwoquan_ops/gate/verify_governance_pipeline_admission.py
+python3 quwoquan_ops/gate/verify_knowledge_asset_s0_migration.py
 python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
 python3 quwoquan_ops/gate/verify_single_track_contracts.py
 # 单轨契约合约测试：Python 1000 行硬顶治理后按场景拆分，随门禁一起执行。

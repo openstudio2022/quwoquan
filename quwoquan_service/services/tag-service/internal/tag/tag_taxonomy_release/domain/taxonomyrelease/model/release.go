@@ -1,8 +1,7 @@
 // Package model 定义 TagTaxonomyRelease 聚合：一次不可变标签分类发布。
-// releaseId/canonicalDigest/nodeCount 创建后不可变；同一 taxonomy 只能有一个
-// active release；幂等回执身份是完整 immutable stage intent
-// (releaseId/sourceOwner/canonicalDigest/nodeCount)，canonicalDigest 唯一约束只用于
-// 侦测不同 release 重放同一快照的冲突。
+// releaseId/sourceOwner/canonicalDigest/releaseKind/nodeCount 创建后不可变；同一 taxonomy
+// 只能有一个 active release。releaseId 是业务身份，幂等回执绑定完整 immutable stage intent；
+// canonicalDigest 只校验快照内容，允许不同 release 引用同一 digest。
 package model
 
 import (

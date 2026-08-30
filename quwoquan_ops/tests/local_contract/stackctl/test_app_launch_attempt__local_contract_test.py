@@ -882,44 +882,6 @@ def test_waiting_past_the_deadline_is_a_typed_receipt_timeout() -> None:
             )
 
 
-def test_prod_sim_rejects_an_artifact_that_is_not_the_exact_release() -> None:
-    """prod-sim 只接受 exact non-promotable simulator Release manifest。"""
-
-    import importlib.util
-
-    launcher_path = (
-        ROOT / "quwoquan_app/scripts/device/launch_release_artifact.py"
-    )
-    spec = importlib.util.spec_from_file_location(
-        "launch_release_artifact", launcher_path
-    )
-    assert spec is not None and spec.loader is not None
-    launcher = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = launcher
-    spec.loader.exec_module(launcher)
-
-    with tempfile.TemporaryDirectory() as temporary:
-        manifest_path = Path(temporary) / "app-artifact-manifest.json"
-        manifest_path.write_text(
-            json.dumps(
-                {
-                    "schema": "app-artifact-manifest",
-                    "environment": "prod",
-                    "platform": "android",
-                    "buildMode": "release",
-                    "distributionClass": "simulator",
-                    # promotable 制品不是 prod-sim 的可运行对象。
-                    "promotable": True,
-                }
-            ),
-            encoding="utf-8",
-        )
-        with pytest.raises(ValueError, match="APP.LAUNCH.prod_artifact_invalid"):
-            launcher._load_inputs(manifest_path, "android")
-
-
-
-
 def test_one_attempt_has_exactly_one_preflight_owner() -> None:
     # dev-session 是编排方，它执行唯一一次 preflight 并交出 exact receipt；
     # canonical launcher 只允许复用，不得为同一 attempt 再跑第二次。

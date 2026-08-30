@@ -1,6 +1,6 @@
 # 三层职责边界（DEC-005）
 
-真相源：[`runtime-data-engineering/design.md#dec-005`](../../../../specs/feature-tree/runtime/runtime-data-engineering/design.md#dec-005)。
+真相源：[`object-homepage-coverage-scaling/design.md#dec-027`](../../../../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-027)。
 
 ## 三层分工
 
@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 宿主 agent（执行主体） | 来源调研、正文创作、评审判断、流程推进决策、读校验报错自修产物、派发子会话/并发 lane | 手改 verify/schema、放宽门禁、伪造证据、手写 `execution_state.json` 或 receipt 文件 |
 | Skill（契约文档） | 阶段序、每阶段产物位置/结构/文档要求、完成判据绑定、恢复与重试语义、自修轮次上限与升级出口、角色独立性 | 含任何代码逻辑；复制 schema/枚举/路径常量（第二真相源） |
-| 脚本（检查 + IO） | verify 门禁、schema 校验、确定性下载/媒体 CAS、publish/release/ship 原子操作、preflight、receipt 原子记录 | 驱动或等待 agent、自动推进状态机、内置业务重试循环、生成正文 |
+| 脚本（检查 + IO） | verify 门禁、schema 校验、确定性下载/媒体 CAS、publish/release/ship 原子操作、stage PRE 与 receipt 原子记录 | 宿主 key/model/SDK semantic preflight、驱动或等待 agent、自动推进状态机、内置业务重试循环、生成正文 |
 
 ## 十条教训 → 设计规则
 
@@ -22,7 +22,7 @@
 8. **评审独立性**：`5.review` 必须由独立会话执行（有 subagent 能力的宿主派 subagent，无此能力的宿主起新 loop 轮次），author 会话不得自评；`verify rubric --generation-family` 的 judge≠generator 校验兜底。
 9. **宿主无关**：skill 文本只依赖三种最低宿主能力——读文件、跑 shell 命令、（可选）派发子会话。规范真相源在 `.agents/skills/content-production/`，Cursor 与 Codex 直接消费同一份 Skill；各宿主 adapter/命令只是薄壳。禁止任何形态的全文镜像拷贝。
 10. **磁盘即交接**：任何阶段的交接物全部落在工作包磁盘（产物 + stage receipt），不依赖会话上下文。任何宿主、任何新会话都能从 [recovery.md](recovery.md) 判定表 + receipt 链恢复到精确断点。
-11. **容量治理不自建测量体系**（旧治理轨 calibration receipt 启动环）：宿主会话轨的并发上限只来自显式 fleet 参数，合法取值由上一级 milestone 的真实 fleet 回执标定（M1 → M10 → M100 → M1k 禁止跳级）；不读取、不生成 calibration receipt（设计归属 L2 `design.md#dec-028`）。
+11. **宿主并发不是业务 authority**：并发上限只来自显式 fleet 参数，真实 receipt 只供人工诊断；不读取、不生成 calibration receipt。M1000 只能在 M100 Gamma E2E acceptance 后启动首 slot，不能由吞吐或并发解锁。
 
 ## 什么算编排代码（评审判据）
 

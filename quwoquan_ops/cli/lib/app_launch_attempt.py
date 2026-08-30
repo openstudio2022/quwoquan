@@ -139,6 +139,19 @@ def validate_app_launch_attempt(value: object) -> dict[str, Any]:
         raise ValueError("App launch attempt recovery web evidence is unexpected")
     if not isinstance(value.get("nonPromotable"), bool):
         raise TypeError("App launch attempt promotability is invalid")
+    candidate_identity = tuple(
+        str(value.get(field) or "")
+        for field in (
+            "candidateDigest",
+            "artifactManifestDigest",
+            "launcherHandoffDigest",
+        )
+    )
+    if value["runMode"] == "release-artifact":
+        if not all(candidate_identity):
+            raise ValueError("Release App launch attempt candidate identity is incomplete")
+    elif any(candidate_identity):
+        raise ValueError("Non-release App launch attempt candidate identity is unexpected")
     if value["runMode"] in {"content-live", "ui-only"} and not value["nonPromotable"]:
         raise ValueError("test_live App launch attempt must be nonPromotable")
     return dict(value)
@@ -162,6 +175,9 @@ def create_app_launch_attempt(
     command_resolution_digest: str,
     device_id: str,
     artifact_digest: str = "",
+    candidate_digest: str = "",
+    artifact_manifest_digest: str = "",
+    launcher_handoff_digest: str = "",
     launch_digest: str = "",
     warnings: Iterable[str] = (),
     log_refs: Iterable[str] = (),
@@ -181,6 +197,9 @@ def create_app_launch_attempt(
         "launchProvenance": launch_provenance,
         "runtimeConfigSupplyMode": runtime_config_supply_mode,
         "artifactDigest": artifact_digest,
+        "candidateDigest": candidate_digest,
+        "artifactManifestDigest": artifact_manifest_digest,
+        "launcherHandoffDigest": launcher_handoff_digest,
         "runtimeConfigTrustEnvelopeDigest": runtime_config_trust_envelope_digest,
         "runtimeConfigPackageDigest": runtime_config_package_digest,
         "applicationId": application_id,

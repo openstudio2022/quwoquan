@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:quwoquan_app/runtime/di/media_delivery_composition.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -887,9 +888,7 @@ class ArticleWrappedParagraph extends StatelessWidget {
                     child: mediaDeliveryImage(
                       binding: binding.hasRenderableSource
                           ? binding
-                          : MediaDeliveryBinding(
-                              assetId: '',
-                              accessMode: null,
+                          : MediaDeliveryBinding.legacyPublic(
                               publicUrl: imageUrl,
                             ),
                       kind: MediaDeliveryKind.image,

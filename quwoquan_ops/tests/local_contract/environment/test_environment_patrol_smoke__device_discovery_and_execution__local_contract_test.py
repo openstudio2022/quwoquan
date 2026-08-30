@@ -7,6 +7,7 @@ quwoquan_ops/tests/support/environment_patrol_smoke_test_support.py。
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -35,7 +36,237 @@ from quwoquan_ops.tests.support.environment_patrol_smoke_test_support import (
 )
 
 
+def _managed_result(
+    *,
+    exit_code: int,
+    output: str = "",
+    timed_out: bool = False,
+) -> dict[str, object]:
+    return {
+        "exitCode": exit_code,
+        "timedOut": timed_out,
+        "outputSummary": output,
+        "logPath": "runs/device/device-preflight.log",
+    }
+
+
 class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
+    def test_report_writer_emits_only_explicit_app_uat_case_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            sample_plan_ref = "data/releases/release-a/uat/sample_plan.json"
+            binding_ref = "target-uat-bindings/binding.json"
+            sample_plan_path = root / sample_plan_ref
+            binding_path = root / binding_ref
+            sample_plan_path.parent.mkdir(parents=True)
+            binding_path.parent.mkdir(parents=True)
+            sample_plan_path.write_bytes(b"sample-plan\n")
+            binding_path.write_bytes(b"target-binding\n")
+            page_ref = "env/alpha/runs/app-content/page-evidence.json"
+            page_path = root / page_ref
+            page_path.parent.mkdir(parents=True)
+            page_path.write_bytes(b"page-evidence\n")
+            marker = {
+                "schema": smoke.APP_UAT_CASE_EVIDENCE_SCHEMA,
+                "sampleId": "baseline-article-001",
+                "entrySurface": "direct_or_object_route",
+                "carrier": "article",
+                "objectId": "article-001",
+                "specRef": "spec.md#gwt-001",
+                "runnerIdentity": "qwq_app.content_uat.direct_or_object_route.article.v1",
+                "status": "passed",
+                "startedAt": "2026-08-30T00:00:00Z",
+                "completedAt": "2026-08-30T00:01:00Z",
+                "target": {"kind": "page", "id": "article-001"},
+                "pageEvidence": {
+                    "status": "present",
+                    "ref": page_ref,
+                    "sha256": "sha256:" + hashlib.sha256(page_path.read_bytes()).hexdigest(),
+                },
+            }
+            report = {
+                "status": "passed",
+                "appUatAuthority": {
+                    "samplePlanRef": sample_plan_ref,
+                    "samplePlanSha256": "sha256:" + hashlib.sha256(sample_plan_path.read_bytes()).hexdigest(),
+                    "targetUatBindingRef": binding_ref,
+                    "targetUatBindingSha256": "sha256:" + hashlib.sha256(binding_path.read_bytes()).hexdigest(),
+                    "targetUatBindingDigest": "sha256:" + "2" * 64,
+                    "releaseId": "release-a",
+                    "releaseDigest": "sha256:" + "3" * 64,
+                    "sourceIdentitySetDigest": "sha256:" + "4" * 64,
+                    "commitSha": "a" * 40,
+                    "contractGraphSourceHash": "b" * 64,
+                    "candidateManifestSha256": "c" * 64,
+                    "provider": "first-party-https",
+                },
+                "runs": [
+                    {
+                        "exitCode": 0,
+                        "patrolExitCode": 0,
+                        "evidence": {
+                            "structuredEvidenceLogPath": "runs/device/device-evidence.log"
+                        },
+                    }
+                ],
+            }
+            log_path = root / "runs/device/device-evidence.log"
+            log_path.parent.mkdir(parents=True)
+            log_path.write_text(
+                smoke.APP_UAT_CASE_EVIDENCE_PREFIX + json.dumps(marker) + "\n",
+                encoding="utf-8",
+            )
+            report_path = root / "env/alpha/runs/app-content/report.json"
+
+            with mock.patch.dict(os.environ, {"QWQ_OUTPUT_ROOT": str(root)}, clear=False):
+                smoke.write_report(report_path, report)
+
+            sources = report["appUatCaseExecutionReports"]
+            self.assertEqual(len(sources), 1)
+            receipt = json.loads((root / sources[0]["receiptRef"]).read_text())
+            self.assertEqual(receipt["schema"], "quwoquan_ops.app_uat_case_execution.v1")
+            self.assertEqual(receipt["sampleId"], "baseline-article-001")
+            self.assertEqual(receipt["entrySurface"], "direct_or_object_route")
+            self.assertEqual(receipt["status"], "passed")
+            self.assertEqual(receipt["pageEvidence"]["ref"], page_ref)
+
+    def test_report_writer_collects_16_markers_with_distinct_host_page_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            sample_plan_ref = "data/releases/release-a/uat/sample_plan.json"
+            binding_ref = "target-uat-bindings/binding.json"
+            sample_plan_path = root / sample_plan_ref
+            binding_path = root / binding_ref
+            sample_plan_path.parent.mkdir(parents=True)
+            binding_path.parent.mkdir(parents=True)
+            sample_plan_path.write_bytes(b"sample-plan\n")
+            binding_path.write_bytes(b"target-binding\n")
+            entries = ("feed", "search", "recommendation", "direct_or_object_route")
+            carriers = ("homepage", "article", "image", "video")
+            evidence_by_capture: dict[str, dict[str, str]] = {}
+            markers = []
+            for entry in entries:
+                for carrier in carriers:
+                    sample_id = f"baseline-{carrier}-001"
+                    capture_id = f"{sample_id}--{entry}--{carrier}"
+                    page_ref = f"env/alpha/runs/app-content/page/{capture_id}.png"
+                    page_path = root / page_ref
+                    page_path.parent.mkdir(parents=True, exist_ok=True)
+                    page_path.write_bytes(capture_id.encode())
+                    evidence_by_capture[capture_id] = {
+                        "status": "present",
+                        "ref": page_ref,
+                        "sha256": "sha256:" + hashlib.sha256(page_path.read_bytes()).hexdigest(),
+                    }
+                    markers.append(
+                        {
+                            "schema": smoke.APP_UAT_CASE_EVIDENCE_SCHEMA,
+                            "sampleId": sample_id,
+                            "entrySurface": entry,
+                            "carrier": carrier,
+                            "objectId": f"source-{carrier}",
+                            "specRef": "spec.md#gwt-004",
+                            "runnerIdentity": f"qwq_app.content_uat.{entry}.{carrier}.v1",
+                            "status": "passed",
+                            "startedAt": "2026-08-30T00:00:00Z",
+                            "completedAt": "2026-08-30T00:01:00Z",
+                            "target": {"kind": "object" if carrier == "homepage" else "page", "id": f"runtime-{carrier}"},
+                            "pageEvidence": {"status": "host_captured", "captureId": capture_id},
+                        }
+                    )
+            log_ref = "runs/device/device-evidence.log"
+            log_path = root / log_ref
+            log_path.parent.mkdir(parents=True)
+            log_path.write_text(
+                "".join(smoke.APP_UAT_CASE_EVIDENCE_PREFIX + json.dumps(marker) + "\n" for marker in markers),
+                encoding="utf-8",
+            )
+            report = {
+                # Parent failure is deliberately independent from the 16 explicit
+                # marker statuses; no case may infer or lose passed from it.
+                "status": "failed",
+                "appUatAuthority": {
+                    "samplePlanRef": sample_plan_ref,
+                    "samplePlanSha256": "sha256:" + hashlib.sha256(sample_plan_path.read_bytes()).hexdigest(),
+                    "targetUatBindingRef": binding_ref,
+                    "targetUatBindingSha256": "sha256:" + hashlib.sha256(binding_path.read_bytes()).hexdigest(),
+                    "targetUatBindingDigest": "sha256:" + "2" * 64,
+                    "releaseId": "release-a",
+                    "releaseDigest": "sha256:" + "3" * 64,
+                    "sourceIdentitySetDigest": "sha256:" + "4" * 64,
+                    "commitSha": "a" * 40,
+                    "contractGraphSourceHash": "b" * 64,
+                    "candidateManifestSha256": "c" * 64,
+                    "provider": "first-party-https",
+                },
+                "runs": [{"exitCode": 1, "patrolExitCode": 0, "evidence": {"structuredEvidenceLogPath": log_ref}}],
+            }
+            report_path = root / "env/alpha/runs/app-content/report.json"
+            resolver = lambda marker: evidence_by_capture[marker["pageEvidence"]["captureId"]]
+            with mock.patch.dict(os.environ, {"QWQ_OUTPUT_ROOT": str(root)}, clear=False):
+                smoke.write_report(
+                    report_path,
+                    report,
+                    app_uat_page_evidence_resolver=resolver,
+                )
+            self.assertEqual(len(report["appUatCaseExecutionReports"]), 16)
+            receipts = [json.loads((root / source["receiptRef"]).read_text()) for source in report["appUatCaseExecutionReports"]]
+            self.assertEqual(len({receipt["pageEvidence"]["ref"] for receipt in receipts}), 16)
+            self.assertEqual(len({receipt["pageEvidence"]["sha256"] for receipt in receipts}), 16)
+            self.assertTrue(all(receipt["status"] == "passed" for receipt in receipts))
+
+    def test_report_writer_blocks_authority_when_explicit_case_marker_is_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            sample_plan_ref = "data/releases/release-a/uat/sample_plan.json"
+            binding_ref = "target-uat-bindings/binding.json"
+            sample_plan_path = root / sample_plan_ref
+            binding_path = root / binding_ref
+            sample_plan_path.parent.mkdir(parents=True)
+            binding_path.parent.mkdir(parents=True)
+            sample_plan_path.write_bytes(b"sample-plan\n")
+            binding_path.write_bytes(b"target-binding\n")
+            report = {
+                "status": "passed",
+                "appUatAuthority": {
+                    "samplePlanRef": sample_plan_ref,
+                    "samplePlanSha256": "sha256:" + hashlib.sha256(sample_plan_path.read_bytes()).hexdigest(),
+                    "targetUatBindingRef": binding_ref,
+                    "targetUatBindingSha256": "sha256:" + hashlib.sha256(binding_path.read_bytes()).hexdigest(),
+                    "targetUatBindingDigest": "sha256:" + "2" * 64,
+                    "releaseId": "release-a",
+                    "releaseDigest": "sha256:" + "3" * 64,
+                    "sourceIdentitySetDigest": "sha256:" + "4" * 64,
+                    "commitSha": "a" * 40,
+                    "contractGraphSourceHash": "b" * 64,
+                    "candidateManifestSha256": "c" * 64,
+                    "provider": "first-party-https",
+                },
+                "runs": [
+                    {
+                        "exitCode": 0,
+                        "patrolExitCode": 0,
+                        "evidence": {
+                            "structuredEvidenceLogPath": "runs/device/device-evidence.log"
+                        },
+                    }
+                ],
+            }
+            log_path = root / "runs/device/device-evidence.log"
+            log_path.parent.mkdir(parents=True)
+            log_path.write_text("suite passed without per-case marker\n", encoding="utf-8")
+            report_path = root / "env/alpha/runs/app-content/report.json"
+
+            with mock.patch.dict(os.environ, {"QWQ_OUTPUT_ROOT": str(root)}, clear=False):
+                smoke.write_report(report_path, report)
+
+            self.assertEqual(report["status"], "gate_block")
+            self.assertEqual(report["appUatCaseExecutionReports"], [])
+            self.assertEqual(report["failureReason"], smoke.APP_UAT_CASE_EVIDENCE_MISSING)
+            persisted = json.loads(report_path.read_text())
+            self.assertEqual(persisted["status"], "gate_block")
+            self.assertNotIn("passed", json.dumps(persisted["appUatCaseExecutionReports"]))
+
     def test_core_readback_requires_and_forwards_one_release_envelope(self) -> None:
         release_values = {
             destination: f"value-{index}"
@@ -405,6 +636,93 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
         terminate.assert_called_once_with(process)
 
+    def test_run_command_times_out_when_stdout_reaches_eof_before_process_exit(
+        self,
+    ) -> None:
+        result = smoke.run_command(
+            [
+                sys.executable,
+                "-c",
+                "import os, time; os.close(1); os.close(2); time.sleep(1)",
+            ],
+            cwd=ROOT,
+            timeout_seconds=0.1,
+            output_line_handler=lambda _line: None,
+        )
+
+        self.assertEqual(result["exitCode"], 124)
+        self.assertTrue(result["timedOut"])
+        self.assertLess(result["durationMs"], 500)
+
+    def test_run_command_keeps_timeout_primary_when_cleanup_and_log_both_fail(
+        self,
+    ) -> None:
+        process = mock.Mock(pid=4321)
+        process.communicate.side_effect = subprocess.TimeoutExpired("adb", 1)
+        cleanup_secret = "cleanup-secret-value"
+        log_secret = "log-secret-value"
+        with (
+            tempfile.TemporaryDirectory() as temporary_dir,
+            mock.patch.object(
+                smoke_execution.subprocess,
+                "Popen",
+                return_value=process,
+            ),
+            mock.patch.object(
+                smoke_execution,
+                "_terminate_process_group",
+                side_effect=OSError(cleanup_secret),
+            ),
+            mock.patch.object(
+                Path,
+                "write_text",
+                side_effect=OSError(log_secret),
+            ),
+        ):
+            result = smoke.run_command(
+                ["adb", "reverse"],
+                cwd=ROOT,
+                timeout_seconds=1,
+                log_path=Path(temporary_dir) / "device-preflight.log",
+            )
+
+        self.assertEqual(result["exitCode"], 124)
+        self.assertTrue(result["timedOut"])
+        self.assertEqual(
+            [failure["stage"] for failure in result["secondaryFailures"]],
+            ["process-group-cleanup", "log-write"],
+        )
+        rendered = repr(result)
+        self.assertNotIn(cleanup_secret, rendered)
+        self.assertNotIn(log_secret, rendered)
+
+    def test_run_command_log_failure_turns_unlogged_success_into_failure(self) -> None:
+        process = mock.Mock(returncode=0)
+        process.communicate.return_value = ("completed", None)
+        with (
+            tempfile.TemporaryDirectory() as temporary_dir,
+            mock.patch.object(
+                smoke_execution.subprocess,
+                "Popen",
+                return_value=process,
+            ),
+            mock.patch.object(
+                Path,
+                "write_text",
+                side_effect=OSError("private log failure"),
+            ),
+        ):
+            result = smoke.run_command(
+                ["adb", "reverse"],
+                cwd=ROOT,
+                log_path=Path(temporary_dir) / "device-preflight.log",
+            )
+
+        self.assertEqual(result["exitCode"], 2)
+        self.assertFalse(result["timedOut"])
+        self.assertEqual(result["secondaryFailures"][0]["stage"], "log-write")
+        self.assertNotIn("private log failure", repr(result))
+
     def test_patrol_test_execution_prefers_xctest_over_zero_patrol_summary(
         self,
     ) -> None:
@@ -593,12 +911,17 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         )
         self.assertEqual(evidence["tagFilter"]["positiveHitCount"], 1)
 
-    @mock.patch.object(smoke.subprocess, "run")
+    @mock.patch.object(smoke_device_runtime, "run_command")
     def test_release_bound_ios_uat_resets_app_and_test_runner_state(
         self,
         run: mock.Mock,
     ) -> None:
-        run.return_value = subprocess.CompletedProcess([], 0, "", "")
+        run.return_value = {
+            "exitCode": 0,
+            "timedOut": False,
+            "outputSummary": "",
+            "logPath": "device-preflight.log",
+        }
         args = self._args(release_uat_cases="/tmp/homepage_verification_cases.json")
         device = {
             "id": "ios-release-uat",
@@ -622,7 +945,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             ],
         )
 
-    @mock.patch.object(smoke.subprocess, "run")
+    @mock.patch.object(smoke_device_runtime, "run_command")
     def test_non_release_patrol_does_not_reset_app_state(
         self,
         run: mock.Mock,
@@ -641,13 +964,18 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
     @mock.patch.object(
         smoke_device_runtime, "resolve_android_debug_bridge", return_value="/sdk/adb"
     )
-    @mock.patch.object(smoke.subprocess, "run")
+    @mock.patch.object(smoke_device_runtime, "run_command")
     def test_release_bound_android_uat_treats_uninstalled_app_as_reset(
         self,
         run: mock.Mock,
         _resolve_adb: mock.Mock,
     ) -> None:
-        run.return_value = subprocess.CompletedProcess([], 1, "", "")
+        run.return_value = {
+            "exitCode": 1,
+            "timedOut": False,
+            "outputSummary": "",
+            "logPath": "device-preflight.log",
+        }
         args = self._args(release_uat_cases="/tmp/homepage_verification_cases.json")
         device = {
             "id": "emulator-5554",
@@ -668,9 +996,192 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 "path",
                 smoke.android_release_uat_package("gamma", "debug"),
             ],
-            text=True,
-            capture_output=True,
-            check=False,
+            cwd=ROOT,
+            env=mock.ANY,
+            timeout_seconds=(
+                smoke_device_runtime._DEVICE_PREFLIGHT_COMMAND_TIMEOUT_SECONDS
+            ),
+            log_path=mock.ANY,
+            secret_values=mock.ANY,
+        )
+
+    @mock.patch.object(smoke_device_runtime, "run_command")
+    def test_ios_uninstall_timeout_is_typed_and_stops_the_reset_sequence(
+        self,
+        run: mock.Mock,
+    ) -> None:
+        args = self._args(release_uat_cases="/tmp/release-cases.json")
+        device = {
+            "id": "ios-release-uat",
+            "targetPlatform": "ios",
+            "emulator": True,
+        }
+
+        for exit_code, timed_out in ((1, True), (124, False)):
+            with self.subTest(exit_code=exit_code, timed_out=timed_out):
+                run.reset_mock()
+                run.return_value = _managed_result(
+                    exit_code=exit_code,
+                    output="application not installed; no such file",
+                    timed_out=timed_out,
+                )
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    r"APP\.LAUNCH\.device_unavailable: ios-uninstall-1 timed out",
+                ):
+                    smoke._reset_release_uat_device_state(args, device)
+                self.assertEqual(run.call_count, 1)
+                self.assertIn(
+                    "runs/ios-release-uat/device-preflight-ios-uninstall-1.log",
+                    str(run.call_args.kwargs["log_path"]),
+                )
+
+    @mock.patch.object(
+        smoke_device_runtime,
+        "resolve_android_debug_bridge",
+        return_value="/sdk/adb",
+    )
+    @mock.patch.object(smoke_device_runtime, "run_command")
+    def test_android_pm_path_timeout_remains_primary_and_skips_clear(
+        self,
+        run: mock.Mock,
+        _resolve_adb: mock.Mock,
+    ) -> None:
+        run.return_value = _managed_result(
+            exit_code=124,
+            output="pm path timed out",
+            timed_out=True,
+        )
+        args = self._args(release_uat_cases="/tmp/release-cases.json")
+        device = {
+            "id": "emulator-5554",
+            "targetPlatform": "android-arm64",
+            "emulator": True,
+        }
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            r"APP\.LAUNCH\.device_unavailable: android-pm-path timed out",
+        ):
+            smoke._reset_release_uat_device_state(args, device)
+
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0][4:6], ["pm", "path"])
+
+    @mock.patch.object(
+        smoke_device_runtime,
+        "resolve_android_debug_bridge",
+        return_value="/sdk/adb",
+    )
+    @mock.patch.object(smoke_device_runtime, "run_command")
+    def test_android_pm_clear_timeout_is_not_relabelled_as_presence_failure(
+        self,
+        run: mock.Mock,
+        _resolve_adb: mock.Mock,
+    ) -> None:
+        run.side_effect = (
+            _managed_result(exit_code=0, output="package:/data/app/base.apk"),
+            _managed_result(
+                exit_code=124,
+                output="pm clear timed out",
+                timed_out=True,
+            ),
+        )
+        args = self._args(release_uat_cases="/tmp/release-cases.json")
+        device = {
+            "id": "emulator-5554",
+            "targetPlatform": "android-arm64",
+            "emulator": True,
+        }
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            r"APP\.LAUNCH\.device_unavailable: android-pm-clear timed out",
+        ):
+            smoke._reset_release_uat_device_state(args, device)
+
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_args_list[0].args[0][4:6], ["pm", "path"])
+        self.assertEqual(run.call_args_list[1].args[0][4:6], ["pm", "clear"])
+
+    @mock.patch.object(
+        smoke_device_runtime,
+        "resolve_android_debug_bridge",
+        return_value="/sdk/adb",
+    )
+    @mock.patch.object(smoke_device_runtime, "run_command")
+    def test_android_pm_primary_failure_is_redacted_and_precedes_clear(
+        self,
+        run: mock.Mock,
+        _resolve_adb: mock.Mock,
+    ) -> None:
+        secret = "uat-secret-token"
+        run.return_value = _managed_result(
+            exit_code=2,
+            output=f"token={secret} log=/private/device-preflight.log",
+        )
+        args = self._args(release_uat_cases="/tmp/release-cases.json")
+        device = {
+            "id": "emulator-5554",
+            "targetPlatform": "android-arm64",
+            "emulator": True,
+        }
+
+        with (
+            mock.patch.dict(
+                os.environ,
+                {"TEST_AUTH_TOKEN": secret, "PATH": "/usr/bin", "HOME": "/tmp"},
+                clear=True,
+            ),
+            self.assertRaises(RuntimeError) as caught,
+        ):
+            smoke._reset_release_uat_device_state(args, device)
+
+        rendered = str(caught.exception)
+        self.assertIn("APP.LAUNCH.device_unavailable: android-pm-path failed", rendered)
+        self.assertNotIn(secret, rendered)
+        self.assertNotIn("/private/device-preflight.log", rendered)
+        self.assertEqual(run.call_count, 1)
+        kwargs = run.call_args.kwargs
+        self.assertNotIn("TEST_AUTH_TOKEN", kwargs["env"])
+        self.assertIn(secret, kwargs["secret_values"])
+
+    @mock.patch.object(
+        smoke_device_runtime,
+        "resolve_android_debug_bridge",
+        return_value="/sdk/adb",
+    )
+    @mock.patch.object(smoke_device_runtime, "run_command")
+    def test_android_reverse_timeout_is_typed_and_stops_remaining_ports(
+        self,
+        run: mock.Mock,
+        _resolve_adb: mock.Mock,
+    ) -> None:
+        run.return_value = _managed_result(
+            exit_code=124,
+            output="adb reverse timed out",
+            timed_out=True,
+        )
+        args = self._args()
+        device = {
+            "id": "emulator-5554",
+            "targetPlatform": "android-arm64",
+            "emulator": True,
+        }
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            r"APP\.LAUNCH\.device_unavailable: android-reverse-19000 timed out",
+        ):
+            smoke._prepare_android_local_port_reverse(args, device)
+
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(
+            run.call_args.args[0][3:], ["reverse", "tcp:19000", "tcp:19000"]
+        )
+        self.assertIn(
+            "runs/emulator-5554/device-preflight-android-reverse-19000.log",
+            str(run.call_args.kwargs["log_path"]),
         )
 
     def test_patrol_secret_define_file_is_private_and_ephemeral_ready(self) -> None:

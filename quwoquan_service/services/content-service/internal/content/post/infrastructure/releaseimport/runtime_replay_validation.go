@@ -82,9 +82,9 @@ func ValidateImportedPostsForReplay(
 	return len(bindings), nil
 }
 
-// ValidateImportedPostReplayBindings proves that a historical import receipt
-// describes exactly today's immutable desired Post set while preserving the
-// runtime IDs that were actually materialized by that earlier importer.
+// ValidateImportedPostReplayBindings proves that a source import receipt
+// describes exactly today's immutable desired Post set. Runtime identity is
+// always derived from admitted contentId; producer object paths are audit refs.
 func ValidateImportedPostReplayBindings(
 	desired []PostDoc,
 	bindings []ImportedPostBinding,
@@ -119,10 +119,8 @@ func ValidateImportedPostReplayBindings(
 		if _, duplicate := seenIDs[binding.PostID]; duplicate {
 			return fmt.Errorf("GATE_BLOCK: duplicate replay postId %q", binding.PostID)
 		}
-		postRefDerivedID := RuntimePostIDFromPostRef(post.PostRef)
-		currentID := RuntimePostID(post.ContentID, post.PostRef)
-		if strings.TrimSpace(binding.PostID) == "" ||
-			(binding.PostID != postRefDerivedID && binding.PostID != currentID) ||
+		currentID := RuntimePostID(post.ContentID)
+		if strings.TrimSpace(binding.PostID) == "" || binding.PostID != currentID ||
 			binding.ContentID != post.ContentID ||
 			binding.ContentVersion != post.ContentVersion ||
 			binding.UsageScope != post.Admission.UsageScope ||

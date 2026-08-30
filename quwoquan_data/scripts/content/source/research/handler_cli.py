@@ -37,6 +37,9 @@ from content.source.research.homepage_article_source_ready_batch import (
 from content.source.research.media_source_admission_cli import (
     register_media_source_admission_parsers,
 )
+from content.source.research.host_source_review_cli import (
+    register_host_source_review_parsers,
+)
 from content.source.research.professional_image_manual_file_evidence_cli import (
     register_professional_image_manual_file_evidence_parser,
 )
@@ -382,6 +385,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     commands = parser.add_subparsers(dest="source_pool_command", required=True)
     register_seed_selection_parser(commands)
+    register_host_source_review_parsers(commands)
 
     acquire_content = commands.add_parser(
         "acquire-homepage-article",

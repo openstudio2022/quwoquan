@@ -36,6 +36,8 @@ from .constants import (  # noqa: E402,F401
     ANDROID_DEVICE_PROXY,
     APP_DIR,
     APP_CONTENT_VIDEO_PAGE_COUNT_ENV,
+    APP_UAT_PAGE_EVIDENCE_READY_PREFIX,
+    APP_UAT_CASE_EVIDENCE_PREFIX,
     APP_LAUNCHER_HANDOFF_BUILDER,
     BASIC_VIABILITY_TARGET,
     CANONICAL_DIGEST_PATTERN,
@@ -69,6 +71,7 @@ from .constants import (  # noqa: E402,F401
     PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_MUTABLE_FIELDS,
     PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_SCHEMA,
     RELEASE_APP_UAT_DEFINES,
+    RELEASE_SAMPLE_MATRIX_TARGET,
     REPO_ROOT,
     RUNTIME_ANONYMOUS_SESSION_MODES,
     RUNTIME_RECOVERY_EVIDENCE_FIELDS,
@@ -121,6 +124,8 @@ from .session import (  # noqa: E402,F401
 )
 from .evidence import (  # noqa: E402,F401
     _AndroidDeviceEvidenceStream,
+    _AppContentPageScreenshotCapture,
+    _AppUatPerMarkerScreenshotCapture,
     _IosDeviceEvidenceStream,
     _android_device_evidence_commands,
     _apply_feed_content_evidence_gate,
@@ -216,5 +221,9 @@ from .artifact_binding_report import (  # noqa: E402,F401
     new_tested_app_artifact_binding_set,
     settle_tested_app_artifact_binding_report,
     unavailable_tested_app_artifact_binding,
+)
+from .app_uat_case_execution import (  # noqa: E402,F401
+    APP_UAT_CASE_EVIDENCE_MISSING,
+    APP_UAT_CASE_EVIDENCE_SCHEMA,
 )
 from .entry import main, write_report  # noqa: E402,F401

@@ -1,7 +1,7 @@
 schema_version: 1
 
 feature_context_manifest:
-  schema_version: 1
+  schema_version: 2
   max_bytes: 8192
   required_fields:
     - schema_version
@@ -12,12 +12,16 @@ feature_context_manifest:
     - applicable_agents
     - profiles
     - open_items
+    - evidence_fingerprint
   owner_chain_fields: [level, node_id, path]
   context_fields: [path, anchor, kind]
   open_item_fields: [path, id, title, release_impact]
+  fingerprint_field: evidence_fingerprint
+  fingerprint_binding_fields: [mode, ref, digest, receipt, receipt_ref]
+  fingerprint_binding_modes: [embedded, referenced]
 
 review_plan:
-  schema_version: 2
+  schema_version: 3
   required_fields:
     - schema_version
     - workflow
@@ -25,12 +29,14 @@ review_plan:
     - round
     - deliverable
     - scope
+    - owner_manifest_identity
     - changed_paths
     - profiles
     - contexts
     - reviewers
     - skipped_reviewers
     - evidence
+    - fingerprint_receipt
     - fingerprint
     - previous_fingerprint
     - evidence_reusable
@@ -41,6 +47,7 @@ review_plan:
     - terminal
     - head_sha
     - generated_at
+  owner_manifest_identity_fields: [ref, canonical_bytes_sha256, target, scope, resolved_owner, fingerprint_ref, fingerprint_digest]
   context_fields: [path, anchor, kind, exists, content_digest]
   reviewer_fields:
     - role
@@ -67,46 +74,351 @@ review_plan:
   workflow_source: .agents/skills/review/references/registry.yaml#workflows
   profile_source: .agents/skills/review/references/registry.yaml#profiles
   evidence_source: .agents/skills/review/references/registry.yaml#evidence
-  fingerprint_inputs:
-    - head_sha
-    - workflow
-    - deliverable
-    - scope
-    - changed_paths
-    - profiles
-    - contexts
-    - reviewers
-    - review_assets
+  fingerprint_identity: canonical-evidence-fingerprint-receipt
+
+named_evidence_receipt:
+  schema_version: 2
+  required_fields:
+    - schema_version
+    - run_id
+    - generation_id
+    - plan_fingerprint_ref
+    - plan_fingerprint_digest
+    - execution_fingerprint
+    - result_fingerprint
     - evidence
-  fingerprint_snapshot_fields:
+    - terminal
+    - captured_by
+    - started_at
+    - finished_at
+  evidence_result_fields:
+    - id
+    - command
+    - command_digest
+    - exit_code
+    - stdout_digest
+    - stderr_digest
+    - started_at
+    - finished_at
+    - captured_by
+    - required
+  terminal_fields: [status, code, failed_evidence]
+  command_digest_format: "sha256:<64-lowercase-hex>"
+
+review_finding:
+  schema_version: 1
+  required_fields: [id, owner, severity, path, summary]
+  severities: [GATE_BLOCK, PR_WARN, advisory]
+
+reviewer_input:
+  schema_version: 1
+  required_fields:
+    - schema_version
+    - plan_fingerprint_ref
+    - plan_fingerprint_digest
+    - evidence_identity
+    - reviewers
+    - generated_at
+  reviewer_fields: [role, kind, required, checklist]
+
+review_result:
+  schema_version: 2
+  required_fields:
+    - schema_version
+    - role
+    - status
+    - plan_fingerprint_ref
+    - plan_fingerprint_digest
+    - evidence_receipt_ref
+    - evidence_receipt_canonical_bytes_sha256
+    - evidence_run_id
+    - evidence_generation_id
+    - execution_fingerprint_ref
+    - execution_fingerprint_digest
+    - result_fingerprint_ref
+    - result_fingerprint_digest
+    - started_at
+    - finished_at
+    - findings
+  statuses: [completed, incomplete, cancelled]
+
+review_consolidation:
+  schema_version: 2
+  required_fields:
+    - schema_version
+    - plan_fingerprint_ref
+    - plan_fingerprint_digest
+    - evidence_identities
+    - reviewer_result_identities
+    - reviewer_results
+    - findings
+    - incomplete_roles
+    - terminal
+    - generated_at
+  evidence_identity_fields: [receipt_ref, canonical_bytes_sha256, run_id, generation_id, plan_fingerprint_ref, plan_fingerprint_digest, execution_fingerprint_ref, execution_fingerprint_digest, result_fingerprint_ref, result_fingerprint_digest, finished_at]
+  reviewer_result_identity_fields: [result_ref, canonical_bytes_sha256, role]
+  terminal_precedence:
+    - malformed_unknown_stale_or_required_incomplete
+    - gate_block_finding
+    - optional_incomplete_or_pr_warn_finding
+    - advisory_or_pass
+  finding_deduplication:
+    identity_field: id
+    exact_duplicate: retain_once
+    conflict: reject
+
+handoff_manifest:
+  schema_version: 3
+  required_fields:
+    - schema_version
+    - intent
+    - triggers
+    - artifacts
+    - pending_dispositions
+    - downstream
+    - owner_manifest_ref
+    - review_plan_ref
+    - evidence_receipt_refs
+    - reviewer_result_refs
+    - review_consolidation_ref
+    - recovery_token
+    - fingerprint_receipt
+  triggers:
+    - cross_session_incomplete
+    - multi_party_parallel
+    - environment_or_release
+    - external_blocker
+    - evidence_reuse
+    - user_explicit_request
+  no_persistent_handoff: no_persistent_handoff
+  output_pattern: .qwq_output/env/repo/runs/handoff/<run-id>/manifest.md
+  pending_dispositions: [open, out_of_scope, downstream]
+
+
+evidence_fingerprint:
+  schema_version: 2
+  serialization_version: evidence-fingerprint-v1
+  digest_algorithm: sha256
+  digest_format: "sha256:<64-lowercase-hex>"
+  ref_format: "evidence-fingerprint-v1:sha256:<64-lowercase-hex>"
+  digest_payload_top_level_fields:
+    - schema_version
+    - serialization_version
+    - git
+    - workspace
+    - assets
+    - execution
+  digest_payload_fields:
+    git: [head_sha, merge_base_sha]
+    workspace: [tracked_digest, untracked_digest, deleted_digest, renamed_digest, symlink_digest]
+    assets: [canonical_assets_digest, review_assets_digest]
+    execution: [commands_digest, toolchain_digest, provider_digest, generator_digest]
+  receipt_fields:
+    - schema_version
+    - serialization_version
+    - ref
+    - digest
+    - digest_payload
+    - captured_at
+    - captured_by
+    - captured_metadata
+  digest_excludes_receipt: true
+  unknown_fields: reject
+  missing_field_encoding: {"$evidenceFingerprintMissing": true}
+  reserved_missing_member: "$evidenceFingerprintMissing"
+  canonical_serialization:
+    character_encoding: utf-8
+    unicode_normalization: NFC
+    json_encoding: compact-json-no-bom-no-trailing-newline
+    map_key_order: bytewise-utf8-after-NFC
+    string_escaping: json-required-only
+    numbers: integers-only-canonical-base10-no-plus-no-leading-zero-negative-zero-is-zero
+    booleans: json-lowercase-true-false
+    "null": json-lowercase-null
+    missing_null_empty: distinct
+    list_order: preserve-declared-semantic-order
+    set_like_lists: sort-by-canonical-json-bytewise-utf8
+  paths:
+    separator: slash
+    input_separators: [slash, backslash]
+    identity: repository-relative-lexical-no-dot-segments
+    unicode_normalization: NFC
+    ordering: bytewise-utf8
+    outside_repository: reject
+  symlink:
+    identity: normalized-path-plus-normalized-target-plus-target-content
+    broken_target: explicit-broken-true-and-null-target-content-digest
+    target_outside_repository: reject
+    cycle: explicit-cycle-content-marker
+    directory_snapshot_includes_symlinks: true
+    follow_directory_symlink: false
+  workspace_category_order: [tracked, untracked, deleted, renamed, symlink]
+  path_snapshot_fields:
     - path
     - exists
     - state
     - tracked
     - git_status
     - content_digest
-  fingerprint_reviewer_fields: [role, kind, required, profile, checklist]
-  fingerprint_evidence_fields: [id, required, covers, command_digest]
-
-evidence_fingerprint:
-  schema_version: 1
-  serialization_version: evidence-fingerprint-v0
-  digest_payload_fields:
-    git: [head_sha, merge_base_sha]
-    workspace: [tracked_digest, untracked_digest, deleted_digest, renamed_digest, symlink_digest]
-    assets: [canonical_assets_digest, review_assets_digest]
-    execution: [commands_digest, toolchain_digest, provider_digest, generator_digest]
-  receipt_fields: [captured_at, captured_by]
-  digest_excludes_receipt: true
-  path_sort: bytewise-utf8
-  absent_vs_empty: distinct
-  symlink: path-and-target-content
+    - renamed_from
+    - symlink_target
+    - symlink_target_digest
+    - symlink_target_content_digest
+    - broken
+  handoff:
+    freshness_values: [fresh, stale]
+    required_freshness: fresh
+    recovery_token: rerun_evidence_for_new_fingerprint
+    source_head_format: "<40-or-64-lowercase-hex>"
+    captured_metadata_fields: [captured_at, captured_by]
   required_fixtures:
     - same-input-different-captured-at-same-digest
     - path-order-invariance
     - any-payload-byte-change-different-digest
+    - unicode-NFC-equivalence
+    - missing-null-empty-distinct
+    - windows-separator-normalization
+    - symlink-target-content-and-broken-target
+    - review-tracked-untracked-deleted
+    - legacy-review-algorithm-not-consumed
+    - handoff-stale-missing-fingerprint-and-recovery-failure
+    - feature-manifest-v2-fingerprint-and-budget
+    - named-evidence-dedup-drift-failure-and-result
+    - handoff-six-trigger-producer-and-ordinary-noop
 
 terminal_codes:
+  REVIEW.OWNER_MANIFEST_REQUIRED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: generate_current_owner_manifest
+  REVIEW.OWNER_MANIFEST_SCHEMA_UNSUPPORTED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: regenerate_owner_manifest_with_current_schema
+  REVIEW.OWNER_MANIFEST_INVALID:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: repair_owner_manifest_then_regenerate
+  REVIEW.OWNER_MANIFEST_TARGET_MISMATCH:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: resolve_target_owner_then_regenerate_manifest
+  REVIEW.OWNER_MANIFEST_SCOPE_MISMATCH:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: align_review_scope_to_owner_manifest
+  REVIEW.OWNER_MANIFEST_STALE:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: regenerate_current_owner_manifest
+  REVIEW.CONTEXT_MANIFEST_BUDGET_EXCEEDED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: reduce_manifest_to_canonical_compact_context
+  REVIEW.CONTROL_WORKFLOW_DELIVERABLE_FORBIDDEN:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: resume_the_owning_delivery_workflow
+  REVIEW.UNKNOWN_WORKFLOW:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: select_workflow_from_canonical_registry
+  REVIEW.SEGMENT_NOT_ALLOWED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: use_an_allowed_workflow_segment
+  REVIEW.INVALID_ROUND:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: select_initial_or_rereview_round
+  REVIEW.PREVIOUS_PLAN_INVALID:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: generate_a_new_initial_review
+  REVIEW.PREVIOUS_PLAN_REQUIRED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: provide_the_initial_review_plan
+  REVIEW.REGISTRY_VERSION_UNSUPPORTED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: restore_current_review_registry_schema
+  REVIEW.INVALID_LIMIT:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: restore_canonical_review_limits
+  REVIEW.INVALID_EVIDENCE:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: repair_named_evidence_registry_entry
+  REVIEW.DUPLICATE_EVIDENCE_COMMAND:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: deduplicate_registry_evidence_command
+  REVIEW.PARALLEL_LIMIT_EXCEEDED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: reduce_reviewers_to_registry_budget
+  REVIEW.REREVIEW_CHAIN_FORBIDDEN:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: reference_the_initial_plan_only
+  REVIEW.INVALID_FINDING_OWNER:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: select_finding_owner_from_initial_reviewers
+  REVIEW.INVOCATION_LIMIT_EXCEEDED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: stop_automatic_review_and_adjudicate
+  REVIEW.UNKNOWN_EVIDENCE:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: register_or_remove_unknown_evidence_reference
+  REVIEW.CHECKLIST_MISSING:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: restore_the_registered_checklist
+  REVIEW.ROLE_MISSING:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: restore_the_registered_reviewer_role
+  REVIEW.CONTEXT_BUDGET_EXCEEDED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: reduce_reviewer_context_to_budget
+  REVIEW.PATH_OUTSIDE_REPOSITORY:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: use_repository_relative_paths
+  REVIEW.INVALID_INCOMPLETE_ROLE:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: report_only_dispatched_reviewer_roles
+  REVIEW.INVALID_EVIDENCE_RESULT:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: report_only_planned_named_evidence
+  REVIEW.TERMINAL_CONTRACT_INVALID:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: declare_the_emitted_terminal_code
+  REVIEW.RUNTIME_OUTPUT_CONTRACT_INVALID:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: restore_canonical_runtime_output_root
+  REVIEW.OUTPUT_PATH_OUTSIDE_RUNTIME_ROOT:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: write_review_output_under_runtime_root
+  REVIEW.JSON_INVALID:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: provide_valid_canonical_json
+  REVIEW.FINGERPRINT_CHANGED:
+    severity: GATE_BLOCK
+    automatic_retry: false
+    recovery: rerun_evidence_for_the_new_fingerprint
   REVIEW.EVIDENCE_FAILED:
     severity: GATE_BLOCK
     automatic_retry: false
@@ -123,10 +435,6 @@ terminal_codes:
     severity: GATE_BLOCK
     automatic_retry: false
     recovery: resume_only_after_explicit_user_request
-  REVIEW.FINGERPRINT_CHANGED:
-    severity: GATE_BLOCK
-    automatic_retry: false
-    recovery: rerun_evidence_for_the_new_fingerprint
   REVIEW.NEW_REVIEW_REQUIRED:
     severity: GATE_BLOCK
     automatic_retry: false

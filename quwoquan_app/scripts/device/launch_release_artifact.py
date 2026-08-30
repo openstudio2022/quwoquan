@@ -97,6 +97,9 @@ class ReleaseLaunchInputs:
     artifact: Path
     build_receipt_path: Path
     handoff_path: Path
+    candidate_digest: str
+    artifact_manifest_digest: str
+    launcher_handoff_digest: str
 
 
 def _positive_seconds(value: str) -> float:
@@ -113,6 +116,9 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", required=True)
     parser.add_argument("--platform", required=True, choices=("android", "ios"))
     parser.add_argument("--receipt", required=True, type=Path)
+    parser.add_argument("--candidate-digest", required=True)
+    parser.add_argument("--artifact-manifest-digest", required=True)
+    parser.add_argument("--launcher-handoff-digest", required=True)
     parser.add_argument("--log-ref", default="")
     parser.add_argument(
         "--activation-timeout-seconds", type=_positive_seconds, default=30.0
@@ -302,6 +308,10 @@ def _load_inputs(
     manifest_path: Path,
     platform: str,
     handoff_path: Path | None = None,
+    *,
+    candidate_digest: str,
+    artifact_manifest_digest: str,
+    launcher_handoff_digest: str,
 ) -> ReleaseLaunchInputs:
     if platform == "ios":
         raise ValueError(IOS_SIMULATOR_RELEASE_BLOCKER)
@@ -309,6 +319,19 @@ def _load_inputs(
         raise _invalid("launcher handoff is required")
     manifest_path = manifest_path.resolve()
     handoff_path = handoff_path.resolve()
+    for label, value in (
+        ("candidate digest", candidate_digest),
+        ("artifact manifest digest", artifact_manifest_digest),
+        ("launcher handoff digest", launcher_handoff_digest),
+    ):
+        if _DIGEST.fullmatch(value) is None:
+            raise _invalid(f"{label} is invalid")
+    observed_manifest_digest = _digest(manifest_path)
+    observed_handoff_digest = _digest(handoff_path)
+    if observed_manifest_digest != artifact_manifest_digest:
+        raise _invalid("artifact manifest differs from candidate launch bundle")
+    if observed_handoff_digest != launcher_handoff_digest:
+        raise _invalid("launcher handoff differs from candidate launch bundle")
     manifest = _load_object(manifest_path, "artifact manifest")
     _validate_manifest(manifest, platform)
     build_receipt_path = manifest_path.with_name("build-receipt.json")
@@ -328,6 +351,9 @@ def _load_inputs(
         artifact=artifact,
         build_receipt_path=build_receipt_path,
         handoff_path=handoff_path,
+        candidate_digest=candidate_digest,
+        artifact_manifest_digest=artifact_manifest_digest,
+        launcher_handoff_digest=launcher_handoff_digest,
     )
 
 
@@ -622,6 +648,9 @@ def _execute_release_attempt(
         ),
         device_id=args.device,
         artifact_digest=str(inputs.manifest["artifactDigest"]),
+        candidate_digest=inputs.candidate_digest,
+        artifact_manifest_digest=inputs.artifact_manifest_digest,
+        launcher_handoff_digest=inputs.launcher_handoff_digest,
         launch_digest=str(inputs.handoff["effectiveLaunchManifestDigest"]),
         log_refs=identity_refs,
         non_promotable=True,
@@ -705,6 +734,9 @@ def main() -> int:
             args.manifest,
             args.platform,
             args.launcher_handoff,
+            candidate_digest=args.candidate_digest,
+            artifact_manifest_digest=args.artifact_manifest_digest,
+            launcher_handoff_digest=args.launcher_handoff_digest,
         )
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(str(error), file=sys.stderr)

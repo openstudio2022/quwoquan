@@ -32,14 +32,21 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _require_real_directory(path: Path, *, error_code: str) -> Path:
-    """Reject a directory reached through any symlinked path component."""
+def _require_real_directory(
+    path: Path,
+    *,
+    error_code: str,
+    allow_canonical_alias: bool = False,
+) -> Path:
+    """Reject explicit symlink nodes except the caller-authorized OS root alias."""
 
     try:
         resolved = path.resolve(strict=True)
     except OSError as error:
         raise ValueError(error_code) from error
-    if path.is_symlink() or not path.is_dir() or resolved != path:
+    if path.is_symlink() or not path.is_dir():
+        raise ValueError(error_code)
+    if not allow_canonical_alias and resolved != path:
         raise ValueError(error_code)
     return resolved
 
@@ -47,27 +54,34 @@ def _require_real_directory(path: Path, *, error_code: str) -> Path:
 def _safe_attempt_root(output_root: Path, attempt_root: Path) -> Path:
     output = output_root.expanduser().absolute()
     output.mkdir(parents=True, exist_ok=True)
-    _require_real_directory(
+    resolved_output = _require_real_directory(
         output,
         error_code="APP.LAUNCH.workspace_projection_output_unsafe",
+        allow_canonical_alias=True,
     )
     attempt = attempt_root.expanduser().absolute()
+    if any(part == ".." for part in attempt_root.expanduser().parts):
+        raise ValueError("APP.LAUNCH.workspace_projection_path_unsafe")
     if not attempt.is_relative_to(output) or attempt == output:
         raise ValueError("APP.LAUNCH.workspace_projection_path_unsafe")
     if attempt.exists() or attempt.is_symlink():
         raise ValueError("APP.LAUNCH.workspace_projection_not_fresh")
     attempt.parent.mkdir(parents=True, exist_ok=True)
-    _require_real_directory(
+    resolved_parent = _require_real_directory(
         attempt.parent,
         error_code="APP.LAUNCH.workspace_projection_path_unsafe",
+        allow_canonical_alias=True,
     )
-    if not attempt.parent.is_relative_to(output):
+    if not resolved_parent.is_relative_to(resolved_output):
         raise ValueError("APP.LAUNCH.workspace_projection_path_unsafe")
     attempt.mkdir(mode=0o700)
-    _require_real_directory(
+    resolved_attempt = _require_real_directory(
         attempt,
         error_code="APP.LAUNCH.workspace_projection_path_unsafe",
+        allow_canonical_alias=True,
     )
+    if not resolved_attempt.is_relative_to(resolved_output):
+        raise ValueError("APP.LAUNCH.workspace_projection_path_unsafe")
     return attempt
 
 

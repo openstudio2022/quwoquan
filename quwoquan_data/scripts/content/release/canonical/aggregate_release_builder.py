@@ -36,6 +36,11 @@ from content.release.canonical.aggregate_release_pool import (
 from content.release.canonical.aggregate_release_result import (
     aggregate_release_result,
 )
+from content.release.canonical.aggregate_release_uat import (
+    UAT_SAMPLE_PLAN_REF,
+    build_release_uat_sample_plan_artifact,
+    derive_release_sample_source_identity_set_digest,
+)
 from content.release.canonical.creator_avatar_quality import (
     creator_avatar_quality_issues,
 )
@@ -103,6 +108,8 @@ def _build_aggregate_release(
     milestone: str | None = None,
     release_class: str,
     pool_wide: bool = False,
+    sampling_authority_artifact_root: Path | None = None,
+    sampling_authority_binding: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Create one immutable release from canonical objects bound to execution IDs."""
     release_id = _safe_id(release_id, label="releaseId")
@@ -274,6 +281,16 @@ def _build_aggregate_release(
         if environment_selection is not None
         else None
     )
+    sample_source_identity_set_digest = (
+        derive_release_sample_source_identity_set_digest(
+            environment_selection=environment_selection,
+            source_identity_set_digest=source_identity_set_digest,
+            execution_ids=execution_ids,
+            source_revision=source_revision,
+            source_digest=source_digest,
+            entity_catalog_digest=entity_catalog_digest,
+        )
+    )
     final_root = release_root / release_id
     if final_root.exists():
         existing = reuse_existing_aggregate_release(
@@ -306,9 +323,12 @@ def _build_aggregate_release(
             ),
             source_identities=source_identities,
             source_identity_set_digest=source_identity_set_digest,
+            sample_source_identity_set_digest=sample_source_identity_set_digest,
             build_release_asset_admission_fn=build_release_asset_admission,
             build_release_media_manifest_fn=build_release_media_manifest,
             scan_release_contract_fn=scan_release_contract,
+            sampling_authority_artifact_root=sampling_authority_artifact_root,
+            sampling_authority_binding=sampling_authority_binding,
         )
         if pool_wide:
             existing["excluded"] = list(pool_excluded)
@@ -385,6 +405,23 @@ def _build_aggregate_release(
             raise ObjectTransactionError(
                 "reviewed closure adoption object bytes changed during aggregation"
             )
+        uat_sample_plan, sample_plan_digest = (
+            build_release_uat_sample_plan_artifact(
+                payload=payload,
+                release_id=release_id,
+                environment_selection=environment_selection,
+                sample_source_identity_set_digest=(
+                    sample_source_identity_set_digest
+                ),
+                selected_merkle=selected_merkle,
+                release_contents=release_contents,
+                entity_refs=desired["entities"],
+                sampling_authority_artifact_root=(
+                    sampling_authority_artifact_root
+                ),
+                sampling_authority_binding=sampling_authority_binding,
+            )
+        )
         release_header = release_header_document(
             release_id=release_id,
             execution_ids=execution_ids,
@@ -434,6 +471,10 @@ def _build_aggregate_release(
                 if environment_selection is not None
                 else None
             ),
+            sample_plan_ref=(
+                UAT_SAMPLE_PLAN_REF if uat_sample_plan is not None else None
+            ),
+            sample_plan_digest=sample_plan_digest,
             source_identities=(
                 list(source_identities) if source_identity_set_mode else None
             ),
@@ -532,6 +573,10 @@ def _build_aggregate_release(
             environment_selection=environment_selection,
             excluded=pool_excluded,
             pool_wide=pool_wide,
+            sample_plan_ref=(
+                UAT_SAMPLE_PLAN_REF if uat_sample_plan is not None else None
+            ),
+            sample_plan_digest=sample_plan_digest,
         )
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)

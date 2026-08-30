@@ -207,8 +207,13 @@ https://{$QWQ_PUBLIC_RTC_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 
 https://{$QWQ_PUBLIC_OPS_HOST}:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010} {
 	import public_gamma_tls
+	# Product Ops 的非业务探针与 deploy/base 同源，精确转发到 owner；
+	# /ops 与 /control-plane 的业务请求仍唯一进入 api-edge。
 	handle /healthz {
-		import business_api_edge
+		reverse_proxy product-ops-service:18086
+	}
+	handle /readyz {
+		reverse_proxy product-ops-service:18086
 	}
 	handle /ops/* {
 		import business_api_edge

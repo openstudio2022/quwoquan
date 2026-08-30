@@ -80,6 +80,22 @@ def test_package_and_workspace_share_one_source_root_closure() -> None:
     assert len(roots) == len(set(roots))
 
 
+def test_attempt_root_accepts_canonicalized_output_alias(tmp_path: Path) -> None:
+    physical_output = tmp_path / "physical-output"
+    output_alias = tmp_path / "output-alias"
+    physical_output.mkdir()
+    output_alias.symlink_to(physical_output, target_is_directory=True)
+    lexical_output = output_alias / "canonical-output"
+
+    attempt = source._safe_attempt_root(
+        lexical_output,
+        lexical_output / "env/repo/runs/attempt",
+    )
+
+    assert attempt.is_dir()
+    assert attempt.resolve().is_relative_to(lexical_output.resolve())
+
+
 def test_attempt_root_rejects_intermediate_symlink_escape(tmp_path: Path) -> None:
     output = tmp_path / "output"
     escape = tmp_path / "escape"
@@ -91,6 +107,17 @@ def test_attempt_root_rejects_intermediate_symlink_escape(tmp_path: Path) -> Non
         source._safe_attempt_root(output, output / "runs/attempt")
 
     assert not (escape / "attempt").exists()
+
+
+def test_attempt_root_rejects_parent_traversal_without_mutation(tmp_path: Path) -> None:
+    output = tmp_path / "output"
+    output.mkdir()
+    outside = tmp_path / "outside"
+
+    with pytest.raises(ValueError, match="workspace_projection_path_unsafe"):
+        source._safe_attempt_root(output, output / "runs/../../outside/attempt")
+
+    assert not outside.exists()
 
 
 def test_projection_verifier_rejects_intermediate_symlink_escape(

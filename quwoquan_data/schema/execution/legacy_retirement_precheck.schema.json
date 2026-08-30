@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/legacy_retirement_precheck.schema.json",
+  "title": "Read-only legacy orchestration retirement precheck",
+  "description": "Aggregates current stable proof and retirement inventory without changing state or deleting anything.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "openItemRef",
+    "phase",
+    "eligibility",
+    "stableProductionProof",
+    "retirementInventory",
+    "missingPrerequisites",
+    "typedBlocker",
+    "humanSummary",
+    "stateChanged",
+    "deletedRefs"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.legacy_retirement_precheck"
+    },
+    "openItemRef": {
+      "const": "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-006"
+    },
+    "phase": {
+      "const": "pre_delete"
+    },
+    "eligibility": {
+      "enum": [
+        "eligible",
+        "not_eligible"
+      ]
+    },
+    "stableProductionProof": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/stableProof"
+        }
+      ]
+    },
+    "retirementInventory": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/inventory"
+        }
+      ]
+    },
+    "missingPrerequisites": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "typedBlocker": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/blocker"
+        }
+      ]
+    },
+    "humanSummary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stateChanged": {
+      "const": false
+    },
+    "deletedRefs": {
+      "type": "array",
+      "maxItems": 0
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "eligibility": {
+            "const": "eligible"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "stableProductionProof": {
+            "$ref": "#/$defs/stableProof"
+          },
+          "retirementInventory": {
+            "$ref": "#/$defs/inventory"
+          },
+          "missingPrerequisites": {
+            "maxItems": 0
+          },
+          "typedBlocker": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "eligibility": {
+            "const": "not_eligible"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "missingPrerequisites": {
+            "minItems": 1
+          },
+          "typedBlocker": {
+            "$ref": "#/$defs/blocker"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "ref": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "exactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "exactByteDigest"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/ref"
+        },
+        "exactByteDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "stableProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exactRef",
+        "schema",
+        "expectedFingerprint",
+        "releaseIds",
+        "proofUnitCount",
+        "executionCount",
+        "verdict"
+      ],
+      "properties": {
+        "schema": {
+          "const": "quwoquan_data.stable_production_proof_set"
+        },
+        "expectedFingerprint": {
+          "$ref": "#/$defs/digest"
+        },
+        "proofUnitCount": {
+          "const": 3
+        },
+        "verdict": {
+          "const": "pass"
+        },
+        "exactRef": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "releaseIds": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "executionCount": {
+          "const": 12
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "exactRef"
+      ],
+      "properties": {
+        "state": {
+          "const": "operationally_retired"
+        },
+        "exactRef": {
+          "$ref": "#/$defs/pathExactRef"
+        }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "causes"
+      ],
+      "properties": {
+        "code": {
+          "const": "DATA.LEGACY_RETIREMENT.PRECHECK_NOT_ELIGIBLE"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "causes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "pathExactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "exactByteDigest"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exactByteDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    }
+  }
+}

@@ -14,9 +14,11 @@
 
 ### In Scope
 
-- provider policy、资产级 rights/provenance、watermark 和对象匹配
-- 跨 execution canonical identity 去重
-- request 驱动的 environment import、consumer、rollback/replay 证据
+- 资产级 rights/provenance、watermark、对象匹配与 generator 的 consumer contract
+- canonical identity 去重结果到 environment consumer 的无损投影
+- request-bound importer/rollback/replay readback
+
+> 图片 execution、pool、milestone、release build/promotion 与 UAT/acceptance 业务 owner 已迁至 discovery `multi-carrier-release`；本 Story 保留既有 GWT 锚点作为 consumer 合同与测试绑定，不再拥有规模完成结论。
 
 ### Out of Scope
 

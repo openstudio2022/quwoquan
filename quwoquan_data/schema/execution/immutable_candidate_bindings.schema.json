@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/immutable_candidate_bindings.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "executionId", "carrier", "sourceRef", "entityCatalogDigest", "candidateCount", "targets"],
+  "properties": {
+    "schema": {"const": "quwoquan_data.immutable_candidate_bindings"},
+    "executionId": {"type": "string", "minLength": 1},
+    "carrier": {"enum": ["homepage", "article", "image", "video"]},
+    "sourceRef": {"type": "string", "minLength": 1},
+    "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "candidateCount": {"type": "integer", "minimum": 1},
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "target_set.schema.json#/$defs/target"}
+    }
+  }
+}

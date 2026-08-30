@@ -754,6 +754,229 @@ select {
   font-size: 13px;
 }
 
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.human-authority-status:empty {
+  display: none;
+}
+
+.human-authority-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 2px solid #b91c1c;
+  border-radius: 12px;
+  background: #fff7f7;
+  color: #7f1d1d;
+}
+
+.human-authority-status:focus {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+
+.human-authority-summary-grid,
+.human-authority-fact-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.human-authority-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.human-authority-fact-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.human-authority-summary-grid article,
+.human-authority-fact-grid section,
+.human-authority-callout,
+.human-authority-option,
+.human-authority-readback {
+  padding: 14px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.human-authority-summary-grid h3,
+.human-authority-fact-grid h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.human-authority-summary-grid p,
+.human-authority-fact-grid ul {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+}
+
+.human-authority-fact-grid ul {
+  padding-left: 20px;
+}
+
+.human-authority-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+  border-left: 4px solid #92400e;
+  background: #fffbeb;
+}
+
+.human-authority-options {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.human-authority-options legend {
+  grid-column: 1 / -1;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.human-authority-option {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.human-authority-option:focus-within {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.human-authority-option__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.human-authority-option__choice input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+.human-authority-option dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.human-authority-option dl div {
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+.human-authority-option dt {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.human-authority-option dd {
+  margin: 4px 0 0;
+  color: #1f2937;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.human-authority-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.human-authority-actions {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+.human-authority-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.human-authority-field textarea,
+.human-authority-field select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid rgba(17, 24, 39, 0.16);
+  border-radius: 10px;
+  background: #ffffff;
+  color: #111827;
+  resize: vertical;
+}
+
+.human-authority-button-row {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.human-authority-readback {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left: 4px solid #166534;
+  background: #f0fdf4;
+}
+
+.human-authority-audit-details {
+  margin-top: 16px;
+}
+
+.human-authority-audit-details summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.human-authority-audit-details pre {
+  max-width: 100%;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 1200px) {
   .portal-root {
     grid-template-columns: 1fr;
@@ -801,6 +1024,14 @@ select {
   .metric-strip,
   .insight-grid {
     grid-template-columns: 1fr;
+  }
+
+  .human-authority-summary-grid,
+  .human-authority-fact-grid,
+  .human-authority-options,
+  .human-authority-form,
+  .human-authority-option dl {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .page-body,

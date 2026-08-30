@@ -259,6 +259,9 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
             "release_config_digest",
             "contract_graph_digest",
             "adapter_digest",
+            "environment_acceptance_ref",
+            "environment_acceptance_sha256",
+            "environment_acceptance_root",
         )
     }
     if args.target != "prod-hosted" or args.env:
@@ -727,6 +730,27 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         "--prometheus-url",
         default="",
         help="生产 SLO readback 的 Prometheus base URL；非 dry-run 必须提供",
+    )
+    deploy_parser.add_argument(
+        "--environment-acceptance-ref",
+        default="",
+        help=(
+            "canonical Prod EnvironmentAcceptanceFact 相对 evidence root 的精确引用；"
+            "正式 rollout 必填，dry-run 可选校验"
+        ),
+    )
+    deploy_parser.add_argument(
+        "--environment-acceptance-sha256",
+        default="",
+        help="EnvironmentAcceptanceFact exact-byte sha256；与 ref 成对提供",
+    )
+    deploy_parser.add_argument(
+        "--environment-acceptance-root",
+        default="",
+        help=(
+            "EnvironmentAcceptanceFact 及其直接证据的受保护根；"
+            "默认读取 QWQ_ENVIRONMENT_ACCEPTANCE_ROOT"
+        ),
     )
     deploy_parser.add_argument(
         "--promotion-evidence",

@@ -375,6 +375,46 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         issues.extend(
             f"distribution: {issue}" for issue in distribution_issues
         )
+    candidate_snapshot: Mapping[str, Any] | None = None
+    startup_receipt: Mapping[str, Any] | None = None
+    generation_issues: list[str] = []
+    if target_name != "repo":
+        try:
+            candidate_snapshot = _stackctl.active_deployment_candidate_snapshot(
+                target_name
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
+            generation_issues.append(f"active candidate readback failed: {error}")
+        try:
+            startup_receipt = _stackctl.read_startup_attempt(target_name)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
+            generation_issues.append(f"startup receipt readback failed: {error}")
+        candidate_digest = str((candidate_snapshot or {}).get("baselineId") or "")
+        startup_candidate = str((startup_receipt or {}).get("candidateDigest") or "")
+        if candidate_digest and startup_candidate and candidate_digest != startup_candidate:
+            generation_issues.append(
+                "startup receipt candidateDigest does not match the active candidate"
+            )
+    from quwoquan_ops.cli.lib.evidence_generation import (
+        build_evidence_generation_envelope,
+    )
+    evidence_envelope = build_evidence_generation_envelope(
+        command="verify",
+        candidate_snapshot=candidate_snapshot,
+        startup_receipt=startup_receipt,
+        startup_status=(
+            "executed"
+            if isinstance(startup_receipt, Mapping)
+            else ("not_applicable" if target_name == "repo" else "not_executed")
+        ),
+        startup_reason=(
+            "baseline verify has no runtime startup layer"
+            if target_name == "repo"
+            else "no startup receipt is available for verify"
+        ),
+        upstream_status="not_applicable",
+        upstream_reason="verify consumes candidate and runtime evidence directly",
+    )
     package_envs = [env_name] if env_name in _stackctl.ENVIRONMENTS and profile.requires_environment else []
     test_data_package_ready = True
     for package_env in package_envs:
@@ -646,6 +686,8 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         "kind": args.kind,
         "profile": profile.value,
         "providerReadiness": provider_readiness,
+        "evidenceEnvelope": evidence_envelope,
+        "generationIssues": generation_issues,
         "staticGateMs": static_gate_ms,
         "profileGateMs": profile_gate_ms,
         "steps": steps,
@@ -684,5 +726,6 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         "reportDir": _stackctl.relpath(report_dir),
         "staticGateMs": static_gate_ms,
         "profileGateMs": profile_gate_ms,
+        "evidenceEnvelope": evidence_envelope,
         **timing,
     }

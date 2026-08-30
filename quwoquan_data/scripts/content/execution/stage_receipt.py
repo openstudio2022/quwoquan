@@ -151,6 +151,8 @@ def build_receipt(
 
 def write_receipt_create_once(execution_id: str, payload: dict) -> Path:
     """tmp + os.link 原子 create-once：目标已存在即失败，绝不覆盖历史。"""
+    if payload.get("executionId") != execution_id:
+        raise ValueError("receipt executionId must match target execution")
     root = receipts_dir(execution_id)
     root.mkdir(parents=True, exist_ok=True)
     target = root / f"{payload['sequence']:03d}-{payload['stage']}.json"
@@ -179,15 +181,45 @@ def receipt_state_status(payload: dict) -> ExecutionStateStatus:
     return ExecutionStateStatus.RUNNING
 
 
-def record_stage_receipt(**kwargs: object) -> Path:
-    """写 receipt 并在同一命令内更新 execution_state（写入权单轨）。"""
-    payload = build_receipt(**kwargs)  # type: ignore[arg-type]
-    target = write_receipt_create_once(str(kwargs["execution_id"]), payload)
-    from content.execution.context import load_execution_state, save_execution_state
+def _matches_stage_record(existing: dict, kwargs: dict[str, object]) -> bool:
+    expected = {
+        "executionId": str(kwargs["execution_id"]),
+        "stage": str(kwargs["stage"]),
+        "verdict": str(kwargs["verdict"]),
+        "actor": {
+            "host": str(kwargs["actor_host"]),
+            "modelFamily": str(kwargs["actor_model_family"]),
+            "sessionId": str(kwargs["actor_session"]),
+        },
+        "artifacts": list(kwargs["artifacts"]),
+        "openItems": list(kwargs["open_items"]),
+        "next": str(kwargs["next_stage"]),
+        "evidence": {
+            "commands": list(kwargs["evidence_commands"]),
+            "issueCount": int(kwargs["issue_count"]),
+            "repairRounds": int(kwargs["repair_rounds"]),
+        },
+    }
+    return all(existing.get(key) == value for key, value in expected.items())
 
-    state = load_execution_state(str(kwargs["execution_id"]))
-    state.status = receipt_state_status(payload)
-    save_execution_state(state)
+
+def record_stage_receipt(**kwargs: object) -> Path:
+    """Create one receipt or replay it solely to heal the derived projection."""
+    execution_id = str(kwargs["execution_id"])
+    entries = list_receipt_files(execution_id)
+    if entries:
+        latest = load_receipt(entries[-1][2])
+        state_path = execution_root(execution_id) / "_shared/execution_state.json"
+        if _matches_stage_record(latest, kwargs) and not state_path.is_file():
+            from content.execution.receipt_state_reducer import reduce_receipt_projection
+
+            reduce_receipt_projection(execution_id)
+            return entries[-1][2]
+    payload = build_receipt(**kwargs)  # type: ignore[arg-type]
+    target = write_receipt_create_once(execution_id, payload)
+    from content.execution.receipt_state_reducer import reduce_receipt_projection
+
+    reduce_receipt_projection(execution_id)
     return target
 
 

@@ -178,6 +178,7 @@ func ProjectBoundMediaAssets(
 				Kind:              "image",
 				MediaAssetId:      asset.AssetID,
 				MediaAssetVersion: asset.Version,
+				AccessMode:        "public",
 				Url:               publicSliceKey,
 			}
 			mediaItems = append(mediaItems, item)
@@ -197,6 +198,7 @@ func ProjectBoundMediaAssets(
 				Kind:                     "video",
 				MediaAssetId:             asset.AssetID,
 				MediaAssetVersion:        asset.Version,
+				AccessMode:               "public",
 				Url:                      publicSliceKey,
 				CoverUrl:                 coverSlice,
 				ThumbnailUrl:             coverSlice,
@@ -322,6 +324,7 @@ func projectArticleAssetManifest(
 		row := postmodel.PostArticleAsset{
 			AssetId:        assetID,
 			Kind:           "image",
+			AccessMode:     "public",
 			Role:           role,
 			Layout:         strings.TrimSpace(source.Layout),
 			Caption:        strings.TrimSpace(source.Caption),

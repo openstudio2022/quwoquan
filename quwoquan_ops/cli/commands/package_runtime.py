@@ -22,22 +22,48 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from quwoquan_ops.cli.commands.package_runtime_support import (
     _build_official_skill_package_publication as _build_skill_publication,
+)
+from quwoquan_ops.cli.commands.package_runtime_support import (
     _receipt_safe_step,
     _receipt_safe_text,
-    _run_runtime_compile_preflight as _run_compile_preflight,
     _runtime_package_report_path,
     _validate_runtime_package_identity_readback,
+)
+from quwoquan_ops.cli.commands.package_runtime_support import (
+    _run_runtime_compile_preflight as _run_compile_preflight,
+)
+
+__all__ = (
+    "_command_package_unlocked",
+    "_run_runtime_compile_preflight",
+    "_runtime_package_report_path",
+    "_validate_runtime_package_identity_readback",
 )
 
 # 与 stackctl.ROOT 同源同值(仓库根);仅用于函数默认参数,
 # 函数体内仍统一经 `_stackctl.ROOT` 访问。
 _REPO_ROOT = Path(__file__).resolve().parents[3]
+PACKAGE_CAPSULE_CAS_BLOCKER = "OPS.PACKAGE.input_capsule_cas_drift"
+
+
+def _persist_package_capsule_cas_failure(
+    *, report_dir: Path, env_name: str, target_name: str,
+    package_snapshot: dict[str, object], reports: list[dict[str, Any]],
+    detail: str, timing: dict[str, Any],
+) -> dict[str, Any]:
+    from quwoquan_ops.cli.commands.package_runtime_capsule_receipt import (
+        _persist_package_capsule_cas_failure as persist_failure,
+    )
+    return persist_failure(
+        report_dir=report_dir, env_name=env_name, target_name=target_name,
+        package_snapshot=package_snapshot, reports=reports, detail=detail, timing=timing,
+    )
 
 
 def _build_official_skill_package_publication(
@@ -724,6 +750,32 @@ def _command_package_unlocked(
             f"imageDigest={image_manifest['imageDigest']}"
         )
 
+    app_launch_bundle: dict[str, Any] | None = None
+    if target_name == "prod-sim":
+        if package_snapshot is None or package_capsule_root is None:
+            raise RuntimeError("prod-sim App launch bundle requires immutable inputs")
+        try:
+            app_launch_bundle = manifest.materialize_prod_sim_app_launch_bundle(
+                candidate_root=package_capsule_root.parent,
+                package_snapshot=package_snapshot,
+                materialized_release_evidence=materialized_release_evidence,
+                source_root=package_source_root,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            timing = _stackctl._finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": "stackctl package prod-sim App launch bundle is GATE_BLOCK",
+                "details": [str(exc)],
+                "reportDir": _stackctl.relpath(report_dir),
+                "baselineId": package_snapshot["baselineId"],
+                **timing,
+            }
+        details.append(
+            "prod-sim App launch bundle ready: "
+            + str(app_launch_bundle["artifactManifestDigest"])
+        )
+
     if package_snapshot is None or package_capsule_root is None:
         raise RuntimeError("runtime package requires an immutable input capsule")
     try:
@@ -733,13 +785,15 @@ def _command_package_unlocked(
         )
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
         timing = _stackctl._finish_timing(started_monotonic, started_at)
-        return {
-            "exitCode": 2,
-            "summary": f"stackctl package capsule CAS blocked for {env_name}",
-            "details": [str(exc)],
-            "reportDir": _stackctl.relpath(report_dir),
-            **timing,
-        }
+        return _persist_package_capsule_cas_failure(
+            report_dir=report_dir,
+            env_name=env_name,
+            target_name=target_name,
+            package_snapshot=package_snapshot,
+            reports=reports,
+            detail=str(exc),
+            timing=timing,
+        )
 
     try:
         release_bindings = _stackctl.validate_release_attestations(
@@ -757,6 +811,19 @@ def _command_package_unlocked(
             release_input_classification=release_classification,
             contract_graph_digest=contract_graph_digest,
             graphql_read_registry=graphql_read_registry_package or {},
+            app_launch_bundle=(
+                {
+                    **app_launch_bundle,
+                    "candidateDigest": _stackctl.package_content_digest(
+                        env_name,
+                        target_name,
+                        service_packages=packaged_services,
+                        candidate_root=package_capsule_root.parent,
+                    )[0],
+                }
+                if app_launch_bundle is not None
+                else None
+            ),
             service_packages=packaged_services,
             release_attestation=str(
                 getattr(args, "release_attestation", "") or ""
@@ -777,6 +844,7 @@ def _command_package_unlocked(
             rollback_release_attestation=str(
                 getattr(args, "rollback_release_attestation", "") or ""
             ),
+            app_launch_bundle=app_launch_bundle,
         )
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
         timing = _stackctl._finish_timing(started_monotonic, started_at)
@@ -801,6 +869,8 @@ def _command_package_unlocked(
             "baselineId": package_snapshot["baselineId"],
             **timing,
         }
+    candidate_manifest_payload = json.loads(candidate_manifest.read_text(encoding="utf-8"))
+    package_identity_digest = str(candidate_manifest_payload.get("packageDigest") or "")
     details.append(f"package fingerprint: {_stackctl.relpath(fingerprint)}")
     details.append(f"candidate manifest: {candidate_manifest}")
     details.append(f"baselineId: {package_snapshot['baselineId']}")
@@ -816,6 +886,11 @@ def _command_package_unlocked(
         "releaseInputClassification": release_classification,
         "contractGraphDigest": contract_graph_digest,
         "graphqlReadRegistry": graphql_read_registry_package,
+        "appLaunchBundle": (
+            {**app_launch_bundle, "candidateDigest": package_identity_digest}
+            if app_launch_bundle is not None
+            else None
+        ),
         "timestamp": _stackctl.utc_now(),
         "reportDir": _stackctl.relpath(report_dir),
         "steps": reports,

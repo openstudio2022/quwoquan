@@ -5,17 +5,16 @@ from __future__ import annotations
 import base64
 import json
 import os
-from pathlib import Path
 import subprocess
 import tempfile
+from pathlib import Path
 
 from .graphql_read_registry_signing import (
     SigningMaterial,
     validate_signing_material,
 )
-from .local_integration_service_mtls import _openssl_bin
+from .openssl3_resolver import OpenSSL3Executable, resolve_openssl3
 from .output_paths import deployment_target_path
-
 
 ROLE = "graphql-read-registry"
 DEFAULT_KEY_ID = "local-managed-ed25519"
@@ -35,6 +34,7 @@ def prepare_local_graphql_read_registry_signing(
             "GraphQL registry local signing target/environment mismatch: "
             f"environment={environment} target={target}"
         )
+    openssl = resolve_openssl3()
     key_dir = deployment_target_path(target, "secrets", ROLE)
     key_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(key_dir, 0o700)
@@ -42,7 +42,7 @@ def prepare_local_graphql_read_registry_signing(
     keyring_path = key_dir / "trusted_public_keys.json"
     exists = (private_path.exists(), keyring_path.exists())
     if exists == (False, False):
-        _issue_keypair(key_dir, private_path, keyring_path)
+        _issue_keypair(key_dir, private_path, keyring_path, openssl=openssl)
     elif exists != (True, True):
         raise ValueError(
             f"GraphQL registry local signing material is partial for {target}"
@@ -59,7 +59,7 @@ def prepare_local_graphql_read_registry_signing(
         raise ValueError("GraphQL registry local trusted keyring must contain one key")
     key_id = next(iter(keyring))
     signing = SigningMaterial(key_id, private_path, keyring_path)
-    validate_signing_material(repo_root, signing)
+    validate_signing_material(repo_root, signing, openssl=openssl)
     return signing
 
 
@@ -67,16 +67,17 @@ def _issue_keypair(
     key_dir: Path,
     private_path: Path,
     keyring_path: Path,
+    *,
+    openssl: OpenSSL3Executable | None = None,
 ) -> None:
-    openssl = _openssl_bin()
+    selected = openssl or resolve_openssl3()
     with tempfile.TemporaryDirectory(dir=key_dir) as temporary:
         staging = Path(temporary)
         next_private = staging / "signing.pem"
         public_der = staging / "public.der"
         commands = (
-            [openssl, "genpkey", "-algorithm", "ED25519", "-out", str(next_private)],
-            [
-                openssl,
+            ("genpkey", "-algorithm", "ED25519", "-out", str(next_private)),
+            (
                 "pkey",
                 "-in",
                 str(next_private),
@@ -85,11 +86,11 @@ def _issue_keypair(
                 "DER",
                 "-out",
                 str(public_der),
-            ],
+            ),
         )
-        for command in commands:
+        for arguments in commands:
             result = subprocess.run(
-                command,
+                selected.argv(*arguments),
                 text=True,
                 capture_output=True,
                 check=False,

@@ -46,6 +46,7 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
     promotion_deadline_epoch = scope["promotion_deadline_epoch"]
     release_artifact_digest = scope["release_artifact_digest"]
     release_candidate_digests = scope["release_candidate_digests"]
+    environment_acceptance = scope["environment_acceptance"]
     release_receipt_id = scope["release_receipt_id"]
     release_receipt_path = scope["release_receipt_path"]
     report_dir = scope["report_dir"]
@@ -199,6 +200,7 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
                     if rollback_succeeded
                     else to_image_transport_tag
                 ),
+                environment_acceptance=environment_acceptance,
                 deadline_epoch=rollback_deadline_epoch,
                 trigger_stage=rollout_stage,
             )
@@ -248,6 +250,7 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
                 to_release_evidence_ref=to_release_evidence_ref,
                 from_image_transport_tag=from_image_transport_tag,
                 to_image_transport_tag=to_image_transport_tag,
+                environment_acceptance=environment_acceptance,
                 deadline_epoch=rollback_deadline_epoch,
                 trigger_stage=rollout_stage,
             )
@@ -274,6 +277,7 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
                 to_release_evidence_ref=to_release_evidence_ref,
                 from_image_transport_tag=from_image_transport_tag,
                 to_image_transport_tag=to_image_transport_tag,
+                environment_acceptance=environment_acceptance,
                 deadline_epoch=promotion_deadline_epoch,
             )
     elif final_exit_code == 0 and not dry_run_requested:
@@ -302,6 +306,7 @@ def _deploy_prod_hosted_finalize(scope: dict[str, Any]) -> dict[str, Any]:
             to_release_evidence_ref=to_release_evidence_ref,
             from_image_transport_tag=from_image_transport_tag,
             to_image_transport_tag=to_image_transport_tag,
+            environment_acceptance=environment_acceptance,
             deadline_epoch=promotion_deadline_epoch,
         )
     if committed_release_state is not None:

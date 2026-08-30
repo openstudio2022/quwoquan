@@ -15,6 +15,9 @@ ARTIFACT_MANIFEST=""
 LAUNCHER_HANDOFF=""
 LAUNCH_RECEIPT=""
 LAUNCH_LOG_REF=""
+CANDIDATE_DIGEST=""
+ARTIFACT_MANIFEST_DIGEST=""
+LAUNCHER_HANDOFF_DIGEST=""
 INSTANCE_NAMESPACE="${APP_INSTANCE_NAMESPACE:-manual}"
 SERVICE_MODE="${APP_INSTANCE_SERVICE_MODE:-app-only}"
 ROLLOUT_MODE="${APP_ROLLOUT_MODE:-}"
@@ -50,6 +53,9 @@ while [[ $# -gt 0 ]]; do
     --mode) RUN_MODE="${2:-}"; shift 2 ;;
     --artifact-manifest) ARTIFACT_MANIFEST="${2:-}"; shift 2 ;;
     --launcher-handoff) LAUNCHER_HANDOFF="${2:-}"; shift 2 ;;
+    --candidate-digest) CANDIDATE_DIGEST="${2:-}"; shift 2 ;;
+    --artifact-manifest-digest) ARTIFACT_MANIFEST_DIGEST="${2:-}"; shift 2 ;;
+    --launcher-handoff-digest) LAUNCHER_HANDOFF_DIGEST="${2:-}"; shift 2 ;;
     --launch-receipt) LAUNCH_RECEIPT="${2:-}"; shift 2 ;;
     --launch-log-ref) LAUNCH_LOG_REF="${2:-}"; shift 2 ;;
     --gateway-base-url) GATEWAY_BASE_URL="${2:-}"; shift 2 ;;
@@ -95,6 +101,10 @@ if [[ "$TARGET_NAME" == "prod-sim" && -z "$LAUNCHER_HANDOFF" ]]; then
   echo "APP.LAUNCH.prod_artifact_invalid: prod-sim requires --launcher-handoff bound to the exact external runtime package." >&2
   exit 2
 fi
+if [[ "$TARGET_NAME" == "prod-sim" && ( -z "$CANDIDATE_DIGEST" || -z "$ARTIFACT_MANIFEST_DIGEST" || -z "$LAUNCHER_HANDOFF_DIGEST" ) ]]; then
+  echo "APP.LAUNCH.prod_artifact_invalid: prod-sim requires candidate/artifact/handoff digests from one fixed candidate snapshot." >&2
+  exit 2
+fi
 if [[ "$ENV_NAME" == "prod" && -n "$ROLLOUT_MODE" ]]; then
   echo "GATE_BLOCK: Prod artifact startup does not execute rollout or canary." >&2
   exit 2
@@ -137,6 +147,9 @@ if [[ "$TARGET_NAME" == "prod-sim" ]]; then
     python3 "$APP_DIR/scripts/device/launch_release_artifact.py"
     --manifest "$ARTIFACT_MANIFEST"
     --launcher-handoff "$LAUNCHER_HANDOFF"
+    --candidate-digest "$CANDIDATE_DIGEST"
+    --artifact-manifest-digest "$ARTIFACT_MANIFEST_DIGEST"
+    --launcher-handoff-digest "$LAUNCHER_HANDOFF_DIGEST"
     --device "$DEVICE_ID"
     --platform "$DEVICE_PLATFORM"
     --receipt "$LAUNCH_RECEIPT"

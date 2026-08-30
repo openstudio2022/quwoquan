@@ -519,15 +519,20 @@ class CapacityPreflightWiringLocalContractTest(unittest.TestCase):
 
     def test_up_blocks_before_consuming_the_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
+            output_root = Path(temp) / "output"
             args = argparse.Namespace(
                 command="up",
                 env="gamma",
                 target="",
                 workload="full",
                 output_format="json",
-                report_dir=str(Path(temp) / "up"),
+                report_dir=str(output_root / "env/gamma/runs/up"),
             )
             with (
+                mock.patch.dict(
+                    stackctl.os.environ,
+                    {"QWQ_OUTPUT_ROOT": str(output_root)},
+                ),
                 mock.patch.object(stackctl, "load_environment_topology", return_value={}),
                 mock.patch.object(
                     stackctl,

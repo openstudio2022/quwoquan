@@ -21,10 +21,7 @@ from content.release.canonical.research_scale_promotion import (
     ResearchScalePromotionError,
     write_research_scale_promotion,
 )
-from content.release.canonical.object_source_identity import (
-    source_identity_digest,
-    source_identity_set,
-)
+from content.release.canonical.object_source_identity import source_identity_set
 from core.release_layout import payload_digest
 from core.source_digest import SourceDefinitionSnapshot, content_source_revision
 
@@ -188,14 +185,23 @@ def _research_release(output_root: Path, *, article_count: int = 100) -> Path:
     source_identities, source_identity_set_digest = source_identity_set(
         expanded_identities
     )
-    identity_digest = source_identity_digest(expanded_identities[0])
     contents = [
         {
             "contentId": f"content-{carrier}-{index:03d}",
             "version": 1,
             "postRef": f"{carrier}/work-{index:03d}/1",
-            "executionId": f"{carrier}-execution",
-            "sourceIdentityDigest": identity_digest,
+            "selectionIdentityDigest": "sha256:"
+            + hashlib.sha256(
+                f"selection:{carrier}:{index:03d}".encode("utf-8")
+            ).hexdigest(),
+            "canonicalObjectDigest": "sha256:"
+            + hashlib.sha256(
+                f"canonical:{carrier}:{index:03d}".encode("utf-8")
+            ).hexdigest(),
+            "contentLibraryBindingDigest": "sha256:"
+            + hashlib.sha256(
+                f"content-library:{carrier}:{index:03d}".encode("utf-8")
+            ).hexdigest(),
         }
         for carrier, count in (("article", 100), ("image", 100), ("video", 10))
         for index in range(count)
@@ -255,6 +261,8 @@ def _research_release(output_root: Path, *, article_count: int = 100) -> Path:
             "counts": {"article": 100, "image": 100, "video": 10, "total": 210},
             "contents": contents,
             "authors": [],
+            "samplePlanRef": "uat/sample_plan.json",
+            "samplePlanDigest": "sha256:" + "8" * 64,
             "buildResult": "completed",
             "sourceIdentities": source_identities,
             "sourceIdentitySetDigest": source_identity_set_digest,
@@ -325,8 +333,9 @@ def _commercial_release(output_root: Path) -> Path:
                     "contentId": "content-image-example",
                     "version": 2,
                     "postRef": "image/example",
-                    "executionId": "commercial-image-execution",
-                    "sourceIdentityDigest": "sha256:" + "2" * 64,
+                    "selectionIdentityDigest": "sha256:" + "2" * 64,
+                    "canonicalObjectDigest": "sha256:" + "3" * 64,
+                    "contentLibraryBindingDigest": "sha256:" + "4" * 64,
                 }
             ],
         },
@@ -376,8 +385,9 @@ def _transition_research_release(output_root: Path) -> Path:
                     "contentId": "content-image-example",
                     "version": 1,
                     "postRef": "image/example",
-                    "executionId": "research-image-execution",
-                    "sourceIdentityDigest": "sha256:" + "1" * 64,
+                    "selectionIdentityDigest": "sha256:" + "1" * 64,
+                    "canonicalObjectDigest": "sha256:" + "2" * 64,
+                    "contentLibraryBindingDigest": "sha256:" + "3" * 64,
                 }
             ],
         }

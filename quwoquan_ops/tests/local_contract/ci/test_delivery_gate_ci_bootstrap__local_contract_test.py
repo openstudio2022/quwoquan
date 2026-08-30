@@ -17,6 +17,20 @@ ROOT = Path(__file__).resolve().parents[4]
 GATE_REPO_PATH = ROOT / "quwoquan_ops/gate/gate_repo.sh"
 
 
+def _workflow_jobs() -> dict[str, object]:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    return yaml.safe_load(workflow)["jobs"]
+
+
+def _job_body(workflow: str, job_name: str) -> str:
+    job_start = workflow.index(f"  {job_name}:\n")
+    next_job = re.search(
+        r"^  [a-z_]+:\n", workflow[job_start + 1 :], flags=re.MULTILINE
+    )
+    job_end = job_start + 1 + next_job.start() if next_job else None
+    return workflow[job_start:job_end]
+
+
 def _delivery_change_range_script() -> str:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     step_start = workflow.index("      - id: change_range\n")
@@ -158,6 +172,93 @@ def test_delivery_gate_bootstrap_uses_pinned_verified_toolchains() -> None:
     assert "pip install -r quwoquan_data/requirements.txt" in workflow
     assert "github.com/rhysd/actionlint/cmd/actionlint@v1.7.7" in workflow
     assert 'actionlint\" -version | head -n 1)\" = \"v1.7.7\"' in workflow
+
+
+def test_common_governance_is_one_exact_sha_bounded_job() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    jobs = _workflow_jobs()
+
+    assert list(jobs).count("common_governance") == 1
+    common = _job_body(workflow, "common_governance")
+    assert "timeout-minutes: 15" in common
+    assert "github.event.pull_request.head.sha || github.sha" in common
+    assert "git rev-parse HEAD" in common
+    assert "git status --porcelain" in common
+    assert common.count("verify_git_branch_policy.py") == 1
+    assert common.count("verify_github_supply_chain.py") == 1
+    assert "github.com/rhysd/actionlint/cmd/actionlint@v1.7.7" in common
+    assert "Validate optional LocalReadiness verifier wiring" in common
+    assert "quwoquan_ops/policies/local_readiness_contract.yaml" in common
+    assert "quwoquan_ops/cli/local_readiness.py" in common
+    assert 'python3 "$VERIFIER" verify --help' in common
+    assert "LocalReadiness contract exists without its canonical verifier" in common
+    assert "bash quwoquan_ops/gate/gate_repo.sh" not in common
+    assert "GATE_SKIP" not in workflow
+    topology = _job_body(workflow, "topology_regression")
+    assert "needs: common_governance" in topology
+    assert "verify_git_branch_policy.py" not in topology
+    assert "verify_github_supply_chain.py" not in topology
+
+
+def test_data_jobs_are_impact_gated_as_one_complete_closure() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    expected_if = "if: ${{ needs.topology_regression.outputs.data == 'true' }}"
+    data = _job_body(workflow, "quwoquan_data")
+    shards = _job_body(workflow, "quwoquan_data_tests")
+
+    assert expected_if in data
+    assert expected_if in shards
+    assert "GATE_DATA_PHASE: verify" in data
+    assert "GATE_DATA_PHASE: local_contract" in shards
+    assert 'DATA_TEST_TOTAL_SHARDS: "4"' in shards
+    assert "shard_index: [0, 1, 2, 3]" in shards
+    assert 'if [[ "$DATA_IMPACTED" == "true" ]]; then' in workflow
+    assert '--require-count "data=1" --require-count "data_tests=4"' in workflow
+    assert 'expect_typed_pending_or_skipped "quwoquan_data"' in workflow
+    assert 'expect_typed_pending_or_skipped "quwoquan_data_tests"' in workflow
+    assert 'expect_typed_pending_or_skipped "quwoquan_data"' in workflow
+    assert 'expect_typed_pending_or_skipped "quwoquan_data_tests"' in workflow
+    assert 'if [ "$impacted" = "true" ]; then' in workflow
+    assert 'expect_success "$name" "$val" "$hint"' in workflow
+
+
+def test_pull_request_avoids_release_and_canonical_coverage_workloads() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    pr_exclusion = "github.event_name != 'pull_request'"
+
+    for job_name in (
+        "quwoquan_service",
+        "quwoquan_service_packaging",
+        "quwoquan_service_coverage",
+    ):
+        assert pr_exclusion in _job_body(workflow, job_name)
+    for job_name in (
+        "quwoquan_app_static",
+        "quwoquan_app_tests",
+        "quwoquan_app_serial",
+        "quwoquan_app_coverage",
+    ):
+        assert pr_exclusion in _job_body(workflow, job_name)
+    release = _job_body(workflow, "release_evidence")
+    assert "if: always() && inputs.produce_release_evidence" in release
+    assert "schedule:" not in workflow
+
+
+def test_delivery_uses_lock_bound_hosted_dependency_caches() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    for job_name in ("quwoquan_service", "quwoquan_service_coverage", "search_contract_smoke"):
+        job = _job_body(workflow, job_name)
+        assert "cache: false" in job
+        assert "Cache lock-bound Go modules and build outputs" in job
+        assert "hashFiles('quwoquan_service/go.sum')" in job
+        assert "~/go/pkg/mod" in job
+        assert "~/.cache/go-build" in job
+    for job_name in ("quwoquan_data", "quwoquan_data_tests"):
+        job = _job_body(workflow, job_name)
+        assert "cache: 'pip'" in job
+        assert "cache-dependency-path: quwoquan_data/requirements.txt" in job
+    assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in workflow
+    assert "Cache lock-bound Dart dependencies" in workflow
 
 
 def test_delivery_pub_cache_is_hosted_only() -> None:
@@ -533,6 +634,7 @@ def test_delivery_gate_has_bounded_jobs() -> None:
     )
 
     expected_timeouts = {
+        "common_governance": 15,
         "topology_regression": 10,
         "quwoquan_service": 40,
         "quwoquan_service_packaging": 30,
@@ -541,7 +643,7 @@ def test_delivery_gate_has_bounded_jobs() -> None:
         "quwoquan_app_tests": 40,
         "quwoquan_app_serial": 40,
         "quwoquan_service_coverage": 40,
-        "quwoquan_app_coverage": 40,
+        "quwoquan_app_coverage": 60,
         "quwoquan_app": 30,
         "quwoquan_data": 10,
         "quwoquan_data_tests": 25,
@@ -772,6 +874,7 @@ def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_phases_on_c
     )
 
     hosted_linux_jobs = (
+        "common_governance",
         "topology_regression",
         "quwoquan_service",
         "search_contract_smoke",

@@ -503,13 +503,21 @@ class _HomeFeedVideoCard extends ConsumerWidget {
     // 视频本体的交付声明取自投影 mediaItems 的同一条目。私有视频走短签渐进式
     // MP4：分段 Range 由原生播放器发起、交付边缘按段复算签名，因此单签 URL 即可
     // 播放。绝不按公开地址播放私有资产——那会把授权判定悄悄跳过。
-    final videoDelivery = _feedImageDeliveryIndex(dto)[dto.mediaVideoUrl.trim()];
+    final videoDelivery = _feedImageDeliveryIndex(
+      dto,
+    )[dto.mediaVideoUrl.trim()];
     final videoBinding = MediaDeliveryBinding(
       assetId: videoDelivery?.assetId ?? mediaAssetId,
       accessMode: videoDelivery?.accessMode,
       publicUrl: dto.mediaVideoUrl,
     );
-    final adaptiveReference = mediaAssetId.isEmpty || mediaAssetVersion <= 0
+    // private HLS 当前 unsupported：signed_grant 绝不把 manifest 交给公开
+    // adaptive resolver，也不进入 HLS→MP4 fallback。progressive 私有 MP4 只走
+    // signedDelivery 单候选。
+    final adaptiveReference =
+        videoBinding.accessMode != MediaDeliveryAccessMode.public ||
+            mediaAssetId.isEmpty ||
+            mediaAssetVersion <= 0
         ? null
         : resolver?.tryResolve(
             dto.hlsCmafMasterManifestUrl,
@@ -521,8 +529,8 @@ class _HomeFeedVideoCard extends ConsumerWidget {
         ? dto.mediaVideoCoverUrl
         : dto.primaryVisualUrl;
     // 封面的 typed 交付绑定取自投影 mediaItems 的逐媒体声明（含 coverAssetId 与
-    // accessMode），不以 dto.id 冒充媒体资产标识。索引缺该 URL 即契约未声明，
-    // 显式落公开路。
+    // accessMode），不以 dto.id 冒充媒体资产标识。索引缺该 URL 即契约失败，
+    // 不得显式落公开路。
     final coverDelivery = _feedImageDeliveryIndex(dto)[coverRaw.trim()];
     final coverBinding = MediaDeliveryBinding(
       assetId: coverDelivery?.assetId ?? '',
@@ -589,17 +597,18 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                     behaviorTracker: behaviorTracker,
                   );
                 },
-                signedBuilder: (context, signedDelivery) => _homeFeedVideoPlayer(
-                  dto: dto,
-                  signedDelivery: signedDelivery,
-                  coverBinding: coverBinding,
-                  initialize: initialize,
-                  autoPlay: autoPlay,
-                  sharedTimelineEnabled: sharedTimelineEnabled,
-                  onTap: onTap,
-                  performanceObservability: performanceObservability,
-                  behaviorTracker: behaviorTracker,
-                ),
+                signedBuilder: (context, signedDelivery) =>
+                    _homeFeedVideoPlayer(
+                      dto: dto,
+                      signedDelivery: signedDelivery,
+                      coverBinding: coverBinding,
+                      initialize: initialize,
+                      autoPlay: autoPlay,
+                      sharedTimelineEnabled: sharedTimelineEnabled,
+                      onTap: onTap,
+                      performanceObservability: performanceObservability,
+                      behaviorTracker: behaviorTracker,
+                    ),
               )
             else if (coverBinding.hasRenderableSource)
               _feedDeliveryImage(

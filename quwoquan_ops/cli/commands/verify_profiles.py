@@ -566,6 +566,7 @@ def _environment_page_smoke_profile_command(
     remote_api_evidence_report: Path | None = None,
     data_readiness_path: Path | None = None,
     release_video_work_id: str | None = None,
+    app_uat_authority: dict[str, str] | None = None,
     persisted_device_session: bool = False,
 ) -> dict[str, Any] | None:
     import quwoquan_ops.cli.stackctl as _stackctl
@@ -605,8 +606,8 @@ def _environment_page_smoke_profile_command(
     )
     if release_video_work_id is not None:
         # app-content-uat already validated this identity against the exact
-        # Data appUatEnvelope. Preserve that single binding instead of
-        # reinterpreting the receipt through an older canary query shape.
+        # Data ReleaseUatSamplePlan. Preserve that single binding instead of
+        # reinterpreting the receipt through an environment canary query shape.
         video_playback_canary_work_id = str(release_video_work_id).strip()
     elif data_readiness_path is not None:
         try:
@@ -657,6 +658,27 @@ def _environment_page_smoke_profile_command(
         "--target",
         patrol_target,
     ]
+    if app_uat_authority is not None:
+        argument_names = {
+            "releaseId": "--data-release-id",
+            "samplePlanRef": "--app-uat-sample-plan-ref",
+            "samplePlanSha256": "--app-uat-sample-plan-sha256",
+            "targetUatBindingRef": "--app-uat-target-binding-ref",
+            "targetUatBindingSha256": "--app-uat-target-binding-sha256",
+            "targetUatBindingDigest": "--app-uat-target-binding-digest",
+            "releaseDigest": "--app-uat-release-digest",
+            "sourceIdentitySetDigest": "--app-uat-source-identity-set-digest",
+            "commitSha": "--app-uat-commit-sha",
+            "contractGraphSourceHash": "--app-uat-contract-graph-source-hash",
+            "candidateManifestSha256": "--app-uat-candidate-manifest-sha256",
+        }
+        if set(app_uat_authority) != set(argument_names) or any(
+            not isinstance(value, str) or not value or value != value.strip()
+            for value in app_uat_authority.values()
+        ):
+            raise ValueError("app-content UAT authority arguments are incomplete")
+        for field, option in argument_names.items():
+            argv.extend((option, app_uat_authority[field]))
     if remote_api_evidence_report is not None:
         argv.extend(
             (

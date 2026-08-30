@@ -52,7 +52,7 @@ def _governed_acquisition_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
-        "content.execution.controller.execute.pre_acquisition_handoff.bind_pre_acquisition_handoff",
+        "content.source.pre_acquisition_handoff.bind_pre_acquisition_handoff",
         lambda *_args, **_kwargs: (
             {
                 "carrierRequirements": {

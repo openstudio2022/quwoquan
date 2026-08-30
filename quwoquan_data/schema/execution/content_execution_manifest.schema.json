@@ -41,108 +41,22 @@
         "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
       }
     },
-    "modelBinding": {
+    "hostRuntime": { "const": "external_host_agent" },
+    "carrierDemand": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["provider", "authorModel", "authorModelFamily", "authorModelParameters", "reviewerModel", "reviewerModelFamily", "reviewerModelParameters"],
+      "required": ["ref", "digest", "workRequestRef", "workRequestDigest"],
       "properties": {
-        "provider": {"enum": ["cursor_sdk", "codex_sdk"]},
-        "authorModel": {"type": "string", "minLength": 1},
-        "authorModelFamily": {"type": "string", "minLength": 1},
-        "authorModelParameters": {"$ref": "#/$defs/modelParameters"},
-        "reviewerModel": {"type": "string", "minLength": 1},
-        "reviewerModelFamily": {"type": "string", "minLength": 1},
-        "reviewerModelParameters": {"$ref": "#/$defs/modelParameters"}
+        "ref": {"type": "string", "minLength": 1},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "workRequestRef": {"type": "string", "minLength": 1},
+        "workRequestDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
       }
     },
-    "runtimeProfileId": {"type": "string", "minLength": 1},
-    "runtimeProfileDigest": {
-      "type": "string",
-      "pattern": "^sha256:[a-f0-9]{64}$"
-    },
-    "semanticSelectionId": {"enum": ["default", "cursor_grok", "cursor_auto"]},
-    "semanticPreflightReceipt": {
-      "$ref": "semantic_provider_preflight_receipt_ref.schema.json"
-    },
-    "semanticRuntime": {"enum": ["local", "cloud"]},
     "requestRef": {"const": "0.plan/request.json"},
     "targetSetRef": {"const": "0.plan/target_set.json"},
     "targetSetDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "retryOf": {"type": ["string", "null"]}
   },
-  "required": ["executionId", "familyRef", "sourceDigest", "executionBundle", "modelBinding", "runtimeProfileId", "runtimeProfileDigest", "semanticSelectionId", "semanticRuntime", "requestRef", "targetSetRef", "targetSetDigest", "retryOf"],
-  "allOf": [
-    {
-      "if": {
-        "properties": {"semanticSelectionId": {"const": "cursor_grok"}},
-        "required": ["semanticSelectionId"]
-      },
-      "then": {
-        "properties": {
-          "modelBinding": {
-            "properties": {
-              "provider": {"const": "cursor_sdk"},
-              "authorModel": {"type": "string", "pattern": "^grok-"},
-              "authorModelFamily": {"const": "grok"},
-              "reviewerModel": {"type": "string", "pattern": "^grok-"},
-              "reviewerModelFamily": {"const": "grok"}
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {"semanticSelectionId": {"const": "cursor_auto"}},
-        "required": ["semanticSelectionId"]
-      },
-      "then": {
-        "properties": {
-          "modelBinding": {
-            "properties": {
-              "provider": {"const": "cursor_sdk"},
-              "authorModel": {"const": "auto"},
-              "authorModelFamily": {"const": "auto"},
-              "reviewerModel": {"const": "auto"},
-              "reviewerModelFamily": {"const": "auto"}
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {"semanticSelectionId": {"const": "default"}},
-        "required": ["semanticSelectionId"]
-      },
-      "then": {
-        "properties": {
-          "modelBinding": {
-            "properties": {
-              "provider": {"const": "codex_sdk"},
-              "authorModel": {"const": "gpt-5.6-terra"},
-              "authorModelFamily": {"const": "gpt"},
-              "reviewerModel": {"const": "gpt-5.6-terra"},
-              "reviewerModelFamily": {"const": "gpt"}
-            }
-          }
-        }
-      }
-    }
-  ],
-  "$defs": {
-    "modelParameters": {
-      "type": "array",
-      "uniqueItems": true,
-      "items": {
-        "type": "object",
-        "required": ["id", "value"],
-        "additionalProperties": false,
-        "properties": {
-          "id": {"type": "string", "minLength": 1},
-          "value": {"type": "string", "minLength": 1}
-        }
-      }
-    }
-  }
+  "required": ["executionId", "familyRef", "sourceDigest", "executionBundle", "hostRuntime", "carrierDemand", "requestRef", "targetSetRef", "targetSetDigest", "retryOf"]
 }

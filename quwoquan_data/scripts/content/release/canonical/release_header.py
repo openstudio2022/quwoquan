@@ -116,22 +116,54 @@ def validate_release_header(
             raise ReleaseHeaderError(f"{label} contents do not match counts.total")
         content_ids: set[str] = set()
         post_refs: set[str] = set()
-        content_source_bindings: list[tuple[str, str]] = []
+        content_selection_digests: set[str] = set()
+        content_modes: set[str] = set()
         for item in contents:
             if not isinstance(item, Mapping):
                 raise ReleaseHeaderError(f"{label} content entry is invalid")
             content_id = str(item.get("contentId") or "").strip()
             post_ref = str(item.get("postRef") or "").strip()
+            selection_identity_digest = str(
+                item.get("selectionIdentityDigest") or ""
+            ).strip()
+            canonical_object_digest = str(
+                item.get("canonicalObjectDigest") or ""
+            ).strip()
+            content_library_binding_digest = str(
+                item.get("contentLibraryBindingDigest") or ""
+            ).strip()
             execution_id = str(item.get("executionId") or "").strip()
-            identity_digest = str(
+            source_identity_digest_value = str(
                 item.get("sourceIdentityDigest") or ""
             ).strip()
+            current_mode = bool(
+                selection_identity_digest
+                and canonical_object_digest
+                and content_library_binding_digest
+                and not execution_id
+                and not source_identity_digest_value
+            )
+            legacy_mode = bool(
+                execution_id
+                and source_identity_digest_value
+                and not selection_identity_digest
+                and not canonical_object_digest
+                and not content_library_binding_digest
+            )
             version = item.get("version")
             if (
                 not content_id
                 or not post_ref
-                or not execution_id
-                or not identity_digest.startswith("sha256:")
+                or not (current_mode or legacy_mode)
+                or (current_mode and not all(
+                    value.startswith("sha256:")
+                    for value in (
+                        selection_identity_digest,
+                        canonical_object_digest,
+                        content_library_binding_digest,
+                    )
+                ))
+                or (legacy_mode and not source_identity_digest_value.startswith("sha256:"))
                 or not isinstance(version, int)
                 or isinstance(version, bool)
                 or version < 1
@@ -139,9 +171,19 @@ def validate_release_header(
                 or post_ref in post_refs
             ):
                 raise ReleaseHeaderError(f"{label} content entry is invalid")
+            content_modes.add("handoff" if current_mode else "legacy_audit")
+            if current_mode:
+                if selection_identity_digest in content_selection_digests:
+                    raise ReleaseHeaderError(
+                        f"{label} selection identity is duplicated"
+                    )
+                content_selection_digests.add(selection_identity_digest)
             content_ids.add(content_id)
             post_refs.add(post_ref)
-            content_source_bindings.append((execution_id, identity_digest))
+        if len(content_modes) > 1:
+            raise ReleaseHeaderError(
+                f"{label} content entries mix current handoff and historical audit shapes"
+            )
         if not isinstance(authors, list):
             raise ReleaseHeaderError(f"{label} authors must be an array")
         author_ids: set[str] = set()
@@ -301,7 +343,6 @@ def validate_release_header(
                 or document.get("sourceIdentitySetDigest") != expected_set_digest
                 or sorted(execution_ids)
                 != sorted({row["executionId"] for row in expanded})
-                or set(content_source_bindings) - identity_bindings
                 or set(frozen_digests)
                 != {str(row["sourceDigest"]) for row in expected_identities}
             ):
@@ -351,6 +392,11 @@ def _validate_reviewed_adoption(
     label: str,
 ) -> dict[str, Any]:
     adoption = document.get("reviewedClosureAdoption")
+    migration = document.get("contractMigration")
+    if adoption is not None and migration is not None:
+        raise ReleaseHeaderError(
+            f"{label} adoption and contract migration are mutually exclusive"
+        )
     if adoption is not None:
         if not isinstance(adoption, Mapping):
             raise ReleaseHeaderError(f"{label} adoption provenance is invalid")
@@ -360,6 +406,22 @@ def _validate_reviewed_adoption(
         ) == document.get("releaseId"):
             raise ReleaseHeaderError(
                 f"{label} cannot reuse the collided source releaseId"
+            )
+    if migration is not None:
+        if not isinstance(migration, Mapping):
+            raise ReleaseHeaderError(
+                f"{label} contract migration provenance is invalid"
+            )
+        if (
+            migration.get("sourceReleaseId") == document.get("releaseId")
+            or migration.get("sourceCanonicalMerkle")
+            != document.get("canonicalMerkle")
+            or migration.get("sourceSamplePlanRef") != "uat/sample_plan.json"
+            or document.get("samplePlanRef") != "uat/sample_plan.json"
+            or not document.get("samplePlanDigest")
+        ):
+            raise ReleaseHeaderError(
+                f"{label} contract migration provenance drifted"
             )
     return document
 

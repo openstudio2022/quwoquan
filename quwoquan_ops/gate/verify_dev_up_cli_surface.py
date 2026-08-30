@@ -58,6 +58,10 @@ def source_section(source: str, start: str, end: str) -> str | None:
 
 def main() -> int:
     issues: list[str] = []
+    root_report = ROOT / "report.json"
+    root_report_state = (
+        (True, root_report.read_bytes()) if root_report.exists() else (False, b"")
+    )
 
     up_help = run(["python3", str(STACKCTL), "up", "--help"])
     if up_help.returncode != 0:
@@ -74,6 +78,11 @@ def main() -> int:
     conflict = run(["python3", str(STACKCTL), "up", "--env", "beta", "--target", "beta-local", "--skip-app"])
     if conflict.returncode == 0 or "provide exactly one of --env or --target" not in (conflict.stdout + conflict.stderr):
         issues.append("stackctl up must reject simultaneous --env and --target")
+    current_root_report_state = (
+        (True, root_report.read_bytes()) if root_report.exists() else (False, b"")
+    )
+    if current_root_report_state != root_report_state:
+        issues.append("stackctl up selector conflict must not create or mutate root report.json")
 
     missing = run(["python3", str(STACKCTL), "up", "--skip-app"])
     missing_output = missing.stdout + missing.stderr

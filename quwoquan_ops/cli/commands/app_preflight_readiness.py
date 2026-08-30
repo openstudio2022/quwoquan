@@ -166,7 +166,6 @@ def _load_data_release_readiness(
         "manifestDigest",
         "mediaManifestDigest",
         *identity_digest_keys,
-        "appUatEnvelopeDigest",
         "activationEnvelopeDigest",
     ):
         if _stackctl._DATA_READINESS_DIGEST_RE.fullmatch(str(receipt.get(digest_key) or "")) is None:

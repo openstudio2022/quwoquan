@@ -21,7 +21,7 @@
     ],
     "afterFileEdit": [
       {
-        "command": "python3 quwoquan_ops/hooks/draft_quickcheck.py"
+        "command": "python3 quwoquan_ops/hooks/local_readiness_after_edit.py"
       }
     ]
   }

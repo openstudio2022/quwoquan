@@ -24,10 +24,114 @@ import contextlib
 import fcntl
 import json
 import os
-import shutil
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
+
+from quwoquan_ops.cli.commands.package_runtime_support import _receipt_safe_text
+from quwoquan_ops.cli.lib.package_reuse.dependency_fs import remove_private_tree
+
+PACKAGE_STAGING_CLEANUP_BLOCKER = "OPS.PACKAGE.staging_cleanup_failed"
+
+
+def _package_staging_cleanup_warning(staging_dir: Path) -> str:
+    try:
+        remove_private_tree(staging_dir)
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        return f"{PACKAGE_STAGING_CLEANUP_BLOCKER}: " + _receipt_safe_text(
+            str(exc) or "package staging cleanup did not converge"
+        )
+    return ""
+
+
+def _apply_package_staging_cleanup_warning(
+    payload: dict[str, Any],
+    warning: str,
+) -> dict[str, Any]:
+    """Keep a primary result authoritative while exposing cleanup as secondary."""
+
+    result = dict(payload)
+    details = [str(item) for item in result.get("details") or []]
+    details.append(f"secondary cleanup warning: {warning}")
+    result["details"] = details
+    result["cleanupWarnings"] = [warning]
+    if int(result.get("exitCode") or 0) == 0:
+        result["exitCode"] = 2
+        result["status"] = "GATE_BLOCK"
+        result["summary"] = "stackctl package staging cleanup is GATE_BLOCK"
+        result["firstBlocker"] = PACKAGE_STAGING_CLEANUP_BLOCKER
+    return result
+
+
+def _cleanup_package_staging(
+    staging_dir: Path,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Remove one exact attempt tree without replacing an earlier blocker."""
+
+    warning = _package_staging_cleanup_warning(staging_dir)
+    if not warning:
+        return dict(payload)
+    return _apply_package_staging_cleanup_warning(payload, warning)
+
+
+class _PackageStagingOwnership:
+    """Own one staging tree until its candidate CAS rename succeeds."""
+
+    def __init__(self, staging_dir: Path) -> None:
+        self._staging_dir = staging_dir
+        self._return_payload: dict[str, Any] | None = None
+        self._transferred = False
+
+    @classmethod
+    def create(cls, capsule_parent: Path) -> _PackageStagingOwnership:
+        return cls(
+            Path(
+                tempfile.mkdtemp(
+                    prefix=".package-staging-",
+                    dir=str(capsule_parent),
+                )
+            )
+        )
+
+    @property
+    def staging_dir(self) -> Path:
+        return self._staging_dir
+
+    def __enter__(self) -> Self:
+        return self
+
+    def returning(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self._return_payload = payload
+        return payload
+
+    def transfer_to(self, candidate_dir: Path) -> None:
+        self._staging_dir.replace(candidate_dir)
+        self._transferred = True
+
+    def __exit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        _traceback: object,
+    ) -> bool:
+        if self._transferred:
+            return False
+        warning = _package_staging_cleanup_warning(self._staging_dir)
+        if not warning:
+            return False
+        if exc is not None:
+            exc.add_note(f"secondary cleanup warning: {warning}")
+            return False
+        if self._return_payload is None:
+            raise RuntimeError(warning)
+        replacement = _apply_package_staging_cleanup_warning(
+            self._return_payload,
+            warning,
+        )
+        self._return_payload.clear()
+        self._return_payload.update(replacement)
+        return False
 
 
 def register_parser(
@@ -75,9 +179,7 @@ def register_parser(
     package_parser.add_argument("--device", default="")
     # artifactFormat 由请求显式声明或按平台默认推导（DEC-005）；
     # 禁止由 distribution-class 推导，aab 仅限 android × release 硬需求。
-    package_parser.add_argument(
-        "--artifact-format", choices=["apk", "aab"], default=""
-    )
+    package_parser.add_argument("--artifact-format", choices=["apk", "aab"], default="")
     package_parser.add_argument("--service", default="")
     package_parser.add_argument("--include-services", action="store_true")
     package_parser.add_argument(
@@ -128,7 +230,9 @@ def _target_package_lock(target_name: str) -> Any:
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         handle.seek(0)
         handle.truncate()
-        handle.write(f"pid={os.getpid()} target={target} startedAt={_stackctl.utc_now()}\n")
+        handle.write(
+            f"pid={os.getpid()} target={target} startedAt={_stackctl.utc_now()}\n"
+        )
         handle.flush()
         os.fsync(handle.fileno())
         try:
@@ -139,6 +243,41 @@ def _target_package_lock(target_name: str) -> Any:
             handle.flush()
             os.fsync(handle.fileno())
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _package_evidence_projection(
+    payload: dict[str, Any],
+    *,
+    report_path: Path | None = None,
+) -> dict[str, Any]:
+    """Attach a typed package-generation envelope without rebuilding bytes."""
+
+    baseline_id = str(payload.get("baselineId") or "").strip()
+    if not baseline_id or "evidenceEnvelope" in payload:
+        return payload
+    from quwoquan_ops.cli.lib.evidence_generation import (
+        build_evidence_generation_envelope,
+    )
+
+    payload["evidenceEnvelope"] = build_evidence_generation_envelope(
+        command="package",
+        candidate_snapshot={"baselineId": baseline_id},
+        startup_status="not_applicable",
+        startup_reason="package does not execute a runtime startup attempt",
+        upstream_status="not_applicable",
+        upstream_reason="package is the candidate evidence producer",
+    )
+    if report_path is not None and report_path.is_file() and not report_path.is_symlink():
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            report = None
+        if isinstance(report, dict):
+            report["evidenceEnvelope"] = payload["evidenceEnvelope"]
+            import quwoquan_ops.cli.stackctl as _stackctl
+
+            _stackctl.write_json(report_path, report)
+    return payload
 
 
 def command_package(args: argparse.Namespace) -> dict[str, Any]:
@@ -227,7 +366,10 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             "summary": f"stackctl runtime package blocked for {env_name}",
             "details": [str(exc)],
         }
-    with contextlib.closing(build_cache_use_lock), _stackctl._target_package_lock(target_name):
+    with (
+        contextlib.closing(build_cache_use_lock),
+        _stackctl._target_package_lock(target_name),
+    ):
         package_input_roots = _stackctl.deployment_input_roots(
             env_name,
             target_name,
@@ -261,154 +403,186 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
         # capsule seals its root read-only, and macOS correctly refuses moving
         # that sealed directory on its own.  Moving the still-writable parent
         # at final candidate CAS preserves the seal without a writable gap.
-        staging_dir = Path(
-            tempfile.mkdtemp(prefix=".package-staging-", dir=str(capsule_parent))
-        )
-        capsule_staging_root = staging_dir / _stackctl.PACKAGE_INPUT_CAPSULE_DIRECTORY
-        try:
-            package_snapshot = _stackctl.materialize_package_input_capsule(
-                package_input_roots,
-                capsule_root=capsule_staging_root,
+        with _PackageStagingOwnership.create(capsule_parent) as staging_ownership:
+            staging_dir = staging_ownership.staging_dir
+            capsule_staging_root = (
+                staging_dir / _stackctl.PACKAGE_INPUT_CAPSULE_DIRECTORY
             )
-        except (
-            OSError,
-            TypeError,
-            UnicodeError,
-            ValueError,
-            json.JSONDecodeError,
-        ) as exc:
-            shutil.rmtree(staging_dir, ignore_errors=True)
-            return {
-                "exitCode": 2,
-                "summary": f"stackctl package input capsule blocked for {env_name}",
-                "details": [str(exc)],
-            }
-        if package_snapshot is None:
-            return _stackctl._command_package_unlocked(
-                args,
-                package_snapshot=None,
-                package_input_roots=package_input_roots,
-            )
-
-        baseline_id = str(package_snapshot["baselineId"])
-        candidate_dir = _stackctl.deployment_candidate_dir(target_name, baseline_id)
-        previous_override = os.environ.get(_stackctl.PACKAGE_ROOT_OVERRIDE_ENV)
-        if candidate_dir.exists():
-            shutil.rmtree(staging_dir, ignore_errors=True)
-            os.environ[_stackctl.PACKAGE_ROOT_OVERRIDE_ENV] = str(candidate_dir / "packages")
             try:
-                reusable, detail = _stackctl.can_reuse_package(
+                package_snapshot = _stackctl.materialize_package_input_capsule(
+                    package_input_roots,
+                    capsule_root=capsule_staging_root,
+                )
+            except (
+                OSError,
+                TypeError,
+                UnicodeError,
+                ValueError,
+                json.JSONDecodeError,
+            ) as exc:
+                return staging_ownership.returning(
+                    {
+                        "exitCode": 2,
+                        "summary": (
+                            f"stackctl package input capsule blocked for {env_name}"
+                        ),
+                        "details": [str(exc)],
+                    }
+                )
+            if package_snapshot is None:
+                payload = _stackctl._command_package_unlocked(
+                    args,
+                    package_snapshot=None,
+                    package_input_roots=package_input_roots,
+                )
+                return staging_ownership.returning(payload)
+
+            baseline_id = str(package_snapshot["baselineId"])
+            candidate_dir = _stackctl.deployment_candidate_dir(target_name, baseline_id)
+            previous_override = os.environ.get(_stackctl.PACKAGE_ROOT_OVERRIDE_ENV)
+            if candidate_dir.exists():
+                os.environ[_stackctl.PACKAGE_ROOT_OVERRIDE_ENV] = str(
+                    candidate_dir / "packages"
+                )
+                try:
+                    reusable, detail = _stackctl.can_reuse_package(
+                        env_name,
+                        target_name,
+                        include_services=bool(args.include_services or args.service),
+                        required_services=[args.service] if args.service else None,
+                        candidate_root=candidate_dir,
+                    )
+                finally:
+                    if previous_override is None:
+                        os.environ.pop(_stackctl.PACKAGE_ROOT_OVERRIDE_ENV, None)
+                    else:
+                        os.environ[_stackctl.PACKAGE_ROOT_OVERRIDE_ENV] = (
+                            previous_override
+                        )
+                if not reusable:
+                    return staging_ownership.returning(
+                        {
+                            "exitCode": 2,
+                            "summary": (
+                                f"stackctl package candidate collision for {target_name}"
+                            ),
+                            "details": [detail, f"candidateDir={candidate_dir}"],
+                            "baselineId": baseline_id,
+                        }
+                    )
+                reused_manifest = _stackctl.load_candidate_manifest(
                     env_name,
                     target_name,
-                    include_services=bool(args.include_services or args.service),
-                    required_services=[args.service] if args.service else None,
-                    candidate_root=candidate_dir,
+                    baseline_id,
+                    require_full=True,
+                )
+                if reused_manifest.get("release") != requested_release_bindings:
+                    return staging_ownership.returning(
+                        {
+                            "exitCode": 2,
+                            "summary": (
+                                "stackctl package release binding collision for "
+                                f"{target_name}"
+                            ),
+                            "details": [
+                                "immutable candidate exists with different candidate/rollback release attestations"
+                            ],
+                            "baselineId": baseline_id,
+                        }
+                    )
+                reused_fingerprint_path = (
+                    candidate_dir / "packages" / "app" / "package-fingerprint.json"
+                )
+                reused_fingerprint = json.loads(
+                    reused_fingerprint_path.read_text(encoding="utf-8")
+                )
+                report_ref = str(reused_fingerprint.get("reportRef") or "").strip()
+                reused_report_path = _stackctl._runtime_package_report_path(report_ref)
+                try:
+                    package_identity = (
+                        _stackctl._validate_runtime_package_identity_readback(
+                            report_path=reused_report_path,
+                            fingerprint_path=reused_fingerprint_path,
+                            manifest_path=candidate_dir / "manifest.json",
+                        )
+                    )
+                except (
+                    OSError,
+                    UnicodeError,
+                    ValueError,
+                    json.JSONDecodeError,
+                ) as exc:
+                    return staging_ownership.returning(
+                        {
+                            "exitCode": 2,
+                            "summary": (
+                                f"stackctl package reuse identity blocked for {target_name}"
+                            ),
+                            "details": [str(exc)],
+                            "baselineId": baseline_id,
+                        }
+                    )
+                pointer = _stackctl.activate_deployment_candidate(
+                    target_name,
+                    baseline_id,
+                )
+                return staging_ownership.returning(
+                    _package_evidence_projection({
+                        "exitCode": 0,
+                        "summary": (
+                            f"stackctl package reused immutable candidate for {env_name}"
+                        ),
+                        "details": [detail, f"candidateDir={candidate_dir}"],
+                        "baselineId": baseline_id,
+                        "candidateDir": str(candidate_dir),
+                        "activeCandidateRef": str(pointer),
+                        "reportDir": str(reused_fingerprint.get("reportRef") or ""),
+                        "packageFingerprint": str(reused_fingerprint_path),
+                        **package_identity,
+                        "packageDigest": reused_manifest["packageDigest"],
+                        "buildInputDigest": reused_manifest["buildInputDigest"],
+                        "imageDigest": reused_manifest["imageDigest"],
+                        "runtimeConfigDigest": reused_manifest["runtimeConfigDigest"],
+                        "environmentRuntimeDigest": reused_manifest[
+                            "environmentRuntimeDigest"
+                        ],
+                        "runtimeSchemaVersion": reused_manifest["runtimeSchemaVersion"],
+                        "observabilityLogSink": reused_manifest["observabilityLogSink"],
+                        "providerRuntime": reused_manifest["providerRuntime"],
+                    }, report_path=reused_report_path)
+                )
+
+            capsule_root = capsule_staging_root
+            os.environ[_stackctl.PACKAGE_ROOT_OVERRIDE_ENV] = str(
+                staging_dir / "packages"
+            )
+            try:
+                payload = _stackctl._command_package_unlocked(
+                    args,
+                    package_snapshot=package_snapshot,
+                    package_input_roots=package_input_roots,
+                    package_source_root=capsule_root / "repo",
+                    package_capsule_root=capsule_root,
                 )
             finally:
                 if previous_override is None:
                     os.environ.pop(_stackctl.PACKAGE_ROOT_OVERRIDE_ENV, None)
                 else:
                     os.environ[_stackctl.PACKAGE_ROOT_OVERRIDE_ENV] = previous_override
-            if not reusable:
-                return {
-                    "exitCode": 2,
-                    "summary": f"stackctl package candidate collision for {target_name}",
-                    "details": [detail, f"candidateDir={candidate_dir}"],
-                    "baselineId": baseline_id,
-                }
-            reused_manifest = _stackctl.load_candidate_manifest(
-                env_name,
-                target_name,
-                baseline_id,
-                require_full=True,
-            )
-            if reused_manifest.get("release") != requested_release_bindings:
-                return {
-                    "exitCode": 2,
-                    "summary": f"stackctl package release binding collision for {target_name}",
-                    "details": [
-                        "immutable candidate exists with different candidate/rollback release attestations"
-                    ],
-                    "baselineId": baseline_id,
-                }
-            reused_fingerprint_path = (
-                candidate_dir / "packages" / "app" / "package-fingerprint.json"
-            )
-            reused_fingerprint = json.loads(
-                reused_fingerprint_path.read_text(encoding="utf-8")
-            )
-            report_ref = str(reused_fingerprint.get("reportRef") or "").strip()
-            reused_report_path = _stackctl._runtime_package_report_path(report_ref)
-            try:
-                package_identity = _stackctl._validate_runtime_package_identity_readback(
-                    report_path=reused_report_path,
-                    fingerprint_path=reused_fingerprint_path,
-                    manifest_path=candidate_dir / "manifest.json",
+            if int(payload.get("exitCode") or 0) != 0:
+                return staging_ownership.returning(payload)
+            if candidate_dir.exists():
+                return staging_ownership.returning(
+                    {
+                        "exitCode": 2,
+                        "summary": (
+                            f"stackctl package candidate collision for {target_name}"
+                        ),
+                        "details": [f"candidate already exists: {candidate_dir}"],
+                        "baselineId": baseline_id,
+                    }
                 )
-            except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
-                return {
-                    "exitCode": 2,
-                    "summary": (
-                        f"stackctl package reuse identity blocked for {target_name}"
-                    ),
-                    "details": [str(exc)],
-                    "baselineId": baseline_id,
-                }
-            pointer = _stackctl.activate_deployment_candidate(target_name, baseline_id)
-            return {
-                "exitCode": 0,
-                "summary": f"stackctl package reused immutable candidate for {env_name}",
-                "details": [detail, f"candidateDir={candidate_dir}"],
-                "baselineId": baseline_id,
-                "candidateDir": str(candidate_dir),
-                "activeCandidateRef": str(pointer),
-                "reportDir": str(reused_fingerprint.get("reportRef") or ""),
-                "packageFingerprint": str(reused_fingerprint_path),
-                **package_identity,
-                "packageDigest": reused_manifest["packageDigest"],
-                "buildInputDigest": reused_manifest["buildInputDigest"],
-                "imageDigest": reused_manifest["imageDigest"],
-                "runtimeConfigDigest": reused_manifest["runtimeConfigDigest"],
-                "environmentRuntimeDigest": reused_manifest[
-                    "environmentRuntimeDigest"
-                ],
-                "runtimeSchemaVersion": reused_manifest["runtimeSchemaVersion"],
-                "observabilityLogSink": reused_manifest[
-                    "observabilityLogSink"
-                ],
-                "providerRuntime": reused_manifest["providerRuntime"],
-            }
-
-        capsule_root = capsule_staging_root
-        os.environ[_stackctl.PACKAGE_ROOT_OVERRIDE_ENV] = str(staging_dir / "packages")
-        try:
-            payload = _stackctl._command_package_unlocked(
-                args,
-                package_snapshot=package_snapshot,
-                package_input_roots=package_input_roots,
-                package_source_root=capsule_root / "repo",
-                package_capsule_root=capsule_root,
-            )
-        except Exception:
-            shutil.rmtree(staging_dir, ignore_errors=True)
-            raise
-        finally:
-            if previous_override is None:
-                os.environ.pop(_stackctl.PACKAGE_ROOT_OVERRIDE_ENV, None)
-            else:
-                os.environ[_stackctl.PACKAGE_ROOT_OVERRIDE_ENV] = previous_override
-        if int(payload.get("exitCode") or 0) != 0:
-            shutil.rmtree(staging_dir, ignore_errors=True)
-            return payload
-        if candidate_dir.exists():
-            shutil.rmtree(staging_dir)
-            return {
-                "exitCode": 2,
-                "summary": f"stackctl package candidate collision for {target_name}",
-                "details": [f"candidate already exists: {candidate_dir}"],
-                "baselineId": baseline_id,
-            }
-        staging_dir.replace(candidate_dir)
+            staging_ownership.transfer_to(candidate_dir)
         staging_text = str(staging_dir)
         candidate_text = str(candidate_dir)
         payload = json.loads(
@@ -481,4 +655,4 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
         # candidate.
         pointer = _stackctl.activate_deployment_candidate(target_name, baseline_id)
         payload["activeCandidateRef"] = str(pointer)
-        return payload
+        return _package_evidence_projection(payload, report_path=report_path)

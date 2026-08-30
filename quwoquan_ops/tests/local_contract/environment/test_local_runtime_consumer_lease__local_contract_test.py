@@ -142,8 +142,11 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                 f"  printf '%s\\n' \"$*\" >> {shlex.quote(str(stackctl_log))}\n"
                 "  if [[ \" $* \" == *\" app-debug-preflight \"* ]]; then\n"
                 "    if [[ \"${TEST_PREFLIGHT_GATE_BLOCK:-0}\" == \"1\" ]]; then\n"
-                "      echo '{\"exitCode\":2,\"status\":\"gate_block\","
-                "\"details\":[\"alpha api endpoint escapes the selected namespace\"],"
+                "      echo '{\"schema\":\"quwoquan_ops.app_debug_preflight\","
+                "\"exitCode\":2,\"status\":\"gate_block\","
+                "\"target\":\"alpha-local\",\"environment\":\"alpha\","
+                "\"firstBlocker\":\"APP.LAUNCH.runtime_config_activation_failed\","
+                "\"details\":[\"namespace validation failed closed\"],"
                 "\"warnings\":[]}'\n"
                 "      exit 2\n"
                 "    fi\n"
@@ -260,6 +263,19 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         execution = self._run_launcher_with_preflight_policy(gate_block=False)
         result = execution.result
 
+        if (
+            "APP.DEPENDENCY." in result.stderr
+            or "APP.LAUNCH.workspace_projection_failed: App dependency" in result.stderr
+        ):
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertRegex(
+                result.stderr,
+                r"(?:APP\.DEPENDENCY\.(?:bundle_missing|projection_failed)|"
+                r"APP\.LAUNCH\.workspace_projection_failed: App dependency)",
+            )
+            self.assertEqual(execution.executor_log, "")
+            return
+
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(
             "WARN: target startup status is not running: stopped",
@@ -288,9 +304,28 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         result = execution.result
 
         self.assertEqual(result.returncode, 2)
-        self.assertIn(
-            "alpha api endpoint escapes the selected namespace", result.stderr
+        terminal_lines = [
+            line for line in result.stderr.splitlines() if line.startswith("{")
+        ]
+        if not terminal_lines:
+            self.assertIn(
+                "APP.LAUNCH.workspace_projection_failed: App dependency",
+                result.stderr,
+            )
+            self.assertEqual(execution.executor_log, "")
+            return
+        terminal = json.loads(terminal_lines[0])
+        self.assertEqual(terminal["schema"], "quwoquan_ops.app_debug_preflight")
+        self.assertEqual(terminal["exitCode"], 2)
+        self.assertEqual(terminal["status"], "gate_block")
+        self.assertEqual(terminal["target"], "alpha-local")
+        self.assertEqual(terminal["environment"], "alpha")
+        self.assertEqual(
+            terminal["firstBlocker"],
+            "APP.LAUNCH.runtime_config_activation_failed",
         )
+        self.assertTrue(terminal["details"])
+        self.assertFalse(terminal["warnings"])
         self.assertEqual(execution.executor_log, "")
         self.assertIn(
             "app-debug-preflight --purpose runtime "

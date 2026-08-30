@@ -25,7 +25,7 @@ _LOGIN_RECEIPT_DIGEST = "sha256:" + "4" * 64
 _OBSERVABILITY_DIGEST = "sha256:" + "5" * 64
 _MANIFEST_DIGEST = "sha256:" + "6" * 64
 _READINESS_DIGEST = "sha256:" + "7" * 64
-_APP_UAT_ENVELOPE_DIGEST = "sha256:" + "8" * 64
+_RELEASE_UAT_SAMPLE_PLAN_DIGEST = "sha256:" + "8" * 64
 _APP_UAT_PLAN_DIGEST = "sha256:" + "9" * 64
 
 
@@ -118,13 +118,21 @@ def _content_identity() -> dict[str, object]:
             "env/alpha/runs/release-lifecycle-exit/release-alpha-a/exit-a/"
             "lifecycle-exit.json"
         ),
-        "appUatEnvelope": {
-            "releaseId": "release-alpha-a",
-            "videoWorkId": "video-alpha-a",
-        },
-        "appUatEnvelopeDigest": _APP_UAT_ENVELOPE_DIGEST,
+        "releaseHeaderRef": "data/releases/release-alpha-a/payload/release.json",
+        "releaseHeaderDigest": _APP_UAT_PLAN_DIGEST,
+        "releaseUatSamplePlanRef": "uat/sample_plan.json",
+        "releaseUatSamplePlanDigest": _RELEASE_UAT_SAMPLE_PLAN_DIGEST,
         "appUatPlan": {
-            "videoPagination": {"expectedWorkIds": ["video-alpha-a"]}
+            "releaseIdentity": {
+                "releaseId": "release-alpha-a",
+                "payloadSha256": _MANIFEST_DIGEST,
+            },
+            "releaseUatSamplePlanRef": "uat/sample_plan.json",
+            "releaseUatSamplePlanDigest": _RELEASE_UAT_SAMPLE_PLAN_DIGEST,
+            "carrierIdentities": {"video": "video-alpha-a"},
+            "orderedSamples": [],
+            "requiredCasePlan": [],
+            "videoPagination": {"expectedWorkIds": ["video-alpha-a"]},
         },
         "appUatPlanDigest": _APP_UAT_PLAN_DIGEST,
     }
@@ -137,6 +145,10 @@ def _immutable_content_preflight() -> dict[str, object]:
         "packageBaseline": _BASELINE_ID,
         "sourceRevision": "a" * 40,
         **_content_identity(),
+        "releaseUatSamplePlan": {
+            "schema": "quwoquan_data.release_uat_sample_plan",
+            "releaseId": "release-alpha-a",
+        },
         "contentReadback": {
             "postIds": ["article-alpha-a", "video-alpha-a"],
             "feedQueries": [
@@ -156,7 +168,12 @@ def _immutable_content_preflight() -> dict[str, object]:
         "releaseProbe": {
             "exitCode": 0,
             "mediaChecks": {"automatic": True},
-            "searchCanaries": [{"id": "a"}, {"id": "b"}, {"id": "c"}],
+            "searchCanaries": [
+                {"id": "homepage"},
+                {"id": "article"},
+                {"id": "image"},
+                {"id": "video"},
+            ],
         },
         "details": [],
     }
@@ -574,10 +591,16 @@ class StackctlAppDebugPreflightRuntimeModeIsolationTest(unittest.TestCase):
             self.assertEqual(result[field], expected, field)
         self.assertEqual(result["contentReadback"], verified["contentReadback"])
         self.assertEqual(
+            result["releaseUatSamplePlan"],
+            verified["releaseUatSamplePlan"],
+        )
+        self.assertEqual(
             result["contentReadinessReportRef"],
             verified["contentReadinessReportRef"],
         )
         self.assertEqual(result["contentBinding"], {})
+        self.assertFalse(result["details"])
+        self.assertFalse(result["warnings"])
         content_loader.assert_not_called()
         content_preflight_command.assert_called_once()
 
@@ -642,21 +665,39 @@ class StackctlAppDebugPreflightRuntimeModeIsolationTest(unittest.TestCase):
         content_loader.assert_called_once_with("alpha-local")
         content_preflight_command.assert_not_called()
 
-    def test_illegal_namespace_remains_a_canonical_launch_blocker(self) -> None:
+    def test_valid_alpha_namespace_keeps_namespace_check_open(self) -> None:
         result, _content_loader, _content_preflight_command = self._invoke(
             runtime_mode="test_live",
-            api_base_url="https://api.prod.quwoquan.com",
+            api_base_url="https://api.alpha.quwoquan.com:17000",
         )
 
-        self.assertEqual(result["exitCode"], 2, result)
-        self.assertEqual(result["status"], "gate_block")
-        self.assertIn(
-            "escapes the selected alpha namespace", " ".join(result["details"])
-        )
-        self.assertEqual(
-            result["firstBlocker"],
-            "APP.LAUNCH.runtime_config_activation_failed",
-        )
+        self.assertEqual(result["exitCode"], 0, result)
+        self.assertNotEqual(result["status"], "gate_block")
+        self.assertEqual(result["firstBlocker"], "")
+
+    def test_illegal_namespace_remains_a_canonical_launch_blocker(self) -> None:
+        for api_base_url in (
+            "https://api.prod.quwoquan.com",
+            "https://api.alpha.quwoquan.com:17000/../prod",
+            "https://api.alpha.quwoquan.com:17000/%2e%2e/prod",
+            "https://api.alpha.quwoquan.com:17000//foreign",
+        ):
+            with self.subTest(api_base_url=api_base_url):
+                result, _content_loader, _content_preflight_command = self._invoke(
+                    runtime_mode="test_live",
+                    api_base_url=api_base_url,
+                )
+
+                self.assertEqual(result["exitCode"], 2, result)
+                self.assertEqual(result["status"], "gate_block")
+                self.assertIn(
+                    "escapes the selected alpha namespace",
+                    " ".join(result["details"]),
+                )
+                self.assertEqual(
+                    result["firstBlocker"],
+                    "APP.LAUNCH.runtime_config_activation_failed",
+                )
 
     def test_cli_requires_an_explicit_runtime_mode(self) -> None:
         parser = stackctl.build_parser()

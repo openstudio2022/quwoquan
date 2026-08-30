@@ -52,7 +52,8 @@ def _pod_executable(root: Path, *, marker: str = "first") -> Path:
         'SELF="$(cd "$(dirname "$0")" && pwd -P)/$(basename "$0")"\n'
         'case "${1:-}" in\n'
         f"  --version) printf '%s\\n' '{SUPPORTED_COCOAPODS_VERSION}' ;;\n"
-        "  env) printf 'Executable Path: %s\\n' \"$SELF\" ;;\n"
+        "  env) printf '### Stack\nCocoaPods : %s\nRuby : 3.3.0\nRubyGems : 3.5.0\n### Plugins\ncocoapods-deintegrate : 1.0.5\nExecutable Path: %s\n' "
+        f"'{SUPPORTED_COCOAPODS_VERSION}' \"$SELF\" ;;\n"
         f"  install) printf '%s\\n' '{marker}'; "
         f"if [ '{marker}' = 'mutate-pods' ]; then "
         "printf '// drift\\n' >> Pods/Framework/Versions/A/Headers/Example.h; fi; "
@@ -60,11 +61,25 @@ def _pod_executable(root: Path, *, marker: str = "first") -> Path:
         '[ ! -f "$CP_HOME_DIR/projected" ]; then '
         "printf '// projected\\n' >> Pods/Pods.xcodeproj/project.pbxproj; "
         ': > "$CP_HOME_DIR/projected"; fi; '
+        f"if [ '{marker}' = 'xcode-user-state' ]; then "
+        "mkdir -p Pods/Pods.xcodeproj/xcuserdata/tester.xcuserdatad; "
+        "printf '%s\\n' 'ephemeral' > Pods/Pods.xcodeproj/xcuserdata/"
+        "tester.xcuserdatad/xcschememanagement.plist; fi; "
         f"if [ '{marker}' = 'project-always' ]; then "
         "printf '// projected again\\n' >> Pods/Pods.xcodeproj/project.pbxproj; fi; "
         f"if [ '{marker}' = 'project-leak' ]; then "
         "printf '// /outside/online/root/file\\n' >> "
-        "Pods/Pods.xcodeproj/project.pbxproj; fi ;;\n"
+        "Pods/Pods.xcodeproj/project.pbxproj; fi; "
+        f"if [ '{marker}' = 'project-generic-segment' ] && "
+        '[ ! -f "$CP_HOME_DIR/generic-segment" ]; then '
+        "printf '// dependencies is not a path\\n' >> "
+        "Pods/Pods.xcodeproj/project.pbxproj; "
+        ': > "$CP_HOME_DIR/generic-segment"; fi; '
+        f"if [ '{marker}' = 'project-flutter-toolchain' ] && "
+        '[ ! -f "$CP_HOME_DIR/flutter-toolchain" ]; then '
+        "printf '// %s/bin/cache/artifacts/engine/ios/Flutter.xcframework\\n' "
+        '"$FLUTTER_ROOT" >> Pods/Pods.xcodeproj/project.pbxproj; '
+        ': > "$CP_HOME_DIR/flutter-toolchain"; fi ;;\n'
         "  *) exit 64 ;;\n"
         "esac\n",
         encoding="utf-8",
@@ -188,18 +203,38 @@ def test_exact_capsule_roundtrip_and_private_projection(tmp_path: Path) -> None:
     )
     assert projection.pods_root == ios_root / "Pods"
     assert (projection.pods_root / "Framework/Headers").resolve().is_dir()
+    proxy_keys = {
+        "ALL_PROXY",
+        "all_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    }
     environment = isolated_cocoapods_environment(
         base={
             "PATH": os.environ["PATH"],
-            "HTTPS_PROXY": "secret-proxy",
+            **dict.fromkeys(proxy_keys, "secret-proxy"),
             "FLUTTER_SWIFT_PACKAGE_MANAGER": "true",
         },
         projection=projection,
     )
     assert environment["CP_HOME_DIR"] == str(projection.cp_home_dir)
     assert environment["CP_CACHE_DIR"] == str(projection.cp_cache_dir)
-    assert environment["HOME"] == str(projection.private_home)
-    assert "HTTPS_PROXY" not in environment
+    private_environment_directories = {
+        "HOME": projection.private_home,
+        "XDG_CONFIG_HOME": projection.private_home / ".config",
+        "XDG_CACHE_HOME": projection.private_home / ".cache",
+    }
+    for key, expected in private_environment_directories.items():
+        exported = Path(environment[key])
+        assert exported == expected
+        assert exported.is_dir()
+        assert not exported.is_symlink()
+        assert exported.stat().st_mode & 0o777 == 0o700
+    assert proxy_keys.isdisjoint(environment)
     assert environment["FLUTTER_SWIFT_PACKAGE_MANAGER"] == "false"
 
 
@@ -481,6 +516,36 @@ def test_install_command_is_network_denied_and_never_updates_repos(
     ]
 
 
+def test_offline_install_ignores_generated_xcode_user_state(
+    tmp_path: Path,
+) -> None:
+    paths, pod, snapshot = _snapshot(tmp_path, marker="xcode-user-state")
+    capsule = write_ios_pod_capsule(snapshot, tmp_path / "capsule")
+    ios_root = tmp_path / "workspace/quwoquan_app/ios"
+    ios_root.mkdir(parents=True)
+    (ios_root / "Podfile.lock").write_bytes(snapshot.lock_bytes)
+    projection = materialize_ios_pod_projection(
+        snapshot_root=capsule,
+        ios_root=ios_root,
+        private_state_root=tmp_path / "private-cocoapods",
+        pod_executable=pod,
+        resolution_inputs=_resolution_inputs(paths),
+        upstream_dependency_digest=_UPSTREAM_DEPENDENCY_DIGEST,
+    )
+
+    result = run_offline_cocoapods_install(
+        projection=projection,
+        pod_executable=pod,
+        base_environment={"PATH": os.environ["PATH"]},
+    )
+
+    assert result.first_exit_code == result.second_exit_code == 0
+    assert (
+        projection.pods_root
+        / "Pods.xcodeproj/xcuserdata/tester.xcuserdatad/xcschememanagement.plist"
+    ).is_file()
+
+
 def test_offline_install_rejects_pods_output_drift_even_when_lock_is_same(
     tmp_path: Path,
 ) -> None:
@@ -527,6 +592,66 @@ def test_offline_install_rejects_project_that_never_converges(
             pod_executable=pod,
             base_environment={"PATH": os.environ["PATH"]},
         )
+
+
+def test_offline_install_does_not_treat_generic_seed_segment_as_path_leak(
+    tmp_path: Path,
+) -> None:
+    paths, pod, snapshot = _snapshot(tmp_path, marker="project-generic-segment")
+    capsule = write_ios_pod_capsule(snapshot, tmp_path / "dependencies/capsule")
+    ios_root = tmp_path / "workspace/quwoquan_app/ios"
+    ios_root.mkdir(parents=True)
+    (ios_root / "Podfile.lock").write_bytes(snapshot.lock_bytes)
+    projection = materialize_ios_pod_projection(
+        snapshot_root=capsule,
+        ios_root=ios_root,
+        private_state_root=tmp_path / "private-cocoapods",
+        pod_executable=pod,
+        resolution_inputs=_resolution_inputs(paths),
+        upstream_dependency_digest=_UPSTREAM_DEPENDENCY_DIGEST,
+    )
+
+    result = run_offline_cocoapods_install(
+        projection=projection,
+        pod_executable=pod,
+        base_environment={"PATH": os.environ["PATH"]},
+    )
+
+    assert result.first_exit_code == result.second_exit_code == 0
+
+
+def test_offline_install_allows_explicit_flutter_toolchain_root(
+    tmp_path: Path,
+) -> None:
+    paths, pod, snapshot = _snapshot(tmp_path, marker="project-flutter-toolchain")
+    capsule = write_ios_pod_capsule(snapshot, tmp_path / "dependencies/capsule")
+    ios_root = tmp_path / "workspace/quwoquan_app/ios"
+    ios_root.mkdir(parents=True)
+    (ios_root / "Podfile.lock").write_bytes(snapshot.lock_bytes)
+    flutter = tmp_path / "toolchain/flutter/bin/flutter"
+    flutter.parent.mkdir(parents=True)
+    flutter.write_text("#!/bin/sh\n", encoding="utf-8")
+    flutter.chmod(0o755)
+    projection = materialize_ios_pod_projection(
+        snapshot_root=capsule,
+        ios_root=ios_root,
+        private_state_root=tmp_path / "private-cocoapods",
+        pod_executable=pod,
+        resolution_inputs=_resolution_inputs(paths),
+        upstream_dependency_digest=_UPSTREAM_DEPENDENCY_DIGEST,
+    )
+
+    result = run_offline_cocoapods_install(
+        projection=projection,
+        pod_executable=pod,
+        base_environment={
+            "PATH": os.environ["PATH"],
+            "QWQ_REAL_FLUTTER": str(flutter),
+            "FLUTTER_ROOT": str(flutter.parent.parent),
+        },
+    )
+
+    assert result.first_exit_code == result.second_exit_code == 0
 
 
 def test_offline_install_rejects_external_project_path(tmp_path: Path) -> None:

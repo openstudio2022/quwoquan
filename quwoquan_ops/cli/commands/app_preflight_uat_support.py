@@ -26,6 +26,10 @@ APP_CORE_READBACK_UAT_TEST_TARGET = (
     "test/user_acceptance/journeys/app_startup/"
     "app_core_readback__user_acceptance_test.dart"
 )
+RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET = (
+    "test/user_acceptance/journeys/release_bound_sample_matrix/"
+    "release_bound_sample_matrix__user_acceptance_test.dart"
+)
 PROFILE_JOURNEY_UAT_TEST_TARGET = (
     "test/user_acceptance/journeys/profile/"
     "profile_journey__user_acceptance_test.dart"
@@ -40,27 +44,6 @@ IOS_DIRECT_FLUTTER_RUN_UAT = (
 STARTUP_FIRST_FRAME_UAT = (
     _REPO_ROOT / "quwoquan_app/scripts/device/verify_startup_first_frame.py"
 )
-APP_CONTENT_UAT_ENVELOPE_ARGUMENTS = (
-    ("releaseId", "--data-release-id"),
-    ("releaseClass", "--data-release-class"),
-    ("productLifecycleState", "--product-lifecycle-state"),
-    ("homepageId", "--data-release-homepage-id"),
-    ("homepageTitle", "--data-release-homepage-title"),
-    ("articleWorkId", "--data-release-article-work-id"),
-    ("articleTitle", "--data-release-article-title"),
-    ("imageWorkId", "--data-release-image-work-id"),
-    ("imageTitle", "--data-release-image-title"),
-    ("creatorName", "--data-release-creator-name"),
-    ("creatorUserHandle", "--data-release-creator-user-handle"),
-    ("creatorPersonaId", "--data-release-creator-persona-id"),
-    (
-        "creatorAvatarAssetId",
-        "--data-release-creator-avatar-asset-id",
-    ),
-    ("tagLabel", "--data-release-tag-label"),
-    ("videoAttribution", "--data-release-video-attribution"),
-)
-
 
 def register_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
@@ -78,10 +61,11 @@ def register_parser(
     )
     app_content_uat_parser.add_argument(
         "--platform",
-        choices=("ios-simulator", "android"),
+        choices=("ios-simulator", "android", "android-physical", "ios-physical"),
         default="ios-simulator",
     )
     app_content_uat_parser.add_argument("--device-id", required=True)
+    app_content_uat_parser.add_argument("--device-registration-ref", default="")
     app_content_uat_parser.add_argument("--dry-run", action="store_true")
 
 
@@ -92,6 +76,7 @@ _ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
         PROFILE_JOURNEY_UAT_TEST_TARGET,
         MESSAGE_HOME_UAT_TEST_TARGET,
         APP_CORE_READBACK_UAT_TEST_TARGET,
+        RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET,
         HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
         VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
         CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
@@ -102,6 +87,7 @@ _BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
         PROFILE_JOURNEY_UAT_TEST_TARGET,
         MESSAGE_HOME_UAT_TEST_TARGET,
         APP_CORE_READBACK_UAT_TEST_TARGET,
+        RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET,
         HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
     }
 )
@@ -170,7 +156,7 @@ def _app_content_experience_screenshot_digests(
     return digests
 
 
-def _app_content_android_launch_command(
+def _app_content_canonical_launch_command(
     *,
     environment: str,
     target: str,
@@ -181,7 +167,7 @@ def _app_content_android_launch_command(
     app_root: Path = _REPO_ROOT / "quwoquan_app",
     launch_control: Mapping[str, Any] | None = None,
 ) -> tuple[list[str], dict[str, str]]:
-    """Build the only Android page-UAT prelaunch command.
+    """Build the canonical Android/iOS-physical page-UAT prelaunch command.
 
     `--exit-after-launch` is guarded again by run.sh's internal actor check; the
     explicit actor environment here is evidence that stackctl, rather than an

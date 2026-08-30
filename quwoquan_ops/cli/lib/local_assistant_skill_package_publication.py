@@ -18,6 +18,7 @@ from .local_assistant_skill_package_keys import (
     KEY_ID,
     prepare_local_assistant_skill_package_keys,
 )
+from .openssl3_resolver import OpenSSL3Executable, resolve_openssl3
 from .output_paths import deployment_target_path
 
 SCHEMA = "stackctl.local_assistant_skill_package_publication.v1"
@@ -346,9 +347,15 @@ def _source_digest(root: Path) -> str:
     return "sha256:" + digest.hexdigest()
 
 
-def _private_key_base64(private_pem: Path, public_keys_json: str) -> str:
+def _private_key_base64(
+    private_pem: Path,
+    public_keys_json: str,
+    *,
+    openssl: OpenSSL3Executable | None = None,
+) -> str:
+    selected = openssl or resolve_openssl3()
     result = subprocess.run(
-        ["openssl", "pkey", "-in", str(private_pem), "-outform", "DER"],
+        selected.argv("pkey", "-in", str(private_pem), "-outform", "DER"),
         capture_output=True,
         check=False,
     )
@@ -597,7 +604,10 @@ def publish_alpha_test_live(report_dir: Path) -> dict[str, Any]:
         / "services/assistant-service/resources/skill_packages/official"
     )
     source_digest = _source_digest(source_root)
-    keys = prepare_local_assistant_skill_package_keys(ENVIRONMENT, TARGET)
+    openssl = resolve_openssl3()
+    keys = prepare_local_assistant_skill_package_keys(
+        ENVIRONMENT, TARGET, openssl=openssl
+    )
     runtime_environment, config_root, network, mounts = _container_runtime()
     if (
         runtime_environment.get(
@@ -629,7 +639,9 @@ def publish_alpha_test_live(report_dir: Path) -> dict[str, Any]:
     environment = dict(runtime_environment)
     environment[
         "ASSISTANT_SKILL_PACKAGE_SIGNING_PRIVATE_KEY_BASE64"
-    ] = _private_key_base64(keys.private_key_path, keys.public_keys_json)
+    ] = _private_key_base64(
+        keys.private_key_path, keys.public_keys_json, openssl=openssl
+    )
     build_report: dict[str, Any]
     if publication_path.exists():
         build_report = {

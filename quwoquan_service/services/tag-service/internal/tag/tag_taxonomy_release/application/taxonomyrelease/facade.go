@@ -1,5 +1,5 @@
 // Package taxonomyrelease 是 TagTaxonomyRelease 的命令门面：
-// Stage 以完整 immutable intent 承载幂等，并把 canonicalDigest 唯一冲突 fail-closed；
+// Stage 以 releaseId 绑定完整 immutable intent 承载幂等；不同 releaseId 可以引用同一 canonicalDigest；
 // Activate 做单 active 内部 CAS 切换并对纯竞态有限重放；目标已 active 时按 no-op 重放安全返回。
 package taxonomyrelease
 
@@ -39,8 +39,8 @@ type StageCommand struct {
 	NodeCount       int
 }
 
-// Stage 落不可变 staged 记录。只有完整相同的导入意图可重放；
-// 同 digest 但 releaseId/sourceOwner/nodeCount 漂移必须显式冲突，不能激活别的 catalog release。
+// Stage 落不可变 staged 记录。同 releaseId 只有完整相同的导入意图可重放；
+// 不同 releaseId 可引用同一 canonicalDigest，同 releaseId 的任一 intent 字段漂移必须显式冲突。
 func (f *Facade) Stage(ctx context.Context, command StageCommand) (model.Release, error) {
 	release, err := model.NewStaged(
 		command.ReleaseID, command.SourceOwner,
@@ -53,23 +53,9 @@ func (f *Facade) Stage(ctx context.Context, command StageCommand) (model.Release
 	} else if found {
 		return resolveStageReplay(existing, release)
 	}
-	if existing, found, findErr := f.store.FindByDigest(ctx, release.CanonicalDigest); findErr != nil {
-		return model.Release{}, findErr
-	} else if found {
-		return resolveStageReplay(existing, release)
-	}
 	insertErr := f.store.InsertStaged(ctx, release)
 	if insertErr == nil {
 		return release, nil
-	}
-	if errors.Is(insertErr, model.ErrDigestConflict) {
-		existing, found, findErr := f.store.FindByDigest(ctx, release.CanonicalDigest)
-		if findErr != nil {
-			return model.Release{}, findErr
-		}
-		if found {
-			return resolveStageReplay(existing, release)
-		}
 	}
 	if errors.Is(insertErr, model.ErrVersionConflict) {
 		existing, found, loadErr := f.store.Load(ctx, release.ReleaseID)

@@ -11,6 +11,10 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from quwoquan_app.scripts.tools.flutter_facade.flutter_facade import (
+    resolved_flutter_identity,
+)
+
 _DIGEST_PREFIX = "sha256:"
 _POLICY_SCHEMA = "quwoquan_ops.app_build_projection_policy.v1"
 _SEAL_SCHEMA = "quwoquan_ops.app_build_projection_seal.v1"
@@ -22,6 +26,9 @@ FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID = (
 FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID = "flutter-ios-3.47-cocoapods-1.16.2"
 _POLICY_FIELDS = {"toolchain", "exact", "subtrees", "reject"}
 _NODE_KINDS = {"directory", "file", "symlink"}
+_PATROL_IOS_INTEGRATION_TEST_SYMLINK = (
+    "quwoquan_app/test_host/patrol/ios/.symlinks/plugins/integration_test"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,7 +264,27 @@ def _read_regular_at(
     return bytes(content)
 
 
-def _inventory(projection: Path) -> list[_Node]:
+def _canonical_flutter_integration_test_directory(
+    environment: Mapping[str, str],
+) -> Path:
+    identity = resolved_flutter_identity(dict(environment))
+    executable = Path(str(identity.get("executable") or ""))
+    try:
+        physical_executable = executable.resolve(strict=True)
+        sdk_root = physical_executable.parent.parent
+        package = (sdk_root / "packages/integration_test").resolve(strict=True)
+    except OSError as exc:
+        raise ValueError(
+            "App build projection canonical Flutter integration_test is unavailable"
+        ) from exc
+    if not physical_executable.is_file() or not package.is_dir():
+        raise ValueError(
+            "App build projection canonical Flutter integration_test is invalid"
+        )
+    return package
+
+
+def _inventory(projection: Path, *, policy_id: str) -> list[_Node]:
     root_metadata = projection.lstat()
     if not stat.S_ISDIR(root_metadata.st_mode) or projection.is_symlink():
         raise ValueError("App build projection root must be a real directory")
@@ -300,9 +327,25 @@ def _inventory(projection: Path) -> list[_Node]:
                         raise ValueError(
                             f"App build projection symlink target is unavailable: {relative}"
                         ) from exc
-                    if not resolved.is_relative_to(root):
+                    is_patrol_flutter_package = (
+                        policy_id == FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID
+                        and relative == _PATROL_IOS_INTEGRATION_TEST_SYMLINK
+                    )
+                    allowed_external = False
+                    if is_patrol_flutter_package:
+                        allowed_external = (
+                            resolved
+                            == _canonical_flutter_integration_test_directory(os.environ)
+                        )
+                        if not allowed_external:
+                            raise ValueError(
+                                "App build projection symlink escapes build root: "
+                                f"{relative}"
+                            )
+                    if not resolved.is_relative_to(root) and not allowed_external:
                         raise ValueError(
-                            f"App build projection symlink escapes build root: {relative}"
+                            "App build projection symlink escapes build root: "
+                            f"{relative}"
                         )
                     content = os.fsencode(target)
                     kind, size = "symlink", len(content)
@@ -335,6 +378,15 @@ def _inventory(projection: Path) -> list[_Node]:
 
 
 def _admit(policy: _Policy, node: _Node) -> None:
+    if policy.policy_id == FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID:
+        if (
+            node.path == _PATROL_IOS_INTEGRATION_TEST_SYMLINK
+            and node.kind == "symlink"
+        ) or (
+            node.kind == "directory"
+            and _is_parent(node.path, _PATROL_IOS_INTEGRATION_TEST_SYMLINK)
+        ):
+            return
     if any(_under(node.path, denied) for denied in policy.reject):
         raise ValueError(
             f"App build projection derived output rejected by policy: {node.path}"
@@ -422,7 +474,7 @@ def seal_projection_build(
         reject_unmanifested=False,
     )
     policy = _load_policy(projection / _POLICY_RELATIVE_PATH, policy_id)
-    inventory = _inventory(projection)
+    inventory = _inventory(projection, policy_id=policy_id)
     indexed = {node.path: node for node in inventory}
     for path, kind in source.items():
         node = indexed.get(path)
@@ -446,7 +498,7 @@ def seal_projection_build(
     )
     if (source_digest, source_count) != (final_source_digest, final_source_count):
         raise ValueError("App build projection source CAS changed during inventory")
-    if _inventory(projection) != inventory:
+    if _inventory(projection, policy_id=policy_id) != inventory:
         raise ValueError("App build projection tree changed during inventory")
     derived_digest = _canonical_digest(
         {

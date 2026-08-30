@@ -42,7 +42,7 @@ from content.execution.controller.execute.image_supported_api_review_result impo
     image_review_passed as _review_passed,
     image_review_summary,
 )
-from content.execution.controller.execute.pre_acquisition_handoff import (
+from content.source.pre_acquisition_handoff import (
     guard_acquisition_source_identity,
 )
 from content.source.professional_image_supported_api_contract import load_document

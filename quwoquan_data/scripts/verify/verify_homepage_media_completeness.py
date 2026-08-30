@@ -24,7 +24,8 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core import paths
 from core.data_issue import DataIssue, DataIssueCode
-from core.io import read_json, write_json
+from core.io import read_json
+from content.execution.execution_terminal import load_terminal_execution_evidence
 from verify import homepage_media_decision as decision
 from verify import homepage_media_fulfillment as fulfillment
 from verify.homepage_media_issue import issue as _issue, mapping_rows as _mapping_rows
@@ -99,7 +100,6 @@ def _media_report(
     publishable_names: Collection[str] | None,
     include_decision: bool,
     include_fulfillment: bool,
-    evidence_name: str,
 ) -> dict[str, Any]:
     """Shared scan behind the decision, fulfillment and combined verdicts.
 
@@ -167,10 +167,9 @@ def _media_report(
         )
         report["passed"] = False
     if root.is_dir():
-        evidence = root / "evidence" / evidence_name
-        evidence.parent.mkdir(parents=True, exist_ok=True)
-        write_json(evidence, report)
-        report["reportPath"] = str(evidence)
+        # 纯 verifier 对 active 与 terminal 工作包都只读；该调用只负责让无效的
+        # stale/supersession candidate fail closed，不把报告反写进 execution inventory。
+        load_terminal_execution_evidence(root)
     return report
 
 
@@ -184,7 +183,6 @@ def homepage_media_decision_report(execution_id: str) -> dict[str, Any]:
         publishable_names=None,
         include_decision=True,
         include_fulfillment=False,
-        evidence_name="homepage_media_decision.json",
     )
 
 
@@ -199,7 +197,6 @@ def homepage_media_fulfillment_report(
         publishable_names=publishable_names,
         include_decision=False,
         include_fulfillment=True,
-        evidence_name="homepage_media_fulfillment.json",
     )
 
 
@@ -219,7 +216,6 @@ def homepage_media_completeness_report(
         publishable_names=publishable_names,
         include_decision=True,
         include_fulfillment=True,
-        evidence_name="homepage_media_completeness.json",
     )
 
 

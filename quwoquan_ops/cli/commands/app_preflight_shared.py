@@ -119,16 +119,15 @@ def _validate_data_activation_envelope(
     """Recompute the environment-specific activation/import/readback binding."""
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    app_uat = receipt.get("appUatEnvelope")
-    if not isinstance(app_uat, dict):
-        issues.append("Data readiness appUatEnvelope must be an object")
-        app_uat = {}
-    app_uat_digest = _stackctl._canonical_document_checksum(app_uat)
-    if receipt.get("appUatEnvelopeDigest") != app_uat_digest:
-        issues.append("Data readiness appUatEnvelopeDigest drift")
-    for field in ("releaseId", "releaseClass", "productLifecycleState"):
-        if app_uat.get(field) != receipt.get(field):
-            issues.append(f"Data readiness appUatEnvelope {field} drift")
+    retired = sorted(
+        field
+        for field in ("appUatEnvelope", "appUatEnvelopeDigest")
+        if field in receipt
+    )
+    if retired:
+        issues.append(
+            "Data readiness contains retired App UAT fields: " + ", ".join(retired)
+        )
 
     import_ref = str(receipt.get("contentImportReportRef") or "").strip()
     import_path = (evidence_root / import_ref).resolve()
@@ -150,7 +149,6 @@ def _validate_data_activation_envelope(
         "verifyRunId": receipt.get("verifyRunId"),
         "importReportRef": import_ref,
         "importReportDigest": import_digest,
-        "appUatEnvelopeDigest": app_uat_digest,
     }
     if "sourceIdentities" in receipt or "sourceIdentitySetDigest" in receipt:
         expected["sourceIdentities"] = receipt.get("sourceIdentities")
@@ -161,6 +159,9 @@ def _validate_data_activation_envelope(
         expected["sourceRevision"] = receipt.get("sourceRevision")
         expected["sourceDigest"] = receipt.get("sourceDigest")
         expected["entityCatalogDigest"] = receipt.get("entityCatalogDigest")
+    for field in ("milestone", "previousEnvironmentActivation"):
+        if field in receipt:
+            expected[field] = receipt.get(field)
     if receipt.get("readinessPhase") == ReadinessPhase.RESEARCH.value:
         isolation_ref = str(
             receipt.get("researchIsolationVerificationRef") or ""

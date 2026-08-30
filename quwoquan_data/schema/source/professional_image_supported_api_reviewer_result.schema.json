@@ -4,81 +4,233 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema", "candidateId", "contentSha256", "reviewRequestRef", "reviewRequestSha256",
-    "provider", "model", "runId", "reviewedAt", "resultSha256", "judgment", "judgmentDigest"
+    "schema",
+    "candidateId",
+    "contentSha256",
+    "reviewRequestRef",
+    "reviewRequestSha256",
+    "provider",
+    "model",
+    "runId",
+    "reviewedAt",
+    "resultSha256",
+    "judgment",
+    "judgmentDigest"
   ],
   "properties": {
-    "schema": {"const": "quwoquan_data.professional_image_supported_api_reviewer_result"},
-    "candidateId": {"type": "string", "minLength": 1},
-    "contentSha256": {"$ref": "#/$defs/sha256"},
-    "reviewRequestRef": {"$ref": "#/$defs/safeRef"},
-    "reviewRequestSha256": {"$ref": "#/$defs/sha256"},
-    "semanticTaskRequestRef": {"$ref": "#/$defs/safeRef"},
-    "semanticTaskRequestSha256": {"$ref": "#/$defs/sha256"},
-    "semanticTaskAttemptRef": {"$ref": "#/$defs/safeRef"},
-    "semanticTaskAttemptSha256": {"$ref": "#/$defs/sha256"},
-    "sourceReview": {"$ref": "#/$defs/sourceReview"},
-    "sourceReviewRequestRef": {"$ref": "#/$defs/safeRef"},
-    "sourceReviewRequestSha256": {"$ref": "#/$defs/sha256"},
-    "sourceReviewAttemptRef": {"$ref": "#/$defs/safeRef"},
-    "sourceReviewAttemptSha256": {"$ref": "#/$defs/sha256"},
-    "provider": {"enum": ["cursor_sdk", "codex_sdk"]},
-    "model": {"type": "string", "minLength": 1},
-    "runId": {"type": "string", "minLength": 1},
-    "reviewedAt": {"type": "string", "format": "date-time"},
-    "resultSha256": {"$ref": "#/$defs/sha256"},
-    "judgment": {"$ref": "#/$defs/judgment"},
-    "judgmentDigest": {"$ref": "#/$defs/sha256"}
+    "schema": {
+      "const": "quwoquan_data.professional_image_supported_api_reviewer_result"
+    },
+    "candidateId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contentSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "reviewRequestRef": {
+      "$ref": "#/$defs/safeRef"
+    },
+    "reviewRequestSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "semanticTaskRequestRef": {
+      "$ref": "#/$defs/safeRef"
+    },
+    "semanticTaskRequestSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "semanticTaskAttemptRef": {
+      "$ref": "#/$defs/safeRef"
+    },
+    "semanticTaskAttemptSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "sourceReview": {
+      "$ref": "#/$defs/sourceReview"
+    },
+    "sourceReviewRequestRef": {
+      "$ref": "#/$defs/safeRef"
+    },
+    "sourceReviewRequestSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "sourceReviewAttemptRef": {
+      "$ref": "#/$defs/safeRef"
+    },
+    "sourceReviewAttemptSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "provider": {
+      "enum": [
+        "cursor_sdk",
+        "codex_sdk"
+      ]
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resultSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "judgment": {
+      "$ref": "#/$defs/judgment"
+    },
+    "judgmentDigest": {
+      "$ref": "#/$defs/sha256"
+    }
   },
   "oneOf": [
     {
       "required": [
-        "semanticTaskRequestRef", "semanticTaskRequestSha256",
-        "semanticTaskAttemptRef", "semanticTaskAttemptSha256"
+        "semanticTaskRequestRef",
+        "semanticTaskRequestSha256",
+        "semanticTaskAttemptRef",
+        "semanticTaskAttemptSha256"
       ],
-      "not": {"required": ["sourceReview"]}
+      "not": {
+        "required": [
+          "sourceReview"
+        ]
+      }
     },
     {
       "required": [
-        "sourceReview", "sourceReviewRequestRef", "sourceReviewRequestSha256",
-        "sourceReviewAttemptRef", "sourceReviewAttemptSha256"
+        "sourceReview",
+        "sourceReviewRequestRef",
+        "sourceReviewRequestSha256",
+        "sourceReviewAttemptRef",
+        "sourceReviewAttemptSha256"
       ],
-      "not": {"required": ["semanticTaskRequestRef"]}
+      "not": {
+        "required": [
+          "semanticTaskRequestRef"
+        ]
+      }
     }
   ],
   "$defs": {
-    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "safeRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "safeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
     "sourceReview": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "executionBundleDigest", "handoffDigest", "requestDigest"],
+      "required": [
+        "sourceRevision",
+        "sourceDigest",
+        "entityCatalogDigest",
+        "executionBundleDigest",
+        "handoffDigest",
+        "requestDigest"
+      ],
       "properties": {
-        "sourceRevision": {"$ref": "#/$defs/sha256"},
-        "sourceDigest": {"$ref": "#/$defs/sha256"},
-        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
-        "executionBundleDigest": {"$ref": "#/$defs/sha256"},
-        "handoffDigest": {"$ref": "#/$defs/sha256"},
-        "requestDigest": {"$ref": "#/$defs/sha256"}
+        "sourceRevision": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "entityCatalogDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "executionBundleDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "handoffDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "requestDigest": {
+          "$ref": "#/$defs/sha256"
+        }
       }
     },
     "judgment": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "status", "entityMatch", "privacyRisk", "minorRisk",
-        "maliciousMediaRisk", "watermarkStatus", "qualityStatus", "findings"
+        "status",
+        "entityMatch",
+        "privacyRisk",
+        "minorRisk",
+        "maliciousMediaRisk",
+        "watermarkStatus",
+        "qualityStatus",
+        "findings"
       ],
       "properties": {
-        "status": {"enum": ["passed", "blocked"]},
-        "entityMatch": {"enum": ["matched", "mismatch", "unknown"]},
-        "privacyRisk": {"enum": ["none", "present", "unknown"]},
-        "minorRisk": {"enum": ["none", "present", "unknown"]},
-        "maliciousMediaRisk": {"enum": ["none", "present", "unknown"]},
-        "watermarkStatus": {"enum": ["absent", "present", "unknown"]},
-        "qualityStatus": {"enum": ["passed", "blocked"]},
-        "findings": {"type": "array", "items": {"type": "string", "minLength": 1}}
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ]
+        },
+        "entityMatch": {
+          "enum": [
+            "matched",
+            "mismatch",
+            "unknown"
+          ]
+        },
+        "privacyRisk": {
+          "enum": [
+            "none",
+            "present",
+            "unknown"
+          ]
+        },
+        "minorRisk": {
+          "enum": [
+            "none",
+            "present",
+            "unknown"
+          ]
+        },
+        "maliciousMediaRisk": {
+          "enum": [
+            "none",
+            "present",
+            "unknown"
+          ]
+        },
+        "watermarkStatus": {
+          "enum": [
+            "absent",
+            "present",
+            "unknown"
+          ]
+        },
+        "qualityStatus": {
+          "enum": [
+            "passed",
+            "blocked"
+          ]
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     }
-  }
+  },
+  "title": "Retired managed image reviewer result; invalid for new source admission",
+  "deprecated": true
 }

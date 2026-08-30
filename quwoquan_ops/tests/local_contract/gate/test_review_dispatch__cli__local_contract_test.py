@@ -8,15 +8,18 @@
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-004.t3
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-006.t1
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-006.t2
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-006.t3
 """
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
+import uuid
 import unittest
 from pathlib import Path
 from types import ModuleType
@@ -29,6 +32,7 @@ _CLI = _REPO_ROOT / "quwoquan_ops/cli/review_dispatch.py"
 _REGISTRY = _REPO_ROOT / ".agents/skills/review/references/registry.yaml"
 _GOVERNANCE_CONTRACT = _REPO_ROOT / "quwoquan_ops/policies/agent_governance_contract.yaml"
 _OUTPUT_ROOT = _REPO_ROOT / ".qwq_output/env/repo/local/review-dispatch-tests"
+_MANIFEST_REFS: dict[int, str] = {}
 
 
 def _load_cli() -> ModuleType:
@@ -52,6 +56,25 @@ def _plan(
     deliverable: str | None = None,
     **kwargs: object,
 ) -> dict:
+    if (
+        segment == "POST"
+        and (_registry["workflows"][workflow].get("automatic_review") is not False)
+        and "context_manifest" not in kwargs
+    ):
+        kwargs["context_manifest"] = _context_manifest(
+            {"path": "README.md", "anchor": None, "kind": "spec"}
+        )
+    manifest = kwargs.get("context_manifest")
+    if isinstance(manifest, dict) and "context_manifest_ref" not in kwargs:
+        ref = _MANIFEST_REFS.get(id(manifest))
+        if ref:
+            kwargs["context_manifest_ref"] = ref
+    previous = kwargs.get("previous_plan")
+    if isinstance(previous, dict) and "context_manifest_ref" not in kwargs:
+        ref = (previous.get("owner_manifest_identity") or {}).get("ref")
+        if isinstance(ref, str) and ref:
+            kwargs["context_manifest_ref"] = ref
+            kwargs["context_manifest"] = json.loads((_REPO_ROOT / ref).read_text(encoding="utf-8"))
     return _cli.build_plan(
         _registry,
         workflow,
@@ -65,11 +88,11 @@ def _plan(
 def _context_manifest(
     *contexts: dict[str, str | None],
 ) -> dict[str, object]:
-    return {
+    manifest: dict[str, object] = {
         "schema_version": _governance_contract["feature_context_manifest"][
             "schema_version"
         ],
-        "target": "README.md",
+        "target": "specs/feature-tree/spec.md",
         "resolved_owner": "specs/feature-tree/spec.md",
         "owner_chain": [
             {
@@ -78,11 +101,27 @@ def _context_manifest(
                 "path": "specs/feature-tree/spec.md",
             }
         ],
-        "canonical_contexts": list(contexts),
+        "canonical_contexts": [
+            {
+                "path": "specs/feature-tree/spec.md",
+                "anchor": None,
+                "kind": "spec",
+            },
+            *list(contexts),
+        ],
         "applicable_agents": ["AGENTS.md"],
         "profiles": [],
         "open_items": [],
     }
+    manifest["evidence_fingerprint"] = _cli.embedded_fingerprint_binding(
+        _cli.build_feature_context_fingerprint(manifest, repo_root=_REPO_ROOT)
+    )
+    root = _OUTPUT_ROOT / "manifests"
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"{uuid.uuid4().hex}.json"
+    path.write_text(json.dumps(manifest, ensure_ascii=False) + "\n", encoding="utf-8")
+    _MANIFEST_REFS[id(manifest)] = path.relative_to(_REPO_ROOT).as_posix()
+    return manifest
 
 
 class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
@@ -99,7 +138,16 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             set(_governance_contract["review_plan"]["required_fields"]),
             set(plan),
         )
-        self.assertEqual(2, _governance_contract["review_plan"]["schema_version"])
+        self.assertEqual(3, _governance_contract["review_plan"]["schema_version"])
+        self.assertNotIn("fingerprint_inputs", _governance_contract["review_plan"])
+        self.assertEqual(
+            "canonical-evidence-fingerprint-receipt",
+            _governance_contract["review_plan"]["fingerprint_identity"],
+        )
+        self.assertRegex(plan["fingerprint"], r"^sha256:[0-9a-f]{64}$")
+        self.assertEqual(
+            plan["fingerprint"], plan["fingerprint_receipt"]["digest"]
+        )
         for field, declaration in (
             ("contexts", "context_fields"),
             ("reviewers", "reviewer_fields"),
@@ -128,18 +176,6 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
         # GWT-002.t1 / GWT-004.t1
         contract_module = sys.modules[_cli.declared_object.__module__]
         original = contract_module.declared_fields
-
-        def drift(section: str, declaration: str) -> tuple[str, ...]:
-            fields = original(section, declaration)
-            if section == "review_plan" and declaration == "fingerprint_inputs":
-                return (*fields, "new_undeclared_input")
-            return fields
-
-        with (
-            mock.patch.object(contract_module, "declared_fields", side_effect=drift),
-            self.assertRaisesRegex(ValueError, "fingerprint_inputs"),
-        ):
-            _plan("dev", "POST", ["README.md"])
 
         def context_drift(section: str, declaration: str) -> tuple[str, ...]:
             fields = original(section, declaration)
@@ -175,7 +211,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 ["README.md"],
                 context_manifest=legacy_manifest,
             )
-        self.assertEqual("REVIEW.CONTEXT_MANIFEST_INVALID", legacy.exception.code)
+        self.assertEqual("REVIEW.OWNER_MANIFEST_SCHEMA_UNSUPPORTED", legacy.exception.code)
 
         version_drift = _context_manifest(
             {"path": "README.md", "anchor": None, "kind": "spec"}
@@ -189,9 +225,22 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 context_manifest=version_drift,
             )
         self.assertEqual(
-            "REVIEW.CONTEXT_MANIFEST_INVALID",
+            "REVIEW.OWNER_MANIFEST_SCHEMA_UNSUPPORTED",
             invalid_manifest.exception.code,
         )
+
+        stale_manifest = _context_manifest(
+            {"path": "README.md", "anchor": None, "kind": "spec"}
+        )
+        stale_manifest["target"] = "AGENTS.md"
+        with self.assertRaises(_cli.ReviewDispatchError) as stale:
+            _plan(
+                "dev",
+                "POST",
+                ["README.md"],
+                context_manifest=stale_manifest,
+            )
+        self.assertEqual("REVIEW.OWNER_MANIFEST_STALE", stale.exception.code)
 
         initial = _plan("dev", "POST", ["README.md"])
         invalid_previous = json.loads(json.dumps(initial))
@@ -306,6 +355,92 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             tied["reviewers"][1]["checklist"],
         )
 
+    def test_governance_profiles_outrank_recommendation_for_mixed_worktree(self) -> None:
+        governance_paths = (
+            "quwoquan_ops/ci/local_readiness_planner.py",
+            "quwoquan_ops/gate/verify_workflow_resolution.py",
+            "quwoquan_ops/cli/lib/hosted_authority/client.py",
+            "quwoquan_ops/cli/objective_execution.py",
+            "quwoquan_ops/gate/verify_governance_pipeline_admission.py",
+            "quwoquan_service/control-plane/platform-ops/cmd/api/main.go",
+            "quwoquan_ops/portal/src/domains/platform/HumanAuthorityPage.tsx",
+            "specs/feature-tree/runtime/runtime-control-plane-foundation/human-authority-role-cards/spec.md",
+        )
+        recommendation_path = (
+            "quwoquan_service/services/recommendation-service/"
+            "generated/recommendation/recommendation_model_release/"
+            "control_plane/portal_menu.py"
+        )
+
+        for governance_path in governance_paths:
+            with self.subTest(path=governance_path):
+                plan = _plan(
+                    "dev",
+                    "POST",
+                    [recommendation_path, governance_path],
+                )
+                self.assertEqual(
+                    ["developer", "ops"],
+                    [item["role"] for item in plan["reviewers"]],
+                )
+                self.assertEqual("gate", plan["reviewers"][1]["profile"])
+                self.assertEqual(
+                    ["agent-context-budget"],
+                    [item["id"] for item in plan["evidence"]],
+                )
+                self.assertLessEqual(len(plan["reviewers"]), 2)
+
+    def test_governance_tests_have_one_public_make_owner_outside_commit_fast_path(self) -> None:
+        source = (_REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        expected = {
+            "quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py":
+                "test-review-dispatch",
+            "quwoquan_ops/tests/local_contract/gate/test_hosted_authority_adapter__local_contract_test.py":
+                "test-hosted-authority-adapter-local-contract",
+            "quwoquan_ops/tests/local_contract/gate/test_governance_pipeline_admission__evidence_bundle__local_contract_test.py":
+                "test-governance-pipeline-admission",
+            "quwoquan_ops/tests/local_contract/ci/test_delivery_gate_ci_bootstrap__local_contract_test.py":
+                "test-delivery-ci-local-contract",
+            "quwoquan_ops/tests/local_contract/ci/test_hosted_ci_timing_ledger__local_contract_test.py":
+                "test-delivery-ci-local-contract",
+        }
+
+        def target_block(name: str) -> str:
+            start = source.index(f"\n{name}:")
+            recipe_start = source.index("\n", start + 1) + 1
+            match = re.search(
+                r"(?m)^[-A-Za-z0-9_.%]+\s*:", source[recipe_start:]
+            )
+            end = recipe_start + match.start() if match else len(source)
+            return source[start:end]
+
+        gate_header = next(
+            line
+            for line in source.splitlines()
+            if line.startswith("test-gate-companion-local-contract:")
+        )
+        for public_target in {
+            "test-review-dispatch",
+            "test-hosted-authority-adapter-local-contract",
+            "test-governance-pipeline-admission",
+            "test-delivery-ci-local-contract",
+        }:
+            self.assertIn(public_target, gate_header)
+
+        for path, owner in expected.items():
+            with self.subTest(path=path):
+                self.assertEqual(1, source.count(path))
+                self.assertIn(path, target_block(owner))
+
+        commit_fast_path = (
+            _REPO_ROOT / "quwoquan_ops/gate/commit_gate.sh"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("test-delivery-ci-local-contract", commit_fast_path)
+        self.assertNotIn(
+            "test-hosted-authority-adapter-local-contract", commit_fast_path
+        )
+        self.assertNotIn("test-governance-pipeline-admission", commit_fast_path)
+
     def test_named_evidence_is_deduplicated_by_id(self) -> None:
         # GWT-004.t1: product and UX both reference feature-tree.
         plan = _plan("prd", "POST", [], deliverable="page")
@@ -315,6 +450,8 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             ["product", "ux"],
             plan["evidence"][0]["consumers"],
         )
+        for evidence in plan["evidence"]:
+            self.assertRegex(evidence["command_digest"], r"^sha256:[0-9a-f]{64}$")
 
     def test_fingerprint_covers_tracked_untracked_deleted_and_content_change(self) -> None:
         # GWT-004.t1
@@ -322,16 +459,30 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             ".agents/skills/review/references/registry.yaml"
         )
         self.assertTrue(tracked["tracked"])
-        with (
-            mock.patch.object(_cli, "_is_tracked", return_value=True),
-            mock.patch.object(_cli, "_exists_at_head", return_value=True),
-            mock.patch.object(_cli, "_head_blob_digest", return_value="head-digest"),
-        ):
-            deleted = _cli._snapshot_path(
-                ".qwq_output/env/repo/local/review-dispatch-tests/deleted.txt"
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            source = repo / "deleted.txt"
+            source.write_text("before\n", encoding="utf-8")
+            subprocess.run(["git", "add", "deleted.txt"], cwd=repo, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "user.name=Fixture",
+                    "-c",
+                    "user.email=fixture@example.invalid",
+                    "commit",
+                    "-qm",
+                    "fixture",
+                ],
+                cwd=repo,
+                check=True,
             )
+            source.unlink()
+            deleted = _cli.snapshot_path("deleted.txt", repo_root=repo)
             self.assertEqual("deleted", deleted["state"])
-            self.assertEqual("head-digest", deleted["content_digest"])
+            self.assertTrue(deleted["content_digest"].startswith("sha256:"))
 
         _OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=_OUTPUT_ROOT) as directory:
@@ -344,15 +495,77 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             second = _plan("dev", "POST", [relative])
             self.assertNotEqual(first["fingerprint"], second["fingerprint"])
 
+    def test_legacy_fingerprint_is_never_consumed_for_rereview(self) -> None:
+        initial = _plan("dev", "POST", ["README.md"])
+        legacy = json.loads(json.dumps(initial))
+        legacy["fingerprint"] = "0" * 64
+        with self.assertRaises(_cli.ReviewDispatchError) as previous:
+            _plan(
+                "dev",
+                "POST",
+                ["README.md"],
+                round_name="rereview",
+                finding_owners=["developer"],
+                previous_plan=legacy,
+            )
+        self.assertEqual("REVIEW.PREVIOUS_PLAN_INVALID", previous.exception.code)
+
+    def test_canonical_digest_is_stable_across_receipt_capture_time(self) -> None:
+        first = _cli._fingerprint_receipt(
+            workflow="dev",
+            deliverable="code",
+            scope="",
+            owner_manifest_identity={"ref": None, "canonical_bytes_sha256": None, "target": "", "scope": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None},
+            terminal={"status": "READY", "codes": [], "failed_evidence": []},
+            changed_paths=["README.md"],
+            profiles=[],
+            contexts=[],
+            initial_reviewers=[],
+            evidence=[],
+        )
+        second = _cli._fingerprint_receipt(
+            workflow="dev",
+            deliverable="code",
+            scope="",
+            owner_manifest_identity={"ref": None, "canonical_bytes_sha256": None, "target": "", "scope": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None},
+            terminal={"status": "READY", "codes": [], "failed_evidence": []},
+            changed_paths=["README.md"],
+            profiles=[],
+            contexts=[],
+            initial_reviewers=[],
+            evidence=[],
+        )
+        self.assertEqual(first["digest"], second["digest"])
+        self.assertEqual(
+            "review_plan.fingerprint", first["captured_metadata"]["consumer"]
+        )
+
+    def test_review_fingerprint_binds_symlink_target_content_and_broken_state(self) -> None:
+        _OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=_OUTPUT_ROOT) as directory:
+            root = Path(directory)
+            target = root / "target.txt"
+            link = root / "link.txt"
+            target.write_text("first\n", encoding="utf-8")
+            link.symlink_to("target.txt")
+            relative = link.relative_to(_REPO_ROOT).as_posix()
+            first = _plan("dev", "POST", [relative])
+            target.write_text("second\n", encoding="utf-8")
+            second = _plan("dev", "POST", [relative])
+            target.unlink()
+            broken = _plan("dev", "POST", [relative])
+            self.assertNotEqual(first["fingerprint"], second["fingerprint"])
+            self.assertNotEqual(second["fingerprint"], broken["fingerprint"])
+
     def test_rereview_is_finding_owner_only_and_never_exceeds_four_calls(self) -> None:
         # GWT-004.t2
         path = "quwoquan_app/lib/design_system/pageflip/example.dart"
-        initial = _plan("dev", "POST", [path], scope="pageflip")
+        initial = _plan("dev", "POST", [path], scope="specs/feature-tree/spec.md")
         rereview = _plan(
             "dev",
             "POST",
             [path],
-            scope="pageflip",
+            scope="specs/feature-tree/spec.md",
             round_name="rereview",
             finding_owners=["developer", "ux"],
             previous_plan=initial,
@@ -408,7 +621,10 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 finding_owners=["ux"],
                 previous_plan=initial,
             )
-        self.assertEqual("REVIEW.NEW_REVIEW_REQUIRED", changed_scope.exception.code)
+        self.assertEqual(
+            "REVIEW.OWNER_MANIFEST_SCOPE_MISMATCH",
+            changed_scope.exception.code,
+        )
 
     def test_fingerprint_change_invalidates_evidence_without_expanding_reviewers(self) -> None:
         # GWT-004.t1 / GWT-004.t2
@@ -472,6 +688,22 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             [item["role"] for item in evidence["skipped_reviewers"]],
         )
 
+    def test_cancelled_review_is_gate_blocked_without_automatic_retry(self) -> None:
+        # GWT-006.t3：cancelled 不得包装为通过，恢复只能由显式用户请求触发。
+        plan = _plan(
+            "dev",
+            "POST",
+            ["README.md"],
+            cancelled=True,
+        )
+        self.assertEqual("GATE_BLOCK", plan["terminal"]["status"])
+        self.assertEqual(["REVIEW.CANCELLED"], plan["terminal"]["codes"])
+        terminal = _governance_contract["terminal_codes"]["REVIEW.CANCELLED"]
+        self.assertIs(terminal["automatic_retry"], False)
+        self.assertEqual(
+            "resume_only_after_explicit_user_request", terminal["recovery"]
+        )
+
     def test_plan_fields_context_budget_and_old_cli_arguments_remain_supported(self) -> None:
         plan = _plan("dev", "POST", ["README.md"])
         required_fields = {
@@ -492,7 +724,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 "-B",
                 str(_CLI),
                 "--workflow",
-                "dev",
+                "review",
                 "--segment",
                 "POST",
                 "--changed-paths",
@@ -504,7 +736,83 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             check=False,
         )
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(2, json.loads(result.stdout)["schema_version"])
+        self.assertEqual(3, json.loads(result.stdout)["schema_version"])
+
+    def test_post_requires_current_owner_manifest_and_matches_scope(self) -> None:
+        with self.assertRaises(_cli.ReviewDispatchError) as missing:
+            _cli.build_plan(_registry, "dev", "POST", None, ["README.md"])
+        self.assertEqual("REVIEW.OWNER_MANIFEST_REQUIRED", missing.exception.code)
+
+        manifest = _context_manifest(
+            {"path": "README.md", "anchor": None, "kind": "spec"}
+        )
+        with self.assertRaises(_cli.ReviewDispatchError) as mismatch:
+            _plan(
+                "dev",
+                "POST",
+                ["README.md"],
+                scope="AGENTS.md",
+                context_manifest=manifest,
+            )
+        self.assertEqual(
+            "REVIEW.OWNER_MANIFEST_SCOPE_MISMATCH", mismatch.exception.code
+        )
+
+
+    def test_plan_identity_binds_owner_manifest_and_terminal(self) -> None:
+        manifest = _context_manifest(
+            {"path": "README.md", "anchor": None, "kind": "spec"}
+        )
+        plan = _plan("dev", "POST", ["README.md"], context_manifest=manifest)
+        identity = plan["owner_manifest_identity"]
+        self.assertEqual(manifest["target"], identity["target"])
+        self.assertEqual(
+            manifest["evidence_fingerprint"]["digest"],
+            identity["fingerprint_digest"],
+        )
+        terminal_mutation = json.loads(json.dumps(plan))
+        terminal_mutation["terminal"] = {
+            "status": "GATE_BLOCK",
+            "codes": ["REVIEW.CANCELLED"],
+            "failed_evidence": [],
+        }
+        with self.assertRaises(_cli.ReviewDispatchError) as blocked:
+            _cli.validate_current_review_plan(
+                terminal_mutation, _registry, phase="evidence"
+            )
+        self.assertEqual("REVIEW.TERMINAL_CONTRACT_INVALID", blocked.exception.code)
+
+    def test_owner_manifest_ref_replacement_is_stale(self) -> None:
+        manifest = _context_manifest()
+        plan = _plan("dev", "POST", ["README.md"], context_manifest=manifest)
+        ref = _REPO_ROOT / plan["owner_manifest_identity"]["ref"]
+        original = ref.read_text(encoding="utf-8")
+        try:
+            ref.write_text(original + " ", encoding="utf-8")
+            with self.assertRaises(_cli.ReviewDispatchError) as stale:
+                _cli.validate_current_review_plan(plan, _registry)
+            self.assertEqual("REVIEW.OWNER_MANIFEST_STALE", stale.exception.code)
+        finally:
+            ref.write_text(original, encoding="utf-8")
+
+    def test_control_workflow_cannot_wrap_delivery_deliverable(self) -> None:
+        with self.assertRaises(_cli.ReviewDispatchError) as forbidden:
+            _plan("review", "POST", ["README.md"], deliverable="implementation")
+        self.assertEqual(
+            "REVIEW.CONTROL_WORKFLOW_DELIVERABLE_FORBIDDEN",
+            forbidden.exception.code,
+        )
+
+    def test_emitted_terminal_codes_equal_contract_closed_set(self) -> None:
+        self.assertEqual(
+            set(_governance_contract["terminal_codes"]),
+            set(_cli.EMITTED_REVIEW_CODES),
+        )
+        recoveries = [
+            item["recovery"]
+            for item in _governance_contract["terminal_codes"].values()
+        ]
+        self.assertEqual(len(recoveries), len(set(recoveries)))
 
     def test_cli_refuses_runtime_output_outside_canonical_root(self) -> None:
         forbidden = "specs/feature-tree/runtime/review-dispatch-forbidden-output"

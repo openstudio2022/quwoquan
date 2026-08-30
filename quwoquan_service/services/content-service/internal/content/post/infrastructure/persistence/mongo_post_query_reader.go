@@ -761,7 +761,6 @@ func PostDetailProjection() bson.D {
 		{Key: "updatedAt", Value: 1},
 		{Key: "publishedAt", Value: 1},
 		{Key: "lastActiveAt", Value: 1},
-		{Key: "sourceTaskId", Value: 1},
 	}
 }
 
@@ -851,7 +850,6 @@ func PostFeedProjection() bson.D {
 		{Key: "primaryHomepageId", Value: 1},
 		{Key: "primaryHomepageType", Value: 1},
 		{Key: "gatheringRef", Value: 1},
-		{Key: "sourceTaskId", Value: 1},
 		{Key: "sourceOwner", Value: 1},
 		{Key: "releaseId", Value: 1},
 		{Key: "manifestDigest", Value: 1},

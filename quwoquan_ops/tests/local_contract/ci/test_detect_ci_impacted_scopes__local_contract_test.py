@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import subprocess
 import sys
@@ -32,6 +31,7 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         self.assertIn("service=false", result.stdout)
         self.assertIn("portal=false", result.stdout)
         self.assertIn("topology=false", result.stdout)
+        self.assertIn("data=false", result.stdout)
 
     def test_metadata_change_impacts_service_app_and_portal(self) -> None:
         result = run_detect(
@@ -50,6 +50,25 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         self.assertIn("app=true", result.stdout)
         self.assertIn("portal=true", result.stdout)
         self.assertIn("topology=true", result.stdout)
+        self.assertIn("data=true", result.stdout)
+
+    def test_ops_change_impacts_data_and_all_hosted_scopes(self) -> None:
+        result = run_detect("quwoquan_ops/ci/detect_ci_impacted_scopes.py")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for scope in ("service", "app", "portal", "topology", "data"):
+            self.assertIn(f"{scope}=true", result.stdout)
+
+    def test_data_script_change_keeps_complete_data_and_hosted_closure(self) -> None:
+        result = run_detect("quwoquan_data/scripts/content/release/publish.py")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for scope in ("service", "app", "portal", "topology", "data"):
+            self.assertIn(f"{scope}=true", result.stdout)
+
+    def test_docs_only_change_keeps_every_scope_not_required(self) -> None:
+        result = run_detect("docs/ci/delivery-gate.md")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for scope in ("service", "app", "portal", "topology", "data"):
+            self.assertIn(f"{scope}=false", result.stdout)
 
     def test_l1_spec_change_triggers_its_owned_app_scope(self) -> None:
         result = run_detect("specs/feature-tree/runtime/runtime-client-foundation/spec.md")
@@ -96,6 +115,7 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         self.assertIn("app=true", result.stdout)
         self.assertIn("portal=true", result.stdout)
         self.assertIn("topology=true", result.stdout)
+        self.assertIn("data=true", result.stdout)
 
     def test_required_scope_policy_overrides_diff_without_skipped_inference(self) -> None:
         result = subprocess.run(
@@ -115,7 +135,7 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         self.assertIn("service=true", result.stdout)
         self.assertIn("app=true", result.stdout)
 
-    def test_scope_receipt_binds_identity_paths_and_required_state(self) -> None:
+    def test_scope_receipt_is_canonical_evidence_fingerprint(self) -> None:
         paths = [
             "quwoquan_app/lib/runtime/bootstrap.dart",
             "quwoquan_service/services/chat-service/cmd/api/bootstrap.go",
@@ -132,11 +152,7 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
                     "b" * 40,
                     "--scope-receipt",
                     str(receipt),
-                    *[
-                        value
-                        for path in paths
-                        for value in ("--changed-file", path)
-                    ],
+                    *[value for path in paths for value in ("--changed-file", path)],
                 ],
                 check=False,
                 capture_output=True,
@@ -144,29 +160,103 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
             payload = json.loads(receipt.read_text(encoding="utf-8"))
+
+        from quwoquan_ops.cli.lib.evidence_fingerprint import (
+            validate_evidence_fingerprint,
+        )
+
+        validated = validate_evidence_fingerprint(payload)
+        self.assertEqual(validated["digest_payload"]["git"]["head_sha"], "b" * 40)
         self.assertEqual(
-            payload,
+            validated["digest_payload"]["git"]["merge_base_sha"], "a" * 40
+        )
+        self.assertRegex(
+            validated["digest_payload"]["workspace"]["tracked_digest"],
+            r"^sha256:[0-9a-f]{64}$",
+        )
+        self.assertRegex(
+            validated["digest_payload"]["execution"]["generator_digest"],
+            r"^sha256:[0-9a-f]{64}$",
+        )
+        self.assertEqual(
+            validated["captured_metadata"]["changed_paths_digest"],
+            validated["digest_payload"]["workspace"]["tracked_digest"],
+        )
+        self.assertEqual(
+            validated["captured_metadata"]["planner_digest"],
+            validated["digest_payload"]["execution"]["generator_digest"],
+        )
+        self.assertEqual(
+            validated["captured_metadata"]["scope_states"],
             {
-                "schema": "ci-impacted-scope-receipt",
-                "baseSha": "a" * 40,
-                "headSha": "b" * 40,
-                "changedPathsDigest": "sha256:"
-                + hashlib.sha256(
-                    json.dumps(
-                        paths,
-                        ensure_ascii=False,
-                        separators=(",", ":"),
-                    ).encode("utf-8")
-                ).hexdigest(),
-                "scopes": {
-                    "app": "required",
-                    "data": "not_required",
-                    "portal": "not_required",
-                    "service": "required",
-                    "topology": "not_required",
-                },
+                "service": "required",
+                "app": "required",
+                "portal": "not_required",
+                "topology": "not_required",
+                "data": "not_required",
             },
         )
+        self.assertEqual(
+            validated["captured_metadata"]["planner_version"], "impact-planner-v1"
+        )
+
+    def test_receipt_requires_lowercase_exact_shas(self) -> None:
+        for base_sha, head_sha in (
+            ("a" * 39, "b" * 40),
+            ("A" * 40, "b" * 40),
+            ("a" * 40, "HEAD"),
+            ("a" * 40, "b" * 64),
+        ):
+            with tempfile.TemporaryDirectory() as directory:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(SCRIPT),
+                        "--base-sha",
+                        base_sha,
+                        "--head-sha",
+                        head_sha,
+                        "--scope-receipt",
+                        str(Path(directory) / "scope.json"),
+                        "--changed-file",
+                        "quwoquan_app/lib/runtime/bootstrap.dart",
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("exact SHA", result.stderr)
+
+    def test_malformed_changed_paths_fail_closed(self) -> None:
+        for path in (
+            "../quwoquan_app/lib/main.dart",
+            "quwoquan_app/../quwoquan_data/file.py",
+            "/tmp/quwoquan_app/lib/main.dart",
+            "C:/repo/quwoquan_app/lib/main.dart",
+            "quwoquan_app//lib/main.dart",
+            "quwoquan_app/lib/main.dart\nignored",
+        ):
+            result = run_detect(path)
+            self.assertNotEqual(result.returncode, 0, path)
+            self.assertIn("detect_ci_impacted_scopes: FAIL", result.stderr)
+
+        from quwoquan_ops.ci.impact_planner_core import normalize_changed_path
+
+        with self.assertRaises(ValueError):
+            normalize_changed_path("quwoquan_app/lib/main.dart\x00ignored")
+
+    def test_dot_segment_is_canonicalized_and_nfc_paths_share_identity(self) -> None:
+        dotted = run_detect("./quwoquan_app/lib/main.dart")
+        self.assertEqual(dotted.returncode, 0, dotted.stderr)
+        self.assertIn("app=true", dotted.stdout)
+
+        from quwoquan_ops.ci.impact_planner_core import classify_impacts
+
+        composed = classify_impacts(["docs/café.md"])
+        decomposed = classify_impacts(["docs/cafe\u0301.md"])
+        self.assertEqual(composed["paths"], decomposed["paths"])
+        self.assertEqual(composed["path_digest"], decomposed["path_digest"])
 
 
 if __name__ == "__main__":

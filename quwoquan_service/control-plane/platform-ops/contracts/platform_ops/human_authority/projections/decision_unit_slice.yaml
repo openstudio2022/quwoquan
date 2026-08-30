@@ -1,0 +1,15 @@
+read_model: DecisionUnitSlice
+description: authenticated operator 在映射职责范围内可见的 DecisionUnit 列表 envelope；不扩大 authority scope。
+source_entities:
+- DecisionUnit
+consumers:
+- platform-ops
+fields:
+- name: items
+  type: '[]DecisionUnit'
+  constraints:
+  - NOT_NULL
+  classification: SENSITIVE
+  log_policy: redacted
+  api_exposure: drop
+  ops_exposure: read

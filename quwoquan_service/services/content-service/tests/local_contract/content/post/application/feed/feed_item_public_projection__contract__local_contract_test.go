@@ -124,7 +124,6 @@ func TestFeedItemPublicProjectionHasExactCanonicalJSONKeys(t *testing.T) {
 			post.Visibility = "public"
 			post.TagRefs = []string{"travel.photography"}
 			post.ContentVertical = "travel"
-			post.SourceTaskId = "internal-source-task"
 			post.LikeCount = 3
 			post.CommentCount = 2
 			post.ShareCount = 1

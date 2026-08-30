@@ -23,6 +23,7 @@ _CONFIGURATION_DIGEST = "sha256:" + "a" * 64
 _MANIFEST_DIGEST = "sha256:" + "b" * 64
 _BASELINE = "sha256:" + "f" * 64
 _RELEASE_TRAIN = "sha256:" + "9" * 64
+_CONTRACT_GRAPH_DIGEST = "sha256:" + "7" * 64
 _HEALTH_URL = "https://alpha-api.example.test/healthz"
 
 
@@ -38,6 +39,10 @@ def _launch_binding(report_dir: Path) -> dict[str, str]:
         "launchAttemptDigest": "sha256:" + "a" * 64,
         "launchAttemptRef": str(attempt_dir / "attempt.json"),
         "launchReportRef": str(attempt_dir / "report.json"),
+        "contractGraphDigest": _CONTRACT_GRAPH_DIGEST,
+        "contractGraphRef": str(report_dir / "source-projection/contract_graph.json"),
+        "contractGraphOperationCount": 1,
+        "sourceProjectionRoot": str(report_dir / "source-projection"),
     }
 
 
@@ -57,12 +62,26 @@ def _preflight() -> dict[str, object]:
         "manifestDigest": _MANIFEST_DIGEST,
         "readinessReceiptRef": "env/alpha/runs/readiness.json",
         "readinessReceiptDigest": "sha256:" + "c" * 64,
-        "appUatEnvelope": {
-            "releaseId": "release-alpha",
-            "videoWorkId": "video-alpha",
-        },
+        "releaseUatSamplePlanRef": "uat/sample_plan.json",
+        "releaseUatSamplePlanDigest": "sha256:" + "d" * 64,
         "appUatPlan": {
-            "releaseId": "release-alpha",
+            "releaseIdentity": {
+                "releaseId": "release-alpha",
+                "payloadSha256": _MANIFEST_DIGEST,
+            },
+            "releaseUatSamplePlanRef": "uat/sample_plan.json",
+            "releaseUatSamplePlanDigest": "sha256:" + "d" * 64,
+            "carrierIdentities": {"video": "video-alpha"},
+            "orderedSamples": [
+                {
+                    "sampleId": "canary-video-001",
+                    "carrier": "video",
+                    "objectId": "video-alpha",
+                    "objectRef": "objects/posts/video/video-alpha",
+                    "objectDigest": "sha256:" + "8" * 64,
+                }
+            ],
+            "requiredCasePlan": [],
             "videoPagination": {"expectedWorkIds": ["video-alpha"]},
         },
     }
@@ -151,19 +170,38 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
         restored: bool,
         dependency_failure: BaseException | None = None,
         child_blocker: dict[str, object] | None = None,
+        child_returncode: int = 0,
     ) -> tuple[dict[str, object], object, object, object]:
         successful = subprocess.CompletedProcess(["patrol"], 0, "", "")
+        patrol_result = subprocess.CompletedProcess(
+            ["patrol"],
+            child_returncode,
+            "token=child-secret" if child_returncode else "",
+            "path=/private/child-secret" if child_returncode else "",
+        )
 
-        def evidence(report_ref: str) -> dict[str, object]:
+        def evidence(
+            report_ref: str,
+            *,
+            contract_graph_binding: dict[str, object],
+        ) -> dict[str, object]:
+            self.assertEqual(
+                contract_graph_binding["contractGraphDigest"],
+                _CONTRACT_GRAPH_DIGEST,
+            )
             if child_blocker is not None:
                 return {
                     "status": "passed",
                     "typedBlocker": dict(child_blocker),
                     "testedAppArtifactBinding": {"status": "passed"},
+                    "contractGraphDigest": _CONTRACT_GRAPH_DIGEST,
                 }
             if "controlled-edge-recovery" in report_ref:
-                return _controlled_edge_evidence(restored=restored)
-            return {}
+                return {
+                    **_controlled_edge_evidence(restored=restored),
+                    "contractGraphDigest": _CONTRACT_GRAPH_DIGEST,
+                }
+            return {"contractGraphDigest": _CONTRACT_GRAPH_DIGEST}
 
         def dependency_bound(
             **kwargs: object,
@@ -262,12 +300,12 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
             patch.object(
                 stackctl,
                 "_run_profile_command",
-                return_value=successful,
+                return_value=patrol_result,
             ) as profile_runner,
             patch.object(
                 stackctl,
                 "_run_app_content_message_home_command",
-                return_value=(successful, {}),
+                return_value=(patrol_result, {}),
             ) as message_runner,
             patch.object(
                 uat,
@@ -388,8 +426,6 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
     def test_zero_exit_page_cannot_override_child_receipt_blocker(self) -> None:
         blocker = {
             "errorCode": "APP.LAUNCH.runtime_config_activation_failed",
-            "sourceOperationId": "environment_page_smoke.child_receipt",
-            "httpStatus": None,
         }
         with tempfile.TemporaryDirectory() as temporary_directory:
             result, smoke_profile, profile_runner, message_runner = self._run(
@@ -415,6 +451,28 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
         self.assertEqual(smoke_profile.call_count, 1)
         self.assertEqual(profile_runner.call_count, 1)
         self.assertEqual(message_runner.call_count, 0)
+
+    def test_nonzero_child_uses_typed_blocker_without_raw_output_leak(self) -> None:
+        blocker = {"errorCode": "APP.LAUNCH.runtime_config_activation_failed"}
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            result, *_ = self._run(
+                Path(temporary_directory) / "child-nonzero",
+                restored=True,
+                child_blocker=blocker,
+                child_returncode=2,
+            )
+
+        self.assertEqual(result["firstBlocker"], blocker["errorCode"])
+        self.assertEqual(
+            result["details"],
+            [
+                (
+                    "alpha-local: homepage-feed failed: "
+                    "APP.LAUNCH.runtime_config_activation_failed"
+                )
+            ],
+        )
+        self.assertNotIn("child-secret", str(result))
 
     def test_post_only_dependency_failure_receipt_keeps_its_original_stage(
         self,

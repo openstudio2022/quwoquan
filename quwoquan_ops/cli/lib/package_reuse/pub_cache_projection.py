@@ -8,7 +8,6 @@ from typing import Any
 
 from .pub_cache_capsule import (
     PUB_CACHE_PROJECTION_RELATIVE,
-    build_pub_cache_snapshot,
     copy_snapshot_tree_with_lock,
 )
 from .pub_cache_store import (
@@ -22,11 +21,14 @@ def materialize_capsule_pub_cache(
     capsule_root: Path,
     manifest_entries: Sequence[Mapping[str, Any]],
     projection_root: Path,
+    verified_snapshot: Any | None = None,
 ) -> Path:
-    snapshot = capsule_dependency_snapshot(
-        capsule_root=capsule_root,
-        manifest_entries=manifest_entries,
-    )
+    snapshot = verified_snapshot
+    if snapshot is None:
+        snapshot = capsule_dependency_snapshot(
+            capsule_root=capsule_root,
+            manifest_entries=manifest_entries,
+        )
     if snapshot is None:
         raise ValueError("App dependency capsule is required for Flutter projection")
     verify_snapshot_flutter_toolchain(snapshot)
@@ -38,13 +40,6 @@ def materialize_capsule_pub_cache(
         lock_path=lock_path,
         writable=True,
     )
-    final = build_pub_cache_snapshot(
-        lock_path=lock_path,
-        cache_root=target,
-        reject_unlocked=True,
-    )
-    if final.manifest != snapshot.manifest:
-        raise ValueError("App dependency projected cache CAS drifted")
     return target
 
 

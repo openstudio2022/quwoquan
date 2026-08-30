@@ -36,6 +36,13 @@ func TestDeclaredEnvKeysCoverHandwrittenOverrides(t *testing.T) {
 		"REPO_ROOT":               "REPO_ROOT",
 		"RELEASE_MANIFEST_DIGEST": "RELEASE_MANIFEST_DIGEST",
 		"ALERT_INGEST_TOKEN":      "ALERT_INGEST_TOKEN",
+		"PLATFORM_OPS_HUMAN_AUTHORITY_SIGNING_KEY_ID":             "PLATFORM_OPS_HUMAN_AUTHORITY_SIGNING_KEY_ID",
+		"PLATFORM_OPS_HUMAN_AUTHORITY_SIGNING_PRIVATE_KEY_FILE":   "PLATFORM_OPS_HUMAN_AUTHORITY_SIGNING_PRIVATE_KEY_FILE",
+		"PLATFORM_OPS_HUMAN_AUTHORITY_SIGNING_PRIVATE_KEY_BASE64": "PLATFORM_OPS_HUMAN_AUTHORITY_SIGNING_PRIVATE_KEY_BASE64",
+		"PLATFORM_OPS_HUMAN_AUTHORITY_SIGNING_TEST_KEY":           "PLATFORM_OPS_HUMAN_AUTHORITY_SIGNING_TEST_KEY",
+		"PLATFORM_OPS_HUMAN_AUTHORITY_GITHUB_WEBHOOK_SECRET":      "PLATFORM_OPS_HUMAN_AUTHORITY_GITHUB_WEBHOOK_SECRET",
+		"PLATFORM_OPS_HUMAN_AUTHORITY_ROLE_MAPPINGS":              "PLATFORM_OPS_HUMAN_AUTHORITY_ROLE_MAPPINGS",
+		"PLATFORM_OPS_HUMAN_AUTHORITY_GITHUB_MAPPINGS":            "PLATFORM_OPS_HUMAN_AUTHORITY_GITHUB_MAPPINGS",
 	}
 	for legacy, successor := range successors {
 		if !declared[successor] {
@@ -162,6 +169,13 @@ func TestValidatePlatformOpsConfigRequiresProdReleaseDigest(t *testing.T) {
 		t.Fatal("prod with a non-canonical digest must fail closed")
 	}
 	cfg.ReleaseManifestDigest = "sha256:" + strings.Repeat("a", 64)
+	cfg.HumanAuthority.Issuer = "quwoquan-platform-ops"
+	cfg.HumanAuthority.ProviderVersion = "v1"
+	cfg.HumanAuthority.ProviderCommit = "sha256:" + strings.Repeat("b", 64)
+	cfg.HumanAuthority.SigningKeyID = "prod-key"
+	cfg.HumanAuthority.SigningPrivateKeyFile = "/run/secrets/human-authority-key"
+	cfg.HumanAuthority.GitHubWebhookSecret = "secret-reference-placeholder"
+	cfg.HumanAuthority.RoleMappings = `{"ops-release":["release_owner"]}`
 	if err := validatePlatformOpsConfig(cfg); err != nil {
 		t.Fatalf("canonical prod digest must pass: %v", err)
 	}

@@ -448,7 +448,6 @@ type PostDetailSlice struct {
 	UpdatedAt               time.Time                      `json:"updatedAt" bson:"updatedAt"`
 	PublishedAt             time.Time                      `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
 	LastActiveAt            time.Time                      `json:"lastActiveAt,omitempty" bson:"lastActiveAt,omitempty"`
-	SourceTaskID            string                         `json:"sourceTaskId,omitempty" bson:"sourceTaskId,omitempty"`
 }
 
 // AuthorPostItemSlice 是个人主页创作页的紧凑卡片白名单。它不会载入详情
@@ -538,7 +537,6 @@ type PostFeedItemSlice struct {
 	// GatheringRef 共同经历回流引用：feed 卡溯源标「他们从这条内容出发」的
 	// 物理载体；作者删除或取消关联即为空。
 	GatheringRef string `json:"gatheringRef,omitempty" bson:"gatheringRef,omitempty"`
-	SourceTaskID string `json:"sourceTaskId,omitempty" bson:"sourceTaskId,omitempty"`
 	SourceOwner        string               `json:"-" bson:"sourceOwner,omitempty"`
 	ReleaseID          string               `json:"-" bson:"releaseId,omitempty"`
 	ManifestDigest     string               `json:"-" bson:"manifestDigest,omitempty"`

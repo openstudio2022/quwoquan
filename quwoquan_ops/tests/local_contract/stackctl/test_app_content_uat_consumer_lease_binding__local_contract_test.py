@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 SOURCE = ROOT / "quwoquan_ops" / "cli" / "commands" / "app_preflight_uat.py"
+RECEIPT = ROOT / "quwoquan_ops" / "cli" / "commands" / "app_preflight_uat_receipt.py"
 CONSUMER = ROOT / "quwoquan_ops" / "cli" / "lib" / "read_only_user_availability.py"
 
 
@@ -32,7 +33,7 @@ def test_patrol_run_payload_carries_top_level_consumer_lease_id() -> None:
 
 
 def test_aggregate_receipt_collects_lease_ids_from_a_single_key() -> None:
-    source = SOURCE.read_text(encoding="utf-8")
+    source = RECEIPT.read_text(encoding="utf-8")
     collector = source[source.index('"consumerLeaseIds": sorted(') :][:400]
     assert 'item.get("consumerLeaseId")' in collector
     # 聚合器只认一个位置：出现第二种读法就意味着字段有了两处真相源。

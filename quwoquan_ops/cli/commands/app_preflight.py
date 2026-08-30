@@ -12,7 +12,7 @@ app-domain-api-integration)。
 
 candidate/test-live 内容证据解析与 release probe 家族
 (`_resolve_active_app_content_evidence` /
-`_resolve_test_live_app_content_evidence` / `_app_content_uat_envelope` /
+`_resolve_test_live_app_content_evidence` / `_app_content_uat_sample_plan` /
 `_app_content_readback_summary` / `_run_app_content_release_probe`)在
 `commands/app_preflight_evidence.py`;`command_app_debug_preflight` 与
 `_execute_otp_login_journey` 在 `commands/app_preflight_debug.py`;本模块
@@ -44,7 +44,8 @@ from quwoquan_ops.cli.commands.app_preflight_debug import (
 )
 from quwoquan_ops.cli.commands.app_preflight_evidence import (
     _app_content_readback_summary,
-    _app_content_uat_envelope,
+    _app_content_uat_sample_plan,
+    _load_active_release_uat_contract,
     _resolve_active_app_content_evidence,
     _resolve_test_live_app_content_evidence,
     _run_app_content_release_probe,
@@ -144,14 +145,51 @@ def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
             candidate, readiness, readiness_path, lifecycle_ref = (
                 _stackctl._resolve_test_live_app_content_evidence(target, content_binding)
             )
+            release_uat_contract = {
+                "releasePayloadSha256": content_binding.get("manifestDigest"),
+                "releaseHeader": content_binding.get("releaseHeader"),
+                "releaseHeaderRef": content_binding.get("releaseHeaderRef"),
+                "releaseHeaderDigest": content_binding.get("releaseHeaderDigest"),
+                "releaseUatSamplePlanRef": content_binding.get(
+                    "releaseUatSamplePlanRef"
+                ),
+                "releaseUatSamplePlanDigest": content_binding.get(
+                    "releaseUatSamplePlanDigest"
+                ),
+            }
+            if release_uat_contract["releaseHeader"]:
+                raise ValueError(
+                    "test_live content binding must not promote immutable release header"
+                )
+            app_uat_plan = content_binding.get("appUatPlan")
+            if (
+                not isinstance(app_uat_plan, Mapping)
+                or content_binding.get("appUatPlanDigest")
+                != _stackctl._canonical_document_checksum(dict(app_uat_plan))
+                or app_uat_plan.get("releaseUatSamplePlanRef")
+                != release_uat_contract["releaseUatSamplePlanRef"]
+                or app_uat_plan.get("releaseUatSamplePlanDigest")
+                != release_uat_contract["releaseUatSamplePlanDigest"]
+            ):
+                raise ValueError("test_live ReleaseUatSamplePlan binding drifted")
+            app_uat_plan = dict(app_uat_plan)
         elif runtime_mode == "immutable_candidate":
             candidate, readiness, readiness_path, lifecycle_ref = (
                 _stackctl._resolve_active_app_content_evidence(target)
             )
+            release = candidate.get("release")
+            release_candidate = (
+                release.get("candidate") if isinstance(release, Mapping) else None
+            )
+            if not isinstance(release_candidate, Mapping):
+                raise ValueError("active candidate does not bind a Data candidate release")
+            release_uat_contract = _load_active_release_uat_contract(release_candidate)
+            app_uat_plan = _app_content_uat_sample_plan(
+                release_contract=release_uat_contract,
+                readiness=readiness,
+            )
         else:
             raise ValueError("App content preflight runtime mode is invalid")
-        app_uat_envelope = _stackctl._app_content_uat_envelope(readiness)
-        app_uat_plan = _stackctl.build_app_content_uat_plan(readiness)
     except (OSError, ValueError) as exc:
         details = [str(exc)]
         payload = {
@@ -186,7 +224,11 @@ def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
     )
     passed = int(readiness_result.get("exitCode", 2)) == 0
     release_probe: dict[str, Any] = {}
-    details = list(readiness_result.get("details", []))
+    # content-readiness uses details for both PASS summaries and blockers.
+    # App preflight findings must contain only failure evidence.
+    details = (
+        [] if passed else list(readiness_result.get("details", []))
+    )
     if passed and purpose == "content_live":
         try:
             release_probe = _stackctl._run_app_content_release_probe(
@@ -242,9 +284,27 @@ def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
             readiness.get("activationEnvelopeDigest") or ""
         ),
         "lifecycleExitRef": lifecycle_ref,
-        "appUatEnvelope": app_uat_envelope,
-        "appUatEnvelopeDigest": str(
-            readiness.get("appUatEnvelopeDigest") or ""
+        **(
+            {
+                "releaseHeader": dict(release_uat_contract["releaseHeader"]),
+                "releaseHeaderRef": str(
+                    release_uat_contract.get("releaseHeaderRef") or ""
+                ),
+                "releaseHeaderDigest": str(
+                    release_uat_contract.get("releaseHeaderDigest") or ""
+                ),
+                "releaseUatSamplePlan": dict(
+                    release_uat_contract.get("releaseUatSamplePlan") or {}
+                ),
+            }
+            if runtime_mode == "immutable_candidate"
+            else {}
+        ),
+        "releaseUatSamplePlanRef": str(
+            release_uat_contract.get("releaseUatSamplePlanRef") or ""
+        ),
+        "releaseUatSamplePlanDigest": str(
+            release_uat_contract.get("releaseUatSamplePlanDigest") or ""
         ),
         "appUatPlan": app_uat_plan,
         "appUatPlanDigest": _stackctl._canonical_document_checksum(app_uat_plan),

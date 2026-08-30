@@ -22,7 +22,8 @@
       "enum": [
         "frozen_publish_jobs",
         "reviewed_delivery_only",
-        "campaign_reviewed_publish"
+        "campaign_reviewed_publish",
+        "host_publish"
       ]
     },
     "executionStatePreserved": {"const": true},

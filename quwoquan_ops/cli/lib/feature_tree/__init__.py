@@ -73,6 +73,7 @@ from .parsing import (  # noqa: F401
     outcome_clause_count,
     outcome_sub_clauses,
     section,
+    singleton_repository_roots,
     title,
     validate_acceptance_clause_coverage,
 )

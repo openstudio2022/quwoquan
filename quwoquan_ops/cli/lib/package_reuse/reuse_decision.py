@@ -27,6 +27,7 @@ from .constants import (
     _DEPLOYMENT_INPUT_FIELDS,
     _DIGEST_FIELDS,
     _FINGERPRINT_FIELDS,
+    CURRENTNESS_TIMEOUT_DETAIL_PREFIX,
     CURRENTNESS_TIMEOUT_SECONDS,
     FINGERPRINT_NAME,
     FINGERPRINT_SCHEMA,
@@ -151,6 +152,7 @@ def write_package_fingerprint(
     release_input_classification: str,
     contract_graph_digest: str,
     graphql_read_registry: dict[str, object],
+    app_launch_bundle: dict[str, object] | None = None,
     service_packages: Sequence[str] | None = None,
     release_attestation: str = "",
     rollback_release_attestation: str = "",
@@ -234,6 +236,7 @@ def write_package_fingerprint(
         "releaseInputClassification": release_input_classification,
         "contractGraphDigest": contract_graph_digest,
         "graphqlReadRegistry": graphql_read_registry,
+        "appLaunchBundle": app_launch_bundle,
     }
     _atomic_write_fingerprint(
         path,
@@ -279,11 +282,16 @@ def can_reuse_package(
     purpose: str = "self_verify",
     currentness_timeout_seconds: float = CURRENTNESS_TIMEOUT_SECONDS,
     candidate_root: Path | None = None,
+    verify_source_capsule: bool = True,
 ) -> tuple[bool, str]:
     if not include_services:
         return False, "runtime package reuse requires all services"
     if purpose not in PACKAGE_VALIDATION_PURPOSES:
         return False, "runtime package validation purpose is invalid"
+    if not isinstance(verify_source_capsule, bool):
+        return False, "runtime package source capsule validation mode is invalid"
+    if purpose == "currentness" and not verify_source_capsule:
+        return False, "runtime package currentness requires source capsule verification"
 
     override = os.environ.get(PACKAGE_ROOT_OVERRIDE_ENV, "").strip()
     active_candidate: dict[str, str] | None
@@ -403,8 +411,11 @@ def can_reuse_package(
             raise ValueError("deploymentInputs roots are not canonical")
         if deployment_inputs.get("capsuleRef") != PACKAGE_INPUT_CAPSULE_DIRECTORY:
             raise ValueError("deploymentInputs capsuleRef mismatch")
-        capsule_manifest = _pkg.verify_package_input_capsule(
-            selected_candidate_root / PACKAGE_INPUT_CAPSULE_DIRECTORY,
+        capsule_root = selected_candidate_root / PACKAGE_INPUT_CAPSULE_DIRECTORY
+        capsule_manifest = (
+            _pkg.verify_package_input_capsule(capsule_root)
+            if verify_source_capsule
+            else _pkg._read_capsule_manifest(capsule_root)
         )
         if (
             capsule_manifest.get("baselineId") != payload.get("baselineId")
@@ -467,12 +478,27 @@ def can_reuse_package(
             "releaseInputClassification": classification,
             "contractGraphDigest": contract_graph_digest,
             "graphqlReadRegistry": graphql_read_registry,
+            "appLaunchBundle": payload.get("appLaunchBundle"),
         }
         for field, expected in manifest_bindings.items():
             if validated_candidate.get(field) != expected:
                 raise ValueError(f"deployment candidate {field} mismatch")
+    except TimeoutError as exc:
+        return (
+            False,
+            f"{CURRENTNESS_TIMEOUT_DETAIL_PREFIX} fingerprint rejected: {exc}",
+        )
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
-        return False, f"fingerprint rejected: {exc}"
+        detail = str(exc)
+        lowered = detail.lower()
+        if purpose == "currentness" and "currentness" in lowered and (
+            "timed out" in lowered or "timeout" in lowered
+        ):
+            return (
+                False,
+                f"{CURRENTNESS_TIMEOUT_DETAIL_PREFIX} fingerprint rejected: {detail}",
+            )
+        return False, f"fingerprint rejected: {detail}"
     return (
         True,
         f"reuse ok fingerprint={path} reportRef={payload['reportRef']}",

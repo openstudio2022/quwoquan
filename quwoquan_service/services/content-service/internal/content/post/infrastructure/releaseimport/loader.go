@@ -36,8 +36,9 @@ type AssetManifestItem struct {
 	// AccessMode 是媒体交付访问模式（DEC-033，契约 PostArticleAsset.accessMode，
 	// enum 唯一真相源 contracts/metadata/_shared/types.yaml
 	// MediaDeliveryAccessMode）。由 release header 的 releaseClass 单点映射写入，
-	// signed_grant 时 App 必须按 assetId 换取短签；空串表示缺席（契约
-	// NULLABLE），只允许出现在存量 public 交付。
+	// signed_grant 时 App 必须按 assetId 换取短签。新 immutable release 必须
+	// 显式 public|signed_grant；空串只属于具名 legacy-public migration 边界，
+	// 不得进入本 importer。
 	AccessMode           string   `json:"accessMode,omitempty" bson:"accessMode,omitempty"`
 	ObjectKey            string   `json:"objectKey,omitempty" bson:"-"`
 	Version              int64    `json:"version,omitempty" bson:"version,omitempty"`
@@ -128,11 +129,9 @@ type PostDoc struct {
 	Page                  any                                `json:"page" bson:"page"`
 	LicenseProof          any                                `json:"licenseProof" bson:"licenseProof"`
 	Template              string                             `json:"template" bson:"template"`
-	GeneratorModel        string                             `json:"generatorModel" bson:"generatorModel"`
 	ArticleMarkdown       string                             `json:"articleMarkdown" bson:"articleMarkdown"`
 	ArticleDigest         string                             `json:"articleDigest" bson:"articleDigest"`
 	ArticleAssetManifest  *ArticleAssetManifestDoc           `json:"articleAssetManifest" bson:"articleAssetManifest"`
-	SourceTaskId          string                             `json:"sourceTaskId" bson:"sourceTaskId"`
 	CreatedAt             time.Time                          `json:"createdAt" bson:"createdAt"`
 	UpdatedAt             time.Time                          `json:"updatedAt" bson:"updatedAt"`
 	PublishedAt           time.Time                          `json:"publishedAt" bson:"publishedAt"`
@@ -151,7 +150,6 @@ type EntityDoc struct {
 	AssetManifest *EntityAssetManifestDoc `json:"assetManifest" bson:"assetManifest"`
 	// ConditionProfile 条件画像（L3 实体级 {regions/seasons/altitudeMeters}），从 _entity.json 透传到运行库。
 	ConditionProfile map[string]any `json:"conditionProfile" bson:"conditionProfile"`
-	SourceTaskId     string         `json:"sourceTaskId" bson:"sourceTaskId"`
 }
 
 type ReleaseDesiredState struct {
@@ -491,8 +489,9 @@ func missingDesiredRefs(filter map[string]bool, loadedRefs []string) []string {
 
 // LoadPosts 从对象闭包的 posts/ 加载内容；filter 使用相对 posts/ 的对象引用。
 // LoadPosts 校验并装载 release 对象闭包内的 post 文档。releaseClass 是 release
-// header 声明的发布类别（"research"/"commercial"）；空值按最严格的 commercial
-// 语义 fail closed 处理。
+// header 声明的发布类别（"research"/"commercial"）；空值只保留给 pre-pool
+// fixture 的 rights 校验。新 release 的媒体交付判据在 Bind +
+// ValidateImportedPostMediaBindings 边界显式收敛。
 func LoadPosts(publishRoot string, filter map[string]bool, releaseClass string) ([]PostDoc, error) {
 	postsRoot := filepath.Join(publishRoot, "posts")
 	var docs []PostDoc
@@ -648,11 +647,9 @@ func LoadPosts(publishRoot string, filter map[string]bool, releaseClass string) 
 			Page:                  firstSourceFact(m.Page, m.SourceCollectionURL),
 			LicenseProof:          firstSourceFact(m.LicenseProof, m.LicenseProofRef),
 			Template:              m.Template,
-			GeneratorModel:        m.GeneratorModel,
 			ArticleMarkdown:       article,
 			ArticleDigest:         m.ArticleDigest,
 			ArticleAssetManifest:  m.ArticleAssetManifest,
-			SourceTaskId:          m.SourceTaskId,
 			CreatedAt:             createdAt,
 			UpdatedAt:             updatedAt,
 			PublishedAt:           publishedAt,
@@ -707,7 +704,6 @@ type entityFile struct {
 	Type             string         `json:"type"`
 	TagRefs          []string       `json:"tagRefs"`
 	ConditionProfile map[string]any `json:"conditionProfile"`
-	SourceTaskId     string         `json:"sourceTaskId"`
 }
 
 // LoadEntities 从 publish/entities 加载实体；filter 非空时只保留其中的 entityRef。
@@ -783,7 +779,6 @@ func LoadEntities(publishRoot string, filter map[string]bool) ([]EntityDoc, erro
 			HasPage:          hasPage,
 			AssetManifest:    assetManifest,
 			ConditionProfile: ef.ConditionProfile,
-			SourceTaskId:     ef.SourceTaskId,
 		})
 		return nil
 	})

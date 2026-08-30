@@ -76,7 +76,7 @@ verify run 是 append-only 证据：失败的 run 目录原样保留，禁止改
    不得手工 `docker` 清理后继续本阶段。
 
 按 [handoff-protocol.md](../handoff-protocol.md) 落 receipt；
-`verdict=pass` 时 `task stage-record` 顺带置 `execution_state.status=succeeded`。
+`verdict=pass` 时 `task stage-record` 写入终态 receipt；receipt reducer 随后确定性投影 `execution_state.status=succeeded`。
 
 ## 交接（HANDOFF）
 

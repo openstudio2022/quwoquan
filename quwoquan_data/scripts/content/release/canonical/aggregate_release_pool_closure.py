@@ -218,11 +218,6 @@ def candidate_closure(
             "DATA.POOL.AUTHOR_CLOSURE_INVALID: "
             + "; ".join(f"{item['code']}:{item['ref']}" for item in creator_issues[:5])
         )
-    pool_execution_ids(
-        publish_root,
-        entity_refs=entity_refs,
-        post_refs=post_refs,
-    )
     media_manifest = build_release_media_manifest(
         release_id="pool-candidate-preflight",
         post_refs=[post_ref],
@@ -294,11 +289,6 @@ def entity_candidate_closure(
             "DATA.POOL.AUTHOR_CLOSURE_INVALID: "
             + "; ".join(f"{item['code']}:{item['ref']}" for item in creator_issues[:5])
         )
-    pool_execution_ids(
-        publish_root,
-        entity_refs=entity_refs,
-        post_refs=set(),
-    )
     media_manifest = build_release_media_manifest(
         release_id="pool-homepage-preflight",
         post_refs=[],

@@ -19,20 +19,50 @@ app_dependency_toolchain.py` 委托本模块，不得复制解析逻辑。
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 FACADE_PACKAGE_DIR = Path(__file__).resolve().parent
 FACADE_EXECUTABLE = FACADE_PACKAGE_DIR / "bin" / "flutter"
 APP_ROOT = FACADE_PACKAGE_DIR.parents[2]
+REPO_ROOT = APP_ROOT.parent
 CANONICAL_LAUNCHER = APP_ROOT / "run.sh"
 LAUNCH_PROVENANCE_WORKSPACE_FLUTTER_RUN = "workspace_flutter_run"
 MOBILE_TARGET_PLATFORM_PREFIXES = ("ios", "android")
+FLUTTER_PROBE_STATE_ROOT = REPO_ROOT / ".qwq_output/env/repo/local/flutter-facade-probe"
+FLUTTER_PROBE_OS_ENV_KEYS = (
+    "PATH",
+    "SHELL",
+    "USER",
+    "LOGNAME",
+    "LANG",
+    "LANGUAGE",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LC_MESSAGES",
+    "LC_COLLATE",
+    "LC_MONETARY",
+    "LC_NUMERIC",
+    "LC_TIME",
+    "TERM",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "DEVELOPER_DIR",
+    "SDKROOT",
+    "TOOLCHAINS",
+    "SystemRoot",
+    "WINDIR",
+    "COMSPEC",
+    "PATHEXT",
+)
 
 USAGE_HINT = (
     "受支持入口：`./quwoquan_app/run.sh --env alpha|beta|gamma -d <device>`，"
@@ -45,7 +75,7 @@ class FacadeError(Exception):
     """typed facade 失败：message 面向终端用户，指向合法入口。"""
 
 
-def _fail(message: str) -> "NoReturn":  # noqa: F821 - 注释型返回
+def _fail(message: str) -> NoReturn:
     print(f"[flutter-facade] GATE_BLOCK: {message}", file=sys.stderr)
     print(f"[flutter-facade] {USAGE_HINT}", file=sys.stderr)
     raise SystemExit(2)
@@ -77,7 +107,9 @@ def _physical_executable(candidate: Path) -> Path:
     try:
         resolved = expanded.resolve(strict=True)
     except OSError as error:
-        raise FacadeError(f"Flutter SDK executable 无法解析：{expanded}: {error}") from error
+        raise FacadeError(
+            f"Flutter SDK executable 无法解析：{expanded}: {error}"
+        ) from error
     if _is_facade_copy(resolved):
         raise FacadeError("真实 Flutter SDK 解析回 workspace facade，构成递归")
     if not resolved.is_file() or not os.access(resolved, os.X_OK):
@@ -85,10 +117,91 @@ def _physical_executable(candidate: Path) -> Path:
     return resolved
 
 
-def _flutter_version_payload(candidate: Path) -> dict[str, object]:
+def _ensure_private_probe_directory(path: Path) -> Path:
+    """创建仅当前用户可访问且不经 symlink 跳转的探针状态目录。"""
+
+    try:
+        path.mkdir(mode=0o700, parents=True, exist_ok=True)
+        expected = Path(os.path.abspath(path))
+        resolved = path.resolve(strict=True)
+        if resolved != expected:
+            raise FacadeError("Flutter SDK 版本探针状态目录包含 symlink")
+
+        flags = os.O_RDONLY
+        flags |= getattr(os, "O_DIRECTORY", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(resolved, flags)
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISDIR(metadata.st_mode):
+                raise FacadeError("Flutter SDK 版本探针状态路径不是目录")
+            if hasattr(os, "geteuid") and metadata.st_uid != os.geteuid():
+                raise FacadeError("Flutter SDK 版本探针状态目录 owner 不匹配")
+            os.fchmod(descriptor, 0o700)
+            if stat.S_IMODE(os.fstat(descriptor).st_mode) != 0o700:
+                raise FacadeError("Flutter SDK 版本探针状态目录权限不安全")
+        finally:
+            os.close(descriptor)
+    except FacadeError:
+        raise
+    except OSError as error:
+        reason = error.strerror or error.__class__.__name__
+        raise FacadeError(
+            f"Flutter SDK 版本探针状态目录初始化失败：{reason}"
+        ) from error
+    return resolved
+
+
+def _flutter_probe_state_root(environ: dict[str, str]) -> Path:
+    """选择版本探针状态根；显式 output root 必须保持字面绝对路径。"""
+
+    if "QWQ_OUTPUT_ROOT" not in environ:
+        return FLUTTER_PROBE_STATE_ROOT
+    raw_output_root = environ["QWQ_OUTPUT_ROOT"]
+    output_root = Path(raw_output_root)
+    if (
+        not raw_output_root
+        or not output_root.is_absolute()
+        or str(output_root) != raw_output_root
+        or any(part in {"", ".", ".."} for part in output_root.parts[1:])
+    ):
+        raise FacadeError("QWQ_OUTPUT_ROOT 必须是非空 literal absolute path")
+    return output_root / "env/repo/local/flutter-facade-probe"
+
+
+def _flutter_probe_environment(environ: dict[str, str]) -> dict[str, str]:
+    """构造版本探针 allowlist env，并把所有用户状态封闭进可删除输出树。"""
+
+    state_root = _ensure_private_probe_directory(_flutter_probe_state_root(environ))
+    home = _ensure_private_probe_directory(state_root / "home")
+    config_home = _ensure_private_probe_directory(state_root / "config")
+    cache_home = _ensure_private_probe_directory(state_root / "cache")
+    probe_environment = {
+        key: environ[key]
+        for key in FLUTTER_PROBE_OS_ENV_KEYS
+        if environ.get(key, "").strip()
+    }
+    probe_environment.setdefault("PATH", os.defpath)
+    probe_environment.update(
+        {
+            "HOME": str(home),
+            "XDG_CONFIG_HOME": str(config_home),
+            "XDG_CACHE_HOME": str(cache_home),
+            "PUB_CACHE": str(cache_home / "pub-cache"),
+            "FLUTTER_SUPPRESS_ANALYTICS": "true",
+        }
+    )
+    return probe_environment
+
+
+def _flutter_version_payload(
+    candidate: Path,
+    environ: dict[str, str],
+) -> dict[str, object]:
     try:
         completed = subprocess.run(
             [str(candidate), "--version", "--machine"],
+            env=_flutter_probe_environment(environ),
             capture_output=True,
             text=True,
             timeout=30,
@@ -110,15 +223,17 @@ def _flutter_version_payload(candidate: Path) -> dict[str, object]:
     return payload
 
 
-def _validate_flutter_version(candidate: Path) -> Path:
+def _validate_flutter_version(candidate: Path, environ: dict[str, str]) -> Path:
     version_file = APP_ROOT / ".flutter-version"
     try:
         expected = version_file.read_text(encoding="utf-8").strip()
     except OSError as error:
-        raise FacadeError(f"无法读取 Flutter 版本真相源 {version_file}: {error}") from error
+        raise FacadeError(
+            f"无法读取 Flutter 版本真相源 {version_file}: {error}"
+        ) from error
     if not expected:
         raise FacadeError(f"Flutter 版本真相源为空：{version_file}")
-    payload = _flutter_version_payload(candidate)
+    payload = _flutter_version_payload(candidate, environ)
     actual = str(payload.get("frameworkVersion") or "").strip()
     if actual != expected:
         raise FacadeError(
@@ -131,7 +246,7 @@ def resolved_flutter_identity(environ: dict[str, str]) -> dict[str, str]:
     """返回经钉定版本验证的 SDK 身份；digest 不泄露本机绝对路径。"""
 
     executable = resolve_real_flutter(environ)
-    payload = _flutter_version_payload(executable)
+    payload = _flutter_version_payload(executable, environ)
     identity = {
         "frameworkVersion": str(payload.get("frameworkVersion") or "").strip(),
         "frameworkRevision": str(payload.get("frameworkRevision") or "").strip(),
@@ -152,21 +267,21 @@ def resolved_flutter_identity(environ: dict[str, str]) -> dict[str, str]:
     }
 
 
-def _validated_candidate(candidate: Path) -> Path:
-    return _validate_flutter_version(_physical_executable(candidate))
+def _validated_candidate(candidate: Path, environ: dict[str, str]) -> Path:
+    return _validate_flutter_version(_physical_executable(candidate), environ)
 
 
 def resolve_real_flutter(environ: dict[str, str]) -> Path:
     """单轨解析真实 Flutter SDK；解析到任一 workspace facade 副本即失败。"""
     explicit = environ.get("QWQ_REAL_FLUTTER", "").strip()
     if explicit:
-        return _validated_candidate(Path(explicit))
+        return _validated_candidate(Path(explicit), environ)
 
     flutter_root = environ.get("FLUTTER_ROOT", "").strip()
     if flutter_root:
         candidate = Path(flutter_root) / "bin" / "flutter"
         try:
-            return _validated_candidate(candidate)
+            return _validated_candidate(candidate, environ)
         except FacadeError as error:
             raise FacadeError(f"FLUTTER_ROOT 无效：{error}") from error
 
@@ -186,11 +301,11 @@ def resolve_real_flutter(environ: dict[str, str]) -> Path:
             and os.access(candidate, os.X_OK)
             and not _is_facade_copy(candidate)
         ):
-            return _validated_candidate(candidate)
+            return _validated_candidate(candidate, environ)
 
     fallback = shutil.which("flutter")
     if fallback and not _is_facade_copy(Path(fallback)):
-        return _validated_candidate(Path(fallback))
+        return _validated_candidate(Path(fallback), environ)
     raise FacadeError(
         "无法解析真实 Flutter SDK：请设置 FLUTTER_ROOT，"
         "或把真实 SDK 的 bin 目录放入 PATH"
@@ -233,7 +348,7 @@ def _parse_run_arguments(argv: list[str]) -> str:
             device_id = tokens[position + 1]
             position += 2
             continue
-        if token.startswith("-d=") or token.startswith("--device-id="):
+        if token.startswith(("-d=", "--device-id=")):
             device_id = token.split("=", 1)[1]
             position += 1
             continue
@@ -261,8 +376,7 @@ def _list_mobile_devices(real_flutter: Path) -> list[dict[str, object]]:
         raise FacadeError(f"设备发现失败：{exc}") from exc
     if completed.returncode != 0:
         raise FacadeError(
-            "设备发现失败："
-            f"`flutter devices --machine` 退出码 {completed.returncode}"
+            f"设备发现失败：`flutter devices --machine` 退出码 {completed.returncode}"
         )
     payload = completed.stdout.strip()
     start = payload.find("[")
@@ -300,7 +414,7 @@ def _select_device(argv: list[str], real_flutter: Path) -> str:
     )
 
 
-def _take_over_run(argv: list[str], real_flutter: Path) -> "NoReturn":  # noqa: F821
+def _take_over_run(argv: list[str], real_flutter: Path) -> NoReturn:
     device_id = _select_device(argv, real_flutter)
     launcher = CANONICAL_LAUNCHER
     if not launcher.is_file() or not os.access(launcher, os.X_OK):

@@ -126,25 +126,6 @@ def _write_data_readiness_fixture(
         for name, query, post_ids in feed_queries
     ]
     guest_actor_hash = "sha256:" + "3" * 64
-    app_uat_envelope = {
-        "releaseId": release_id,
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
-        "homepageId": "homepage-west-lake",
-        "homepageTitle": "西湖",
-        "articleWorkId": "post-article",
-        "articleTitle": "西湖文章",
-        "imageWorkId": "post-image",
-        "imageTitle": "西湖图片",
-        "videoWorkId": "post-video",
-        "videoTitle": "西湖视频",
-        "creatorName": "西湖创作者",
-        "creatorUserHandle": "west_lake_creator",
-        "creatorPersonaId": "persona-west-lake",
-        "creatorAvatarAssetId": "creator-avatar-1",
-        "tagLabel": "西湖",
-        "videoAttribution": "测试来源",
-    }
     post_verification_path = output_root / refs["postApiVerificationRef"]
     post_verification_path.write_text(
         json.dumps(
@@ -251,10 +232,6 @@ def _write_data_readiness_fixture(
         "feedQueries": feed_query_evidence,
         **refs,
         "mediaManifestRef": media_path.relative_to(output_root).as_posix(),
-        "appUatEnvelope": app_uat_envelope,
-        "appUatEnvelopeDigest": stackctl._canonical_document_checksum(
-            app_uat_envelope
-        ),
         "verifiedAt": "2026-07-28T00:00:00Z",
         "passed": True,
     }
@@ -275,7 +252,6 @@ def _write_data_readiness_fixture(
         "importReportRef": import_ref,
         "importReportDigest": "sha256:"
         + hashlib.sha256((output_root / import_ref).read_bytes()).hexdigest(),
-        "appUatEnvelopeDigest": receipt["appUatEnvelopeDigest"],
     }
     receipt["activationEnvelopeDigest"] = (
         stackctl._canonical_document_checksum(receipt["activationEnvelope"])
@@ -301,12 +277,6 @@ def _convert_data_readiness_fixture_to_research(
     receipt["internalSubjectHash"] = "sha256:" + "7" * 64
     receipt.pop("guestActorHash", None)
     receipt.pop("guestLogin", None)
-    app_uat = receipt["appUatEnvelope"]
-    app_uat["releaseClass"] = "research"
-    app_uat["productLifecycleState"] = "research"
-    receipt["appUatEnvelopeDigest"] = stackctl._canonical_document_checksum(
-        app_uat
-    )
     attestation_path = (
         output_root
         / "data/releases"
@@ -367,7 +337,6 @@ def _convert_data_readiness_fixture_to_research(
             "releaseClass": "research",
             "productLifecycleState": "research",
             "readinessPhase": "research",
-            "appUatEnvelopeDigest": receipt["appUatEnvelopeDigest"],
             "researchIsolationPolicy": {
                 "policyRef": isolation["policyRef"],
                 "policyDigest": isolation["policySha256"],

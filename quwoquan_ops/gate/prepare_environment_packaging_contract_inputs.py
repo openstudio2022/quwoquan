@@ -16,6 +16,12 @@ from cleanup_deployment_test_workspace import (
     validated_deployment_test_workspace,
 )
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.openssl3_resolver import resolve_openssl3
+
 
 KEY_ID = "packaging-contract"
 PRIVATE_KEY_NAME = "graphql-signing-private.pem"
@@ -54,14 +60,15 @@ def prepare_environment_packaging_contract_inputs(raw_workspace: str) -> None:
         if path.exists() or path.is_symlink():
             raise ValueError(f"packaging contract input already exists: {path.name}")
 
+    openssl = resolve_openssl3()
     subprocess.run(
-        ["openssl", "genpkey", "-algorithm", "ED25519", "-out", str(private_key)],
+        openssl.argv("genpkey", "-algorithm", "ED25519", "-out", str(private_key)),
         check=True,
         capture_output=True,
     )
     os.chmod(private_key, 0o600, follow_symlinks=False)
     public_result = subprocess.run(
-        ["openssl", "pkey", "-in", str(private_key), "-pubout", "-outform", "DER"],
+        openssl.argv("pkey", "-in", str(private_key), "-pubout", "-outform", "DER"),
         check=True,
         capture_output=True,
     )

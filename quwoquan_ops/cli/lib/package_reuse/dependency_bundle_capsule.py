@@ -13,8 +13,10 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.cli.lib.app_dependency_toolchain import (
+    COCOAPODS_ENVIRONMENT_KEYS,
     AppDependencyToolchainError,
-    resolve_cocoapods_executable,
+    cocoapods_identity_from_environment,
+    resolve_cocoapods_identity,
 )
 
 from .android_gradle_capsule import (
@@ -41,7 +43,7 @@ from .ios_pod_inputs import (
     IOS_POD_DEPENDENCY_LOGICAL_PATHS,
     IOS_POD_PATROL_HOST,
     IOS_POD_PRODUCTION_HOST,
-    IOS_PODFILE_RELATIVES,
+    IOS_PODFILE_LOCK_RELATIVES,
     ios_pod_resolution_inputs,
 )
 from .ios_pod_store import (
@@ -79,6 +81,15 @@ class ManagedDependencySnapshots:
     android_gradle: AndroidGradleSnapshot
 
 
+VerifiedDependencySnapshots = tuple[
+    PubCacheSnapshot,
+    PubCacheSnapshot,
+    IosPodSnapshot,
+    IosPodSnapshot,
+    AndroidGradleSnapshot,
+]
+
+
 def _pub_manifest_digest(snapshot: PubCacheSnapshot) -> str:
     encoded = snapshot.encoded_sync_manifest
     if encoded is None:
@@ -111,16 +122,33 @@ def load_managed_dependency_snapshots(
     ):
         raise ValueError("App dependency bundle Pub component drifted")
     try:
-        pod = resolve_cocoapods_executable(
-            str(pod_executable or os.environ.get("QWQ_COCOAPODS_EXECUTABLE", ""))
-        )
+        if pod_executable is not None:
+            pod_identity = resolve_cocoapods_identity(
+                pod_executable,
+                search_path=str(Path(pod_executable).expanduser().parent),
+            )
+        else:
+            present_identity_keys = {
+                key
+                for key in COCOAPODS_ENVIRONMENT_KEYS
+                if str(os.environ.get(key) or "").strip()
+            }
+            if present_identity_keys:
+                pod_identity = cocoapods_identity_from_environment(os.environ)
+            else:
+                pod_identity = resolve_cocoapods_identity(
+                    search_path=str(os.environ.get("PATH") or ""),
+                )
+        pod = pod_identity.executable
     except AppDependencyToolchainError as error:
-        raise ValueError(f"APP.DEPENDENCY.cocoapods_mixed: {error}") from error
+        raise ValueError(str(error)) from error
     production_manifest = bundle.component_manifest("productionIosPods")
     patrol_manifest = bundle.component_manifest("patrolIosPods")
     production_ios = load_verified_ios_pod_capsule(
         snapshot_root=bundle.component_root("productionIosPods"),
-        expected_podfile_lock=repository / "quwoquan_app/ios/Podfile.lock",
+        expected_podfile_lock=(
+            repository / IOS_PODFILE_LOCK_RELATIVES[IOS_POD_PRODUCTION_HOST]
+        ),
         pod_executable=pod,
         resolution_inputs=ios_pod_resolution_inputs(
             repo_root=repository,
@@ -132,7 +160,7 @@ def load_managed_dependency_snapshots(
     patrol_ios = load_verified_ios_pod_capsule(
         snapshot_root=bundle.component_root("patrolIosPods"),
         expected_podfile_lock=(
-            repository / "quwoquan_app/test_host/patrol/ios/Podfile.lock"
+            repository / IOS_PODFILE_LOCK_RELATIVES[IOS_POD_PATROL_HOST]
         ),
         pod_executable=pod,
         resolution_inputs=ios_pod_resolution_inputs(
@@ -343,7 +371,7 @@ def _ios_capsule_snapshot(
     return load_ios_pod_capsule_bytes(
         snapshot_root=capsule_root / relative,
         expected_podfile_lock=(
-            capsule_root / "repo" / IOS_PODFILE_RELATIVES[dependency_host]
+            capsule_root / "repo" / IOS_PODFILE_LOCK_RELATIVES[dependency_host]
         ),
         resolution_inputs=ios_pod_resolution_inputs(
             repo_root=capsule_root / "repo",
@@ -358,13 +386,7 @@ def verify_dependency_bundle_capsule(
     *,
     capsule_root: Path,
     manifest_entries: Sequence[Mapping[str, Any]],
-) -> tuple[
-    PubCacheSnapshot,
-    PubCacheSnapshot,
-    IosPodSnapshot,
-    IosPodSnapshot,
-    AndroidGradleSnapshot,
-]:
+) -> VerifiedDependencySnapshots:
     """Verify all dependency bytes without consulting current global toolchains."""
 
     root = capsule_root.expanduser().absolute()

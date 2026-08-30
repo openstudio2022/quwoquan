@@ -26,6 +26,7 @@ from .ios_pod_capsule import (
     _validate_symlink_closure,
     inspect_cocoapods_executable,
 )
+from .dependency_fs import clone_fresh_relative_file
 from .ios_pod_inputs import IOS_POD_PRODUCTION_HOST, validate_ios_pod_host
 
 
@@ -49,18 +50,21 @@ def _write_exclusive(path: Path, content: bytes, *, mode: int) -> None:
     path.chmod(mode)
 
 
-def _copy_file(node: IosPodNode, destination: Path, *, writable: bool) -> None:
-    content, source_mode = _read_regular_nofollow(
-        node.source, label=f"snapshot node {node.relative}"
-    )
-    if (
-        source_mode != node.mode
-        or len(content) != node.size
-        or _digest_bytes(content) != node.sha256
-    ):
-        raise ValueError("iOS Pod snapshot changed during copy")
+def _copy_file(
+    node: IosPodNode,
+    destination_root: Path,
+    relative: str,
+    *,
+    writable: bool,
+) -> None:
     mode = 0o755 if writable and node.mode & 0o111 else 0o644 if writable else node.mode
-    _write_exclusive(destination, content, mode=mode)
+    clone_fresh_relative_file(
+        root=destination_root,
+        relative=relative,
+        source=node.source,
+        mode=mode,
+        expected_size=node.size,
+    )
 
 
 def _copy_symlink(node: IosPodNode, destination: Path) -> None:
@@ -119,7 +123,7 @@ def copy_ios_pod_component(
         relative = node.relative.removeprefix(prefix)
         destination_node = target / relative
         if node.kind == "file":
-            _copy_file(node, destination_node, writable=writable)
+            _copy_file(node, target, relative, writable=writable)
         elif node.kind == "symlink":
             _copy_symlink(node, destination_node)
     copied = _scan_component(component, target)
@@ -295,26 +299,41 @@ def load_verified_ios_pod_capsule(
     resolution_inputs: Mapping[str, Path],
     upstream_dependency_digest: str,
     dependency_host: str = IOS_POD_PRODUCTION_HOST,
+    verified_snapshot: IosPodSnapshot | None = None,
 ) -> IosPodSnapshot:
     """Additionally bind the current CocoaPods executable at projection time."""
 
-    snapshot = load_ios_pod_capsule_bytes(
-        snapshot_root=snapshot_root,
-        expected_podfile_lock=expected_podfile_lock,
-        resolution_inputs=resolution_inputs,
-        upstream_dependency_digest=upstream_dependency_digest,
-        dependency_host=dependency_host,
-    )
+    snapshot = verified_snapshot
+    if snapshot is None:
+        snapshot = load_ios_pod_capsule_bytes(
+            snapshot_root=snapshot_root,
+            expected_podfile_lock=expected_podfile_lock,
+            resolution_inputs=resolution_inputs,
+            upstream_dependency_digest=upstream_dependency_digest,
+            dependency_host=dependency_host,
+        )
+    else:
+        root = snapshot_root.expanduser().resolve(strict=True)
+        if (
+            snapshot.dependency_host != validate_ios_pod_host(dependency_host)
+            or any(not node.source.is_relative_to(root) for node in snapshot.nodes)
+        ):
+            raise ValueError("iOS Pod verified snapshot does not belong to capsule")
+        expected_lock, _expected_mode = _read_regular_nofollow(
+            expected_podfile_lock, label="current Podfile.lock"
+        )
+        if expected_lock != snapshot.lock_bytes:
+            raise ValueError("iOS Pod capsule is stale for current Podfile.lock")
     identity = inspect_cocoapods_executable(pod_executable)
     if identity.as_dict() != snapshot.cocoa_pods.as_dict():
         raise ValueError("iOS Pod capsule CocoaPods tool identity drifted")
-    return _build_snapshot(
-        podfile_lock=snapshot_root / IOS_POD_LOCK_NAME,
-        pods_root=snapshot_root / "pods",
-        cp_home_dir=snapshot_root / "home",
-        cp_cache_dir=snapshot_root / "cache",
+    return IosPodSnapshot(
+        manifest=snapshot.manifest,
+        encoded_manifest=snapshot.encoded_manifest,
+        lock_bytes=snapshot.lock_bytes,
+        nodes=snapshot.nodes,
         cocoa_pods=identity,
-        resolution_inputs=resolution_inputs,
-        upstream_dependency_digest=upstream_dependency_digest,
-        dependency_host=dependency_host,
+        resolution_inputs=snapshot.resolution_inputs,
+        upstream_dependency_digest=snapshot.upstream_dependency_digest,
+        dependency_host=snapshot.dependency_host,
     )

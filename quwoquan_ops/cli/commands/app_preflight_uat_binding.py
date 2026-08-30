@@ -21,6 +21,7 @@ UAT dart 目标常量与 `_app_content_uat_requires_typed_actor` /
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -80,7 +81,6 @@ __all__ = [
 ]
 
 
-
 def _verified_app_content_readiness(
     preflight: Mapping[str, Any],
 ) -> tuple[dict[str, Any], Path]:
@@ -113,9 +113,8 @@ def _verified_app_content_readiness(
     if readiness_path.is_symlink() or not readiness_path.is_file():
         raise ValueError("App content UAT readiness receipt is missing")
     readiness = _stackctl._read_json_object(str(readiness_path))
-    if (
-        _stackctl._canonical_document_checksum(readiness)
-        != preflight.get("readinessReceiptDigest")
+    if _stackctl._canonical_document_checksum(readiness) != preflight.get(
+        "readinessReceiptDigest"
     ):
         raise ValueError("App content UAT readiness receipt digest drifted")
     try:
@@ -136,12 +135,59 @@ def _verified_app_content_readiness(
         "environment": environment,
         "releaseId": release_id,
         "manifestDigest": manifest_digest,
-        "appUatEnvelope": preflight.get("appUatEnvelope"),
-        "appUatEnvelopeDigest": preflight.get("appUatEnvelopeDigest"),
     }
     if any(readiness.get(field) != value for field, value in expected.items()):
         raise ValueError("App content UAT readiness/preflight identity drifted")
+    _verified_app_content_release_uat_contract(preflight)
     return canonical, readiness_path
+
+
+def _verified_app_content_release_uat_contract(
+    preflight: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Re-read the exact active release header and sample plan bytes."""
+    from quwoquan_ops.cli.lib.app_content_uat_plan import (
+        load_release_uat_sample_plan,
+    )
+
+    release_id = str(preflight.get("releaseId") or "").strip()
+    header_ref = str(preflight.get("releaseHeaderRef") or "").strip()
+    header_digest = str(preflight.get("releaseHeaderDigest") or "").strip()
+    if not header_ref or _DIGEST_RE.fullmatch(header_digest) is None:
+        raise ValueError("App content UAT release header identity is missing")
+    header_path = Path(header_ref).expanduser().resolve()
+    if (
+        header_path.name != "release.json"
+        or header_path.parent.name != "payload"
+        or header_path.is_symlink()
+        or not header_path.is_file()
+    ):
+        raise ValueError("App content UAT release header path is invalid")
+    try:
+        header_bytes = header_path.read_bytes()
+        header = json.loads(header_bytes)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("App content UAT release header is unreadable") from exc
+    if not isinstance(header, dict):
+        raise ValueError("App content UAT release header must be an object")
+    observed_header_digest = "sha256:" + hashlib.sha256(header_bytes).hexdigest()
+    if observed_header_digest != header_digest:
+        raise ValueError("App content UAT release header digest drifted")
+    if header.get("releaseId") != release_id or preflight.get("releaseHeader") != header:
+        raise ValueError("App content UAT release header/preflight identity drifted")
+
+    plan, plan_ref, plan_digest = load_release_uat_sample_plan(
+        release_root=header_path.parent,
+        release_header=header,
+    )
+    expected = {
+        "releaseUatSamplePlanRef": plan_ref,
+        "releaseUatSamplePlanDigest": plan_digest,
+        "releaseUatSamplePlan": plan,
+    }
+    if any(preflight.get(field) != value for field, value in expected.items()):
+        raise ValueError("App content UAT ReleaseUatSamplePlan/preflight identity drifted")
+    return header, plan
 
 
 def _app_content_readiness_path(preflight: Mapping[str, Any]) -> Path:
@@ -178,6 +224,13 @@ def _candidate_runtime_identities(
         )
     ):
         raise ValueError("App content UAT immutable candidate identity is incomplete")
+    contract_graph_digest = manifest.get("contractGraphDigest")
+    if (
+        not isinstance(contract_graph_digest, str)
+        or _DIGEST_RE.fullmatch(contract_graph_digest) is None
+        or artifact.get("contractGraphDigest") != contract_graph_digest
+    ):
+        raise ValueError("App content UAT candidate ContractGraph identity drifted")
     return {
         "artifactBaseline": str(source_capsule.get("baselineId") or ""),
         "sourceRevision": str(source_capsule.get("sourceRevision") or ""),
@@ -204,6 +257,7 @@ def _candidate_runtime_identities(
         "observabilityLogSinkDigest": str(
             observability_composition.get("composeDigest") or ""
         ),
+        "contractGraphDigest": contract_graph_digest,
     }
 
 
@@ -273,6 +327,9 @@ def _app_content_immutable_runtime_binding(
             "App content UAT requires the current running immutable receipt"
         )
     readiness, _readiness_path = _verified_app_content_readiness(preflight)
+    release_uat_sample_plan = preflight.get("releaseUatSamplePlan")
+    if not isinstance(release_uat_sample_plan, Mapping):
+        raise ValueError("App content UAT ReleaseUatSamplePlan is missing")
     release = manifest.get("release")
     release_candidate = (
         release.get("candidate") if isinstance(release, Mapping) else None
@@ -310,6 +367,7 @@ def _app_content_immutable_runtime_binding(
         "environmentRuntimeDigest",
         "providerRuntimeDigest",
         "observabilityLogSinkDigest",
+        "contractGraphDigest",
     ):
         if _DIGEST_RE.fullmatch(identities[field]) is None:
             raise ValueError(f"App content UAT immutable {field} is invalid")
@@ -320,11 +378,9 @@ def _app_content_immutable_runtime_binding(
         "configurationDigest": identities["configurationDigest"],
         "runtimeConfigDigest": identities["runtimeConfigDigest"],
         "environmentRuntimeDigest": identities["environmentRuntimeDigest"],
+        "contractGraphDigest": identities["contractGraphDigest"],
     }
-    if any(
-        manifest.get(field) != value
-        for field, value in manifest_expected.items()
-    ):
+    if any(manifest.get(field) != value for field, value in manifest_expected.items()):
         raise ValueError("App content UAT environmentArtifact identity drifted")
     if (
         identities["artifactProviderRuntimeDigest"]
@@ -337,9 +393,7 @@ def _app_content_immutable_runtime_binding(
         "providerRuntimeDigest": identities["providerRuntimeDigest"],
         "observabilityLogSinkDigest": identities["observabilityLogSinkDigest"],
     }
-    if any(
-        startup.get(field) != value for field, value in startup_expected.items()
-    ):
+    if any(startup.get(field) != value for field, value in startup_expected.items()):
         raise ValueError("App content UAT immutable startup identity drifted")
     expected_preflight = {
         "packageBaseline": baseline,
@@ -349,18 +403,14 @@ def _app_content_immutable_runtime_binding(
         "releaseId": release_candidate.get("releaseId"),
         "manifestDigest": release_candidate.get("releaseDigest"),
         "readinessReceiptDigest": _stackctl._canonical_document_checksum(readiness),
-        "appUatEnvelope": readiness.get("appUatEnvelope"),
-        "appUatEnvelopeDigest": readiness.get("appUatEnvelopeDigest"),
     }
     for field, expected in expected_preflight.items():
         if preflight.get(field) != expected:
             raise ValueError(f"App content UAT preflight/candidate drifted: {field}")
     app_uat_plan = preflight.get("appUatPlan")
-    if (
-        not isinstance(app_uat_plan, Mapping)
-        or preflight.get("appUatPlanDigest")
-        != _stackctl._canonical_document_checksum(dict(app_uat_plan))
-    ):
+    if not isinstance(app_uat_plan, Mapping) or preflight.get(
+        "appUatPlanDigest"
+    ) != _stackctl._canonical_document_checksum(dict(app_uat_plan)):
         raise ValueError("App content UAT plan digest drifted")
     _stackctl.assert_active_deployment_candidate_snapshot(dict(snapshot))
 
@@ -381,10 +431,9 @@ def _app_content_immutable_runtime_binding(
         "sourceCapsuleWorkspaceStatusDigest": identities[
             "sourceCapsuleWorkspaceStatusDigest"
         ],
+        "contractGraphDigest": identities["contractGraphDigest"],
         "sourceCapsuleManifestRef": str(
-            candidate_root
-            / _stackctl.PACKAGE_INPUT_CAPSULE_DIRECTORY
-            / "manifest.json"
+            candidate_root / _stackctl.PACKAGE_INPUT_CAPSULE_DIRECTORY / "manifest.json"
         ),
         "sourceRevision": identities["sourceRevision"],
         "packageDigest": identities["packageDigest"],
@@ -401,12 +450,18 @@ def _app_content_immutable_runtime_binding(
         "manifestDigest": str(release_candidate.get("releaseDigest") or ""),
         "readinessPhase": str(readiness.get("readinessPhase") or ""),
         "readinessReceiptRef": str(preflight.get("readinessReceiptRef") or ""),
-        "readinessReceiptDigest": str(
-            preflight.get("readinessReceiptDigest") or ""
-        ),
+        "readinessReceiptDigest": str(preflight.get("readinessReceiptDigest") or ""),
         "lifecycleExitRef": str(preflight.get("lifecycleExitRef") or ""),
-        "appUatEnvelope": dict(preflight.get("appUatEnvelope") or {}),
-        "appUatEnvelopeDigest": str(preflight.get("appUatEnvelopeDigest") or ""),
+        "releaseHeader": dict(preflight.get("releaseHeader") or {}),
+        "releaseHeaderRef": str(preflight.get("releaseHeaderRef") or ""),
+        "releaseHeaderDigest": str(preflight.get("releaseHeaderDigest") or ""),
+        "releaseUatSamplePlan": dict(release_uat_sample_plan),
+        "releaseUatSamplePlanRef": str(
+            preflight.get("releaseUatSamplePlanRef") or ""
+        ),
+        "releaseUatSamplePlanDigest": str(
+            preflight.get("releaseUatSamplePlanDigest") or ""
+        ),
         "appUatPlan": dict(app_uat_plan),
         "appUatPlanDigest": str(preflight.get("appUatPlanDigest") or ""),
     }
@@ -466,8 +521,7 @@ def _app_content_immutable_actor_context(
         "readinessPhase": readiness.get("readinessPhase"),
     }
     if any(
-        runtime_binding.get(field) != value
-        for field, value in expected_runtime.items()
+        runtime_binding.get(field) != value for field, value in expected_runtime.items()
     ):
         raise ValueError("App content UAT typed Actor candidate identity drifted")
     candidate = _stackctl.build_candidate_binding(
@@ -539,10 +593,8 @@ def _app_content_actor_context_from_candidate(
         or login.get("sourceRevision") != runtime_binding.get("sourceRevision")
         or login.get("runtimeConfigDigest")
         != runtime_binding.get("runtimeConfigDigest")
-        or login.get("configurationDigest")
-        != startup.get("configurationDigest")
-        or login.get("providerRuntimeDigest")
-        != startup.get("providerRuntimeDigest")
+        or login.get("configurationDigest") != startup.get("configurationDigest")
+        or login.get("providerRuntimeDigest") != startup.get("providerRuntimeDigest")
         or login.get("challengePresent") is not True
         or login.get("sessionPresent") is not True
         or login.get("startupAttemptId") != runtime_binding.get("startupAttemptId")
@@ -552,9 +604,9 @@ def _app_content_actor_context_from_candidate(
         is None
     ):
         raise ValueError("App content UAT typed Actor OTP evidence drifted")
-    identity_provider_capability = (
-        AUTHENTICATED_ACTORS.required_provider_capabilities[0].value
-    )
+    identity_provider_capability = AUTHENTICATED_ACTORS.required_provider_capabilities[
+        0
+    ].value
     provider_evidence = {
         identity_provider_capability: {
             "status": "passed",
@@ -564,10 +616,12 @@ def _app_content_actor_context_from_candidate(
             "receiptDigest": login["receiptDigest"],
         }
     }
-    topology_target = _stackctl.get_target(_stackctl.load_environment_topology(), target)
-    base_url = str(
-        (topology_target.get("publicBases") or {}).get("api") or ""
-    ).rstrip("/")
+    topology_target = _stackctl.get_target(
+        _stackctl.load_environment_topology(), target
+    )
+    base_url = str((topology_target.get("publicBases") or {}).get("api") or "").rstrip(
+        "/"
+    )
     return TestDataContext(
         candidate=candidate,
         base_url=base_url,
@@ -645,11 +699,17 @@ def _run_app_content_message_home_command(
         receiver = runtime.actor(receiver_handle)
         command_environment.update(
             {
-                TYPED_TEST_DATA_ACTOR_ENV["access_token"]: receiver.session.access_token,
-                TYPED_TEST_DATA_ACTOR_ENV["refresh_token"]: receiver.session.refresh_token,
+                TYPED_TEST_DATA_ACTOR_ENV[
+                    "access_token"
+                ]: receiver.session.access_token,
+                TYPED_TEST_DATA_ACTOR_ENV[
+                    "refresh_token"
+                ]: receiver.session.refresh_token,
                 TYPED_TEST_DATA_ACTOR_ENV["owner_id"]: receiver.session.owner_id,
                 TYPED_TEST_DATA_ACTOR_ENV["persona_id"]: receiver.session.persona_id,
-                TYPED_TEST_DATA_CONVERSATION_ENV["conversation_id"]: provisioned.value.conversation.object_id,
+                TYPED_TEST_DATA_CONVERSATION_ENV[
+                    "conversation_id"
+                ]: provisioned.value.conversation.object_id,
                 TYPED_TEST_DATA_CONVERSATION_ENV["message_ids_json"]: json.dumps(
                     [
                         message.message.object_id
@@ -691,9 +751,8 @@ def _ios_direct_flutter_log_reader_retryable(
 
     if evidence.get("status") != "failed":
         return False
-    if (
-        evidence.get("flutterProcessGroupStoppedBySigint") is not True
-        or not isinstance(evidence.get("flutterRunExitCode"), int)
+    if evidence.get("flutterProcessGroupStoppedBySigint") is not True or not isinstance(
+        evidence.get("flutterRunExitCode"), int
     ):
         return False
     issues = evidence.get("issues")

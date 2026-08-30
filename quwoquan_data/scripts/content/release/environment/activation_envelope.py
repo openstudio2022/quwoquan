@@ -50,7 +50,6 @@ def build_environment_activation_envelope(
     verify_run_id: str,
     import_report_ref: str,
     import_report_digest: str,
-    app_uat_envelope: Mapping[str, Any],
     research_isolation: Mapping[str, Any] | None,
     research_isolation_verification_ref: str = "",
     research_isolation_verification_digest: str = "",
@@ -63,9 +62,9 @@ def build_environment_activation_envelope(
 
     The envelope deliberately contains no deployment endpoint or mutable active
     pointer.  It binds an immutable Data release to one environment import and
-    one environment readback.  Research isolation is required only for the
-    research activation phase; consumer probes and commercial activation remain
-    separate lifecycle facts.
+    one environment readback. It is a Data import/readback fact and carries no
+    target App UAT, device, runner, package, or promotion authority. Research
+    isolation is required only for the research readiness phase.
     """
 
     text_fields = {
@@ -88,7 +87,6 @@ def build_environment_activation_envelope(
     envelope: dict[str, Any] = {
         "schema": "quwoquan_data.environment_activation_envelope",
         **text_fields,
-        "appUatEnvelopeDigest": document_digest(app_uat_envelope),
     }
     scalar_identity = (source_revision, source_digest, entity_catalog_digest)
     if source_identities is not None:
@@ -203,7 +201,6 @@ def build_release_activation_envelope(
     verify_run_id: str,
     import_report_ref: str,
     import_report_digest: str,
-    app_uat_envelope: Mapping[str, Any],
     research_isolation: Mapping[str, Any] | None,
     research_isolation_verification_ref: str,
     research_isolation_verification_digest: str,
@@ -233,7 +230,6 @@ def build_release_activation_envelope(
         verify_run_id=verify_run_id,
         import_report_ref=import_report_ref,
         import_report_digest=import_report_digest,
-        app_uat_envelope=app_uat_envelope,
         research_isolation=research_isolation,
         research_isolation_verification_ref=research_isolation_verification_ref,
         research_isolation_verification_digest=(

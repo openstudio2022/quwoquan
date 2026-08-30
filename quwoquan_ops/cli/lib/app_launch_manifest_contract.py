@@ -24,6 +24,7 @@ from .app_runtime_config_signing import (
     verify_signature,
 )
 from .generated.app_launch_contract import APP_LAUNCH_MANIFEST
+from .openssl3_resolver import OpenSSL3CapabilityError
 
 
 _RUNTIME_CONFIG_TRUST_ENVELOPE_FIELDS = {
@@ -790,6 +791,8 @@ def validate_runtime_config_package(
                         canonical_signed_payload(package),
                         signature,
                     )
+                except OpenSSL3CapabilityError:
+                    raise
                 except ValueError as exc:
                     issues.append(f"runtimeConfigPackage signature is invalid: {exc}")
     return list(dict.fromkeys(issues))

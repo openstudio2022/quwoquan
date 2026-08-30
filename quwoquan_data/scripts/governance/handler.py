@@ -231,6 +231,9 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub = p.add_subparsers(dest="governance_command")
 
     from governance.coverage.handler import register_coverage_parser
+    from governance.stable_production_proof_cli import (
+        register_stable_production_proof_parsers,
+    )
     from governance.taxonomy.handler import register_taxonomy_parser
 
     creators = sub.add_parser(
@@ -257,6 +260,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     register_taxonomy_parser(sub)
     register_coverage_parser(sub)
+    register_stable_production_proof_parsers(sub)
 
     media_probe = sub.add_parser(
         "media-probe",

@@ -82,12 +82,52 @@ def _launch_prod_sim_stack(
     run_stage: Callable[..., subprocess.CompletedProcess[str]],
     announce: Callable[..., None],
     maybe_resolve_device_id: Callable[..., str],
-    start_app_process: Callable[[str, str], dict[str, Any]],
+    start_app_process: Callable[..., dict[str, Any]],
+    candidate_snapshot: dict[str, Any] | None,
+    assert_fixed_candidate_selected: Callable[[], None],
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     import quwoquan_ops.cli.stackctl as _stackctl
     from quwoquan_ops.cli.commands import up_app_launch as _up_app_launch
 
     cmd = ["bash", "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh", "up"]
+    if candidate_snapshot is None:
+        return (
+            subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout="",
+                stderr="GATE_BLOCK: fixed prod-sim candidate snapshot is missing",
+            ),
+            cmd,
+        )
+    manifest = candidate_snapshot.get("manifest")
+    candidate_root = Path(str(candidate_snapshot.get("candidateDir") or ""))
+    if not isinstance(manifest, dict) or not candidate_root.is_absolute():
+        return (
+            subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout="",
+                stderr="GATE_BLOCK: fixed prod-sim candidate snapshot is invalid",
+            ),
+            cmd,
+        )
+    try:
+        assert_fixed_candidate_selected()
+        launch_bundle = _stackctl.prod_sim_app_launch_bundle_from_candidate(
+            manifest,
+            candidate_root=candidate_root,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        return (
+            subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout="",
+                stderr=f"GATE_BLOCK: prod-sim candidate App launch bundle invalid: {exc}",
+            ),
+            cmd,
+        )
     readiness_value = str(
         getattr(args, "data_release_readiness", "")
         or os.environ.get("DATA_RELEASE_READINESS_RECEIPT", "")
@@ -126,47 +166,27 @@ def _launch_prod_sim_stack(
     if result.returncode == 0 and not args.skip_app:
         args.device_id = maybe_resolve_device_id(include_web=True)
         try:
-            app_launch = start_app_process("prod-sim", args.device_id)
+            assert_fixed_candidate_selected()
+            app_launch = start_app_process(
+                "prod-sim",
+                args.device_id,
+                launch_bundle=launch_bundle,
+            )
         except RuntimeError as exc:
             result = subprocess.CompletedProcess(cmd, 1, stdout="", stderr=str(exc))
             app_launch = None
         if app_launch is not None:
-            tail_result = _stackctl._tail_file_for_startup(
-                app_launch["log_path"],
-                process=app_launch["process"],
-                prefix=f"[{app_launch['stageHeader']} app] ",
-                idle_timeout_seconds=8.0,
-                max_follow_seconds=120.0,
-                ready_patterns=(
-                    "Syncing files to device",
-                    "Flutter run key commands",
-                    "A Dart VM Service",
-                    "The Flutter DevTools debugger",
-                ),
-                failure_patterns=(
-                    "Failed to build",
-                    "Error launching application on",
-                    "Lost connection to device.",
-                    "Target kernel_snapshot_program failed",
-                    "app launch exited before reaching steady state",
-                ),
-                ready_idle_timeout_seconds=3.0,
-            )
-            app_exit_code = app_launch["process"].poll()
-            failure_detail = _stackctl._app_launch_failure_detail(
-                tail_result,
-                default_message="prod-sim app launch failed",
-                process_exit_code=app_exit_code,
-            )
-            if failure_detail is not None:
+            try:
+                assert_fixed_candidate_selected()
+            except (OSError, TypeError, ValueError) as exc:
                 result = subprocess.CompletedProcess(
                     app_launch["command"],
-                    1,
+                    2,
                     stdout="",
-                    stderr=str(failure_detail),
+                    stderr=f"active candidate changed during App launch: {exc}",
                 )
             else:
-                announce("prod-sim", "app launch reached steady state")
+                announce("prod-sim", "candidate-bound App launch receipt is ready")
                 cmd = app_launch["command"]
                 result = subprocess.CompletedProcess(
                     cmd,
@@ -177,10 +197,10 @@ def _launch_prod_sim_stack(
             steps.append(
                 {
                     "argv": app_launch["command"],
-                    "exitCode": app_exit_code or 0,
+                    "exitCode": result.returncode,
                     "stdout": f"pid={app_launch['process'].pid}",
                     "stderr": f"log={_stackctl.relpath(app_launch['log_path'])}",
-                    "tail": tail_result,
+                    "tail": {"requireReady": False, "source": "diagnostic-only"},
                 }
             )
     return result, cmd

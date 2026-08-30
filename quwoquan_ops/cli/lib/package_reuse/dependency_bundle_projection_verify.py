@@ -26,12 +26,21 @@ from .dependency_projection_contract import (
     DependencyProjectionReadback,
     DependencyProjectionReadbackEvidence,
     load_expectation,
+    load_expectation_bytes,
     load_historical_expectation,
     load_readback_evidence,
+    load_readback_evidence_bytes,
     write_readback_evidence,
 )
-from .dependency_projection_prepare import prepare_dependency_projection_cas_evidence
-from .dependency_projection_readback import revalidate_dependency_projection_cas
+from .dependency_projection_prepare import (
+    PreparedDependencyProjectionEvidence,
+    prepare_dependency_projection_cas_evidence,
+    prepare_dependency_projection_cas_evidence_with_observed_components,
+)
+from .dependency_projection_readback import (
+    readback_from_expectation,
+    revalidate_dependency_projection_cas,
+)
 
 __all__ = [
     "DEPENDENCY_PROJECTION_CAS_BLOCKER",
@@ -41,10 +50,15 @@ __all__ = [
     "DependencyProjectionExpectation",
     "DependencyProjectionReadback",
     "DependencyProjectionReadbackEvidence",
+    "PreparedDependencyProjectionEvidence",
     "load_dependency_projection_cas_evidence",
+    "load_dependency_projection_cas_evidence_bytes",
     "load_dependency_projection_cas_readback",
+    "load_dependency_projection_cas_readback_bytes",
     "load_historical_dependency_projection_cas_evidence",
     "prepare_dependency_projection_cas_evidence",
+    "prepare_dependency_projection_cas_evidence_with_observed_components",
+    "readback_from_expectation",
     "revalidate_dependency_projection_cas",
     "write_dependency_projection_cas_readback",
 ]
@@ -58,6 +72,25 @@ def load_dependency_projection_cas_evidence(
     return load_expectation(
         projection_root_path=projection_root,
         evidence_path=evidence_path,
+        expected_digest=expected_digest,
+    )
+
+
+def load_dependency_projection_cas_evidence_bytes(
+    *,
+    projection_root: Path,
+    evidence_path: Path,
+    encoded: bytes,
+    evidence_mode: int,
+    expected_digest: str,
+) -> DependencyProjectionExpectation:
+    """Validate caller-opened expectation bytes without reopening the path."""
+
+    return load_expectation_bytes(
+        projection_root_path=projection_root,
+        evidence_path=evidence_path,
+        encoded=encoded,
+        evidence_mode=evidence_mode,
         expected_digest=expected_digest,
     )
 
@@ -91,6 +124,25 @@ def load_dependency_projection_cas_readback(
 
     return load_readback_evidence(
         evidence_path=evidence_path,
+        expected_digest=expected_digest,
+        expected_expectation_digest=expected_expectation_digest,
+    )
+
+
+def load_dependency_projection_cas_readback_bytes(
+    *,
+    evidence_path: Path,
+    encoded: bytes,
+    evidence_mode: int,
+    expected_digest: str,
+    expected_expectation_digest: str,
+) -> DependencyProjectionReadbackEvidence:
+    """Validate caller-opened readback bytes without reopening the path."""
+
+    return load_readback_evidence_bytes(
+        evidence_path=evidence_path,
+        encoded=encoded,
+        evidence_mode=evidence_mode,
         expected_digest=expected_digest,
         expected_expectation_digest=expected_expectation_digest,
     )

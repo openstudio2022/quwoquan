@@ -40,10 +40,8 @@ def _test_live_readiness_fixture(
     )
     receipt = root / receipt_ref
     receipt.parent.mkdir(parents=True)
-    envelope = {
-        "releaseId": "release-1",
-        "videoWorkId": video_work_id,
-    }
+    # readiness keeps environment verification only; release samples are carried
+    # by the exact header-bound ReleaseUatSamplePlan projected into appUatPlan.
     readiness = {
         "schema": "quwoquan_data.environment_release_readiness",
         "environment": "alpha",
@@ -53,10 +51,7 @@ def _test_live_readiness_fixture(
         "manifestDigest": "sha256:" + "a" * 64,
         "importRunId": "apply-1",
         "verifyRunId": "verify-1",
-        "appUatEnvelope": envelope,
-        "feedQueries": [
-            {"name": "typed_video", "matchedPostIds": [video_work_id]}
-        ],
+        "feedQueries": [{"name": "typed_video", "matchedPostIds": [video_work_id]}],
     }
     encoded = json.dumps(readiness, sort_keys=True).encode("utf-8")
     receipt.write_bytes(encoded)
@@ -82,16 +77,202 @@ def _test_live_readiness_fixture(
         "verifyRunId": "verify-1",
         "manifestDigest": "sha256:" + "a" * 64,
         "readinessReceiptRef": receipt_ref,
-        "readinessReceiptDigest": (
-            "sha256:" + hashlib.sha256(encoded).hexdigest()
-        ),
-        "appUatEnvelope": envelope,
+        "readinessReceiptDigest": ("sha256:" + hashlib.sha256(encoded).hexdigest()),
+        "releaseUatSamplePlanRef": "uat/sample_plan.json",
+        "releaseUatSamplePlanDigest": "sha256:" + "2" * 64,
+        "appUatPlan": {
+            "orderedSamples": [
+                {
+                    "sampleId": "canary-video-001",
+                    "carrier": "video",
+                    "objectId": video_work_id,
+                    "objectRef": f"objects/posts/video/{video_work_id}/1",
+                    "objectDigest": "sha256:" + "7" * 64,
+                }
+            ],
+            "carrierIdentities": {
+                "homepage": "homepage-1",
+                "article": "article-1",
+                "image": "image-1",
+                "video": video_work_id,
+            },
+        },
     }
     return receipt, content_binding
 
 
+def _checksum(value: object) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _write_candidate_release_fixture(
+    root: Path,
+    *,
+    release_id: str,
+    manifest_digest: str,
+) -> tuple[Path, str]:
+    scalar_identity = {
+        "sourceRevision": "sha256:" + "2" * 64,
+        "sourceDigest": "sha256:" + "3" * 64,
+        "entityCatalogDigest": "sha256:" + "4" * 64,
+    }
+    source_identities = [{**scalar_identity, "executionIds": ["execution-1"]}]
+    source_identity_set_digest = _checksum(
+        {
+            "schema": "quwoquan_data.source_identity_set",
+            "sourceIdentities": source_identities,
+        }
+    )
+    pool_digest = "sha256:" + "5" * 64
+    canonical_merkle = "sha256:" + "6" * 64
+    content_source_identity_digest = _checksum(
+        {"schema": "quwoquan_data.object_source_identity", **scalar_identity}
+    )
+    contents = [
+        {
+            "contentId": f"{carrier}-1",
+            "version": 1,
+            "postRef": f"{carrier}/{carrier}-1/1",
+            "executionId": "execution-1",
+            "sourceIdentityDigest": content_source_identity_digest,
+        }
+        for carrier in ("article", "image", "video")
+    ]
+    selection_evidence = {
+        "poolDigest": pool_digest,
+        "sourceIdentitySetDigest": source_identity_set_digest,
+        "canonicalMerkle": canonical_merkle,
+        "releaseContentsDigest": _checksum(contents),
+        "releaseEntityCohortDigest": _checksum(["homepage-1"]),
+    }
+    release_digest = _checksum(
+        {
+            "schema": "quwoquan_data.release_uat_sample_plan_identity",
+            "releaseId": release_id,
+            "canonicalMerkle": canonical_merkle,
+            "selectionEvidence": selection_evidence,
+        }
+    )
+    carriers = ("homepage", "article", "image", "video")
+    distribution = {carrier: 1 for carrier in carriers}
+    sample_plan = {
+        "schema": "quwoquan_data.release_uat_sample_plan",
+        "releaseId": release_id,
+        "releaseDigest": release_digest,
+        "milestone": None,
+        "selectionEvidence": selection_evidence,
+        "eligiblePopulationCounts": dict(distribution),
+        "exactCohortCounts": dict(distribution),
+        "entryCarrierCells": [
+            {
+                "entry": entry,
+                "carrier": carrier,
+                "applicability": "required",
+                "specRef": (
+                    "specs/feature-tree/runtime/runtime-config/"
+                    "environment-topology-and-packaging/spec.md#req-006"
+                ),
+                "runnerClass": f"qwq_app.content_uat.{entry}.{carrier}.v1",
+            }
+            for entry in ("feed", "search", "recommendation", "direct_or_object_route")
+            for carrier in carriers
+        ],
+        "sampleStrategy": {
+            "name": "baseline_per_required_carrier",
+            "version": 1,
+            "seedDigest": _checksum(
+                {"releaseDigest": release_digest, "sampleDistribution": distribution}
+            ),
+            "carrierOrder": list(carriers),
+            "sortKey": "identity",
+            "direction": "ascending",
+            "objectDigestAlgorithm": "sha256-path-blob-merkle",
+            "sampleDistribution": distribution,
+        },
+        "sampleCount": 4,
+        "samples": [
+            {
+                "sampleId": f"canary-{carrier}-001",
+                "carrier": carrier,
+                "objectId": (
+                    "/entity/homepage-1" if carrier == "homepage" else f"{carrier}-1"
+                ),
+                "objectRef": (
+                    "objects/entities/homepage-1"
+                    if carrier == "homepage"
+                    else f"objects/posts/{carrier}/{carrier}-1/1"
+                ),
+                "objectDigest": _checksum({"carrier": carrier, "fixture": "object"}),
+            }
+            for carrier in carriers
+        ],
+    }
+    sample_bytes = (
+        json.dumps(
+            sample_plan, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+        + "\n"
+    ).encode("utf-8")
+    release_root = root / "data/releases" / release_id
+    sample_path = release_root / "payload/uat/sample_plan.json"
+    sample_path.parent.mkdir(parents=True, exist_ok=True)
+    sample_path.write_bytes(sample_bytes)
+    header = {
+        "schema": "quwoquan_data.release",
+        "releaseId": release_id,
+        "sourceOwner": "qwq_data",
+        "releaseKind": "content",
+        "releaseClass": "research",
+        "productLifecycleState": "research",
+        "sourceIdentities": source_identities,
+        "sourceIdentitySetDigest": source_identity_set_digest,
+        "poolDigest": pool_digest,
+        "canonicalMerkle": canonical_merkle,
+        "selectionScope": "target_environment",
+        "targetEnvironment": "alpha",
+        "releaseMode": "research",
+        "counts": {"article": 1, "image": 1, "video": 1, "total": 3},
+        "contents": contents,
+        "authors": [],
+        "buildResult": "completed",
+        "samplePlanRef": "uat/sample_plan.json",
+        "samplePlanDigest": "sha256:" + hashlib.sha256(sample_bytes).hexdigest(),
+    }
+    (release_root / "payload/release.json").write_text(
+        json.dumps(header, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    attestation = {
+        "schema": "quwoquan_data.release_attestation",
+        "releaseId": release_id,
+        "sourceOwner": "qwq_data",
+        "releaseKind": "content",
+        "releaseClass": "research",
+        "productLifecycleState": "research",
+        "payloadSha256": manifest_digest,
+    }
+    attestation_path = release_root / "attestations/release.json"
+    attestation_path.parent.mkdir(parents=True, exist_ok=True)
+    attestation_path.write_text(
+        json.dumps(attestation, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return (
+        attestation_path,
+        "sha256:" + hashlib.sha256(attestation_path.read_bytes()).hexdigest(),
+    )
+
+
 class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
-    def test_alpha_operator_is_short_lived_typed_and_never_returned_in_receipt(self) -> None:
+    def test_alpha_operator_is_short_lived_typed_and_never_returned_in_receipt(
+        self,
+    ) -> None:
         token = _jwt(
             {
                 "sub": "operator:content-commercial:alpha",
@@ -172,6 +353,13 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
     def test_candidate_binding_rejects_video_outside_active_release(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            release_id = "release-1"
+            manifest_digest = "sha256:" + "a" * 64
+            attestation_path, attestation_digest = _write_candidate_release_fixture(
+                root,
+                release_id=release_id,
+                manifest_digest=manifest_digest,
+            )
             receipt = root / "data-release/release/verify/release-readiness.json"
             receipt.parent.mkdir(parents=True)
             receipt.write_text(
@@ -179,15 +367,42 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                     {
                         "schema": "quwoquan_data.environment_release_readiness",
                         "environment": "alpha",
+                        "releaseId": release_id,
+                        "releaseKind": "content",
+                        "sourceOwner": "qwq_data",
+                        "releaseClass": "research",
+                        "productLifecycleState": "research",
+                        "sourceIdentities": [
+                            {
+                                "sourceRevision": "sha256:" + "2" * 64,
+                                "sourceDigest": "sha256:" + "3" * 64,
+                                "entityCatalogDigest": "sha256:" + "4" * 64,
+                                "executionIds": ["execution-1"],
+                            }
+                        ],
+                        "sourceIdentitySetDigest": _checksum(
+                            {
+                                "schema": "quwoquan_data.source_identity_set",
+                                "sourceIdentities": [
+                                    {
+                                        "sourceRevision": "sha256:" + "2" * 64,
+                                        "sourceDigest": "sha256:" + "3" * 64,
+                                        "entityCatalogDigest": "sha256:" + "4" * 64,
+                                        "executionIds": ["execution-1"],
+                                    }
+                                ],
+                            }
+                        ),
                         "readinessPhase": "consumer",
-                        "passed": True,
-                        "releaseId": "release-1",
-                        "manifestDigest": "sha256:" + "a" * 64,
+                        "manifestDigest": manifest_digest,
                         "importRunId": "apply-1",
                         "verifyRunId": "verify-1",
+                        "entityRefs": ["homepage-1"],
+                        "postIds": ["article-1", "image-1", "video-1"],
                         "feedQueries": [
                             {"name": "typed_video", "matchedPostIds": ["video-1"]}
                         ],
+                        "passed": True,
                     }
                 ),
                 encoding="utf-8",
@@ -207,8 +422,10 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                         "sourceRevision": "revision-1",
                         "release": {
                             "candidate": {
-                                "releaseId": "release-1",
-                                "releaseDigest": "sha256:" + "a" * 64,
+                                "releaseId": release_id,
+                                "releaseDigest": manifest_digest,
+                                "attestationRef": str(attestation_path),
+                                "attestationDigest": attestation_digest,
                             }
                         },
                     },
@@ -220,7 +437,7 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                 ),
                 self.assertRaisesRegex(
                     premium_pool_release.PremiumPoolReleaseError,
-                    "release-bound video",
+                    "ReleaseUatSamplePlan video sample",
                 ),
             ):
                 premium_pool_release.load_premium_pool_candidate_binding(
@@ -230,7 +447,9 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                     content_id="video-other",
                 )
 
-    def test_test_live_binding_accepts_exact_consumer_and_commercial_video(self) -> None:
+    def test_test_live_binding_accepts_exact_consumer_and_commercial_video(
+        self,
+    ) -> None:
         for phase in ("consumer", "commercial"):
             with self.subTest(phase=phase), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
@@ -261,7 +480,67 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                 self.assertEqual(binding.startup_attempt_id, "attempt-alpha-1")
                 self.assertEqual(binding.content_id, "video-1")
 
-    def test_test_live_binding_rejects_unbound_cross_target_stale_or_wrong_video(self) -> None:
+    def test_test_live_binding_requires_a_video_sample_and_never_guesses_query(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            receipt, content_binding = _test_live_readiness_fixture(root)
+            readiness = json.loads(receipt.read_text(encoding="utf-8"))
+            readiness["feedQueries"] = [
+                {"name": "typed_video", "matchedPostIds": ["video-guessed"]}
+            ]
+            encoded = json.dumps(readiness, sort_keys=True).encode("utf-8")
+            receipt.write_bytes(encoded)
+            content_binding["readinessReceiptDigest"] = (
+                "sha256:" + hashlib.sha256(encoded).hexdigest()
+            )
+            with (
+                mock.patch.object(
+                    premium_pool_release, "output_root", return_value=root
+                ),
+                mock.patch.object(
+                    premium_pool_release,
+                    "load_test_live_content_binding",
+                    return_value=content_binding,
+                ),
+            ):
+                binding = premium_pool_release.load_premium_pool_test_live_binding(
+                    environment="alpha",
+                    target="alpha-local",
+                    readiness_receipt=receipt,
+                    content_id="video-1",
+                )
+            self.assertEqual(binding.content_id, "video-1")
+
+            content_binding["appUatPlan"] = {
+                **content_binding["appUatPlan"],
+                "orderedSamples": [],
+            }
+            with (
+                mock.patch.object(
+                    premium_pool_release, "output_root", return_value=root
+                ),
+                mock.patch.object(
+                    premium_pool_release,
+                    "load_test_live_content_binding",
+                    return_value=content_binding,
+                ),
+                self.assertRaisesRegex(
+                    premium_pool_release.PremiumPoolReleaseError,
+                    "no required video sample",
+                ),
+            ):
+                premium_pool_release.load_premium_pool_test_live_binding(
+                    environment="alpha",
+                    target="alpha-local",
+                    readiness_receipt=receipt,
+                    content_id="video-1",
+                )
+
+    def test_test_live_binding_rejects_unbound_cross_target_stale_or_wrong_video(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             receipt, content_binding = _test_live_readiness_fixture(root)
@@ -387,7 +666,9 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                         content_id=supplied_content_id,
                     )
 
-    def test_test_live_receipt_and_tokens_bind_attempt_and_mutable_identity(self) -> None:
+    def test_test_live_receipt_and_tokens_bind_attempt_and_mutable_identity(
+        self,
+    ) -> None:
         runtime_identity = {
             "mutableStateDigest": "sha256:" + "a" * 64,
             "configurationDigest": "sha256:" + "b" * 64,

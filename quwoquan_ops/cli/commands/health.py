@@ -18,6 +18,7 @@ import argparse
 import concurrent.futures
 import hashlib
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -483,9 +484,42 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
     ok_count = sum(1 for item in statuses if item["ok"])
     timing = _stackctl._finish_timing(started_monotonic, started_at)
     surfaces = _surface_health(statuses)
+    candidate_snapshot: Mapping[str, Any] | None = None
+    startup_receipt: Mapping[str, Any] | None = None
+    generation_issues: list[str] = []
+    try:
+        candidate_snapshot = _stackctl.active_deployment_candidate_snapshot(args.target)
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
+        generation_issues.append(f"active candidate readback failed: {error}")
+    try:
+        startup_receipt = _stackctl.read_startup_attempt(args.target)
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as error:
+        generation_issues.append(f"startup receipt readback failed: {error}")
+    candidate_digest = str((candidate_snapshot or {}).get("baselineId") or "")
+    startup_candidate = str((startup_receipt or {}).get("candidateDigest") or "")
+    if candidate_digest and startup_candidate and candidate_digest != startup_candidate:
+        generation_issues.append(
+            "startup receipt candidateDigest does not match the active candidate"
+        )
+    from quwoquan_ops.cli.lib.evidence_generation import (
+        build_evidence_generation_envelope,
+    )
+    evidence_envelope = build_evidence_generation_envelope(
+        command="health",
+        candidate_snapshot=candidate_snapshot,
+        startup_receipt=startup_receipt,
+        startup_status=(
+            "executed" if isinstance(startup_receipt, Mapping) else "not_executed"
+        ),
+        startup_reason="no startup receipt is available for health",
+        upstream_status="not_applicable",
+        upstream_reason="health probes the active runtime directly",
+    )
     payload = {
         "command": "health",
         "target": args.target,
+        "evidenceEnvelope": evidence_envelope,
+        "generationIssues": generation_issues,
         "scope": args.scope,
         "requestTimeoutSeconds": timeout_seconds,
         "retryAttempts": retry_attempts,
@@ -554,5 +588,6 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         "reportDir": _stackctl.relpath(report_dir),
         "userAvailability": user_availability["userAvailability"],
         "firstBlockerClass": user_availability["firstBlockerClass"],
+        "evidenceEnvelope": evidence_envelope,
         **timing,
     }

@@ -12,7 +12,7 @@ from core.io import read_json
 from core.paths import SOURCE_ACQUISITION_ROOT
 from core.schema import assert_valid
 
-from content.execution.controller.execute.pre_acquisition_handoff import (
+from content.source.pre_acquisition_handoff import (
     guard_acquisition_source_identity,
     load_pre_acquisition_handoff,
 )

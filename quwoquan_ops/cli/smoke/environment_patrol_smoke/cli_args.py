@@ -70,6 +70,18 @@ def parse_args() -> argparse.Namespace:
             dest=destination,
             default=os.environ.get(define_name, "").strip(),
         )
+    parser.add_argument("--app-uat-sample-plan-ref", default="")
+    parser.add_argument("--app-uat-sample-plan-sha256", default="")
+    parser.add_argument("--app-uat-target-binding-ref", default="")
+    parser.add_argument("--app-uat-target-binding-sha256", default="")
+    parser.add_argument("--app-uat-target-binding-digest", default="")
+    parser.add_argument("--app-uat-release-digest", default="")
+    parser.add_argument("--app-uat-source-identity-set-digest", default="")
+    parser.add_argument("--app-uat-commit-sha", default="")
+    parser.add_argument("--app-uat-contract-graph-source-hash", default="")
+    parser.add_argument("--app-uat-candidate-manifest-sha256", default="")
+    parser.add_argument("--app-uat-sample-plan-b64", default="", help=argparse.SUPPRESS)
+    parser.add_argument("--app-uat-runtime-binding-b64", default="", help=argparse.SUPPRESS)
     parser.add_argument(
         "--patrol-install-id",
         default=os.environ.get("QWQ_PATROL_INSTALL_ID", "").strip(),

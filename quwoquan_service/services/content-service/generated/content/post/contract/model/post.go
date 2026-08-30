@@ -87,7 +87,6 @@ type Post struct {
 	UpdatedAt                 time.Time                `json:"updatedAt" bson:"updatedAt"`
 	PublishedAt               time.Time                `json:"publishedAt" bson:"publishedAt"`
 	LastActiveAt              time.Time                `json:"lastActiveAt" bson:"lastActiveAt"`
-	SourceTaskId              string                   `json:"sourceTaskId" bson:"sourceTaskId"`
 	DeletedAt                 time.Time                `json:"deletedAt" bson:"deletedAt"`
 }
 

@@ -161,7 +161,7 @@ def _blocked(
 
 
 def _normalize(intent: Mapping[str, Any]) -> dict[str, Any]:
-    from content.execution.controller.execute.pre_acquisition_handoff import (
+    from content.source.pre_acquisition_handoff import (
         PreAcquisitionHandoffError,
         carrier_source_providers,
         load_pre_acquisition_handoff,

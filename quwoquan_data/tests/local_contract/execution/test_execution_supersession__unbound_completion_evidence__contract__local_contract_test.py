@@ -11,11 +11,12 @@ import socket
 from pathlib import Path
 
 import pytest
-from content.execution import context, execution_supersession
+from content.execution import context, execution_supersession, stage_receipt
 from content.execution.controller.execute import reconcile
 from core.control_types import ExecutionStateStatus
 from core.io import read_json, write_json
 from core.source_digest import SourceDigest, current_source_digest
+
 
 EXECUTION_ID = "20260828--travel-homepage-unbound--sichuan--pilot-001"
 BUILT_RELEASE = "release-20260828-own-001"
@@ -31,28 +32,31 @@ def _freeze_source(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _stage_receipt(
+def _record_stage_receipt(
     root: Path,
     *,
-    sequence: int,
     stage: str,
     verdict: str,
     command: str,
-) -> None:
-    write_json(
-        root / "_shared" / "receipts" / f"{sequence:03d}-{stage}.json",
-        {
-            "schema": "quwoquan_data.stage_receipt",
-            "executionId": root.name,
-            "stage": stage,
-            "sequence": sequence,
-            "verdict": verdict,
-            "actor": {"host": "cursor", "modelFamily": "claude"},
-            "artifacts": [],
-            "next": "END" if stage == "ship" else "ship",
-            "evidence": {"commands": [{"command": command, "exitCode": 0}]},
-            "recordedAt": "2026-08-28T00:00:00Z",
-        },
+    next_stage: str,
+) -> Path:
+    return stage_receipt.record_stage_receipt(
+        execution_id=root.name,
+        stage=stage,
+        verdict=verdict,
+        actor_host="cursor",
+        actor_model_family="claude",
+        actor_session="supersession-contract-fixture",
+        artifacts=[],
+        open_items=(
+            []
+            if verdict == "pass"
+            else [{"item": "fixture ship blocked", "disposition": "gate_block"}]
+        ),
+        next_stage=next_stage,
+        evidence_commands=[{"command": command, "exitCode": 0}],
+        issue_count=0 if verdict == "pass" else 1,
+        repair_rounds=0,
     )
 
 
@@ -69,9 +73,7 @@ def _succeeded_fixture(
     state_path = root / "_shared" / "execution_state.json"
     monkeypatch.setattr(reconcile, "execution_root", lambda _execution_id: root)
     monkeypatch.setattr(context, "_state_path", lambda _execution_id: state_path)
-    state = context.load_execution_state(EXECUTION_ID)
-    state.status = status
-    context.save_execution_state(state)
+    monkeypatch.setattr(stage_receipt, "execution_root", lambda _execution_id: root)
     write_json(
         root / "execution_manifest.json",
         {
@@ -99,27 +101,48 @@ def _succeeded_fixture(
         },
     )
     if built is not None:
-        _stage_receipt(
+        _record_stage_receipt(
             root,
-            sequence=9,
             stage="release",
             verdict="pass",
             command=(
                 "python3 quwoquan_data/scripts/cli.py release pool-build "
                 f"--release-id {built} --all-publishable --release-class research"
             ),
+            next_stage="ship",
         )
-    if shipped is not None:
-        _stage_receipt(
+
+    terminal_release = shipped or "release-fixture-terminal-success-001"
+    if ship_verdict == "blocked":
+        _record_stage_receipt(
             root,
-            sequence=10,
             stage="ship",
-            verdict=ship_verdict,
+            verdict="blocked",
             command=(
                 "python3 quwoquan_data/scripts/cli.py ship apply --env gamma "
-                f"--release {shipped}"
+                f"--release {terminal_release}"
             ),
+            next_stage="ship",
         )
+    terminal_receipt_path = _record_stage_receipt(
+        root,
+        stage="ship",
+        verdict="pass",
+        command=(
+            "python3 quwoquan_data/scripts/cli.py ship apply --env gamma "
+            f"--release {terminal_release}"
+        ),
+        next_stage="END",
+    )
+
+    # These negative cases model corrupt historical completion evidence only after
+    # the canonical producer has established the terminal succeeded state.
+    if shipped is None or ship_verdict != "pass":
+        terminal_receipt_path.unlink()
+    if status is not ExecutionStateStatus.SUCCEEDED:
+        state = context.load_execution_state(EXECUTION_ID)
+        state.status = status
+        context.save_execution_state(state)
     return root
 
 
@@ -147,8 +170,8 @@ class TestSucceededWithBorrowedEvidenceIsRetractable:
         binding = receipt["completionEvidenceBinding"]
         assert binding["builtReleaseId"] == BUILT_RELEASE
         assert binding["shippedReleaseId"] == SHIPPED_RELEASE
-        assert binding["builtReleaseReceiptRef"] == "009-release.json"
-        assert binding["shippedReleaseReceiptRef"] == "010-ship.json"
+        assert binding["builtReleaseReceiptRef"] == "001-release.json"
+        assert binding["shippedReleaseReceiptRef"] == "002-ship.json"
         assert path.is_file()
 
     def test_is_create_once_and_leaves_the_old_evidence_byte_intact(
@@ -158,7 +181,7 @@ class TestSucceededWithBorrowedEvidenceIsRetractable:
     ) -> None:
         root = _succeeded_fixture(tmp_path, monkeypatch)
         _freeze_source(monkeypatch)
-        ship_before = read_json(root / "_shared/receipts/010-ship.json")
+        ship_before = read_json(root / "_shared/receipts/002-ship.json")
 
         first, first_path = execution_supersession.supersede_execution(
             EXECUTION_ID,
@@ -173,7 +196,7 @@ class TestSucceededWithBorrowedEvidenceIsRetractable:
 
         assert repeated == first
         assert repeated_path == first_path
-        assert read_json(root / "_shared/receipts/010-ship.json") == ship_before
+        assert read_json(root / "_shared/receipts/002-ship.json") == ship_before
         assert first["evidenceDisposition"] == "protected_read_only"
         assert first["retryPolicy"] == "new_execution_with_retryOf"
 

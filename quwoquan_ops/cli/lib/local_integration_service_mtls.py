@@ -12,17 +12,16 @@ It is never committed and never reuses production Secret Manager material.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
-from pathlib import Path
 import secrets
-import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 
+from .openssl3_resolver import OpenSSL3Executable, resolve_openssl3
 from .output_paths import deployment_target_path
 from .public_domain_tls import PublicDomainTlsError, root_certificate_path
-
 
 ROLE = "integration-service-mtls"
 CLIENT_CN = "user-service"
@@ -35,28 +34,6 @@ class LocalIntegrationServiceMTLS:
     client_cert_path: Path
     client_key_path: Path
 
-
-def _openssl_bin() -> str:
-    """Prefer Homebrew OpenSSL when PATH still resolves to LibreSSL.
-
-    macOS ``/usr/bin/openssl`` (LibreSSL) rejects ``-checkhost`` and breaks
-    readiness even when PEMs are valid. Local bootstrap must stay portable.
-    """
-
-    candidates = (
-        os.environ.get("QWQ_OPENSSL_BIN", "").strip(),
-        "/opt/homebrew/opt/openssl@3/bin/openssl",
-        "/opt/homebrew/bin/openssl",
-        "/usr/local/opt/openssl@3/bin/openssl",
-        "/usr/local/bin/openssl",
-        shutil.which("openssl") or "",
-    )
-    for candidate in candidates:
-        if candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
-            return candidate
-    raise RuntimeError(
-        "GATE_BLOCK: openssl is required for integration-service mTLS"
-    )
 
 
 def prepare_local_integration_service_mtls(
@@ -74,7 +51,7 @@ def prepare_local_integration_service_mtls(
             "integration-service mTLS target/environment mismatch: "
             f"environment={environment} target={target_name}"
         )
-    openssl = _openssl_bin()
+    openssl = resolve_openssl3()
 
     ca_path = root_certificate_path(target_name)
     ca_key_path = ca_path.with_name("root.key")
@@ -121,11 +98,11 @@ def prepare_local_integration_service_mtls(
     )
 
 
-def _certificate_binds_client_cn(openssl: str, certificate: Path) -> bool:
+def _certificate_binds_client_cn(openssl: OpenSSL3Executable, certificate: Path) -> bool:
     """Accept DNS SAN or CN for CLIENT_CN without LibreSSL-incompatible flags."""
 
     text = subprocess.run(
-        [openssl, "x509", "-in", str(certificate), "-noout", "-text"],
+        openssl.argv("x509", "-in", str(certificate), "-noout", "-text"),
         capture_output=True,
         check=False,
         text=True,
@@ -136,7 +113,7 @@ def _certificate_binds_client_cn(openssl: str, certificate: Path) -> bool:
     if f"DNS:{CLIENT_CN}" in body:
         return True
     subject = subprocess.run(
-        [openssl, "x509", "-in", str(certificate), "-noout", "-subject"],
+        openssl.argv("x509", "-in", str(certificate), "-noout", "-subject"),
         capture_output=True,
         check=False,
         text=True,
@@ -154,7 +131,7 @@ def _certificate_binds_client_cn(openssl: str, certificate: Path) -> bool:
 
 
 def _material_is_ready(
-    openssl: str,
+    openssl: OpenSSL3Executable,
     ca: Path,
     certificate: Path,
     key: Path,
@@ -168,9 +145,9 @@ def _material_is_ready(
     if ca.stat().st_size == 0 or certificate.stat().st_size == 0 or key.stat().st_size == 0:
         return False
     commands = (
-        [openssl, "x509", "-in", str(ca), "-noout"],
-        [openssl, "x509", "-in", str(certificate), "-checkend", "86400", "-noout"],
-        [openssl, "verify", "-CAfile", str(ca), str(certificate)],
+        openssl.argv("x509", "-in", str(ca), "-noout"),
+        openssl.argv("x509", "-in", str(certificate), "-checkend", "86400", "-noout"),
+        openssl.argv("verify", "-CAfile", str(ca), str(certificate)),
     )
     if not all(
         subprocess.run(command, capture_output=True, check=False).returncode == 0
@@ -180,12 +157,12 @@ def _material_is_ready(
     if not _certificate_binds_client_cn(openssl, certificate):
         return False
     certificate_public_key = subprocess.run(
-        [openssl, "x509", "-in", str(certificate), "-noout", "-pubkey"],
+        openssl.argv("x509", "-in", str(certificate), "-noout", "-pubkey"),
         capture_output=True,
         check=False,
     )
     private_public_key = subprocess.run(
-        [openssl, "pkey", "-in", str(key), "-pubout"],
+        openssl.argv("pkey", "-in", str(key), "-pubout"),
         capture_output=True,
         check=False,
     )
@@ -198,7 +175,7 @@ def _material_is_ready(
 
 def _issue_client_certificate(
     *,
-    openssl: str,
+    openssl: OpenSSL3Executable,
     target_name: str,
     tls_dir: Path,
     ca_path: Path,
@@ -220,8 +197,7 @@ def _issue_client_certificate(
             encoding="utf-8",
         )
         commands = (
-            [
-                openssl,
+            (
                 "genpkey",
                 "-algorithm",
                 "RSA",
@@ -229,9 +205,8 @@ def _issue_client_certificate(
                 "rsa_keygen_bits:2048",
                 "-out",
                 str(next_key),
-            ],
-            [
-                openssl,
+            ),
+            (
                 "req",
                 "-new",
                 "-key",
@@ -240,9 +215,8 @@ def _issue_client_certificate(
                 str(request_path),
                 "-subj",
                 f"/CN={CLIENT_CN} ({target_name})",
-            ],
-            [
-                openssl,
+            ),
+            (
                 "x509",
                 "-req",
                 "-sha256",
@@ -260,11 +234,11 @@ def _issue_client_certificate(
                 str(extensions),
                 "-out",
                 str(next_certificate),
-            ],
+            ),
         )
-        for command in commands:
+        for arguments in commands:
             result = subprocess.run(
-                command,
+                openssl.argv(*arguments),
                 text=True,
                 capture_output=True,
                 check=False,

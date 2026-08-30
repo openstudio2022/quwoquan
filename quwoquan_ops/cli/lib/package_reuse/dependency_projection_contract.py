@@ -242,23 +242,21 @@ def write_expectation(
     )
 
 
-def _read_private_evidence(path: Path, *, label: str) -> tuple[bytes, dict[str, Any]]:
+def _private_evidence_manifest(
+    encoded: bytes,
+    *,
+    mode: int,
+    label: str,
+) -> dict[str, Any]:
     try:
-        metadata = path.lstat()
-        encoded, _mode = read_regular_nofollow(
-            path,
-            label=f"projection {label} evidence",
-        )
         value = json.loads(encoded)
-    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+    except (UnicodeError, json.JSONDecodeError) as error:
         raise typed(
             EVIDENCE_BLOCKER,
             f"{label} evidence is unavailable, linked or invalid",
         ) from error
     if (
-        not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_nlink != 1
-        or stat.S_IMODE(metadata.st_mode) != 0o600
+        mode != 0o600
         or not isinstance(value, dict)
         or encoded != _canonical_bytes(value)
     ):
@@ -266,7 +264,27 @@ def _read_private_evidence(path: Path, *, label: str) -> tuple[bytes, dict[str, 
             EVIDENCE_BLOCKER,
             f"{label} evidence is not canonical private bytes",
         )
-    return encoded, value
+    return value
+
+
+def _read_private_evidence(path: Path, *, label: str) -> tuple[bytes, int]:
+    try:
+        metadata = path.lstat()
+        encoded, _normalized_mode = read_regular_nofollow(
+            path,
+            label=f"projection {label} evidence",
+        )
+    except (OSError, ValueError) as error:
+        raise typed(
+            EVIDENCE_BLOCKER,
+            f"{label} evidence is unavailable, linked or invalid",
+        ) from error
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+        raise typed(
+            EVIDENCE_BLOCKER,
+            f"{label} evidence is not canonical private bytes",
+        )
+    return encoded, stat.S_IMODE(metadata.st_mode)
 
 
 def _absolute_historical_path(value: object, *, label: str) -> Path:
@@ -502,16 +520,22 @@ def _historical_patrol_command_envelope(
         )
 
 
-def load_historical_expectation(
-    *, evidence_path: Path, expected_digest: str
+def load_historical_expectation_bytes(
+    *,
+    evidence_path: Path,
+    encoded: bytes,
+    evidence_mode: int,
+    expected_digest: str,
 ) -> DependencyProjectionExpectation:
-    """Load immutable expectation bytes after their live projection was deleted."""
-
+    """Validate already-opened immutable expectation bytes."""
     if not DIGEST.fullmatch(expected_digest):
         raise typed(EVIDENCE_BLOCKER, "expected evidence digest is invalid")
-    requested = evidence_path.expanduser().absolute()
-    path = requested.parent.resolve(strict=True) / requested.name
-    encoded, manifest = _read_private_evidence(path, label="expectation")
+    path = evidence_path.expanduser().absolute()
+    manifest = _private_evidence_manifest(
+        encoded,
+        mode=evidence_mode,
+        label="expectation",
+    )
     if _digest_bytes(encoded) != expected_digest:
         raise typed(EVIDENCE_BLOCKER, "expectation evidence digest drifted")
     if (
@@ -547,6 +571,22 @@ def load_historical_expectation(
     )
 
 
+def load_historical_expectation(
+    *, evidence_path: Path, expected_digest: str
+) -> DependencyProjectionExpectation:
+    """Load immutable expectation bytes after their live projection was deleted."""
+
+    requested = evidence_path.expanduser().absolute()
+    path = requested.parent.resolve(strict=True) / requested.name
+    encoded, mode = _read_private_evidence(path, label="expectation")
+    return load_historical_expectation_bytes(
+        evidence_path=path,
+        encoded=encoded,
+        evidence_mode=mode,
+        expected_digest=expected_digest,
+    )
+
+
 def load_expectation(
     *, projection_root_path: Path, evidence_path: Path, expected_digest: str
 ) -> DependencyProjectionExpectation:
@@ -568,19 +608,65 @@ def load_expectation(
     )
 
 
-def load_readback_evidence(
+def load_expectation_bytes(
+    *,
+    projection_root_path: Path,
+    evidence_path: Path,
+    encoded: bytes,
+    evidence_mode: int,
+    expected_digest: str,
+) -> DependencyProjectionExpectation:
+    """Validate stable no-follow expectation bytes without reopening their path."""
+
+    root = projection_root_path
+    if (
+        not root.is_absolute()
+        or str(root) != root.as_posix()
+        or any(part in {"", ".", ".."} for part in root.parts[1:])
+    ):
+        raise typed(
+            EVIDENCE_BLOCKER,
+            "projection root is not an exact opened path",
+        )
+    historical = load_historical_expectation_bytes(
+        evidence_path=evidence_path,
+        encoded=encoded,
+        evidence_mode=evidence_mode,
+        expected_digest=expected_digest,
+    )
+    if historical.projection_root != root:
+        raise typed(
+            EVIDENCE_BLOCKER,
+            "expectation evidence projection binding drifted",
+        )
+    return DependencyProjectionExpectation(
+        evidence_path=historical.evidence_path,
+        evidence_digest=expected_digest,
+        projection_root=root,
+        manifest=historical.manifest,
+    )
+
+
+def load_readback_evidence_bytes(
     *,
     evidence_path: Path,
+    encoded: bytes,
+    evidence_mode: int,
     expected_digest: str,
     expected_expectation_digest: str,
 ) -> DependencyProjectionReadbackEvidence:
+    """Validate already-opened readback bytes without reopening their path."""
+
     if not DIGEST.fullmatch(expected_digest) or not DIGEST.fullmatch(
         expected_expectation_digest
     ):
         raise typed(EVIDENCE_BLOCKER, "readback evidence digest is invalid")
-    requested = evidence_path.expanduser().absolute()
-    path = requested.parent.resolve(strict=True) / requested.name
-    encoded, manifest = _read_private_evidence(path, label="readback")
+    path = evidence_path.expanduser().absolute()
+    manifest = _private_evidence_manifest(
+        encoded,
+        mode=evidence_mode,
+        label="readback",
+    )
     if _digest_bytes(encoded) != expected_digest:
         raise typed(EVIDENCE_BLOCKER, "readback evidence digest drifted")
     if (
@@ -614,6 +700,24 @@ def load_readback_evidence(
         evidence_digest=expected_digest,
         expectation_digest=expected_expectation_digest,
         manifest=manifest,
+    )
+
+
+def load_readback_evidence(
+    *,
+    evidence_path: Path,
+    expected_digest: str,
+    expected_expectation_digest: str,
+) -> DependencyProjectionReadbackEvidence:
+    requested = evidence_path.expanduser().absolute()
+    path = requested.parent.resolve(strict=True) / requested.name
+    encoded, mode = _read_private_evidence(path, label="readback")
+    return load_readback_evidence_bytes(
+        evidence_path=path,
+        encoded=encoded,
+        evidence_mode=mode,
+        expected_digest=expected_digest,
+        expected_expectation_digest=expected_expectation_digest,
     )
 
 

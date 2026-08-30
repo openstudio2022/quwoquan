@@ -11,11 +11,8 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import fnmatch
-import hashlib
 import json
-import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -31,12 +28,31 @@ GRADING_PATH = REFERENCES_DIR / "grading.md"
 
 sys.path.insert(0, str(REPO_ROOT / "quwoquan_ops/cli"))
 from lib.agent_governance_contract import (  # noqa: E402
+    canonical_bytes_sha256,
     contract_schema_version,
     contract_section,
     declared_object,
     validate_declared_fields,
     validate_feature_context_manifest,
     validate_required_fields,
+)
+from lib.feature_context_fingerprint import (  # noqa: E402
+    build_feature_context_fingerprint,
+    embedded_fingerprint_binding,
+    validate_current_feature_context_fingerprint,
+)
+from lib.evidence_fingerprint import (  # noqa: E402
+    EvidenceFingerprintError,
+    snapshot_path,
+    validate_evidence_fingerprint,
+)
+from lib.review_fingerprint import (  # noqa: E402
+    build_review_fingerprint,
+    head_sha as _review_head_sha,
+    merge_base_sha as _review_merge_base_sha,
+    normalize_path as _review_normalize_path,
+    sha256_text as _review_sha256_text,
+    snapshot as _review_snapshot,
 )
 
 _EVIDENCE_LINE_RE = re.compile(r"^\s*evidence:\s*(?P<evidence>[a-z0-9][a-z0-9-]*)\s*$")
@@ -70,6 +86,16 @@ def derive_profiles(
     return active
 
 
+from lib.review_terminal_contract import (  # noqa: E402
+    EMITTED_REVIEW_CODES,
+    validate_emitted_terminal_closure as _validate_emitted_terminal_closure,
+)
+
+
+def validate_emitted_terminal_closure() -> None:
+    _validate_emitted_terminal_closure(contract_section)
+
+
 def build_plan(
     registry: dict[str, Any],
     workflow: str,
@@ -81,6 +107,7 @@ def build_plan(
     finding_owners: list[str] | None = None,
     previous_plan: dict[str, Any] | None = None,
     context_manifest: dict[str, Any] | None = None,
+    context_manifest_ref: str | None = None,
     scope: str = "",
     incomplete_roles: list[dict[str, str] | str] | None = None,
     failed_evidence_ids: list[str] | None = None,
@@ -93,6 +120,7 @@ def build_plan(
     compatible.
     """
 
+    validate_emitted_terminal_closure()
     _validate_registry_header(registry)
     workflows = registry.get("workflows") or {}
     workflow_config = workflows.get(workflow)
@@ -130,7 +158,23 @@ def build_plan(
         or workflow_config.get("deliverable")
         or ""
     )
-    resolved_scope = scope or (normalized_previous or {}).get("scope") or ""
+    automatic_review = workflow_config.get("automatic_review") is not False
+    canonical_deliverable = str(workflow_config.get("deliverable") or "")
+    if not automatic_review and deliverable and deliverable != canonical_deliverable:
+        _refuse(
+            "REVIEW.CONTROL_WORKFLOW_DELIVERABLE_FORBIDDEN",
+            f"控制型 workflow={workflow} 只能声明 deliverable={canonical_deliverable}",
+        )
+
+    requested_scope = scope or (normalized_previous or {}).get("scope") or ""
+    manifest_required = segment == "POST" and automatic_review
+    contexts, manifest_bytes, manifest_target, owner_manifest_identity = _normalize_contexts(
+        context_manifest or {},
+        manifest_ref=context_manifest_ref,
+        expected_scope=requested_scope,
+        required=manifest_required,
+    )
+    resolved_scope = requested_scope or manifest_target
     active_profiles = derive_profiles(
         registry.get("profiles") or {}, normalized_paths, resolved_deliverable
     )
@@ -165,7 +209,6 @@ def build_plan(
         )
         previous_fingerprint = str(normalized_previous.get("fingerprint") or "")
 
-    contexts, manifest_bytes = _normalize_contexts(context_manifest or {})
     context_bytes = _measure_reviewer_contexts(
         registry,
         workflow=workflow,
@@ -184,16 +227,26 @@ def build_plan(
     # owner/profile/scope are unchanged. Evidence is therefore derived from the
     # complete initial bundle and rerun once before finding owners are dispatched.
     evidence = all_initial_evidence
-    fingerprint = _fingerprint(
+    normalized_incomplete, terminal = _classify_terminal(
+        reviewers,
+        evidence,
+        incomplete_roles=incomplete_roles or [],
+        failed_evidence_ids=failed_evidence_ids or [],
+        cancelled=cancelled,
+    )
+    fingerprint_receipt = _fingerprint_receipt(
         workflow=workflow,
         deliverable=resolved_deliverable,
         scope=resolved_scope,
+        owner_manifest_identity=owner_manifest_identity,
+        terminal=terminal,
         changed_paths=normalized_paths,
         profiles=active_profiles,
         contexts=contexts,
         initial_reviewers=initial_reviewers,
         evidence=evidence,
     )
+    fingerprint = fingerprint_receipt["digest"]
     evidence_reusable = bool(
         round_name == "rereview"
         and previous_fingerprint
@@ -209,13 +262,6 @@ def build_plan(
     for item in evidence:
         item["reusable"] = evidence_reusable
 
-    normalized_incomplete, terminal = _classify_terminal(
-        reviewers,
-        evidence,
-        incomplete_roles=incomplete_roles or [],
-        failed_evidence_ids=failed_evidence_ids or [],
-        cancelled=cancelled,
-    )
     skipped_reviewers: list[dict[str, Any]] = []
     if "REVIEW.EVIDENCE_FAILED" in terminal["codes"]:
         # Evidence is executed before role dispatch. A required failure must
@@ -235,12 +281,14 @@ def build_plan(
         "round": round_name,
         "deliverable": resolved_deliverable,
         "scope": resolved_scope,
+        "owner_manifest_identity": owner_manifest_identity,
         "changed_paths": normalized_paths,
         "profiles": active_profiles,
         "contexts": contexts,
         "reviewers": reviewers,
         "skipped_reviewers": skipped_reviewers,
         "evidence": evidence,
+        "fingerprint_receipt": fingerprint_receipt,
         "fingerprint": fingerprint,
         "previous_fingerprint": previous_fingerprint,
         "evidence_reusable": evidence_reusable,
@@ -268,6 +316,25 @@ def _validate_plan_contract(plan: dict[str, Any]) -> None:
             f"{expected_version}，实际为 {plan.get('schema_version')!r}"
         )
     validate_required_fields(plan, "review_plan")
+    receipt = validate_evidence_fingerprint(plan.get("fingerprint_receipt"))
+    fingerprint = plan.get("fingerprint")
+    if receipt["digest"] != fingerprint:
+        raise ValueError("review_plan.fingerprint_receipt 与 fingerprint 不一致")
+    if (
+        not isinstance(fingerprint, str)
+        or not re.fullmatch(r"sha256:[0-9a-f]{64}", fingerprint)
+    ):
+        raise ValueError(
+            "review_plan.fingerprint 必须为 canonical EvidenceFingerprint digest"
+        )
+    previous_fingerprint = plan.get("previous_fingerprint")
+    if previous_fingerprint is not None and (
+        not isinstance(previous_fingerprint, str)
+        or not re.fullmatch(r"sha256:[0-9a-f]{64}", previous_fingerprint)
+    ):
+        raise ValueError(
+            "review_plan.previous_fingerprint 必须为空或 canonical EvidenceFingerprint digest"
+        )
     for field, declaration in (
         ("contexts", "context_fields"),
         ("reviewers", "reviewer_fields"),
@@ -283,6 +350,12 @@ def _validate_plan_contract(plan: dict[str, Any]) -> None:
             if not isinstance(value, dict):
                 raise TypeError(f"review_plan.{field} 项必须为映射")
             validate_declared_fields(value, "review_plan", declaration)
+    owner_identity = plan["owner_manifest_identity"]
+    if not isinstance(owner_identity, dict):
+        raise TypeError("review_plan.owner_manifest_identity 必须为映射")
+    validate_declared_fields(
+        owner_identity, "review_plan", "owner_manifest_identity_fields"
+    )
     for field, declaration in (
         ("context_bytes", "context_bytes_fields"),
         ("terminal", "terminal_fields"),
@@ -512,25 +585,88 @@ def _checklist_evidence(checklist: str) -> list[str]:
 
 def _normalize_contexts(
     manifest: dict[str, Any],
-) -> tuple[list[dict[str, Any]], int]:
+    *,
+    manifest_ref: str | None,
+    expected_scope: str = "",
+    required: bool = False,
+) -> tuple[list[dict[str, Any]], int, str, dict[str, Any]]:
     if not manifest:
-        return [], 0
+        if required:
+            _refuse(
+                "REVIEW.OWNER_MANIFEST_REQUIRED",
+                "非控制型 workflow 的 POST Review 必须携带 current owner manifest",
+            )
+        return [], 0, "", declared_object(
+            {
+                "ref": None,
+                "canonical_bytes_sha256": None,
+                "target": "",
+                "scope": expected_scope,
+                "resolved_owner": "",
+                "fingerprint_ref": None,
+                "fingerprint_digest": None,
+            },
+            "review_plan",
+            "owner_manifest_identity_fields",
+        )
+    expected_version = contract_schema_version("feature_context_manifest")
+    if manifest.get("schema_version") != expected_version:
+        _refuse(
+            "REVIEW.OWNER_MANIFEST_SCHEMA_UNSUPPORTED",
+            f"owner manifest schema_version 必须为 {expected_version}",
+        )
     try:
         validate_feature_context_manifest(manifest)
     except (KeyError, TypeError, ValueError) as exc:
-        _refuse("REVIEW.CONTEXT_MANIFEST_INVALID", str(exc))
-    encoded = json.dumps(manifest, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        _refuse("REVIEW.OWNER_MANIFEST_INVALID", str(exc))
+    encoded = json.dumps(
+        manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
     manifest_limit = int(contract_section("feature_context_manifest")["max_bytes"])
     if len(encoded) > manifest_limit:
         _refuse(
             "REVIEW.CONTEXT_MANIFEST_BUDGET_EXCEEDED",
             f"manifest={len(encoded)} bytes 超过 {manifest_limit}",
         )
-    raw_contexts = manifest["canonical_contexts"]
+    if not manifest_ref:
+        _refuse(
+            "REVIEW.OWNER_MANIFEST_REQUIRED",
+            "POST Review 必须携带 owner manifest exact ref",
+        )
+    normalized_manifest_ref = _repo_relative(manifest_ref)
+    manifest_path = REPO_ROOT / normalized_manifest_ref
+    if not manifest_path.is_file() or manifest_path.is_symlink():
+        _refuse(
+            "REVIEW.OWNER_MANIFEST_INVALID",
+            f"owner manifest ref 必须为仓库内 regular file：{normalized_manifest_ref}",
+        )
+    try:
+        referenced = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        _refuse("REVIEW.OWNER_MANIFEST_INVALID", str(exc))
+    if referenced != manifest:
+        _refuse(
+            "REVIEW.OWNER_MANIFEST_STALE",
+            "owner manifest ref canonical bytes 已被替换",
+        )
+    target = _repo_relative(str(manifest["target"]))
+    if expected_scope and target != _repo_relative(expected_scope):
+        _refuse(
+            "REVIEW.OWNER_MANIFEST_SCOPE_MISMATCH",
+            f"owner manifest target={target} 与 Review scope={expected_scope} 不一致",
+        )
+    chain = manifest.get("owner_chain") or []
+    if not chain or chain[-1].get("path") != manifest.get("resolved_owner"):
+        _refuse(
+            "REVIEW.OWNER_MANIFEST_TARGET_MISMATCH",
+            "owner manifest resolved_owner 必须等于 owner_chain 末节点",
+        )
+    try:
+        validate_current_feature_context_fingerprint(manifest, repo_root=REPO_ROOT)
+    except EvidenceFingerprintError as exc:
+        _refuse("REVIEW.OWNER_MANIFEST_STALE", str(exc))
     contexts: list[dict[str, Any]] = []
-    for raw in raw_contexts:
-        if not isinstance(raw, dict) or "path" not in raw:
-            _refuse("REVIEW.CONTEXT_MANIFEST_INVALID", "canonical_contexts 项缺 path")
+    for raw in manifest["canonical_contexts"]:
         relative = _repo_relative(str(raw["path"]))
         snapshot = _snapshot_path(relative)
         contexts.append(
@@ -546,7 +682,23 @@ def _normalize_contexts(
                 "context_fields",
             )
         )
-    return contexts, len(encoded)
+    binding = manifest["evidence_fingerprint"]
+    owner_identity = declared_object(
+        {
+            "ref": normalized_manifest_ref,
+            "canonical_bytes_sha256": "sha256:" + __import__("hashlib").sha256(
+                manifest_path.read_bytes()
+            ).hexdigest(),
+            "target": target,
+            "scope": expected_scope or target,
+            "resolved_owner": str(manifest["resolved_owner"]),
+            "fingerprint_ref": binding["ref"],
+            "fingerprint_digest": binding["digest"],
+        },
+        "review_plan",
+        "owner_manifest_identity_fields",
+    )
+    return contexts, len(encoded), target, owner_identity
 
 
 def _measure_reviewer_contexts(
@@ -604,200 +756,228 @@ def _measure_reviewer_contexts(
     }
 
 
-def _fingerprint(
+def _fingerprint_receipt(
     *,
     workflow: str,
     deliverable: str,
     scope: str,
+    owner_manifest_identity: dict[str, Any],
+    terminal: dict[str, Any],
     changed_paths: list[str],
     profiles: list[str],
     contexts: list[dict[str, Any]],
     initial_reviewers: list[dict[str, Any]],
     evidence: list[dict[str, Any]],
-) -> str:
-    assets: list[dict[str, Any]] = [_snapshot_path(REGISTRY_PATH.relative_to(REPO_ROOT).as_posix())]
-    if GRADING_PATH.is_file():
-        assets.append(_snapshot_path(GRADING_PATH.relative_to(REPO_ROOT).as_posix()))
-    for reviewer in initial_reviewers:
-        assets.append(
-            _snapshot_path(
-                f".agents/skills/review/references/roles/{reviewer['role']}/ROLE.md"
+) -> dict[str, Any]:
+    return build_review_fingerprint(
+        workflow=workflow,
+        deliverable=deliverable,
+        scope=scope,
+        owner_manifest_identity=owner_manifest_identity,
+        terminal=terminal,
+        changed_paths=changed_paths,
+        profiles=profiles,
+        contexts=contexts,
+        initial_reviewers=initial_reviewers,
+        evidence=evidence,
+    )
+
+
+def recompute_plan_fingerprint(
+    plan: dict[str, Any], registry: dict[str, Any]
+) -> dict[str, Any]:
+    """Rebuild current plan identity from workspace and canonical review assets."""
+
+    _validate_plan_contract(plan)
+    _validate_registry_header(registry)
+    workflow = str(plan["workflow"])
+    workflow_config = (registry.get("workflows") or {}).get(workflow)
+    if not isinstance(workflow_config, dict):
+        _refuse("REVIEW.UNKNOWN_WORKFLOW", f"workflow={workflow} 不在 registry")
+    changed_paths = sorted({_repo_relative(path) for path in plan["changed_paths"]})
+    deliverable = str(plan["deliverable"])
+    profiles = derive_profiles(
+        registry.get("profiles") or {}, changed_paths, deliverable
+    )
+    initial_reviewers = _select_initial_reviewers(
+        registry,
+        workflow=workflow,
+        segment=str(plan["segment"]),
+        workflow_config=workflow_config,
+        active_profiles=profiles,
+    )
+    evidence = _resolve_evidence(
+        registry, initial_reviewers, segment=str(plan["segment"])
+    )
+    contexts: list[dict[str, Any]] = []
+    for raw in plan["contexts"]:
+        relative = _repo_relative(str(raw["path"]))
+        snapshot = _snapshot_path(relative)
+        contexts.append(
+            declared_object(
+                {
+                    "path": relative,
+                    "anchor": raw["anchor"],
+                    "kind": raw["kind"],
+                    "exists": snapshot["exists"],
+                    "content_digest": snapshot["content_digest"],
+                },
+                "review_plan",
+                "context_fields",
             )
         )
-        assets.append(
-            _snapshot_path(
-                (REFERENCES_DIR / reviewer["checklist"])
-                .relative_to(REPO_ROOT)
-                .as_posix()
-            )
+    return _fingerprint_receipt(
+        workflow=workflow,
+        deliverable=deliverable,
+        scope=str(plan["scope"]),
+        owner_manifest_identity=dict(plan["owner_manifest_identity"]),
+        terminal=dict(plan["terminal"]),
+        changed_paths=changed_paths,
+        profiles=profiles,
+        contexts=contexts,
+        initial_reviewers=initial_reviewers,
+        evidence=evidence,
+    )
+
+
+def validate_plan_terminal_for_phase(
+    plan: dict[str, Any], *, phase: str
+) -> dict[str, Any]:
+    terminal = plan.get("terminal")
+    if not isinstance(terminal, dict):
+        _refuse("REVIEW.TERMINAL_CONTRACT_INVALID", "Review plan terminal 缺失")
+    validate_declared_fields(terminal, "review_plan", "terminal_fields")
+    if phase not in {"evidence", "consolidation", "handoff"}:
+        _refuse("REVIEW.TERMINAL_CONTRACT_INVALID", f"未知 Review phase={phase}")
+    if terminal.get("status") != "READY" or terminal.get("codes") or terminal.get("failed_evidence"):
+        _refuse(
+            "REVIEW.TERMINAL_CONTRACT_INVALID",
+            f"phase={phase} 只接受 initial READY plan；实际={terminal}",
         )
-    payload = declared_object(
-        {
-            "head_sha": _head_sha(),
-            "workflow": workflow,
-            "deliverable": deliverable,
-            "scope": scope,
-            "changed_paths": [_snapshot_path(path) for path in changed_paths],
-            "profiles": profiles,
-            "contexts": contexts,
-            "reviewers": [
-                declared_object(
-                    {
-                        "role": item["role"],
-                        "kind": item["kind"],
-                        "required": item["required"],
-                        "profile": item["profile"],
-                        "checklist": item["checklist"],
-                    },
-                    "review_plan",
-                    "fingerprint_reviewer_fields",
-                )
-                for item in initial_reviewers
-            ],
-            "review_assets": assets,
-            "evidence": [
-                declared_object(
-                    {
-                        "id": item["id"],
-                        "required": item["required"],
-                        "covers": item["covers"],
-                        "command_digest": item["command_digest"],
-                    },
-                    "review_plan",
-                    "fingerprint_evidence_fields",
-                )
-                for item in evidence
-            ],
-        },
-        "review_plan",
-        "fingerprint_inputs",
+    return terminal
+
+
+def _validate_current_owner_manifest(plan: dict[str, Any]) -> dict[str, Any]:
+    identity = plan.get("owner_manifest_identity")
+    if not isinstance(identity, dict):
+        _refuse("REVIEW.OWNER_MANIFEST_REQUIRED", "Review plan 缺 owner manifest identity")
+    validate_declared_fields(
+        identity, "review_plan", "owner_manifest_identity_fields"
     )
-    rendered = json.dumps(
-        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    )
-    return _sha256_text(rendered)
+    raw_ref = identity.get("ref")
+    if not isinstance(raw_ref, str) or not raw_ref:
+        _refuse("REVIEW.OWNER_MANIFEST_REQUIRED", "Review plan 缺 owner manifest ref")
+    ref = _repo_relative(raw_ref)
+    path = REPO_ROOT / ref
+    if not path.is_file() or path.is_symlink():
+        _refuse("REVIEW.OWNER_MANIFEST_STALE", f"owner manifest ref stale：{ref}")
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        _refuse("REVIEW.OWNER_MANIFEST_INVALID", str(exc))
+    if not isinstance(manifest, dict):
+        _refuse("REVIEW.OWNER_MANIFEST_INVALID", "owner manifest 必须为 JSON object")
+    if (
+        "sha256:" + __import__("hashlib").sha256(path.read_bytes()).hexdigest()
+        != identity.get("canonical_bytes_sha256")
+    ):
+        _refuse("REVIEW.OWNER_MANIFEST_STALE", "owner manifest canonical bytes 已漂移")
+    if (
+        manifest.get("target") != identity.get("target")
+        or manifest.get("resolved_owner") != identity.get("resolved_owner")
+        or identity.get("scope") != plan.get("scope")
+    ):
+        _refuse("REVIEW.OWNER_MANIFEST_TARGET_MISMATCH", "owner target/scope/owner 已漂移")
+    binding = manifest.get("evidence_fingerprint") or {}
+    if (
+        binding.get("ref") != identity.get("fingerprint_ref")
+        or binding.get("digest") != identity.get("fingerprint_digest")
+    ):
+        _refuse("REVIEW.OWNER_MANIFEST_STALE", "owner manifest fingerprint binding 已漂移")
+    try:
+        validate_feature_context_manifest(manifest)
+        validate_current_feature_context_fingerprint(manifest, repo_root=REPO_ROOT)
+        from lib.feature_tree.commands import _context_manifest, discover_nodes
+        from lib.feature_tree.ownership import resolve_target_details
+
+        nodes = discover_nodes()
+        current = _context_manifest(
+            str(manifest["target"]),
+            resolve_target_details(str(manifest["target"]), nodes),
+            nodes,
+        )
+    except (EvidenceFingerprintError, KeyError, TypeError, ValueError) as exc:
+        _refuse("REVIEW.OWNER_MANIFEST_STALE", str(exc))
+    for field in (
+        "target", "resolved_owner", "owner_chain", "canonical_contexts",
+        "applicable_agents", "profiles", "open_items",
+    ):
+        if current[field] != manifest[field]:
+            _refuse(
+                "REVIEW.OWNER_MANIFEST_STALE",
+                f"current owner manifest {field} 已漂移",
+            )
+    return manifest
+
+
+def validate_current_review_plan(
+    plan: dict[str, Any], registry: dict[str, Any], *, phase: str = "evidence"
+) -> dict[str, Any]:
+    validate_plan_terminal_for_phase(plan, phase=phase)
+    _validate_current_owner_manifest(plan)
+    expected = validate_evidence_fingerprint(plan.get("fingerprint_receipt"))
+    current = recompute_plan_fingerprint(plan, registry)
+    for field in ("ref", "digest", "digest_payload"):
+        if current[field] != expected[field]:
+            _refuse(
+                "REVIEW.FINGERPRINT_CHANGED",
+                f"Review plan {field} 已 stale，必须对 current workspace 重跑 evidence",
+            )
+    return current
+
+
+def build_reviewer_input(
+    plan: dict[str, Any], evidence_identity: dict[str, Any]
+) -> dict[str, Any]:
+    validate_plan_terminal_for_phase(plan, phase="consolidation")
+    payload = {
+        "schema_version": contract_schema_version("reviewer_input"),
+        "plan_fingerprint_ref": plan["fingerprint_receipt"]["ref"],
+        "plan_fingerprint_digest": plan["fingerprint_receipt"]["digest"],
+        "evidence_identity": evidence_identity,
+        "reviewers": [
+            {
+                "role": item["role"],
+                "kind": item["kind"],
+                "required": item["required"],
+                "checklist": item["checklist"],
+            }
+            for item in plan["reviewers"]
+        ],
+        "generated_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+    }
+    validate_required_fields(payload, "reviewer_input")
+    for item in payload["reviewers"]:
+        validate_declared_fields(item, "reviewer_input", "reviewer_fields")
+    return payload
 
 
 def _snapshot_path(relative: str) -> dict[str, Any]:
-    normalized = _repo_relative(relative)
-    path = REPO_ROOT / normalized
-    tracked = _is_tracked(normalized)
-    status = _git_status(normalized)
-    if path.is_symlink():
-        target = os.readlink(path)
-        return _fingerprint_snapshot(
-            normalized, True, "symlink", tracked, status, _sha256_text(target)
-        )
-    if path.is_file():
-        return _fingerprint_snapshot(
-            normalized,
-            True,
-            "file",
-            tracked,
-            status,
-            hashlib.sha256(path.read_bytes()).hexdigest(),
-        )
-    if path.is_dir():
-        children: list[dict[str, str]] = []
-        for child in sorted(item for item in path.rglob("*") if item.is_file()):
-            child_relative = child.relative_to(REPO_ROOT).as_posix()
-            children.append(
-                {
-                    "path": child_relative,
-                    "digest": hashlib.sha256(child.read_bytes()).hexdigest(),
-                }
-            )
-        return _fingerprint_snapshot(
-            normalized,
-            True,
-            "directory",
-            tracked,
-            status,
-            _sha256_text(
-                json.dumps(children, sort_keys=True, separators=(",", ":"))
-            ),
-        )
-    return _fingerprint_snapshot(
-        normalized,
-        False,
-        "deleted" if _exists_at_head(normalized) else "missing",
-        tracked,
-        status,
-        _head_blob_digest(normalized),
-    )
+    """Compatibility helper retained for Review callers and tests."""
 
-
-def _fingerprint_snapshot(
-    path: str,
-    exists: bool,
-    state: str,
-    tracked: bool,
-    git_status: str,
-    content_digest: str | None,
-) -> dict[str, Any]:
-    return declared_object(
-        {
-            "path": path,
-            "exists": exists,
-            "state": state,
-            "tracked": tracked,
-            "git_status": git_status,
-            "content_digest": content_digest,
-        },
-        "review_plan",
-        "fingerprint_snapshot_fields",
-    )
+    return _review_snapshot(relative)
 
 
 def _repo_relative(raw_path: str) -> str:
-    path = Path(raw_path)
-    resolved = path.resolve(strict=False) if path.is_absolute() else (REPO_ROOT / path).resolve(strict=False)
     try:
-        return resolved.relative_to(REPO_ROOT).as_posix()
-    except ValueError:
-        _refuse("REVIEW.PATH_OUTSIDE_REPOSITORY", f"路径不在仓库内：{raw_path}")
+        return _review_normalize_path(raw_path)
+    except EvidenceFingerprintError as exc:
+        _refuse("REVIEW.PATH_OUTSIDE_REPOSITORY", str(exc))
     raise AssertionError("unreachable")
 
 
-def _is_tracked(relative: str) -> bool:
-    result = subprocess.run(
-        ["git", "ls-files", "--error-unmatch", "--", relative],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        check=False,
-    )
-    return result.returncode == 0
-
-
-def _git_status(relative: str) -> str:
-    result = subprocess.run(
-        ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", relative],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return result.stdout.strip()
-
-
-def _exists_at_head(relative: str) -> bool:
-    result = subprocess.run(
-        ["git", "cat-file", "-e", f"HEAD:{relative}"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        check=False,
-    )
-    return result.returncode == 0
-
-
-def _head_blob_digest(relative: str) -> str | None:
-    result = subprocess.run(
-        ["git", "show", f"HEAD:{relative}"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        check=False,
-    )
-    return hashlib.sha256(result.stdout).hexdigest() if result.returncode == 0 else None
+def _merge_base_sha() -> str:
+    return _review_merge_base_sha()
 
 
 def _classify_terminal(
@@ -879,18 +1059,11 @@ def _classify_terminal(
 
 
 def _head_sha() -> str:
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return result.stdout.strip() if result.returncode == 0 else "unknown"
+    return _review_head_sha()
 
 
 def _sha256_text(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return _review_sha256_text(value)
 
 
 def _refuse(code: str, message: str) -> None:
@@ -970,6 +1143,7 @@ def main(argv: list[str] | None = None) -> int:
             finding_owners=args.finding_owner,
             previous_plan=_load_json(args.previous_plan, label="previous_plan"),
             context_manifest=_load_json(args.context_manifest, label="context_manifest"),
+            context_manifest_ref=args.context_manifest,
             scope=args.scope,
             incomplete_roles=args.incomplete_role,
             failed_evidence_ids=args.evidence_failed,

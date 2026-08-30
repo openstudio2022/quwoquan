@@ -5,6 +5,8 @@ spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-pac
 
 from __future__ import annotations
 
+import hashlib
+
 from quwoquan_ops.cli.commands import app_preflight_uat as uat
 from quwoquan_ops.tests.support.app_content_preflight_test_support import (
     Path,
@@ -17,7 +19,88 @@ from quwoquan_ops.tests.support.app_content_preflight_test_support import (
 )
 
 
+def _contract_graph_binding(root: Path) -> dict[str, object]:
+    graph_root = (root / "candidate-source").resolve()
+    graph_path = graph_root / "quwoquan_service/generated/contract_graph.json"
+    graph_path.parent.mkdir(parents=True, exist_ok=True)
+    encoded = json.dumps(
+        {
+            "operations": [
+                {
+                    "id": "content.post.GetFeed",
+                    "errorCodes": ["CONTENT.SYSTEM.required_dependency_unavailable"],
+                }
+            ]
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    graph_path.write_bytes(encoded)
+    return {
+        "contractGraphDigest": "sha256:" + hashlib.sha256(encoded).hexdigest(),
+        "contractGraphRef": str(graph_path),
+        "contractGraphOperationCount": 1,
+        "sourceProjectionRoot": str(graph_root),
+    }
+
+
 class AppContentPreflightUatActorsTest(unittest.TestCase):
+    def test_patrol_remote_blocker_uses_only_candidate_projection_graph(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            report = root / "report.json"
+            report.write_text(
+                json.dumps(
+                    {
+                        "status": "gate_block",
+                        "runs": [
+                            {
+                                "exitCode": 2,
+                                "evidence": {
+                                    "typedBlocker": {
+                                        "errorCode": (
+                                            "CONTENT.SYSTEM.required_dependency_unavailable"
+                                        ),
+                                        "sourceOperationId": "content.post.GetFeed",
+                                        "httpStatus": 503,
+                                    }
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            binding = _contract_graph_binding(root)
+            workspace = root / "mutable-workspace"
+            workspace_graph = (
+                workspace / "quwoquan_service/generated/contract_graph.json"
+            )
+            workspace_graph.parent.mkdir(parents=True)
+            workspace_graph.write_text('{"operations":[]}', encoding="utf-8")
+            with patch.object(stackctl, "ROOT", workspace):
+                evidence = stackctl._app_content_patrol_evidence(
+                    str(report), contract_graph_binding=binding
+                )
+            self.assertEqual(
+                evidence["typedBlocker"]["sourceOperationId"],
+                "content.post.GetFeed",
+            )
+            self.assertEqual(
+                evidence["contractGraphDigest"], binding["contractGraphDigest"]
+            )
+
+            Path(str(binding["contractGraphRef"])).write_text(
+                '{"operations":[]}', encoding="utf-8"
+            )
+            drifted = stackctl._app_content_patrol_evidence(
+                str(report), contract_graph_binding=binding
+            )
+            self.assertEqual(
+                drifted["typedBlocker"],
+                {"errorCode": "APP.LAUNCH.receipt_invalid"},
+            )
+            self.assertEqual(drifted["contractGraphDigest"], "")
+
     def test_patrol_screenshot_evidence_requires_an_in_run_page_marker(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -49,7 +132,10 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             }
             report.write_text(json.dumps(payload), encoding="utf-8")
 
-            old_host_capture = stackctl._app_content_patrol_evidence(str(report))
+            graph_binding = _contract_graph_binding(root)
+            old_host_capture = stackctl._app_content_patrol_evidence(
+                str(report), contract_graph_binding=graph_binding
+            )
             self.assertEqual(old_host_capture["screenshotDigest"], "")
             self.assertEqual(old_host_capture["screenshotMarker"], {})
 
@@ -65,7 +151,9 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 }
             )
             report.write_text(json.dumps(payload), encoding="utf-8")
-            live_capture = stackctl._app_content_patrol_evidence(str(report))
+            live_capture = stackctl._app_content_patrol_evidence(
+                str(report), contract_graph_binding=graph_binding
+            )
 
         self.assertRegex(live_capture["screenshotDigest"], r"^sha256:[0-9a-f]{64}$")
         self.assertEqual(live_capture["screenshotMarker"]["suite"], "homepage-feed")
@@ -83,14 +171,10 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             report = Path(temporary_directory) / "report.json"
             artifact_blocker = {
                 "errorCode": "APP.UAT.page_artifact_binding_missing",
-                "sourceOperationId": (
-                    "environment_page_smoke.tested_app_artifact_binding"
-                ),
-                "httpStatus": None,
             }
             first_blocker = {
                 "errorCode": "CONTENT.SYSTEM.required_dependency_unavailable",
-                "sourceOperationId": "content.feed.read",
+                "sourceOperationId": "content.post.GetFeed",
                 "httpStatus": 503,
             }
             report.write_text(
@@ -110,9 +194,6 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                             {
                                 "exitCode": 2,
                                 "device": {"id": "emulator-5556"},
-                                "typedBlocker": {
-                                    "errorCode": "APP.LAUNCH.compile_failed"
-                                },
                                 "artifactBindingBlocker": {},
                                 "evidence": {
                                     "typedBlocker": first_blocker,
@@ -133,7 +214,10 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            evidence = stackctl._app_content_patrol_evidence(str(report))
+            evidence = stackctl._app_content_patrol_evidence(
+                str(report),
+                contract_graph_binding=_contract_graph_binding(report.parent),
+            )
 
         self.assertEqual(evidence["typedBlocker"], first_blocker)
         self.assertEqual(evidence["artifactBindingBlocker"], artifact_blocker)
@@ -160,25 +244,30 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 ],
             }
             report.write_text(json.dumps(payload), encoding="utf-8")
-            evidence = stackctl._app_content_patrol_evidence(str(report))
+            graph_binding = _contract_graph_binding(report.parent)
+            evidence = stackctl._app_content_patrol_evidence(
+                str(report), contract_graph_binding=graph_binding
+            )
 
             payload["runs"][0].pop("firstBlocker")
             payload["runs"][0]["errorCode"] = (
                 "APP.LAUNCH.runtime_config_activation_failed"
             )
             report.write_text(json.dumps(payload), encoding="utf-8")
-            error_evidence = stackctl._app_content_patrol_evidence(str(report))
+            error_evidence = stackctl._app_content_patrol_evidence(
+                str(report), contract_graph_binding=graph_binding
+            )
 
             payload["runs"][0]["errorCode"] = "token=/private/secret-not-a-typed-code"
             report.write_text(json.dumps(payload), encoding="utf-8")
-            invalid = stackctl._app_content_patrol_evidence(str(report))
+            invalid = stackctl._app_content_patrol_evidence(
+                str(report), contract_graph_binding=graph_binding
+            )
 
         self.assertEqual(
             evidence["typedBlocker"],
             {
                 "errorCode": "APP.LAUNCH.runtime_config_activation_failed",
-                "sourceOperationId": "environment_page_smoke.child_receipt",
-                "httpStatus": None,
             },
         )
         self.assertEqual(error_evidence["typedBlocker"], evidence["typedBlocker"])
@@ -187,6 +276,124 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             "APP.LAUNCH.receipt_invalid",
         )
         self.assertNotIn("secret-not-a-typed-code", str(invalid))
+
+    def test_patrol_evidence_rejects_malformed_or_unknown_child_runs_in_order(
+        self,
+    ) -> None:
+        valid_remote_blocker = {
+            "errorCode": "CONTENT.SYSTEM.required_dependency_unavailable",
+            "sourceOperationId": "content.post.GetFeed",
+            "httpStatus": 503,
+        }
+        malformed_runs = (
+            "not-a-list",
+            ["not-an-object"],
+            [{"exitCode": "2", "evidence": {}}],
+            [{"exitCode": True, "evidence": {}}],
+            [
+                {
+                    "exitCode": 2,
+                    "evidence": {
+                        "typedBlocker": {
+                            **valid_remote_blocker,
+                            "sourceOperationId": "content.post.UnknownFeed",
+                        }
+                    },
+                }
+            ],
+            [
+                {
+                    "exitCode": 2,
+                    "evidence": {
+                        "typedBlocker": {
+                            **valid_remote_blocker,
+                            "errorCode": "CONTENT.SYSTEM.unknown_but_syntax_valid",
+                        }
+                    },
+                }
+            ],
+            [{"exitCode": 2, "evidence": {}}],
+            [
+                {
+                    "exitCode": 2,
+                    "evidence": {"typedBlocker": valid_remote_blocker},
+                },
+                {"exitCode": 2, "evidence": {}},
+            ],
+            [
+                {
+                    "exitCode": 2,
+                    "typedBlocker": {"errorCode": "APP.LAUNCH.compile_failed"},
+                    "evidence": {
+                        "typedBlocker": {"errorCode": "APP.LAUNCH.install_failed"}
+                    },
+                }
+            ],
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            report = Path(temporary_directory) / "report.json"
+            graph_binding = _contract_graph_binding(report.parent)
+            for runs in malformed_runs:
+                report.write_text(
+                    json.dumps({"status": "gate_block", "runs": runs}),
+                    encoding="utf-8",
+                )
+                evidence = stackctl._app_content_patrol_evidence(
+                    str(report), contract_graph_binding=graph_binding
+                )
+                self.assertEqual(
+                    evidence["typedBlocker"],
+                    {"errorCode": "APP.LAUNCH.receipt_invalid"},
+                )
+
+            invalid_fragments = (
+                {"firstBlocker": "token=secret-late-first-blocker"},
+                {"errorCode": "APP.LAUNCH.unknown-late-error"},
+                {
+                    "typedBlocker": {
+                        **valid_remote_blocker,
+                        "errorCode": "CONTENT.SYSTEM.unknown-late-typed",
+                    }
+                },
+                {
+                    "artifactBindingBlocker": {
+                        "errorCode": "APP.UAT.page_artifact_binding_missing",
+                        "sourceOperationId": "secret-late-artifact-operation",
+                        "httpStatus": None,
+                    }
+                },
+            )
+            for fragment in invalid_fragments:
+                for location in ("run", "evidence"):
+                    later_run = {"exitCode": 0, "evidence": {}}
+                    target = later_run if location == "run" else later_run["evidence"]
+                    target.update(fragment)
+                    report.write_text(
+                        json.dumps(
+                            {
+                                "status": "gate_block",
+                                "runs": [
+                                    {
+                                        "exitCode": 2,
+                                        "evidence": {
+                                            "typedBlocker": valid_remote_blocker
+                                        },
+                                    },
+                                    later_run,
+                                ],
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                    invalid = stackctl._app_content_patrol_evidence(
+                        str(report), contract_graph_binding=graph_binding
+                    )
+                    self.assertEqual(
+                        invalid["typedBlocker"],
+                        {"errorCode": "APP.LAUNCH.receipt_invalid"},
+                    )
+                    self.assertNotIn("secret-late", str(invalid))
+                    self.assertNotIn("unknown-late", str(invalid))
 
     def test_research_preflight_uses_research_readiness_without_lifecycle_exit(
         self,
@@ -213,26 +420,27 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     },
                     {"name": "premium_stream", "matchedPostIds": ["video-a"]},
                 ],
-                "appUatEnvelope": {
-                    "releaseId": "release-research-a",
-                    "releaseClass": "research",
-                    "productLifecycleState": "research",
-                    "homepageId": "homepage-a",
-                    "homepageTitle": "海港灯塔",
-                    "articleWorkId": "article-a",
-                    "articleTitle": "灯塔维护手记",
-                    "imageWorkId": "image-a",
-                    "imageTitle": "潮汐时刻",
-                    "videoWorkId": "video-a",
-                    "creatorName": "灯塔观察员",
-                    "creatorUserHandle": "creator-a",
-                    "creatorPersonaId": "persona-a",
-                    "creatorAvatarAssetId": "avatar-a",
-                    "tagLabel": "海港",
-                    "videoAttribution": "公开来源",
-                },
             }
             captured: dict[str, object] = {}
+            release_contract = {
+                "releaseHeader": {
+                    "releaseId": "release-research-a",
+                    "selectionScope": "milestone",
+                },
+                "releaseHeaderRef": "/release/payload/release.json",
+                "releaseHeaderDigest": "sha256:" + "7" * 64,
+                "releaseUatSamplePlan": {"samples": []},
+                "releaseUatSamplePlanRef": "uat/sample_plan.json",
+                "releaseUatSamplePlanDigest": "sha256:" + "8" * 64,
+            }
+            projected_plan = {
+                "releaseId": "release-research-a",
+                "searchCanaries": [
+                    {},
+                    {"expectedObjectId": "homepage-a"},
+                    {},
+                ],
+            }
 
             def content_readiness(args: object) -> dict[str, object]:
                 captured["phase"] = vars(args)["phase"]
@@ -244,11 +452,29 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     stackctl,
                     "_resolve_active_app_content_evidence",
                     return_value=(
-                        {"baselineId": "", "sourceRevision": "revision-a"},
+                        {
+                            "baselineId": "",
+                            "sourceRevision": "revision-a",
+                            "release": {
+                                "candidate": {
+                                    "releaseId": "release-research-a",
+                                    "releaseDigest": readiness["manifestDigest"],
+                                }
+                            },
+                        },
                         readiness,
                         readiness_path,
                         "",
                     ),
+                ),
+                patch(
+                    "quwoquan_ops.cli.commands.app_preflight._load_active_release_uat_contract",
+                    return_value=release_contract,
+                ),
+                patch.object(
+                    stackctl,
+                    "build_app_content_uat_plan",
+                    return_value=projected_plan,
                 ),
                 patch.object(
                     stackctl,
@@ -264,6 +490,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 )
 
             self.assertEqual(result["exitCode"], 0)
+            self.assertEqual(result["details"], [])
             self.assertEqual(captured["phase"], "research")
             self.assertEqual(captured["lifecycleExitRef"], "")
             self.assertEqual(result["lifecycleExitRef"], "")
@@ -271,6 +498,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 result["appUatPlan"]["searchCanaries"][1]["expectedObjectId"],
                 "homepage-a",
             )
+            self.assertNotIn("appUatEnvelope", result)
 
     def test_three_environment_uat_allows_target_baselines_on_one_release_train(
         self,
@@ -281,8 +509,21 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             release_train_id = "sha256:" + "e" * 64
             preflight_modes: list[tuple[str, str]] = []
             video_ids = [f"video-{index:02d}" for index in range(1, 21)]
-            uat_plan = {
+            sample_plan_digest = "sha256:" + "8" * 64
+            release_identity = {
                 "releaseId": "release-a",
+                "payloadSha256": manifest_digest,
+            }
+            uat_plan = {
+                "releaseIdentity": release_identity,
+                "releaseUatSamplePlanRef": "uat/sample_plan.json",
+                "releaseUatSamplePlanDigest": sample_plan_digest,
+                "carrierIdentities": {
+                    "homepage": "entity-a",
+                    "article": "article-a",
+                    "image": "image-a",
+                    "video": "video-01",
+                },
                 "searchCanaries": [
                     {
                         "kind": "post",
@@ -352,22 +593,8 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     ),
                     "readinessReceiptDigest": "sha256:" + ordinal * 64,
                     "lifecycleExitRef": "",
-                    "appUatEnvelope": {
-                        "releaseId": "release-a",
-                        "homepageId": "homepage-a",
-                        "homepageTitle": "首页 A",
-                        "articleWorkId": "article-a",
-                        "articleTitle": "文章 A",
-                        "imageWorkId": "image-a",
-                        "imageTitle": "图片 A",
-                        "videoWorkId": "video-01",
-                        "creatorName": "灯塔观察员",
-                        "creatorUserHandle": "creator-a",
-                        "creatorPersonaId": "persona-a",
-                        "creatorAvatarAssetId": "avatar-a",
-                        "tagLabel": "标签 A",
-                        "videoAttribution": "来源 A",
-                    },
+                    "releaseUatSamplePlanRef": "uat/sample_plan.json",
+                    "releaseUatSamplePlanDigest": sample_plan_digest,
                     "appUatPlan": uat_plan,
                     "appUatPlanDigest": stackctl._canonical_document_checksum(uat_plan),
                 }
@@ -496,10 +723,6 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 3,
             )
             self.assertIn("no runtime evidence", result["details"][0])
-            self.assertRegex(
-                result["appUatEnvelopeDigest"],
-                r"^sha256:[0-9a-f]{64}$",
-            )
             # 三个 target 均执行 6 个页面 P0 suite；每环境另有 release
             # probe + workspace Flutter run。
             self.assertEqual(len(result["runs"]), 24)
@@ -517,12 +740,16 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     (call.kwargs.get("env") or {}).get("QWQ_OUTPUT_ROOT"),
                     str(stackctl.output_root().expanduser().resolve()),
                 )
+                self.assertIn("--launch-provenance", direct_argv)
                 self.assertIn("workspace_flutter_run", direct_argv)
+                self.assertNotIn("--launch-surface", direct_argv)
+                self.assertIn("--run-mode", direct_argv)
+                self.assertIn("content-live", direct_argv)
                 self.assertIn("--preflight-only", direct_argv)
                 timeout_argument = direct_argv.index("--ready-timeout-seconds")
                 self.assertEqual(
                     direct_argv[timeout_argument + 1],
-                    "900",
+                    "1800",
                 )
                 cold_native_argument = direct_argv.index(
                     "--max-cold-native-safe-terminal-ms"
@@ -570,15 +797,12 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
             for call in core_calls:
                 self.assertIn("--data-release-id", call.args[0])
                 self.assertIn("release-a", call.args[0])
-                self.assertIn("--data-release-creator-user-handle", call.args[0])
-                self.assertIn("creator-a", call.args[0])
-                self.assertIn("--data-release-creator-persona-id", call.args[0])
-                self.assertIn("persona-a", call.args[0])
-                self.assertIn(
+                self.assertNotIn("--data-release-creator-user-handle", call.args[0])
+                self.assertNotIn("--data-release-creator-persona-id", call.args[0])
+                self.assertNotIn(
                     "--data-release-creator-avatar-asset-id",
                     call.args[0],
                 )
-                self.assertIn("avatar-a", call.args[0])
                 self.assertEqual(
                     (call.kwargs.get("env") or {}).get(
                         "QWQ_APP_CONTENT_VIDEO_PAGE_COUNT"

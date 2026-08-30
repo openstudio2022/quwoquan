@@ -157,6 +157,9 @@ func Run() {
 	); err != nil {
 		log.Fatalf("bind post asset URLs: %v", err)
 	}
+	if err := ValidateImportedPostMediaBindings(posts, releaseBinding.ReleaseClass); err != nil {
+		log.Fatalf("validate post media delivery bindings: %v", err)
+	}
 	postBindings, err := ImportedPostBindings(posts)
 	if err != nil {
 		log.Fatalf("derive imported post bindings: %v", err)
@@ -504,25 +507,16 @@ func sourceHash(v any) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// RuntimePostID derives the public Post identity from the stable contentId.
-// postRef is used only while importing a pre-contentId immutable release.
-func RuntimePostID(contentID string, postRef ...string) string {
+// RuntimePostID derives the public Post identity exclusively from the stable
+// contentId admitted by the canonical content pool. Missing contentId is an
+// invalid release input and never falls back to a producer object path.
+func RuntimePostID(contentID string) string {
 	identity := strings.TrimSpace(contentID)
-	if identity == "" && len(postRef) > 0 {
-		identity = strings.TrimSpace(postRef[0])
-	}
 	if identity == "" {
 		return ""
 	}
 	sum := sha256.Sum256([]byte("qwq-content-post:" + identity))
 	return "data_post_" + hex.EncodeToString(sum[:])
-}
-
-// RuntimePostIDFromPostRef identifies a Post imported before contentId became
-// the runtime identity owner. Import migration may remove this ID, but never
-// emits it for a newly admitted content record.
-func RuntimePostIDFromPostRef(postRef string) string {
-	return RuntimePostID(strings.TrimSpace(postRef))
 }
 
 // CanonicalImportReportPostRef projects the loader storage postRef
@@ -572,7 +566,7 @@ func ImportedPostBindings(posts []PostDoc) ([]ImportedPostBinding, error) {
 		storagePostRef := strings.TrimSpace(post.PostRef)
 		contentType := strings.TrimSpace(post.ContentType)
 		authorID := strings.TrimSpace(post.AuthorID)
-		postID := RuntimePostID(post.ContentID, storagePostRef)
+		postID := RuntimePostID(post.ContentID)
 		reportPostRef, err := CanonicalImportReportPostRef(storagePostRef)
 		if err != nil {
 			return nil, err
@@ -629,7 +623,7 @@ func desiredPostRefs(posts []PostDoc) []string {
 func desiredRuntimePostIDs(posts []PostDoc) []string {
 	ids := make([]string, 0, len(posts))
 	for _, p := range posts {
-		id := RuntimePostID(p.ContentID, p.PostRef)
+		id := RuntimePostID(p.ContentID)
 		if id != "" {
 			ids = append(ids, id)
 		}
@@ -655,9 +649,9 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 		if err != nil {
 			return n, fmt.Errorf("%s: %w", p.PostRef, err)
 		}
-		postID := RuntimePostID(p.ContentID, p.PostRef)
+		postID := RuntimePostID(p.ContentID)
 		if postID == "" {
-			return n, fmt.Errorf("postRef is required to derive runtime postId")
+			return n, fmt.Errorf("contentId is required to derive runtime postId")
 		}
 		newHash := sourceHash(p)
 		runtimeEntityRefs := p.NormalizedEntityRefs
@@ -696,7 +690,7 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 			"creator":                   p.Creator,
 			"page":                      p.Page,
 			"licenseProof":              p.LicenseProof,
-			"template":                  p.Template, "generatorModel": p.GeneratorModel, "articleTemplate": p.Template,
+			"template":                  p.Template, "articleTemplate": p.Template,
 			"body": body, "summary": summary,
 			"mediaUrls": media.MediaURLs, "mediaItems": media.MediaItems, "coverUrl": media.CoverURL,
 			"mediaAssetIds":   media.MediaAssetIDs,
@@ -705,11 +699,10 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 				p.ArticleAssetManifest,
 				accessMode,
 			),
-			"sourceTaskId": p.SourceTaskId,
-			"createdAt":    p.CreatedAt,
-			"updatedAt":    p.UpdatedAt,
-			"publishedAt":  p.PublishedAt,
-			"version":      opts.ProjectionVersion,
+			"createdAt":   p.CreatedAt,
+			"updatedAt":   p.UpdatedAt,
+			"publishedAt": p.PublishedAt,
+			"version":     opts.ProjectionVersion,
 			// Path A 导入的 publish 主线文章默认视为已公开发布，保证
 			// 在线 search/feed 与 rm_discovery_feed 的 discoverability 口径一致。
 			"status":           "published",
@@ -806,8 +799,8 @@ func UpsertEntitiesWithOptions(ctx context.Context, coll *mongo.Collection, enti
 			"entityRef": e.EntityRef, "domain": e.Domain, "etype": e.Etype, "name": e.Name,
 			"label": e.Label, "tagRefs": e.TagRefs, "page": e.Page, "hasPage": e.HasPage,
 			"assetManifest":    e.AssetManifest,
-			"conditionProfile": e.ConditionProfile, "sourceTaskId": e.SourceTaskId,
-			"updatedAt": now, "sourceHash": sourceHash(e),
+			"conditionProfile": e.ConditionProfile,
+			"updatedAt":        now, "sourceHash": sourceHash(e),
 		}
 		for k, v := range releaseFields(opts, now, "active") {
 			doc[k] = v

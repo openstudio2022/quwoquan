@@ -22,12 +22,23 @@ from quwoquan_ops.cli.commands.app_preflight_uat_binding import (
     _ios_direct_flutter_log_reader_retryable,
     _run_app_content_message_home_command,
 )
+from quwoquan_ops.cli.commands.app_preflight_uat_blockers import (
+    app_content_uat_cli_profile,
+    first_canonical_app_blocker,
+)
 from quwoquan_ops.cli.commands.app_preflight_uat_launch import (
     FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID,
     FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
     materialize_app_content_launch_projection,
     verify_app_content_launch_projection,
     write_app_content_launch_control,
+)
+from quwoquan_ops.cli.commands.app_preflight_uat_lock import (
+    command_app_content_uat,
+)
+from quwoquan_ops.cli.commands.app_preflight_uat_page_evidence import (
+    collect_app_uat_case_execution_reports,
+    emit_app_uat_raw_results,
 )
 from quwoquan_ops.cli.commands.app_preflight_uat_patrol_dependency import (
     PatrolDependencyFailure,
@@ -37,10 +48,17 @@ from quwoquan_ops.cli.commands.app_preflight_uat_patrol_dependency import (
 from quwoquan_ops.cli.commands.app_preflight_uat_platform import (
     execute_canonical_platform_launch,
 )
+from quwoquan_ops.cli.commands.app_preflight_uat_receipt import (
+    build_app_content_uat_receipt,
+    project_app_content_uat_raw_authority,
+)
+from quwoquan_ops.cli.commands.app_preflight_uat_raw_results import (
+    AppUatRawResultError,
+    expected_app_uat_raw_coverage,
+)
 from quwoquan_ops.cli.commands.app_preflight_uat_support import (
     _ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS,
     _BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS,
-    APP_CONTENT_UAT_ENVELOPE_ARGUMENTS,
     APP_CORE_READBACK_UAT_TEST_TARGET,
     CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
     DISCOVERY_FEED_UAT_TEST_TARGET,
@@ -48,9 +66,10 @@ from quwoquan_ops.cli.commands.app_preflight_uat_support import (
     IOS_DIRECT_FLUTTER_RUN_UAT,
     MESSAGE_HOME_UAT_TEST_TARGET,
     PROFILE_JOURNEY_UAT_TEST_TARGET,
+    RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET,
     STARTUP_FIRST_FRAME_UAT,
     VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
-    _app_content_android_launch_command,
+    _app_content_canonical_launch_command,
     _app_content_experience_screenshot_digests,
     _app_content_uat_requires_typed_actor,
     register_parser,
@@ -66,7 +85,6 @@ from quwoquan_ops.cli.smoke.environment_patrol_smoke.external_aut_driver import 
 )
 
 __all__ = [
-    "APP_CONTENT_UAT_ENVELOPE_ARGUMENTS",
     "APP_CORE_READBACK_UAT_TEST_TARGET",
     "CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET",
     "DISCOVERY_FEED_UAT_TEST_TARGET",
@@ -74,6 +92,7 @@ __all__ = [
     "IOS_DIRECT_FLUTTER_RUN_UAT",
     "MESSAGE_HOME_UAT_TEST_TARGET",
     "PROFILE_JOURNEY_UAT_TEST_TARGET",
+    "RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET",
     "STARTUP_FIRST_FRAME_UAT",
     "VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET",
     "_ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS",
@@ -90,6 +109,157 @@ __all__ = [
     "command_app_content_uat",
     "register_parser",
 ]
+
+
+def _target_uat_binding_for_execution(
+    *,
+    stackctl: Any,
+    evidence_root: Path,
+    preflight: Mapping[str, Any],
+    runtime_binding: Mapping[str, Any],
+    launch_binding: Mapping[str, Any],
+    uat_profile: Mapping[str, Any],
+    device_id: str,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    from quwoquan_ops.cli.lib.target_uat_binding import (
+        build_target_uat_binding,
+        canonical_target_uat_binding_bytes,
+        target_uat_binding_digest,
+        write_create_once_target_uat_binding,
+    )
+
+    target = str(runtime_binding["target"])
+    release_id = str(runtime_binding["releaseId"])
+    activation = preflight.get("activationEnvelope")
+    if not isinstance(activation, Mapping):
+        raise ValueError("canonical Data activation envelope is missing")
+    def evidence_ref(value: object, *, label: str) -> str:
+        raw = str(value or "").strip()
+        if not raw:
+            raise ValueError(f"{label} exact-byte reference is missing")
+        candidate = Path(raw).expanduser()
+        resolved = (
+            candidate.resolve()
+            if candidate.is_absolute()
+            else (evidence_root / candidate).resolve()
+        )
+        try:
+            relative = resolved.relative_to(evidence_root).as_posix()
+        except ValueError as exc:
+            raise ValueError(f"{label} escapes QWQ_OUTPUT_ROOT") from exc
+        if resolved.is_symlink() or not resolved.is_file():
+            raise ValueError(f"{label} exact bytes are missing or unsafe")
+        return relative
+
+    def verify_file_digest(ref: str, digest: str, *, label: str) -> None:
+        if not digest:
+            raise ValueError(f"{label} exact-byte digest is missing")
+        observed = "sha256:" + hashlib.sha256((evidence_root / ref).read_bytes()).hexdigest()
+        if observed != digest:
+            raise ValueError(f"{label} exact-byte digest drifted")
+
+    activation_ref = evidence_ref(
+        activation.get("importReportRef"), label="active CAS"
+    )
+    activation_digest = str(activation.get("importReportDigest") or "")
+    readback_ref = evidence_ref(
+        preflight.get("readinessReceiptRef"), label="readback"
+    )
+    readback_digest = str(preflight.get("readinessReceiptDigest") or "")
+    provider_ref = evidence_ref(
+        launch_binding.get("contractGraphRef"), label="Provider ContractGraph"
+    )
+    provider_digest = str(launch_binding.get("contractGraphDigest") or "")
+    for ref, digest, label in (
+        (activation_ref, activation_digest, "active CAS"),
+        (provider_ref, provider_digest, "Provider ContractGraph"),
+    ):
+        verify_file_digest(ref, digest, label=label)
+    if not readback_digest:
+        raise ValueError("readback exact-byte digest is missing")
+    readback_payload = stackctl._read_json_object(str(evidence_root / readback_ref))
+    if stackctl._canonical_document_checksum(readback_payload) != readback_digest:
+        raise ValueError("readback canonical digest drifted")
+    runner_source_paths = (
+        "quwoquan_ops/cli/commands/app_preflight_uat.py",
+        "quwoquan_ops/cli/smoke/environment_patrol_smoke/app_uat_case_execution.py",
+        "quwoquan_ops/cli/smoke/environment_patrol_smoke/evidence.py",
+        "quwoquan_app/test/user_acceptance/journeys/release_bound_sample_matrix/"
+        "release_bound_sample_matrix__user_acceptance_test.dart",
+        "quwoquan_app/test/support/runtime/patrol/release_uat_sample_plan.dart",
+        "quwoquan_app/test/support/runtime/patrol/patrol_app_uat_case_evidence.dart",
+    )
+    runner_source_path = runner_source_paths[3]
+    runner_hasher = hashlib.sha256()
+    for source_path in runner_source_paths:
+        encoded_path = source_path.encode("utf-8")
+        encoded_source = (stackctl.ROOT / source_path).read_bytes()
+        runner_hasher.update(len(encoded_path).to_bytes(4, "big"))
+        runner_hasher.update(encoded_path)
+        runner_hasher.update(len(encoded_source).to_bytes(8, "big"))
+        runner_hasher.update(encoded_source)
+    runner_digest = "sha256:" + runner_hasher.hexdigest()
+    profile = str(uat_profile.get("profile") or "")
+    registered = profile in {"promotable", "production"}
+    binding = build_target_uat_binding(
+        runtime_binding,
+        launch_binding,
+        {
+            "releaseId": release_id,
+            "releaseUatSamplePlanRef": str(
+                preflight.get("releaseUatSamplePlanRef") or ""
+            ),
+            "releaseUatSamplePlanDigest": str(
+                preflight.get("releaseUatSamplePlanDigest") or ""
+            ),
+        },
+        active_cas={"ref": activation_ref, "digest": activation_digest},
+        readback={"ref": readback_ref, "digest": readback_digest},
+        artifact_class="production_behavior",
+        build_mode="debug",
+        build_profile="nonprod",
+        provider={
+            "identity": "first-party-https",
+            "class": "first_party",
+            "type": "https",
+            "registered": registered,
+            "conformanceEvidence": {
+                "ref": provider_ref,
+                "digest": provider_digest,
+            },
+        },
+        device={
+            "identity": device_id,
+            "class": str(uat_profile.get("deviceClass") or ""),
+            "registered": bool(uat_profile.get("deviceRegistered")),
+        },
+        runner={
+            "identity": "app-content-uat",
+            "sourcePath": runner_source_path,
+            "digest": runner_digest,
+            "registered": registered,
+        },
+        profile=profile,
+        non_promotable=bool(uat_profile.get("nonPromotable")),
+        created_at=str(
+            (
+                stackctl._read_json_object(str(launch_binding["launchAttemptRef"]))
+                .get("transitions", [{}])[0]
+                .get("at")
+            )
+            or ""
+        ),
+    )
+    written = write_create_once_target_uat_binding(
+        output_root=evidence_root,
+        binding=binding,
+    )
+    if (
+        written.digest != target_uat_binding_digest(binding)
+        or written.path.read_bytes() != canonical_target_uat_binding_bytes(binding)
+    ):
+        raise ValueError("TargetUatBinding exact bytes drifted after create-once write")
+    return binding, {"ref": written.ref, "digest": written.digest}
 
 
 def _command_app_content_uat(
@@ -120,6 +290,30 @@ def _command_app_content_uat(
     device_id = str(getattr(args, "device_id", "") or "").strip()
     if not device_id:
         issues.append("--device-id is required")
+    uat_profile: dict[str, Any] = {}
+    if device_id:
+        try:
+            uat_profile = app_content_uat_cli_profile(
+                platform=str(getattr(args, "platform", "") or ""),
+                device_id=device_id,
+                device_registration_ref=str(
+                    getattr(args, "device_registration_ref", "") or ""
+                ),
+            )
+        except ValueError as exc:
+            issues.append(str(exc))
+
+    if unsupported:
+        return {
+            "schema": "quwoquan_ops.app_content_uat_receipt",
+            "status": "gate_block",
+            "targets": targets,
+            "firstBlocker": "APP.LAUNCH.receipt_invalid",
+            "details": list(issues),
+            "exitCode": 2,
+            "summary": "App content UAT is GATE_BLOCK",
+            "reportDir": "",
+        }
 
     preflights: list[dict[str, Any]] = []
     runtime_bindings: list[dict[str, Any]] = []
@@ -153,13 +347,17 @@ def _command_app_content_uat(
         release_trains = {
             str(item.get("releaseTrainId") or "") for item in runtime_bindings
         }
-        app_uat_envelopes = {
+        release_identities = {
             json.dumps(
-                item.get("appUatEnvelope") or {},
+                (item.get("appUatPlan") or {}).get("releaseIdentity") or {},
                 ensure_ascii=False,
                 sort_keys=True,
                 separators=(",", ":"),
             )
+            for item in preflights
+        }
+        sample_plan_digests = {
+            str(item.get("releaseUatSamplePlanDigest") or "")
             for item in preflights
         }
         app_uat_plans = {
@@ -177,12 +375,21 @@ def _command_app_content_uat(
             issues.append("Alpha/Beta/Gamma manifest digest is not identical")
         elif len(release_trains) != 1 or "" in release_trains:
             issues.append("Alpha/Beta/Gamma releaseTrainId is not identical")
-        elif len(app_uat_envelopes) != 1 or "{}" in app_uat_envelopes:
-            issues.append("Alpha/Beta/Gamma appUatEnvelope is not identical")
+        elif len(release_identities) != 1 or "{}" in release_identities:
+            issues.append("Alpha/Beta/Gamma release identity is not identical")
+        elif len(sample_plan_digests) != 1 or "" in sample_plan_digests:
+            issues.append(
+                "Alpha/Beta/Gamma ReleaseUatSamplePlan exact digest is not identical"
+            )
         elif len(app_uat_plans) != 1 or "{}" in app_uat_plans:
             issues.append("Alpha/Beta/Gamma appUatPlan is not identical")
 
     runs: list[dict[str, Any]] = []
+    target_uat_bindings: dict[str, dict[str, Any]] = {}
+    target_uat_binding_refs: dict[str, dict[str, str]] = {}
+    raw_results: dict[str, list[dict[str, Any]]] = {}
+    expected_raw_coverage: dict[str, int] = {}
+    case_execution_reports: dict[str, dict[tuple[str, str, str], dict[str, str]]] = {}
     launch_bindings: dict[str, dict[str, str]] = {}
     launch_projections: dict[str, dict[str, str]] = {}
     experience_screenshot_digests: dict[str, dict[str, str]] = {}
@@ -190,17 +397,28 @@ def _command_app_content_uat(
         for preflight in preflights:
             target = str(preflight["target"])
             environment = str(preflight["environment"])
-            envelope = preflight.get("appUatEnvelope")
-            if not isinstance(envelope, dict):
-                issues.append(f"{target}: canonical App UAT envelope is missing")
-                break
             app_uat_plan = preflight.get("appUatPlan")
             if not isinstance(app_uat_plan, dict):
                 issues.append(f"{target}: canonical App UAT plan is missing")
                 break
-            release_video_work_id = str(envelope.get("videoWorkId") or "").strip()
+            carrier_identities = app_uat_plan.get("carrierIdentities")
+            release_video_work_id = (
+                str(carrier_identities.get("video") or "").strip()
+                if isinstance(carrier_identities, Mapping)
+                else ""
+            )
+            sample_plan = preflight.get("releaseUatSamplePlan")
+            if not isinstance(sample_plan, Mapping):
+                issues.append(f"{target}: ReleaseUatSamplePlan is missing")
+                break
+            try:
+                expected_raw_coverage[target] = expected_app_uat_raw_coverage(sample_plan)
+            except AppUatRawResultError as exc:
+                issues.append(f"{target}: {exc}")
+                break
+            case_execution_reports[target] = {}
             if not release_video_work_id:
-                issues.append(f"{target}: canonical App UAT video workId is missing")
+                issues.append(f"{target}: ReleaseUatSamplePlan video identity is missing")
                 break
             video_pagination = app_uat_plan.get("videoPagination")
             expected_video_work_ids = (
@@ -224,6 +442,7 @@ def _command_app_content_uat(
             runtime_binding = next(
                 item for item in runtime_bindings if item.get("target") == target
             )
+            release_probe_run: dict[str, Any] = {}
             if bool(getattr(args, "dry_run", False)):
                 runs.append(
                     {
@@ -243,14 +462,13 @@ def _command_app_content_uat(
                 )
             else:
                 try:
-                    runs.append(
-                        _stackctl._run_app_content_release_probe(
-                            target=target,
-                            readiness_path=readiness_path,
-                            app_uat_plan=app_uat_plan,
-                            report_dir=(report_dir / target / "release-bound-readback"),
-                        )
+                    release_probe_run = _stackctl._run_app_content_release_probe(
+                        target=target,
+                        readiness_path=readiness_path,
+                        app_uat_plan=app_uat_plan,
+                        report_dir=(report_dir / target / "release-bound-readback"),
                     )
+                    runs.append(release_probe_run)
                 except (OSError, RuntimeError, TypeError, ValueError) as exc:
                     issues.append(f"{target}: {exc}")
                     break
@@ -265,7 +483,7 @@ def _command_app_content_uat(
             launch_control: dict[str, Any] = {}
             build_projection_policy_id = (
                 FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID
-                if args.platform == "android"
+                if str(args.platform).startswith("android")
                 else FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID
             )
             if not bool(getattr(args, "dry_run", False)):
@@ -341,12 +559,18 @@ def _command_app_content_uat(
                 issues=issues,
                 runs=runs,
                 launch_bindings=launch_bindings,
-                android_launch_command=_app_content_android_launch_command,
+                canonical_launch_command=_app_content_canonical_launch_command,
                 launch_binding_reader=_app_content_launch_binding,
                 write_launch_control=write_app_content_launch_control,
             ):
                 break
             suite_plan: list[tuple[str, str, bool, str]] = [
+                (
+                    "release-sample-matrix",
+                    RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET,
+                    False,
+                    "",
+                ),
                 ("homepage-feed", _stackctl.DISCOVERY_FEED_UAT_TEST_TARGET, False, ""),
                 # 作者主页旅程：他人主页「记录」列表必须真实解码渲染（回归
                 # ListUserPosts 契约漂移导致的「共有 0 条记录」+错误态事故）。
@@ -391,6 +615,90 @@ def _command_app_content_uat(
                     "",
                 ),
             )
+            if not bool(getattr(args, "dry_run", False)):
+                recorded_launch = launch_bindings.get(target)
+                if not isinstance(recorded_launch, Mapping):
+                    issues.append(f"{target}: canonical launch binding is missing")
+                    break
+                try:
+                    binding, binding_ref = _target_uat_binding_for_execution(
+                        stackctl=_stackctl,
+                        evidence_root=canonical_output_root,
+                        preflight=preflight,
+                        runtime_binding=runtime_binding,
+                        launch_binding=recorded_launch,
+                        uat_profile=uat_profile,
+                        device_id=device_id,
+                    )
+                except (OSError, TypeError, ValueError) as exc:
+                    issues.append(f"{target}: {exc}")
+                    break
+                target_uat_bindings[target] = binding
+                target_uat_binding_refs[target] = binding_ref
+            app_uat_authority: dict[str, str] | None = None
+            if not bool(getattr(args, "dry_run", False)):
+                sample_plan_selection = sample_plan.get("selectionEvidence")
+                recorded_launch = launch_bindings.get(target)
+                binding_ref = target_uat_binding_refs.get(target)
+                if (
+                    not isinstance(sample_plan_selection, Mapping)
+                    or not isinstance(recorded_launch, Mapping)
+                    or not isinstance(binding_ref, Mapping)
+                ):
+                    issues.append(
+                        f"{target}: App UAT Patrol authority inputs are incomplete"
+                    )
+                    break
+                sample_plan_ref = str(preflight.get("releaseUatSamplePlanRef") or "")
+                header_ref = Path(
+                    str(preflight.get("releaseHeaderRef") or "")
+                ).expanduser()
+                sample_plan_path = (
+                    Path(sample_plan_ref).expanduser()
+                    if Path(sample_plan_ref).expanduser().is_absolute()
+                    else header_ref.parent / sample_plan_ref
+                )
+                if not sample_plan_path.is_file():
+                    sample_plan_path = header_ref.parent / "uat" / "sample_plan.json"
+                try:
+                    sample_plan_authority_ref = sample_plan_path.resolve().relative_to(
+                        canonical_output_root
+                    ).as_posix()
+                    binding_authority_ref = str(binding_ref.get("ref") or "")
+                    candidate_manifest_path = (
+                        Path(str(runtime_binding["sourceCapsuleManifestRef"]))
+                        .parent.parent
+                        / "manifest.json"
+                    )
+                    candidate_manifest_sha256 = hashlib.sha256(
+                        candidate_manifest_path.read_bytes()
+                    ).hexdigest()
+                    graph_path = Path(str(recorded_launch["contractGraphRef"]))
+                    contract_graph_source_hash = hashlib.sha256(
+                        graph_path.read_bytes()
+                    ).hexdigest()
+                    app_uat_authority = {
+                        "releaseId": str(preflight.get("releaseId") or ""),
+                        "samplePlanRef": sample_plan_authority_ref,
+                        "samplePlanSha256": str(
+                            preflight.get("releaseUatSamplePlanDigest") or ""
+                        ),
+                        "targetUatBindingRef": binding_authority_ref,
+                        "targetUatBindingSha256": str(binding_ref.get("digest") or ""),
+                        "targetUatBindingDigest": str(binding_ref.get("digest") or ""),
+                        "releaseDigest": str(sample_plan.get("releaseDigest") or ""),
+                        "sourceIdentitySetDigest": str(
+                            sample_plan_selection.get("sourceIdentitySetDigest") or ""
+                        ),
+                        "commitSha": str(runtime_binding.get("sourceRevision") or ""),
+                        "contractGraphSourceHash": contract_graph_source_hash,
+                        "candidateManifestSha256": candidate_manifest_sha256,
+                    }
+                except (KeyError, OSError, ValueError) as exc:
+                    issues.append(
+                        f"{target}: App UAT Patrol authority binding failed: {exc}"
+                    )
+                    break
             typed_actor_context: TestDataContext | None = None
             if not bool(getattr(args, "dry_run", False)) and any(
                 _stackctl._app_content_uat_requires_typed_actor(
@@ -419,27 +727,89 @@ def _command_app_content_uat(
                     patrol_target=patrol_target,
                     data_readiness_path=(readiness_path if bind_release else None),
                     release_video_work_id=(canary_work_id if bind_release else None),
+                    app_uat_authority=(
+                        app_uat_authority
+                        if patrol_target == RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET
+                        else None
+                    ),
                 )
                 if command is None:
                     issues.append(f"{target}: {suite_name} topology is incomplete")
                     break
                 argv = list(command["argv"])
+                if (
+                    patrol_target == RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET
+                    and not bool(getattr(args, "dry_run", False))
+                ):
+                    sample_execution = release_probe_run.get("sampleExecution")
+                    if not isinstance(sample_execution, Mapping):
+                        issues.append(f"{target}: release sample runtime binding is missing")
+                        break
+                    runtime_samples = sample_execution.get("samples")
+                    if not isinstance(runtime_samples, list) or not runtime_samples:
+                        issues.append(f"{target}: release sample runtime rows are missing")
+                        break
+                    runtime_binding_bytes = (
+                        json.dumps(
+                            {
+                                "schema": "quwoquan_ops.app_uat_sample_runtime_binding.v1",
+                                "releaseId": str(preflight.get("releaseId") or ""),
+                                "samples": [
+                                    {
+                                        "sampleId": str(item.get("sampleId") or ""),
+                                        "carrier": str(item.get("carrier") or ""),
+                                        "sourceObjectId": str(item.get("sourceObjectId") or ""),
+                                        "readObjectId": str(item.get("readObjectId") or ""),
+                                    }
+                                    for item in runtime_samples
+                                    if isinstance(item, Mapping)
+                                ],
+                            },
+                            ensure_ascii=False,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        )
+                        + "\n"
+                    ).encode("utf-8")
+                    sample_plan_bytes = sample_plan_path.read_bytes()
+                    if (
+                        "sha256:" + hashlib.sha256(sample_plan_bytes).hexdigest()
+                        != str(preflight.get("releaseUatSamplePlanDigest") or "")
+                    ):
+                        issues.append(f"{target}: ReleaseUatSamplePlan exact bytes drifted")
+                        break
+                    argv.extend(
+                        (
+                            "--app-uat-sample-plan-b64",
+                            __import__("base64").b64encode(sample_plan_bytes).decode("ascii"),
+                            "--app-uat-runtime-binding-b64",
+                            __import__("base64").b64encode(runtime_binding_bytes).decode("ascii"),
+                        )
+                    )
                 if patrol_target == _stackctl.HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET:
                     argv.extend(
                         (
                             "--data-release-id",
-                            str(envelope.get("releaseId") or ""),
+                            str(preflight.get("releaseId") or ""),
                         )
                     )
                 if patrol_target == _stackctl.APP_CORE_READBACK_UAT_TEST_TARGET:
-                    for field, flag in _stackctl.APP_CONTENT_UAT_ENVELOPE_ARGUMENTS:
-                        argv.extend((flag, str(envelope.get(field) or "")))
+                    release_identity = app_uat_plan.get("releaseIdentity")
+                    if not isinstance(release_identity, Mapping):
+                        issues.append(f"{target}: release identity is missing")
+                        break
+                    argv.extend(
+                        (
+                            "--data-release-id",
+                            str(release_identity.get("releaseId") or ""),
+                        )
+                    )
                 if patrol_target == _stackctl.CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET:
                     argv.append("--stackctl-controlled-edge-fault")
                 argv.extend(
                     [
                         "--platform",
-                        "ios" if args.platform == "ios-simulator" else "android",
+                        "ios" if str(args.platform).startswith("ios") else "android",
                         "--device-id",
                         device_id,
                     ]
@@ -563,9 +933,17 @@ def _command_app_content_uat(
                                     "status": str(page_report.get("status") or ""),
                                 },
                             }
-                patrol_evidence = _stackctl._app_content_patrol_evidence(
-                    str(command["reportPath"])
-                )
+                recorded_launch = launch_bindings.get(target)
+                if bool(getattr(args, "dry_run", False)):
+                    patrol_evidence = {}
+                elif not isinstance(recorded_launch, Mapping):
+                    issues.append(f"{target}: canonical launch binding is missing")
+                    break
+                else:
+                    patrol_evidence = _stackctl._app_content_patrol_evidence(
+                        str(command["reportPath"]),
+                        contract_graph_binding=recorded_launch,
+                    )
                 controlled_edge_evidence_issue = ""
                 if (
                     patrol_target == _stackctl.CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET
@@ -599,13 +977,22 @@ def _command_app_content_uat(
                 first_child_blocker = (
                     patrol_typed_blocker
                     if isinstance(patrol_typed_blocker, Mapping)
-                    and str(patrol_typed_blocker.get("errorCode") or "")
+                    and isinstance(patrol_typed_blocker.get("errorCode"), str)
+                    and patrol_typed_blocker.get("errorCode")
                     else artifact_binding_blocker
                     if isinstance(artifact_binding_blocker, Mapping)
-                    and str(artifact_binding_blocker.get("errorCode") or "")
+                    and isinstance(artifact_binding_blocker.get("errorCode"), str)
+                    and artifact_binding_blocker.get("errorCode")
                     else {}
                 )
-                first_child_error_code = str(first_child_blocker.get("errorCode") or "")
+                raw_child_error_code = first_child_blocker.get("errorCode")
+                first_child_error_code = (
+                    raw_child_error_code
+                    if isinstance(raw_child_error_code, str)
+                    and raw_child_error_code
+                    and raw_child_error_code == raw_child_error_code.strip()
+                    else ""
+                )
                 if (
                     result.returncode == 0
                     or (
@@ -613,7 +1000,6 @@ def _command_app_content_uat(
                         and bool(reported_page_binding)
                     )
                 ) and not bool(getattr(args, "dry_run", False)):
-                    recorded_launch = launch_bindings.get(target)
                     if not isinstance(recorded_launch, Mapping):
                         page_artifact_binding_issue = (
                             f"{APP_PAGE_ARTIFACT_BINDING_BLOCKER}: "
@@ -655,6 +1041,9 @@ def _command_app_content_uat(
                         patrol_target == _stackctl.MESSAGE_HOME_UAT_TEST_TARGET
                     ),
                     "evidence": patrol_evidence,
+                    "contractGraphDigest": patrol_evidence.get(
+                        "contractGraphDigest", ""
+                    ),
                 }
                 if page_artifact_binding:
                     run_payload["pageArtifactBinding"] = page_artifact_binding
@@ -687,12 +1076,53 @@ def _command_app_content_uat(
                 if test_data_scope is not None:
                     run_payload["testDataScope"] = test_data_scope
                 runs.append(run_payload)
+                if (
+                    not bool(getattr(args, "dry_run", False))
+                    and patrol_target == RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET
+                ):
+                    binding_ref = target_uat_binding_refs.get(target)
+                    binding = target_uat_bindings.get(target)
+                    if not isinstance(binding_ref, Mapping) or not isinstance(
+                        binding, Mapping
+                    ):
+                        issues.append(f"{target}: TargetUatBinding is missing")
+                        break
+                    try:
+                        reports = collect_app_uat_case_execution_reports(
+                            evidence_root=canonical_output_root,
+                            report_ref=str(command["reportPath"]),
+                            expected_target_uat_binding_digest=str(
+                                binding_ref.get("digest") or ""
+                            ),
+                        )
+                    except (OSError, TypeError, ValueError) as exc:
+                        if result.returncode == 0:
+                            issues.append(f"{target}: {suite_name} {exc}")
+                            break
+                        reports = []
+                    target_reports = case_execution_reports[target]
+                    for source in reports:
+                        receipt = _stackctl._read_json_object(
+                            str(canonical_output_root / source["receiptRef"])
+                        )
+                        key = (
+                            str(receipt.get("sampleId") or ""),
+                            str(receipt.get("entrySurface") or ""),
+                            str(receipt.get("carrier") or ""),
+                        )
+                        if key in target_reports:
+                            issues.append(
+                                f"{target}: duplicate App UAT case execution receipt {key}"
+                            )
+                            break
+                        target_reports[key] = source
+                    if issues:
+                        break
                 if result.returncode != 0:
                     detail = (
-                        page_artifact_binding_issue
-                        if first_child_error_code == APP_PAGE_ARTIFACT_BINDING_BLOCKER
-                        else (result.stderr or result.stdout).strip()
-                        or first_child_error_code
+                        first_child_error_code
+                        or page_artifact_binding_issue
+                        or (result.stderr or result.stdout).strip()
                     )
                     issues.append(
                         f"{target}: {suite_name} failed: "
@@ -725,6 +1155,25 @@ def _command_app_content_uat(
                     )
                 except (StopIteration, TypeError, ValueError) as exc:
                     issues.append(f"{target}: {exc}")
+            if not issues and not bool(getattr(args, "dry_run", False)):
+                binding = target_uat_bindings.get(target)
+                sample_plan = preflight.get("releaseUatSamplePlan")
+                if not isinstance(binding, Mapping) or not isinstance(
+                    sample_plan, Mapping
+                ):
+                    issues.append(f"{target}: raw authority inputs are incomplete")
+                else:
+                    try:
+                        raw_results[target] = emit_app_uat_raw_results(
+                            evidence_root=canonical_output_root,
+                            target_binding=binding,
+                            sample_plan=sample_plan,
+                            case_execution_reports=list(
+                                case_execution_reports[target].values()
+                            ),
+                        )
+                    except (AppUatRawResultError, OSError, TypeError, ValueError) as exc:
+                        issues.append(f"{target}: {exc}")
             if not issues and not bool(getattr(args, "dry_run", False)):
                 recorded_launch = launch_bindings.get(target)
                 if not isinstance(recorded_launch, Mapping):
@@ -764,163 +1213,75 @@ def _command_app_content_uat(
     dry_run = bool(getattr(args, "dry_run", False))
     if not issues and not dry_run and set(launch_bindings) != set(targets):
         issues.append("canonical launch bindings are incomplete for requested targets")
-    status = "gate_block" if issues else ("planned" if dry_run else "passed")
-    payload = {
-        "schema": "quwoquan_ops.app_content_uat_receipt",
-        "status": status,
-        "targets": targets,
-        "platform": str(args.platform),
-        "deviceId": device_id,
-        "launchPolicy": "immutable_candidate",
-        "nonPromotable": True,
-        "packageBaselines": {
-            str(item.get("target") or ""): str(item.get("candidateDigest") or "")
-            for item in runtime_bindings
-            if str(item.get("target") or "")
-        },
-        "releaseTrainId": (
-            str(runtime_bindings[0].get("releaseTrainId") or "")
-            if runtime_bindings
-            and len(
-                {str(item.get("releaseTrainId") or "") for item in runtime_bindings}
+    if dry_run:
+        for preflight in preflights:
+            target = str(preflight.get("target") or "")
+            sample_plan = preflight.get("releaseUatSamplePlan")
+            if target and isinstance(sample_plan, Mapping):
+                try:
+                    expected_raw_coverage[target] = expected_app_uat_raw_coverage(
+                        sample_plan
+                    )
+                except AppUatRawResultError as exc:
+                    issues.append(f"{target}: {exc}")
+    try:
+        raw_authority_projection, raw_projection_issues = (
+            project_app_content_uat_raw_authority(
+                evidence_root=canonical_output_root,
+                targets=targets,
+                raw_results=raw_results,
+                expected_raw_coverage=expected_raw_coverage,
+                dry_run=dry_run,
             )
-            == 1
-            else ""
-        ),
-        "runtimeBindings": {str(item["target"]): item for item in runtime_bindings},
-        "runtimeBindingDigests": {
-            str(item["target"]): "sha256:"
-            + hashlib.sha256(
-                json.dumps(
-                    item,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                ).encode("utf-8")
-            ).hexdigest()
-            for item in runtime_bindings
-        },
-        "launchBindings": launch_bindings,
-        "firstBlocker": (
-            next(
-                (
-                    str(item.get("errorCode") or "")
-                    for item in runs
-                    if str(item.get("errorCode") or "")
-                ),
-                "",
-            )
-        ),
-        "launchBindingDigests": {
-            target: _stackctl._canonical_document_checksum(binding)
-            for target, binding in launch_bindings.items()
-        },
-        "releaseId": (str(preflights[0].get("releaseId") or "") if preflights else ""),
-        "manifestDigest": (
-            str(preflights[0].get("manifestDigest") or "") if preflights else ""
-        ),
-        "appUatEnvelope": (
-            preflights[0].get("appUatEnvelope", {}) if preflights else {}
-        ),
-        "appUatEnvelopeDigest": (
-            "sha256:"
-            + hashlib.sha256(
-                json.dumps(
-                    preflights[0].get("appUatEnvelope") or {},
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                ).encode("utf-8")
-            ).hexdigest()
-            if preflights and preflights[0].get("appUatEnvelope")
-            else ""
-        ),
-        "appUatPlan": (preflights[0].get("appUatPlan", {}) if preflights else {}),
-        "appUatPlanDigest": (
-            _stackctl._canonical_document_checksum(
-                dict(preflights[0].get("appUatPlan") or {})
-            )
-            if preflights and preflights[0].get("appUatPlan")
-            else ""
-        ),
-        "configurationDigests": sorted(
-            {
-                str(item.get("configurationDigest") or "")
-                for item in preflights
-                if str(item.get("configurationDigest") or "")
-            }
-        ),
-        "readinessReceiptDigests": sorted(
-            {
-                str(item.get("readinessReceiptDigest") or "")
-                for item in preflights
-                if str(item.get("readinessReceiptDigest") or "")
-            }
-        ),
-        "consumerLeaseIds": sorted(
-            {
-                str(item.get("consumerLeaseId") or "")
-                for item in runs
-                if str(item.get("consumerLeaseId") or "")
-            }
-        ),
-        "screenshotDigests": sorted(
-            {
-                str((item.get("evidence") or {}).get("screenshotDigest") or "")
-                for item in runs
-                if isinstance(item.get("evidence"), dict)
-                and str((item.get("evidence") or {}).get("screenshotDigest") or "")
-            }
-        ),
-        "experienceScreenshotDigests": experience_screenshot_digests,
-        "visibleCardCounts": {
-            str(item.get("target") or ""): int(
-                ((item.get("evidence") or {}).get("feedContent") or {}).get(
-                    "visibleCardCount", 0
-                )
-            )
-            for item in runs
-            if item.get("suite") == "homepage-feed"
-            and isinstance(item.get("evidence"), dict)
-        },
-        "controlledEdgeRecoveries": {
-            str(item.get("target") or ""): {
-                "evidence": (
-                    (item.get("evidence") or {}).get("controlledEdgeFault") or {}
-                ),
-                "receipt": (
-                    (item.get("evidence") or {}).get("controlledEdgeFaultReceipt") or {}
-                ),
-            }
-            for item in runs
-            if item.get("suite") == "controlled-edge-recovery"
-            and isinstance(item.get("evidence"), dict)
-        },
-        "preflights": preflights,
-        "runs": runs,
-        "executed": 0 if dry_run else len(runs),
-        "executedSamples": (
-            0
-            if dry_run
-            else sum(int(item.get("executedSampleCount") or 0) for item in runs)
-        ),
-        "sampleExecutionDigests": sorted(
-            {
-                str(item.get("sampleExecutionDigest") or "")
-                for item in runs
-                if str(item.get("sampleExecutionDigest") or "")
-            }
-        ),
-        "skipped": 0,
-        "details": issues
-        or [
-            (
-                "dry-run planned all App content UAT suites; no runtime evidence was claimed"
-                if dry_run
-                else "all requested App content UAT suites passed"
-            )
-        ],
-    }
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raw_authority_projection = {
+            "rawResultRefs": {target: [] for target in targets},
+            "rawResultDigests": {target: [] for target in targets},
+            "rawCoverage": {
+                target: {
+                    "expected": int(expected_raw_coverage.get(target) or 0),
+                    "present": 0,
+                    "missing": int(expected_raw_coverage.get(target) or 0),
+                }
+                for target in targets
+            },
+            "rawGaps": {target: [str(exc)] for target in targets},
+        }
+        raw_projection_issues = [str(exc)]
+    issues.extend(
+        item for item in raw_projection_issues if item not in issues
+    )
+    status = "gate_block" if issues else ("planned" if dry_run else "complete")
+    payload = build_app_content_uat_receipt(
+        status=status,
+        targets=targets,
+        platform=str(args.platform),
+        device_id=device_id,
+        uat_profile=uat_profile,
+        runtime_bindings=runtime_bindings,
+        launch_bindings=launch_bindings,
+        target_uat_binding_refs=target_uat_binding_refs,
+        raw_authority_projection=raw_authority_projection,
+        preflights=preflights,
+        runs=runs,
+        experience_screenshot_digests=experience_screenshot_digests,
+        issues=issues,
+        dry_run=dry_run,
+        canonical_checksum=_stackctl._canonical_document_checksum,
+    )
+    first_blocker, first_blocker_audit = first_canonical_app_blocker(
+        status=status,
+        preflights=preflights,
+        runs=runs,
+    )
+    payload["firstBlocker"] = first_blocker
+    if first_blocker_audit.get("fallback") is True and not payload["details"]:
+        payload["details"].append(
+            "APP.LAUNCH.receipt_invalid: parent gate_block lacked a canonical "
+            "child blocker; inspect retained preflights/runs evidence for the "
+            "original cause"
+        )
     _stackctl.write_json(report_dir / "report.json", payload)
     _stackctl.write_json(report_dir / "findings.json", {"issues": issues})
     return {
@@ -929,34 +1290,9 @@ def _command_app_content_uat(
         "summary": (
             "App content UAT dry-run planned"
             if not issues and dry_run
-            else "App content UAT passed"
+            else "App content UAT raw authority projection complete"
             if not issues
             else "App content UAT is GATE_BLOCK"
         ),
         "reportDir": _stackctl.relpath(report_dir),
     }
-
-
-def command_app_content_uat(args: argparse.Namespace) -> dict[str, Any]:
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    targets = [
-        item.strip()
-        for item in str(getattr(args, "targets", "")).split(",")
-        if item.strip()
-    ]
-    device_id = str(getattr(args, "device_id", "") or "").strip()
-    dry_run = bool(getattr(args, "dry_run", False))
-    if dry_run or not targets or not device_id:
-        return _stackctl._command_app_content_uat(args)
-    try:
-        runtime_use_lock = _stackctl.acquire_local_runtime_use_lock(
-            target=",".join(targets),
-            purpose=f"app-content-uat:{args.platform}:{device_id}",
-        )
-    except RuntimeError as error:
-        return _stackctl._command_app_content_uat(args, initial_issues=(str(error),))
-    try:
-        return _stackctl._command_app_content_uat(args)
-    finally:
-        runtime_use_lock.close()

@@ -8,22 +8,21 @@ from __future__ import annotations
 import base64
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.app_runtime_config_signing import (
-    _derive_public_key,
     SIGNING_KEY_ID_ENV,
     SIGNING_PRIVATE_KEY_FILE_ENV,
     TRUSTED_PUBLIC_KEYS_FILE_ENV,
+    _derive_public_key,
     canonical_signed_payload,
     decode_keyring,
     resolve_signing_material,
@@ -73,7 +72,9 @@ class AppRuntimeConfigSigningSecurityContractTest(unittest.TestCase):
         os.chmod(keyring_path, 0o600)
         return private_path, keyring_path
 
-    def test_external_ed25519_material_signs_and_verifies_canonical_payload(self) -> None:
+    def test_external_ed25519_material_signs_and_verifies_canonical_payload(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory(prefix="qwq-runtime-signing-") as temporary:
             private_path, keyring_path = self._issue_external_material(Path(temporary))
             signing = resolve_signing_material(
@@ -101,7 +102,9 @@ class AppRuntimeConfigSigningSecurityContractTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "verification failed"):
                 verify_signature(public, payload + b"tampered", signature)
 
-    def test_private_key_must_be_absolute_external_regular_0600_and_match_keyring(self) -> None:
+    def test_private_key_must_be_absolute_external_regular_0600_and_match_keyring(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory(prefix="qwq-runtime-signing-") as temporary:
             root = Path(temporary)
             private_path, keyring_path = self._issue_external_material(root)
@@ -120,7 +123,14 @@ class AppRuntimeConfigSigningSecurityContractTest(unittest.TestCase):
             environment[SIGNING_PRIVATE_KEY_FILE_ENV] = str(private_path)
             wrong_keyring = root / "wrong-keyring.json"
             wrong_keyring.write_text(
-                json.dumps({"runtime-test-ed25519": base64.b64encode(b"x" * 32).decode("ascii")}, separators=(",", ":")),
+                json.dumps(
+                    {
+                        "runtime-test-ed25519": base64.b64encode(b"x" * 32).decode(
+                            "ascii"
+                        )
+                    },
+                    separators=(",", ":"),
+                ),
                 encoding="utf-8",
             )
             os.chmod(wrong_keyring, 0o600)
@@ -128,52 +138,11 @@ class AppRuntimeConfigSigningSecurityContractTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not match keyring"):
                 resolve_signing_material(ROOT, environment.get)
 
-    def test_openssl_without_ed25519_is_reported_as_toolchain_not_bad_key(self) -> None:
-        """PATH 上解析到不支持 Ed25519 的 openssl 时，诊断必须指向工具链。
-
-        macOS 自带 `/usr/bin/openssl` 是 LibreSSL，对一把完全合法的 Ed25519
-        密钥同样退非零。若把它报成「密钥非法」，排查会被引向密钥材料与签名
-        权威，而真正要换的只是 PATH——这类误导代价高且会重复发生。
-        """
-
-        stub_root = Path(tempfile.mkdtemp())
-        stub = stub_root / "openssl"
-        stub.write_text(
-            "#!/bin/sh\n"
-            'if [ "$1" = "version" ]; then echo "LibreSSL 3.3.6"; exit 0; fi\n'
-            'echo "unsupported private key algorithm:TYPE=Ed25519" >&2\n'
-            "exit 1\n",
-            encoding="utf-8",
-        )
-        os.chmod(stub, 0o755)
-        original_path = os.environ.get("PATH", "")
-        try:
-            os.environ["PATH"] = f"{stub_root}:{original_path}"
-            with self.assertRaisesRegex(ValueError, "不支持 Ed25519"):
-                _derive_public_key(b"-----BEGIN PRIVATE KEY-----\n")
-        finally:
-            os.environ["PATH"] = original_path
-
     def test_invalid_key_material_is_still_reported_as_bad_key(self) -> None:
-        """工具链判别不得吃掉真实的密钥非法：非 unsupported 的失败仍归密钥。"""
+        """Capability-proof success must not hide actual invalid key material."""
 
-        stub_root = Path(tempfile.mkdtemp())
-        stub = stub_root / "openssl"
-        stub.write_text(
-            "#!/bin/sh\n"
-            'if [ "$1" = "version" ]; then echo "OpenSSL 3.6.3"; exit 0; fi\n'
-            'echo "could not read key" >&2\n'
-            "exit 1\n",
-            encoding="utf-8",
-        )
-        os.chmod(stub, 0o755)
-        original_path = os.environ.get("PATH", "")
-        try:
-            os.environ["PATH"] = f"{stub_root}:{original_path}"
-            with self.assertRaisesRegex(ValueError, "not a valid Ed25519 PEM"):
-                _derive_public_key(b"-----BEGIN PRIVATE KEY-----\n")
-        finally:
-            os.environ["PATH"] = original_path
+        with self.assertRaisesRegex(ValueError, "not a valid Ed25519 PEM"):
+            _derive_public_key(b"-----BEGIN PRIVATE KEY-----\n")
 
     def test_keyring_rejects_noncanonical_or_non_ed25519_values(self) -> None:
         with self.assertRaises(ValueError):

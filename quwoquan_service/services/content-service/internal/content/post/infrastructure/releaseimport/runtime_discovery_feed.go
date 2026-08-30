@@ -48,8 +48,8 @@ const (
 
 // MediaDeliveryAccessModeForReleaseClass 把 release header 的 releaseClass 映射
 // 为逐媒体 accessMode（DEC-033）：research → signed_grant、commercial → public。
-// 其它/未声明类别返回空串表示缺席——契约 accessMode 为 NULLABLE，缺席时端按
-// 存量 public 单一序列消费，不得由 importer 造值。
+// 其它/未声明类别返回空串作为 invalid sentinel；新 release importer 必须在写入前
+// fail closed。该空串不得进入投影，也不得被消费端当成 public。
 func MediaDeliveryAccessModeForReleaseClass(releaseClass string) string {
 	switch strings.TrimSpace(releaseClass) {
 	case "research":
@@ -63,7 +63,8 @@ func MediaDeliveryAccessModeForReleaseClass(releaseClass string) string {
 
 // ImportedMediaFields 把 release 资产投影为 App 可消费的逐媒体交付绑定。
 // mediaItems 逐项使用 canonical BSON 键（mediaAssetId/mediaAssetVersion，
-// 与 contracts PostMediaItem 单轨对齐）；accessMode 为空表示缺席不写键。
+// 与 contracts PostMediaItem 单轨对齐）；调用者必须先验证 accessMode，空值不会
+// 被解释为 public。
 func ImportedMediaFields(assets []AssetManifestItem, accessMode string) importedMediaSummary {
 	urls := make([]string, 0, len(assets))
 	items := make([]bson.M, 0, len(assets))
@@ -82,6 +83,10 @@ func ImportedMediaFields(assets []AssetManifestItem, accessMode string) imported
 	}
 	summary := importedMediaSummary{}
 	for _, asset := range assets {
+		itemAccessMode := strings.TrimSpace(asset.AccessMode)
+		if itemAccessMode == "" {
+			itemAccessMode = strings.TrimSpace(accessMode)
+		}
 		url := asset.CDNURL
 		if url == "" {
 			continue
@@ -107,8 +112,8 @@ func ImportedMediaFields(assets []AssetManifestItem, accessMode string) imported
 			"mediaAssetVersion": asset.Version,
 			"url":               url,
 		}
-		if accessMode != "" {
-			item["accessMode"] = accessMode
+		if itemAccessMode != "" {
+			item["accessMode"] = itemAccessMode
 		}
 		if isVideoAsset && strings.TrimSpace(asset.PosterAssetID) != "" {
 			item["coverAssetId"] = strings.TrimSpace(asset.PosterAssetID)
@@ -213,9 +218,9 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 		if err != nil {
 			return n, fmt.Errorf("%s: %w", p.PostRef, err)
 		}
-		postID := RuntimePostID(p.ContentID, p.PostRef)
+		postID := RuntimePostID(p.ContentID)
 		if postID == "" {
-			return n, fmt.Errorf("postRef is required to derive discovery feed postId")
+			return n, fmt.Errorf("contentId is required to derive discovery feed postId")
 		}
 		var cond map[string]any
 		runtimeEntityRefs := p.NormalizedEntityRefs
@@ -260,7 +265,6 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 			"page":                      p.Page,
 			"licenseProof":              p.LicenseProof,
 			"articleAssetManifest":      p.ArticleAssetManifest,
-			"sourceTaskId":              p.SourceTaskId,
 			"conditionProfile":          cond,
 			"status":                    "published",
 			"visibility":                "public",
@@ -345,7 +349,9 @@ func ImportedArticleAssetManifest(
 	assets := make([]AssetManifestItem, len(manifest.Assets))
 	copy(assets, manifest.Assets)
 	for index := range assets {
-		assets[index].AccessMode = accessMode
+		if strings.TrimSpace(assets[index].AccessMode) == "" {
+			assets[index].AccessMode = accessMode
+		}
 	}
 	stamped.Assets = assets
 	return &stamped
@@ -374,9 +380,7 @@ func removePriorDiscoveryFeedIdentity(
 	runtimeID string,
 	opts ImportOptions,
 ) error {
-	priorIdentityFilters := bson.A{bson.M{"postId": bson.M{"$in": bson.A{
-		postRef, RuntimePostIDFromPostRef(postRef),
-	}}}}
+	priorIdentityFilters := bson.A{bson.M{"postId": postRef}}
 	if stableContentID := strings.TrimSpace(contentID); stableContentID != "" {
 		priorIdentityFilters = append(
 			priorIdentityFilters,

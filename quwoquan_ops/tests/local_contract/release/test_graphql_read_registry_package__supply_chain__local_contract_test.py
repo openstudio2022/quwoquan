@@ -225,6 +225,52 @@ class GraphQLReadRegistryPackageContractTest(unittest.TestCase):
                 },
             )
 
+    def test_prod_targets_keep_actual_target_and_cross_target_fails_closed(self) -> None:
+        for target in ("prod-sim", "prod-hosted"):
+            with self.subTest(target=target), tempfile.TemporaryDirectory(
+                prefix="qwq-graphql-prod-package-"
+            ) as temporary:
+                root = Path(temporary)
+                candidate = self._candidate(root)
+                descriptor = materialize_graphql_read_registry_package(
+                    repo_root=ROOT,
+                    candidate_root=candidate,
+                    environment="prod",
+                    target=target,
+                    candidate_digest=CANDIDATE,
+                    signing=self._signing(root),
+                )
+                self.assertEqual(descriptor["environment"], "prod")
+                self.assertEqual(descriptor["target"], target)
+                foreign_target = (
+                    "prod-hosted" if target == "prod-sim" else "prod-sim"
+                )
+                with self.assertRaisesRegex(ValueError, "candidate identity"):
+                    validate_packaged_graphql_read_registry(
+                        repo_root=ROOT,
+                        candidate_root=candidate,
+                        expected_environment="prod",
+                        expected_target=foreign_target,
+                        expected_candidate_digest=CANDIDATE,
+                        expected_descriptor=descriptor,
+                    )
+
+    def test_prod_requires_explicit_signing_material(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="qwq-graphql-prod-package-"
+        ) as temporary:
+            root = Path(temporary)
+            candidate = self._candidate(root)
+            with self.assertRaisesRegex(ValueError, "explicit signing material"):
+                materialize_graphql_read_registry_package(
+                    repo_root=ROOT,
+                    candidate_root=candidate,
+                    environment="prod",
+                    target="prod-sim",
+                    candidate_digest=CANDIDATE,
+                    signing=None,
+                )
+
     def test_registry_boundary_excludes_unrelated_dependency_symlinks(self) -> None:
         with tempfile.TemporaryDirectory(prefix="qwq-graphql-package-") as temporary:
             root = Path(temporary)

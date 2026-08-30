@@ -13,8 +13,15 @@ from types import SimpleNamespace
 import pytest
 
 from quwoquan_ops.cli.lib.package_reuse import (
+    dependency_projection_prepare as projection_prepare,
+)
+from quwoquan_ops.cli.lib.package_reuse import (
+    dependency_projection_readback as projection_readback,
+)
+from quwoquan_ops.cli.lib.package_reuse import (
     patrol_command_envelope as envelope_contract,
 )
+from quwoquan_ops.cli.lib.package_reuse import pub_cache_capsule as pub_capsule
 from quwoquan_ops.cli.lib.package_reuse.android_gradle_capsule import (
     ANDROID_GRADLE_PROJECTION_RELATIVE,
 )
@@ -26,8 +33,12 @@ from quwoquan_ops.cli.lib.package_reuse.dependency_bundle_projection_verify impo
     DEPENDENCY_PROJECTION_CAS_BLOCKER,
     DEPENDENCY_PROJECTION_EVIDENCE_BLOCKER,
     load_dependency_projection_cas_evidence,
+    load_dependency_projection_cas_evidence_bytes,
     load_dependency_projection_cas_readback,
+    load_dependency_projection_cas_readback_bytes,
     prepare_dependency_projection_cas_evidence,
+    prepare_dependency_projection_cas_evidence_with_observed_components,
+    readback_from_expectation,
     revalidate_dependency_projection_cas,
     write_dependency_projection_cas_readback,
 )
@@ -182,6 +193,174 @@ def _prepare(*, root: Path, source: Path, projection: SimpleNamespace):
     )
 
 
+def test_sealed_pub_scanner_visits_each_directory_and_file_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "projection"
+    cache, lock, _payload = _pub(root)
+    package = cache / "hosted/pub.flutter-io.cn/production_only-1.0.0"
+    for directory_index in range(24):
+        directory = package / f"example-{directory_index:02d}"
+        directory.mkdir()
+        for file_index in range(12):
+            (directory / f"fixture-{file_index:02d}.dart").write_text(
+                f"const fixture = {directory_index * 12 + file_index};\n",
+                encoding="utf-8",
+            )
+    expected_directories = 1 + sum(
+        1 for path in cache.rglob("*") if path.is_dir()
+    )
+    expected_files = sum(1 for path in cache.rglob("*") if path.is_file())
+    scandir_calls = 0
+    read_calls = 0
+    digest_calls = 0
+    real_scandir = pub_capsule.os.scandir
+    real_read = pub_capsule._read_scanned_file
+
+    def counted_scandir(path):
+        nonlocal scandir_calls
+        scandir_calls += 1
+        return real_scandir(path)
+
+    def counted_read(**kwargs):
+        nonlocal read_calls, digest_calls
+        read_calls += 1
+        digest_calls += int(bool(kwargs["digest"]))
+        return real_read(**kwargs)
+
+    monkeypatch.setattr(pub_capsule.os, "scandir", counted_scandir)
+    monkeypatch.setattr(pub_capsule, "_read_scanned_file", counted_read)
+
+    snapshot = pub_capsule.build_pub_cache_snapshot(
+        lock_path=lock,
+        cache_root=cache,
+        reject_unlocked=True,
+    )
+
+    assert snapshot.manifest["entryCount"] == expected_files
+    assert scandir_calls == expected_directories
+    assert read_calls == expected_files
+    assert digest_calls == expected_files
+
+
+def test_initial_readback_reuses_expectation_scan_without_reopening_pub_tree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "projection"
+    cache, _lock, _payload = _pub(root)
+    projection = _projection(cache)
+    source = _source_manifest(tmp_path, {"productionPub"})
+    evidence_parent = root.parent / "private-evidence"
+    evidence_parent.mkdir()
+    scan_calls = 0
+    real_build = projection_prepare.build_pub_cache_snapshot
+
+    def counted_build(**kwargs):
+        nonlocal scan_calls
+        scan_calls += 1
+        return real_build(**kwargs)
+
+    monkeypatch.setattr(
+        projection_prepare,
+        "build_pub_cache_snapshot",
+        counted_build,
+    )
+    prepared = prepare_dependency_projection_cas_evidence_with_observed_components(
+        projection_root=root,
+        source_manifest_path=source,
+        dependency_projection=projection,
+        evidence_path=evidence_parent / "expected.json",
+    )
+
+    def unexpected_rescan(**_kwargs):
+        raise AssertionError("initial readback reopened the projected Pub tree")
+
+    monkeypatch.setattr(
+        projection_readback,
+        "build_pub_cache_snapshot",
+        unexpected_rescan,
+    )
+    readback = readback_from_expectation(
+        expectation=prepared.expectation,
+        observed_components=prepared.observed_components,
+        command_environment_owner="production",
+        command_environment=projection.production_environment,
+    )
+
+    assert scan_calls == 1
+    assert readback.manifest["components"] == prepared.observed_components
+
+
+def test_reused_initial_readback_matches_fresh_full_revalidation(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "projection"
+    cache, _lock, _payload = _pub(root)
+    projection = _projection(cache)
+    evidence_parent = root.parent / "private-evidence"
+    evidence_parent.mkdir()
+    prepared = prepare_dependency_projection_cas_evidence_with_observed_components(
+        projection_root=root,
+        source_manifest_path=_source_manifest(tmp_path, {"productionPub"}),
+        dependency_projection=projection,
+        evidence_path=evidence_parent / "expected.json",
+    )
+
+    reused = readback_from_expectation(
+        expectation=prepared.expectation,
+        observed_components=prepared.observed_components,
+        command_environment_owner="production",
+        command_environment=projection.production_environment,
+    )
+    fresh = revalidate_dependency_projection_cas(
+        projection_root=root,
+        evidence_path=prepared.expectation.evidence_path,
+        expected_digest=prepared.expectation.evidence_digest,
+        command_environment_owner="production",
+        command_environment=projection.production_environment,
+    )
+
+    assert reused == fresh
+
+
+def test_pub_expectation_allows_only_known_runtime_metadata(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "projection"
+    cache, _lock, _payload = _pub(root)
+    (cache / "active_roots/aa").mkdir(parents=True)
+    (cache / "active_roots/aa/root").write_text("runtime only\n", encoding="utf-8")
+    (cache / "README.md").write_text("runtime only\n", encoding="utf-8")
+
+    expected = _prepare(
+        root=root,
+        source=_source_manifest(tmp_path, {"productionPub"}),
+        projection=_projection(cache),
+    )
+
+    assert "productionPub" in expected.manifest["components"]
+
+
+def test_pub_expectation_rejects_unknown_unlocked_bytes(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "projection"
+    cache, _lock, _payload = _pub(root)
+    (cache / "unknown.bin").write_bytes(b"unlocked")
+
+    with pytest.raises(
+        ValueError,
+        match="productionPub pre-command Pub CAS is invalid.*unknown.bin",
+    ):
+        _prepare(
+            root=root,
+            source=_source_manifest(tmp_path, {"productionPub"}),
+            projection=_projection(cache),
+        )
+
+
 def test_pub_expectation_is_private_and_reloads_without_projection_object(
     tmp_path: Path,
 ) -> None:
@@ -198,6 +377,14 @@ def test_pub_expectation_is_private_and_reloads_without_projection_object(
         expected_digest=expected.evidence_digest,
     )
     assert loaded.manifest == expected.manifest
+    loaded_from_bytes = load_dependency_projection_cas_evidence_bytes(
+        projection_root=root,
+        evidence_path=expected.evidence_path,
+        encoded=expected.evidence_path.read_bytes(),
+        evidence_mode=0o600,
+        expected_digest=expected.evidence_digest,
+    )
+    assert loaded_from_bytes == loaded
 
     (cache / "active_roots/aa").mkdir(parents=True)
     (cache / "active_roots/aa/root").write_text("runtime only\n", encoding="utf-8")
@@ -230,6 +417,14 @@ def test_pub_expectation_is_private_and_reloads_without_projection_object(
         expected_expectation_digest=expected.evidence_digest,
     )
     assert loaded_readback.manifest == readback.manifest
+    loaded_readback_from_bytes = load_dependency_projection_cas_readback_bytes(
+        evidence_path=persisted.evidence_path,
+        encoded=persisted.evidence_path.read_bytes(),
+        evidence_mode=0o600,
+        expected_digest=persisted.evidence_digest,
+        expected_expectation_digest=expected.evidence_digest,
+    )
+    assert loaded_readback_from_bytes == loaded_readback
 
 
 @pytest.mark.parametrize("mutation", ["package", "lock", "extra", "linked"])
@@ -291,6 +486,30 @@ def _ios_result(projection: SimpleNamespace, lock: bytes, component: str):
         converged_tree_digest=identity["treeDigest"],
         output_snapshot=SimpleNamespace(lock_bytes=lock),
     )
+
+
+def test_ios_pods_identity_ignores_xcode_user_state(tmp_path: Path) -> None:
+    root = tmp_path / "projection"
+    projection, _lock = _pods(root, IOS_POD_PRODUCTION_HOST)
+    before = scan_pods(
+        projection.pods_root,
+        projection.ios_root / "Podfile.lock",
+        component="productionIosPods",
+    )
+    user_state = (
+        projection.pods_root
+        / "Pods.xcodeproj/xcuserdata/tester.xcuserdatad/xcschememanagement.plist"
+    )
+    user_state.parent.mkdir(parents=True)
+    user_state.write_text("ephemeral\n", encoding="utf-8")
+
+    after = scan_pods(
+        projection.pods_root,
+        projection.ios_root / "Podfile.lock",
+        component="productionIosPods",
+    )
+
+    assert after == before
 
 
 @pytest.mark.parametrize("mutation", ["pods", "lock"])

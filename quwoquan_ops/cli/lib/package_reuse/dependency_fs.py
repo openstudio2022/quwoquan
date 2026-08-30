@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import os
 import shutil
 import stat
@@ -155,6 +156,114 @@ def write_fresh_relative_file(
         for opened_descriptor in reversed(opened):
             os.close(opened_descriptor)
         os.close(root_fd)
+
+
+def clone_fresh_relative_file(
+    *,
+    root: Path,
+    relative: str,
+    source: Path,
+    mode: int,
+    expected_size: int,
+) -> None:
+    """Kernel-copy one already verified regular file into a fresh private tree."""
+
+    pure = PurePosixPath(relative)
+    if (
+        not relative
+        or pure.as_posix() != relative
+        or any(part in {"", ".", ".."} for part in pure.parts)
+        or expected_size < 0
+    ):
+        raise ValueError("App dependency clone path or size is unsafe")
+    absolute_source = _absolute(source)
+    source_parent = _directory_fd(
+        absolute_source.parent,
+        label=f"snapshot clone source {relative}",
+    )
+    source_descriptor = -1
+    root_descriptor = _directory_fd(root, label="snapshot clone destination root")
+    destination_parent = root_descriptor
+    opened: list[int] = []
+    destination_descriptor = -1
+    try:
+        source_descriptor = os.open(
+            absolute_source.name,
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=source_parent,
+        )
+        before = os.fstat(source_descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or before.st_size != expected_size
+            or (before.st_mode & 0o111) != (mode & 0o111)
+        ):
+            raise ValueError(f"App dependency snapshot clone source drifted: {relative}")
+        for segment in pure.parts[:-1]:
+            try:
+                os.mkdir(segment, mode=0o700, dir_fd=destination_parent)
+            except FileExistsError:
+                pass
+            next_descriptor = os.open(
+                segment,
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_CLOEXEC", 0),
+                dir_fd=destination_parent,
+            )
+            opened.append(next_descriptor)
+            destination_parent = next_descriptor
+        destination_descriptor = os.open(
+            pure.parts[-1],
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=destination_parent,
+        )
+        try:
+            fcntl.fcopyfile(source_descriptor, destination_descriptor, 0)
+        except AttributeError:
+            remaining = expected_size
+            while remaining:
+                chunk = os.read(source_descriptor, min(1024 * 1024, remaining))
+                if not chunk:
+                    raise OSError("App dependency snapshot clone made no progress")
+                view = memoryview(chunk)
+                while view:
+                    written = os.write(destination_descriptor, view)
+                    if written <= 0:
+                        raise OSError("App dependency snapshot clone made no progress")
+                    view = view[written:]
+                remaining -= len(chunk)
+        os.fchmod(destination_descriptor, mode)
+        after = os.fstat(source_descriptor)
+        destination_state = os.fstat(destination_descriptor)
+        identity = lambda item: (
+            item.st_dev,
+            item.st_ino,
+            item.st_mode,
+            item.st_nlink,
+            item.st_size,
+            item.st_mtime_ns,
+            item.st_ctime_ns,
+        )
+        if identity(before) != identity(after) or destination_state.st_size != expected_size:
+            raise ValueError(f"App dependency snapshot changed during clone: {relative}")
+    finally:
+        if destination_descriptor >= 0:
+            os.close(destination_descriptor)
+        for descriptor in reversed(opened):
+            os.close(descriptor)
+        os.close(root_descriptor)
+        if source_descriptor >= 0:
+            os.close(source_descriptor)
+        os.close(source_parent)
 
 
 def remove_private_tree(root: Path) -> None:

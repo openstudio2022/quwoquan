@@ -59,6 +59,12 @@ FEED_CONTENT_EVIDENCE_PREFIX = "QWQ_FEED_CONTENT_EVIDENCE "
 APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX = (
     "QWQ_APP_CONTENT_PAGE_SCREENSHOT_READY "
 )
+APP_UAT_PAGE_EVIDENCE_READY_PREFIX = "QWQ_APP_UAT_PAGE_EVIDENCE_READY "
+APP_UAT_CASE_EVIDENCE_PREFIX = "QWQ_APP_UAT_CASE_EVIDENCE "
+RELEASE_SAMPLE_MATRIX_TARGET = (
+    "test/user_acceptance/journeys/release_bound_sample_matrix/"
+    "release_bound_sample_matrix__user_acceptance_test.dart"
+)
 CONTROLLED_EDGE_FAULT_TARGET = (
     "test/user_acceptance/service/content_service/content/feed_delivery_page/"
     "feed_controlled_edge_recovery__user_acceptance_test.dart"
@@ -291,6 +297,8 @@ def android_release_uat_package(
 IOS_DEVICE_EVIDENCE_TOKENS = (
     FEED_CONTENT_EVIDENCE_PREFIX,
     APP_CONTENT_PAGE_SCREENSHOT_READY_PREFIX,
+    APP_UAT_PAGE_EVIDENCE_READY_PREFIX,
+    APP_UAT_CASE_EVIDENCE_PREFIX,
     VIDEO_PLAYBACK_EVIDENCE_MARKER,
     CONTROLLED_EDGE_RESTORE_REQUEST_PREFIX,
     CONTROLLED_EDGE_FAULT_EVIDENCE_PREFIX,

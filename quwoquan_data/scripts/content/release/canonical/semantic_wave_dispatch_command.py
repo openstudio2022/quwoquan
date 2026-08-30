@@ -22,11 +22,16 @@ def task_execute_argv(
             "GATE_BLOCK DATA.EXECUTION.AUTHORITY_INVALID: semantic wave "
             "dispatch requires governed_calibration authority"
         )
+    # Canonical order is positional for the command prefix only. Every optional
+    # option below is appended once in the order declared here; validators parse
+    # option/value tokens and must not assume lineage is the argv suffix.
     argv = [
         "python3",
         "quwoquan_data/scripts/cli.py",
         "task",
         "execute",
+        "--stage",
+        "plan-only",
         "--execution-id",
         execution_id,
         "--family",
@@ -72,18 +77,14 @@ def task_execute_argv(
     ]
     if semantic_receipt_ref:
         argv.extend(("--semantic-preflight-receipt", semantic_receipt_ref))
-    if retry_of:
-        argv[6:6] = ["--retry-of", retry_of]
-        retry_scope_argv = [
-            value
-            for ref in retry_unfinished_refs
-            for value in ("--retry-unfinished-ref", ref)
-        ]
-        argv[8:8] = retry_scope_argv
     for candidate_id in selection["candidateIds"]:
         argv.extend(("--source-pool-candidate-id", str(candidate_id)))
     for name in request.target_names:
         argv.extend(("--target", name))
+    if retry_of:
+        argv.extend(("--retry-of", retry_of))
+        for ref in retry_unfinished_refs:
+            argv.extend(("--retry-unfinished-ref", ref))
     return argv
 
 

@@ -109,6 +109,15 @@
 - 可测试观察面：local_contract 锁定上述顺序、`--no-deps` 破环与公开 command 单轨；真实环境验收绑定同一 candidate 的 package、startup attempt、policy receipt、strict health 和逆序 teardown。
 - 影响能力：[`deliver-deploy-prod-pipeline`](./deliver-deploy-prod-pipeline/spec.md)、[`runtime-config`](./runtime-config/spec.md)、[`runtime-governance`](./runtime-governance/spec.md)
 
+<a id="dec-005"></a>
+### DEC-005 根 Makefile 归 runtime L1 的薄编排边界
+
+- 决策：仓库根 `Makefile` 是由 runtime L1 唯一拥有的构建、测试与门禁薄编排门面；它只转发到各能力的 canonical 入口，不拥有被调用 Feature 的行为、契约或测试，也不得在 L2/L3 重复登记。
+- 理由：仓库级编排是跨能力工程机制；精确根单例归属可消除无 owner，同时避免把任意根文件或被调用能力吸收到 runtime。
+- 被否决方案：把 `Makefile` 分配给某个 L2/L3、扩张通用路径语法以接纳任意根文件、按 recipe 所调用的能力建立多 owner。
+- 失败恢复：仅精确匹配仓库根 `Makefile`；其他根文件继续 fail-closed，重复 L1 声明形成同优先级 typed blocker。
+- 可测试观察面：resolver 证明唯一 runtime L1 owner、无 L2 design ownership、重复声明冲突、`report.json` 仍无 owner，既有具体路径与精确匹配语义不变。
+
 ## 6. 质量与运行约束
 
 - 环境和 rollout stage 是证据维度。任何商用外部能力缺 Gamma Port 对等替身证据、Prod 真实 Adapter 证据、观测或回滚均不能准出。

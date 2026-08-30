@@ -15,8 +15,7 @@ quwoquan_data/schema/
   executionId 或输出路径。
 - 区域范围、discovery、count、execution phase 和 executionId 只通过 CLI 参数进入执行。
 - 实体类型只读 taxonomy/schema；内容结构和语言规则只读 template/prompt。
-- 默认凭证源是仓外且权限为 `0600` 的 `~/.config/quwoquan/cursor_api_key`；
-  `QWQ_CURSOR_API_KEY_FILE` 只允许受控测试或显式替换该位置。
+- 宿主 Cursor/Codex 的账号、key 与模型能力归宿主自身；Data 仓库、工作包、日志与 receipt 不读取或保存它们。
 
 ## 单任务 execution 工作包
 

@@ -342,6 +342,81 @@ class PackageReuseContractTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("package content digest mismatch", detail)
 
+    def test_currentness_timeout_is_classified_and_uses_canonical_budget(self) -> None:
+        self._write()
+        with mock.patch.object(
+            package_reuse,
+            "workspace_snapshot",
+            side_effect=TimeoutError(
+                "deployment input currentness check timed out"
+            ),
+        ) as snapshot:
+            ok, detail = package_reuse.can_reuse_package(
+                "alpha",
+                "alpha-local",
+                purpose="currentness",
+            )
+
+        self.assertFalse(ok)
+        self.assertTrue(
+            detail.startswith(package_reuse.CURRENTNESS_TIMEOUT_DETAIL_PREFIX),
+            detail,
+        )
+        self.assertIn("currentness check timed out", detail)
+        self.assertEqual(package_reuse.CURRENTNESS_TIMEOUT_SECONDS, 120.0)
+        self.assertEqual(
+            snapshot.call_args.kwargs["timeout_seconds"],
+            package_reuse.CURRENTNESS_TIMEOUT_SECONDS,
+        )
+        self.validate_candidate_manifest.reset_mock()
+        expected_snapshot = package_reuse.verify_package_input_capsule(
+            self.candidate_root / package_reuse.PACKAGE_INPUT_CAPSULE_DIRECTORY
+        )
+        with mock.patch.object(
+            package_reuse,
+            "workspace_snapshot",
+            return_value=expected_snapshot,
+        ) as successful_snapshot:
+            ok, detail = package_reuse.can_reuse_package(
+                "alpha",
+                "alpha-local",
+                purpose="currentness",
+            )
+        self.assertTrue(ok, detail)
+        self.assertEqual(
+            successful_snapshot.call_args.kwargs["timeout_seconds"],
+            package_reuse.CURRENTNESS_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(
+            self.validate_candidate_manifest.call_args.kwargs[
+                "currentness_timeout_seconds"
+            ],
+            package_reuse.CURRENTNESS_TIMEOUT_SECONDS,
+        )
+
+    def test_runtime_diagnostic_can_skip_source_capsule_reread(self) -> None:
+        self._write()
+        with mock.patch.object(
+            package_reuse,
+            "verify_package_input_capsule",
+            side_effect=AssertionError("runtime diagnostic must not reread source capsule"),
+        ):
+            ok, detail = package_reuse.can_reuse_package(
+                "alpha",
+                "alpha-local",
+                verify_source_capsule=False,
+            )
+        self.assertTrue(ok, detail)
+
+        ok, detail = package_reuse.can_reuse_package(
+            "alpha",
+            "alpha-local",
+            purpose="currentness",
+            verify_source_capsule=False,
+        )
+        self.assertFalse(ok)
+        self.assertIn("currentness requires source capsule verification", detail)
+
     def test_untracked_closure_input_only_invalidates_currentness(self) -> None:
         self._write()
         untracked = self.root / "quwoquan_service/new_runtime_input.txt"

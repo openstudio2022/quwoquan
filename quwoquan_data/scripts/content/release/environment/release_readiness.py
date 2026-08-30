@@ -19,10 +19,6 @@ from content.release.environment.activation_envelope import (
 from content.release.environment.activation_predecessor import (
     previous_environment_activation_for_release,
 )
-from content.release.environment.app_uat_envelope import (
-    AppUatEnvelopeError,
-    build_app_uat_envelope,
-)
 from content.release.environment.release_readiness_closure import (
     ReleaseReadinessClosureError,
     validate_readiness_closure,
@@ -108,7 +104,7 @@ def write_environment_release_readiness(
     previous_environment_readiness_path: Path | None = None,
     readiness_phase: str = "commercial",
 ) -> Path:
-    """Write append-only, release-bound proof for Ops readiness composition."""
+    """Write append-only Data release/import/readback readiness evidence."""
     phase_issue = readiness_phase_issue(readiness_phase)
     if phase_issue is not None:
         raise EnvironmentReleaseReadinessError(phase_issue)
@@ -398,30 +394,6 @@ def write_environment_release_readiness(
             "premium_stream does not expose a release-bound video with a playable media probe"
         )
 
-    video_query_name = (
-        "typed_video" if readiness_phase == "consumer" else "premium_stream"
-    )
-    try:
-        app_uat_envelope = build_app_uat_envelope(
-            release_root=release_root,
-            release_id=release_id,
-            entity_refs=entity_refs,
-            post_refs=post_refs,
-            creator_ids=creator_ids,
-            tag_refs=tag_refs,
-            bindings=bindings,
-            homepage_report=homepage_report,
-            queries_by_name=queries_by_name,
-            video_query_name=video_query_name,
-            verified_playable_video_ids=verified_playable_video_ids,
-            illustrated_article_ids=set(closure["illustratedArticleIds"]),
-            verified_image_work_ids=set(closure["verifiedImageWorkIds"]),
-            release_class=release_class,
-            product_lifecycle_state=product_lifecycle_state,
-        )
-    except AppUatEnvelopeError as exc:
-        raise EnvironmentReleaseReadinessError(str(exc)) from exc
-
     if attestation.get("payloadSha256") != actual_payload_digest:
         raise EnvironmentReleaseReadinessError("attestation payloadSha256 drift")
     if import_report.get("manifestDigest") != actual_payload_digest:
@@ -488,7 +460,6 @@ def write_environment_release_readiness(
             verify_run_id=verify_run_id,
             import_report_ref=content_import_report_ref,
             import_report_digest=file_digest(import_report_path),
-            app_uat_envelope=app_uat_envelope,
             research_isolation=research_isolation,
             research_isolation_verification_ref=(
                 research_isolation_verification_ref
@@ -548,8 +519,6 @@ def write_environment_release_readiness(
         "homepageApiVerificationRef": _relative(homepage_api_verification_path, output_root=output_root, label="homepage API verification"),
         "postApiVerificationRef": _relative(post_api_verification_path, output_root=output_root, label="post API verification"),
         "mediaManifestRef": _relative(media_manifest_path, output_root=output_root, label="media manifest"),
-        "appUatEnvelope": app_uat_envelope,
-        "appUatEnvelopeDigest": document_digest(app_uat_envelope),
         "activationEnvelope": activation_envelope,
         "activationEnvelopeDigest": document_digest(activation_envelope),
         "verifiedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
@@ -557,6 +526,8 @@ def write_environment_release_readiness(
     }
     for field in source_identity_fields:
         document[field] = header[field]
+    if "milestone" in header:
+        document["milestone"] = header["milestone"]
     if research_isolation is not None:
         document["internalSubjectHash"] = research_isolation["subjectHash"]
         document["researchIsolationVerificationRef"] = (

@@ -86,7 +86,7 @@ def register_stage_record_parser(
 ) -> None:
     parser = commands.add_parser(
         "stage-record",
-        help="阶段收尾唯一写入口：create-once 落 receipt 并同步 execution_state",
+        help="阶段收尾唯一写入口：create-once 落 receipt 并重算只读 execution_state 投影",
     )
     parser.add_argument("--execution-id", required=True)
     parser.add_argument("--stage", required=True, choices=RECEIPT_STAGES)

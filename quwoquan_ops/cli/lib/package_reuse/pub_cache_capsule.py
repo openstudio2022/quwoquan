@@ -10,8 +10,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
-from collections.abc import Mapping, Sequence
+import shutil
+import stat
+import subprocess
+import sys
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -20,9 +25,10 @@ from urllib.parse import urlparse
 import yaml
 
 from .dependency_fs import (
+    _directory_fd,
     assert_real_directory,
+    clone_fresh_relative_file,
     read_regular_nofollow,
-    write_fresh_relative_file,
 )
 
 PUB_CACHE_DEPENDENCY_SCHEMA = "stackctl-dart-pub-cache-dependency.v2"
@@ -244,45 +250,265 @@ def _package_files(
     return files, directories
 
 
+def _stable_node_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _read_scanned_file(
+    *,
+    parent_fd: int,
+    name: str,
+    label: str,
+    digest: bool,
+    capture: bool = False,
+) -> tuple[int, int, str | None, bytes | None]:
+    descriptor = os.open(
+        name,
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0),
+        dir_fd=parent_fd,
+    )
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+            raise ValueError(f"App dependency {label} is not a single-link regular file")
+        hasher = hashlib.sha256() if digest else None
+        captured = bytearray() if capture else None
+        size = 0
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if hasher is not None:
+                hasher.update(chunk)
+            if captured is not None:
+                captured.extend(chunk)
+        after = os.fstat(descriptor)
+        if _stable_node_identity(before) != _stable_node_identity(after):
+            raise ValueError(f"App dependency {label} changed during read")
+    finally:
+        os.close(descriptor)
+    mode = 0o555 if before.st_mode & 0o111 else 0o444
+    return (
+        mode,
+        size,
+        _DIGEST_PREFIX + hasher.hexdigest() if hasher is not None else None,
+        bytes(captured) if captured is not None else None,
+    )
+
+
+def _scan_pub_cache_tree(
+    *,
+    cache: Path,
+    packages: Sequence[Mapping[str, str]],
+    admitted_extra: Callable[[str, bool], bool],
+) -> tuple[list[PubCacheFile], set[str]]:
+    """Scan, classify and hash one sealed cache with descriptor-relative IO."""
+
+    package_roots: dict[str, Mapping[str, str]] = {}
+    hash_paths: dict[str, Mapping[str, str]] = {}
+    required_directories = {"hosted", "hosted-hashes"}
+    for package in packages:
+        package_segment = f"{package['name']}-{package['version']}"
+        package_root = f"hosted/{package['host']}/{package_segment}"
+        hash_path = f"hosted-hashes/{package['host']}/{package_segment}.sha256"
+        package_roots[package_root] = package
+        hash_paths[hash_path] = package
+        required_directories.update(
+            {
+                f"hosted/{package['host']}",
+                package_root,
+                f"hosted-hashes/{package['host']}",
+            }
+        )
+
+    files: list[PubCacheFile] = []
+    directories: set[str] = set()
+    payload_counts = {relative: 0 for relative in package_roots}
+
+    def package_for(relative: str) -> tuple[str, Mapping[str, str]] | None:
+        parts = PurePosixPath(relative).parts
+        if len(parts) <= 3 or parts[0] != "hosted":
+            return None
+        package_root = PurePosixPath(*parts[:3]).as_posix()
+        package = package_roots.get(package_root)
+        return (package_root, package) if package is not None else None
+
+    def scan_directory(descriptor: int, relative_parent: PurePosixPath) -> None:
+        before = os.fstat(descriptor)
+        with os.scandir(descriptor) as entries:
+            ordered = sorted(entries, key=lambda item: item.name)
+        for entry in ordered:
+            relative_path = relative_parent / entry.name
+            relative = relative_path.as_posix()
+            metadata = entry.stat(follow_symlinks=False)
+            if stat.S_ISDIR(metadata.st_mode) and not stat.S_ISLNK(metadata.st_mode):
+                locked_package = package_for(relative)
+                expected = (
+                    relative in required_directories or locked_package is not None
+                )
+                if not expected and not admitted_extra(relative, True):
+                    raise ValueError(f"undeclared dependency directory {relative}")
+                child = os.open(
+                    entry.name,
+                    os.O_RDONLY
+                    | getattr(os, "O_DIRECTORY", 0)
+                    | getattr(os, "O_NOFOLLOW", 0)
+                    | getattr(os, "O_CLOEXEC", 0),
+                    dir_fd=descriptor,
+                )
+                try:
+                    if expected:
+                        if locked_package is not None:
+                            suffix = PurePosixPath(relative).relative_to(
+                                PurePosixPath(locked_package[0])
+                            )
+                            if any(
+                                part in _FORBIDDEN_CACHE_SEGMENTS
+                                for part in suffix.parts
+                            ):
+                                raise ValueError(
+                                    "App dependency managed cache contains build output: "
+                                    f"{relative}"
+                                )
+                        directories.add(relative)
+                    scan_directory(child, relative_path)
+                finally:
+                    os.close(child)
+                continue
+
+            if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+                raise ValueError(f"unsafe dependency node {relative}")
+            locked_package = package_for(relative)
+            expected_hash = hash_paths.get(relative)
+            if locked_package is None and expected_hash is None:
+                try:
+                    _read_scanned_file(
+                        parent_fd=descriptor,
+                        name=entry.name,
+                        label=f"sealed cache file {relative}",
+                        digest=False,
+                    )
+                except OSError as error:
+                    raise ValueError(
+                        f"App dependency sealed cache file {relative} "
+                        "is unavailable or linked"
+                    ) from error
+                if not admitted_extra(relative, False):
+                    raise ValueError(f"undeclared dependency file {relative}")
+                continue
+
+            if locked_package is not None:
+                package_root, _package = locked_package
+                suffix = PurePosixPath(relative).relative_to(
+                    PurePosixPath(package_root)
+                )
+                if any(part in _FORBIDDEN_CACHE_SEGMENTS for part in suffix.parts):
+                    raise ValueError(
+                        "App dependency managed cache contains build output: "
+                        f"{relative}"
+                    )
+            try:
+                mode, size, sha256, content = _read_scanned_file(
+                    parent_fd=descriptor,
+                    name=entry.name,
+                    label=f"sealed cache file {relative}",
+                    digest=True,
+                    capture=expected_hash is not None,
+                )
+            except OSError as error:
+                raise ValueError(
+                    f"App dependency sealed cache file {relative} "
+                    "is unavailable or linked"
+                ) from error
+            if expected_hash is not None:
+                try:
+                    archive_sha = (content or b"").decode(
+                        "ascii", errors="strict"
+                    ).strip()
+                except UnicodeError as error:
+                    raise ValueError(
+                        f"App dependency archive hash drifted: {relative}"
+                    ) from error
+                if archive_sha != expected_hash["archiveSha256"]:
+                    raise ValueError(
+                        f"App dependency archive hash drifted: {relative}"
+                    )
+            else:
+                payload_counts[locked_package[0]] += 1
+            files.append(
+                PubCacheFile(
+                    relative=relative,
+                    source=cache / Path(*relative_path.parts),
+                    mode=mode,
+                    size=size,
+                    sha256=str(sha256),
+                )
+            )
+        after = os.fstat(descriptor)
+        if _stable_node_identity(before) != _stable_node_identity(after):
+            label = relative_parent.as_posix() if relative_parent.parts else "."
+            raise ValueError(
+                f"App dependency cache directory changed during scan: {label}"
+            )
+
+    root_fd = _directory_fd(cache, label="cache root")
+    try:
+        scan_directory(root_fd, PurePosixPath())
+    finally:
+        os.close(root_fd)
+    missing_directories = required_directories - directories
+    missing_hashes = set(hash_paths) - {item.relative for item in files}
+    empty_packages = {
+        relative for relative, count in payload_counts.items() if count == 0
+    }
+    if missing_directories or missing_hashes or empty_packages:
+        raise ValueError("App dependency locked cache closure is incomplete")
+    files.sort(key=lambda item: item.relative)
+    return files, directories
+
+
 def build_pub_cache_snapshot(
     *,
     lock_path: Path,
     cache_root: Path,
     reject_unlocked: bool = False,
+    admitted_extra: Callable[[str, bool], bool] | None = None,
 ) -> PubCacheSnapshot:
     """Hash the exact locked hosted package trees from one private cache."""
 
+    if reject_unlocked and admitted_extra is not None:
+        raise ValueError("App dependency unlocked-node policies conflict")
     lock_encoded, lock_digest, packages = _lock_model(lock_path)
     del lock_encoded
     cache = cache_root.expanduser().absolute()
     assert_real_directory(cache, label="cache root")
-    files: list[PubCacheFile] = []
-    directories: set[str] = set()
-    for package in packages:
-        package_files, package_directories = _package_files(cache, package)
-        files.extend(package_files)
-        directories.update(package_directories)
-    files.sort(key=lambda item: item.relative)
-    if len({item.relative for item in files}) != len(files):
-        raise ValueError("App dependency cache paths are duplicated")
-    if reject_unlocked:
-        expected_paths = {item.relative for item in files}
-        expected_directories = set(directories)
-        actual_paths: set[str] = set()
-        actual_directories: set[str] = set()
-        for path in cache.rglob("*"):
-            relative = path.relative_to(cache).as_posix()
-            if path.is_dir() and not path.is_symlink():
-                assert_real_directory(path, label=f"sealed cache directory {relative}")
-                actual_directories.add(relative)
-                continue
-            read_regular_nofollow(path, label=f"sealed cache file {relative}")
-            actual_paths.add(relative)
-        if (
-            actual_paths != expected_paths
-            or actual_directories != expected_directories
-        ):
-            raise ValueError("App dependency sealed cache contains unlocked bytes")
+    if reject_unlocked or admitted_extra is not None:
+        files, directories = _scan_pub_cache_tree(
+            cache=cache,
+            packages=packages,
+            admitted_extra=admitted_extra or (lambda _relative, _directory: False),
+        )
+    else:
+        files = []
+        directories = set()
+        for package in packages:
+            package_files, package_directories = _package_files(cache, package)
+            files.extend(package_files)
+            directories.update(package_directories)
+        files.sort(key=lambda item: item.relative)
+        if len({item.relative for item in files}) != len(files):
+            raise ValueError("App dependency cache paths are duplicated")
     entry_values = [item.as_dict() for item in files]
     directory_values = sorted(directories)
     tree_digest = _digest_bytes(
@@ -336,22 +562,107 @@ def _copy_snapshot_file(
     *,
     writable: bool,
 ) -> None:
-    content, normalized_mode = read_regular_nofollow(
-        source.source,
-        label=f"snapshot file {source.relative}",
-    )
-    if (
-        normalized_mode != source.mode
-        or len(content) != source.size
-        or _digest_bytes(content) != source.sha256
-    ):
-        raise ValueError("App dependency snapshot changed during copy")
-    write_fresh_relative_file(
+    clone_fresh_relative_file(
         root=destination_root,
         relative=source.relative,
-        content=content,
+        source=source.source,
         mode=(0o755 if source.mode & 0o111 else 0o644) if writable else source.mode,
+        expected_size=source.size,
     )
+
+
+def _normalize_writable_clone_tree(
+    *,
+    destination: Path,
+    snapshot: PubCacheSnapshot,
+) -> None:
+    expected_files = {item.relative: item for item in snapshot.files}
+    expected_directories = set(snapshot.directories)
+    actual_files: set[str] = set()
+    actual_directories: set[str] = set()
+    root_metadata = destination.lstat()
+    if not stat.S_ISDIR(root_metadata.st_mode) or stat.S_ISLNK(root_metadata.st_mode):
+        raise ValueError("App dependency cloned cache root is unsafe")
+    destination.chmod(0o700, follow_symlinks=False)
+    for parent, directory_names, file_names in os.walk(
+        destination,
+        topdown=True,
+        followlinks=False,
+    ):
+        parent_path = Path(parent)
+        for name in directory_names:
+            path = parent_path / name
+            relative = path.relative_to(destination).as_posix()
+            metadata = path.lstat()
+            if not stat.S_ISDIR(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+                raise ValueError(
+                    f"App dependency cloned cache directory is unsafe: {relative}"
+                )
+            if relative not in expected_directories:
+                raise ValueError(
+                    f"App dependency cloned cache contains extra directory: {relative}"
+                )
+            path.chmod(0o700, follow_symlinks=False)
+            actual_directories.add(relative)
+        for name in file_names:
+            path = parent_path / name
+            relative = path.relative_to(destination).as_posix()
+            metadata = path.lstat()
+            expected = expected_files.get(relative)
+            if (
+                expected is None
+                or not stat.S_ISREG(metadata.st_mode)
+                or stat.S_ISLNK(metadata.st_mode)
+                or metadata.st_nlink != 1
+                or metadata.st_size != expected.size
+            ):
+                raise ValueError(
+                    f"App dependency cloned cache file is unsafe: {relative}"
+                )
+            path.chmod(
+                0o755 if expected.mode & 0o111 else 0o644,
+                follow_symlinks=False,
+            )
+            actual_files.add(relative)
+    if actual_files != set(expected_files) or actual_directories != expected_directories:
+        raise ValueError("App dependency cloned cache closure drifted")
+
+
+def _clone_writable_snapshot_tree_darwin(
+    *,
+    snapshot: PubCacheSnapshot,
+    destination: Path,
+) -> None:
+    source = snapshot.cache_root.expanduser().absolute()
+    assert_real_directory(source, label="writable clone source root")
+    destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    assert_real_directory(
+        destination.parent, label="writable clone destination parent"
+    )
+    command = ["/bin/cp", "-cRP", str(source), str(destination)]
+    try:
+        completed = subprocess.run(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            detail = completed.stderr.strip()
+            raise OSError(
+                "App dependency writable cache clone failed"
+                + (f": {detail}" if detail else "")
+            )
+        _normalize_writable_clone_tree(
+            destination=destination,
+            snapshot=snapshot,
+        )
+    except BaseException:
+        if destination.exists() and not destination.is_symlink():
+            shutil.rmtree(destination)
+        raise
 
 
 def copy_snapshot_tree_with_lock(
@@ -365,21 +676,32 @@ def copy_snapshot_tree_with_lock(
 
     if destination.exists() or destination.is_symlink():
         raise ValueError("App dependency snapshot destination must be fresh")
-    destination.mkdir(parents=True, mode=0o700)
-    for relative in sorted(
-        snapshot.directories,
-        key=lambda value: (len(PurePosixPath(value).parts), value),
-    ):
-        target = destination / Path(*PurePosixPath(relative).parts)
-        target.mkdir(parents=True, exist_ok=True, mode=0o700)
-        assert_real_directory(target, label=f"snapshot directory {relative}")
-    for item in snapshot.files:
-        _copy_snapshot_file(item, destination, writable=writable)
-    rebuilt = build_pub_cache_snapshot(
-        lock_path=lock_path,
-        cache_root=destination,
-        reject_unlocked=True,
-    )
+    if writable and sys.platform == "darwin":
+        _clone_writable_snapshot_tree_darwin(
+            snapshot=snapshot,
+            destination=destination,
+        )
+    else:
+        destination.mkdir(parents=True, mode=0o700)
+        for relative in sorted(
+            snapshot.directories,
+            key=lambda value: (len(PurePosixPath(value).parts), value),
+        ):
+            target = destination / Path(*PurePosixPath(relative).parts)
+            target.mkdir(parents=True, exist_ok=True, mode=0o700)
+            assert_real_directory(target, label=f"snapshot directory {relative}")
+        for item in snapshot.files:
+            _copy_snapshot_file(item, destination, writable=writable)
+    try:
+        rebuilt = build_pub_cache_snapshot(
+            lock_path=lock_path,
+            cache_root=destination,
+            reject_unlocked=True,
+        )
+    except (OSError, TypeError, ValueError) as error:
+        raise ValueError(
+            f"App dependency snapshot copy CAS drifted: {error}"
+        ) from error
     if rebuilt.manifest != snapshot.manifest:
         raise ValueError("App dependency snapshot copy CAS drifted")
     if not writable:

@@ -19,7 +19,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 APP_DIR = Path(__file__).resolve().parents[3]
 REPO_ROOT = APP_DIR.parent
 FACADE_DIR = APP_DIR / "scripts/tools/flutter_facade"
@@ -39,6 +38,7 @@ def _load_facade_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
 
 SUBPROCESS_TIMEOUT_SECONDS = 30
 
@@ -63,7 +63,7 @@ def _write_fake_real_flutter(
         "#!/usr/bin/env bash\n"
         "set -euo pipefail\n"
         'if [[ "$*" == "--version --machine" ]]; then\n'
-        "  printf '%s' '{\"frameworkVersion\":\"3.47.0\",\"frameworkRevision\":\"fixture-revision\"}'\n"
+        '  printf \'%s\' \'{"frameworkVersion":"3.47.0","frameworkRevision":"fixture-revision"}\'\n'
         "  exit 0\n"
         "fi\n"
         f"printf '%s\\n' \"$*\" >> {json.dumps(str(capture_path))}\n"
@@ -75,13 +75,66 @@ def _write_fake_real_flutter(
     )
 
 
+def _write_probe_environment_spy(
+    root: Path,
+    *,
+    capture_path: Path,
+) -> Path:
+    """模拟 Flutter tool state 写入，并捕获版本探针实际收到的环境。"""
+    return _write_executable(
+        root / "probe-spy-sdk/bin/flutter",
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        'if [[ "$*" == "--version --machine" ]]; then\n'
+        f"  {json.dumps(sys.executable)} - {json.dumps(str(capture_path))} <<'PY'\n"
+        "import json\n"
+        "import os\n"
+        "import stat\n"
+        "import sys\n"
+        "from pathlib import Path\n"
+        "home = os.environ.get('HOME')\n"
+        "config_home = os.environ.get('XDG_CONFIG_HOME')\n"
+        "cache_home = os.environ.get('XDG_CACHE_HOME')\n"
+        "state_root = Path(config_home) if config_home else "
+        "Path(home or '.') / '.config'\n"
+        "tool_state = state_root / 'flutter' / 'tool_state'\n"
+        "tool_state.parent.mkdir(parents=True, exist_ok=True)\n"
+        "tool_state.write_text('{}', encoding='utf-8')\n"
+        "payload = {\n"
+        "    'cwd': os.getcwd(),\n"
+        "    'HOME': home,\n"
+        "    'XDG_CONFIG_HOME': config_home,\n"
+        "    'XDG_CACHE_HOME': cache_home,\n"
+        "    'PATH': os.environ.get('PATH'),\n"
+        "    'outputRoot': os.environ.get('QWQ_OUTPUT_ROOT'),\n"
+        "    'secret': os.environ.get('QWQ_PROBE_SECRET_DO_NOT_LEAK'),\n"
+        "    'modes': {\n"
+        "        key: stat.S_IMODE(Path(value).stat().st_mode)\n"
+        "        for key, value in {\n"
+        "            'HOME': home,\n"
+        "            'XDG_CONFIG_HOME': config_home,\n"
+        "            'XDG_CACHE_HOME': cache_home,\n"
+        "        }.items()\n"
+        "        if value\n"
+        "    },\n"
+        "}\n"
+        "Path(sys.argv[1]).write_text(json.dumps(payload), encoding='utf-8')\n"
+        "print(json.dumps({\n"
+        "    'frameworkVersion': '3.47.0',\n"
+        "    'frameworkRevision': 'fixture-revision',\n"
+        "}))\n"
+        "PY\n"
+        "  exit 0\n"
+        "fi\n"
+        "exit 64\n",
+    )
+
+
 def _install_fake_workspace(root: Path) -> dict[str, Path]:
     """把真实 facade 复制进假 App 树，run.sh 替换为捕获替身。"""
     app_root = root / "quwoquan_app"
     (app_root).mkdir(parents=True)
-    (app_root / "pubspec.yaml").write_text(
-        "name: quwoquan_app\n", encoding="utf-8"
-    )
+    (app_root / "pubspec.yaml").write_text("name: quwoquan_app\n", encoding="utf-8")
     (app_root / ".flutter-version").write_text("3.47.0\n", encoding="utf-8")
     capture = root / "launcher-capture.json"
     _write_executable(
@@ -116,6 +169,7 @@ def _clean_environment(**overrides: str) -> dict[str, str]:
         "QWQ_REAL_FLUTTER",
         "QWQ_APP_LAUNCH_PROVENANCE",
         "QWQ_ENVIRONMENT",
+        "QWQ_OUTPUT_ROOT",
         "FLUTTER_ROOT",
     ):
         environment.pop(key, None)
@@ -200,6 +254,173 @@ class FlutterFacadeCommandContractTest(unittest.TestCase):
             "pub get --offline",
             "非 run 子命令必须把原始 argv 原样透传真实 SDK",
         )
+
+    def test_version_probe_uses_explicit_output_root_outside_workspace(
+        self,
+    ) -> None:
+        workspace = _install_fake_workspace(self.root)
+        external_temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(external_temporary.cleanup)
+        explicit_output_root = (
+            Path(external_temporary.name) / "canonical-output"
+        ).resolve()
+        capture = self.root / "explicit-output-probe-environment.json"
+        real_flutter = _write_probe_environment_spy(
+            self.root,
+            capture_path=capture,
+        )
+        environment = _clean_environment(
+            QWQ_REAL_FLUTTER=str(real_flutter),
+            QWQ_OUTPUT_ROOT=str(explicit_output_root),
+            PATH="/usr/bin:/bin",
+            QWQ_PROBE_SECRET_DO_NOT_LEAK="probe-secret-sentinel",
+        )
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(
+                    workspace["app_root"]
+                    / "scripts/tools/flutter_facade/resolve_real_flutter.py"
+                ),
+                "--format",
+                "json",
+            ],
+            cwd=self.root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        managed_root = (
+            explicit_output_root / "env/repo/local/flutter-facade-probe"
+        )
+        probe_environment = json.loads(capture.read_text(encoding="utf-8"))
+        self.assertEqual(
+            Path(probe_environment["HOME"]),
+            managed_root / "home",
+        )
+        self.assertEqual(
+            Path(probe_environment["XDG_CONFIG_HOME"]),
+            managed_root / "config",
+        )
+        self.assertEqual(
+            Path(probe_environment["XDG_CACHE_HOME"]),
+            managed_root / "cache",
+        )
+        self.assertFalse(
+            (self.root / ".qwq_output").exists(),
+            "显式外部 output root 不得在 source projection 创建 derived output",
+        )
+        self.assertIsNone(
+            probe_environment["outputRoot"],
+            "QWQ_OUTPUT_ROOT 只定位 facade probe，不得传给 Flutter child",
+        )
+        self.assertIsNone(probe_environment["secret"])
+        terminal_output = result.stdout + result.stderr
+        self.assertNotIn("probe-secret-sentinel", terminal_output)
+        self.assertNotIn(str(explicit_output_root), terminal_output)
+
+    def test_version_probe_rejects_relative_output_root_without_path_disclosure(
+        self,
+    ) -> None:
+        workspace = _install_fake_workspace(self.root)
+        capture = self.root / "relative-output-probe-environment.json"
+        real_flutter = _write_probe_environment_spy(
+            self.root,
+            capture_path=capture,
+        )
+        sensitive_relative_path = "relative-probe-secret-sentinel/output"
+        environment = _clean_environment(
+            QWQ_REAL_FLUTTER=str(real_flutter),
+            QWQ_OUTPUT_ROOT=sensitive_relative_path,
+            PATH="/usr/bin:/bin",
+        )
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(
+                    workspace["app_root"]
+                    / "scripts/tools/flutter_facade/resolve_real_flutter.py"
+                ),
+                "--format",
+                "json",
+            ],
+            cwd=self.root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("GATE_BLOCK", result.stderr)
+        self.assertIn("QWQ_OUTPUT_ROOT", result.stderr)
+        self.assertFalse(capture.exists(), "非法 output root 必须在启动 Flutter 前阻断")
+        self.assertFalse((self.root / ".qwq_output").exists())
+        self.assertNotIn(sensitive_relative_path, result.stdout + result.stderr)
+
+    def test_version_probe_seals_home_xdg_and_arbitrary_secret_environment(
+        self,
+    ) -> None:
+        workspace = _install_fake_workspace(self.root)
+        capture = self.root / "probe-environment.json"
+        real_flutter = _write_probe_environment_spy(
+            self.root,
+            capture_path=capture,
+        )
+        environment = _clean_environment(
+            QWQ_REAL_FLUTTER=str(real_flutter),
+            PATH="/usr/bin:/bin",
+            QWQ_PROBE_SECRET_DO_NOT_LEAK="probe-secret-sentinel",
+        )
+        for key in ("HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
+            environment.pop(key, None)
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(
+                    workspace["app_root"]
+                    / "scripts/tools/flutter_facade/resolve_real_flutter.py"
+                ),
+                "--format",
+                "json",
+            ],
+            cwd=self.root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(
+            (self.root / ".config").exists(),
+            "HOME/XDG 缺席时版本探针不得在 repo root 写 .config/flutter/tool_state",
+        )
+        probe_environment = json.loads(capture.read_text(encoding="utf-8"))
+        managed_root = (
+            self.root / ".qwq_output/env/repo/local/flutter-facade-probe"
+        ).resolve()
+        for key in ("HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
+            value = Path(probe_environment[key]).resolve()
+            self.assertTrue(value.is_relative_to(managed_root), (key, value))
+            self.assertEqual(probe_environment["modes"][key], 0o700)
+        self.assertEqual(probe_environment["PATH"], "/usr/bin:/bin")
+        self.assertIsNone(
+            probe_environment["secret"],
+            "版本探针必须采用 allowlist env，不得继承任意 secret",
+        )
+        terminal_output = result.stdout + result.stderr
+        self.assertNotIn("probe-secret-sentinel", terminal_output)
+        self.assertNotIn(str(managed_root), terminal_output)
 
     def test_facade_passthrough_propagates_real_sdk_exit_code(self) -> None:
         capture = self.root / "sdk-capture.log"
@@ -345,9 +566,7 @@ class FlutterFacadeCommandContractTest(unittest.TestCase):
     def test_launch_surface_values_bind_to_metadata_closed_enum(self) -> None:
         import yaml
 
-        manifest = yaml.safe_load(
-            APP_ARTIFACT_MANIFEST.read_text(encoding="utf-8")
-        )
+        manifest = yaml.safe_load(APP_ARTIFACT_MANIFEST.read_text(encoding="utf-8"))
         provenances = set(manifest["launch_provenances"])
         module = _load_facade_module()
         self.assertIn(
@@ -356,7 +575,9 @@ class FlutterFacadeCommandContractTest(unittest.TestCase):
             "facade 的 launch surface 必须属于 metadata launch_provenances 闭集",
         )
 
-    def test_canonical_launcher_rejects_launch_surface_outside_closed_enum(self) -> None:
+    def test_canonical_launcher_rejects_launch_surface_outside_closed_enum(
+        self,
+    ) -> None:
         environment = dict(os.environ)
         environment["QWQ_APP_LAUNCH_PROVENANCE"] = "icon_cold_launch_forged"
         result = subprocess.run(
@@ -383,9 +604,48 @@ class FlutterFacadeCommandContractTest(unittest.TestCase):
         )
         settings.write_text(original, encoding="utf-8")
 
-        def run_activation(*args: str) -> subprocess.CompletedProcess[str]:
+        sdk_capture = self.root / "activation-sdk.log"
+        real_flutter = _write_fake_real_flutter(
+            self.root / "activation", capture_path=sdk_capture
+        )
+        fake_pod = self.root / "activation-pod/bin/pod"
+        fake_pod.parent.mkdir(parents=True)
+        fake_pod.write_text(
+            "#!/bin/sh\n"
+            'SELF="$(cd "$(dirname "$0")" && pwd -P)/$(basename "$0")"\n'
+            'if [ "$1" = "--version" ]; then\n'
+            "  printf '%s\\n' '1.16.2'\n"
+            "  exit 0\n"
+            "fi\n"
+            'if [ "$1" = "env" ]; then\n'
+            "  printf '### Stack\\nCocoaPods : 1.16.2\\nRuby : 3.3.0\\n"
+            "RubyGems : 3.5.0\\n### Plugins\\n"
+            "cocoapods-deintegrate : 1.0.5\\nExecutable Path: %s\\n' "
+            '"$SELF"\n'
+            "  exit 0\n"
+            "fi\n"
+            "exit 64\n",
+            encoding="utf-8",
+        )
+        fake_pod.chmod(0o755)
+        activation_environment = _clean_environment(
+            QWQ_REAL_FLUTTER=str(real_flutter),
+            PATH=f"{fake_pod.parent}:/usr/bin:/bin",
+        )
+
+        def run_activation(
+            *args: str,
+            environment: dict[str, str] | None = None,
+        ) -> subprocess.CompletedProcess[str]:
             return subprocess.run(
-                [sys.executable, str(activate_script), "--settings", str(settings), *args],
+                [
+                    sys.executable,
+                    str(activate_script),
+                    "--settings",
+                    str(settings),
+                    *args,
+                ],
+                env=environment or activation_environment,
                 capture_output=True,
                 text=True,
                 timeout=SUBPROCESS_TIMEOUT_SECONDS,
@@ -399,17 +659,28 @@ class FlutterFacadeCommandContractTest(unittest.TestCase):
         self.assertIn("用户已有注释必须保留", merged)
         self.assertIn("dart.analysisExcludedFolders", merged)
         self.assertIn(
-            "flutter_facade/bin:${env:PATH}",
+            "flutter_facade/bin",
             merged,
-            "激活只允许 prepend facade bin 并保留 ${env:PATH}，不得替换全局 PATH",
+            "激活必须 prepend facade bin",
         )
+        self.assertIn(
+            "${env:PATH}",
+            merged,
+            "激活必须保留 ${env:PATH}，不得替换全局 PATH",
+        )
+        self.assertIn('"FLUTTER_ROOT"', merged)
+        self.assertIn('"QWQ_REAL_FLUTTER_VERSION": "3.47.0"', merged)
+        self.assertIn('"QWQ_REAL_FLUTTER_COMMAND_RESOLUTION_DIGEST": "sha256:', merged)
 
         second = run_activation()
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertEqual(second.stdout.strip(), "unchanged")
         self.assertEqual(settings.read_text(encoding="utf-8"), merged)
 
-        rollback = run_activation("--deactivate")
+        rollback = run_activation(
+            "--deactivate",
+            environment=_clean_environment(PATH="/usr/bin:/bin"),
+        )
         self.assertEqual(rollback.returncode, 0, rollback.stderr)
         self.assertEqual(rollback.stdout.strip().splitlines()[0], "deactivated")
         self.assertEqual(
@@ -421,6 +692,10 @@ class FlutterFacadeCommandContractTest(unittest.TestCase):
     def test_workspace_activation_refuses_foreign_terminal_env_key(self) -> None:
         activate_script = FACADE_DIR / "activate_cursor_workspace.py"
         settings = self.root / "settings.json"
+        sdk_capture = self.root / "foreign-key-sdk.log"
+        real_flutter = _write_fake_real_flutter(
+            self.root / "foreign-key", capture_path=sdk_capture
+        )
         settings.write_text(
             "{\n"
             '    "terminal.integrated.env.osx": {"PATH": "/custom/bin:${env:PATH}"}\n'
@@ -429,6 +704,10 @@ class FlutterFacadeCommandContractTest(unittest.TestCase):
         )
         result = subprocess.run(
             [sys.executable, str(activate_script), "--settings", str(settings)],
+            env=_clean_environment(
+                QWQ_REAL_FLUTTER=str(real_flutter),
+                PATH="/usr/bin:/bin",
+            ),
             capture_output=True,
             text=True,
             timeout=SUBPROCESS_TIMEOUT_SECONDS,

@@ -27,6 +27,7 @@ from quwoquan_data.tests.local_contract.release.test_environment_release_readine
     SOURCE_REVISION,
     VERIFY_RUN_ID,
     _convert_fixture_to_consumer,
+    _convert_fixture_to_research,
     _fixture,
     _image_probe,
     _resign_readiness,
@@ -61,26 +62,8 @@ def test_environment_release_readiness__binds_full_payload_and_feed_ids__local_c
     assert receipt["guestLogin"]["pageId"] == "user.login.anonymous"
     premium = next(row for row in receipt["feedQueries"] if row["name"] == "premium_stream")
     assert premium["matchedPostIds"] == ["post-video-a"]
-    assert receipt["appUatEnvelope"] == {
-        "releaseId": RELEASE_ID,
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
-        "homepageId": "homepage-a",
-        "homepageTitle": "测试实体",
-        "articleWorkId": "post-article-a",
-        "articleTitle": "测试文章",
-        "imageWorkId": "post-image-a",
-        "imageTitle": "测试图片",
-        "videoWorkId": "post-video-a",
-        "videoTitle": "测试视频",
-        "creatorName": "测试创作者",
-        "creatorUserHandle": "test_creator",
-        "creatorPersonaId": "author-a",
-        "creatorAvatarAssetId": "creator-avatar-a",
-        "tagLabel": "旅行",
-        "videoAttribution": "测试视频来源",
-    }
-    assert receipt["appUatEnvelopeDigest"].startswith("sha256:")
+    assert "appUatEnvelope" not in receipt
+    assert "appUatEnvelopeDigest" not in receipt
     activation = receipt["activationEnvelope"]
     assert activation == {
         "schema": "quwoquan_data.environment_activation_envelope",
@@ -103,9 +86,129 @@ def test_environment_release_readiness__binds_full_payload_and_feed_ids__local_c
             "sha256:"
             + hashlib.sha256((paths["import"] / "import.json").read_bytes()).hexdigest()
         ),
-        "appUatEnvelopeDigest": receipt["appUatEnvelopeDigest"],
     }
     assert receipt["activationEnvelopeDigest"].startswith("sha256:")
+
+
+def test_environment_release_readiness__milestone_identity_is_projected_from_header__local_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = _fixture(tmp_path)
+    subject_hash = _convert_fixture_to_research(paths)
+    identity = {
+        "sourceRevision": SOURCE_REVISION,
+        "sourceDigest": SOURCE_DIGEST.digest,
+        "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+        "executionIds": ["20260728--travel-content--test--pilot-002"],
+    }
+    header_path = paths["release"] / "payload/release.json"
+    header = json.loads(header_path.read_text(encoding="utf-8"))
+    for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest"):
+        header.pop(field)
+    header.update(
+        {
+            "sourceIdentities": [identity],
+            "sourceIdentitySetDigest": "sha256:" + "9" * 64,
+            "milestone": "M100",
+            "selectionScope": "milestone",
+            "releaseMode": "research",
+            "milestoneTargets": {
+                "homepage": 100,
+                "article": 100,
+                "image": 100,
+                "video": 10,
+            },
+            "poolDigest": "sha256:" + "8" * 64,
+            "counts": {"article": 1, "image": 1, "video": 1, "total": 3},
+            "buildResult": "completed",
+        }
+    )
+    write_json(header_path, header)
+    attestation_path = paths["release"] / "attestations/release.json"
+    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+    for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest"):
+        attestation.pop(field)
+    attestation["sourceIdentities"] = [identity]
+    attestation["sourceIdentitySetDigest"] = "sha256:" + "9" * 64
+    write_json(attestation_path, attestation)
+    _resign_release(paths)
+
+    isolation_path = paths["verify"] / "research-isolation-verification.json"
+    write_json(isolation_path, {"frozen": True})
+    isolation = {
+        "subjectHash": subject_hash,
+        "policyRef": "quwoquan_ops/environments/gamma/runtime.yaml",
+        "policySha256": "sha256:" + "7" * 64,
+        "positiveReadback": {
+            "releaseId": RELEASE_ID,
+            "manifestDigest": payload_digest(paths["release"]),
+            "subjectHash": subject_hash,
+            "entityRefs": ["entity:景区:测试实体"],
+            "postIds": sorted(row[1] for row in POSTS),
+            "mediaAssetIds": [
+                "article-body-a",
+                "article-cover-a",
+                "image-a",
+                "video-a",
+                "video-cover-a",
+            ],
+        },
+    }
+    monkeypatch.setattr(
+        readiness_subject,
+        "load_research_isolation_verification",
+        lambda *_args, **_kwargs: isolation,
+    )
+    monkeypatch.setattr(
+        readiness_subject,
+        "validate_release_header",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        readiness_subject,
+        "previous_environment_activation_for_release",
+        lambda **_kwargs: {
+            "environment": "beta",
+            "readinessRef": (
+                f"env/beta/runs/data-release/{RELEASE_ID}/verify-beta/"
+                "release-readiness.json"
+            ),
+            "readinessDigest": "sha256:" + "6" * 64,
+            "activationEnvelopeDigest": "sha256:" + "5" * 64,
+        },
+    )
+
+    receipt = json.loads(
+        _write(
+            tmp_path,
+            readiness_phase="research",
+            research_isolation_path=isolation_path,
+        ).read_text(encoding="utf-8")
+    )
+
+    assert receipt["milestone"] == "M100"
+    assert receipt["activationEnvelope"]["milestone"] == "M100"
+    receipt["milestone"] = "M1000"
+    _resign_readiness(receipt)
+    assert any(
+        "milestone drifts from immutable release closure" in issue
+        for issue in _semantic_issues(tmp_path, paths, receipt)
+    )
+
+
+def test_environment_release_readiness__semantic_verifier_rejects_invented_milestone__local_contract(
+    tmp_path: Path,
+) -> None:
+    paths = _fixture(tmp_path)
+    receipt = json.loads(_write(tmp_path).read_text(encoding="utf-8"))
+    receipt["milestone"] = "M100"
+    _resign_readiness(receipt)
+
+    assert any(
+        "milestone is absent from immutable release header" in issue
+        for issue in _semantic_issues(tmp_path, paths, receipt)
+    )
 
 
 def test_environment_release_readiness__selects_canonical_source_identity_mode__local_contract() -> None:
@@ -133,7 +236,7 @@ def test_environment_release_readiness__selects_canonical_source_identity_mode__
     ) == ("sourceRevision", "sourceDigest", "entityCatalogDigest")
 
 
-def test_environment_release_readiness__consumer_projects_typed_video_app_uat_envelope__local_contract(
+def test_environment_release_readiness__consumer_keeps_data_readback_without_app_uat_authority__local_contract(
     tmp_path: Path,
 ) -> None:
     paths = _fixture(tmp_path)
@@ -143,11 +246,8 @@ def test_environment_release_readiness__consumer_projects_typed_video_app_uat_en
     receipt = json.loads(report.read_text(encoding="utf-8"))
 
     assert receipt["readinessPhase"] == "consumer"
-    # consumer 同样必须证明 premium_stream release-bound 可播视频非空。
     assert receipt["counts"]["premiumPlayableVideos"] == 1
-    assert {
-        row["name"] for row in receipt["feedQueries"]
-    } == {
+    assert {row["name"] for row in receipt["feedQueries"]} == {
         "discovery_work",
         "typed_article",
         "typed_image",
@@ -155,64 +255,8 @@ def test_environment_release_readiness__consumer_projects_typed_video_app_uat_en
         "homepage_recommend",
         "premium_stream",
     }
-    assert receipt["appUatEnvelope"] == {
-        "releaseId": RELEASE_ID,
-        "releaseClass": "commercial",
-        "productLifecycleState": "commercial",
-        "homepageId": "homepage-a",
-        "homepageTitle": "测试实体",
-        "articleWorkId": "post-article-a",
-        "articleTitle": "测试文章",
-        "imageWorkId": "post-image-a",
-        "imageTitle": "测试图片",
-        "videoWorkId": "post-video-a",
-        "videoTitle": "测试视频",
-        "creatorName": "测试创作者",
-        "creatorUserHandle": "test_creator",
-        "creatorPersonaId": "author-a",
-        "creatorAvatarAssetId": "creator-avatar-a",
-        "tagLabel": "旅行",
-        "videoAttribution": "测试视频来源",
-    }
-
-
-def test_environment_release_readiness__consumer_app_uat_tamper_cannot_hide_behind_checksum__local_contract(
-    tmp_path: Path,
-) -> None:
-    paths = _fixture(tmp_path)
-    _convert_fixture_to_consumer(paths)
-    readiness = json.loads(
-        _write(tmp_path, readiness_phase="consumer").read_text(encoding="utf-8")
-    )
-    app_uat_envelope = readiness["appUatEnvelope"]
-    assert isinstance(app_uat_envelope, dict)
-    app_uat_envelope["videoWorkId"] = "foreign-video"
-    _resign_readiness(readiness)
-
-    issues = _semantic_issues(tmp_path, paths, readiness)
-
-    assert any(
-        "appUatEnvelope drifts from immutable release closure" in issue
-        for issue in issues
-    )
-    assert all("verificationChecksum drift" not in issue for issue in issues)
-
-
-def test_environment_release_readiness__app_uat_envelope_requires_release_object_title__local_contract(
-    tmp_path: Path,
-) -> None:
-    paths = _fixture(tmp_path)
-    manifest_path = (
-        paths["release"]
-        / "payload/objects/posts/article/test-a/manifest.json"
-    )
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["publishTitle"] = ""
-    write_json(manifest_path, manifest)
-    _resign_release(paths)
-
-    with pytest.raises(EnvironmentReleaseReadinessError, match="release article title"):
-        _write(tmp_path)
+    assert "appUatEnvelope" not in receipt
+    assert "appUatEnvelopeDigest" not in receipt
 
 
 def test_environment_release_readiness__premium_must_bind_release_post__local_contract(

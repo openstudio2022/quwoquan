@@ -21,6 +21,14 @@ from quwoquan_ops.cli.lib.package_reuse.dependency_projection_contract import (
     environment_identity,
 )
 
+UNSAFE_PATROL_PATHS = (
+    "/sdk/flutter/bin::/usr/bin",
+    "relative/flutter/bin:/usr/bin",
+    "/sdk/./flutter/bin:/usr/bin",
+    "/sdk/../flutter/bin:/usr/bin",
+    "/sdk//flutter/bin:/usr/bin",
+)
+
 
 def _digest(marker: str) -> str:
     return "sha256:" + marker * 64
@@ -32,6 +40,7 @@ def _fixture(
     *,
     components: set[str] | None = None,
     post_error: Exception | None = None,
+    historical_path: str | None = None,
 ) -> tuple[dict[str, object], dict[str, str], list[dict[str, Any]]]:
     root = tmp_path / "source-projection"
     root.mkdir()
@@ -58,6 +67,8 @@ def _fixture(
         path=str(root / "toolchain/flutter/bin") + ":/usr/bin:/bin",
         dependency_environment=patrol_values,
     )
+    if historical_path is not None:
+        command_envelope["path"] = historical_path
     monkeypatch.setattr(
         envelope_contract,
         "resolved_flutter_identity",
@@ -127,6 +138,100 @@ class _Stackctl:
         **_kwargs: object,
     ) -> tuple[str, dict[str, Any]]:
         raise AssertionError("message runner is not selected")
+
+
+@pytest.mark.parametrize("unsafe_path", UNSAFE_PATROL_PATHS)
+def test_patrol_envelope_construction_rejects_unsafe_path(
+    tmp_path: Path,
+    unsafe_path: str,
+) -> None:
+    with pytest.raises(ValueError, match="Patrol sealed PATH"):
+        envelope_contract.patrol_command_envelope(
+            flutter_identity={
+                "executable": str(tmp_path / "flutter/bin/flutter"),
+                "flutterVersion": "3.47.0",
+                "commandResolutionDigest": _digest("f"),
+            },
+            path=unsafe_path,
+        )
+
+
+@pytest.mark.parametrize("unsafe_path", UNSAFE_PATROL_PATHS)
+def test_patrol_envelope_builder_rejects_unsafe_path_before_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+    unsafe_path: str,
+) -> None:
+    resolver_calls: list[dict[str, str]] = []
+
+    def resolve(environment: dict[str, str]) -> dict[str, str]:
+        resolver_calls.append(environment)
+        raise AssertionError("unsafe PATH reached Flutter command resolution")
+
+    monkeypatch.setattr(envelope_contract, "resolved_flutter_identity", resolve)
+
+    with pytest.raises(ValueError, match="Patrol sealed PATH"):
+        envelope_contract.build_patrol_command_envelope({"PATH": unsafe_path})
+
+    assert resolver_calls == []
+
+
+def test_patrol_envelope_builder_resolves_and_seals_the_same_absolute_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sealed_path = "/sdk/flutter/bin:/usr/bin:/bin"
+    resolver_calls: list[dict[str, str]] = []
+
+    def resolve(environment: dict[str, str]) -> dict[str, str]:
+        resolver_calls.append(environment)
+        return {
+            "executable": "/sdk/flutter/bin/flutter",
+            "flutterVersion": "3.47.0",
+            "commandResolutionDigest": _digest("f"),
+        }
+
+    monkeypatch.setattr(envelope_contract, "resolved_flutter_identity", resolve)
+
+    envelope = envelope_contract.build_patrol_command_envelope(
+        {
+            "PATH": sealed_path,
+            "PUB_CACHE": "/cache/pub",
+        }
+    )
+
+    assert len(resolver_calls) == 1
+    assert resolver_calls[0]["PATH"] == sealed_path
+    assert envelope["path"] == sealed_path
+    assert envelope["dependencyEnvironment"] == {"PUB_CACHE": "/cache/pub"}
+
+
+@pytest.mark.parametrize("unsafe_path", UNSAFE_PATROL_PATHS)
+def test_historical_patrol_envelope_rejects_unsafe_path_before_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    unsafe_path: str,
+) -> None:
+    projection, launch_binding, calls = _fixture(
+        tmp_path,
+        monkeypatch,
+        historical_path=unsafe_path,
+    )
+    stackctl = _Stackctl()
+
+    with pytest.raises(subject.PatrolDependencyFailure) as caught:
+        subject.execute_patrol_with_dependency_cas(
+            stackctl=stackctl,
+            profile_command={"argv": ["python3", "runner.py"]},
+            target_name="alpha-local",
+            actor_context=None,
+            message_home=False,
+            launch_projection=projection,
+            launch_binding=launch_binding,
+            platform="android",
+        )
+
+    assert caught.value.as_dict()["stage"] == "expectation"
+    assert calls == []
+    assert stackctl.command == {}
 
 
 def test_patrol_runs_from_candidate_root_with_exact_overlay_and_adjacent_cas(

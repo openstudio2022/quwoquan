@@ -19,9 +19,11 @@ DELIVERY_GATE = ROOT / ".github" / "workflows" / "delivery-gate.yml"
 
 
 class CommitGateFastPathTest(unittest.TestCase):
-    def test_pre_commit_uses_commit_gate_not_make_gate(self) -> None:
+    def test_pre_commit_consumes_fresh_staged_scope_receipt_only(self) -> None:
         source = PRE_COMMIT.read_text(encoding="utf-8")
-        self.assertIn("commit_gate.sh", source)
+        self.assertIn("local_readiness.py verify --level scope --staged", source)
+        self.assertIn("local_readiness.py scope --staged", source)
+        self.assertNotIn("commit_gate.sh", source)
         self.assertNotRegex(source, r"(?m)^\s*make gate\b")
         self.assertNotIn("gate_repo.sh --scope", source)
 
@@ -140,6 +142,8 @@ class CommitGateFastPathTest(unittest.TestCase):
     def test_commit_gate_script_has_fingerprint_and_budgets(self) -> None:
         source = COMMIT_GATE.read_text(encoding="utf-8")
         self.assertIn("fingerprint", source.lower())
+        self.assertIn("local_readiness.py plan --level fast --staged", source)
+        self.assertNotIn("git status --porcelain | shasum", source)
         self.assertIn("HARD_BUDGET", source)
         self.assertIn("SOFT_BUDGET", source)
         self.assertIn("entrypoint_script_paths", source)

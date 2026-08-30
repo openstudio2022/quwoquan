@@ -16,7 +16,7 @@ func seedPublishEntityWithCoordinates(t *testing.T, root, ref, coordinatesJSON s
 		coordinates = `"coordinates":` + coordinatesJSON + `,`
 	}
 	writeFile(t, filepath.Join(dir, "_entity.json"),
-		`{"label":"九寨沟","domain":"地点","type":"景区","sourceTaskId":"旅行/试点",`+
+		`{"label":"九寨沟","domain":"地点","type":"景区",`+
 			coordinates+
 			`"tagRefs":["Entity/地点/景区/5A景区","Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县"],`+
 			`"geoTagRef":"Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县",`+

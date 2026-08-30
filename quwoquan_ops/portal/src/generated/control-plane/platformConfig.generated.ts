@@ -4587,6 +4587,66 @@ export const platformConfig = {
       "sensitive": false
     },
     {
+      "key": "sys.platform-ops-service.human_authority.github_mappings",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.github_webhook_secret",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": true
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.role_mappings",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.signing_key_id",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.signing_private_key_file",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": true
+    },
+    {
       "key": "sys.platform-ops-service.postgres.dsn",
       "type": "string",
       "owner": "",

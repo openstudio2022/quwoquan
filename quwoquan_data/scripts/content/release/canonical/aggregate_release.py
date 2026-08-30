@@ -57,6 +57,8 @@ def build_pool_release(
     all_publishable: bool = False,
     milestone: str | None = None,
     release_class: str,
+    sampling_authority_artifact_root: Path | None = None,
+    sampling_authority_binding: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build one immutable pool release under one explicit selection scope."""
 
@@ -76,6 +78,8 @@ def build_pool_release(
             milestone=milestone,
             release_class=release_class,
             pool_wide=True,
+            sampling_authority_artifact_root=sampling_authority_artifact_root,
+            sampling_authority_binding=sampling_authority_binding,
         )
 
 

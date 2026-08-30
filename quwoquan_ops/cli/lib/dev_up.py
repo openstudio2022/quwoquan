@@ -439,6 +439,11 @@ def build_start_app_command(
     app_mode: str = "content-live",
     launch_receipt: Path | None = None,
     launch_log_ref: Path | None = None,
+    artifact_manifest: Path | None = None,
+    launcher_handoff: Path | None = None,
+    candidate_digest: str = "",
+    artifact_manifest_digest: str = "",
+    launcher_handoff_digest: str = "",
 ) -> list[str]:
     del topology
     command = [
@@ -463,6 +468,32 @@ def build_start_app_command(
         command.extend(["--launch-receipt", str(launch_receipt)])
     if launch_log_ref is not None:
         command.extend(["--launch-log-ref", str(launch_log_ref)])
+    release_values = (
+        artifact_manifest,
+        launcher_handoff,
+        candidate_digest,
+        artifact_manifest_digest,
+        launcher_handoff_digest,
+    )
+    if any(value is not None and value != "" for value in release_values):
+        if artifact_manifest is None or launcher_handoff is None or not all(
+            (candidate_digest, artifact_manifest_digest, launcher_handoff_digest)
+        ):
+            raise ValueError("prod-sim candidate launch bundle is incomplete")
+        command.extend(
+            [
+                "--artifact-manifest",
+                str(artifact_manifest),
+                "--launcher-handoff",
+                str(launcher_handoff),
+                "--candidate-digest",
+                candidate_digest,
+                "--artifact-manifest-digest",
+                artifact_manifest_digest,
+                "--launcher-handoff-digest",
+                launcher_handoff_digest,
+            ]
+        )
     return command
 
 
@@ -474,6 +505,11 @@ def launch_app(
     rollout_mode: str = "",
     log_path: Path | None = None,
     startup_wait_seconds: float = 900,
+    artifact_manifest: Path | None = None,
+    launcher_handoff: Path | None = None,
+    candidate_digest: str = "",
+    artifact_manifest_digest: str = "",
+    launcher_handoff_digest: str = "",
 ) -> subprocess.Popen[str]:
     from quwoquan_ops.cli.lib.app_launch_attempt import wait_for_app_launch_attempt
 
@@ -503,6 +539,11 @@ def launch_app(
         and bool(device.get("emulator", False))
     ):
         trust_platform = "android-emulator"
+    if target_name == "prod-sim" and device_kind != "android_emulator":
+        raise RuntimeError(
+            "APP.LAUNCH.platform_unsupported: prod-sim exact Release supports only "
+            "an Android emulator"
+        )
     if trust_platform and target_name in {
         "alpha-local",
         "beta-local",
@@ -526,9 +567,14 @@ def launch_app(
         device_id,
         topology=manifest,
         rollout_mode=rollout_mode,
-        app_mode="content-live",
+        app_mode=("release-artifact" if target_name == "prod-sim" else "content-live"),
         launch_receipt=launch_receipt,
         launch_log_ref=launch_log,
+        artifact_manifest=artifact_manifest,
+        launcher_handoff=launcher_handoff,
+        candidate_digest=candidate_digest,
+        artifact_manifest_digest=artifact_manifest_digest,
+        launcher_handoff_digest=launcher_handoff_digest,
     )
     launch_log.parent.mkdir(parents=True, exist_ok=True)
     log_handle = launch_log.open("a", encoding="utf-8")
@@ -545,22 +591,75 @@ def launch_app(
         )
     finally:
         log_handle.close()
+    if target_name == "prod-sim":
+        deadline = time.monotonic() + startup_wait_seconds
+        while not launch_receipt.exists():
+            return_code = process.poll()
+            if return_code is not None:
+                raise RuntimeError(
+                    "APP.LAUNCH.receipt_absent: prod-sim launcher exited before "
+                    f"creating its receipt (exit={return_code})"
+                )
+            if time.monotonic() >= deadline:
+                process.terminate()
+                raise RuntimeError(
+                    f"APP.LAUNCH.receipt_absent: {launch_receipt}"
+                )
+            time.sleep(0.05)
+
+    def process_watchdog() -> None:
+        return_code = process.poll()
+        if return_code is not None:
+            raise RuntimeError(
+                "APP.LAUNCH.launch_failed: App launcher exited before a terminal "
+                f"receipt (exit={return_code})"
+            )
+
     try:
         attempt = wait_for_app_launch_attempt(
             launch_receipt,
             timeout_seconds=startup_wait_seconds,
+            poll_seconds=0.05 if target_name == "prod-sim" else 0.2,
+            watchdog=process_watchdog if target_name == "prod-sim" else None,
+            watchdog_interval_seconds=0.05,
         )
-    except TimeoutError as error:
-        process.terminate()
+    except (RuntimeError, TimeoutError) as error:
+        if process.poll() is None:
+            process.terminate()
         raise RuntimeError(str(error)) from error
-    if attempt["status"] == "failed":
+    if attempt["status"] != "launched":
         output = launch_log.read_text(encoding="utf-8") if launch_log.exists() else ""
+        blocker = str(attempt.get("firstBlocker") or "APP.LAUNCH.launch_failed")
         raise RuntimeError(
-            f"{attempt['firstBlocker']}: App launch failed before launched "
-            f"(configurationState={attempt['configurationState']}, "
+            f"{blocker}: App launch did not reach launched "
+            f"(status={attempt['status']}, "
+            f"configurationState={attempt['configurationState']}, "
             f"runtimeHealthStatus={attempt['runtimeHealthStatus']}):\n"
             + summarize_output(output)
         )
+    if target_name == "prod-sim":
+        expected_identity = {
+            "candidateDigest": candidate_digest,
+            "artifactManifestDigest": artifact_manifest_digest,
+            "launcherHandoffDigest": launcher_handoff_digest,
+            "runtimeHealthStatus": "healthy",
+            "configurationState": "complete",
+        }
+        mismatches = [
+            field
+            for field, expected in expected_identity.items()
+            if attempt.get(field) != expected
+        ]
+        terminal_fields = (
+            "startupTerminalAttemptId",
+            "startupTerminalEvidenceDigest",
+            "startupTerminalEvidenceRef",
+        )
+        if mismatches or any(not str(attempt.get(field) or "") for field in terminal_fields):
+            raise RuntimeError(
+                "APP.LAUNCH.receipt_invalid: prod-sim receipt is not candidate-bound "
+                f"and healthy; mismatched={sorted(mismatches)}"
+            )
     return process
 
 

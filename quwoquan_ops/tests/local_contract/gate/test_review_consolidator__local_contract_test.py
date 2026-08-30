@@ -1,0 +1,319 @@
+"""Deterministic Review consolidation contract.
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-007.t2
+"""
+
+from __future__ import annotations
+
+import copy
+import json
+import shutil
+import sys
+import unittest
+import uuid
+from pathlib import Path
+from unittest import mock
+
+import yaml
+
+ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
+
+import evidence_runner  # noqa: E402
+import review_consolidator  # noqa: E402
+import review_dispatch  # noqa: E402
+import handoff_consumer  # noqa: E402
+from lib.agent_governance_contract import canonical_bytes_sha256, contract_schema_version  # noqa: E402
+from lib.feature_tree.commands import _context_manifest, discover_nodes  # noqa: E402
+from lib.feature_tree.ownership import resolve_target_details  # noqa: E402
+
+REGISTRY_PATH = ROOT / ".agents/skills/review/references/registry.yaml"
+CASE_ROOT = ROOT / ".qwq_output/env/repo/local/review-consolidator-tests"
+
+
+class ReviewConsolidatorTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.case = CASE_ROOT / uuid.uuid4().hex
+        self.case.mkdir(parents=True)
+        self.artifact = self.case / "asset.txt"
+        self.artifact.write_text("stable\n", encoding="utf-8")
+        self.registry = copy.deepcopy(
+            yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
+        )
+        self.registry["evidence"] = {
+            "fixture": {
+                "command": "printf fixture",
+                "segment": "POST",
+                "required": True,
+                "covers": [],
+            }
+        }
+        target = (
+            "specs/feature-tree/runtime/development-workflow-governance/"
+            "agent-skill-review-context-organization/spec.md"
+        )
+        nodes = discover_nodes()
+        manifest = _context_manifest(
+            target, resolve_target_details(target, nodes), nodes
+        )
+        manifest["evidence_fingerprint"] = review_dispatch.embedded_fingerprint_binding(
+            review_dispatch.build_feature_context_fingerprint(manifest, repo_root=ROOT)
+        )
+        self.manifest_path = self.case / "owner-manifest.json"
+        self.manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+        with mock.patch.object(
+            review_dispatch, "_checklist_evidence", return_value=["fixture"]
+        ):
+            self.plan = review_dispatch.build_plan(
+                self.registry,
+                "dev",
+                "POST",
+                None,
+                [self.artifact.relative_to(ROOT).as_posix()],
+                context_manifest=manifest,
+                context_manifest_ref=self.manifest_path.relative_to(ROOT).as_posix(),
+            )
+            self.evidence = evidence_runner.run_plan(
+                self.plan, registry=self.registry, cwd=ROOT, run_id="run-1"
+            )
+        self.evidence_path = self.case / "evidence.json"
+        self.evidence_path.write_text(json.dumps(self.evidence), encoding="utf-8")
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.case, ignore_errors=True)
+
+    def _result(self, role: str, *, status: str = "completed", findings=None):
+        evidence = handoff_consumer.named_evidence_identity(
+            self.evidence_path.relative_to(ROOT).as_posix(), self.evidence
+        )
+        result = {
+            "schema_version": contract_schema_version("review_result"),
+            "role": role,
+            "status": status,
+            "plan_fingerprint_ref": evidence["plan_fingerprint_ref"],
+            "plan_fingerprint_digest": evidence["plan_fingerprint_digest"],
+            "evidence_receipt_ref": evidence["receipt_ref"],
+            "evidence_receipt_canonical_bytes_sha256": evidence["canonical_bytes_sha256"],
+            "evidence_run_id": evidence["run_id"],
+            "evidence_generation_id": evidence["generation_id"],
+            "execution_fingerprint_ref": evidence["execution_fingerprint_ref"],
+            "execution_fingerprint_digest": evidence["execution_fingerprint_digest"],
+            "result_fingerprint_ref": evidence["result_fingerprint_ref"],
+            "result_fingerprint_digest": evidence["result_fingerprint_digest"],
+            "started_at": evidence["finished_at"],
+            "finished_at": evidence["finished_at"],
+            "findings": findings or [],
+        }
+        path = self.case / f"review-{role}-{uuid.uuid4().hex}.json"
+        path.write_text(json.dumps(result), encoding="utf-8")
+        return path.relative_to(ROOT).as_posix(), result
+
+    def _consolidate(self, results):
+        with mock.patch.object(
+            review_dispatch, "_checklist_evidence", return_value=["fixture"]
+        ):
+            return review_consolidator.consolidate(
+                self.plan,
+                self.evidence,
+                results,
+                evidence_receipt_ref=self.evidence_path.relative_to(ROOT).as_posix(),
+                registry=self.registry,
+            )
+
+    @staticmethod
+    def _finding(
+        finding_id: str,
+        severity: str,
+        *,
+        summary: str = "finding",
+        owner: str = "developer",
+    ) -> dict[str, str]:
+        return {
+            "id": finding_id,
+            "owner": owner,
+            "severity": severity,
+            "path": "README.md",
+            "summary": summary,
+        }
+
+    def _set_optional_reviewer(self, role: str = "optional") -> None:
+        optional = copy.deepcopy(self.plan["reviewers"][0])
+        optional.update({"role": role, "required": False})
+        self.plan["reviewers"] = [optional]
+
+    def test_completed_result_is_pass_and_findings_deduplicate(self) -> None:
+        finding = {
+            "id": "F-001",
+            "owner": "developer",
+            "severity": "advisory",
+            "path": "README.md",
+            "summary": "same",
+        }
+        result = self._consolidate(
+            [self._result("developer", findings=[finding, dict(finding)])]
+        )
+        self.assertEqual("PASS", result["terminal"]["status"])
+        self.assertEqual(["F-001"], [item["id"] for item in result["findings"]])
+
+    def test_required_incomplete_is_gate_block(self) -> None:
+        result = self._consolidate([])
+        self.assertEqual("GATE_BLOCK", result["terminal"]["status"])
+        self.assertEqual(
+            ["REVIEW.REQUIRED_REVIEWER_INCOMPLETE"],
+            result["terminal"]["codes"],
+        )
+
+    def test_optional_incomplete_is_pr_warn(self) -> None:
+        self._set_optional_reviewer()
+        result = self._consolidate([])
+        self.assertEqual("PR_WARN", result["terminal"]["status"])
+        self.assertEqual(
+            ["REVIEW.OPTIONAL_REVIEWER_INCOMPLETE"],
+            result["terminal"]["codes"],
+        )
+
+    def test_completed_required_gate_block_finding_blocks(self) -> None:
+        result = self._consolidate(
+            [
+                self._result(
+                    "developer",
+                    findings=[self._finding("F-BLOCK-REQUIRED", "GATE_BLOCK")],
+                )
+            ]
+        )
+        self.assertEqual(
+            {"status": "GATE_BLOCK", "codes": []}, result["terminal"]
+        )
+
+    def test_completed_optional_gate_block_finding_blocks(self) -> None:
+        self._set_optional_reviewer()
+        result = self._consolidate(
+            [
+                self._result(
+                    "optional",
+                    findings=[self._finding("F-BLOCK-OPTIONAL", "GATE_BLOCK")],
+                )
+            ]
+        )
+        self.assertEqual("GATE_BLOCK", result["terminal"]["status"])
+
+    def test_pr_warn_finding_warns(self) -> None:
+        result = self._consolidate(
+            [
+                self._result(
+                    "developer",
+                    findings=[self._finding("F-WARN", "PR_WARN")],
+                )
+            ]
+        )
+        self.assertEqual("PR_WARN", result["terminal"]["status"])
+
+    def test_advisory_only_findings_pass(self) -> None:
+        result = self._consolidate(
+            [
+                self._result(
+                    "developer",
+                    findings=[self._finding("F-ADVISORY", "advisory")],
+                )
+            ]
+        )
+        self.assertEqual("PASS", result["terminal"]["status"])
+
+    def test_conflicting_duplicate_finding_ids_are_rejected(self) -> None:
+        findings = [
+            self._finding("F-CONFLICT", "PR_WARN", summary="first"),
+            self._finding("F-CONFLICT", "PR_WARN", summary="second"),
+        ]
+        with self.assertRaisesRegex(ValueError, "finding id 冲突"):
+            self._consolidate([self._result("developer", findings=findings)])
+
+    def test_unknown_finding_severity_is_rejected(self) -> None:
+        finding = self._finding("F-UNKNOWN", "UNKNOWN")
+        with self.assertRaisesRegex(ValueError, "severity 非法"):
+            self._consolidate([self._result("developer", findings=[finding])])
+
+    def test_malformed_finding_is_rejected(self) -> None:
+        finding = self._finding("", "GATE_BLOCK")
+        with self.assertRaisesRegex(ValueError, "必须为非空字符串"):
+            self._consolidate([self._result("developer", findings=[finding])])
+
+    def test_consolidation_exact_shape_remains_consumer_compatible(self) -> None:
+        result = self._consolidate([self._result("developer")])
+        contract = review_consolidator.contract_section("review_consolidation")
+        self.assertEqual(
+            [
+                "malformed_unknown_stale_or_required_incomplete",
+                "gate_block_finding",
+                "optional_incomplete_or_pr_warn_finding",
+                "advisory_or_pass",
+            ],
+            contract["terminal_precedence"],
+        )
+        self.assertEqual(
+            {
+                "identity_field": "id",
+                "exact_duplicate": "retain_once",
+                "conflict": "reject",
+            },
+            contract["finding_deduplication"],
+        )
+        self.assertEqual(set(contract["required_fields"]), set(result))
+        self.assertEqual({"status", "codes"}, set(result["terminal"]))
+        self.assertEqual("developer", result["reviewer_results"][0]["role"])
+        self.assertEqual(
+            self.evidence["run_id"],
+            result["reviewer_results"][0]["evidence_run_id"],
+        )
+
+
+    def test_result_from_evidence_run_one_rejected_for_run_two(self) -> None:
+        old_result = self._result("developer")
+        with mock.patch.object(
+            review_dispatch, "_checklist_evidence", return_value=["fixture"]
+        ):
+            second = evidence_runner.run_plan(
+                self.plan, registry=self.registry, cwd=ROOT, run_id="run-2"
+            )
+        second_path = self.case / "evidence-run-2.json"
+        second_path.write_text(json.dumps(second), encoding="utf-8")
+        self.evidence = second
+        self.evidence_path = second_path
+        with self.assertRaisesRegex(ValueError, "run_id|generation|receipt ref|canonical"):
+            self._consolidate([old_result])
+
+    def test_result_missing_or_predating_evidence_is_rejected(self) -> None:
+        ref, result = self._result("developer")
+        result.pop("evidence_run_id")
+        (ROOT / ref).write_text(json.dumps(result), encoding="utf-8")
+        with self.assertRaises(ValueError):
+            self._consolidate([(ref, result)])
+
+        ref, result = self._result("developer")
+        result["started_at"] = "2000-01-01T00:00:00+00:00"
+        (ROOT / ref).write_text(json.dumps(result), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "pre-evidence"):
+            self._consolidate([(ref, result)])
+
+    def test_result_ref_replacement_and_fingerprint_drift_are_rejected(self) -> None:
+        ref, result = self._result("developer")
+        for field in (
+            "evidence_receipt_canonical_bytes_sha256",
+            "execution_fingerprint_digest",
+            "result_fingerprint_digest",
+        ):
+            drifted = copy.deepcopy(result)
+            drifted[field] = "sha256:" + "0" * 64
+            (ROOT / ref).write_text(json.dumps(drifted), encoding="utf-8")
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self._consolidate([(ref, drifted)])
+
+    def test_stale_reviewer_result_is_rejected(self) -> None:
+        ref, result = self._result("developer")
+        result["result_fingerprint_digest"] = "sha256:" + "0" * 64
+        (ROOT / ref).write_text(json.dumps(result), encoding="utf-8")
+        with self.assertRaises(ValueError):
+            self._consolidate([(ref, result)])
+
+
+if __name__ == "__main__":
+    sys.exit(0 if unittest.main(exit=False).result.wasSuccessful() else 1)

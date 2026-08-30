@@ -40,6 +40,10 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    # provider 已通过 Compose health 门后，仍可能在开发机拥塞窗口出现一次 TCP
+    # connect/ping 超时。仅对非零退出做有界编排重试；配置错误等永久故障在 5 次后
+    # 保持退出，且不会把正常停止或 one-shot 语义伪装成可恢复。
+    restart: "on-failure:5"
     ports:
       - "${QWQ_COMPOSE_RTC_PORT:-19350}:18083"
     volumes:

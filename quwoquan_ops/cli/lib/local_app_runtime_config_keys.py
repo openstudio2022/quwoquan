@@ -5,14 +5,13 @@ from __future__ import annotations
 import base64
 import json
 import os
-from pathlib import Path
 import subprocess
 import tempfile
+from pathlib import Path
 
 from .app_runtime_config_signing import SigningMaterial, validate_signing_material
-from .local_integration_service_mtls import _openssl_bin
+from .openssl3_resolver import OpenSSL3Executable, resolve_openssl3
 from .output_paths import deployment_target_path
-
 
 ROLE = "app-runtime-config"
 LOCAL_AUTHORITY_PROFILE = "nonprod"
@@ -27,6 +26,7 @@ def prepare_local_app_runtime_config_signing(repo_root: Path) -> SigningMaterial
     material instead of selecting an environment or target through this API.
     """
 
+    openssl = resolve_openssl3()
     key_dir = deployment_target_path(
         LOCAL_AUTHORITY_TARGET,
         "secrets",
@@ -39,7 +39,7 @@ def prepare_local_app_runtime_config_signing(repo_root: Path) -> SigningMaterial
     keyring_path = key_dir / "trusted_public_keys.json"
     exists = (private_path.exists(), keyring_path.exists())
     if exists == (False, False):
-        _issue_keypair(key_dir, private_path, keyring_path)
+        _issue_keypair(key_dir, private_path, keyring_path, openssl=openssl)
         exists = (private_path.exists(), keyring_path.exists())
     if exists != (True, True):
         raise ValueError(
@@ -57,7 +57,7 @@ def prepare_local_app_runtime_config_signing(repo_root: Path) -> SigningMaterial
         raise ValueError("App runtime local trusted keyring must contain one key")
     key_id = next(iter(keyring))
     signing = SigningMaterial(key_id, private_path, keyring_path)
-    validate_signing_material(repo_root, signing)
+    validate_signing_material(repo_root, signing, openssl=openssl)
     return signing
 
 
@@ -65,16 +65,17 @@ def _issue_keypair(
     key_dir: Path,
     private_path: Path,
     keyring_path: Path,
+    *,
+    openssl: OpenSSL3Executable | None = None,
 ) -> None:
-    openssl = _openssl_bin()
+    selected = openssl or resolve_openssl3()
     with tempfile.TemporaryDirectory(dir=key_dir) as temporary:
         staging = Path(temporary)
         next_private = staging / "signing.pem"
         public_der = staging / "public.der"
         commands = (
-            [openssl, "genpkey", "-algorithm", "ED25519", "-out", str(next_private)],
-            [
-                openssl,
+            ("genpkey", "-algorithm", "ED25519", "-out", str(next_private)),
+            (
                 "pkey",
                 "-in",
                 str(next_private),
@@ -83,11 +84,11 @@ def _issue_keypair(
                 "DER",
                 "-out",
                 str(public_der),
-            ],
+            ),
         )
-        for command in commands:
+        for arguments in commands:
             result = subprocess.run(
-                command,
+                selected.argv(*arguments),
                 text=True,
                 capture_output=True,
                 check=False,

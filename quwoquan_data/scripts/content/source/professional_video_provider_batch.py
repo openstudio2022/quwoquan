@@ -1,6 +1,7 @@
 """Failure-isolated provider candidate batches for professional videos."""
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,7 +9,6 @@ from typing import Any
 
 from core.paths import SOURCE_ACQUISITION_ROOT
 
-from content.execution.agent.outcome import AgentRunOutcome
 from content.source.professional_commons_video_input_evidence import (
     CommonsVideoInputError,
     digest,
@@ -106,9 +106,30 @@ class CommonsVideoBatchBlocked(CommonsVideoInputError):
         codes = ",".join(
             sorted({str(row.get("failureCode") or "") for row in self.outcomes})
         )
+        pending = [
+            row for row in self.outcomes
+            if row.get("failureCode") == "DATA.SOURCE.HOST_REVIEW_PENDING"
+        ]
+        next_step = (
+            "; nextAction=record_host_source_review_result pending="
+            + json.dumps(
+                [
+                    {
+                        "assetId": row.get("assetId"),
+                        "requestRef": row.get("requestRef"),
+                        "reentryRef": row.get("reentryRef"),
+                    }
+                    for row in pending
+                ],
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            if pending
+            else ""
+        )
         super().__init__(
             "DATA.SOURCE.VIDEO_BATCH_NO_SUCCESS",
-            f"no discovered video candidate was admitted; exclusions={codes}",
+            f"no discovered video candidate was admitted; exclusions={codes}{next_step}",
         )
 
 
@@ -116,7 +137,6 @@ class CommonsVideoBatchBlocked(CommonsVideoInputError):
 class ProviderVideoBatchDependencies:
     load_handoff: Callable[[Path], Mapping[str, Any]]
     file_sha256: Callable[[Path], str]
-    source_runner: Callable[[str], AgentRunOutcome]
     candidate_token: Callable[..., str]
     prepare_candidate: Callable[..., tuple[Path, dict[str, Any]]]
     acquire_videos: Callable[..., tuple[dict[str, Any], Path]]
@@ -197,8 +217,18 @@ def _candidate_exclusion(
     if not isinstance(code, str) or not code:
         code = "DATA.SOURCE.CANDIDATE_EXCLUDED"
     detail = str(error).strip() or f"{type(error).__name__} excluded candidate"
+    pending_fields = (
+        {
+            "requestRef": str(getattr(error, "request_ref", "")),
+            "nextAction": str(getattr(error, "next_action", "")),
+            "reentryRef": str(getattr(error, "reentry_ref", "")),
+        }
+        if getattr(error, "code", "") == "DATA.SOURCE.HOST_REVIEW_PENDING"
+        else {}
+    )
     return {
         **dict(prepared_outcome),
+        **pending_fields,
         "assetId": _candidate_asset_id(
             candidate,
             index=index,
@@ -237,7 +267,6 @@ def acquire_provider_sourced_videos(
     handoff_ref: Path,
     output_root: Path | None,
     candidate_limit: int,
-    runner: Callable[[str], AgentRunOutcome] | None,
     discovery: Callable[..., list[dict[str, Any]]],
     profile: VideoSourceProfile,
     dependencies: ProviderVideoBatchDependencies,
@@ -274,7 +303,6 @@ def acquire_provider_sourced_videos(
             f"{profile.platform} returned no admissible public video "
             f"for entity={entity_id}",
         )
-    reviewer = runner or dependencies.source_runner
     outcomes: list[dict[str, Any]] = []
     for index, candidate in enumerate(candidates):
         prepared_outcome: dict[str, Any] = {}
@@ -286,7 +314,6 @@ def acquire_provider_sourced_videos(
                 root=root,
                 source_identity=source_identity,
                 source_review_identity=source_review_identity,
-                runner=reviewer,
                 profile=profile,
             )
             receipt, receipt_path = dependencies.acquire_videos(

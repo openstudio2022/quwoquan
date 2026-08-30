@@ -25,6 +25,42 @@ def issues_for(content: str, *, kind: str = "L3 Story") -> list[str]:
     return review.issues
 
 
+def issue_facts(issues: list[str]) -> list[tuple[str, str]]:
+    assert all(isinstance(issue, reviewer.Issue) for issue in issues)
+    return [(issue.rule_id, str(issue)) for issue in issues]
+
+
+def open_item_issues(
+    tmp_path: Path,
+    *,
+    impact_or_value: str,
+    item_type: str = "capability_gap",
+) -> list[str]:
+    spec = tmp_path / "domain" / "capability" / "story" / "spec.md"
+    spec.parent.mkdir(parents=True, exist_ok=True)
+    spec.write_text(
+        "## 7. 开放事项\n\n"
+        "### OPEN-001 待关闭事项\n\n"
+        f"- 类型：`{item_type}`\n"
+        "- 优先级：`P1`\n"
+        "- 准出影响：`track`\n"
+        f"- 影响或价值：{impact_or_value}\n"
+        "- 完成判定：`GWT-001` 具备直接证据。\n"
+        "- 依赖：无。\n",
+        encoding="utf-8",
+    )
+    node = SimpleNamespace(
+        spec=spec,
+        rel="domain/capability/story",
+        level=3,
+    )
+    review = reviewer.Review(path=spec.as_posix(), kind="L3 Story")
+
+    reviewer.validate_open_items(review, spec.read_text(encoding="utf-8"), node)
+
+    return review.issues
+
+
 def test_explicit_html_anchor_is_not_a_template_placeholder() -> None:
     assert issues_for('<a id="gwt-001"></a>') == []
 
@@ -161,24 +197,58 @@ def test_semantically_duplicate_open_items_are_blocked(tmp_path: Path) -> None:
     assert review.issues == ["OPEN-002 与 OPEN-001 是同一未完成事项的重复登记"]
 
 
-def test_capability_gap_requires_explicit_missing_state(tmp_path: Path) -> None:
-    spec = tmp_path / "spec.md"
-    spec.write_text(
-        "## 7. 开放事项\n\n"
-        "### OPEN-001 目标态冒充缺口\n\n"
-        "- 类型：`capability_gap`\n"
-        "- 优先级：`P1`\n"
-        "- 准出影响：`track`\n"
-        "- 影响或价值：测试全部通过。\n"
-        "- 完成判定：`GWT-001` 有真实 `spec_ref`。\n",
-        encoding="utf-8",
+def test_capability_gap_accepts_explicit_missing_semantics_after_context(
+    tmp_path: Path,
+) -> None:
+    impacts = (
+        "领域 owner 已建立，但 DOM-003 仍有两条负向判据缺少直接验收证据。",
+        "authority 链已落地；当前仍缺 fresh api_integration 与 user_acceptance 证据。",
+        "统一 inventory、immutable plan 与宿主 adapter 尚未实现。",
+        "供应商边界已经明确，但该能力无法通过验收。",
+        "当前首波 SourcePool 强制依赖 execution 后 receipt，形成启动环。",
     )
-    node = SimpleNamespace(spec=spec, rel="domain/capability/story", level=3)
-    review = reviewer.Review(path="spec.md", kind="L3 Story")
 
-    reviewer.validate_open_items(review, spec.read_text(encoding="utf-8"), node)
+    for impact in impacts:
+        issues = open_item_issues(tmp_path, impact_or_value=impact)
+        assert issue_facts(issues) == [], impact
 
-    assert review.issues == ["OPEN-001 未明确说明尚缺的实现或验收证据"]
+
+def test_capability_gap_rejects_success_history_and_vague_non_gaps(
+    tmp_path: Path,
+) -> None:
+    impacts = (
+        "测试全部通过。",
+        "历史上缺少实现，当前已经全部完成。",
+        "此前未实现，但现已落地并通过验收。",
+        "这一事项需要后续关注。",
+        "存在历史记录。",
+        "当前状态待观察。",
+        "没有问题，能力已经完成。",
+        "检查尚未发现缺口。",
+        "不得把成功回执当作证据。",
+        "不再缺少实现或验收证据。",
+    )
+
+    for impact in impacts:
+        issues = open_item_issues(tmp_path, impact_or_value=impact)
+        assert issue_facts(issues) == [
+            (
+                reviewer.RULE_CAPABILITY_GAP_SEMANTICS,
+                "OPEN-001 未明确说明尚缺的实现或验收证据",
+            )
+        ], impact
+
+
+def test_external_blocker_does_not_use_capability_gap_semantics(
+    tmp_path: Path,
+) -> None:
+    issues = open_item_issues(
+        tmp_path,
+        item_type="external_blocker",
+        impact_or_value="此前缺少供应商账号，现已完成授权快照。",
+    )
+
+    assert issue_facts(issues) == []
 
 
 def test_section_outside_template_is_blocked() -> None:
@@ -315,29 +385,80 @@ def test_generic_design_decision_is_blocked() -> None:
     ]
 
 
-def test_repeated_design_sentence_and_mechanical_list_are_blocked() -> None:
+def test_repeated_design_free_prose_is_blocked_with_rule_identity() -> None:
     repeated = "- 设计必须由唯一对象 owner 持有事实，并通过公开 command query event 与调用方协作。"
     issues = issues_for(
         f"{repeated}\n{repeated}\n- 决策：A；理由：B；影响：C\n",
         kind="L2 Business Capability Design",
     )
 
-    assert issues == [
-        "存在重复长句 `- 设计必须由唯一对象 owner 持有事实，并通过公开 command query event 与调用方协作。…`",
-        "存在由历史文档机械拼接的多段列表项",
+    assert issue_facts(issues) == [
+        (
+            reviewer.RULE_DESIGN_DUPLICATE_LONG_LINE,
+            "存在重复长句 `- 设计必须由唯一对象 owner 持有事实，并通过公开 command query event 与调用方协作。…`",
+        )
     ]
 
 
-def test_repeated_structured_requirement_links_are_not_duplicate_prose() -> None:
+def test_repeated_design_decision_content_remains_blocked() -> None:
+    repeated = "- 决策：发布必须绑定 exact identity，并在任何摘要漂移时 fail closed。"
+    issues = issues_for(
+        f"{repeated}\n{repeated}\n",
+        kind="L2 Business Capability Design",
+    )
+
+    assert issue_facts(issues) == [
+        (
+            reviewer.RULE_DESIGN_DUPLICATE_LONG_LINE,
+            "存在重复长句 `- 决策：发布必须绑定 exact identity，并在任何摘要漂移时 fail closed。…`",
+        )
+    ]
+
+
+def test_repeated_structural_design_metadata_is_not_duplicate_prose() -> None:
     issues = issues_for(
         "- 关联要求：`REQ-001`、`REQ-002`\n"
         "- 关联要求：`REQ-001`、`REQ-002`\n"
         "- 关联验收：`SIT-001`\n"
-        "- 关联验收：`SIT-001`\n",
+        "- 关联验收：`SIT-001`\n"
+        "- 影响 Story：[`story`](./story/spec.md)\n"
+        "- 影响 Story：[`story`](./story/spec.md)\n",
         kind="L2 Business Capability Design",
     )
 
     assert issues == []
+
+
+def test_semicolon_rich_authority_and_boundary_lists_are_allowed() -> None:
+    fixtures = (
+        "- Alpha/Beta/Gamma/Prod 各自绑定 raw result exact bytes；后环境绑定前环境 acceptance digest；父 report 只读投影且不得持有 verdict。",
+        "- event 先写入私有 staging 并 file fsync；再以 exclusive no-replace 发布并 fsync events directory；完整 event chain 是 crash recovery authority。",
+        "- command/query split：audit 与 readback 是纯 query；plan 是 create-once command；apply/recover 只消费 exact plan。",
+        "- adapter 必须保护 active、pinned 与 unknown 资源；首动作前复验 identity；任何 drift 均 fail closed。",
+        "- SLO：只读写入为零；已知 drift 首动作前阻断率 100%；受保护对象误回收为零。",
+        "- terminal 闭集为 passed/blocked/failed；blocked 携带首个 typed blocker；failed 不得包装为 passed。",
+        "- inventory 分为 immutable package；mutable runtime state；runs/observability；active generation；build/install/UAT artifact；receipt/report/attestation。",
+    )
+
+    for fixture in fixtures:
+        assert issue_facts(issues_for(fixture)) == [], fixture
+
+
+def test_actual_historical_document_stitching_is_blocked() -> None:
+    fixtures = (
+        "- 会话 1：确认旧实现；会话 2：复制阶段结论；会话 3：保留迁移记录。",
+        "- 1. 旧接口说明；2. 迁移中间态；3. 目标态。",
+        "- 现状：旧写入；目标态：双轨过渡；迁移策略：后续删除。",
+    )
+
+    for fixture in fixtures:
+        issues = issues_for(fixture)
+        assert issue_facts(issues) == [
+            (
+                reviewer.RULE_MECHANICAL_HISTORY_STITCHING,
+                "存在由历史文档机械拼接的多段列表项",
+            )
+        ], fixture
 
 
 def test_repository_reference_allows_fragment_and_documented_path_variable(

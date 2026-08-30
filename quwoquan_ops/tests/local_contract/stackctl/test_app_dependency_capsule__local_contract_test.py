@@ -7,7 +7,9 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import stat
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,6 +19,7 @@ from quwoquan_ops.cli.lib import package_reuse
 from quwoquan_ops.cli.lib.package_reuse import (
     dependency_bundle,
     input_capsule,
+    pub_cache_capsule,
     pub_cache_store,
 )
 from quwoquan_ops.cli.lib.package_reuse.dependency_fs import remove_private_tree
@@ -492,3 +495,125 @@ def test_snapshot_binds_empty_directory_and_readonly_cleanup_converges(
         directory.chmod(0o555)
     remove_private_tree(readonly)
     assert not readonly.exists()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="APFS clone projection is Darwin-only")
+def test_writable_projection_clones_tree_and_normalizes_modes(
+    tmp_path: Path,
+) -> None:
+    repo, archive_sha = _repo(tmp_path)
+    source = tmp_path / "source"
+    package = source / "hosted/pub.flutter-io.cn/fixture_pkg-1.2.3"
+    package.mkdir(parents=True)
+    payload = package / "lib.dart"
+    payload.write_text("const fixture = true;\n", encoding="utf-8")
+    executable = package / "tool.sh"
+    executable.write_text("#!/bin/sh\n", encoding="ascii")
+    executable.chmod(0o555)
+    (package / "empty").mkdir()
+    archive = source / "hosted-hashes/pub.flutter-io.cn/fixture_pkg-1.2.3.sha256"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(archive_sha + "\n", encoding="ascii")
+    snapshot = build_pub_cache_snapshot(
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        cache_root=source,
+        reject_unlocked=True,
+    )
+
+    destination = tmp_path / "writable"
+    copy_snapshot_tree_with_lock(
+        snapshot,
+        destination,
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        writable=True,
+    )
+
+    projected_payload = destination / payload.relative_to(source)
+    projected_executable = destination / executable.relative_to(source)
+    projected_empty = destination / package.relative_to(source) / "empty"
+    assert projected_payload.read_bytes() == payload.read_bytes()
+    assert projected_empty.is_dir()
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o700
+    assert stat.S_IMODE(projected_empty.stat().st_mode) == 0o700
+    assert stat.S_IMODE(projected_payload.stat().st_mode) == 0o644
+    assert stat.S_IMODE(projected_executable.stat().st_mode) == 0o755
+    assert projected_payload.stat().st_ino != payload.stat().st_ino
+    assert projected_payload.stat().st_nlink == 1
+
+    source_bytes = payload.read_bytes()
+    payload.write_text("const fixture = changed;\n", encoding="utf-8")
+    assert projected_payload.read_bytes() == source_bytes
+
+
+def test_writable_projection_rejects_post_clone_cas_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, archive_sha = _repo(tmp_path)
+    source = tmp_path / "source"
+    package = source / "hosted/pub.flutter-io.cn/fixture_pkg-1.2.3"
+    package.mkdir(parents=True)
+    (package / "lib.dart").write_text("const fixture = true;\n", encoding="utf-8")
+    archive = source / "hosted-hashes/pub.flutter-io.cn/fixture_pkg-1.2.3.sha256"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(archive_sha + "\n", encoding="ascii")
+    snapshot = build_pub_cache_snapshot(
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        cache_root=source,
+        reject_unlocked=True,
+    )
+    original = pub_cache_capsule._clone_writable_snapshot_tree_darwin
+
+    def clone_then_drift(*, snapshot, destination: Path) -> None:
+        original(snapshot=snapshot, destination=destination)
+        drifted = destination / snapshot.files[0].relative
+        drifted.write_bytes(drifted.read_bytes() + b"drift")
+
+    monkeypatch.setattr(
+        pub_cache_capsule,
+        "_clone_writable_snapshot_tree_darwin",
+        clone_then_drift,
+    )
+    monkeypatch.setattr(pub_cache_capsule.sys, "platform", "darwin")
+
+    with pytest.raises(ValueError):
+        copy_snapshot_tree_with_lock(
+            snapshot,
+            tmp_path / "drifted",
+            lock_path=repo / "quwoquan_app/pubspec.lock",
+            writable=True,
+        )
+
+
+def test_readonly_projection_does_not_use_darwin_clone_tree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, archive_sha = _repo(tmp_path)
+    source = tmp_path / "source"
+    package = source / "hosted/pub.flutter-io.cn/fixture_pkg-1.2.3"
+    package.mkdir(parents=True)
+    (package / "lib.dart").write_text("const fixture = true;\n", encoding="utf-8")
+    archive = source / "hosted-hashes/pub.flutter-io.cn/fixture_pkg-1.2.3.sha256"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(archive_sha + "\n", encoding="ascii")
+    snapshot = build_pub_cache_snapshot(
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        cache_root=source,
+        reject_unlocked=True,
+    )
+    monkeypatch.setattr(pub_cache_capsule.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        pub_cache_capsule,
+        "_clone_writable_snapshot_tree_darwin",
+        lambda **_kwargs: pytest.fail("readonly projection used writable clone tree"),
+    )
+
+    destination = tmp_path / "readonly"
+    copy_snapshot_tree_with_lock(
+        snapshot,
+        destination,
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        writable=False,
+    )
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o555

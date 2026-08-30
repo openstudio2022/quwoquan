@@ -35,6 +35,10 @@ from quwoquan_ops.cli.lib.app_identity import (
     build_profile_for_environment,
     supported_build_products,
 )
+from quwoquan_ops.ci.release_bound_environment_acceptance import (
+    acceptance_relative_ref as _acceptance_relative_ref_impl,
+    validate_environment_acceptance_authority as _validate_environment_acceptance_authority_impl,
+)
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     canonical_candidate_digest,
     canonical_manifest_digest,
@@ -154,6 +158,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--app-artifact-receipt", required=True, action="append", type=Path
     )
+    parser.add_argument("--environment-acceptance-fact", required=True, type=Path)
     parser.add_argument("--startup-device-case-result", required=True, type=Path)
     parser.add_argument("--telemetry-readback", required=True, type=Path)
     parser.add_argument("--rollback-receipt", required=True, type=Path)
@@ -261,19 +266,6 @@ def _validate_activation(
         field: _digest(readiness.get(field), label=f"release-readiness.{field}")
         for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest")
     }
-    app_uat = readiness.get("appUatEnvelope")
-    if not isinstance(app_uat, Mapping):
-        raise IdentityEvidenceError("release-readiness.appUatEnvelope is missing")
-    for field, expected in (
-        ("releaseId", readiness.get("releaseId")),
-        ("releaseClass", release_class),
-        ("productLifecycleState", lifecycle),
-    ):
-        if app_uat.get(field) != expected:
-            raise IdentityEvidenceError(f"appUatEnvelope.{field} drift")
-    app_uat_digest = _canonical_digest(app_uat)
-    if readiness.get("appUatEnvelopeDigest") != app_uat_digest:
-        raise IdentityEvidenceError("appUatEnvelopeDigest drift")
     activation = readiness.get("activationEnvelope")
     if not isinstance(activation, Mapping):
         raise IdentityEvidenceError("release-readiness.activationEnvelope is missing")
@@ -288,7 +280,6 @@ def _validate_activation(
         "readinessPhase": phase,
         "importRunId": readiness.get("importRunId"),
         "verifyRunId": readiness.get("verifyRunId"),
-        "appUatEnvelopeDigest": app_uat_digest,
     }
     for field, expected_value in expected.items():
         if activation.get(field) != expected_value:
@@ -711,6 +702,26 @@ def _validate_telemetry(
     _validate_telemetry_backend_receipt(value)
 
 
+def _acceptance_relative_ref(path: Path, *, evidence_root: Path) -> str:
+    try:
+        return _acceptance_relative_ref_impl(path, evidence_root=evidence_root)
+    except ValueError as exc:
+        raise IdentityEvidenceError(str(exc)) from exc
+
+
+def _validate_environment_acceptance_authority(
+    path: Path, *, evidence_root: Path, environment: str, target: str,
+    release_id: str, release_digest: str,
+) -> dict[str, Any]:
+    try:
+        return _validate_environment_acceptance_authority_impl(
+            path, evidence_root=evidence_root, environment=environment, target=target,
+            release_id=release_id, release_digest=release_digest,
+        )
+    except ValueError as exc:
+        raise IdentityEvidenceError(str(exc)) from exc
+
+
 def render(args: argparse.Namespace) -> dict[str, Any]:
     baseline_id = _text(args.baseline_id, label="baselineId")
     environment = str(args.environment)
@@ -723,6 +734,7 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
         args.import_receipt,
         args.replay_receipt,
         args.effective_launch_manifest,
+        args.environment_acceptance_fact,
         *args.app_artifact_receipt,
         args.startup_device_case_result,
         args.telemetry_readback,
@@ -757,6 +769,14 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
             f"ReleaseEvidenceManifest bundle is invalid: {exc}"
         ) from exc
     release = _validate_readiness(readiness, environment=environment)
+    acceptance_authority = _validate_environment_acceptance_authority(
+        args.environment_acceptance_fact,
+        evidence_root=args.data_output_root,
+        environment=environment,
+        target=target,
+        release_id=str(release["releaseId"]),
+        release_digest=str(release["releaseDigest"]),
+    )
     import_run = _validate_run(
         import_receipt,
         label="import-receipt",
@@ -845,6 +865,7 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
         "dataSourceIdentity": release["sourceIdentity"],
         "activationEnvelope": release["activationEnvelope"],
         "activationEnvelopeDigest": release["activationEnvelopeDigest"],
+        "environmentAcceptanceFact": acceptance_authority,
         "importRunId": import_run,
         "verifyRunId": release["verifyRunId"],
         "dataCounts": release["counts"],
@@ -874,6 +895,10 @@ def render(args: argparse.Namespace) -> dict[str, Any]:
         "replayReceipt": {
             "ref": args.replay_receipt.resolve().as_posix(),
             "sha256": snapshots[args.replay_receipt.resolve()],
+        },
+        "environmentAcceptanceFact": {
+            "ref": args.environment_acceptance_fact.resolve().as_posix(),
+            "sha256": snapshots[args.environment_acceptance_fact.resolve()],
         },
         "effectiveLaunchManifest": {
             "ref": args.effective_launch_manifest.resolve().as_posix(),

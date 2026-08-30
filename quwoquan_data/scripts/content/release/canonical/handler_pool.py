@@ -46,6 +46,17 @@ def _workload_targets(values: tuple[str, ...]) -> dict[str, int] | None:
 
 def handle_pool_release_build(args: argparse.Namespace) -> None:
     output_root = Path(OUTPUT_ROOT).resolve()
+    authority_values = (
+        getattr(args, "sampling_authority_artifact_root", None),
+        getattr(args, "sampling_authority_ref", None),
+        getattr(args, "sampling_authority_digest", None),
+    )
+    if any(authority_values) and not all(authority_values):
+        raise SystemExit(
+            "[release pool-build] GATE_BLOCK M1000 sampling authority requires "
+            "--sampling-authority-artifact-root, --sampling-authority-ref, and "
+            "--sampling-authority-digest together"
+        )
     publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
     release_root = Path(
         args.release_root or output_root / "data/releases"
@@ -67,6 +78,22 @@ def handle_pool_release_build(args: argparse.Namespace) -> None:
                 else None
             ),
             release_class=str(args.release_class),
+            sampling_authority_artifact_root=(
+                Path(args.sampling_authority_artifact_root).expanduser().resolve()
+                if getattr(args, "sampling_authority_artifact_root", None)
+                else None
+            ),
+            sampling_authority_binding=(
+                {
+                    "ref": str(args.sampling_authority_ref),
+                    "digest": str(args.sampling_authority_digest),
+                }
+                if (
+                    getattr(args, "sampling_authority_ref", None)
+                    and getattr(args, "sampling_authority_digest", None)
+                )
+                else None
+            ),
         )
     except (
         FileNotFoundError,

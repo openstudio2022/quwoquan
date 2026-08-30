@@ -27,6 +27,12 @@ from quwoquan_ops.cli.lib.read_only_user_availability import (
     validate_read_only_user_availability_report,
 )
 from quwoquan_ops.cli.lib.service_runtime_probes import service_probe_matrix
+from quwoquan_ops.cli.lib.currentness import CURRENTNESS_TIMEOUT_DETAIL_PREFIX
+from quwoquan_ops.cli.lib.openssl3_resolver import (
+    OpenSSL3CapabilityError,
+    openssl3_identity_report,
+    resolve_openssl3,
+)
 
 
 def _diagnostic_aggregation_boundary() -> None:
@@ -511,6 +517,8 @@ def _candidate_workspace_report(
         "mismatchedFields": [],
         "issues": [],
         "warnings": [],
+        "firstBlockerClass": "none",
+        "opensslIdentity": None,
     }
     if purpose not in {"self_verify", "currentness"}:
         report["issues"] = ["candidate validation purpose is invalid"]
@@ -528,6 +536,8 @@ def _candidate_workspace_report(
                 }
             )
             return report
+        openssl = resolve_openssl3()
+        report["opensslIdentity"] = dict(openssl3_identity_report(openssl))
         candidate_root = Path(str(active["candidateDir"]))
         self_verified, self_verify_detail = _stackctl.can_reuse_package(
             environment,
@@ -535,6 +545,11 @@ def _candidate_workspace_report(
             include_services=True,
             purpose="self_verify",
             candidate_root=candidate_root,
+            # Runtime diagnostics verify every runnable package byte and all
+            # candidate cross-bindings. The immutable source/dependency capsule
+            # is App/package reconstruction evidence, not a runtime input; its
+            # identity manifest remains cross-bound without rereading 5+ GiB.
+            verify_source_capsule=False,
         )
         if not self_verified:
             raise ValueError(self_verify_detail)
@@ -545,8 +560,18 @@ def _candidate_workspace_report(
             require_full=True,
             purpose="self_verify",
         )
-    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+    except OpenSSL3CapabilityError as exc:
+        report["firstBlockerClass"] = "toolchain_capability"
         report["issues"] = ["candidate self-verify is unavailable: " + str(exc)]
+        return report
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+        detail = str(exc)
+        report["firstBlockerClass"] = (
+            "signature_invalid"
+            if "signature" in detail.lower()
+            else "candidate_invalid"
+        )
+        report["issues"] = ["candidate self-verify is unavailable: " + detail]
         return report
 
     candidate_identity = {
@@ -570,12 +595,24 @@ def _candidate_workspace_report(
             purpose="currentness",
             candidate_root=candidate_root,
         )
-        status = "current" if current else "drifted"
-        current_source_claim = status
-        non_promotable = not current
-        drifted = not current
         current_identity = {"detail": detail}
-        if not current:
+        if current:
+            status = "current"
+            current_source_claim = "current"
+            non_promotable = False
+            drifted = False
+        elif detail.startswith(CURRENTNESS_TIMEOUT_DETAIL_PREFIX):
+            status = "currentness_unavailable"
+            current_source_claim = "not_evaluated"
+            non_promotable = True
+            drifted = None
+            report["firstBlockerClass"] = "verification_timeout"
+            warnings.append(detail)
+        else:
+            status = "drifted"
+            current_source_claim = "drifted"
+            non_promotable = True
+            drifted = True
             mismatched = ["deploymentInputClosure"]
             warnings.append(detail)
     report.update(

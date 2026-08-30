@@ -601,7 +601,9 @@ def write_app_content_launch_control(
 
     policy_by_platform = {
         "android": FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID,
+        "android-physical": FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID,
         "ios-simulator": FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
+        "ios-physical": FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
     }
     if policy_by_platform.get(platform) != build_projection_policy_id:
         raise ValueError("App content UAT build projection policy/platform mismatch")

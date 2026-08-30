@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/m1000_app_uat_sampling_strategy.schema.json",
+  "title": "Externally frozen M1000 App UAT sampling strategy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "strategyId",
+    "milestone",
+    "releaseId",
+    "releaseDigest",
+    "sampleDistribution",
+    "selector",
+    "createdAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.m1000_app_uat_sampling_strategy"
+    },
+    "strategyId": {
+      "$ref": "#/$defs/identity"
+    },
+    "milestone": {
+      "const": "M1000"
+    },
+    "releaseId": {
+      "$ref": "#/$defs/identity"
+    },
+    "releaseDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "sampleDistribution": {
+      "$ref": "#/$defs/positiveCarrierCounts"
+    },
+    "selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "sortKey",
+        "direction"
+      ],
+      "properties": {
+        "name": {
+          "const": "stratified_exact"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sortKey": {
+          "const": "identity"
+        },
+        "direction": {
+          "const": "ascending"
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "identity": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,255}$"
+    },
+    "positiveCarrierCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "homepage",
+        "article",
+        "image",
+        "video"
+      ],
+      "properties": {
+        "homepage": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "article": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "image": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "video": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

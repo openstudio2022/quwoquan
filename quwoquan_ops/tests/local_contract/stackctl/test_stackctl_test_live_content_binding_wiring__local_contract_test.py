@@ -53,11 +53,27 @@ def _binding() -> dict[str, object]:
             "verify-alpha-001/release-readiness.json"
         ),
         "readinessReceiptDigest": _DIGEST_C,
-        "appUatEnvelope": {
-            "releaseId": "release-panda-001",
-            "releaseClass": "research",
-            "productLifecycleState": "research",
+        "releaseHeaderRef": "data/releases/release-panda-001/payload/release.json",
+        "releaseHeaderDigest": _DIGEST_B,
+        "releaseUatSamplePlanRef": "uat/sample_plan.json",
+        "releaseUatSamplePlanDigest": _DIGEST_C,
+        "appUatPlan": {
+            "releaseIdentity": {
+                "releaseId": "release-panda-001",
+                "payloadSha256": _DIGEST_A,
+            },
+            "releaseUatSamplePlanRef": "uat/sample_plan.json",
+            "releaseUatSamplePlanDigest": _DIGEST_C,
+            "carrierIdentities": {
+                "homepage": "homepage-harbour",
+                "article": "article-a",
+                "image": "image-a",
+                "video": "video-a",
+            },
+            "orderedSamples": [],
+            "requiredCasePlan": [],
         },
+        "appUatPlanDigest": _DIGEST_A,
         "lifecycleExitRef": "",
         "lifecycleExitDigest": "",
         "boundAt": "2026-08-09T00:00:00Z",

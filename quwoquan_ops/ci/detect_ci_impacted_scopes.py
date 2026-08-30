@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Detect which CI scopes are impacted by the current change set."""
-
+"""Hosted adapter for the canonical CI impact planner."""
 from __future__ import annotations
 
 import argparse
@@ -8,68 +7,28 @@ import hashlib
 import json
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+sys.dont_write_bytecode = True
 
-ALL_SCOPE_PREFIXES = (
-    ".github/workflows/",
-    "quwoquan_ops/", "quwoquan_app/scripts/", "quwoquan_service/scripts/", "quwoquan_data/scripts/",
+ROOT = Path(__file__).resolve().parents[2]
+CLI_ROOT = ROOT / "quwoquan_ops/cli"
+for entry in (str(ROOT), str(CLI_ROOT)):
+    if entry in sys.path:
+        sys.path.remove(entry)
+    sys.path.insert(0, entry)
+
+from quwoquan_ops.cli.lib.evidence_fingerprint import (  # noqa: E402
+    build_evidence_fingerprint,
+    canonical_digest,
+    validate_evidence_fingerprint,
 )
-DATA_PREFIXES = (
-    "quwoquan_data/",
-    ".agents/skills/content-production/",
-)
-DATA_DOCUMENT_PREFIXES = ("specs/feature-tree/discovery-content/",)
-SERVICE_PREFIXES = (
-    "quwoquan_service/",
-)
-APP_PREFIXES = (
-    "quwoquan_app/",
-    "quwoquan_app/packages/quwoquan_cloud_contracts/",
-)
-PORTAL_PREFIXES = (
-    "quwoquan_ops/portal/",
-)
-TOPOLOGY_PREFIXES = (
-    "quwoquan_ops/environments/",
-)
-METADATA_PREFIX = "quwoquan_service/contracts/metadata/"
-SERVICE_CONTRACT_PREFIX = "quwoquan_service/services/"
-SERVICE_CONTRACT_SEGMENT = "/contracts/"
-ROOT_LEVEL_ALL_SCOPE_FILES = {
-    "Makefile",
-}
-DOC_ONLY_PREFIXES = (
-    "specs/",
-    "docs/",
-)
-DOC_ONLY_SUFFIXES = {
-    ".md",
-    ".mdc",
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".svg",
-}
-FEATURE_SPEC_SCOPE_RULES: tuple[tuple[str, dict[str, bool]], ...] = (
-    (
-        "specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/",
-        {"service": False, "app": True, "portal": False, "topology": False},
-    ),
-    (
-        "specs/feature-tree/runtime/runtime-client-foundation/",
-        {"service": False, "app": True, "portal": False, "topology": False},
-    ),
-    (
-        "specs/feature-tree/product-ops-growth/",
-        {"service": True, "app": True, "portal": True, "topology": False},
-    ),
-    (
-        "specs/feature-tree/platform-ops-governance/",
-        {"service": True, "app": False, "portal": True, "topology": False},
-    ),
+from quwoquan_ops.ci.impact_planner_core import (  # noqa: E402
+    SCOPE_NAMES,
+    classify_impacts,
+    planner_identity,
+    validate_exact_sha,
 )
 
 
@@ -77,35 +36,25 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-sha", default="")
     parser.add_argument("--head-sha", default="HEAD")
-    parser.add_argument(
-        "--changed-file",
-        action="append",
-        default=[],
-        help="Explicit changed file path relative to repo root. Repeatable.",
-    )
-    parser.add_argument(
-        "--github-output",
-        default="",
-        help="Optional path to write GitHub Actions outputs.",
-    )
-    parser.add_argument(
-        "--scope-receipt",
-        default="",
-        help="Optional typed scope decision receipt path.",
-    )
+    parser.add_argument("--changed-file", action="append", default=[])
+    parser.add_argument("--github-output", default="")
+    parser.add_argument("--scope-receipt", default="")
     parser.add_argument(
         "--required-scope",
         action="append",
-        choices=("service", "app", "portal", "topology", "data"),
+        choices=SCOPE_NAMES,
         default=[],
-        help="Scope required by trigger policy even when the diff is not impacted.",
     )
     return parser.parse_args()
 
 
 def git_changed_files(base_sha: str, head_sha: str) -> list[str]:
-    if not base_sha.strip():
+    if not base_sha:
+        if head_sha != "HEAD":
+            validate_exact_sha(head_sha, label="head_sha")
         return []
+    validate_exact_sha(base_sha, label="base_sha")
+    validate_exact_sha(head_sha, label="head_sha")
     proc = subprocess.run(
         ["git", "diff", "--name-only", base_sha, head_sha],
         cwd=ROOT,
@@ -115,89 +64,77 @@ def git_changed_files(base_sha: str, head_sha: str) -> list[str]:
     )
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or "git diff failed")
-    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-
-
-def is_doc_only(path: str) -> bool:
-    pure = Path(path)
-    if path.startswith("specs/feature-tree/") and pure.name in {"spec.md", "design.md"}:
-        return False
-    return pure.suffix.lower() in DOC_ONLY_SUFFIXES and path.startswith(DOC_ONLY_PREFIXES)
-
-
-def classify_feature_spec_path(path: str) -> dict[str, bool] | None:
-    pure = Path(path)
-    if not path.startswith("specs/feature-tree/") or pure.name not in {"spec.md", "design.md"}:
-        return None
-    for prefix, scope_flags in FEATURE_SPEC_SCOPE_RULES:
-        if path.startswith(prefix):
-            return scope_flags
-    return {"service": True, "app": True, "portal": True, "topology": False}
+    return proc.stdout.splitlines()
 
 
 def classify(paths: list[str]) -> dict[str, bool]:
-    impacted = {
-        "service": False,
-        "app": False,
-        "portal": False,
-        "topology": False,
-        "data": False,
-    }
-    for raw_path in paths:
-        path = raw_path.strip()
-        if path.startswith("./"):
-            path = path[2:]
-        if not path or is_doc_only(path):
-            if path.startswith(DATA_DOCUMENT_PREFIXES):
-                impacted["data"] = True
-            continue
-        feature_scope = classify_feature_spec_path(path)
-        if feature_scope is not None:
-            for key, value in feature_scope.items():
-                impacted[key] = impacted[key] or value
-            if path.startswith("specs/feature-tree/discovery-content/"):
-                impacted["data"] = True
-            continue
-        if path in ROOT_LEVEL_ALL_SCOPE_FILES:
-            impacted["service"] = True
-            impacted["app"] = True
-            impacted["portal"] = True
-            impacted["topology"] = True
-            impacted["data"] = True
-            continue
-        if path.startswith(ALL_SCOPE_PREFIXES):
-            impacted["service"] = True
-            impacted["app"] = True
-            impacted["portal"] = True
-            impacted["topology"] = True
-            continue
-        if path.startswith(METADATA_PREFIX):
-            impacted["service"] = True
-            impacted["app"] = True
-            impacted["portal"] = True
-            continue
-        if path.startswith(SERVICE_CONTRACT_PREFIX) and SERVICE_CONTRACT_SEGMENT in path:
-            impacted["service"] = True
-            impacted["app"] = True
-            impacted["portal"] = True
-            continue
-        if path.startswith(TOPOLOGY_PREFIXES):
-            impacted["topology"] = True
-        if path.startswith(DATA_PREFIXES):
-            impacted["data"] = True
-            continue
-        if path.startswith(SERVICE_PREFIXES):
-            impacted["service"] = True
-        if path.startswith(APP_PREFIXES):
-            impacted["app"] = True
-        if path.startswith(PORTAL_PREFIXES):
-            impacted["portal"] = True
-    return impacted
+    """Compatibility projection over the canonical planner core."""
+
+    return dict(classify_impacts(paths)["scopes"])
 
 
 def write_github_outputs(path: str, impacted: dict[str, bool]) -> None:
     lines = [f"{key}={'true' if value else 'false'}" for key, value in impacted.items()]
     Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _scope_fingerprint(
+    *,
+    base_sha: str,
+    head_sha: str,
+    changed_files: list[str],
+    impacted: dict[str, bool],
+    required_scopes: list[str],
+) -> dict[str, object]:
+    base = validate_exact_sha(base_sha, label="base_sha")
+    head = validate_exact_sha(head_sha, label="head_sha")
+    classified = classify_impacts(changed_files)
+    identity = planner_identity()
+    planner_source_digest = "sha256:" + hashlib.sha256(
+        (ROOT / "quwoquan_ops/ci/impact_planner_core.py").read_bytes()
+    ).hexdigest()
+    scope_state = {
+        scope: "required" if impacted[scope] else "not_required"
+        for scope in SCOPE_NAMES
+    }
+    receipt = build_evidence_fingerprint(
+        {
+            "git": {"head_sha": head, "merge_base_sha": base},
+            "workspace": {
+                "tracked_digest": classified["path_digest"],
+                "untracked_digest": canonical_digest([]),
+                "deleted_digest": canonical_digest([]),
+                "renamed_digest": canonical_digest([]),
+                "symlink_digest": canonical_digest([]),
+            },
+            "assets": {
+                "canonical_assets_digest": identity["digest"],
+                "review_assets_digest": canonical_digest(scope_state),
+            },
+            "execution": {
+                "commands_digest": canonical_digest(classified["paths"]),
+                "toolchain_digest": canonical_digest(
+                    {"adapter": "detect_ci_impacted_scopes.py", "version": 1}
+                ),
+                "provider_digest": canonical_digest(
+                    {"required_scopes": sorted(set(required_scopes))}
+                ),
+                "generator_digest": planner_source_digest,
+            },
+        },
+        captured_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        captured_by="hosted-impact-planner",
+        captured_metadata={
+            "changed_paths": classified["paths"],
+            "scope_states": scope_state,
+            "changed_paths_digest": classified["path_digest"],
+            "planner_digest": planner_source_digest,
+            "planner_identity_digest": identity["digest"],
+            "planner_source": identity["source"],
+            "planner_version": identity["version"],
+        },
+    )
+    return validate_evidence_fingerprint(receipt)
 
 
 def write_scope_receipt(
@@ -207,22 +144,15 @@ def write_scope_receipt(
     head_sha: str,
     changed_files: list[str],
     impacted: dict[str, bool],
+    required_scopes: list[str] | None = None,
 ) -> None:
-    encoded_paths = json.dumps(
-        changed_files,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    payload = {
-        "schema": "ci-impacted-scope-receipt",
-        "baseSha": base_sha,
-        "headSha": head_sha,
-        "changedPathsDigest": "sha256:" + hashlib.sha256(encoded_paths).hexdigest(),
-        "scopes": {
-            key: "required" if value else "not_required"
-            for key, value in sorted(impacted.items())
-        },
-    }
+    payload = _scope_fingerprint(
+        base_sha=base_sha,
+        head_sha=head_sha,
+        changed_files=changed_files,
+        impacted=impacted,
+        required_scopes=required_scopes or [],
+    )
     receipt_path = Path(path)
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(
@@ -234,23 +164,21 @@ def write_scope_receipt(
 def main() -> int:
     args = parse_args()
     try:
-        changed_files = [path for path in args.changed_file if path.strip()]
-        if not changed_files:
+        explicit_paths = bool(args.changed_file)
+        if explicit_paths:
+            changed_files = args.changed_file
+            if args.scope_receipt or args.base_sha or args.head_sha != "HEAD":
+                validate_exact_sha(args.base_sha, label="base_sha")
+                validate_exact_sha(args.head_sha, label="head_sha")
+        else:
             changed_files = git_changed_files(args.base_sha, args.head_sha)
-        if not changed_files:
-            impacted = {
-                "service": True,
-                "app": True,
-                "portal": True,
-                "topology": True,
-                "data": True,
-            }
+        classified = classify_impacts(changed_files, fail_closed_empty=True)
+        impacted = dict(classified["scopes"])
+        if not classified["paths"]:
             print(
                 "No diff range available; defaulting all scopes to impacted for safety.",
                 file=sys.stderr,
             )
-        else:
-            impacted = classify(changed_files)
         for required_scope in args.required_scope:
             impacted[required_scope] = True
     except Exception as exc:  # noqa: BLE001
@@ -260,13 +188,18 @@ def main() -> int:
     if args.github_output:
         write_github_outputs(args.github_output, impacted)
     if args.scope_receipt:
-        write_scope_receipt(
-            args.scope_receipt,
-            base_sha=args.base_sha,
-            head_sha=args.head_sha,
-            changed_files=changed_files,
-            impacted=impacted,
-        )
+        try:
+            write_scope_receipt(
+                args.scope_receipt,
+                base_sha=args.base_sha,
+                head_sha=args.head_sha,
+                changed_files=list(classified["paths"]),
+                impacted=impacted,
+                required_scopes=args.required_scope,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"detect_ci_impacted_scopes: FAIL: {exc}", file=sys.stderr)
+            return 1
 
     for key, value in impacted.items():
         print(f"{key}={'true' if value else 'false'}")

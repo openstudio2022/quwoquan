@@ -120,8 +120,11 @@ def test_commercial_transition_accepts_pool_source_identity_sets(
         header_path = release / "payload/release.json"
         header = json.loads(header_path.read_text(encoding="utf-8"))
         header.pop("sourceDigest")
+        execution_id = str(
+            (header.get("executionIds") or [f"{release.name}-execution"])[0]
+        )
         identity = {
-            "executionId": str(header["contents"][0]["executionId"]),
+            "executionId": execution_id,
             "sourceDigest": "sha256:" + "a" * 64,
             "entityCatalogDigest": "sha256:" + "6" * 64,
         }

@@ -423,7 +423,6 @@ jobs:
             --target beta-local \
             --kind all \
             --profile release \
-            --reuse-package \
             --report-dir "$ROOT/verify"
           cp "$ROOT/verify/report.json" "$ROOT/verify.json"
       - name: Verify nightly runtime release matches candidate
@@ -448,8 +447,6 @@ jobs:
           ROOT="$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix-runtime"
           python3 quwoquan_ops/cli/stackctl.py dev-session \
             --env gamma \
-            --release-attestation "$QWQ_RELEASE_ATTESTATION" \
-            --rollback-release-attestation "$QWQ_ROLLBACK_RELEASE_ATTESTATION" \
             --report-dir "$ROOT/dev-session"
           SESSION_KIND="$(python3 -c 'import json,sys; payload=json.load(open(sys.argv[1])); sessions=payload.get("sessions") or []; print((sessions[0] if sessions else {}).get("sessionKind") or "")' "$ROOT/dev-session/report.json")"
           case "$SESSION_KIND" in

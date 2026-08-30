@@ -121,7 +121,19 @@ launch_blockers:
   APP.LAUNCH.runtime_config_missing: 安装后平台私有容器没有可激活或可读取的 runtime package。
   APP.LAUNCH.runtime_config_activation_failed: runtime package 验证、原子写入或 active readback 未完成。
   APP.LAUNCH.workspace_entrypoint_inactive: 工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。
+  APP.LAUNCH.workspace_flutter_sdk_unavailable: 工作区激活时无法解析真实 Flutter SDK 或 SDK 版本与仓库锁定不符；激活必须在写入任何 workspace facade 投影前以本码阻断。
   APP.LAUNCH.launch_surface_unsupported: 启动入口不属于 canonical launcher、工作区字面 Flutter 或受控制 IDE profile。
+  APP.DEPENDENCY.lock_drift: App 生产工程、UAT test host 或已投影依赖的锁定身份不一致。
+  APP.DEPENDENCY.cocoapods_missing: iOS 启动缺少契约锁定的 CocoaPods 可执行文件。
+  APP.DEPENDENCY.cocoapods_mixed: iOS 依赖投影混用了不同 CocoaPods 可执行文件或版本。
+  APP.DEPENDENCY.bundle_missing: 启动未获得经验证的 source capsule 与原子依赖 bundle。
+  APP.DEPENDENCY.projection_failed: 启动期原子依赖投影或离线回放未完成。
+  APP.DEPENDENCY.projection_expectation_invalid: 依赖投影 expectation 或其摘要、读回身份缺失或非法。
+  APP.DEPENDENCY.projection_cas_drift: 冻结的依赖投影在命令执行前后发生 CAS 漂移。
+  APP.DEPENDENCY.projection_execution_failed: 受冻结依赖投影约束的启动期子命令执行失败。
+  APP.DEPENDENCY.pub_offline_replay_failed: Flutter pub 依赖无法按锁定在私有 cache 中离线回放。
+  APP.DEPENDENCY.cross_platform_generated_tooling_unsafe: 当前平台投影中的跨平台生成工具残留无法安全检查或剪除。
+  APP.DEPENDENCY.flutter_spm_residue_forbidden: CocoaPods-only iOS 工程仍含 Flutter Swift Package Manager 残留。
   APP.UAT.page_artifact_binding_missing: 页面自动化实际安装并启动的 AppArtifact 缺少与同 target canonical launch 的完整身份绑定或逐字段不一致，禁止生成页面通过结果。
   APP.WEB.recovery_unavailable: 恢复 Web 静态面不可达，不得据此生成 launched 或 ready 假证据。
 
@@ -357,6 +369,9 @@ schemas:
       - launchProvenance
       - runtimeConfigSupplyMode
       - artifactDigest
+      - candidateDigest
+      - artifactManifestDigest
+      - launcherHandoffDigest
       - runtimeConfigTrustEnvelopeDigest
       - runtimeConfigPackageDigest
       - applicationId
@@ -390,6 +405,9 @@ schemas:
       launchProvenance: { type: string, allowed_values_ref: app_artifact_manifest.launch_provenances }
       runtimeConfigSupplyMode: { type: string, allowed_values_ref: runtime_config_supply_modes }
       artifactDigest: { type: string, format: optional_sha256_identity }
+      candidateDigest: { type: string, format: optional_sha256_identity }
+      artifactManifestDigest: { type: string, format: optional_sha256_identity }
+      launcherHandoffDigest: { type: string, format: optional_sha256_identity }
       runtimeConfigTrustEnvelopeDigest: { type: string, format: sha256_identity }
       runtimeConfigPackageDigest: { type: string, format: sha256_identity }
       applicationId: { type: string, min_length: 1 }
@@ -430,6 +448,7 @@ schemas:
       - prepared/compiling 允许 artifactDigest 为空；写入 compiled transition 时必须在同一次原子回执更新中填入本次 canonical executor 实际产出的 Android APK 或 iOS .app payload sha256，installed transition 前必须在真实安装完成后对同一路径按 AppArtifact payload digest 算法重读且完全相等。出现 compiled 后 artifactDigest 必须始终非空且不可变；产物缺失或不可读以 APP.LAUNCH.compile_failed 阻断，安装前后错配以 APP.LAUNCH.install_failed 阻断，源码、配置、handoff 或 package digest 不得冒充制品摘要。
       - buildProfile 必须与 environment 满足 launch_policies 和 app_artifact_manifest.build_profiles 的单轨映射；launchProvenance 必须来自 app_artifact_manifest.launch_provenances，runtimeConfigSupplyMode 必须来自 runtime_config_supply_modes。
       - runtimeConfigTrustEnvelopeDigest/runtimeConfigPackageDigest 必须与同 attempt 的 handoff、制品回读与 activation receipt 一致；applicationId 必须匹配 buildProfile × buildMode 的生成身份，commandResolutionDigest 只记录脱敏后的 SDK/入口解析身份。
+      - release-artifact attempt 的 candidateDigest/artifactManifestDigest/launcherHandoffDigest 必须全为 canonical sha256 且分别绑定 fixed deployment candidate、exact AppArtifactManifest 与 canonical launcher handoff；非 release-artifact attempt 三者必须全空。startup safe-terminal 通过 launchAttemptId 闭包继承这三项身份，不得从 latest、日志或外部 mutable pointer 补猜。
       - startupTerminalAttemptId/startupTerminalEvidenceDigest/startupTerminalEvidenceRef 必须全空或全非空；非空时 evidence 必须是同一 launchAttemptId、artifactDigest、device/applicationId、launchProvenance/runtimeConfigSupplyMode/effectiveLaunchManifestDigest 的 cold startup_safe_terminal/routerShell canonical receipt。严格 app-content-uat 必须先原子绑定该 receipt 才可把 VM attach 推进为 launched；仅有 app.started/debugPort 不构成 launched。
       - 编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；缺 build-profile trust 使用 APP.LAUNCH.runtime_config_trust_missing，无 active package 使用 APP.LAUNCH.runtime_config_missing，runtime package 验证、原子写入或 readback 失败使用 APP.LAUNCH.runtime_config_activation_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。
       - Alpha/Beta/Gamma 的 test_live 下，ui-only 与 content-live 都把 service、Provider、TLS、transport、content、observability、capacity 与 drift readiness 记入 warnings 后继续真实编译、安装、activation 与启动；身份、信任、非法 target、最小 package、工具链、真实编译、设备或 activation 失败仍须阻断。release-artifact、immutable candidate、内容 UAT 与 Prod readiness 不得消费这些 warnings 作为通过。

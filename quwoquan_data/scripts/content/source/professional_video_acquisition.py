@@ -18,7 +18,7 @@ from governance.coverage.distribution import (
     RightsStatus,
 )
 
-from content.execution.controller.execute.pre_acquisition_handoff import (
+from content.source.pre_acquisition_handoff import (
     guard_acquisition_source_identity,
 )
 from content.source.professional_safety_evidence import (

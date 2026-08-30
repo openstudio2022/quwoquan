@@ -7,17 +7,16 @@ material is issued under the target-scoped deploy work root and never committed.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import base64
 import json
 import os
-from pathlib import Path
 import subprocess
 import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 
-from .local_integration_service_mtls import _openssl_bin
+from .openssl3_resolver import OpenSSL3Executable, resolve_openssl3
 from .output_paths import deployment_target_path
-
 
 ROLE = "assistant-skill-package"
 KEY_ID = "local-managed-ed25519"
@@ -33,6 +32,8 @@ class LocalAssistantSkillPackageKeys:
 def prepare_local_assistant_skill_package_keys(
     environment: str,
     target_name: str,
+    *,
+    openssl: OpenSSL3Executable | None = None,
 ) -> LocalAssistantSkillPackageKeys:
     if environment not in {"alpha", "beta", "gamma"}:
         raise ValueError(
@@ -43,20 +44,20 @@ def prepare_local_assistant_skill_package_keys(
             "assistant Skill package key target/environment mismatch: "
             f"environment={environment} target={target_name}"
         )
-    openssl = _openssl_bin()
+    selected = openssl or resolve_openssl3()
     key_dir = deployment_target_path(target_name, "secrets", ROLE)
     key_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(key_dir, 0o700)
     private_pem = key_dir / "signing.pem"
     public_keys_path = key_dir / "trusted_public_keys.json"
-    if not _material_is_ready(openssl, private_pem, public_keys_path):
+    if not _material_is_ready(selected, private_pem, public_keys_path):
         _issue_keypair(
-            openssl=openssl,
+            openssl=selected,
             key_dir=key_dir,
             private_pem=private_pem,
             public_keys_path=public_keys_path,
         )
-    if not _material_is_ready(openssl, private_pem, public_keys_path):
+    if not _material_is_ready(selected, private_pem, public_keys_path):
         raise RuntimeError(
             "GATE_BLOCK: assistant Skill package trust keys are empty or invalid "
             f"for {target_name}"
@@ -72,7 +73,7 @@ def prepare_local_assistant_skill_package_keys(
 
 
 def _material_is_ready(
-    openssl: str,
+    openssl: OpenSSL3Executable,
     private_pem: Path,
     public_keys_path: Path,
 ) -> bool:
@@ -97,22 +98,21 @@ def _material_is_ready(
     if len(public_key) != 32:
         return False
     check = subprocess.run(
-        [openssl, "pkey", "-in", str(private_pem), "-noout"],
+        openssl.argv("pkey", "-in", str(private_pem), "-noout"),
         capture_output=True,
         check=False,
     )
     if check.returncode != 0:
         return False
     public_check = subprocess.run(
-        [
-            openssl,
+        openssl.argv(
             "pkey",
             "-in",
             str(private_pem),
             "-pubout",
             "-outform",
             "DER",
-        ],
+        ),
         capture_output=True,
         check=False,
     )
@@ -125,7 +125,7 @@ def _material_is_ready(
 
 def _issue_keypair(
     *,
-    openssl: str,
+    openssl: OpenSSL3Executable,
     key_dir: Path,
     private_pem: Path,
     public_keys_path: Path,
@@ -135,16 +135,14 @@ def _issue_keypair(
         next_private = temp / "signing.pem"
         next_public_der = temp / "public.der"
         commands = (
-            [
-                openssl,
+            (
                 "genpkey",
                 "-algorithm",
                 "ED25519",
                 "-out",
                 str(next_private),
-            ],
-            [
-                openssl,
+            ),
+            (
                 "pkey",
                 "-in",
                 str(next_private),
@@ -153,11 +151,11 @@ def _issue_keypair(
                 "DER",
                 "-out",
                 str(next_public_der),
-            ],
+            ),
         )
-        for command in commands:
+        for arguments in commands:
             result = subprocess.run(
-                command,
+                openssl.argv(*arguments),
                 text=True,
                 capture_output=True,
                 check=False,

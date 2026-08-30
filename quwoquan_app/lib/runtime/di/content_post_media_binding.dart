@@ -38,7 +38,7 @@ Map<String, MediaDeliveryBinding> contentPostMediaBindings(
 /// 作者头像的 typed 交付绑定（DEC-033，kind 用 avatar 而非 image）。
 ///
 /// 头像与内容图是两条 kind，签发与缓存身份都不同；消费面不得拿内容图的推导
-/// 顶替。资产身份缺席即退回公开路，不猜 accessMode。
+/// 顶替。accessMode 缺席保持 contract failure，不退回公开路。
 MediaDeliveryBinding contentPostAuthorAvatarBinding(ContentPostViewData post) {
   return MediaDeliveryBinding(
     assetId: post.authorAvatarAssetId?.trim() ?? '',
@@ -49,8 +49,9 @@ MediaDeliveryBinding contentPostAuthorAvatarBinding(ContentPostViewData post) {
 
 /// 取某个渲染 URL 的交付绑定。
 ///
-/// 投影未声明该 URL 的交付形态时返回仅带公开 URL 的绑定，由统一入口按四形态
-/// 判定；此处不替它猜一个 accessMode——猜 public 会让私有资产走公开直连。
+/// 投影未声明该 URL 的交付形态时返回 contract-failure 绑定；不替它猜 public。
+/// legacy public 必须由已确认 contract version 的调用方显式使用
+/// [MediaDeliveryBinding.legacyPublic]。
 MediaDeliveryBinding contentPostMediaBinding(
   ContentPostViewData post,
   String url,

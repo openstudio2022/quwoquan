@@ -134,7 +134,6 @@ func fixturePostFeedSlice(post postmodel.Post) postports.PostFeedItemSlice {
 		TagRefs:          append([]string(nil), post.TagRefs...),
 		EntityRefs:       append([]string(nil), post.EntityRefs...),
 		ContentVertical:  post.ContentVertical,
-		SourceTaskID:     post.SourceTaskId,
 		LikeCount:        post.LikeCount,
 		CommentCount:     post.CommentCount,
 		ShareCount:       post.ShareCount,

@@ -314,9 +314,10 @@ def _release_search_canaries(args: argparse.Namespace) -> list[dict[str, str]]:
     if not raw_canaries:
         return []
     expected_types = {
-        "post": "content.post",
         "homepage": "entity.homepage",
-        "persona": "user.profile",
+        "article": "content.post",
+        "image": "content.post",
+        "video": "content.post",
     }
     canaries: list[dict[str, str]] = []
     observed_kinds: set[str] = set()
@@ -347,7 +348,9 @@ def _release_search_canaries(args: argparse.Namespace) -> list[dict[str, str]]:
         observed_kinds.add(kind)
         canaries.append(canary)
     if observed_kinds != set(expected_types):
-        raise ValueError("release search canaries must cover Post, Homepage, and Persona")
+        raise ValueError(
+            "release search canaries must cover Homepage, Article, Image, and Video"
+        )
     return canaries
 
 

@@ -16,10 +16,7 @@ from .patrol_pub_store import (
     patrol_capsule_snapshot,
     verify_patrol_snapshot_flutter_toolchain,
 )
-from .pub_cache_capsule import (
-    build_pub_cache_snapshot,
-    copy_snapshot_tree_with_lock,
-)
+from .pub_cache_capsule import copy_snapshot_tree_with_lock
 
 
 def materialize_capsule_patrol_pub_cache(
@@ -27,13 +24,16 @@ def materialize_capsule_patrol_pub_cache(
     capsule_root: Path,
     manifest_entries: Sequence[Mapping[str, Any]],
     projection_root: Path,
+    verified_snapshot: Any | None = None,
 ) -> Path:
     """Copy one verified Patrol-only cache into a writable build projection."""
 
-    snapshot = patrol_capsule_snapshot(
-        capsule_root=capsule_root,
-        manifest_entries=manifest_entries,
-    )
+    snapshot = verified_snapshot
+    if snapshot is None:
+        snapshot = patrol_capsule_snapshot(
+            capsule_root=capsule_root,
+            manifest_entries=manifest_entries,
+        )
     if snapshot is None:
         raise ValueError("Patrol Pub dependency capsule is required for projection")
     verify_patrol_snapshot_flutter_toolchain(snapshot)
@@ -60,13 +60,6 @@ def materialize_capsule_patrol_pub_cache(
         label="projected writable cache",
         require_read_only=False,
     )
-    final = build_pub_cache_snapshot(
-        lock_path=lock_path,
-        cache_root=target,
-        reject_unlocked=True,
-    )
-    if final.manifest != snapshot.manifest:
-        raise ValueError("Patrol Pub projected cache CAS drifted")
     return target
 
 

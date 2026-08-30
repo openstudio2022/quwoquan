@@ -3,68 +3,211 @@
   "$id": "quwoquan_data/schema/source/professional_video_safety_evidence.schema.json",
   "type": "object",
   "required": [
-    "schema", "assetId", "entityId", "observedEntityId", "sourcePageUrl",
-    "fileRef", "fileSha256",
-    "bytes", "contactSheetRef", "contactSheetSha256", "mediaProbe",
-    "status", "entityMatch", "privacyRisk", "minorRisk", "maliciousMediaRisk",
-    "watermarkStatus", "reviewedAt", "reviewer"
+    "schema",
+    "assetId",
+    "entityId",
+    "observedEntityId",
+    "sourcePageUrl",
+    "fileRef",
+    "fileSha256",
+    "bytes",
+    "contactSheetRef",
+    "contactSheetSha256",
+    "mediaProbe",
+    "status",
+    "entityMatch",
+    "privacyRisk",
+    "minorRisk",
+    "maliciousMediaRisk",
+    "watermarkStatus",
+    "reviewedAt",
+    "reviewer"
   ],
   "additionalProperties": false,
   "properties": {
-    "schema": {"const": "quwoquan_data.manual_asset_safety_evidence"},
-    "assetId": {"type": "string", "minLength": 1},
-    "entityId": {"type": "string", "minLength": 1},
-    "observedEntityId": {"type": "string", "minLength": 1},
-    "sourcePageUrl": {"type": "string", "pattern": "^https://"},
+    "schema": {
+      "const": "quwoquan_data.manual_asset_safety_evidence"
+    },
+    "assetId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entityId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "observedEntityId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourcePageUrl": {
+      "type": "string",
+      "pattern": "^https://"
+    },
     "fileRef": {
       "oneOf": [
-        {"const": ""},
-        {"$ref": "#/$defs/relativeRef"}
+        {
+          "const": ""
+        },
+        {
+          "$ref": "#/$defs/relativeRef"
+        }
       ]
     },
-    "fileSha256": {"$ref": "#/$defs/sha256"},
-    "bytes": {"type": "integer", "minimum": 1},
-    "contactSheetRef": {"$ref": "#/$defs/relativeRef"},
-    "contactSheetSha256": {"$ref": "#/$defs/sha256"},
-    "sourceContentSha256": {"$ref": "#/$defs/sha256"},
-    "transformation": {"type": "string", "minLength": 1},
-    "sourceAttribution": {"$ref": "#/$defs/sourceAttribution"},
+    "fileSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "contactSheetRef": {
+      "$ref": "#/$defs/relativeRef"
+    },
+    "contactSheetSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "sourceContentSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "transformation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceAttribution": {
+      "$ref": "#/$defs/sourceAttribution"
+    },
     "mediaProbe": {
       "type": "object",
       "required": [
-        "width", "height", "frameCount", "framesPerSecond", "durationMs",
-        "codec", "hasAudio", "sampleCount", "distinctFrameCount",
-        "movingTransitionCount", "meanTransitionDelta", "motionVideo",
-        "staticImageSequence", "playable", "premiumPlayableEligible"
+        "width",
+        "height",
+        "frameCount",
+        "framesPerSecond",
+        "durationMs",
+        "codec",
+        "hasAudio",
+        "sampleCount",
+        "distinctFrameCount",
+        "movingTransitionCount",
+        "meanTransitionDelta",
+        "motionVideo",
+        "staticImageSequence",
+        "playable",
+        "premiumPlayableEligible"
       ],
       "additionalProperties": false,
       "properties": {
-        "width": {"type": "integer", "minimum": 1},
-        "height": {"type": "integer", "minimum": 1},
-        "frameCount": {"type": "integer", "minimum": 1},
-        "framesPerSecond": {"type": "number", "exclusiveMinimum": 0},
-        "durationMs": {"type": "integer", "minimum": 1},
-        "codec": {"type": "string", "minLength": 1},
-        "hasAudio": {"type": "boolean"},
-        "sampleCount": {"type": "integer", "minimum": 1},
-        "distinctFrameCount": {"type": "integer", "minimum": 1},
-        "movingTransitionCount": {"type": "integer", "minimum": 0},
-        "meanTransitionDelta": {"type": "number", "minimum": 0},
-        "motionVideo": {"type": "boolean"},
-        "staticImageSequence": {"type": "boolean"},
-        "playable": {"type": "boolean"},
-        "premiumPlayableEligible": {"type": "boolean"}
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "frameCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "framesPerSecond": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "codec": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hasAudio": {
+          "type": "boolean"
+        },
+        "sampleCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "distinctFrameCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "movingTransitionCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "meanTransitionDelta": {
+          "type": "number",
+          "minimum": 0
+        },
+        "motionVideo": {
+          "type": "boolean"
+        },
+        "staticImageSequence": {
+          "type": "boolean"
+        },
+        "playable": {
+          "type": "boolean"
+        },
+        "premiumPlayableEligible": {
+          "type": "boolean"
+        }
       }
     },
-    "status": {"enum": ["passed", "blocked", "pending"]},
-    "entityMatch": {"enum": ["matched", "mismatch", "unknown"]},
-    "privacyRisk": {"enum": ["none", "present", "unknown"]},
-    "minorRisk": {"enum": ["none", "present", "unknown"]},
-    "maliciousMediaRisk": {"enum": ["none", "present", "unknown"]},
-    "watermarkStatus": {"enum": ["absent", "present", "unknown"]},
-    "reviewedAt": {"type": "string", "minLength": 1},
-    "reviewer": {"type": "string", "minLength": 1},
-    "reviewEvidence": {"$ref": "#/$defs/sourceReviewEvidence"}
+    "status": {
+      "enum": [
+        "passed",
+        "blocked",
+        "pending"
+      ]
+    },
+    "entityMatch": {
+      "enum": [
+        "matched",
+        "mismatch",
+        "unknown"
+      ]
+    },
+    "privacyRisk": {
+      "enum": [
+        "none",
+        "present",
+        "unknown"
+      ]
+    },
+    "minorRisk": {
+      "enum": [
+        "none",
+        "present",
+        "unknown"
+      ]
+    },
+    "maliciousMediaRisk": {
+      "enum": [
+        "none",
+        "present",
+        "unknown"
+      ]
+    },
+    "watermarkStatus": {
+      "enum": [
+        "absent",
+        "present",
+        "unknown"
+      ]
+    },
+    "reviewedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewEvidence": {
+      "$ref": "#/$defs/sourceReviewEvidence"
+    }
   },
   "$defs": {
     "sha256": {
@@ -76,50 +219,36 @@
       "minLength": 1,
       "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
     },
-    "sourceReviewIdentity": {
-      "type": "object",
-      "required": [
-        "sourceRevision",
-        "sourceDigest",
-        "entityCatalogDigest",
-        "executionBundleDigest",
-        "handoffDigest",
-        "requestDigest"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "sourceRevision": {"$ref": "#/$defs/sha256"},
-        "sourceDigest": {"$ref": "#/$defs/sha256"},
-        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
-        "executionBundleDigest": {"$ref": "#/$defs/sha256"},
-        "handoffDigest": {"$ref": "#/$defs/sha256"},
-        "requestDigest": {"$ref": "#/$defs/sha256"}
-      }
-    },
     "sourceReviewEvidence": {
       "type": "object",
       "required": [
-        "sourceReview",
-        "sourceReviewRequestRef",
-        "sourceReviewRequestSha256",
-        "sourceReviewAttemptRef",
-        "sourceReviewAttemptSha256",
-        "provider",
-        "model",
-        "runId",
-        "resultSha256"
+        "contractVersion",
+        "requestRef",
+        "requestDigest",
+        "resultRef",
+        "resultDigest",
+        "actor"
       ],
       "additionalProperties": false,
       "properties": {
-        "sourceReview": {"$ref": "#/$defs/sourceReviewIdentity"},
-        "sourceReviewRequestRef": {"$ref": "#/$defs/relativeRef"},
-        "sourceReviewRequestSha256": {"$ref": "#/$defs/sha256"},
-        "sourceReviewAttemptRef": {"$ref": "#/$defs/relativeRef"},
-        "sourceReviewAttemptSha256": {"$ref": "#/$defs/sha256"},
-        "provider": {"const": "cursor_sdk"},
-        "model": {"type": "string", "pattern": "^grok-"},
-        "runId": {"type": "string", "minLength": 1},
-        "resultSha256": {"$ref": "#/$defs/sha256"}
+        "contractVersion": {
+          "const": "host-source-review/v1"
+        },
+        "requestRef": {
+          "$ref": "#/$defs/relativeRef"
+        },
+        "requestDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "resultRef": {
+          "$ref": "#/$defs/relativeRef"
+        },
+        "resultDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "actor": {
+          "$ref": "host_source_review_result_input.schema.json#/$defs/actor"
+        }
       }
     },
     "sourceAttribution": {
@@ -135,13 +264,34 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "provider": {"type": "string", "minLength": 1},
-        "sourcePostUrl": {"type": "string", "pattern": "^https://"},
-        "originalAssetUrl": {"type": "string", "pattern": "^https://"},
-        "creator": {"type": "string", "minLength": 1},
-        "license": {"type": "string", "minLength": 1},
-        "termsUrl": {"type": "string", "pattern": "^https://"},
-        "authorizationProof": {"type": "string", "pattern": "^https://"}
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourcePostUrl": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "originalAssetUrl": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "creator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1
+        },
+        "termsUrl": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "authorizationProof": {
+          "type": "string",
+          "pattern": "^https://"
+        }
       }
     }
   }

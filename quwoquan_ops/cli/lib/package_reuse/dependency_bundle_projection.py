@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,8 +11,7 @@ from .android_gradle_projection import (
     materialize_capsule_android_gradle_home,
     private_gradle_environment,
 )
-from .dependency_bundle_capsule import verify_dependency_bundle_capsule
-from .input_capsule import verify_package_input_capsule
+from .input_capsule import verify_package_input_capsule_with_dependencies
 from .ios_pod_inputs import (
     IOS_FLUTTER_SWIFT_PACKAGE_MANAGER,
     IOS_POD_DEPENDENCY_DIRECTORIES,
@@ -72,6 +72,61 @@ def _pub_manifest_digest(snapshot: object) -> str:
     return _digest_bytes(encoded)
 
 
+def _literal_absolute_path(value: object, *, label: str) -> str:
+    raw = str(value or "")
+    path = Path(raw)
+    if (
+        not raw
+        or not path.is_absolute()
+        or str(path) != raw
+        or any(part in {"", ".", ".."} for part in path.parts[1:])
+    ):
+        raise ValueError(f"{label} is not a literal absolute path")
+    return raw
+
+
+def _private_search_path(base: Mapping[str, str]) -> str:
+    """Expand current-user shorthand while rejecting cwd-relative lookup."""
+
+    raw = str(base.get("PATH") or "")
+    if not raw:
+        raise ValueError("App dependency private PATH is empty")
+    entries = raw.split(os.pathsep)
+    if any(not entry for entry in entries):
+        raise ValueError("App dependency private PATH contains an empty entry")
+
+    normalized: list[str] = []
+    for entry in entries:
+        if entry == "~" or entry.startswith("~/"):
+            shorthand = Path(entry)
+            if (
+                str(shorthand) != entry
+                or any(part in {"", ".", ".."} for part in shorthand.parts[1:])
+            ):
+                raise ValueError(
+                    "App dependency private PATH entry is not a literal path"
+                )
+            home = _literal_absolute_path(
+                base.get("HOME"),
+                label="App dependency base HOME",
+            )
+            expanded = home if entry == "~" else str(Path(home) / entry[2:])
+            normalized.append(
+                _literal_absolute_path(
+                    expanded,
+                    label="App dependency private PATH entry",
+                )
+            )
+            continue
+        normalized.append(
+            _literal_absolute_path(
+                entry,
+                label="App dependency private PATH entry",
+            )
+        )
+    return os.pathsep.join(normalized)
+
+
 def _private_flutter_environment(
     *,
     base: Mapping[str, str],
@@ -79,6 +134,7 @@ def _private_flutter_environment(
 ) -> dict[str, str]:
     """Isolate Flutter config/plugin generation from developer-global state."""
 
+    search_path = _private_search_path(base)
     state = state_root.expanduser().absolute()
     if state.exists() or state.is_symlink():
         raise ValueError("App dependency Flutter private state must be fresh")
@@ -93,10 +149,11 @@ def _private_flutter_environment(
         key: value
         for key, value in base.items()
         if key not in _PROXY_KEYS
-        and key not in {"HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"}
+        and key not in {"HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "PATH"}
     }
     environment.update(
         {
+            "PATH": search_path,
             "HOME": str(home),
             "XDG_CONFIG_HOME": str(config),
             "XDG_CACHE_HOME": str(cache),
@@ -119,6 +176,7 @@ def _ios_projection(
     upstream_dependency_digest: str,
     base_environment: Mapping[str, str],
     replay: bool,
+    verified_snapshot: object | None = None,
 ) -> tuple[IosPodProjection, OfflinePodInstallResult | None, dict[str, str]]:
     relative_lock = IOS_PODFILE_RELATIVES[dependency_host]
     ios_root = (projection_root / relative_lock).parent
@@ -135,6 +193,7 @@ def _ios_projection(
         ),
         upstream_dependency_digest=upstream_dependency_digest,
         dependency_host=dependency_host,
+        verified_snapshot=verified_snapshot,
     )
     result = (
         run_offline_cocoapods_install(
@@ -179,18 +238,18 @@ def materialize_dependency_bundle_projection(
     capsule_root = manifest_ref.parent
     projection = projection_root.expanduser().absolute()
     private = private_state_root.expanduser().absolute()
-    manifest = verify_package_input_capsule(capsule_root)
-    entries = _manifest_entries(manifest)
-    snapshots = verify_dependency_bundle_capsule(
-        capsule_root=capsule_root,
-        manifest_entries=entries,
-    )
+    verified_capsule = verify_package_input_capsule_with_dependencies(capsule_root)
+    entries = _manifest_entries(verified_capsule.manifest)
+    snapshots = verified_capsule.dependency_snapshots
+    if snapshots is None:
+        raise ValueError("App dependency verified capsule snapshots are missing")
     production_pub, patrol_pub, _production_ios, _patrol_ios, _android = snapshots
 
     production_cache = materialize_capsule_pub_cache(
         capsule_root=capsule_root,
         manifest_entries=entries,
         projection_root=projection,
+        verified_snapshot=production_pub,
     )
     production_environment = _private_flutter_environment(
         base=base_environment,
@@ -204,6 +263,7 @@ def materialize_dependency_bundle_projection(
             capsule_root=capsule_root,
             manifest_entries=entries,
             projection_root=projection,
+            verified_snapshot=patrol_pub,
         )
         patrol_environment = _private_flutter_environment(
             base=base_environment,
@@ -249,6 +309,11 @@ def materialize_dependency_bundle_projection(
             )
             if base is None:
                 raise ValueError("Patrol iOS dependency environment is missing")
+            verified_ios = (
+                _production_ios
+                if host == IOS_POD_PRODUCTION_HOST
+                else _patrol_ios
+            )
             ios_projection, result, environment = _ios_projection(
                 capsule_root=capsule_root,
                 projection_root=projection,
@@ -258,6 +323,7 @@ def materialize_dependency_bundle_projection(
                 upstream_dependency_digest=upstream,
                 base_environment=base,
                 replay=replay_ios,
+                verified_snapshot=verified_ios,
             )
             ios_projections.append((host, ios_projection))
             if result is not None:

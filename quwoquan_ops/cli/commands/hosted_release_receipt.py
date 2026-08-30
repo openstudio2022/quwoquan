@@ -66,11 +66,44 @@ def command_hosted_release_receipt(args: argparse.Namespace) -> dict[str, Any]:
             receipt_id=receipt_id,
         )
         receipt = readback["receipt"]
+        if not isinstance(receipt, dict):
+            raise RuntimeError("hosted receipt identity is invalid")
+        # Validate this exact receipt schema, closed field set, canonical request
+        # projection, generation, authority and content-derived receipt id.  A
+        # generic JSON object validator cannot prove release-ledger semantics.
+        from quwoquan_ops.cli.prod import hosted_release_ledger
+
+        if (
+            set(receipt) != hosted_release_ledger.RECEIPT_FIELDS
+            or receipt.get("schema") != hosted_release_ledger.RECEIPT_SCHEMA
+            or receipt.get("authority") != hosted_release_ledger.AUTHORITY
+            or receipt.get("receiptId") != receipt_id
+            or hosted_release_ledger._receipt_id(receipt) != receipt_id
+        ):
+            raise RuntimeError("hosted release receipt schema is invalid")
+        request = {
+            field: receipt[field]
+            for field in hosted_release_ledger.REQUEST_FIELDS
+            if field != "schema"
+        }
+        request["schema"] = hosted_release_ledger.REQUEST_SCHEMA
+        try:
+            hosted_release_ledger._validate_request(request)
+        except ValueError as error:
+            raise RuntimeError("hosted release receipt payload is invalid") from error
+        expected_generation = receipt.get("expectedGeneration")
+        committed_generation = receipt.get("committedGeneration")
+        if (
+            not isinstance(expected_generation, int)
+            or isinstance(expected_generation, bool)
+            or not isinstance(committed_generation, int)
+            or isinstance(committed_generation, bool)
+            or committed_generation != expected_generation + 1
+        ):
+            raise RuntimeError("hosted release receipt generation is invalid")
         receipt_bytes = (
             json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         ).encode("utf-8")
-        if not isinstance(receipt, dict) or receipt.get("receiptId") != receipt_id:
-            raise RuntimeError("hosted receipt identity is invalid")
         if receipt.get("service") != str(args.service).strip():
             raise RuntimeError("hosted receipt service does not match request")
         if any(receipt.get(field) != value for field, value in expected_candidate.items()):

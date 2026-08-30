@@ -29,6 +29,7 @@ from .constants import (  # noqa: F401
     _DEPLOYMENT_INPUT_FIELDS,
     _DIGEST_FIELDS,
     _FINGERPRINT_FIELDS,
+    CURRENTNESS_TIMEOUT_DETAIL_PREFIX,
     CURRENTNESS_TIMEOUT_SECONDS,
     FINGERPRINT_NAME,
     FINGERPRINT_SCHEMA,
@@ -72,8 +73,10 @@ from .input_capsule import (  # noqa: F401
     _path_entry,
     _read_capsule_manifest,
     _safe_capsule_source,
+    VerifiedPackageInputCapsule,
     materialize_package_input_capsule,
     verify_package_input_capsule,
+    verify_package_input_capsule_with_dependencies,
 )
 from .native_dependency_inputs import (  # noqa: F401
     NATIVE_RESOLUTION_INPUT_SCHEMA,

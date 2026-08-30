@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import shlex
+import stat
 import subprocess
 import sys
 from collections.abc import Mapping
@@ -18,7 +19,10 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli.lib.app_dependency_toolchain import (
     AppDependencyToolchainError,
-    resolve_cocoapods_executable,
+    ResolvedCocoaPodsIdentity,
+    cocoapods_environment,
+    cocoapods_identity_from_environment,
+    resolve_cocoapods_identity,
 )
 from quwoquan_ops.cli.lib.dev_up import detect_device_kind, find_device
 from quwoquan_ops.cli.lib.package_reuse import (
@@ -27,8 +31,8 @@ from quwoquan_ops.cli.lib.package_reuse import (
 )
 from quwoquan_ops.cli.lib.package_reuse.dependency_bundle_projection_verify import (
     load_dependency_projection_cas_readback,
-    prepare_dependency_projection_cas_evidence,
-    revalidate_dependency_projection_cas,
+    prepare_dependency_projection_cas_evidence_with_observed_components,
+    readback_from_expectation,
     write_dependency_projection_cas_readback,
 )
 
@@ -69,6 +73,13 @@ _FORBIDDEN_IOS_SPM_TOKENS = (
     "XCLocalSwiftPackageReference",
     "XCSwiftPackageProductDependency",
 )
+_CROSS_PLATFORM_GENERATED_TOOLING = {
+    "ios": (Path("android/local.properties"),),
+    "android": (
+        Path("ios/Flutter/Generated.xcconfig"),
+        Path("ios/Flutter/flutter_export_environment.sh"),
+    ),
+}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -164,6 +175,82 @@ def _run_projected_pub_gets(
     )
 
 
+def _prune_cross_platform_generated_tooling(
+    *,
+    projection_root: Path,
+    platform: str,
+    include_patrol: bool,
+) -> None:
+    try:
+        relative_paths = _CROSS_PLATFORM_GENERATED_TOOLING[platform]
+    except KeyError as error:
+        raise ValueError(
+            "APP.DEPENDENCY.cross_platform_generated_tooling_unsafe: "
+            f"unsupported target platform {platform}"
+        ) from error
+
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    package_roots = [Path("quwoquan_app")]
+    if include_patrol:
+        package_roots.append(Path("quwoquan_app/test_host/patrol"))
+    for package_root in package_roots:
+        for relative_path in relative_paths:
+            generated_relative_path = package_root / relative_path
+            directory_descriptors: list[int] = []
+            try:
+                try:
+                    directory_descriptors.append(
+                        os.open(projection_root, directory_flags)
+                    )
+                    for component in generated_relative_path.parent.parts:
+                        directory_descriptors.append(
+                            os.open(
+                                component,
+                                directory_flags,
+                                dir_fd=directory_descriptors[-1],
+                            )
+                        )
+                except FileNotFoundError:
+                    continue
+                except OSError as error:
+                    raise ValueError(
+                        "APP.DEPENDENCY.cross_platform_generated_tooling_unsafe: "
+                        f"unsafe parent for {generated_relative_path}: {error}"
+                    ) from error
+
+                filename = generated_relative_path.name
+                try:
+                    observed = os.stat(
+                        filename,
+                        dir_fd=directory_descriptors[-1],
+                        follow_symlinks=False,
+                    )
+                except FileNotFoundError:
+                    continue
+                except OSError as error:
+                    raise ValueError(
+                        "APP.DEPENDENCY.cross_platform_generated_tooling_unsafe: "
+                        f"unable to inspect {generated_relative_path}: {error}"
+                    ) from error
+                if not stat.S_ISREG(observed.st_mode):
+                    raise ValueError(
+                        "APP.DEPENDENCY.cross_platform_generated_tooling_unsafe: "
+                        f"expected a regular file at {generated_relative_path}"
+                    )
+                try:
+                    os.unlink(filename, dir_fd=directory_descriptors[-1])
+                except FileNotFoundError:
+                    continue
+                except OSError as error:
+                    raise ValueError(
+                        "APP.DEPENDENCY.cross_platform_generated_tooling_unsafe: "
+                        f"unable to prune {generated_relative_path}: {error}"
+                    ) from error
+            finally:
+                for descriptor in reversed(directory_descriptors):
+                    os.close(descriptor)
+
+
 def _shell_exports(
     environment: Mapping[str, str],
     *,
@@ -175,6 +262,20 @@ def _shell_exports(
         if value:
             lines.append(f"export {key}={shlex.quote(value)}")
         else:
+            lines.append(f"unset {key}")
+    for key in (
+        "QWQ_COCOAPODS_EXECUTABLE",
+        "QWQ_COCOAPODS_VERSION",
+        "QWQ_COCOAPODS_EXECUTABLE_DIGEST",
+        "QWQ_COCOAPODS_RUNTIME_ENVIRONMENT_DIGEST",
+        "QWQ_COCOAPODS_COMMAND_RESOLUTION_DIGEST",
+        "QWQ_COCOAPODS_BINDING_SEAL",
+        "PATH",
+    ):
+        value = str(environment.get(key) or "")
+        if value:
+            lines.append(f"export {key}={shlex.quote(value)}")
+        elif key.startswith("QWQ_COCOAPODS_"):
             lines.append(f"unset {key}")
     if dependency_evidence is not None:
         evidence = dependency_evidence
@@ -214,15 +315,48 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         platform = _platform(args.device)
+        pod_identity: ResolvedCocoaPodsIdentity | None = None
         pod: str | None = None
+        base_environment = dict(os.environ)
         if platform == "ios":
-            pod = resolve_cocoapods_executable(args.pod)
+            supplied_identity = any(
+                str(base_environment.get(key) or "").strip()
+                for key in (
+                    "QWQ_COCOAPODS_EXECUTABLE",
+                    "QWQ_COCOAPODS_VERSION",
+                    "QWQ_COCOAPODS_EXECUTABLE_DIGEST",
+                    "QWQ_COCOAPODS_RUNTIME_ENVIRONMENT_DIGEST",
+                    "QWQ_COCOAPODS_COMMAND_RESOLUTION_DIGEST",
+                    "QWQ_COCOAPODS_BINDING_SEAL",
+                )
+            )
+            if supplied_identity:
+                pod_identity = cocoapods_identity_from_environment(base_environment)
+                if args.pod:
+                    declared_identity = resolve_cocoapods_identity(
+                        args.pod,
+                        search_path=str(pod_identity.executable.parent),
+                    )
+                    if declared_identity.as_dict() != pod_identity.as_dict():
+                        raise ValueError(
+                            "APP.DEPENDENCY.cocoapods_mixed: --pod differs from QWQ identity"
+                        )
+            else:
+                pod_identity = resolve_cocoapods_identity(args.pod)
+            pod = str(pod_identity.executable)
+            base_environment = cocoapods_environment(
+                pod_identity,
+                base=base_environment,
+            )
+        base_environment["QWQ_REAL_FLUTTER"] = str(
+            Path(args.flutter).expanduser().resolve(strict=True)
+        )
         dependency_projection = materialize_dependency_bundle_projection(
             manifest_path=Path(args.source_capsule_manifest),
             projection_root=Path(args.projection_root),
             private_state_root=Path(args.private_state_root),
             platform=platform,
-            base_environment=dict(os.environ),
+            base_environment=base_environment,
             pod_executable=pod,
             include_patrol=args.include_patrol,
             replay_ios=False,
@@ -242,18 +376,27 @@ def main(argv: list[str] | None = None) -> int:
                 pod_executable=pod,
             )
             _assert_cocoapods_only_ios_project(Path(args.projection_root))
-        private_state_root = Path(args.private_state_root).expanduser().absolute()
-        expectation = prepare_dependency_projection_cas_evidence(
+        _prune_cross_platform_generated_tooling(
             projection_root=Path(args.projection_root),
-            source_manifest_path=Path(args.source_capsule_manifest),
-            dependency_projection=dependency_projection,
-            evidence_path=private_state_root / "dependency-projection-expectation.json",
-            ios_install_results=ios_install_results,
+            platform=platform,
+            include_patrol=args.include_patrol,
         )
-        prebuild_readback = revalidate_dependency_projection_cas(
-            projection_root=Path(args.projection_root),
-            evidence_path=expectation.evidence_path,
-            expected_digest=expectation.evidence_digest,
+        private_state_root = Path(args.private_state_root).expanduser().absolute()
+        prepared_evidence = (
+            prepare_dependency_projection_cas_evidence_with_observed_components(
+                projection_root=Path(args.projection_root),
+                source_manifest_path=Path(args.source_capsule_manifest),
+                dependency_projection=dependency_projection,
+                evidence_path=(
+                    private_state_root / "dependency-projection-expectation.json"
+                ),
+                ios_install_results=ios_install_results,
+            )
+        )
+        expectation = prepared_evidence.expectation
+        prebuild_readback = readback_from_expectation(
+            expectation=expectation,
+            observed_components=prepared_evidence.observed_components,
             command_environment_owner="production",
             command_environment=dependency_projection.production_environment,
         )

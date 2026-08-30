@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Produce candidate-bound Gamma release-consumer/device-UAT CaseResult evidence."""
+"""Emit canonical, create-once Gamma App ``ReadinessCaseResult`` bundles."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -20,18 +20,36 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_app.scripts.gamma import verify_local_gamma_mirror as gamma_verifier
-from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
-    load_candidate_manifest,
-)
-from quwoquan_ops.cli.lib.output_paths import (
-    active_deployment_candidate,
-    output_root,
+from quwoquan_ops.cli.lib.deployment_candidate_manifest import load_candidate_manifest
+from quwoquan_ops.cli.lib.output_paths import active_deployment_candidate, output_root
+from quwoquan_ops.cli.lib.readiness_case_result import (
+    ReadinessCaseResultError,
+    build_readiness_result_bundle,
+    validate_readiness_case_result,
+    write_create_once_json,
 )
 from quwoquan_ops.cli.lib.startup_attempt_receipt import load_startup_attempt
+from quwoquan_ops.cli.lib.target_uat_binding import (
+    TargetUatBindingError,
+    target_uat_binding_digest,
+    validate_target_uat_binding,
+)
 
 
 ENVIRONMENT = "gamma"
 TARGET = "gamma-local"
+SPEC_REF = (
+    "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/"
+    "multi-carrier-release/spec.md#gwt-001"
+)
+CASE_ID = "homepage_release_consumer_render_app_uat"
+OBJECT_ID = "entity.homepage"
+TARGET_VALUE = {"kind": "page", "id": "entity.detail"}
+RUNNER_IDENTITY = "gamma-patrol-release-homepage"
+RUNNER_SOURCE_PATH = (
+    "quwoquan_app/test/user_acceptance/service/entity_service/entity_homepage/"
+    "homepage/release_homepage__consumer_render__functional__user_acceptance_test.dart"
+)
 IDENTITY_SNAPSHOT_SCHEMA = "quwoquan.gamma-case-result-identity"
 IDENTITY_FIELDS = (
     "environment",
@@ -40,17 +58,19 @@ IDENTITY_FIELDS = (
     "attemptId",
     "packageDigest",
     "configurationDigest",
+    "runtimeConfigDigest",
     "providerRuntimeDigest",
     "observabilityLogSinkDigest",
     "imageDigest",
+    "sourceRevision",
+    "contractGraphSourceHash",
+    "candidateManifestSha256",
 )
-IDENTITY_SNAPSHOT_FIELDS = frozenset(
-    {"schema", "phase", "preparedAt", "identity"}
-)
+IDENTITY_SNAPSHOT_FIELDS = frozenset({"schema", "phase", "preparedAt", "identity"})
 
 
 class GammaCaseResultError(ValueError):
-    """The current runtime cannot support a passed Gamma CaseResult."""
+    """Gamma evidence cannot produce a trustworthy canonical raw result."""
 
 
 def utc_now() -> str:
@@ -85,43 +105,18 @@ def resolve_gamma_evidence_path(raw_value: str, *, label: str) -> Path:
         raise GammaCaseResultError(
             f"{label} must stay below QWQ_OUTPUT_ROOT/env/gamma/runs"
         ) from exc
-
-    # Do not resolve first: doing so would hide a symlink at the leaf or in an
-    # existing parent.  Every existing component below the canonical evidence
-    # root must be a physical directory/file owned by this target.
     current = evidence_root_lexical
     for component in relative.parts:
         current /= component
         if current.is_symlink():
             raise GammaCaseResultError(f"{label} cannot traverse a symlink")
-
-    resolved = candidate.resolve()
     try:
-        resolved.relative_to(evidence_root)
+        candidate.resolve().relative_to(evidence_root)
     except ValueError as exc:
         raise GammaCaseResultError(
             f"{label} resolved outside QWQ_OUTPUT_ROOT/env/gamma/runs"
         ) from exc
-    return resolved
-
-
-def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-        dir=path.parent,
-    )
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        temporary.replace(path)
-    finally:
-        temporary.unlink(missing_ok=True)
+    return candidate.resolve()
 
 
 def _load_json(path: Path, *, label: str) -> dict[str, Any]:
@@ -134,6 +129,43 @@ def _load_json(path: Path, *, label: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise GammaCaseResultError(f"{label} root must be an object")
     return payload
+
+
+def _contract_graph_source_hash() -> str:
+    graph = _load_json(
+        ROOT / "quwoquan_service/generated/contract_graph.json",
+        label="current ContractGraph",
+    )
+    sources = graph.get("sources")
+    if not isinstance(sources, list) or not sources:
+        raise GammaCaseResultError("current ContractGraph has no source identities")
+    normalized: list[tuple[str, str]] = []
+    for source in sources:
+        if not isinstance(source, dict):
+            raise GammaCaseResultError("current ContractGraph source identity is invalid")
+        source_path = str(source.get("path") or "").strip()
+        digest = str(source.get("sha256") or "").strip()
+        if not source_path or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+            raise GammaCaseResultError("current ContractGraph source identity is invalid")
+        normalized.append((source_path, digest))
+    normalized.sort()
+    if len({source_path for source_path, _ in normalized}) != len(normalized):
+        raise GammaCaseResultError("current ContractGraph has duplicate source paths")
+    hasher = hashlib.sha256()
+    for source_path, digest in normalized:
+        hasher.update(source_path.encode("utf-8"))
+        hasher.update(b"\0")
+        hasher.update(digest.encode("ascii"))
+        hasher.update(b"\n")
+    return hasher.hexdigest()
+
+
+def _candidate_manifest_sha256(active: Mapping[str, Any]) -> str:
+    candidate_dir = Path(str(active.get("candidateDir") or "")).resolve()
+    manifest_path = candidate_dir / "manifest.json"
+    if not manifest_path.is_file() or manifest_path.is_symlink():
+        raise GammaCaseResultError("Gamma candidate manifest bytes are missing or unsafe")
+    return hashlib.sha256(manifest_path.read_bytes()).hexdigest()
 
 
 def _normalize_identity(value: object) -> dict[str, str]:
@@ -162,19 +194,25 @@ def load_gamma_execution_identity() -> dict[str, str]:
             baseline_id,
             require_full=True,
         )
-        identity = gamma_verifier._candidate_identity(
+        legacy_identity = gamma_verifier._candidate_identity(
             startup=startup,
             active=active,
             candidate=candidate,
             configuration_digest=str(startup.get("configurationDigest") or ""),
         )
+        identity = {
+            **legacy_identity,
+            "runtimeConfigDigest": str(candidate.get("runtimeConfigDigest") or ""),
+            "sourceRevision": str(candidate.get("sourceRevision") or ""),
+            "contractGraphSourceHash": _contract_graph_source_hash(),
+            "candidateManifestSha256": _candidate_manifest_sha256(active),
+        }
         startup_after = load_startup_attempt(TARGET)
         active_after = active_deployment_candidate(TARGET)
     except GammaCaseResultError:
         raise
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         raise GammaCaseResultError(str(exc)) from exc
-
     if startup_after != startup or active_after != active:
         raise GammaCaseResultError(
             "Gamma startup or active candidate changed during identity validation"
@@ -192,126 +230,157 @@ def require_unchanged_identity(expected: Mapping[str, str]) -> dict[str, str]:
     return current
 
 
-def build_passed_case_result(
-    *,
-    phase: str,
-    identity: Mapping[str, str],
-    executed: int,
-    skipped: int,
-    failed: int,
-    executed_at: str,
-) -> dict[str, Any]:
-    normalized_identity = _normalize_identity(dict(identity))
-    payload: dict[str, Any] = {
-        "schema": gamma_verifier.CASE_RESULT_SCHEMA,
-        "caseId": gamma_verifier.CASE_IDS[phase],
-        "status": "passed",
-        **normalized_identity,
-        "executed": executed,
-        "skipped": skipped,
-        "failed": failed,
-        "executedAt": _timestamp(executed_at, label=f"{phase} executedAt"),
-        "specRefs": list(gamma_verifier.CASE_SPEC_REFS),
-    }
+def load_target_uat_binding(path: Path) -> tuple[dict[str, Any], str]:
     try:
-        return gamma_verifier.validate_gamma_case_result(
-            payload,
-            phase=phase,
-            identity=normalized_identity,
+        encoded = path.read_bytes()
+    except OSError as exc:
+        raise GammaCaseResultError("TargetUatBinding is missing or unreadable") from exc
+    try:
+        binding = json.loads(encoded)
+        validated = validate_target_uat_binding(
+            binding,
+            expected_bindings={"environment": ENVIRONMENT, "target": TARGET},
         )
-    except (TypeError, ValueError) as exc:
+        digest = target_uat_binding_digest(encoded)
+    except (json.JSONDecodeError, TargetUatBindingError, TypeError, ValueError) as exc:
+        raise GammaCaseResultError(f"TargetUatBinding is invalid: {exc}") from exc
+    return validated, digest
+
+
+def _slot_artifact_path(report_path: Path, slot_id: str) -> Path:
+    safe = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in slot_id)
+    return report_path.with_name(f"{report_path.stem}.{safe}.json")
+
+
+def _result(
+    *,
+    identity: Mapping[str, str],
+    status: str,
+    entry_surface: str,
+    carrier: str,
+    platform: str,
+    device_class: str,
+    runner_identity: str,
+    started_at: str,
+    completed_at: str,
+    artifact_sha256: str,
+    artifact_path: str,
+    binding: Mapping[str, Any],
+    binding_digest: str,
+) -> dict[str, Any]:
+    normalized = _normalize_identity(dict(identity))
+    value: dict[str, Any] = {
+        "objectId": OBJECT_ID,
+        "specRef": SPEC_REF,
+        "caseId": CASE_ID,
+        "producer": "app",
+        "layer": "user_acceptance",
+        "status": status,
+        "target": dict(TARGET_VALUE),
+        "commitSha": normalized["sourceRevision"],
+        "contractGraphSourceHash": normalized["contractGraphSourceHash"],
+        "deploymentTarget": TARGET,
+        "baselineId": normalized["baselineId"].removeprefix("sha256:"),
+        "packageDigest": normalized["packageDigest"],
+        "configurationDigest": normalized["configurationDigest"],
+        "candidateManifestSha256": normalized["candidateManifestSha256"],
+        "candidateDigest": normalized["baselineId"],
+        "environment": ENVIRONMENT,
+        "platform": platform,
+        "deviceClass": device_class,
+        "provider": str(binding["provider"]["identity"]),
+        "startedAt": _timestamp(started_at, label="ReadinessCaseResult startedAt"),
+        "completedAt": _timestamp(completed_at, label="ReadinessCaseResult completedAt"),
+        "runnerIdentity": runner_identity,
+        "artifactSha256": artifact_sha256,
+        "artifactPath": artifact_path,
+    }
+    if status != "passed":
+        value["reasonCode"] = (
+            "APP.GAMMA_UAT.failed" if status == "failed" else "APP.GAMMA_UAT.blocked"
+        )
+    if not binding_digest:
+        raise GammaCaseResultError("exact TargetUatBinding digest is missing")
+    if (
+            binding.get("candidateDigest") != normalized["baselineId"]
+            or binding.get("packageDigest") != normalized["packageDigest"]
+            or binding.get("configurationDigest") != normalized["configurationDigest"]
+            or binding.get("runtimeConfigDigest") != normalized["runtimeConfigDigest"]
+    ):
+        raise GammaCaseResultError(
+            "TargetUatBinding candidate identity differs from running Gamma"
+        )
+    value.update(
+        {
+                "releaseDigest": str(binding["releaseDigest"]),
+                "releaseId": str(binding["releaseId"]),
+                "targetUatBindingDigest": binding_digest,
+                "entrySurface": entry_surface,
+                "carrier": carrier,
+                "deviceIdentity": str(binding["device"]["identity"]),
+                "uatProfile": str(binding["profile"]),
+                "nonPromotable": bool(binding["nonPromotable"]),
+                "artifactClass": str(binding["artifact"]["class"]),
+                "physicalDevice": binding["device"]["class"] == "physical",
+        }
+    )
+    try:
+        return validate_readiness_case_result(value, generated_at=completed_at)
+    except ReadinessCaseResultError as exc:
         raise GammaCaseResultError(str(exc)) from exc
 
 
-def blocked_case_result(
-    *,
-    phase: str,
-    reason: str,
-    identity: Mapping[str, str] | None = None,
-    status: str = "gate_block",
-    executed: int = 0,
-    skipped: int = 0,
-    failed: int = 0,
-) -> dict[str, Any]:
-    if status not in {"gate_block", "failed"}:
-        raise GammaCaseResultError("blocked CaseResult status is invalid")
-    payload: dict[str, Any] = {
-        "schema": gamma_verifier.CASE_RESULT_SCHEMA,
-        "caseId": gamma_verifier.CASE_IDS[phase],
-        "status": status,
-        "executed": executed,
-        "skipped": skipped,
-        "failed": failed,
-        "executedAt": utc_now(),
-        "specRefs": list(gamma_verifier.CASE_SPEC_REFS),
-        "reason": str(reason or "Gamma execution did not produce passed evidence"),
+def _relative_artifact_path(path: Path) -> str:
+    root = output_root().expanduser().resolve()
+    try:
+        return path.resolve().relative_to(root).as_posix()
+    except ValueError as exc:
+        raise GammaCaseResultError("Gamma evidence artifact escapes QWQ_OUTPUT_ROOT") from exc
+
+
+def write_blocker_artifact(
+    *, report_path: Path, reason: str, slot_identity: Mapping[str, str]
+) -> tuple[str, str]:
+    payload = {
+        "schema": "quwoquan.gamma-readiness-blocker.v1",
+        "reason": " ".join(str(reason).split()).strip(),
+        "slot": dict(slot_identity),
     }
-    if identity is not None:
-        payload.update(_normalize_identity(dict(identity)))
-    return payload
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    digest = hashlib.sha256(encoded).hexdigest()
+    blocker_path = report_path.with_name(f"{report_path.stem}.blocker.{digest}.json")
+    try:
+        write_create_once_json(blocker_path, payload)
+    except ReadinessCaseResultError as exc:
+        raise GammaCaseResultError(str(exc)) from exc
+    return digest, _relative_artifact_path(blocker_path)
 
 
-def write_blocked_case_result(
-    *,
-    report_path: Path,
-    phase: str,
-    reason: str,
-    identity: Mapping[str, str] | None = None,
-    status: str = "gate_block",
-    executed: int = 0,
-    skipped: int = 0,
-    failed: int = 0,
-) -> dict[str, Any]:
-    payload = blocked_case_result(
-        phase=phase,
-        reason=reason,
-        identity=identity,
-        status=status,
-        executed=executed,
-        skipped=skipped,
-        failed=failed,
-    )
-    _write_json(report_path, payload)
-    return payload
-
-
-def write_passed_case_result(
-    *,
-    report_path: Path,
-    phase: str,
-    identity: Mapping[str, str],
-    executed: int,
-    skipped: int,
-    failed: int,
-    executed_at: str,
-) -> dict[str, Any]:
-    payload = build_passed_case_result(
-        phase=phase,
-        identity=identity,
-        executed=executed,
-        skipped=skipped,
-        failed=failed,
-        executed_at=executed_at,
-    )
-    _write_json(report_path, payload)
-    return payload
+def write_result_bundle(*, report_path: Path, results: list[Mapping[str, Any]]) -> dict[str, Any]:
+    if not results:
+        raise GammaCaseResultError("Gamma execution produced no canonical raw results")
+    generated_at = max(str(result["completedAt"]) for result in results)
+    try:
+        bundle = build_readiness_result_bundle(results, generated_at=generated_at)
+        write_create_once_json(report_path, bundle)
+    except ReadinessCaseResultError as exc:
+        raise GammaCaseResultError(str(exc)) from exc
+    return bundle
 
 
 def write_identity_snapshot(
-    *,
-    path: Path,
-    phase: str,
-    identity: Mapping[str, str],
+    *, path: Path, phase: str, identity: Mapping[str, str]
 ) -> dict[str, Any]:
-    if phase not in gamma_verifier.CASE_IDS:
-        raise GammaCaseResultError(f"unsupported Gamma CaseResult phase: {phase}")
     payload = {
         "schema": IDENTITY_SNAPSHOT_SCHEMA,
         "phase": phase,
         "preparedAt": utc_now(),
         "identity": _normalize_identity(dict(identity)),
     }
-    _write_json(path, payload)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
     return payload
 
 
@@ -329,62 +398,165 @@ def load_identity_snapshot(*, path: Path, phase: str) -> dict[str, str]:
 
 def prepare_device_uat(
     *,
-    report_path: Path,
     identity_snapshot_path: Path,
     patrol_report_path: Path,
 ) -> dict[str, str]:
-    # Invalidate every reusable input before identity validation.  A stopped or
-    # missing receipt must never leave an earlier passed CaseResult/snapshot/raw
-    # Patrol report available for a later finalize invocation.
-    write_blocked_case_result(
-        report_path=report_path,
-        phase="device_uat",
-        reason="Gamma device-UAT identity validation has not completed",
-    )
-    _write_json(
-        identity_snapshot_path,
-        {
-            "schema": IDENTITY_SNAPSHOT_SCHEMA,
-            "phase": "device_uat",
-            "status": "gate_block",
-            "preparedAt": utc_now(),
-        },
-    )
-    _write_json(
-        patrol_report_path,
-        {
-            "schema": "quwoquan.gamma-device-uat-patrol-preflight",
-            "status": "gate_block",
-            "reason": "Gamma device-UAT Patrol execution has not started",
-            "preparedAt": utc_now(),
-        },
-    )
-    # Resolve the raw evidence path before executing Patrol so a symlink or an
-    # out-of-plane override cannot redirect the underlying report.
     resolve_gamma_evidence_path(
-        str(patrol_report_path),
-        label="Gamma device-UAT Patrol report",
+        str(patrol_report_path), label="Gamma device-UAT Patrol report"
     )
+    if identity_snapshot_path.exists() or identity_snapshot_path.is_symlink():
+        raise GammaCaseResultError(
+            "Gamma device-UAT identity snapshot already exists; use a new run path"
+        )
+    if patrol_report_path.exists() or patrol_report_path.is_symlink():
+        raise GammaCaseResultError(
+            "Gamma device-UAT Patrol report already exists; use a new run path"
+        )
     identity = load_gamma_execution_identity()
-    write_blocked_case_result(
-        report_path=report_path,
-        phase="device_uat",
-        reason="Gamma device-UAT execution has not completed",
-        identity=identity,
-    )
     write_identity_snapshot(
-        path=identity_snapshot_path,
-        phase="device_uat",
-        identity=identity,
+        path=identity_snapshot_path, phase="device_uat", identity=identity
     )
     return identity
 
 
-def _patrol_execution_counts(payload: Mapping[str, Any]) -> tuple[int, int, int, str]:
-    if payload.get("status") != "passed":
-        raise GammaCaseResultError(
-            f"Gamma device-UAT Patrol report status is {payload.get('status') or 'missing'}"
-        )
+def _platform_for_device(device: Mapping[str, Any]) -> str:
+    target_platform = str(device.get("targetPlatform") or "").strip().lower()
+    if target_platform.startswith("android"):
+        return "android"
+    if target_platform == "ios":
+        return "ios"
+    raise GammaCaseResultError("Patrol cell platform is missing")
+
+
+def _device_class(device: Mapping[str, Any]) -> str:
+    emulator = device.get("emulator")
+    if not isinstance(emulator, bool):
+        raise GammaCaseResultError("Patrol cell deviceClass is missing")
+    return "simulator" if emulator else "physical"
+
+
+def _artifact_binding_for_device(
+    payload: Mapping[str, Any], device_id: str
+) -> Mapping[str, Any]:
+    collection = payload.get("testedAppArtifactBinding")
+    bindings = collection.get("bindings") if isinstance(collection, dict) else None
+    if not isinstance(bindings, list):
+        raise GammaCaseResultError("Patrol tested App artifact bindings are missing")
+    matches = [
+        item
+        for item in bindings
+        if isinstance(item, dict) and item.get("deviceId") == device_id
+    ]
+    if len(matches) != 1 or matches[0].get("status") != "passed":
+        raise GammaCaseResultError("Patrol tested App artifact binding is not passed")
+    return matches[0]
+
+
+def _artifact_identity(binding: Mapping[str, Any]) -> tuple[str, str]:
+    artifact = binding.get("buildArtifact")
+    if not isinstance(artifact, dict):
+        raise GammaCaseResultError("Patrol build artifact identity is missing")
+    digest = str(artifact.get("artifactDigest") or "")
+    if not digest.startswith("sha256:"):
+        raise GammaCaseResultError("Patrol build artifact digest is missing")
+    path = str(artifact.get("path") or "").strip().lstrip("/")
+    if not path:
+        raise GammaCaseResultError("Patrol build artifact path is missing")
+    return digest.removeprefix("sha256:"), path
+
+
+def _case_result_by_device(payload: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    cases = payload.get("caseResults")
+    if not isinstance(cases, list):
+        return {}
+    result: dict[str, Mapping[str, Any]] = {}
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        device_id = str(case.get("deviceId") or "").strip()
+        if not device_id or device_id in result:
+            raise GammaCaseResultError("Patrol caseResults device identity is duplicate")
+        result[device_id] = case
+    return result
+
+
+def _run_by_device(payload: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    runs = payload.get("runs")
+    if not isinstance(runs, list):
+        return {}
+    result: dict[str, Mapping[str, Any]] = {}
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        device_id = str(run.get("deviceId") or "").strip()
+        if not device_id:
+            binding = run.get("testedAppArtifactBinding")
+            device_id = (
+                str(binding.get("deviceId") or "").strip()
+                if isinstance(binding, dict)
+                else ""
+            )
+        if not device_id:
+            continue
+        if device_id in result:
+            raise GammaCaseResultError("Patrol runs device identity is duplicate")
+        result[device_id] = run
+    return result
+
+
+def _blocked_cell_result(
+    *,
+    report_path: Path,
+    identity: Mapping[str, str],
+    binding: Mapping[str, Any],
+    binding_digest: str,
+    platform: str,
+    device_class: str,
+    runner_identity: str,
+    reason: str,
+    started_at: str,
+    completed_at: str,
+) -> dict[str, Any]:
+    slot = {
+        "platform": platform,
+        "deviceClass": device_class,
+        "entrySurface": "direct_or_object_route",
+        "carrier": "homepage",
+        "runnerIdentity": runner_identity,
+    }
+    artifact_sha256, artifact_path = write_blocker_artifact(
+        report_path=report_path, reason=reason, slot_identity=slot
+    )
+    return _result(
+        identity=identity,
+        binding=binding,
+        binding_digest=binding_digest,
+        status="blocked",
+        entry_surface="direct_or_object_route",
+        carrier="homepage",
+        platform=platform,
+        device_class=device_class,
+        runner_identity=runner_identity,
+        started_at=started_at,
+        completed_at=completed_at,
+        artifact_sha256=artifact_sha256,
+        artifact_path=artifact_path,
+    )
+
+
+def results_from_patrol(
+    *,
+    report_path: Path,
+    payload: Mapping[str, Any],
+    identity: Mapping[str, str],
+    binding: Mapping[str, Any],
+    binding_digest: str,
+) -> list[dict[str, Any]]:
+    started_at = _timestamp(payload.get("startedAt"), label="Patrol startedAt")
+    completed_at = _timestamp(payload.get("endedAt"), label="Patrol endedAt")
+    platform = str(binding["platform"])
+    device_class = str(binding["device"]["class"])
+    runner_identity = str(binding["runner"]["identity"])
     if (
         payload.get("composition") != "production_remote"
         or payload.get("evidenceClass") != "user_acceptance_remote"
@@ -392,82 +564,117 @@ def _patrol_execution_counts(payload: Mapping[str, Any]) -> tuple[int, int, int,
         or payload.get("apiContractEnv") != ENVIRONMENT
         or payload.get("environmentAlias") not in {"local-gamma", TARGET}
     ):
-        raise GammaCaseResultError("Gamma device-UAT Patrol composition identity mismatch")
-
+        return [
+            _blocked_cell_result(
+                report_path=report_path,
+                identity=identity,
+                binding=binding,
+                binding_digest=binding_digest,
+                platform=platform,
+                device_class=device_class,
+                runner_identity=runner_identity,
+                reason="Gamma device-UAT Patrol composition identity mismatch",
+                started_at=started_at,
+                completed_at=completed_at,
+            )
+        ]
     devices = payload.get("devices")
-    runs = payload.get("runs")
-    cases = payload.get("caseResults")
-    if (
-        not isinstance(devices, list)
-        or not devices
-        or not isinstance(runs, list)
-        or not runs
-        or not isinstance(cases, list)
-        or not cases
-        or len(runs) != len(cases)
-    ):
-        raise GammaCaseResultError("Gamma device-UAT Patrol report has no executed device matrix")
-
-    device_ids = {
-        str(device.get("id") or "").strip()
+    if not isinstance(devices, list):
+        devices = []
+    devices_by_id = {
+        str(device.get("id") or ""): device
         for device in devices
-        if isinstance(device, dict)
+        if isinstance(device, dict) and str(device.get("id") or "")
     }
-    case_device_ids = {
-        str(case.get("deviceId") or "").strip()
-        for case in cases
-        if isinstance(case, dict)
-    }
-    if (
-        "" in device_ids
-        or "" in case_device_ids
-        or not case_device_ids
-        or not case_device_ids.issubset(device_ids)
+    device_id = str(binding["device"]["identity"])
+    device = devices_by_id.get(device_id)
+    if device is None:
+        return [
+            _blocked_cell_result(
+                report_path=report_path,
+                identity=identity,
+                binding=binding,
+                binding_digest=binding_digest,
+                platform=platform,
+                device_class=device_class,
+                runner_identity=runner_identity,
+                reason=f"Patrol evidence lacks exact TargetUatBinding device {device_id}",
+                started_at=started_at,
+                completed_at=completed_at,
+            )
+        ]
+    reasons: list[str] = []
+    try:
+        if _platform_for_device(device) != platform:
+            reasons.append("Patrol cell platform differs from TargetUatBinding")
+        if _device_class(device) != device_class:
+            reasons.append("Patrol cell deviceClass differs from TargetUatBinding")
+    except GammaCaseResultError as exc:
+        reasons.append(str(exc))
+    case = _case_result_by_device(payload).get(device_id)
+    run = _run_by_device(payload).get(device_id)
+    if case is None or run is None:
+        reasons.append("Patrol evidence lacks an independently identified run/case cell")
+    summary = case.get("testExecution") if case is not None else None
+    run_summary = run.get("testExecution") if run is not None else None
+    if not isinstance(summary, dict) or summary != run_summary:
+        reasons.append("Patrol cell testExecution identity is missing or drifted")
+    elif (
+        not isinstance(summary.get("executed"), int)
+        or isinstance(summary.get("executed"), bool)
+        or summary.get("executed", 0) <= 0
+        or summary.get("skipped") != 0
+        or summary.get("failed") != 0
     ):
-        raise GammaCaseResultError("Gamma device-UAT Patrol device identity is incomplete")
-
-    executed = 0
-    skipped = 0
-    failed = 0
-    for index, (run, case) in enumerate(zip(runs, cases, strict=True)):
-        if not isinstance(run, dict) or not isinstance(case, dict):
-            raise GammaCaseResultError("Gamma device-UAT Patrol run entry is invalid")
-        run_summary = run.get("testExecution")
-        case_summary = case.get("testExecution")
-        if (
-            run.get("exitCode") != 0
-            or case.get("status") != "passed"
-            or run_summary != case_summary
-            or not isinstance(run_summary, dict)
-        ):
-            raise GammaCaseResultError(
-                f"Gamma device-UAT Patrol run {index} is not a passed execution"
+        reasons.append("Patrol cell requires executed>0, skipped=0, failed=0")
+    status = "passed"
+    if (
+        payload.get("status") != "passed"
+        or case is None
+        or case.get("status") != "passed"
+        or run is None
+        or run.get("exitCode") != 0
+    ):
+        status = "failed"
+    try:
+        artifact_binding = _artifact_binding_for_device(payload, device_id)
+        artifact_sha256, artifact_path = _artifact_identity(artifact_binding)
+    except GammaCaseResultError as exc:
+        reasons.append(str(exc))
+        artifact_sha256 = ""
+        artifact_path = ""
+    if reasons:
+        return [
+            _blocked_cell_result(
+                report_path=report_path,
+                identity=identity,
+                binding=binding,
+                binding_digest=binding_digest,
+                platform=platform,
+                device_class=device_class,
+                runner_identity=runner_identity,
+                reason="; ".join(reasons),
+                started_at=started_at,
+                completed_at=completed_at,
             )
-        counts = tuple(
-            run_summary.get(field) for field in ("executed", "skipped", "failed")
+        ]
+    return [
+        _result(
+            identity=identity,
+            binding=binding,
+            binding_digest=binding_digest,
+            status=status,
+            entry_surface="direct_or_object_route",
+            carrier="homepage",
+            platform=platform,
+            device_class=device_class,
+            runner_identity=runner_identity,
+            started_at=started_at,
+            completed_at=completed_at,
+            artifact_sha256=artifact_sha256,
+            artifact_path=artifact_path,
         )
-        if any(
-            not isinstance(value, int) or isinstance(value, bool)
-            for value in counts
-        ):
-            raise GammaCaseResultError(
-                f"Gamma device-UAT Patrol run {index} execution counts are invalid"
-            )
-        run_executed, run_skipped, run_failed = counts
-        executed += run_executed
-        skipped += run_skipped
-        failed += run_failed
-
-    if executed <= 0 or skipped != 0 or failed != 0:
-        raise GammaCaseResultError(
-            "Gamma device-UAT requires executed>0, skipped=0, failed=0"
-        )
-    return (
-        executed,
-        skipped,
-        failed,
-        _timestamp(payload.get("endedAt"), label="Gamma device-UAT Patrol endedAt"),
-    )
+    ]
 
 
 def finalize_device_uat(
@@ -475,142 +682,83 @@ def finalize_device_uat(
     report_path: Path,
     identity_snapshot_path: Path,
     patrol_report_path: Path,
+    target_uat_binding_path: Path,
     dry_run: bool,
     runner_exit_code: int = 0,
 ) -> dict[str, Any]:
-    identity: dict[str, str] | None = None
-    try:
-        identity = load_identity_snapshot(
-            path=identity_snapshot_path,
-            phase="device_uat",
+    identity = load_identity_snapshot(
+        path=identity_snapshot_path, phase="device_uat"
+    )
+    require_unchanged_identity(identity)
+    binding, binding_digest = load_target_uat_binding(target_uat_binding_path)
+    if dry_run:
+        raise GammaCaseResultError("Gamma device-UAT dry-run has no raw CaseResult")
+    if runner_exit_code != 0:
+        raise GammaCaseResultError(
+            f"Gamma device-UAT Patrol runner exited with {runner_exit_code}"
         )
-        require_unchanged_identity(identity)
-        if runner_exit_code != 0:
-            raise GammaCaseResultError(
-                f"Gamma device-UAT Patrol runner exited with {runner_exit_code}"
-            )
-        if dry_run:
-            raise GammaCaseResultError("Gamma device-UAT dry-run has no executed CaseResult")
-        patrol_report = _load_json(
-            patrol_report_path,
-            label="Gamma device-UAT Patrol report",
-        )
-        executed, skipped, failed, executed_at = _patrol_execution_counts(
-            patrol_report
-        )
-        payload = build_passed_case_result(
-            phase="device_uat",
-            identity=identity,
-            executed=executed,
-            skipped=skipped,
-            failed=failed,
-            executed_at=executed_at,
-        )
-        _write_json(report_path, payload)
-        return payload
-    except GammaCaseResultError as exc:
-        source_status = ""
-        source_executed = 0
-        source_skipped = 0
-        source_failed = 0
-        try:
-            source = _load_json(
-                patrol_report_path,
-                label="Gamma device-UAT Patrol report",
-            )
-            source_status = str(source.get("status") or "")
-            for case in source.get("caseResults") or []:
-                if not isinstance(case, dict):
-                    continue
-                summary = case.get("testExecution")
-                if not isinstance(summary, dict):
-                    continue
-                values = [summary.get(field) for field in ("executed", "skipped", "failed")]
-                if all(
-                    isinstance(value, int) and not isinstance(value, bool)
-                    for value in values
-                ):
-                    source_executed += values[0]
-                    source_skipped += values[1]
-                    source_failed += values[2]
-        except GammaCaseResultError:
-            pass
-        return write_blocked_case_result(
-            report_path=report_path,
-            phase="device_uat",
-            reason=str(exc),
-            identity=identity,
-            status="failed" if source_status == "failed" else "gate_block",
-            executed=source_executed,
-            skipped=source_skipped,
-            failed=source_failed,
-        )
+    patrol_report = _load_json(
+        patrol_report_path, label="Gamma device-UAT Patrol report"
+    )
+    results = results_from_patrol(
+        report_path=report_path,
+        payload=patrol_report,
+        identity=identity,
+        binding=binding,
+        binding_digest=binding_digest,
+    )
+    return write_result_bundle(report_path=report_path, results=results)
 
 
-def _paths(args: argparse.Namespace) -> tuple[Path, Path, Path]:
-    report = resolve_gamma_evidence_path(args.report, label="Gamma device-UAT CaseResult")
+def _paths(args: argparse.Namespace) -> tuple[Path, Path, Path, Path | None]:
+    report = resolve_gamma_evidence_path(args.report, label="Gamma device-UAT ResultBundle")
     identity = resolve_gamma_evidence_path(
-        args.identity_snapshot,
-        label="Gamma device-UAT identity snapshot",
+        args.identity_snapshot, label="Gamma device-UAT identity snapshot"
     )
     patrol = resolve_gamma_evidence_path(
-        args.patrol_report,
-        label="Gamma device-UAT Patrol report",
+        args.patrol_report, label="Gamma device-UAT Patrol report"
     )
+    binding = None
+    if getattr(args, "target_uat_binding", ""):
+        binding = resolve_gamma_evidence_path(
+            args.target_uat_binding, label="Gamma TargetUatBinding"
+        )
     if len({report, identity, patrol}) != 3:
         raise GammaCaseResultError("Gamma device-UAT evidence paths must be distinct")
-    return report, identity, patrol
+    return report, identity, patrol, binding
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-
-    for command in ("prepare-device-uat", "finalize-device-uat", "block-device-uat"):
-        child = subparsers.add_parser(command)
+    prepare = subparsers.add_parser("prepare-device-uat")
+    finalize = subparsers.add_parser("finalize-device-uat")
+    for child in (prepare, finalize):
         child.add_argument("--report", required=True)
         child.add_argument("--identity-snapshot", required=True)
         child.add_argument("--patrol-report", required=True)
-        if command == "finalize-device-uat":
-            child.add_argument("--dry-run", action="store_true")
-            child.add_argument("--runner-exit-code", type=int, default=0)
-        if command == "block-device-uat":
-            child.add_argument("--reason", required=True)
-
+    finalize.add_argument("--target-uat-binding", required=True)
+    finalize.add_argument("--dry-run", action="store_true")
+    finalize.add_argument("--runner-exit-code", type=int, default=0)
     args = parser.parse_args()
     try:
-        report_path, identity_path, patrol_path = _paths(args)
+        report_path, identity_path, patrol_path, binding_path = _paths(args)
         if args.command == "prepare-device-uat":
             prepare_device_uat(
-                report_path=report_path,
                 identity_snapshot_path=identity_path,
                 patrol_report_path=patrol_path,
             )
             return 0
-        if args.command == "finalize-device-uat":
-            payload = finalize_device_uat(
-                report_path=report_path,
-                identity_snapshot_path=identity_path,
-                patrol_report_path=patrol_path,
-                dry_run=bool(args.dry_run),
-                runner_exit_code=int(args.runner_exit_code),
-            )
-            if payload["status"] == "passed":
-                return 0
-            return 1 if payload["status"] == "failed" else 2
-
-        identity: dict[str, str] | None = None
-        try:
-            identity = load_identity_snapshot(path=identity_path, phase="device_uat")
-        except GammaCaseResultError:
-            pass
-        write_blocked_case_result(
+        assert binding_path is not None
+        bundle = finalize_device_uat(
             report_path=report_path,
-            phase="device_uat",
-            reason=args.reason,
-            identity=identity,
+            identity_snapshot_path=identity_path,
+            patrol_report_path=patrol_path,
+            target_uat_binding_path=binding_path,
+            dry_run=bool(args.dry_run),
+            runner_exit_code=int(args.runner_exit_code),
         )
-        return 2
+        return 0 if all(result["status"] == "passed" for result in bundle["results"]) else 1
     except GammaCaseResultError as exc:
         print(f"Gamma device-UAT GATE_BLOCK: {exc}", file=sys.stderr)
         return 2

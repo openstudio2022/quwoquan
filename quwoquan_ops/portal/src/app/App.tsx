@@ -4,6 +4,7 @@ import { portalMenu } from '../generated/control-plane/portalMenu.generated.js';
 import { AuditPage } from '../domains/overview/AuditPage.js';
 import { OverviewDashboardPage } from '../domains/overview/OverviewDashboardPage.js';
 import { PlatformConfigPage } from '../domains/platform/PlatformConfigPage.js';
+import { HumanAuthorityPage } from '../domains/platform/HumanAuthorityPage.js';
 import { PlatformObservabilityPage } from '../domains/platform/PlatformObservabilityPage.js';
 import { PlatformRolloutPage } from '../domains/platform/PlatformRolloutPage.js';
 import { PlatformServiceCatalogPage } from '../domains/platform/PlatformServiceCatalogPage.js';
@@ -46,6 +47,7 @@ function AuthenticatedRoutes() {
           <Route path="/platform/config/snapshot" element={<PlatformConfigPage />} />
           <Route path="/platform/config/drift" element={<PlatformConfigPage />} />
           <Route path="/platform/rollout" element={<PlatformRolloutPage />} />
+          <Route path={portalRoutePath('platform-delivery-decision')} element={<HumanAuthorityPage />} />
           <Route path="/platform/observability" element={<PlatformObservabilityPage />} />
           <Route path="/product" element={<Navigate to="/product/dashboard" replace />} />
           <Route path="/product/dashboard" element={<ProductDashboardPage />} />

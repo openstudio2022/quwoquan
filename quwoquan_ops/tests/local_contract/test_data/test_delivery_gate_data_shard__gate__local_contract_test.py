@@ -36,11 +36,22 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.gate import commit_gate_select as cgs
 from quwoquan_ops.gate import delivery_gate_data_shard as shard
+from quwoquan_ops.gate.local_dependency_purity.shell_commands import (
+    ShellCommandParseError,
+    reachable_shell_array_tokens,
+    reachable_shell_command_tokens,
+)
 
 SHARD_CLI = ROOT / "quwoquan_ops" / "gate" / "delivery_gate_data_shard.py"
 GATE_REPO = ROOT / "quwoquan_ops" / "gate" / "gate_repo.sh"
 WORKFLOW = ROOT / ".github" / "workflows" / "delivery-gate.yml"
 DATA_TESTS_JOB = "quwoquan_data_tests"
+EXPECTED_SHARD_INDICES = (0, 1, 2, 3)
+EXPECTED_SHARD_ENVIRONMENT = {
+    "GATE_DATA_PHASE": "local_contract",
+    "DATA_TEST_TOTAL_SHARDS": str(len(EXPECTED_SHARD_INDICES)),
+    "DATA_TEST_SHARD_INDEX": "${{ matrix.shard_index }}",
+}
 
 
 @pytest.fixture(scope="module")
@@ -75,14 +86,21 @@ def _declared_shard_indices(job: dict) -> tuple[int, ...]:
     assert all(type(index) is int for index in raw_indices), (
         "data local_contract matrix shard_index 必须是整数，bool/string 不得替代"
     )
-    expected = list(range(len(raw_indices)))
+    expected = list(EXPECTED_SHARD_INDICES)
     assert raw_indices == expected and len(set(raw_indices)) == len(raw_indices), (
-        "data local_contract matrix shard_index 必须从 0 开始连续且唯一"
+        "data local_contract matrix shard_index 必须精确等于 canonical 四片"
     )
     return tuple(raw_indices)
 
 
 def _shard_step(job: dict, *, shard_total: int) -> dict:
+    assert job.get("continue-on-error") in (None, False), (
+        "data local_contract job 不得吞掉分片失败"
+    )
+    assert job["strategy"] == {
+        "fail-fast": False,
+        "matrix": {"shard_index": list(EXPECTED_SHARD_INDICES)},
+    }, "data local_contract strategy 必须精确绑定 canonical 四片 matrix"
     steps = [
         step
         for step in job["steps"]
@@ -90,17 +108,60 @@ def _shard_step(job: dict, *, shard_total: int) -> dict:
     ]
     assert len(steps) == 1, "分片 job 必须有且只有一个 local_contract phase 步骤"
     step = steps[0]
+    assert set(step) == {"name", "env", "run"}, (
+        "data local_contract step 只允许 name/env/run，禁止 if/shell/continue-on-error 绕过"
+    )
     assert type(step.get("run")) is str and step["run"] == (
         "bash quwoquan_ops/gate/gate_repo.sh --scope data"
     ), "data local_contract step 必须精确调用 canonical gate_repo data scope"
     environment = step["env"]
-    assert environment.get("DATA_TEST_TOTAL_SHARDS") == str(shard_total), (
-        "DATA_TEST_TOTAL_SHARDS 必须精确等于 canonical matrix 数量"
-    )
-    assert environment.get("DATA_TEST_SHARD_INDEX") == "${{ matrix.shard_index }}", (
-        "DATA_TEST_SHARD_INDEX 必须直接消费 canonical matrix.shard_index"
+    assert shard_total == len(EXPECTED_SHARD_INDICES)
+    assert environment == EXPECTED_SHARD_ENVIRONMENT, (
+        "data local_contract env 必须精确绑定 phase/total/index，禁止测试选择污染"
     )
     return step
+
+
+def _assert_executable_command(run: str, expected_prefix: tuple[str, ...]) -> None:
+    matches = reachable_shell_command_tokens(run, command_prefix=expected_prefix)
+    assert len(matches) == 1, (
+        f"workflow 必须真实执行 {' '.join(expected_prefix)}，注释/heredoc/未调用函数不算"
+    )
+
+
+def _assert_summary_shard_blocker_contract(summary: dict) -> None:
+    assert summary.get("if") == "always()"
+    assert summary.get("continue-on-error") in (None, False)
+    steps = [
+        candidate
+        for candidate in summary["steps"]
+        if "DATA_TESTS" in candidate.get("env", {})
+    ]
+    assert len(steps) == 1
+    step = steps[0]
+    assert step.get("if") == "always()"
+    assert step.get("continue-on-error") in (None, False)
+    assert step.get("shell") is None
+    assert step["env"]["DATA_TESTS"] == "${{ needs.quwoquan_data_tests.result }}"
+    assert type(step.get("run")) is str
+    _assert_executable_command(
+        step["run"],
+        ("expect_success", DATA_TESTS_JOB, "${DATA_TESTS}"),
+    )
+
+
+def _assert_data_jobs_are_unconditional(workflow: dict) -> None:
+    for job_name in ("quwoquan_data", DATA_TESTS_JOB):
+        job = workflow["jobs"][job_name]
+        assert job.get("if") is None, f"{job_name} 必须在每次 Delivery Gate 调用执行"
+        assert job.get("continue-on-error") in (None, False)
+
+
+def _assert_token_sequence(tokens: tuple[str, ...], expected: tuple[str, ...]) -> None:
+    assert any(
+        tokens[index : index + len(expected)] == expected
+        for index in range(len(tokens) - len(expected) + 1)
+    ), f"workflow canonical ARGS 缺 {' '.join(expected)}"
 
 
 def _run_shard_cli(*args: str) -> subprocess.CompletedProcess[str]:
@@ -129,6 +190,26 @@ def _gate_shell_function(name: str) -> str:
     start = lines.index(f"{name}() {{")
     end = next(index for index in range(start + 1, len(lines)) if lines[index] == "}")
     return "\n".join(lines[start : end + 1])
+
+
+def _run_data_phase_validation(
+    *, scope: str, phase: str, env: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    script = (
+        "set -u\n"
+        f"scope={shlex.quote(scope)}\n"
+        f"data_phase={shlex.quote(phase)}\n"
+        f"{_gate_shell_function('validate_data_phase_configuration')}\n"
+        "validate_data_phase_configuration\n"
+    )
+    return subprocess.run(
+        ["bash", "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=ROOT,
+        env={"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", **env},
+    )
 
 
 @pytest.mark.parametrize("cleanup_fails", [False, True])
@@ -281,16 +362,38 @@ def test_half_declared_sharding_is_refused(env: dict[str, str]) -> None:
     assert "must be provided together" in result.stdout + result.stderr
 
 
+@pytest.mark.parametrize(
+    ("scope", "phase"),
+    (("all", "all"), ("app", "all"), ("data", "verify"), ("data", "all")),
+)
+def test_shard_environment_is_only_valid_for_data_local_contract(
+    scope: str,
+    phase: str,
+) -> None:
+    result = _run_data_phase_validation(
+        scope=scope,
+        phase=phase,
+        env={"DATA_TEST_TOTAL_SHARDS": "4", "DATA_TEST_SHARD_INDEX": "0"},
+    )
+
+    assert result.returncode == 2
+    assert "only valid with --scope data and GATE_DATA_PHASE=local_contract" in (
+        result.stdout + result.stderr
+    )
+
+
+def test_unsharded_aggregate_data_configuration_remains_valid() -> None:
+    result = _run_data_phase_validation(scope="all", phase="all", env={})
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_delivery_gate_runs_the_declared_shard_count(
     data_tests_job: dict,
     declared_shard_indices: tuple[int, ...],
 ) -> None:
     shard_total = len(declared_shard_indices)
     _shard_step(data_tests_job, shard_total=shard_total)
-    assert (
-        data_tests_job["if"].strip()
-        == "${{ needs.topology_regression.outputs.data == 'true' }}"
-    )
+    assert data_tests_job.get("if") is None
     assert data_tests_job["strategy"]["fail-fast"] is False
 
 
@@ -300,7 +403,17 @@ def test_duplicate_or_noncontinuous_matrix_indices_are_rejected(
     mutated = copy.deepcopy(data_tests_job)
     mutated["strategy"]["matrix"]["shard_index"] = [0, 0, 2, 3]
 
-    with pytest.raises(AssertionError, match="从 0 开始连续且唯一"):
+    with pytest.raises(AssertionError, match="精确等于 canonical 四片"):
+        _declared_shard_indices(mutated)
+
+
+def test_single_shard_matrix_cannot_redefine_the_canonical_total(
+    data_tests_job: dict,
+) -> None:
+    mutated = copy.deepcopy(data_tests_job)
+    mutated["strategy"]["matrix"]["shard_index"] = [0]
+
+    with pytest.raises(AssertionError, match="精确等于 canonical 四片"):
         _declared_shard_indices(mutated)
 
 
@@ -317,6 +430,53 @@ def test_boolean_run_cannot_impersonate_the_canonical_gate_command(
     step["run"] = yaml.safe_load("run: true")["run"]
 
     with pytest.raises(AssertionError, match="精确调用 canonical gate_repo"):
+        _shard_step(mutated, shard_total=declared_shard_total)
+
+
+@pytest.mark.parametrize(
+    ("location", "key", "value"),
+    (
+        ("job", "continue-on-error", True),
+        ("step", "if", "false"),
+        ("step", "continue-on-error", True),
+        ("step", "shell", "bash {0}"),
+    ),
+)
+def test_shard_job_rejects_execution_bypass_controls(
+    data_tests_job: dict,
+    declared_shard_total: int,
+    location: str,
+    key: str,
+    value: object,
+) -> None:
+    mutated = copy.deepcopy(data_tests_job)
+    if location == "job":
+        mutated[key] = value
+    else:
+        step = next(
+            candidate
+            for candidate in mutated["steps"]
+            if candidate.get("env", {}).get("GATE_DATA_PHASE") == "local_contract"
+        )
+        step[key] = value
+
+    with pytest.raises(AssertionError):
+        _shard_step(mutated, shard_total=declared_shard_total)
+
+
+def test_shard_step_rejects_test_selection_environment_pollution(
+    data_tests_job: dict,
+    declared_shard_total: int,
+) -> None:
+    mutated = copy.deepcopy(data_tests_job)
+    step = next(
+        candidate
+        for candidate in mutated["steps"]
+        if candidate.get("env", {}).get("GATE_DATA_PHASE") == "local_contract"
+    )
+    step["env"]["PYTEST_ADDOPTS"] = "--ignore=quwoquan_data/tests/local_contract"
+
+    with pytest.raises(AssertionError, match="测试选择污染"):
         _shard_step(mutated, shard_total=declared_shard_total)
 
 
@@ -343,7 +503,259 @@ def test_a_red_shard_blocks_the_delivery_gate(workflow: dict) -> None:
         and f"needs.{DATA_TESTS_JOB}.result" in str(step["env"]["DATA_TESTS"])
     ]
     assert block_steps, "汇总步骤必须读取分片 job 的结果"
-    assert f'expect_success_or_skipped "{DATA_TESTS_JOB}"' in block_steps[0]["run"]
+    _assert_executable_command(
+        block_steps[0]["run"],
+        ("expect_success", DATA_TESTS_JOB, "${DATA_TESTS}"),
+    )
+
+
+@pytest.mark.parametrize("produce_release_evidence", (False, True))
+def test_data_false_still_requires_producers_and_consumers(
+    workflow: dict,
+    produce_release_evidence: bool,
+) -> None:
+    data_impacted = False
+    assert data_impacted is False
+    _assert_data_jobs_are_unconditional(workflow)
+    _assert_summary_shard_blocker_contract(workflow["jobs"]["delivery_gate_summary"])
+    if produce_release_evidence:
+        evidence = workflow["jobs"]["release_evidence"]
+        assert DATA_TESTS_JOB in evidence["needs"]
+        aggregate = next(
+            step
+            for step in evidence["steps"]
+            if step.get("name") == "Aggregate exact three-layer test results"
+        )
+        arguments = reachable_shell_array_tokens(
+            aggregate["run"],
+            array_name="ARGS",
+            consumer_prefix=(
+                "python3",
+                "quwoquan_ops/ci/render_delivery_release_evidence.py",
+            ),
+        )
+        _assert_token_sequence(arguments, ("--local-required", "data"))
+        _assert_token_sequence(arguments, ("--local-required", "data_tests"))
+
+
+@pytest.mark.parametrize("decoy_kind", ("comment", "heredoc"))
+def test_summary_rejects_non_executable_shard_blocker_text(
+    workflow: dict,
+    decoy_kind: str,
+) -> None:
+    summary = workflow["jobs"]["delivery_gate_summary"]
+    step = next(
+        candidate
+        for candidate in summary["steps"]
+        if "DATA_TESTS" in candidate.get("env", {})
+    )
+    executable = (
+        'expect_success "quwoquan_data_tests" "${DATA_TESTS}" '
+        '"检查 data local_contract 分片测试"'
+    )
+    replacement = (
+        f"# {executable}"
+        if decoy_kind == "comment"
+        else f"cat <<'DATA_TESTS_DECOY'\n{executable}\nDATA_TESTS_DECOY"
+    )
+    mutated = step["run"].replace(executable, replacement, 1)
+
+    with pytest.raises(AssertionError, match="必须真实执行"):
+        _assert_executable_command(
+            mutated,
+            ("expect_success", DATA_TESTS_JOB, "${DATA_TESTS}"),
+        )
+
+
+def test_summary_shard_blocker_is_bound_to_unconditional_workflow_step(
+    workflow: dict,
+) -> None:
+    summary = workflow["jobs"]["delivery_gate_summary"]
+    _assert_summary_shard_blocker_contract(summary)
+
+
+@pytest.mark.parametrize(
+    ("location", "key", "value"),
+    (
+        ("job", "if", "false"),
+        ("job", "continue-on-error", True),
+        ("step", "if", "false"),
+        ("step", "continue-on-error", True),
+        ("env", "DATA_TESTS", "success"),
+    ),
+)
+def test_summary_shard_blocker_rejects_workflow_bypass_mutations(
+    workflow: dict,
+    location: str,
+    key: str,
+    value: object,
+) -> None:
+    summary = copy.deepcopy(workflow["jobs"]["delivery_gate_summary"])
+    step = next(
+        candidate
+        for candidate in summary["steps"]
+        if "DATA_TESTS" in candidate.get("env", {})
+    )
+    target = (
+        summary if location == "job" else step["env"] if location == "env" else step
+    )
+    target[key] = value
+
+    with pytest.raises(AssertionError):
+        _assert_summary_shard_blocker_contract(summary)
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    (
+        'unused() { expect_success "quwoquan_data_tests" "${DATA_TESTS}"; }',
+        'exit 0\nexpect_success "quwoquan_data_tests" "${DATA_TESTS}"',
+        'false && expect_success "quwoquan_data_tests" "${DATA_TESTS}"',
+        'true || expect_success "quwoquan_data_tests" "${DATA_TESTS}"',
+        'if true; then expect_success "quwoquan_data_tests" "${DATA_TESTS}"; fi',
+        '(expect_success "quwoquan_data_tests" "${DATA_TESTS}")',
+        'expect_success "quwoquan_data_tests" "${DATA_TESTS}" | tee /tmp/result',
+        'expect_success "quwoquan_data_tests" "${DATA_TESTS}" & wait',
+    ),
+)
+def test_summary_rejects_unreachable_shard_blocker_command(
+    workflow: dict,
+    replacement: str,
+) -> None:
+    summary = copy.deepcopy(workflow["jobs"]["delivery_gate_summary"])
+    step = next(
+        candidate
+        for candidate in summary["steps"]
+        if "DATA_TESTS" in candidate.get("env", {})
+    )
+    executable = (
+        'expect_success "quwoquan_data_tests" "${DATA_TESTS}" '
+        '"检查 data local_contract 分片测试"'
+    )
+    step["run"] = step["run"].replace(executable, replacement, 1)
+
+    with pytest.raises(AssertionError):
+        _assert_summary_shard_blocker_contract(summary)
+
+
+def test_summary_rejects_blocker_after_guaranteed_static_exit(workflow: dict) -> None:
+    summary = copy.deepcopy(workflow["jobs"]["delivery_gate_summary"])
+    step = next(
+        candidate
+        for candidate in summary["steps"]
+        if "DATA_TESTS" in candidate.get("env", {})
+    )
+    executable = (
+        'expect_success "quwoquan_data_tests" "${DATA_TESTS}" '
+        '"检查 data local_contract 分片测试"'
+    )
+    step["run"] = step["run"].replace(
+        executable,
+        "if true; then exit 0; fi\n" + executable,
+        1,
+    )
+
+    with pytest.raises(AssertionError):
+        _assert_summary_shard_blocker_contract(summary)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "subshell",
+        "control",
+        "terminal",
+        "short_circuit_and",
+        "short_circuit_or",
+    ),
+)
+def test_timing_rejects_nonpersistent_or_unreachable_array_write(
+    workflow: dict,
+    mutation: str,
+) -> None:
+    timing = next(
+        step
+        for step in workflow["jobs"]["delivery_gate_summary"]["steps"]
+        if step.get("id") == "job_timing"
+    )
+    required_line = '  --require-count "data_tests=4"\n'
+    write = 'ARGS+=(--require-count "data_tests=4")'
+    replacements = {
+        "subshell": f"({write})",
+        "control": f"if true; then {write}; fi",
+        "terminal": f"exit 0\n{write}",
+        "short_circuit_and": f"false && {write}",
+        "short_circuit_or": f"true || {write}",
+    }
+    mutated = (
+        timing["run"]
+        .replace(required_line, "", 1)
+        .replace(
+            'python3 quwoquan_ops/ci/github_actions_timing.py "${ARGS[@]}"',
+            replacements[mutation]
+            + '\npython3 quwoquan_ops/ci/github_actions_timing.py "${ARGS[@]}"',
+            1,
+        )
+    )
+
+    if mutation == "terminal":
+        with pytest.raises(ShellCommandParseError):
+            reachable_shell_array_tokens(
+                mutated,
+                array_name="ARGS",
+                consumer_prefix=(
+                    "python3",
+                    "quwoquan_ops/ci/github_actions_timing.py",
+                ),
+            )
+        return
+    arguments = reachable_shell_array_tokens(
+        mutated,
+        array_name="ARGS",
+        consumer_prefix=("python3", "quwoquan_ops/ci/github_actions_timing.py"),
+    )
+    assert "data_tests=4" not in arguments
+
+
+def test_false_or_static_array_write_is_reachable_and_persistent(
+    workflow: dict,
+) -> None:
+    timing = next(
+        step
+        for step in workflow["jobs"]["delivery_gate_summary"]["steps"]
+        if step.get("id") == "job_timing"
+    )
+    mutated = (
+        timing["run"]
+        .replace('  --require-count "data_tests=4"\n', "", 1)
+        .replace(
+            'python3 quwoquan_ops/ci/github_actions_timing.py "${ARGS[@]}"',
+            'false || ARGS+=(--require-count "data_tests=4")\n'
+            'python3 quwoquan_ops/ci/github_actions_timing.py "${ARGS[@]}"',
+            1,
+        )
+    )
+
+    arguments = reachable_shell_array_tokens(
+        mutated,
+        array_name="ARGS",
+        consumer_prefix=("python3", "quwoquan_ops/ci/github_actions_timing.py"),
+    )
+
+    _assert_token_sequence(arguments, ("--require-count", "data_tests=4"))
+
+
+def test_summary_rejects_shell_override(workflow: dict) -> None:
+    summary = copy.deepcopy(workflow["jobs"]["delivery_gate_summary"])
+    step = next(
+        candidate
+        for candidate in summary["steps"]
+        if "DATA_TESTS" in candidate.get("env", {})
+    )
+    step["shell"] = "bash --noprofile --norc -o errexit {0}"
+
+    with pytest.raises(AssertionError):
+        _assert_summary_shard_blocker_contract(summary)
 
 
 def test_required_shard_count_matches_the_matrix(
@@ -353,10 +765,72 @@ def test_required_shard_count_matches_the_matrix(
     timing = [step for step in summary["steps"] if step.get("id") == "job_timing"]
     assert timing, "汇总 job 必须有 job_timing 步骤"
     run = timing[0]["run"]
-    assert f'--require-count "data_tests={declared_shard_total}"' in run, (
-        "timing 的 require-count 与 matrix 片数漂移时，少跑一片不会被发现"
+    arguments = reachable_shell_array_tokens(
+        run,
+        array_name="ARGS",
+        consumer_prefix=("python3", "quwoquan_ops/ci/github_actions_timing.py"),
     )
-    assert '--phase "data_tests=Delivery Gate — Data Tests Shard "' in run
+    _assert_token_sequence(
+        arguments, ("--require-count", f"data_tests={declared_shard_total}")
+    )
+    _assert_token_sequence(
+        arguments, ("--phase", "data_tests=Delivery Gate — Data Tests Shard ")
+    )
+
+
+def test_timing_rejects_commented_required_shard_count(
+    workflow: dict,
+) -> None:
+    timing = next(
+        step
+        for step in workflow["jobs"]["delivery_gate_summary"]["steps"]
+        if step.get("id") == "job_timing"
+    )
+    mutated = timing["run"].replace(
+        '  --require-count "data_tests=4"\n',
+        '  # --require-count "data_tests=4"\n',
+        1,
+    )
+    arguments = reachable_shell_array_tokens(
+        mutated,
+        array_name="ARGS",
+        consumer_prefix=("python3", "quwoquan_ops/ci/github_actions_timing.py"),
+    )
+
+    with pytest.raises(AssertionError, match="canonical ARGS"):
+        _assert_token_sequence(arguments, ("--require-count", "data_tests=4"))
+
+
+def test_timing_rejects_required_shard_count_written_after_consumer(
+    workflow: dict,
+) -> None:
+    timing = next(
+        step
+        for step in workflow["jobs"]["delivery_gate_summary"]["steps"]
+        if step.get("id") == "job_timing"
+    )
+    mutated = (
+        timing["run"]
+        .replace(
+            '  --require-count "data_tests=4"\n',
+            "",
+            1,
+        )
+        .replace(
+            'python3 quwoquan_ops/ci/github_actions_timing.py "${ARGS[@]}"',
+            'python3 quwoquan_ops/ci/github_actions_timing.py "${ARGS[@]}"\n'
+            'ARGS+=(--require-count "data_tests=4")',
+            1,
+        )
+    )
+    arguments = reachable_shell_array_tokens(
+        mutated,
+        array_name="ARGS",
+        consumer_prefix=("python3", "quwoquan_ops/ci/github_actions_timing.py"),
+    )
+
+    with pytest.raises(AssertionError, match="canonical ARGS"):
+        _assert_token_sequence(arguments, ("--require-count", "data_tests=4"))
 
 
 def test_release_evidence_requires_the_shards(workflow: dict) -> None:
@@ -369,8 +843,85 @@ def test_release_evidence_requires_the_shards(workflow: dict) -> None:
     ]
     assert aggregate, "候选证据 job 必须有三层测试聚合步骤"
     run = aggregate[0]["run"]
-    assert '--job-result "data_tests=$DATA_TESTS_RESULT"' in run
-    assert "--local-required data_tests" in run
+    arguments = reachable_shell_array_tokens(
+        run,
+        array_name="ARGS",
+        consumer_prefix=(
+            "python3",
+            "quwoquan_ops/ci/render_delivery_release_evidence.py",
+        ),
+    )
+    _assert_token_sequence(arguments, ("--job-result", "data_tests=$DATA_TESTS_RESULT"))
+    _assert_token_sequence(arguments, ("--local-required", "data_tests"))
+
+
+def test_release_evidence_rejects_heredoc_job_result_decoy(workflow: dict) -> None:
+    evidence = workflow["jobs"]["release_evidence"]
+    aggregate = next(
+        step
+        for step in evidence["steps"]
+        if step.get("name") == "Aggregate exact three-layer test results"
+    )
+    mutated = aggregate["run"].replace(
+        '  --job-result "data_tests=$DATA_TESTS_RESULT"\n',
+        "cat <<'DATA_TESTS_RESULT_DECOY'\n"
+        '  --job-result "data_tests=$DATA_TESTS_RESULT"\n'
+        "DATA_TESTS_RESULT_DECOY\n",
+        1,
+    )
+    arguments = reachable_shell_array_tokens(
+        mutated,
+        array_name="ARGS",
+        consumer_prefix=(
+            "python3",
+            "quwoquan_ops/ci/render_delivery_release_evidence.py",
+        ),
+    )
+
+    with pytest.raises(AssertionError, match="canonical ARGS"):
+        _assert_token_sequence(
+            arguments, ("--job-result", "data_tests=$DATA_TESTS_RESULT")
+        )
+
+
+def test_release_evidence_rejects_job_result_written_after_consumer(
+    workflow: dict,
+) -> None:
+    evidence = workflow["jobs"]["release_evidence"]
+    aggregate = next(
+        step
+        for step in evidence["steps"]
+        if step.get("name") == "Aggregate exact three-layer test results"
+    )
+    consumer = (
+        'python3 quwoquan_ops/ci/render_delivery_release_evidence.py "${ARGS[@]}"'
+    )
+    mutated = (
+        aggregate["run"]
+        .replace(
+            '  --job-result "data_tests=$DATA_TESTS_RESULT"\n',
+            "",
+            1,
+        )
+        .replace(
+            consumer,
+            consumer + '\nARGS+=(--job-result "data_tests=$DATA_TESTS_RESULT")',
+            1,
+        )
+    )
+    arguments = reachable_shell_array_tokens(
+        mutated,
+        array_name="ARGS",
+        consumer_prefix=(
+            "python3",
+            "quwoquan_ops/ci/render_delivery_release_evidence.py",
+        ),
+    )
+
+    with pytest.raises(AssertionError, match="canonical ARGS"):
+        _assert_token_sequence(
+            arguments, ("--job-result", "data_tests=$DATA_TESTS_RESULT")
+        )
 
 
 def test_every_data_implementation_directory_is_reachable_from_commit_gate() -> None:

@@ -20,9 +20,10 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 ///   coordinator 一处；
 /// - signedGrant 但资产身份缺席：投影自相矛盾，落显式判否终态，**不回退公开
 ///   路径**——私有资产走公开 URL 会把授权判定悄悄跳过；
-/// - public 或契约缺席（存量 public 投影）且公开 URL 在场：走 [publicBuilder]，
-///   公开候选推导与 CDN 变体差异由调用方承载；
-/// - 公开 URL 也缺席：宿主没给任何可渲染取值，落缺席终态，不猜一条 URL。
+/// - typed public（含具名 legacy adapter 已适配出的 public）且 URL 在场：走
+///   [publicBuilder]；
+/// - accessMode 缺席/未知但仍带 URL 或资产身份：contract failure，落判否终态；
+/// - 全部字段均缺席：宿主没给任何可渲染取值，落缺席终态。
 class MediaDeliveryImage extends StatelessWidget {
   const MediaDeliveryImage({
     super.key,
@@ -91,7 +92,7 @@ class MediaDeliveryImage extends StatelessWidget {
         onLoadFailed: onLoadFailed,
       );
     }
-    if (binding.isSignedGrantWithoutAsset) {
+    if (binding.isSignedGrantWithoutAsset || binding.isUnsupportedPrivateHls) {
       // 私有资产没有资产身份就换不到 grant；回退公开 URL 会把授权判定跳过，
       // 因此这里停在判否终态。重试不会让资产身份出现，故不给恢复动作。
       return _terminal(
@@ -101,11 +102,22 @@ class MediaDeliveryImage extends StatelessWidget {
         ),
       );
     }
-    final publicUrl = binding.publicUrl.trim();
-    if (publicUrl.isEmpty) {
-      return _terminal(absentWidget ?? const SizedBox.shrink());
+    if (binding.isPublic) {
+      final publicUrl = binding.publicUrl.trim();
+      if (publicUrl.isEmpty) {
+        return _terminal(absentWidget ?? const SizedBox.shrink());
+      }
+      return publicBuilder(context, publicUrl);
     }
-    return publicBuilder(context, publicUrl);
+    if (binding.isContractFailure) {
+      return _terminal(
+        KeyedSubtree(
+          key: appImageLoadErrorKey,
+          child: errorWidget ?? const MediaDeliveryFailureState(),
+        ),
+      );
+    }
+    return _terminal(absentWidget ?? const SizedBox.shrink());
   }
 
   Widget _terminal(Widget child) {

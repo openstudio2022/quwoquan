@@ -64,6 +64,16 @@ var PlatformOperationSecurityDescriptors = mustSelectOperationSecurityDescriptor
 	"ops.config_snapshot.ListServiceCatalogEntries",
 	"ops.config_snapshot.ListServiceConfigs",
 	"ops.config_snapshot.ResolveEffectiveConfig",
+	"ops.human_authority.ConsumeHumanAuthorizationReceipt",
+	"ops.human_authority.CreateHumanDecisionUnit",
+	"ops.human_authority.FinalizeHumanDecision",
+	"ops.human_authority.ListHumanDecisionUnits",
+	"ops.human_authority.ReadHumanAuthoritySigningPublicKey",
+	"ops.human_authority.ReadHumanAuthorizationReceipt",
+	"ops.human_authority.ReadHumanDecisionUnit",
+	"ops.human_authority.RevokeHumanAuthorizationReceipt",
+	"ops.human_authority.SealHumanDecisionRound",
+	"ops.human_authority.SubmitHumanRoleEvidence",
 })
 
 var ProductOperationSecurityDescriptors = mustSelectOperationSecurityDescriptors([]string{

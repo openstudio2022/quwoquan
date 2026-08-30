@@ -517,6 +517,137 @@ def test_source_drift_supersession_receipt_detects_root_inventory_drift(
     with pytest.raises(ValueError, match="root inventory drift"):
         load_terminal_execution_evidence(root)
 
+    class CurrentRequestSchemaMustNotRun:
+        @staticmethod
+        def from_document(_document: object) -> object:
+            raise AssertionError(
+                "invalid terminal evidence must remain the first and only blocker"
+            )
+
+    monkeypatch.setattr(
+        verify_runtime_input_ownership,
+        "DATA_EXECUTIONS_ROOT",
+        root.parent,
+    )
+    monkeypatch.setattr(verify_runtime_input_ownership, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        verify_runtime_input_ownership,
+        "RuntimeExecutionRequest",
+        CurrentRequestSchemaMustNotRun,
+    )
+
+    assert verify_runtime_input_ownership._request_issues() == [
+        f"{root.relative_to(tmp_path)}: invalid terminal execution evidence: "
+        "execution supersession root inventory drift"
+    ]
+
+
+def test_terminal_evidence_precheck_reports_invalid_candidate_without_writes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from content.execution import terminal_evidence_precheck
+
+    root = tmp_path / "tasks" / EXECUTION_ID
+    _pre_controller_fixture(root)
+    _freeze_supersession_source(monkeypatch)
+    execution_supersession.supersede_execution(
+        EXECUTION_ID,
+        reason="source_drift",
+        executions_root=root.parent,
+    )
+    write_json(root / "evidence/homepage_media_completeness.json", {"passed": True})
+    before = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+
+    report = terminal_evidence_precheck.terminal_evidence_precheck(
+        EXECUTION_ID,
+        executions_root=root.parent,
+    )
+
+    after = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    assert report == {
+        "schema": "quwoquan_data.terminal_evidence_precheck",
+        "executionId": EXECUTION_ID,
+        "passed": False,
+        "decision": None,
+        "errorCode": "DATA.EXECUTION.TERMINAL_EVIDENCE_INVALID",
+        "issues": ["execution supersession root inventory drift"],
+        "writable": False,
+        "repairSupported": False,
+    }
+    assert after == before
+
+
+def test_terminal_evidence_precheck_cli_returns_typed_blocker(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import argparse
+    import json
+
+    from content.execution import terminal_evidence_precheck
+
+    monkeypatch.setattr(
+        terminal_evidence_precheck,
+        "terminal_evidence_precheck",
+        lambda _execution_id: {
+            "schema": "quwoquan_data.terminal_evidence_precheck",
+            "executionId": EXECUTION_ID,
+            "passed": False,
+            "decision": None,
+            "errorCode": "DATA.EXECUTION.TERMINAL_EVIDENCE_INVALID",
+            "issues": ["execution supersession root inventory drift"],
+            "writable": False,
+            "repairSupported": False,
+        },
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        terminal_evidence_precheck._handle(
+            argparse.Namespace(execution_id=EXECUTION_ID)
+        )
+
+    assert exc_info.value.code == 1
+    assert json.loads(capsys.readouterr().out)["errorCode"] == (
+        "DATA.EXECUTION.TERMINAL_EVIDENCE_INVALID"
+    )
+
+
+def test_terminal_evidence_precheck_accepts_valid_supersession(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from content.execution import terminal_evidence_precheck
+
+    root = tmp_path / "tasks" / EXECUTION_ID
+    _pre_controller_fixture(root)
+    _freeze_supersession_source(monkeypatch)
+    execution_supersession.supersede_execution(
+        EXECUTION_ID,
+        reason="source_drift",
+        executions_root=root.parent,
+    )
+
+    report = terminal_evidence_precheck.terminal_evidence_precheck(
+        EXECUTION_ID,
+        executions_root=root.parent,
+    )
+
+    assert report["passed"] is True
+    assert report["decision"] == "superseded"
+    assert report["errorCode"] is None
+    assert report["issues"] == []
+    assert report["writable"] is False
+    assert report["repairSupported"] is False
+
 
 def test_stale_reconciliation_refuses_live_controller(
     tmp_path: Path,

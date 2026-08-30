@@ -2,10 +2,17 @@ from __future__ import annotations
 
 # spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001
 import tempfile
+
+import pytest
 from pathlib import Path
 
 from quwoquan_ops.cli.lib.app_dependency_toolchain import (
+    AppDependencyToolchainError,
+    cocoapods_environment,
+    cocoapods_identity_from_environment,
     resolve_cocoapods_executable,
+    resolve_cocoapods_identity,
+    validate_cocoapods_child_environment,
 )
 from quwoquan_ops.gate import verify_local_dependency_purity as purity
 from quwoquan_ops.gate.verify_local_dependency_purity import (
@@ -571,88 +578,147 @@ def test_cross_lock_rejects_disagreeing_firebase_pods_without_plugin_tree() -> N
         assert any("Firebase pods disagree" in failure for failure in failures)
 
 
-def test_cocoapods_rejects_mixed_executable_and_runtime(monkeypatch) -> None:
-    class Result:
-        returncode = 0
+def _write_pod(
+    path: Path,
+    *,
+    version: str = "1.16.2",
+    runtime: Path | None = None,
+) -> None:
+    reported = runtime or path
+    script = f"""#!/bin/sh
+if [ "$1" = "--version" ]; then
+  printf '%s\n' {version!r}
+  exit 0
+fi
+if [ "$1" = "env" ]; then
+  cat <<'EOF'
+### Stack
+CocoaPods : {version}
+Ruby : 3.3.0
+RubyGems : 3.5.0
+### Plugins
+cocoapods-deintegrate : 1.0.5
+Executable Path: {reported}
+EOF
+  exit 0
+fi
+exit 2
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(script, encoding="utf-8")
+    path.chmod(0o755)
 
-        def __init__(self, stdout: str) -> None:
-            self.stdout = stdout
 
-    results = iter(
-        [
-            Result("1.16.2\n"),
-            Result(
-                "Executable Path: "
-                "/opt/homebrew/Cellar/cocoapods/1.15.2_1/libexec/bin/pod\n"
-            ),
-            Result("1.15.2\n"),
-            Result(
-                "Executable Path: "
-                "/opt/homebrew/Cellar/cocoapods/1.15.2_1/libexec/bin/pod\n"
-            ),
-        ]
+def test_cocoapods_resolver_returns_complete_physical_identity_and_seal(
+    tmp_path: Path,
+) -> None:
+    pod = tmp_path / "exact/bin/pod"
+    _write_pod(pod)
+
+    identity = resolve_cocoapods_identity(pod, search_path=str(pod.parent))
+
+    assert identity.executable == pod.resolve()
+    assert identity.version == "1.16.2"
+    assert identity.executable_digest.startswith("sha256:")
+    assert identity.runtime_environment_digest.startswith("sha256:")
+    assert identity.command_resolution_digest.startswith("sha256:")
+    assert identity.binding_seal.startswith("sha256:")
+    resolved_again = resolve_cocoapods_identity(
+        pod,
+        search_path=str(pod.parent),
     )
-    monkeypatch.setattr(
-        "quwoquan_ops.cli.lib.app_dependency_toolchain.subprocess.run",
-        lambda *_args, **_kwargs: next(results),
-    )
-    failures: list[str] = []
-    _verify_cocoapods_toolchain(failures, pod_executable="/usr/local/bin/pod")
-    assert failures and failures[0].startswith("APP.DEPENDENCY.cocoapods_mixed:")
+    assert resolved_again.executable == pod.resolve()
+    assert resolved_again.as_dict() == identity.as_dict()
 
 
-def test_cocoapods_wrapper_normalizes_to_self_reported_runtime(
+def test_cocoapods_resolver_rejects_missing_and_hostile_path(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    class Result:
-        returncode = 0
+    hostile = tmp_path / "hostile/pod"
+    exact = tmp_path / "exact/pod"
+    _write_pod(hostile, version="1.15.2")
+    _write_pod(exact)
 
-        def __init__(self, stdout: str) -> None:
-            self.stdout = stdout
+    with pytest.raises(AppDependencyToolchainError, match="cocoapods_missing"):
+        resolve_cocoapods_identity(search_path=str(tmp_path / "empty"))
+    with pytest.raises(AppDependencyToolchainError, match="cocoapods_mixed"):
+        resolve_cocoapods_identity(exact, search_path=str(hostile.parent))
 
-    runtime = tmp_path / "libexec/bin/pod"
-    runtime.parent.mkdir(parents=True)
-    runtime.write_text("#!/bin/sh\n", encoding="utf-8")
-    results = iter(
-        [
-            Result("1.16.2\n"),
-            Result(f"Executable Path: {runtime}\n"),
-            Result("1.16.2\n"),
-            Result(f"Executable Path: {runtime}\n"),
-        ]
-    )
+
+def test_cocoapods_stored_environment_validates_seal_without_live_probe(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    pod = tmp_path / "exact/bin/pod"
+    _write_pod(pod)
+    identity = resolve_cocoapods_identity(pod, search_path=str(pod.parent))
+    environment = identity.as_environment()
+
     monkeypatch.setattr(
-        "quwoquan_ops.cli.lib.app_dependency_toolchain.subprocess.run",
-        lambda *_args, **_kwargs: next(results),
+        "quwoquan_ops.cli.lib.app_dependency_toolchain._inspect",
+        lambda _executable: (_ for _ in ()).throw(AssertionError("live inspect")),
     )
 
-    assert resolve_cocoapods_executable("/usr/local/bin/pod") == str(runtime.resolve())
-
-
-def _stub_pod_inspection(monkeypatch, version: str) -> None:
-    class Result:
-        returncode = 0
-
-        def __init__(self, stdout: str) -> None:
-            self.stdout = stdout
-
-    results = iter(
-        [
-            Result(f"{version}\n"),
-            Result("Executable Path: /opt/pod/libexec/bin/pod\n"),
-        ]
+    stored = cocoapods_identity_from_environment(
+        environment,
+        inspect_physical=False,
     )
-    monkeypatch.setattr(
-        "quwoquan_ops.cli.lib.app_dependency_toolchain.subprocess.run",
-        lambda *_args, **_kwargs: next(results),
-    )
+    assert stored.as_environment() == environment
+
+    drifted = dict(environment)
+    drifted["QWQ_COCOAPODS_BINDING_SEAL"] = "sha256:" + "0" * 64
+    with pytest.raises(AppDependencyToolchainError, match="cocoapods_mixed"):
+        cocoapods_identity_from_environment(
+            drifted,
+            inspect_physical=False,
+        )
+
+
+def test_cocoapods_environment_rejects_mixed_digest_and_seal(
+    tmp_path: Path,
+) -> None:
+    pod = tmp_path / "exact/bin/pod"
+    _write_pod(pod)
+    identity = resolve_cocoapods_identity(pod, search_path=str(pod.parent))
+    environment = cocoapods_environment(identity, base={"PATH": str(pod.parent)})
+
+    for key in (
+        "QWQ_COCOAPODS_EXECUTABLE_DIGEST",
+        "QWQ_COCOAPODS_RUNTIME_ENVIRONMENT_DIGEST",
+        "QWQ_COCOAPODS_COMMAND_RESOLUTION_DIGEST",
+        "QWQ_COCOAPODS_BINDING_SEAL",
+    ):
+        mixed = dict(environment)
+        mixed[key] = "sha256:" + "9" * 64
+        with pytest.raises(AppDependencyToolchainError, match="cocoapods_mixed"):
+            cocoapods_identity_from_environment(mixed)
+
+
+def test_cocoapods_child_environment_rejects_hostile_path_then_accepts_prepend(
+    tmp_path: Path,
+) -> None:
+    hostile = tmp_path / "hostile/pod"
+    exact = tmp_path / "exact/pod"
+    _write_pod(hostile, version="1.15.2")
+    _write_pod(exact)
+    identity = resolve_cocoapods_identity(exact, search_path=str(exact.parent))
+    hostile_environment = {
+        **identity.as_environment(),
+        "PATH": str(hostile.parent),
+    }
+
+    with pytest.raises(AppDependencyToolchainError, match="cocoapods_mixed"):
+        validate_cocoapods_child_environment(hostile_environment)
+
+    sealed = cocoapods_environment(identity, base=hostile_environment)
+    observed, child = validate_cocoapods_child_environment(sealed)
+    assert observed.as_dict() == identity.as_dict()
+    assert child["PATH"].split(":")[0] == str(exact.parent)
 
 
 def test_cocoapods_is_not_applicable_without_any_installed_pod(monkeypatch) -> None:
-    """CocoaPods 只存在于 macOS，Linux 上缺席不构成版本漂移。"""
-
-    monkeypatch.setattr("shutil.which", lambda _name: None)
+    monkeypatch.setattr("shutil.which", lambda _name, **_kwargs: None)
     failures: list[str] = []
 
     _verify_cocoapods_toolchain(failures)
@@ -661,24 +727,25 @@ def test_cocoapods_is_not_applicable_without_any_installed_pod(monkeypatch) -> N
 
 
 def test_cocoapods_still_rejects_declared_but_unusable_executable(
-    monkeypatch,
+    tmp_path: Path,
 ) -> None:
-    """显式声明就是承诺有 CocoaPods，声明却不可用仍然是漂移。"""
-
-    monkeypatch.setattr("shutil.which", lambda _name: None)
-    _stub_pod_inspection(monkeypatch, "1.15.2")
     failures: list[str] = []
 
-    _verify_cocoapods_toolchain(failures, pod_executable="/usr/local/bin/pod")
+    _verify_cocoapods_toolchain(
+        failures,
+        pod_executable=str(tmp_path / "missing/pod"),
+    )
 
     assert failures and failures[0].startswith("APP.DEPENDENCY.cocoapods_mixed:")
 
 
-def test_cocoapods_still_rejects_drift_discovered_on_path(monkeypatch) -> None:
-    """装了 CocoaPods 就必须判：缺席豁免不能顺带放过 PATH 上的漂移版本。"""
-
-    monkeypatch.setattr("shutil.which", lambda _name: "/usr/local/bin/pod")
-    _stub_pod_inspection(monkeypatch, "1.15.2")
+def test_cocoapods_still_rejects_drift_discovered_on_path(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    pod = tmp_path / "pod"
+    _write_pod(pod, version="1.15.2")
+    monkeypatch.setattr("shutil.which", lambda _name, **_kwargs: str(pod))
     failures: list[str] = []
 
     _verify_cocoapods_toolchain(failures)
@@ -759,165 +826,3 @@ def test_production_purity_accepts_isolated_host_and_enumerated_uat() -> None:
         failures: list[str] = []
         _verify_production_test_dependency_purity(failures, app_dir=app)
         assert failures == []
-
-
-def _write_uat_analysis_coverage_fixture(root: Path) -> tuple[Path, Path]:
-    app = root / "quwoquan_app"
-    (app / "test/user_acceptance/journeys/startup").mkdir(parents=True)
-    (app / "test/support/runtime/patrol").mkdir(parents=True)
-    (app / "test_host/patrol/test").mkdir(parents=True)
-    (app / "test/user_acceptance/journeys/startup/startup_test.dart").write_text(
-        "void main() {}\n", encoding="utf-8"
-    )
-    (app / "test/support/runtime/patrol/patrol_test_support.dart").write_text(
-        "void support() {}\n", encoding="utf-8"
-    )
-    (app / "analysis_options.yaml").write_text(
-        "analyzer:\n"
-        "  exclude:\n"
-        "    - test/user_acceptance/**\n"
-        "    - test/support/runtime/patrol/**\n",
-        encoding="utf-8",
-    )
-    (app / "test_host/patrol/test/canonical").symlink_to(
-        Path("../../../test"), target_is_directory=True
-    )
-    gate = root / "gate_repo.sh"
-    gate.write_text(
-        "(cd quwoquan_app/test_host/patrol && flutter analyze \\\n"
-        "  lib test/patrol test/canonical/user_acceptance "
-        "test/canonical/support/runtime/patrol)\n",
-        encoding="utf-8",
-    )
-    return app, gate
-
-
-def test_uat_analysis_coverage_accepts_symlinked_test_host_analysis() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        app, gate = _write_uat_analysis_coverage_fixture(Path(tmp))
-        failures: list[str] = []
-        _verify_uat_static_analysis_coverage(failures, app_dir=app, gate_script=gate)
-        assert failures == []
-
-
-def test_uat_analysis_coverage_rejects_exclusion_without_test_host_analysis() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        app, gate = _write_uat_analysis_coverage_fixture(Path(tmp))
-        gate.write_text("flutter analyze lib test\n", encoding="utf-8")
-        failures: list[str] = []
-        _verify_uat_static_analysis_coverage(failures, app_dir=app, gate_script=gate)
-        assert [
-            failure
-            for failure in failures
-            if failure.startswith("APP.PACKAGE.uat_static_analysis_uncovered:")
-            and "test/canonical/user_acceptance" in failure
-        ]
-
-
-def test_uat_analysis_coverage_rejects_copied_canonical_uat() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        app, gate = _write_uat_analysis_coverage_fixture(Path(tmp))
-        canonical_link = app / "test_host/patrol/test/canonical"
-        canonical_link.unlink()
-        (canonical_link / "user_acceptance/journeys/startup").mkdir(parents=True)
-        (
-            canonical_link / "user_acceptance/journeys/startup/startup_test.dart"
-        ).write_text("void main() {}\n", encoding="utf-8")
-        failures: list[str] = []
-        _verify_uat_static_analysis_coverage(failures, app_dir=app, gate_script=gate)
-        assert [
-            failure
-            for failure in failures
-            if failure.startswith("APP.PACKAGE.uat_static_analysis_uncovered:")
-            and "must be a symlink" in failure
-        ]
-
-
-def test_uat_analysis_coverage_rejects_unexcluded_main_app_analysis() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        app, gate = _write_uat_analysis_coverage_fixture(Path(tmp))
-        (app / "analysis_options.yaml").write_text(
-            "analyzer:\n  exclude:\n    - build/**\n", encoding="utf-8"
-        )
-        failures: list[str] = []
-        _verify_uat_static_analysis_coverage(failures, app_dir=app, gate_script=gate)
-        assert [
-            failure
-            for failure in failures
-            if failure.startswith("APP.PACKAGE.uat_static_analysis_uncovered:")
-            and "test/user_acceptance/**" in failure
-        ]
-
-
-def test_uat_analysis_coverage_rejects_a_new_exclude_without_a_witness() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        app, gate = _write_uat_analysis_coverage_fixture(Path(tmp))
-        (app / "analysis_options.yaml").write_text(
-            "analyzer:\n"
-            "  exclude:\n"
-            "    - test/user_acceptance/**\n"
-            "    - test/support/runtime/patrol/**\n"
-            "    - test/support/runtime/device/**\n",
-            encoding="utf-8",
-        )
-        failures: list[str] = []
-        _verify_uat_static_analysis_coverage(failures, app_dir=app, gate_script=gate)
-        assert [
-            failure
-            for failure in failures
-            if failure.startswith("APP.PACKAGE.uat_static_analysis_uncovered:")
-            and "test/support/runtime/device/**" in failure
-        ]
-
-
-def test_uat_analysis_coverage_rejects_a_commented_out_analysis_root() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        app, gate = _write_uat_analysis_coverage_fixture(Path(tmp))
-        gate.write_text(
-            "# test/canonical/user_acceptance test/canonical/support/runtime/patrol\n"
-            "(cd quwoquan_app/test_host/patrol && flutter analyze lib test/patrol)\n",
-            encoding="utf-8",
-        )
-        failures: list[str] = []
-        _verify_uat_static_analysis_coverage(failures, app_dir=app, gate_script=gate)
-        assert [
-            failure
-            for failure in failures
-            if failure.startswith("APP.PACKAGE.uat_static_analysis_uncovered:")
-            and "test/canonical/user_acceptance" in failure
-        ]
-
-
-def test_uat_analysis_coverage_rejects_a_complete_commented_command() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        app, gate = _write_uat_analysis_coverage_fixture(Path(tmp))
-        gate.write_text(
-            "# (cd quwoquan_app/test_host/patrol && flutter analyze lib test/patrol "
-            "test/canonical/user_acceptance test/canonical/support/runtime/patrol)\n"
-            "(cd quwoquan_app/test_host/patrol && flutter analyze lib test/patrol)\n",
-            encoding="utf-8",
-        )
-        failures: list[str] = []
-        _verify_uat_static_analysis_coverage(failures, app_dir=app, gate_script=gate)
-        assert [
-            failure
-            for failure in failures
-            if failure.startswith("APP.PACKAGE.uat_static_analysis_uncovered:")
-            and "test/canonical/user_acceptance" in failure
-        ]
-
-
-def test_uat_analysis_coverage_rejects_test_host_excluding_canonical_tree() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        app, gate = _write_uat_analysis_coverage_fixture(Path(tmp))
-        (app / "test_host/patrol/analysis_options.yaml").write_text(
-            "analyzer:\n  exclude:\n    - test/canonical/**\n", encoding="utf-8"
-        )
-        failures: list[str] = []
-        _verify_uat_static_analysis_coverage(failures, app_dir=app, gate_script=gate)
-        assert [
-            failure
-            for failure in failures
-            if failure.startswith("APP.PACKAGE.uat_static_analysis_uncovered:")
-            and "must not exclude test/canonical/**" in failure
-        ]

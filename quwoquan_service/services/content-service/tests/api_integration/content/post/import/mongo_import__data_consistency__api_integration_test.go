@@ -104,7 +104,7 @@ func samplePosts() []PostDoc {
 			AuthorID: "builtin_travel_blogger", CreatorProfileID: "qwq_creator_travel_blogger_001", CreatorArchetype: "travel_blogger",
 			CreatorProfileVersion: "1.0.0", CreatorDisclosure: postmodel.PostCreatorDisclosure{Type: "platform_virtual_creator", DisplayText: "平台虚拟创作者", Visible: true},
 			ExperienceClaimMode: "editorial_synthesis", AuthorQualitySignals: postmodel.PostAuthorQualitySignals{QualityScore: 0.85, FatigueScore: 0.2, RiskTier: "low"},
-			GeneratorModel: "agent/x", ArticleMarkdown: "# 甲居藏寨体验\n正文\n", ArticleDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+			ArticleMarkdown: "# 甲居藏寨体验\n正文\n", ArticleDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
 			ArticleAssetManifest: &ArticleAssetManifestDoc{
 				Schema:                ArticleAssetManifestSchema,
 				MarkdownDialect:       "qwq-rich-md",
@@ -116,10 +116,9 @@ func samplePosts() []PostDoc {
 					{AssetID: "cover", ObjectKey: "media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg", CDNURL: "https://img.example.com/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg", Sha256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 				},
 			},
-			SourceTaskId: "旅行/环线/川西环线/川西大环线自驾",
-			CreatedAt:    time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC),
-			UpdatedAt:    time.Date(2026, 5, 3, 8, 0, 0, 0, time.UTC),
-			PublishedAt:  time.Date(2026, 5, 4, 8, 0, 0, 0, time.UTC)},
+			CreatedAt:   time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC),
+			UpdatedAt:   time.Date(2026, 5, 3, 8, 0, 0, 0, time.UTC),
+			PublishedAt: time.Date(2026, 5, 4, 8, 0, 0, 0, time.UTC)},
 		{PostRef: "posts/article/攻略/色达攻略/1", ContentIdentity: "work", ContentType: "article", Title: "色达攻略", Angle: "攻略", Seq: 1,
 			EntityRefs: []string{"地点/景区/色达"}, NormalizedEntityRefs: []string{"entity:景区:色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
 			CreatedAt:   time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
@@ -135,8 +134,7 @@ func sampleEntities() []EntityDoc {
 			AssetManifest: &EntityAssetManifestDoc{Assets: []AssetManifestItem{
 				{AssetID: "甲居藏寨_homepage_detail", ObjectKey: "media/objects/sha256/bb/bb/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png", CDNURL: "https://img.example.com/media/objects/sha256/bb/bb/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png", Sha256: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
 			}},
-			ConditionProfile: map[string]any{"regions": []any{"高原", "山地"}, "seasons": []any{"夏", "秋"}, "altitudeMeters": 3500},
-			SourceTaskId:     "旅行/环线/川西环线/川西大环线自驾"},
+			ConditionProfile: map[string]any{"regions": []any{"高原", "山地"}, "seasons": []any{"夏", "秋"}, "altitudeMeters": 3500}},
 		{EntityRef: "地点/景区/色达", Domain: "地点", Etype: "景区", Name: "色达", Label: "色达", HasPage: false},
 	}
 }
@@ -189,7 +187,6 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 		ArticleTemplate      string                   `bson:"articleTemplate"`
 		MarkdownDigest       string                   `bson:"articleMarkdownDigest"`
 		ArticleAssetManifest *ArticleAssetManifestDoc `bson:"articleAssetManifest"`
-		SourceTaskId         string                   `bson:"sourceTaskId"`
 		AuthorID             string                   `bson:"authorId"`
 		CreatorProfileID     string                   `bson:"creatorProfileId"`
 		CreatorArchetype     string                   `bson:"creatorArchetype"`
@@ -232,9 +229,6 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	}
 	if got.ArticleTemplate != "journal" {
 		t.Fatalf("articleTemplate must mirror template: %+v", got)
-	}
-	if got.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
-		t.Fatalf("sourceTaskId not persisted: %q", got.SourceTaskId)
 	}
 	if got.AuthorID != "builtin_travel_blogger" || got.CreatorProfileID != "qwq_creator_travel_blogger_001" || got.CreatorArchetype != "travel_blogger" {
 		t.Fatalf("creator projection not persisted: %+v", got)
@@ -500,7 +494,7 @@ func TestMongoActiveReleaseRepairCountMismatchRollsBackThenConverges(t *testing.
 		t.Fatalf("derive replay source postRef: %v", err)
 	}
 	second.ReplayPostBindings = []ImportedPostBinding{{
-		PostRef: replayPostRef, PostID: RuntimePostID(posts[0].ContentID, posts[0].PostRef),
+		PostRef: replayPostRef, PostID: RuntimePostID(posts[0].ContentID),
 		ContentID: posts[0].ContentID, ContentVersion: posts[0].ContentVersion,
 		UsageScope: posts[0].Admission.UsageScope, ContentType: posts[0].ContentType,
 		AuthorID: posts[0].AuthorID,
@@ -634,8 +628,8 @@ func TestMongoLegacyActiveReleaseRepairOnlyChangesFourPostDeletedPayloads(
 	bindings := make([]ImportedPostBinding, 0, len(desired))
 	posts := db.Collection("posts")
 	for _, post := range desired {
-		currentID := RuntimePostID(post.ContentID, post.PostRef)
-		postRefDerivedID := RuntimePostIDFromPostRef(post.PostRef)
+		currentID := RuntimePostID(post.ContentID)
+		postRefDerivedID := RuntimePostID(post.PostRef)
 		var document bson.M
 		if err := posts.FindOne(ctx, bson.M{"_id": currentID}).Decode(&document); err != nil {
 			t.Fatalf("read current Post %q: %v", post.PostRef, err)
@@ -973,7 +967,6 @@ func TestMongoUpsertEntitiesPageFlag(t *testing.T) {
 	var withPage struct {
 		HasPage          bool           `bson:"hasPage"`
 		Page             string         `bson:"page"`
-		SourceTaskId     string         `bson:"sourceTaskId"`
 		AssetManifest    map[string]any `bson:"assetManifest"`
 		ConditionProfile map[string]any `bson:"conditionProfile"`
 	}
@@ -983,8 +976,8 @@ func TestMongoUpsertEntitiesPageFlag(t *testing.T) {
 	if !withPage.HasPage || withPage.Page == "" {
 		t.Fatalf("甲居藏寨 should have page: %+v", withPage)
 	}
-	if withPage.SourceTaskId == "" || withPage.ConditionProfile == nil {
-		t.Fatalf("entity sourceTaskId/conditionProfile not persisted: %+v", withPage)
+	if withPage.ConditionProfile == nil {
+		t.Fatalf("entity conditionProfile not persisted: %+v", withPage)
 	}
 	if withPage.AssetManifest == nil {
 		t.Fatalf("entity assetManifest not persisted: %+v", withPage)
@@ -1090,7 +1083,7 @@ func TestMongoLoadThenUpsertFromPublishTree(t *testing.T) {
 
 // TestMongoUpsertDiscoveryFeed 验证 Path A 同写 rm_discovery_feed：
 // postId=运行时安全 ID、postRef 保留发布证据、status/visibility 可召回、
-// sourceTaskId 透传、conditionProfile 从主实体 join 冗余。
+// producer lineage 不透传，conditionProfile 从主实体 join 冗余。
 func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
@@ -1114,7 +1107,6 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 		Visibility               string                `bson:"visibility"`
 		TagRefs                  []string              `bson:"tagRefs"`
 		IntersectionHints        []IntersectionHintDoc `bson:"intersectionHints"`
-		SourceTaskId             string                `bson:"sourceTaskId"`
 		CreatorProfileID         string                `bson:"creatorProfileId"`
 		CreatorArchetype         string                `bson:"creatorArchetype"`
 		ConditionProfile         map[string]any        `bson:"conditionProfile"`
@@ -1144,9 +1136,6 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	if len(item.IntersectionHints) != 2 || item.IntersectionHints[1].ActionTargetID != "Topic/旅行" {
 		t.Fatalf("feed intersectionHints missing: %+v", item.IntersectionHints)
 	}
-	if item.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
-		t.Fatalf("feed sourceTaskId missing: %+v", item)
-	}
 	if item.CreatorProfileID != "qwq_creator_travel_blogger_001" || item.CreatorArchetype != "travel_blogger" {
 		t.Fatalf("feed creator projection missing: %+v", item)
 	}
@@ -1173,8 +1162,7 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	}
 	// 无画像实体的文章：conditionProfile 应缺省（nil），不阻断 tag/hot/explore 召回。
 	var second struct {
-		Status       string `bson:"status"`
-		SourceTaskId string `bson:"sourceTaskId"`
+		Status string `bson:"status"`
 	}
 	if err := feed.FindOne(ctx, bson.M{"postId": RuntimePostID("posts/article/攻略/色达攻略/1")}).Decode(&second); err != nil {
 		t.Fatal(err)

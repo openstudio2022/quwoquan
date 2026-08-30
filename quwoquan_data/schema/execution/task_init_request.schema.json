@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/task_init_request.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "executionId", "familyRef", "carrier", "quota", "workUnitCount", "carrierDemand", "candidateBinding", "retryOf"],
+  "properties": {
+    "schema": {"const": "quwoquan_data.task_init_request"},
+    "executionId": {"type": "string", "minLength": 1},
+    "familyRef": {"type": "string", "minLength": 1},
+    "carrier": {"enum": ["homepage", "article", "image", "video"]},
+    "quota": {"type": "integer", "minimum": 1},
+    "workUnitCount": {"type": "integer", "minimum": 1},
+    "carrierDemand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "digest", "workRequestRef", "workRequestDigest"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "workRequestRef": {"type": "string", "minLength": 1},
+        "workRequestDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+      }
+    },
+    "candidateBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "digest"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+      }
+    },
+    "retryOf": {"type": ["string", "null"]}
+  }
+}

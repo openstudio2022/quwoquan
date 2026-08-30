@@ -8,7 +8,9 @@ import yaml
 
 from quwoquan_ops.gate.local_dependency_purity.shell_commands import (
     ShellCommandParseError,
-    parse_shell_commands,
+    reachable_dispatched_shell_commands,
+    shell_case_dispatches_function,
+    unique_top_level_shell_function_identity,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -146,16 +148,36 @@ def _excluded_test_prefix(pattern: str) -> str:
 def _test_host_analysis_prefixes(gate_text: str) -> tuple[str, ...]:
     """Return the ``test/``-relative roots the test host actually analyzes."""
 
-    commands = parse_shell_commands(gate_text)
+    commands = reachable_dispatched_shell_commands(gate_text)
+    run_app_identity = unique_top_level_shell_function_identity(
+        gate_text,
+        function_name="run_app",
+    )
+    if run_app_identity is None:
+        return ()
+    run_app_is_dispatched = shell_case_dispatches_function(
+        gate_text,
+        variable="scope",
+        function_name="run_app",
+        required_labels=("all", "app"),
+    )
+    if not run_app_is_dispatched:
+        return ()
     complete_commands: list[tuple[str, ...]] = []
     for index, command in enumerate(commands):
         arguments = command.argv
-        if arguments[:2] != ("flutter", "analyze") or index == 0:
+        if (
+            arguments[:2] != ("flutter", "analyze")
+            or command.function_scope != ("run_app",)
+            or command.function_definition_scope != (run_app_identity,)
+            or index == 0
+        ):
             continue
         previous = commands[index - 1]
         if not (
             command.separator_before == "&&"
             and command.subshell_depth == previous.subshell_depth
+            and previous.function_scope == command.function_scope
             and previous.argv == ("cd", "quwoquan_app/test_host/patrol")
         ):
             continue

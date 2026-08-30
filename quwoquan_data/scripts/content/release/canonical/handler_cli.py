@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 
 from content.release.canonical import handler as owner
+from content.release.canonical.handler_identity_cli import register_identity_parsers
+from content.release.canonical.handler_uat_cli import register_uat_parsers
 from core.control_types import PoolObjectRetirementReason
 
 
@@ -59,7 +61,36 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     pool_build.add_argument("--publish-root")
     pool_build.add_argument("--release-root")
+    pool_build.add_argument(
+        "--sampling-authority-artifact-root",
+        help="M1000 projected authority exact ref 的只读根；仅 M1000 使用",
+    )
+    pool_build.add_argument(
+        "--sampling-authority-ref",
+        help="M1000 projected authority repo/output-relative exact ref",
+    )
+    pool_build.add_argument(
+        "--sampling-authority-digest",
+        help="M1000 projected authority exact-byte sha256 digest",
+    )
     pool_build.set_defaults(handler=owner.handle_pool_release_build)
+
+    contract_migrate = commands.add_parser(
+        "contract-migrate",
+        help=(
+            "只读预检或从旧不可变 release 的 canonical payload 构建新合同 release；"
+            "绝不修改源 release"
+        ),
+    )
+    contract_migrate.add_argument("--source-release-id", required=True)
+    contract_migrate.add_argument("--new-release-id", required=True)
+    contract_migrate.add_argument("--release-root")
+    contract_migrate.add_argument(
+        "--apply",
+        action="store_true",
+        help="显式创建新的 immutable release；省略时只运行 fail-closed precheck",
+    )
+    contract_migrate.set_defaults(handler=owner.handle_release_contract_migration)
 
     pool_precheck = commands.add_parser(
         "pool-precheck",
@@ -324,57 +355,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         handler=owner.handle_object_transaction_replay_package
     )
 
-    identity_incident = commands.add_parser(
-        "identity-incident",
-        help="记录同一 releaseId 的冲突 immutable identity；不修改任何 release",
-    )
-    identity_incident.add_argument("--release-id", required=True)
-    identity_incident.add_argument("--incident-id", required=True)
-    identity_incident.add_argument(
-        "--original-attestation",
-        action="append",
-        default=[],
-        help="原始留存的 release attestation 文件；可重复",
-    )
-    identity_incident.add_argument(
-        "--recovery-provenance",
-        action="append",
-        default=[],
-        help="deterministic_byte_reconstruction 的 create-once provenance；可重复",
-    )
-    identity_incident.add_argument("--output-root")
-    identity_incident.set_defaults(handler=owner.handle_release_identity_incident)
-
-    identity_recovery = commands.add_parser(
-        "identity-recovery",
-        help="按冻结 JSON 序列化合同写确定性 attestation 恢复物与 provenance",
-    )
-    identity_recovery.add_argument("--release-id", required=True)
-    identity_recovery.add_argument("--recovery-id", required=True)
-    identity_recovery.add_argument("--attestation-document", required=True)
-    identity_recovery.add_argument("--template-attestation", required=True)
-    identity_recovery.add_argument("--target-attestation-sha256", required=True)
-    identity_recovery.add_argument("--writer-revision", required=True)
-    identity_recovery.add_argument(
-        "--writer-source",
-        action="append",
-        required=True,
-        help="历史 writer 闭集，格式 <logicalRef>=<snapshotPath>；必须四项",
-    )
-    identity_recovery.add_argument("--recovered-recorded-at", required=True)
-    identity_recovery.add_argument("--search-start-at", required=True)
-    identity_recovery.add_argument("--search-end-at", required=True)
-    identity_recovery.add_argument(
-        "--evidence",
-        action="append",
-        required=True,
-        help=(
-            "独立证据，格式 <role>=<path>；必须各提供 "
-            "release_identity 与 execution_closure"
-        ),
-    )
-    identity_recovery.add_argument("--output-root")
-    identity_recovery.set_defaults(handler=owner.handle_release_identity_recovery)
+    register_identity_parsers(commands, owner=owner)
 
     baseline = commands.add_parser(
         "baseline", help="创建仅用于 full-sync rollback 的空 desired-state 发布包"
@@ -508,6 +489,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     research_promote.add_argument("--release-root")
     research_promote.add_argument("--output-root")
     research_promote.set_defaults(handler=owner.handle_research_scale_promotion)
+
+    register_uat_parsers(commands, owner=owner)
 
     commercial_transition = commands.add_parser(
         "commercial-transition",

@@ -26,6 +26,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(Write|Edit|MultiEdit|ApplyPatch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/quwoquan_ops/hooks/local_readiness_after_edit.py\"",
+            "timeout": 20,
+            "statusMessage": "入队本地 readiness 检查"
+          }
+        ]
+      }
     ]
   }
 }

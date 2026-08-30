@@ -272,7 +272,7 @@ func postSupplySource(post *postports.PostFeedItemSlice) string {
 	if post == nil {
 		return "unknown"
 	}
-	if strings.TrimSpace(post.SourceTaskID) != "" {
+	if strings.TrimSpace(post.SourceOwner) == "qwq_data" {
 		return "data_engineering"
 	}
 	return "ugc"
@@ -301,7 +301,7 @@ func postMatchesVertical(post *postports.PostFeedItemSlice, vertical string) boo
 }
 
 func postVerticalTokens(post *postports.PostFeedItemSlice) []string {
-	tokens := []string{string(post.ContentType), post.SourceTaskID}
+	tokens := []string{string(post.ContentType)}
 	tokens = append(tokens, post.TagRefs...)
 	tokens = append(tokens, post.EntityRefs...)
 	return tokens

@@ -7,6 +7,7 @@ remain private build/UAT inputs.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -135,6 +136,20 @@ def _literal_absolute_path(value: object, *, label: str) -> str:
     return raw
 
 
+def _literal_absolute_search_path(value: object, *, label: str) -> str:
+    """Validate every PATH entry without normalizing historical evidence."""
+
+    raw = str(value or "")
+    if not raw:
+        raise ValueError(f"{label} is empty")
+    entries = raw.split(os.pathsep)
+    if any(not entry for entry in entries):
+        raise ValueError(f"{label} contains an empty entry")
+    for entry in entries:
+        _literal_absolute_path(entry, label=f"{label} entry")
+    return raw
+
+
 def patrol_command_envelope(
     *,
     flutter_identity: Mapping[str, str],
@@ -154,14 +169,13 @@ def patrol_command_envelope(
     ).strip()
     if not flutter_version or not _is_digest(resolution_digest):
         raise ValueError("Patrol Flutter identity is incomplete")
-    if not isinstance(path, str) or not path:
-        raise ValueError("Patrol sealed PATH is empty")
+    sealed_path = _literal_absolute_search_path(path, label="Patrol sealed PATH")
     envelope = {
         "schema": PATROL_COMMAND_ENVELOPE_SCHEMA,
         "flutterExecutable": executable,
         "flutterVersion": flutter_version,
         "commandResolutionDigest": resolution_digest,
-        "path": path,
+        "path": sealed_path,
         "requiredAbsentProxyKeys": list(PROXY_ENVIRONMENT_KEYS),
         "dependencyEnvironment": dict(dependency_environment or {}),
         "hostEnvironment": dict(host_environment or {}),
@@ -175,19 +189,25 @@ def build_patrol_command_envelope(
 ) -> dict[str, Any]:
     """Resolve and seal the one Flutter command selected by a private projection."""
 
+    sealed_path = _literal_absolute_search_path(
+        environment.get("PATH"),
+        label="Patrol sealed PATH",
+    )
     present_proxy = next(
         (key for key in PROXY_ENVIRONMENT_KEYS if key in environment),
         "",
     )
     if present_proxy:
         raise ValueError("Patrol dependency environment contains a proxy key")
+    resolver_environment = dict(environment)
+    resolver_environment["PATH"] = sealed_path
     try:
-        identity = resolved_flutter_identity(dict(environment))
+        identity = resolved_flutter_identity(resolver_environment)
     except (FacadeError, OSError, TypeError, ValueError) as error:
         raise ValueError("Patrol Flutter command identity is invalid") from error
     return patrol_command_envelope(
         flutter_identity=identity,
-        path=str(environment.get("PATH") or ""),
+        path=sealed_path,
         dependency_environment={
             key: str(environment[key])
             for key in DEPENDENCY_ENVIRONMENT_KEYS
@@ -230,6 +250,7 @@ def validate_patrol_command_envelope(value: object) -> Mapping[str, Any]:
         value.get("flutterExecutable"),
         label="Patrol Flutter executable",
     )
+    _literal_absolute_search_path(value.get("path"), label="Patrol sealed PATH")
     return value
 
 

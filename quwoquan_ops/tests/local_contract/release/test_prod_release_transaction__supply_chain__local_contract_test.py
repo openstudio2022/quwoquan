@@ -386,6 +386,15 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             to_digest = "sha256:" + ("b" * 64)
             request = {
                 "schema": hosted_release_ledger.REQUEST_SCHEMA,
+                "environmentAcceptanceRef": "prod/fact.json",
+                "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
+                "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
+                "gammaPredecessorFactId": "sha256:" + ("8" * 64),
+                "gammaPredecessorDigest": "sha256:" + ("9" * 64),
+                "engineeringEligibilityRef": "prod/engineering.json",
+                "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
+                "durableApprovalRef": "prod/approval.json",
+                "durableApprovalDigest": "sha256:" + ("e" * 64),
                 "service": "prod-stack",
                 "fromCandidateDigest": from_digest,
                 "toCandidateDigest": to_digest,
@@ -463,6 +472,15 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             }
             initial = {
                 "schema": hosted_release_ledger.REQUEST_SCHEMA,
+                "environmentAcceptanceRef": "prod/fact.json",
+                "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
+                "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
+                "gammaPredecessorFactId": "sha256:" + ("8" * 64),
+                "gammaPredecessorDigest": "sha256:" + ("9" * 64),
+                "engineeringEligibilityRef": "prod/engineering.json",
+                "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
+                "durableApprovalRef": "prod/approval.json",
+                "durableApprovalDigest": "sha256:" + ("e" * 64),
                 "service": "prod-stack",
                 "fromCandidateDigest": source,
                 "toCandidateDigest": candidate,
@@ -595,6 +613,15 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
         digest = "sha256:" + ("b" * 64)
         receipt = {
             "schema": hosted_release_ledger.RECEIPT_SCHEMA,
+            "environmentAcceptanceRef": "prod/fact.json",
+            "environmentAcceptanceDigest": "sha256:" + ("6" * 64),
+            "environmentAcceptanceFactId": "sha256:" + ("7" * 64),
+            "gammaPredecessorFactId": "sha256:" + ("8" * 64),
+            "gammaPredecessorDigest": "sha256:" + ("9" * 64),
+            "engineeringEligibilityRef": "prod/engineering.json",
+            "engineeringEligibilityDigest": "sha256:" + ("d" * 64),
+            "durableApprovalRef": "prod/approval.json",
+            "durableApprovalDigest": "sha256:" + ("e" * 64),
             "authority": hosted_release_ledger.AUTHORITY,
             "service": "prod-stack",
             "fromCandidateDigest": from_digest,

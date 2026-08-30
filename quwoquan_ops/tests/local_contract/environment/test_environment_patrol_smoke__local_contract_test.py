@@ -104,6 +104,35 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         )
         self.assertNotIn(str(smoke.APP_DIR), command[command.index("-t") + 1])
 
+    def test_release_sample_matrix_passes_exact_plan_and_runtime_defines(self) -> None:
+        plan_b64 = "ZXhhY3QtcGxhbi1ieXRlcwo="
+        runtime_b64 = "ZXhhY3QtcnVudGltZS1iaW5kaW5nCg=="
+        args = self._args(
+            target=smoke.RELEASE_SAMPLE_MATRIX_TARGET,
+            app_uat_sample_plan_b64=plan_b64,
+            app_uat_runtime_binding_b64=runtime_b64,
+        )
+
+        command = smoke.patrol_command(
+            {
+                "id": "android-gamma",
+                "targetPlatform": "android-arm64",
+                "emulator": True,
+            },
+            args,
+            "patrol",
+            dart_define_file=Path("/protected/session.json"),
+        )
+
+        self.assertIn(
+            f"--dart-define=QWQ_RELEASE_UAT_SAMPLE_PLAN_B64={plan_b64}",
+            command,
+        )
+        self.assertIn(
+            f"--dart-define=QWQ_RELEASE_UAT_RUNTIME_BINDING_B64={runtime_b64}",
+            command,
+        )
+
     def test_patrol_host_enumerates_every_canonical_uat_once(self) -> None:
         expected = tuple(
             path.relative_to(smoke.APP_DIR).as_posix()
@@ -528,6 +557,94 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
 
         self.assertEqual(boundary_run.call_count, 2)
         self.assertTrue(receipt["runBoundaryObserved"])
+
+    def test_app_uat_per_marker_capture_requires_16_distinct_frames(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            run_dir = Path(temporary_dir)
+            args = self._args(target=smoke.RELEASE_SAMPLE_MATRIX_TARGET)
+            calls: list[Path] = []
+
+            def capture(path: Path) -> dict[str, str]:
+                calls.append(path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(path.name.encode())
+                return {"status": "captured", "path": str(path)}
+
+            handler = smoke_evidence._AppUatPerMarkerScreenshotCapture(
+                args=args,
+                capture=capture,
+                run_dir=run_dir,
+            )
+            for entry in ("feed", "search", "recommendation", "direct_or_object_route"):
+                for carrier in ("homepage", "article", "image", "video"):
+                    sample_id = f"baseline-{carrier}-001"
+                    capture_id = f"{sample_id}--{entry}--{carrier}"
+                    marker = {
+                        "schema": "quwoquan_app.app_uat_page_evidence_ready.v1",
+                        "sampleId": sample_id,
+                        "entrySurface": entry,
+                        "carrier": carrier,
+                        "objectId": f"source-{carrier}",
+                        "runtimeObjectId": f"runtime-{carrier}",
+                        "specRef": "spec.md#gwt-004",
+                        "runnerIdentity": f"qwq_app.content_uat.{entry}.{carrier}.v1",
+                        "route": f"/{entry}/{carrier}",
+                        "terminalKey": f"terminal-{capture_id}",
+                        "captureId": capture_id,
+                    }
+                    handler.handle_line(
+                        smoke.APP_UAT_PAGE_EVIDENCE_READY_PREFIX + json.dumps(marker)
+                    )
+            result = {"exitCode": 0, "outputSummary": ""}
+            handler.apply_success_gate(result, dry_run=False)
+            self.assertEqual(result["exitCode"], 0)
+            self.assertEqual(len(calls), 16)
+            self.assertEqual(len({path.name for path in calls}), 16)
+            self.assertEqual(
+                len({value["sha256"] for value in handler.evidence_by_capture_id.values()}),
+                16,
+            )
+
+    def test_app_uat_per_marker_capture_rejects_reused_frame_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            run_dir = Path(temporary_dir)
+            args = self._args(target=smoke.RELEASE_SAMPLE_MATRIX_TARGET)
+
+            def capture(path: Path) -> dict[str, str]:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"same-frame")
+                return {"status": "captured", "path": str(path)}
+
+            handler = smoke_evidence._AppUatPerMarkerScreenshotCapture(
+                args=args,
+                capture=capture,
+                run_dir=run_dir,
+            )
+
+            def marker(entry: str) -> str:
+                sample_id = "baseline-article-001"
+                return smoke.APP_UAT_PAGE_EVIDENCE_READY_PREFIX + json.dumps(
+                    {
+                        "schema": "quwoquan_app.app_uat_page_evidence_ready.v1",
+                        "sampleId": sample_id,
+                        "entrySurface": entry,
+                        "carrier": "article",
+                        "objectId": "source-article",
+                        "runtimeObjectId": "runtime-article",
+                        "specRef": "spec.md#gwt-004",
+                        "runnerIdentity": f"qwq_app.content_uat.{entry}.article.v1",
+                        "route": f"/{entry}/article",
+                        "terminalKey": f"terminal-{entry}",
+                        "captureId": f"{sample_id}--{entry}--article",
+                    }
+                )
+
+            handler.handle_line(marker("feed"))
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "screenshot bytes were reused",
+            ):
+                handler.handle_line(marker("search"))
 
     def test_app_content_page_screenshot_marker_captures_once_during_patrol(
         self,

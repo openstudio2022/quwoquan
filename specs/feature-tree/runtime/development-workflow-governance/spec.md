@@ -6,7 +6,7 @@
 
 ## 1. 能力目标
 
-让开发者、审核者和编程 Agent 使用同一套目录原生规格、动态上下文和可执行门禁完成需求理解、实现与验收。
+让 Agent 使用目录原生规格、动态上下文和可执行门禁主导从概念到结果沉淀的全链交付，同时让人类以明确业务角色保有价值、范围、体验、风险、外部动作、商用与 outcome 的决定权。
 
 ## 2. 范围与非目标
 
@@ -14,9 +14,12 @@
 
 - AppRoot/L1/L2/L3 的目录、规格、设计与验收规则。
 - 工作流技能（`explore/prd/design/dev/continue/plan-next/review/commit` 与自动触发的 `environment-ops/content-production/incident-inspection/distill`）的统一模板、上下文链与工作流间交接契约。
+- Agent 主导的概念、产品、体验、方案、交付授权、实施、质量/UAT、集成 CI、制品、Alpha/Beta/Gamma、商用、Prod、渠道、outcome 与沉淀全链阶段，以及人类角色在每阶段的输入、升级、验收和准出责任。
+- 人类选择、授权、异常处置与事后检查的可理解交互；人类决定与技术 Review 分轨，Review 结果只作为证据。
 - 按 `(workflow, deliverable, profiles)` 派发角色评审的 review 机制与分级语义。
 - Cursor / Codex 两个 harness 的指令载体分配、渐进加载与上下文预算。
 - 动态特性上下文、总览、变更影响报告和机器门禁。
+- 本地优先持续集成、工作流同轨解析和全链治理 observe-only 准入的单轨编排与证据分层。
 
 ### Out of Scope
 
@@ -30,9 +33,14 @@
 ## 4. Story
 
 
-
 - [`directory-native-sdd`](./directory-native-sdd/spec.md)：工具必须直接扫描目录与 Markdown；删除 `.qwq_output` 后仍可从受版本控制真相源重建上下文。
 - [`agent-skill-review-context-organization`](./agent-skill-review-context-organization/spec.md)：规则按全局、子树、工作流、Feature、角色与 adapter 分层；开发与 Review 共用精确 owner manifest，POST 评审固定在主审加最多一名专审，Cursor/Codex 从同一真相源加载。
+- [`human-agent-delivery-interaction`](./human-agent-delivery-interaction/spec.md)：Agent 在冻结授权内主导完整交付，人类按业务 authority 角色提供独立输入、裁决硬门和价值取舍、授权外部动作并接受商用与 outcome 结果。
+- [`objective-execution`](./objective-execution/spec.md)：Objective 与 Increment 通过 append-only TransitionEvent、deterministic reducer、authenticated authority readback 和 effect readback 可恢复推进；S4 准入直接消费 branch policy。
+- [`hotl-expansion-control`](./hotl-expansion-control/spec.md)：S6 只读评估固定 cohort 人工瓶颈、checkpoint delta、紧急控制 proof 与 capability admission；当前 fail-closed 为 manual/单写者且不授予 mutation。
+- [`local-continuous-integration`](./local-continuous-integration/spec.md)：按编辑、空闲、提交范围与推送范围调度 canonical checks，并以精确输入回执区分 `fast_green`、`scope_ready` 与 `release_ready`。
+- [`workflow-resolution`](./workflow-resolution/spec.md)：显式 Skill 与自然语言意图经同一 resolver 选择 canonical workflow，歧义、低置信或 owner manifest 漂移时 fail closed。
+- [`governance-pipeline-observe-only`](./governance-pipeline-observe-only/spec.md)：只读聚合全链独立证据并给出 observe-only 准入解释，任何终态都不授予生产、商用或 HOTL mutation。
 
 ## 5. 能力要求
 
@@ -83,6 +91,23 @@
 - 冲突裁决先识别事实类型再回该类型唯一 owner；两个 current canonical owner 声称同一事实时返回 typed `GATE_BLOCK(owner_conflict)`，不得以全局优先级掩盖双真相源。
 - 强制度由 binding closure 决定：绑定可执行 gate/test/required check 的条款是 hard-gate，其余为 review-required 或 advisory；自然语言条款本身不冒充硬门。
 
+
+<a id="req-006"></a>
+### REQ-006 Agent 主导且人类 authority 可理解的全链交付
+
+- Agent 必须主动研究、形成中性方案、实施、验证、取证和恢复；只有价值、范围、体验、风险、外部或不可逆动作、商用节奏与 outcome 接受需要具名 Human Authority 决定，常规实现细节不得反向甩给非技术角色。
+- 每个需要人类决定的单元必须明确事前输入、独立影响评估、不可豁免硬门、唯一综合裁决、授权执行、证据责任和结果接受；缺席、超时、越权或职责分离不成立时 fail-closed。
+- Human Authority 与 ReviewRole 必须分轨：Reviewer 只评价交付件和证据，任何 Reviewer PASS、投票或总分不得生成、替代或推导人类决定和执行授权。
+- 人类界面必须以角色可理解的事实、对称选项、影响、未知项和后果支持补证据、转交与暂停；内部路径、工具、指纹与状态机术语不得成为业务角色必须理解的选项。
+- 商用准备、生产 campaign、渠道公开和 outcome 接受必须分层裁定；上游通过不得冒充下游决定，硬门不得由 Limited Go、风险接受或多数意见绕过。
+
+<a id="req-007"></a>
+### REQ-007 本地反馈、工作流解析与治理准入保持单轨
+
+- Local CI 只规划和调度 canonical checks，readiness queue、exact-input cache 与 receipt 都是可删除投影，不得形成第二事实台账；本地 `scope_ready`/`release_ready` 只证明所绑定的源码与测试范围。
+- 显式 Skill 与自然语言输入必须进入同一 workflow resolver 和同一后继生命周期；歧义、低置信、owner manifest 缺失或漂移均 fail closed，真实 Cursor/Codex 双宿主发现未取证前保持 Story OPEN。
+- 治理流水线 admission 只消费各 owner 的 exact readback 并执行 observe-only 评估，不得从 Review、本地 readiness 或调用方自报推导 Human、Commercial、Prod、channel、outcome 或 HOTL authority；任一终态的 Prod/HOTL mutation 均为 `false`。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`runtime`](../spec.md) 的仓库执行约束。
@@ -123,6 +148,15 @@
 - GIVEN 一个新增或变更的知识资产按 `REQ-005` 声明了唯一 owner。
 - WHEN 运行特性树门禁与 Agent 上下文治理门。
 - THEN 违反唯一 owner、层级验收所有权或中央分类 registry 禁令的变更被 typed 判否。
+- AND 历史知识资产迁移闭包只能由 tracked machine-readable fixture 从冻结 Git source object 重算；行数、source bytes、clause identity/digest、唯一 disposition、当前 target/anchor、terminal status 或 dangling reference 任一漂移均被结构门禁判否。
+
+<a id="sit-005"></a>
+### SIT-005 本地 CI、workflow resolver 与治理准入共用唯一门禁链
+
+- GIVEN Local CI、workflow resolver 与治理 admission 的 canonical contracts、focused local contracts 和各自外部 OPEN。
+- WHEN 执行三个公开 focused verify target、特性树门禁与仓库门禁链。
+- THEN Local CI 只调度 canonical checks，workflow 显式/自然输入保持同轨且歧义 fail closed，admission 只返回保守 observe-only 评估并保持 Prod/HOTL mutation false。
+- AND 本地 PASS 只证明当前 contract、实现与 fixture 自洽，不关闭真实双宿主、外部身份、六角色 calibration、activation、环境、生产、渠道或 outcome 证据。
 
 ## 8. 开放事项
 
@@ -134,6 +168,7 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：部分节点仍以同节点 OPEN 声明尚缺直接测试 `spec_ref`，影响自动验收覆盖率。
 - 完成判定：`SIT-001` 及全部节点验收锚点均有真实测试 `spec_ref`，且不再依赖 OPEN 代替证据。
+- 依赖：各最低 owner Story 的测试与外部证据。
 
 <a id="open-005"></a>
 ### OPEN-005 并行会话合法合入协议 gate/check 实现
@@ -143,3 +178,4 @@
 - 准出影响：`track`
 - 影响或价值：尚缺可执行 gate/check 与直接测试 `spec_ref`——协议语义已冻结为 `REQ-004`（scope-green + foreign-red 登记、部分暂存、scope 内 pathspec、ContractGraph 静止窗口），但语义只靠自觉时，并行脏树互锁仍可能逼出 `--no-verify`（出处：调研转录 `0c4c608c-7219-47c2-bcda-5c66dcf93294`）。
 - 完成判定：`SIT-003` 的合入子句（`.t2`）由真实 gate/check 覆盖——`REQ-004` 的合法合入态有可执行校验（如提交前 scope-green 自动判定、交接单 foreign-red 登记联动检查），ContractGraph 静止窗口约定有门禁化表达，且对应测试带 `spec_ref` 绑定。
+- 依赖：commit gate、handoff manifest 与 ContractGraph 静止窗口门禁。

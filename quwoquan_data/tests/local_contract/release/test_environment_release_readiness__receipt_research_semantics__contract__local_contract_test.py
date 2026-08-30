@@ -29,7 +29,7 @@ from quwoquan_data.tests.local_contract.release.test_environment_release_readine
 )
 
 
-def test_environment_release_readiness__research_projects_internal_uat_without_guest__local_contract(
+def test_environment_release_readiness__research_projects_data_readback_without_guest__local_contract(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -84,8 +84,8 @@ def test_environment_release_readiness__research_projects_internal_uat_without_g
     assert report["releaseClass"] == "research"
     assert report["productLifecycleState"] == "research"
     assert report["internalSubjectHash"] == subject_hash
-    assert report["appUatEnvelope"]["releaseClass"] == "research"
-    assert report["appUatEnvelope"]["articleWorkId"] == "post-article-a"
+    assert "appUatEnvelope" not in report
+    assert "appUatEnvelopeDigest" not in report
     isolation_binding = report["activationEnvelope"][
         "researchIsolationPolicy"
     ]
@@ -122,7 +122,7 @@ def test_environment_release_readiness__activation_envelope_tamper_fails_semanti
     assert all("verificationChecksum drift" not in issue for issue in issues)
 
 
-def test_environment_release_readiness__semantic_verifier_reprojects_commercial_app_uat_envelope__local_contract(
+def test_environment_release_readiness__semantic_verifier_reprojects_data_activation_envelope__local_contract(
     tmp_path: Path,
 ) -> None:
     paths = _fixture(tmp_path)
@@ -146,10 +146,6 @@ def test_environment_release_readiness__resigned_research_release_cannot_masquer
     readiness["releaseClass"] = "research"
     readiness["productLifecycleState"] = "research"
     readiness["manifestDigest"] = payload_digest(paths["release"])
-    app_uat_envelope = readiness["appUatEnvelope"]
-    assert isinstance(app_uat_envelope, dict)
-    app_uat_envelope["releaseClass"] = "research"
-    app_uat_envelope["productLifecycleState"] = "research"
     _resign_readiness(readiness)
 
     with pytest.raises(ValueError, match="schema violation"):
@@ -174,46 +170,18 @@ def test_environment_release_readiness__resigned_research_release_cannot_masquer
     assert all("verificationChecksum drift" not in issue for issue in issues)
 
 
-def test_environment_release_readiness__research_app_uat_tamper_cannot_hide_behind_checksum__local_contract(
+def test_environment_release_readiness__rejects_retired_app_uat_authority_fields__local_contract(
     tmp_path: Path,
 ) -> None:
     paths = _fixture(tmp_path)
     readiness = json.loads(_write(tmp_path).read_text(encoding="utf-8"))
-    post_report = json.loads(
-        (paths["verify"] / "post-api-verification.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    release_header_path = paths["release"] / "payload/release.json"
-    release_header = json.loads(release_header_path.read_text(encoding="utf-8"))
-    release_header["releaseClass"] = "research"
-    release_header["productLifecycleState"] = "research"
-    write_json(release_header_path, release_header)
-
-    readiness["readinessPhase"] = "research"
-    readiness["releaseClass"] = "research"
-    readiness["productLifecycleState"] = "research"
-    readiness.pop("guestActorHash", None)
-    readiness.pop("guestLogin", None)
-    app_uat_envelope = readiness["appUatEnvelope"]
-    assert isinstance(app_uat_envelope, dict)
-    app_uat_envelope["releaseClass"] = "research"
-    app_uat_envelope["productLifecycleState"] = "research"
-    app_uat_envelope["articleTitle"] = "伪造标题"
-    post_report.pop("guestActorHash", None)
-    post_report.pop("guestLogin", None)
-    post_report["readinessPhase"] = "research"
+    readiness["appUatEnvelopeDigest"] = "sha256:" + "a" * 64
     _resign_readiness(readiness)
 
-    issues = _semantic_issues(
-        tmp_path,
-        paths,
-        readiness,
-        post_report=post_report,
-    )
-
-    assert any(
-        "appUatEnvelope drifts from immutable release closure" in issue
-        for issue in issues
-    )
-    assert all("verificationChecksum drift" not in issue for issue in issues)
+    with pytest.raises(ValueError, match="schema violation"):
+        assert_valid(
+            readiness,
+            "release",
+            "environment_release_readiness",
+            label="retired app UAT authority",
+        )

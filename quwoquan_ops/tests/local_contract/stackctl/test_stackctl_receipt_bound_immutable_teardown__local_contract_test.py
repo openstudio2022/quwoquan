@@ -273,13 +273,14 @@ class StackctlReceiptBoundImmutableTeardownTest(unittest.TestCase):
             candidate_root=candidate_root,
         )
         # teardown 读的是回执记下的那个候选包，它可能早于当前 ContractGraph；
-        # 自校验用途正是为此不要求候选包与当前图一致。
+        # 专用用途保持完整候选字节校验，只允许退出历史 non-prod-sim 候选时投影
+        # 新增的 nullable appLaunchBundle 字段。
         load_manifest.assert_called_once_with(
             "alpha",
             "alpha-local",
             receipt_candidate,
             require_full=True,
-            purpose="self_verify",
+            purpose="teardown",
         )
         provider_environment.assert_called_once_with(
             {"composition": {}},

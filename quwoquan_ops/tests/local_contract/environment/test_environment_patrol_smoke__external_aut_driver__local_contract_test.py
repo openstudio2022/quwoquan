@@ -10,6 +10,7 @@ import base64
 import copy
 import hashlib
 import json
+import os
 import plistlib
 import subprocess
 import sys
@@ -356,6 +357,61 @@ class EnvironmentPatrolExternalAutDriverTest(unittest.TestCase):
         self.assertEqual(observed[-1][1:4], ["simctl", "spawn", "ios-simulator-1"])
         self.assertIn("print", observed[-1])
         self.assertNotIn("launch", observed[-1])
+
+    def test_ios_physical_pid_observer_uses_devicectl_not_simctl(self) -> None:
+        observed: list[list[str]] = []
+
+        def runner(command, **_kwargs):
+            observed.append(list(command))
+            output_path = Path(command[command.index("--json-output") + 1])
+            if "apps" in command:
+                payload = {
+                    "result": {
+                        "apps": [
+                            {
+                                "bundleIdentifier": PRODUCTION_IOS_ID,
+                                "url": "/private/var/containers/Bundle/Application/A/Runner.app",
+                            }
+                        ]
+                    }
+                }
+            else:
+                payload = {
+                    "result": {
+                        "runningProcesses": [
+                            {
+                                "processIdentifier": 4312,
+                                "executable": (
+                                    "/private/var/containers/Bundle/Application/A/"
+                                    "Runner.app/Runner"
+                                ),
+                            }
+                        ]
+                    }
+                }
+            output_path.write_text(json.dumps(payload), encoding="utf-8")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with tempfile.TemporaryDirectory() as temporary_directory, patch.dict(
+            os.environ,
+            {"QWQ_OUTPUT_ROOT": temporary_directory},
+            clear=False,
+        ), patch(
+            "quwoquan_ops.cli.commands.app_preflight_uat_process.shutil.which",
+            return_value="/usr/bin/xcrun",
+        ):
+            process_id = observe_canonical_app_process_id(
+                platform="ios-physical",
+                device_id="physical-ios-udid",
+                application_id=PRODUCTION_IOS_ID,
+                runner=runner,
+            )
+
+        self.assertEqual(process_id, 4312)
+        self.assertEqual(len(observed), 2)
+        self.assertTrue(all(command[1:3] == ["devicectl", "device"] for command in observed))
+        self.assertFalse(any("simctl" in command for command in observed))
+        self.assertFalse(any("launch" in command for command in observed))
 
     def test_canonical_binding_handoff_rejects_noncanonical_bytes(self) -> None:
         binding = _canonical_binding()

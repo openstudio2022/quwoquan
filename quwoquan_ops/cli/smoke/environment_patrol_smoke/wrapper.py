@@ -29,6 +29,7 @@ from .constants import (
     PATROL_TEST_DIRECTORY,
     PROFILE_JOURNEY_TARGET,
     RELEASE_APP_UAT_DEFINES,
+    RELEASE_SAMPLE_MATRIX_TARGET,
 )
 from .devices import patrol_ios_runtime_argument
 from .handoff import (
@@ -672,6 +673,15 @@ def patrol_command(
                 f"--dart-define=MEDIA_UPLOAD_BASE_URL={media_upload_base_url}",
             ]
         )
+    release_plan_b64 = str(getattr(args, "app_uat_sample_plan_b64", "") or "")
+    release_runtime_b64 = str(getattr(args, "app_uat_runtime_binding_b64", "") or "")
+    if str(args.target).strip() == RELEASE_SAMPLE_MATRIX_TARGET:
+        if not release_plan_b64 or not release_runtime_b64:
+            raise ValueError("release sample matrix requires exact plan and runtime binding")
+        command.extend((
+            f"--dart-define=QWQ_RELEASE_UAT_SAMPLE_PLAN_B64={release_plan_b64}",
+            f"--dart-define=QWQ_RELEASE_UAT_RUNTIME_BINDING_B64={release_runtime_b64}",
+        ))
     release_uat_cases_b64 = str(getattr(args, "release_uat_cases_b64", "") or "")
     if release_uat_cases_b64:
         command.append(f"--dart-define=QWQ_RELEASE_HOMEPAGE_UAT_CASES_B64={release_uat_cases_b64}")

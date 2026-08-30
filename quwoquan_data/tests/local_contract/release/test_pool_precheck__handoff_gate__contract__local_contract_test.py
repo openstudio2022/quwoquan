@@ -363,14 +363,15 @@ def test_precheck_carrier_targets_derive_from_the_milestone_policy__local_contra
     )
 
     targets = MILESTONE_TARGETS["M100"]
-    assert {gap.carrier for gap in report.carrier_gaps} == {
-        carrier for carrier in targets if carrier != subject.HOMEPAGE_CARRIER
-    }
+    assert {gap.carrier for gap in report.carrier_gaps} == set(targets)
     assert all(gap.target == targets[gap.carrier] for gap in report.carrier_gaps)
     assert all(gap.gap == gap.target - gap.selectable for gap in report.carrier_gaps)
-    assert report.homepage_observation["homepageTarget"] == (
-        targets[subject.HOMEPAGE_CARRIER]
-    )
+    gaps = {gap.carrier: gap for gap in report.carrier_gaps}
+    admitted_homepages = report.homepage_observation.get("admittedHomepageObjects")
+    assert gaps[subject.HOMEPAGE_CARRIER].selectable == int(admitted_homepages or 0)
+    assert gaps[subject.HOMEPAGE_CARRIER].target == report.homepage_observation[
+        "homepageTarget"
+    ]
 
 
 def test_precheck_rejects_an_unknown_milestone__local_contract(

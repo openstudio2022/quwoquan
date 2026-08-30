@@ -113,6 +113,8 @@ def _target_environment_identity_set_header() -> dict[str, object]:
         {
             "selectionScope": "target_environment",
             "targetEnvironment": "alpha",
+            "samplePlanRef": "uat/sample_plan.json",
+            "samplePlanDigest": "sha256:" + "8" * 64,
             "releaseMode": "research",
             "poolDigest": "sha256:" + "3" * 64,
             "counts": {"article": 1, "image": 0, "video": 0, "total": 1},
@@ -121,8 +123,9 @@ def _target_environment_identity_set_header() -> dict[str, object]:
                     "contentId": "content-alpha-001",
                     "version": 1,
                     "postRef": "article/alpha-work/1",
-                    "executionId": execution_id,
-                    "sourceIdentityDigest": source_identity_digest(identity),
+                    "selectionIdentityDigest": "sha256:" + "7" * 64,
+                    "canonicalObjectDigest": "sha256:" + "8" * 64,
+                    "contentLibraryBindingDigest": "sha256:" + "9" * 64,
                 }
             ],
             "authors": [],
@@ -182,6 +185,8 @@ def test_typed_header_rejects_identity_set_outside_pool_release() -> None:
         "contents",
         "authors",
         "buildResult",
+        "samplePlanRef",
+        "samplePlanDigest",
     ):
         document.pop(key)
 
@@ -205,8 +210,9 @@ def test_typed_header_accepts_environment_neutral_exact_m100_research_cohort() -
             "contentId": f"content-{index}",
             "version": 1,
             "postRef": f"{content_type}/work-{index}/1",
-            "executionId": execution_id,
-            "sourceIdentityDigest": identity_digest,
+            "selectionIdentityDigest": "sha256:" + f"{index:064x}"[-64:],
+            "canonicalObjectDigest": "sha256:" + f"{index + 1000:064x}"[-64:],
+            "contentLibraryBindingDigest": "sha256:" + f"{index + 2000:064x}"[-64:],
         }
         for content_type, start, count in (
             ("article", 0, 100),
@@ -217,6 +223,8 @@ def test_typed_header_accepts_environment_neutral_exact_m100_research_cohort() -
     ]
     document.update({
         "selectionScope": "milestone",
+        "samplePlanRef": "uat/sample_plan.json",
+        "samplePlanDigest": "sha256:" + "8" * 64,
         "milestone": "M100",
         "milestoneTargets": {
             "homepage": 100,
@@ -277,8 +285,9 @@ def test_milestone_header_preserves_two_execution_identities_and_rejects_drift()
                     "contentId": f"cross-content-{index}",
                     "version": 1,
                     "postRef": f"{content_type}/cross-work-{index}/1",
-                    "executionId": execution_id,
-                    "sourceIdentityDigest": identity_digests[execution_id],
+                    "selectionIdentityDigest": "sha256:" + f"{index + 3000:064x}"[-64:],
+                    "canonicalObjectDigest": "sha256:" + f"{index + 4000:064x}"[-64:],
+                    "contentLibraryBindingDigest": "sha256:" + f"{index + 5000:064x}"[-64:],
                 }
             )
     source_documents = list(document["sourceDigests"])
@@ -292,6 +301,8 @@ def test_milestone_header_preserves_two_execution_identities_and_rejects_drift()
                 source_documents, key=lambda row: str(row["digest"])
             ),
             "selectionScope": "milestone",
+        "samplePlanRef": "uat/sample_plan.json",
+        "samplePlanDigest": "sha256:" + "8" * 64,
         "milestone": "M100",
             "milestoneTargets": {
                 "homepage": 100,
@@ -311,8 +322,10 @@ def test_milestone_header_preserves_two_execution_identities_and_rejects_drift()
     )
 
     assert validate_release_header(document) == document
-    document["contents"][0]["sourceIdentityDigest"] = "sha256:" + "f" * 64
-    with pytest.raises(ReleaseHeaderError, match="closure drifted"):
+    document["contents"][0]["selectionIdentityDigest"] = (
+        document["contents"][1]["selectionIdentityDigest"]
+    )
+    with pytest.raises(ReleaseHeaderError, match="selection identity is duplicated"):
         validate_release_header(document)
 
 
@@ -338,3 +351,33 @@ def test_ship_loader_uses_typed_header_boundary(tmp_path: Path) -> None:
 
     with pytest.raises(SystemExit, match="immutable release contract invalid"):
         load_release(tmp_path, release_id)
+
+
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/spec.md#req-006
+def test_pool_header_requires_exact_release_uat_sample_plan_binding() -> None:
+    document = _target_environment_identity_set_header()
+    document["selectionScope"] = "milestone"
+    document.pop("targetEnvironment")
+    document["milestone"] = "M100"
+    document["milestoneTargets"] = {
+        "homepage": 100,
+        "article": 100,
+        "image": 100,
+        "video": 10,
+    }
+    assert validate_release_header(document) == document
+
+    document.pop("samplePlanDigest")
+    with pytest.raises(ReleaseHeaderError, match="samplePlanDigest|UAT sample plan binding is invalid"):
+        validate_release_header(document)
+
+
+def test_pool_header_rejects_legacy_uat_sample_binding_names() -> None:
+    document = _target_environment_identity_set_header()
+    document.pop("samplePlanRef")
+    document.pop("samplePlanDigest")
+    document["uatSamplePlanRef"] = "uat/sample_plan.json"
+    document["uatSamplePlanSha256"] = "sha256:" + "8" * 64
+
+    with pytest.raises(ReleaseHeaderError, match="samplePlanRef|未知字段|UAT sample plan binding is invalid"):
+        validate_release_header(document)

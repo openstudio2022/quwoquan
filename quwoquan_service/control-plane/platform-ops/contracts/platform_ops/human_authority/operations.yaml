@@ -1,0 +1,574 @@
+description: Hosted Human Authority 的 OIDC 控制面命令、职责内 query、exact readback、CAS 与 GitHub HMAC webhook；全部 route 在 live 外部证据闭合前保持 commercial blocked。
+api_routes:
+- method: POST
+  path: /control-plane/platform/human-authority/decision-units
+  operation: CreateHumanDecisionUnit
+  actor: account
+  security:
+    auth_mode: required
+  authorization:
+    principal: operator
+    scopes:
+    - ops.human-authority.write
+    ownership_policy: operator_scope
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 1
+    idempotency: required
+  error_codes:
+  - OPS.USER.human_authority_invalid
+  - OPS.USER.human_authority_unauthorized
+  - OPS.USER.human_authority_conflict
+  - OPS.SYSTEM.human_authority_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: redacted
+  telemetry:
+    metric: ops_human_authority_commands
+    trace: true
+    attributes:
+    - operation
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 正式 hosted PostgreSQL、OIDC、GitHub App、签名密钥轮换与 live UAT 外部前置未闭合
+    gap_id: HOSTED_HUMAN_AUTHORITY_LIVE_EVIDENCE
+    target_story: hosted-human-authority
+  application:
+    kind: command
+    facet: HumanAuthorityFacade
+    method: createDecisionUnit
+    aggregate_owner: HumanAuthority
+    mutation_target: HumanAuthority
+    invariant_target: HumanAuthority
+- method: GET
+  path: /control-plane/platform/human-authority/decision-units
+  operation: ListHumanDecisionUnits
+  actor: account
+  security:
+    auth_mode: required
+  authorization:
+    principal: operator
+    scopes:
+    - ops.human-authority.read
+    ownership_policy: operator_role_scope
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - OPS.USER.human_authority_unauthorized
+  - OPS.SYSTEM.human_authority_storage_failed
+  - OPS.USER.human_authority_wrong_role
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: redacted
+  telemetry:
+    metric: ops_human_authority_commands
+    trace: true
+    attributes:
+    - operation
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 正式 hosted PostgreSQL、OIDC、GitHub App、签名密钥轮换与 live UAT 外部前置未闭合
+    gap_id: HOSTED_HUMAN_AUTHORITY_LIVE_EVIDENCE
+    target_story: hosted-human-authority
+  response_entity: DecisionUnitSlice
+  response_body_kind: page
+  application:
+    kind: query
+    facet: HumanAuthorityFacade
+    method: listDecisionUnits
+    reader: HumanAuthorityReader
+    slice: DecisionUnitSlice
+- method: GET
+  path: /control-plane/platform/human-authority/decision-units/{decisionUnitId}
+  operation: ReadHumanDecisionUnit
+  actor: account
+  security:
+    auth_mode: required
+  authorization:
+    principal: operator
+    scopes:
+    - ops.human-authority.read
+    ownership_policy: operator_role_scope
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - OPS.USER.human_authority_unauthorized
+  - OPS.USER.human_authority_wrong_role
+  - OPS.SYSTEM.human_authority_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: redacted
+  telemetry:
+    metric: ops_human_authority_commands
+    trace: true
+    attributes:
+    - operation
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 正式 hosted PostgreSQL、OIDC、GitHub App、签名密钥轮换与 live UAT 外部前置未闭合
+    gap_id: HOSTED_HUMAN_AUTHORITY_LIVE_EVIDENCE
+    target_story: hosted-human-authority
+  application:
+    kind: query
+    facet: HumanAuthorityFacade
+    method: readDecisionUnit
+    reader: HumanAuthorityReader
+    slice: DecisionUnit
+  request_bindings:
+    path:
+    - name: decisionUnitId
+      field: decisionUnitId
+- method: POST
+  path: /control-plane/platform/human-authority/decision-units/{decisionUnitId}/submissions
+  operation: SubmitHumanRoleEvidence
+  actor: account
+  security:
+    auth_mode: required
+  request_entity: SubmitHumanRoleEvidenceRequest
+  request_body_kind: object
+  authorization:
+    principal: operator
+    scopes:
+    - ops.human-authority.write
+    ownership_policy: operator_role_scope
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 1
+    idempotency: required
+  error_codes:
+  - OPS.USER.human_authority_invalid
+  - OPS.USER.human_authority_unauthorized
+  - OPS.USER.human_authority_conflict
+  - OPS.USER.human_authority_wrong_role
+  - OPS.USER.human_authority_evidence_expired
+  - OPS.SYSTEM.human_authority_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: redacted
+  telemetry:
+    metric: ops_human_authority_commands
+    trace: true
+    attributes:
+    - operation
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 正式 hosted PostgreSQL、OIDC、GitHub App、签名密钥轮换与 live UAT 外部前置未闭合
+    gap_id: HOSTED_HUMAN_AUTHORITY_LIVE_EVIDENCE
+    target_story: hosted-human-authority
+  application:
+    kind: command
+    facet: HumanAuthorityFacade
+    method: submitRoleEvidence
+    aggregate_owner: HumanAuthority
+    mutation_target: HumanAuthority
+    invariant_target: HumanAuthority
+  request_bindings:
+    path:
+    - name: decisionUnitId
+      field: decisionUnitId
+- method: POST
+  path: /control-plane/platform/human-authority/decision-units/{decisionUnitId}/rounds/{round}:seal
+  operation: SealHumanDecisionRound
+  actor: account
+  security:
+    auth_mode: required
+  authorization:
+    principal: operator
+    scopes:
+    - ops.human-authority.write
+    ownership_policy: operator_role_scope
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 1
+    idempotency: required
+  error_codes:
+  - OPS.USER.human_authority_invalid
+  - OPS.USER.human_authority_unauthorized
+  - OPS.USER.human_authority_conflict
+  - OPS.USER.human_authority_wrong_role
+  - OPS.SYSTEM.human_authority_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: redacted
+  telemetry:
+    metric: ops_human_authority_commands
+    trace: true
+    attributes:
+    - operation
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 正式 hosted PostgreSQL、OIDC、GitHub App、签名密钥轮换与 live UAT 外部前置未闭合
+    gap_id: HOSTED_HUMAN_AUTHORITY_LIVE_EVIDENCE
+    target_story: hosted-human-authority
+  application:
+    kind: command
+    facet: HumanAuthorityFacade
+    method: sealRound
+    aggregate_owner: HumanAuthority
+    mutation_target: HumanAuthority
+    invariant_target: HumanAuthority
+  request_bindings:
+    path:
+    - name: decisionUnitId
+      field: decisionUnitId
+    - name: round
+      field: round
+- method: POST
+  path: /control-plane/platform/human-authority/decision-units/{decisionUnitId}:finalize
+  operation: FinalizeHumanDecision
+  actor: account
+  security:
+    auth_mode: required
+  request_entity: FinalizeHumanDecisionRequest
+  request_body_kind: object
+  authorization:
+    principal: operator
+    scopes:
+    - ops.human-authority.authorize
+    ownership_policy: operator_role_scope
+  reliability:
+    timeout_ms: 2000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 1
+    idempotency: required
+  error_codes:
+  - OPS.USER.human_authority_invalid
+  - OPS.USER.human_authority_unauthorized
+  - OPS.USER.human_authority_conflict
+  - OPS.USER.human_authority_wrong_role
+  - OPS.USER.human_authority_hard_veto
+  - OPS.USER.human_authority_sod_failed
+  - OPS.USER.human_authority_evidence_expired
+  - OPS.SYSTEM.human_authority_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: redacted
+  telemetry:
+    metric: ops_human_authority_commands
+    trace: true
+    attributes:
+    - operation
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 正式 hosted PostgreSQL、OIDC、GitHub App、签名密钥轮换与 live UAT 外部前置未闭合
+    gap_id: HOSTED_HUMAN_AUTHORITY_LIVE_EVIDENCE
+    target_story: hosted-human-authority
+  application:
+    kind: command
+    facet: HumanAuthorityFacade
+    method: finalizeDecision
+    aggregate_owner: HumanAuthority
+    mutation_target: HumanAuthority
+    invariant_target: HumanAuthority
+  request_bindings:
+    path:
+    - name: decisionUnitId
+      field: decisionUnitId
+- method: GET
+  path: /control-plane/platform/human-authority/receipts/{decisionId}
+  operation: ReadHumanAuthorizationReceipt
+  actor: account
+  security:
+    auth_mode: required
+  authorization:
+    principal: operator
+    scopes:
+    - ops.human-authority.read
+    ownership_policy: operator_scope
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - OPS.USER.human_authority_unauthorized
+  - OPS.SYSTEM.human_authority_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: redacted
+  telemetry:
+    metric: ops_human_authority_commands
+    trace: true
+    attributes:
+    - operation
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 正式 hosted PostgreSQL、OIDC、GitHub App、签名密钥轮换与 live UAT 外部前置未闭合
+    gap_id: HOSTED_HUMAN_AUTHORITY_LIVE_EVIDENCE
+    target_story: hosted-human-authority
+  application:
+    kind: query
+    facet: HumanAuthorityFacade
+    method: readReceiptExact
+    reader: HumanAuthorityReader
+    slice: AuthorizationReceipt
+  request_bindings:
+    path:
+    - name: decisionId
+      field: decisionId
+- method: GET
+  path: /control-plane/platform/human-authority/signing-keys/{keyId}
+  operation: ReadHumanAuthoritySigningPublicKey
+  actor: account
+  security:
+    auth_mode: required
+  authorization:
+    principal: operator
+    scopes:
+    - ops.human-authority.read
+    ownership_policy: operator_scope
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - OPS.USER.human_authority_unauthorized
+  - OPS.SYSTEM.human_authority_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: redacted
+  telemetry:
+    metric: ops_human_authority_commands
+    trace: true
+    attributes:
+    - operation
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 正式 hosted PostgreSQL、OIDC、GitHub App、签名密钥轮换与 live UAT 外部前置未闭合
+    gap_id: HOSTED_HUMAN_AUTHORITY_LIVE_EVIDENCE
+    target_story: hosted-human-authority
+  application:
+    kind: query
+    facet: HumanAuthorityFacade
+    method: readSigningPublicKey
+    reader: HumanAuthorityReader
+    slice: SigningPublicKey
+  request_bindings:
+    path:
+    - name: keyId
+      field: keyId
+- method: POST
+  path: /control-plane/platform/human-authority/receipts/{decisionId}:consume
+  operation: ConsumeHumanAuthorizationReceipt
+  actor: account
+  request_entity: ConsumeHumanAuthorizationReceiptRequest
+  request_body_kind: object
+  response_entity: AuthorizationReceipt
+  response_body_kind: object
+  security:
+    auth_mode: required
+  authorization:
+    principal: operator
+    scopes:
+    - ops.human-authority.consume
+    ownership_policy: operator_scope
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 1
+    idempotency: required
+  error_codes:
+  - OPS.USER.human_authority_invalid
+  - OPS.USER.human_authority_unauthorized
+  - OPS.USER.human_authority_conflict
+  - OPS.SYSTEM.human_authority_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: redacted
+  telemetry:
+    metric: ops_human_authority_commands
+    trace: true
+    attributes:
+    - operation
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 正式 hosted PostgreSQL、OIDC、GitHub App、签名密钥轮换与 live UAT 外部前置未闭合
+    gap_id: HOSTED_HUMAN_AUTHORITY_LIVE_EVIDENCE
+    target_story: hosted-human-authority
+  application:
+    kind: command
+    facet: HumanAuthorityFacade
+    method: consumeReceipt
+    aggregate_owner: HumanAuthority
+    mutation_target: HumanAuthority
+    invariant_target: HumanAuthority
+  request_bindings:
+    path:
+    - name: decisionId
+      field: decisionId
+- method: POST
+  path: /control-plane/platform/human-authority/receipts/{decisionId}:revoke
+  operation: RevokeHumanAuthorizationReceipt
+  actor: account
+  request_entity: RevokeHumanAuthorizationReceiptRequest
+  request_body_kind: object
+  response_entity: AuthorizationReceipt
+  response_body_kind: object
+  security:
+    auth_mode: required
+  authorization:
+    principal: operator
+    scopes:
+    - ops.human-authority.revoke
+    ownership_policy: operator_scope
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 1
+    idempotency: required
+  error_codes:
+  - OPS.USER.human_authority_invalid
+  - OPS.USER.human_authority_unauthorized
+  - OPS.USER.human_authority_conflict
+  - OPS.SYSTEM.human_authority_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: redacted
+  telemetry:
+    metric: ops_human_authority_commands
+    trace: true
+    attributes:
+    - operation
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 正式 hosted PostgreSQL、OIDC、GitHub App、签名密钥轮换与 live UAT 外部前置未闭合
+    gap_id: HOSTED_HUMAN_AUTHORITY_LIVE_EVIDENCE
+    target_story: hosted-human-authority
+  application:
+    kind: command
+    facet: HumanAuthorityFacade
+    method: revokeReceipt
+    aggregate_owner: HumanAuthority
+    mutation_target: HumanAuthority
+    invariant_target: HumanAuthority
+  request_bindings:
+    path:
+    - name: decisionId
+      field: decisionId
+- method: POST
+  path: /control-plane/platform/human-authority/webhooks/github
+  operation: IngestGitHubHumanAuthorityWebhook
+  actor: none
+  security:
+    auth_mode: required
+    principal: github
+    token_transport: hmac_sha256
+    anonymous_policy: deny
+    visibility: internal
+  authorization:
+    principal: service
+    scopes:
+    - ops.human-authority.github.write
+    ownership_policy: machine_principal_bound
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 1
+    idempotency: payload_digest_server_side
+  error_codes:
+  - OPS.USER.human_authority_invalid
+  - OPS.USER.human_authority_unauthorized
+  - OPS.USER.human_authority_conflict
+  - OPS.SYSTEM.human_authority_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: redacted
+  telemetry:
+    metric: ops_human_authority_commands
+    trace: true
+    attributes:
+    - operation
+    - outcome
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: 正式 hosted PostgreSQL、OIDC、GitHub App、签名密钥轮换与 live UAT 外部前置未闭合
+    gap_id: HOSTED_HUMAN_AUTHORITY_LIVE_EVIDENCE
+    target_story: hosted-human-authority
+  application:
+    kind: command
+    facet: HumanAuthorityFacade
+    method: ingestGitHubWebhook
+    aggregate_owner: HumanAuthority
+    mutation_target: HumanAuthority
+    invariant_target: HumanAuthority
+contract_test:
+  coverage_requirements:
+  - Human contract 生成 binding 漂移失败。
+  - collection/read wrong-role、request DTO wire、全部 mutation exact idempotency 与 server-owned finalize authority 有本地契约测试。
+  - GitHub HMAC、mapping fail-closed、delivery digest replay/conflict 与同 identity tuple request→approved 有本地契约测试。
+  - PostgreSQL append-only hash chain 与原子 decision/audit/outbox/receipt 有真实引擎集成测试。

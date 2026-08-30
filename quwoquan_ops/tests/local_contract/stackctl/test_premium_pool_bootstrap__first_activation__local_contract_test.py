@@ -114,6 +114,27 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
             mock.patch.object(
                 premium_pool_release, "env_runs_root", return_value=root
             ),
+            mock.patch.object(
+                premium_pool_release,
+                "_load_release_sample_plan_documents_from_attestation",
+                return_value=(
+                    {},
+                    {
+                        "schema": "quwoquan_data.release_uat_sample_plan",
+                        "releaseId": candidate_release_id,
+                        "samples": [
+                            {
+                                "sampleId": "canary-video-001",
+                                "carrier": "video",
+                                "objectId": VIDEO_ID,
+                                "objectRef": "objects/posts/video/攻略/峨眉山/1",
+                                "objectDigest": "sha256:" + "7" * 64,
+                            }
+                        ],
+                    },
+                    "sha256:" + "f" * 64,
+                ),
+            ),
         ):
             return premium_pool_release.load_premium_pool_bootstrap_binding(
                 environment=environment,
@@ -126,7 +147,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
     def test_empty_pool_binds_the_release_video_from_import_evidence(self) -> None:
         """首次激活只需 apply 已产出的导入证据。
 
-        spec_ref: environment-topology-and-packaging GWT-004（Alpha 激活可形成 appUatEnvelope 的 release）
+        spec_ref: environment-topology-and-packaging GWT-004（Alpha 激活绑定 ReleaseUatSamplePlan）
         """
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -161,14 +182,14 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
             root = Path(temporary)
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
-                "release-bound video",
+                "ReleaseUatSamplePlan video sample",
             ):
                 self._load(
                     _import_report(root), root, content_id="data_post_" + "f" * 64
                 )
 
     def test_a_non_video_binding_is_refused(self) -> None:
-        """精选池只收视频，与 consumer 档 `typed_video` 的口径一致。
+        """精选池只收 ReleaseUatSamplePlan 明确选中的 video 样本。
 
         spec_ref: environment-topology-and-packaging GWT-004
         """
@@ -176,7 +197,7 @@ class PremiumPoolBootstrapBindingLocalContractTest(unittest.TestCase):
             root = Path(temporary)
             with self.assertRaisesRegex(
                 premium_pool_release.PremiumPoolReleaseError,
-                "release-bound video",
+                "ReleaseUatSamplePlan video sample",
             ):
                 self._load(_import_report(root), root, content_id=ARTICLE_ID)
 

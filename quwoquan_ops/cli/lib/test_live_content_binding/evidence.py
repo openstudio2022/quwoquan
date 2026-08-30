@@ -34,6 +34,12 @@ class _Evidence:
     source_identity: dict[str, Any]
     attestation_ref: str
     readiness_ref: str
+    release_header: dict[str, Any]
+    release_header_snapshot: _RegularJson
+    release_header_ref: str
+    release_uat_sample_plan: dict[str, Any]
+    release_uat_sample_plan_ref: str
+    release_uat_sample_plan_digest: str
     lifecycle: dict[str, Any] | None
     lifecycle_snapshot: _RegularJson | None
     lifecycle_ref: str
@@ -226,22 +232,28 @@ def _validate_readiness(
     declared = str(checksum.pop("verificationChecksum", ""))
     if declared != _document_checksum(checksum):
         raise ValueError("Data readiness verificationChecksum mismatch")
-    envelope = value.get("appUatEnvelope")
-    if not isinstance(envelope, Mapping):
-        raise ValueError("Data readiness is missing canonical appUatEnvelope")
-    for field, expected_value in (
-        ("releaseId", release_id),
-        ("releaseClass", release_class),
-        ("productLifecycleState", lifecycle_state),
-    ):
-        if envelope.get(field) != expected_value:
-            raise ValueError(f"Data readiness appUatEnvelope {field} mismatch")
-    app_uat_digest = _document_checksum(envelope)
-    if value.get("appUatEnvelopeDigest") != app_uat_digest:
-        raise ValueError("Data readiness appUatEnvelopeDigest mismatch")
+    retired = sorted(
+        field
+        for field in ("appUatEnvelope", "appUatEnvelopeDigest")
+        if field in value
+    )
+    if retired:
+        raise ValueError(
+            "Data readiness contains retired App UAT fields: " + ", ".join(retired)
+        )
     activation = value.get("activationEnvelope")
     if not isinstance(activation, Mapping):
         raise ValueError("Data readiness is missing canonical activationEnvelope")
+    retired_activation = sorted(
+        field
+        for field in ("appUatEnvelope", "appUatEnvelopeDigest")
+        if field in activation
+    )
+    if retired_activation:
+        raise ValueError(
+            "Data readiness activationEnvelope contains retired App UAT fields: "
+            + ", ".join(retired_activation)
+        )
     expected_activation = {
         "schema": "quwoquan_data.environment_activation_envelope",
         "environment": environment,
@@ -253,8 +265,10 @@ def _validate_readiness(
         "readinessPhase": phase,
         "importRunId": value["importRunId"],
         "verifyRunId": verify_run_id,
-        "appUatEnvelopeDigest": app_uat_digest,
     }
+    for field in ("milestone", "previousEnvironmentActivation"):
+        if field in value:
+            expected_activation[field] = value.get(field)
     for field, expected_value in expected_activation.items():
         if activation.get(field) != expected_value:
             raise ValueError(f"Data readiness activationEnvelope {field} mismatch")
@@ -417,7 +431,9 @@ def _load_evidence(
     ):
         raise ValueError("test-live content binding requires the exact running startup attempt")
 
-    attestation_path = root / "data" / "releases" / release / "attestations" / "release.json"
+    release_root = root / "data" / "releases" / release
+    attestation_path = release_root / "attestations" / "release.json"
+    release_header_path = release_root / "payload" / "release.json"
     readiness_path = (
         _pkg.env_runs_root(environment)
         / "data-release"
@@ -431,19 +447,54 @@ def _load_evidence(
         label="release attestation",
     )
     readiness_ref = _canonical_ref(readiness_path, root=root, label="release readiness")
+    release_header_ref = _canonical_ref(
+        release_header_path, root=root, label="release header"
+    )
     attestation_snapshot = _read_regular_json(
         attestation_path,
         label="Data release attestation",
+    )
+    release_header_snapshot = _read_regular_json(
+        release_header_path,
+        label="Data release header",
     )
     readiness_snapshot = _read_regular_json(
         readiness_path,
         label="Data readiness receipt",
     )
-    assert attestation_snapshot is not None and readiness_snapshot is not None
+    assert (
+        attestation_snapshot is not None
+        and release_header_snapshot is not None
+        and readiness_snapshot is not None
+    )
     release_class, lifecycle_state, source_identity = _validate_attestation(
         attestation_snapshot.value,
         release_id=release,
         manifest_digest=digest,
+    )
+    release_header = release_header_snapshot.value
+    expected_header = {
+        "schema": "quwoquan_data.release",
+        "releaseId": release,
+        "releaseKind": "content",
+        "sourceOwner": "qwq_data",
+        "releaseClass": release_class,
+        "productLifecycleState": lifecycle_state,
+    }
+    if any(
+        release_header.get(field) != expected_value
+        for field, expected_value in expected_header.items()
+    ):
+        raise ValueError("Data release header identity mismatch")
+    if _source_identity(release_header, label="Data release header") != source_identity:
+        raise ValueError("Data release header source identity mismatch")
+    from quwoquan_ops.cli.lib.app_content_uat_plan import (
+        load_release_uat_sample_plan,
+    )
+
+    sample_plan, sample_plan_ref, sample_plan_digest = load_release_uat_sample_plan(
+        release_root=release_header_path.parent,
+        release_header=release_header,
     )
     phase = _validate_readiness(
         readiness_snapshot.value,
@@ -493,6 +544,12 @@ def _load_evidence(
         source_identity=_copy_source_identity(source_identity),
         attestation_ref=attestation_ref,
         readiness_ref=readiness_ref,
+        release_header=release_header,
+        release_header_snapshot=release_header_snapshot,
+        release_header_ref=release_header_ref,
+        release_uat_sample_plan=sample_plan,
+        release_uat_sample_plan_ref=sample_plan_ref,
+        release_uat_sample_plan_digest=sample_plan_digest,
         lifecycle=lifecycle,
         lifecycle_snapshot=lifecycle_snapshot,
         lifecycle_ref=lifecycle_ref,

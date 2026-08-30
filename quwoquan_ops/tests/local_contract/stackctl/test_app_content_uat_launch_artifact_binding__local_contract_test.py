@@ -20,11 +20,10 @@ from quwoquan_app.scripts.device.startup_terminal_receipt import (
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.commands import app_preflight_uat_launch as launch
 from quwoquan_ops.cli.commands.app_preflight_uat import (
-    _app_content_android_launch_command,
+    _app_content_canonical_launch_command,
 )
 from quwoquan_ops.cli.commands.app_preflight_uat_binding import (
     _app_content_launch_binding,
-    _app_content_page_artifact_binding,
 )
 from quwoquan_ops.cli.commands.app_preflight_uat_launch_binding import (
     _verified_dependency_projection_binding,
@@ -37,12 +36,6 @@ from quwoquan_ops.cli.lib.app_launch_attempt import (
 from quwoquan_ops.cli.lib.package_reuse.dependency_projection_contract import (
     COMPONENT_LOGICAL_PATHS,
     environment_identity,
-)
-from quwoquan_ops.cli.smoke.environment_patrol_smoke.artifact_binding import (
-    build_tested_app_artifact_binding,
-)
-from quwoquan_ops.cli.smoke.environment_patrol_smoke.artifact_binding import (
-    tested_app_artifact_comparison as _tested_app_artifact_comparison,
 )
 from quwoquan_ops.tests.support.patrol_command_envelope_test_support import (
     sealed_patrol_command_fixture,
@@ -64,6 +57,18 @@ SOURCE_PROJECTION_DIGEST = _digest("f")
 DERIVED_OUTPUT_DIGEST = _digest("7")
 DERIVED_OUTPUT_POLICY_DIGEST = _digest("8")
 BUILD_PROJECTION_DIGEST = _digest("9")
+CONTRACT_GRAPH_BYTES = json.dumps(
+    {
+        "operations": [
+            {
+                "id": "content.post.GetFeed",
+                "errorCodes": ["CONTENT.SYSTEM.required_dependency_unavailable"],
+            }
+        ]
+    },
+    separators=(",", ":"),
+).encode("utf-8")
+CONTRACT_GRAPH_DIGEST = "sha256:" + hashlib.sha256(CONTRACT_GRAPH_BYTES).hexdigest()
 
 
 def _write_private_evidence(path: Path, payload: dict[str, object]) -> str:
@@ -201,183 +206,6 @@ def _dependency_projection_evidence(
     }
 
 
-def _page_artifact_evidence(binding: dict[str, object]) -> dict[str, object]:
-    comparison = _tested_app_artifact_comparison(binding)
-    return {
-        "patrolTarget": "test/example.dart",
-        "environmentAlias": "alpha-local",
-        "platform": "android",
-        "deviceId": "emulator-5556",
-        "testedAppArtifactBinding": {
-            "status": "passed",
-            "bindings": [binding],
-            "comparisonProjections": [dict(comparison)],
-        },
-    }
-
-
-def _valid_test_host_binding() -> dict[str, object]:
-    return build_tested_app_artifact_binding(
-        platform="android",
-        device_id="emulator-5556",
-        command_application_id="com.quwoquan.testhost.patrol",
-        build_application_id="com.quwoquan.testhost.patrol",
-        build_artifact_path="build/app/outputs/apk/debug/app-debug.apk",
-        build_artifact_digest=ARTIFACT_DIGEST,
-        installed_application_id="com.quwoquan.testhost.patrol",
-        installed_artifact_digest=ARTIFACT_DIGEST,
-        installed_readback_method="adb-pull-base-apk",
-        installed_locator_digest=_digest("6"),
-        host_source={
-            "root": "quwoquan_app/test_host/patrol",
-            "rootIdentityDigest": _digest("7"),
-            "sourceDigest": _digest("8"),
-            "sourceFileCount": 1,
-        },
-    )
-
-
-def _canonical_page_comparison() -> dict[str, str]:
-    return {
-        "applicationId": "com.leadwise.quwoquan.nonprod.debug",
-        "artifactDigest": ARTIFACT_DIGEST,
-        "sourceProjectionDigest": SOURCE_PROJECTION_DIGEST,
-        "runtimeConfigPackageDigest": PACKAGE_DIGEST,
-        "trustDigest": TRUST_DIGEST,
-        "launchAttemptId": "launch-attempt-1",
-    }
-
-
-def _canonical_page_launch_binding() -> dict[str, str]:
-    comparison = _canonical_page_comparison()
-    return {
-        **comparison,
-        "runtimeConfigTrustEnvelopeDigest": comparison["trustDigest"],
-    }
-
-
-def test_page_artifact_binding_rejects_spoofed_six_key_projection() -> None:
-    comparison = _canonical_page_comparison()
-    evidence = {
-        "testedAppArtifactBinding": {
-            "status": "passed",
-            "bindings": [{"canonicalComparison": dict(comparison)}],
-            "comparisonProjections": [dict(comparison)],
-        }
-    }
-
-    with pytest.raises(ValueError, match="binding schema is invalid"):
-        _app_content_page_artifact_binding(
-            page_evidence={
-                **evidence,
-                "patrolTarget": "test/example.dart",
-                "environmentAlias": "alpha-local",
-                "platform": "android",
-                "deviceId": "emulator-5556",
-            },
-            launch_binding=_canonical_page_launch_binding(),
-            expected_patrol_target="test/example.dart",
-            expected_environment_alias="alpha-local",
-            expected_platform="android",
-            expected_device_id="emulator-5556",
-        )
-
-
-def test_test_host_missing_canonical_keys_blocks_strict_page_uat() -> None:
-    with pytest.raises(
-        ValueError,
-        match="missing sourceProjectionDigest,runtimeConfigPackageDigest,trustDigest,launchAttemptId",
-    ):
-        _app_content_page_artifact_binding(
-            page_evidence=_page_artifact_evidence(_valid_test_host_binding()),
-            launch_binding=_canonical_page_launch_binding(),
-            expected_patrol_target="test/example.dart",
-            expected_environment_alias="alpha-local",
-            expected_platform="android",
-            expected_device_id="emulator-5556",
-        )
-
-
-def test_page_artifact_binding_rejects_cross_artifact_comparison() -> None:
-    binding = _valid_test_host_binding()
-    comparison = binding["canonicalComparison"]
-    assert isinstance(comparison, dict)
-    comparison["artifactDigest"] = _digest("9")
-
-    with pytest.raises(ValueError, match="artifactDigest is not a readback"):
-        _app_content_page_artifact_binding(
-            page_evidence={
-                "testedAppArtifactBinding": {
-                    "status": "passed",
-                    "bindings": [binding],
-                    "comparisonProjections": [_tested_app_artifact_comparison(binding)],
-                }
-            },
-            launch_binding=_canonical_page_launch_binding(),
-            expected_patrol_target="test/example.dart",
-            expected_environment_alias="alpha-local",
-            expected_platform="android",
-            expected_device_id="emulator-5556",
-        )
-
-
-@pytest.mark.parametrize(
-    (
-        "expected_patrol_target",
-        "expected_environment_alias",
-        "expected_platform",
-        "expected_device_id",
-        "detail",
-    ),
-    (
-        (
-            "test/wrong.dart",
-            "alpha-local",
-            "android",
-            "emulator-5556",
-            "patrolTarget",
-        ),
-        (
-            "test/example.dart",
-            "beta-local",
-            "android",
-            "emulator-5556",
-            "environmentAlias",
-        ),
-        (
-            "test/example.dart",
-            "alpha-local",
-            "ios",
-            "emulator-5556",
-            "platform",
-        ),
-        (
-            "test/example.dart",
-            "alpha-local",
-            "android",
-            "emulator-9999",
-            "deviceId",
-        ),
-    ),
-)
-def test_page_artifact_binding_rejects_wrong_page_or_device_identity(
-    expected_patrol_target: str,
-    expected_environment_alias: str,
-    expected_platform: str,
-    expected_device_id: str,
-    detail: str,
-) -> None:
-    with pytest.raises(ValueError, match=detail):
-        _app_content_page_artifact_binding(
-            page_evidence=_page_artifact_evidence(_valid_test_host_binding()),
-            launch_binding=_canonical_page_launch_binding(),
-            expected_patrol_target=expected_patrol_target,
-            expected_environment_alias=expected_environment_alias,
-            expected_platform=expected_platform,
-            expected_device_id=expected_device_id,
-        )
-
-
 def _write_launch_pair(
     root: Path,
 ) -> tuple[Path, Path, dict[str, object], dict[str, object]]:
@@ -441,11 +269,19 @@ def _write_launch_pair(
     attempt_digest = stackctl._canonical_document_checksum(attempt)
     capsule_manifest_path = root / "candidate/input-capsule/manifest.json"
     capsule_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    contract_graph_entry = {
+        "logicalPath": "quwoquan_service/generated/contract_graph.json",
+        "capsulePath": "repo/quwoquan_service/generated/contract_graph.json",
+        "kind": "file",
+        "digest": CONTRACT_GRAPH_DIGEST,
+        "mode": 0o444,
+        "size": len(CONTRACT_GRAPH_BYTES),
+    }
     capsule_manifest = {
         "baselineId": _digest("0"),
         "deploymentInputDigest": _digest("1"),
         "deploymentInputFileCount": 2,
-        "entries": _source_dependency_markers(),
+        "entries": [*_source_dependency_markers(), contract_graph_entry],
     }
     capsule_manifest_path.write_text(
         json.dumps(capsule_manifest, sort_keys=True) + "\n",
@@ -457,6 +293,11 @@ def _write_launch_pair(
     )
     projection_root = root / "alpha-local/canonical-launch/source-projection"
     projection_root.mkdir(parents=True)
+    contract_graph_ref = (
+        projection_root / "quwoquan_service/generated/contract_graph.json"
+    )
+    contract_graph_ref.parent.mkdir(parents=True)
+    contract_graph_ref.write_bytes(CONTRACT_GRAPH_BYTES)
     projection_evidence_path = projection_root.parent / "source-projection.json"
     projection_evidence = {
         "schema": "quwoquan_ops.app_content_uat_source_projection.v1",
@@ -469,7 +310,7 @@ def _write_launch_pair(
         "sourceCapsuleManifestRef": str(capsule_manifest_path),
         "sourceProjectionRoot": str(projection_root),
         "sourceProjectionDigest": SOURCE_PROJECTION_DIGEST,
-        "sourceProjectionFileCount": 3,
+        "sourceProjectionFileCount": 4,
     }
     projection_evidence_path.write_text(
         json.dumps(projection_evidence, sort_keys=True),
@@ -492,7 +333,7 @@ def _write_launch_pair(
         "schema": "quwoquan_ops.app_build_projection_seal.v1",
         "policyId": launch.FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID,
         "sourceProjectionDigest": SOURCE_PROJECTION_DIGEST,
-        "sourceEntryCount": 3,
+        "sourceEntryCount": 4,
         "derivedOutputDigest": DERIVED_OUTPUT_DIGEST,
         "derivedOutputPolicyDigest": DERIVED_OUTPUT_POLICY_DIGEST,
         "derivedEntryCount": 12,
@@ -569,7 +410,7 @@ def _write_launch_pair(
         "sourceProjectionEvidenceDigest": projection["sourceProjectionEvidenceDigest"],
         "sourceProjectionEvidenceRef": projection["sourceProjectionEvidenceRef"],
         "sourceProjectionDigest": SOURCE_PROJECTION_DIGEST,
-        "sourceProjectionFileCount": 3,
+        "sourceProjectionFileCount": 4,
         "prebuildProjectionDigest": _digest("0"),
         "buildProjectionSeal": build_projection_seal,
         "buildProjectionSealDigest": build_projection_seal_digest,
@@ -629,6 +470,7 @@ def _runtime_binding() -> dict[str, object]:
         "sourceCapsuleWorkspaceStatusDigest": _digest("d"),
         "candidateDigest": CANDIDATE_DIGEST,
         "packageDigest": PACKAGE_DIGEST,
+        "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
     }
 
 
@@ -688,7 +530,14 @@ def test_launch_binding_persists_exact_artifact_and_attempt_identity(
         "sourceProjectionEvidenceDigest": projection["sourceProjectionEvidenceDigest"],
         "sourceProjectionEvidenceRef": projection["sourceProjectionEvidenceRef"],
         "sourceProjectionDigest": SOURCE_PROJECTION_DIGEST,
-        "sourceProjectionFileCount": 3,
+        "sourceProjectionFileCount": 4,
+        "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
+        "contractGraphRef": str(
+            Path(str(projection["sourceProjectionRoot"]))
+            / "quwoquan_service/generated/contract_graph.json"
+        ),
+        "contractGraphOperationCount": 1,
+        "sourceProjectionRoot": projection["sourceProjectionRoot"],
         "dependencyProjectionExpectationRef": report[
             "dependencyProjectionExpectationRef"
         ],
@@ -767,7 +616,7 @@ def test_android_uat_command_cannot_bypass_canonical_launcher(tmp_path: Path) ->
     attempt_path = tmp_path / "attempt.json"
     report_path = tmp_path / "report.json"
 
-    command, environment = _app_content_android_launch_command(
+    command, environment = _app_content_canonical_launch_command(
         environment="alpha",
         target="alpha-local",
         device_id="emulator-5554",

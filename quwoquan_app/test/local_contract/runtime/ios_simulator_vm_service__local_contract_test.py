@@ -538,6 +538,10 @@ class IOSSimulatorVMServiceContractTest(unittest.TestCase):
             "startup_evidence_lines",
             return_value=(),
         ), mock.patch.object(
+            driver,
+            "child_environment",
+            side_effect=executor.compile_environment,
+        ), mock.patch.object(
             executor.subprocess,
             "Popen",
             return_value=process,
@@ -615,6 +619,10 @@ class IOSSimulatorVMServiceContractTest(unittest.TestCase):
             "read_ios_simulator_startup_evidence",
             return_value=markers,
         ) as readback, mock.patch.object(
+            driver,
+            "child_environment",
+            side_effect=executor.compile_environment,
+        ), mock.patch.object(
             executor.subprocess,
             "Popen",
             return_value=process,

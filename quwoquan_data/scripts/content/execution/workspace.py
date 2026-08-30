@@ -280,6 +280,7 @@ def write_frozen_target_set(
     *,
     targets: Iterable[dict[str, Any]],
     source_ref: str,
+    candidate_binding: Mapping[str, Any] | None = None,
 ) -> tuple[Path, str]:
     """Freeze the exact execution target set before an execution manifest exists."""
     normalized: list[dict[str, Any]] = []
@@ -297,10 +298,20 @@ def write_frozen_target_set(
         normalized.append(target)
     if not normalized:
         raise ValueError("frozen target set must not be empty")
+    source_ref_text = str(source_ref).strip()
+    binding = dict(candidate_binding or {})
+    if not binding:
+        source_path = (core_paths.REPO_ROOT / source_ref_text).resolve()
+        binding = {
+            "ref": source_ref_text,
+            "digest": f"sha256:{_file_sha256(source_path)}",
+            "candidateCount": len(normalized),
+        }
     payload = {
         "executionId": validate_execution_id(execution_id),
         "selectionPolicy": SelectionPolicy.FROZEN.value,
-        "sourceRef": str(source_ref).strip(),
+        "sourceRef": source_ref_text,
+        "candidateBinding": binding,
         "entityCatalogDigest": entity_catalog_digest(source_ref),
         "targetCount": len(normalized),
         "targetRefs": sorted(refs),
@@ -431,16 +442,6 @@ def create_execution_manifest(
         if manifest_path.is_file()
         else None
     )
-    from content.execution.planning.semantic_preflight_admission import (
-        resolve_manifest_preflight_binding,
-    )
-
-    normalized_preflight_binding = resolve_manifest_preflight_binding(
-        existing_manifest=existing_manifest,
-        requested_binding=semantic_preflight_binding,
-        semantic_selection_id=semantic_selection_id,
-        output_root=core_paths.OUTPUT_ROOT,
-    )
     if existing_manifest is not None:
         # A v2 work package is its own immutable execution authority.  Resume
         # must not rebuild either identity from the changing checkout: source
@@ -450,16 +451,12 @@ def create_execution_manifest(
         family_ref = existing_manifest.get("familyRef")
         if not isinstance(family_ref, Mapping) or family_ref.get("ref") != recipe_ref:
             raise ValueError("execution manifest familyRef drift")
-        if existing_manifest.get("semanticSelectionId") != semantic_selection_id:
-            raise ValueError("execution manifest semanticSelectionId drift")
         if existing_manifest.get("retryOf") != normalized_retry_of:
             raise ValueError("execution manifest retryOf drift")
         if existing_manifest.get("targetSetRef") != target_set_ref:
             raise ValueError("execution manifest targetSetRef drift")
         if existing_manifest.get("targetSetDigest") != target_set_digest:
             raise ValueError("execution manifest targetSetDigest drift")
-        if existing_manifest.get("semanticPreflightReceipt") != normalized_preflight_binding:
-            raise ValueError("execution manifest semantic preflight binding drift")
         request_path = execution_request_path(identity.execution_id)
         if not request_path.is_file() or read_json(request_path) != request:
             raise ValueError("execution request is immutable; create a new sequence")
@@ -467,16 +464,6 @@ def create_execution_manifest(
 
     if not recipe_file.is_file():
         raise FileNotFoundError(f"recipeRef does not exist: {recipe_ref}")
-    recipe_payload = yaml.safe_load(recipe_file.read_text(encoding="utf-8"))
-    if not isinstance(recipe_payload, dict):
-        raise ValueError(f"recipe must be an object: {recipe_file}")
-    from content.execution.planning.semantic_selection import semantic_manifest_identity
-
-    semantic_identity = semantic_manifest_identity(
-        recipe_payload,
-        semantic_selection_id=semantic_selection_id,
-        retry_of=normalized_retry_of,
-    )
     source_identity = current_source_definition_snapshot().to_document()
     execution_bundle_identity = current_execution_bundle_identity().to_document()
     candidate = {
@@ -484,14 +471,18 @@ def create_execution_manifest(
         "familyRef": {"ref": recipe_ref, "sha256": _file_sha256(recipe_file)},
         "sourceDigest": source_identity,
         "executionBundle": execution_bundle_identity,
-        **semantic_identity,
+        "hostRuntime": "external_host_agent",
+        "carrierDemand": {
+            "ref": REQUEST_REF,
+            "digest": f"sha256:{_canonical_payload_sha256(request)}",
+            "workRequestRef": REQUEST_REF,
+            "workRequestDigest": f"sha256:{_canonical_payload_sha256(request)}",
+        },
         "requestRef": REQUEST_REF,
         "targetSetRef": target_set_ref,
         "targetSetDigest": target_set_digest,
         "retryOf": normalized_retry_of,
     }
-    if normalized_preflight_binding is not None:
-        candidate["semanticPreflightReceipt"] = normalized_preflight_binding
     ensure_execution_work_package_layout(identity.execution_id)
     request_path = execution_request_path(identity.execution_id)
     if request_path.is_file():

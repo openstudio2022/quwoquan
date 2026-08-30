@@ -224,11 +224,7 @@ class _ArticlePageImage extends StatelessWidget {
           child: mediaDeliveryImage(
             binding: binding.hasRenderableSource
                 ? binding
-                : MediaDeliveryBinding(
-                    assetId: '',
-                    accessMode: null,
-                    publicUrl: imageUrl,
-                  ),
+                : MediaDeliveryBinding.legacyPublic(publicUrl: imageUrl),
             kind: MediaDeliveryKind.image,
             publicBuilder: (context, publicUrl) =>
                 ArticleAdaptiveImage(imageUrl: publicUrl),

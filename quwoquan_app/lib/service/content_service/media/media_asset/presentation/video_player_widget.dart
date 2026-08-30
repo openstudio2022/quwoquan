@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:quwoquan_app/runtime/transport/media/signed_video_delivery.dart';
 export 'package:quwoquan_app/runtime/transport/media/signed_video_delivery.dart';
+
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
@@ -130,10 +132,10 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
       ];
     }
     return AdaptiveVideoDeliverySet(
-      progressive: value.deliveryReference!,
-      adaptive: value.adaptiveDeliveryReference,
-      adaptiveDescriptorVersion: value.adaptiveDescriptorVersion,
-    )
+          progressive: value.deliveryReference!,
+          adaptive: value.adaptiveDeliveryReference,
+          adaptiveDescriptorVersion: value.adaptiveDescriptorVersion,
+        )
         .candidates(
           featureEnabled:
               featureEnabled ??
@@ -236,6 +238,27 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     }
     if (widget.verifiedDuration != oldWidget.verifiedDuration) {
       _playbackSession.setVerifiedDuration(widget.verifiedDuration);
+    }
+    final sameSignedAsset =
+        oldWidget.signedDelivery?.assetId.isNotEmpty == true &&
+        oldWidget.signedDelivery?.assetId == widget.signedDelivery?.assetId &&
+        oldWidget.signedDelivery?.cacheIdentity ==
+            widget.signedDelivery?.cacheIdentity;
+    final signedUrlChanged =
+        sameSignedAsset &&
+        oldWidget.signedDelivery?.deliveryUri !=
+            widget.signedDelivery?.deliveryUri;
+    if (signedUrlChanged) {
+      // 同一私有资产换签只改变短期 URL；稳定 asset/cache identity 不变时仍必须
+      // 重建 native controller 并保留已确认位置。候选 identity 故意不含签名 query，
+      // 所以短签 URL 的轮换需在此显式失效 active 快照。
+      _forceProgressiveForCurrentDelivery = false;
+      _activeCandidateSnapshot = null;
+      _scheduleControllerLifecycleSync(
+        sourceChanged: true,
+        preserveSourcePosition: true,
+      );
+      return;
     }
     if (_deliveryCandidateIdentity(widget) !=
         _deliveryCandidateIdentity(oldWidget)) {
@@ -520,9 +543,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
     if (_isRetrying) {
       return;
     }
-    MediaLoadFailureCache.instance.clearIdentity(
-      widget.playbackCacheIdentity,
-    );
+    MediaLoadFailureCache.instance.clearIdentity(widget.playbackCacheIdentity);
     _forceProgressiveForCurrentDelivery = false;
     _pendingSourceSwitchPosition = null;
     setState(() {

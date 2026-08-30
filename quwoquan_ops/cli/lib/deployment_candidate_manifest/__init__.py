@@ -128,6 +128,8 @@ from .provider_runtime_package import (  # noqa: F401
 from .manifest import (  # noqa: F401
     _validate_candidate_app_runtime_binding,
     load_candidate_manifest,
+    materialize_prod_sim_app_launch_bundle,
+    prod_sim_app_launch_bundle_from_candidate,
     validate_candidate_manifest,
     write_candidate_manifest,
 )

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from . import artifact_binding_report, external_aut_driver
+from .app_uat_case_execution import settle_app_uat_case_execution_reports
 from .constants import utc_now
 from .session import (
     _account_enforcement_subject_digest,
@@ -67,6 +68,24 @@ def new_report(
         "sessionSource": "",
         "releaseUatCasesPath": "",
         "remoteApiEvidence": {},
+        "appUatAuthority": (
+            {
+                "samplePlanRef": str(getattr(args, "app_uat_sample_plan_ref", "") or ""),
+                "samplePlanSha256": str(getattr(args, "app_uat_sample_plan_sha256", "") or ""),
+                "targetUatBindingRef": str(getattr(args, "app_uat_target_binding_ref", "") or ""),
+                "targetUatBindingSha256": str(getattr(args, "app_uat_target_binding_sha256", "") or ""),
+                "targetUatBindingDigest": str(getattr(args, "app_uat_target_binding_digest", "") or ""),
+                "releaseId": str(getattr(args, "data_release_id", "") or ""),
+                "releaseDigest": str(getattr(args, "app_uat_release_digest", "") or ""),
+                "sourceIdentitySetDigest": str(getattr(args, "app_uat_source_identity_set_digest", "") or ""),
+                "commitSha": str(getattr(args, "app_uat_commit_sha", "") or ""),
+                "contractGraphSourceHash": str(getattr(args, "app_uat_contract_graph_source_hash", "") or ""),
+                "candidateManifestSha256": str(getattr(args, "app_uat_candidate_manifest_sha256", "") or ""),
+                "provider": "first-party-https",
+            }
+            if str(getattr(args, "app_uat_sample_plan_ref", "") or "")
+            else None
+        ),
         "devices": [],
         "runs": [],
         "caseResults": [],
@@ -82,7 +101,17 @@ def new_report(
     }
 
 
-def write_report(path: Path, report: dict[str, Any]) -> None:
+def write_report(
+    path: Path,
+    report: dict[str, Any],
+    *,
+    app_uat_page_evidence_resolver: Any | None = None,
+) -> None:
+    settle_app_uat_case_execution_reports(
+        report,
+        report_path=path,
+        page_evidence_resolver=app_uat_page_evidence_resolver,
+    )
     artifact_binding_report.settle_tested_app_artifact_binding_report(report)
     external_aut_driver.settle_external_aut_journey_report(report)
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -135,6 +135,11 @@ def _finish_orphan_repair_gate_block(
 def command_repair(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
+    if str(getattr(args, "target", "") or "") == "prod-hosted":
+        from quwoquan_ops.cli.commands.hosted_read_only import rejection
+
+        return rejection("repair")
+
     if args.fix == "reconcile-output-layout":
         report_dir = _stackctl.resolve_report_dir(args, "repo", "repo")
         if args.target != "repo":

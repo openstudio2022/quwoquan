@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import os
 import secrets
-import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from .openssl3_resolver import OpenSSL3Executable, resolve_openssl3
 from .output_paths import deployment_target_path
 from .provider_endpoint_contract import load_provider_endpoint_environment
 from .public_domain_tls import PublicDomainTlsError, root_certificate_path
@@ -35,8 +35,7 @@ def prepare_local_sms_provider_substitute(
         raise ValueError("SMS Debug Provider target/environment mismatch")
     if not 1 <= int(port) <= 65535:
         raise ValueError("SMS Debug Provider port is invalid")
-    if shutil.which("openssl") is None:
-        raise RuntimeError("GATE_BLOCK: openssl is required for SMS substitute TLS")
+    openssl = resolve_openssl3()
 
     ca_path = root_certificate_path(target_name)
     ca_key_path = ca_path.with_name("root.key")
@@ -57,6 +56,7 @@ def prepare_local_sms_provider_substitute(
         certificate_path,
         private_key_path,
         ca_path,
+        openssl=openssl,
     ):
         _issue_certificate(
             target_name=target_name,
@@ -65,6 +65,7 @@ def prepare_local_sms_provider_substitute(
             ca_key_path=ca_key_path,
             certificate_path=certificate_path,
             private_key_path=private_key_path,
+            openssl=openssl,
         )
     return LocalSMSProviderSubstitute(
         environment={
@@ -96,15 +97,21 @@ def prepare_local_sms_provider_substitute(
     )
 
 
-def _certificate_is_ready(certificate: Path, key: Path, ca: Path) -> bool:
+def _certificate_is_ready(
+    certificate: Path,
+    key: Path,
+    ca: Path,
+    *,
+    openssl: OpenSSL3Executable,
+) -> bool:
     if not certificate.is_file() or not key.is_file():
         return False
     if key.stat().st_mode & 0o077:
         return False
     commands = (
-        ["openssl", "x509", "-in", str(certificate), "-checkend", "86400", "-noout"],
-        ["openssl", "verify", "-CAfile", str(ca), str(certificate)],
-        ["openssl", "x509", "-in", str(certificate), "-noout", "-checkhost", "sms-provider-substitute"],
+        openssl.argv("x509", "-in", str(certificate), "-checkend", "86400", "-noout"),
+        openssl.argv("verify", "-CAfile", str(ca), str(certificate)),
+        openssl.argv("x509", "-in", str(certificate), "-noout", "-checkhost", "sms-provider-substitute"),
     )
     if not all(
         subprocess.run(command, capture_output=True, check=False).returncode == 0
@@ -112,12 +119,12 @@ def _certificate_is_ready(certificate: Path, key: Path, ca: Path) -> bool:
     ):
         return False
     certificate_public_key = subprocess.run(
-        ["openssl", "x509", "-in", str(certificate), "-noout", "-pubkey"],
+        openssl.argv("x509", "-in", str(certificate), "-noout", "-pubkey"),
         capture_output=True,
         check=False,
     )
     private_public_key = subprocess.run(
-        ["openssl", "pkey", "-in", str(key), "-pubout"],
+        openssl.argv("pkey", "-in", str(key), "-pubout"),
         capture_output=True,
         check=False,
     )
@@ -136,6 +143,7 @@ def _issue_certificate(
     ca_key_path: Path,
     certificate_path: Path,
     private_key_path: Path,
+    openssl: OpenSSL3Executable,
 ) -> None:
     with tempfile.TemporaryDirectory(dir=tls_dir) as temporary:
         temp = Path(temporary)
@@ -151,8 +159,7 @@ def _issue_certificate(
             encoding="utf-8",
         )
         commands = (
-            [
-                "openssl",
+            (
                 "genpkey",
                 "-algorithm",
                 "RSA",
@@ -160,9 +167,8 @@ def _issue_certificate(
                 "rsa_keygen_bits:2048",
                 "-out",
                 str(next_key),
-            ],
-            [
-                "openssl",
+            ),
+            (
                 "req",
                 "-new",
                 "-key",
@@ -171,9 +177,8 @@ def _issue_certificate(
                 str(request_path),
                 "-subj",
                 f"/CN=sms-provider-substitute ({target_name})",
-            ],
-            [
-                "openssl",
+            ),
+            (
                 "x509",
                 "-req",
                 "-sha256",
@@ -191,10 +196,15 @@ def _issue_certificate(
                 str(extensions),
                 "-out",
                 str(next_certificate),
-            ],
+            ),
         )
-        for command in commands:
-            result = subprocess.run(command, text=True, capture_output=True, check=False)
+        for arguments in commands:
+            result = subprocess.run(
+                openssl.argv(*arguments),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
             if result.returncode != 0:
                 raise RuntimeError(
                     "GATE_BLOCK: SMS substitute TLS issuance failed: "

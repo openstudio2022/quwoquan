@@ -3,10 +3,65 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from collections.abc import Callable, Mapping
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
+
+from quwoquan_ops.cli.lib.app_dependency_toolchain import (
+    COCOAPODS_ENVIRONMENT_KEYS,
+    cocoapods_environment,
+    resolve_cocoapods_identity,
+)
+
+IOS_DIRECT_FLUTTER_TIMEOUT_BLOCKER = "APP.LAUNCH.receipt_timeout"
+IOS_DIRECT_FLUTTER_TIMEOUT_CLASS = "flutter_process_timeout_before_native_launch"
+IOS_DIRECT_FLUTTER_RECEIPT_BLOCKER = "APP.LAUNCH.receipt_invalid"
+
+
+def _ios_direct_flutter_failure_projection(
+    *,
+    evidence: Mapping[str, Any],
+    binding_issue: str,
+) -> dict[str, Any]:
+    """Retain literal runner evidence and assign one deterministic failure class."""
+
+    flutter_exit_code = evidence.get("flutterRunExitCode")
+    native_launch_count = evidence.get("nativeDidFinishLaunchingCount")
+    runtime_snapshots = evidence.get("runtimeIdentitySnapshots")
+    if (
+        flutter_exit_code is None
+        and native_launch_count == 0
+        and runtime_snapshots == []
+    ):
+        first_blocker = IOS_DIRECT_FLUTTER_TIMEOUT_BLOCKER
+        failure_class = IOS_DIRECT_FLUTTER_TIMEOUT_CLASS
+    else:
+        first_blocker = IOS_DIRECT_FLUTTER_RECEIPT_BLOCKER
+        failure_class = (
+            "launch_binding_invalid"
+            if binding_issue
+            else "literal_flutter_run_report_invalid"
+        )
+    raw_issues = evidence.get("issues")
+    return {
+        "firstBlocker": first_blocker,
+        "failureClass": failure_class,
+        "reportRef": str(evidence.get("reportPath") or ""),
+        "flutterRunLogRef": str(evidence.get("flutterRunLog") or ""),
+        "iosStartupLogRef": str(evidence.get("iosStartupLog") or ""),
+        "flutterProcessGroupId": evidence.get("flutterProcessGroupId"),
+        "flutterProcessGroupStoppedBySigint": evidence.get(
+            "flutterProcessGroupStoppedBySigint"
+        ),
+        "flutterRunExitCode": flutter_exit_code,
+        "nativeDidFinishLaunchingCount": native_launch_count,
+        "runtimeIdentitySnapshots": runtime_snapshots,
+        "issues": list(raw_issues) if isinstance(raw_issues, list) else [],
+        "bindingIssue": binding_issue,
+    }
 
 
 def execute_canonical_platform_launch(
@@ -28,13 +83,13 @@ def execute_canonical_platform_launch(
     issues: list[str],
     runs: list[dict[str, Any]],
     launch_bindings: dict[str, dict[str, Any]],
-    android_launch_command: Callable[..., tuple[list[str], dict[str, str]]],
+    canonical_launch_command: Callable[..., tuple[list[str], dict[str, str]]],
     launch_binding_reader: Callable[..., dict[str, Any]],
     write_launch_control: Callable[..., dict[str, Any]],
 ) -> bool:
-    if args.platform == "android":
-        android_command, android_environment = (
-            android_launch_command(
+    if args.platform in {"android", "android-physical", "ios-physical"}:
+        canonical_command, canonical_environment = (
+            canonical_launch_command(
                 environment=environment,
                 target=target,
                 device_id=device_id,
@@ -57,70 +112,70 @@ def execute_canonical_platform_launch(
                 }
             )
         else:
-            android_execution_lock = None
+            canonical_execution_lock = None
             try:
-                android_execution_lock = (
+                canonical_execution_lock = (
                     stackctl.acquire_patrol_execution_lock(
                         env_name=target,
                         target=f"canonical-launch:{device_id}",
                     )
                 )
-                android_result = stackctl.run(
-                    android_command,
+                canonical_result = stackctl.run(
+                    canonical_command,
                     cwd=launch_app_root,
-                    env=android_environment,
+                    env=canonical_environment,
                 )
             except RuntimeError as exc:
                 issues.append(f"{target}: {exc}")
                 return False
             finally:
-                if android_execution_lock is not None:
-                    android_execution_lock.close()
-            android_binding: dict[str, str] = {}
-            android_binding_issue = ""
-            if android_result.returncode == 0:
+                if canonical_execution_lock is not None:
+                    canonical_execution_lock.close()
+            canonical_binding: dict[str, str] = {}
+            canonical_binding_issue = ""
+            if canonical_result.returncode == 0:
                 try:
-                    android_binding = launch_binding_reader(
+                    canonical_binding = launch_binding_reader(
                         runtime_binding=runtime_binding,
                         report_ref=launch_report_path,
                         attempt_ref=launch_attempt_path,
-                        platform="android",
+                        platform=str(args.platform),
                         device_id=device_id,
                         launch_provenance="canonical_launcher",
                         launch_projection=launch_projection,
                     )
                 except (OSError, RuntimeError, TypeError, ValueError) as exc:
-                    android_binding_issue = str(exc)
+                    canonical_binding_issue = str(exc)
             runs.append(
                 {
                     "target": target,
                     "suite": "canonical-launch",
                     "exitCode": (
                         1
-                        if android_binding_issue
-                        else android_result.returncode
+                        if canonical_binding_issue
+                        else canonical_result.returncode
                     ),
                     "reportRef": str(launch_report_path),
                     "launchProvenance": "canonical_launcher",
-                    "launchBinding": android_binding,
+                    "launchBinding": canonical_binding,
                 }
             )
-            if android_result.returncode != 0 or android_binding_issue:
+            if canonical_result.returncode != 0 or canonical_binding_issue:
                 detail = (
-                    android_binding_issue
-                    or android_result.stderr
-                    or android_result.stdout
+                    canonical_binding_issue
+                    or canonical_result.stderr
+                    or canonical_result.stdout
                 ).strip()
                 issues.append(
-                    f"{target}: canonical Android launch failed: "
+                    f"{target}: canonical {args.platform} launch failed: "
                     + (
                         detail[:800]
                         if detail
-                        else f"exit={android_result.returncode}"
+                        else f"exit={canonical_result.returncode}"
                     )
                 )
                 return False
-            launch_bindings[target] = android_binding
+            launch_bindings[target] = canonical_binding
     elif args.platform == "ios-simulator":
         direct_command = [
             sys.executable,
@@ -132,13 +187,17 @@ def execute_canonical_platform_launch(
             environment,
             "--device-id",
             device_id,
-            "--launch-surface",
+            "--launch-provenance",
             "workspace_flutter_run",
-            # app-content-uat cold compile includes the current tree's
-            # frontend and Xcode build; observed builds exceed seven
-            # minutes, so this one evidence run needs a private budget.
+            "--run-mode",
+            "content-live",
+            # app-content-uat covers dependency capsule
+            # verification/projection, offline replay, and cold
+            # compilation. The measured canonical path can exceed
+            # 15 minutes, so this evidence run needs a private
+            # ready-wait budget.
             "--ready-timeout-seconds",
-            "900",
+            "1800",
             # Only the native observation of the cold terminal gets
             # this page-UAT allowance. Dart-reported cold and all hot
             # restart terminal budgets remain the canonical 6000ms.
@@ -170,6 +229,56 @@ def execute_canonical_platform_launch(
         direct_execution_lock = None
         try:
             if not bool(getattr(args, "dry_run", False)):
+                declared_cocoapods_environment = {
+                    key: str(os.environ.get(key) or "").strip()
+                    for key in COCOAPODS_ENVIRONMENT_KEYS
+                }
+                declared_cocoapods_keys = {
+                    key
+                    for key, value in declared_cocoapods_environment.items()
+                    if value
+                }
+                if declared_cocoapods_keys and declared_cocoapods_keys != set(
+                    COCOAPODS_ENVIRONMENT_KEYS
+                ):
+                    raise ValueError(
+                        "APP.DEPENDENCY.cocoapods_mixed: parent CocoaPods "
+                        "identity is incomplete"
+                    )
+                cocoapods_identity = resolve_cocoapods_identity(
+                    declared_cocoapods_environment[
+                        "QWQ_COCOAPODS_EXECUTABLE"
+                    ],
+                    search_path=str(os.environ.get("PATH") or ""),
+                )
+                if (
+                    declared_cocoapods_keys
+                    and cocoapods_identity.as_environment()
+                    != declared_cocoapods_environment
+                ):
+                    raise ValueError(
+                        "APP.DEPENDENCY.cocoapods_mixed: parent CocoaPods "
+                        "identity differs from the resolved executable"
+                    )
+                resolved_cocoapods_environment = cocoapods_environment(
+                    cocoapods_identity,
+                    base=os.environ,
+                )
+                frozen_cocoapods_environment: Mapping[str, str] = (
+                    MappingProxyType(
+                        {
+                            "PATH": resolved_cocoapods_environment["PATH"],
+                            **{
+                                key: resolved_cocoapods_environment[key]
+                                for key in COCOAPODS_ENVIRONMENT_KEYS
+                            },
+                        }
+                    )
+                )
+                direct_environment = {
+                    **direct_environment,
+                    **frozen_cocoapods_environment,
+                }
                 direct_execution_lock = stackctl.acquire_patrol_execution_lock(
                     env_name=target,
                     target=f"workspace-flutter-run:{device_id}",
@@ -244,7 +353,6 @@ def execute_canonical_platform_launch(
                 )
                 direct_environment = {
                     **direct_environment,
-                    "QWQ_OUTPUT_ROOT": str(canonical_output_root),
                     "QWQ_APP_LAUNCH_RECEIPT": str(launch_attempt_path),
                     "QWQ_APP_TEST_LIVE_REPORT": str(launch_report_path),
                     "QWQ_CANONICAL_LAUNCH_CONTROL": launch_control[
@@ -320,36 +428,60 @@ def execute_canonical_platform_launch(
             is not None
             and not direct_binding_issue
         )
-        runs.append(
-            {
-                "target": target,
-                "suite": "workspace-flutter-run",
-                "exitCode": (
-                    1 if direct_binding_issue else direct_result.returncode
-                ),
-                "reportRef": str(direct_evidence.get("reportPath") or ""),
-                "launchProvenance": direct_evidence.get(
-                    "launchProvenance"
-                ),
-                "runtimeConfigSupplyMode": direct_evidence.get(
-                    "runtimeConfigSupplyMode"
-                ),
-                "consumerLeaseId": direct_evidence.get("consumerLeaseId"),
-                "attempts": direct_evidence.get("attempts", []),
-                "retryCount": len(direct_retry_reports),
-                "supersededFailedReportRefs": direct_retry_reports,
-                "launchBinding": direct_binding,
-            }
+        direct_failure_evidence = (
+            {}
+            if direct_passed
+            else _ios_direct_flutter_failure_projection(
+                evidence=direct_evidence,
+                binding_issue=direct_binding_issue,
+            )
         )
+        run_payload = {
+            "target": target,
+            "suite": "workspace-flutter-run",
+            "status": "passed" if direct_passed else "failed",
+            "exitCode": (
+                1 if direct_binding_issue else direct_result.returncode
+            ),
+            "reportRef": str(direct_evidence.get("reportPath") or ""),
+            "launchProvenance": direct_evidence.get(
+                "launchProvenance"
+            ),
+            "runtimeConfigSupplyMode": direct_evidence.get(
+                "runtimeConfigSupplyMode"
+            ),
+            "consumerLeaseId": direct_evidence.get("consumerLeaseId"),
+            "attempts": direct_evidence.get("attempts", []),
+            "retryCount": len(direct_retry_reports),
+            "supersededFailedReportRefs": direct_retry_reports,
+            "launchBinding": direct_binding,
+        }
+        if direct_failure_evidence:
+            run_payload.update(
+                {
+                    "firstBlocker": direct_failure_evidence["firstBlocker"],
+                    "failureClass": direct_failure_evidence["failureClass"],
+                    "failureEvidence": direct_failure_evidence,
+                }
+            )
+        runs.append(run_payload)
         if not direct_passed:
-            detail = (
-                direct_binding_issue
-                or direct_result.stderr
-                or direct_result.stdout
-            ).strip()
+            if direct_failure_evidence:
+                detail = json.dumps(
+                    direct_failure_evidence,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            else:
+                detail = (
+                    direct_binding_issue
+                    or direct_result.stderr
+                    or direct_result.stdout
+                ).strip()
             issues.append(
                 f"{target}: literal flutter run failed: "
-                + (detail[:800] if detail else "typed report is incomplete")
+                + (detail if detail else "typed report is incomplete")
             )
             return False
         if not bool(getattr(args, "dry_run", False)):

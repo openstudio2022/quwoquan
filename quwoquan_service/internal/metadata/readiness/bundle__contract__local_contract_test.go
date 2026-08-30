@@ -26,6 +26,213 @@ func TestReadinessResultBundleSchemaAcceptsCanonicalWire(t *testing.T) {
 	}
 }
 
+func TestContentReleaseUATWireRequiresCanonicalBinding(t *testing.T) {
+	metadataDir := filepath.Join("..", "..", "..", "contracts", "metadata")
+	schemas, err := LoadWireSchemas(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := contentReleaseUATResult()
+	bundle := ReadinessResultBundle{
+		GeneratedAt: testStart,
+		Results:     []ReadinessCaseResult{result},
+	}
+	if err := ValidateBundleSchema(metadataDir, bundle); err != nil {
+		t.Fatalf("canonical content release UAT bundle rejected: %v", err)
+	}
+	receipt := ReadinessReceipt{
+		Binding:        receiptBindingForResult(result),
+		EvidenceSHA256: strings.Repeat("f", 64),
+	}
+	receipt.Binding.ReleaseID = result.ReleaseID
+	receipt.Binding.TargetUATBindingDigest = result.TargetUATBindingDigest
+	receipt.Binding.EntrySurface = result.EntrySurface
+	receipt.Binding.Carrier = result.Carrier
+	receipt.Binding.DeviceIdentity = result.DeviceIdentity
+	receipt.Binding.UATProfile = result.UATProfile
+	receipt.Binding.NonPromotable = result.NonPromotable
+	receipt.Binding.ArtifactClass = result.ArtifactClass
+	receipt.Binding.PhysicalDevice = result.PhysicalDevice
+	receipt.Binding.ObservedOutcome = result.ObservedOutcome
+	receipt.Binding.ObservedReleaseID = result.ObservedReleaseID
+	receiptBytes, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := schemas.DecodeReceipt(bytes.NewReader(receiptBytes)); err != nil {
+		t.Fatalf("canonical content release UAT receipt rejected: %v", err)
+	}
+
+	for _, field := range []string{
+		"releaseId", "targetUatBindingDigest", "entrySurface", "carrier",
+		"deviceIdentity", "uatProfile", "nonPromotable", "artifactClass", "physicalDevice",
+	} {
+		t.Run("bundle missing "+field, func(t *testing.T) {
+			data, err := json.Marshal(bundle)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var document map[string]any
+			if err := json.Unmarshal(data, &document); err != nil {
+				t.Fatal(err)
+			}
+			delete(document["results"].([]any)[0].(map[string]any), field)
+			data, err = json.Marshal(document)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := schemas.DecodeBundle(bytes.NewReader(data)); err == nil {
+				t.Fatalf("content release UAT bundle without %s was accepted", field)
+			}
+		})
+		t.Run("receipt missing "+field, func(t *testing.T) {
+			var document map[string]any
+			if err := json.Unmarshal(receiptBytes, &document); err != nil {
+				t.Fatal(err)
+			}
+			delete(document["binding"].(map[string]any), field)
+			data, err := json.Marshal(document)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := schemas.DecodeReceipt(bytes.NewReader(data)); err == nil {
+				t.Fatalf("content release UAT receipt without %s was accepted", field)
+			}
+		})
+	}
+}
+
+func contentReleaseUATResult() ReadinessCaseResult {
+	contract := completeCaseContracts()[0]
+	result := resultFor(contract, contract.Executions[0], "receipt/content-release-uat", []byte("receipt"))
+	result.ObjectID = "content.content_post"
+	result.Producer = ProducerApp
+	result.Layer = LayerUserAcceptance
+	result.Target = ReadinessTarget{Kind: TargetPage, ID: "content.feed"}
+	result.ReleaseDigest = "sha256:" + strings.Repeat("e", 64)
+	result.ReleaseID = "content-release-2026-08-29"
+	result.TargetUATBindingDigest = "sha256:" + strings.Repeat("7", 64)
+	result.EntrySurface = "feed"
+	result.Carrier = "article"
+	result.DeviceIdentity = "device.pixel-9.rehearsal"
+	result.UATProfile = "rehearsal"
+	result.NonPromotable = true
+	result.ArtifactClass = "production_behavior"
+	result.PhysicalDevice = false
+	result.ObservedOutcome = "content"
+	result.ObservedReleaseID = result.ReleaseID
+	return result
+}
+
+func TestReadinessUATSchemaRejectsInvalidProfilesOutcomesAndStatusReasons(t *testing.T) {
+	metadataDir := filepath.Join("..", "..", "..", "contracts", "metadata")
+	tests := map[string]func(*ReadinessCaseResult){
+		"unknown profile": func(result *ReadinessCaseResult) {
+			result.UATProfile = "developer"
+		},
+		"rehearsal promotable": func(result *ReadinessCaseResult) {
+			result.NonPromotable = false
+		},
+		"rehearsal production artifact": func(result *ReadinessCaseResult) {
+			result.ArtifactClass = "production"
+		},
+		"promotable virtual device": func(result *ReadinessCaseResult) {
+			result.UATProfile = "promotable"
+			result.NonPromotable = false
+			result.PhysicalDevice = false
+		},
+		"production outside prod": func(result *ReadinessCaseResult) {
+			result.UATProfile = "production"
+			result.NonPromotable = false
+			result.PhysicalDevice = true
+			result.DeviceRegistered = true
+			result.ArtifactClass = "production"
+			result.Environment = "gamma"
+		},
+		"production behavior artifact": func(result *ReadinessCaseResult) {
+			result.UATProfile = "production"
+			result.NonPromotable = false
+			result.PhysicalDevice = true
+			result.ArtifactClass = "production_behavior"
+			result.Environment = "prod"
+		},
+		"failed missing reason": func(result *ReadinessCaseResult) {
+			result.Status = StatusFailed
+		},
+		"passed carries reason": func(result *ReadinessCaseResult) {
+			result.ReasonCode = "stale_failure"
+		},
+		"no active release has observed release": func(result *ReadinessCaseResult) {
+			result.ObservedOutcome = "no_active_release"
+		},
+		"rollback missing previous release": func(result *ReadinessCaseResult) {
+			result.ObservedOutcome = "rollback_restored"
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			result := contentReleaseUATResult()
+			mutate(&result)
+			bundle := ReadinessResultBundle{GeneratedAt: testStart, Results: []ReadinessCaseResult{result}}
+			if err := ValidateBundleSchema(metadataDir, bundle); err == nil {
+				t.Fatal("invalid UAT readiness result entered canonical wire")
+			}
+		})
+	}
+}
+
+func TestReadinessUATSchemaAcceptsProfilesAndRestoredOutcomeFields(t *testing.T) {
+	metadataDir := filepath.Join("..", "..", "..", "contracts", "metadata")
+	for _, result := range []ReadinessCaseResult{
+		func() ReadinessCaseResult {
+			result := contentReleaseUATResult()
+			result.UATProfile = "promotable"
+			result.NonPromotable = false
+			result.PhysicalDevice = true
+			result.DeviceRegistered = true
+			return result
+		}(),
+		func() ReadinessCaseResult {
+			result := contentReleaseUATResult()
+			result.UATProfile = "production"
+			result.NonPromotable = false
+			result.PhysicalDevice = true
+			result.DeviceRegistered = true
+			result.ArtifactClass = "production"
+			result.Environment = "prod"
+			result.ObservedOutcome = "replay_restored"
+			result.PreviousReleaseID = "content-release-2026-08-28"
+			result.ObservedReleaseID = result.PreviousReleaseID
+			return result
+		}(),
+	} {
+		bundle := ReadinessResultBundle{GeneratedAt: testStart, Results: []ReadinessCaseResult{result}}
+		if err := ValidateBundleSchema(metadataDir, bundle); err != nil {
+			t.Fatalf("valid UAT profile/outcome rejected: %v", err)
+		}
+	}
+}
+
+func TestGenericAppReceiptDoesNotRequireReleaseUATFields(t *testing.T) {
+	metadataDir := filepath.Join("..", "..", "..", "contracts", "metadata")
+	schemas, err := LoadWireSchemas(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := resultFor(completeCaseContracts()[0], completeCaseContracts()[0].Executions[0], "receipt/generic", []byte("receipt"))
+	result.Producer = ProducerApp
+	result.Layer = LayerLocalContract
+	result.ReleaseDigest = ""
+	receipt := ReadinessReceipt{Binding: receiptBindingForResult(result), EvidenceSHA256: strings.Repeat("f", 64)}
+	data, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := schemas.DecodeReceipt(bytes.NewReader(data)); err != nil {
+		t.Fatalf("generic app local-contract receipt incorrectly required release UAT fields: %v", err)
+	}
+}
+
 func TestReadinessDigestWireSeparatesDigestFromSHA256Fields(t *testing.T) {
 	contract := completeCaseContracts()[0]
 	canonical := resultFor(

@@ -45,6 +45,12 @@ func TestSearchHealthProbeSplitKeepsDeepChecksOffLiveness(t *testing.T) {
 			t.Fatalf("probe route %s must stay owned by servicekit", forbidden)
 		}
 	}
+	if !strings.Contains(
+		bootstrapText,
+		`ifreadiness:=built.ReadinessCheck();readiness!=nil{asm.Health.Register("elasticsearch",readiness)`,
+	) {
+		t.Fatal("search /readyz must register the functional Elasticsearch query check")
+	}
 	for _, deep := range []string{
 		`asm.Health.Register("elasticsearch"`,
 		`asm.Health.Register("experiment-policy-consumer"`,

@@ -115,11 +115,7 @@ def attach_tested_app_artifact_binding(
     result["testedAppArtifactBinding"] = binding
     blocker: dict[str, object] = {}
     if binding.get("status") == "gate_block":
-        blocker = {
-            "errorCode": APP_PAGE_ARTIFACT_BINDING_BLOCKER,
-            "sourceOperationId": ("environment_page_smoke.tested_app_artifact_binding"),
-            "httpStatus": None,
-        }
+        blocker = {"errorCode": APP_PAGE_ARTIFACT_BINDING_BLOCKER}
     return binding, blocker
 
 

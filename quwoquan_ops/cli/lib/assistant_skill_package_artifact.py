@@ -16,6 +16,7 @@ from .local_assistant_skill_package_keys import (
     KEY_ID,
     prepare_local_assistant_skill_package_keys,
 )
+from .openssl3_resolver import resolve_openssl3
 from .local_assistant_skill_package_publication import (
     _private_key_base64,
     _source_digest,
@@ -67,12 +68,16 @@ def _signing_material(
             private_key_base64=private_key_base64,
             public_keys_json=public_keys_json,
         )
-    keys = prepare_local_assistant_skill_package_keys(environment, target)
+    openssl = resolve_openssl3()
+    keys = prepare_local_assistant_skill_package_keys(
+        environment, target, openssl=openssl
+    )
     return SigningMaterial(
         key_id=KEY_ID,
         private_key_base64=_private_key_base64(
             keys.private_key_path,
             keys.public_keys_json,
+            openssl=openssl,
         ),
         public_keys_json=keys.public_keys_json,
     )

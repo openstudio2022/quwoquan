@@ -4,12 +4,19 @@
 
 from __future__ import annotations
 
+import os
+import shlex
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from quwoquan_app.scripts.device import prepare_flutter_dependencies as prepare
+from quwoquan_ops.cli.lib.app_dependency_toolchain import (
+    ResolvedCocoaPodsIdentity,
+    cocoapods_environment,
+)
+from quwoquan_ops.cli.lib.package_reuse.ios_pod_identity import CocoaPodsIdentity
 from quwoquan_app.scripts.device import verify_flutter_dependencies as verify
 
 
@@ -83,6 +90,134 @@ def test_projected_pub_gets_include_patrol_only_when_explicitly_requested(
     ]
 
 
+@pytest.mark.parametrize(
+    ("platform", "removed_relpaths", "preserved_relpaths"),
+    [
+        (
+            "ios",
+            ("android/local.properties",),
+            (
+                "ios/Flutter/Generated.xcconfig",
+                "ios/Flutter/flutter_export_environment.sh",
+            ),
+        ),
+        (
+            "android",
+            (
+                "ios/Flutter/Generated.xcconfig",
+                "ios/Flutter/flutter_export_environment.sh",
+            ),
+            ("android/local.properties",),
+        ),
+    ],
+)
+def test_prune_cross_platform_generated_tooling_removes_only_non_target_hosts(
+    tmp_path: Path,
+    platform: str,
+    removed_relpaths: tuple[str, ...],
+    preserved_relpaths: tuple[str, ...],
+) -> None:
+    hosts = (
+        tmp_path / "quwoquan_app",
+        tmp_path / "quwoquan_app/test_host/patrol",
+    )
+    for host in hosts:
+        for relative_path in (*removed_relpaths, *preserved_relpaths):
+            generated = host / relative_path
+            generated.parent.mkdir(parents=True, exist_ok=True)
+            generated.write_text(f"generated:{relative_path}", encoding="utf-8")
+
+    prepare._prune_cross_platform_generated_tooling(
+        projection_root=tmp_path,
+        platform=platform,
+        include_patrol=True,
+    )
+
+    for host in hosts:
+        for relative_path in removed_relpaths:
+            assert not (host / relative_path).exists()
+        for relative_path in preserved_relpaths:
+            assert (host / relative_path).read_text(encoding="utf-8") == (
+                f"generated:{relative_path}"
+            )
+
+
+@pytest.mark.parametrize("platform", ["ios", "android"])
+@pytest.mark.parametrize("include_patrol", [False, True])
+def test_prune_cross_platform_generated_tooling_is_idempotent_when_absent(
+    tmp_path: Path,
+    platform: str,
+    include_patrol: bool,
+) -> None:
+    for _ in range(2):
+        prepare._prune_cross_platform_generated_tooling(
+            projection_root=tmp_path,
+            platform=platform,
+            include_patrol=include_patrol,
+        )
+
+
+@pytest.mark.parametrize(
+    ("platform", "relative_path"),
+    [
+        ("ios", "android/local.properties"),
+        ("android", "ios/Flutter/Generated.xcconfig"),
+    ],
+)
+@pytest.mark.parametrize("node_kind", ["symlink", "directory"])
+def test_prune_cross_platform_generated_tooling_rejects_non_regular_nodes(
+    tmp_path: Path,
+    platform: str,
+    relative_path: str,
+    node_kind: str,
+) -> None:
+    generated = tmp_path / "quwoquan_app" / relative_path
+    generated.parent.mkdir(parents=True, exist_ok=True)
+    sentinel = tmp_path / "sentinel"
+    sentinel.write_text("must remain", encoding="utf-8")
+    if node_kind == "symlink":
+        generated.symlink_to(sentinel)
+    else:
+        generated.mkdir()
+
+    with pytest.raises(
+        ValueError,
+        match="APP\\.DEPENDENCY\\.cross_platform_generated_tooling_unsafe",
+    ):
+        prepare._prune_cross_platform_generated_tooling(
+            projection_root=tmp_path,
+            platform=platform,
+            include_patrol=False,
+        )
+
+    assert sentinel.read_text(encoding="utf-8") == "must remain"
+    assert generated.is_symlink() if node_kind == "symlink" else generated.is_dir()
+
+
+def test_prune_cross_platform_generated_tooling_rejects_symlinked_parent(
+    tmp_path: Path,
+) -> None:
+    external = tmp_path / "external"
+    external.mkdir()
+    sentinel = external / "local.properties"
+    sentinel.write_text("must remain", encoding="utf-8")
+    package_root = tmp_path / "quwoquan_app"
+    package_root.mkdir()
+    (package_root / "android").symlink_to(external, target_is_directory=True)
+
+    with pytest.raises(
+        ValueError,
+        match="APP\\.DEPENDENCY\\.cross_platform_generated_tooling_unsafe",
+    ):
+        prepare._prune_cross_platform_generated_tooling(
+            projection_root=tmp_path,
+            platform="ios",
+            include_patrol=False,
+        )
+
+    assert sentinel.read_text(encoding="utf-8") == "must remain"
+
+
 def test_run_sh_requests_patrol_projection_only_for_canonical_uat_actor() -> None:
     repo_root = Path(__file__).resolve().parents[5]
     source = (repo_root / "quwoquan_app/run.sh").read_text(encoding="utf-8")
@@ -99,6 +234,64 @@ def test_run_sh_requests_patrol_projection_only_for_canonical_uat_actor() -> Non
         '${DEPENDENCY_PATROL_ARGUMENT:+"$DEPENDENCY_PATROL_ARGUMENT"}'
         in dependency_block
     )
+
+
+def _pod_identity(executable: Path) -> ResolvedCocoaPodsIdentity:
+    return ResolvedCocoaPodsIdentity(
+        physical=CocoaPodsIdentity(
+            executable=executable,
+            version="1.16.2",
+            executable_digest="sha256:" + "1" * 64,
+            runtime_environment_digest="sha256:" + "2" * 64,
+            command_resolution_digest="sha256:" + "3" * 64,
+        ),
+        binding_seal="sha256:" + "4" * 64,
+    )
+
+
+def test_cocoapods_environment_prepends_exact_directory_and_deduplicates(
+    tmp_path: Path,
+) -> None:
+    pod = tmp_path / "exact/bin/pod"
+    pod.parent.mkdir(parents=True)
+    pod.write_text("#!/bin/sh\n", encoding="utf-8")
+    pod.chmod(0o755)
+    identity = _pod_identity(pod)
+
+    environment = cocoapods_environment(
+        identity,
+        base={"PATH": os.pathsep.join(("/hostile", str(pod.parent), "/usr/bin"))},
+    )
+
+    assert environment["PATH"].split(os.pathsep) == [
+        str(pod.parent),
+        "/hostile",
+        "/usr/bin",
+    ]
+    for key, value in identity.as_environment().items():
+        assert environment[key] == value
+
+
+def test_shell_exports_include_complete_cocoapods_binding_and_final_path(
+    tmp_path: Path,
+) -> None:
+    pod = tmp_path / "exact/bin/pod"
+    pod.parent.mkdir(parents=True)
+    pod.write_text("#!/bin/sh\n", encoding="utf-8")
+    pod.chmod(0o755)
+    identity = _pod_identity(pod)
+    environment = cocoapods_environment(identity, base={"PATH": "/usr/bin"})
+
+    parsed: dict[str, str] = {}
+    for line in prepare._shell_exports(environment).splitlines():
+        if line.startswith("export "):
+            key, value = line[len("export ") :].split("=", 1)
+            parsed[key] = shlex.split(value)[0]
+
+    assert {key: parsed[key] for key in identity.as_environment()} == (
+        identity.as_environment()
+    )
+    assert parsed["PATH"].split(os.pathsep)[0] == str(pod.parent)
 
 
 def test_shell_exports_only_dependency_controls_and_removes_proxies() -> None:
@@ -146,23 +339,39 @@ def test_ios_uat_main_projects_both_pub_hosts_then_replays_both_pod_hosts(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     order: list[str] = []
-    environment = {
-        "PUB_CACHE": str(tmp_path / "pub"),
-        "FLUTTER_SWIFT_PACKAGE_MANAGER": "false",
-    }
-    dependency_projection = SimpleNamespace(
-        production_environment=environment,
-        patrol_environment={
-            "PUB_CACHE": str(tmp_path / "patrol-pub"),
+    monkeypatch.setattr(prepare, "_platform", lambda _device: "ios")
+    pod = tmp_path / "canonical/pod"
+    pod.parent.mkdir(parents=True)
+    pod.write_text("fixture", encoding="utf-8")
+    pod.chmod(0o755)
+    pod_identity = _pod_identity(pod)
+    environment = cocoapods_environment(
+        pod_identity,
+        base={
+            "PUB_CACHE": str(tmp_path / "pub"),
             "FLUTTER_SWIFT_PACKAGE_MANAGER": "false",
+            "PATH": "/usr/bin",
         },
     )
-    monkeypatch.setattr(prepare, "_platform", lambda _device: "ios")
+    dependency_projection = SimpleNamespace(
+        production_environment=environment,
+        patrol_environment=cocoapods_environment(
+            pod_identity,
+            base={
+                "PUB_CACHE": str(tmp_path / "patrol-pub"),
+                "FLUTTER_SWIFT_PACKAGE_MANAGER": "false",
+                "PATH": "/usr/bin",
+            },
+        ),
+    )
     monkeypatch.setattr(
         prepare,
-        "resolve_cocoapods_executable",
-        lambda _pod: "/canonical/pod",
+        "resolve_cocoapods_identity",
+        lambda _pod: pod_identity,
     )
+    flutter = tmp_path / "canonical/flutter"
+    flutter.parent.mkdir(parents=True, exist_ok=True)
+    flutter.write_text("fixture", encoding="utf-8")
 
     def materialize(**kwargs):
         assert kwargs["include_patrol"] is True
@@ -176,6 +385,14 @@ def test_ios_uat_main_projects_both_pub_hosts_then_replays_both_pod_hosts(
             "pub-patrol" if package_root.name == "patrol" else "pub-production"
         )
 
+    def prune(**kwargs):
+        assert kwargs == {
+            "projection_root": tmp_path / "repo",
+            "platform": "ios",
+            "include_patrol": True,
+        }
+        order.append("prune")
+
     def pod_replay(**_kwargs):
         order.append("pod")
         return ()
@@ -187,6 +404,11 @@ def test_ios_uat_main_projects_both_pub_hosts_then_replays_both_pod_hosts(
         evidence_path=tmp_path / "private/dependency-projection-expectation.json",
         evidence_digest="sha256:" + "1" * 64,
     )
+    observed_components = {"productionPub": {"treeDigest": "captured"}}
+    prepared_evidence = SimpleNamespace(
+        expectation=expectation,
+        observed_components=observed_components,
+    )
     prebuild_readback = SimpleNamespace()
     prebuild_evidence = SimpleNamespace(
         evidence_path=tmp_path / "private/dependency-projection-prebuild-readback.json",
@@ -197,10 +419,12 @@ def test_ios_uat_main_projects_both_pub_hosts_then_replays_both_pod_hosts(
         assert _kwargs["dependency_projection"] is dependency_projection
         assert dependency_projection.patrol_environment is not None
         order.append("expectation")
-        return expectation
+        return prepared_evidence
 
-    def revalidate(**_kwargs):
-        order.append("revalidate")
+    def initial_readback(**kwargs):
+        assert kwargs["expectation"] is expectation
+        assert kwargs["observed_components"] is observed_components
+        order.append("readback")
         return prebuild_readback
 
     def write_readback(**_kwargs):
@@ -215,6 +439,7 @@ def test_ios_uat_main_projects_both_pub_hosts_then_replays_both_pod_hosts(
         prepare, "materialize_dependency_bundle_projection", materialize
     )
     monkeypatch.setattr(prepare, "_run_pub_get", pub_get)
+    monkeypatch.setattr(prepare, "_prune_cross_platform_generated_tooling", prune)
     monkeypatch.setattr(prepare, "replay_ios_dependency_projections", pod_replay)
     monkeypatch.setattr(
         prepare,
@@ -223,10 +448,10 @@ def test_ios_uat_main_projects_both_pub_hosts_then_replays_both_pod_hosts(
     )
     monkeypatch.setattr(
         prepare,
-        "prepare_dependency_projection_cas_evidence",
+        "prepare_dependency_projection_cas_evidence_with_observed_components",
         prepare_evidence,
     )
-    monkeypatch.setattr(prepare, "revalidate_dependency_projection_cas", revalidate)
+    monkeypatch.setattr(prepare, "readback_from_expectation", initial_readback)
     monkeypatch.setattr(
         prepare,
         "write_dependency_projection_cas_readback",
@@ -249,9 +474,9 @@ def test_ios_uat_main_projects_both_pub_hosts_then_replays_both_pod_hosts(
             "--device",
             "ios-fixture",
             "--flutter",
-            "/canonical/flutter",
+            str(flutter),
             "--pod",
-            "/canonical/pod",
+            str(pod),
             "--include-patrol",
         ]
     )
@@ -263,13 +488,17 @@ def test_ios_uat_main_projects_both_pub_hosts_then_replays_both_pod_hosts(
         "pub-patrol",
         "pod",
         "spm",
+        "prune",
         "expectation",
-        "revalidate",
+        "readback",
         "write",
         "load",
     ]
     stdout = capsys.readouterr().out
     assert "export FLUTTER_SWIFT_PACKAGE_MANAGER=false" in stdout
+    assert f"export QWQ_COCOAPODS_EXECUTABLE={pod}" in stdout
+    assert "export QWQ_COCOAPODS_BINDING_SEAL=sha256:" in stdout
+    assert f"export PATH={pod.parent}" in stdout
     assert (
         "export QWQ_DEPENDENCY_PROJECTION_EXPECTATION_DIGEST="
         + expectation.evidence_digest

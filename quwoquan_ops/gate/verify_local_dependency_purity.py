@@ -35,7 +35,7 @@ from quwoquan_ops.gate.local_dependency_purity.python_command_flow import (
 )
 from quwoquan_ops.gate.local_dependency_purity.shell_commands import (
     ShellCommandParseError,
-    parse_shell_commands,
+    reachable_dispatched_shell_commands,
 )
 from quwoquan_ops.gate.local_dependency_purity.uat_static_analysis import (
     verify_uat_static_analysis_coverage as _verify_uat_static_analysis_coverage,
@@ -173,7 +173,7 @@ def _verify_locked_offline_flutter_pub_get(
 
     display = _display_path(path)
     try:
-        shell_commands = parse_shell_commands(_read_text(path))
+        shell_commands = reachable_dispatched_shell_commands(_read_text(path))
     except ShellCommandParseError:
         _fail(
             failures,
@@ -282,7 +282,8 @@ def _verify_launcher_dependency_helper(
         )
         return
     pub_commands = reachable_subprocess_command_tokens(
-        pub,
+        tree,
+        function_name="_run_pub_get",
         executable_parameter="flutter",
     )
     if len(pub_commands) != 1 or not (

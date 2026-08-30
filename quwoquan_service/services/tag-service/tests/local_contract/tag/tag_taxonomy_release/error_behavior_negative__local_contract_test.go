@@ -22,12 +22,11 @@ import (
 )
 
 type stubReleaseStore struct {
-	loadRelease   *releasemodel.Release
-	loadErr       error
-	active        *releasemodel.Release
-	insertErr     error
-	activateErr   error
-	digestRelease *releasemodel.Release
+	loadRelease *releasemodel.Release
+	loadErr     error
+	active      *releasemodel.Release
+	insertErr   error
+	activateErr error
 }
 
 func (s stubReleaseStore) ActiveReleaseID(context.Context) (string, bool, error) {
@@ -50,13 +49,6 @@ func (s stubReleaseStore) Load(context.Context, string) (releasemodel.Release, b
 	}
 	if s.loadRelease != nil {
 		return *s.loadRelease, true, nil
-	}
-	return releasemodel.Release{}, false, nil
-}
-
-func (s stubReleaseStore) FindByDigest(context.Context, string) (releasemodel.Release, bool, error) {
-	if s.digestRelease != nil {
-		return *s.digestRelease, true, nil
 	}
 	return releasemodel.Release{}, false, nil
 }

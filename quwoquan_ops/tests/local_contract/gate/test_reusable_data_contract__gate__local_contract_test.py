@@ -121,6 +121,13 @@ class ReusableDataContractGateTest(unittest.TestCase):
         self._write("quwoquan_data/control_plane/campaigns/plan.yaml", "stage: Canary\n")
         self._assert_rejected("reusable contract contains task-specific value")
 
+    def test_domain_neutral_post_delete_probe_wording_is_accepted(self) -> None:
+        self._write(
+            "specs/feature-tree/runtime/runtime-data-engineering/spec.md",
+            "post-delete minimal production probe validates the smallest new execution\n",
+        )
+        self._assert_accepted()
+
     def test_scale_catalog_is_held_to_the_same_rollout_ban(self) -> None:
         # scale catalog 自带一套 forbidden 元组，容易被当成"放量事实的合法落点"
         # 而单独放宽；它其实与其他可复用输入同口径。

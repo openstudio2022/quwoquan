@@ -16,17 +16,37 @@ func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if strings.Contains(filepath.ToSlash(path), "/posts/") &&
 		strings.HasSuffix(path, "manifest.json") &&
-		strings.Contains(content, `"contentType"`) &&
-		!strings.Contains(content, `"contentIdentity"`) {
-		// Canonical fixture manifests model data-engineering output. Tests that
-		// exercise a missing identity must bypass this fixture authoring helper.
-		content = strings.Replace(content, "{", `{"contentIdentity":"work",`, 1)
+		strings.Contains(content, `"contentType"`) {
+		// Canonical release fixtures always carry admitted content identity and
+		// pool fields. Negative tests write bytes directly and bypass this helper.
+		prefix := `{"contentId":"fixture-` + fmt.Sprintf("%x", len(path)) + `","version":1,"sourceType":"data","variantPurpose":"original","admission":{"processResult":"completed","qualityResult":"passed","usageScope":"research","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:` + strings.Repeat("a", 64) + `"},"status":"active","contentIdentity":"work",`
+		content = strings.Replace(content, "{", prefix, 1)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLoadPostsRejectsMissingCanonicalPoolAdmission(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "posts/article/攻略/缺少准入/1/manifest.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{
+		"contentType":"article",
+		"contentIdentity":"work",
+		"authorId":"builtin_author",
+		"publishTitle":"缺少准入",
+		"publishedAt":"2026-07-30T00:00:00Z"
+	}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadPosts(root, nil, "research"); err == nil || !strings.Contains(err.Error(), "canonical content pool admission is incomplete") {
+		t.Fatalf("missing contentId/version/admission must fail closed, got %v", err)
 	}
 }
 
@@ -37,6 +57,12 @@ func TestLoadPostsRejectsMissingContentIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, []byte(`{
+		"contentId":"missing-identity",
+		"version":1,
+		"sourceType":"data",
+		"variantPurpose":"original",
+		"admission":{"processResult":"completed","qualityResult":"passed","usageScope":"research","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		"status":"active",
 		"contentType":"article",
 		"entityRefs":[],
 		"tagRefs":[],
@@ -118,9 +144,6 @@ func TestLoadPostsFull(t *testing.T) {
 	}
 	if len(p.NormalizedEntityRefs) != 1 || p.NormalizedEntityRefs[0] != "entity:景区:甲居藏寨" {
 		t.Fatalf("normalizedEntityRefs wrong: %+v", p.NormalizedEntityRefs)
-	}
-	if p.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
-		t.Fatalf("sourceTaskId not loaded: %q", p.SourceTaskId)
 	}
 	if len(p.IntersectionHints) != 2 || p.IntersectionHints[0].ActionTargetID != "entity:景区:甲居藏寨" {
 		t.Fatalf("intersectionHints not loaded: %+v", p.IntersectionHints)
@@ -234,7 +257,7 @@ func TestImportedPostBindingsAreCompleteAndDeterministic(t *testing.T) {
 		if strings.HasPrefix(binding.PostRef, "posts/") {
 			t.Fatalf("binding %d must emit object-relative postRef without posts/ prefix: %+v", index, binding)
 		}
-		if binding.PostID != RuntimePostID(binding.ContentID, "posts/"+binding.PostRef) {
+		if binding.PostID != RuntimePostID(binding.ContentID) {
 			t.Fatalf("binding %d runtime identity drift: %+v", index, binding)
 		}
 		if index > 0 && bindings[index-1].PostRef >= binding.PostRef {
@@ -297,9 +320,6 @@ func TestLoadEntitiesAndPageFlag(t *testing.T) {
 		t.Fatalf("色达 should NOT have page")
 	}
 	jiaju := byRef["地点/景区/甲居藏寨"]
-	if jiaju.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
-		t.Fatalf("entity sourceTaskId not loaded: %+v", jiaju)
-	}
 	if jiaju.ConditionProfile == nil {
 		t.Fatalf("conditionProfile not loaded: %+v", jiaju)
 	}

@@ -220,6 +220,26 @@ FORBIDDEN_CONTENT = (
 )
 
 
+RULE_CAPABILITY_GAP_SEMANTICS = "OPEN.CAPABILITY_GAP_SEMANTICS"
+RULE_MECHANICAL_HISTORY_STITCHING = "CONTENT.MECHANICAL_HISTORY_STITCHING"
+RULE_DESIGN_DUPLICATE_LONG_LINE = "DESIGN.DUPLICATE_LONG_LINE"
+
+
+class Issue(str):
+    """兼容文本报告的稳定规则诊断。"""
+
+    rule_id: str
+
+    def __new__(cls, rule_id: str, message: str) -> Issue:
+        issue = super().__new__(cls, message)
+        issue.rule_id = rule_id
+        return issue
+
+
+def add_issue(review: Review, rule_id: str, message: str) -> None:
+    review.issues.append(Issue(rule_id, message))
+
+
 @dataclass
 class Review:
     path: str
@@ -282,6 +302,115 @@ def validate_sections(
     expected_actual = [*expected, *(heading for heading in optional if heading in actual)]
     if allowed_actual != expected_actual and "核心章节顺序不符合模板" not in review.issues:
         review.issues.append("核心章节顺序不符合模板")
+
+
+HISTORICAL_STITCHING_LABEL_RE = re.compile(
+    r"(?:会话\s*\d+|session\s*\d+|历史(?:记录|状态|快照)|PRD(?:\s*baseline)?|"
+    r"旧(?:版|文档|接口|实现)(?:说明|记录)?|迁移(?:记录|中间态|策略)|"
+    r"现状(?:与问题)?|目标态|阶段(?:结论|状态)|变更记录)\s*[：:]",
+    re.IGNORECASE,
+)
+COPIED_NUMBERED_FRAGMENT_RE = re.compile(
+    r"(?:^|[；;])\s*\d+[.、)]\s*[^；;]+(?:[；;]\s*\d+[.、)]\s*[^；;]+){1,}"
+)
+MIXED_LEGACY_HEADING_RE = re.compile(
+    r"(?:现状|旧(?:版|文档|接口|实现)|迁移(?:记录|中间态|策略)|目标态)\s*[：:]"
+)
+CURRENT_GAP_TOKEN_RE = re.compile(
+    r"(?:尚(?:未|无|缺)|仍(?:未|无|缺|有)|依然(?:未|无|缺)|还(?:未|无|缺)|从未|"
+    r"没有(?!(?:问题|缺口|风险|遗漏|异常|失败|阻断))|"
+    r"未(?:实现|完成|落地|闭合|覆盖|验证|提供|交付|形成|建立|支持|具备|证明|接线)|"
+    r"无法(?:通过|完成|验证|提供|交付|形成|支持)|缺(?:少|失|乏)|缺口|"
+    r"(?:形成|构成).{0,160}(?:启动环|循环依赖|闭环阻断))"
+)
+LEGACY_GAP_PREFIX_RE = re.compile(
+    r"^(?:尚|缺|未|仍|当前|存在|无法|不能|需要|依赖|缺口)"
+)
+GAP_SUBJECT_RE = re.compile(
+    r"(?:实现|能力|功能|接口|适配|支持|覆盖|闭环|验收|证据|测试|断言|绑定|证明|"
+    r"回执|readback|evidence|spec_ref|local_contract|api_integration|user_acceptance|"
+    r"adapter|runner|wire|schema|codegen|契约|链路|矩阵|设备|环境|行为|接线|发布|"
+    r"import|activation|rollback|Provider|Remote|UAT|ResultBundle|启动环|循环依赖|自举|"
+    r"阻断|BLOCK|verified|不可用|异常|失败|错误|不可达|断开|入口|读面|通道|字段|"
+    r"取值|身份|identity|source|生命周期|UI|页面|布局|权限|阈值|数据|对象|路径|写入|"
+    r"恢复|观测|指标|SLO|告警|配置|枚举|语义|素材|媒体|内容|账户|渠道|投影|存储|"
+    r"元数据|字段|属性|裁剪|编辑|事件|状态|pipeline|source|capture|sourceType|"
+    r"qualityBand|slice|封面|尺寸|时长|ready|a11y|guideline|违规|触控|交互|布局|"
+    r"schema|contract|receipt)"
+)
+GAP_NEGATION_RE = re.compile(
+    r"(?:(?:不再|不复|并非|不是|无须|无需|毋须)|"
+    r"(?:未|没有|尚未)(?:发现|观察到|检测到|识别出|存在))\s*$"
+)
+VAGUE_GAP_RE = re.compile(
+    r"(?:(?:后续|继续|进一步)(?:关注|处理|讨论|评估|优化|考虑|推进)|"
+    r"待(?:观察|确认|处理|讨论|评估))"
+)
+SUCCESS_ONLY_RE = re.compile(
+    r"(?:测试|验收|实现|能力|功能|证据)?.{0,8}(?:全部|均|已经|已|现已).{0,8}(?:通过|完成|落地|闭合|具备|解决)"
+)
+
+
+def normalized_semantic_text(value: str) -> str:
+    normalized = re.sub(r"[`*_~（）()\[\]【】‘’“”\"']+", " ", value)
+    normalized = re.sub(r"[；;]+", "；", normalized)
+    normalized = re.sub(r"[。！？.!?]+", "。", normalized)
+    normalized = re.sub(r"[，,、：:]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def capability_gap_names_current_gap(value: str) -> bool:
+    normalized = normalized_semantic_text(value)
+    if VAGUE_GAP_RE.search(normalized) or re.search(
+        r"(?:尚未|未|没有)(?:发现|观察到|检测到|识别出|存在).{0,12}(?:缺口|问题|风险|异常|失败|阻断)",
+        normalized,
+    ):
+        return False
+    for token in CURRENT_GAP_TOKEN_RE.finditer(normalized):
+        clause_start = max(
+            normalized.rfind("；", 0, token.start()),
+            normalized.rfind("。", 0, token.start()),
+        )
+        prefix = normalized[max(clause_start + 1, token.start() - 8) : token.start()]
+        if GAP_NEGATION_RE.search(prefix):
+            continue
+        sentence_end = re.search(r"[；。]", normalized[token.end() :])
+        end = token.end() + (sentence_end.start() if sentence_end else 64)
+        tail = normalized[token.end() : min(len(normalized), end)]
+        if re.search(
+            r"(?:但|然而|不过|当前|现已).{0,24}(?:已|完成|通过|落地|闭合|解决)",
+            tail,
+        ):
+            continue
+        return True
+    if not LEGACY_GAP_PREFIX_RE.match(normalized):
+        return False
+    if SUCCESS_ONLY_RE.search(normalized):
+        return False
+    if not GAP_SUBJECT_RE.search(normalized):
+        return False
+    return True
+
+
+def looks_like_mechanical_history_stitching(raw: str) -> bool:
+    line = raw.strip()
+    if not line.startswith("-"):
+        return False
+    body = line.lstrip("- ")
+    if COPIED_NUMBERED_FRAGMENT_RE.search(body):
+        return True
+    labeled_segments = [
+        segment
+        for segment in re.split(r"[；;]", body)
+        if HISTORICAL_STITCHING_LABEL_RE.search(segment)
+    ]
+    if len(labeled_segments) >= 2:
+        return True
+    mixed_headings = {
+        match.group(0).rstrip("：:").lower()
+        for match in MIXED_LEGACY_HEADING_RE.finditer(body)
+    }
+    return len(mixed_headings) >= 2
 
 
 def validate_content(review: Review, text: str) -> None:
@@ -363,13 +492,25 @@ def validate_content(review: Review, text: str) -> None:
         for raw in text.splitlines():
             line = raw.strip()
             if len(line) < 20 or line.startswith(
-                ("#", ">", "```", "- canonical：", "- 关联要求：", "- 关联验收：")
+                (
+                    "#",
+                    ">",
+                    "```",
+                    "- canonical：",
+                    "- 关联要求：",
+                    "- 关联验收：",
+                    "- 影响 Story：",
+                )
             ):
                 continue
             normalized_lines[line] = normalized_lines.get(line, 0) + 1
         duplicates = [line for line, count in normalized_lines.items() if count > 1]
         if duplicates:
-            review.issues.append(f"存在重复长句 `{duplicates[0][:56]}…`")
+            add_issue(
+                review,
+                RULE_DESIGN_DUPLICATE_LONG_LINE,
+                f"存在重复长句 `{duplicates[0][:56]}…`",
+            )
 
     dangling = re.findall(
         r"^- (?:关键设计决策|选型决策|当前状态|现有代码与目标态对照|状态机与状态迁移|数据流（目标态）|设计目标|设计原则|数据流|边界|观测|回滚|降级与回滚|范围与目标|现状与问题|核心规则|当前实现|目标态|当前目标结构|目标链|状态机|迁移策略)[:：]?\s*$",
@@ -378,8 +519,12 @@ def validate_content(review: Review, text: str) -> None:
     )
     if dangling:
         review.issues.append(f"存在无内容的设计残片 `{dangling[0]}`")
-    if re.search(r"^-.+(?:；.+){2,}$", text, re.MULTILINE):
-        review.issues.append("存在由历史文档机械拼接的多段列表项")
+    if any(looks_like_mechanical_history_stitching(raw) for raw in text.splitlines()):
+        add_issue(
+            review,
+            RULE_MECHANICAL_HISTORY_STITCHING,
+            "存在由历史文档机械拼接的多段列表项",
+        )
     if "Design" in review.kind:
         if re.search(r"^- \d+\.\s+", text, re.MULTILINE):
             review.issues.append("设计保留旧文档编号列表残片")
@@ -471,11 +616,14 @@ def validate_open_items(review: Review, text: str, node: feature_tree.Node) -> N
             review.issues.append(f"{item_id} 缺少影响或价值")
         if not str(item["completion"]).strip():
             review.issues.append(f"{item_id} 缺少完成判定")
-        if item_type == "capability_gap" and not re.match(
-            r"(?:尚|缺|未|仍|当前|存在|无法|不能|不得|不可|需要|依赖|缺口)",
-            str(item["impactOrValue"]).strip(),
+        if item_type == "capability_gap" and not capability_gap_names_current_gap(
+            str(item["impactOrValue"])
         ):
-            review.issues.append(f"{item_id} 未明确说明尚缺的实现或验收证据")
+            add_issue(
+                review,
+                RULE_CAPABILITY_GAP_SEMANTICS,
+                f"{item_id} 未明确说明尚缺的实现或验收证据",
+            )
         semantic_key = tuple(
             re.sub(r"OPEN-\d{3,}|\s+", "", str(item[field]))
             for field in (

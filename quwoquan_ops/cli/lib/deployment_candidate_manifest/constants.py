@@ -46,6 +46,8 @@ _RELEASE_BINDING_FIELDS = frozenset(
 RELEASE_INPUT_CLASSIFICATIONS = frozenset(
     {"research_inputs", "commercial_inputs", "mixed_inputs"}
 )
-CANDIDATE_VALIDATION_PURPOSES = frozenset({"self_verify", "currentness"})
+CANDIDATE_VALIDATION_PURPOSES = frozenset(
+    {"self_verify", "currentness", "teardown"}
+)
 CONTRACT_GRAPH_PATH = ROOT / "quwoquan_service/generated/contract_graph.json"
 LOG_SINK_ADAPTER_ID = "ext.obs.elasticsearch"

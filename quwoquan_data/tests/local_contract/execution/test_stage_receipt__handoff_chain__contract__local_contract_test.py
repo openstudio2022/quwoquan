@@ -102,6 +102,13 @@ def test_receipt_protocol_rejections(overrides: dict, message: str) -> None:
         stage_receipt.build_receipt(**kwargs)
 
 
+def test_receipt_target_execution_identity_must_match() -> None:
+    payload = stage_receipt.build_receipt(**_base_kwargs())
+
+    with pytest.raises(ValueError, match="executionId must match"):
+        stage_receipt.write_receipt_create_once(f"{EXEC_ID}-other", payload)
+
+
 def test_receipt_state_status_mapping() -> None:
     running = stage_receipt.build_receipt(**_base_kwargs())
     assert stage_receipt.receipt_state_status(running).value == "running"
@@ -117,6 +124,40 @@ def test_receipt_state_status_mapping() -> None:
         **_base_kwargs(stage="ship", next_stage="END")
     )
     assert stage_receipt.receipt_state_status(shipped).value == "succeeded"
+
+
+def test_stage_record_reduces_minimal_projection_from_receipts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = stage_receipt.execution_root(EXEC_ID) / "_shared/execution_state.json"
+    import content.execution.receipt_state_reducer as reducer
+
+    monkeypatch.setattr(reducer, "execution_state_path", lambda _execution_id: state_path)
+    path = stage_receipt.record_stage_receipt(**_base_kwargs())
+    projection = json.loads(state_path.read_text(encoding="utf-8"))
+    assert path.name == "001-0.plan.json"
+    assert projection == {
+        "schema": "quwoquan.content.execution_state_projection",
+        "executionId": EXEC_ID,
+        "completed": ["0.plan"],
+        "status": "running",
+        "latestStage": "0.plan",
+        "next": "sources",
+        "latestReceiptRef": "_shared/receipts/001-0.plan.json",
+        "latestReceiptDigest": projection["latestReceiptDigest"],
+        "updatedAt": projection["updatedAt"],
+    }
+    assert set(projection) == {
+        "schema", "executionId", "completed", "status", "latestStage", "next",
+        "latestReceiptRef", "latestReceiptDigest", "updatedAt",
+    }
+
+
+def test_legacy_business_state_writer_is_permanently_rejected() -> None:
+    from content.execution import context
+
+    with pytest.raises(ValueError, match="STATE_WRITER_RETIRED"):
+        context.save_execution_state(object())
 
 
 def test_lane_claim_acquire_refresh_conflict_release() -> None:
@@ -322,3 +363,39 @@ def test_stage_enumerations_all_derive_from_one_closed_set() -> None:
                 "6.nonexistent",
             ]
         )
+
+
+
+def test_stage_record_same_receipt_replay_heals_missing_projection(
+    _isolated_execution_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from content.execution import receipt_state_reducer
+
+    monkeypatch.setattr(
+        receipt_state_reducer,
+        "execution_state_path",
+        lambda execution_id: _isolated_execution_root
+        / "tasks"
+        / execution_id
+        / "_shared/execution_state.json",
+    )
+    original = receipt_state_reducer._write_receipt_projection
+    calls = 0
+
+    def fail_once(**values: object):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("simulated projection crash")
+        return original(**values)
+
+    monkeypatch.setattr(receipt_state_reducer, "_write_receipt_projection", fail_once)
+    with pytest.raises(OSError, match="projection crash"):
+        stage_receipt.record_stage_receipt(**_base_kwargs())
+    assert len(stage_receipt.list_receipt_files(EXEC_ID)) == 1
+    state_path = _isolated_execution_root / "tasks" / EXEC_ID / "_shared/execution_state.json"
+    assert not state_path.exists()
+
+    stage_receipt.record_stage_receipt(**_base_kwargs())
+    assert len(stage_receipt.list_receipt_files(EXEC_ID)) == 1
+    assert json.loads(state_path.read_text(encoding="utf-8"))["latestStage"] == "0.plan"

@@ -7,7 +7,7 @@ import importlib
 import os
 import sys
 from collections.abc import Callable
-from dataclasses import dataclass
+from typing import NamedTuple
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -18,11 +18,7 @@ REPO_ROOT = SCRIPTS_ROOT.parent.parent
 sys.path.insert(0, str(SCRIPTS_ROOT))
 sys.path.insert(0, str(REPO_ROOT))
 
-from core.python_environment import maybe_reexec_for_agent_command
-
-
-@dataclass(frozen=True, slots=True)
-class _CommandDefinition:
+class _CommandDefinition(NamedTuple):
     module: str
     register: str
     help: str
@@ -98,7 +94,6 @@ def _register_command_overview(
 
 
 def main() -> None:
-    maybe_reexec_for_agent_command(sys.argv)
     parser = argparse.ArgumentParser(prog="qwq-data", description="Data engineering facade")
     subparsers = parser.add_subparsers(dest="command", required=True)
     requested = _requested_command(sys.argv[1:])

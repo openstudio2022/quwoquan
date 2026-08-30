@@ -483,11 +483,17 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         }
         calls: list[list[str]] = []
 
-        def run_adb(
-            command: list[str], **_: object
-        ) -> subprocess.CompletedProcess[str]:
+        command_kwargs: list[dict[str, object]] = []
+
+        def run_adb(command: list[str], **kwargs: object) -> dict[str, object]:
             calls.append(command)
-            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+            command_kwargs.append(dict(kwargs))
+            return {
+                "exitCode": 0,
+                "timedOut": False,
+                "outputSummary": "",
+                "logPath": str(kwargs["log_path"]),
+            }
 
         with (
             mock.patch.object(
@@ -495,7 +501,11 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 "resolve_android_debug_bridge",
                 return_value="/usr/bin/adb",
             ),
-            mock.patch.object(smoke.subprocess, "run", side_effect=run_adb),
+            mock.patch.object(
+                smoke_device_runtime,
+                "run_command",
+                side_effect=run_adb,
+            ),
         ):
             result = smoke._prepare_android_local_port_reverse(args, device)
 
@@ -506,6 +516,17 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         )
         self.assertTrue(
             all(command[3] == "reverse" for command in calls),
+        )
+        self.assertTrue(
+            all(
+                kwargs["timeout_seconds"]
+                == smoke_device_runtime._DEVICE_PREFLIGHT_COMMAND_TIMEOUT_SECONDS
+                for kwargs in command_kwargs
+            )
+        )
+        self.assertEqual(
+            len({str(kwargs["log_path"]) for kwargs in command_kwargs}),
+            len(calls),
         )
 
     def test_patrol_tls_evidence_uses_system_public_ca_without_trust_install(

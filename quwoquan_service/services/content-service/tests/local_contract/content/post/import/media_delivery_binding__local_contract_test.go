@@ -8,6 +8,7 @@
 package releaseimport_test
 
 import (
+	"strings"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -23,7 +24,7 @@ func TestMediaDeliveryAccessModeForReleaseClass(t *testing.T) {
 	}{
 		{releaseClass: "research", want: "signed_grant"},
 		{releaseClass: "commercial", want: "public"},
-		// 未声明/未知类别缺席，不得由 importer 造值。
+		// 未声明/未知类别返回 invalid sentinel；新 release validator 必须拒绝。
 		{releaseClass: "", want: ""},
 		{releaseClass: "unknown_class", want: ""},
 	}
@@ -114,12 +115,86 @@ func TestImportedMediaFieldsWriteCanonicalPerMediaDeliveryBinding(t *testing.T) 
 	}
 }
 
-func TestImportedMediaFieldsOmitAccessModeWhenReleaseClassUndeclared(t *testing.T) {
-	media := ImportedMediaFields(videoWithPosterAssets(), MediaDeliveryAccessModeForReleaseClass(""))
-	for index, item := range media.MediaItems {
-		if _, exists := item["accessMode"]; exists {
-			t.Fatalf("mediaItems[%d] must keep accessMode absent for undeclared releaseClass: %#v", index, item)
-		}
+func TestValidateImportedPostMediaBindingsRejectsNullUnknownSignedAssetAndPrivateHLS(t *testing.T) {
+	base := PostDoc{
+		PostRef: "posts/video/research/private/1",
+		Assets: []AssetManifestItem{{
+			AssetID:    "clip_main",
+			Kind:       "video",
+			MimeType:   "video/mp4",
+			AccessMode: MediaDeliveryAccessModeSignedGrant,
+			CDNURL:     "media/objects/sha256/aa/bb/clip.mp4",
+		}},
+	}
+	if err := ValidateImportedPostMediaBindings([]PostDoc{base}, "research"); err != nil {
+		t.Fatalf("valid progressive private MP4 must pass: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*PostDoc)
+		want   string
+	}{
+		{
+			name:   "null accessMode",
+			mutate: func(post *PostDoc) { post.Assets[0].AccessMode = "" },
+			want:   "accessMode must be public or signed_grant",
+		},
+		{
+			name:   "unknown accessMode",
+			mutate: func(post *PostDoc) { post.Assets[0].AccessMode = "private" },
+			want:   "accessMode must be public or signed_grant",
+		},
+		{
+			name:   "signed grant missing asset",
+			mutate: func(post *PostDoc) { post.Assets[0].AssetID = "" },
+			want:   "signed_grant media asset requires assetId",
+		},
+		{
+			name:   "private HLS m3u8",
+			mutate: func(post *PostDoc) { post.Assets[0].CDNURL = "media/objects/private/master.m3u8" },
+			want:   "private HLS media asset",
+		},
+		{
+			name:   "private DASH mime",
+			mutate: func(post *PostDoc) { post.Assets[0].MimeType = "application/dash+xml" },
+			want:   "private HLS media asset",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			post := base
+			post.Assets = append([]AssetManifestItem(nil), base.Assets...)
+			test.mutate(&post)
+			err := ValidateImportedPostMediaBindings([]PostDoc{post}, "research")
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("want %q rejection, got %v", test.want, err)
+			}
+		})
+	}
+}
+
+func TestValidateImportedPostMediaBindingsAcceptsExplicitPublicAndRejectsClassMismatch(t *testing.T) {
+	post := PostDoc{
+		PostRef: "posts/image/commercial/public/1",
+		Assets: []AssetManifestItem{{
+			AssetID:    "cover",
+			Kind:       "image",
+			MimeType:   "image/jpeg",
+			AccessMode: MediaDeliveryAccessModePublic,
+			CDNURL:     "https://cdn.example.test/media/image/s/asset/cover/v1/source.jpg",
+		}},
+	}
+	if err := ValidateImportedPostMediaBindings([]PostDoc{post}, "commercial"); err != nil {
+		t.Fatalf("explicit public commercial binding must pass: %v", err)
+	}
+	if err := ValidateImportedPostMediaBindings([]PostDoc{post}, "research"); err == nil ||
+		!strings.Contains(err.Error(), "differs from releaseClass") {
+		t.Fatalf("releaseClass/accessMode mismatch must fail closed, got %v", err)
+	}
+	if err := ValidateImportedPostMediaBindings([]PostDoc{post}, ""); err == nil ||
+		!strings.Contains(err.Error(), "releaseClass must be research or commercial") {
+		t.Fatalf("missing releaseClass must fail closed, got %v", err)
 	}
 }
 

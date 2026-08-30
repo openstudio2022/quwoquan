@@ -27,7 +27,7 @@ from content.execution.campaign.scale import (
     campaign_workload_targets,
     resolve_campaign_scale,
 )
-from content.execution.controller.execute.pre_acquisition_handoff import (
+from content.source.pre_acquisition_handoff import (
     write_pre_acquisition_handoff,
 )
 from content.execution.model_contract import (

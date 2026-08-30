@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 import textwrap
@@ -343,14 +344,13 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
             self.workflow,
         )
         self.assertIn("--env gamma", self.workflow)
-        self.assertIn(
-            '--release-attestation "$QWQ_RELEASE_ATTESTATION"',
-            self.workflow,
-        )
-        self.assertIn(
-            '--rollback-release-attestation "$QWQ_ROLLBACK_RELEASE_ATTESTATION"',
-            self.workflow,
-        )
+        managed_runtime = self.workflow.split(
+            "name: Start stackctl-managed Gamma full runtime", maxsplit=1
+        )[1].split(
+            "name: Inspect and doctor the managed Gamma runtime before soak", maxsplit=1
+        )[0]
+        self.assertNotIn("--release-attestation", managed_runtime)
+        self.assertNotIn("--rollback-release-attestation", managed_runtime)
         self.assertIn("echo \"started=true\" >> \"$GITHUB_OUTPUT\"", self.workflow)
         timing_gate = self.timing_budgets["gates"]["05.app_env_device_matrix_pr"]
         self.assertEqual(
@@ -377,6 +377,64 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
             '"$calendar_lead_time_seconds" -gt "$profile_hard_fail_seconds"',
             self.workflow,
         )
+
+    def test_managed_dev_session_command_matches_current_stackctl_argparse(self) -> None:
+        managed_runtime = self.workflow.split(
+            "name: Start stackctl-managed Gamma full runtime", maxsplit=1
+        )[1].split(
+            "name: Inspect and doctor the managed Gamma runtime before soak", maxsplit=1
+        )[0]
+        command_lines = managed_runtime.split(
+            "python3 quwoquan_ops/cli/stackctl.py dev-session", maxsplit=1
+        )[1].split("SESSION_KIND=", maxsplit=1)[0]
+        command_text = "dev-session " + " ".join(
+            line.strip().removesuffix("\\").strip()
+            for line in command_lines.splitlines()
+            if line.strip()
+        )
+        arguments = shlex.split(command_text)
+
+        from quwoquan_ops.cli import stackctl
+
+        parsed = stackctl.build_parser().parse_args(arguments)
+        self.assertEqual(parsed.command, "dev-session")
+        self.assertEqual(parsed.env, "gamma")
+        self.assertEqual(parsed.report_dir, "$ROOT/dev-session")
+        self.assertNotIn("--release-attestation", arguments)
+        self.assertNotIn("--rollback-release-attestation", arguments)
+
+        # output-format 是 stackctl 全局参数，必须位于子命令前；app-content-uat
+        # 的 adapter 使用当前 --targets/--platform/--device-id 名称。
+        uat = stackctl.build_parser().parse_args(
+            [
+                "--output-format",
+                "json",
+                "app-content-uat",
+                "--targets",
+                "alpha-local,gamma-local",
+                "--platform",
+                "ios-simulator",
+                "--device-id",
+                "simulator-contract",
+            ]
+        )
+        self.assertEqual(uat.output_format, "json")
+        self.assertEqual(uat.targets, "alpha-local,gamma-local")
+        self.assertEqual(uat.platform, "ios-simulator")
+        self.assertEqual(uat.device_id, "simulator-contract")
+
+    def test_formal_package_keeps_its_current_legal_arguments(self) -> None:
+        formal_runtime = self.workflow.split(
+            "name: Run immutable Beta formal runtime", maxsplit=1
+        )[1].split(
+            "name: Verify nightly runtime release matches candidate", maxsplit=1
+        )[0]
+        package = formal_runtime.split(
+            "python3 quwoquan_ops/cli/stackctl.py package", maxsplit=1
+        )[1].split("cp \"$ROOT/package/report.json\"", maxsplit=1)[0]
+        self.assertIn("--env beta", package)
+        self.assertIn("--include-services", package)
+        self.assertIn('--report-dir "$ROOT/package"', package)
 
     def test_android_and_ios_are_independent_required_jobs(self) -> None:
         self.assertIn("android_device_matrix:\n    name: Android device matrix", self.workflow)

@@ -172,6 +172,62 @@ def test_ios_policy_seals_source_policy_files_modes_and_raw_symlink_targets(
         )
 
 
+@pytest.mark.parametrize(
+    "policy_id",
+    [
+        FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID,
+        FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
+    ],
+)
+def test_flutter_3_47_policies_admit_pub_get_dartpad_web_plugin_registrant(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    policy_id: str,
+) -> None:
+    manifest_path, projection = _source_projection(tmp_path, monkeypatch)
+    registrant = _write(
+        projection,
+        "quwoquan_app/.dart_tool/dartpad/web_plugin_registrant.dart",
+        b"// Generated file. Do not edit.\n",
+    )
+
+    sealed = seal_projection_build(
+        manifest_path,
+        projection,
+        policy_id=policy_id,
+    )
+
+    assert sealed.policy_id == policy_id
+    assert registrant.is_file()
+
+
+def test_flutter_podspec_is_ios_exact_file_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path, projection = _source_projection(tmp_path, monkeypatch)
+    podspec = _write(
+        projection,
+        "quwoquan_app/ios/Flutter/Flutter.podspec",
+        b"Pod::Spec.new {}\n",
+    )
+
+    sealed = seal_projection_build(
+        manifest_path,
+        projection,
+        policy_id=FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
+    )
+
+    assert sealed.policy_id == FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID
+    assert podspec.is_file()
+    with pytest.raises(ValueError, match="derived output rejected by policy"):
+        seal_projection_build(
+            manifest_path,
+            projection,
+            policy_id=FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID,
+        )
+
+
 def test_android_policy_admits_flutter_and_gradle_outputs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -255,10 +311,10 @@ def test_seal_rejects_derived_output_changed_during_inventory(
     original_inventory = projection_seal._inventory
     calls = 0
 
-    def drifting_inventory(root: Path) -> list[object]:
+    def drifting_inventory(root: Path, *, policy_id: str) -> list[object]:
         nonlocal calls
         calls += 1
-        result = original_inventory(root)
+        result = original_inventory(root, policy_id=policy_id)
         if calls == 1:
             _write(root, "quwoquan_app/build/late-output.bin")
         return result
@@ -320,6 +376,125 @@ def test_ios_policy_rejects_special_nodes_and_hardlinks(
             manifest_path,
             projection,
             policy_id=FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
+        )
+
+
+def _canonical_flutter_integration_test_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Path:
+    sdk_root = tmp_path / "canonical-flutter-sdk"
+    _write(sdk_root, "bin/flutter", b"#!/bin/sh\n")
+    package = sdk_root / "packages/integration_test"
+    package.mkdir(parents=True)
+    monkeypatch.setattr(
+        projection_seal,
+        "_canonical_flutter_integration_test_directory",
+        lambda _environment: package.resolve(),
+    )
+    return package
+
+
+def _patrol_integration_test_link(projection: Path, target: Path) -> Path:
+    link = (
+        projection
+        / "quwoquan_app/test_host/patrol/ios/.symlinks/plugins/integration_test"
+    )
+    link.parent.mkdir(parents=True)
+    link.symlink_to(target)
+    return link
+
+
+def test_ios_policy_admits_exact_patrol_link_to_canonical_flutter_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path, projection = _source_projection(tmp_path, monkeypatch)
+    package = _canonical_flutter_integration_test_package(tmp_path, monkeypatch)
+    link = _patrol_integration_test_link(projection, package)
+
+    sealed = seal_projection_build(
+        manifest_path,
+        projection,
+        policy_id=FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
+    )
+
+    assert sealed.derived_output_digest.startswith("sha256:")
+    assert link.resolve() == package.resolve()
+
+
+def test_ios_policy_rejects_patrol_link_to_foreign_same_name_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path, projection = _source_projection(tmp_path, monkeypatch)
+    _canonical_flutter_integration_test_package(tmp_path, monkeypatch)
+    foreign = tmp_path / "foreign-flutter-sdk/packages/integration_test"
+    foreign.mkdir(parents=True)
+    _patrol_integration_test_link(projection, foreign)
+
+    with pytest.raises(ValueError, match="symlink escapes build root"):
+        seal_projection_build(
+            manifest_path,
+            projection,
+            policy_id=FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
+        )
+
+
+def test_ios_policy_rejects_patrol_link_to_other_canonical_sdk_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path, projection = _source_projection(tmp_path, monkeypatch)
+    integration_test = _canonical_flutter_integration_test_package(
+        tmp_path, monkeypatch
+    )
+    other_package = integration_test.parent / "path_provider"
+    other_package.mkdir()
+    _patrol_integration_test_link(projection, other_package)
+
+    with pytest.raises(ValueError, match="symlink escapes build root"):
+        seal_projection_build(
+            manifest_path,
+            projection,
+            policy_id=FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
+        )
+
+
+def test_ios_policy_rejects_canonical_flutter_package_at_wrong_relative(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path, projection = _source_projection(tmp_path, monkeypatch)
+    package = _canonical_flutter_integration_test_package(tmp_path, monkeypatch)
+    wrong = (
+        projection
+        / "quwoquan_app/test_host/patrol/ios/.symlinks/plugins/integration_test_copy"
+    )
+    wrong.parent.mkdir(parents=True)
+    wrong.symlink_to(package)
+
+    with pytest.raises(ValueError, match="symlink escapes build root"):
+        seal_projection_build(
+            manifest_path,
+            projection,
+            policy_id=FLUTTER_IOS_3_47_COCOAPODS_1_16_POLICY_ID,
+        )
+
+
+def test_android_policy_rejects_exact_patrol_link_to_canonical_flutter_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest_path, projection = _source_projection(tmp_path, monkeypatch)
+    package = _canonical_flutter_integration_test_package(tmp_path, monkeypatch)
+    _patrol_integration_test_link(projection, package)
+
+    with pytest.raises(ValueError, match="symlink escapes build root"):
+        seal_projection_build(
+            manifest_path,
+            projection,
+            policy_id=FLUTTER_ANDROID_3_47_GRADLE_8_14_POLICY_ID,
         )
 
 

@@ -22,7 +22,12 @@ def _acquire(root: Path, platform: str = "android") -> tuple[dict[str, str], Pat
         return_value=HOST_DIGEST,
     ), patch(
         "quwoquan_ops.ci.device_runner_lease.select_device",
-        return_value=f"{platform}-device",
+        return_value={
+            "id": f"{platform}-device",
+            "targetPlatform": "ios" if platform == "ios" else "android-arm64",
+            "emulator": False,
+            "isSupported": True,
+        },
     ):
         values = acquire(
             platform=platform,
@@ -49,6 +54,10 @@ def test_device_lease_is_atomic_host_bound_and_releasable() -> None:
         assert evidence["hostDigest"] == HOST_DIGEST
         assert evidence["runnerLabel"] == "mobile-android"
         assert evidence["deviceIdDigest"] == values["device_id_digest"]
+        assert evidence["deviceClass"] == "physical"
+        assert evidence["deviceRegistered"] is True
+        assert evidence["targetPlatform"] == "android-arm64"
+        assert Path(evidence["leaseOwnerRef"]).is_file()
         assert "android-device" not in evidence_path.read_text(encoding="utf-8")
 
         release(

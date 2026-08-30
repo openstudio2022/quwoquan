@@ -1,17 +1,17 @@
 """Create-once source admission for physical image and video evidence."""
-
 from __future__ import annotations
-
 import json
 import os
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
-
 from core.io import read_json
 from core.schema import assert_valid
-
+from content.source.host_source_review import (
+    CONTRACT_VERSION as HOST_SOURCE_REVIEW_CONTRACT_VERSION,
+    read_host_source_review_result,
+)
 from content.source.media_source_admission_contract import (
     MEDIA_SOURCE_ADMISSION_BLOCKED,
     MEDIA_SOURCE_ADMISSION_INVALID,
@@ -39,10 +39,8 @@ _EVIDENCE_ROLES = (
 )
 _GENERATED_VIDEO_MARKERS = ("generated", "synthetic", "text_to_video", "ai_video")
 
-
 def _invalid(issue: object) -> MediaSourceAdmissionError:
     return MediaSourceAdmissionError(MEDIA_SOURCE_ADMISSION_INVALID, issue)
-
 
 def _document_binding(root: Path, ref: object, *, role: str) -> tuple[dict[str, Any], dict[str, str]]:
     try:
@@ -62,7 +60,6 @@ def _document_binding(root: Path, ref: object, *, role: str) -> tuple[dict[str, 
             raise
         raise _invalid(exc) from exc
 
-
 def _matching_rows(document: Mapping[str, Any], *, asset_id: str) -> list[Mapping[str, Any]]:
     for key in ("assets", "candidates"):
         rows = document.get(key)
@@ -80,7 +77,6 @@ def _matching_rows(document: Mapping[str, Any], *, asset_id: str) -> list[Mappin
         return [document]
     return []
 
-
 def _one_evidence_row(
     document: Mapping[str, Any],
     *,
@@ -91,7 +87,6 @@ def _one_evidence_row(
     if len(rows) != 1:
         raise _invalid(f"{role} must bind exactly one asset: {asset_id}")
     return rows[0]
-
 
 def _identity_issues(
     documents: Mapping[str, Mapping[str, Any]],
@@ -113,7 +108,6 @@ def _identity_issues(
                 issues.append(f"{role}.{field} drift")
     return issues
 
-
 def _cross_evidence_issues(
     rows: Mapping[str, Mapping[str, Any]],
     *,
@@ -134,28 +128,30 @@ def _cross_evidence_issues(
             issues.append(f"{role}.entityId drift")
     return issues
 
-
-def _normalized_review(row: Mapping[str, Any]) -> dict[str, Any]:
-    nested = row.get("safetyReview")
-    source = nested if isinstance(nested, Mapping) else row
-    status = str(source.get("status") or "")
+def _normalized_review(
+    document: Mapping[str, Any], *, root: Path, asset_id: str, result_ref: str
+) -> dict[str, Any]:
+    if document.get("schema") != "quwoquan_data.host_source_review_result":
+        raise _invalid("source semantic review must use host-source-review/v1")
+    try:
+        result = read_host_source_review_result(
+            evidence_root=root,
+            request_ref=str(document.get("requestRef") or ""),
+            result_ref=result_ref,
+        )
+    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+        raise _invalid(exc) from exc
+    asset = result.get("assetBinding")
+    if not isinstance(asset, Mapping) or asset.get("assetId") != asset_id:
+        raise _invalid("host source review asset identity drift")
+    verdict = result["verdict"]
     return {
-        "status": status,
-        "entityMatch": str(source.get("entityMatch") or "unknown"),
-        "qualityStatus": str(source.get("qualityStatus") or (
-            "passed" if status == "passed" else "blocked"
-        )),
-        "privacyRisk": str(source.get("privacyRisk") or "unknown"),
-        "minorRisk": str(source.get("minorRisk") or "unknown"),
-        "maliciousMediaRisk": str(source.get("maliciousMediaRisk") or "unknown"),
-        "watermarkStatus": str(source.get("watermarkStatus") or "unknown"),
-        "findings": [
-            str(value).strip()
-            for value in source.get("findings") or []
-            if str(value).strip()
-        ],
+        "resultRef": result_ref,
+        "requestDigest": str(result["requestDigest"]),
+        "resultDigest": str(result["resultDigest"]),
+        "actor": dict(result["actor"]),
+        **dict(verdict),
     }
-
 
 def _source_attribution(
     asset: Mapping[str, Any], rights: Mapping[str, Any]
@@ -338,7 +334,13 @@ def _prepare_receipt(
     rows = {
         role: _one_evidence_row(document, asset_id=asset_id, role=role)
         for role, document in documents.items()
+        if role != "source_semantic_review"
     }
+    review_document = documents["source_semantic_review"]
+    review_asset = review_document.get("assetBinding")
+    if not isinstance(review_asset, Mapping) or review_asset.get("assetId") != asset_id:
+        raise _invalid("source_semantic_review must bind the exact asset")
+    rows["source_semantic_review"] = review_asset
     acquisition = rows["acquisition"]
     content_sha256 = str(acquisition.get("contentSha256") or "")
     entity_id = str(acquisition.get("entityId") or "")
@@ -363,7 +365,12 @@ def _prepare_receipt(
         raise _invalid(exc) from exc
     if asset_sha != snapshot["contentSha256"]:
         raise _invalid("asset bytes contentSha256 drift")
-    review = _normalized_review(rows["source_semantic_review"])
+    review = _normalized_review(
+        documents["source_semantic_review"],
+        root=root,
+        asset_id=asset_id,
+        result_ref=str(evidence_refs["source_semantic_review"]),
+    )
     blockers = _blockers(asset_kind=asset_kind, snapshot=snapshot, review=review)
     evidence_root_digest = canonical_digest(
         {
@@ -397,6 +404,7 @@ def _prepare_receipt(
         "evidenceBindings": bindings,
         "assetSnapshot": snapshot,
         "sourceReview": review,
+        "sourceReviewContractVersion": HOST_SOURCE_REVIEW_CONTRACT_VERSION,
         "admissionDecision": "blocked" if blockers else "accepted",
         "blockers": blockers,
         "recordedAt": str(recorded_at),
@@ -517,13 +525,11 @@ class MediaSourceAdmissionQuery:
             raise _invalid(exc) from exc
         if not isinstance(payload, dict):
             raise _invalid("media source admission receipt must be one object")
+        current = payload.get("sourceReviewContractVersion") == HOST_SOURCE_REVIEW_CONTRACT_VERSION
+        schema_name = ("media_source_admission_receipt" if current
+                       else "media_source_admission_receipt_legacy_v0")
         try:
-            assert_valid(
-                payload,
-                "source",
-                "media_source_admission_receipt",
-                label="media source admission receipt",
-            )
+            assert_valid(payload, "source", schema_name, label="media source admission receipt")
         except (FileNotFoundError, TypeError, ValueError) as exc:
             raise _invalid(exc) from exc
         stable = {key: value for key, value in payload.items() if key != "receiptDigest"}
@@ -539,10 +545,13 @@ class MediaSourceAdmissionQuery:
         bindings = payload.get("evidenceBindings")
         if not isinstance(bindings, list):
             raise _invalid("media source admission evidence bindings are absent")
+        if not current:
+            return {"status": str(payload["admissionDecision"]), "receiptRef": canonical_ref,
+                    "receiptDigest": str(payload["receiptDigest"]), "receipt": payload,
+                    "contractVersion": "legacy-v0-read-only"}
         evidence_refs = {
             str(binding.get("role") or ""): str(binding.get("ref") or "")
-            for binding in bindings
-            if isinstance(binding, Mapping)
+            for binding in bindings if isinstance(binding, Mapping)
         }
         rebuilt = _prepare_receipt(
             root=self._root,
@@ -566,6 +575,8 @@ class MediaSourceAdmissionQuery:
 
     def require_accepted(self, receipt_ref: str) -> dict[str, Any]:
         result = self.read(receipt_ref)
+        if result.get("contractVersion") == "legacy-v0-read-only":
+            raise _invalid("legacy media source admission is historical read-only")
         if result["status"] != "accepted":
             receipt = result["receipt"]
             blockers = receipt.get("blockers") if isinstance(receipt, Mapping) else None

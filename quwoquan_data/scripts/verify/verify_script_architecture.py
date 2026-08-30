@@ -3,13 +3,34 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 import sys
 from pathlib import Path
 
+from verify.legacy_runtime_entries import (
+    LEGACY_ORCHESTRATION_FAMILIES,
+    scan_data_legacy_orchestration_entries,
+    scan_legacy_runtime_entries,
+    scan_live_python_import_graph,
+)
+
 
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SCRIPTS_ROOT.parent.parent
+PRESERVED_PROTOCOL_KERNELS = ("closure", "runtime_evidence", "scale")
+RETIREMENT_INVENTORY_RELATIVE = Path(
+    "quwoquan_data/control_plane/execution/legacy_orchestration_retirement.json"
+)
+_RETIREMENT_INVENTORY_KEYS = frozenset(
+    {
+        "schema",
+        "state",
+        "deleteFamilies",
+        "preserveProtocolKernels",
+        "forbiddenCompatibility",
+    }
+)
 ALLOWED_ROOT_ENTRIES = {"cli.py", "core", "content", "governance", "verify", "__init__.py"}
 EXECUTION_ROOT_MODULES = frozenset(
     {
@@ -17,6 +38,7 @@ EXECUTION_ROOT_MODULES = frozenset(
         "asset_registry.py",
         "baseline.py",
         "baseline_packet.py",
+        "carrier_contract.py",
         "context.py",
         "contracts.py",
         "coverage.py",
@@ -27,18 +49,25 @@ EXECUTION_ROOT_MODULES = frozenset(
         "handler.py",
         "identity.py",
         "model_contract.py",
+        "operation_views.py",
+        "operational_fingerprint.py",
         "production_contracts.py",
         "prompt_snapshot.py",
+        "receipt_state_reducer.py",
         "request.py",
         "runtime_contract.py",
         "runtime_state.py",
         "spec_contract.py",
+        "stable_production_proof.py",
         "stage_receipt.py",
         "stage_receipt_cli.py",
         "stage_reports.py",
+        "task_init.py",
+        "task_init_cli.py",
         "store.py",
         "support.py",
         "target_integrity.py",
+        "terminal_evidence_precheck.py",
         "terminal_state_integrity.py",
         "workspace.py",
     }
@@ -233,6 +262,63 @@ def _lookup_index_boundary_issues() -> list[str]:
     ]
 
 
+def _retirement_inventory() -> tuple[str, list[str]]:
+    path = REPO_ROOT / RETIREMENT_INVENTORY_RELATIVE
+    if not path.is_file() or path.is_symlink():
+        return "pre_delete", []
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return "blocked", [
+            f"GATE_BLOCK {path.relative_to(REPO_ROOT)}: "
+            f"retirement inventory unreadable: {exc}"
+        ]
+    issues: list[str] = []
+    expected = {
+        "schema": "quwoquan_data.legacy_orchestration_retirement_inventory",
+        "deleteFamilies": list(LEGACY_ORCHESTRATION_FAMILIES),
+        "preserveProtocolKernels": list(PRESERVED_PROTOCOL_KERNELS),
+        "forbiddenCompatibility": ["alias", "dual_read", "dual_write", "shim"],
+    }
+    if not isinstance(value, dict) or set(value) != _RETIREMENT_INVENTORY_KEYS:
+        issues.append(
+            f"GATE_BLOCK {path.relative_to(REPO_ROOT)}: "
+            "retirement inventory fields mismatch"
+        )
+        return "blocked", issues
+    for field, expected_value in expected.items():
+        if value.get(field) != expected_value:
+            issues.append(
+                f"GATE_BLOCK {path.relative_to(REPO_ROOT)}: "
+                f"retirement inventory {field} drifted"
+            )
+    state = value.get("state")
+    if state not in {"pre_delete", "operationally_retired", "retired"}:
+        issues.append(
+            f"GATE_BLOCK {path.relative_to(REPO_ROOT)}: "
+            "retirement inventory state is invalid"
+        )
+    return (str(state) if not issues else "blocked"), issues
+
+
+def _legacy_orchestration_post_delete_issues() -> list[str]:
+    package_roots = tuple(
+        name
+        for name in ("quwoquan_app", "quwoquan_service", "quwoquan_ops", ".github")
+        if (REPO_ROOT / name).exists()
+    )
+    package_scan = scan_legacy_runtime_entries(REPO_ROOT, root_names=package_roots)
+    data_scan = scan_data_legacy_orchestration_entries(
+        scripts_root=SCRIPTS_ROOT, repo_root=REPO_ROOT
+    )
+    return [
+        *(f"GATE_BLOCK {ref}" for ref in data_scan.legacy_entry_refs),
+        *(f"GATE_BLOCK {ref}" for ref in package_scan.legacy_entry_refs),
+        *(f"GATE_BLOCK {error}" for error in data_scan.scan_errors),
+        *(f"GATE_BLOCK {error}" for error in package_scan.scan_errors),
+    ]
+
+
 def script_architecture_issues() -> list[str]:
     issues: list[str] = []
     for required in (
@@ -319,6 +405,13 @@ def script_architecture_issues() -> list[str]:
                     f"{path.relative_to(REPO_ROOT)}: generated cache must not exist in source tree"
                 )
     issues.extend(_lookup_index_boundary_issues())
+    retirement_state, retirement_issues = _retirement_inventory()
+    issues.extend(retirement_issues)
+    live_scan = scan_live_python_import_graph(scripts_root=SCRIPTS_ROOT)
+    issues.extend(f"GATE_BLOCK {ref}" for ref in live_scan.legacy_entry_refs)
+    issues.extend(f"GATE_BLOCK {error}" for error in live_scan.scan_errors)
+    if retirement_state == "retired":
+        issues.extend(_legacy_orchestration_post_delete_issues())
     return issues
 
 

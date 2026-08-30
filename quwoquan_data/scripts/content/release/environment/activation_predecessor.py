@@ -1,4 +1,4 @@
-"""Validate the previous environment's independent milestone activation receipt."""
+"""Bind the previous environment's exact Data import/readback readiness."""
 
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ from content.release.environment.activation_envelope import (
     file_digest,
 )
 from core.schema import assert_valid
-from verify.release_publishability import evaluate_release_readiness_receipt
 
 _PREVIOUS_ENVIRONMENT = {
     "alpha": None,
@@ -58,7 +57,7 @@ def load_previous_environment_activation(
     source_identity_set_digest: str,
     output_root: Path,
 ) -> dict[str, str] | None:
-    """Freeze the exact preceding Research readiness receipt for one milestone."""
+    """Freeze the exact preceding Research Data readiness receipt."""
 
     if environment not in _PREVIOUS_ENVIRONMENT:
         raise EnvironmentActivationEnvelopeError(
@@ -116,10 +115,9 @@ def load_previous_environment_activation(
         raise EnvironmentActivationEnvelopeError(
             "previous environment activation envelope is missing"
         )
-    verdict = evaluate_release_readiness_receipt(receipt)
-    if not verdict.publishable or verdict.phase != "research":
+    if receipt.get("passed") is not True or receipt.get("readinessPhase") != "research":
         raise EnvironmentActivationEnvelopeError(
-            "previous environment readiness is not a publishable research receipt"
+            "previous environment Data readiness is not a passed research receipt"
         )
     if (
         receipt.get("verificationChecksum") != _checksum(receipt)
@@ -141,11 +139,9 @@ def load_previous_environment_activation(
         "environment": previous,
         "readinessRef": relative.as_posix(),
         "readinessDigest": file_digest(readiness_path),
-        "verifyRunId": str(receipt.get("verifyRunId") or ""),
         "activationEnvelopeDigest": str(
             receipt.get("activationEnvelopeDigest") or ""
         ),
-        "appUatEnvelopeDigest": str(receipt.get("appUatEnvelopeDigest") or ""),
     }
 
 

@@ -25,6 +25,7 @@ type platformService struct {
 	configTopology        http.Handler
 	configInstanceReports http.Handler
 	configInstanceRuntime http.Handler
+	humanAuthority        http.Handler
 	releaseManifestDigest string
 	alertIngestToken      string
 	configAckInstances    []string

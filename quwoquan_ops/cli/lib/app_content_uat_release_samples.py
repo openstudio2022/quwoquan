@@ -12,6 +12,7 @@ from typing import Any
 _DISTRIBUTIONS = {
     "M100": {"homepage": 25, "article": 25, "image": 40, "video": 10},
     "M1000": {"homepage": 25, "article": 25, "image": 25, "video": 25},
+    "M10000": {"homepage": 25, "article": 25, "image": 25, "video": 25},
 }
 _SOURCE_READBACKS = {
     "homepage": "entityRefs",
@@ -54,62 +55,51 @@ def _load_regular_json(path: Path, *, root: Path, label: str) -> tuple[dict[str,
 
 
 def _sample_cases(plan: Mapping[str, Any]) -> tuple[str, list[dict[str, Any]]]:
-    raw = plan.get("stratifiedSamples")
-    if not isinstance(raw, Mapping):
-        raise ValueError("App content UAT milestone sample plan is missing")
-    milestone = str(raw.get("milestone") or "").strip()
-    expected_distribution = _DISTRIBUTIONS.get(milestone)
-    if expected_distribution is None:
-        raise ValueError("App content UAT milestone sample plan is unsupported")
-    if (
-        raw.get("selection") != "lexicographic_prefix_v1"
-        or raw.get("sampleCount") != 100
-        or raw.get("distribution") != expected_distribution
-    ):
-        raise ValueError("App content UAT milestone sample policy drifted")
-    cases = raw.get("cases")
-    if not isinstance(cases, list) or len(cases) != 100:
-        raise ValueError("App content UAT milestone requires exactly 100 sample cases")
+    raw = plan.get("orderedSamples")
+    if not isinstance(raw, list) or not raw:
+        raise ValueError("App content UAT ReleaseUatSamplePlan orderedSamples are missing")
+    release_identity = plan.get("releaseIdentity")
+    milestone = (
+        str((plan.get("releaseUatSamplePlan") or {}).get("milestone") or "").strip()
+        if isinstance(plan.get("releaseUatSamplePlan"), Mapping)
+        else ""
+    )
+    if not milestone and isinstance(release_identity, Mapping):
+        milestone = str(release_identity.get("milestone") or "").strip()
+    # Milestone is optional for canary plans; distribution is carried by exact rows.
     normalized: list[dict[str, Any]] = []
-    for index, raw_case in enumerate(cases):
-        if not isinstance(raw_case, Mapping) or set(raw_case) != {
-            "sampleId",
-            "carrier",
-            "sourceReadback",
-            "objectId",
-            "ordinal",
-        }:
-            raise ValueError(f"App content UAT sample {index} fields are invalid")
+    for index, raw_case in enumerate(raw):
+        if not isinstance(raw_case, Mapping):
+            raise ValueError(f"App content UAT sample {index} is invalid")
         carrier = str(raw_case.get("carrier") or "").strip()
         sample_id = str(raw_case.get("sampleId") or "").strip()
         object_id = str(raw_case.get("objectId") or "").strip()
-        source_readback = str(raw_case.get("sourceReadback") or "").strip()
-        ordinal = raw_case.get("ordinal")
+        object_ref = str(raw_case.get("objectRef") or "").strip()
+        object_digest = str(raw_case.get("objectDigest") or "").strip()
         if (
-            carrier not in expected_distribution
-            or source_readback != _SOURCE_READBACKS[carrier]
+            carrier not in _SOURCE_READBACKS
             or not sample_id
             or not object_id
-            or not isinstance(ordinal, int)
-            or isinstance(ordinal, bool)
-            or ordinal <= 0
+            or not object_ref
+            or not object_digest.startswith("sha256:")
         ):
             raise ValueError(f"App content UAT sample {index} identity is invalid")
         normalized.append(
             {
                 "sampleId": sample_id,
                 "carrier": carrier,
-                "sourceReadback": source_readback,
                 "sourceObjectId": object_id,
-                "ordinal": ordinal,
+                "objectRef": object_ref,
+                "objectDigest": object_digest,
             }
         )
-    if dict(Counter(case["carrier"] for case in normalized)) != expected_distribution:
-        raise ValueError("App content UAT sample distribution drifted")
-    for field in ("sampleId", "sourceObjectId"):
+    for field in ("sampleId", "sourceObjectId", "objectRef"):
         values = [str(case[field]) for case in normalized]
         if len(values) != len(set(values)):
             raise ValueError(f"App content UAT sample {field} values are duplicated")
+    distribution = dict(Counter(case["carrier"] for case in normalized))
+    if milestone and distribution != _DISTRIBUTIONS.get(milestone):
+        raise ValueError("App content UAT sample distribution drifted")
     return milestone, normalized
 
 
@@ -121,9 +111,11 @@ def resolve_release_sample_requests(
 ) -> dict[str, Any]:
     """Resolve plan identities to exact public read identities.
 
-    Homepage samples originate in readiness ``entityRefs``.  The current
-    release's homepage API verification is the sole mapping to environment
-    ``homepageId`` values; Post sample IDs are already public GetPost IDs.
+    Homepage samples originate in readiness ``entityRefs`` and resolve through
+    the current release's homepage API verification. Post samples originate as
+    immutable Data ``contentId`` values and resolve through the import report's
+    exact ``contentId``/``postRef``/``postId`` binding; Ops never equates those
+    owner-specific identities.
     """
 
     root = output_root.expanduser().resolve()
@@ -134,8 +126,16 @@ def resolve_release_sample_requests(
     )
     milestone, cases = _sample_cases(app_uat_plan)
     release_id = str(readiness.get("releaseId") or "").strip()
-    if not release_id or app_uat_plan.get("releaseId") != release_id:
+    if (
+        not release_id
+        or not isinstance(app_uat_plan.get("releaseIdentity"), Mapping)
+        or app_uat_plan["releaseIdentity"].get("releaseId") != release_id
+    ):
         raise ValueError("App content UAT sample plan releaseId drifted")
+    sample_plan_ref = str(app_uat_plan.get("releaseUatSamplePlanRef") or "").strip()
+    sample_plan_digest = str(app_uat_plan.get("releaseUatSamplePlanDigest") or "").strip()
+    if not sample_plan_ref or not sample_plan_digest.startswith("sha256:"):
+        raise ValueError("App content UAT ReleaseUatSamplePlan binding is missing")
 
     homepage_ref = str(readiness.get("homepageApiVerificationRef") or "").strip()
     if not homepage_ref:
@@ -171,18 +171,99 @@ def resolve_release_sample_requests(
             or row.get("introductionStatus") != 200
         ):
             raise ValueError("App content UAT homepage API verification identity drifted")
-        homepage_ids[entity_ref] = homepage_id
+        for identity in {
+            entity_ref,
+            entity_ref.strip("/").removeprefix("entity/"),
+            entity_ref.strip("/").removeprefix("entities/"),
+        }:
+            if identity in homepage_ids and homepage_ids[identity] != homepage_id:
+                raise ValueError(
+                    "App content UAT homepage API verification identity drifted"
+                )
+            homepage_ids[identity] = homepage_id
+
+    import_ref = str(readiness.get("contentImportReportRef") or "").strip()
+    if not import_ref:
+        raise ValueError("App content UAT content import report ref is missing")
+    import_report, observed_import_ref = _load_regular_json(
+        root / import_ref,
+        root=root,
+        label="App content UAT content import report",
+    )
+    if observed_import_ref != import_ref:
+        raise ValueError("App content UAT content import report ref drifted")
+    if (
+        import_report.get("schema") != "quwoquan.content_import_report"
+        or import_report.get("releaseId") != release_id
+        or import_report.get("status") != "imported"
+        or import_report.get("manifestDigest") != readiness.get("manifestDigest")
+    ):
+        raise ValueError("App content UAT content import report is not release-bound")
+    raw_bindings = import_report.get("postBindings")
+    if not isinstance(raw_bindings, list):
+        raise ValueError("App content UAT content import post bindings are missing")
+    post_ids = {
+        str(value).strip() for value in readiness.get("postIds") or [] if str(value).strip()
+    }
+    post_bindings: dict[tuple[str, str, str], str] = {}
+    observed_post_ids: set[str] = set()
+    for index, raw_binding in enumerate(raw_bindings):
+        if not isinstance(raw_binding, Mapping):
+            raise ValueError(f"App content UAT content import binding {index} is invalid")
+        content_id = str(raw_binding.get("contentId") or "").strip()
+        post_ref = str(raw_binding.get("postRef") or "").strip()
+        post_id = str(raw_binding.get("postId") or "").strip()
+        content_type = str(raw_binding.get("contentType") or "").strip()
+        key = (content_id, post_ref, content_type)
+        if (
+            not all(key)
+            or not post_id
+            or key in post_bindings
+            or post_id in observed_post_ids
+        ):
+            raise ValueError("App content UAT content import binding identity drifted")
+        post_bindings[key] = post_id
+        observed_post_ids.add(post_id)
+    if observed_post_ids != post_ids:
+        raise ValueError("App content UAT content import postIds drifted from readiness")
 
     samples: list[dict[str, Any]] = []
+    carrier_ordinals: Counter[str] = Counter()
     for case in cases:
         carrier = str(case["carrier"])
         source_id = str(case["sourceObjectId"])
-        read_object_id = homepage_ids.get(source_id, "") if carrier == "homepage" else source_id
+        carrier_ordinals[carrier] += 1
+        if carrier == "homepage":
+            normalized_source_id = source_id.strip("/")
+            for prefix in ("entities/", "entity/"):
+                if normalized_source_id.startswith(prefix):
+                    normalized_source_id = normalized_source_id[len(prefix) :]
+                    break
+            read_object_id = homepage_ids.get(source_id, "") or homepage_ids.get(
+                normalized_source_id, ""
+            )
+        else:
+            object_ref = str(case["objectRef"])
+            prefix = f"objects/posts/{carrier}/"
+            if not object_ref.startswith(prefix):
+                raise ValueError(
+                    f"App content UAT immutable object ref is invalid for {source_id}"
+                )
+            post_ref = object_ref.removeprefix("objects/posts/")
+            read_object_id = post_bindings.get((source_id, post_ref, carrier), "")
         if not read_object_id:
-            raise ValueError(f"App content UAT homepage mapping is missing for {source_id}")
+            raise ValueError(
+                f"App content UAT runtime mapping is missing for {source_id}"
+            )
         samples.append(
             {
-                **case,
+                "sampleId": case["sampleId"],
+                "carrier": carrier,
+                "sourceReadback": _SOURCE_READBACKS[carrier],
+                "sourceObjectId": source_id,
+                "objectRef": str(case["objectRef"]),
+                "objectDigest": str(case["objectDigest"]),
+                "ordinal": carrier_ordinals[carrier],
                 "readObjectId": read_object_id,
                 "expectedContentType": "" if carrier == "homepage" else carrier,
             }
@@ -190,10 +271,14 @@ def resolve_release_sample_requests(
     return {
         "releaseId": release_id,
         "milestone": milestone,
+        "releaseUatSamplePlanRef": sample_plan_ref,
+        "releaseUatSamplePlanDigest": sample_plan_digest,
         "readinessReceiptRef": readiness_ref,
         "readinessReceiptFileSha256": _file_digest((root / readiness_ref).resolve()),
         "homepageApiVerificationRef": homepage_ref,
         "homepageApiVerificationFileSha256": _file_digest((root / homepage_ref).resolve()),
+        "contentImportReportRef": import_ref,
+        "contentImportReportFileSha256": _file_digest((root / import_ref).resolve()),
         "samples": samples,
     }
 
@@ -208,7 +293,7 @@ def validate_release_sample_probe(
     """Return compact per-sample evidence only after 100 exact HTTP reads pass."""
 
     expected = resolved.get("samples")
-    if not isinstance(expected, list) or len(expected) != 100:
+    if not isinstance(expected, list) or not expected:
         raise ValueError("App content UAT resolved sample set is incomplete")
     expected_by_id = {str(row["sampleId"]): row for row in expected if isinstance(row, Mapping)}
     raw_checks = report.get("checks")
@@ -219,8 +304,10 @@ def validate_release_sample_probe(
         for row in raw_checks
         if isinstance(row, Mapping) and row.get("name") == "release_sample"
     ]
-    if len(checks) != 100:
-        raise ValueError("App content UAT release sample probe did not execute 100 reads")
+    if len(checks) != len(expected):
+        raise ValueError(
+            f"App content UAT release sample probe did not execute {len(expected)} reads"
+        )
 
     evidence: list[dict[str, Any]] = []
     observed_ids: set[str] = set()
@@ -265,13 +352,15 @@ def validate_release_sample_probe(
         raise ValueError("App content UAT release sample execution coverage is incomplete")
     distribution = dict(Counter(str(row["carrier"]) for row in evidence))
     milestone = str(resolved.get("milestone") or "")
-    if distribution != _DISTRIBUTIONS.get(milestone):
+    if milestone and distribution != _DISTRIBUTIONS.get(milestone):
         raise ValueError("App content UAT release sample evidence distribution drifted")
     evidence.sort(key=lambda row: str(row["sampleId"]))
     return {
         "milestone": milestone,
-        "executedSampleCount": 100,
+        "executedSampleCount": len(evidence),
         "distribution": distribution,
+        "releaseUatSamplePlanRef": resolved["releaseUatSamplePlanRef"],
+        "releaseUatSamplePlanDigest": resolved["releaseUatSamplePlanDigest"],
         "appUatPlanDigest": app_uat_plan_digest,
         "readinessReceiptDigest": readiness_receipt_digest,
         "readinessReceiptRef": resolved["readinessReceiptRef"],
@@ -279,6 +368,10 @@ def validate_release_sample_probe(
         "homepageApiVerificationRef": resolved["homepageApiVerificationRef"],
         "homepageApiVerificationFileSha256": resolved[
             "homepageApiVerificationFileSha256"
+        ],
+        "contentImportReportRef": resolved["contentImportReportRef"],
+        "contentImportReportFileSha256": resolved[
+            "contentImportReportFileSha256"
         ],
         "samples": evidence,
     }

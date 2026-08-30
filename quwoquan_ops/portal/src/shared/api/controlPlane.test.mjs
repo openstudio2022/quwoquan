@@ -43,6 +43,11 @@ import {
   fetchAccountEnforcementCase,
   reviewAccountEnforcementCase,
   retryAccountEnforcementDelivery,
+  fetchHumanAuthorityDecisionUnits,
+  fetchHumanAuthorityTask,
+  submitHumanAuthorityRound,
+  applyHumanAuthorityAction,
+  fetchHumanAuthorityReadback,
 } from '../../../.test-dist/shared/api/controlPlane.js';
 
 const originalFetch = globalThis.fetch;
@@ -50,6 +55,7 @@ const originalPlatformBaseUrl = process.env.VITE_PLATFORM_OPS_BASE_URL;
 const originalProductBaseUrl = process.env.VITE_PRODUCT_OPS_BASE_URL;
 const originalContentServiceBaseUrl = process.env.VITE_CONTENT_SERVICE_BASE_URL;
 const originalEntityServiceBaseUrl = process.env.VITE_ENTITY_SERVICE_BASE_URL;
+const originalLocation = globalThis.location;
 
 function stubFetch(payload) {
   const calls = [];
@@ -85,6 +91,11 @@ function restoreEnvAndFetch() {
   process.env.VITE_PRODUCT_OPS_BASE_URL = originalProductBaseUrl;
   process.env.VITE_CONTENT_SERVICE_BASE_URL = originalContentServiceBaseUrl;
   process.env.VITE_ENTITY_SERVICE_BASE_URL = originalEntityServiceBaseUrl;
+  if (originalLocation === undefined) {
+    delete globalThis.location;
+  } else {
+    globalThis.location = originalLocation;
+  }
 }
 
 test('requests platform service catalog from configured base url', async () => {
@@ -345,6 +356,117 @@ test('account enforcement case read, dual-sign review and delivery retry hit gen
   // retry-delivery 契约要求空 body。
   assert.equal(calls[2].init?.body, undefined);
   assert.equal(retried.deliveryStatus, 'delivered');
+  restoreEnvAndFetch();
+});
+
+
+
+test('human authority client adapts canonical snake-case projection at one boundary', async () => {
+  process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
+  const calls = stubFetchSequence([
+    {
+      payload: {
+        items: [{
+          decision_unit_id: 'du-1',
+          stage: 'product_definition',
+          decision_kind: 'product_scope',
+          scope: 'objective-1',
+          state: 'awaiting_round_2',
+          evidence_expires_at: '2026-08-31T00:00:00Z',
+          current_task: {
+            task_id: 'task-1',
+            decision_unit_id: 'du-1',
+            role: 'product_owner',
+            stage: 'product_definition',
+            decision_kind: 'product_scope',
+            state: 'awaiting_round_2',
+            sod_policy: 'independent-principal-required',
+            card_projection: {
+              schema_version: 1,
+              card_type: 'choice',
+              current_role: 'product_owner',
+              role_responsibility: '确认范围取舍',
+              question: '选择范围',
+              what_happened: '范围需要确认',
+              user_or_business_impact: '影响交付节奏',
+              known_facts: ['事实'],
+              unknowns: ['未知'],
+              hard_constraints: ['约束'],
+              options: [{
+                option_id: 'a', neutral_label: '方案 A', user_outcome: '用户结果',
+                business_outcome: '业务结果', cost: '成本', time_to_effect: '一周', risk: '风险',
+                reversibility: '可逆', scope_change: '不变', unknowns: [], next_step: '下一步',
+              }],
+              selected_option_id: null,
+              agent_recommendation: null,
+              actions: ['submit_round_2', 'pause'],
+              consequences: ['后果'],
+              safest_default: '暂停',
+              audit_details: { digest: 'hidden' },
+            },
+          },
+        }],
+      },
+    },
+    {
+      payload: {
+        decisionUnitId: 'task-1', stage: 'product_definition', decisionKind: 'product_scope',
+        scope: 'objective-1', accountableRole: 'product_owner', requiredRoles: ['product_owner'],
+        sodPolicy: 'independent-principal-required', evidenceExpiresAt: '2026-08-31T00:00:00Z',
+        sealedRounds: [1, 2], submissions: [], options: [],
+        card: { schemaVersion: 1, cardType: 'authorization', currentRole: 'product_owner', question: '确认决定', knownFacts: [], unknowns: [], hardConstraints: [], options: [], selectedOptionId: null, agentRecommendation: null, actions: ['authorize'], consequences: [] },
+      },
+    },
+  ]);
+
+  const units = await fetchHumanAuthorityDecisionUnits();
+  const task = await fetchHumanAuthorityTask('task-1');
+
+  assert.equal(calls[0].url, 'http://platform.test/control-plane/platform/human-authority/decision-units');
+  assert.equal(units[0].currentTask.card.options[0].neutralLabel, '方案 A');
+  assert.equal(units[0].currentTask.card.auditDetails.digest, 'hidden');
+  assert.equal(calls[1].url, 'http://platform.test/control-plane/platform/human-authority/decision-units/task-1');
+  assert.equal(task.card.cardType, 'authorization');
+  restoreEnvAndFetch();
+});
+
+test('human authority mutations use hosted round seal, finalize and exact read routes', async () => {
+  process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
+  const hostedUnit = {
+    decisionUnitId: 'du-1', stage: 'product_definition', decisionKind: 'product_scope',
+    scope: 'objective-1', accountableRole: 'product_owner', requiredRoles: ['product_owner'],
+    sodPolicy: 'role-record-only', evidenceExpiresAt: '2026-08-31T00:00:00Z',
+    submissions: [], sealedRounds: [1], options: [],
+  };
+  const calls = stubFetchSequence([
+    { payload: hostedUnit },
+    { payload: hostedUnit },
+    { payload: { ...hostedUnit, sealedRounds: [1, 2], decision: { decisionId: 'decision-1', selectedOptionId: 'a', recordedAt: '2026-08-30T02:00:00Z' } } },
+    { payload: { ...hostedUnit, sealedRounds: [1, 2], decision: { decisionId: 'decision-1', selectedOptionId: 'a', recordedAt: '2026-08-30T02:00:00Z' } } },
+  ]);
+
+  const roundResult = await submitHumanAuthorityRound('du-1', {
+    round: 1, facts: ['事实'], impacts: [], unknowns: ['未知'],
+  }, 'stable-round-key');
+  const actionResult = await applyHumanAuthorityAction('du-1', {
+    action: 'authorize', note: '确认', selectedOptionId: 'a',
+  }, 'stable-action-key');
+  const readback = await fetchHumanAuthorityReadback('du-1');
+
+  assert.equal(calls[0].url, 'http://platform.test/control-plane/platform/human-authority/decision-units/du-1/submissions');
+  assert.equal(calls[0].init.headers['Idempotency-Key'], 'stable-round-key');
+  assert.equal(JSON.parse(calls[0].init.body).round, 1);
+  assert.equal(JSON.parse(calls[0].init.body).role, undefined);
+  assert.equal(JSON.parse(calls[0].init.body).actorId, undefined);
+  assert.equal(JSON.parse(calls[0].init.body).evidenceExpiresAt, undefined);
+  assert.equal(calls[1].url, 'http://platform.test/control-plane/platform/human-authority/decision-units/du-1/rounds/1:seal');
+  assert.equal(calls[1].init.headers['Idempotency-Key'], 'stable-round-key-seal');
+  assert.equal(roundResult.readback.status, 'awaiting_round_2');
+  assert.equal(calls[2].url, 'http://platform.test/control-plane/platform/human-authority/decision-units/du-1:finalize');
+  assert.equal(calls[2].init.headers['Idempotency-Key'], 'stable-action-key');
+  assert.equal(actionResult.readback.status, 'recorded');
+  assert.equal(calls[3].url, 'http://platform.test/control-plane/platform/human-authority/decision-units/du-1');
+  assert.equal(readback.selectedOptionId, 'a');
   restoreEnvAndFetch();
 });
 

@@ -418,7 +418,7 @@ def test_pool_delivery_drain__pre_capsule_admission_fails_closed(
         delivery_drain.drain_pool_delivery(EXECUTION_ID)
 
 
-def test_pool_delivery_drain_is_exposed_only_through_canonical_data_cli() -> None:
+def test_pool_delivery_drain_legacy_controller_cli_is_not_public() -> None:
     completed = subprocess.run(
         [
             sys.executable,
@@ -434,5 +434,5 @@ def test_pool_delivery_drain_is_exposed_only_through_canonical_data_cli() -> Non
         text=True,
     )
 
-    assert completed.returncode == 0, completed.stderr
-    assert "--execution-id" in completed.stdout
+    assert completed.returncode != 0
+    assert "invalid choice: 'drain-pool-delivery'" in completed.stderr

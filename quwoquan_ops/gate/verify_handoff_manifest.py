@@ -9,7 +9,9 @@ HANDOFF 是宪法要求的工作流间交接契约，但聊天文本无法校验
 2. 宪法四项段落齐全：`## 产出物`、`## 未决项去向`、`## 唯一合法下游`、`## 证据链`。
 3. 未决项三向裁决零悬空：每条落到「转 OPEN-###」「Out of Scope」「下一工作流承接」之一；
    且每条带泛化判定「孤例」或「一类」留痕（显式「无未决项」豁免）。
-4. 证据链每条带「命令 + 退出码 + 时间戳 + 工作树 SHA」，下游消费时过期即复跑。
+4. canonical 身份段绑定 EvidenceFingerprint ref/digest、source HEAD/source fingerprint、
+   captured metadata、freshness 与唯一 recovery token；旧 Markdown shape 不再被消费。
+5. 证据链每条带「命令 + 退出码 + 时间戳 + 工作树 SHA」，下游消费时过期即复跑。
 
 用法：
     python3 quwoquan_ops/gate/verify_handoff_manifest.py <manifest.md>
@@ -23,7 +25,9 @@ HANDOFF 是宪法要求的工作流间交接契约，但聊天文本无法校验
 
 from __future__ import annotations
 
+import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -32,11 +36,28 @@ sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 HANDOFF_ROOT = ROOT / ".qwq_output/env/repo/runs/handoff"
 
-sys.path.insert(0, str(ROOT / "quwoquan_ops/cli/lib"))
-from gate_output import emit_gate_result, finding  # noqa: E402
+sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
+from lib.agent_governance_contract import contract_section  # noqa: E402
+from lib.evidence_fingerprint import (  # noqa: E402
+    EvidenceFingerprintError,
+    canonical_digest,
+    validate_digest,
+    validate_evidence_fingerprint,
+    validate_ref,
+)
+from lib.gate_output import emit_gate_result, finding  # noqa: E402
+import handoff_consumer  # noqa: E402
 
 REQUIRED_HEAD_FIELDS = ("intent 终版", "新轮触发判定")
-REQUIRED_SECTIONS = ("## 产出物", "## 未决项去向", "## 唯一合法下游", "## 证据链")
+REQUIRED_SECTIONS = (
+    "## EvidenceFingerprint",
+    "## 产出物",
+    "## 未决项去向",
+    "## 唯一合法下游",
+    "## 证据链",
+)
+IDENTITY_FIELD_RE = re.compile(r"^- (?P<key>[a-z_]+):\s*(?P<value>.+?)\s*$", re.M)
+SOURCE_HEAD_RE = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 
 # 三向裁决：转 OPEN / Out of Scope / 下一工作流承接。「无未决项」显式声明也合法。
 RESOLUTION_RE = re.compile(r"OPEN-\d{3,}|Out of Scope|承接|无未决项")
@@ -61,6 +82,114 @@ def _section(text: str, heading: str) -> str | None:
     return tail[: nxt.start()] if nxt else tail
 
 
+def _identity_fields(text: str) -> tuple[dict[str, str], list[str]]:
+    issues: list[str] = []
+    section = _section(text, "## EvidenceFingerprint")
+    if section is None:
+        return {}, issues
+    fields: dict[str, str] = {}
+    for match in IDENTITY_FIELD_RE.finditer(section):
+        key = match.group("key")
+        if key in fields:
+            issues.append(f"EvidenceFingerprint 字段重复：{key}")
+        fields[key] = match.group("value").strip().strip("`")
+    required = {
+        "payload_ref",
+        "ref",
+        "digest",
+        "source_head",
+        "source_fingerprint",
+        "captured_metadata",
+        "freshness",
+        "recovery_token",
+        "digest_payload",
+    }
+    missing = sorted(required - set(fields))
+    extra = sorted(set(fields) - required)
+    if missing or extra:
+        issues.append(
+            f"EvidenceFingerprint 字段闭集漂移：missing={missing}, extra={extra}"
+        )
+    return fields, issues
+
+
+def _validate_identity(text: str, rel: str) -> list[str]:
+    fields, field_issues = _identity_fields(text)
+    issues = [f"{rel}: {issue}" for issue in field_issues]
+    if field_issues:
+        return issues
+    try:
+        digest = validate_digest(fields["digest"])
+        validate_ref(fields["ref"], digest=digest)
+        source_fingerprint = validate_digest(fields["source_fingerprint"])
+    except (KeyError, EvidenceFingerprintError) as exc:
+        issues.append(f"{rel}: canonical EvidenceFingerprint ref/digest 非法：{exc}")
+        return issues
+    if source_fingerprint != digest:
+        issues.append(f"{rel}: source_fingerprint 必须等于 canonical digest")
+    if not SOURCE_HEAD_RE.fullmatch(fields["source_head"]):
+        issues.append(f"{rel}: source_head 必须为 40 或 64 位小写 hex")
+    else:
+        current_head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+        if not current_head or fields["source_head"] != current_head:
+            issues.append(
+                f"{rel}: source_head 已 stale，必须重新采集 canonical fingerprint"
+            )
+    try:
+        metadata = json.loads(fields["captured_metadata"])
+    except json.JSONDecodeError as exc:
+        issues.append(f"{rel}: captured_metadata 必须为 JSON object：{exc.msg}")
+        metadata = None
+    expected_metadata = contract_section("evidence_fingerprint")["handoff"][
+        "captured_metadata_fields"
+    ]
+    if not isinstance(metadata, dict) or set(metadata) != set(expected_metadata):
+        issues.append(
+            f"{rel}: captured_metadata 字段必须精确为 {expected_metadata}"
+        )
+    elif not all(isinstance(metadata[field], str) and metadata[field] for field in expected_metadata):
+        issues.append(f"{rel}: captured_metadata 值必须为非空字符串")
+    try:
+        payload = json.loads(fields["digest_payload"])
+    except json.JSONDecodeError as exc:
+        issues.append(f"{rel}: digest_payload 必须为 JSON object：{exc.msg}")
+        payload = None
+    if isinstance(payload, dict) and canonical_digest(payload) != digest:
+        issues.append(f"{rel}: digest_payload 与 canonical digest 不一致")
+    elif not isinstance(payload, dict):
+        issues.append(f"{rel}: digest_payload 必须为 JSON object")
+    handoff = contract_section("evidence_fingerprint")["handoff"]
+    if fields["freshness"] != handoff["required_freshness"]:
+        issues.append(
+            f"{rel}: evidence freshness={fields['freshness']!r}，必须为 fresh 后再消费"
+        )
+    if fields["recovery_token"] != handoff["recovery_token"]:
+        issues.append(
+            f"{rel}: recovery_token 非法，必须为 {handoff['recovery_token']}"
+        )
+    payload_ref = fields.get("payload_ref")
+    if payload_ref:
+        try:
+            _, handoff_payload = handoff_consumer._load_json_ref(
+                payload_ref, label="handoff payload"
+            )
+            handoff_consumer.validate_handoff_payload(handoff_payload)
+            current = validate_evidence_fingerprint(
+                handoff_payload["fingerprint_receipt"]
+            )
+            if current["digest"] != digest or current["ref"] != fields["ref"]:
+                issues.append(f"{rel}: Markdown identity 与 canonical payload 不一致")
+        except (KeyError, TypeError, ValueError) as exc:
+            issues.append(f"{rel}: canonical handoff payload stale：{exc}")
+    return issues
+
+
 def validate(text: str, rel: str) -> list[str]:
     issues: list[str] = []
     for field in REQUIRED_HEAD_FIELDS:
@@ -69,7 +198,8 @@ def validate(text: str, rel: str) -> list[str]:
 
     for heading in REQUIRED_SECTIONS:
         if _section(text, heading) is None:
-            issues.append(f"{rel}: 缺宪法四项段落「{heading}」")
+            issues.append(f"{rel}: 缺 required 段落「{heading}」")
+    issues.extend(_validate_identity(text, rel))
 
     pending = _section(text, "## 未决项去向")
     if pending is not None:
@@ -142,7 +272,10 @@ def main(argv: list[str]) -> int:
         for issue in issues:
             print(f"  - {issue}", file=sys.stderr)
         return 1
-    print(f"[verify_handoff_manifest] OK: {rel} 四项齐全、裁决零悬空、证据字段完整")
+    print(
+        f"[verify_handoff_manifest] OK: {rel} canonical fingerprint fresh、"
+        "裁决零悬空、证据字段完整"
+    )
     return 0
 
 

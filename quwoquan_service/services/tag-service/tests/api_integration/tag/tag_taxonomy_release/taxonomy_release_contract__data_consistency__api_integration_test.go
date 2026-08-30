@@ -15,6 +15,8 @@ import (
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	nodemodel "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
 	releasehttp "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/adapters/inbound/http"
@@ -91,10 +93,21 @@ func seedSnapshot(t *testing.T, releaseID string, nodeCount int) {
 	}
 }
 
-func TestTaxonomyReleaseStageDigestIdempotent(t *testing.T) {
+func TestTaxonomyReleaseStageIsIdempotentByFullReleaseIntent(t *testing.T) {
 	cleanReleases(t)
-	facade := newReleaseFacade(t)
 	ctx := context.Background()
+	collection := mongoDB.Collection("tag_taxonomy_releases")
+	if err := collection.Indexes().DropOne(ctx, "idx_tag_taxonomy_release_digest"); err != nil {
+		t.Fatalf("drop current digest index: %v", err)
+	}
+	if _, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "canonicalDigest", Value: 1}},
+		Options: options.Index().SetName("idx_tag_taxonomy_release_digest").SetUnique(true),
+	}); err != nil {
+		t.Fatalf("create former unique digest index: %v", err)
+	}
+	facade := newReleaseFacade(t)
+	assertTaxonomyReleaseDigestIndexIsNonUnique(t, ctx)
 
 	first, err := facade.Stage(ctx, taxonomyrelease.StageCommand{
 		ReleaseID: "rel-1", SourceOwner: "qwq_data",
@@ -107,7 +120,7 @@ func TestTaxonomyReleaseStageDigestIdempotent(t *testing.T) {
 		t.Fatalf("unexpected staged release: %+v", first)
 	}
 
-	// 完全相同的导入意图才可幂等重放。
+	// 同 releaseId 的完整导入意图相同才可幂等重放。
 	replayed, err := facade.Stage(ctx, taxonomyrelease.StageCommand{
 		ReleaseID: "rel-1", SourceOwner: "qwq_data",
 		CanonicalDigest: "digest-aaa", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 42,
@@ -115,14 +128,23 @@ func TestTaxonomyReleaseStageDigestIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("replay stage: %v", err)
 	}
-	if replayed.ReleaseID != "rel-1" {
-		t.Fatalf("identical stage must reuse the first release: %+v", replayed)
+	if replayed.ReleaseID != "rel-1" || replayed.Version != first.Version || replayed.Status != first.Status {
+		t.Fatalf("identical stage must reuse the first release: first=%+v replayed=%+v", first, replayed)
 	}
+
+	// canonicalDigest 是快照校验值，不是跨 release 唯一身份。
+	second, err := facade.Stage(ctx, taxonomyrelease.StageCommand{
+		ReleaseID: "rel-2", SourceOwner: "qwq_data",
+		CanonicalDigest: "digest-aaa", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 42,
+	})
+	if err != nil {
+		t.Fatalf("stage second release with shared digest: %v", err)
+	}
+	if second.ReleaseID != "rel-2" {
+		t.Fatalf("shared digest must preserve second release identity: %+v", second)
+	}
+
 	for _, conflicting := range []taxonomyrelease.StageCommand{
-		{
-			ReleaseID: "rel-other", SourceOwner: "qwq_data",
-			CanonicalDigest: "digest-aaa", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 42,
-		},
 		{
 			ReleaseID: "rel-1", SourceOwner: "another_owner",
 			CanonicalDigest: "digest-aaa", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 42,
@@ -135,13 +157,17 @@ func TestTaxonomyReleaseStageDigestIdempotent(t *testing.T) {
 			ReleaseID: "rel-1", SourceOwner: "qwq_data",
 			CanonicalDigest: "digest-other", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 42,
 		},
+		{
+			ReleaseID: "rel-1", SourceOwner: "qwq_data",
+			CanonicalDigest: "digest-aaa", ReleaseKind: releasemodel.ReleaseKindEmptyBaseline, NodeCount: 0,
+		},
 	} {
 		if _, err := facade.Stage(ctx, conflicting); !errors.Is(err, releasemodel.ErrDigestConflict) {
-			t.Fatalf("conflicting stage error = %v, want digest conflict", err)
+			t.Fatalf("same-release drift error = %v, want idempotency conflict", err)
 		}
 	}
 	count, err := mongoDB.Collection("tag_taxonomy_releases").CountDocuments(ctx, bson.M{})
-	if err != nil || count != 1 {
+	if err != nil || count != 2 {
 		t.Fatalf("release docs=%d err=%v", count, err)
 	}
 
@@ -152,6 +178,24 @@ func TestTaxonomyReleaseStageDigestIdempotent(t *testing.T) {
 	}); err == nil {
 		t.Fatal("empty releaseId must be rejected")
 	}
+}
+
+func assertTaxonomyReleaseDigestIndexIsNonUnique(t *testing.T, ctx context.Context) {
+	t.Helper()
+	indexes, err := mongoDB.Collection("tag_taxonomy_releases").Indexes().ListSpecifications(ctx)
+	if err != nil {
+		t.Fatalf("list release indexes: %v", err)
+	}
+	for _, index := range indexes {
+		if index.Name != "idx_tag_taxonomy_release_digest" {
+			continue
+		}
+		if index.Unique != nil && *index.Unique {
+			t.Fatal("canonicalDigest index must be non-unique")
+		}
+		return
+	}
+	t.Fatal("canonicalDigest index is missing")
 }
 
 func TestTaxonomyReleaseActivateSingleActive(t *testing.T) {
@@ -180,10 +224,10 @@ func TestTaxonomyReleaseActivateSingleActive(t *testing.T) {
 		t.Fatalf("re-activate must be noop: %+v err=%v", replay, err)
 	}
 
-	// 激活第二个 release：旧 active 让位，同一时刻只有一个 active。
+	// 第二个 release 可复用相同快照 digest；激活仍严格按 releaseId 选择目标。
 	if _, err := facade.Stage(ctx, taxonomyrelease.StageCommand{
 		ReleaseID: "rel-b", SourceOwner: "qwq_data",
-		CanonicalDigest: "digest-b", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 11,
+		CanonicalDigest: "digest-a", ReleaseKind: releasemodel.ReleaseKindContent, NodeCount: 11,
 	}); err != nil {
 		t.Fatalf("stage b: %v", err)
 	}
@@ -202,6 +246,13 @@ func TestTaxonomyReleaseActivateSingleActive(t *testing.T) {
 	}
 	if retired.Status != releasemodel.StatusRetired {
 		t.Fatalf("previous active must retire: %+v", retired)
+	}
+	var active releasemodel.Release
+	if err := mongoDB.Collection("tag_taxonomy_releases").FindOne(ctx, bson.M{"status": "active"}).Decode(&active); err != nil {
+		t.Fatalf("load active release: %v", err)
+	}
+	if active.ReleaseID != "rel-b" || active.CanonicalDigest != "digest-a" {
+		t.Fatalf("activation must select rel-b by releaseId despite shared digest: %+v", active)
 	}
 
 	// retired immutable snapshot 可回放为 active，旧 active 仍只做状态切换而不物理删除。

@@ -111,6 +111,37 @@ def test_and_cannot_hide_an_independent_outcome_from_clause_counting() -> None:
     ) == 1
 
 
+def test_human_gwt002_clause_mapping_is_stable() -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
+    spec = (
+        ROOT / "specs/feature-tree/runtime/development-workflow-governance/"
+        "human-agent-delivery-interaction/spec.md"
+    )
+    text = spec.read_text(encoding="utf-8")
+    body = feature_tree.anchor_sections(text)["GWT-002"]
+    clauses = [
+        clause
+        for bullet in feature_tree.outcome_bullets(body)
+        for clause in feature_tree.outcome_sub_clauses(bullet)
+    ]
+
+    assert clauses == [
+        "THEN 每张卡只向当前角色提出一个责任内问题。",
+        "AND 每张卡以角色语言区分已知事实、未知项、硬约束、用户或业务影响与后果。",
+        "AND 合法方案使用中性名称和对称字段，交换展示顺序不改变合法集合。",
+        "AND 卡片不存在预选、视觉突出或“接受推荐/拒绝推荐”的单通路。",
+        "AND 产品范围选择不展示 Agent 推荐。",
+        "AND 存在客观支配关系的工程建议也只能在独立输入封存后附带假设、反例与替代项。",
+        "AND 每张卡都允许补证据、转交正确角色、暂停或停止，事实未知时允许“不知道”并保持可恢复。",
+        "AND 授权卡明确自动执行边界、排除项、预算、需再次询问的外部动作和撤销后果。",
+        "AND 范围或版本漂移使授权失效。",
+        "AND 异常卡先说明安全动作与最安全默认。",
+        "AND 超时不产生隐式批准。",
+        "AND 事后检查卡只允许当前角色接受自己的结果。",
+        "AND 一个通过不覆盖其他责任域。",
+    ]
+
+
 def test_separator_folded_outcomes_each_take_one_clause_slot() -> None:
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
     # 折叠漏口：把多个相互独立的结果用 `；` 或 `，且` 塞进同一个 bullet，曾让整组结果

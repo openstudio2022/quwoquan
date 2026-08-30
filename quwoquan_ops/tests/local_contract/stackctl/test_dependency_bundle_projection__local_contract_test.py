@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -27,13 +28,17 @@ def _stub_capsule(
     patrol = SimpleNamespace(encoded_sync_manifest=b"patrol")
     monkeypatch.setattr(
         projection,
-        "verify_package_input_capsule",
-        lambda _root: {"entries": [{"logicalPath": "fixture"}]},
-    )
-    monkeypatch.setattr(
-        projection,
-        "verify_dependency_bundle_capsule",
-        lambda **_kwargs: (production, patrol, object(), object(), object()),
+        "verify_package_input_capsule_with_dependencies",
+        lambda _root: SimpleNamespace(
+            manifest={"entries": [{"logicalPath": "fixture"}]},
+            dependency_snapshots=(
+                production,
+                patrol,
+                object(),
+                object(),
+                object(),
+            ),
+        ),
     )
     monkeypatch.setattr(
         projection,
@@ -73,7 +78,7 @@ def test_android_projection_forces_one_private_gradle_home_for_both_hosts(
         projection_root=tmp_path / "repo",
         private_state_root=tmp_path / "private",
         platform="android",
-        base_environment={"SAFE": "1"},
+        base_environment={"SAFE": "1", "PATH": "/usr/bin:/bin"},
         include_patrol=True,
     )
 
@@ -111,6 +116,7 @@ def test_web_projection_uses_fresh_flutter_home_and_ignores_global_config(
             "HOME": "/developer/home",
             "XDG_CONFIG_HOME": "/developer/config",
             "HTTP_PROXY": "http://developer-proxy.invalid",
+            "PATH": "/usr/bin:/bin",
         },
     )
 
@@ -120,6 +126,63 @@ def test_web_projection_uses_fresh_flutter_home_and_ignores_global_config(
     )
     assert result.production_environment["FLUTTER_SWIFT_PACKAGE_MANAGER"] == "false"
     assert "HTTP_PROXY" not in result.production_environment
+
+
+def test_patrol_projection_expands_user_home_shorthand_in_private_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest, _production, _patrol = _stub_capsule(tmp_path, monkeypatch)
+    developer_home = tmp_path / "developer-home"
+    source_path = os.pathsep.join(("~/.dotnet/tools", "/usr/bin"))
+    expected_path = os.pathsep.join(
+        (str(developer_home / ".dotnet/tools"), "/usr/bin")
+    )
+
+    result = projection.materialize_dependency_bundle_projection(
+        manifest_path=manifest,
+        projection_root=tmp_path / "repo",
+        private_state_root=tmp_path / "private",
+        platform="web",
+        base_environment={"HOME": str(developer_home), "PATH": source_path},
+        include_patrol=True,
+    )
+
+    assert result.production_environment["PATH"] == expected_path
+    assert result.patrol_environment is not None
+    assert result.patrol_environment["PATH"] == expected_path
+
+
+@pytest.mark.parametrize(
+    "unsafe_path",
+    (
+        "",
+        os.pathsep.join(("/usr/bin", "", "/bin")),
+        os.pathsep.join(("/usr/bin", "relative/tools")),
+        os.pathsep.join(("/usr/bin", ".")),
+        os.pathsep.join(("/usr/bin", "..")),
+    ),
+    ids=("empty", "empty-entry", "relative", "dot", "dot-dot"),
+)
+def test_patrol_projection_rejects_nonliteral_private_path_at_materialization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    unsafe_path: str,
+) -> None:
+    manifest, _production, _patrol = _stub_capsule(tmp_path, monkeypatch)
+
+    with pytest.raises(ValueError, match="private PATH"):
+        projection.materialize_dependency_bundle_projection(
+            manifest_path=manifest,
+            projection_root=tmp_path / "repo",
+            private_state_root=tmp_path / "private",
+            platform="web",
+            base_environment={
+                "HOME": str(tmp_path / "developer-home"),
+                "PATH": unsafe_path,
+            },
+            include_patrol=True,
+        )
 
 
 def test_ios_projection_replays_each_host_against_its_own_pub_identity(
@@ -141,7 +204,7 @@ def test_ios_projection_replays_each_host_against_its_own_pub_identity(
         projection_root=tmp_path / "repo",
         private_state_root=tmp_path / "private",
         platform="ios",
-        base_environment={"SAFE": "1"},
+        base_environment={"SAFE": "1", "PATH": "/usr/bin:/bin"},
         pod_executable="/fixture/pod",
         include_patrol=True,
     )
@@ -161,3 +224,5 @@ def test_ios_projection_replays_each_host_against_its_own_pub_identity(
     assert result.patrol_environment is not None
     assert result.patrol_environment["HOST"] == "patrol"
     assert result.patrol_environment["FLUTTER_SWIFT_PACKAGE_MANAGER"] == "false"
+    assert calls[0]["verified_snapshot"] is not None
+    assert calls[1]["verified_snapshot"] is not None

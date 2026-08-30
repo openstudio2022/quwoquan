@@ -10,6 +10,7 @@
 .PHONY: verify-app-shell-navigation codegen-app-shell-navigation verify-app-identity codegen-app-identity
 .PHONY: verify-app-launch-contract codegen-app-launch-contract
 .PHONY: verify-domain-model-compatibility
+.PHONY: verify-platform-ops-human-contract-binding codegen-platform-ops-human-contract-binding test-platform-ops-local-contract test-platform-ops-api-integration
 
 SCENARIO ?= content_feed
 DB ?= quwoquan_content
@@ -56,6 +57,7 @@ export PYTHONDONTWRITEBYTECODE ?= 1
 # ─── Quality Gate ────────────────────────────────────────────────────
 gate: verify-metadata verify-redis-routes verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission verify-nullability-single-semantics
 	@PYTHONDONTWRITEBYTECODE=1 python3 ../quwoquan_ops/gate/verify_service_architecture.py
+	@$(MAKE) -C control-plane/platform-ops build
 	@set -e; for service in $(DOMAIN_SERVICES); do \
 		echo "[gate] $$service"; \
 		$(MAKE) -C "services/$$service" gate; \
@@ -111,6 +113,18 @@ lint:
 	go vet ./tools/...
 
 # ─── Metadata ────────────────────────────────────────────────────────
+verify-platform-ops-human-contract-binding:
+	$(MAKE) -C control-plane/platform-ops verify-human-contract-binding
+
+codegen-platform-ops-human-contract-binding:
+	$(MAKE) -C control-plane/platform-ops codegen-human-contract-binding
+
+test-platform-ops-local-contract:
+	$(MAKE) -C control-plane/platform-ops test-local-contract
+
+test-platform-ops-api-integration:
+	$(MAKE) -C control-plane/platform-ops test-api-integration
+
 service-contract-view:
 	@python3 scripts/contracts/build_service_contract_view.py --output "$(CONTRACT_VIEW)"
 
@@ -118,7 +132,7 @@ verify-ddd-cqrs-baseline:
 	go test ./internal/metadata/load ./internal/metadata/graph ./internal/metadata/validate
 	go test ./services/content-service/internal/trust_safety/report/domain/... ./services/content-service/internal/trust_safety/report/application
 
-verify-metadata: service-contract-view verify-actor-persona-vocabulary verify-codegen-contract-graph-source verify-contract-graph-single-track verify-observability-catalog verify-api-edge-errors verify-assistant-service-errors verify-assistant-runtime-enums verify-assistant-tool-catalog verify-assistant-citation-destinations verify-link-templates-go verify-shared-contract-enums verify-storage-keyset-single-track verify-storage-index-governance verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-graphql-read-registry verify-graphql-read-rest-command-structural-zero verify-graphql-read-rest-command-migration-ratchet
+verify-metadata: service-contract-view verify-platform-ops-human-contract-binding verify-actor-persona-vocabulary verify-codegen-contract-graph-source verify-contract-graph-single-track verify-observability-catalog verify-api-edge-errors verify-assistant-service-errors verify-assistant-runtime-enums verify-assistant-tool-catalog verify-assistant-citation-destinations verify-link-templates-go verify-shared-contract-enums verify-storage-keyset-single-track verify-storage-index-governance verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-graphql-read-registry verify-graphql-read-rest-command-structural-zero verify-graphql-read-rest-command-migration-ratchet
 	@$(MAKE) verify-contract-graph-commercial
 	go run ./tools/verify_metadata/ "$(CONTRACT_VIEW)"
 
@@ -308,7 +322,7 @@ verify-redis-routes:
 codegen-redis-routes:
 	python3 scripts/codegen/gen_redis_router_config.py
 
-codegen: codegen-redis-routes codegen-observability-catalog codegen-api-edge-errors codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-reader-descriptors codegen-assistant-tool-catalog codegen-assistant-citation-destinations codegen-link-templates-go codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-event-constants codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+codegen: codegen-platform-ops-human-contract-binding codegen-redis-routes codegen-observability-catalog codegen-api-edge-errors codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-reader-descriptors codegen-assistant-tool-catalog codegen-assistant-citation-destinations codegen-link-templates-go codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-event-constants codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
 	# ContractGraph 消费上述生成器可能更新的全部 metadata，必须作为最终固定点生成。
 	$(MAKE) codegen-contract-graph
 

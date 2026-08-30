@@ -62,17 +62,19 @@ def test_initial_dependency_projection_prepares_expectation_and_readback() -> No
     )
     assert prepare_call < evaluate_exports < seal_predependency
 
-    evidence_prepare = preparer.index("prepare_dependency_projection_cas_evidence(")
-    immediate_revalidate = preparer.index(
-        "revalidate_dependency_projection_cas(", evidence_prepare
+    evidence_prepare = preparer.index(
+        "prepare_dependency_projection_cas_evidence_with_observed_components("
+    )
+    initial_readback = preparer.index(
+        "readback_from_expectation(", evidence_prepare
     )
     write_readback = preparer.index(
-        "write_dependency_projection_cas_readback(", immediate_revalidate
+        "write_dependency_projection_cas_readback(", initial_readback
     )
     reload_readback = preparer.index(
         "load_dependency_projection_cas_readback(", write_readback
     )
-    assert evidence_prepare < immediate_revalidate < write_readback < reload_readback
+    assert evidence_prepare < initial_readback < write_readback < reload_readback
 
     for field in (
         "QWQ_DEPENDENCY_PROJECTION_EXPECTATION_REF",
@@ -126,6 +128,46 @@ def test_retry_validates_expected_full_tree_before_fresh_prebuild_readback() -> 
     )
 
 
+def test_ios_initial_and_retry_preserve_one_complete_cocoapods_identity() -> None:
+    launcher = (_REPO_ROOT / "quwoquan_app/run.sh").read_text(encoding="utf-8")
+    preparer = (
+        _REPO_ROOT / "quwoquan_app/scripts/device/prepare_flutter_dependencies.py"
+    ).read_text(encoding="utf-8")
+    identity_keys = (
+        "QWQ_COCOAPODS_EXECUTABLE",
+        "QWQ_COCOAPODS_VERSION",
+        "QWQ_COCOAPODS_EXECUTABLE_DIGEST",
+        "QWQ_COCOAPODS_RUNTIME_ENVIRONMENT_DIGEST",
+        "QWQ_COCOAPODS_COMMAND_RESOLUTION_DIGEST",
+        "QWQ_COCOAPODS_BINDING_SEAL",
+    )
+
+    retry_start = launcher.index("DEPENDENCY_RETRY=1")
+    supervisor = launcher.index('"${SUPERVISOR_CMD[@]}"', retry_start)
+    retry_contract = launcher[retry_start:supervisor]
+    assert "resolve_cocoapods_identity" not in retry_contract
+    assert "resolve_cocoapods_executable" not in retry_contract
+    assert "verify_cocoapods_launch_identity || exit 2" in retry_contract
+    assert launcher.index("verify_cocoapods_launch_identity || exit 2") < supervisor
+    for key in identity_keys:
+        assert key in preparer
+        assert key in launcher
+
+
+def test_ios_retry_missing_identity_fails_without_ambient_resolution() -> None:
+    launcher = (_REPO_ROOT / "quwoquan_app/run.sh").read_text(encoding="utf-8")
+    verifier = launcher[
+        launcher.index("verify_cocoapods_launch_identity()") : launcher.index(
+            "print_usage()"
+        )
+    ]
+
+    assert "validate_cocoapods_child_environment(os.environ)" in verifier
+    assert "resolve_cocoapods_identity" not in verifier
+    assert "shutil.which" not in verifier
+    assert "APP.DEPENDENCY.cocoapods_mixed" in verifier
+
+
 def test_real_supervisor_is_followed_by_mandatory_postbuild_revalidation() -> None:
     launcher = (_REPO_ROOT / "quwoquan_app/run.sh").read_text(encoding="utf-8")
     supervisor = launcher.index('"${SUPERVISOR_CMD[@]}" --')
@@ -173,8 +215,9 @@ def test_launch_report_and_strict_uat_bind_all_dependency_cas_fields() -> None:
         assert field in binding
     assert "flutter_exit_code,\n    flutter_exit_code," not in launcher
     assert "_verified_dependency_projection_binding(" in binding
-    assert "load_dependency_projection_cas_evidence(" in binding
-    assert binding.count("load_dependency_projection_cas_readback(") >= 2
+    assert "load_canonical_projection_evidence(" in binding
+    assert "load_dependency_projection_cas_evidence_bytes(" in binding
+    assert binding.count("load_dependency_projection_cas_readback_bytes(") >= 2
 
 
 def test_control_and_report_bind_exact_build_projection_seal_fields() -> None:

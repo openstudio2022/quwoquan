@@ -30,6 +30,7 @@
         ]
       },
       "subtrees": [
+        "quwoquan_app/.dart_tool/dartpad",
         "quwoquan_app/.dart_tool/flutter_build",
         "quwoquan_app/.dart_tool/hooks_runner",
         "quwoquan_app/.dart_tool/lib",
@@ -71,6 +72,9 @@
         "quwoquan_app/.flutter-plugins-dependencies": [
           "file"
         ],
+        "quwoquan_app/ios/Flutter/Flutter.podspec": [
+          "file"
+        ],
         "quwoquan_app/ios/Flutter/Generated.xcconfig": [
           "file"
         ],
@@ -79,6 +83,7 @@
         ]
       },
       "subtrees": [
+        "quwoquan_app/.dart_tool/dartpad",
         "quwoquan_app/.dart_tool/flutter_build",
         "quwoquan_app/.dart_tool/hooks_runner",
         "quwoquan_app/.dart_tool/lib",

@@ -107,6 +107,65 @@ func TestCollectorBuildsDeterministicTrustedBundle(t *testing.T) {
 	}
 }
 
+func TestCollectorPreservesContentReleaseUATBinding(t *testing.T) {
+	contract := testCase("content_release_uat", "prod", "android", "physical", "live")
+	contract.ObjectID = "content.content_post"
+	contract.Producer = ast.ReadinessProducerApp
+	contract.Layer = ast.ReadinessLayerUserAcceptance
+	contract.Target = ast.ReadinessCaseTarget{
+		Kind: ast.ReadinessTargetPage,
+		ID:   "content.feed",
+	}
+	contract.RunnerSourcePath = "quwoquan_app/test/user_acceptance/service/content_service/content/content_post/readiness_case_test.dart"
+	fixture := newCollectorFixture(t, []ast.ReadinessCaseContract{contract})
+	binding := testBinding(
+		fixture.sourceHash, fixture.graph.ReadinessCases[0],
+		time.Date(2026, 8, 29, 1, 2, 3, 0, time.UTC), readiness.StatusPassed,
+	)
+	binding.ReleaseID = "content-release-2026-08-29"
+	binding.TargetUATBindingDigest = "sha256:" + strings.Repeat("7", 64)
+	binding.EntrySurface = "feed"
+	binding.Carrier = "article"
+	binding.DeviceIdentity = "device.pixel-9.prod"
+	binding.UATProfile = "production"
+	binding.NonPromotable = false
+	binding.ArtifactClass = "production"
+	binding.PhysicalDevice = true
+	binding.DeviceRegistered = true
+	binding.ObservedOutcome = "rollback_restored"
+	binding.ObservedReleaseID = "content-release-2026-08-28"
+	binding.PreviousReleaseID = binding.ObservedReleaseID
+	fixture.writeReceipt(t, "content-uat.json", binding)
+
+	var stdout bytes.Buffer
+	if exitCode := run(context.Background(), fixture.args(), &stdout, fixture.factory(nil, nil)); exitCode != 0 {
+		t.Fatalf("collector exit=%d output=%s", exitCode, stdout.String())
+	}
+	var bundle readiness.ReadinessResultBundle
+	if err := json.Unmarshal(stdout.Bytes(), &bundle); err != nil {
+		t.Fatal(err)
+	}
+	if len(bundle.Results) != 1 {
+		t.Fatalf("results=%d, want 1", len(bundle.Results))
+	}
+	result := bundle.Results[0]
+	if result.ReleaseID != binding.ReleaseID ||
+		result.TargetUATBindingDigest != binding.TargetUATBindingDigest ||
+		result.EntrySurface != binding.EntrySurface ||
+		result.Carrier != binding.Carrier ||
+		result.DeviceIdentity != binding.DeviceIdentity ||
+		result.UATProfile != binding.UATProfile ||
+		result.NonPromotable != binding.NonPromotable ||
+		result.ArtifactClass != binding.ArtifactClass ||
+		result.PhysicalDevice != binding.PhysicalDevice ||
+		result.DeviceRegistered != binding.DeviceRegistered ||
+		result.ObservedOutcome != binding.ObservedOutcome ||
+		result.ObservedReleaseID != binding.ObservedReleaseID ||
+		result.PreviousReleaseID != binding.PreviousReleaseID {
+		t.Fatalf("collector lost content release UAT binding: result=%+v binding=%+v", result, binding)
+	}
+}
+
 func TestCollectorReturnsOneForMissingOrNonPassedTrustedResults(t *testing.T) {
 	t.Run("all receipts missing", func(t *testing.T) {
 		fixture := newCollectorFixture(t, []ast.ReadinessCaseContract{
@@ -146,17 +205,20 @@ func TestCollectorReturnsOneForMissingOrNonPassedTrustedResults(t *testing.T) {
 		fixture := newCollectorFixture(t, []ast.ReadinessCaseContract{
 			testCase("case_a", "alpha", "android", "android_emulator", "substitute"),
 		})
-		fixture.writeReceipt(t, "a.json", testBinding(
+		binding := testBinding(
 			fixture.sourceHash, fixture.graph.ReadinessCases[0],
 			time.Date(2026, 8, 8, 1, 2, 3, 0, time.UTC), readiness.StatusFailed,
-		))
+		)
+		binding.ReasonCode = "assertion_failed"
+		fixture.writeReceipt(t, "a.json", binding)
 		var stdout bytes.Buffer
 		if exitCode := run(context.Background(), fixture.args(), &stdout, fixture.factory(nil, nil)); exitCode != 1 {
 			t.Fatalf("exit=%d output=%s", exitCode, stdout.String())
 		}
 		var bundle readiness.ReadinessResultBundle
 		if err := json.Unmarshal(stdout.Bytes(), &bundle); err != nil ||
-			len(bundle.Results) != 1 || bundle.Results[0].Status != readiness.StatusFailed {
+			len(bundle.Results) != 1 || bundle.Results[0].Status != readiness.StatusFailed ||
+			bundle.Results[0].ReasonCode != binding.ReasonCode {
 			t.Fatalf("non-passed receipt was not preserved: %#v err=%v", bundle, err)
 		}
 	})
@@ -431,7 +493,6 @@ func testBinding(
 		ConfigurationDigest:     "sha256:" + strings.Repeat("d", 64),
 		CandidateManifestSHA256: strings.Repeat("e", 64),
 		CandidateDigest:         "sha256:" + strings.Repeat("1", 64),
-		ReleaseDigest:           "sha256:" + strings.Repeat("2", 64),
 		Environment:             execution.Environment, Platform: execution.Platform,
 		DeviceClass: execution.DeviceClass, Provider: execution.Provider,
 		StartedAt: completed.Add(-time.Minute), CompletedAt: completed,

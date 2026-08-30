@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 import yaml
@@ -20,28 +21,238 @@ from ..agent_governance_contract import (
 )
 from . import context, gitio
 from .delta import semantic_anchor_changes
-from .evidence import test_spec_refs
+from .evidence import extract_spec_refs, test_spec_refs
 from .nodes import Node, discover_nodes, node_for_spec, parent_chain
 from .ownership import TargetResolution, owners_for_path, resolve_target_details
 from .parsing import block_open_items, open_item_details, title
 from .patterns import PATH_RE, VALID_LEVELS
+from ..feature_context_fingerprint import (
+    build_feature_context_fingerprint,
+    embedded_fingerprint_binding,
+    referenced_fingerprint_binding,
+)
 
 MANIFEST_MAX_BYTES = int(contract_section("feature_context_manifest")["max_bytes"])
-CANONICAL_CONTRACT_PATHS = {
-    "quwoquan_ops/policies/agent_governance_contract.yaml",
-}
+CANONICAL_FEATURE_SPEC_RE = re.compile(
+    r"^specs/feature-tree/(?:[A-Za-z0-9][A-Za-z0-9_.-]*/)*spec\.md$"
+)
+_MARKDOWN_INLINE_LINK_RE = re.compile(
+    r"(?<!!)\[[^]\n]*\]\(\s*"
+    r"(?P<destination><[^>\n]+>|[^()\s]+)"
+    r"(?:\s+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^()\n]*\)))?\s*\)"
+)
+_CODE_SPAN_RE = re.compile(r"`([^`\n]+)`")
+_SPEC_REF_CODE_SPAN_RE = re.compile(
+    r"^\s*spec_ref\s*:\s*(?P<reference>.+?)\s*$",
+    re.IGNORECASE,
+)
+_BRACED_DIRECT_REFERENCE_RE = re.compile(
+    r"^(?P<prefix>[^{}]*)\{(?P<options>[^{}]+)\}(?P<suffix>[^{}]*)$"
+)
 
 
-def _is_canonical_contract_reference(reference: str) -> bool:
-    path = reference.partition("#")[0]
+def _is_service_contract_path(path: str) -> bool:
+    parts = Path(path).parts
+    return (
+        len(parts) >= 4
+        and parts[:2] == ("quwoquan_service", "services")
+        and not any(character in parts[2] for character in "*?[]{}")
+        and parts[3] == "contracts"
+    )
+
+
+def _is_metadata_contract_file(path: str) -> bool:
     return (
         path.startswith("quwoquan_service/contracts/metadata/")
-        or (
-            path.startswith("quwoquan_service/services/")
-            and "/contracts/" in path
-        )
-        or path in CANONICAL_CONTRACT_PATHS
+        and path.endswith(".yaml")
     )
+
+
+def _canonical_reference_kind(path: str) -> str | None:
+    """按仓库物理边界判定 canonical 类型，不维护文件 allowlist。"""
+
+    if CANONICAL_FEATURE_SPEC_RE.fullmatch(path):
+        return "spec"
+    parts = Path(path).parts
+    if (
+        len(parts) == 3
+        and parts[:2] == ("quwoquan_ops", "policies")
+        and parts[2].endswith(".yaml")
+    ):
+        return "contract"
+    if _is_metadata_contract_file(path):
+        return "contract"
+    if _is_service_contract_path(path):
+        return "contract"
+    return None
+
+
+def _source_label(source: Path) -> str:
+    try:
+        return _relative(source)
+    except ValueError:
+        return str(source)
+
+
+def _resolved_direct_reference(
+    reference: str,
+    *,
+    source: Path,
+) -> tuple[str, str | None, str] | None:
+    """解析一个直接引用；canonical 候选一旦无效即 fail-closed。"""
+
+    raw = reference.strip()
+    if raw.startswith("<") and raw.endswith(">"):
+        raw = raw[1:-1].strip()
+    if not raw or raw.startswith("#"):
+        return None
+    if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", raw) or raw.startswith("//"):
+        return None
+
+    path_text, separator, anchor = raw.partition("#")
+    path_text = path_text.strip()
+    anchor_value = anchor.strip() if separator else None
+    # canonical contract 的 `/**` 是该直接目录本身的递归摘要记法；manifest 保留
+    # 目录 context，由 EvidenceFingerprint 对目录内容递归取摘要，不展开文件清单。
+    if path_text.endswith("/**"):
+        path_text = path_text[:-3].rstrip("/")
+    explicit_spec = (
+        path_text.startswith("specs/feature-tree/")
+        and path_text.endswith("/spec.md")
+    )
+    relative_spec = path_text == "spec.md" or path_text.endswith("/spec.md")
+    policy_parts = Path(path_text).parts
+    explicit_contract = (
+        (
+            len(policy_parts) == 3
+            and policy_parts[:2] == ("quwoquan_ops", "policies")
+            and policy_parts[2].endswith(".yaml")
+        )
+        or _is_metadata_contract_file(path_text)
+        or _is_service_contract_path(path_text)
+    )
+    candidate_type = explicit_spec or relative_spec or explicit_contract
+    if not path_text or "?" in path_text or "\\" in path_text:
+        if candidate_type:
+            raise ValueError(
+                f"GATE_BLOCK: {_source_label(source)} 包含无效 canonical 直接引用："
+                f"{reference}"
+            )
+        return None
+    if separator and not anchor_value:
+        if candidate_type:
+            raise ValueError(
+                f"GATE_BLOCK: {_source_label(source)} 包含空锚点 canonical 直接引用："
+                f"{reference}"
+            )
+        return None
+
+    # selected canonical source segment 中的裸 YAML basename 只可能指向唯一
+    # quwoquan_ops/policies 文件；即使目标缺失也必须作为 candidate fail-closed。
+    # 带目录的普通 YAML 仍按其原路径判断，不映射到 policies。
+    if "/" not in path_text and path_text.endswith(".yaml"):
+        candidate = context.REPO_ROOT / "quwoquan_ops" / "policies" / path_text
+        candidate_type = True
+    elif path_text.startswith(
+        ("specs/", "quwoquan_app/", "quwoquan_service/", "quwoquan_data/", "quwoquan_ops/")
+    ):
+        candidate = context.REPO_ROOT / path_text
+    else:
+        candidate = source.parent / path_text
+
+    resolved = candidate.resolve()
+    try:
+        relative = resolved.relative_to(context.REPO_ROOT.resolve()).as_posix()
+    except ValueError as error:
+        if candidate_type:
+            raise ValueError(
+                f"GATE_BLOCK: {_source_label(source)} 的 canonical 直接引用越出仓库："
+                f"{reference}"
+            ) from error
+        return None
+
+    kind = _canonical_reference_kind(relative)
+    if kind is None:
+        if candidate_type:
+            raise ValueError(
+                f"GATE_BLOCK: {_source_label(source)} 的直接引用不属于 canonical "
+                f"spec/contract 物理边界：{reference} -> {relative}"
+            )
+        return None
+    if resolved.is_file():
+        return relative, anchor_value, kind
+    if (
+        resolved.is_dir()
+        and kind == "contract"
+        and _is_service_contract_path(relative)
+    ):
+        return relative, anchor_value, kind
+    raise ValueError(
+        f"GATE_BLOCK: {_source_label(source)} 的 canonical 直接引用不存在："
+        f"{reference} -> {relative}"
+    )
+
+
+def _direct_reference_variants(reference: str) -> tuple[str, ...]:
+    """展开 Markdown 中显式枚举的有限路径，不扫描目录或构建 inventory。"""
+
+    if not reference.startswith(
+        ("quwoquan_service/contracts/metadata/", "quwoquan_service/services/")
+    ):
+        return (reference,)
+    match = _BRACED_DIRECT_REFERENCE_RE.fullmatch(reference)
+    if match is None:
+        return (reference,)
+    options = tuple(
+        option.strip()
+        for option in match.group("options").split(",")
+        if option.strip()
+    )
+    if len(options) < 2:
+        return (reference,)
+    return tuple(
+        f"{match.group('prefix')}{option}{match.group('suffix')}"
+        for option in options
+    )
+
+
+def _direct_canonical_references(
+    source: Path,
+    segment: str,
+    *,
+    bare_policy_candidates: bool = True,
+) -> set[tuple[str, str | None, str]]:
+    # `spec_ref: <repo spec>#<anchor>` 是 canonical 验收绑定，不是上下文扩展入口。
+    # 先用全仓唯一 spec_ref 词法入口提取精确 ref，校验它的物理边界与存在性，
+    # 同时避免把 code span 中的 `spec_ref: ` marker 拼进相对路径。
+    explicit_spec_refs = extract_spec_refs(segment)
+    references = list(explicit_spec_refs)
+    for match in _CODE_SPAN_RE.finditer(segment):
+        code_span = match.group(1)
+        if code_span in explicit_spec_refs or extract_spec_refs(code_span):
+            continue
+        marked_ref = _SPEC_REF_CODE_SPAN_RE.fullmatch(code_span)
+        references.append(
+            marked_ref.group("reference") if marked_ref is not None else code_span
+        )
+    references.extend(
+        match.group("destination")
+        for match in _MARKDOWN_INLINE_LINK_RE.finditer(segment)
+    )
+    resolved: set[tuple[str, str | None, str]] = set()
+    for reference in references:
+        for variant in _direct_reference_variants(reference):
+            path_text = variant.partition("#")[0].strip()
+            if (
+                not bare_policy_candidates
+                and "/" not in path_text
+                and path_text.endswith(".yaml")
+            ):
+                continue
+            item = _resolved_direct_reference(variant, source=source)
+            if item is not None and reference not in explicit_spec_refs:
+                resolved.add(item)
+    return resolved
 
 
 def _anchor_section(text: str, anchor: str) -> str:
@@ -61,6 +272,12 @@ def _anchor_section(text: str, anchor: str) -> str:
     return text[match.start() : end].strip()
 
 
+def _serialize_context_manifest(payload: Mapping[str, object]) -> str:
+    """序列化默认机器 manifest；字段和值不变，仅移除展示型空白。"""
+
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
 def write_output(name: str, content: str) -> Path:
     context.OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     path = context.OUTPUT_ROOT / name
@@ -74,6 +291,8 @@ def _relative(path: Path) -> str:
 
 def _canonical_contexts(
     resolution: TargetResolution,
+    *,
+    raw_target: str,
 ) -> list[dict[str, str | None]]:
     """返回直达 canonical 文档及锚点，不展开中间转引文本。"""
 
@@ -89,6 +308,7 @@ def _canonical_contexts(
         if entry not in contexts:
             contexts.append(entry)
 
+    requested_name = Path(raw_target.partition("#")[0]).name
     if design_owner is not None:
         append(design_owner.l2.design, design_owner.anchor, "decision")
         for anchor in design_owner.requirement_anchors:
@@ -98,15 +318,15 @@ def _canonical_contexts(
         if not design_owner.requirement_anchors and not design_owner.acceptance_anchors:
             append(design_owner.story.spec, None, "spec")
     else:
-        # 没有更精确 DEC 时只加载当前 owner，父链仅作身份与边界
-        # 信息保留在 owner_chain，不再默认展开 AppRoot/L1 全文。
+        # 直接 spec/design 请求只读取被请求文档的直接引用；工程路径没有更精确
+        # DEC 时仍加载当前 owner 的 spec/design。父链只保留在 owner_chain。
         append(resolution.node.spec, None, "spec")
-        if resolution.node.design.is_file():
+        if requested_name != "spec.md" and resolution.node.design.is_file():
             append(resolution.node.design, None, "design")
 
     # 只读取已选 DEC/REQ/GWT 锚点中的 direct contract；Story 其他要求、父层全文
     # 与集中契约清单都不应扩大本次 feature context。
-    source_segments: list[str] = []
+    source_segments: list[tuple[Path, str]] = []
     if design_owner is not None:
         design_text = design_owner.l2.design.read_text(encoding="utf-8")
         story_text = design_owner.story.spec.read_text(encoding="utf-8")
@@ -116,25 +336,40 @@ def _canonical_contexts(
             *design_owner.acceptance_anchors,
         )
         for anchor in selected:
-            section = _anchor_section(design_text, anchor) or _anchor_section(
-                story_text, anchor
-            )
+            section = _anchor_section(design_text, anchor)
             if section:
-                source_segments.append(section)
+                source_segments.append((design_owner.l2.design, section))
+                continue
+            section = _anchor_section(story_text, anchor)
+            if section:
+                source_segments.append((design_owner.story.spec, section))
     else:
-        for path in (resolution.node.spec, resolution.node.design):
+        if requested_name == "spec.md":
+            source_paths = (resolution.node.spec,)
+        elif requested_name == "design.md":
+            source_paths = (resolution.node.design,)
+        else:
+            source_paths = (resolution.node.spec, resolution.node.design)
+        for path in source_paths:
             if path.is_file():
-                source_segments.append(path.read_text(encoding="utf-8"))
-    contract_refs: set[str] = set()
-    for segment in source_segments:
-        contract_refs.update(
-            ref
-            for ref in PATH_RE.findall(segment)
-            if _is_canonical_contract_reference(ref)
+                source_segments.append((path, path.read_text(encoding="utf-8")))
+
+    direct_refs: set[tuple[str, str | None, str]] = set()
+    for source, segment in source_segments:
+        direct_refs.update(
+            _direct_canonical_references(
+                source,
+                segment,
+                bare_policy_candidates=(
+                    design_owner is not None or requested_name == "design.md"
+                ),
+            )
         )
-    for ref in sorted(contract_refs):
-        path, separator, anchor = ref.partition("#")
-        append(context.REPO_ROOT / path, anchor if separator else None, "contract")
+    for path, anchor, kind in sorted(
+        direct_refs,
+        key=lambda item: (item[2], item[0], item[1] or ""),
+    ):
+        append(context.REPO_ROOT / path, anchor, kind)
     return contexts
 
 
@@ -166,11 +401,22 @@ def _profiles_for_resolution(resolution: TargetResolution) -> list[str]:
         context.REPO_ROOT / ".agents/skills/review/references/registry.yaml"
     )
     if not registry_path.is_file():
-        return []
+        raise ValueError(
+            "GATE_BLOCK: Review profile registry 缺失："
+            f"{registry_path.relative_to(context.REPO_ROOT)}"
+        )
     try:
-        registry = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as error:
-        raise ValueError(f"GATE_BLOCK: Review profile registry 无法解析：{error}") from error
+        registry = yaml.safe_load(registry_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as error:
+        raise ValueError(
+            f"GATE_BLOCK: Review profile registry 无法读取或解析：{error}"
+        ) from error
+    if not isinstance(registry, Mapping):
+        raise ValueError("GATE_BLOCK: Review profile registry 根必须是 mapping")
+    profile_configs = registry.get("profiles")
+    if not isinstance(profile_configs, Mapping):
+        raise ValueError("GATE_BLOCK: Review profile registry profiles 必须是 mapping")
+
     candidates: set[str] = set()
     for path in (resolution.target, resolution.ownership_target):
         try:
@@ -178,14 +424,26 @@ def _profiles_for_resolution(resolution: TargetResolution) -> list[str]:
         except ValueError:
             continue
     profiles: list[str] = []
-    for name, config in (registry.get("profiles") or {}).items():
-        patterns = config.get("paths") or []
+    for name, config in profile_configs.items():
+        if not isinstance(name, str) or not name:
+            raise ValueError("GATE_BLOCK: Review profile 名称必须是非空 string")
+        if not isinstance(config, Mapping):
+            raise ValueError(
+                f"GATE_BLOCK: Review profile {name} config 必须是 mapping"
+            )
+        patterns = config.get("paths", [])
+        if not isinstance(patterns, list) or any(
+            not isinstance(pattern, str) for pattern in patterns
+        ):
+            raise ValueError(
+                f"GATE_BLOCK: Review profile {name} paths 必须是 string list"
+            )
         if any(
             fnmatch.fnmatch(candidate, pattern)
             for candidate in candidates
             for pattern in patterns
         ):
-            profiles.append(str(name))
+            profiles.append(name)
     return profiles
 
 
@@ -193,6 +451,8 @@ def _context_manifest(
     raw_target: str,
     resolution: TargetResolution,
     nodes: list[Node],
+    *,
+    fingerprint_receipt: dict[str, object] | None = None,
 ) -> dict[str, object]:
     by_dir = {node.directory.resolve(): node for node in nodes}
     chain = parent_chain(resolution.node, by_dir)
@@ -221,11 +481,17 @@ def _context_manifest(
             )
             for item in chain
         ],
-        "canonical_contexts": _canonical_contexts(resolution),
+        "canonical_contexts": _canonical_contexts(resolution, raw_target=raw_target),
         "applicable_agents": _applicable_agents(resolution.target),
         "profiles": _profiles_for_resolution(resolution),
         "open_items": open_items,
     }
+    receipt = (
+        fingerprint_receipt
+        if fingerprint_receipt is not None
+        else build_feature_context_fingerprint(payload, repo_root=context.REPO_ROOT)
+    )
+    payload["evidence_fingerprint"] = embedded_fingerprint_binding(receipt)
     validate_feature_context_manifest(payload)
     return payload
 
@@ -237,7 +503,13 @@ def _command_expanded_context(
 ) -> int:
     by_dir = {item.directory.resolve(): item for item in nodes}
     chain = parent_chain(node, by_dir)
-    blocks = ["# Feature Context", "", f"- TARGET：`{args.target}`", f"- 归属节点：`{node.rel}`", ""]
+    blocks = [
+        "# Feature Context",
+        "",
+        f"- TARGET：`{args.target}`",
+        f"- 归属节点：`{node.rel}`",
+        "",
+    ]
     for item in chain:
         blocks.extend([f"## {VALID_LEVELS[item.level]} · {item.node_id}", "", item.spec.read_text(encoding="utf-8").strip(), ""])
         if item.design.is_file():
@@ -299,13 +571,25 @@ def command_context(args: argparse.Namespace) -> int:
         if output_format == "expanded":
             return _command_expanded_context(args, nodes, resolution.node)
         manifest = _context_manifest(args.target, resolution, nodes)
-        content = json.dumps(manifest, ensure_ascii=False, indent=2)
+        content = _serialize_context_manifest(manifest)
         size = len((content.rstrip() + "\n").encode("utf-8"))
         if size > MANIFEST_MAX_BYTES:
-            raise ValueError(
-                "GATE_BLOCK: feature context manifest 超出 8KiB 预算："
-                f"{size} bytes"
+            receipt = manifest["evidence_fingerprint"]["receipt"]
+            receipt_name = "context-manifest.evidence-fingerprint.json"
+            receipt_ref = (context.OUTPUT_ROOT / receipt_name).relative_to(
+                context.REPO_ROOT
+            ).as_posix()
+            manifest["evidence_fingerprint"] = referenced_fingerprint_binding(
+                receipt, receipt_ref=receipt_ref
             )
+            content = _serialize_context_manifest(manifest)
+            size = len((content.rstrip() + "\n").encode("utf-8"))
+            if size > MANIFEST_MAX_BYTES:
+                raise ValueError(
+                    "GATE_BLOCK: feature context manifest 超出 8KiB 预算："
+                    f"{size} bytes"
+                )
+            write_output(receipt_name, json.dumps(receipt, ensure_ascii=False, indent=2))
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2

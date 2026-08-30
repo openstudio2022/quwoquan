@@ -426,7 +426,7 @@ class StackctlGammaOperationLockContractTest(
                     stackctl,
                     "load_candidate_manifest",
                     return_value={"baselineId": receipt_candidate},
-                ),
+                ) as load_candidate_manifest,
                 mock.patch.object(
                     stackctl,
                     "deployment_candidate_dir",
@@ -476,6 +476,13 @@ class StackctlGammaOperationLockContractTest(
                 "quwoquan_gamma_release_7001_1",
                 False,
             ),
+        )
+        load_candidate_manifest.assert_called_once_with(
+            "gamma",
+            "gamma-local",
+            receipt_candidate,
+            require_full=True,
+            purpose="teardown",
         )
         candidate_provider.assert_called_once_with(
             "gamma",

@@ -50,7 +50,7 @@ class AgentContextBudgetGateTest(unittest.TestCase):
                 {
                     "schema_version": 1,
                     "feature_context_manifest": {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "max_bytes": manifest_max_bytes,
                         "required_fields": [
                             "schema_version",
@@ -61,6 +61,7 @@ class AgentContextBudgetGateTest(unittest.TestCase):
                             "applicable_agents",
                             "profiles",
                             "open_items",
+                            "evidence_fingerprint",
                         ],
                         "owner_chain_fields": ["level", "node_id", "path"],
                         "context_fields": ["path", "anchor", "kind"],
@@ -70,6 +71,15 @@ class AgentContextBudgetGateTest(unittest.TestCase):
                             "title",
                             "release_impact",
                         ],
+                        "fingerprint_field": "evidence_fingerprint",
+                        "fingerprint_binding_fields": [
+                            "mode",
+                            "ref",
+                            "digest",
+                            "receipt",
+                            "receipt_ref",
+                        ],
+                        "fingerprint_binding_modes": ["embedded", "referenced"],
                     },
                 },
                 sort_keys=False,

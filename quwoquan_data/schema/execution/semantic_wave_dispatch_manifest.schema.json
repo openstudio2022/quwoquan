@@ -170,6 +170,16 @@
         "argv": {
           "type": "array",
           "minItems": 20,
+          "prefixItems": [
+            {"const": "python3"},
+            {"const": "quwoquan_data/scripts/cli.py"},
+            {"const": "task"},
+            {"const": "execute"},
+            {"const": "--stage"},
+            {"const": "plan-only"},
+            {"const": "--execution-id"},
+            {"$ref": "#/$defs/executionId"}
+          ],
           "items": {"type": "string", "minLength": 1}
         },
         "queueBackend": {"const": "local_file"},

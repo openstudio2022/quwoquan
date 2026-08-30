@@ -28,6 +28,10 @@ from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
 )
+from quwoquan_ops.cli.lib.openssl3_resolver import (
+    OpenSSL3Executable,
+    resolve_openssl3,
+)
 from quwoquan_ops.cli.lib.output_paths import (
     certificate_export_dir,
     deployment_target_path,
@@ -138,9 +142,14 @@ def root_certificate_path(target: str, *, require_ready: bool = True) -> Path:
     return path
 
 
-def _openssl(command: list[str], *, failure: str) -> subprocess.CompletedProcess[str]:
+def _openssl(
+    openssl: OpenSSL3Executable,
+    command: list[str],
+    *,
+    failure: str,
+) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
-        ["openssl", *command],
+        openssl.argv(*command),
         text=True,
         capture_output=True,
         check=False,
@@ -151,9 +160,12 @@ def _openssl(command: list[str], *, failure: str) -> subprocess.CompletedProcess
     return result
 
 
-def _public_key_digest(arguments: list[str]) -> str:
+def _public_key_digest(
+    openssl: OpenSSL3Executable,
+    arguments: list[str],
+) -> str:
     result = subprocess.run(
-        ["openssl", *arguments],
+        openssl.argv(*arguments),
         capture_output=True,
         check=False,
     )
@@ -162,11 +174,17 @@ def _public_key_digest(arguments: list[str]) -> str:
     return hashlib.sha256(result.stdout).hexdigest()
 
 
-def _certificate_key_pair_matches(certificate: Path, private_key: Path) -> bool:
+def _certificate_key_pair_matches(
+    certificate: Path,
+    private_key: Path,
+    *,
+    openssl: OpenSSL3Executable,
+) -> bool:
     if not certificate.is_file() or not private_key.is_file():
         return False
     try:
         certificate_public_key = _openssl(
+            openssl,
             ["x509", "-in", str(certificate), "-pubkey", "-noout"],
             failure="certificate public-key read failed",
         )
@@ -174,9 +192,11 @@ def _certificate_key_pair_matches(certificate: Path, private_key: Path) -> bool:
             public_key.write(certificate_public_key.stdout.encode("utf-8"))
             public_key.flush()
             certificate_digest = _public_key_digest(
+                openssl,
                 ["pkey", "-pubin", "-in", public_key.name, "-outform", "DER"]
             )
         private_digest = _public_key_digest(
+            openssl,
             ["pkey", "-in", str(private_key), "-pubout", "-outform", "DER"]
         )
     except PublicDomainTlsError:
@@ -184,7 +204,12 @@ def _certificate_key_pair_matches(certificate: Path, private_key: Path) -> bool:
     return certificate_digest == private_digest
 
 
-def verify_certificate(target: str, *, renew_before_days: int | None = None) -> dict[str, Any]:
+def verify_certificate(
+    target: str,
+    *,
+    renew_before_days: int | None = None,
+    openssl: OpenSSL3Executable | None = None,
+) -> dict[str, Any]:
     policy = load_policy()
     profile_name, profile = _profile_for_target(target)
     profile_kind = _profile_kind(profile_name, profile)
@@ -192,6 +217,7 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
         raise PublicDomainTlsError(
             f"GATE_BLOCK: {target} certificate is externally managed"
         )
+    selected = openssl or resolve_openssl3()
     cert, key = certificate_paths(target)
     days = int(
         renew_before_days
@@ -200,7 +226,7 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
         or (policy.get("acme") or {}).get("renewBeforeDays", 30)
     )
     check = subprocess.run(
-        ["openssl", "x509", "-in", str(cert), "-checkend", str(days * 86400), "-noout"],
+        selected.argv("x509", "-in", str(cert), "-checkend", str(days * 86400), "-noout"),
         text=True,
         capture_output=True,
         check=False,
@@ -209,10 +235,10 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
         raise PublicDomainTlsError(
             f"GATE_BLOCK: {target} certificate expires within {days} days"
         )
-    if not _certificate_key_pair_matches(cert, key):
+    if not _certificate_key_pair_matches(cert, key, openssl=selected):
         raise PublicDomainTlsError(f"GATE_BLOCK: {target} certificate/private-key mismatch")
     inspect = subprocess.run(
-        ["openssl", "x509", "-in", str(cert), "-noout", "-ext", "subjectAltName"],
+        selected.argv("x509", "-in", str(cert), "-noout", "-ext", "subjectAltName"),
         text=True,
         capture_output=True,
         check=False,
@@ -228,6 +254,7 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
     if profile_kind == "local-managed":
         root = root_certificate_path(target)
         _openssl(
+            selected,
             ["verify", "-CAfile", str(root), str(cert)],
             failure=f"{target} local-managed certificate chain verification failed",
         )
@@ -248,21 +275,20 @@ def verify_certificate(target: str, *, renew_before_days: int | None = None) -> 
 def _issue_local_managed_certificate(
     target: str,
     profile: dict[str, Any],
+    *,
+    openssl: OpenSSL3Executable,
 ) -> dict[str, Any]:
-    if shutil.which("openssl") is None:
-        raise PublicDomainTlsError(
-            "GATE_BLOCK: openssl is required for local-managed TLS"
-        )
     output_root = certificate_dir(target)
     output_root.mkdir(parents=True, exist_ok=True)
     root_key = output_root / "root.key"
     root_cert = root_certificate_path(target, require_ready=False)
-    if not _certificate_key_pair_matches(root_cert, root_key):
+    if not _certificate_key_pair_matches(root_cert, root_key, openssl=openssl):
         with tempfile.TemporaryDirectory(dir=output_root) as temporary:
             temporary_root = Path(temporary)
             next_root_key = temporary_root / "root.key"
             next_root_cert = temporary_root / "root.crt"
             _openssl(
+                openssl,
                 [
                     "genpkey",
                     "-algorithm",
@@ -275,6 +301,7 @@ def _issue_local_managed_certificate(
                 failure=f"{target} local-managed root key generation failed",
             )
             _openssl(
+                openssl,
                 [
                     "req", "-x509", "-new", "-sha256", "-days", "3650",
                     "-key", str(next_root_key), "-out", str(next_root_cert),
@@ -296,10 +323,12 @@ def _issue_local_managed_certificate(
         leaf = temporary_root / "leaf.crt"
         extensions = temporary_root / "leaf.ext"
         _openssl(
+            openssl,
             ["genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", str(key)],
             failure=f"{target} local-managed leaf key generation failed",
         )
         _openssl(
+            openssl,
             ["req", "-new", "-key", str(key), "-out", str(csr), "-subj", f"/CN={names[0]}"],
             failure=f"{target} local-managed certificate request failed",
         )
@@ -314,6 +343,7 @@ def _issue_local_managed_certificate(
         )
         serial = secrets.token_hex(16)
         _openssl(
+            openssl,
             [
                 "x509", "-req", "-sha256",
                 "-days", str(int(profile.get("certificateDays") or 90)),
@@ -325,7 +355,7 @@ def _issue_local_managed_certificate(
         )
         cert.write_bytes(leaf.read_bytes() + root_cert.read_bytes())
     key.chmod(0o600)
-    return verify_certificate(target)
+    return verify_certificate(target, openssl=openssl)
 
 
 def _challenge_credential_environment(
@@ -389,7 +419,8 @@ def issue_certificate(target: str) -> dict[str, Any]:
     policy = load_policy()
     profile_name, profile = _profile_for_target(target)
     if _profile_kind(profile_name, profile) == "local-managed":
-        return _issue_local_managed_certificate(target, profile)
+        openssl = resolve_openssl3()
+        return _issue_local_managed_certificate(target, profile, openssl=openssl)
     if profile.get("certificateAutomation") == "external":
         raise PublicDomainTlsError(
             f"GATE_BLOCK: {target} certificate issuance is externally managed"

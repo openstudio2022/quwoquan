@@ -240,17 +240,20 @@ PY
        && -n "$LAUNCH_RECEIPT" ]]; then
       first_launch_blocker="$(
         python3 - "$LAUNCH_RECEIPT" <<'PY' 2>/dev/null || true
-import json
 import pathlib
-import re
 import sys
 
+from quwoquan_ops.cli.lib.app_launch_attempt import (
+    LAUNCH_BLOCKERS,
+    read_app_launch_attempt,
+)
+
 try:
-    receipt = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
-except (OSError, json.JSONDecodeError):
+    receipt = read_app_launch_attempt(pathlib.Path(sys.argv[1]))
+except (OSError, TypeError, ValueError):
     raise SystemExit(0) from None
 blocker = str(receipt.get("firstBlocker") or "")
-if re.fullmatch(r"APP\.LAUNCH\.[a-z_]+", blocker):
+if blocker in LAUNCH_BLOCKERS:
     print(blocker)
 PY
       )"
@@ -311,6 +314,41 @@ verify_dependency_projection_after_command() {
   export QWQ_DEPENDENCY_PROJECTION_PREBUILD_READBACK_DIGEST
   export QWQ_DEPENDENCY_PROJECTION_POSTBUILD_READBACK_REF
   export QWQ_DEPENDENCY_PROJECTION_POSTBUILD_READBACK_DIGEST
+}
+
+verify_cocoapods_launch_identity() {
+  local identity_exports=""
+  if ! identity_exports="$(
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+      python3 - 2>&1 <<'PY'
+import os
+import shlex
+
+from quwoquan_ops.cli.lib.app_dependency_toolchain import (
+    validate_cocoapods_child_environment,
+)
+
+identity, environment = validate_cocoapods_child_environment(os.environ)
+for key, value in {
+    **identity.as_environment(),
+    "PATH": environment["PATH"],
+}.items():
+    print(f"export {key}={shlex.quote(value)}")
+PY
+  )"; then
+    if [[ -n "$identity_exports" ]]; then
+      echo "[run] ${identity_exports//$'\n'/ }" >&2
+    else
+      echo "[run] APP.DEPENDENCY.cocoapods_mixed: CocoaPods identity validation failed." >&2
+    fi
+    return 2
+  fi
+  eval "$identity_exports"
+  export PATH QWQ_COCOAPODS_EXECUTABLE QWQ_COCOAPODS_VERSION
+  export QWQ_COCOAPODS_EXECUTABLE_DIGEST
+  export QWQ_COCOAPODS_RUNTIME_ENVIRONMENT_DIGEST
+  export QWQ_COCOAPODS_COMMAND_RESOLUTION_DIGEST
+  export QWQ_COCOAPODS_BINDING_SEAL
 }
 
 print_usage() {
@@ -541,7 +579,9 @@ if control.get("actor") != "app-content-uat":
     raise SystemExit("canonical launch control actor mismatch")
 policy_by_platform = {
     "android": "flutter-android-3.47-gradle-8.14-agp-8.11.1",
+    "android-physical": "flutter-android-3.47-gradle-8.14-agp-8.11.1",
     "ios-simulator": "flutter-ios-3.47-cocoapods-1.16.2",
+    "ios-physical": "flutter-ios-3.47-cocoapods-1.16.2",
 }
 if policy_by_platform.get(control.get("platform")) != control.get(
     "buildProjectionPolicyId"
@@ -1322,6 +1362,12 @@ PY
   export QWQ_DEPENDENCY_PROJECTION_EXPECTATION_REF
   export QWQ_DEPENDENCY_PROJECTION_EXPECTATION_DIGEST
 fi
+if [[ "${QWQ_RUN_DEVICE_KIND:-}" == ios-* ]]; then
+  # Both initial launches and retries must consume the exact attempt identity.
+  # This verifier only checks and projects the sealed identity; it never resolves
+  # ambient PATH as a replacement for a missing retry handoff.
+  verify_cocoapods_launch_identity || exit 2
+fi
 if [[ "$PUB_CACHE" != "$EXPECTED_PRIVATE_PUB_CACHE" \
    || -L "$PUB_CACHE" || ! -d "$PUB_CACHE" ]]; then
   echo "[run] APP.LAUNCH.receipt_invalid: private projection PUB_CACHE identity drifted." >&2
@@ -1632,8 +1678,9 @@ case "${QWQ_RUN_DEVICE_KIND:-}" in
     ;;
 esac
 if [[ -n "$TEST_LIVE_REPORT_OVERRIDE" ]]; then
-  CONTROL_EXPECTED_PLATFORM="$LAUNCH_PLATFORM"
-  [[ "$LAUNCH_PLATFORM" != "ios" ]] || CONTROL_EXPECTED_PLATFORM=ios-simulator
+  CONTROL_EXPECTED_PLATFORM="$QWQ_RUN_DEVICE_KIND"
+  [[ "$CONTROL_EXPECTED_PLATFORM" != "android_emulator" ]] || CONTROL_EXPECTED_PLATFORM=android
+  [[ "$CONTROL_EXPECTED_PLATFORM" != "android_physical" ]] || CONTROL_EXPECTED_PLATFORM=android-physical
   if [[ "$QWQ_CANONICAL_CONTROL_PLATFORM" != "$CONTROL_EXPECTED_PLATFORM" ]]; then
     echo "[run] APP.LAUNCH.receipt_invalid: canonical launch control platform drifted." >&2
     exit 2
@@ -1759,6 +1806,11 @@ import pathlib
 import re
 import sys
 
+from quwoquan_ops.cli.lib.app_launch_attempt import (
+    LAUNCH_BLOCKERS,
+    read_app_launch_attempt,
+)
+
 (
     preflight_json,
     flutter_exit_code,
@@ -1801,7 +1853,7 @@ delivery = json.loads(delivery_json)
 handoff = json.loads(handoff_json)
 exit_code = int(flutter_exit_code)
 try:
-    raw_receipt = pathlib.Path(launch_receipt_path).read_text(encoding="utf-8")
+    receipt = read_app_launch_attempt(pathlib.Path(launch_receipt_path))
 except FileNotFoundError:
     raise SystemExit(
         "APP.LAUNCH.receipt_absent: supervisor produced no launch attempt receipt at "
@@ -1811,14 +1863,10 @@ except OSError as error:
     raise SystemExit(
         f"APP.LAUNCH.receipt_unreadable: {launch_receipt_path}: {error}"
     ) from None
-try:
-    receipt = json.loads(raw_receipt)
-except json.JSONDecodeError as error:
+except (TypeError, ValueError) as error:
     raise SystemExit(
-        f"APP.LAUNCH.receipt_invalid: {launch_receipt_path} is not valid JSON: {error}"
+        f"APP.LAUNCH.receipt_invalid: {launch_receipt_path}: {error}"
     ) from None
-if receipt.get("schema") != "app-launch-attempt":
-    raise SystemExit("APP.LAUNCH.receipt_invalid: test_live report requires app-launch-attempt")
 transition_states = [
     str(item.get("status") or "")
     for item in receipt.get("transitions") or []
@@ -1832,6 +1880,10 @@ if "compiled" in transition_states and re.fullmatch(
         "APP.LAUNCH.receipt_invalid: compiled launch attempt requires exact artifactDigest"
     )
 first_blocker = str(receipt.get("firstBlocker") or "")
+if first_blocker and first_blocker not in LAUNCH_BLOCKERS:
+    raise SystemExit(
+        "APP.LAUNCH.receipt_invalid: launch attempt firstBlocker is not canonical"
+    )
 launch_warnings = [str(item) for item in receipt.get("warnings") or []]
 terminal_identity = {
     "startupTerminalAttemptId": str(receipt.get("startupTerminalAttemptId") or ""),

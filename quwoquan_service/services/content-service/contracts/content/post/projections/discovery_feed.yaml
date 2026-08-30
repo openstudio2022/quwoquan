@@ -164,9 +164,6 @@ fields:
 - description: 交集理由（云侧推荐管线预生成，B1；端只读展示，无来源时为空）
   name: intersectionReasons
   type: '[]object'
-- description: 内容溯源——生成此内容的数据工程任务 id（效果回流按 sourceTask 归因；从 Post 冗余）
-  name: sourceTaskId
-  type: string
 - description: 条件画像（从主实体冗余）：结构化子键 {regions:[]string, seasons:[]string, altitudeMeters:int?}，供地域/季节召回与精排匹配
   name: conditionProfile
   type: object

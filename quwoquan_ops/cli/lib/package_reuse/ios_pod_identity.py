@@ -29,12 +29,39 @@ class CocoaPodsIdentity:
     runtime_environment_digest: str
     command_resolution_digest: str
 
-    def as_dict(self) -> dict[str, str]:
+    def command_identity_dict(self) -> dict[str, str]:
+        """Return the portable command identity sealed into dependency capsules."""
+
         return {
             "version": self.version,
             "executableDigest": self.executable_digest,
             "runtimeEnvironmentDigest": self.runtime_environment_digest,
             "commandResolutionDigest": self.command_resolution_digest,
+        }
+
+    def as_dict(self) -> dict[str, str]:
+        """Compatibility alias for the portable dependency-capsule identity."""
+
+        return self.command_identity_dict()
+
+    def runtime_binding_dict(self) -> dict[str, str]:
+        if self.executable is None:
+            raise ValueError("iOS Pod CocoaPods runtime executable is absent")
+        return {
+            "executable": str(self.executable),
+            **self.command_identity_dict(),
+        }
+
+    @property
+    def binding_seal(self) -> str:
+        """Seal the physical executable together with its portable identity."""
+
+        return _digest_bytes(_canonical_bytes(self.runtime_binding_dict()))
+
+    def resolved_dict(self) -> dict[str, str]:
+        return {
+            **self.runtime_binding_dict(),
+            "bindingSeal": self.binding_seal,
         }
 
 
@@ -124,17 +151,25 @@ def _runtime_environment_digest(value: str, *, expected_version: str) -> str:
             continue
         if section == "stack" and ":" in line:
             key, raw_value = (item.strip() for item in line.split(":", 1))
-            if key in {"CocoaPods", "Ruby", "RubyGems"}:
-                if key in stack or not raw_value:
+            normalized_key = "RubyGems" if key in {"RubyGems", "RubyGems Environment"} else key
+            if normalized_key in {"CocoaPods", "Ruby", "RubyGems"}:
+                if normalized_key in stack or not raw_value:
                     raise ValueError("iOS Pod CocoaPods runtime stack is invalid")
-                stack[key] = raw_value
+                stack[normalized_key] = raw_value
         elif section == "plugins" and ":" in line:
             key, raw_value = (item.strip() for item in line.split(":", 1))
-            if key and raw_value and not key.startswith("```"):
+            if (
+                key
+                and key != "Executable Path"
+                and raw_value
+                and not key.startswith("```")
+            ):
                 if key in plugins:
                     raise ValueError("iOS Pod CocoaPods plugin set is duplicated")
                 plugins[key] = raw_value
-    if stack and stack.get("CocoaPods") != expected_version:
+    if set(stack) != {"CocoaPods", "Ruby", "RubyGems"}:
+        raise ValueError("iOS Pod CocoaPods runtime stack is incomplete")
+    if stack["CocoaPods"] != expected_version:
         raise ValueError("iOS Pod CocoaPods runtime version is inconsistent")
     return _digest_bytes(
         _canonical_bytes(
@@ -146,13 +181,19 @@ def _runtime_environment_digest(value: str, *, expected_version: str) -> str:
     )
 
 
-def inspect_cocoapods_executable(executable: str | Path) -> CocoaPodsIdentity:
-    """Bind the exact self-reported CocoaPods executable and supported version."""
-
+def _resolved_executable(value: str | Path, *, label: str) -> Path:
     try:
-        resolved = Path(executable).expanduser().resolve(strict=True)
+        return Path(value).expanduser().resolve(strict=True)
     except (OSError, RuntimeError) as error:
-        raise ValueError("iOS Pod CocoaPods executable is unavailable") from error
+        raise ValueError(f"iOS Pod {label} is invalid") from error
+
+
+def _inspect_resolved_executable(
+    resolved: Path,
+    *,
+    expected_reported: Path | None = None,
+    digest_executable: Path | None = None,
+) -> tuple[CocoaPodsIdentity, Path]:
     content, mode = _read_regular_nofollow(resolved, label="CocoaPods executable")
     if not mode & 0o111:
         raise ValueError("iOS Pod CocoaPods executable is not executable")
@@ -163,7 +204,9 @@ def inspect_cocoapods_executable(executable: str | Path) -> CocoaPodsIdentity:
         version = _inspect_output(
             [str(resolved), "--version"], private_root=private_root
         )
-        environment = _inspect_output([str(resolved), "env"], private_root=private_root)
+        environment = _inspect_output(
+            [str(resolved), "env"], private_root=private_root
+        )
     after_content, after_mode = _read_regular_nofollow(
         resolved, label="CocoaPods executable"
     )
@@ -174,26 +217,61 @@ def inspect_cocoapods_executable(executable: str | Path) -> CocoaPodsIdentity:
         raise ValueError(f"iOS Pod requires CocoaPods {SUPPORTED_COCOAPODS_VERSION}")
     if match is None:
         raise ValueError("iOS Pod CocoaPods did not report its executable")
-    try:
-        reported = Path(match.group(1)).expanduser().resolve(strict=True)
-    except (OSError, RuntimeError) as error:
-        raise ValueError("iOS Pod reported CocoaPods executable is invalid") from error
-    if reported != resolved:
+    reported = _resolved_executable(
+        match.group(1),
+        label="reported CocoaPods executable",
+    )
+    if expected_reported is not None and reported != expected_reported:
         raise ValueError("iOS Pod CocoaPods executable is internally inconsistent")
-    executable_digest = _digest_bytes(content)
+    digest_content = content
+    if digest_executable is not None and digest_executable != resolved:
+        digest_content, digest_mode = _read_regular_nofollow(
+            digest_executable,
+            label="physical CocoaPods executable",
+        )
+        if not digest_mode & 0o111:
+            raise ValueError("iOS Pod physical CocoaPods executable is not executable")
+    executable_digest = _digest_bytes(digest_content)
     runtime_environment_digest = _runtime_environment_digest(
         environment,
         expected_version=version,
     )
-    identity = {
+    command_identity = {
         "version": version,
         "executableDigest": executable_digest,
         "runtimeEnvironmentDigest": runtime_environment_digest,
     }
-    return CocoaPodsIdentity(
-        executable=resolved,
-        version=version,
-        executable_digest=executable_digest,
-        runtime_environment_digest=runtime_environment_digest,
-        command_resolution_digest=_digest_bytes(_canonical_bytes(identity)),
+    return (
+        CocoaPodsIdentity(
+            executable=resolved,
+            version=version,
+            executable_digest=executable_digest,
+            runtime_environment_digest=runtime_environment_digest,
+            command_resolution_digest=_digest_bytes(
+                _canonical_bytes(command_identity)
+            ),
+        ),
+        reported,
     )
+
+
+def inspect_cocoapods_executable(executable: str | Path) -> CocoaPodsIdentity:
+    """Bind one exact physical CocoaPods runtime and its portable identity."""
+
+    candidate = _resolved_executable(executable, label="CocoaPods executable")
+    candidate_identity, reported = _inspect_resolved_executable(candidate)
+    if reported == candidate:
+        return candidate_identity
+    runtime_identity, runtime_reported = _inspect_resolved_executable(
+        reported,
+        expected_reported=reported,
+        digest_executable=reported,
+    )
+    candidate_runtime_identity, _candidate_reported = _inspect_resolved_executable(
+        candidate,
+        expected_reported=reported,
+        digest_executable=reported,
+    )
+    if candidate_runtime_identity.command_identity_dict() != runtime_identity.command_identity_dict():
+        raise ValueError("iOS Pod CocoaPods wrapper and runtime identity drifted")
+    return runtime_identity

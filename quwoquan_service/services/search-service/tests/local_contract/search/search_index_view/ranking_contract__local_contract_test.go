@@ -42,6 +42,16 @@ func (p migratedTermHeatProvider) RelatedTerms(context.Context, string, int) ([]
 	return p.terms, nil
 }
 
+type blockingTermHeatProvider struct {
+	released chan struct{}
+}
+
+func (p blockingTermHeatProvider) RelatedTerms(ctx context.Context, _ string, _ int) ([]queryheat.TermHeat, error) {
+	<-ctx.Done()
+	close(p.released)
+	return nil, ctx.Err()
+}
+
 func TestSearchRankingAndTermHeatUseApplicationPorts(t *testing.T) {
 	publisher := &assignmentPublisherSpy{}
 	experiments, err := application.NewExperiments(publisher)
@@ -85,6 +95,34 @@ func TestSearchRankingAndTermHeatUseApplicationPorts(t *testing.T) {
 	byTerm := queryheat.HeatByTerm(heats)
 	if byTerm["recent"].DecayedHeat <= byTerm["old"].DecayedHeat {
 		t.Fatalf("recency decay lost ordering: %#v", heats)
+	}
+}
+
+func TestSearchRankingOptionalTermHeatHasIndependentBudget(t *testing.T) {
+	experiments, err := application.NewExperiments(&assignmentPublisherSpy{})
+	if err != nil {
+		t.Fatalf("NewExperiments() error = %v", err)
+	}
+	if err := experiments.ApplyPolicy(searchPolicy("running", 1, 9999)); err != nil {
+		t.Fatalf("ApplyPolicy() error = %v", err)
+	}
+	released := make(chan struct{})
+	decorator := application.NewRankingDecorator(blockingTermHeatProvider{released: released}, experiments, 1, nil)
+	started := time.Now()
+	preparation, err := decorator.Prepare(context.Background(), "成都", "persona-budget")
+	if err != nil {
+		t.Fatalf("Prepare() error = %v, want base ranking fallback", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("optional heat consumed owner request budget: %s", elapsed)
+	}
+	select {
+	case <-released:
+	default:
+		t.Fatal("term heat provider did not observe independent deadline")
+	}
+	if preparation.ExperimentBucket != application.BucketTermHeat || len(preparation.BoostTerms) != 0 {
+		t.Fatalf("preparation = %#v, want assigned bucket with base ranking", preparation)
 	}
 }
 

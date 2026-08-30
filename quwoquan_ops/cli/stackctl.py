@@ -44,6 +44,34 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+def _bootstrap_command(argv: Sequence[str]) -> str:
+    """Resolve the command without importing the full argparse command graph."""
+
+    index = 0
+    while index < len(argv):
+        argument = argv[index]
+        if argument in {"--output-format", "--report-dir"}:
+            index += 2
+            continue
+        if argument.startswith("--output-format=") or argument.startswith("--report-dir="):
+            index += 1
+            continue
+        return "" if argument.startswith("-") else argument
+    return ""
+
+
+# status/health/inspect must produce diagnostics before mutating, packaging,
+# Data, App UAT, Objective, release, and migration domains are imported.
+if __name__ == "__main__" and _bootstrap_command(sys.argv[1:]) in {
+    "status",
+    "health",
+    "inspect",
+    "doctor",
+}:
+    from quwoquan_ops.cli.read_only_entry import main as _read_only_main
+
+    raise SystemExit(_read_only_main())
+
 from quwoquan_ops.cli.lib.common import (
     artifact_run_dir, ensure_list, load_json_yaml, relpath, run, utc_now, write_json,
     write_markdown,
@@ -300,10 +328,12 @@ from quwoquan_ops.cli.lib.output_paths import (
     active_deployment_candidate_snapshot, app_deployment_package_dir,
     assert_active_deployment_candidate_snapshot, deployment_candidate_dir,
     deployment_target_for_env, deployment_target_path, deployment_work_root,
-    env_observability_run_dir, env_runs_root, legal_static_deployment_package_dir, output_root,
-    portal_deployment_package_dir, repo_local_dir, repo_run_dir, repo_runs_root,
-    remove_deployment_tree, runtime_shared_deployment_package_dir, service_deployment_package_dir,
-    web_deployment_package_dir, target_cache_dir, target_local_dir, target_process_dir,
+    env_for_target, env_observability_run_dir, env_runs_root,
+    legal_static_deployment_package_dir, output_root, portal_deployment_package_dir,
+    repo_local_dir, repo_run_dir, repo_runs_root, remove_deployment_tree,
+    runtime_shared_deployment_package_dir, service_deployment_package_dir,
+    target_cache_dir, target_local_dir, target_process_dir,
+    validate_env_run_evidence_dir, web_deployment_package_dir,
 )
 from quwoquan_ops.migrations.travel_to_gathering import (
     control_plane as travel_to_gathering_migration,
@@ -333,6 +363,7 @@ def _global_local_operation_lock(
 # stackctl 保持唯一入口；此处 import + 再导出保证 dispatch 与测试
 # monkeypatch（mock.patch.object(stackctl, ...)）语义零漂移。
 from quwoquan_ops.cli.commands import app_preflight as app_preflight_commands
+from quwoquan_ops.cli.commands import app_uat_evidence as app_uat_evidence_commands
 from quwoquan_ops.cli.commands import app_preflight_shared as app_preflight_shared_commands
 from quwoquan_ops.cli.commands import app_preflight_uat as app_preflight_uat_commands
 from quwoquan_ops.cli.commands import app_dependency_sync as app_dependency_sync_commands
@@ -355,6 +386,7 @@ from quwoquan_ops.cli.commands import drill as drill_commands
 from quwoquan_ops.cli.commands import filter_catalog as filter_catalog_commands
 from quwoquan_ops.cli.commands import health as health_commands
 from quwoquan_ops.cli.commands import hosted_release_receipt as hosted_release_receipt_commands
+from quwoquan_ops.cli.commands import hosted_read_only as hosted_read_only_commands
 from quwoquan_ops.cli.commands import inspect_surface as inspect_surface_commands
 from quwoquan_ops.cli.commands import loadtest as loadtest_commands
 from quwoquan_ops.cli.commands import package_domain as package_domain_commands
@@ -379,9 +411,10 @@ from quwoquan_ops.cli.commands import verify_kinds as verify_kinds_commands
 from quwoquan_ops.cli.commands import verify_profiles as verify_profiles_commands
 from quwoquan_ops.cli.commands import verify_shared as verify_shared_commands
 from quwoquan_ops.cli.commands.app_preflight import (
-    _app_content_readback_summary, _app_content_uat_envelope, _execute_otp_login_journey,
-    _resolve_active_app_content_evidence, _resolve_test_live_app_content_evidence,
-    _run_app_content_release_probe, command_app_content_preflight, command_app_debug_preflight,
+    _app_content_readback_summary, _app_content_uat_sample_plan, _execute_otp_login_journey,
+    _load_active_release_uat_contract, _resolve_active_app_content_evidence,
+    _resolve_test_live_app_content_evidence, _run_app_content_release_probe,
+    command_app_content_preflight, command_app_debug_preflight,
     command_app_domain_api_integration,
 )
 from quwoquan_ops.cli.commands.app_preflight_shared import (
@@ -400,11 +433,10 @@ from quwoquan_ops.cli.commands.app_preflight_uat import (
     _app_content_uat_requires_typed_actor, _command_app_content_uat,
     _ios_direct_flutter_log_reader_retryable,
     _run_app_content_message_home_command, command_app_content_uat,
-    APP_CONTENT_UAT_ENVELOPE_ARGUMENTS, APP_CORE_READBACK_UAT_TEST_TARGET,
-    CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET, DISCOVERY_FEED_UAT_TEST_TARGET,
-    HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET, IOS_DIRECT_FLUTTER_RUN_UAT,
-    MESSAGE_HOME_UAT_TEST_TARGET, PROFILE_JOURNEY_UAT_TEST_TARGET,
-    STARTUP_FIRST_FRAME_UAT,
+    APP_CORE_READBACK_UAT_TEST_TARGET, CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
+    DISCOVERY_FEED_UAT_TEST_TARGET, HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
+    IOS_DIRECT_FLUTTER_RUN_UAT, MESSAGE_HOME_UAT_TEST_TARGET,
+    PROFILE_JOURNEY_UAT_TEST_TARGET, STARTUP_FIRST_FRAME_UAT,
     VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
 )
 from quwoquan_ops.cli.commands.app_dependency_sync import command_app_dependency_sync
@@ -573,7 +605,8 @@ from quwoquan_ops.cli.commands.provider_conformance_domain import (
 from quwoquan_ops.cli.commands.deploy_prod_finalize import _deploy_prod_hosted_finalize
 from quwoquan_ops.cli.commands.deploy_release_inputs import (
     _decision_from_slo_output, _deployable_release_manifest, _emit_prod_rollout_canary_traffic,
-    _materialize_prevalidation_release_manifest, _prevalidation_release_manifest,
+    _load_prod_environment_acceptance, _materialize_prevalidation_release_manifest,
+    _prevalidation_release_manifest,
     _prod_rollout_contract, _prod_rollout_workloads, _prometheus_query_value, _read_prometheus_slo,
     _read_recommendation_slo, _release_transport_tag, _resolve_prod_rollout_stage,
     _slo_settle_seconds, _validate_release_artifacts, _verify_release_registry_attestations,
@@ -652,67 +685,25 @@ from quwoquan_ops.cli.commands.verify_shared import (
     _video_ui_evidence_from_smoke,
 )
 
-RUNTIME_CANDIDATE_ROOT_ENV = "QWQ_RUNTIME_CANDIDATE_ROOT"
-PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_ENV = (
-    "QWQ_PROVIDER_CONFORMANCE_RUNTIME_IDENTITY"
+from quwoquan_ops.cli.commands.stackctl_contract import (
+    DEFAULT_TARGET_BY_ENV,
+    PROVIDER_CONFORMANCE_EVIDENCE_ENVIRONMENTS,
+    PROVIDER_CONFORMANCE_LAYERS,
+    PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_ENV,
+    PROVIDER_CONFORMANCE_SCRIPT,
+    RUNTIME_CANDIDATE_ROOT_ENV,
+    TEST_DATA_TARGETS,
+    VERIFY_COMMAND_GROUPS,
 )
-TEST_DATA_TARGETS = {
-    "alpha-local": "alpha",
-    "beta-local": "beta",
-    "gamma-local": "gamma",
-}
-
-
-VERIFY_COMMAND_GROUPS = {
-    "topology": [
-        ["python3", "quwoquan_ops/gate/verify_stackctl_args_contract.py"],
-        ["python3", "quwoquan_ops/gate/verify_environment_assembly.py"],
-        ["python3", "quwoquan_ops/gate/verify_local_env_port_manifest.py"],
-    ],
-    "config": [
-        ["python3", "quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py"],
-        ["python3", "quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py"],
-        ["python3", "quwoquan_ops/gate/verify_media_delivery_contract.py"],
-        # 推荐 policy 单轨：gamma 只绑定 canonical 内容摘要，不允许环境变体。
-        ["python3", "quwoquan_ops/gate/verify_canonical_recommendation_policy.py"],
-    ],
-    "packaging": [
-        ["python3", "quwoquan_ops/gate/verify_environment_packaging_contract.py"],
-        ["python3", "quwoquan_ops/gate/verify_env_artifact_isolation.py"],
-        ["python3", "quwoquan_app/scripts/env/verify_prod_package_purity.py"],
-    ],
-}
 
 # PROD_RELEASE_UNIT 常量已随 release state 迁往 commands/deploy_release_state.py，
 # 经下方 re-export 段回填本命名空间。
 
-DEFAULT_TARGET_BY_ENV = {
-    "alpha": "alpha-local",
-    "beta": "beta-local",
-    "gamma": "gamma-local",
-    "prod": "prod-hosted",
-}
-
 # CLI summaries should retain every concise prerequisite failure while keeping
-# the terminal surface bounded. Startup/composition failures need the full
-# child-process tail: the actionable Compose error ("dependency failed to
-# start", container create/start errors) was previously cut by a 12-line
-# window, leaving no diagnosable evidence anywhere on disk.
+# the terminal surface bounded.
 COMMAND_SUMMARY_DETAIL_LIMIT = 400
-# A cold iOS simulator build can legitimately take several minutes while
-# Xcode compiles native plugins. Treat it as a launch failure only after this
-# bounded first-build allowance, rather than reporting a false environment
-# failure while the app continues to start in the background.
+# A cold iOS simulator build can legitimately take several minutes.
 ALPHA_APP_FIRST_BUILD_TIMEOUT_SECONDS = 300.0
-PROVIDER_CONFORMANCE_SCRIPT = "quwoquan_ops/cli/lib/provider_conformance.py"
-# Keep argparse choices local so `stackctl up` (used by Xcode build phases) does
-# not eagerly import PyYAML-dependent provider-conformance modules.
-PROVIDER_CONFORMANCE_EVIDENCE_ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
-PROVIDER_CONFORMANCE_LAYERS = (
-    "local_contract",
-    "api_integration",
-    "user_acceptance",
-)
 _PROVIDER_CAPABILITY_ID_PATTERN = re.compile(
     r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]+)+$"
 )
@@ -787,6 +778,7 @@ def build_parser() -> argparse.ArgumentParser:
     app_dependency_sync_commands.register_parser(subparsers)
     provider_debug_commands.register_parser(subparsers)
     app_preflight_uat_commands.register_parser(subparsers)
+    app_uat_evidence_commands.register_parser(subparsers)
 
     data_execution_fleet_commands.register_parser(subparsers)
 
@@ -804,6 +796,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     deploy_domain_commands.register_parser(subparsers)
     hosted_release_receipt_commands.register_parser(subparsers)
+    hosted_read_only_commands.register_parser(subparsers)
     return parser
 
 
@@ -812,6 +805,12 @@ def resolve_report_dir(args: argparse.Namespace, env_name: str, target: str) -> 
     if report_dir:
         return Path(report_dir)
     return artifact_run_dir(env_name, args.command, target=target or "local")
+
+
+def validate_up_report_dir(report_dir: str | Path, *, env_name: str) -> Path:
+    """Accept `up` evidence writes only inside the selected env runs subtree."""
+
+    return validate_env_run_evidence_dir(report_dir, env_name=env_name)
 
 
 class _SloSamplesInsufficient(RuntimeError):
@@ -882,6 +881,10 @@ def _resolve_graphql_read_signing_for_local_target(
         )
         if any(str(os.environ.get(name) or "").strip() for name in explicit):
             raise
+        if environment == "prod":
+            raise ValueError(
+                "Prod GraphQL registry package requires explicit signing material"
+            )
         return prepare_local_graphql_read_registry_signing(
             ROOT, environment, target
         )
@@ -973,6 +976,7 @@ def main() -> int:
         "app-dependency-sync": command_app_dependency_sync,
         "provider-debug": command_provider_debug,
         "app-content-uat": command_app_content_uat,
+        **app_uat_evidence_commands.COMMAND_HANDLERS,
         "data-execution-fleet": command_data_execution_fleet,
         "content-uat": command_content_uat,
         "account-enforcement-uat": command_account_enforcement_uat,
@@ -982,6 +986,7 @@ def main() -> int:
         "roll": command_roll,
         "deploy": command_deploy,
         "hosted-release-receipt": command_hosted_release_receipt,
+        "hosted-read-only": hosted_read_only_commands.command_hosted_read_only,
         "migration": travel_to_gathering_migration.command,
     }
     payload = dispatch[args.command](args)

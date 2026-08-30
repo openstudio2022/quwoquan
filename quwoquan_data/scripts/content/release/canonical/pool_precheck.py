@@ -22,7 +22,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from content.release.canonical.aggregate_release_closure import object_root
 from content.release.canonical.aggregate_release_pool import (
     _exclusion,
     _selection_exclusion,
@@ -33,11 +32,8 @@ from content.release.canonical.aggregate_release_pool import (
 from content.release.canonical.aggregate_release_pool_closure import (
     candidate_closure,
 )
-from content.release.canonical.content_pool_record import (
-    is_pool_record_admitted,
-)
-from content.release.canonical.effective_admission import (
-    effective_admission_record,
+from content.release.canonical.content_pool_handoff import (
+    project_content_pool_handoff,
 )
 from content.release.canonical.environment_release_selection import (
     MILESTONE_TARGETS,
@@ -48,7 +44,6 @@ from content.release.canonical.environment_release_support import (
 )
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
-    _read_json,
 )
 
 HOMEPAGE_CARRIER = "homepage"
@@ -207,13 +202,12 @@ def _homepage_observation(
         required_entity_refs.update(closure[0])
     admitted = 0
     for entity_ref in pool_entity_refs(publish_root):
-        root = object_root(publish_root, "entities", entity_ref)
-        record = effective_admission_record(
-            root,
-            _read_json(root / "manifest.json"),
+        handoff = project_content_pool_handoff(
+            publish_root=publish_root,
             object_type=HOMEPAGE_CARRIER,
+            object_ref=entity_ref,
         )
-        if is_pool_record_admitted(record):
+        if handoff is not None:
             admitted += 1
     return {
         "homepageTarget": homepage_target,
@@ -317,14 +311,29 @@ def precheck_pool_release(
             sorted(milestone_preparation.environment_selection.post_refs)
         )
 
+    homepage_selectable = int(
+        homepage_observation.get("admittedHomepageObjects", 0)
+    )
     carrier_gaps = tuple(
         CarrierGap(
             carrier=carrier,
             target=int(targets[carrier]),
-            selectable=carrier_counts.get(carrier, 0),
-            gap=max(int(targets[carrier]) - carrier_counts.get(carrier, 0), 0),
+            selectable=(
+                homepage_selectable
+                if carrier == HOMEPAGE_CARRIER
+                else carrier_counts.get(carrier, 0)
+            ),
+            gap=max(
+                int(targets[carrier])
+                - (
+                    homepage_selectable
+                    if carrier == HOMEPAGE_CARRIER
+                    else carrier_counts.get(carrier, 0)
+                ),
+                0,
+            ),
         )
-        for carrier in carriers
+        for carrier in sorted(targets)
     )
     excluded_by_code: dict[str, int] = {}
     for row in excluded:

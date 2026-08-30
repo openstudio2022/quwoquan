@@ -24,6 +24,47 @@ def _selector(carrier: str) -> Any:
     return TargetSelector(_SELECTORS[carrier])
 
 
+def _option_occurrences(
+    argv: list[str], option: str
+) -> tuple[tuple[int, str], ...] | None:
+    values: list[tuple[int, str]] = []
+    for index, token in enumerate(argv):
+        if token != option:
+            continue
+        if index + 1 >= len(argv) or argv[index + 1].startswith("--"):
+            return None
+        values.append((index, argv[index + 1]))
+    return tuple(values)
+
+
+def _option_values(argv: list[str], option: str) -> tuple[str, ...] | None:
+    occurrences = _option_occurrences(argv, option)
+    if occurrences is None:
+        return None
+    return tuple(value for _index, value in occurrences)
+
+
+def _has_exact_retry_lineage(
+    argv: list[str], *, retry_of: str, unfinished_refs: tuple[str, ...]
+) -> bool:
+    retry = _option_occurrences(argv, "--retry-of")
+    unfinished = _option_occurrences(argv, "--retry-unfinished-ref")
+    if retry is None or unfinished is None:
+        return False
+    expected_values = (retry_of, *unfinished_refs)
+    actual = (*retry, *unfinished)
+    if tuple(value for _index, value in actual) != expected_values:
+        return False
+    positions = tuple(index for index, _value in actual)
+    return positions == tuple(
+        range(positions[0], positions[0] + 2 * len(positions), 2)
+    )
+
+
+def _has_plan_only_stage(argv: list[str]) -> bool:
+    return _option_values(argv, "--stage") == ("plan-only",)
+
+
 def validate_semantic_wave_dispatch(document: Mapping[str, Any]) -> dict[str, Any]:
     try:
         value = dict(document)
@@ -53,6 +94,8 @@ def validate_semantic_wave_dispatch(document: Mapping[str, Any]) -> dict[str, An
         candidates.extend(str(item) for item in slot["candidateIds"])
         objects.extend(str(item) for item in slot["candidateObjectRefs"])
         carriers.append(str(slot["carrier"]))
+        if not _has_plan_only_stage(slot["argv"]):
+            raise _fail(DISPATCH_INVALID, f"dispatch stage drift: {slot['slotId']}")
         if slot.get("retryOf") is not None:
             retry_slots.append(dict(slot))
     if len(candidates) != len(set(candidates)) or len(objects) != len(set(objects)):
@@ -93,18 +136,16 @@ def validate_semantic_wave_dispatch(document: Mapping[str, Any]) -> dict[str, An
             mapping = by_slot.get(str(slot["slotId"]))
             selection = slot["taskRequest"]["sourcePoolSelection"]
             unfinished_refs = tuple(slot.get("retryUnfinishedRefs") or ())
-            unfinished_argv = [
-                value
-                for ref in unfinished_refs
-                for value in ("--retry-unfinished-ref", str(ref))
-            ]
             if mapping is None or (
                 mapping["executionId"] != slot["executionId"]
                 or mapping["retryOf"] != slot["retryOf"]
                 or mapping["selectionDigest"] != selection["selectionDigest"]
                 or tuple(mapping.get("unfinishedRefs") or ()) != unfinished_refs
-                or ["--retry-of", str(slot["retryOf"])] != slot["argv"][6:8]
-                or slot["argv"][8 : 8 + len(unfinished_argv)] != unfinished_argv
+                or not _has_exact_retry_lineage(
+                    slot["argv"],
+                    retry_of=str(slot["retryOf"]),
+                    unfinished_refs=unfinished_refs,
+                )
             ):
                 raise _fail(DISPATCH_INVALID, f"retry lineage drift: {slot['slotId']}")
             current = parse_execution_id(str(slot["executionId"]))

@@ -129,6 +129,11 @@ def _resolution_input_identity(
     return entries, digest
 
 
+def is_ephemeral_xcode_user_state(relative: str) -> bool:
+    user_state_root = "pods/Pods.xcodeproj/xcuserdata"
+    return relative == user_state_root or relative.startswith(f"{user_state_root}/")
+
+
 def _scan_component(component: str, root: Path) -> list[IosPodNode]:
     nodes: list[IosPodNode] = []
     directories: dict[Path, tuple[int, int, int, int]] = {}

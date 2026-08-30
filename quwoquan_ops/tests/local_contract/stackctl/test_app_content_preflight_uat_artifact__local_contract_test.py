@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 from quwoquan_ops.cli.commands import app_preflight_uat as uat
+from quwoquan_ops.cli.commands.app_preflight_uat_binding import (
+    _candidate_runtime_identities,
+)
+from quwoquan_ops.cli.smoke.environment_patrol_smoke import artifact_binding_report
+from quwoquan_ops.cli.smoke.environment_patrol_smoke.artifact_binding import (
+    TestedAppArtifactBindingError as ArtifactBindingError,
+)
 from quwoquan_ops.tests.support.app_content_preflight_test_support import (
     Path,
     patch,
@@ -14,6 +21,48 @@ from quwoquan_ops.tests.support.app_content_preflight_test_support import (
 
 
 class AppContentPreflightUatArtifactTest(unittest.TestCase):
+    def test_candidate_graph_digest_requires_manifest_artifact_exact_identity(
+        self,
+    ) -> None:
+        digest = "sha256:" + "7" * 64
+        manifest = {
+            "contractGraphDigest": digest,
+            "environmentArtifact": {
+                "contractGraphDigest": digest,
+                "releaseTrainId": "train",
+                "environmentArtifactDigest": "artifact",
+                "packageDigest": "package",
+                "sourceCapsule": {
+                    "baselineId": "baseline",
+                    "sourceRevision": "a" * 40,
+                    "digest": "capsule",
+                    "workspaceStatusDigest": "workspace",
+                },
+                "configuration": {
+                    "serviceDigest": "service",
+                    "appRuntimeDigest": "app",
+                    "environmentRuntimeDigest": "environment",
+                },
+                "provider": {"runtimeCompositionDigest": "provider"},
+            },
+        }
+        identities = _candidate_runtime_identities(
+            manifest=manifest,
+            provider_binding={"composition": {"runtimeCompositionDigest": "provider"}},
+            observability_binding={"composition": {"composeDigest": "logs"}},
+        )
+        self.assertEqual(identities["contractGraphDigest"], digest)
+
+        manifest["environmentArtifact"]["contractGraphDigest"] = "sha256:" + "8" * 64
+        with self.assertRaisesRegex(ValueError, "ContractGraph identity drifted"):
+            _candidate_runtime_identities(
+                manifest=manifest,
+                provider_binding={
+                    "composition": {"runtimeCompositionDigest": "provider"}
+                },
+                observability_binding={"composition": {"composeDigest": "logs"}},
+            )
+
     def test_android_content_uat_preserves_child_artifact_blocker_order(
         self,
     ) -> None:
@@ -37,12 +86,26 @@ class AppContentPreflightUatArtifactTest(unittest.TestCase):
                 "manifestDigest": "sha256:" + "5" * 64,
                 "readinessReceiptRef": str(readiness_path),
                 "readinessReceiptDigest": "sha256:" + "6" * 64,
-                "appUatEnvelope": {
-                    "releaseId": "beta-research-pool8",
-                    "videoWorkId": "video-01",
-                },
+                "releaseUatSamplePlanRef": "uat/sample_plan.json",
+                "releaseUatSamplePlanDigest": "sha256:" + "7" * 64,
                 "appUatPlan": {
-                    "releaseId": "beta-research-pool8",
+                    "releaseIdentity": {
+                        "releaseId": "beta-research-pool8",
+                        "payloadSha256": "sha256:" + "5" * 64,
+                    },
+                    "releaseUatSamplePlanRef": "uat/sample_plan.json",
+                    "releaseUatSamplePlanDigest": "sha256:" + "7" * 64,
+                    "carrierIdentities": {"video": "video-01"},
+                    "orderedSamples": [
+                        {
+                            "sampleId": "canary-video-001",
+                            "carrier": "video",
+                            "objectId": "video-01",
+                            "objectRef": "objects/posts/video/video-01",
+                            "objectDigest": "sha256:" + "8" * 64,
+                        }
+                    ],
+                    "requiredCasePlan": [],
                     "videoPagination": {"expectedWorkIds": ["video-01"]},
                 },
             }
@@ -54,50 +117,42 @@ class AppContentPreflightUatArtifactTest(unittest.TestCase):
                 "trustDigest": "sha256:" + "b" * 64,
                 "launchAttemptId": "launch-attempt-beta",
             }
-            artifact_blocker = {
-                "errorCode": "APP.UAT.page_artifact_binding_missing",
-                "sourceOperationId": (
-                    "environment_page_smoke.tested_app_artifact_binding"
+            producer_report: dict[str, object] = {}
+            producer_result: dict[str, object] = {"exitCode": 0}
+            with patch.object(
+                artifact_binding_report,
+                "collect_tested_app_artifact_binding",
+                side_effect=ArtifactBindingError(
+                    "installed artifact readback is unavailable"
                 ),
-                "httpStatus": None,
-            }
-            typed_missing = [
-                {
-                    "field": field,
-                    "errorCode": "APP.UAT.page_artifact_binding_missing",
-                    "reason": f"test_host_patrol does not own canonical {field}",
-                }
-                for field in (
-                    "sourceProjectionDigest",
-                    "runtimeConfigPackageDigest",
-                    "trustDigest",
-                    "launchAttemptId",
+            ):
+                produced_binding, artifact_blocker = (
+                    artifact_binding_report.attach_tested_app_artifact_binding(
+                        producer_report,
+                        producer_result,
+                        {
+                            "id": "emulator-5556",
+                            "targetPlatform": "android-arm64",
+                            "emulator": True,
+                        },
+                        ["patrol", "test"],
+                        {"PATH": "/sdk"},
+                        False,
+                    )
                 )
-            ]
+            self.assertEqual(
+                artifact_blocker,
+                {"errorCode": "APP.UAT.page_artifact_binding_missing"},
+            )
+            self.assertEqual(producer_result["exitCode"], 2)
+            self.assertEqual(produced_binding["status"], "gate_block")
+            typed_missing = produced_binding["canonicalComparison"]["typedMissing"]
             page_evidence = {
                 "patrolTarget": stackctl.DISCOVERY_FEED_UAT_TEST_TARGET,
                 "environmentAlias": "beta-local",
                 "platform": "android",
                 "deviceId": "emulator-5556",
-                "testedAppArtifactBinding": {
-                    "status": "gate_block",
-                    "errorCode": "APP.UAT.page_artifact_binding_missing",
-                    "bindings": [
-                        {
-                            "status": "gate_block",
-                            "errorCode": "APP.UAT.page_artifact_binding_missing",
-                            "canonicalComparison": {
-                                **page_comparison,
-                                "sourceProjectionDigest": "",
-                                "runtimeConfigPackageDigest": "",
-                                "trustDigest": "",
-                                "launchAttemptId": "",
-                                "typedMissing": typed_missing,
-                            },
-                        }
-                    ],
-                    "comparisonProjections": [],
-                },
+                "testedAppArtifactBinding": producer_report["testedAppArtifactBinding"],
                 "typedBlocker": dict(artifact_blocker),
                 "artifactBindingBlocker": dict(artifact_blocker),
             }
@@ -279,7 +334,7 @@ class AppContentPreflightUatArtifactTest(unittest.TestCase):
                 )
                 page_evidence["typedBlocker"] = {
                     "errorCode": "CONTENT.SYSTEM.required_dependency_unavailable",
-                    "sourceOperationId": "content.feed.read",
+                    "sourceOperationId": "content.post.GetFeed",
                     "httpStatus": 503,
                 }
                 earlier_blocked_result = stackctl._command_app_content_uat(

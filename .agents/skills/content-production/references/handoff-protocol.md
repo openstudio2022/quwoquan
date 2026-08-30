@@ -54,9 +54,10 @@ python3 quwoquan_data/scripts/cli.py task stage-record \
 
 ## execution_state 合并方式（写入权移交，DEC-005）
 
-- `_shared/execution_state.json` 及其 journal 的唯一写盘入口保持
-  `content.execution.context.save_execution_state`；agent 与 skill 一律不手写。
-- `task stage-record` 在写 receipt 的同一命令内顺带更新 execution_state：
+- `_shared/execution_state.json` 是 receipt reducer 产生的只读最小投影；唯一写盘入口是
+  `content.execution.receipt_state_reducer.reduce_receipt_projection`。`context.save_execution_state`
+  永久拒绝业务写者；agent、skill 与其他命令一律不手写。
+- `task stage-record` 先 create-once 写 receipt，再由全部 receipt 确定性重算 projection：
   - `stage=ship` 且 `verdict=pass` → `status=succeeded`（execution 终态的唯一合法来源）。
   - `verdict=blocked` → `status=manual_required`。
   - 其余 pass receipt → `status=running`。

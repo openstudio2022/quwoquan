@@ -19,6 +19,8 @@ def aggregate_release_result(
     environment_selection: Any | None,
     excluded: tuple[Mapping[str, str], ...],
     pool_wide: bool,
+    sample_plan_ref: str | None,
+    sample_plan_digest: str | None,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "schema": "quwoquan_data.aggregate_release_result",
@@ -49,6 +51,8 @@ def aggregate_release_result(
             result["milestoneTargets"] = dict(
                 environment_selection.milestone_targets or {}
             )
+        result["samplePlanRef"] = sample_plan_ref
+        result["samplePlanDigest"] = sample_plan_digest
     if pool_wide:
         result["excluded"] = list(excluded)
         result["excludedCount"] = len(excluded)

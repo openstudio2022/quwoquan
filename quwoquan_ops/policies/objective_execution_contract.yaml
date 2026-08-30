@@ -1,0 +1,235 @@
+schema_id: objective-execution-contract
+schema_version: 2
+owner_story: specs/feature-tree/runtime/development-workflow-governance/objective-execution/spec.md
+human_authority_contract: quwoquan_ops/policies/human_agent_delivery_contract.yaml
+branch_policy_source: quwoquan_ops/policies/branch_policy.yaml
+
+authority_boundaries:
+  local_journal_authority: execution_state_only
+  human_identity_authority: external_authenticated_provider
+  local_json_is_human_authority: false
+  production_provider_default: unavailable
+  test_provider:
+    provider_kind: test
+    release_evidence_eligible: false
+
+closed_sets:
+  subject_kind: [objective, increment]
+  objective_state: [draft, clarify, approved, planning, executing, review, integrating, observing, accepted, escalated, aborted]
+  increment_state: [proposed, authorized, executing, pending_readback, verified, integrated, failed, aborted]
+  transition_event_kind: [human_decision_recorded, state_transition_committed]
+  transition_action: [create_objective, request_clarification, approve_objective, begin_planning, begin_execution, submit_review, request_rework, begin_integration, begin_observation, accept_objective, escalate_objective, resolve_escalation, abort_objective, reopen_objective, restart_objective, create_increment, authorize_increment, start_increment, request_effect_readback, resume_effect_readback, verify_increment, integrate_increment, fail_increment, abort_increment, retry_increment, restart_increment]
+  readback_status: [present, absent, failed]
+  effect_readback_status: [applied, not_applied, unknown]
+  admission_status: [admitted, not_admitted, blocked]
+  command_result: [committed, duplicate, conflict, typed_blocker, pending_readback, recovered]
+
+transition_graph:
+  graph_version: 1
+  reducer_version: 1
+  terminal_reopen_policy: explicit_edges_only
+  subjects:
+    objective:
+      states_source: closed_sets.objective_state
+      initial_state: null
+      terminal_states: [accepted, aborted]
+      reopenable_terminal_states: [accepted, aborted]
+      transitions:
+        - {action: create_objective, from_state: null, to_state: draft}
+        - {action: request_clarification, from_state: draft, to_state: clarify}
+        - {action: approve_objective, from_state: clarify, to_state: approved}
+        - {action: begin_planning, from_state: approved, to_state: planning}
+        - {action: begin_execution, from_state: planning, to_state: executing}
+        - {action: submit_review, from_state: executing, to_state: review}
+        - {action: request_rework, from_state: review, to_state: executing}
+        - {action: begin_integration, from_state: review, to_state: integrating}
+        - {action: begin_observation, from_state: integrating, to_state: observing}
+        - {action: accept_objective, from_state: observing, to_state: accepted}
+        - {action: escalate_objective, from_state: executing, to_state: escalated}
+        - {action: resolve_escalation, from_state: escalated, to_state: executing}
+        - {action: abort_objective, from_state: executing, to_state: aborted}
+        - {action: abort_objective, from_state: escalated, to_state: aborted}
+        - {action: reopen_objective, from_state: accepted, to_state: clarify}
+        - {action: restart_objective, from_state: aborted, to_state: draft}
+    increment:
+      states_source: closed_sets.increment_state
+      initial_state: null
+      terminal_states: [integrated, failed, aborted]
+      reopenable_terminal_states: [failed, aborted]
+      transitions:
+        - {action: create_increment, from_state: null, to_state: proposed}
+        - {action: authorize_increment, from_state: proposed, to_state: authorized}
+        - {action: start_increment, from_state: authorized, to_state: executing}
+        - {action: request_effect_readback, from_state: executing, to_state: pending_readback}
+        - {action: resume_effect_readback, from_state: pending_readback, to_state: executing}
+        - {action: verify_increment, from_state: executing, to_state: verified}
+        - {action: integrate_increment, from_state: verified, to_state: integrated}
+        - {action: fail_increment, from_state: executing, to_state: failed}
+        - {action: fail_increment, from_state: pending_readback, to_state: failed}
+        - {action: abort_increment, from_state: proposed, to_state: aborted}
+        - {action: abort_increment, from_state: authorized, to_state: aborted}
+        - {action: abort_increment, from_state: executing, to_state: aborted}
+        - {action: abort_increment, from_state: pending_readback, to_state: aborted}
+        - {action: abort_increment, from_state: verified, to_state: aborted}
+        - {action: retry_increment, from_state: failed, to_state: proposed}
+        - {action: restart_increment, from_state: aborted, to_state: proposed}
+
+schemas:
+  transition_event:
+    required_fields: [schema_version, reducer_version, event_id, subject_kind, subject_id, event_kind, action, from_state, to_state, expected_head, expected_generation, generation, previous_event_digest, authority_receipt_ref, effect_idempotency_key, command_envelope_digest, effect_id, effect_readback, occurred_at, payload, event_digest]
+  append_transition_command:
+    required_fields: [subject_kind, subject_id, event_kind, reducer_version, action, from_state, to_state, expected_head, expected_generation, authority_receipt_ref, effect_idempotency_key, command_envelope_digest, effect_id, effect_readback, occurred_at, payload]
+  command_envelope:
+    required_fields: [schema_version, subject_kind, subject_id, source_state, target_state, authority_receipt_ref, expected_scope, expected_evidence_fingerprint, expected_decision_kind, action, effect_id, effect_idempotency_key, occurred_at, payload, authority_provider_kind, authority_provider_receipt_ref, authority_claims_digest, authority_winner_idempotency_key, authority_winner_command_digest, authority_winner_previous_generation, authority_winner_generation, authority_chain_commit]
+  human_decision_recorded_payload:
+    required_fields: [command_envelope, command_envelope_digest, authority_claims, release_evidence_eligible, provider_receipt_ref]
+  execution_readback:
+    required_fields: [status, subject_kind, subject_id, reduced_state, head, generation, last_authority_receipt_ref, last_effect_readback, terminal]
+  authority_receipt_claims:
+    required_fields: [receipt_id, decision_id, decision_unit_id, actor_id, actor_authenticated, role, scope, expires_at, evidence_fingerprint, decision_kind, actions, provider_kind, provider_version, provider_commit, contract_version, issuer, receipt_state, receipt_previous_generation, receipt_generation, receipt_etag, chain_commit, winner_idempotency_key, winner_command_digest]
+  authority_verification:
+    required_fields: [provider_kind, authenticated, exact_bytes_verified, claims, release_evidence_eligible, provider_receipt_ref]
+  execute_effect_command:
+    required_fields: [subject_kind, subject_id, target_state, authority_receipt_ref, expected_scope, expected_evidence_fingerprint, expected_decision_kind, action, effect_id, effect_idempotency_key, occurred_at, payload]
+  effect_readback:
+    required_fields: [status, effect_id, idempotency_key, exact_match, provider_receipt_ref]
+  admission_readback:
+    required_fields: [status, stage, write_concurrency, temporary_branch_allowed, branch_policy_digest, reason, terminal]
+
+commands:
+  append_transition:
+    order: [acquire_writer_lease_capability, validate_inode_scope, recover_derived_materialization, compare_cas, write_private_staging, fsync_staging, exclusive_publish_event, fsync_events_directory, materialize_snapshot, materialize_head]
+    cas_fields: [expected_head, expected_generation]
+    idempotency_fields: [subject_kind, subject_id, event_kind, effect_idempotency_key]
+  recover_materialization:
+    mutation: true
+    writer_lease_required: true
+    source: complete_verified_event_chain
+    writes: [snapshot, head]
+  execute_authorized_effect:
+    order: [query_signed_authority_wrapper, verify_claim_and_state_bindings, validate_versioned_transition, consume_authority_cas, verify_signed_consume_winner, append_human_decision_recorded, invoke_effect_once, readback_effect, append_state_transition_committed]
+    pending_identity_fields: [subject_kind, subject_id, source_state, target_state, action, payload, authority_receipt_ref, expected_scope, expected_evidence_fingerprint, expected_decision_kind, authority_provider_kind, authority_provider_receipt_ref, authority_claims_digest, authority_winner_idempotency_key, authority_winner_command_digest, authority_winner_previous_generation, authority_winner_generation, authority_chain_commit, effect_id, effect_idempotency_key]
+    pending_identity_match: exact_command_envelope_digest
+    readback_effect_id_source: persisted_human_decision_recorded
+    empty_effect_id_readback_allowed: false
+    unknown_effect_outcome: pending_readback
+    retry_unknown_effect: false
+  hosted_consume:
+    query_before_mutation: true
+    validate_transition_before_mutation: true
+    persist_intent_before_consume: false
+    strong_if_match_required: true
+    mutation_attempts: 1
+    unknown_outcome: reconcile_only
+    signed_winner_required: true
+    winner_fields: [receipt_state, receipt_previous_generation, receipt_generation, receipt_etag, receipt_id, decision_id, decision_unit_id, provider_kind, provider_version, provider_commit, contract_version, issuer, chain_commit, winner_idempotency_key, winner_command_digest]
+    local_journal_allowed_before_winner: false
+    effect_allowed_before_winner: false
+  inspect_admission:
+    mutation: false
+  read_execution_state:
+    mutation: false
+    materialization_allowed: false
+
+journal:
+  append_only: true
+  event_atomic_write: private_staging_fsync_exclusive_publish_fsync_directory
+  exclusive_publish:
+    darwin: renameatx_np_RENAME_EXCL
+    unsupported_platform: fail_closed
+    overwrite_fallback_allowed: false
+  derived_atomic_write: descriptor_relative_fsync_replace_fsync_directory
+  storage_trust:
+    owner: current_effective_uid
+    directory_mode: "0700"
+    file_mode: "0600"
+    file_type: regular
+    file_link_count: 1
+    symlink_policy: reject_every_ancestor_and_component
+    path_identity: retained_dirfd_and_inode
+    mkdir_durability: fsync_parent_then_new_directory
+    lease_capability: internal_unforgeable_root_subject_inode_scoped
+    public_lease_bypass_argument: forbidden
+    staging_authoritative: false
+    staging_cleanup_requires_validated_lease: true
+  hash_chain: sha256_canonical_json
+  cas: expected_head_and_generation
+  reducer: deterministic_versioned
+  event_chain_authority: true
+  derived_artifacts: [snapshot, head]
+  derived_drift_terminal: OEX.JOURNAL_RECOVERY_REQUIRED
+  recovery_requires_writer_lease: true
+  recovery_source: complete_verified_event_chain
+  legal_crash_failpoints: [after_staging_create, after_staging_partial_write, after_staging_fsync, before_event_publish, after_event_publish_before_directory_fsync, after_event_fsync, after_snapshot_materialized, after_head_materialized]
+  tamper_conditions: [unsafe_storage_node, inode_identity_drift, event_gap, event_digest_drift, event_identity_drift, event_hash_chain_drift, reducer_version_drift]
+  output_root: .qwq_output/env/repo/local/objective-execution/process
+
+authority_port:
+  exact_bytes_required: true
+  verifier_injected: true
+  checks: [actor_authenticated, actor_id, role, scope, expiry, evidence_fingerprint, decision_kind, action, issuer, provider_version, provider_commit, contract_version, state, etag, chain_commit, winner_identity]
+  projection_authorization_grant:
+    authenticated: false
+    executable: false
+    mutation_allowed: false
+  provider_unavailable:
+    terminal_code: OEX.AUTHORITY_PROVIDER_UNAVAILABLE
+    mutation_allowed: false
+
+admission:
+  source: quwoquan_ops/policies/branch_policy.yaml
+  duplicated_allowed_branches: forbidden
+  readback_contract:
+    schema: admission_readback
+    exact_fields_required: true
+    stage: S4
+    status_source: closed_sets.admission_status
+    statuses:
+      admitted:
+        reason_policy: fixed
+        reason: temporary_execution_lifecycle_admitted
+        terminal: admitted
+        write_concurrency: 2
+        temporary_branch_allowed: true
+        branch_policy_digest: sha256_required
+      not_admitted:
+        reason_policy: fixed
+        reason: temporary_execution_lifecycle_not_admitted
+        terminal: not_admitted
+        write_concurrency: 1
+        temporary_branch_allowed: false
+        branch_policy_digest: sha256_required
+      blocked:
+        reason_policy: dynamic_detail
+        reason_constraints: {nonempty: true, trimmed: true, nul_forbidden: true}
+        fallback_reason: dynamic_inspection_unavailable
+        terminal: OEX.ADMISSION_BLOCKED
+        write_concurrency: 0
+        temporary_branch_allowed: false
+        branch_policy_digest: null
+  derivation:
+    admitted_requires_all: [pull_request_prefix_declared, isolated_writer_branch, declared_promotion_path, mandatory_cleanup_after_promotion_or_abort, concurrency_evidence_required]
+  writer_lease: exclusive_nonblocking
+  loser_effect_allowed: false
+  loser_event_allowed: false
+  reads_may_run_in_parallel: true
+
+errors:
+  OEX.CONTRACT_INVALID: {result: typed_blocker, terminal: blocked, recovery: repair_canonical_contract}
+  OEX.JOURNAL_FAILED: {result: typed_blocker, terminal: blocked, recovery: inspect_event_storage_io}
+  OEX.JOURNAL_TAMPERED: {result: typed_blocker, terminal: blocked, recovery: quarantine_and_restore_from_verified_authority}
+  OEX.JOURNAL_RECOVERY_REQUIRED: {result: typed_blocker, terminal: blocked, recovery: acquire_writer_lease_and_materialize_from_verified_events}
+  OEX.CAS_CONFLICT: {result: conflict, terminal: conflict, recovery: readback_then_reconcile_without_effect}
+  OEX.WRITER_LEASE_CONFLICT: {result: typed_blocker, terminal: not_admitted, recovery: readback_and_queue_without_effect}
+  OEX.AUTHORITY_PROVIDER_UNAVAILABLE: {result: typed_blocker, terminal: blocked, recovery: attach_authenticated_authority_provider}
+  OEX.AUTHORITY_ABSENT: {result: typed_blocker, terminal: blocked, recovery: obtain_authenticated_authority_receipt}
+  OEX.AUTHORITY_INVALID: {result: typed_blocker, terminal: blocked, recovery: repair_actor_role_scope_expiry_fingerprint_decision_or_action}
+  OEX.AUTHORITY_CONSUME_UNKNOWN: {result: pending_readback, terminal: pending_readback, recovery: reconcile_signed_winner_without_retry_or_local_mutation}
+  OEX.AUTHORITY_CONSUME_CONFLICT: {result: conflict, terminal: conflict, recovery: readback_signed_winner_without_local_mutation}
+  OEX.AUTHORITY_WINNER_UNPROVEN: {result: typed_blocker, terminal: blocked, recovery: repair_signed_consume_readback}
+  OEX.AUTHORITY_PROJECTION_ONLY: {result: typed_blocker, terminal: blocked, recovery: obtain_executable_authenticated_authority}
+  OEX.TRANSITION_INVALID: {result: typed_blocker, terminal: blocked, recovery: submit_action_allowed_by_versioned_transition_graph}
+  OEX.PENDING_COMMAND_CONFLICT: {result: conflict, terminal: conflict, recovery: resume_with_exact_persisted_command_envelope}
+  OEX.EFFECT_IDENTITY_CONFLICT: {result: pending_readback, terminal: pending_readback, recovery: reconcile_exact_persisted_effect_identity_without_retry}
+  OEX.EFFECT_OUTCOME_UNKNOWN: {result: pending_readback, terminal: pending_readback, recovery: reconcile_readback_without_retry}
+  OEX.ADMISSION_BLOCKED: {result: typed_blocker, terminal: blocked, recovery: repair_branch_policy_or_keep_single_writer}

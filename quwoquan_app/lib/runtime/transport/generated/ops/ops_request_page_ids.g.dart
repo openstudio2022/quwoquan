@@ -6,7 +6,11 @@ class OpsRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'AcknowledgeAlert': 'ops.acknowledge.alert',
+    'ConsumeHumanAuthorizationReceipt':
+        'ops.consume.human.authorization.receipt',
     'CreateExperiment': 'ops.create.experiment',
+    'CreateHumanDecisionUnit': 'ops.create.human.decision.unit',
+    'FinalizeHumanDecision': 'ops.finalize.human.decision',
     'GetAccountEnforcementCase': 'ops.get.account.enforcement.case',
     'GetAppRecoveryVersion': 'ops.get.app.recovery.version',
     'GetConfigSnapshot': 'ops.get.config.snapshot',
@@ -28,11 +32,14 @@ class OpsRequestPageIds {
     'GetServiceRouteRED': 'ops.get.service.route.r.e.d',
     'GetVisitStats': 'ops.get.visit.stats',
     'IngestAlertmanagerWebhook': 'ops.ingest.alertmanager.webhook',
+    'IngestGitHubHumanAuthorityWebhook':
+        'ops.ingest.git.hub.human.authority.webhook',
     'ListActiveAlerts': 'ops.list.active.alerts',
     'ListConfigDomains': 'ops.list.config.domains',
     'ListConfigInstanceReports': 'ops.list.config.instance.reports',
     'ListEnvironmentTopologies': 'ops.list.environment.topologies',
     'ListExperiments': 'ops.list.experiments',
+    'ListHumanDecisionUnits': 'ops.list.human.decision.units',
     'ListL1L4MetricSnapshots': 'ops.list.l1.l4.metric.snapshots',
     'ListPlaneBindings': 'ops.list.plane.bindings',
     'ListPlatformApprovals': 'ops.list.platform.approvals',
@@ -49,6 +56,10 @@ class OpsRequestPageIds {
     'ListServiceConfigs': 'ops.list.service.configs',
     'OpenAccountAppealCase': 'ops.open.account.appeal.case',
     'OpenAccountModerationCase': 'ops.open.account.moderation.case',
+    'ReadHumanAuthoritySigningPublicKey':
+        'ops.read.human.authority.signing.public.key',
+    'ReadHumanAuthorizationReceipt': 'ops.read.human.authorization.receipt',
+    'ReadHumanDecisionUnit': 'ops.read.human.decision.unit',
     'RecordVisit': 'ops.record.visit',
     'ReportConfigInstance': 'ops.report.config.instance',
     'ReportEventBatch': 'ops.report.event.batch',
@@ -60,14 +71,22 @@ class OpsRequestPageIds {
         'ops.resolve.effective.config.for.instance',
     'RetryAccountEnforcementDelivery': 'ops.retry.account.enforcement.delivery',
     'ReviewAccountEnforcementCase': 'ops.review.account.enforcement.case',
+    'RevokeHumanAuthorizationReceipt': 'ops.revoke.human.authorization.receipt',
     'RollbackPremiumPoolEntry': 'ops.rollback.premium.pool.entry',
+    'SealHumanDecisionRound': 'ops.seal.human.decision.round',
+    'SubmitHumanRoleEvidence': 'ops.submit.human.role.evidence',
     'TakedownPremiumPoolEntry': 'ops.takedown.premium.pool.entry',
     'UpdateExperimentRollout': 'ops.update.experiment.rollout',
     'UpsertPremiumPoolEntry': 'ops.upsert.premium.pool.entry',
   };
 
   static const String acknowledgeAlert = 'ops.acknowledge.alert';
+  static const String consumeHumanAuthorizationReceipt =
+      'ops.consume.human.authorization.receipt';
   static const String createExperiment = 'ops.create.experiment';
+  static const String createHumanDecisionUnit =
+      'ops.create.human.decision.unit';
+  static const String finalizeHumanDecision = 'ops.finalize.human.decision';
   static const String getAccountEnforcementCase =
       'ops.get.account.enforcement.case';
   static const String getAppRecoveryVersion = 'ops.get.app.recovery.version';
@@ -96,6 +115,8 @@ class OpsRequestPageIds {
   static const String getVisitStats = 'ops.get.visit.stats';
   static const String ingestAlertmanagerWebhook =
       'ops.ingest.alertmanager.webhook';
+  static const String ingestGitHubHumanAuthorityWebhook =
+      'ops.ingest.git.hub.human.authority.webhook';
   static const String listActiveAlerts = 'ops.list.active.alerts';
   static const String listConfigDomains = 'ops.list.config.domains';
   static const String listConfigInstanceReports =
@@ -103,6 +124,7 @@ class OpsRequestPageIds {
   static const String listEnvironmentTopologies =
       'ops.list.environment.topologies';
   static const String listExperiments = 'ops.list.experiments';
+  static const String listHumanDecisionUnits = 'ops.list.human.decision.units';
   static const String listL1L4MetricSnapshots =
       'ops.list.l1.l4.metric.snapshots';
   static const String listPlaneBindings = 'ops.list.plane.bindings';
@@ -123,6 +145,11 @@ class OpsRequestPageIds {
   static const String openAccountAppealCase = 'ops.open.account.appeal.case';
   static const String openAccountModerationCase =
       'ops.open.account.moderation.case';
+  static const String readHumanAuthoritySigningPublicKey =
+      'ops.read.human.authority.signing.public.key';
+  static const String readHumanAuthorizationReceipt =
+      'ops.read.human.authorization.receipt';
+  static const String readHumanDecisionUnit = 'ops.read.human.decision.unit';
   static const String recordVisit = 'ops.record.visit';
   static const String reportConfigInstance = 'ops.report.config.instance';
   static const String reportEventBatch = 'ops.report.event.batch';
@@ -137,8 +164,13 @@ class OpsRequestPageIds {
       'ops.retry.account.enforcement.delivery';
   static const String reviewAccountEnforcementCase =
       'ops.review.account.enforcement.case';
+  static const String revokeHumanAuthorizationReceipt =
+      'ops.revoke.human.authorization.receipt';
   static const String rollbackPremiumPoolEntry =
       'ops.rollback.premium.pool.entry';
+  static const String sealHumanDecisionRound = 'ops.seal.human.decision.round';
+  static const String submitHumanRoleEvidence =
+      'ops.submit.human.role.evidence';
   static const String takedownPremiumPoolEntry =
       'ops.takedown.premium.pool.entry';
   static const String updateExperimentRollout = 'ops.update.experiment.rollout';

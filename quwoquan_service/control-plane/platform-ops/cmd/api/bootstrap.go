@@ -127,6 +127,13 @@ func assemblePlatformOpsDomain(asm *servicekit.Assembly, cfg *config) error {
 	if err := composePlatformHandlers(service, asm.Identity.ConfigRoot); err != nil {
 		return err
 	}
+	if strings.TrimSpace(cfg.HumanAuthority.SigningKeyID) != "" || cfg.Environment == "prod" {
+		humanAuthority, authorityErr := composeHumanAuthority(asm, cfg)
+		if authorityErr != nil {
+			return authorityErr
+		}
+		service.humanAuthority = humanAuthority
+	}
 
 	// 仓库/事实树可达性是拓扑与快照只读源的前置条件，属于依赖就绪而非进程
 	// 存活，因此登记在 /readyz 而不是 /healthz。
@@ -180,6 +187,10 @@ func registerPlatformOpsRoutes(asm *servicekit.Assembly, service *platformServic
 	unguarded.Handle(configAckConvergencePath, routes)
 	unguarded.Handle(resolveForInstancePath, routes)
 	unguarded.Handle(alertIngestPath, service.requireAlertIngestToken(routes))
+	if service.humanAuthority != nil {
+		unguarded.Handle("POST /control-plane/platform/human-authority/webhooks/github", service.humanAuthority)
+		asm.Mux.Handle("/control-plane/platform/human-authority/", service.humanAuthority)
+	}
 	asm.Mux.Handle("/", routes)
 }
 

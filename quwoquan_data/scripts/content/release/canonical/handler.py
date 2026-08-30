@@ -51,6 +51,10 @@ from content.release.canonical.handler_pool import (
 from content.release.canonical.lifecycle_exit import (
     handle_lifecycle_exit,  # noqa: F401
 )
+from content.release.canonical.handler_uat import (
+    handle_m1000_four_environment_proof,  # noqa: F401
+    handle_project_uat_sampling_authority,  # noqa: F401
+)
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from content.release.canonical.object_transaction_lock import canonical_publish_lock
 from content.release.canonical.object_transaction_replay import (
@@ -61,6 +65,10 @@ from content.release.canonical.release_identity_incident import (
 )
 from content.release.canonical.release_identity_recovery import (
     write_deterministic_identity_attestation_recovery,
+)
+from content.release.canonical.release_contract_migration import (
+    migrate_release_contract,
+    release_contract_migration_precheck,
 )
 from content.release.canonical.release_operation_lock import (
     ReleaseOperationConflict,
@@ -108,6 +116,26 @@ def handle_campaign_aggregate_release(args: argparse.Namespace) -> None:
         ValueError,
     ) as exc:
         raise SystemExit(f"[release campaign-aggregate] GATE_BLOCK {exc}") from exc
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def handle_release_contract_migration(args: argparse.Namespace) -> None:
+    release_root = Path(
+        getattr(args, "release_root", None) or OUTPUT_ROOT / "data/releases"
+    ).resolve()
+    try:
+        operation = (
+            migrate_release_contract
+            if bool(getattr(args, "apply", False))
+            else release_contract_migration_precheck
+        )
+        report = operation(
+            release_root=release_root,
+            source_release_id=str(args.source_release_id),
+            new_release_id=str(args.new_release_id),
+        )
+    except (FileNotFoundError, OSError, ObjectTransactionError, TypeError, ValueError) as exc:
+        raise SystemExit(f"[release contract-migrate] GATE_BLOCK {exc}") from exc
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 

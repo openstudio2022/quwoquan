@@ -47,8 +47,8 @@
   指向唯一 owner 与直接 canonical 锚点；不得把整条父链正文拼入默认输出。
 - 路径先由 L1 最长工程根确定领域 owner，再由该 L1 下 L2 DEC 的适用工程根与唯一影响 Story
   精确下钻；同优先级多 owner 或无 owner时 fail-closed。
-- 开发 PRE 与 Review POST 必须消费同一 manifest；Review profile 只补 specialist 与 evidence，
-  不复制 feature owner 或 design 内容。
+- 开发 PRE 与非控制型 workflow 的 Review POST 必须消费同一份 current owner manifest；缺失、旧 schema、target/scope 不匹配或 fingerprint stale 必须以 canonical `REVIEW.*` blocker 停止。控制型零 Reviewer workflow 只允许其 registry 声明的控制交付件，不得用于包装送审交付件旁路 owner manifest。
+- Review profile 只补 specialist 与 evidence，不复制 feature owner 或 design 内容。
 - 上下文装配顺序固定为 Skill-first：Skill body 先于 feature-context 被加载，(workflow, profile)
   与所需 owner kind 的选择先于 manifest 请求、由已选中的唯一 Skill 决定；自然语言与显式命令一旦
   RESOLVE 完成即消费同一顺序。
@@ -65,8 +65,8 @@
 
 - evidence 的定义只由 registry 拥有；checklist 的 MUST 只能绑定 `evidence: <id>` 或客观
   `check:`，不得保存命令。
-- board 每个 evidence ID 只执行一次并把结果共享给 Reviewer；Reviewer 缺 evidence 时报告
-  incomplete，禁止自行补跑命令。
+- board 每个 evidence ID 只执行一次并把结果共享给 Reviewer。Reviewer 缺 evidence 时报告 incomplete，禁止自行补跑命令。Evidence runner 在首条命令前按 plan changed paths、canonical contexts 与 review assets 重算 current EvidenceFingerprint；tracked/untracked/deleted/renamed/symlink/context/registry command 任一变化必须零命令返回 `REVIEW.FINGERPRINT_CHANGED`。
+- 每条命令后与最终收口都必须复核同一输入 identity；运行中受管内容变化使 result stale/GATE_BLOCK。execution/result receipt 必须携带真实 workspace digests，不能以空摘要代替当前工作树。
 - 复用指纹必须消费 canonical contract 声明的全部输入；tracked、untracked、删除、symlink、
   context 或 evidence 定义的变化都不得复用旧结论。
 - re-review 必须引用 initial plan，finding owner 必须来自首次 Reviewer；scope、profile 或路径集合变化时
@@ -87,8 +87,10 @@
 <a id="req-006"></a>
 ### REQ-006 Review 中断给出 typed 终态与唯一恢复动作
 
-- evidence 失败、required/optional Reviewer 未完成、用户取消、指纹或 scope 漂移必须分别落到 canonical contract 已声明的 terminal；未知失败 fail-closed。
-- Board 必须按该 terminal 的等级、自动重试许可与唯一恢复动作收敛，禁止把 incomplete/cancelled/stale 包装为通过。
+- evidence 失败、required/optional Reviewer 未完成、用户取消、owner manifest/指纹/scope 漂移必须分别落到 canonical contract 已声明的 terminal；实现可发射的 `REVIEW.*` code 与 contract 必须静态闭集一致，每个 code 只有一个 recovery，未知失败 fail-closed。
+- Named evidence receipt 只有在文件/ref 真实存在、schema 合法、terminal=PASS、plan identity 匹配且 current fingerprint fresh 时才能进入 handoff；handoff evidence 行必须投影真实 command/exit/start-finish/source HEAD，禁止硬编码成功。
+- Handoff producer、consumer/verifier 必须从 digest payload、artifact 与 named evidence receipt 重算 current freshness；同 HEAD 脏树漂移也拒绝旧 handoff，且 downstream 必须属于 canonical workflow registry。
+- Review consolidator 只消费 current plan、fresh named evidence 与结构化 reviewer results：required incomplete=`GATE_BLOCK`、optional incomplete=`PR_WARN`，finding 确定性去重，旧 fingerprint result 拒绝。Board 必须按 terminal 等级与唯一恢复动作收敛，禁止把 READY、incomplete、cancelled 或 stale 包装为 PASS。
 
 ## 4. 契约引用
 
@@ -146,8 +148,16 @@
 
 - GIVEN evidence 失败、required Reviewer 模型/额度/连接不可用、optional specialist 不可用、用户取消或指纹漂移。
 - WHEN board 汇总该次评审状态。
-- THEN 每种输入分别得到 canonical terminal contract 声明的 typed 等级、用户可读原因、是否允许重试与唯一恢复动作。
-- AND 任何 incomplete、cancelled 或 stale plan 都不得产生整体通过结论，也不得自动无限重试。
+- THEN 每种输入分别得到 canonical terminal contract 声明的 typed 等级、用户可读原因、是否允许重试与唯一恢复动作；实现发射闭集与 contract 精确相等。
+- AND 任何 READY、incomplete、cancelled、owner manifest stale、evidence result stale 或 handoff stale 都不得产生整体通过结论，也不得自动无限重试。
+
+<a id="gwt-007"></a>
+### GWT-007 Evidence、Review 结果与 Handoff 只消费当前真实回执
+
+- GIVEN 一个 POST plan、canonical named evidence receipt、结构化 reviewer results 与 handoff artifact/ref。
+- WHEN plan 后任一受管工作树字节、context、registry command、review asset 或 artifact 在执行前、命令间或下游消费前变化。
+- THEN 变化在首条命令前导致零命令 `REVIEW.FINGERPRINT_CHANGED`，运行中变化导致 stale/GATE_BLOCK；handoff 拒绝不存在、非 PASS、plan identity 不匹配或 freshness stale 的 evidence ref，并投影真实执行字段。
+- AND 仅 current fresh 输入可被确定性 consolidation；required incomplete 为 `GATE_BLOCK`、optional incomplete 为 `PR_WARN`、finding 去重稳定，downstream 只能来自 canonical workflow registry。
 
 ## 6. 依赖
 
@@ -158,15 +168,6 @@
 
 ## 7. 开放事项
 
-<a id="open-002"></a>
-### OPEN-002 EvidenceFingerprint 消费者尚未切换到 digestPayload 单轨身份
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺消费 `evidence_fingerprint` digestPayload 的实现与 `required_fixtures` 三项 contract fixture 证据——canonical contract 已声明该段（digestPayload 与 receipt 分离），但 Review 复用当前唯一 consumed 身份仍是 `review_plan.fingerprint_inputs`，迁移窗口内两段定义并存，若不收敛会形成第二身份算法。
-- 完成判定：`GWT-004` 的指纹复用子句由消费 `evidence_fingerprint` digestPayload 的实现与 `required_fixtures` 三项 contract fixture 绑定证据，且 `review_plan.fingerprint_inputs` 的身份职责被显式 supersede 或删除。
-
 <a id="open-001"></a>
 ### OPEN-001 渐进上下文与轻量 Review 尚未全部绑定真实证据
 
@@ -174,4 +175,4 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺绑定当前工作树字节的完整治理门、聚合 pageflip evidence，以及 Cursor/Codex 各一次 harness 发现 smoke；在这些证据齐备前不得把规格完成当作实现完成。
-- 完成判定：`GWT-001` 至 `GWT-006` 均具备职责匹配的真实 gate/local_contract；`GWT-005` 另具 Cursor 与 Codex 各一次发现 smoke，且上述证据绑定当前工作树字节。
+- 完成判定：`GWT-001` 至 `GWT-007` 均具备职责匹配的真实 gate/local_contract；`GWT-005` 另具 Cursor 与 Codex 各一次发现 smoke，且上述证据绑定当前工作树字节。

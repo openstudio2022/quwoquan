@@ -99,6 +99,20 @@ _PORTAL_MENU_JSON = r'''{
     },
     {
       "domain": "platform-ops",
+      "icon": "badge-check",
+      "label": "交付决策",
+      "menu_id": "platform-delivery-decision",
+      "object_types": [
+        "decision_unit",
+        "human_authority_card"
+      ],
+      "order": 24,
+      "parent_menu_id": "platform-ops",
+      "permission_scope": "ops.platform.delivery_decision.read",
+      "route_path": "/platform/delivery-decision"
+    },
+    {
+      "domain": "platform-ops",
       "icon": "chart-area",
       "label": "可观测与 SLO",
       "menu_id": "platform-observability",

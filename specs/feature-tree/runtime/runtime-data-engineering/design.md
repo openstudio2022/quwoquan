@@ -11,10 +11,14 @@
 
 ## 2. Story 协作与状态流
 
-- [`article-commercial-scale-closure`](./article-commercial-scale-closure/spec.md)：缺来源或权利的对象保持 typed GATE_BLOCK，不能进入 canonical publish。
-- [`geo-content-trinity`](./geo-content-trinity/spec.md)：图片来源、下载字节、授权与发布引用均可回放。
-- [`image-commercial-scale-closure`](./image-commercial-scale-closure/spec.md)：缺任一 required rights 字段的资产不能进入 release。
-- [`video-commercial-scale-closure`](./video-commercial-scale-closure/spec.md)：不满足 admission 的候选以 typed issue 阻断。
+四个历史 carrier Story 退役其 execution/pool/milestone/release/UAT 业务 ownership，只保留仍具跨域唯一价值的 consumer contract：
+
+- [`article-commercial-scale-closure`](./article-commercial-scale-closure/spec.md)：文章 canonical closure 到 importer/query 的字段与 failure 语义。
+- [`geo-content-trinity`](./geo-content-trinity/spec.md)：四载体共同引用闭包在 runtime consumer 的同 identity 对账。
+- [`image-commercial-scale-closure`](./image-commercial-scale-closure/spec.md)：图片 asset disposition/generator 在 consumer wire 的 fail-closed。
+- [`video-commercial-scale-closure`](./video-commercial-scale-closure/spec.md)：视频 attribution/media package 到 service/App 的无损投影。
+
+execution、reviewed delivery、canonical pool、milestone、release build/promotion 与 UAT/acceptance 业务规格统一归 [`discovery-content/object-homepage-coverage-scaling`](../../discovery-content/object-homepage-coverage-scaling/spec.md)。
 
 ## 3. 端云与数据流
 
@@ -25,37 +29,36 @@
 ## 4. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 数据任务先冻结来源事实并经 immutable release 激活
-- 决策：数据任务先冻结 reviewed commit、source digest、canonical entity catalog、来源、权利与目标事实，并让各 carrier 以独立 execution 分别调度和形成逐项终态，再经 canonical publish、immutable release 和环境 importer 激活；实际运行可串行或重叠，不要求固定四路并发、四个同时 workspace 或先通过 capacity soak。
-- 理由：`runtime-data-engineering` 是运行时数据工程能力，负责把离线/半自动数据产物整理为 App 与云服务可消费的稳定契约输入。
-- 被否决方案：环境内容 seed manifest、T3/UAT 自建内容对象、把评论/圈子/消息混入 Data release、post 依赖 homepage execution、把四载体塞入单一 execution，或调用方/页面复制本层状态并绕过 release/importer。
-- 约束与影响：release 聚合只以冻结的 source/entity facts 和实际 carrier task 的逐项终态为输入；soak、workspace smoke、effective concurrency 与 resource samples 只作诊断。canonical publish 保持对象事务单写者，release exact closure 用 attestation `payloadSha256` 串联四环境 import/readiness，并在 cleanup 时以进程锁及 acceptance evidence 保留长期验收引用。
-- 关联要求：`REQ-001`
-- 影响 Story：[`article-commercial-scale-closure`](./article-commercial-scale-closure/spec.md)、[`geo-content-trinity`](./geo-content-trinity/spec.md)、[`image-commercial-scale-closure`](./image-commercial-scale-closure/spec.md)、[`video-commercial-scale-closure`](./video-commercial-scale-closure/spec.md)
+### DEC-001 runtime-data-engineering 只拥有 immutable release consumer 边界
+- 决策：本节点不再拥有数据任务 execution、pool、milestone、release build/promotion 或 UAT/acceptance；这些业务事实统一由 discovery owner。runtime-data-engineering 只拥有 importer/outbox、Search/Recommendation/Homepage 与 App media projection 对公开 immutable release ref/digest 的消费边界。
+- 理由：同一 M100/M1000 与 release/UAT 事实存在两个 owner 会产生冲突 gate；runtime 的唯一跨域价值是确保消费者不改写、不猜测且同 identity readback。
+- 被否决方案：在四个 carrier Story 重复 workload target、环境晋级、容量或 acceptance OPEN；由 runtime integration PASS 代替 discovery 的 fresh Gamma/device evidence。
+- 失败恢复：上游 ref/digest 缺失或漂移时 consumer fail closed；恢复只在上游 owner 修复后重放 importer/query，不在本域补造 release/UAT。
+- 可测试面：api_integration 绑定同一 immutable release 的 importer/outbox/query/readback；静态测试断言本节点无 execution/pool/milestone/release/UAT command owner。
+- 关联要求：`REQ-001`、`REQ-002`
+- 影响 Story：[`geo-content-trinity`](./geo-content-trinity/spec.md)
 - 关联验收：`SIT-001`
 
 <a id="dec-002"></a>
-### DEC-002 池记录只保存准入结论，环境只消费不可变 Manifest
-- 决策：Data 作者记录只保存稳定身份、版本、过程/质量结论、证据引用与状态。
-- 数据边界：Data 内容记录再增加 `usageScope` 与 `variantPurpose`。逐素材许可证、来源、署名和证明保留在 evidence receipt，不复制进推荐候选、搜索文档或 App DTO。
-- 发布边界：Research/Commercial 共用 acquisition、semantic、review 与 canonical pool。环境 build 必须显式选择 release class，在同一 frozen pool snapshot 上让 Research 接受 `research|commercial`、让 Commercial 只接受逐对象商用授权闭合子集，并生成各自唯一 `releaseId + payload digest` Manifest。
-- 导入边界：Content 正式导入命令原子写 Post 与 durable outbox。
-- 理由：从内容生产者看只需回答“是否结束、质量是否合格、允许在哪里用”；从环境使用者看只需回答“这个 release 精确包含什么且是否验证通过”，不需要 PoolDelta、PoolSnapshot、SampleBundle 或 EnvironmentSelection 等并列业务身份。
-- 被否决方案：按环境或 Research/Commercial 维护独立 acquisition/semantic/review/pool，按环境维护独立内容副本、把头像授权范围并入作者准入、为头像生成 commercial variant、直接 seed 推荐/搜索、把 Manifest 当首页固定列表、由 Data 修改真实用户 Persona 或 UGC。
-- 约束与影响：Research 原版与 commercial variant 共享 `contentId` 并追加版本；Research release 优先最新 original，Commercial release 只取最新 commercial。Recommendation/Search 通过同一 Post lifecycle 消费 active Data release 与公开 UGC，Data release 切换不修改 UGC。
+### DEC-002 content library 与 pool/release 只作为上游只读事实
+- 决策：content library sole-holder、canonical object package/pool record 与 immutable release 均由上游 owner 单写。本域只消费 media binding、manifest digest、access mode 与 object refs，不拥有 holder、selection seal、materialization rebuild 或 pool repair command。
+- 理由：consumer 取得写权会让 sole-holder 与 release owner 分叉；跨域层只需验证 exact binding 并 fail closed。
+- 被否决方案：从 runtime cache、旧 release、fixture 或 App 本地字节回填 canonical；从 SourcePool/execution/campaign/provider/model 推导 eligibility。
+- 一致性与恢复：binding 不可达或 digest 漂移时 importer/query 整体或逐对象按公开契约阻断，owner bytes 不变；恢复后 exact replay。
+- 可测试面：local_contract 锁定 consumer schema 白名单，api_integration 覆盖 binding 漂移与 exact replay。
 - 关联要求：`REQ-001`、`REQ-002`
-- 影响 Story：文章、图片与视频三个 carrier Story 的 terminal replay/adopt。
+- 影响 Story：[`geo-content-trinity`](./geo-content-trinity/spec.md)
 - 关联验收：`SIT-001`
 
 <a id="dec-003"></a>
-### DEC-003 canonical reset 以 empty release 作为环境栅栏
-- 决策：canonical publish tree 与 inventory sidecar 是同一个 reset 一致性边界，但不是新的内容聚合或长期内容库。唯一写入口为现有 `release reset-canonical` command；它先消费所有受影响环境的 empty immutable release lifecycle/readback，再在全局 release operation lock 内获取 canonical publish lock 并原子清空两者。读面分别使用 release lifecycle/readback 与 `release pool-inspect`，不经通用 Repository 或数据库旁路。
-- 理由：先把消费者收敛到可验证的零对象 release，才能确保清空供应侧 canonical 状态时没有环境继续引用被作废对象；双锁顺序使 reset 与 pool delivery/release build 不会交错形成部分成功。
-- 被否决方案：手工删除 publish 或 inventory、以状态文件代替实际 lease/flock、在环境仍读旧 release 时清空、改写旧 execution receipt，以及 reset 后重新运行已闭合的 acquisition、author 或 review。
-- 失败恢复：任一环境未进入 empty baseline、锁冲突或 inventory 漂移均在写前 fail closed；写后恢复只消费 immutable release 与 terminal execution evidence，通过同 ID resume 或新 `retryOf` sequence replay/adopt。环境回滚与 canonical 重建均不依赖重新构建旧 release。
-- 可测试观察面：`release reset-canonical` 输出、publish/inventory digest、锁冲突结果、empty baseline lifecycle/readback、terminal execution 的 `retryOf` 与 pool inspection。local_contract 观察原子性和锁，api_integration 观察 baseline lifecycle，真实 release 消费观察重建 closure。
+### DEC-003 consumer rollback/replay 跟随上游 active pointer
+- 决策：本域不拥有 empty release、canonical reset 或 release lifecycle command；只在上游 active pointer/operation fact 变化后，原子 full-sync Post/outbox/Search/Recommendation/Homepage/media projection 到同一 release identity。
+- 理由：rollback command 与 consumer readback 是不同 owner；合并会让 runtime 可越权改变发布状态。
+- 被否决方案：runtime 直写 canonical/pool、按 counts 推断回滚成功、以缓存 last-known-good 覆盖上游 identity。
+- 失败恢复：任一 consumer 混合 identity、悬挂引用或 digest drift fail closed，previous fully verified projection 保持可读。
+- 可测试面：api_integration 覆盖 original→candidate→previous 的同 identity readback与部分同步故障。
 - 关联要求：`REQ-004`
-- 影响 Story：[`article-commercial-scale-closure`](./article-commercial-scale-closure/spec.md)、[`image-commercial-scale-closure`](./image-commercial-scale-closure/spec.md)、[`video-commercial-scale-closure`](./video-commercial-scale-closure/spec.md)
+- 影响 Story：[`geo-content-trinity`](./geo-content-trinity/spec.md)
 - 关联验收：`SIT-002`
 
 <a id="dec-004"></a>
@@ -70,27 +73,50 @@
 - 关联验收：[`image-commercial-scale-closure/GWT-004`](./image-commercial-scale-closure/spec.md#gwt-004)
 
 <a id="dec-005"></a>
-### DEC-005 内容生产执行推进主体退役为宿主 Agent + 阶段契约 + 检查脚本三层分工
-- 决策：内容生产执行的推进主体从仓内编排框架移交给 Cursor 或 Codex 宿主 agent 会话。仓库执行代码只保留确定性 IO（下载、媒体 CAS、publish/release/ship 原子命令）与检查器（verify 门禁 + JSON schema）；阶段序与交接协议由 `.agents/skills/content-production/` 阶段契约文档拥有。每阶段收尾由 `task stage-record` 写 create-once stage receipt（executionId、stage、verdict、actor、artifacts、openItems、next、evidence），receipt 链加磁盘产物是跨会话交接与恢复的唯一状态源。
-- 理由：自建编排两个月产出为 6 次 execution 仅 1 次 succeeded、immutable release 为零；来源不足刚性停机、`waiting_agent` 交接挂起、publish 盲试放弃三类主失败全部位于「框架驱动 agent」的交接带。宿主 agent 作为唯一执行主体后交接断点归零，合规从过程控制转为产物证据门禁。
-- 被否决方案：继续扩展仓内 agent 驱动与队列舰队、为旧编排层保留兼容双轨、把阶段语义写进 loop 驱动、用会话上下文代替磁盘 receipt、按宿主分叉多套 skill 文本。
-- 约束与影响：唯一允许新增的编排是 `quwoquan_data/scripts/content/execution/runner/loop_driver.sh`（≤50 行，只读 receipt verdict 决定续/停）与 `quwoquan_data/scripts/content/execution/runner/fleet_dispatcher.sh`（≤100 行，只做进程起/收/记录与 ≤3 次基础设施退避），均不含业务判断。同一 executionId 同时只有一个执行者（single-writer claim + TTL 心跳）。`5.review` 由独立会话执行且 judge 模型族 ≠ generator 模型族；该约束要求派发面能指定具名模型，因此 judge 的唯一合法派发面是宿主子会话并显式传入 model slug，`auto` 派发不是合法 judge 派发面（其族别不可预先声明），取不到具名异族 slug 即落 `verdict=blocked` 而不是先评后补。运行时模型与主控会话模型解耦、默认 auto，但该默认不适用于 judge 派发。工作包布局、`retryOf` 身份、`execution_state` 终态语义与 publish/release 契约不变。
-- 失败恢复：阶段验收失败由执行者按 verify issue 自修 ≤3 轮，超限落 `verdict=blocked` receipt 停 lane 交人工。宿主瞬时错误由驱动退避重启 ≤3 次，崩溃后从 receipt 链续跑到精确断点。终态不可 resume，只能新 sequence + `retryOf`。
-- 可测试观察面：stage receipt schema 与 create-once 语义、layout 门对 receipt 位置的 allowlist、readiness 门对 receipt 链的消费、驱动脚本行数与无业务判断治理门、rubric 门的 judge 分离、judge 派发面在缺具名异族 slug 时的 `blocked` 终态。
-- 关联要求：`REQ-001`、`REQ-004`
-- 影响 Story：文章、地理三元组、图片与视频四条 carrier Story 的执行推进方式（对象与 release 契约不变）。
-- 关联验收：`SIT-001`、`SIT-002`
+### DEC-005 宿主 execution 只作为 discovery owner 的只读上游
+- 决策：宿主 Cursor/Codex Agent 十阶段、stage receipt、reviewed delivery、pool 与 ship terminal 归 discovery owner。本节点不定义 Skill、runner、claim、recovery 或 terminal reducer，只允许 consumer diagnosis 通过公开 release/receipt ref 追溯。
+- 理由：执行推进方式不是 runtime consumer 的业务事实；在本域再拥有一套会与 discovery 单轨分叉。
+- 被否决方案：仓内 managed SDK/controller/campaign、runtime view 回写 execution、由 importer/UAT 写 succeeded。
+- 失败恢复：execution 问题返回上游 typed ref；本域只能重跑自己的 importer/query，不创建 `retryOf` 内容 execution。
+- 可测试面：静态 owner test 与 projection-only local_contract。
+- 关联要求：`REQ-005`
+- 影响 Story：[`geo-content-trinity`](./geo-content-trinity/spec.md)
+- 关联验收：`SIT-003`
+
+<a id="dec-006"></a>
+### DEC-006 runtime 运营对象仅投影 consumer facts
+- 决策：本域 View 只投影 importer/outbox/query/active pointer 与公开上游 release refs；无 command、Repository、checkpoint、独立 lifecycle 或 owner-fact 修复能力。
+- 理由：跨 owner 查询可重建，持久 checkpoint 会成为第二状态台账。
+- 被否决方案：View 写下一环境、acceptance、release selection 或 execution terminal。
+- 恢复：缺 fact/digest drift 返回 typed incomplete/conflict，修 source fact 后重建。
+- 可测试面：删除重建 exact 相同且 owner bytes 不变。
+- 关联要求：`REQ-005`
+- 影响 Story：[`geo-content-trinity`](./geo-content-trinity/spec.md)
+- 关联验收：`SIT-003`
+
+<a id="dec-007"></a>
+### DEC-007 UAT runner 只消费 runtime readback，不拥有 acceptance
+- 决策：sample plan、target binding、raw `ReadinessCaseResult` 与 `EnvironmentAcceptanceFact` 的 authority 继续由 discovery/metadata/Ops owner；runtime 只提供被 required runner 调用的 release-bound readback。
+- 理由：readback producer 与 UAT result/acceptance writer 是不同 owner；本域 PASS 不能代替 registered physical device raw facts 或 Gamma acceptance。
+- 被否决方案：把 verdict 写进 Data readiness、由 bundle/counts 推导 acceptance、从 runtime integration 触发 M1000。
+- 失败恢复：readback 缺失或漂移只返回 typed blocker，不写 raw result/acceptance；由外层 runner 保留真实结果。
+- 可测试面：local_contract 锁定 port 只读，api_integration 提供同 release/candidate readback。
+- 关联要求：`REQ-006`
+- 影响 Story：[`geo-content-trinity`](./geo-content-trinity/spec.md)
+- 关联验收：`SIT-004`
 
 ## 5. 失败与恢复
 
-- 失败类型：权限拒绝、依赖超时、版本冲突、锁冲突、环境 baseline 未收敛、inventory 漂移或持久化失败。
-- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
-- 恢复动作：写前失败保持 canonical 不变；reset 后只按 terminal evidence replay/adopt，环境恢复只 replay 已核验 immutable release。调用方不得自行合成成功结果。
-- 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
+- 失败类型：权限拒绝、依赖超时、版本/bytes 冲突、锁冲突、环境 baseline 未收敛、inventory/holder 漂移、target 前置缺失、required raw result 缺失或持久化失败。
+- 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写 ship succeeded 或追加伪 `EnvironmentAcceptanceFact`。
+- execution 恢复：写前失败保持 canonical 不变，terminal 只以新 `executionId + retryOf` 恢复。reset 后只按 terminal evidence replay/adopt。
+- 环境恢复：追加新的 operation/readback/Exit/raw result facts 并重新求值，不改旧 execution/acceptance。
+- materialization 恢复：只从 content library sole-holder exact rebuild。
+- 禁止 fallback：不得回退到 Mock、旧 wire、双读双写、compatibility shim、View Repository/checkpoint 或页面本地写副本。
 
 ## 6. 质量与观测
 
-- 成本影响保持同量级：reset 只处理当前 publish/inventory 元数据，replay 成本与被选 terminal execution 数量线性相关，不引入长期内容副本。
-- reset 写阶段在取得锁后 60 秒内完成或 fail closed；环境从 empty baseline 恢复原 release 的目标为 5 分钟内完成。超时只产生失败 receipt，不放宽锁或 closure。
-- SLI 直接读取 create-once reset receipt、empty/replay lifecycle、pool inspection 与 execution receipt 的完成状态和耗时；这些回执也是告警与审计来源，不新增第二份状态台账。
-- rollout 先在 Alpha 以最小 rollout stage 执行；回滚使用已核验 empty/original immutable release 与 same-digest replay，不重新构建 release。Beta/Gamma/Prod 与长期 `content_library + holdings` 保持现有 OPEN。
+- 成本影响保持同量级：reset 只处理 canonical publish/inventory 元数据，replay 成本与被选 terminal execution 数量线性相关；release materialization 可重建，不引入 content library 之外的长期 media holder。
+- reset 写阶段在取得锁后 60 秒内完成或 fail closed；环境从 empty baseline 恢复原 release 的目标为 5 分钟内完成。超时只产生失败 receipt，不放宽锁、holder protection 或 closure。
+- SLI 直接读取 create-once reset/stage/ship receipt、empty/replay lifecycle、pool inspection、raw readiness result、target binding 与 acceptance fact 的完成状态和耗时；View 与 bundle 只做查询，不新增第二份状态台账。
+- rollout、Gamma acceptance 与 M1000 start gate 归 discovery/Ops owner。本域只在 active pointer 改变后按 same digest 重放 consumer projection；未完成消费证据保留在 `OPEN-004`、`OPEN-005`、`OPEN-008`。

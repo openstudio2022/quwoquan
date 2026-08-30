@@ -27,6 +27,63 @@ FAILURE_CODE_KEYS = frozenset(
     }
 )
 FAILURE_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*$")
+BRANCH_POLICY_FIELDS = frozenset(
+    {
+        "allowed_local_branches",
+        "allowed_remote_branches",
+        "pull_request_branch_prefixes",
+        "integration_branch",
+        "release_branch",
+        "production_source_branch",
+        "production_workflow",
+        "required_promotion_checks",
+        "allowed_pull_request_edges",
+        "system_backsync",
+        "temporary_execution_admission",
+        "failure_codes",
+    }
+)
+POLICY_INVALID_RECOVERY = "repair_canonical_branch_policy"
+AUTHORITY_UNAVAILABLE_RECOVERY = "restore_git_authority_then_retry"
+
+
+class _UniqueKeySafeLoader(yaml.SafeLoader):
+    """SafeLoader that rejects ambiguous mappings at every nesting level."""
+
+
+def _construct_unique_mapping(
+    loader: _UniqueKeySafeLoader,
+    node: yaml.MappingNode,
+    deep: bool = False,
+) -> dict[object, object]:
+    loader.flatten_mapping(node)
+    mapping: dict[object, object] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        try:
+            duplicate = key in mapping
+        except TypeError as error:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                "found an unhashable mapping key",
+                key_node.start_mark,
+            ) from error
+        if duplicate:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                f"found duplicate key {key!r}",
+                key_node.start_mark,
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_UniqueKeySafeLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_unique_mapping,
+)
 
 
 @dataclass(frozen=True)
@@ -60,6 +117,14 @@ class RequiredPromotionCheck:
 
 
 @dataclass(frozen=True)
+class TemporaryExecutionAdmission:
+    isolation: str
+    promotion: str
+    cleanup: str
+    concurrency_evidence: str
+
+
+@dataclass(frozen=True)
 class BranchPolicy:
     allowed_local: frozenset[str]
     allowed_remote: frozenset[str]
@@ -71,6 +136,7 @@ class BranchPolicy:
     required_promotion_checks: tuple[RequiredPromotionCheck, ...]
     allowed_pull_request_edges: tuple[PullRequestEdge, ...]
     system_backsync: SystemBacksync | None
+    temporary_execution_admission: TemporaryExecutionAdmission | None
     failure_codes: tuple[tuple[str, str], ...]
 
     def failure_code(self, name: str) -> str:
@@ -114,11 +180,16 @@ def _run_git(*args: str) -> list[str]:
     return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
 
 
-def _required_string(payload: Mapping[str, object], key: str) -> str:
-    value = str(payload.get(key) or "").strip()
-    if not value:
-        raise ValueError(f"branch policy requires non-empty {key}")
+def _strict_string(value: object, label: str) -> str:
+    if type(value) is not str:
+        raise TypeError(f"branch policy {label} must be a string")
+    if not value or value.strip() != value:
+        raise ValueError(f"branch policy {label} must be non-empty and trimmed")
     return value
+
+
+def _required_string(payload: Mapping[str, object], key: str) -> str:
+    return _strict_string(payload.get(key), key)
 
 
 def _string_set(
@@ -127,7 +198,10 @@ def _string_set(
     raw = payload.get(key)
     if not isinstance(raw, list):
         raise TypeError(f"branch policy {key} must be a list")
-    rows = [str(value).strip() for value in raw if str(value).strip()]
+    rows = [
+        _strict_string(value, f"{key}[{index}]")
+        for index, value in enumerate(raw)
+    ]
     if (not rows and not allow_empty) or len(rows) != len(set(rows)):
         qualifier = "duplicate-free" if allow_empty else "non-empty and duplicate-free"
         raise ValueError(f"branch policy {key} must be {qualifier}")
@@ -206,11 +280,43 @@ def _system_backsync(payload: Mapping[str, object]) -> SystemBacksync | None:
     )
 
 
+def _temporary_execution_admission(
+    payload: Mapping[str, object],
+) -> TemporaryExecutionAdmission | None:
+    raw = payload.get("temporary_execution_admission")
+    if raw is None:
+        return None
+    expected = {
+        "isolation": "branch_per_writer",
+        "promotion": "declared_pull_request_edge_only",
+        "cleanup": "mandatory_after_promotion_or_abort",
+        "concurrency_evidence": "required",
+    }
+    if not isinstance(raw, Mapping) or set(raw) != set(expected):
+        raise ValueError(
+            "branch policy temporary_execution_admission must contain the exact "
+            "isolation/promotion/cleanup/concurrency_evidence lifecycle fields"
+        )
+    values = {
+        key: _strict_string(raw.get(key), f"temporary_execution_admission.{key}")
+        for key in expected
+    }
+    for key, expected_value in expected.items():
+        if values[key] != expected_value:
+            raise ValueError(
+                f"branch policy temporary_execution_admission.{key} must be "
+                f"{expected_value!r}"
+            )
+    return TemporaryExecutionAdmission(**values)
+
+
 def _failure_codes(payload: Mapping[str, object]) -> tuple[tuple[str, str], ...]:
     raw = payload.get("failure_codes")
     if not isinstance(raw, Mapping):
         raise TypeError("branch policy failure_codes must be a mapping")
-    keys = frozenset(str(key) for key in raw)
+    for key in raw:
+        _strict_string(key, "failure_codes key")
+    keys = frozenset(raw)
     if keys != FAILURE_CODE_KEYS:
         missing = sorted(FAILURE_CODE_KEYS - keys)
         unexpected = sorted(keys - FAILURE_CODE_KEYS)
@@ -220,7 +326,7 @@ def _failure_codes(payload: Mapping[str, object]) -> tuple[tuple[str, str], ...]
         )
     rows: list[tuple[str, str]] = []
     for key in sorted(FAILURE_CODE_KEYS):
-        code = str(raw.get(key) or "").strip()
+        code = _strict_string(raw.get(key), f"failure_codes.{key}")
         if not FAILURE_CODE_PATTERN.fullmatch(code):
             raise ValueError(
                 f"branch policy failure_codes.{key} must use MODULE.KIND.REASON"
@@ -231,10 +337,26 @@ def _failure_codes(payload: Mapping[str, object]) -> tuple[tuple[str, str], ...]
     return tuple(rows)
 
 
-def load_policy(path: Path = POLICY_PATH) -> BranchPolicy:
-    payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+def load_policy_bytes(raw: bytes) -> BranchPolicy:
+    """Parse and validate one exact byte snapshot of canonical branch policy."""
+    if not isinstance(raw, bytes):
+        raise TypeError("branch policy raw input must be bytes")
+    decoded = raw.decode("utf-8", errors="strict")
+    loaded = yaml.load(decoded, Loader=_UniqueKeySafeLoader)
+    payload = {} if loaded is None else loaded
     if not isinstance(payload, Mapping):
         raise TypeError("branch policy root must be a mapping")
+    actual_fields = set(payload)
+    required_fields = BRANCH_POLICY_FIELDS - {
+        "system_backsync", "temporary_execution_admission",
+    }
+    missing = sorted(required_fields - actual_fields)
+    unexpected = sorted(actual_fields - BRANCH_POLICY_FIELDS, key=repr)
+    if missing or unexpected:
+        raise ValueError(
+            "branch policy root fields drifted; "
+            f"missing={missing}, unexpected={unexpected}"
+        )
     policy = BranchPolicy(
         allowed_local=_string_set(payload, "allowed_local_branches"),
         allowed_remote=_string_set(payload, "allowed_remote_branches"),
@@ -248,6 +370,7 @@ def load_policy(path: Path = POLICY_PATH) -> BranchPolicy:
         required_promotion_checks=_required_promotion_checks(payload),
         allowed_pull_request_edges=_pull_request_edges(payload),
         system_backsync=_system_backsync(payload),
+        temporary_execution_admission=_temporary_execution_admission(payload),
         failure_codes=_failure_codes(payload),
     )
     for branch_name in (
@@ -285,6 +408,22 @@ def load_policy(path: Path = POLICY_PATH) -> BranchPolicy:
             raise ValueError(
                 f"branch policy PR head pattern {edge.head!r} is not a declared pull-request prefix"
             )
+    if policy.temporary_execution_admission is not None:
+        if not policy.pull_request_prefixes:
+            raise ValueError(
+                "branch policy temporary execution admission requires at least one "
+                "declared pull-request prefix"
+            )
+        admitted_prefixes = {
+            edge.prefix
+            for edge in policy.allowed_pull_request_edges
+            if edge.prefix is not None and edge.base == policy.integration_branch
+        }
+        if admitted_prefixes != set(policy.pull_request_prefixes):
+            raise ValueError(
+                "branch policy temporary execution admission requires every and only "
+                "declared prefix to promote into the integration branch"
+            )
     if policy.integration_branch == policy.release_branch:
         if policy.system_backsync is not None:
             raise ValueError(
@@ -301,6 +440,11 @@ def load_policy(path: Path = POLICY_PATH) -> BranchPolicy:
                 "branch policy system_backsync must be release -> integration and fast-forward-only"
             )
     return policy
+
+
+def load_policy(path: Path = POLICY_PATH) -> BranchPolicy:
+    """Read canonical policy bytes once, then delegate to the sole parser."""
+    return load_policy_bytes(path.read_bytes())
 
 
 def _matches_pull_request_prefix(branch: str | None, prefixes: frozenset[str]) -> bool:
@@ -536,8 +680,8 @@ def branch_policy_issues(
     return issues
 
 
-def current_repo_issues() -> list[str]:
-    policy = load_policy()
+def current_repo_issues(policy: BranchPolicy | None = None) -> list[str]:
+    policy = policy or load_policy()
     local_branches = _run_git("for-each-ref", "--format=%(refname:short)", "refs/heads")
     remote_branches = [
         ref[len("origin/") :]
@@ -548,10 +692,7 @@ def current_repo_issues() -> list[str]:
     ]
     ci_head_branch, ci_base_branch = pull_request_context_from_environment(os.environ)
     hosted_branch = repository_branch_context_from_environment(os.environ)
-    try:
-        current_branch = _run_git("symbolic-ref", "--quiet", "--short", "HEAD")[0]
-    except (subprocess.CalledProcessError, IndexError):
-        current_branch = None
+    current_branch = _current_branch()
     if hosted_branch is not None:
         current_branch = hosted_branch
     issues = branch_policy_issues(
@@ -562,22 +703,9 @@ def current_repo_issues() -> list[str]:
         ci_head_branch=ci_head_branch,
         ci_base_branch=ci_base_branch,
     )
-    if hosted_branch is not None and os.environ.get("GITHUB_EVENT_NAME") == "push":
-        decision = evaluate_transition(
-            policy=policy,
-            transition=BranchTransition(
-                event="direct_push",
-                actor_kind="github",
-                repository=os.environ.get("GITHUB_REPOSITORY", "github"),
-                head=hosted_branch,
-                base=hosted_branch,
-            ),
-        )
-        if not decision.allowed:
-            issues.append(
-                f"{decision.reason_code}: hosted direct push to "
-                f"'{hosted_branch}' is not allowed"
-            )
+    # A generic GitHub push event does not carry the update provenance needed to
+    # distinguish a direct push from a server-side PR merge. Direct-push decisions
+    # are therefore constructed only by explicit update sources such as pre-push.
     return issues
 
 
@@ -700,9 +828,24 @@ def pre_push_issues(
 
 def _current_branch() -> str | None:
     try:
-        return _run_git("symbolic-ref", "--quiet", "--short", "HEAD")[0]
-    except (subprocess.CalledProcessError, IndexError):
-        return None
+        rows = _run_git("symbolic-ref", "--quiet", "--short", "HEAD")
+    except subprocess.CalledProcessError as error:
+        if error.returncode == 1:
+            return None
+        raise
+    if not rows:
+        raise OSError("git symbolic-ref returned no branch")
+    return rows[0]
+
+
+def _safe_error_detail(error: BaseException) -> str:
+    return " ".join(str(error).replace("\x00", "\\x00").split()) or type(error).__name__
+
+
+def _emit_terminal_failure(*, code: str, detail: str, recovery: str) -> int:
+    print("[verify_git_branch_policy] FAIL")
+    print(f"  - {code}: terminal=blocked; {detail}; recovery={recovery}")
+    return 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -716,17 +859,29 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
+        policy = load_policy()
+    except (OSError, UnicodeError, TypeError, ValueError, yaml.YAMLError) as error:
+        return _emit_terminal_failure(
+            code="OPS.BRANCH.POLICY_INVALID",
+            detail=f"branch policy is invalid: {_safe_error_detail(error)}",
+            recovery=POLICY_INVALID_RECOVERY,
+        )
+    try:
         if args.pre_push:
             issues = pre_push_issues(
-                policy=load_policy(),
+                policy=policy,
                 current_branch=_current_branch(),
                 update_lines=sys.stdin,
                 environment=os.environ,
             )
         else:
-            issues = current_repo_issues()
-    except (OSError, TypeError, ValueError, yaml.YAMLError) as exc:
-        issues = [f"OPS.BRANCH.POLICY_INVALID: branch policy is invalid: {exc}"]
+            issues = current_repo_issues(policy)
+    except (OSError, UnicodeError, subprocess.SubprocessError) as error:
+        return _emit_terminal_failure(
+            code=policy.failure_code("authority_unavailable"),
+            detail=f"Git authority is unavailable: {_safe_error_detail(error)}",
+            recovery=AUTHORITY_UNAVAILABLE_RECOVERY,
+        )
     if issues:
         print("[verify_git_branch_policy] FAIL")
         for issue in issues:

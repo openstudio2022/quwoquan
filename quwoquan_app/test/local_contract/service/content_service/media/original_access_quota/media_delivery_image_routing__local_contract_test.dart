@@ -140,7 +140,9 @@ void main() {
       expect(find.byType(SignedGrantImage), findsNothing);
     });
 
-    testWidgets('契约缺席 accessMode（存量 public 投影）：走公开委托', (tester) async {
+    testWidgets('accessMode 缺席但 URL 在场：contract failure，不公开 fallback', (
+      tester,
+    ) async {
       final harness = _Harness(_StallingOriginalAccessGateway());
       await tester.pumpWidget(
         harness.wrap(
@@ -148,6 +150,22 @@ void main() {
             assetId: '',
             accessMode: null,
             publicUrl: 'https://media.example.test/public/cover.jpg',
+          ),
+        ),
+      );
+
+      expect(find.byKey(_errorKey), findsOneWidget);
+      expect(find.byKey(_publicKey), findsNothing);
+      expect(harness.publicBuilderCalls, 0);
+      expect(harness.resolveAttempts, 0);
+    });
+
+    testWidgets('具名 legacyPublic adapter：显式适配为 public 后走公开委托', (tester) async {
+      final harness = _Harness(_StallingOriginalAccessGateway());
+      await tester.pumpWidget(
+        harness.wrap(
+          const MediaDeliveryBinding.legacyPublic(
+            publicUrl: 'https://media.example.test/public/legacy-cover.jpg',
           ),
         ),
       );

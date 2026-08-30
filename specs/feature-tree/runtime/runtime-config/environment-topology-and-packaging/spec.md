@@ -48,7 +48,7 @@
 - 同一环境存在多个部署 target 时，每个 target 必须写入独立 package 目录，并从环境 `urlRoles + target urlOverrides + portProfile` 的解析结果投影 App 运行时端点；禁止复制环境默认 target 的 URL 或跨 target 复用可变产物。
 - `prod-hosted` artifact 禁止包含 mock/seed/debug/local/test host 与跨环境 URL；`prod-sim` 仍属于 `prod` 环境，但全部公共入口必须使用 `*.sim.quwoquan.com`，不得命中生产 host、增加第五环境或放宽 `prod-hosted` 纯度门。
 - 南北向公开入口（URL role、gateway 数据流、公网 DNS、TLS profile、CDN、derived link）与东西向端口块模型由 [`system-topology-and-networking`](../../system-topology-and-networking/spec.md) 拥有；本 Story 只消费 topology resolver 投影完成打包、装配与验收，不复制组网规则。
-- local environment matrix 的 `emulator_only` 设备 profile 只要求 iOS Simulator 与 Android Emulator，并且只能签发 `ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN`、`nonPromotable=true` 与 Android 真机 waiver；它不得写入正式 Green Matrix、Provider 140-cell 或 Prod artifact closure。正式 `ALPHA_BETA_GAMMA_LOCAL_GREEN` 继续要求独立 Android 真机回执。
+- local environment matrix 的 `emulator_only` rehearsal profile 只要求 iOS Simulator 与 Android Emulator，并且只能签发 `ALPHA_BETA_GAMMA_EMULATOR_ONLY_FUNCTIONAL_GREEN`、`nonPromotable=true` 与 Android 真机 waiver；它保留原始 canonical `ReadinessCaseResult`，但不得写入正式 Green Matrix、Provider 140-cell、`EnvironmentAcceptanceFact` 或 Prod artifact closure。正式 `ALPHA_BETA_GAMMA_LOCAL_GREEN` 使用同一套 `ReadinessCaseResult` schema，必须为 Alpha、Beta、Gamma 的 Android 与 iOS physical slots 逐项声明受测 production-behavior artifact、已登记物理设备、平台 trust/runtime package 与独立机器回执。不得把模拟器结果改标、复制或聚合为 promotable 证据。
 - 四环境分别拥有配置与部署 composition，不从 Prod 继承，但引用同一 Web bundle 摘要；非生产 Web hosting 的 `noindex` 与 DNS/证书策略由 [`system-topology-and-networking`](../../system-topology-and-networking/spec.md) 拥有。
 - `stackctl status` 是严格只读诊断：只能读取既有进程、package、receipt 与 HTTP 状态，禁止创建或刷新 secret、物化 Provider、启动服务、执行修复或改变环境事实；缺失依赖必须以失败状态返回。
 - `stackctl package` 的 immutable candidate 合同用于显式内容验收与 Prod 发布。package plan 必须先派生本次实际读取的 `deploymentInputClosure`，在短 capture 窗口把 staged、unstaged、untracked 精确字节复制到 target-scoped、只读、content-addressed package input capsule，并绑定 target-scoped 唯一 `baselineId`；Alpha/Beta/Gamma 的环境配置输入不同，因此 baseline 允许且预期不同，跨 target 的共同冻结身份只取每份 fresh active candidate manifest 中 `environmentArtifact.releaseTrainId`。capture 期间闭包变化使该次 capture fail closed 并可重试。
@@ -69,16 +69,21 @@
 - `dev-session --all-nonprod` 在单工作站按 Alpha→Beta→Gamma 串行运行；隔离 runner 可并行执行不同 target，但不得共享端口、Compose project、secret、CA、release 或 runtime receipt。
 - full runtime 是 App 会话的唯一 baseline。bounded content workload 在 full 健康时只复用其能力且不得覆盖 baseline receipt；独立 bounded runtime 必须使用 workload-scoped receipt，并在结束后恢复进入前状态。
 - 四环境内容 consumer/commercial readiness 必须绑定同一份 immutable release 的 `releaseId + manifestDigest + sourceOwner=qwq_data`，并校验 discovery `identity=work`、视频书 `identity=work&type=video` 与 `premium_stream` 的 release-bound 非空读回；缺少 Data readiness receipt 或任一 exact query 为空时不得产生通过回执。
-- commercial readiness 必须从同一 release 对象闭包投影 canonical `appUatEnvelope`，包含 homepage、article、image、video、Creator、Tag 与 attribution 的验收身份。App 自动验收不得从手工环境变量、fixture 或旧回执重建该信封。
+- Data release owner 必须从同一 release 对象闭包 create-once `ReleaseUatSamplePlan`，冻结 homepage、article、image、video、Creator、Tag、attribution 的 sample identity 与二维 required cells；Ops 只通过 exact-byte `TargetUatBinding` 将该 plan 绑定到 target/runtime/package/config/platform/device/runner slot。App 自动验收不得从手工环境变量、fixture、旧回执或任何 retired envelope 重建计划或 target binding。
+- 应用消费验收必须建模为二维矩阵：`entry ∈ {feed, search, recommendation, direct_or_object_route}`，`carrier ∈ {homepage, article, image, video}`；每个 cell 只能声明 `required` 或 `not_applicable`，后者必须携带 plan-owned reason。entry 是到达内容的入口，carrier 是被消费的内容载体，禁止把二者混称为同一组“四 surface”、以一维列表替代矩阵，或以一个通过 cell 覆盖另一个 required cell。
 
 <a id="req-003"></a>
 ### REQ-003 双端本地运行持有可释放 consumer lease
 
 - `quwoquan_app/run.sh --mode content-live -d <device>` 是显式选择设备、持有 consumer lease、准备平台 transport 并验证真实首页/视频书内容的 canonical launcher，也是未指定 mode 时的默认；`--mode ui-only` 只允许调试安全 Shell 与页面布局且生成 `nonPromotable=true` 证据。IDE launch profile 可以薄包装该入口。
 - `dev-session --app-mode content-live|ui-only` 与 canonical launcher 使用同一执行体且默认 `content-live`。Alpha/Beta/Gamma 的 `test_live` 是开发启动严格度：两种 App mode 都不得因服务、Provider、内容或观测 readiness 不可用而跳过真实编译、安装、activation 与启动；`ui-only` 始终标记 `nonPromotable=true`，`content-live` 还必须在启动后真实请求 Remote 内容并如实呈现成功、合法空态或 typed unavailable。
+- `make app-dev ENV=alpha|beta|gamma [DEVICE_ID=<id>] [MODE=content-live|ui-only]` 是面向人类的公开一键入口，仅作为 `stackctl dev-session --launch-app --app-mode` 的薄 adapter；`ENV` 默认 `alpha`，`MODE` 默认 `content-live`。设备选择只委托 canonical device authority：唯一设备自动选择，多设备必须显式 `DEVICE_ID`。Make 不拥有设备发现、env/target 扩展、交互、状态机、provenance 或 receipt。
+- `make app-uat TARGETS=... PLATFORM=... DEVICE_ID=...` 是面向 AI/自动化的无交互公开入口，只委托 `stackctl app-content-uat`；`TARGETS` 仅允许 `alpha-local`、`beta-local`、`gamma-local` 的非空子集，禁止 Prod。它只编排自动验收，不替代 fresh Workspace Terminal 的字面 `flutter run` 或 IDE surface 的用户验收。
 - `quwoquan_app/run.sh --mode content-live --env alpha|beta|gamma -d <device>` 是内容联调与 Hot Restart 的唯一开发启动执行体。字面 `flutter run` 与受控制的 IDE Run/Debug 是两个独立受支持的 thin command surface，必须分别薄包装并归一化进入同一执行体；工作区 `flutter` facade 只拦截本 App 的 `run` 子命令（launch provenance=`workspace_flutter_run`），IDE 薄包装使用 `workspace_ide_debug`，其余子命令与其他项目全部透传真实 Flutter SDK。未经任一 canonical handoff 的原始 Xcode/Gradle backend 不具备安装后 target config activation 能力，必须继续 fail-closed，且 typed blocker 必须只指引 `run.sh`、工作区 facade 激活入口或受控制的 IDE profile。
 - 设备选择按 launch surface 分层：直接调用 `run.sh` 必须显式 `-d <device>`；`workspace_flutter_run` surface 在设备清单恰有一台可用移动设备时允许自动选择该设备，多设备时列出 canonical inventory 并要求 `-d`，不得按最近使用猜测设备。`workspace_ide_debug` 必须由 profile 的显式设备选择或同一 inventory 规则解析，不能读取 IDE 最近设备作为事实。
 - 工作区 facade 与 IDE profile 必须可凭受版本控制真相源重建。首次使用只执行仓库内具名激活入口，本地编辑器配置只是可删除投影。激活后重载编辑器窗口，新建工作区终端的 `command -v flutter` 必须解析到 facade，IDE Run/Debug 必须显示并调用 canonical profile。旧终端、仓库外终端、绝对 SDK 命令与原始 Xcode/Gradle 不属于受支持正向面。未激活时唯一恢复动作是执行具名激活入口并重载窗口，不得要求修改全局 PATH、Flutter 安装或关闭 trust gate。移除投影并重载即完全回退。
+- 字面 `flutter run` 的 required surface 只接受 fresh Workspace Terminal；`agents-window` 仅为 optional diagnostics，不是字面 Flutter 或 UAT 的 required surface，也不得通过修改用户全局 Cursor settings 制造通过。
+- 全部代理 user zsh startup files 执行完成后，最终 `PATH` 必须稳定保持 facade→real Flutter→exact Pod 的顺序；只有对 `command -v flutter`、physical `command -v pod` 与同一 six-field CocoaPods identity 完成 live validation 后，terminal carrier receipt 才成立。旧 PTY 或 startup 完成前写入的 receipt 均不得作为证据。
 - canonical launcher 固定选择 metadata 声明的 `nonprod` build profile，默认 target 为 `alpha-local`，显式环境只选择对应签名 runtime config package。它禁止选择 Prod 或直接覆盖 URL、密钥、target、manifest 与 release。
 - `QWQ_ENVIRONMENT` 只允许选择 nonprod 信任域内的 runtime package，不得反向选择原生包身份或进入 Flutter 编译输入。
 - `workspace_flutter_run` 与 `workspace_ide_debug` surface 没有自建的 mode 协议；run mode 与环境同构，经 `QWQ_RUN_MODE`（`content-live|ui-only`，默认 `content-live`）选择并交同一 canonical 执行体校验，IDE profile 只投影同一输入，非法值 fail closed。
@@ -113,6 +118,7 @@
 - 每次 Dart isolate 启动必须先生成新 `attemptId`，再调用原生 `beginStartupAttempt(attemptId)`。原生返回 `attemptKind=cold|hotRestart`、`processElapsedMs`、`attemptElapsedMs` 与 `deadlineOrigin=nativeProcess|dartHotRestart`。
 - `startup_attempt_started` 只能在 native runtime package 已水合且 `configurationState=complete` 后发送；Cold Start 的 6 秒预算可使用进程时钟，Hot Restart 只能使用本次 attempt 时钟。进程总存活时间只作诊断，不得写入 `welcomeExitMs` 或消耗 Hot Restart 预算。
 - `stackctl app-content-uat` 必须在唯一 environment operation owner 已完成同一 `releaseTrainId`、逐 target 精确 baseline 与同一 release activation 后，顺序对 Alpha、Beta、Gamma 执行上述严格预检、canonical `run.sh`/工作区 facade 启动、首页 Feed、`environment_app_core_readback` 与视频播放 Patrol。严格预检和 launch report 都必须零 warning，任一 warning 立即阻断本 target 页面 suite。
+- iOS UAT parent 必须在 attempt-1 前一次性解析并冻结 exact `PATH` 与同一 six-field physical CocoaPods binding，attempt-1 与 retry 原样复用；不得依赖 parent shell ambient identity、在 attempt 间重新发现，或由 Flutter child/其他子进程反向传回 binding。binding 被篡改或不能保持一致时，必须在启动 Flutter child 前返回 typed blocker。
 - 每个 target 的页面 suite 前必须解析 fresh active candidate，并校验 manifest 的 `candidateDigest`、`packageDigest` 与只读 input capsule。runner 只能把该 capsule 复制到 attempt-scoped 私有 writable projection 后从 projection build/launch，不得从 live `APP_DIR` 取源码；复制前后 tree digest 漂移即返回首个 typed blocker。
 - 每个 target 的页面 suite 必须新建并消费紧邻的同 target、platform、device、immutable source capsule、application ID、runtime package 与 trust envelope 的 canonical launch report 和 `app-launch-attempt`。Android 不得跳过 canonical launcher，iOS 工作区字面 `flutter run` 必须由 facade 进入同一执行体。
 - 只有 attempt 真实完成 compiled、installed、configured，并由本次已安装 APK/`.app` 的同一 `artifactDigest` 产生关联 startup safe terminal 后才可进入页面 suite。VM attach 只记观测，不得替代 safe terminal；回执必须含非空 `startupTerminalAttemptId + startupTerminalEvidenceDigest + startupTerminalEvidenceRef`。
@@ -132,18 +138,44 @@
 - 每个渠道的验收 CaseResult 声明自动化分级：CI 全自动、设备实验室定期自动、或人工执行加机器回执；人工动作缺机器回执时按失败处理。
 
 <a id="req-005"></a>
-### REQ-005 Alpha/Beta/Gamma 双模拟器只交 target-scoped 原始 CaseResult
+### REQ-005 canonical raw ReadinessCaseResult 是唯一 UAT 结果事实
 
-- Alpha、Beta、Gamma 内容验收的正向窗口必须让 Android Emulator 与 iOS Simulator 对同一 `releaseId + manifestDigest + sourceIdentitySetDigest` 分别生成原始 CaseResult，并覆盖 [`AppRoot UAT-001`](../../../spec.md#uat-001) 的内容、Creator、搜索和可恢复终态，以及 [`UAT-003`](../../../spec.md#uat-003) 的同状态、同内容 identity 与同恢复动作。
-- `stackctl app-content-uat --targets alpha-local,beta-local,gamma-local` 按冻结顺序编排三个 target。每个平台结果和父 report 都必须声明 `nonPromotable=true`；父 report 不得生成单环境 aggregate、canonical matrix passed 或 promotion 事实。
-- `no_active_release` 只作为 Alpha 独有的独立 lifecycle drill：在 active-release suite 外保存原 active release 与 readback，通过正式环境命令应用已核验 empty baseline，依次取得两端 `outcome=empty + emptyReason=no_active_release` CaseResult，再 same-digest replay 原 release并复核 lifecycle/readback。任一步中断都必须先恢复原 release；该 drill 不代替 Beta/Gamma 正向与恢复结果，也不能单独关闭三环境矩阵。
+- canonical raw `ReadinessCaseResult` 是唯一可承载 UAT outcome、verdict 与 failure/blocked/skipped 原因的结果事实。每个 `required target × platform × device × entry × carrier` slot 必须 create-once；`not_applicable` cell 由 plan 声明且不生成伪通过结果。required slot 缺失、`failed`、`blocked` 或 `skipped` 均保持原状并阻断相应 acceptance，不得被父 report、所谓 `AppUatResultBundle`、summary、重跑或其他 slot 掩盖。
+- 父 report/所谓 `AppUatResultBundle` 只能是对 required raw refs、exact-byte digests、矩阵覆盖率与缺口的只读完整性投影：无独立 verdict、无 promotion authority、不可写回 raw result 或 acceptance fact，也不得另造第二套 CaseResult。任何聚合层出现独立 `passed`、丢弃非通过结果或把模拟器 evidence 提升为 promotable 时必须 `GATE_BLOCK`。
+- Alpha、Beta、Gamma rehearsal 内容验收继续让 Android Emulator 与 iOS Simulator 对同一 `releaseId + manifestDigest + sourceIdentitySetDigest` 分别生成 canonical raw `ReadinessCaseResult`，覆盖 [`AppRoot UAT-001`](../../../spec.md#uat-001) 的内容、Creator、搜索和可恢复终态，以及 [`UAT-003`](../../../spec.md#uat-003) 的同状态、同内容 identity 与同恢复动作；这些 slot 全部明确 `nonPromotable=true`。
+- `stackctl app-content-uat --targets alpha-local,beta-local,gamma-local` 按冻结顺序编排三个 target。rehearsal 父 report 只读投影完整性并声明 `nonPromotable=true`；不得生成单环境 aggregate、canonical matrix passed 或 promotion 事实。
+- promotable physical profile 不新建结果类型：Alpha/Beta/Gamma 的正式 acceptance 必须为 Android/iOS physical slots 使用 canonical `ReadinessCaseResult`，绑定已登记物理设备与受测 artifact；Alpha 垂直切片至少补齐 Alpha 的 Android physical 与 iOS physical required slots，正式 promotion 则补齐计划要求的全部环境 physical slots。Prod 只接受 production artifact、Android/iOS physical devices 与 production authority 共同绑定的 required slots。Simulator/Emulator、Debug App 或 nonprod authority 一律不得替代。
+- `no_active_release` 只作为 Alpha 独有的独立 lifecycle drill：在 active-release suite 外保存 previous release identity 与 readback，通过正式环境命令应用已核验 empty baseline，依次取得两端 `outcome=empty + emptyReason=no_active_release` 的 raw `ReadinessCaseResult`，再 same-digest replay previous release并逐 entry 复核 lifecycle/readback。`no_active_release` 或 empty baseline 绝不等同 `deleted`；rollback/replay 的 raw 结果 append-only 保留，且 `feed/search/recommendation/direct_or_object_route` 均须回到 previous release identity。任一步中断都必须先恢复原 release。该 drill 不代替 Beta/Gamma 正向与恢复结果，也不能单独关闭矩阵。
 - `CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET` 必须分别进入 Alpha、Beta、Gamma suite。每次故障控制只操作当前 target runtime receipt 绑定的精确 API Edge 容器，App 显示唯一重试动作；`finally` 恢复容器并通过 health 后，同一安装点击重试必须重新读取原 release。
 - 网络不可用显示 typed unavailable 与唯一重试，恢复网络后在原页续接同一 release；白名单或身份权限拒绝只提供重新登录或返回安全 Shell，登录成功沿用 canonical AuthContinuation，取消不循环。
 - 新账号或无历史用户不形成第二套 feed：有 active release 时读取同一 public/research projection，无 active release 时进入同一 canonical 空态。相机与 RTC 不参与本验收。
 
+<a id="req-006"></a>
+### REQ-006 Release UAT plan、target binding 与环境 acceptance 单向派生
+
+- `ReleaseUatSamplePlan` 由 Data release owner 在 release 层 create-once，环境无关，并冻结 release identity、source identity、二维 `entry × carrier` cell 的 `required/not_applicable`、sample identity 与 raw case expectation；Ops、App runner 与环境不得修改、补写或按 target 分叉该 plan。
+- `TargetUatBinding` 由 Ops 为每个 target/runtime/package/config/platform/device/runner slot create-once。只有 fresh active candidate 的 CAS/readback 已确认，且受测 artifact、物理或模拟设备及 runner 均就绪后才能创建；它必须 exact-byte 绑定 `ReleaseUatSamplePlan`、target runtime、candidate/package/config、artifact、platform/device 与 runner identity。后续漂移必须创建新 binding/新 slot 或阻断，禁止原地改写。
+- 单向事实链固定为 `ReleaseUatSamplePlan → TargetUatBinding → raw ReadinessCaseResult → EnvironmentAcceptanceFact`；上游对象不能消费下游 verdict 回写自身，父 report 只可旁路投影完整性，不能进入该 authority 链。
+- `EnvironmentAcceptanceFact` 是 append-only Ops acceptance fact，必须直接绑定全部 required raw refs 及其 exact-byte digests、Data readiness、fresh active CAS/readback、environment lifecycle `Exit`、Provider/observability/rollback readiness。Beta、Gamma、Prod 还必须绑定前一环境 canonical `EnvironmentAcceptanceFact` 的 exact-byte digest；Data readiness、retired `appUatEnvelopeDigest` field、父 report 或 bundle digest 均不能替代前环境 acceptance 或任一 required raw result。
+- 任何 required slot 缺失或结果为 `failed/blocked/skipped`、任一 exact-byte digest/readback 漂移、lifecycle 未到 `Exit`、Provider/observability/rollback 未就绪、前环境 acceptance 缺失，均不得创建通过的 `EnvironmentAcceptanceFact`，并返回 `GATE_BLOCK`。`EnvironmentAcceptanceFact` 只能按 Alpha→Beta→Gamma→Prod 顺序追加，每一后继环境必须 exact-byte 绑定前一环境 fact；任何 legacy aggregate verdict 均无写 authority、无 promotion consumer。
+- acceptance 收尾只能以 `lease revoke`、`lock release` 与 `GC protection` 描述并分别取证：先停止新使用并 revoke 对应 lease，再 release execution/runtime-use lock，最后确认 raw results、bindings、acceptance facts 及 rollback/replay 证据受 GC protection；禁止用含混 `cleanup` 表示删除事实、释放锁或回收 evidence。
+
+<a id="req-007"></a>
+### REQ-007 Prod J0/J1/J2 仅为 canonical 发布事实视图
+
+- `J0/J1/J2` 只是 Prod readiness UI/report 的只读视图标签，不新建状态机、ledger、verdict 或可写 promotion authority：`J0` 映射 canonical engineering eligibility，`J1` 映射 durable exact approval，`J2` 映射 canonical canary→5%→20%→50%→100% rollout 与对应 rollback facts。
+- 视图必须逐项保留来源对象的 exact identity/digest、时间与 authority；缺步、乱序、审批摘要漂移、canary/比例 rollout 或 rollback fact 缺失时显示 blocked/incomplete，不得通过移动 J 标签、父 report verdict、Data readiness 或 retired `appUatEnvelopeDigest` field 推进。
+- Prod acceptance 只有在 production artifact、physical device raw results、production authority、前环境 acceptance exact-byte digest 以及 J0/J1/J2 所映射 canonical facts全部成立时才可创建；撤回审批或 rollback 只追加 canonical durable facts并重算视图，不改写历史 raw result 或 acceptance fact。
+
 ## 4. 契约引用
 
 - 父能力公开契约：[`L2 spec`](../spec.md)。
+- `GWT-001` 证据绑定：`local_contract` 覆盖 topology/package/capsule/依赖纯度与只读语义，`api_integration` 覆盖真实 package/up/health/verify、Provider/DNS/TLS/readback，`user_acceptance` 覆盖 production-behavior App artifact 的安装、启动与内容结果。
+- `GWT-002` 证据绑定：`local_contract` 覆盖 launcher/lease/activation/receipt、`app-dev`/`app-uat` 薄适配边界、final startup PATH、frozen CocoaPods binding、父 report 无 verdict 与 typed blocker；`api_integration` 覆盖真实 stackctl 委托、terminal live validation、attempt-1/retry 同 binding、runtime package、CAS/readback、Remote 服务与 lifecycle；`user_acceptance` 覆盖 Android/iOS 的 `run.sh`、fresh Workspace Terminal 字面 `flutter run`、IDE 启动、Hot Restart、内容 outcome 与恢复动作。
+- `GWT-003` 证据绑定：`local_contract` 覆盖有效路径闭集、行为指纹与渠道不可替代性，`api_integration` 覆盖下载对象、签名、包身份、release identity 与 telemetry readback，`user_acceptance` 覆盖各渠道下载、安装、冷启动与覆盖升级行为。
+- `GWT-004` 证据绑定：`local_contract` 覆盖二维矩阵、create-once raw slot、父投影只读无 verdict 与 `nonPromotable`，`api_integration` 覆盖 active CAS/readback、empty baseline、rollback/replay 与 previous release identity，`user_acceptance` 覆盖六个模拟器 raw `ReadinessCaseResult`。
+- `GWT-005` 证据绑定：`local_contract` 覆盖 rehearsal/promotable profile 与 artifact/device/authority 约束，`api_integration` 覆盖 artifact/runtime/CAS/前环境 acceptance 的 exact binding，`user_acceptance` 覆盖 physical-device raw results。
+- `GWT-006` 证据绑定：`local_contract` 覆盖 create-once/append-only、exact-byte refs、父投影不可写回与 J 标签纯视图，`api_integration` 覆盖 CAS/readback、Data readiness、Exit、Provider/observability/rollback 与前环境 digest，`user_acceptance` 覆盖 required raw results 对 acceptance 的直接贡献。
 
 ## 5. 验收场景
 
@@ -182,6 +214,9 @@
 
 - GIVEN 开发者通过 `quwoquan_app/run.sh --mode content-live|ui-only --env alpha|beta|gamma -d <device>`、受版本控制的 IDE 薄包装入口（`workspace_ide_debug`），或在完成具名激活并重载后的新工作区终端执行字面 `flutter run`（facade 归一化为同一执行体，launch provenance=`workspace_flutter_run`，`QWQ_ENVIRONMENT=beta|gamma` 显式选择环境），在未显式选择环境时默认 Alpha，并由 launcher 生成 canonical handoff 与待激活 package。
 - WHEN Flutter 构建、运行、正常退出或异常退出，或并行环境任务尝试 down/强制清理。
+- AND `make app-dev` 只按默认值或显式 `ENV/DEVICE_ID/MODE` 委托 `stackctl dev-session --launch-app --app-mode`，`make app-uat` 只按显式 `TARGETS/PLATFORM/DEVICE_ID` 无交互委托 `stackctl app-content-uat` 并拒绝 Prod，Make 不持有设备发现、env/target 扩展、交互、状态机、provenance 或 receipt。
+- AND fresh Workspace Terminal 在全部 user zsh startup files 完成后得到 facade→real Flutter→exact Pod 的 final `PATH`，再经 `command -v flutter`、physical `command -v pod` 与 six-field CocoaPods identity live validation 写 terminal carrier receipt；旧 PTY、提前 receipt、`agents-window` 或用户全局 Cursor settings 修改均不能满足该条件。
+- AND iOS UAT parent 在 attempt-1 前冻结 exact `PATH` 与同一 six-field physical CocoaPods binding，attempt-1/retry 原样消费；任一 attempt 间重发现、ambient identity 依赖、child 反传或 binding 篡改均在 Flutter child 前 typed block。
 - THEN Android lease 在构建前绑定设备、包名、release handoff 与 topology 端口。
 - AND canonical launcher 退出时由 trap 释放 Android lease；异常中断后的 lease 由 App 进程 liveness 判为 stale 并等待显式 GC。
 - AND iOS Simulator 与已登记 iPhone 在构建前获取同一 schema 的 lease，绑定 platform、设备、bundle ID、target 与空 transport ports，并在启动 executor 前将同一 lease 绑定最终 handoff digest；Simulator 通过 user launchd application service 与安装容器 executable 保活，已登记 iPhone 通过 `devicectl` 结构化 App URL 与 process executable 保活。
@@ -197,7 +232,7 @@
 - AND Android/iOS nonprod AppArtifact 仅构建和签名一次；默认 Alpha 与显式 Alpha/Beta/Gamma 的启动都复用同一完整 APK/`.app` digest，并分别原子激活匹配 target 的签名 runtime config。`alpha → beta → gamma → alpha` 不依赖 clean、重装、共享文件刷新、重试、重编或重签，并发 activation 不互相覆盖 active pointer。
 - AND 冷启动和连续 Hot Restart 均先完成 `beginStartupAttempt`，再以 `configurationState=complete` 发送 attempt 事件；Hot Restart 的 `welcomeExitMs` 始终相对本次 attempt 且不超过 6000ms。
 - AND 环境无激活内容 release 时 App 只接受 canonical `outcome=empty + emptyReason=no_active_release` 或 typed unavailable，不以普通空列表冒充成功；环境已激活 release 时 App 从 Content API 响应解析 `releaseId + manifestDigest`，UAT 以环境侧期望 release 比对读回身份，App 制品不内嵌内容身份。Prod 发布准出仍绑定 active candidate、commercial readiness 与 rollback/replay 的环境侧证据，任一缺失均阻断准出，但不改变 App 运行时行为。
-- AND `stackctl app-content-uat` 只有在 Alpha/Beta/Gamma 的 `environmentArtifact.releaseTrainId` 相同、`packageBaselines[target]` 分别精确等于各自 manifest/sourceCapsule/startup candidate，并且每个 target 从 active candidate 私有 projection 产生零 warning 的 canonical launch report/attempt 时，才可聚合为 passed receipt。该回执必须与同一 target、platform、device、immutable source capsule、application ID、runtime package、trust envelope及真实安装 AppArtifact 摘要完全一致，并逐 target 持久化 launch attempt/provenance/artifact/trust/attempt digest、`candidateDigest`、`packageDigest`、`startupTerminalAttemptId`、`startupTerminalEvidenceDigest` 与 `startupTerminalEvidenceRef`。Android 不得绕过 launcher，故障控制只作用于 runtime receipt 绑定的精确容器且始终恢复，任何 target 失败时保留已有证据并停止后续 App 执行。
+- AND `stackctl app-content-uat` 只有在 Alpha/Beta/Gamma 的 `environmentArtifact.releaseTrainId` 相同、`packageBaselines[target]` 分别精确等于各自 manifest/sourceCapsule/startup candidate，并且每个 target 从 active candidate 私有 projection 产生零 warning 的 canonical launch report/attempt 时，才可生成父完整性投影；该投影不得聚合为独立 passed receipt。每个 raw `ReadinessCaseResult` 必须与同一 target、platform、device、immutable source capsule、application ID、runtime package、trust envelope及真实安装 AppArtifact 摘要完全一致，并逐 target 持久化 launch attempt/provenance/artifact/trust/attempt digest、`candidateDigest`、`packageDigest`、`startupTerminalAttemptId`、`startupTerminalEvidenceDigest` 与 `startupTerminalEvidenceRef`。Android 不得绕过 launcher，故障控制只作用于 runtime receipt 绑定的精确容器且始终恢复，任何 target 失败时保留已有 raw evidence、将未执行 required slots 标为 blocked/skipped 原因并停止后续 App 执行。父 report 只读持有 required raw refs、exact-byte digests、coverage 与缺口，不得持有 outcome verdict 或掩盖这些结果。
 - AND 字面 `flutter run` 经 facade 单轨解析仓库钉定的真实 Flutter SDK（拒绝 facade 自递归、错误 SDK 版本与 PATH 漂移），非 `run` 子命令与其他 Flutter 项目全部透传；launch surface 枚举值与 `app_artifact_manifest.yaml` 的 `launch_provenances` 闭集保持一致，任何启动脚本不得自持第二份枚举副本。
 - AND 显式但不完整的 handoff、Profile/Release 与超出 nonprod 信任域的 direct 环境选择在安装前失败，用户不得看到由开发配置缺失制造的启动恢复页。
 - AND 端到端验收 runner 入口唯一归属主测试树，只承载会话级前置与收尾，不聚合用例也不预启动 App；每个验收场景各自完成一次启动，不存在第二份 runner 入口。
@@ -213,15 +248,35 @@
 - AND 任一渠道证据缺失时该渠道保持 `GATE_BLOCK/OPEN`，不得以其他渠道回执或 package-only 报告替代。
 
 <a id="gwt-004"></a>
-### GWT-004 Alpha/Beta/Gamma 双模拟器正向与受控恢复保持同一 release
+### GWT-004 Alpha/Beta/Gamma rehearsal raw results 保持同一 release
 
-- GIVEN Alpha、Beta、Gamma 已激活同一份可形成完整 `appUatEnvelope` 的 immutable release，每个 target 的 Android Emulator 与 iOS Simulator 均可运行 production Remote composition。
-- WHEN 三个 target 的两端依次执行正向内容窗口与 suite 内受控 API Edge 5xx 恢复，并另外在 Alpha 执行独立 empty-baseline drill。
-- THEN 三个 target 的两端分别交出绑定同一 release、source capsule、`candidateDigest`、`packageDigest`、真实安装 AppArtifact、launch attempt 与 safe terminal 的原始 CaseResult。父 report 不产生单环境 aggregate 或 promotion passed，所有结论均为 `nonPromotable=true`。
-- THEN 页面 runner 逐平台验证自动化实际安装并启动的 `testedAppArtifactBinding` 与同 target canonical launch 的六项身份；缺字段、伪造 comparison、非法 provenance 或任一不一致均输出 `APP.UAT.page_artifact_binding_missing` 并停止，不得以 test host 的自身制品或 canonical launch 的复制字段冒充页面已测试生产 AppArtifact。
-- THEN Alpha 空态 drill 保存原 active release、应用 empty baseline、取得两端 `no_active_release` 结果并 same-digest replay 原 release。任一中断先恢复，恢复失败即停止；该结果不得替代 Beta/Gamma 正向或 5xx 恢复 CaseResult。
+- GIVEN Data 已为同一 immutable release create-once `ReleaseUatSamplePlan`，Alpha、Beta、Gamma 已激活该 release，且 Ops 已为每个 target 的 Android Emulator 与 iOS Simulator required slots create-once `TargetUatBinding`，production Remote composition 可运行。
+- WHEN 三个 target 的两端按 `entry × carrier` required cells 依次执行正向内容窗口与 suite 内受控 API Edge 5xx 恢复，并另外在 Alpha 执行独立 empty-baseline drill。
+- THEN 三个 target 的两端分别交出绑定同一 release、source capsule、`candidateDigest`、`packageDigest`、真实安装 AppArtifact、launch attempt 与 safe terminal 的 raw `ReadinessCaseResult`。父 report 只读投影 required refs/digests 与缺口，不产生单环境 aggregate、独立 verdict 或 promotion authority，所有 rehearsal 结论均为 `nonPromotable=true`。
+- THEN 页面 runner 逐平台验证自动化实际安装并启动的 `testedAppArtifactBinding` 与同 target canonical launch 的六项身份；缺字段、伪造 comparison、非法 provenance 或任一不一致均输出 `APP.UAT.page_artifact_binding_missing` 并停止，不得以 test host 的自身制品或 canonical launch 的复制字段冒充页面已测试 production-behavior AppArtifact。
+- THEN Alpha 空态 drill 保存 previous active release identity、应用 empty baseline、取得两端 `no_active_release` raw results 并 same-digest replay previous release；结果不声明 `deleted`。任一中断先恢复，恢复失败即停止。rollback/replay raw results 保留，且 feed/search/recommendation/direct_or_object_route 全部 readback previous release identity。该结果不得替代 Beta/Gamma 正向或 5xx 恢复 CaseResult。
 - THEN 每个 target 的受控 Edge 故障都在 `finally` 恢复精确容器并通过 health，同一安装点击唯一重试后重新看到原 release。
 - THEN 精选池为空的环境以 `apply` 产出的导入报告为唯一输入完成首次激活，绑定收据记为 `release_import` 且不声明 verify 运行；池中已有条目的环境不接受该路径，其变更只认 consumer 档收据。
+
+<a id="gwt-005"></a>
+### GWT-005 physical promotion profile 不复用模拟器结论
+
+- GIVEN `ReleaseUatSamplePlan` 已冻结二维矩阵，Alpha 垂直切片或正式环境 promotion 请求创建 promotable target bindings。
+- WHEN Ops 准备 Alpha/Beta/Gamma 正式 profile，或准备 Prod production profile。
+- THEN Alpha 垂直切片至少为 Alpha Android physical 与 iOS physical required slots 分别 create-once `TargetUatBinding` 和 raw `ReadinessCaseResult`；正式 promotion 按 plan 补齐相应环境全部 physical slots，且使用与 rehearsal 相同的 canonical raw result schema而非第二套 CaseResult。
+- AND Alpha/Beta/Gamma physical slots 逐项绑定已登记物理设备、受测 production-behavior artifact、target runtime/package/config、runner 与 active CAS/readback；任何 Emulator/Simulator raw result 只能保留为 `nonPromotable` rehearsal evidence。
+- AND Prod required slots 逐项绑定 production artifact、Android/iOS physical devices 与 production authority；Debug/nonprod artifact、模拟器、人工口头确认或父 report verdict 均返回 `GATE_BLOCK`。
+- AND required physical slot 缺失、failed、blocked 或 skipped 时不创建通过 acceptance，既不修改现有 raw result，也不以其他 platform/device/entry/carrier slot 替代。
+
+<a id="gwt-006"></a>
+### GWT-006 EnvironmentAcceptanceFact 只从 canonical authority 链生成
+
+- GIVEN Data 已 create-once `ReleaseUatSamplePlan`，Ops 已在 artifact/device 就绪与 fresh active CAS/readback 后 create-once `TargetUatBinding`，且 required raw `ReadinessCaseResult` 已逐 slot 形成。
+- WHEN Ops 尝试为 Alpha、Beta、Gamma 或 Prod 追加 `EnvironmentAcceptanceFact`。
+- THEN fact 直接列出全部 required raw refs/exact-byte digests、Data readiness、active CAS/readback、lifecycle `Exit`、Provider/observability/rollback readiness；Beta/Gamma/Prod 还分别绑定前环境 acceptance exact-byte digest。retired `appUatEnvelopeDigest` field、Data readiness 或父 report/bundle 不能替代其中任一项。
+- AND 任一 required raw result 为 failed/blocked/skipped、slot 缺失、digest 漂移、前置 readiness 或 previous acceptance 缺失时返回 `GATE_BLOCK` 且不追加通过 fact；失败事实和已有 raw evidence 均保持 append-only。
+- AND 收尾 evidence 分别证明 `lease revoke`、`lock release` 与 raw/binding/acceptance/rollback/replay 的 `GC protection`，不使用 `cleanup completed` 代替三项状态。
+- AND Prod `J0/J1/J2` 只分别投影 canonical engineering eligibility、durable exact approval、canary→5%→20%→50%→100% rollout/rollback facts；视图无新状态机或 ledger，缺步/乱序/撤回/rollback 时只重算 blocked/incomplete，不改写 canonical facts。
 
 ## 6. 依赖
 
@@ -239,7 +294,7 @@
 - 准出影响：`block`
 - 影响或价值：缺少与修复后 source/candidate identity 一致的 Alpha/Beta/Gamma fresh live 回执。任何旧 `package/up/health`、release 导入或页面回读只作诊断，不作当前通过证据。Prod-sim/Prod 的公网 DNS/TLS 前置由 OPEN-002 独立承接，不反向阻塞 nonprod 本地矩阵。
 - 目标：在同一 `releaseTrainId` 下，分别为 Alpha、Beta、Gamma 捕获各自 fresh target-scoped immutable candidate 与唯一 `baselineId`，再按 target 顺序完成 package、up、strict health/verify、同一 immutable release activation/readback、Android/iOS 启动与首页矩阵。三个 target 的环境输入和 baseline 允许且预期不同，不得把 Alpha candidate 或 baseline 复用、复制或回填给 Beta/Gamma。真实登录和 1v1 消息由其所属 Feature OPEN 独立关闭，不由 runtime 复制验收；Prod-sim 只完成打包、纯度、安装启动 readiness，Prod rollout 保持单独授权。
-- 完成判定：`GWT-001` 的四环境 App/Service/activation 重建矩阵与 `GWT-002` 的 Android/iOS 会话保护、test-live 告警及 Prod fail-closed 矩阵全部通过，且真实测试以子句级 `spec_ref` 绑定一份聚合 ResultBundle；该 ResultBundle 必须证明 Alpha/Beta/Gamma 的 `environmentArtifact.releaseTrainId` 相同，并逐 target 绑定各自 fresh candidate manifest、source capsule、`candidateDigest`、`packageDigest` 与 `packageBaselines[target]`，不得声称三环境共用一份 candidate。
+- 完成判定：`GWT-001` 的四环境 App/Service/activation 重建矩阵与 `GWT-002` 的 Android/iOS 会话保护、test-live 告警及 Prod fail-closed 矩阵全部通过，且真实测试以子句级 `spec_ref` 直接绑定 canonical raw `ReadinessCaseResult`；父完整性投影只能证明 Alpha/Beta/Gamma 的 `environmentArtifact.releaseTrainId` 相同，并逐 target 列出各自 fresh candidate manifest、source capsule、`candidateDigest`、`packageDigest`、`packageBaselines[target]` 与 raw refs/digests，不得持有独立 verdict、声称三环境共用一份 candidate 或替代任一 raw result。
 
 <a id="open-002"></a>
 ### OPEN-002 Prod 公网 DNS 与公共证书 live 准出
@@ -269,8 +324,10 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前尚无同一 release train 下 Alpha/Beta/Gamma 各自 Android Emulator 与 iOS Simulator 的正向和受控 5xx 恢复原始 CaseResult，也没有与这些结果同轮的 Alpha `no_active_release` lifecycle drill。Alpha 单端、Alpha-only 父 report或旧 receipt 都不能作为三环境完成证据。
-- 完成判定：`GWT-004` 由三环境 suite plan/result 的 `local_contract`、真实 Alpha empty/replay lifecycle readback 的 `api_integration` 与六个 production Remote `user_acceptance` 原始 CaseResult 直接覆盖。每个结果均绑定同一 source/candidate/package/safe-terminal 身份并明确 `nonPromotable=true`，且父 report 无单环境 aggregate 或 promotion passed。
+- 影响或价值：尚缺同一 release train 下 Alpha/Beta/Gamma 各自 Android Emulator 与 iOS Simulator 的正向和受控 5xx 恢复 raw `ReadinessCaseResult`，也缺与这些结果同一执行闭包的 Alpha `no_active_release` lifecycle drill。Alpha 单端、Alpha-only 父 report 或旧 receipt 都不能作为三环境完成证据。
+- 尚缺实现：三环境 runner 需按 target/platform/device/entry/carrier create-once slot 执行正向、受控恢复与 Alpha lifecycle drill，并让父 report 只读列举 raw refs/digests。
+- 尚缺验收证据：`local_contract` 证明 slot 与父投影约束，`api_integration` 证明 empty/replay 与四入口 previous release identity，`user_acceptance` 交付六个模拟器 raw results。
+- 完成判定：`GWT-004` 由二维矩阵、create-once slot 与父投影无 verdict 的 `local_contract`，真实 Alpha empty/replay lifecycle 及四入口 previous release identity readback 的 `api_integration`，以及六个 production Remote `user_acceptance` raw `ReadinessCaseResult` 直接覆盖。每个结果均绑定同一 source/candidate/package/safe-terminal 身份并明确 `nonPromotable=true`，且父 report 只读列举 raw refs/digests，无单环境 aggregate、独立 verdict或 promotion authority。
 
 <a id="open-005"></a>
 ### OPEN-005 设备相关 launch blocker 的行为断言
@@ -278,7 +335,9 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：当前 `app_launch_manifest` 已登记全部 launch blocker，`APP.LAUNCH.compile_failed`、`install_failed`、`launch_failed`、`prod_debug_forbidden`、`prod_artifact_required`、`prod_artifact_invalid`、`prod_hosted_flutter_forbidden`、`receipt_timeout` 已有行为断言；`device_unavailable`、`platform_unsupported` 只在 `run_app_instance.sh` 的设备发现路径抛出，`receipt_invalid` 只在 launcher 完整跑完一次后由 test_live 报告段抛出，三者当前只有枚举集合断言，没有行为断言。
+- 影响或价值：尚缺 `device_unavailable`、`platform_unsupported` 与 `receipt_invalid` 三个 canonical launch blocker 的可观察行为证据；已有枚举集合不能证明真实触发路径。
+- 尚缺实现：设备发现与 receipt 校验路径需稳定返回对应 typed blocker，并保持 manifest 闭集、首错与恢复指引语义。
+- 尚缺验收证据：`local_contract` 逐项触发三个 blocker，`api_integration` 证明 launcher/设备探测边界与 receipt provenance，`user_acceptance` 证明失败停在业务 Shell 前。
 - 完成判定：`GWT-002` 声明的 typed blocker 中这三个码各有一条真实触发的断言——设备类两码由真实设备发现失败（或等价的 canonical 设备探测替身）驱动，`receipt_invalid` 由一次完整 launcher run 产出的非 `app-launch-attempt` 回执驱动；断言与真实四环境启动矩阵同轮交付，不以源码字符串断言替代。
 
 <a id="open-006"></a>
@@ -291,6 +350,7 @@
 - 已达成的部分：`Runner.xcodeproj/project.pbxproj`、`ios/Podfile` 与 `prod.xcscheme` 三处均已不引用 `Debug-prod`/`Profile-prod`，prod scheme 的 `buildForRunning`/`buildForProfiling` 为 `NO`，没有任何构建入口能选中它们。
 - 尚缺实现：`quwoquan_service/tools/codegen_app_metadata` 的 App identity codegen 仍按 buildMode × buildProfile 全笛卡尔积产出 `ios/Flutter/Debug-prod.xcconfig` 与 `Profile-prod.xcconfig`，两份文件无人引用却仍登记在 `quwoquan_app/tool/app_identity_codegen/generated_manifest.json`。
 - 风险：无引用的生成文件让「prod 只有 Release」这条 metadata 事实在物理树上不可自证，读者需要额外推断哪些配置是死的。
+- 尚缺验收证据：`local_contract` 证明 codegen 只生成 distribution class 允许的 build modes，`api_integration` 证明 Xcode project/Podfile/scheme 与生成清单无 Debug-prod/Profile-prod 引用，`user_acceptance` 证明 Prod 安装只消费 Release artifact。
 - 完成判定：codegen 按各 buildProfile 的 `distribution_class.build_modes` 求交后产出 xcconfig，`GWT-002` 绑定的 iOS 身份矩阵契约同时断言 project/Podfile/scheme 三处无引用且这两份 xcconfig 不再生成；生成清单随之收敛。
 - 依赖：Go codegen 与其 local_contract，属 iOS 构建身份矩阵面。
 
@@ -301,7 +361,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：尚未形成 Android/iOS test host 复用生产原生读取面、trust 嵌入与 host application id activation 编排的双端证据。当前 Patrol CLI 实际运行 `com.quwoquan.testhost.patrol`，只能回读 test host 自身的 `applicationId + artifactDigest`，不能证明生产 AppArtifact 的 `sourceProjectionDigest + runtimeConfigPackageDigest + trustDigest + launchAttemptId`；因此严格页面验收必须返回 `APP.UAT.page_artifact_binding_missing`，不得以 canonical comparison 回填或源码存在冒充完成。
-- 尚缺闭环：确认 test host 与生产 App 只共享一套生成契约和平台 I/O 实现，没有手写错误码、字段、target 或 launch provenance 副本；从干净受版本控制输入重建双端 host，分别完成 trust 校验、安装后 activation、启动与 release identity readback。
+- 尚缺实现：确认 test host 与生产 App 只共享一套生成契约和平台 I/O 实现，没有手写错误码、字段、target 或 launch provenance 副本；从干净受版本控制输入重建双端 host，分别完成 trust 校验、安装后 activation、启动与 release identity readback。
 - 尚缺验收证据：`app-content-uat` 在 research 与 consumer 两个相位各产出一次页面 suite 通过回执，其中 `device_bound` 与 `content_live_passed` 均在场且 release identity 与 Data readiness 一致。
 - 完成判定：[`GWT-003`](#gwt-003) 的行为指纹一致子句在 test host 启动路径上成立，即同一环境下 test host 与生产 App 的配置完成态、首个安全终态与 release identity 一致且 recovery 不再因缺 package 二次抛错。[`GWT-004`](#gwt-004) 的 Android/iOS 原始 CaseResult 均从实际受测 App 交出六项完整、同 target 且与 canonical launch 相等的 `testedAppArtifactBinding`，不再返回 `APP.UAT.page_artifact_binding_missing`。
 - 依赖：生产侧 runtime config 原生供给面与 trust 嵌入脚本，以及 `stackctl app-content-uat` 的 Patrol 编排。
@@ -336,8 +396,10 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚未形成 `run.sh`、新工作区终端字面 `flutter run` 与受控制 IDE Run/Debug 三个独立正向面的双端证据。IDE profile 不存在，未激活终端仍解析到真实 SDK，Android 原始 Gradle 缺 trust 还可能产出制品；test_live 旧实现又会因内容 readiness 在真实编译前退出，导致局部契约通过但用户仍无法启动。
-- 完成判定：[`GWT-002`](#gwt-002) 在三个开发启动面及 raw backend 负向面逐项成立：从受版本控制输入重建激活投影后，三个正向面在 Android/iOS 各完成同 attempt 的 compile、install、activation、launch/attach；服务、Provider、内容或观测不可用只产生 warning 和真实 runtime outcome。绝对 SDK、原始 Xcode 与原始 Gradle 缺 trust 均在构建期输出首个 typed blocker，且 blocker 指向唯一恢复动作。
+- 影响或价值：required human surfaces 固定为 `run.sh`、fresh Workspace Terminal 的字面 `flutter run` 与受控制 IDE Run/Debug，当前仍缺三个独立正向面的双端证据。面向人类的 `make app-dev` 一键入口、面向 AI/自动化的 `make app-uat` 无交互入口、workspace activation、final PATH/terminal receipt、Android trust gate、iOS retry frozen CocoaPods binding 与 test_live readiness 行为尚未同时闭环；`agents-window` 仅为 optional diagnostics，不要求作为正向字面 Flutter surface。
+- 尚缺实现：`make app-dev` 与 `make app-uat` 需分别薄委托 canonical stackctl command 且不自持状态；三个 required human surfaces 需归一化进入 canonical launcher，fresh Workspace Terminal 只在 final facade→real Flutter→exact Pod PATH 与 live identity validation 后写 receipt，iOS UAT attempt-1/retry 需复用 parent 预冻结 binding，raw Xcode/Gradle backend 需 fail closed，test_live readiness warning 不得跳过真实编译、安装、activation 与启动。
+- 尚缺验收证据：`local_contract` 证明两类 Make 薄适配、入口归一化、final startup receipt、retry binding 与 blocker 闭集；`api_integration` 证明真实 stackctl 委托、workspace activation/runtime package/CAS readback、physical Pod identity 及 attempt-1/retry 同 binding；`user_acceptance` 证明 Android/iOS 的 `run.sh`、fresh Workspace Terminal 字面 `flutter run` 与 IDE 三入口真实启动及 raw backend 负向行为，`make app-uat` 不替代这些 human surfaces。
+- 完成判定：[`GWT-002`](#gwt-002) 在两个公开薄入口、三个 required human surfaces 及 raw backend 负向面逐项成立：从受版本控制输入重建激活投影后，`app-dev`/`app-uat` 只提交 canonical contract，fresh Workspace Terminal 的 final PATH/receipt 成立，iOS attempt-1/retry 复用同一 frozen binding，三个正向面在 Android/iOS 各完成同 attempt 的 compile、install、activation、launch/attach；服务、Provider、内容或观测不可用只产生 warning 和真实 runtime outcome。绝对 SDK、原始 Xcode 与原始 Gradle 缺 trust 均在构建期输出首个 typed blocker，且 blocker 指向唯一恢复动作；OPEN 保持未关闭，直至上述 fresh 证据全部到位。
 - 依赖：本节点启动设计、`app_artifact_manifest.yaml` / `app_launch_manifest.yaml` 与平台 build gate。
 
 <a id="open-011"></a>
@@ -346,7 +408,9 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：仍存在 Swift、Java/Kotlin、Python、Shell 与 facade 各自复制启动字段、错误码、target map、状态或 launch provenance 的缺口，且 iOS 错误分支已少于 canonical metadata。继续逐文件修补会让同类启动问题反复出现。
+- 影响或价值：尚缺 Swift、Java/Kotlin、Python、Shell 与 facade 对 canonical 启动 metadata 的单轨消费，现有手写字段、错误码、target map、状态或 launch provenance 副本可能漂移。
+- 尚缺实现：metadata/codegen 需生成跨语言只读协议视图，所有消费者只保留 I/O 与编排并对未知值 fail closed。
+- 尚缺验收证据：`local_contract` 证明集合相等、未知值阻断与生成物 freshness，`api_integration` 证明双端 activation/readback 使用同一协议，`user_acceptance` 证明 Android/iOS 可见错误语义一致。
 - 完成判定：[`GWT-002`](#gwt-002) 的 metadata 单轨、错误闭集、launch provenance 与双端 activation 子句成立：metadata/codegen 生成跨语言只读协议视图并由所有消费者加载；平台手写代码只保留 I/O 与编排。集合相等、未知值 fail-closed、生成物 freshness 与干净重建测试通过，任一消费者不得自持第二份闭集。
 - 依赖：`runtime-config` design、跨服务 metadata compiler 与 App identity codegen。
 
@@ -361,3 +425,36 @@
 - 尚缺验收证据：`local_contract` 用 fake zone 同时注入一条未登记业务记录和一条具名豁免记录，断言两者分别进入 `observedUnmanaged` / `observedExempt` 且不被删除；`api_integration` 再从 fresh provider zone readback 证明同样的分类和完整性。
 - 完成判定：只有上述实现与两层证据在同一当前 source fingerprint 下 fresh 重跑并以子句级 `spec_ref` 绑定 [`GWT-001`](#gwt-001) 后，本 OPEN 才能关闭。旧 receipt、只有 plan-scoped 核对或只存在字段/代码的证明均不得冒充完成。
 - 依赖：DNS provider adapter 的 zone list 权限与 `stackctl verify` 对账编排。
+
+<a id="open-013"></a>
+### OPEN-013 UAT authority 链尚缺 fresh 四环境验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：`ReleaseUatSamplePlan → TargetUatBinding → raw ReadinessCaseResult → EnvironmentAcceptanceFact` 单向 authority 链、raw slot create-once、acceptance append-only、required raw exact-byte refs、前环境 acceptance digest、lifecycle Exit、Provider/observability/rollback readiness 与父投影禁止写回已由 schema/code/local_contract 落地。当前仍缺同一 current source/candidate fingerprint 下的 fresh `api_integration`/`user_acceptance`、双端物理设备与 Alpha→Beta→Gamma→Prod 顺序 evidence，所以本 OPEN 继续 `GATE_BLOCK`。Data readiness、retired `appUatEnvelopeDigest`、父 report 或所谓 `AppUatResultBundle` 均不能冒充这些 fresh evidence。
+- 尚缺实现：无。Data-owned `ReleaseUatSamplePlan`、Ops-owned `TargetUatBinding`/`EnvironmentAcceptanceFact`、canonical raw `ReadinessCaseResult` slot identity、exact-byte evaluator、父 report 只读投影与 J0/J1/J2 纯视图均已落地；不得把本 OPEN 重新表述为 schema/code 缺口。
+- 尚缺验收证据：相关 `local_contract` 已证明重复创建、缺 raw、failed/blocked/skipped、父投影写回、J 标签直接推进均 fail closed。仍缺 fresh `api_integration` 证明 active CAS/readback、前环境 acceptance exact-byte digest、Exit 与 Provider/observability/rollback 缺一即阻断，并缺双端物理设备 `user_acceptance` 证明四环境 acceptance 可追溯到每个 required raw result 而非 bundle verdict。
+- 完成判定：保持已通过的 `GWT-006` schema/code/local_contract，在同一当前 source/candidate fingerprint 下补齐 fresh `api_integration` 与双端物理设备 `user_acceptance`，并让 Alpha/Beta/Gamma/Prod 的 `EnvironmentAcceptanceFact` 按顺序 exact-byte 绑定前环境 fact；任何 legacy aggregate verdict 无写 authority、无 promotion consumer。
+
+<a id="open-014"></a>
+### OPEN-014 promotable physical UAT profile 与生产授权证据尚未闭环
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺 Alpha 垂直切片与正式 promotion 所需的 Android/iOS physical slots。现有 Alpha/Beta/Gamma Android Emulator 与 iOS Simulator evidence 按约保留但全部 `nonPromotable`，Prod 还缺 production artifact、双端 physical devices 与 production authority 共同绑定的 raw evidence。
+- 尚缺实现：在不新增 CaseResult 类型的前提下，为 Alpha/Beta/Gamma 和 Prod 声明明确 physical profile、required slot identity、受测 artifact class、device registration、runner 与 authority binding；Ops runner 按 profile 创建 `TargetUatBinding` 并产出同一 canonical raw `ReadinessCaseResult`。
+- 尚缺验收证据：`local_contract` 证明模拟器不可升级为 promotable 且两类 profile 共用同一 raw schema；`api_integration` 证明 artifact/device/runtime/CAS/authority exact binding。`user_acceptance` 先交付 Alpha Android+iOS physical vertical slice，再按 release plan 交付其余环境与 Prod physical slots。
+- 完成判定：[`GWT-005`](#gwt-005) 的 required physical slots 全部由 fresh raw results 关闭；任何缺失、failed、blocked、skipped 或模拟器替代保持 `GATE_BLOCK`。
+
+<a id="open-015"></a>
+### OPEN-015 二维 UAT 与 lifecycle 尚缺 fresh 实证
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：二维 `entry × carrier` schema/code/local_contract 已区分 feed/search/recommendation/direct_or_object_route 与 homepage/article/image/video，并已冻结 required cell、`no_active_release`/empty/deleted 与 rollback/replay identity 语义。当前仍缺 fresh `api_integration`/`user_acceptance`：所有 required cells 尚未在双端物理设备产生 current raw results，四环境 lifecycle drill 也尚未逐 entry 证明回到 previous release identity，所以本 OPEN 继续 `GATE_BLOCK`。
+- 尚缺实现：无。Data-owned `ReleaseUatSamplePlan` 已表达二维 cells 与 plan-owned `not_applicable` reason，Ops `TargetUatBinding`/raw slot identity 已同时绑定 entry 与 carrier，lifecycle result 已区分 `no_active_release`、empty、deleted 并承载 previous release identity 与 rollback/replay raw refs。
+- 尚缺验收证据：相关 `local_contract` 已对 required/not_applicable 全矩阵、entry/carrier 维度混用与 deleted 误标做负向断言。仍缺 fresh `api_integration` 对四环境 empty baseline、same-digest replay 和四 entry previous identity readback 取证，并缺双端物理设备 `user_acceptance` 对所有 required cells 逐项生成 current raw result。
+- 完成判定：保持已落地的二维 schema/code/local_contract，在同一 current source/candidate fingerprint 下由 fresh `api_integration`/双端物理设备 `user_acceptance` 证明 [`GWT-004`](#gwt-004)、[`GWT-005`](#gwt-005) 的 required cells 均可由 raw refs 唯一定位，并完成四环境 lifecycle drill：无 deleted 伪装，四入口 rollback/replay identity 全部一致。

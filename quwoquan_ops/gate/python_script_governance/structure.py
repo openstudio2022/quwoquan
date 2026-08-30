@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import sys
 from pathlib import Path
 from typing import Sequence
 
@@ -336,7 +337,18 @@ def data_architecture_issues(root: Path) -> list[Issue]:
             )
         ]
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    scripts_root = str(module_path.parents[1])
+    inserted = scripts_root not in sys.path
+    if inserted:
+        sys.path.insert(0, scripts_root)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        if inserted:
+            try:
+                sys.path.remove(scripts_root)
+            except ValueError:
+                pass
     return [
         Issue(
             code="DATA.SCRIPT_ARCHITECTURE",

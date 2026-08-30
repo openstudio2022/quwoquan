@@ -561,6 +561,74 @@ class CanonicalLaunchExecutorContractTest(
         self.assertNotIn("QWQ_CONTENT_RELEASE_ID", environment)
         self.assertNotIn("ANDROID_LOCAL_GATEWAY_BASE_URL", environment)
 
+    def test_ios_child_environment_requires_exact_cocoapods_identity(self) -> None:
+        driver = executor.IOSSimulatorPlatformDriver(
+            device_id="simulator-1",
+            application_id="com.leadwise.quwoquan.nonprod.debug",
+            entrypoint="lib/main_prod.dart",
+        )
+        exact_environment = {"PATH": "/exact/bin"}
+        with mock.patch.object(
+            activation,
+            "validate_cocoapods_child_environment",
+            return_value=(mock.sentinel.identity, exact_environment),
+        ) as validate:
+            child = driver.child_environment({"PATH": "/hostile/bin"})
+
+        self.assertEqual(child, exact_environment)
+        validate.assert_called_once()
+        self.assertEqual(validate.call_args.args[0]["PATH"], "/hostile/bin")
+
+    def test_ios_build_and_attach_use_the_same_validated_child_environment(self) -> None:
+        driver = executor.IOSSimulatorPlatformDriver(
+            device_id="simulator-1",
+            application_id="com.leadwise.quwoquan.nonprod.debug",
+            entrypoint="lib/main_prod.dart",
+        )
+        build_environment = {"PATH": "/exact/bin", "PHASE": "build"}
+        attach_environment = {"PATH": "/exact/bin", "PHASE": "attach"}
+        process = _AttachProcess(
+            '[{"event":"app.started","params":{"appId":"daemon-app-1"}}]\n'
+        )
+        with mock.patch.object(
+            driver,
+            "child_environment",
+            side_effect=(build_environment, attach_environment),
+        ) as child_environment, mock.patch.object(
+            executor,
+            "_run_checked",
+        ) as run_checked, mock.patch.object(
+            driver,
+            "artifact_path",
+        ) as artifact_path, mock.patch.object(
+            executor.subprocess,
+            "Popen",
+            return_value=process,
+        ) as popen, mock.patch.object(
+            executor.threading,
+            "Thread",
+            _ImmediateThread,
+        ), mock.patch.object(
+            driver,
+            "resolve_attach_debug_url",
+            return_value="http://127.0.0.1:1234/token/",
+        ), mock.patch.object(
+            driver,
+            "startup_evidence_lines",
+            return_value=(),
+        ):
+            artifact_path.return_value.exists.return_value = True
+            driver.build({"PATH": "/hostile/build"})
+            self.assertEqual(
+                driver.attach((), timeout_seconds=10.0, on_attached=lambda: None),
+                0,
+            )
+
+        self.assertEqual(child_environment.call_count, 2)
+        run_checked.assert_called_once()
+        self.assertEqual(run_checked.call_args.kwargs["environment"], build_environment)
+        self.assertEqual(popen.call_args.kwargs["env"], attach_environment)
+
     def test_attach_argument_sanitizer_rejects_executor_owned_inputs(self) -> None:
         for arguments in (
             ("--flavor", "prod"),

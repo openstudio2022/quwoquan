@@ -325,6 +325,41 @@ def select_pytest_paths(paths: list[str]) -> tuple[list[str], list[str]]:
             ),
         ),
         (
+            "quwoquan_ops/ci/local_readiness_planner.py",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_local_readiness__core__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/local_readiness.py",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_local_readiness__core__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/lib/local_readiness/",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_local_readiness__core__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/hooks/local_readiness_after_edit.py",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_local_readiness__core__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/policies/local_readiness_contract.yaml",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_local_readiness__core__local_contract_test.py",
+            ),
+        ),
+        (
             "quwoquan_ops/gate/verify_github_supply_chain.py",
             (
                 "quwoquan_ops/tests/local_contract/release/"

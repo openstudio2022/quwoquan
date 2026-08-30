@@ -64,6 +64,9 @@ func TestProjectBoundMediaAssetsReplacesClientDeliveryReferences(t *testing.T) {
 	if item.Url != videoSlice {
 		t.Fatalf("media item must replace client URL: %#v", item)
 	}
+	if item.AccessMode != "public" {
+		t.Fatalf("normal Post projection must emit explicit public accessMode: %#v", item)
+	}
 	if item.CoverUrl != post.CoverUrl {
 		t.Fatalf("media item must replace client cover URL: %#v", item)
 	}
@@ -172,6 +175,9 @@ func TestProjectBoundMediaAssetsRebuildsArticleManifestFromPublicSlices(
 	for _, row := range rows {
 		if row.PublicSliceKey == "" {
 			t.Fatalf("article manifest exposed storage authority: %#v", row)
+		}
+		if row.AccessMode != "public" {
+			t.Fatalf("article projection must emit explicit public accessMode: %#v", row)
 		}
 	}
 	if rows[1].Layout != "wrapLeft" || rows[1].Caption != "配图" {

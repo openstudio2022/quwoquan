@@ -18,7 +18,10 @@ from core.paths import (
     REPO_ROOT,
     is_execution_id,
 )
-from content.execution.execution_terminal import load_terminal_execution_evidence
+from content.execution.execution_terminal import (
+    InvalidTerminalExecutionEvidenceError,
+    load_terminal_execution_evidence,
+)
 from content.execution.spec_contract import ExecutionSpec
 from content.execution.store import load_spec
 from content.execution.workspace import load_execution_manifest, load_frozen_target_set
@@ -52,6 +55,11 @@ _RETIRED_RUNTIME_IDENTITY_KEYS = frozenset(
         "executionInstance",
     }
 )
+
+
+def _is_execution_work_package_root(path: Path) -> bool:
+    """用 canonical execution identity 或根 manifest 识别工作包。"""
+    return is_execution_id(path.name) or (path / "execution_manifest.json").exists()
 
 
 def _display_path(path: Path) -> str:
@@ -231,14 +239,23 @@ def _execution_work_package_issues(entry: Path) -> list[str]:
     return issues
 
 
-def _terminal_evidence(entry: Path, *, issues: list[str]) -> object | None:
+def _terminal_evidence(
+    entry: Path,
+    *,
+    issues: list[str],
+) -> tuple[object | None, bool]:
     try:
-        return load_terminal_execution_evidence(entry)
+        return load_terminal_execution_evidence(entry), False
+    except InvalidTerminalExecutionEvidenceError as exc:
+        issues.append(
+            f"{_display_path(entry)}: invalid terminal execution evidence: {exc}"
+        )
+        return None, True
     except (OSError, TypeError, ValueError) as exc:
         issues.append(
             f"{_display_path(entry)}: invalid terminal execution evidence: {exc}"
         )
-        return None
+        return None, False
 
 
 def content_execution_layout_issues(
@@ -268,7 +285,9 @@ def content_execution_layout_issues(
         entry = DATA_EXECUTIONS_ROOT / execution_id
         if not entry.is_dir():
             return [*issues, f"{_display_path(entry)}: execution work package does not exist"]
-        terminal = _terminal_evidence(entry, issues=issues)
+        terminal, invalid_terminal = _terminal_evidence(entry, issues=issues)
+        if invalid_terminal:
+            return issues
         if terminal is not None and not (
             allow_succeeded_terminal and terminal.decision == "succeeded"
         ):
@@ -283,10 +302,10 @@ def content_execution_layout_issues(
         if not entry.is_dir():
             issues.append(f"{_display_path(entry)}: tasks root only allows execution directories")
             continue
-        if not is_execution_id(entry.name):
-            issues.append(f"{_display_path(entry)}: invalid executionId directory")
+        if not _is_execution_work_package_root(entry):
             continue
-        if _terminal_evidence(entry, issues=issues) is not None:
+        terminal, invalid_terminal = _terminal_evidence(entry, issues=issues)
+        if invalid_terminal or terminal is not None:
             continue
         issues.extend(_execution_work_package_issues(entry))
     return issues

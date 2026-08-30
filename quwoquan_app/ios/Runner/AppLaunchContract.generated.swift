@@ -2,7 +2,7 @@
 import Foundation
 
 enum AppLaunchContract {
-  static let sourceDigest = "sha256:fb9bf68498ff7587e7d0720b097b858ce3b666be3ca2645230754b72c946ecf1"
+  static let sourceDigest = "sha256:a325c484b79e46a75639359283fcac1c4f256cc7f10d5f1d01f25608b724f885"
   static let environments: [String] = [
     "alpha",
     "beta",
@@ -55,6 +55,17 @@ enum AppLaunchContract {
     "rtcMediaConnectionUrl",
   ]
   static let launchBlockers: [String: String] = [
+    "APP.DEPENDENCY.bundle_missing": "启动未获得经验证的 source capsule 与原子依赖 bundle。",
+    "APP.DEPENDENCY.cocoapods_missing": "iOS 启动缺少契约锁定的 CocoaPods 可执行文件。",
+    "APP.DEPENDENCY.cocoapods_mixed": "iOS 依赖投影混用了不同 CocoaPods 可执行文件或版本。",
+    "APP.DEPENDENCY.cross_platform_generated_tooling_unsafe": "当前平台投影中的跨平台生成工具残留无法安全检查或剪除。",
+    "APP.DEPENDENCY.flutter_spm_residue_forbidden": "CocoaPods-only iOS 工程仍含 Flutter Swift Package Manager 残留。",
+    "APP.DEPENDENCY.lock_drift": "App 生产工程、UAT test host 或已投影依赖的锁定身份不一致。",
+    "APP.DEPENDENCY.projection_cas_drift": "冻结的依赖投影在命令执行前后发生 CAS 漂移。",
+    "APP.DEPENDENCY.projection_execution_failed": "受冻结依赖投影约束的启动期子命令执行失败。",
+    "APP.DEPENDENCY.projection_expectation_invalid": "依赖投影 expectation 或其摘要、读回身份缺失或非法。",
+    "APP.DEPENDENCY.projection_failed": "启动期原子依赖投影或离线回放未完成。",
+    "APP.DEPENDENCY.pub_offline_replay_failed": "Flutter pub 依赖无法按锁定在私有 cache 中离线回放。",
     "APP.LAUNCH.compile_failed": "编译未产出可安装制品。",
     "APP.LAUNCH.device_unavailable": "目标设备不可用或未被 canonical 设备发现认领。",
     "APP.LAUNCH.install_failed": "制品已编译但未能安装到目标设备。",
@@ -75,6 +86,7 @@ enum AppLaunchContract {
     "APP.LAUNCH.runtime_config_trust_missing": "build-profile trust envelope 缺失或非法，禁止产生可安装制品。",
     "APP.LAUNCH.runtime_dependency_unavailable": "目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。",
     "APP.LAUNCH.workspace_entrypoint_inactive": "工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。",
+    "APP.LAUNCH.workspace_flutter_sdk_unavailable": "工作区激活时无法解析真实 Flutter SDK 或 SDK 版本与仓库锁定不符；激活必须在写入任何 workspace facade 投影前以本码阻断。",
     "APP.UAT.page_artifact_binding_missing": "页面自动化实际安装并启动的 AppArtifact 缺少与同 target canonical launch 的完整身份绑定或逐字段不一致，禁止生成页面通过结果。",
     "APP.WEB.recovery_unavailable": "恢复 Web 静态面不可达，不得据此生成 launched 或 ready 假证据。",
   ]
@@ -163,6 +175,9 @@ enum AppLaunchContract {
     "launchProvenance",
     "runtimeConfigSupplyMode",
     "artifactDigest",
+    "candidateDigest",
+    "artifactManifestDigest",
+    "launcherHandoffDigest",
     "runtimeConfigTrustEnvelopeDigest",
     "runtimeConfigPackageDigest",
     "applicationId",

@@ -142,10 +142,19 @@ profiles:
     paths:
       - quwoquan_ops/gate/**
       - .github/workflows/**
+      - .agents/skills/review/**
+      - quwoquan_ops/**/*local_readiness*
+      - quwoquan_ops/**/*workflow_resolution*
+      - quwoquan_ops/**/*hosted_authority*
+      - quwoquan_ops/**/*objective_execution*
+      - quwoquan_ops/**/*governance_pipeline*
+      - quwoquan_service/control-plane/platform-ops/**
+      - quwoquan_ops/portal/src/domains/platform/HumanAuthorityPage*
+      - specs/feature-tree/runtime/runtime-control-plane-foundation/human-authority-role-cards/**
     deliverables: [gate]
     specialist:
       role: ops
-      priority: 85
+      priority: 130
       required: false
       checklists:
         design: roles/ops/checklists/design/gate.md

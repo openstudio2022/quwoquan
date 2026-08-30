@@ -124,6 +124,7 @@ def execution_root(tmp_path: Path, monkeypatch) -> Path:
     root = tmp_path / "execution"
     _write_source(root)
     monkeypatch.setattr(gate.paths, "execution_root", lambda _execution: root)
+    monkeypatch.setattr(gate, "load_terminal_execution_evidence", lambda _root: None)
     return root
 
 

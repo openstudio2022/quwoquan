@@ -165,7 +165,6 @@ func init() {
 		{ObjectID: "content.post", Field: "shareCount", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "sourceAttribution", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "sourcePostId", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
-		{ObjectID: "content.post", Field: "sourceTaskId", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "sourceType", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "status", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "summary", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},

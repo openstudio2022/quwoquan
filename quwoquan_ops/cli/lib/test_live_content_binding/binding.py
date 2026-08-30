@@ -60,9 +60,25 @@ def _evidence_token(evidence: _Evidence) -> tuple[object, ...]:
         evidence.readiness,
         evidence.readiness_snapshot.identity,
         evidence.readiness_snapshot.digest,
+        evidence.release_header,
+        evidence.release_header_snapshot.identity,
+        evidence.release_header_snapshot.digest,
+        evidence.release_uat_sample_plan,
+        evidence.release_uat_sample_plan_ref,
+        evidence.release_uat_sample_plan_digest,
         evidence.lifecycle,
         evidence.lifecycle_snapshot.identity if evidence.lifecycle_snapshot else None,
         evidence.lifecycle_snapshot.digest if evidence.lifecycle_snapshot else "",
+    )
+
+
+def _app_uat_plan(evidence: _Evidence) -> dict[str, Any]:
+    return build_app_content_uat_plan(
+        evidence.readiness,
+        release_header=evidence.release_header,
+        release_uat_sample_plan=evidence.release_uat_sample_plan,
+        release_uat_sample_plan_digest=evidence.release_uat_sample_plan_digest,
+        release_payload_sha256=str(evidence.attestation.get("payloadSha256") or ""),
     )
 
 
@@ -72,7 +88,7 @@ def _binding_payload(
     environment: str,
     target: str,
 ) -> dict[str, Any]:
-    app_uat_plan = build_app_content_uat_plan(evidence.readiness)
+    app_uat_plan = _app_uat_plan(evidence)
     return {
         "schema": SCHEMA,
         "launchPolicy": "test_live",
@@ -92,8 +108,10 @@ def _binding_payload(
         "readinessReceiptRef": evidence.readiness_ref,
         "readinessReceiptDigest": evidence.readiness_snapshot.digest,
         "dataSourceIdentity": _copy_source_identity(evidence.source_identity),
-        "appUatEnvelope": dict(evidence.readiness["appUatEnvelope"]),
-        "appUatEnvelopeDigest": evidence.readiness["appUatEnvelopeDigest"],
+        "releaseHeaderRef": evidence.release_header_ref,
+        "releaseHeaderDigest": evidence.release_header_snapshot.digest,
+        "releaseUatSamplePlanRef": evidence.release_uat_sample_plan_ref,
+        "releaseUatSamplePlanDigest": evidence.release_uat_sample_plan_digest,
         "appUatPlan": app_uat_plan,
         "appUatPlanDigest": _document_checksum(app_uat_plan),
         "activationEnvelope": dict(evidence.readiness["activationEnvelope"]),
@@ -120,7 +138,7 @@ def _validate_timestamp(value: object) -> None:
 def _validate_binding(value: object, *, evidence: _Evidence, target: str) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) != _BINDING_FIELDS:
         raise ValueError("test-live content binding fields mismatch")
-    app_uat_plan = build_app_content_uat_plan(evidence.readiness)
+    app_uat_plan = _app_uat_plan(evidence)
     expected = {
         "schema": SCHEMA,
         "launchPolicy": "test_live",
@@ -140,8 +158,10 @@ def _validate_binding(value: object, *, evidence: _Evidence, target: str) -> dic
         "readinessReceiptRef": evidence.readiness_ref,
         "readinessReceiptDigest": evidence.readiness_snapshot.digest,
         "dataSourceIdentity": _copy_source_identity(evidence.source_identity),
-        "appUatEnvelope": dict(evidence.readiness["appUatEnvelope"]),
-        "appUatEnvelopeDigest": evidence.readiness["appUatEnvelopeDigest"],
+        "releaseHeaderRef": evidence.release_header_ref,
+        "releaseHeaderDigest": evidence.release_header_snapshot.digest,
+        "releaseUatSamplePlanRef": evidence.release_uat_sample_plan_ref,
+        "releaseUatSamplePlanDigest": evidence.release_uat_sample_plan_digest,
         "appUatPlan": app_uat_plan,
         "appUatPlanDigest": _document_checksum(app_uat_plan),
         "activationEnvelope": dict(evidence.readiness["activationEnvelope"]),

@@ -15,6 +15,10 @@ ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.lib.app_dependency_toolchain import (
+    AppDependencyToolchainError,
+    validate_cocoapods_child_environment,
+)
 from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
     build_runtime_config_activation_request,
     runtime_config_activation_request_digest,
@@ -117,7 +121,7 @@ class CanonicalLaunchExecutor:
         self.emit = emit
 
     def execute(self) -> int:
-        self.platform_driver.build(compile_environment(self.inherited_environment))
+        self.platform_driver.build(dict(self.inherited_environment))
         self._emit_phase("compiled")
         self._emit_phase("installing")
         self.platform_driver.install()
@@ -327,7 +331,11 @@ def decode_activation_receipt(
     return decoded
 
 
-def compile_environment(inherited: Mapping[str, str]) -> dict[str, str]:
+def compile_environment(
+    inherited: Mapping[str, str],
+    *,
+    require_cocoapods: bool = False,
+) -> dict[str, str]:
     environment = {str(key): str(value) for key, value in inherited.items()}
     for forbidden in FORBIDDEN_COMPILE_ENVIRONMENT_KEYS:
         if forbidden.endswith("*"):
@@ -337,6 +345,11 @@ def compile_environment(inherited: Mapping[str, str]) -> dict[str, str]:
                     environment.pop(key, None)
         else:
             environment.pop(forbidden, None)
+    if require_cocoapods:
+        try:
+            _identity, environment = validate_cocoapods_child_environment(environment)
+        except AppDependencyToolchainError as error:
+            raise CanonicalExecutorError(str(error)) from error
     return environment
 
 

@@ -35,6 +35,7 @@ from quwoquan_app.scripts.device.startup_terminal_receipt import (
 )
 from quwoquan_ops.cli.lib.app_launch_attempt import (
     CONFIGURATION_STATES,
+    LAUNCH_BLOCKERS,
     create_app_launch_attempt,
     read_app_launch_attempt,
     record_app_launch_attempt_observation,
@@ -81,6 +82,19 @@ _PHASE_MARKER = re.compile(
     r"^QWQ_APP_LAUNCH_PHASE status="
     r"(compiled|installing|installed|configuring|configured|launching|launched)$"
 )
+_DEPENDENCY_BLOCKER_MARKER = re.compile(
+    r"(?<![A-Za-z0-9_.])(?P<code>APP\.DEPENDENCY\.[a-z_]+)(?![A-Za-z0-9_.])"
+)
+
+
+def _canonical_dependency_blocker_from(line: str) -> str:
+    """Project only registered launch dependency blockers from child output."""
+
+    for match in _DEPENDENCY_BLOCKER_MARKER.finditer(line):
+        code = match.group("code")
+        if code in LAUNCH_BLOCKERS:
+            return code
+    return ""
 
 
 class _ArtifactIdentityError(RuntimeError):
@@ -485,6 +499,7 @@ def main() -> int:
     interrupted = False
     timed_out = False
     observed_launch_error = False
+    first_dependency_blocker = ""
     artifact_identity_error: _ArtifactIdentityError | None = None
     safe_terminal_error: _SafeTerminalIdentityError | None = None
     pending_launched = False
@@ -682,6 +697,8 @@ def main() -> int:
                 handle.write(line)
                 handle.flush()
             lowered = line.lower()
+            if not first_dependency_blocker:
+                first_dependency_blocker = _canonical_dependency_blocker_from(line)
             observed_phase = _observed_phase_from(line)
             if observed_phase:
                 if settle_pending_interruption():
@@ -867,9 +884,12 @@ def main() -> int:
                 args.receipt,
                 "failed",
                 first_blocker=(
-                    "APP.LAUNCH.launch_failed"
-                    if observed_launch_error
-                    else _failure_for(current)
+                    first_dependency_blocker
+                    or (
+                        "APP.LAUNCH.launch_failed"
+                        if observed_launch_error
+                        else _failure_for(current)
+                    )
                 ),
             )
         _settle_runtime_health(args.receipt)

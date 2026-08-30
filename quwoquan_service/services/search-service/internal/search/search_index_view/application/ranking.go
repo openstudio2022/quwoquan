@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"time"
 
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/services/search-service/internal/search/search_request_fact/application/queryheat"
@@ -17,6 +18,11 @@ const RelatedTermsLimit = 8
 // adds under the term_heat AB arm. It is comparable to a strong tag/term hit so
 // search-term heat meaningfully reorders without drowning text relevance.
 const DefaultTermHeatBoost = 1.5
+
+// termHeatLookupBudget bounds an optional ranking enrichment. The owner search
+// operation has a tighter end-to-end budget; Mongo/Redis DNS or pool stalls must
+// not consume it before the canonical search backend can run.
+const termHeatLookupBudget = 250 * time.Millisecond
 
 // TermHeatProvider supplies the derived search-term heat for ranking + suggest.
 // Implemented in infrastructure (reads the rm_search_term_heat read model). It
@@ -97,9 +103,12 @@ func (d *RankingDecorator) Prepare(ctx context.Context, normalizedQuery, subject
 
 	var heats []queryheat.TermHeat
 	if d.termHeat != nil {
-		fetched, err := d.termHeat.RelatedTerms(ctx, normalizedQuery, RelatedTermsLimit)
+		lookupCtx, cancel := context.WithTimeout(ctx, termHeatLookupBudget)
+		fetched, err := d.termHeat.RelatedTerms(lookupCtx, normalizedQuery, RelatedTermsLimit)
+		cancel()
 		if err != nil {
-			// Best-effort: degrade to base ranking, never fail the search.
+			// Best-effort: optional heat must release the request budget quickly so
+			// canonical backend retrieval still has time to serve base ranking.
 			d.logger.WarnContext(ctx, "search related-terms lookup failed (best-effort, base ranking served)",
 				slog.String("query", normalizedQuery), slog.String("err", err.Error()))
 		} else {

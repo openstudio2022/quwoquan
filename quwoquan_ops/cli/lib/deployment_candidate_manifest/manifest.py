@@ -11,12 +11,14 @@ import hashlib
 import json
 import os
 import re
+import shutil
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 import quwoquan_ops.cli.lib.deployment_candidate_manifest as _pkg
 from quwoquan_ops.cli.lib.immutable_image_composition import immutable_image_digest
+from quwoquan_ops.cli.lib.currentness import CURRENTNESS_TIMEOUT_SECONDS
 
 from .candidate_fs import (
     _UnsafeCandidatePath,
@@ -524,6 +526,17 @@ def _validate_prod_hosted_release_evidence_currentness(
         raise ValueError("prod-hosted release image evidence currentness drifted")
 
 
+def materialize_prod_sim_app_launch_bundle(
+    *, candidate_root: Path, package_snapshot: Mapping[str, object],
+    materialized_release_evidence: Mapping[str, str], source_root: Path,
+) -> dict[str, Any]:
+    from .prod_sim_app_launch_materialization import materialize_prod_sim_app_launch_bundle_impl
+    return materialize_prod_sim_app_launch_bundle_impl(
+        candidate_root=candidate_root, package_snapshot=package_snapshot,
+        materialized_release_evidence=materialized_release_evidence, source_root=source_root,
+    )
+
+
 def write_candidate_manifest(
     env_name: str,
     target_name: str,
@@ -532,6 +545,7 @@ def write_candidate_manifest(
     candidate_type: str = RUNTIME_CANDIDATE_TYPE,
     release_attestation: str = "",
     rollback_release_attestation: str = "",
+    app_launch_bundle: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write the only candidate manifest after every package digest is sealed."""
 
@@ -664,8 +678,15 @@ def write_candidate_manifest(
         "releaseInputClassification": release_classification,
         "contractGraphDigest": contract_graph_digest,
         "graphqlReadRegistry": graphql_read_registry,
+        "appLaunchBundle": (
+            {**dict(app_launch_bundle), "candidateDigest": package_content.get("digest")}
+            if app_launch_bundle is not None
+            else None
+        ),
         "specRefs": list(SPEC_REFS),
     }
+    if fingerprint.get("appLaunchBundle") != payload.get("appLaunchBundle"):
+        raise ValueError("package fingerprint App launch bundle identity drifted")
     payload["environmentArtifact"] = build_environment_artifact(
         environment=env_name,
         target=target_name,
@@ -712,7 +733,7 @@ def validate_candidate_manifest(
     require_full: bool,
     candidate_root: Path | None = None,
     purpose: str = "self_verify",
-    currentness_timeout_seconds: float = 120.0,
+    currentness_timeout_seconds: float = CURRENTNESS_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     if candidate_root is None:
         raise ValueError(
@@ -746,10 +767,22 @@ def validate_candidate_manifest(
         "releaseInputClassification",
         "contractGraphDigest",
         "graphqlReadRegistry",
+        "appLaunchBundle",
         "specRefs",
         "environmentArtifact",
     }
-    if not isinstance(payload, dict) or set(payload) != required:
+    if not isinstance(payload, dict):
+        raise ValueError("deployment candidate manifest fields mismatch")
+    actual_fields = set(payload)
+    legacy_teardown_fields = required - {"appLaunchBundle"}
+    if (
+        purpose == "teardown"
+        and payload.get("target") != "prod-sim"
+        and actual_fields == legacy_teardown_fields
+    ):
+        # 单代历史候选只在退出时投影新增 nullable 字段；不改写封存字节。
+        payload = {**payload, "appLaunchBundle": None}
+    elif actual_fields != required:
         raise ValueError("deployment candidate manifest fields mismatch")
     if payload.get("schema") != CANDIDATE_MANIFEST_SCHEMA:
         raise ValueError("deployment candidate manifest schema mismatch")
@@ -806,6 +839,10 @@ def validate_candidate_manifest(
         payload,
         candidate_root=candidate_root,
     )
+    prod_sim_app_launch_bundle_from_candidate(
+        payload,
+        candidate_root=candidate_root,
+    )
     _validate_candidate_provider_oci_binding(
         payload,
         candidate_root=candidate_root,
@@ -857,7 +894,7 @@ def validate_candidate_manifest(
         expected_target=expected_target,
         expected_candidate_digest=str(payload.get("baselineId") or ""),
         expected_descriptor=payload.get("graphqlReadRegistry"),
-        purpose=purpose,
+        purpose=("self_verify" if purpose == "teardown" else purpose),
         currentness_timeout_seconds=currentness_timeout_seconds,
     )
     fingerprint = _read_candidate_object(
@@ -869,9 +906,17 @@ def validate_candidate_manifest(
         fingerprint.get("releaseInputClassification") != expected_classification
         or fingerprint.get("contractGraphDigest") != payload.get("contractGraphDigest")
         or fingerprint.get("graphqlReadRegistry") != graphql_read_registry
+        or fingerprint.get("appLaunchBundle") != payload.get("appLaunchBundle")
     ):
         raise ValueError("package fingerprint release identity drifted")
     return payload
+
+
+def prod_sim_app_launch_bundle_from_candidate(
+    candidate: Mapping[str, Any], *, candidate_root: Path
+) -> dict[str, Any]:
+    from .prod_sim_app_launch import validate_prod_sim_app_launch_bundle
+    return validate_prod_sim_app_launch_bundle(candidate, candidate_root=candidate_root)
 
 
 def _validate_candidate_app_runtime_binding(
@@ -904,7 +949,7 @@ def load_candidate_manifest(
     *,
     require_full: bool,
     purpose: str = "self_verify",
-    currentness_timeout_seconds: float = 120.0,
+    currentness_timeout_seconds: float = CURRENTNESS_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     candidate_root = _pkg.deployment_candidate_dir(target_name, baseline_id)
     payload = _read_candidate_object(

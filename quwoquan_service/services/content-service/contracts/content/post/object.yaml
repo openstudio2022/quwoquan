@@ -80,8 +80,6 @@ relationships:
 local_identity_reasons:
   localDraftId: 端侧草稿在所属作者内的稳定去重键，不是 Post 聚合主身份
   publishIntentId: 一次发布意图在所属作者内的永久幂等键，不是 Post 聚合主身份
-  sourceTaskId: immutable correlation or idempotency key scoped to this fact or command; it is not a business-object
-    reference
 counter_strategy:
   description: 'Post 只承载可重建计数投影，不拥有互动事实。like 来自 ContentReaction
 

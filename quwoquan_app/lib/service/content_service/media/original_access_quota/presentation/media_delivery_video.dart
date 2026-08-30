@@ -23,8 +23,10 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 ///   交付边缘按段复算签名，因此单签 URL 足够，不需要逐段换签；TTL 到期或签名
 ///   被拒时由播放器回调触发一次强制换签；
 /// - signedGrant 但资产身份缺席：投影自相矛盾，落显式判否，**不回退公开路径**；
-/// - public 或契约缺席且公开 URL 在场：走 [publicBuilder]；
-/// - 公开 URL 也缺席：宿主没给可播放取值，落缺席终态。
+/// - typed public（含具名 legacy adapter 已适配出的 public）且 URL 在场：走
+///   [publicBuilder]；
+/// - null/unknown 或 private HLS：contract failure/unsupported typed terminal；
+/// - 全部字段均缺席：宿主没给可播放取值，落缺席终态。
 class MediaDeliveryVideo extends ConsumerStatefulWidget {
   const MediaDeliveryVideo({
     super.key,
@@ -172,7 +174,9 @@ class _MediaDeliveryVideoState extends ConsumerState<MediaDeliveryVideo> {
   @override
   Widget build(BuildContext context) {
     final binding = widget.binding;
-    if (binding.isSignedGrantWithoutAsset) {
+    if (binding.isSignedGrantWithoutAsset ||
+        binding.isUnsupportedPrivateHls ||
+        binding.isContractFailure) {
       // 私有资产没有资产身份就换不到 grant；回退公开 URL 会把授权判定跳过。
       // 重试不会让资产身份出现，故不给恢复动作。
       return widget.errorWidget ??
@@ -208,10 +212,13 @@ class _MediaDeliveryVideoState extends ConsumerState<MediaDeliveryVideo> {
           );
       }
     }
-    final publicUrl = binding.publicUrl.trim();
-    if (publicUrl.isEmpty) {
-      return widget.absentWidget ?? const SizedBox.shrink();
+    if (binding.isPublic) {
+      final publicUrl = binding.publicUrl.trim();
+      if (publicUrl.isEmpty) {
+        return widget.absentWidget ?? const SizedBox.shrink();
+      }
+      return widget.publicBuilder(context, publicUrl);
     }
-    return widget.publicBuilder(context, publicUrl);
+    return widget.absentWidget ?? const SizedBox.shrink();
   }
 }

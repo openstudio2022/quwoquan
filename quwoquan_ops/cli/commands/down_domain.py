@@ -323,7 +323,7 @@ def _bind_local_teardown_runtime(
         target_name,
         receipt_candidate,
         require_full=True,
-        purpose="self_verify",
+        purpose="teardown",
     )
     provider_runtime_binding = _stackctl._candidate_provider_runtime(
         env_name,

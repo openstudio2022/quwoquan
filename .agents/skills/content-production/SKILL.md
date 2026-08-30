@@ -24,14 +24,21 @@ immutable release、导入环境或数据发布时使用。
 verify、原子 publish/release/ship 与 receipt 记录，不驱动或等待 Agent。工作包布局需要
 定位时读取 [execution-layout.md](references/execution-layout.md)，不预载全部阶段文档。
 
+
+
+自然语言触发与显式 Skill 调用同轨，字段、闭集与审计隔离只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.content-production`：
+
+- PRE：`progress_update` / `delivery_planning_authorization` / `engineering_delivery_owner`。
+
 ## 执行
 
-所有子命令以 `python3 quwoquan_data/scripts/cli.py` 为入口，按下列分支进入同一阶段链：
+所有子命令以 `python3 quwoquan_data/scripts/cli.py` 为入口，并只从磁盘 owner facts 进入同一阶段链：
 
-1. 新任务先运行 `task preflight --json`，然后从 `0.plan` 开始。
-2. 续跑或跨宿主接手按 [recovery.md](references/recovery.md) 的 receipt 判定表定位唯一断点。
-3. loop、并发或 fleet 才读取 [orchestration.md](references/orchestration.md)；正式并发只使用
-   `fleet_dispatcher + loop_driver`，并遵守 single-writer claim。
+1. 新任务先确认 confirmed demand 与 immutable candidate binding。唯一初始化命令是中性 `task init --carrier-demand <path> --candidate-bindings <path>`，它只原子物化 `execution_manifest.json`、`0.plan/request.json`、`0.plan/target_set.json`，零 stage 副作用；输入必须是 confirmed carrier demand 与 immutable candidate bindings，不得改用 `task execute`（含 plan-only）、pool-dispatch/campaign 或手写工作包。
+2. 宿主 Agent 不运行仓内 semantic provider、Cursor key/model、SDK、capacity 或 workspace soak preflight。进入每个 stage 时只执行该 stage 契约声明的 deterministic input/layout/source/rights/runtime PRE。
+3. M100 gap 与 candidate readiness 只能经只读 pool handoff query/precheck 查看；query 不得写 selection、冻结 slot 或启动 production。M1000 在同一 M100 exact release 完成必要前序、Gamma import/readback、registered physical-device raw App UAT 与 Gamma acceptance 前保持生产副作用为 0；gate 后本轮首 slot 只到 `0.plan pass -> next=sources`。
+4. 续跑或跨宿主接手按 [recovery.md](references/recovery.md) 的 receipt 判定表定位唯一断点。
+5. loop、并发或 fleet 才读取 [orchestration.md](references/orchestration.md)；两个 runner 只起收宿主进程、只读 receipt，不含 candidate 选择、业务重试或旧 `agent/queue/controller/recovery/campaign` 入口。
 
 只在进入某阶段时读取对应契约，并按顺序推进：
 
@@ -52,6 +59,10 @@ verify、原子 publish/release/ship 与 receipt 记录，不驱动或等待 Age
 [carriers/](references/carriers/)；阶段失败才读取 [self-repair.md](references/self-repair.md)，
 修复产物后重跑同一命名证据，不跳阶段。
 
+- 执行中：`exception_escalation` / `nonproduction_validation` / `$route`。
+
+`$route` 表示按当前决定责任动态路由；Skill 不复制 envelope schema，所有可见输出统一由 canonical projector 生成。
+
 ## 完成证据
 
 完成必须同时绑定同一 execution 的 receipt 链、immutable release、环境 import/readback
@@ -67,6 +78,8 @@ deliverable=`content-release`）。主审是 `data-quality`；命中内容发布
 一个 `data-legal` 专审。Reviewer 只裁决已有证据，不自行运行 gate。required evidence 或
 required Reviewer 未完成即返回 typed `GATE_BLOCK`。
 
+- POST：`completion_report` / `nonproduction_validation` / `$route`。
+
 ## 失败与停止
 
 - 禁止手改 verify/schema/门禁参数，禁止手写 receipt 或 `execution_state.json`。
@@ -74,13 +87,10 @@ required Reviewer 未完成即返回 typed `GATE_BLOCK`。
   `executionId` 和首个失败阶段返回 `GATE_BLOCK`。
 - receipt 链、source digest、release identity 或环境读回不一致时停止，由 recovery 判定表
   决定返回阶段；不得从后续阶段反向修饰旧证据。
-- 凭证只从仓外 `0600` 的 `~/.config/quwoquan/cursor_api_key` 读取；任何输出不得包含
-  key、片段或指纹。
+- 宿主 Cursor/Codex 凭证与模型能力由宿主自身管理；Data 仓库、工作包、日志与 receipt 不读取、不保存 key、token、片段或指纹。
 
 ## 条件性交接
 
-仅在跨会话未完成、环境/发布、多人并行、外部阻断或证据需要后续复用时持久化交接。
-交接只记录 execution/release/run identity、当前阶段、首个 typed blocker、receipt 与证据
-路径、唯一恢复入口；不得复制阶段规范或另建状态台账。App 代码缺陷可交给 `dev`，其他
-阻断按 [recovery.md](references/recovery.md) 回到唯一阶段。普通且已闭环的内容检查只向用户
-交付产物、实际验证和未决项。
+六类触发（跨会话未完成、多人并行、环境/发布、外部阻断、证据复用、用户显式要求）统一调用 canonical handoff producer；普通闭环不落持久交接。
+
+仅当路由结果要求真实人类责任时，使用统一 `$route`、project/card 与 hosted authority readback；routine execution 不新造 checkpoint。Reviewer PASS 只是评审证据，不能签发或替代 authority receipt。

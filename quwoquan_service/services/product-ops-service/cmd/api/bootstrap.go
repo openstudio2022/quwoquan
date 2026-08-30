@@ -261,7 +261,10 @@ func assembleProductOpsDomain(asm *servicekit.Assembly, cfg *config) error {
 // 允许匿名访问：它们分别以固定 schema、严格大小与每来源 IP 配额收紧，不绕过
 // 通用 /ops/events 的鉴权要求。
 func registerProductOpsRoutes(asm *servicekit.Assembly, service *productService) {
-	routes := newServerMux(service, asm.Health)
+	registerProductOpsRouteHandler(asm, newServerMux(service))
+}
+
+func registerProductOpsRouteHandler(asm *servicekit.Assembly, routes http.Handler) {
 	unguarded := asm.Unguarded()
 	for _, path := range []string{
 		"/ops/startup-events",
@@ -273,7 +276,17 @@ func registerProductOpsRoutes(asm *servicekit.Assembly, service *productService)
 	} {
 		unguarded.Handle(path, routes)
 	}
-	asm.Mux.Handle("/", routes)
+	// 领域只挂自己实际拥有的 path 前缀。禁止以 "/" 兜底，否则领域 mux 会
+	// 对 servicekit 统一拥有的 /healthz、/readyz、/metrics 形成第二路由面；
+	// canonical 探针必须始终由 Bootstrap 外层 mux 回答。
+	for _, path := range []string{
+		"/ops/",
+		"/control-plane/product/",
+		"/download",
+		"/download/",
+	} {
+		asm.Mux.Handle(path, routes)
+	}
 }
 
 type eventRepositoryComposition struct {

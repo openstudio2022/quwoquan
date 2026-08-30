@@ -267,8 +267,8 @@ func assembleSearchBackend(
 	if err := ensureSearchIndex(asm.Context, built); err != nil {
 		return searchbackend.Built{}, err
 	}
-	if ping := built.HealthPing(); ping != nil {
-		asm.Health.Register("elasticsearch", ping)
+	if readiness := built.ReadinessCheck(); readiness != nil {
+		asm.Health.Register("elasticsearch", readiness)
 	}
 	return built, nil
 }

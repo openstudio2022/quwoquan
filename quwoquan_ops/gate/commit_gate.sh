@@ -21,7 +21,7 @@ if [[ -z "$SOFT_BUDGET" || -z "$HARD_BUDGET" ]]; then
 fi
 
 STARTED_AT=$(date +%s)
-FINGERPRINT_START="$(git status --porcelain | shasum -a 256 | awk '{print $1}')"
+FINGERPRINT_START="$(python3 -B quwoquan_ops/cli/local_readiness.py plan --level fast --staged | python3 -c 'import json,sys; print(json.load(sys.stdin)["fingerprint"]["digest"])')"
 PLAN_JSON="$REPORT_DIR/plan.json"
 PHASE_LOG="$REPORT_DIR/phases.jsonl"
 : >"$PHASE_LOG"
@@ -43,7 +43,7 @@ write_summary() {
   local result="$1"
   local elapsed fingerprint_end
   elapsed="$(elapsed_now)"
-  fingerprint_end="$(git status --porcelain | shasum -a 256 | awk '{print $1}')"
+  fingerprint_end="$(python3 -B quwoquan_ops/cli/local_readiness.py plan --level fast --staged | python3 -c 'import json,sys; print(json.load(sys.stdin)["fingerprint"]["digest"])')"
   REPORT_DIR="$REPORT_DIR" PLAN_JSON="$PLAN_JSON" PHASE_LOG="$PHASE_LOG" \
   RESULT="$result" ELAPSED="$elapsed" SOFT_BUDGET="$SOFT_BUDGET" HARD_BUDGET="$HARD_BUDGET" \
   FINGERPRINT_START="$FINGERPRINT_START" FINGERPRINT_END="$fingerprint_end" \
@@ -317,7 +317,7 @@ if [[ "$DEFERRED_COUNT" -gt 0 ]]; then
   log "deferred_to_ci=$DEFERRED_COUNT Flutter tests (see plan.json)"
 fi
 
-FINGERPRINT_END="$(git status --porcelain | shasum -a 256 | awk '{print $1}')"
+FINGERPRINT_END="$(python3 -B quwoquan_ops/cli/local_readiness.py plan --level fast --staged | python3 -c 'import json,sys; print(json.load(sys.stdin)["fingerprint"]["digest"])')"
 if [[ "$FINGERPRINT_START" != "$FINGERPRINT_END" ]]; then
   log "FAIL: working tree changed during commit gate (concurrent writers?). Re-run after stabilizing the tree."
   write_summary "fail_fingerprint"

@@ -25,6 +25,8 @@ FIRST_BLOCKER_CLASSES = frozenset(
     {
         "none",
         "build",
+        "toolchain_capability",
+        "signature_invalid",
         "startup_identity",
         "provider",
         "release",
@@ -494,9 +496,44 @@ def _content_report(
     exact_queries_ready = False
     if readiness:
         try:
-            _stackctl._app_content_uat_envelope(readiness)
-            exact_queries_ready = True
-        except (TypeError, ValueError) as exc:
+            if mode == "test_live":
+                plan = binding.get("appUatPlan")
+                if (
+                    not isinstance(plan, Mapping)
+                    or not str(binding.get("releaseUatSamplePlanRef") or "").strip()
+                    or not str(binding.get("releaseUatSamplePlanDigest") or "").startswith(
+                        "sha256:"
+                    )
+                ):
+                    raise ValueError("test-live ReleaseUatSamplePlan binding is incomplete")
+            else:
+                active = _stackctl.active_deployment_candidate(target_name) or {}
+                candidate_manifest = _stackctl._read_json_object(
+                    str(Path(str(active.get("candidateDir") or "")) / "manifest.json")
+                )
+                release_binding = candidate_manifest.get("release")
+                release_candidate = (
+                    release_binding.get("candidate")
+                    if isinstance(release_binding, Mapping)
+                    else None
+                )
+                if not isinstance(release_candidate, Mapping):
+                    raise ValueError(
+                        "active candidate does not bind a Data candidate release"
+                    )
+                release = _stackctl._load_active_release_uat_contract(
+                    release_candidate
+                )
+                plan = _stackctl._app_content_uat_sample_plan(
+                    release_contract=release,
+                    readiness=readiness,
+                )
+            exact_queries_ready = bool(
+                isinstance(plan, Mapping)
+                and plan.get("orderedSamples")
+                and plan.get("requiredCasePlan")
+            )
+        except (OSError, TypeError, ValueError) as exc:
             issues.append(f"exact query evidence is invalid: {exc}")
     readiness_digest = ""
     if readiness_path is not None:
@@ -675,6 +712,31 @@ def _distribution_report(target_name: str) -> dict[str, Any]:
     }
 
 
+def _content_uat_report_candidates(
+    roots: tuple[Path, ...],
+) -> list[tuple[float, Path]]:
+    """Enumerate canonical direct run reports without descending other outputs."""
+
+    candidates: list[tuple[float, Path]] = []
+    for root in roots:
+        try:
+            run_directories = tuple(root.iterdir())
+        except OSError:
+            continue
+        for run_directory in run_directories:
+            try:
+                if run_directory.is_symlink() or not run_directory.is_dir():
+                    continue
+                report = run_directory / "report.json"
+                if report.is_symlink() or not report.is_file():
+                    continue
+                candidates.append((report.stat().st_mtime, report))
+            except OSError:
+                continue
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates
+
+
 def _content_live_report(
     *,
     target_name: str,
@@ -705,16 +767,9 @@ def _content_live_report(
     # 任一单环境根。只扫环境根会让 content_live 层永远读不到回执，于是两处都扫：target
     # 归属仍由回执内 runtimeBindings 与 startupAttemptId 判定，放宽的只是查找范围。
     # 跨根之后路径序不再等价于时间序，改按修改时间取最新优先。
-    candidates: list[tuple[float, Path]] = []
-    for root in (_stackctl.env_runs_root(environment), _stackctl.repo_runs_root()):
-        if not root.is_dir():
-            continue
-        for path in root.rglob("report.json"):
-            try:
-                candidates.append((path.stat().st_mtime, path))
-            except OSError:
-                continue
-    candidates.sort(key=lambda item: item[0], reverse=True)
+    candidates = _content_uat_report_candidates(
+        (_stackctl.env_runs_root(environment), _stackctl.repo_runs_root())
+    )
     startup_started_at = _timestamp(str(startup.get("startedAt") or ""))
     for modified_at, path in candidates:
         try:
@@ -805,6 +860,22 @@ def _timestamp(raw: str) -> datetime | None:
 
 
 def _first_blocker_class(layers: list[dict[str, Any]]) -> str:
+    first_issue = next(
+        (
+            str(issue)
+            for layer in layers
+            if layer.get("status") != "ready"
+            for issue in layer.get("issues", [])
+        ),
+        "",
+    )
+    if "GATE_BLOCK[OPENSSL_3_ED25519_RAWIN_CAPABILITY]" in first_issue:
+        return "toolchain_capability"
+    if "signature" in first_issue.lower() and (
+        "invalid" in first_issue.lower()
+        or "verification failed" in first_issue.lower()
+    ):
+        return "signature_invalid"
     mapping = {
         "build_ready": "startup_identity",
         "runtime_full_ready": "startup_identity",

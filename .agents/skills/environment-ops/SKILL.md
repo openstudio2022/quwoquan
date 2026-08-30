@@ -16,6 +16,12 @@ image/config/manifest、SLO 与审批状态，恢复另需当前诊断证据和�
 环境操作者、发布操作者和恢复操作者的特殊步骤只在对应模式下读取
 [roles/](references/roles/)；普通查询不预载发布或恢复约束。
 
+
+
+自然语言触发与显式 Skill 调用同轨，字段、闭集与审计隔离只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.environment-ops`：
+
+- PRE：`progress_update` / `nonproduction_validation` / `environment_reliability_owner`。
+
 ## 执行
 
 唯一操作面是 `python3 quwoquan_ops/cli/stackctl.py`（`make dev-up` 只是受控入口）：
@@ -41,6 +47,10 @@ image/config/manifest、SLO 与审批状态，恢复另需当前诊断证据和�
 `quwoquan_ops/environments/local_env_port_manifest.yaml` 读取，拓扑从目标环境
 `runtime.yaml` 读取，禁止手写或把 `--ssh-host` 写入 runtime public base。
 
+- 执行中：`exception_escalation` / `production_campaign` / `$route`。
+
+`$route` 表示按当前决定责任动态路由；Skill 不复制 envelope schema，所有可见输出统一由 canonical projector 生成。
+
 ## 完成证据
 
 分别报告 package、启动、health、运行探针、发布/回滚和真实 UAT 的实际结果，并引用：
@@ -54,6 +64,8 @@ image/config/manifest、SLO 与审批状态，恢复另需当前诊断证据和�
 deliverable=`release-evidence`）。主审是 `ops`，命中环境发布 profile 时至多增加一个
 `infra-capacity` 专审。Reviewer 不运行 gate。纯 `health`、`inspect`、只读 `verify` 不自动
 派审；required evidence 或 required Reviewer 未完成即返回 typed `GATE_BLOCK`。
+
+- POST：`completion_report` / `production_campaign` / `$route`。
 
 ## 失败与停止
 
@@ -71,7 +83,6 @@ deliverable=`release-evidence`）。主审是 `ops`，命中环境发布 profile
 
 ## 条件性交接
 
-仅在跨会话未完成、环境/发布、多人并行、外部阻断或证据需要复用时持久化交接。记录
-目标、不可变候选 identity、当前 rollout/诊断阶段、首个 typed blocker、运行产物路径与
-唯一恢复命令，不复制环境规范。已有可复现代码缺陷交给 `dev`；尚需遥测定级的异常交给
-`incident-inspection`。普通只读查询只交付结论、证据和未决项。
+六类触发（跨会话未完成、多人并行、环境/发布、外部阻断、证据复用、用户显式要求）统一调用 canonical handoff producer；普通闭环不落持久交接。
+
+仅当路由结果要求真实人类责任时，使用统一 `$route`、project/card 与 hosted authority readback；routine execution 不新造 checkpoint。Reviewer PASS 只是评审证据，不能签发或替代 authority receipt。

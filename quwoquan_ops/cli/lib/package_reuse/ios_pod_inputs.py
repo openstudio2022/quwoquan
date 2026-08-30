@@ -24,6 +24,10 @@ IOS_PODFILE_RELATIVES = {
     IOS_POD_PRODUCTION_HOST: Path("quwoquan_app/ios/Podfile"),
     IOS_POD_PATROL_HOST: Path("quwoquan_app/test_host/patrol/ios/Podfile"),
 }
+IOS_PODFILE_LOCK_RELATIVES = {
+    host: podfile.parent / "Podfile.lock"
+    for host, podfile in IOS_PODFILE_RELATIVES.items()
+}
 
 _EXCLUDED_SEGMENTS = frozenset(
     {".dart_tool", ".symlinks", "Flutter", "Pods", "build", "example", "macos"}

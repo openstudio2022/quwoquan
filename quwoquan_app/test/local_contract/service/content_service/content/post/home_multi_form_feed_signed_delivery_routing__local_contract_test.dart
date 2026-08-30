@@ -35,7 +35,8 @@ import '../../../../../support/service/content_service/content/content_behavior_
 
 /// 对象级 typed double：grant 兑换永挂起，让 SignedGrantImage 停在占位态。
 /// 接线测试只断言「typed 声明分流到桥接原子」，不消费兑换结果。
-final class _HangingOriginalAccessGateway implements OriginalAccessQuotaGateway {
+final class _HangingOriginalAccessGateway
+    implements OriginalAccessQuotaGateway {
   final Completer<MediaOriginalAccessGrant> _never =
       Completer<MediaOriginalAccessGrant>();
 
@@ -85,6 +86,12 @@ final class _NoopPostInteractionStateNotifier
 }
 
 ContentPostViewData _post({
+  String contentType = 'micro',
+  String? videoUrl,
+  String? mediaAssetId,
+  int? mediaAssetVersion,
+  String? hlsCmafMasterManifestUrl,
+  int? hlsCmafDescriptorVersion,
   List<String> mediaUrls = const <String>[],
   List<PostMediaItem>? mediaItems,
   String authorAvatarUrl = '',
@@ -94,7 +101,7 @@ ContentPostViewData _post({
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: 'post_signed_routing',
-      contentType: 'micro',
+      contentType: contentType,
       contentIdentity: 'moment',
       authorId: 'author_signed_routing',
       authorDisplayName: 'Routing Author',
@@ -113,6 +120,11 @@ ContentPostViewData _post({
       updatedAt: null,
       publishedAt: null,
       body: 'signed delivery routing contract content.',
+      videoUrl: videoUrl,
+      mediaAssetId: mediaAssetId,
+      mediaAssetVersion: mediaAssetVersion,
+      hlsCmafMasterManifestUrl: hlsCmafMasterManifestUrl,
+      hlsCmafDescriptorVersion: hlsCmafDescriptorVersion,
       mediaUrls: mediaUrls,
       mediaItems: mediaItems,
       intersectionReasons: const [],
@@ -138,9 +150,8 @@ Future<void> _pumpFeed(WidgetTester tester) async {
         authSessionControllerProvider.overrideWith(
           _GuestAuthSessionController.new,
         ),
-        contentFeatureFlagProvider(
-          'enable_article_distribution_profiles',
-        ).overrideWithValue(false),
+        contentFeatureFlagProvider('enable_article_distribution_profiles')
+            .overrideWithValue(false),
         discoveryFeedMapProvider.overrideWith(_StaticFeedMapNotifier.new),
         postInteractionStateProvider.overrideWith(
           _NoopPostInteractionStateNotifier.new,
@@ -200,13 +211,18 @@ void main() {
     expect(signed.accessMode, MediaDeliveryAccessMode.signedGrant);
   });
 
-  testWidgets('public feed 图维持既有公开路径，不经私有媒体桥接原子', (tester) async {
+  testWidgets('typed public feed 图维持既有公开路径，不经私有媒体桥接原子', (tester) async {
     const url = 'https://cdn.example.test/public/one.jpg';
     _feedItems = <ContentPostViewData>[
       _post(
         mediaUrls: const <String>[url],
-        // 存量 public 投影：契约缺席 accessMode。
-        mediaItems: const <PostMediaItem>[PostMediaItem(kind: 'image', url: url)],
+        mediaItems: const <PostMediaItem>[
+          PostMediaItem(
+            kind: 'image',
+            url: url,
+            accessMode: MediaDeliveryAccessMode.public,
+          ),
+        ],
       ),
     ];
     await _pumpFeed(tester);
@@ -216,10 +232,74 @@ void main() {
     final publicImages = tester
         .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
         .where((image) => image.imageUrl == url);
-    expect(publicImages, hasLength(1), reason: '公开媒体必须维持既有 AppCachedNetworkImage 路径');
+    expect(
+      publicImages,
+      hasLength(1),
+      reason: '公开媒体必须维持既有 AppCachedNetworkImage 路径',
+    );
   });
 
-  testWidgets('signedGrant 作者头像分流到 SignedGrantImage（kind=avatar）', (tester) async {
+  testWidgets('null accessMode feed 图 fail closed，不公开 fallback', (
+    tester,
+  ) async {
+    const url = 'https://cdn.example.test/implicit-public.jpg';
+    _feedItems = <ContentPostViewData>[
+      _post(
+        mediaUrls: const <String>[url],
+        mediaItems: const <PostMediaItem>[
+          PostMediaItem(kind: 'image', url: url),
+        ],
+      ),
+    ];
+    await _pumpFeed(tester);
+
+    expect(find.byType(SignedGrantImage), findsNothing);
+    expect(
+      tester
+          .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
+          .where((image) => image.imageUrl == url),
+      isEmpty,
+    );
+  });
+
+  testWidgets('private HLS feed 视频 fail closed，不进入公开/自适应播放器', (tester) async {
+    const manifest = 'media/objects/private/master.m3u8';
+    _feedItems = <ContentPostViewData>[
+      _post(
+        contentType: 'video',
+        videoUrl: manifest,
+        mediaAssetId: 'asset-private-hls',
+        mediaAssetVersion: 1,
+        hlsCmafMasterManifestUrl: manifest,
+        hlsCmafDescriptorVersion: 1,
+        mediaUrls: const <String>[manifest],
+        mediaItems: const <PostMediaItem>[
+          PostMediaItem(
+            kind: 'video',
+            url: manifest,
+            mediaAssetId: 'asset-private-hls',
+            mediaAssetVersion: 1,
+            accessMode: MediaDeliveryAccessMode.signedGrant,
+          ),
+        ],
+      ),
+    ];
+    await _pumpFeed(tester);
+
+    expect(find.byType(SignedGrantImage), findsNothing);
+    expect(find.byType(SignedGrantImage), findsNothing);
+    expect(
+      tester
+          .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
+          .where((image) => image.imageUrl == manifest),
+      isEmpty,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('signedGrant 作者头像分流到 SignedGrantImage（kind=avatar）', (
+    tester,
+  ) async {
     _feedItems = <ContentPostViewData>[
       _post(
         authorAvatarUrl: 'media/avatar/private-author.jpg',

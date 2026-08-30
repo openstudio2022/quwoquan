@@ -37,4 +37,4 @@ if [[ "$installed" != "quwoquan_ops/hooks" ]]; then
 fi
 
 echo "[hooks] installed via core.hooksPath=quwoquan_ops/hooks (readback ok)"
-echo "[hooks] pre-commit: L0 commit gate; pre-push: branch policy; post-commit: 未合入工作副本提醒"
+echo "[hooks] pre-commit: fresh staged scope_ready; pre-push: branch policy + fresh push release_ready; post-commit: 未合入工作副本提醒"

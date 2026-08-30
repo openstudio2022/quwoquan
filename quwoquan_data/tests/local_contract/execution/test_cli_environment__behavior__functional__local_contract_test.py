@@ -29,7 +29,6 @@ from core import (  # noqa: E402
     cursor_credentials,
     cursor_startup_probe,
     cursor_workspace_probe,
-    python_environment,
     python_network,
 )
 from core import cursor_workspace_probe  # noqa: E402
@@ -47,7 +46,7 @@ def _key_file(
     return path
 
 
-def test_cli_exposes_only_durable_task_facades():
+def test_cli_exposes_only_host_only_task_facades():
     task = subprocess.run(
         [sys.executable, str(CLI), "task", "--help"],
         capture_output=True,
@@ -61,364 +60,66 @@ def test_cli_exposes_only_durable_task_facades():
         if line.strip().startswith("{") and line.strip().endswith("}")
     )
     assert choices.split(",") == [
-        "preflight",
-        "compile-intent",
-        "calibrate-capacity",
-        "capacity-bootstrap",
-        "prepare-campaign",
-        "execute",
-        "drain-pool-delivery",
-        "discard",
-        "supersede-execution",
-        "plan-images",
-        "discover-image-supported-api-metadata",
-        "probe-images",
-        "acquire-images",
-        "rebind-image-acquisition-manifest",
-        "prepare-image-supported-api-input",
-        "prepare-video-manual-input",
-        "acquire-videos",
-        "rebind-video-acquisition-manifest",
-        "bind-sourced-video-unit",
-        "bind-sourced-image-unit",
-        "review-asset",
-        "review-image-supported-api-input",
-        "author-image-supported-api-input",
-        "author-video-acquisition-input",
-        "review-video-acquisition-input",
-        "reconcile-stale",
-        "reconcile-failed-campaign",
-        "reconcile-submissions",
-        "runtime-evidence",
-        "freeze-homepage-media",
+        "init",
         "stage-record",
         "lane-claim",
         "fleet-status",
+        "acquire-images",
+        "rebind-image-acquisition-manifest",
+        "acquire-videos",
+        "rebind-video-acquisition-manifest",
+        "freeze-homepage-media",
+        "supersede-execution",
+        "terminal-evidence-precheck",
     ]
-
-    runtime_evidence = subprocess.run(
-        [sys.executable, str(CLI), "task", "runtime-evidence", "--help"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert runtime_evidence.returncode == 0, runtime_evidence.stderr
-    compact_help = "".join(runtime_evidence.stdout.split())
-    assert (
-        "{create-session,sample,inject-worker-termination,inject-lease-expiry,"
-        "inject-redis-restart,inject-mongo-reconnect,inject-provider-timeout,"
-        "inject-provider-rate-limit,finalize}"
-    ) in compact_help
-
-    inject = subprocess.run(
-        [
-            sys.executable,
-            str(CLI),
-            "task",
-            "runtime-evidence",
-            "inject-worker-termination",
-            "--help",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert inject.returncode == 0, inject.stderr
-    assert "--confirm-active-worker-termination" in inject.stdout
-    for forbidden in (
-        "--environment",
-        "--output-root",
-        "--run-id",
-        "--generation",
-        "--fencing-token",
-        "--fault-type",
-        "--provider",
-        "--command",
-        "--argv",
-        "--shell",
+    for retired in (
+        "preflight", "compile-intent", "calibrate-capacity", "capacity-bootstrap",
+        "prepare-campaign", "execute", "recipe", "drain-pool-delivery", "discard",
+        "plan-images", "probe-images", "reconcile-stale", "reconcile-failed-campaign",
+        "reconcile-submissions", "runtime-evidence",
     ):
-        assert forbidden not in inject.stdout
-
-    preflight = subprocess.run(
-        [sys.executable, str(CLI), "task", "preflight", "--help"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert preflight.returncode == 0, preflight.stderr
-    for name in (
-        "--json",
-        "--no-network",
-        "--no-semantic-agent-credential",
-        "--report-out",
-        "--semantic-selection-id",
-        "--soak",
-        "--receipt-out",
-    ):
-        assert name in preflight.stdout
-    assert "--no-cursor-key" not in preflight.stdout
-    for name in (
-        "--python",
-        "--requirements",
-        "--timeout-seconds",
-        "--model",
-        "--runtime",
-        "--startup-timeout-seconds",
-    ):
-        assert name not in preflight.stdout
-
-    prepare = subprocess.run(
-        [sys.executable, str(CLI), "task", "prepare-campaign", "--help"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert prepare.returncode == 0, prepare.stderr
-    for name in (
-        "--phase",
-        "--scale",
-        "--region-ref",
-        "--run-date",
-        "--sequence",
-        "--handoff-id",
-        "--handoff-revision",
-        "--supersedes-handoff-ref",
-        "--handoff-ref",
-        "--semantic-selection-id",
-        "--semantic-preflight-receipt",
-        "--homepage-image-input",
-        "--image-input",
-        "--video-input",
-    ):
-        assert name in prepare.stdout
-    for forbidden in (
-        "--output-root",
-        "--kind",
-        "--acquisition-root-ref",
-        "--article-image-input",
-        "--alpha-m100-readiness-receipt",
-        "--alpha-m100-app-uat-receipt",
-    ):
-        assert forbidden not in prepare.stdout
-
-    for command in ("acquire-images", "acquire-videos"):
-        acquisition = subprocess.run(
-            [sys.executable, str(CLI), "task", command, "--help"],
+        result = subprocess.run(
+            [sys.executable, str(CLI), "task", retired, "--help"],
             capture_output=True,
             text=True,
             check=False,
         )
-        assert acquisition.returncode == 0, acquisition.stderr
-        assert "--handoff-ref" in acquisition.stdout
-
-    review = subprocess.run(
-        [sys.executable, str(CLI), "task", "review-asset", "--help"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert review.returncode == 0, review.stderr
-    for name in (
-        "--acquisition-receipt",
-        "--asset-kind",
-        "--asset-id",
-        "--execution-manifest",
-        "--author-evidence",
-        "--reviewer-evidence",
-        "--object-ref",
-        "--judgment",
-    ):
-        assert name in review.stdout
-    for forbidden in (
-        "--provider",
-        "--model",
-        "--run-id",
-        "--output-root",
-    ):
-        assert forbidden not in review.stdout
+        assert result.returncode == 2, retired
+        assert "invalid choice" in result.stderr
 
 
-def test_prepare_campaign_help_forbids_alpha_acceptance_dispatch_inputs() -> None:
-    prepare = subprocess.run(
-        [sys.executable, str(CLI), "task", "prepare-campaign", "--help"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert prepare.returncode == 0, prepare.stderr
-    assert "--alpha-m100-readiness-receipt" not in prepare.stdout
-    assert "--alpha-m100-app-uat-receipt" not in prepare.stdout
+def test_task_help_imports_no_retired_or_sdk_modules(tmp_path: Path) -> None:
+    sitecustomize = tmp_path / "sitecustomize.py"
+    sitecustomize.write_text(
+        """
+import importlib.abc
+import sys
 
-
-def test_python_runtime_prefers_data_venv_when_current_lacks_agent_modules(monkeypatch):
-    current = Path("/usr/bin/python3")
-    data_python = python_environment.DATA_VENV_PYTHON
-    monkeypatch.setattr(
-        python_environment,
-        "candidate_pythons",
-        lambda include_current=True: [current, data_python],
-    )
-    monkeypatch.setattr(
-        python_environment,
-        "python_has_modules",
-        lambda python, modules: (
-            Path(python) == data_python,
-            [] if Path(python) == data_python else ["missing"],
-        ),
-    )
-    assert (
-        python_environment.resolve_data_agent_python(include_current=True)
-        == data_python
-    )
-
-
-def test_python_module_probe_does_not_inherit_closed_worker_stdin(monkeypatch):
-    captured: dict[str, object] = {}
-
-    class Completed:
-        returncode = 0
-        stdout = '{"missing": []}'
-        stderr = ""
-
-    def run(*args, **kwargs):
-        captured["args"] = args
-        captured["kwargs"] = kwargs
-        return Completed()
-
-    monkeypatch.setattr(python_environment.subprocess, "run", run)
-
-    assert python_environment.python_has_modules(
-        Path(sys.executable), ("cursor_sdk",)
-    ) == (True, [])
-    assert captured["kwargs"]["stdin"] is subprocess.DEVNULL
-
-
-def test_python_module_probe_runs_from_a_worker_with_fd_zero_closed() -> None:
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(SCRIPTS_ROOT)
-    code = (
-        "import json, os, sys\n"
-        "from pathlib import Path\n"
-        "os.close(0)\n"
-        "from core.python_environment import python_has_modules\n"
-        "ok, missing = python_has_modules(Path(sys.executable), ('json',))\n"
-        "print(json.dumps({'ok': ok, 'missing': missing}))\n"
-    )
-    completed = subprocess.run(
-        [sys.executable, "-c", code],
-        cwd=DATA_ROOT.parent,
-        env=env,
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert completed.returncode == 0, completed.stderr
-    assert json.loads(completed.stdout) == {"ok": True, "missing": []}
-
-
-def test_python_tool_cache_rejects_disposable_output_root() -> None:
-    with pytest.raises(ValueError, match="must not be inside .qwq_output"):
-        python_environment.resolve_python_cache_root(
-            str(DATA_ROOT.parent / ".qwq_output" / "env" / "repo"),
-        )
-
-
-def test_agent_reexec_keeps_bytecode_out_of_the_source_tree(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    captured: dict[str, object] = {}
-
-    def capture_execvpe(executable: str, argv: list[str], env: dict[str, str]) -> None:
-        captured["executable"] = executable
-        captured["argv"] = argv
-        captured["env"] = env
-        raise RuntimeError("stop after capturing re-exec")
-
-    monkeypatch.delenv(python_environment.BOOTSTRAP_ENV, raising=False)
-    monkeypatch.delenv("PYTHONDONTWRITEBYTECODE", raising=False)
-    monkeypatch.setattr(
-        python_environment, "agent_command_needs_bootstrap", lambda _argv: True
-    )
-    monkeypatch.setattr(
-        python_environment, "python_has_modules", lambda *_args: (False, ["missing"])
-    )
-    monkeypatch.setattr(
-        python_environment,
-        "resolve_data_agent_python",
-        lambda **_kwargs: Path("/tmp/quwoquan-data-python"),
-    )
-    monkeypatch.setattr(python_environment.os, "execvpe", capture_execvpe)
-
-    with pytest.raises(RuntimeError, match="stop after capturing re-exec"):
-        python_environment.maybe_reexec_for_agent_command(["cli.py", "task", "execute"])
-
-    env = captured["env"]
-    assert isinstance(env, dict)
-    assert env[python_environment.BOOTSTRAP_ENV] == "1"
-    assert env["PYTHONDONTWRITEBYTECODE"] == "1"
-
-
-@pytest.mark.parametrize(
-    ("argv", "expected"),
-    [
-        (["cli.py", "task", "execute"], True),
-        (["cli.py", "task", "acquire-videos"], True),
-        (["cli.py", "task", "preflight"], False),
-    ],
+FORBIDDEN = (
+    'content.execution.agent', 'content.execution.queue',
+    'content.execution.controller', 'content.execution.recovery',
+    'content.execution.campaign', 'cursor_sdk', 'codex', 'openai_codex',
 )
-def test_agent_runtime_commands_are_explicitly_bootstrapped(
-    argv: list[str],
-    expected: bool,
-) -> None:
-    assert python_environment.agent_command_needs_bootstrap(argv) is expected
-
-
-def test_data_python_tool_cache_is_rebuilt_from_repo_truth(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    cache_dir = tmp_path / "tool-cache" / "quwoquan-data"
-    create_calls: list[Path] = []
-
-    def create_cache(path: Path, *, with_pip: bool) -> None:
-        assert with_pip is True
-        create_calls.append(Path(path))
-        python = python_environment._venv_python(Path(path))
-        python.parent.mkdir(parents=True, exist_ok=True)
-        python.write_text("", encoding="utf-8")
-
-    class Completed:
-        returncode = 0
-        stdout = ""
-        stderr = ""
-
-    monkeypatch.setattr(python_environment.venv, "create", create_cache)
-    monkeypatch.setattr(
-        python_environment.subprocess,
-        "run",
-        lambda *_args, **_kwargs: Completed(),
+class BlockForbidden(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.startswith(FORBIDDEN):
+            raise ImportError(f'forbidden live import: {fullname}')
+        return None
+sys.meta_path.insert(0, BlockForbidden())
+""".strip() + "\n",
+        encoding="utf-8",
     )
-    monkeypatch.setattr(
-        python_environment,
-        "python_has_modules",
-        lambda _python, _modules: (True, []),
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(tmp_path)
+    completed = subprocess.run(
+        [sys.executable, "-B", str(CLI), "task", "--help"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
     )
-    monkeypatch.setattr(
-        python_environment.shutil, "which", lambda _name: "/usr/bin/tool"
-    )
-
-    first = python_environment.prepare_data_runtime_cache(cache_dir=cache_dir)
-    shutil.rmtree(cache_dir)
-    second = python_environment.prepare_data_runtime_cache(cache_dir=cache_dir)
-
-    assert create_calls == [cache_dir, cache_dir]
-    assert ".qwq_output" not in cache_dir.parts
-    assert first["sourceTruth"] == str(DATA_ROOT / "requirements.txt")
-    assert second["sourceTruth"] == str(DATA_ROOT / "requirements.txt")
-    assert first["toolCache"] == str(cache_dir)
-    assert second["cachePersistenceRequired"] is False
+    assert completed.returncode == 0, completed.stderr
+    assert "usage: qwq-data task" in completed.stdout
 
 
 def test_environment_preflight_requires_restricted_key_file(monkeypatch, tmp_path):
@@ -521,6 +222,8 @@ def test_environment_preflight_never_exports_key_to_parent_environment(
 
 
 def test_cursor_key_redaction_covers_hyphen_and_underscore_suffixes():
+    from core import python_environment
+
     value = "cursor crsr_fake-key_value failed"
     redacted = python_environment._redact_secret_text(value)
     assert "crsr_fake-key_value" not in redacted
