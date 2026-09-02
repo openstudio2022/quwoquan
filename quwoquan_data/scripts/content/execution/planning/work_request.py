@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign.request_envelope import write_scale_envelopes
+from content.execution.planning.request_envelope import write_scale_envelopes
 from content.execution.planning.work_request_contract import (
     _RESULT_SCHEMA,
     _blocked,
@@ -126,11 +126,6 @@ class WorkRequestCommandWriter:
                     predecessor_execution_ids_by_carrier=normalized[
                         "predecessorExecutionIdsByCarrier"
                     ],
-                    predecessor_reconciliation_receipt=(
-                        resolve_dependency_path(normalized["predecessorReconciliationReceiptRef"])
-                        if normalized["predecessorReconciliationReceiptRef"]
-                        else None
-                    ),
                     promotion_receipt=(
                         resolve_dependency_path(normalized["promotionReceiptRef"])
                         if normalized["promotionReceiptRef"]

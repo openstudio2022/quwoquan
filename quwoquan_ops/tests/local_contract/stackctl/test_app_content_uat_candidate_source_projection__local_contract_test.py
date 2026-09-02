@@ -432,10 +432,9 @@ def test_projected_run_sh_uses_canonical_output_root_for_private_control(
 
 @pytest.mark.parametrize(
     "launch_provenance",
-    (
-        "canonical_launcher",
-        "workspace_flutter_run",
-    ),
+    # workspace facade 已退役：run.sh 只承认 canonical_launcher 与
+    # workspace_ide_debug（后者需要 IDE VM service handoff，另有专测）。
+    ("canonical_launcher",),
 )
 def test_real_run_sh_warning_branches_reach_supervisor_attempt(
     tmp_path: Path,

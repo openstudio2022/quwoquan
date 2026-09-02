@@ -3,6 +3,7 @@
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-001.t3
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-001.t4
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-001.t5
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-001.t6
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-002.t1
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-002.t2
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-002.t3
@@ -14,10 +15,13 @@
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-003.t2
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-003.t3
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-003.t4
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-004.t1
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-004.t2
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-004.t3
 """本地工作副本生命周期治理的行为级 local_contract。
 
-决策表覆盖三件事：授权闸在两个执行面的不对等输出、滞留提醒的去重与不漏报、
-hooks 安装自检与安装入口的路径解析回归。
+决策表覆盖四件事：授权提醒在两个执行面只注入不阻断、滞留提醒的去重与不漏报、
+hooks 安装自检与安装入口的路径解析回归、lane 身份在准出门禁中 fail-closed。
 """
 
 from __future__ import annotations
@@ -47,7 +51,7 @@ AUTHZ_SCRIPT = ROOT / "quwoquan_ops/hooks/worktree_authz_guard.py"
 INSTALL_SCRIPT = ROOT / "quwoquan_ops/hooks/run_install_hooks.sh"
 GATE_SCRIPT = ROOT / "quwoquan_ops/gate/verify_local_worktree_lifecycle.py"
 REMINDER_GATE = ROOT / "quwoquan_ops/hooks/worktree_session_reminder_gate.sh"
-ALLOWED = frozenset({"dev1.0", "main"})
+ALLOWED = frozenset({"dev1.0", "main", "lane/product-mainline", "lane/data-engineering", "lane/agent-engineering", "lane/ops", "lane/small-fix", "lane/refactor"})
 
 
 @pytest.fixture(scope="module")
@@ -59,7 +63,7 @@ def _detect(command: str) -> guard.Detection | None:
     return guard.detect(command, allowed_branches=ALLOWED, repo_root=ROOT)
 
 
-# --- GWT-001 创建授权闸 ---------------------------------------------------
+# --- GWT-001 创建授权提醒（observe-only） ----------------------------------
 
 
 @pytest.mark.parametrize(
@@ -71,7 +75,21 @@ def _detect(command: str) -> guard.Detection | None:
         ("git checkout -b feature/foo", "branch_create"),
         ("git switch -c hotfix", "branch_create"),
         ("git branch experiment", "branch_create"),
-        ("git clone git@github.com-quwoquan:openstudio2022/quwoquan.git /tmp/y", "clone"),
+        ("git clone https://github.example.invalid/example/quwoquan.git /tmp/y", "clone"),
+        (
+            "git clone --branch main https://github.example.invalid/example/quwoquan.git /tmp/y",
+            "clone",
+        ),
+        (
+            "git clone --depth 1 --origin upstream "
+            "https://github.example.invalid/example/quwoquan.git /tmp/y",
+            "clone",
+        ),
+        (
+            "git clone --branch=main --depth=1 "
+            "https://github.example.invalid/example/quwoquan.git /tmp/y",
+            "clone",
+        ),
     ],
 )
 def test_gwt_001_t1_identifies_creation_surface(command: str, expected_kind: str) -> None:
@@ -90,10 +108,15 @@ def test_gwt_001_t1_identifies_creation_surface(command: str, expected_kind: str
         "git checkout dev1.0",
         "git checkout -b dev1.0",
         "git checkout -b main",
+        "git checkout -b lane/small-fix",
         "git branch",
         "git branch -d stale",
         "git branch --show-current",
-        "git clone https://github.com/flutter/flutter.git",
+        "git clone https://github.example.invalid/example/flutter.git",
+        "git clone https://github.example.invalid/example/worktree.git",
+        "git clone https://github.example.invalid/example/myquwoquan.git",
+        "git clone --branch main https://github.example.invalid/example/flutter.git /tmp/quwoquan",
+        "git clone --reference /tmp/quwoquan https://github.example.invalid/example/flutter.git",
         "echo 'git worktree add' >> notes.md",
     ],
 )
@@ -102,7 +125,7 @@ def test_gwt_001_t2_leaves_unrelated_commands_alone(command: str) -> None:
     assert _detect(command) is None, command
 
 
-def _run_guard(harness: str, command: str) -> dict[str, object]:
+def _run_guard(harness: str, command: str, env: dict[str, str] | None = None) -> dict[str, object]:
     payload = {"command": command} if harness == "cursor" else {"tool_input": {"command": command}}
     completed = subprocess.run(
         [sys.executable, str(AUTHZ_SCRIPT), "--harness", harness],
@@ -110,40 +133,180 @@ def _run_guard(harness: str, command: str) -> dict[str, object]:
         capture_output=True,
         text=True,
         check=True,
+        env={**os.environ, **(env or {})},
     )
     return json.loads(completed.stdout or "{}")
 
 
-def test_gwt_001_t3_two_harnesses_emit_their_own_protocol() -> None:
-    """Cursor 升级为人工批准，Codex 只能拒绝——按能力分叉，不取交集也不取并集。"""
-    command = "git worktree add /tmp/probe"
+def _message(harness: str, output: dict[str, object]) -> str:
+    if harness == "cursor":
+        assert output["permission"] == "allow", output
+        return str(output.get("agent_message") or "")
+    hook = output.get("hookSpecificOutput")
+    if hook is None:
+        return ""
+    assert hook["hookEventName"] == "PreToolUse"
+    assert hook["permissionDecision"] == "allow", output
+    assert "permissionDecisionReason" not in hook
+    return str(hook.get("additionalContext") or "")
+
+
+def test_gwt_001_t3_two_harnesses_inject_context_without_blocking() -> None:
+    """hook 面零硬门：两个执行面都 allow，只按各自协议注入授权规则与留痕方式。"""
+    command = "git clone https://github.example.invalid/example/quwoquan.git /tmp/probe"
+    for harness in ("cursor", "codex"):
+        output = _run_guard(harness, command)
+        message = _message(harness, output)
+        assert "OPS.WORKTREE.NOT_AUTHORIZED" in message, output
+        assert "QWQ_WORKTREE_AUTHZ" in message, "提醒必须给出授权留痕的确切方式"
+        assert "AGENTS.md" in message
+        assert "未阻断" in message
     cursor = _run_guard("cursor", command)
-    codex = _run_guard("codex", command)
-
-    assert cursor["permission"] == "ask"
-    assert cursor["user_message"]
-    hook_output = codex["hookSpecificOutput"]
-    assert hook_output["hookEventName"] == "PreToolUse"
-    assert hook_output["permissionDecision"] == "deny"
-    # Codex 不支持 ask：返回它会被判为 hook 运行失败并放行工具调用。
-    assert hook_output["permissionDecision"] != "ask"
-
-    reason = hook_output["permissionDecisionReason"]
-    assert "OPS.WORKTREE.NOT_AUTHORIZED" in reason
-    assert "QWQ_WORKTREE_AUTHZ" in reason, "拒绝理由必须给出取得授权的确切方式"
+    assert cursor["user_message"] == cursor["agent_message"]
 
 
-def test_gwt_001_t4_explicit_authorization_passes_on_both_harnesses(policy) -> None:
-    command = f'{policy.authorization_env_var}="用户同意排查" git worktree add /tmp/probe'
+def test_gwt_001_t3_fast_path_skips_policy_for_unrelated_commands(monkeypatch, capsys) -> None:
+    """Codex 对每条 Bash 都调用本 hook：命中不到创建面时不得加载 policy，也不得带消息。"""
+    monkeypatch.setattr(
+        inventory, "load_policy", lambda: (_ for _ in ()).throw(AssertionError("policy loaded"))
+    )
+    for harness, payload, expected in (
+        ("cursor", {"command": "ls -la && git status"}, {"permission": "allow"}),
+        ("codex", {"tool_input": {"command": "pytest -q quwoquan_ops/tests"}}, {}),
+    ):
+        monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps(payload)))
+        assert guard.main(["--harness", harness]) == 0
+        assert json.loads(capsys.readouterr().out) == expected
+
+
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-001.t8
+def test_gwt_001_t4_explicit_authorization_records_and_stays_silent(
+    policy, monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(
+        guard,
+        "_git",
+        lambda _root, *args: (0, "a" * 40) if args and args[0] == "rev-parse" else (0, ""),
+    )
+    command = (
+        f'{policy.authorization_env_var}="用户同意排查" git worktree add '
+        '--branch lane/data-engineering /tmp/probe origin/dev1.0'
+    )
     assert guard.is_authorized(command, policy.authorization_env_var) is True
-    assert _run_guard("cursor", command)["permission"] == "allow"
-    assert _run_guard("codex", command) == {}
+    detections = guard.detect_all(
+        command,
+        allowed_branches=policy.allowed_local_branches,
+        repo_root=ROOT,
+        env_var=policy.authorization_env_var,
+    )
+    assert detections[0].authorized is True
+    assert detections[0].invalid_reason == ""
 
     unauthorized = "git worktree add /tmp/probe"
     assert guard.is_authorized(unauthorized, policy.authorization_env_var) is False
     assert guard.is_authorized(
         f"{policy.authorization_env_var}= git worktree add /tmp/probe", policy.authorization_env_var
     ) is False, "空理由不构成授权"
+
+    # 端到端：授权且 canonical 的 segment 静默放行并留可删除记录；未授权的只注入提醒。
+    authorized = _run_guard(
+        "cursor",
+        f'{policy.authorization_env_var}="用户同意" git worktree add -b lane/ops '
+        f"{tmp_path / 'ops'} origin/dev1.0",
+        env={"QWQ_OUTPUT_ROOT": str(tmp_path / "out")},
+    )
+    assert authorized == {"permission": "allow"}
+    ledger = tmp_path / "out/env/repo/local/worktree-governance/cache/authorizations.jsonl"
+    assert ledger.is_file() and "lane/ops" in ledger.read_text(encoding="utf-8")
+
+    reminded = _run_guard(
+        "codex",
+        f"git worktree add -b lane/ops {tmp_path / 'ops2'} origin/dev1.0",
+        env={"QWQ_OUTPUT_ROOT": str(tmp_path / "out")},
+    )
+    message = _message("codex", reminded)
+    assert "OPS.WORKTREE.NOT_AUTHORIZED" in message
+    assert "OPS.WORKTREE.INVALID_ADD" not in message, "canonical 形态不应再附模板"
+
+
+@pytest.mark.parametrize("harness", ["cursor", "codex"])
+def test_gwt_001_t5_policy_failure_allows_with_typed_context(monkeypatch, capsys, harness: str) -> None:
+    monkeypatch.setattr(inventory, "load_policy", lambda: (_ for _ in ()).throw(ValueError("broken")))
+    monkeypatch.setattr(
+        sys, "stdin", __import__("io").StringIO(json.dumps(
+            {"command": "git worktree add /tmp/x", "tool_input": {"command": "git worktree add /tmp/x"}}
+        )),
+    )
+
+    assert guard.main(["--harness", harness]) == 0
+    output = json.loads(capsys.readouterr().out)
+    reason = _message(harness, output)
+    assert "OPS.WORKTREE.POLICY_INVALID" in reason
+    assert "recovery=repair_canonical_worktree_policy" in reason
+    assert "未被阻断" in reason
+
+
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-001.t7
+def test_gwt_001_compound_authorization_is_per_segment(policy, monkeypatch) -> None:
+    monkeypatch.setattr(
+        guard,
+        "_git",
+        lambda _root, *args: (0, "a" * 40) if args and args[0] == "rev-parse" else (0, ""),
+    )
+    command = (
+        'QWQ_WORKTREE_AUTHZ="first" git worktree add --branch lane/data-engineering /tmp/a HEAD && '
+        'git worktree add --branch lane/refactor /tmp/b HEAD'
+    )
+    detections = guard.detect_all(
+        command,
+        allowed_branches=policy.allowed_local_branches,
+        repo_root=ROOT,
+        env_var=policy.authorization_env_var,
+    )
+    assert [item.authorized for item in detections] == [True, False]
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["add", "--detach", "/tmp/x", "HEAD"],
+        ["add", "--force", "--branch", "lane/data-engineering", "/tmp/x", "HEAD"],
+        ["add", "-B", "lane/data-engineering", "/tmp/x", "HEAD"],
+        ["add", "--branch", "feature/nope", "/tmp/x", "HEAD"],
+        ["add", "/tmp/x", "HEAD"],
+        ["add", "--branch", "lane/data-engineering", "/tmp/x"],
+    ],
+)
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-001.t8
+def test_gwt_001_flags_noncanonical_worktree_add_shapes(args) -> None:
+    _, reason = guard._validate_worktree_add(args, allowed_branches=ALLOWED, repo_root=ROOT)
+    assert reason
+    detection = guard.Detection("worktree_add", "x", segment="git worktree add", invalid_reason=reason)
+    message = guard.observation(
+        detection, env_var="QWQ_WORKTREE_AUTHZ", code="OPS.WORKTREE.NOT_AUTHORIZED", lanes=ALLOWED
+    )
+    assert "OPS.WORKTREE.INVALID_ADD" in message
+    assert "git worktree add -b <lane/...> <path> origin/dev1.0" in message
+
+
+def test_gwt_001_flags_noncanonical_start_point_from_any_worktree(monkeypatch) -> None:
+    """不再要求从 dev1.0 worktree 发起；只对 start-point 是否指向 dev1.0 给出提醒。"""
+
+    def fake_git(_root, *args):
+        if args[0] == "branch":
+            return 0, "lane/data-engineering"
+        if args[-1] in {"origin/dev1.0", "dev1.0"}:
+            return 0, "a" * 40
+        return 0, "b" * 40
+
+    monkeypatch.setattr(guard, "_git", fake_git)
+    _, reason = guard._validate_worktree_add(
+        ["add", "--branch", "lane/data-engineering", "/tmp/x", "main"],
+        allowed_branches=ALLOWED,
+        repo_root=ROOT,
+    )
+    assert "start-point" in reason
+    assert not hasattr(guard, "_bootstrap_authority")
 
 
 # --- GWT-002 滞留提醒 -----------------------------------------------------
@@ -325,6 +488,87 @@ def test_gwt_002_t7_short_circuit_never_inlines_the_interval(tmp_path: Path, pol
     assert int(written) > int(time.time()), "sentinel 必须指向未来的下一次提醒时点"
 
 
+def _linked(
+    path: str,
+    branch: str,
+    *,
+    probe_error: str = "",
+    head: str = "same",
+    clean: bool = True,
+    dirty: int = 0,
+) -> inventory.WorkCopy:
+    return inventory.WorkCopy(
+        path=path,
+        kind="linked_worktree",
+        branch=branch,
+        ahead=0,
+        dirty=dirty,
+        stashes=0,
+        oldest_unmerged_epoch=None,
+        probe_error=probe_error,
+        head=head,
+        clean=clean,
+    )
+
+
+def test_inventory_list_failure_is_typed_fail_closed(monkeypatch, policy) -> None:
+    monkeypatch.setattr(inventory, "_git", lambda *_args: (2, "authority down"))
+    with pytest.raises(inventory.InventoryError) as caught:
+        inventory.discover_work_copies(root=ROOT, policy=policy)
+    assert caught.value.code == inventory.INVENTORY_UNAVAILABLE
+
+
+@pytest.mark.parametrize(
+    "copies, fragment",
+    [
+        ([_linked("/tmp/detached", "")], "detached"),
+        ([_linked("/tmp/main", "main")], "not a fixed lane"),
+        ([_linked("/tmp/probe", "lane/ops", probe_error="status failed")], "probe failed"),
+        (
+            [
+                _linked("/tmp/a", "lane/ops"),
+                _linked("/tmp/b", "lane/ops"),
+            ],
+            "duplicate lane binding",
+        ),
+        (
+            [
+                _linked("/tmp/same", "lane/ops"),
+                _linked("/tmp/same", "lane/refactor"),
+            ],
+            "duplicate worktree path",
+        ),
+    ],
+)
+def test_discovered_linked_identity_failures_block(policy, copies, fragment) -> None:
+    issues = inventory.validate_worktree_identity(copies, policy)
+    assert any(fragment in issue for issue in issues)
+
+
+def test_require_all_lanes_checks_clean_and_canonical_head(monkeypatch, policy) -> None:
+    lanes = sorted(branch for branch in policy.allowed_local_branches if branch.startswith("lane/"))
+    copies = [_linked(f"/tmp/{index}", branch) for index, branch in enumerate(lanes)]
+    monkeypatch.setattr(inventory, "_integration_ref", lambda _root, _policy: "origin/dev1.0")
+    monkeypatch.setattr(inventory, "_git", lambda *_args: (0, "same"))
+    assert inventory.validate_worktree_identity(
+        copies, policy, require_all_lanes=True, repo_root=ROOT
+    ) == []
+
+    dirty = list(copies)
+    dirty[0] = _linked(dirty[0].path, dirty[0].branch, clean=False, dirty=1)
+    dirty[1] = _linked(dirty[1].path, dirty[1].branch, head="other")
+    issues = inventory.validate_worktree_identity(
+        dirty, policy, require_all_lanes=True, repo_root=ROOT
+    )
+    assert any("not clean" in issue for issue in issues)
+    assert any("differs from origin/dev1.0" in issue for issue in issues)
+
+    missing = inventory.validate_worktree_identity(
+        copies[:-1], policy, require_all_lanes=True, repo_root=ROOT
+    )
+    assert any("require-all-lanes mismatch" in issue for issue in missing)
+
+
 # --- GWT-003 hooks 安装自检 ------------------------------------------------
 
 
@@ -408,6 +652,58 @@ def test_gate_entrypoint_is_executable_and_reports_typed_codes() -> None:
     assert "issues" in payload and "summary" in payload
     for issue in payload["issues"]:
         assert issue.startswith("OPS.WORKTREE."), issue
+
+
+@pytest.mark.parametrize(
+    ("policy_mutator", "branch_mutator"),
+    [
+        (lambda raw: raw + b"unknown_field: true\n", lambda raw: raw),
+        (
+            lambda raw: raw.replace(
+                b"authorization_env_var: QWQ_WORKTREE_AUTHZ\n",
+                b"authorization_env_var: QWQ_WORKTREE_AUTHZ\n"
+                b"authorization_env_var: OTHER\n",
+            ),
+            lambda raw: raw,
+        ),
+        (lambda raw: raw, lambda raw: raw + b"unknown_field: true\n"),
+        (
+            lambda raw: raw,
+            lambda raw: raw.replace(
+                b"integration_branch: dev1.0\n",
+                b"integration_branch: dev1.0\nintegration_branch: main\n",
+            ),
+        ),
+        (
+            lambda raw: raw,
+            lambda raw: raw.replace(
+                b"production_workflow: .github/workflows/deploy-prod-auto.yml\n",
+                b"",
+            ),
+        ),
+    ],
+)
+def test_policy_loader_rejects_unknown_duplicate_and_incomplete_contracts(
+    tmp_path: Path, policy_mutator, branch_mutator,
+) -> None:
+    policy_path = tmp_path / "worktree_policy.yaml"
+    branch_path = tmp_path / "branch_policy.yaml"
+    policy_path.write_bytes(
+        policy_mutator(
+            (ROOT / "quwoquan_ops/policies/worktree_policy.yaml").read_bytes()
+        )
+    )
+    branch_path.write_bytes(
+        branch_mutator(
+            (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_bytes()
+        )
+    )
+
+    with pytest.raises(inventory.PolicyError):
+        inventory.load_policy(
+            policy_path=policy_path,
+            branch_policy_path=branch_path,
+        )
 
 
 def test_policy_install_command_matches_real_entrypoint(policy) -> None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from content.execution.campaign.lane import normalize_workloads
+from content.execution.planning.carrier_demand import normalize_workloads
 from content.execution.identity import parse_execution_id
 from content.execution.request import RuntimeExecutionRequest
 from content.release.canonical.semantic_wave_dispatch_support import (

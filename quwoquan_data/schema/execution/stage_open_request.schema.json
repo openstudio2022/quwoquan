@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/stage_open_request.schema.json",
+  "title": "Deterministic stage open request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "executionId",
+    "stage",
+    "sequence",
+    "workflowContract",
+    "initArtifacts",
+    "predecessor",
+    "releaseBinding",
+    "openedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.stage_open_request"
+    },
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stage": {
+      "enum": [
+        "0.plan",
+        "sources",
+        "1.download",
+        "2.quality",
+        "3.compose",
+        "4.draft",
+        "5.review",
+        "publish",
+        "release",
+        "ship"
+      ]
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "workflowContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "scope": {
+          "const": "repo"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "initArtifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "ref",
+          "digest"
+        ],
+        "properties": {
+          "scope": {
+            "const": "execution"
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "predecessor": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scope",
+            "ref",
+            "digest"
+          ],
+          "properties": {
+            "scope": {
+              "const": "execution"
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      ]
+    },
+    "releaseBinding": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "releaseId",
+            "releaseDigest"
+          ],
+          "properties": {
+            "releaseId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "releaseDigest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      ]
+    },
+    "openedAt": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "0.plan"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "predecessor": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "ship"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "releaseBinding": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "releaseId",
+              "releaseDigest"
+            ],
+            "properties": {
+              "releaseId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "releaseDigest": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "not": {
+              "const": "ship"
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "releaseBinding": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

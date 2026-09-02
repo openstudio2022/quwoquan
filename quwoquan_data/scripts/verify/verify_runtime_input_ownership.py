@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from core.io import read_json
+from core.schema import assert_valid
 from core.paths import DATA_EXECUTIONS_ROOT, REPO_ROOT, is_execution_id
 from content.execution.execution_terminal import (
     InvalidTerminalExecutionEvidenceError,
@@ -100,8 +101,17 @@ def _request_issues() -> list[str]:
         if not target_set_path.is_file():
             issues.append(f"{target_set_path.relative_to(REPO_ROOT)}: frozen target set is missing")
         try:
-            RuntimeExecutionRequest.from_document(read_json(request_path))
-        except (OSError, ValueError, SystemExit) as exc:
+            request = read_json(request_path)
+            if isinstance(request, dict) and request.get("schema") == "quwoquan_data.task_init_request":
+                assert_valid(
+                    request,
+                    "execution",
+                    "task_init_request",
+                    label=f"task init request:{execution_root.name}",
+                )
+            else:
+                RuntimeExecutionRequest.from_document(request)
+        except (OSError, TypeError, ValueError, SystemExit) as exc:
             issues.append(f"{request_path.relative_to(REPO_ROOT)}: invalid request: {exc}")
     return issues
 

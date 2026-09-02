@@ -11,8 +11,8 @@
     "composePacketRef",
     "promptRef",
     "promptSnapshotRef",
-    "provider",
-    "model",
+    "hostRuntime",
+    "hostActor",
     "runId",
     "outputRefs"
   ],
@@ -44,14 +44,6 @@
       "minLength": 1
     },
     "promptSnapshotRef": {
-      "type": "string",
-      "minLength": 1
-    },
-    "provider": {
-      "type": "string",
-      "minLength": 1
-    },
-    "model": {
       "type": "string",
       "minLength": 1
     },
@@ -147,11 +139,16 @@
     },
     "articleSourceUnitFreeze": {
       "anyOf": [
-        {"type": "null"},
+        {
+          "type": "null"
+        },
         {
           "type": "object",
           "required": [
-            "receiptRef", "freezeDigest", "sourceUnitId", "sourceUnitRef",
+            "receiptRef",
+            "freezeDigest",
+            "sourceUnitId",
+            "sourceUnitRef",
             "executionSourceDigest"
           ],
           "additionalProperties": false,
@@ -160,10 +157,22 @@
               "type": "string",
               "pattern": "^0\\.plan/article_source_unit_freezes/[^/]+\\.json$"
             },
-            "freezeDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-            "sourceUnitId": {"type": "string", "minLength": 1},
-            "sourceUnitRef": {"type": "string", "pattern": "^sources/[^/]+$"},
-            "executionSourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+            "freezeDigest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "sourceUnitId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sourceUnitRef": {
+              "type": "string",
+              "pattern": "^sources/[^/]+$"
+            },
+            "executionSourceDigest": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
           }
         }
       ]
@@ -182,6 +191,25 @@
     },
     "schema": {
       "const": "quwoquan_data.author_job_packet"
+    },
+    "hostRuntime": {
+      "const": "external_host_agent"
+    },
+    "hostActor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "role"
+      ],
+      "properties": {
+        "host": {
+          "const": "external_host_agent"
+        },
+        "role": {
+          "const": "author"
+        }
+      }
     }
   }
 }

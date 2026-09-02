@@ -4611,6 +4611,42 @@ export const platformConfig = {
       "sensitive": true
     },
     {
+      "key": "sys.platform-ops-service.human_authority.issuer",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.provider_commit",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.provider_version",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
       "key": "sys.platform-ops-service.human_authority.role_mappings",
       "type": "string",
       "owner": "",

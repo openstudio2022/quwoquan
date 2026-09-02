@@ -6,9 +6,12 @@ spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-pac
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import subprocess
 import tempfile
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
 
@@ -46,7 +49,27 @@ def _launch_binding(report_dir: Path) -> dict[str, str]:
     }
 
 
-def _preflight() -> dict[str, object]:
+def _sample_plan() -> dict[str, object]:
+    return {
+        "schema": "quwoquan_data.release_uat_sample_plan",
+        "releaseId": "release-alpha",
+        "releaseDigest": "sha256:" + "b" * 64,
+        "selectionEvidence": {"sourceIdentitySetDigest": "sha256:" + "d" * 64},
+    }
+
+
+def _preflight(report_dir: Path) -> dict[str, object]:
+    sample_plan = _sample_plan()
+    sample_plan_path = report_dir / "uat" / "sample_plan.json"
+    sample_plan_path.parent.mkdir(parents=True, exist_ok=True)
+    sample_plan_path.write_bytes(
+        json.dumps(sample_plan, sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
+        )
+    )
+    sample_plan_digest = (
+        "sha256:" + hashlib.sha256(sample_plan_path.read_bytes()).hexdigest()
+    )
     return {
         "exitCode": 0,
         "target": "alpha-local",
@@ -62,15 +85,16 @@ def _preflight() -> dict[str, object]:
         "manifestDigest": _MANIFEST_DIGEST,
         "readinessReceiptRef": "env/alpha/runs/readiness.json",
         "readinessReceiptDigest": "sha256:" + "c" * 64,
-        "releaseUatSamplePlanRef": "uat/sample_plan.json",
-        "releaseUatSamplePlanDigest": "sha256:" + "d" * 64,
+        "releaseUatSamplePlan": sample_plan,
+        "releaseUatSamplePlanRef": str(sample_plan_path),
+        "releaseUatSamplePlanDigest": sample_plan_digest,
         "appUatPlan": {
             "releaseIdentity": {
                 "releaseId": "release-alpha",
                 "payloadSha256": _MANIFEST_DIGEST,
             },
-            "releaseUatSamplePlanRef": "uat/sample_plan.json",
-            "releaseUatSamplePlanDigest": "sha256:" + "d" * 64,
+            "releaseUatSamplePlanRef": str(sample_plan_path),
+            "releaseUatSamplePlanDigest": sample_plan_digest,
             "carrierIdentities": {"video": "video-alpha"},
             "orderedSamples": [
                 {
@@ -87,7 +111,7 @@ def _preflight() -> dict[str, object]:
     }
 
 
-def _runtime_binding() -> dict[str, object]:
+def _runtime_binding(report_dir: Path) -> dict[str, object]:
     return {
         "launchPolicy": "immutable_candidate",
         "nonPromotable": False,
@@ -97,6 +121,9 @@ def _runtime_binding() -> dict[str, object]:
         "candidateDigest": _BASELINE,
         "releaseTrainId": _RELEASE_TRAIN,
         "composeProject": "quwoquan_alpha_test_live",
+        "sourceCapsuleManifestRef": str(
+            report_dir / "candidate/input-capsule/manifest.json"
+        ),
         "startupIdentity": {
             "candidateDigest": _BASELINE,
             "configurationDigest": _CONFIGURATION_DIGEST,
@@ -172,6 +199,38 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
         child_blocker: dict[str, object] | None = None,
         child_returncode: int = 0,
     ) -> tuple[dict[str, object], object, object, object]:
+        report_dir = Path(report_dir).resolve()
+        report_dir.mkdir(parents=True, exist_ok=True)
+        candidate_manifest = report_dir / "candidate/manifest.json"
+        candidate_manifest.parent.mkdir(parents=True, exist_ok=True)
+        candidate_manifest.write_text("candidate-manifest\n", encoding="utf-8")
+        contract_graph = report_dir / "source-projection/contract_graph.json"
+        contract_graph.parent.mkdir(parents=True, exist_ok=True)
+        contract_graph.write_text("contract-graph\n", encoding="utf-8")
+        raw_source = {
+            "slotId": "sha256:" + "1" * 64,
+            "ref": "raw-readiness-case-results/alpha.json",
+            "digest": "sha256:" + "2" * 64,
+        }
+        raw_projection = {
+            "rawResultRefs": {
+                "alpha-local": [
+                    {"slotId": raw_source["slotId"], "ref": raw_source["ref"]}
+                ]
+            },
+            "rawResultDigests": {
+                "alpha-local": [
+                    {
+                        "slotId": raw_source["slotId"],
+                        "digest": raw_source["digest"],
+                    }
+                ]
+            },
+            "rawCoverage": {
+                "alpha-local": {"expected": 1, "present": 1, "missing": 0}
+            },
+            "rawGaps": {"alpha-local": []},
+        }
         successful = subprocess.CompletedProcess(["patrol"], 0, "", "")
         patrol_result = subprocess.CompletedProcess(
             ["patrol"],
@@ -226,16 +285,21 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
                 scope = None
             return result, scope, {"schema": "test-patrol-dependency-readback"}
 
-        with (
+        patchers = [
+            patch.object(
+                stackctl,
+                "output_root",
+                return_value=report_dir,
+            ),
             patch.object(
                 stackctl,
                 "command_app_debug_preflight",
-                return_value=_preflight(),
+                return_value=_preflight(report_dir),
             ),
             patch.object(
                 stackctl,
                 "_app_content_test_live_runtime_binding",
-                return_value=_runtime_binding(),
+                return_value=_runtime_binding(report_dir),
             ),
             patch.object(
                 uat,
@@ -270,7 +334,48 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
                     "target": "alpha-local",
                     "suite": "release-bound-readback",
                     "exitCode": 0,
+                    "sampleExecution": {
+                        "samples": [
+                            {
+                                "sampleId": "canary-video-001",
+                                "carrier": "video",
+                                "sourceObjectId": "video-alpha",
+                                "readObjectId": "video-alpha",
+                            }
+                        ]
+                    },
                 },
+            ),
+            patch.object(
+                uat,
+                "_target_uat_binding_for_execution",
+                return_value=(
+                    {"schema": "fixture-target-uat-binding"},
+                    {
+                        "ref": "target-uat-bindings/alpha-local.json",
+                        "digest": "sha256:" + "4" * 64,
+                    },
+                ),
+            ),
+            patch.object(
+                uat,
+                "expected_app_uat_raw_coverage",
+                return_value=1,
+            ),
+            patch.object(
+                uat,
+                "collect_app_uat_case_execution_reports",
+                return_value=[],
+            ),
+            patch.object(
+                uat,
+                "emit_app_uat_raw_results",
+                return_value=[dict(raw_source)],
+            ),
+            patch.object(
+                uat,
+                "project_app_content_uat_raw_authority",
+                return_value=(raw_projection, []),
             ),
             patch.object(
                 stackctl,
@@ -292,21 +397,6 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
                 "_app_content_readiness_path",
                 return_value=report_dir / "readiness.json",
             ),
-            patch.object(
-                stackctl,
-                "_environment_page_smoke_profile_command",
-                side_effect=_smoke_command,
-            ) as smoke_profile,
-            patch.object(
-                stackctl,
-                "_run_profile_command",
-                return_value=patrol_result,
-            ) as profile_runner,
-            patch.object(
-                stackctl,
-                "_run_app_content_message_home_command",
-                return_value=(patrol_result, {}),
-            ) as message_runner,
             patch.object(
                 uat,
                 "execute_patrol_with_dependency_cas",
@@ -336,7 +426,31 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
                     "profile-journey": "sha256:" + "4" * 64,
                 },
             ),
-        ):
+        ]
+        with ExitStack() as stack:
+            for patcher in patchers:
+                stack.enter_context(patcher)
+            smoke_profile = stack.enter_context(
+                patch.object(
+                    stackctl,
+                    "_environment_page_smoke_profile_command",
+                    side_effect=_smoke_command,
+                )
+            )
+            profile_runner = stack.enter_context(
+                patch.object(
+                    stackctl,
+                    "_run_profile_command",
+                    return_value=patrol_result,
+                )
+            )
+            message_runner = stack.enter_context(
+                patch.object(
+                    stackctl,
+                    "_run_app_content_message_home_command",
+                    return_value=(patrol_result, {}),
+                )
+            )
             result = stackctl._command_app_content_uat(
                 argparse.Namespace(
                     targets="alpha-local",
@@ -372,7 +486,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
             "--stackctl-controlled-edge-fault",
             controlled_calls[0].args[0]["argv"],
         )
-        self.assertEqual(smoke_profile.call_count, 6)
+        self.assertEqual(smoke_profile.call_count, 7)
         self.assertEqual(message_runner.call_count, 1)
         recovery = result["controlledEdgeRecoveries"]["alpha-local"]
         self.assertTrue(recovery["evidence"]["sameInstallRecovery"])
@@ -417,7 +531,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
             [
                 "release-bound-readback",
                 "canonical-launch",
-                "homepage-feed",
+                "release-sample-matrix",
                 "controlled-edge-recovery",
             ],
         )
@@ -443,7 +557,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
             result["details"],
             [
                 (
-                    "alpha-local: homepage-feed failed: "
+                    "alpha-local: release-sample-matrix failed: "
                     "APP.LAUNCH.runtime_config_activation_failed"
                 )
             ],
@@ -467,7 +581,7 @@ class AppContentPreflightUatControlledEdgeTest(unittest.TestCase):
             result["details"],
             [
                 (
-                    "alpha-local: homepage-feed failed: "
+                    "alpha-local: release-sample-matrix failed: "
                     "APP.LAUNCH.runtime_config_activation_failed"
                 )
             ],

@@ -16,9 +16,13 @@ from core.paths import (
 )
 from core.runtime_policy import active_runtime_policy
 
-from content.execution import store, validate_execution_id
+from content.execution import store
 from content.execution.contracts import ExecutionStateTransition
-from content.execution.identity import SelectionPolicy, parse_execution_id
+from content.execution.identity import (
+    SelectionPolicy,
+    parse_execution_id,
+    validate_execution_id,
+)
 from content.execution.planning.capacity_policy import execution_capacity_policy_fields
 from content.execution.planning.selection_discovery import coverage_target_from_selection
 from content.execution.planning.selection_materialization import write_selected_task

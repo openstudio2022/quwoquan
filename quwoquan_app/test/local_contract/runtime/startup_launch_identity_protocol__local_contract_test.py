@@ -84,7 +84,7 @@ class StartupLaunchIdentityProtocolContractTest(unittest.TestCase):
                 self.assertIn("launchProvenance", source)
                 self.assertIn("runtimeConfigSupplyMode", source)
 
-    def test_hot_restart_cli_accepts_only_new_provenance_surface(self) -> None:
+    def test_hot_restart_cli_accepts_only_canonical_provenance_surface(self) -> None:
         args = build_hot_restart_parser().parse_args(
             [
                 "--env",
@@ -92,10 +92,22 @@ class StartupLaunchIdentityProtocolContractTest(unittest.TestCase):
                 "--device-id",
                 "simulator-id",
                 "--launch-provenance",
-                "workspace_flutter_run",
+                "canonical_launcher",
             ]
         )
-        self.assertEqual(args.launch_provenance, "workspace_flutter_run")
+        self.assertEqual(args.launch_provenance, "canonical_launcher")
+        # workspace facade 已退役：workspace_flutter_run 不再是可选 provenance。
+        with self.assertRaises(SystemExit):
+            build_hot_restart_parser().parse_args(
+                [
+                    "--env",
+                    "alpha",
+                    "--device-id",
+                    "simulator-id",
+                    "--launch-provenance",
+                    "workspace_flutter_run",
+                ]
+            )
 
     def test_native_safe_terminal_marker_preserves_canonical_surface(self) -> None:
         android = (

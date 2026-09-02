@@ -9,7 +9,7 @@ from content.execution.campaign import failed_execution_reconciliation as reconc
 from content.execution.campaign import (
     failed_execution_reconciliation_controller as controller_contract,
 )
-from content.execution.campaign.external_inputs import payload_digest
+from content.execution.source_pool.external_inputs import payload_digest
 from content.execution.campaign.submission_reconciliation_contract import (
     CampaignSubmissionReconciliationError,
     canonical_digest,

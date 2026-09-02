@@ -130,15 +130,23 @@ def _dev_session_materialize_compose_files(
     )
     for index, source in enumerate(source_files):
         payload = _stackctl.load_json_yaml(source)
-        services = payload.get("services")
-        if services is not None and not isinstance(services, dict):
-            raise ValueError(f"mutable Compose services must be an object: {source}")
         try:
             source_ref = source.relative_to(_stackctl.ROOT).as_posix()
         except ValueError as exc:
             raise ValueError(
                 f"mutable test_live Compose source escapes repository: {source}"
             ) from exc
+        if source_ref == (
+            "quwoquan_service/services/product-ops-service/deploy/"
+            "local-elasticsearch.compose.yaml"
+        ):
+            canonical = _stackctl.canonical_local_observability_log_sink_composition(
+                source
+            )
+            payload = canonical["compose"]
+        services = payload.get("services")
+        if services is not None and not isinstance(services, dict):
+            raise ValueError(f"mutable Compose services must be an object: {source}")
         if source_ref == "quwoquan_service/services/content-service/deploy/compose.yaml":
             content_service = (services or {}).get("content-service")
             if not isinstance(content_service, dict):
@@ -326,6 +334,12 @@ def _dev_session_materialize_compose_files(
                 provider_binding_manifest_digest
             )
         destination = destination_root / f"{index:02d}-{source.stem}.json"
-        _stackctl.write_json(destination, payload)
+        if source_ref == (
+            "quwoquan_service/services/product-ops-service/deploy/"
+            "local-elasticsearch.compose.yaml"
+        ):
+            destination.write_bytes(canonical["composeBytes"])
+        else:
+            _stackctl.write_json(destination, payload)
         execution_files.append(destination)
     return execution_files

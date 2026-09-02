@@ -58,6 +58,24 @@ def test_contract_spec_and_dart_changes_keep_their_required_static_gates() -> No
     assert "commercial_contract" in contract_checks
 
 
+
+def test_ordinary_commit_never_selects_worktree_lifecycle_static_gate() -> None:
+    for paths in (
+        ["README.md"],
+        ["quwoquan_ops/hooks/worktree_add_guard.py"],
+        ["quwoquan_ops/policies/worktree_policy.yaml"],
+    ):
+        assert "local_worktree_lifecycle" not in _checks(*paths)
+
+    selected, deferred = select_pytest_paths(
+        ["quwoquan_ops/policies/worktree_policy.yaml"]
+    )
+    assert selected == [
+        "quwoquan_ops/tests/local_contract/gate/"
+        "test_local_worktree_lifecycle__gate__local_contract_test.py"
+    ]
+    assert deferred == []
+
 def test_python_test_selection_uses_the_narrow_owner_tree() -> None:
     assert select_pytest_paths(
         ["quwoquan_ops/policies/gates/assistant_search_weak_typing_baseline.json"]
@@ -96,6 +114,8 @@ def test_commit_gate_changes_select_only_their_focused_contracts() -> None:
             "test_commit_gate_fast_path__local_contract_test.py",
             "quwoquan_ops/tests/local_contract/gate/"
             "test_commit_gate_select__local_contract_test.py",
+            "quwoquan_ops/tests/local_contract/gate/"
+            "test_process_group_deadline__local_contract_test.py",
         ],
         [],
     )

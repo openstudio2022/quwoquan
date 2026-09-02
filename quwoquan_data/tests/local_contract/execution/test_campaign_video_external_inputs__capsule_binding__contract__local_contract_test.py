@@ -9,7 +9,7 @@ import pytest
 from content.execution.campaign.external_input_runtime import (
     ExternalInputRuntimeContext,
 )
-from content.execution.campaign.external_inputs import (
+from content.execution.source_pool.external_inputs import (
     PROFESSIONAL_VIDEO_ACQUISITION_KIND,
     CampaignExternalInputError,
     bind_external_input_refs,

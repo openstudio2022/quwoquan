@@ -86,6 +86,9 @@ def test_task_init_atomically_creates_exactly_three_files_without_stage_side_eff
     request = json.loads((root / "0.plan/request.json").read_text())
     target_set = json.loads((root / "0.plan/target_set.json").read_text())
     assert manifest["hostRuntime"] == "external_host_agent"
+    assert manifest["operationalFingerprint"] == task_init.operational_fingerprint(
+        repo_root=paths.REPO_ROOT
+    )
     assert "modelBinding" not in manifest and "semanticSelectionId" not in manifest
     assert request["quota"] == 1 and request["workUnitCount"] == 1
     assert target_set["candidateBinding"]["candidateCount"] == 1
@@ -118,3 +121,49 @@ def test_task_init_invalid_candidate_binding_leaves_no_execution_visible(isolate
     with pytest.raises(task_init.TaskInitError, match="candidateCount"):
         task_init.initialize_task(carrier_demand_path=demand, candidate_bindings_path=candidates)
     assert not (paths.DATA_EXECUTIONS_ROOT / EXECUTION_ID).exists()
+
+
+def test_task_init_allows_multiple_post_work_units_for_one_entity(
+    isolated_output: Path,
+) -> None:
+    demand, candidates = _write_inputs(
+        isolated_output,
+        execution_id="20260831--travel-image-host-init--china--pilot-001",
+    )
+    demand_payload = json.loads(demand.read_text())
+    demand_payload["carrier"] = "image"
+    demand_payload["familyRef"] = "content/travel/image/image"
+    demand.write_text(json.dumps(demand_payload, ensure_ascii=False), encoding="utf-8")
+    candidate_payload = json.loads(candidates.read_text())
+    candidate_payload["carrier"] = "image"
+    candidate_payload["targets"] = [
+        {
+            "name": "都江堰",
+            "entityType": "地点/景区",
+            "publishAngle": "美图",
+            "publishTitle": "都江堰杩槎",
+            "publishSeq": 1,
+        },
+        {
+            "name": "都江堰",
+            "entityType": "地点/景区",
+            "publishAngle": "美图",
+            "publishTitle": "都江堰杩槎二景",
+            "publishSeq": 1,
+        },
+    ]
+    candidate_payload["candidateCount"] = 2
+    candidates.write_text(json.dumps(candidate_payload, ensure_ascii=False), encoding="utf-8")
+
+    result = task_init.initialize_task(
+        carrier_demand_path=demand, candidate_bindings_path=candidates
+    )
+    target_set = json.loads(
+        (paths.DATA_EXECUTIONS_ROOT / result["executionId"] / "0.plan/target_set.json").read_text()
+    )
+
+    assert target_set["targetCount"] == 2
+    assert target_set["targetRefs"] == [
+        "posts/image/美图/都江堰杩槎/1",
+        "posts/image/美图/都江堰杩槎二景/1",
+    ]

@@ -58,6 +58,7 @@ class LocalEnvPortManifestReverseClosureGateTest(unittest.TestCase):
             for path in self.gate._local_compose_sources(
                 issues,
                 unowned_sources=self.manifest[self.gate.UNOWNED_COMPOSE_SOURCES_KEY],
+                retired_sources=self.manifest[self.gate.RETIRED_COMPOSE_SOURCES_KEY],
             )
         }
         self.assertEqual(issues, [])
@@ -71,8 +72,10 @@ class LocalEnvPortManifestReverseClosureGateTest(unittest.TestCase):
 
     def test_undeclared_environment_compose_file_fails_closed(self) -> None:
         """`environments/compose/` 下新增文件必须被裁决归属，不能靠没人注意逃出闭包。"""
-        adjudicated = set(self.gate.LOCAL_ENVIRONMENT_COMPOSE) | set(
-            self.manifest[self.gate.UNOWNED_COMPOSE_SOURCES_KEY]
+        adjudicated = (
+            set(self.gate.LOCAL_ENVIRONMENT_COMPOSE)
+            | set(self.manifest[self.gate.UNOWNED_COMPOSE_SOURCES_KEY])
+            | set(self.manifest[self.gate.RETIRED_COMPOSE_SOURCES_KEY])
         )
         present = {
             path.name
@@ -83,6 +86,32 @@ class LocalEnvPortManifestReverseClosureGateTest(unittest.TestCase):
         }
         self.assertEqual(sorted(present - adjudicated), [])
         self.assertTrue(present)
+
+    def test_retired_compose_candidate_is_separate_from_permanent_unowned_exemptions(
+        self,
+    ) -> None:
+        retired = self.manifest[self.gate.RETIRED_COMPOSE_SOURCES_KEY]
+        unowned = self.manifest[self.gate.UNOWNED_COMPOSE_SOURCES_KEY]
+
+        self.assertEqual(
+            set(retired),
+            {"docker-compose.data-execution-fleet.yaml"},
+        )
+        self.assertFalse(set(retired) & set(unowned))
+        self.assertNotIn(
+            "docker-compose.data-execution-fleet.yaml",
+            self.gate.LOCAL_ENVIRONMENT_COMPOSE,
+        )
+
+        missing = copy.deepcopy(self.manifest)
+        missing.pop(self.gate.RETIRED_COMPOSE_SOURCES_KEY)
+        self.assertTrue(
+            [
+                item
+                for item in self.gate.validate_port_manifest(missing)
+                if self.gate.RETIRED_COMPOSE_SOURCES_KEY in item
+            ]
+        )
 
     def test_unowned_compose_exemption_lives_in_the_manifest_not_the_gate(self) -> None:
         """豁免声明位在 manifest：门禁不能同时是判据和自己的豁免出处。"""
@@ -155,22 +184,6 @@ class LocalEnvPortManifestReverseClosureGateTest(unittest.TestCase):
             msg="变量绑到未声明 role 未判否",
         )
 
-    def test_host_port_variable_used_but_undeclared_is_rejected(self) -> None:
-        """compose 里用作主机端口的变量必须已声明，否则该发布口整条逃出 canonical 断言。"""
-        stripped = copy.deepcopy(self.manifest)
-        stripped[self.gate.HOST_PORT_VARIABLES_KEY].pop("QWQ_DATA_FLEET_MONGO_PORT")
-
-        issues = self._issues(stripped)
-
-        self.assertTrue(
-            [
-                item
-                for item in issues
-                if "published host port variable is not declared" in item
-            ],
-            msg=f"未声明的主机端口变量未判否: {issues}",
-        )
-
     def test_env_exports_and_manifest_declaration_must_agree(self) -> None:
         """两个声明位对同一变量的 role 说法分叉时判否；只比对交集,不要求任一侧全覆盖。"""
         drifted = copy.deepcopy(self.manifest)
@@ -189,24 +202,6 @@ class LocalEnvPortManifestReverseClosureGateTest(unittest.TestCase):
             ),
             [],
         )
-
-    def test_data_fleet_publisher_resolves_to_its_own_roles(self) -> None:
-        """fleet 的发布口必须归 fleet 自有 role，不能被目标 runtime 的同名 service 抢走。"""
-        roles = self.gate.compose_published_endpoint_roles(self.manifest, "beta-local")
-        closure = self.gate.compose_publisher_container_role_closure(roles)
-
-        self.assertEqual(
-            closure[("data-execution-mongodb", 27017, "tcp")],
-            frozenset({"data-execution-mongodb"}),
-        )
-        self.assertEqual(
-            closure[("mongodb", 27017, "tcp")], frozenset({"mongodb"})
-        )
-        self.assertEqual(
-            closure[("data-execution-redis", 6379, "tcp")],
-            frozenset({"data-execution-redis"}),
-        )
-        self.assertEqual(closure[("redis", 6379, "tcp")], frozenset({"redis"}))
 
     def test_published_endpoint_without_any_owning_role_is_rejected(self) -> None:
         """撤掉某容器发布口的全部认领方后，Compose 那条发布口必须判否。"""
@@ -256,36 +251,6 @@ class LocalEnvPortManifestReverseClosureGateTest(unittest.TestCase):
         # `:?` 没有缺省值，字面上确实不可判定；它由注入反查承担，不在这里猜。
         self.assertIsNone(self.gate._declared_host_port("${VAR:?required}"))
 
-    def test_required_form_host_port_resolves_to_its_declared_role(self) -> None:
-        """`:?` 形态反查出的是 role，不是折算的 canonical 端口。
-
-        声明段是 profile 无关的（`QWQ_COMPOSE_*` 一族按当前 target 注入，同一变量服务全部
-        profile），折算只能任取一个 profile；且折算值派生自同一份 manifest，比对它等于自证。
-        返回 role 才能让调用方断言一件独立的事：注入变量的 role 就是该容器端点的归属 role。
-        """
-        variables = self.manifest[self.gate.HOST_PORT_VARIABLES_KEY]
-
-        self.assertEqual(
-            self.gate._injected_host_port_role(
-                "${LOCAL_GAMMA_ADMIN_PORT:?LOCAL_GAMMA_ADMIN_PORT is required}",
-                host_port_variables=variables,
-            ),
-            "caddy-admin",
-        )
-        self.assertEqual(
-            self.gate._injected_host_port_role(
-                "127.0.0.1:${QWQ_DATA_FLEET_MONGO_PORT:?required}",
-                host_port_variables=variables,
-            ),
-            "data-execution-mongodb",
-        )
-        self.assertIsNone(
-            self.gate._injected_host_port_role(
-                "${NOT_DECLARED_PORT:?required}",
-                host_port_variables=variables,
-            )
-        )
-
     def test_unrecognized_host_port_form_is_rejected_not_skipped(self) -> None:
         """形态没被识别时必须判否——读不出来不能塌陷成「不可判定」而跳过断言。
 
@@ -296,7 +261,7 @@ class LocalEnvPortManifestReverseClosureGateTest(unittest.TestCase):
         for recognized in (
             "19210",
             "${QWQ_COMPOSE_USER_PORT:-19210}",
-            "${QWQ_DATA_FLEET_MONGO_PORT:?required}",
+            "${QWQ_COMPOSE_PROVIDER_SUBSTITUTE_PORT:?required}",
             "127.0.0.1:${QWQ_COMPOSE_USER_PORT:-19210}",
         ):
             self.assertTrue(
@@ -323,24 +288,6 @@ class LocalEnvPortManifestReverseClosureGateTest(unittest.TestCase):
             [item for item in issues if "host port form is unrecognized" in item],
             msg=f"未知 host 形态未判否: {issues}",
         )
-
-    def test_required_form_yields_injected_role_instead_of_host_port(self) -> None:
-        """`:?` 形态给出 injectedRole；hostPort 与 injectedRole 恰好一个有值。"""
-        issues: list[str] = []
-        parsed = self.gate._published_endpoint(
-            "127.0.0.1:${QWQ_DATA_FLEET_MONGO_PORT:?required}:27017",
-            source="fixture/compose.yaml",
-            service="data-execution-mongodb",
-            issues=issues,
-            host_port_variables=self.manifest[self.gate.HOST_PORT_VARIABLES_KEY],
-        )
-
-        self.assertEqual(issues, [])
-        self.assertIsNotNone(parsed)
-        container_port, protocol, host_port, injected_role = parsed
-        self.assertEqual((container_port, protocol), (27017, "tcp"))
-        self.assertIsNone(host_port)
-        self.assertEqual(injected_role, "data-execution-mongodb")
 
     def test_injected_variable_role_must_own_the_container_endpoint(self) -> None:
         """注入变量声明的 role 必须就是该容器端点的归属 role，分叉即判否。

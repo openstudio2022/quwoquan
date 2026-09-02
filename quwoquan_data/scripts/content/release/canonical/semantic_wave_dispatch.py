@@ -9,8 +9,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign.lane import normalize_workloads
-from content.execution.campaign.request_envelope import workload_intent
+from content.execution.planning.carrier_demand import normalize_workloads
+from content.execution.planning.request_envelope import workload_intent
 from content.execution.identity import build_execution_id, parse_execution_id
 from content.execution.planning.execution_authority import (
     governed_execution_authority,

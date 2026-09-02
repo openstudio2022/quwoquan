@@ -6,6 +6,7 @@
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002.t2
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t1
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t2
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t3
 """
 from __future__ import annotations
 
@@ -174,6 +175,65 @@ def test_same_git_status_with_changed_content_invalidates_fingerprint() -> None:
     assert "local_readiness.py plan --level fast --staged" in COMMIT_GATE.read_text(encoding="utf-8")
 
 
+def test_workspace_fingerprint_ignores_unrelated_tracked_worktree_bytes() -> None:
+    with _repo() as directory:
+        repo = Path(directory)
+        _init(repo)
+        unrelated = repo / "unrelated.txt"
+        unrelated.write_text("one\n", encoding="utf-8")
+        subprocess.run(["git", "add", "unrelated.txt"], cwd=repo, check=True)
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "commit",
+                "-qm",
+                "unrelated fixture",
+            ],
+            cwd=repo,
+            check=True,
+        )
+        plan = _minimal_plan(repo, "true")
+        first = plan["fingerprint"]["digest"]
+
+        unrelated.write_text("two\n", encoding="utf-8")
+        assert (
+            capture_fingerprint(plan, repo_root=repo, mode="workspace")["digest"]
+            == first
+        )
+
+        (repo / "source.txt").write_text("related change\n", encoding="utf-8")
+        assert (
+            capture_fingerprint(plan, repo_root=repo, mode="workspace")["digest"]
+            != first
+        )
+
+
+def test_workspace_fingerprint_excludes_qwq_output_and_state_root() -> None:
+    with _repo() as directory:
+        repo = Path(directory)
+        _init(repo)
+        state = repo / "state"
+        plan = _minimal_plan(repo, "true")
+        plan["paths"] = [".qwq_output/runtime.txt", "source.txt", "state/runtime.txt"]
+        first = capture_fingerprint(
+            plan, repo_root=repo, mode="workspace", state_root=state
+        )["digest"]
+
+        for relative in (".qwq_output/runtime.txt", "state/runtime.txt"):
+            target = repo / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("managed mutation\n", encoding="utf-8")
+        assert (
+            capture_fingerprint(
+                plan, repo_root=repo, mode="workspace", state_root=state
+            )["digest"]
+            == first
+        )
+
 
 def test_empty_input_scope_cannot_produce_readiness() -> None:
     with _repo() as directory:
@@ -261,18 +321,26 @@ def test_portal_runner_executes_test_and_build() -> None:
     assert ["python3", "-B", "quwoquan_ops/cli/local_readiness.py", "managed-portal-build"] in commands
 
 
-def test_staged_receipt_freshness_is_exact_and_hook_has_one_recovery() -> None:
+def test_git_hooks_only_check_boundaries_and_never_consume_receipts() -> None:
+    """硬门只在准出：本地 hooks 只做 staged boundary 与 branch policy，不消费 readiness 回执。"""
     source = PRE_COMMIT.read_text(encoding="utf-8")
     assert "commit_gate.sh" not in source
-    assert source.count("python3 quwoquan_ops/cli/local_readiness.py scope --staged") == 1
-    assert "verify --level scope --staged" in source
+    assert "local_readiness.py staged-boundary" in source
+    assert "verify --level" not in source
+    assert "scope --staged" not in source
+    assert "scope_ready" not in source
+    assert "release_ready" not in source
+    assert "readiness PASS" not in source
     pre_push = PRE_PUSH.read_text(encoding="utf-8")
-    assert "release_ready" in pre_push
     assert "verify_git_branch_policy.py --pre-push" in pre_push
-    assert "push-updates" in pre_push
-    assert "updates_digest" in pre_push
-    assert "trap - EXIT" in pre_push
+    assert "verify --level release" not in pre_push
+    assert "scope_ready" not in pre_push
+    assert "release_ready" not in pre_push
+    assert "readiness PASS" not in pre_push
+    assert "local_readiness.py" not in pre_push
 
+
+def test_staged_receipt_freshness_is_exact() -> None:
     with _repo() as directory:
         repo = Path(directory)
         _init(repo)

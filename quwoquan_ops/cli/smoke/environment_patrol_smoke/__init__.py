@@ -156,6 +156,7 @@ from .handoff import (  # noqa: E402,F401
 from .device_runtime import (  # noqa: E402,F401
     _acquire_patrol_consumer_lease,
     _bind_patrol_consumer_lease_to_handoff,
+    _cleanup_android_local_port_reverse,
     _device_command_env,
     _local_tls_trust_evidence,
     _prepare_android_local_port_reverse,

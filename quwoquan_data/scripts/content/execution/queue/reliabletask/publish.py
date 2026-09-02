@@ -2,17 +2,55 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
+from core.io import read_json
 from core.paths import OUTPUT_ROOT
 
 from content.execution.queue.model import QueueJob
+from content.execution.workspace import execution_root
+
+
+def validate_pool_delivery_intent_for_job(job: QueueJob) -> dict[str, object]:
+    """Validate the legacy ReliableTask routing envelope against one neutral intent."""
+
+    from content.execution.closure.pool_delivery import (
+        validate_pool_delivery_intent_document,
+    )
+
+    metadata = job.metadata_document()
+    raw_ref = str(metadata.get("poolDeliveryIntentRef") or "").strip()
+    expected_digest = str(metadata.get("poolDeliveryIntentDigest") or "").strip()
+    if not raw_ref or not expected_digest:
+        raise ValueError("ReliableTask publish job lacks pool delivery intent binding")
+    root = execution_root(job.execution_id).resolve()
+    path = (root / raw_ref).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("pool delivery intent ref escapes execution root") from exc
+    raw_parts = Path(raw_ref).parts
+    if any(
+        (root / Path(*raw_parts[:index])).is_symlink()
+        for index in range(1, len(raw_parts) + 1)
+    ):
+        raise ValueError("pool delivery intent ref cannot traverse symlinks")
+    validated = validate_pool_delivery_intent_document(read_json(path), root=root)
+    if validated.get("intentId") != expected_digest:
+        raise ValueError("pool delivery intent digest binding mismatch")
+    carrier = job.carrier.value if job.carrier is not None else ""
+    if (
+        validated["executionId"] != job.execution_id
+        or validated["objectRef"] != job.ref
+        or validated["carrier"] != carrier
+        or job.content_object_dir != validated["contentObjectDir"]
+        or metadata.get("sourceRevision") != validated["transactionInputDigest"]
+    ):
+        raise ValueError("pool delivery intent job routing drift")
+    return validated
 
 
 def _execute_publish(job: QueueJob) -> dict[str, object]:
-    from content.execution.closure.pool_delivery import (
-        validate_pool_delivery_intent_for_job,
-    )
-
     intent = validate_pool_delivery_intent_for_job(job)
     carrier = job.carrier.value if job.carrier else ""
     if carrier == "homepage":

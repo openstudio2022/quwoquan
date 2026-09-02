@@ -8,6 +8,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -40,6 +43,8 @@ def _identity(environment: str = "alpha", target: str = "alpha-local") -> dict[s
         "deploymentTarget": target,
         "releaseId": "release-a",
         "releaseDigest": RELEASE_DIGEST,
+        "importRunId": "import-run-a",
+        "verifyRunId": "verify-run-a",
     }
 
 
@@ -185,19 +190,30 @@ def _acceptance_arguments(root: Path, store: Path) -> dict[str, object]:
     raw = _raw(root, binding)
     active = _ready(root, "active-cas", "active")
     readback = _ready(root, "active-cas-readback", "passed")
+    import_report = _ready(root, "import-report", "imported")
+    data_readiness = _write(root, "alpha/data-readiness.json", {
+        **_identity(), "status": "passed",
+        "activationEnvelope": {
+            "importReportRef": import_report["ref"],
+            "importReportDigest": import_report["digest"],
+        },
+    })
     return {
         "evidence_root": root,
         "acceptance_root": store,
+        "acceptance_profile": "environment_promotion",
         "environment": "alpha",
         "target": "alpha-local",
         "release_id": "release-a",
         "release_digest": RELEASE_DIGEST,
+        "import_run_id": "import-run-a",
+        "verify_run_id": "verify-run-a",
         "sample_plan_ref": plan["ref"],
         "sample_plan_digest": plan["digest"],
         "target_binding_refs": [{**binding, **PROFILE}],
         "required_raw_results": [raw],
         "required_target_profiles": [PROFILE],
-        "data_readiness": _ready(root, "data-readiness", "passed"),
+        "data_readiness": data_readiness,
         "active_cas": {
             "ref": active["ref"],
             "digest": active["digest"],
@@ -222,6 +238,132 @@ def _acceptance_arguments(root: Path, store: Path) -> dict[str, object]:
         "created_at": "2026-08-29T07:00:00Z",
         "source_fingerprint": _digest("f"),
     }
+
+
+def _m1_acceptance_arguments(root: Path, store: Path) -> dict[str, object]:
+    arguments = _acceptance_arguments(root, store)
+    entries = ("feed", "search", "recommendation", "direct_or_object_route")
+    carriers = ("homepage", "article", "image", "video")
+    plan = {
+        "schema": "quwoquan_data.release_uat_sample_plan",
+        "releaseId": "release-a",
+        "releaseDigest": RELEASE_DIGEST,
+        "samples": [
+            {
+                "sampleId": f"m1-{carrier}-001",
+                "carrier": carrier,
+                "objectId": f"{carrier}-001",
+                "objectRef": (
+                    f"objects/entities/{carrier}-001"
+                    if carrier == "homepage"
+                    else f"objects/posts/{carrier}/{carrier}-001"
+                ),
+                "objectDigest": _digest(str(index)),
+            }
+            for index, carrier in enumerate(carriers, 1)
+        ],
+        "entryCarrierCells": [
+            {
+                "entry": entry,
+                "carrier": carrier,
+                "applicability": "required",
+                "specRef": SPEC_REF,
+                "runnerClass": f"qwq_service.content_api.{entry}.{carrier}.v1",
+            }
+            for entry in entries
+            for carrier in carriers
+        ],
+    }
+    plan_ref = _write(root, "release/m1-sample-plan.json", plan)
+    samples = {item["carrier"]: item for item in plan["samples"]}
+    raw_results = []
+    for cell in plan["entryCarrierCells"]:
+        sample = samples[cell["carrier"]]
+        raw = {
+            **_identity(),
+            "producer": "service",
+            "layer": "api_integration",
+            "status": "passed",
+            "entrySurface": cell["entry"],
+            "carrier": cell["carrier"],
+            "specRef": cell["specRef"],
+            "runnerIdentity": cell["runnerClass"],
+            "objectId": sample["objectId"],
+        }
+        source = _write(
+            root,
+            f"alpha/m1-raw-{cell['entry']}-{cell['carrier']}.json",
+            raw,
+        )
+        raw_results.append({
+            **source,
+            "slotId": acceptance.required_raw_slot_id(
+                sample_id=sample["sampleId"],
+                entry_surface=cell["entry"],
+                carrier=cell["carrier"],
+                spec_ref=cell["specRef"],
+                runner_identity=cell["runnerClass"],
+            ),
+            "status": "passed",
+        })
+    arguments.update({
+        "acceptance_profile": "m1_api_consumer",
+        "sample_plan_ref": plan_ref["ref"],
+        "sample_plan_digest": plan_ref["digest"],
+        "target_binding_refs": [],
+        "required_raw_results": raw_results,
+        "required_target_profiles": [],
+    })
+    return arguments
+
+
+def _source_cli(name: str, source: object) -> list[str]:
+    assert isinstance(source, dict)
+    return [f"--{name}-ref", str(source["ref"]), f"--{name}-digest", str(source["digest"])]
+
+
+def _m1_cli_arguments(arguments: dict[str, object]) -> list[str]:
+    active = arguments["active_cas"]
+    finalization = arguments["resource_finalization"]
+    assert isinstance(active, dict) and isinstance(finalization, dict)
+    command = [
+        "--output-format", "json", "environment-acceptance-append",
+        "--evidence-root", str(arguments["evidence_root"]),
+        "--acceptance-root", str(arguments["acceptance_root"]),
+        "--acceptance-profile", str(arguments["acceptance_profile"]),
+        "--environment", str(arguments["environment"]),
+        "--target", str(arguments["target"]),
+        "--release-id", str(arguments["release_id"]),
+        "--release-digest", str(arguments["release_digest"]),
+        "--import-run-id", str(arguments["import_run_id"]),
+        "--verify-run-id", str(arguments["verify_run_id"]),
+        "--sample-plan-ref", str(arguments["sample_plan_ref"]),
+        "--sample-plan-digest", str(arguments["sample_plan_digest"]),
+        "--active-cas-ref", str(active["ref"]),
+        "--active-cas-digest", str(active["digest"]),
+        "--active-cas-readback-ref", str(active["readbackRef"]),
+        "--active-cas-readback-digest", str(active["readbackDigest"]),
+        "--created-at", str(arguments["created_at"]),
+        "--source-fingerprint", str(arguments["source_fingerprint"]),
+    ]
+    for field in (
+        "data_readiness", "lifecycle_exit", "provider_readiness",
+        "observability_readiness", "rollback_readiness",
+    ):
+        command.extend(_source_cli(field.replace("_", "-"), arguments[field]))
+    for option, field in (
+        ("lease-revocation", "leaseRevocationRefs"),
+        ("lock-release", "lockReleaseRefs"),
+        ("gc-protection", "gcProtectionRefs"),
+    ):
+        for source in finalization[field]:
+            command.extend([f"--{option}", f"{source['ref']}={source['digest']}"])
+    for raw in arguments["required_raw_results"]:
+        command.extend([
+            "--required-raw",
+            f"{raw['slotId']}={raw['status']}={raw['ref']}={raw['digest']}",
+        ])
+    return command
 
 
 def test_stackctl_parser_registers_only_explicit_uat_evidence_surfaces() -> None:
@@ -442,6 +584,125 @@ def test_failed_raw_does_not_append_and_bundle_cannot_substitute_raw(tmp_path: P
     with pytest.raises(acceptance.EnvironmentAcceptanceFactError, match="bundle substitution"):
         subject.build_environment_acceptance_append_command(**substituted)
     assert list(store.iterdir()) == []
+
+
+def test_m1_api_consumer_append_is_same_builder_and_create_once(tmp_path: Path) -> None:
+    root = tmp_path / "evidence"
+    store = root / "acceptance-facts"
+    root.mkdir()
+    store.mkdir()
+    arguments = _m1_acceptance_arguments(root, store)
+    first = subject.build_environment_acceptance_append_command(**arguments)
+    second = subject.build_environment_acceptance_append_command(**arguments)
+    assert first["factId"] == second["factId"]
+    assert first["factDigest"] == second["factDigest"]
+    fact = json.loads((root / first["factRef"]).read_text(encoding="utf-8"))
+    assert fact["acceptanceProfile"] == "m1_api_consumer"
+    assert fact["targetBindingRefs"] == []
+    assert len(fact["requiredRawResults"]) == 16
+    assert len(list((store / "alpha").glob("*.json"))) == 1
+
+
+def test_m1_api_consumer_public_command_rejects_promotion_only_arguments(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "evidence"
+    store = root / "acceptance-facts"
+    root.mkdir()
+    store.mkdir()
+    arguments = _m1_acceptance_arguments(root, store)
+    forbidden_cases = (
+        ({"required_raw_results": []}, "requiredRawResults must be non-empty"),
+        ({"required_raw_results": arguments["required_raw_results"][:-1]}, "exactly 16"),
+        ({"target_binding_refs": [{"ref": "binding.json"}]}, "must not provide targetBinding"),
+        ({"required_target_profiles": [PROFILE]}, "must not provide requiredProfile"),
+        ({
+            "predecessor_ref": "facts/alpha.json",
+            "predecessor_digest": _digest("8"),
+            "predecessor_fact_id": _digest("9"),
+        }, "must not provide predecessor"),
+        ({"prod_release_facts": {"unexpected": "fact"}}, "must not provide prodReleaseFacts"),
+    )
+    for changes, message in forbidden_cases:
+        with pytest.raises(subject.AppUatEvidenceCommandError, match=message):
+            subject.build_environment_acceptance_append_command(
+                **{**arguments, **changes}
+            )
+
+    first_raw = arguments["required_raw_results"][0]
+    first_path = root / first_raw["ref"]
+    first_payload = json.loads(first_path.read_text(encoding="utf-8"))
+    first_payload["deviceId"] = "forbidden-device"
+    first_path.write_text(
+        json.dumps(first_payload, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    first_raw["digest"] = acceptance.exact_byte_digest(first_path)
+    with pytest.raises(acceptance.EnvironmentAcceptanceFactError, match="App/device authority"):
+        subject.build_environment_acceptance_append_command(**arguments)
+    assert list(store.iterdir()) == []
+
+
+def test_environment_promotion_public_command_keeps_existing_authority_requirements(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "evidence"
+    store = root / "acceptance-facts"
+    root.mkdir()
+    store.mkdir()
+    arguments = _acceptance_arguments(root, store)
+    for changes, message in (
+        ({"target_binding_refs": []}, "requires targetBinding"),
+        ({"required_target_profiles": []}, "requires requiredProfile"),
+    ):
+        with pytest.raises(subject.AppUatEvidenceCommandError, match=message):
+            subject.build_environment_acceptance_append_command(
+                **{**arguments, **changes}
+            )
+
+    beta = {
+        **arguments,
+        "environment": "beta",
+        "target": "beta-local",
+        "predecessor_ref": None,
+        "predecessor_digest": None,
+        "predecessor_fact_id": None,
+    }
+    with pytest.raises(acceptance.EnvironmentAcceptanceFactError, match="requires exact alpha"):
+        subject.build_environment_acceptance_append_command(**beta)
+    assert list(store.iterdir()) == []
+
+
+def test_public_stackctl_m1_api_consumer_exact_create_once(tmp_path: Path) -> None:
+    root = tmp_path / "evidence"
+    store = root / "acceptance-facts"
+    root.mkdir()
+    store.mkdir()
+    arguments = _m1_acceptance_arguments(root, store)
+    command = [
+        sys.executable, "-B", str(Path(subject.__file__).parents[1] / "stackctl.py"),
+        *_m1_cli_arguments(arguments),
+    ]
+    environment = {
+        **os.environ,
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPYCACHEPREFIX": str(tmp_path / "python-cache"),
+    }
+    first = subprocess.run(
+        command, cwd=Path(subject.__file__).parents[3], env=environment,
+        check=False, capture_output=True, text=True,
+    )
+    second = subprocess.run(
+        command, cwd=Path(subject.__file__).parents[3], env=environment,
+        check=False, capture_output=True, text=True,
+    )
+    assert first.returncode == 0, first.stderr or first.stdout
+    assert second.returncode == 0, second.stderr or second.stdout
+    first_payload = json.loads(first.stdout)
+    second_payload = json.loads(second.stdout)
+    assert first_payload["factId"] == second_payload["factId"]
+    assert first_payload["factDigest"] == second_payload["factDigest"]
+    assert len(list((store / "alpha").glob("*.json"))) == 1
 
 
 def test_predecessor_drift_blocks_before_fact_builder_and_create_once_replays(

@@ -77,8 +77,7 @@ def _prepare_stable(
             "asset independent reviewer evidence must be an object"
         )
     supported_api_reviewer = (
-        raw_reviewer.get("schema")
-        == "quwoquan_data.professional_image_supported_api_reviewer_result"
+        raw_reviewer.get("schema") == "quwoquan_data.host_source_review_result"
     )
     if supported_api_reviewer:
         if asset_kind != "image":
@@ -95,7 +94,7 @@ def _prepare_stable(
                 root=output_root,
                 catalog={},
                 digest=canonical_digest,
-            )[str(raw_reviewer.get("candidateId") or "")]
+            )[asset_id]
         except (FileNotFoundError, KeyError, OSError, TypeError, ValueError) as exc:
             raise IndependentAssetReviewError(str(exc)) from exc
     else:
@@ -123,8 +122,6 @@ def _prepare_stable(
     manifest_source = manifest.get("sourceDigest")
     manifest_source = manifest_source if isinstance(manifest_source, Mapping) else {}
     execution_id = str(manifest.get("executionId") or "").strip()
-    binding = manifest.get("modelBinding")
-    binding = binding if isinstance(binding, Mapping) else {}
     author_agent = author.get("agent")
     author_agent = author_agent if isinstance(author_agent, Mapping) else {}
     author_object_ref = str(author.get("ref") or "").strip()
@@ -138,49 +135,46 @@ def _prepare_stable(
         or author.get("executionId") != execution_id
         or (author_object_ref != object_ref and not normalized_supported_ref)
         or author.get("stage") != "author"
-        or author_agent.get("provider") != binding.get("provider")
-        or author_agent.get("model") != binding.get("authorModel")
+        or not str(author_agent.get("provider") or "").strip()
+        or not str(author_agent.get("model") or "").strip()
     ):
         raise IndependentAssetReviewError("asset review source/author identity drift")
 
-    reviewer_execution_id = str(reviewer.get("executionId") or "").strip()
-    reviewer_model_family = str(reviewer.get("modelFamily") or "").strip()
     if supported_api_reviewer:
-        reviewer_manifest = read_json(
-            resolve_ref(
-                str(reviewer["executionManifestRef"]),
-                output_root=output_root,
-                label="supported-API reviewer execution manifest",
-            )
+        reviewer_actor = reviewer.get("actor")
+        reviewer_actor = reviewer_actor if isinstance(reviewer_actor, Mapping) else {}
+        reviewer_session_id = str(reviewer_actor.get("sessionId") or "").strip()
+        reviewer_execution_id = (
+            f"host-review:{reviewer_session_id}" if reviewer_session_id else ""
         )
-        reviewer_binding = (
-            reviewer_manifest.get("modelBinding")
-            if isinstance(reviewer_manifest, Mapping)
-            else {}
-        )
-        reviewer_binding = reviewer_binding if isinstance(reviewer_binding, Mapping) else {}
-        reviewer_model_family = str(reviewer_binding.get("reviewerModelFamily") or "")
+        reviewer_model_family = str(reviewer_actor.get("modelFamily") or "").strip()
+        reviewer_provider = "host:" + str(reviewer_actor.get("host") or "").strip()
+        reviewer_model = reviewer_model_family
         if (
             reviewer.get("candidateId") != asset_id
             or reviewer.get("contentSha256")
             != _one_asset(receipt, asset_id=asset_id).get("contentSha256")
-            or reviewer.get("provider") != reviewer_binding.get("provider")
-            or reviewer.get("model") != reviewer_binding.get("reviewerModel")
             or not reviewer_execution_id
+            or not reviewer_model_family
         ):
             raise IndependentAssetReviewError(
                 "supported-API reviewer identity differs from frozen asset/journal"
             )
-    elif (
-        reviewer_execution_id != execution_id
-        or reviewer.get("objectRef") != object_ref
-        or reviewer.get("provider") != binding.get("provider")
-        or reviewer.get("model") != binding.get("reviewerModel")
-        or reviewer_model_family != binding.get("reviewerModelFamily")
-    ):
-        raise IndependentAssetReviewError(
-            "asset review source/author/reviewer identity drift"
-        )
+    else:
+        reviewer_execution_id = str(reviewer.get("executionId") or "").strip()
+        reviewer_model_family = str(reviewer.get("modelFamily") or "").strip()
+        reviewer_provider = str(reviewer.get("provider") or "")
+        reviewer_model = str(reviewer.get("model") or "")
+        if (
+            reviewer_execution_id != execution_id
+            or reviewer.get("objectRef") != object_ref
+            or not reviewer_provider.strip()
+            or not reviewer_model.strip()
+            or not reviewer_model_family
+        ):
+            raise IndependentAssetReviewError(
+                "asset review source/author/reviewer identity drift"
+            )
 
     author_run_id = str(author_agent.get("runId") or "").strip()
     reviewer_run_id = str(reviewer.get("runId") or "").strip()
@@ -237,12 +231,12 @@ def _prepare_stable(
                 "reviewerExecution": {
                     "executionId": reviewer_execution_id,
                     "objectRef": object_ref,
-                    "provider": str(reviewer.get("provider") or ""),
-                    "model": str(reviewer.get("model") or ""),
+                    "provider": reviewer_provider,
+                    "model": reviewer_model,
                     "modelFamily": reviewer_model_family,
                     "runId": reviewer_run_id,
                     "resultHash": (
-                        str(reviewer.get("judgmentDigest") or "")
+                        str(reviewer.get("resultDigest") or "")
                         if supported_api_reviewer
                         else str(reviewer.get("resultHash") or "")
                     ),
@@ -262,7 +256,7 @@ def _prepare_stable(
         raise IndependentAssetReviewError(str(exc)) from exc
 
     expected_result_hash = (
-        str(reviewer.get("judgmentDigest") or "")
+        str(reviewer.get("resultDigest") or "")
         if supported_api_reviewer
         else canonical_digest(normalized_judgment)
     )
@@ -364,8 +358,8 @@ def _prepare_stable(
         "reviewerExecution": {
             "executionId": reviewer_execution_id,
             "objectRef": object_ref,
-            "provider": str(reviewer.get("provider") or ""),
-            "model": str(reviewer.get("model") or ""),
+            "provider": reviewer_provider,
+            "model": reviewer_model,
             "modelFamily": reviewer_model_family,
             "runId": reviewer_run_id,
             "resultHash": expected_result_hash,

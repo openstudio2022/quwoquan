@@ -156,6 +156,7 @@ def _mutable_fixture(
         "composeDigest": _digest("mutable-compose"),
         "configurationDigest": _digest("mutable-config"),
         "providerRuntimeDigest": provider_digest,
+        "observabilityLogSinkDigest": "sha256:" + "9" * 64,
         "portProfile": "alpha-local",
         "portBlock": {"start": 17000, "end": 17999},
         "publishedPorts": [
@@ -207,6 +208,7 @@ def _mutable_fixture(
         "composeDigest": receipt["composeDigest"],
         "configurationDigest": receipt["configurationDigest"],
         "providerRuntimeDigest": receipt["providerRuntimeDigest"],
+        "observabilityLogSinkDigest": receipt["observabilityLogSinkDigest"],
         "mediaLocalRef": "cache/media",
         "mediaRoot": media_root.relative_to(subject.ROOT).as_posix(),
         "tlsProfile": receipt["tlsProfile"],

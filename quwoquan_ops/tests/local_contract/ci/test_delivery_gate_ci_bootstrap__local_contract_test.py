@@ -49,6 +49,7 @@ def _run_delivery_change_range(
     pr_base_sha: str = "",
     pr_head_sha: str = "",
     push_before_sha: str = "",
+    push_ref_name: str = "",
     event_sha: str = "",
 ) -> subprocess.CompletedProcess[str]:
     output = tmp_path / "github-output"
@@ -61,6 +62,7 @@ def _run_delivery_change_range(
         "PR_BASE_SHA": pr_base_sha,
         "PR_HEAD_SHA": pr_head_sha,
         "PUSH_BEFORE_SHA": push_before_sha,
+        "PUSH_REF_NAME": push_ref_name,
         "DISPATCH_SHA": event_sha,
         "GITHUB_OUTPUT": str(output),
     }
@@ -181,7 +183,7 @@ def test_common_governance_is_one_exact_sha_bounded_job() -> None:
     assert list(jobs).count("common_governance") == 1
     common = _job_body(workflow, "common_governance")
     assert "timeout-minutes: 15" in common
-    assert "github.event.pull_request.head.sha || github.sha" in common
+    assert "inputs.checkout_ref || github.sha" in common
     assert "git rev-parse HEAD" in common
     assert "git status --porcelain" in common
     assert common.count("verify_git_branch_policy.py") == 1
@@ -222,16 +224,30 @@ def test_data_jobs_are_impact_gated_as_one_complete_closure() -> None:
     assert 'expect_success "$name" "$val" "$hint"' in workflow
 
 
-def test_pull_request_avoids_release_and_canonical_coverage_workloads() -> None:
+def test_pull_request_reruns_service_closure_and_defers_app_to_push_evidence() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     pr_exclusion = "github.event_name != 'pull_request'"
 
+    # G1：service impacted 的 exact merge candidate 必须在 PR merge ref 上重跑
+    # Service closure，required scope 不得以 skipped 计绿。
+    service_if = "if: ${{ needs.topology_regression.outputs.service == 'true' }}"
     for job_name in (
         "quwoquan_service",
         "quwoquan_service_packaging",
         "quwoquan_service_coverage",
     ):
-        assert pr_exclusion in _job_body(workflow, job_name)
+        body = _job_body(workflow, job_name)
+        assert pr_exclusion not in body
+        assert service_if in body
+    for job_name in (
+        "quwoquan_service",
+        "quwoquan_service_packaging",
+        "quwoquan_service_coverage",
+    ):
+        assert f'expect_typed_pending_or_skipped "{job_name}"' in workflow
+    assert 'SERVICE_IMPACTED: ${{ needs.topology_regression.outputs.service }}' in workflow
+    # App 重活由 lane/dev1.0 push 生产 exact head 证据，PR 上由 quwoquan_app 核验
+    # push 证据（缺失即 GATE_BLOCK），不重跑也不以 skipped 计绿。
     for job_name in (
         "quwoquan_app_static",
         "quwoquan_app_tests",
@@ -531,9 +547,13 @@ def test_delivery_change_range_requires_complete_workflow_call_identity(
         tmp_path,
         event_name="pull_request",
         pr_base_sha=base_sha,
-        pr_head_sha=head_sha,
+        pr_head_sha=base_sha,
+        event_sha=head_sha,
     )
     assert pull_request.returncode == 0, pull_request.stderr
+    pull_request_output = (tmp_path / "github-output").read_text(encoding="utf-8")
+    assert f"candidate_sha={head_sha}" in pull_request_output
+    assert f"candidate_sha={base_sha}" not in pull_request_output
 
     push = _run_delivery_change_range(
         tmp_path,
@@ -543,26 +563,41 @@ def test_delivery_change_range_requires_complete_workflow_call_identity(
     )
     assert push.returncode == 0, push.stderr
 
-    for invalid_before in ("", "0" * 40):
+    for invalid_before, ref_name in (("", ""), ("0" * 40, ""), ("0" * 40, "dev1.0")):
         blocked_push = _run_delivery_change_range(
             tmp_path,
             event_name="push",
             push_before_sha=invalid_before,
+            push_ref_name=ref_name,
             event_sha=head_sha,
         )
         assert blocked_push.returncode == 2
         assert "push requires an exact non-zero before SHA" in blocked_push.stdout
 
+    # lane 分支首推没有旧 tip；变更区间必须锚定到 dev1.0 merge-base 而不是放弃 exact。
+    lane_bootstrap = _run_delivery_change_range(
+        tmp_path,
+        event_name="push",
+        push_before_sha="0" * 40,
+        push_ref_name="lane/small-fix",
+        event_sha=head_sha,
+    )
+    assert lane_bootstrap.returncode == 0, lane_bootstrap.stdout + lane_bootstrap.stderr
+    expected_lane_base = subprocess.run(
+        ("git", "merge-base", "origin/dev1.0", head_sha),
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    lane_output = (tmp_path / "github-output").read_text(encoding="utf-8")
+    assert f"base_sha={expected_lane_base}" in lane_output
+    assert f"candidate_sha={head_sha}" in lane_output
 
-def test_pull_request_jobs_checkout_and_diff_the_exact_event_head() -> None:
+
+def test_pull_request_jobs_checkout_and_diff_the_exact_merge_candidate() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
 
-    exact_checkout = (
-        "${{ inputs.checkout_ref || "
-        "github.event.pull_request.head.sha || github.sha }}"
-    )
-    # 按 job 逐个判，而不是数 checkout 总数：计数写死时新增一个 job 就得改数字，
-    # 而改数字的人未必检查了新 job 是否真的钉了 exact ref。
+    exact_checkout = "${{ inputs.checkout_ref || github.sha }}"
+    # pull_request 的 github.sha 是 GitHub synthetic merge candidate；PR head
+    # 只允许用于核验 lane push-owned App evidence。
     document = yaml.safe_load(workflow)
     checkouts = [
         (job_name, (step.get("with") or {}).get("ref"))
@@ -572,18 +607,16 @@ def test_pull_request_jobs_checkout_and_diff_the_exact_event_head() -> None:
     ]
     assert checkouts, "Delivery Gate 必须有 checkout 步骤"
     drifted = [job_name for job_name, ref in checkouts if ref != exact_checkout]
-    assert not drifted, f"这些 job 的 checkout 没钉到事件 head：{drifted}"
+    assert not drifted, f"这些 job 的 checkout 没钉到事件 merge candidate：{drifted}"
     assert "PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}" in workflow
-    assert "PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}" in workflow
+    assert 'REQUESTED_CANDIDATE_SHA="$DISPATCH_SHA"' in workflow
     assert "PUSH_BEFORE_SHA: ${{ github.event.before || '' }}" in workflow
+    assert "HEAD_SHA: ${{ inputs.head_sha || github.sha }}" in workflow
     assert (
-        "HEAD_SHA: ${{ inputs.head_sha || "
-        "github.event.pull_request.head.sha || github.sha }}"
+        '--source-git-sha "${{ inputs.source_git_sha || github.sha }}"'
     ) in workflow
-    assert (
-        '--source-git-sha "${{ inputs.source_git_sha || '
-        'github.event.pull_request.head.sha || github.sha }}"'
-    ) in workflow
+    assert workflow.count("github.event.pull_request.head.sha") == 1
+    assert "verify-delivery-app-evidence" in workflow
 
 
 def test_delivery_and_promotion_gates_defer_edges_to_canonical_evaluator() -> None:
@@ -592,8 +625,9 @@ def test_delivery_and_promotion_gates_defer_edges_to_canonical_evaluator() -> No
 
     assert "pull_request:\n    branches:" not in workflow
     assert "pull_request:\n    branches:" not in pre_release
-    for source in (workflow, pre_release):
-        assert "\n  push:\n    branches: [dev1.0]\n" in source
+    # Delivery Gate 由 lane push 生产 G0/App 证据；promotion 门禁仍只跟 dev1.0。
+    assert "\n  push:\n    branches: [dev1.0, 'lane/**']\n" in workflow
+    assert "\n  push:\n    branches: [dev1.0]\n" in pre_release
     app_matrix = (
         ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
     ).read_text(encoding="utf-8")

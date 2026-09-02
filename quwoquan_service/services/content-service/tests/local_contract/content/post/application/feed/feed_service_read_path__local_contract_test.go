@@ -336,7 +336,7 @@ func TestListFeed_PostReaderQueryDoesNotOwnRecommendationExclusions(t *testing.T
 		{ID: "p_ok", ContentType: "image", AuthorId: "author_a", Visibility: "public", Status: "published"},
 		{ID: "p_visible", ContentType: "image", AuthorId: "author_b", Visibility: "public", Status: "published"},
 	}}
-	svc := NewFeedService(reader, feedDeliveryPageStoreOption())
+	svc := NewFeedService(reader, feedDeliveryPageStoreOption(), WithActiveSupplyReader(&terminalActiveSupplyReader{active: true}))
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{
 		UserID: "user-query", SessionID: "session-query", Type: "image", Limit: 20,

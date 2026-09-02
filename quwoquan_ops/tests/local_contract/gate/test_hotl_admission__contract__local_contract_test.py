@@ -655,6 +655,8 @@ def test_hotl_gate_current_blockers_emit_unique_canonical_recovery_tokens() -> N
     ]
     assert lines
     assert all(line.count("recovery=") == 1 for line in lines)
-    assert any("blocker=WRITE_EXPANSION_NOT_ADMITTED" in line for line in lines)
+    # 当前 lane 生命周期政策下动态 S4 为 admitted，write expansion blocker 不得在场。
+    assert not any("blocker=WRITE_EXPANSION_NOT_ADMITTED" in line for line in lines)
+    assert any("blocker=AUTHORITY_PROVIDER_UNAVAILABLE" in line for line in lines)
     assert all("code=HOTL." in line and "terminal=" in line for line in lines)
     assert "Traceback" not in completed.stdout + completed.stderr

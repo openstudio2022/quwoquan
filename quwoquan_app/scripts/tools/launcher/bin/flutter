@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+"""受管 PATH 字面 `flutter` 的单轨 dispatcher。
+
+契约（specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003）：
+- 本 App 的 `flutter run` 是一键托管入口：白名单翻译参数后以前台
+  `QWQ_MANAGED_FLUTTER_ENTRY=1 exec run.sh --env alpha --device <id>` 进入
+  canonical launcher（alpha/content-live）；无 `-d` 时委托 canonical device
+  authority（单设备自动、多设备 TTY 数字选择、非 TTY typed 阻断）。
+- 外部 Flutter project 的 `run` 与其余全部子命令（--version、doctor、
+  analyze、test、pub、build 等）解析真实 Flutter SDK 后逐字 exec 透传
+  （argv/env/cwd 不变，退出码保留）。
+- 真实 SDK 解析唯一委托 `flutter_facade.resolve_real_flutter`（防递归：解析
+  跳过 dispatcher 自身与任何 launcher/facade 拷贝），失败输出 typed
+  `APP.LAUNCH.workspace_flutter_sdk_unavailable:` 行并退出非零。
+- 白名单外的 run 参数输出一行 typed `APP.LAUNCH.managed_argument_unsupported:
+  <参数>` 并 exit 2；本文件按自身物理路径定位仓库根，任意 cwd 可用。
+- 启动的是"当前所站的那棵树"：从 cwd 向上找到本 App 根（pubspec 旁有 run.sh、
+  同仓有 quwoquan_ops/cli/stackctl.py）即 exec 该树的 run.sh；cwd 不在任何本 App
+  树内时退回 dispatcher 自身所在树。多 clone/worktree 并存时修改与启动因此同源。
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import os
+import stat
+import subprocess
+import sys
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+
+_DISPATCHER_PATH = Path(__file__).resolve()
+_APP_ROOT = _DISPATCHER_PATH.parents[4]
+_CANONICAL_RUN_SH = _APP_ROOT / "run.sh"
+_DEVICE_AUTHORITY = _APP_ROOT / "scripts/tools/device/discover_flutter_mobile_devices.py"
+_FACADE_MODULE_PATH = _APP_ROOT / "scripts/tools/flutter_facade/flutter_facade.py"
+
+# 三个码均已在 canonical metadata 登记（app_launch_manifest launch_blockers）。
+_SDK_BLOCKER = "APP.LAUNCH.workspace_flutter_sdk_unavailable"
+_ARGUMENT_BLOCKER = "APP.LAUNCH.managed_argument_unsupported"
+_ENTRYPOINT_BLOCKER = "APP.LAUNCH.workspace_entrypoint_inactive"
+
+_MANAGED_ENVIRONMENT = "alpha"
+_MANAGED_RUN_MODE = "content-live"
+_MANAGED_TARGET = "alpha-local"
+_MANAGED_AMBIENT_SELECTORS = {
+    "QWQ_ENVIRONMENT": _MANAGED_ENVIRONMENT,
+    "QWQ_RUN_MODE": _MANAGED_RUN_MODE,
+    "QWQ_APP_RUNTIME_ENV": _MANAGED_ENVIRONMENT,
+    "QWQ_APP_RUN_MODE": _MANAGED_RUN_MODE,
+    "QWQ_LAUNCH_TARGET": _MANAGED_TARGET,
+}
+
+
+def _sdk_block(reason: str) -> "SystemExit":
+    print(f"{_SDK_BLOCKER}: {reason}", file=sys.stderr)
+    return SystemExit(2)
+
+
+def _load_facade_module():
+    """按物理路径加载 canonical 解析库，使 dispatcher 在任意 cwd/拷贝树可用。"""
+    spec = importlib.util.spec_from_file_location(
+        "qwq_launcher_flutter_facade", _FACADE_MODULE_PATH
+    )
+    if spec is None or spec.loader is None:
+        raise _sdk_block(f"canonical flutter_facade 模块不可用：{_FACADE_MODULE_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except OSError as error:
+        raise _sdk_block(f"canonical flutter_facade 模块加载失败：{error}")
+    return module
+
+
+def _resolve_real_flutter() -> Path:
+    facade = _load_facade_module()
+    try:
+        resolved = facade.resolve_real_flutter(dict(os.environ))
+    except facade.FacadeError as error:
+        raise _sdk_block(str(error))
+    if resolved == _DISPATCHER_PATH:
+        raise _sdk_block("真实 Flutter SDK 解析回到 dispatcher 自身（物理路径相同）")
+    return resolved
+
+
+def _passthrough(arguments: list[str]) -> int:
+    real_flutter = _resolve_real_flutter()
+    os.execv(str(real_flutter), [str(real_flutter), *arguments])
+    return 127  # pragma: no cover - execv 不返回
+
+
+def _argument_block(argument: str) -> "SystemExit":
+    print(f"{_ARGUMENT_BLOCKER}: {argument}", file=sys.stderr)
+    return SystemExit(2)
+
+
+def _nearest_pubspec_project_root(cwd: Path) -> Path | None:
+    """向上定位最近常规 pubspec；拒绝 symlink 与特殊文件。"""
+    current = cwd.absolute()
+    while True:
+        try:
+            if current.is_symlink():
+                return None
+            pubspec_mode = (current / "pubspec.yaml").lstat().st_mode
+        except FileNotFoundError:
+            pass
+        except OSError:
+            return None
+        else:
+            if stat.S_ISLNK(pubspec_mode) or not stat.S_ISREG(pubspec_mode):
+                return None
+            return current
+        parent = current.parent
+        if parent == current:
+            return None
+        current = parent
+
+
+def _is_app_root(candidate: Path) -> bool:
+    """本 App 根：pubspec 旁有常规 run.sh，且同仓存在 quwoquan_ops/cli/stackctl.py。"""
+    run_sh = candidate / "run.sh"
+    stackctl = candidate.parent / "quwoquan_ops/cli/stackctl.py"
+    return (
+        run_sh.is_file()
+        and not run_sh.is_symlink()
+        and (candidate / "pubspec.yaml").is_file()
+        and stackctl.is_file()
+    )
+
+
+def _launch_root_for(cwd: Path) -> Path | None:
+    """cwd 所在的本 App 树；cwd 位于外部 Flutter project 时返回 None（应透传）。
+
+    先看最近 pubspec 根：是本 App 则用它，是别的 Flutter project 则透传。
+    没有 pubspec 时再向上找仓库根下的 quwoquan_app/（例如站在仓库根执行）。
+    都找不到则退回 dispatcher 自身所在树，保持"任意 cwd 可用"。
+    """
+    project_root = _nearest_pubspec_project_root(cwd)
+    if project_root is not None:
+        return project_root if _is_app_root(project_root) else None
+    current = cwd.absolute()
+    while True:
+        nested = current / "quwoquan_app"
+        if _is_app_root(nested):
+            return nested
+        parent = current.parent
+        if parent == current:
+            return _APP_ROOT
+        current = parent
+
+
+def _validate_managed_ambient_selectors(environment: dict[str, str]) -> None:
+    for name, expected in _MANAGED_AMBIENT_SELECTORS.items():
+        value = environment.get(name, "").strip()
+        if value and value != expected:
+            raise _argument_block(f"{name}={value}")
+
+
+def _parse_managed_run_arguments(arguments: list[str]) -> tuple[str, bool]:
+    """白名单翻译：只接受 -d/--device-id 与 -v/--verbose，其余 typed 阻断。"""
+    device_id = ""
+    verbose = False
+    index = 0
+    while index < len(arguments):
+        token = arguments[index]
+        if token in ("-d", "--device-id"):
+            if index + 1 >= len(arguments) or not arguments[index + 1].strip():
+                raise _argument_block(token)
+            candidate = arguments[index + 1].strip()
+            if device_id and device_id != candidate:
+                raise _argument_block(token)
+            device_id = candidate
+            index += 2
+            continue
+        if token.startswith("--device-id="):
+            candidate = token.split("=", 1)[1].strip()
+            if not candidate:
+                raise _argument_block("--device-id")
+            if device_id and device_id != candidate:
+                raise _argument_block(token)
+            device_id = candidate
+            index += 1
+            continue
+        if token in ("-v", "--verbose"):
+            verbose = True
+            index += 1
+            continue
+        raise _argument_block(token)
+    return device_id, verbose
+
+
+def _canonical_device_id(launch_root: Path) -> str:
+    """复用 canonical device authority：单设备自动/多设备 TTY 选择/非 TTY 阻断。"""
+    real_flutter = _resolve_real_flutter()
+    device_authority = launch_root / _DEVICE_AUTHORITY.relative_to(_APP_ROOT)
+    if not device_authority.is_file():
+        device_authority = _DEVICE_AUTHORITY
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(device_authority),
+            "--pick",
+            "--real-flutter",
+            str(real_flutter),
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise SystemExit(completed.returncode)
+    device_id = completed.stdout.strip()
+    if not device_id:
+        print(
+            "GATE_BLOCK: APP.LAUNCH.device_unavailable: canonical device authority "
+            "returned no device id",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    return device_id
+
+
+def _managed_run(arguments: list[str], launch_root: Path) -> int:
+    _validate_managed_ambient_selectors(dict(os.environ))
+    device_id, verbose = _parse_managed_run_arguments(arguments)
+    if not device_id:
+        device_id = _canonical_device_id(launch_root)
+    run_sh = launch_root / "run.sh"
+    if not os.access(run_sh, os.X_OK):
+        print(
+            f"{_ENTRYPOINT_BLOCKER}: canonical launcher 不可执行：{run_sh}",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    environment = dict(os.environ)
+    environment["QWQ_MANAGED_FLUTTER_ENTRY"] = "1"
+    launcher_arguments = [
+        str(run_sh),
+        "--env",
+        _MANAGED_ENVIRONMENT,
+        "--device",
+        device_id,
+    ]
+    if verbose:
+        launcher_arguments.append("--verbose")
+    os.execve(str(run_sh), launcher_arguments, environment)
+    return 127  # pragma: no cover - execve 不返回
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) < 2 or argv[1] != "run":
+        return _passthrough(argv[1:])
+    launch_root = _launch_root_for(Path.cwd())
+    if launch_root is None:
+        return _passthrough(argv[1:])
+    return _managed_run(argv[2:], launch_root)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

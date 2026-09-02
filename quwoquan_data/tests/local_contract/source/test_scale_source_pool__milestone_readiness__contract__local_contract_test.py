@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from content.execution.campaign.source_pool_binding import (
+from content.execution.source_pool.binding import (
     bind_scale_source_pool,
     materialize_bound_scale_source_pool,
     validate_bound_scale_source_pool,
@@ -709,6 +709,20 @@ def test_campaign_binding_freezes_exact_sorted_lane_selection_and_physical_bytes
     assert selection["candidateIds"] == [
         f"article-{index:05d}" for index in range(10)
     ]
+    _, _, m1_selection = bind_scale_source_pool(
+        plan_path,
+        evidence_root=evidence_root,
+        output_root=output_root,
+        target_scale="M100",
+        carrier="article",
+        count=1,
+        minimum_candidate_count=2,
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+    )
+    assert m1_selection["candidateCount"] == 1
+    assert m1_selection["candidateIds"] == ["article-00000"]
     assert binding["planRef"] == "data/local/workspace/source-pool/plan.json"
     validate_bound_scale_source_pool(
         binding,

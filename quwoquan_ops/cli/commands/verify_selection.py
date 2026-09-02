@@ -239,13 +239,6 @@ def _selected_profile_commands(
     ):
         # content-release 不启 chat-service；建群到 inbox 旅程仅 full workload 证明。
         commands.append(chat_group_lifecycle_command)
-    reliabletask_command = _stackctl._reliabletask_gamma_api_integration_profile_command(
-        target_name,
-        profile,
-        report_dir,
-    )
-    if reliabletask_command is not None:
-        commands.append(reliabletask_command)
     onboarding_author_impact_command = (
         _stackctl._onboarding_author_impact_gamma_api_integration_profile_command(
             target_name,

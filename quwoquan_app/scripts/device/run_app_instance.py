@@ -3,16 +3,20 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import queue
+import select
 import shlex
 import signal
 import subprocess
 import sys
 import tempfile
+import termios
 import threading
 import time
+import tty
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
@@ -38,10 +42,19 @@ from canonical_app_instance.activation import (
 from canonical_app_instance.activation import (
     bounded_payload as _bounded_payload,
 )
+from canonical_app_instance.attach_session import (
+    ATTACH_SIGNAL_GRACE_SECONDS,
+    AttachTerminationSignal as _AttachTerminationSignal,
+    attach_command_platform_driver,
+    terminate_attach_process_group as _terminate_attach_process_group,
+)
 from canonical_app_instance.arguments import (
     build_parser as _parser,
     positive_finite_seconds as _positive_finite_seconds,
     sanitize_attach_arguments,
+)
+from canonical_app_instance.launch_io import (
+    flutter_daemon_app_id as _flutter_daemon_app_id,
 )
 from canonical_app_instance.launch_io import (
     is_flutter_app_started_event as _is_flutter_app_started_event,
@@ -59,48 +72,21 @@ ANDROID_REQUEST_DIGEST_EXTRA = (
 IOS_REQUEST_DIGEST_ARGUMENT = "--qwq-runtime-config-activation-request-digest"
 RUNTIME_STATE_DIRECTORY = "qwq_runtime"
 IOS_RUNTIME_STATE_SUBDIRECTORY = "Library/Application Support/qwq_runtime"
-ATTACH_SIGNAL_GRACE_SECONDS = 5.0
+IOS_XCODE_BUILD_ISOLATION_RELATIVE_PATHS = {
+    "FLUTTER_XCODE_OBJROOT": Path("build/ios/xcode-objroot"),
+    "FLUTTER_XCODE_MODULE_CACHE_DIR": Path("build/ios/xcode-module-cache"),
+    "FLUTTER_XCODE_SHARED_PRECOMPS_DIR": Path(
+        "build/ios/xcode-shared-precomps"
+    ),
+}
+XCODE_BUILD_ISOLATION_ENVIRONMENT_KEYS = frozenset(
+    IOS_XCODE_BUILD_ISOLATION_RELATIVE_PATHS
+)
 
 
 def _flutter_executable() -> str:
     """canonical launcher 贯穿的单轨真实 SDK；缺席时按 PATH 解析。"""
     return os.environ.get("QWQ_REAL_FLUTTER", "").strip() or "flutter"
-
-
-class _AttachTerminationSignal(Exception):
-    def __init__(self, signum: int) -> None:
-        super().__init__(signum)
-        self.signum = signum
-
-
-def _terminate_attach_process_group(
-    process: subprocess.Popen[str],
-    *,
-    initial_signal: int,
-) -> None:
-    if initial_signal == signal.SIGINT:
-        signals = (signal.SIGINT, signal.SIGTERM, signal.SIGKILL)
-    elif initial_signal == signal.SIGHUP:
-        signals = (signal.SIGHUP, signal.SIGTERM, signal.SIGKILL)
-    else:
-        signals = (signal.SIGTERM, signal.SIGKILL)
-    for signum in signals:
-        if process.poll() is not None:
-            process.wait()
-            return
-        try:
-            os.killpg(process.pid, signum)
-        except ProcessLookupError:
-            process.wait()
-            return
-        if signum == signal.SIGKILL:
-            process.wait()
-            return
-        try:
-            process.wait(timeout=ATTACH_SIGNAL_GRACE_SECONDS)
-            return
-        except subprocess.TimeoutExpired:
-            continue
 
 
 class CommandPlatformDriver:
@@ -132,15 +118,23 @@ class CommandPlatformDriver:
         return False
 
     def child_environment(self, environment: Mapping[str, str]) -> dict[str, str]:
+        inherited_environment = dict(environment)
+        for key in XCODE_BUILD_ISOLATION_ENVIRONMENT_KEYS:
+            inherited_environment.pop(key, None)
         return compile_environment(
-            environment,
+            inherited_environment,
             require_cocoapods=self.requires_cocoapods(),
         )
+
+    def build_child_environment(
+        self, environment: Mapping[str, str]
+    ) -> dict[str, str]:
+        return self.child_environment(environment)
 
     def build(self, environment: dict[str, str]) -> None:
         _run_checked(
             self.build_command(),
-            environment=self.child_environment(environment),
+            environment=self.build_child_environment(environment),
         )
         artifact = self.artifact_path()
         if not artifact.exists():
@@ -170,121 +164,19 @@ class CommandPlatformDriver:
         timeout_seconds: float,
         on_attached: Callable[[], None],
     ) -> int:
-        command = [
-            _flutter_executable(),
-            "attach",
-            "--machine",
-            "-d",
-            self.device_id,
-            "--app-id",
-            self.application_id,
-            "--target",
-            self.entrypoint,
-            "--host-vmservice-port=0",
-            "--dds-port=0",
-        ]
-        debug_url = self.resolve_attach_debug_url(timeout_seconds)
-        if debug_url is not None:
-            command.append(f"--debug-url={debug_url}")
-        vm_service_info_file = self.validate_vm_service_info_file()
-        if vm_service_info_file is not None:
-            command.append(f"--write-service-info={vm_service_info_file}")
-        command.extend(_sanitize_attach_arguments(attach_arguments))
-        try:
-            process = subprocess.Popen(
-                command,
-                cwd=APP_DIR,
-                env=self.child_environment(os.environ),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                start_new_session=True,
-            )
-        except OSError as error:
-            raise CanonicalExecutorError(
-                f"unable to start flutter attach: {error}"
-            ) from error
-        assert process.stdout is not None
-        output: queue.Queue[str | None] = queue.Queue()
-
-        def read_output() -> None:
-            try:
-                for line in process.stdout:
-                    output.put(line)
-            finally:
-                output.put(None)
-
-        previous_signal_handlers: dict[int, signal.Handlers] = {}
-
-        def handle_termination(signum: int, _frame: object) -> None:
-            raise _AttachTerminationSignal(signum)
-
-        try:
-            for signum in (signal.SIGTERM, signal.SIGHUP):
-                previous_signal_handlers[signum] = signal.signal(
-                    signum, handle_termination
-                )
-            threading.Thread(target=read_output, daemon=True).start()
-            deadline = time.monotonic() + timeout_seconds
-            attached = False
-            emitted_startup_evidence: set[str] = set()
-
-            def emit_startup_evidence() -> None:
-                for evidence_line in self.startup_evidence_lines():
-                    if evidence_line not in emitted_startup_evidence:
-                        emitted_startup_evidence.add(evidence_line)
-                        print(evidence_line, flush=True)
-
-            while True:
-                if not attached and time.monotonic() >= deadline:
-                    raise CanonicalExecutorError(
-                        "flutter attach did not establish a VM service session "
-                        f"within {timeout_seconds:g}s"
-                    )
-                try:
-                    line = output.get(timeout=0.1)
-                except queue.Empty:
-                    if attached:
-                        emit_startup_evidence()
-                    continue
-                if line is None:
-                    break
-                print(ios_vm_service.redact_vm_service_tokens(line), end="", flush=True)
-                if not attached and _is_flutter_app_started_event(line):
-                    self.validate_vm_service_info_file()
-                    emit_startup_evidence()
-                    attached = True
-                    on_attached()
-            exit_code = process.wait()
-        except KeyboardInterrupt:
-            _terminate_attach_process_group(
-                process, initial_signal=signal.SIGINT
-            )
-            return 130
-        except _AttachTerminationSignal as termination:
-            _terminate_attach_process_group(
-                process, initial_signal=termination.signum
-            )
-            return 128 + termination.signum
-        except BaseException:
-            if process.poll() is None:
-                _terminate_attach_process_group(
-                    process, initial_signal=signal.SIGTERM
-                )
-            else:
-                process.wait()
-            raise
-        finally:
-            for signum, previous_handler in previous_signal_handlers.items():
-                signal.signal(signum, previous_handler)
-        if not attached:
-            self.validate_vm_service_info_file()
-            raise CanonicalExecutorError(
-                f"flutter attach exited before VM service attachment (code {exit_code})"
-            )
-        self.validate_vm_service_info_file()
-        return exit_code
+        return attach_command_platform_driver(
+            self,
+            attach_arguments,
+            timeout_seconds=timeout_seconds,
+            on_attached=on_attached,
+            app_dir=APP_DIR,
+            flutter_executable=_flutter_executable(),
+            sanitize_attach_arguments=_sanitize_attach_arguments,
+            is_flutter_app_started_event=_is_flutter_app_started_event,
+            flutter_daemon_app_id=_flutter_daemon_app_id,
+            redact_vm_service_tokens=ios_vm_service.redact_vm_service_tokens,
+            terminate_process_group=_terminate_attach_process_group,
+        )
 
 
 class AndroidPlatformDriver(CommandPlatformDriver):
@@ -471,10 +363,26 @@ class AndroidPlatformDriver(CommandPlatformDriver):
         return self._startup_component()
 
 
-class IOSSimulatorPlatformDriver(CommandPlatformDriver):
+class IOSPlatformDriver(CommandPlatformDriver):
     def requires_cocoapods(self) -> bool:
         return True
 
+    def build_child_environment(
+        self, environment: Mapping[str, str]
+    ) -> dict[str, str]:
+        child_environment = super().build_child_environment(environment)
+        child_environment.update(
+            {
+                key: str(APP_DIR / relative_path)
+                for key, relative_path in (
+                    IOS_XCODE_BUILD_ISOLATION_RELATIVE_PATHS.items()
+                )
+            }
+        )
+        return child_environment
+
+
+class IOSSimulatorPlatformDriver(IOSPlatformDriver):
     def build_command(self) -> list[str]:
         return [
             _flutter_executable(),
@@ -602,10 +510,7 @@ class IOSSimulatorPlatformDriver(CommandPlatformDriver):
         return root
 
 
-class IOSPhysicalPlatformDriver(CommandPlatformDriver):
-    def requires_cocoapods(self) -> bool:
-        return True
-
+class IOSPhysicalPlatformDriver(IOSPlatformDriver):
     def build_command(self) -> list[str]:
         return [
             _flutter_executable(),

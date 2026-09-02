@@ -246,3 +246,76 @@ def test_fulfillment_rejects_a_manifest_asset_with_no_frozen_disposition(
     assert any(
         "never_decided.jpg" in str(row.get("attrs", {})) for row in report["issues"]
     ), report["issues"]
+
+
+def _write_current_request(root: Path, *, carrier: str, execution_id: str) -> None:
+    write_json(
+        root / "0.plan/request.json",
+        {"executionId": execution_id, "carrier": carrier},
+    )
+
+
+def test_video_with_explicitly_zero_image_placements_has_zero_decision_obligation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    execution_id = "20260901--travel-video-zero-images--china--pilot-016"
+    root = tmp_path / "execution"
+    write_json(
+        root / "sources/video-unit/meta.json",
+        {"researchLane": "video", "imagePlacements": [], "hasVideo": True},
+    )
+    _write_current_request(root, carrier="video", execution_id=execution_id)
+    monkeypatch.setattr(gate.paths, "execution_root", lambda _execution: root)
+    monkeypatch.setattr(gate, "load_terminal_execution_evidence", lambda _root: None)
+
+    report = gate.homepage_media_decision_report(execution_id)
+
+    assert report["passed"] is True
+    assert report["checkedSourceCount"] == 0
+    assert report["issues"] == []
+
+
+@pytest.mark.parametrize("carrier", ["homepage", "image"])
+def test_homepage_and_image_cannot_borrow_video_zero_image_exemption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, carrier: str
+) -> None:
+    execution_id = f"20260901--travel-{carrier}-zero-images--china--pilot-016"
+    root = tmp_path / carrier
+    write_json(
+        root / "sources/source-unit/meta.json",
+        {"researchLane": carrier, "imagePlacements": []},
+    )
+    _write_current_request(root, carrier=carrier, execution_id=execution_id)
+    monkeypatch.setattr(gate.paths, "execution_root", lambda _execution: root)
+    monkeypatch.setattr(gate, "load_terminal_execution_evidence", lambda _root: None)
+
+    report = gate.homepage_media_decision_report(execution_id)
+
+    assert report["passed"] is False
+    assert "DATA.MEDIA.ENUMERATION_INCOMPLETE" in {
+        issue["code"] for issue in report["issues"]
+    }
+
+
+def test_post_object_dispositions_are_indexed_for_image_decision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    execution_id = "20260901--travel-image-post-evidence--china--pilot-016"
+    root = tmp_path / "execution"
+    _write_source(root)
+    write_json(
+        root / "posts/image/美图/测试图片作品/1/evidence/media_dispositions.json",
+        {
+            "schema": "quwoquan_data.homepage_media_dispositions",
+            "executionId": execution_id,
+            "objectRef": "posts/image/美图/测试图片作品/1",
+            "assets": _closed_dispositions(),
+        },
+    )
+    _write_current_request(root, carrier="image", execution_id=execution_id)
+    monkeypatch.setattr(gate.paths, "execution_root", lambda _execution: root)
+    monkeypatch.setattr(gate, "load_terminal_execution_evidence", lambda _root: None)
+
+    report = gate.homepage_media_decision_report(execution_id)
+
+    assert report["passed"] is True, report["issues"]

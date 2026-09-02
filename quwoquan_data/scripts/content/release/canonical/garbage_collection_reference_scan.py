@@ -12,12 +12,12 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from content.execution.campaign.external_inputs import (
+from content.execution.source_pool.external_inputs import (
     PROFESSIONAL_IMAGE_ACQUISITION_KIND,
     PROFESSIONAL_VIDEO_ACQUISITION_KIND,
     payload_digest,
 )
-from content.execution.campaign.external_inputs import file_digest as external_file_digest
+from content.execution.source_pool.external_inputs import file_digest as external_file_digest
 from core.paths import RESEARCH_SCALE_PROMOTIONS_OUTPUT_REF
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,

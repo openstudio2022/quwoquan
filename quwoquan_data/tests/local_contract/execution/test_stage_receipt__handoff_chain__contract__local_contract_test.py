@@ -7,6 +7,7 @@ single-writer claim（获取/刷新/冲突/TTL 接手/释放）。
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from datetime import UTC, datetime, timedelta
@@ -19,27 +20,47 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 import content.execution.stage_receipt as stage_receipt  # noqa: E402
+from content.execution.receipt_state_reducer import reduce_receipt_projection  # noqa: E402
+from core.schema import assert_valid  # noqa: E402
 
 EXEC_ID = "20260823--family-article-case--region--pilot-001"
 
 
-def _base_kwargs(**overrides: object) -> dict:
-    kwargs: dict = {
-        "execution_id": EXEC_ID,
-        "stage": "0.plan",
-        "verdict": "pass",
-        "actor_host": "cursor",
-        "actor_model_family": "claude",
-        "actor_session": "sess-1",
-        "artifacts": ["0.plan/request.json"],
-        "open_items": [],
-        "next_stage": "sources",
-        "evidence_commands": [{"command": "verify x", "exitCode": 0}],
-        "issue_count": 0,
-        "repair_rounds": 0,
+def _write_fixture_receipt(execution_id: str, payload: dict) -> Path:
+    return stage_receipt._write_current_receipt_create_once(
+        execution_id, payload, writer_token=stage_receipt._stage_authority_writer_token()
+    )
+
+
+def _digest(label: str) -> str:
+    return "sha256:" + hashlib.sha256(label.encode("utf-8")).hexdigest()
+
+
+def _binding(ref: str) -> dict[str, str]:
+    return {"scope": "execution", "ref": ref, "digest": _digest(ref)}
+
+
+def _receipt(
+    *, sequence: int, stage: str, verdict: str = "pass", next_stage: str,
+    model_family: str = "deterministic", issue_code: str = "DATA.TEST.BLOCKED",
+) -> dict:
+    issues = [] if verdict == "pass" else [{
+        "code": issue_code, "message": "fixture blocked", "recoveryStage": next_stage,
+    }]
+    return {
+        "schema": "quwoquan_data.stage_receipt", "executionId": EXEC_ID,
+        "stage": stage, "sequence": sequence, "verdict": verdict,
+        "actor": {"host": "test", "modelFamily": model_family, "sessionId": "fixture", "invocation": None},
+        "typedIssues": issues, "next": next_stage,
+        "authority": {
+            "openRequest": _binding(f"authority/{sequence}/open.json"),
+            "machineGate": _binding(f"authority/{sequence}/gate.json"),
+            "workflowContract": {"scope": "repo", "ref": "policy.json", "digest": _digest("workflow")},
+            "semanticResult": None,
+            "artifacts": [], "releaseBinding": None, "acceptanceBinding": None,
+        },
+        "recordedAt": f"2026-09-01T00:00:{sequence:02d}Z",
     }
-    kwargs.update(overrides)
-    return kwargs
 
 
 @pytest.fixture(autouse=True)
@@ -52,105 +73,70 @@ def _isolated_execution_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_receipt_sequence_is_monotonic_and_create_once() -> None:
-    payload_1 = stage_receipt.build_receipt(**_base_kwargs())
-    path_1 = stage_receipt.write_receipt_create_once(EXEC_ID, payload_1)
+    payload_1 = _receipt(sequence=1, stage="0.plan", next_stage="sources")
+    assert_valid(payload_1, "execution", "stage_receipt", label="fixture receipt")
+    path_1 = _write_fixture_receipt(EXEC_ID, payload_1)
     assert path_1.name == "001-0.plan.json"
 
-    payload_2 = stage_receipt.build_receipt(
-        **_base_kwargs(stage="sources", next_stage="1.download")
-    )
-    assert payload_2["sequence"] == 2
-    path_2 = stage_receipt.write_receipt_create_once(EXEC_ID, payload_2)
+    payload_2 = _receipt(sequence=2, stage="sources", next_stage="1.download")
+    path_2 = _write_fixture_receipt(EXEC_ID, payload_2)
     assert path_2.name == "002-sources.json"
+    assert _write_fixture_receipt(EXEC_ID, payload_2) == path_2
 
+    conflict = {**payload_2, "verdict": "blocked", "next": "sources",
+                "typedIssues": [{"code": "DATA.TEST.BLOCKED", "message": "blocked", "recoveryStage": "sources"}]}
     with pytest.raises(FileExistsError):
-        stage_receipt.write_receipt_create_once(EXEC_ID, payload_2)
-
-    latest = stage_receipt.latest_receipt(EXEC_ID)
-    assert latest is not None
-    assert latest["stage"] == "sources"
+        _write_fixture_receipt(EXEC_ID, conflict)
+    assert stage_receipt.latest_receipt(EXEC_ID)["stage"] == "sources"
 
 
-@pytest.mark.parametrize(
-    ("overrides", "message"),
-    [
-        ({"actor_model_family": "auto"}, "not literal 'auto'"),
-        (
-            {"verdict": "blocked", "next_stage": "0.plan"},
-            "at least one --open-item",
-        ),
-        ({"next_stage": "END"}, "only legal for the ship stage"),
-        (
-            {"stage": "ship", "next_stage": "release"},
-            "ship pass receipt must set next=END",
-        ),
-        (
-            {
-                "verdict": "blocked",
-                "next_stage": "sources",
-                "open_items": [
-                    {"item": "缺口", "disposition": "return_to_stage"}
-                ],
-            },
-            "requires returnStage",
-        ),
-    ],
-)
-def test_receipt_protocol_rejections(overrides: dict, message: str) -> None:
-    kwargs = _base_kwargs(**overrides)
-    with pytest.raises(ValueError, match=message):
-        stage_receipt.build_receipt(**kwargs)
+def test_current_schema_rejects_self_reported_success_shape() -> None:
+    legacy = {
+        "schema": "quwoquan_data.stage_receipt", "executionId": EXEC_ID,
+        "stage": "0.plan", "sequence": 1, "verdict": "pass", "next": "sources",
+        "commands": [{"command": "verify x", "exitCode": 0}],
+        "recordedAt": "2026-09-01T00:00:00Z",
+    }
+    with pytest.raises(ValueError, match="schema violation"):
+        assert_valid(legacy, "execution", "stage_receipt", label="self-reported receipt")
 
 
 def test_receipt_target_execution_identity_must_match() -> None:
-    payload = stage_receipt.build_receipt(**_base_kwargs())
-
+    payload = _receipt(sequence=1, stage="0.plan", next_stage="sources")
     with pytest.raises(ValueError, match="executionId must match"):
-        stage_receipt.write_receipt_create_once(f"{EXEC_ID}-other", payload)
+        _write_fixture_receipt(f"{EXEC_ID}-other", payload)
 
 
 def test_receipt_state_status_mapping() -> None:
-    running = stage_receipt.build_receipt(**_base_kwargs())
-    assert stage_receipt.receipt_state_status(running).value == "running"
-    blocked = stage_receipt.build_receipt(
-        **_base_kwargs(
-            verdict="blocked",
-            next_stage="sources",
-            open_items=[{"item": "缺口", "disposition": "gate_block"}],
-        )
-    )
-    assert stage_receipt.receipt_state_status(blocked).value == "manual_required"
-    shipped = stage_receipt.build_receipt(
-        **_base_kwargs(stage="ship", next_stage="END")
-    )
+    assert stage_receipt.receipt_state_status(_receipt(sequence=1, stage="0.plan", next_stage="sources")).value == "running"
+    assert stage_receipt.receipt_state_status(_receipt(sequence=1, stage="0.plan", verdict="blocked", next_stage="0.plan")).value == "manual_required"
+    shipped = _receipt(sequence=10, stage="ship", next_stage="END")
+    shipped["authority"]["releaseBinding"] = {"releaseId": "release-1", "releaseDigest": _digest("release")}
+    shipped["authority"]["acceptanceBinding"] = {"scope": "output", "ref": "acceptance.json", "digest": _digest("acceptance"), "environment": "gamma"}
     assert stage_receipt.receipt_state_status(shipped).value == "succeeded"
 
 
-def test_stage_record_reduces_minimal_projection_from_receipts(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_receipt_reducer_writes_minimal_projection(monkeypatch: pytest.MonkeyPatch) -> None:
     state_path = stage_receipt.execution_root(EXEC_ID) / "_shared/execution_state.json"
     import content.execution.receipt_state_reducer as reducer
+    from content.execution import stage_authority
+
+    def load_projection_receipt(execution_id: str, receipt: Path) -> dict:
+        assert execution_id == EXEC_ID
+        return json.loads(Path(receipt).read_text(encoding="utf-8"))
 
     monkeypatch.setattr(reducer, "execution_state_path", lambda _execution_id: state_path)
-    path = stage_receipt.record_stage_receipt(**_base_kwargs())
+    monkeypatch.setattr(
+        stage_authority, "validate_stage_receipt_authority", load_projection_receipt
+    )
+    _write_fixture_receipt(EXEC_ID, _receipt(sequence=1, stage="0.plan", next_stage="sources"))
+    reduce_receipt_projection(EXEC_ID)
     projection = json.loads(state_path.read_text(encoding="utf-8"))
-    assert path.name == "001-0.plan.json"
-    assert projection == {
-        "schema": "quwoquan.content.execution_state_projection",
-        "executionId": EXEC_ID,
-        "completed": ["0.plan"],
-        "status": "running",
-        "latestStage": "0.plan",
-        "next": "sources",
-        "latestReceiptRef": "_shared/receipts/001-0.plan.json",
-        "latestReceiptDigest": projection["latestReceiptDigest"],
-        "updatedAt": projection["updatedAt"],
-    }
-    assert set(projection) == {
-        "schema", "executionId", "completed", "status", "latestStage", "next",
-        "latestReceiptRef", "latestReceiptDigest", "updatedAt",
-    }
+    assert projection["completed"] == ["0.plan"]
+    assert projection["status"] == "running"
+    assert projection["next"] == "sources"
+    assert projection["latestReceiptRef"] == "_shared/receipts/001-0.plan.json"
+
 
 
 def test_legacy_business_state_writer_is_permanently_rejected() -> None:
@@ -241,27 +227,20 @@ def test_lane_claim_check_is_read_only_and_reports_activity() -> None:
 
 
 def test_fleet_status_aggregates_latest_receipts() -> None:
-    stage_receipt.write_receipt_create_once(
-        EXEC_ID, stage_receipt.build_receipt(**_base_kwargs())
+    _write_fixture_receipt(
+        EXEC_ID, _receipt(sequence=1, stage="0.plan", next_stage="sources")
     )
-    stage_receipt.write_receipt_create_once(
-        EXEC_ID,
-        stage_receipt.build_receipt(
-            **_base_kwargs(
-                stage="sources",
-                verdict="blocked",
-                next_stage="sources",
-                actor_model_family="gpt",
-                open_items=[{"item": "两个目标缺源", "disposition": "gate_block"}],
-            )
-        ),
+    _write_fixture_receipt(
+        EXEC_ID, _receipt(sequence=2, stage="sources", verdict="blocked",
+                          next_stage="sources", model_family="gpt",
+                          issue_code="DATA.TEST.SOURCE_PENDING")
     )
     status = stage_receipt.fleet_status([EXEC_ID])
     assert status["total"] == 1
     assert status["succeeded"] == 0
     assert status["stageDistribution"] == {"blocked@sources": 1}
     assert status["modelFamilies"] == {"gpt": 1}
-    assert status["blockedReasons"] == {"两个目标缺源": 1}
+    assert status["blockedReasons"] == {"DATA.TEST.SOURCE_PENDING": 1}
 
 
 # spec_ref: multi-carrier-release GWT-020.t4（round timeout 与 claim TTL 的关系约束）
@@ -366,36 +345,24 @@ def test_stage_enumerations_all_derive_from_one_closed_set() -> None:
 
 
 
-def test_stage_record_same_receipt_replay_heals_missing_projection(
+def test_same_receipt_replay_heals_missing_projection(
     _isolated_execution_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from content.execution import receipt_state_reducer
+    from content.execution import receipt_state_reducer, stage_authority
 
+    def load_projection_receipt(execution_id: str, receipt: Path) -> dict:
+        assert execution_id == EXEC_ID
+        return json.loads(Path(receipt).read_text(encoding="utf-8"))
+
+    state_path = (_isolated_execution_root / "tasks" / EXEC_ID
+                  / "_shared/execution_state.json")
+    monkeypatch.setattr(receipt_state_reducer, "execution_state_path", lambda _execution_id: state_path)
     monkeypatch.setattr(
-        receipt_state_reducer,
-        "execution_state_path",
-        lambda execution_id: _isolated_execution_root
-        / "tasks"
-        / execution_id
-        / "_shared/execution_state.json",
+        stage_authority, "validate_stage_receipt_authority", load_projection_receipt
     )
-    original = receipt_state_reducer._write_receipt_projection
-    calls = 0
-
-    def fail_once(**values: object):
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            raise OSError("simulated projection crash")
-        return original(**values)
-
-    monkeypatch.setattr(receipt_state_reducer, "_write_receipt_projection", fail_once)
-    with pytest.raises(OSError, match="projection crash"):
-        stage_receipt.record_stage_receipt(**_base_kwargs())
-    assert len(stage_receipt.list_receipt_files(EXEC_ID)) == 1
-    state_path = _isolated_execution_root / "tasks" / EXEC_ID / "_shared/execution_state.json"
-    assert not state_path.exists()
-
-    stage_receipt.record_stage_receipt(**_base_kwargs())
+    payload = _receipt(sequence=1, stage="0.plan", next_stage="sources")
+    receipt_path = _write_fixture_receipt(EXEC_ID, payload)
+    assert _write_fixture_receipt(EXEC_ID, payload) == receipt_path
+    reduce_receipt_projection(EXEC_ID)
     assert len(stage_receipt.list_receipt_files(EXEC_ID)) == 1
     assert json.loads(state_path.read_text(encoding="utf-8"))["latestStage"] == "0.plan"

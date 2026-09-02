@@ -29,6 +29,7 @@ from quwoquan_ops.cli.lib.package_reuse.pub_cache_capsule import (
     _digest_bytes,
     build_pub_cache_snapshot,
     copy_snapshot_tree_with_lock,
+    is_canonical_pub_cache_transient,
 )
 
 
@@ -617,3 +618,176 @@ def test_readonly_projection_does_not_use_darwin_clone_tree(
         writable=False,
     )
     assert stat.S_IMODE(destination.stat().st_mode) == 0o555
+
+
+def test_readonly_projection_normalizes_noncanonical_executable_mode(
+    tmp_path: Path,
+) -> None:
+    repo, archive_sha = _repo(tmp_path)
+    source = tmp_path / "source"
+    package = source / "hosted/pub.flutter-io.cn/fixture_pkg-1.2.3"
+    package.mkdir(parents=True)
+    executable = package / "tool/presubmit"
+    executable.parent.mkdir()
+    executable.write_text("#!/bin/sh\n", encoding="ascii")
+    executable.chmod(0o754)
+    archive = source / "hosted-hashes/pub.flutter-io.cn/fixture_pkg-1.2.3.sha256"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(archive_sha + "\n", encoding="ascii")
+    snapshot = build_pub_cache_snapshot(
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        cache_root=source,
+        reject_unlocked=True,
+    )
+
+    destination = tmp_path / "readonly"
+    copy_snapshot_tree_with_lock(
+        snapshot,
+        destination,
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        writable=False,
+    )
+
+    projected = destination / executable.relative_to(source)
+    assert projected.read_bytes() == executable.read_bytes()
+    assert stat.S_IMODE(projected.stat().st_mode) == 0o555
+
+
+def test_readonly_projection_rejects_source_executable_class_drift(
+    tmp_path: Path,
+) -> None:
+    repo, archive_sha = _repo(tmp_path)
+    source = tmp_path / "source"
+    package = source / "hosted/pub.flutter-io.cn/fixture_pkg-1.2.3"
+    package.mkdir(parents=True)
+    executable = package / "tool/presubmit"
+    executable.parent.mkdir()
+    executable.write_text("#!/bin/sh\n", encoding="ascii")
+    executable.chmod(0o754)
+    archive = source / "hosted-hashes/pub.flutter-io.cn/fixture_pkg-1.2.3.sha256"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(archive_sha + "\n", encoding="ascii")
+    snapshot = build_pub_cache_snapshot(
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        cache_root=source,
+        reject_unlocked=True,
+    )
+    executable.chmod(0o644)
+    destination = tmp_path / "readonly"
+
+    with pytest.raises(ValueError, match="snapshot clone source drifted"):
+        copy_snapshot_tree_with_lock(
+            snapshot,
+            destination,
+            lock_path=repo / "quwoquan_app/pubspec.lock",
+            writable=False,
+        )
+
+    assert not (destination / executable.relative_to(source)).exists()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="APFS clone projection is Darwin-only")
+def test_writable_projection_prunes_canonical_pub_transients_before_replay(
+    tmp_path: Path,
+) -> None:
+    repo, archive_sha = _repo(tmp_path)
+    source = tmp_path / "source"
+    package = source / "hosted/pub.flutter-io.cn/fixture_pkg-1.2.3"
+    package.mkdir(parents=True)
+    (package / "lib.dart").write_text("const fixture = true;\n", encoding="utf-8")
+    archive = source / "hosted-hashes/pub.flutter-io.cn/fixture_pkg-1.2.3.sha256"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(archive_sha + "\n", encoding="ascii")
+    transient = source / "_temp/downloads/partial.tmp"
+    transient.parent.mkdir(parents=True)
+    transient.write_bytes(b"partial")
+    snapshot = build_pub_cache_snapshot(
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        cache_root=source,
+        admitted_extra=is_canonical_pub_cache_transient,
+    )
+
+    destination = tmp_path / "replay"
+    copy_snapshot_tree_with_lock(
+        snapshot,
+        destination,
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        writable=True,
+        admitted_extra=is_canonical_pub_cache_transient,
+    )
+
+    assert not (destination / "_temp").exists()
+    replay = build_pub_cache_snapshot(
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        cache_root=destination,
+        reject_unlocked=True,
+    )
+    assert replay.manifest == snapshot.manifest
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="APFS clone projection is Darwin-only")
+def test_writable_projection_rejects_unknown_extra_with_transient_policy(
+    tmp_path: Path,
+) -> None:
+    repo, archive_sha = _repo(tmp_path)
+    source = tmp_path / "source"
+    package = source / "hosted/pub.flutter-io.cn/fixture_pkg-1.2.3"
+    package.mkdir(parents=True)
+    (package / "lib.dart").write_text("const fixture = true;\n", encoding="utf-8")
+    archive = source / "hosted-hashes/pub.flutter-io.cn/fixture_pkg-1.2.3.sha256"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(archive_sha + "\n", encoding="ascii")
+    snapshot = build_pub_cache_snapshot(
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        cache_root=source,
+        reject_unlocked=True,
+    )
+    unexpected = source / "unexpected/payload"
+    unexpected.parent.mkdir()
+    unexpected.write_bytes(b"unclassified")
+    destination = tmp_path / "replay"
+
+    with pytest.raises(ValueError, match="contains extra directory: unexpected"):
+        copy_snapshot_tree_with_lock(
+            snapshot,
+            destination,
+            lock_path=repo / "quwoquan_app/pubspec.lock",
+            writable=True,
+            admitted_extra=is_canonical_pub_cache_transient,
+        )
+
+    assert not destination.exists()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="APFS clone projection is Darwin-only")
+def test_writable_projection_rejects_unsafe_node_under_admitted_transient(
+    tmp_path: Path,
+) -> None:
+    repo, archive_sha = _repo(tmp_path)
+    source = tmp_path / "source"
+    package = source / "hosted/pub.flutter-io.cn/fixture_pkg-1.2.3"
+    package.mkdir(parents=True)
+    (package / "lib.dart").write_text("const fixture = true;\n", encoding="utf-8")
+    archive = source / "hosted-hashes/pub.flutter-io.cn/fixture_pkg-1.2.3.sha256"
+    archive.parent.mkdir(parents=True)
+    archive.write_text(archive_sha + "\n", encoding="ascii")
+    snapshot = build_pub_cache_snapshot(
+        lock_path=repo / "quwoquan_app/pubspec.lock",
+        cache_root=source,
+        reject_unlocked=True,
+    )
+    transient = source / "_temp"
+    transient.mkdir()
+    (transient / "escape").symlink_to(package, target_is_directory=True)
+    destination = tmp_path / "replay"
+
+    with pytest.raises(ValueError, match="directory is unsafe: _temp/escape"):
+        copy_snapshot_tree_with_lock(
+            snapshot,
+            destination,
+            lock_path=repo / "quwoquan_app/pubspec.lock",
+            writable=True,
+            admitted_extra=is_canonical_pub_cache_transient,
+        )
+
+    assert not destination.exists()

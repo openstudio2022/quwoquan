@@ -15,7 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from content.execution.campaign.lane import (
+from content.execution.planning.carrier_demand import (
     CAMPAIGN_CARRIERS,
     normalize_active_carriers,
     normalize_workloads,

@@ -7,7 +7,7 @@
 ## 数据工程硬约束
 
 - 一律遵守 `CLI prepare -> Agent semantic -> CLI validate + gate` 三段式。
-- **执行推进主体是宿主 agent 会话**（[`DEC-027`](../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-027)）：阶段序、产物契约与交接协议由 `.agents/skills/content-production/` 拥有；每阶段收尾用 `task stage-record` 落 create-once stage receipt，receipt 链 + 磁盘产物是跨会话交接与恢复的唯一状态源。仓库执行代码只允许两类——确定性 IO（下载、CAS、publish/release/ship 原子命令）与检查器（verify + schema）；禁止新增驱动/等待 agent、自动推进状态机或内置业务重试的编排代码，唯一豁免是 `quwoquan_data/scripts/content/execution/runner/loop_driver.sh`（≤50 行）与 `quwoquan_data/scripts/content/execution/runner/fleet_dispatcher.sh`（≤100 行，均无业务判断）。
+- **执行推进主体是宿主 agent 会话**（[`DEC-027`](../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-027)）：阶段序、产物契约与交接协议由 `.agents/skills/content-production/` 拥有；每阶段经 `task stage-open` → `task stage-gate` → `task stage-close` 落 create-once authority-bound stage receipt，receipt 链 + 磁盘产物是跨会话交接与恢复的唯一状态源。仓库执行代码只允许两类——确定性 IO（下载、CAS、publish/release/ship 原子命令）与检查器（verify + schema）；禁止新增驱动/等待 agent、自动推进状态机或内置业务重试的编排代码，唯一豁免是 `quwoquan_data/scripts/content/execution/runner/loop_driver.sh`（≤50 行）与 `quwoquan_data/scripts/content/execution/runner/fleet_dispatcher.sh`（≤100 行，均无业务判断）。
 - 新能力优先进入 `python3 quwoquan_data/scripts/cli.py <command>`，不要新增可直接运行的业务入口脚本。
 - schema、blueprint、metadata、tag taxonomy、内容契约先行，再写下载/生产/发布逻辑。
 - 内容生成以真实性、可追溯性和阶段结果为核心；不要用拍脑袋补全替代证据链。
@@ -52,21 +52,12 @@
 - 内容角度、实体类型、tagRefs、manifest、asset id、source paths、发布账本必须一致；不一致先修契约或数据，不用代码绕过。
 - 数据工程同样要补 `local_contract` schema/静态/CLI/模块、`api_integration` importer/真实存储或环境采样、`user_acceptance` 用户消费链路证据。
 
-## 数据工程七角色准出
+## 数据工程准出
 
-- **资深软件工程**：CLI-first、无孤立脚本、复用 `core`、失败可恢复、测试可重复。
-- **资深数据工程师**：DAG/stage result/gate report/typed recovery/sample bundle/importer 幂等完整。
-- **数据质量 QA**：schema、事实回溯、图片安全、去重、golden set、rubric、dirty scan 有证据。
-- **法务法律专家**：来源权利、授权快照、blocked 来源、反抄袭、长句复现、人脸/肖像/商用风险可审计。
-- **消费者视角**：标题兑现、信息密度、图文节奏、可读性、feed/search/detail 可消费。
-- **内容运营专家**：SLO/KPI、人审 SLA、发布节奏、反馈修复、内容供给优化闭环。
-- **无人值守自动化**：object queue、fanout、resource limits、hook-check、repair report、失败回退能自动闭环。
+Review 角色与证据闭包只读 `.agents/skills/review/references/registry.yaml`；缺 required evidence 时先补 spec/test/gate 或 repair stage，不把离线文件生成当成完成。
 
-缺任一角色证据，先补 `specs/tests/gates` 或 repair stage，不要把离线文件生成当成完成。
+## 数据领域 E2E
 
-## 典型触发与 E2E
-
-- 用户说“内容生产、抓取、冷启动、实体主页、标签治理、图片安全、ship、导入 gamma/beta/prod”时，默认加载本文件和 `content-production` skill。
 - 数据任务不能停在离线文件层；必须说明如何进入 service importer、App 发现/搜索/消费、行为反馈和推荐/运营分析。
 - 若涉及环境导入或发布，必须同步加载 `quwoquan_ops/AGENTS.md` 并收集 stackctl 证据。
 

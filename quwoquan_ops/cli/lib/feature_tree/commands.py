@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import json
 import os
 import re
@@ -11,7 +10,6 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 
-import yaml
 
 from ..agent_governance_contract import (
     contract_schema_version,
@@ -20,12 +18,22 @@ from ..agent_governance_contract import (
     validate_feature_context_manifest,
 )
 from . import context, gitio
+from .content_addressed_writer import (
+    _content_addressed_path as _content_addressed_path,
+    _fd_path as _fd_path,
+    _read_exact_bytes_at as _read_exact_bytes_at,
+    _safe_directory_fd as _safe_directory_fd,
+    _write_content_addressed_bytes as _write_content_addressed_bytes,
+    _write_content_addressed_json as _write_content_addressed_json,
+    fcntl as fcntl,
+)
 from .delta import semantic_anchor_changes
 from .evidence import extract_spec_refs, test_spec_refs
 from .nodes import Node, discover_nodes, node_for_spec, parent_chain
 from .ownership import TargetResolution, owners_for_path, resolve_target_details
 from .parsing import block_open_items, open_item_details, title
 from .patterns import PATH_RE, VALID_LEVELS
+from ..evidence_fingerprint import canonical_json_bytes
 from ..feature_context_fingerprint import (
     build_feature_context_fingerprint,
     embedded_fingerprint_binding,
@@ -273,9 +281,9 @@ def _anchor_section(text: str, anchor: str) -> str:
 
 
 def _serialize_context_manifest(payload: Mapping[str, object]) -> str:
-    """序列化默认机器 manifest；字段和值不变，仅移除展示型空白。"""
+    """按 canonical JSON 精确序列化默认机器 manifest。"""
 
-    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    return canonical_json_bytes(payload).decode("utf-8")
 
 
 def write_output(name: str, content: str) -> Path:
@@ -394,59 +402,6 @@ def _applicable_agents(target: Path) -> list[str]:
     return [_relative(path) for path in reversed(found)]
 
 
-def _profiles_for_resolution(resolution: TargetResolution) -> list[str]:
-    """从 Review 的唯一 profile registry 派生，不复制 profile 事实。"""
-
-    registry_path = (
-        context.REPO_ROOT / ".agents/skills/review/references/registry.yaml"
-    )
-    if not registry_path.is_file():
-        raise ValueError(
-            "GATE_BLOCK: Review profile registry 缺失："
-            f"{registry_path.relative_to(context.REPO_ROOT)}"
-        )
-    try:
-        registry = yaml.safe_load(registry_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, yaml.YAMLError) as error:
-        raise ValueError(
-            f"GATE_BLOCK: Review profile registry 无法读取或解析：{error}"
-        ) from error
-    if not isinstance(registry, Mapping):
-        raise ValueError("GATE_BLOCK: Review profile registry 根必须是 mapping")
-    profile_configs = registry.get("profiles")
-    if not isinstance(profile_configs, Mapping):
-        raise ValueError("GATE_BLOCK: Review profile registry profiles 必须是 mapping")
-
-    candidates: set[str] = set()
-    for path in (resolution.target, resolution.ownership_target):
-        try:
-            candidates.add(_relative(path))
-        except ValueError:
-            continue
-    profiles: list[str] = []
-    for name, config in profile_configs.items():
-        if not isinstance(name, str) or not name:
-            raise ValueError("GATE_BLOCK: Review profile 名称必须是非空 string")
-        if not isinstance(config, Mapping):
-            raise ValueError(
-                f"GATE_BLOCK: Review profile {name} config 必须是 mapping"
-            )
-        patterns = config.get("paths", [])
-        if not isinstance(patterns, list) or any(
-            not isinstance(pattern, str) for pattern in patterns
-        ):
-            raise ValueError(
-                f"GATE_BLOCK: Review profile {name} paths 必须是 string list"
-            )
-        if any(
-            fnmatch.fnmatch(candidate, pattern)
-            for candidate in candidates
-            for pattern in patterns
-        ):
-            profiles.append(name)
-    return profiles
-
-
 def _context_manifest(
     raw_target: str,
     resolution: TargetResolution,
@@ -483,7 +438,6 @@ def _context_manifest(
         ],
         "canonical_contexts": _canonical_contexts(resolution, raw_target=raw_target),
         "applicable_agents": _applicable_agents(resolution.target),
-        "profiles": _profiles_for_resolution(resolution),
         "open_items": open_items,
     }
     receipt = (
@@ -571,29 +525,33 @@ def command_context(args: argparse.Namespace) -> int:
         if output_format == "expanded":
             return _command_expanded_context(args, nodes, resolution.node)
         manifest = _context_manifest(args.target, resolution, nodes)
-        content = _serialize_context_manifest(manifest)
-        size = len((content.rstrip() + "\n").encode("utf-8"))
+        content = canonical_json_bytes(manifest)
+        size = len(content)
+        receipt: Mapping[str, object] | None = None
         if size > MANIFEST_MAX_BYTES:
             receipt = manifest["evidence_fingerprint"]["receipt"]
-            receipt_name = "context-manifest.evidence-fingerprint.json"
-            receipt_ref = (context.OUTPUT_ROOT / receipt_name).relative_to(
-                context.REPO_ROOT
-            ).as_posix()
+            receipt_content = canonical_json_bytes(receipt)
+            receipt_ref = _relative(
+                _content_addressed_path(
+                    receipt_content, subdirectory="receipts"
+                )
+            )
             manifest["evidence_fingerprint"] = referenced_fingerprint_binding(
                 receipt, receipt_ref=receipt_ref
             )
-            content = _serialize_context_manifest(manifest)
-            size = len((content.rstrip() + "\n").encode("utf-8"))
+            content = canonical_json_bytes(manifest)
+            size = len(content)
             if size > MANIFEST_MAX_BYTES:
                 raise ValueError(
                     "GATE_BLOCK: feature context manifest 超出 8KiB 预算："
                     f"{size} bytes"
                 )
-            write_output(receipt_name, json.dumps(receipt, ensure_ascii=False, indent=2))
+        if receipt is not None:
+            _write_content_addressed_json(receipt, subdirectory="receipts")
+        output = _write_content_addressed_bytes(content)
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2
-    output = write_output("context-manifest.json", content)
     print(output.relative_to(context.REPO_ROOT))
     return 0
 

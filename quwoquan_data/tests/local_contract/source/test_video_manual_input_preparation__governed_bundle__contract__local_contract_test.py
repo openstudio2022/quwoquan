@@ -182,37 +182,22 @@ def test_task_parser_exposes_only_explicit_governed_inputs() -> None:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
     register_parser(subparsers)
+    # 人工视频字节只能经 task acquire-videos 的 manual-root 物理输入进入采集链。
     parsed = parser.parse_args(
         [
             "task",
-            "prepare-video-manual-input",
-            "--source-root",
+            "acquire-videos",
+            "--manifest",
+            "/tmp/manifest.json",
+            "--handoff-ref",
+            "/tmp/handoff.json",
+            "--manual-root",
             "/source",
-            "--source-ref",
-            "cas/input.mp4",
-            "--source-sha256",
-            "sha256:" + "a" * 64,
-            "--output-root",
-            "/output",
-            "--asset-id",
-            "asset-a",
-            "--entity-id",
-            "都江堰",
-            "--observed-entity-id",
-            "都江堰",
-            "--source-page-url",
-            "https://example.com/source",
-            "--start-ms",
-            "5000",
-            "--duration-ms",
-            "10500",
-            "--prepared-at",
-            "2026-08-10T12:00:00Z",
-            "--operator-id",
-            "operator-a",
         ]
     )
-    assert parsed.task_command == "prepare-video-manual-input"
-    assert parsed.source_ref == "cas/input.mp4"
-    assert parsed.start_ms == 5_000
-    assert parsed.duration_ms == 10_500
+    assert parsed.task_command == "acquire-videos"
+    assert parsed.manual_root == "/source"
+    assert not hasattr(parsed, "verdict")
+    # 退役的语义准备命令不再挂在公开 task 面。
+    with pytest.raises(SystemExit):
+        parser.parse_args(["task", "prepare-video-manual-input", "--source-root", "/source"])

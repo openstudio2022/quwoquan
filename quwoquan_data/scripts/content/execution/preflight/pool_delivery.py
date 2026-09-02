@@ -210,7 +210,7 @@ def _delivery_runtime_binding(
         # deliberately separate identities.  Revalidate both exact frozen
         # documents, then prove that this lane selection is a member of the
         # byte-verified plan; never require their source digests to be equal.
-        from content.execution.campaign.source_pool_binding import (
+        from content.execution.source_pool.binding import (
             validate_bound_scale_source_pool,
             validate_lane_source_pool_selection,
         )

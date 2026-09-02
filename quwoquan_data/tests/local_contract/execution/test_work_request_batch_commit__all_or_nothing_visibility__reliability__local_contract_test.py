@@ -9,11 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import content.execution.campaign.request_envelope as _request_envelope_owner  # noqa: F401
-from content.execution.campaign import request_envelope_build, request_envelope_writer
-from content.execution.controller.execute import (
-    pre_acquisition_handoff as handoff_api,
-)
+import content.execution.planning.request_envelope as _request_envelope_owner  # noqa: F401
+from content.execution.planning import request_envelope_build, request_envelope_writer
+from content.source import pre_acquisition_handoff as handoff_api
+
 from content.execution.planning import (
     work_request_contract,
     work_request_dependencies,
@@ -90,13 +89,24 @@ def _dependencies(
     dependency_rows = {
         "sourcePool": {"ref": "pool.json", "digest": DIGEST}
     }
-    if isinstance(intent, dict) and intent.get(
-        "predecessorReconciliationReceiptRef"
-    ):
-        dependency_rows["predecessorReconciliationReceiptRef"] = {
-            "ref": "reconciliation.json",
-            "digest": "sha256:" + "8" * 64,
-        }
+    if isinstance(intent, dict):
+        predecessors = intent.get("predecessorExecutionIdsByCarrier") or {}
+        if isinstance(predecessors, dict):
+            for carrier, execution_id in predecessors.items():
+                dependency_rows[f"predecessorTerminalReceipt:{carrier}"] = {
+                    "ref": (
+                        f"data/tasks/{execution_id}/_shared/receipts/"
+                        "002-sources.json"
+                    ),
+                    "digest": "sha256:" + "8" * 64,
+                }
+                dependency_rows[f"predecessorExecutionState:{carrier}"] = {
+                    "ref": (
+                        f"data/tasks/{execution_id}/_shared/"
+                        "execution_state.json"
+                    ),
+                    "digest": "sha256:" + "9" * 64,
+                }
     return {
         "source": {
             "algorithm": "sha256",
@@ -128,18 +138,20 @@ def _dependencies(
 def _prepare(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> tuple[dict[str, object], str, list[int]]:
+) -> tuple[dict[str, object], str, list[tuple[int, int]]]:
     _patch_envelope_deps(monkeypatch)
     _install_handoff(monkeypatch)
     monkeypatch.setattr(work_request_contract, "dependency_bindings", _dependencies)
     monkeypatch.setattr(
         work_request_contract, "canonical_dependency_ref", _test_ref
     )
-    selected_counts: list[int] = []
+    selected_counts: list[tuple[int, int]] = []
     original_bind = request_envelope_build.bind_scale_source_pool
 
     def bind(*args: object, **kwargs: object):
-        selected_counts.append(int(kwargs["count"]))
+        selected_counts.append(
+            (int(kwargs["count"]), int(kwargs["minimum_candidate_count"]))
+        )
         return original_bind(*args, **kwargs)
 
     monkeypatch.setattr(request_envelope_build, "bind_scale_source_pool", bind)
@@ -167,8 +179,8 @@ def test_confirm_publishes_one_atomic_package_and_replays_same_digest(
     assert first["replayed"] is False
     assert replay["outcome"] == "confirmed" and replay["replayed"] is True
     assert queried["compileReceiptDigest"] == first["compileReceiptDigest"]
-    # 三轴单义：SourcePool selection 绑定 oversampled 候选数，quota 只是下限。
-    assert selected_counts == [_expected_count(1)]
+    # SourcePool readiness 仍要求 oversampled 候选，但 execution 只冻结 quota。
+    assert selected_counts == [(1, _expected_count(1))]
     work_request_path = output_root / first["workRequestRef"]
     batch_root = work_request_path.parent
     assert {path.name for path in batch_root.iterdir()} == {
@@ -287,7 +299,7 @@ def test_confirm_rechecks_preview_dependency_digest_before_allocating_sequence(
     assert not tuple(root.rglob("sequence-*"))
 
 
-def test_retry_work_request_confirms_exact_predecessor_and_reconciliation(
+def test_retry_work_request_confirms_exact_predecessor_terminal_bindings(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -297,39 +309,11 @@ def test_retry_work_request_confirms_exact_predecessor_and_reconciliation(
     first = writer.confirm(intent, preview_digest=preview_digest)
     assert first["outcome"] == "confirmed", first
     predecessor = str(first["carrierEnvelopes"][0]["executionId"])
-    predecessor_root = read_json(
-        output_root / first["carrierEnvelopes"][0]["envelopeRef"]
-    )["rootExecutionId"]
-
-    def reconciliation(
-        _receipt_path: Path,
-        *,
-        retry_predecessors: dict[str, str],
-        target_names: object,
-        **_kwargs: object,
-    ):
-        return (
-            dict(retry_predecessors),
-            tuple(target_names),
-            {
-                "predecessorRootExecutionId": predecessor_root,
-                "receiptRef": "data/local/reconciliation.json",
-                "receiptDigest": "sha256:" + "8" * 64,
-            },
-            {"reason": "retry"},
-        )
-
-    monkeypatch.setattr(
-        request_envelope_writer, "_reconciliation_inputs", reconciliation
-    )
     retry_intent = _intent(tmp_path)
     retry_intent.update(
         {
             "mode": "retry",
             "predecessorExecutionIdsByCarrier": {"homepage": predecessor},
-            "predecessorReconciliationReceiptRef": str(
-                tmp_path / "reconciliation.json"
-            ),
         }
     )
     retry_preview = WorkRequestPreviewQuery().preview(retry_intent)
@@ -347,9 +331,23 @@ def test_retry_work_request_confirms_exact_predecessor_and_reconciliation(
     )
     assert retry_request["executionMode"] == "retry"
     assert retry_envelope["retryOf"] == predecessor
-    assert retry_envelope["predecessorReconciliation"]["receiptDigest"] == (
-        "sha256:" + "8" * 64
-    )
+    assert "predecessorReconciliation" not in retry_envelope
+    assert retry_request["dependencies"] == {
+        "sourcePool": {"ref": "pool.json", "digest": DIGEST},
+        "predecessorTerminalReceipt:homepage": {
+            "ref": (
+                f"data/tasks/{predecessor}/_shared/receipts/"
+                "002-sources.json"
+            ),
+            "digest": "sha256:" + "8" * 64,
+        },
+        "predecessorExecutionState:homepage": {
+            "ref": (
+                f"data/tasks/{predecessor}/_shared/execution_state.json"
+            ),
+            "digest": "sha256:" + "9" * 64,
+        },
+    }
 
 
 def test_replay_rejects_existing_compile_package_digest_drift(
@@ -503,6 +501,4 @@ def test_four_carrier_confirm_preserves_each_heterogeneous_exact_quantity(
         envelope = read_json(batch_root / f"{carrier}.json")
         assert envelope["quota"] == quantity
         assert envelope["count"] == _expected_count(quantity)
-        assert envelope["sourcePoolSelection"]["candidateCount"] == (
-            _expected_count(quantity)
-        )
+        assert envelope["sourcePoolSelection"]["candidateCount"] == quantity

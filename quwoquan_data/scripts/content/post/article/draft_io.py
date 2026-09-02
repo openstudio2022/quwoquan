@@ -24,7 +24,6 @@ from core.control_types import ContentGenerator
 from governance.creators.assignment import creator_from_payload
 from core.io import read_json, write_json
 from core.paths import STAGE_COMPOSE, STAGE_DRAFT, execution_root
-from content.execution.model_contract import execution_model_pair_for_execution
 
 GENERATOR_AGENT = ContentGenerator.AGENT.value
 GENERATOR_PENDING = ContentGenerator.PENDING.value
@@ -133,7 +132,7 @@ def write_prompt(
     output_refs: Sequence[str] = (),
 ) -> Path:
     from content.execution.runtime_contract import canonical_sha256, stage_execution_context
-    from content.execution.prompt_snapshot import write_prompt_snapshot
+    from content.execution.prompt_snapshot import stage_semantic_actor, write_prompt_snapshot
 
     path = prompt_path(execution_id, ref)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -161,7 +160,6 @@ def write_prompt(
     run_id = "author_" + canonical_sha256(
         {"executionId": execution_id, "objectRef": ref}
     ).removeprefix("sha256:")[:20]
-    author_model = execution_model_pair_for_execution(execution_id).author
     write_prompt_snapshot(
         prompt_snapshot_path(execution_id, ref),
         execution_id=execution_id,
@@ -169,8 +167,10 @@ def write_prompt(
         template_family=resolved_family,
         variables=variables or {"writingPack": pack},
         rendered_prompt=prompt_md,
-        provider=author_model.provider.value,
-        model=author_model.model_id,
+        host_actor={
+            "host": "external_host_agent",
+            "role": "author",
+        },
         run_id=run_id,
         output_refs=resolved_outputs,
     )

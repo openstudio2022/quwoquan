@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from content.execution.campaign.external_inputs import (
+from content.execution.source_pool.external_inputs import (
     content_source_revision,
     external_inputs_digest,
 )

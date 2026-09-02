@@ -34,22 +34,6 @@ class GammaCommercialRunnersLocalContractTest(unittest.TestCase):
         self.assertEqual(user, "verify-user-service-integration")
         self.assertNotEqual(assistant, user)
 
-    def test_reliabletask_runner_owns_real_gamma_dependencies_and_receipt(self) -> None:
-        suites = json.loads(SUITES_PATH.read_text(encoding="utf-8"))
-        case = suites["smokeCases"]["reliabletask_gamma_api_integration"]
-        runner = ROOT / case["path"]
-        source = runner.read_text(encoding="utf-8")
-
-        self.assertEqual(case["runner"], "bash")
-        self.assertIn("stackctl.py", source)
-        self.assertIn("health --target gamma-local --scope full", source)
-        self.assertIn("--profile gamma-local --format json", source)
-        self.assertIn('TEST_MONGO_URI="$mongo_uri"', source)
-        self.assertIn('TEST_REDIS_ADDR="$redis_addr"', source)
-        self.assertIn("test-runtime-api-integration", source)
-        self.assertIn('"status": "passed" if int(exit_code) == 0 else "failed"', source)
-        self.assertNotIn("|| true", source)
-
     def test_onboarding_impact_runners_execute_api_and_both_device_journeys(
         self,
     ) -> None:
@@ -102,22 +86,9 @@ class GammaCommercialRunnersLocalContractTest(unittest.TestCase):
         )
         command_by_name = {command["name"]: command for command in commands}
 
-        reliabletask = command_by_name[
-            "gamma-local-reliabletask-api-integration"
-        ]
-        self.assertEqual(
-            reliabletask["argv"],
-            [
-                "bash",
-                "quwoquan_ops/cli/gamma/"
-                "run_reliabletask_gamma_api_integration.sh",
-                "--reuse-stack",
-            ],
-        )
-        self.assertTrue(reliabletask["stopOnFailure"])
-        self.assertEqual(
-            reliabletask["env"]["QWQ_RUN_ROOT"],
-            str(report_dir / "reliabletask-gamma-api-integration"),
+        self.assertNotIn(
+            "gamma-local-reliabletask-api-integration",
+            command_by_name,
         )
 
         onboarding = command_by_name[
@@ -146,10 +117,6 @@ class GammaCommercialRunnersLocalContractTest(unittest.TestCase):
                 report_dir,
             )
         }
-        self.assertNotIn(
-            "gamma-local-reliabletask-api-integration",
-            integration_names,
-        )
         self.assertNotIn(
             "gamma-local-onboarding-author-impact-api-integration",
             integration_names,

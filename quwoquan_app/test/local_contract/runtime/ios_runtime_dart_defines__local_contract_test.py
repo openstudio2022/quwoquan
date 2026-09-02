@@ -100,6 +100,13 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
             self.assertNotIn(retired, source)
         self.assertIn("Debug-prod|Profile-prod", source)
         self.assertIn("target runtime package must be activated post-install", source)
+        # 构建期默认供给已退役：脚本不得再引用共享默认供给脚本或其分支。
+        self.assertNotIn("build_default_debug_supply.py", source)
+        self.assertNotIn("RUNTIME_CONFIG_SUPPLY_KIND", source)
+        self.assertNotIn("DEFAULT_SUPPLY", source)
+        self.assertIn("./quwoquan_app/run.sh -d <device>", source)
+        self.assertNotIn("app-activate-flutter-facade", source)
+        self.assertNotIn("flutter facade", source)
 
     def test_generated_build_profile_identity_is_required(self) -> None:
         environment = self._environment()
@@ -216,31 +223,47 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
     def test_missing_or_invalid_trust_envelope_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            missing = self._environment()
-            missing.update(
-                {
-                    "TARGET_BUILD_DIR": str(root / "build"),
-                    "UNLOCALIZED_RESOURCES_FOLDER_PATH": "Runner.app",
-                }
-            )
-            missing_result = subprocess.run(
-                ["bash", str(SCRIPT)],
-                cwd=APP_DIR,
-                env=missing,
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(missing_result.returncode, 2)
-            self.assertIn(
-                "APP.LAUNCH.runtime_config_trust_missing",
-                missing_result.stderr,
-            )
-            self.assertIn(
-                "make app-activate-flutter-facade",
-                missing_result.stderr,
-            )
-            self.assertIn("command -v flutter", missing_result.stderr)
+            # 默认供给已退役：包括 Debug-nonprod 在内的一切 configuration
+            # trust 缺席都 GATE_BLOCK，且错误指引 run.sh 而非已退役的 facade。
+            for configuration, build_profile in (
+                ("Debug-nonprod", "nonprod"),
+                ("Profile-nonprod", "nonprod"),
+                ("Release-nonprod", "nonprod"),
+                ("Release-prod", "prod"),
+            ):
+                with self.subTest(configuration=configuration):
+                    missing = self._environment()
+                    missing["CONFIGURATION"] = configuration
+                    missing["QWQ_APP_BUILD_PROFILE"] = build_profile
+                    missing.pop("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH", None)
+                    missing.update(
+                        {
+                            "TARGET_BUILD_DIR": str(root / "build"),
+                            "UNLOCALIZED_RESOURCES_FOLDER_PATH": "Runner.app",
+                        }
+                    )
+                    missing_result = subprocess.run(
+                        ["bash", str(SCRIPT)],
+                        cwd=APP_DIR,
+                        env=missing,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(missing_result.returncode, 2)
+                    self.assertIn(
+                        "APP.LAUNCH.runtime_config_trust_missing",
+                        missing_result.stderr,
+                    )
+                    self.assertIn(
+                        "./quwoquan_app/run.sh -d <device>",
+                        missing_result.stderr,
+                    )
+                    self.assertNotIn(
+                        "app-activate-flutter-facade",
+                        missing_result.stderr,
+                    )
+                    self.assertNotIn("command -v flutter", missing_result.stderr)
 
             trust = _trust_envelope(root)
             payload = json.loads(trust.read_text(encoding="utf-8"))
@@ -259,6 +282,60 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
             self.assertIn(
                 "APP.LAUNCH.runtime_config_trust_missing",
                 invalid_result.stderr,
+            )
+
+    def test_debug_nonprod_missing_trust_fails_closed_without_materialization(self) -> None:
+        # 默认供给已退役：Debug-nonprod 缺 canonical handoff 时不再物化任何
+        # 默认 trust/package，raw `flutter run` 绝对路径旁路因此 fail-closed。
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            environment = self._environment()
+            environment.pop("QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH", None)
+            environment.update(
+                {
+                    "TARGET_BUILD_DIR": str(root / "build"),
+                    "UNLOCALIZED_RESOURCES_FOLDER_PATH": "Runner.app",
+                }
+            )
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("APP.LAUNCH.runtime_config_trust_missing", result.stderr)
+            self.assertIn("./quwoquan_app/run.sh -d <device>", result.stderr)
+            self.assertNotIn("embedded default", result.stderr)
+            self.assertFalse((root / "build").exists())
+
+    def test_external_injection_purges_stale_default_supply_material(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            trust = _trust_envelope(root)
+            environment = self._materialization_environment(root, trust)
+            resource_root = root / "build/Runner.app/qwq_runtime"
+            resource_root.mkdir(parents=True)
+            for stale in (
+                "runtime-config-default-package.json",
+                "runtime-config-default-manifest.json",
+            ):
+                (resource_root / stale).write_text("{}", encoding="utf-8")
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("embeddedRuntimePackage=0", result.stderr)
+            self.assertEqual(
+                {entry.name for entry in resource_root.iterdir()},
+                {"runtime-config-trust.json"},
             )
 
     def test_manual_keyring_protocol_is_rejected(self) -> None:
@@ -322,7 +399,9 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
             "runtimePackageDestinationURL(createDirectory: true)",
             "let previousActivePackage = try readCurrentActivePackageData()",
             "try atomicallyActivate(packageData)",
-            "restorePreviousActivePackage(previousActivePackage, originalError: error)",
+            "try restorePreviousActivePackage(",
+            "previousActivePackage,",
+            "originalError: normalizedError",
             "activationReadbackFailed",
             "activationRollbackFailed",
             "let activatedState = loadActivePackage()",
@@ -342,6 +421,18 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
             'receipt["runtimeConfigSupplyMode"]',
         ):
             self.assertIn(required, source)
+        # 嵌入默认供给（embedded_default_package）已整体退役：消费入口、材料
+        # 常量与激活分支在生产 Runner 与共享供给面都不得复活。
+        for retired_default_supply in (
+            "consumeEmbeddedDefaultSupply",
+            "nativeRuntimeDefaultPackageFileName",
+            "nativeRuntimeDefaultManifestFileName",
+            "runtime-config-default-package.json",
+            "runtime-config-default-manifest.json",
+            "ios_runtime_config_embedded_default_activated",
+            "ios_embedded_default_skipped",
+        ):
+            self.assertNotIn(retired_default_supply, retired_scan)
         for retired_closed_set in (
             "private static let packageFields: Set<String> = [",
             "private static let runtimeFields: Set<String> = [",
@@ -409,11 +500,19 @@ class IosRuntimeConfigBuildPreparationContractTest(unittest.TestCase):
         self.assertIn("runtimeConfigSupplyMode", receipt_fields)
         source = RUNTIME_CONFIG_SUPPLY.read_text(encoding="utf-8")
         self.assertIn(
-            '"launchProvenance": effectiveManifest["launchProvenance"]',
+            "let identity = try NativeRuntimeConfigActivationCoordinator.readVerifiedIdentity()",
             source,
         )
         self.assertIn(
-            '"runtimeConfigSupplyMode": effectiveManifest["runtimeConfigSupplyMode"]',
+            'envelope["launchProvenance"] = identity.launchProvenance',
+            source,
+        )
+        self.assertIn(
+            'envelope["runtimeConfigSupplyMode"] = identity.runtimeConfigSupplyMode',
+            source,
+        )
+        self.assertIn(
+            "let receipt = try readActiveReceiptDocument()",
             source,
         )
         self.assertNotIn("runtime-config-effective-launch-manifest.json", source)

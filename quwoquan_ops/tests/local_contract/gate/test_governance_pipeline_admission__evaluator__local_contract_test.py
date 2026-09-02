@@ -57,7 +57,7 @@ def _human_readback() -> dict[str, Any]:
     sessions = []
     for principal, responsibilities in mapping.items():
         sessions.append({
-            "schema_version": 2, "contract_version": model["contract_version"],
+            "schema_version": human["schema_version"], "contract_version": model["contract_version"],
             "role_model_version": model["role_model_version"], "observation_model_version": model["observation_model_version"],
             "session_id": f"calibration-{principal.replace('_', '-')}", "principal_class": principal,
             "participant_ref": f"participant-{principal.replace('_', '-')}",
@@ -221,12 +221,12 @@ def test_required_hosted_source_absent_is_structural_blocked() -> None:
     assert result["blockers"][0] == "REQUIRED_CODE_EVIDENCE_ABSENT"
 
 
-def test_missing_workflow_receipt_is_not_admitted_with_exact_blocker() -> None:
+def test_missing_owner_manifest_is_not_admitted_with_exact_blocker() -> None:
     payload = complete_input()
-    payload["evidence"]["workflow_resolve"] = readback("absent", layer="workflow_resolve", status="absent", provider_kind="absent", release=False, receipt_ref=None, receipt_bytes_sha256=None, provider_timestamp=None, candidate_id=None, scope_id=None, verifier_id=None)
+    payload["evidence"]["owner_manifest"] = readback("absent", layer="owner_manifest", status="absent", provider_kind="absent", release=False, receipt_ref=None, receipt_bytes_sha256=None, provider_timestamp=None, candidate_id=None, scope_id=None, verifier_id=None)
     result = inspect(payload)
     assert result["status"] == "not_admitted"
-    assert "WORKFLOW_RESOLVE_RECEIPT_MISSING" in result["blockers"]
+    assert "OWNER_MANIFEST_MISSING" in result["blockers"]
     assert_safe(result)
 
 

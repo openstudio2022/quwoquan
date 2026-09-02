@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/stage_semantic_result.schema.json",
+  "title": "Canonical semantic stage result wrapper",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "executionId",
+    "stage",
+    "sequence",
+    "workflowContract",
+    "requestRef",
+    "requestDigest",
+    "actor",
+    "resultBindings",
+    "resultDigest",
+    "recordedAt"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.stage_semantic_result"
+    },
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stage": {
+      "enum": [
+        "sources",
+        "2.quality",
+        "3.compose",
+        "4.draft",
+        "5.review"
+      ]
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "workflowContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "scope": {
+          "const": "repo"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "requestDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "modelFamily",
+        "sessionId",
+        "invocation"
+      ],
+      "properties": {
+        "host": {
+          "const": "cursor"
+        },
+        "modelFamily": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "enum": [
+              "auto",
+              "unknown"
+            ]
+          }
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "invocation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "provider",
+            "model",
+            "runId"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string",
+              "minLength": 1
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "runId": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "resultDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "recordedAt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requestRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+    },
+    "resultBindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "ref",
+          "digest"
+        ],
+        "properties": {
+          "scope": {
+            "const": "execution"
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  }
+}

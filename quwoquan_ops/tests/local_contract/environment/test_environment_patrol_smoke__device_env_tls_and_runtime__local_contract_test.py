@@ -39,6 +39,17 @@ from quwoquan_ops.tests.support.environment_patrol_smoke_test_support import (
 )
 
 
+def _reverse_result(
+    *, exit_code: int, output: str = "", timed_out: bool = False
+) -> dict[str, object]:
+    return {
+        "exitCode": exit_code,
+        "timedOut": timed_out,
+        "outputSummary": output,
+        "logPath": "/tmp/android-reverse.log",
+    }
+
+
 class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
     def _sealed_flutter_environment(self) -> tuple[dict[str, str], dict[str, str]]:
         identity = {
@@ -510,8 +521,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             result = smoke._prepare_android_local_port_reverse(args, device)
 
         self.assertEqual(result["status"], "installed")
+        install_calls = [command for command in calls if command[-1] != "--list"]
         self.assertEqual(
-            {command[-1] for command in calls},
+            {command[-1] for command in install_calls},
             {"tcp:19000", "tcp:19010", "tcp:19100", "tcp:19130"},
         )
         self.assertTrue(
@@ -528,6 +540,126 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
             len({str(kwargs["log_path"]) for kwargs in command_kwargs}),
             len(calls),
         )
+
+    def test_android_reverse_cleanup_removes_only_owned_mapping(self) -> None:
+        args = self._args()
+        device = {
+            "id": "emulator-5554",
+            "targetPlatform": "android-arm64",
+            "emulator": True,
+        }
+        results = [
+            _reverse_result(
+                exit_code=0,
+                output=(
+                    "UsbFfs tcp:19000 tcp:19000\n"
+                    "UsbFfs tcp:19999 tcp:19999\n"
+                ),
+            ),
+            _reverse_result(exit_code=0),
+            _reverse_result(exit_code=0),
+            _reverse_result(exit_code=0),
+            _reverse_result(exit_code=0),
+            _reverse_result(exit_code=0),
+            _reverse_result(exit_code=0),
+        ]
+        with (
+            mock.patch.object(
+                smoke_device_runtime,
+                "resolve_android_debug_bridge",
+                return_value="/usr/bin/adb",
+            ),
+            mock.patch.object(
+                smoke_device_runtime, "run_command", side_effect=results
+            ) as run,
+        ):
+            state = smoke._prepare_android_local_port_reverse(args, device)
+            teardown = smoke._cleanup_android_local_port_reverse(
+                args, device, state
+            )
+
+        self.assertEqual(state["status"], "installed")
+        self.assertEqual(teardown["status"], "passed")
+        self.assertEqual(teardown["removedDevicePorts"], [19010, 19100, 19130])
+        remove_commands = [
+            call.args[0]
+            for call in run.call_args_list
+            if "--remove" in call.args[0]
+        ]
+        self.assertEqual(
+            [command[-1] for command in remove_commands],
+            ["tcp:19010", "tcp:19100", "tcp:19130"],
+        )
+        self.assertNotIn("tcp:19000", [command[-1] for command in remove_commands])
+        self.assertNotIn("tcp:19999", [command[-1] for command in remove_commands])
+
+    def test_android_reverse_mid_install_failure_rolls_back_owned_and_keeps_primary(self) -> None:
+        args = self._args()
+        device = {
+            "id": "emulator-5554",
+            "targetPlatform": "android-arm64",
+            "emulator": True,
+        }
+        results = [
+            _reverse_result(exit_code=0, output=""),
+            _reverse_result(exit_code=0),
+            _reverse_result(exit_code=2, output="install failed"),
+            _reverse_result(exit_code=2, output="cleanup failed"),
+        ]
+        with (
+            mock.patch.object(
+                smoke_device_runtime,
+                "resolve_android_debug_bridge",
+                return_value="/usr/bin/adb",
+            ),
+            mock.patch.object(
+                smoke_device_runtime, "run_command", side_effect=results
+            ) as run,
+            self.assertRaisesRegex(
+                RuntimeError,
+                r"APP\.LAUNCH\.device_unavailable: android-reverse-19010 failed",
+            ) as caught,
+        ):
+            smoke._prepare_android_local_port_reverse(args, device)
+
+        state = getattr(caught.exception, "android_port_reverse")
+        self.assertEqual(state["firstBlocker"], str(caught.exception))
+        self.assertEqual(state["teardown"]["status"], "failed")
+        self.assertEqual(state["teardown"]["removedDevicePorts"], [])
+        self.assertEqual(run.call_args.args[0][-2:], ["--remove", "tcp:19000"])
+        self.assertNotIn("android-reverse-remove", str(caught.exception))
+
+    def test_android_reverse_cleanup_failure_does_not_replace_main_blocker(self) -> None:
+        args = self._args()
+        device = {
+            "id": "emulator-5554",
+            "targetPlatform": "android-arm64",
+            "emulator": True,
+        }
+        state = {
+            "status": "installed",
+            "deviceId": "emulator-5554",
+            "adbExecutable": "/usr/bin/adb",
+            "mappings": [
+                {"devicePort": 19000, "hostPort": 19000, "owned": True}
+            ],
+            "ownedMappings": [
+                {"devicePort": 19000, "hostPort": 19000, "owned": True}
+            ],
+        }
+        with mock.patch.object(
+            smoke_device_runtime,
+            "run_command",
+            return_value=_reverse_result(exit_code=2, output="cleanup failed"),
+        ):
+            teardown = smoke._cleanup_android_local_port_reverse(
+                args, device, state
+            )
+
+        self.assertEqual(teardown["status"], "failed")
+        self.assertIn("android-reverse-remove-19000", teardown["failures"][0])
+        # teardown 是 best-effort evidence；调用方已有 blocker 时不抛异常。
+        self.assertIs(teardown, state["teardown"])
 
     def test_patrol_tls_evidence_uses_system_public_ca_without_trust_install(
         self,

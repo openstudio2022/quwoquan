@@ -6,10 +6,10 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from content.execution.campaign.submission_reconciliation import (
+from content.release.canonical.campaign_reconciliation_reader import (
     load_reconciliation_reference,
 )
-from content.execution.campaign.submission_reconciliation_workload import (
+from content.release.canonical.campaign_reconciliation_reader import (
     campaign_root_for_submission,
 )
 from content.release.canonical.campaign_release_contract import (

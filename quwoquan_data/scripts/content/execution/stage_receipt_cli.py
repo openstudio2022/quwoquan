@@ -1,4 +1,4 @@
-"""`task stage-record` / `task lane-claim` / `task fleet-status` 三个薄 IO 子命令。
+"""`task stage-open/stage-gate/stage-close` / `task lane-claim` / `task fleet-status` 三个薄 IO 子命令。
 
 命令契约冻结于 `.agents/skills/content-production/references/handoff-protocol.md`
 与 `references/orchestration.md`；本文件只做参数解析与结果呈现，
@@ -9,116 +9,131 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from content.execution.stage_receipt import (
     DEFAULT_CLAIM_TTL_MINUTES,
-    OPEN_ITEM_DISPOSITIONS,
-    RECEIPT_NEXT_VALUES,
     RECEIPT_STAGES,
     acquire_lane_claim,
     check_lane_claim,
     fleet_status,
-    record_stage_receipt,
     release_lane_claim,
     round_timeout_admission,
 )
 
 
-def _parse_evidence_command(raw: str) -> dict:
-    command, sep, exit_code = raw.rpartition("::")
-    if not sep or not command:
-        raise argparse.ArgumentTypeError(
-            f"--evidence-command must be '<command>::<exitCode>': {raw!r}"
-        )
+def _load_context(path_value: str | None) -> dict:
+    if not path_value:
+        return {}
+    path = Path(path_value).expanduser().resolve()
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("stage context must contain one JSON object")
+    return value
+
+
+def _authority_error(command: str, exc: Exception) -> None:
+    from content.execution.stage_authority import StageAuthorityConflict
+    from content.execution.stage_semantic_recorder import StageSemanticConflict
+
+    print(f"{command} rejected: {exc}", file=sys.stderr)
+    raise SystemExit(3 if isinstance(exc, (StageAuthorityConflict, StageSemanticConflict)) else 2) from exc
+
+
+def _handle_stage_open(args: argparse.Namespace) -> None:
+    from content.execution.stage_authority import open_stage
     try:
-        code = int(exit_code)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError(
-            f"--evidence-command exit code must be an integer: {raw!r}"
-        ) from exc
-    return {"command": command, "exitCode": code}
+        print(open_stage(args.execution_id, args.stage))
+    except (OSError, TypeError, ValueError) as exc:
+        _authority_error("stage-open", exc)
 
 
-def _parse_open_item(raw: str) -> dict:
-    parts = raw.split("::")
-    if len(parts) not in (2, 3) or not parts[0]:
-        raise argparse.ArgumentTypeError(
-            "--open-item must be '<item>::<disposition>[::<returnStage>]'"
-        )
-    item = {"item": parts[0], "disposition": parts[1]}
-    if parts[1] not in OPEN_ITEM_DISPOSITIONS:
-        raise argparse.ArgumentTypeError(
-            f"--open-item disposition must be one of {OPEN_ITEM_DISPOSITIONS}"
-        )
-    if len(parts) == 3:
-        if parts[2] not in RECEIPT_STAGES:
-            raise argparse.ArgumentTypeError(
-                f"--open-item returnStage must be one of {RECEIPT_STAGES}"
-            )
-        item["returnStage"] = parts[2]
-    return item
-
-
-def _handle_stage_record(args: argparse.Namespace) -> None:
+def _handle_stage_gate(args: argparse.Namespace) -> None:
+    from content.execution.stage_authority import run_stage_gate
     try:
-        target = record_stage_receipt(
-            execution_id=args.execution_id,
-            stage=args.stage,
-            verdict=args.verdict,
-            actor_host=args.actor_host,
-            actor_model_family=args.actor_model_family,
-            actor_session=args.actor_session,
-            artifacts=list(args.artifact or []),
-            open_items=list(args.open_item or []),
-            next_stage=args.next,
-            evidence_commands=list(args.evidence_command or []),
-            issue_count=args.issue_count,
-            repair_rounds=args.repair_rounds,
-        )
-    except (ValueError, FileExistsError) as exc:
-        print(f"stage-record rejected: {exc}", file=sys.stderr)
-        raise SystemExit(2) from exc
-    print(target)
+        print(run_stage_gate(
+            args.execution_id, args.stage, close_context=_load_context(args.context)
+        ))
+    except (OSError, TypeError, ValueError) as exc:
+        _authority_error("stage-gate", exc)
 
 
-def register_stage_record_parser(
-    commands: argparse._SubParsersAction,
+def _handle_stage_close(args: argparse.Namespace) -> None:
+    from content.execution.stage_authority import close_stage
+    try:
+        print(close_stage(
+            args.execution_id, args.stage, close_context=_load_context(args.context)
+        ))
+    except (OSError, TypeError, ValueError) as exc:
+        _authority_error("stage-close", exc)
+
+
+def _register_authority_parser(
+    commands: argparse._SubParsersAction, *, name: str, handler: object, help_text: str
 ) -> None:
-    parser = commands.add_parser(
-        "stage-record",
-        help="阶段收尾唯一写入口：create-once 落 receipt 并重算只读 execution_state 投影",
-    )
+    parser = commands.add_parser(name, help=help_text)
     parser.add_argument("--execution-id", required=True)
     parser.add_argument("--stage", required=True, choices=RECEIPT_STAGES)
-    parser.add_argument("--verdict", required=True, choices=("pass", "blocked"))
-    parser.add_argument("--actor-host", required=True)
-    parser.add_argument(
-        "--actor-model-family",
-        required=True,
-        help="实际路由到的模型族；禁止写字面 auto",
+    if name != "stage-open":
+        parser.add_argument(
+            "--context",
+            help="结构化 JSON context 文件；不接受自由 command/exitCode/next/actor",
+        )
+    parser.set_defaults(handler=handler)
+
+
+def register_stage_authority_parsers(commands: argparse._SubParsersAction) -> None:
+    _register_authority_parser(
+        commands, name="stage-open", handler=_handle_stage_open,
+        help_text="验证唯一合法 next 并 create-once 冻结 workflow/open request",
     )
-    parser.add_argument("--actor-session", required=True)
-    parser.add_argument("--artifact", action="append", default=[])
-    parser.add_argument("--next", required=True, choices=RECEIPT_NEXT_VALUES)
-    parser.add_argument(
-        "--evidence-command",
-        action="append",
-        required=True,
-        type=_parse_evidence_command,
-        help="判据命令与退出码：'<命令>::<退出码>'，可多次",
+    _register_authority_parser(
+        commands, name="stage-gate", handler=_handle_stage_gate,
+        help_text="执行 registry canonical argv 并冻结机器 gate receipt",
     )
-    parser.add_argument("--issue-count", type=int, required=True)
-    parser.add_argument(
-        "--repair-rounds", type=int, required=True, help="自修轮数 0..3"
+    _register_authority_parser(
+        commands, name="stage-close", handler=_handle_stage_close,
+        help_text="从 open+gate+typed issues 派生 verdict/next 并写 receipt",
     )
-    parser.add_argument(
-        "--open-item",
-        action="append",
-        default=[],
-        type=_parse_open_item,
-        help="未决项：'<描述>::<return_to_stage|gate_block|out_of_scope>[::<returnStage>]'",
+
+
+def _handle_semantic_prepare(args: argparse.Namespace) -> None:
+    from content.execution.stage_semantic_recorder import prepare_stage_semantic_request
+    try:
+        print(prepare_stage_semantic_request(args.execution_id, args.stage))
+    except (OSError, TypeError, ValueError) as exc:
+        _authority_error("semantic-prepare", exc)
+
+
+def _handle_semantic_record(args: argparse.Namespace) -> None:
+    from content.execution.stage_semantic_recorder import record_stage_semantic_result
+    try:
+        print(record_stage_semantic_result(
+            args.execution_id, args.stage, _load_context(args.input)
+        ))
+    except (OSError, TypeError, ValueError) as exc:
+        _authority_error("semantic-record", exc)
+
+
+def register_stage_semantic_parsers(commands: argparse._SubParsersAction) -> None:
+    from content.execution.stage_semantic_recorder import SEMANTIC_STAGES
+
+    prepare = commands.add_parser(
+        "semantic-prepare",
+        help="从 registry 确定性发现输入闭包并冻结 semantic request",
     )
-    parser.set_defaults(handler=_handle_stage_record)
+    prepare.add_argument("--execution-id", required=True)
+    prepare.add_argument("--stage", required=True, choices=SEMANTIC_STAGES)
+    prepare.set_defaults(handler=_handle_semantic_prepare)
+
+    record = commands.add_parser(
+        "semantic-record",
+        help="校验一份结构化 result input 并 create-once 写 semantic wrapper",
+    )
+    record.add_argument("--execution-id", required=True)
+    record.add_argument("--stage", required=True, choices=SEMANTIC_STAGES)
+    record.add_argument("--input", required=True, help="唯一结构化 JSON result input 文件")
+    record.set_defaults(handler=_handle_semantic_record)
 
 
 def _handle_lane_claim(args: argparse.Namespace) -> None:
@@ -232,6 +247,7 @@ def register_fleet_status_parser(
 def register_stage_receipt_parsers(
     commands: argparse._SubParsersAction,
 ) -> None:
-    register_stage_record_parser(commands)
+    register_stage_authority_parsers(commands)
+    register_stage_semantic_parsers(commands)
     register_lane_claim_parser(commands)
     register_fleet_status_parser(commands)

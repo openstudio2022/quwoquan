@@ -112,6 +112,7 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 		environment:    strings.TrimSpace(state.Environment),
 		releaseID:      releaseID,
 		manifestDigest: manifestDigest,
+		releaseClass:   strings.TrimSpace(state.ReleaseClass),
 	}
 	return r.cache.Load(ctx, key, func(readCtx context.Context) (postports.ActiveSupplySnapshot, error) {
 		snapshot, readErr := r.readActiveSupplyProjectionCounts(
@@ -134,7 +135,8 @@ func (r *MongoActiveSupplyReader) ActiveSupplySnapshot(
 			return empty, fmt.Errorf("re-attest active release after readback: %w", currentErr)
 		}
 		if !currentFound || strings.TrimSpace(current.ActiveReleaseID) != releaseID ||
-			strings.TrimSpace(current.ManifestDigest) != manifestDigest {
+			strings.TrimSpace(current.ManifestDigest) != manifestDigest ||
+			strings.TrimSpace(current.ReleaseClass) != strings.TrimSpace(state.ReleaseClass) {
 			return empty, fmt.Errorf("active release changed during supply readback")
 		}
 		return snapshot, nil

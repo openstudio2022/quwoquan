@@ -554,6 +554,44 @@ def test_foreign_identity_legacy_receipt_body_does_not_block_fresh_acquisition(
     assert receipt["assets"][0]["failureCode"] == ""
 
 
+def test_image_receipt_in_shared_portable_root_does_not_block_video_acquisition(
+    tmp_path: Path,
+) -> None:
+    manual_root = tmp_path / "manual"
+    manual_root.mkdir()
+    _write_video(manual_root / "fresh.mp4", moving=True, seed=15)
+    output_root = tmp_path / "acquisition"
+    receipts = output_root / "receipts"
+    receipts.mkdir(parents=True)
+    write_json(
+        receipts / "image.json",
+        {
+            "schema": "quwoquan_data.professional_image_acquisition_receipt",
+            "sourceRevision": "local-contract-revision",
+            "sourceDigest": _DIGEST_A,
+            "entityCatalogDigest": _DIGEST_B,
+        },
+    )
+    manifest_path = tmp_path / "fresh.json"
+    write_json(
+        manifest_path,
+        _manifest(
+            [_item("fresh", "fresh.mp4", counts=(1_000, 20, 2, 1, 3))],
+            manifest_id="fresh-with-shared-image-receipt",
+        ),
+    )
+
+    receipt, _receipt_path = acquire_professional_videos(
+        manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
+        manual_root=manual_root,
+        output_root=output_root,
+    )
+
+    assert receipt["acceptedAssetCount"] == 1
+    assert receipt["assets"][0]["failureCode"] == ""
+
+
 def test_same_identity_corrupt_receipt_body_still_fails_closed(
     tmp_path: Path,
 ) -> None:

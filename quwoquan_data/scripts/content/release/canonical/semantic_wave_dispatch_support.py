@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign.source_pool_binding import (
+from content.execution.source_pool.binding import (
     validate_bound_scale_source_pool,
 )
 from content.execution.planning.retry_unfinished_scope import (

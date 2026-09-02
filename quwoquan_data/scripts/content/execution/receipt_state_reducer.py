@@ -26,8 +26,9 @@ def reduce_receipt_projection(execution_id: str) -> Path:
     latest: dict[str, Any] | None = None
     latest_path: Path | None = None
     for sequence, stage, path in entries:
-        receipt = load_receipt(path)
-        assert_valid(receipt, "execution", "stage_receipt", label=f"stage receipt:{path}")
+        from content.execution.stage_authority import validate_stage_receipt_authority
+
+        receipt = validate_stage_receipt_authority(execution_id, path)
         if receipt.get("executionId") != execution_id or receipt.get("sequence") != sequence or receipt.get("stage") != stage:
             raise ValueError(f"stage receipt identity drift: {path}")
         if receipt.get("verdict") == "pass" and stage not in completed:
@@ -62,9 +63,8 @@ def reduce_receipt_projection(execution_id: str) -> Path:
             expected=expected,
         )
     except Exception:
-        # Receipt create-once succeeded first.  A torn convenience projection must
-        # not turn that immutable receipt into an unreplayable stage-record call.
-        # The next stage-record or explicit reducer replay deterministically heals it.
+        # Receipt create-once 先成功；projection 撕裂不应让 immutable receipt
+        # 变成不可重放。下一次 stage-close 或显式 reducer replay 会确定性修复。
         if state_path.is_file():
             try:
                 state = load_execution_state_document(

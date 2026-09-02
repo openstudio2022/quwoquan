@@ -33,6 +33,9 @@ from lib.evidence_fingerprint import (  # noqa: E402
 )
 import review_dispatch as review_dispatch_module  # noqa: E402
 
+sys.path.insert(0, str(ROOT / "quwoquan_ops/gate/lib"))
+from process_group_deadline import run_command  # noqa: E402
+
 OUTPUT_ROOT = ROOT / ".qwq_output/env/repo/runs/review-evidence"
 
 
@@ -95,6 +98,7 @@ def _fingerprint(
                                 "id": item["id"],
                                 "command_digest": item["command_digest"],
                                 "required": item["required"],
+                                "timeout_seconds": item["timeout_seconds"],
                             }
                             for item in evidence
                         ],
@@ -118,7 +122,7 @@ def _fingerprint(
                 ),
                 "provider_digest": canonical_digest(
                     {
-                        "runner": "subprocess.run-shell-false",
+                        "runner": "process-group-deadline-shell-false",
                         "plan_provider": payload["execution"]["provider_digest"],
                     }
                 ),
@@ -197,6 +201,24 @@ def run_plan(
                     f"evidence={evidence_id} command 与 registry 解析结果不一致"
                 )
             registered_digest = _command_digest(str(registered_command))
+            timeout_seconds = registered.get("timeout_seconds")
+            max_evidence_timeout = (registry.get("limits") or {}).get(
+                "max_evidence_timeout_seconds"
+            )
+            if (
+                not isinstance(timeout_seconds, int)
+                or isinstance(timeout_seconds, bool)
+                or timeout_seconds <= 0
+                or not isinstance(max_evidence_timeout, int)
+                or timeout_seconds > max_evidence_timeout
+            ):
+                raise EvidenceRunnerError(
+                    f"evidence={evidence_id} timeout_seconds 必须为 registry 正数上限内的整数"
+                )
+            if raw.get("timeout_seconds") != timeout_seconds:
+                raise EvidenceRunnerError(
+                    f"evidence={evidence_id} timeout_seconds 与 registry 漂移"
+                )
             if command_digest != registered_digest:
                 raise EvidenceRunnerError(
                     f"evidence={evidence_id} command_digest 与 registry 漂移"
@@ -211,6 +233,7 @@ def run_plan(
                 "command": command,
                 "command_digest": exact,
                 "required": bool(raw.get("required", True)),
+                "timeout_seconds": timeout_seconds,
             }
         )
 
@@ -224,15 +247,16 @@ def run_plan(
     )
     results: list[dict[str, Any]] = []
     failed_required: str | None = None
+    failed_required_timed_out = False
     for item in evidence:
         item_started = _now()
         # The exact registry-resolved command string is passed as one /bin/sh -c
         # argument only after its digest has been verified; no interpolation occurs here.
-        completed = subprocess.run(
+        completed = run_command(
             ["/bin/sh", "-c", item["command"]],
             cwd=cwd,
+            timeout_seconds=float(item["timeout_seconds"]),
             capture_output=True,
-            check=False,
         )
         item_finished = _now()
         results.append(
@@ -241,7 +265,11 @@ def run_plan(
                     "id": item["id"],
                     "command": item["command"],
                     "command_digest": item["command_digest"],
+                    "timeout_seconds": item["timeout_seconds"],
                     "exit_code": completed.returncode,
+                    "outcome": "timeout" if completed.timed_out else "exited",
+                    "timed_out": completed.timed_out,
+                    "termination_signal": completed.termination_signal,
                     "stdout_digest": _sha256_bytes(completed.stdout),
                     "stderr_digest": _sha256_bytes(completed.stderr),
                     "started_at": item_started,
@@ -265,6 +293,7 @@ def run_plan(
         )
         if completed.returncode != 0 and item["required"]:
             failed_required = item["id"]
+            failed_required_timed_out = completed.timed_out
             break
 
     finished_at = _now()
@@ -286,7 +315,13 @@ def run_plan(
     terminal = declared_object(
         {
             "status": "GATE_BLOCK" if failed_required else "PASS",
-            "code": "REVIEW.EVIDENCE_FAILED" if failed_required else "EVIDENCE.PASSED",
+            "code": (
+                "REVIEW.EVIDENCE_TIMEOUT"
+                if failed_required_timed_out
+                else "REVIEW.EVIDENCE_FAILED"
+                if failed_required
+                else "EVIDENCE.PASSED"
+            ),
             "failed_evidence": failed_required,
         },
         "named_evidence_receipt",

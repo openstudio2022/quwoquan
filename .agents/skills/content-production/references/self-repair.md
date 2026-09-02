@@ -12,7 +12,7 @@
 - 每阶段自修 ≤3 轮；轮数记入 receipt `evidence.repairRounds`。
 - 每轮必须针对具体 issue 修改具体文件；不允许无差别重跑同一命令期待不同结果。
 - 修复根因属于前序阶段产物时：停止本阶段自修，receipt `verdict=blocked`、
-  `openItems` 登记 `return_to_stage` 及目标阶段，由下一轮会话回到该阶段处理。
+  `typedIssues[].recoveryStage` 冻结恢复目标，由下一轮以新 execution retry 处理。
 
 ## MUST NOT
 
@@ -25,6 +25,6 @@
 
 3 轮后判据仍失败：
 
-1. 调 `task stage-record` 落 `verdict=blocked` receipt，`openItems` 带全部未决 issue。
+1. 在 `task stage-close` 的结构化 context 中提交全部 `typedIssues`，由 authority 派生 `verdict=blocked` receipt。
 2. 向用户返回带 `executionId`、阶段名与 issue 原文的 `GATE_BLOCK`。
 3. 不再重试；恢复入口统一走 [recovery.md](recovery.md)。

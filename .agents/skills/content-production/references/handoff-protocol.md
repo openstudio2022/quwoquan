@@ -9,55 +9,50 @@
 
 每阶段的实例化契约见 [stage-contracts/](stage-contracts/)。
 
-## 四段生命周期（每个阶段统一执行序）
+## 三段 authority 边界（每个阶段统一执行序）
 
-对齐根 `AGENTS.md` 五段执行契约：
+宿主只提交 stage identity 与结构化 context；成功事实、命令退出码、artifact 摘要、
+`verdict` 与 `next` 全部由确定性内核派生：
 
-1. **做前（PRE）**：读本阶段契约 → 验前置阶段 receipt 存在且 `verdict=pass` →
-   复跑前置阶段完成判据命令确认磁盘事实。不信任 receipt 自述，防跨会话漂移。
-2. **做中（DURING）**：契约 MUST/MUST NOT 持续生效；只写本阶段输出目录；
-   验收失败进自修循环（≤3 轮，见 [self-repair.md](self-repair.md)）。
-3. **做后（POST）**：跑本阶段完成判据命令（退出码 0）→ 调 `task stage-record`
-   落 receipt。agent 不手写 receipt 文件，保证格式与写入权单轨。
-4. **交接（HANDOFF）**：receipt 即交接物。四个交接字段对齐仓库 HANDOFF 契约：
-   - `artifacts`：本阶段产出物的工作包相对路径清单。
-   - `openItems`：未决项及去向，每项必须落到 `return_to_stage` /
-     `gate_block` / `out_of_scope` 三者之一，不允许悬空。
-   - `next`：唯一合法下游阶段（终态为 `END`；blocked 时指恢复重入阶段）。
-   - `evidence`：判据命令与退出码、issue 数、自修轮数。
+1. **OPEN**：`task stage-open --execution-id <id> --stage <stage>`。命令验证 receipt
+   链的唯一合法 next、前驱 pass 与 `task init` 三文件 exact closure，并 create-once 冻结
+   workflow contract digest。OPEN 不选择 candidate、不执行 stage、不推进状态。
+2. **DURING**：`sources|2.quality|3.compose|4.draft|5.review` 先调用
+   `task semantic-prepare --execution-id <id> --stage <stage>`；内核根据 registry 确定性发现
+   输入闭包并冻结 canonical request，调用者不能自由传 input refs。宿主只基于该 request
+   完成语义工作，随后把 `actor{host,sessionId,modelFamily,invocation{provider,model,runId}} + requestRef/requestDigest + resultRefs` 写入唯一结构化 JSON，
+   调用 `task semantic-record --execution-id <id> --stage <stage> --input <json>`；record 校验
+   stage allowlist、现有业务 schema/validator 与 exact bytes 后 create-once 写 canonical wrapper。
+   结果 input 禁止包含 verdict、next、command 或 exitCode。
+3. **GATE**：`task stage-gate --execution-id <id> --stage <stage> --context <json>`。
+   内核只执行 stage registry 的 canonical argv，捕获真实 exitCode/stdout/stderr 摘要并冻结
+   artifact exact refs。五个语义 stage 的 context 必须只把 canonical wrapper 作为
+   `semanticResultRef + semanticResultDigest` 绑定，actor/语义结果不再从任意 artifact JSON 派生。
+   release/ship context 必须绑定 `releaseId + releaseDigest`；ship 还必须
+   绑定 canonical `EnvironmentAcceptanceFact` exact ref/digest，内核直接调用 Ops validator
+   完整验证 required raw UAT closure。
+4. **CLOSE**：`task stage-close --execution-id <id> --stage <stage> [--context <json>]`。
+   close context 只允许结构化 `typedIssues`。内核重验 workflow/open/gate/artifact bytes，
+   从 gate exits 与 typed issues 派生 `verdict` 和 `next`：pass 固定后继，ship pass 才
+   `END`；blocked 只能回到 issue 指定且已完成/当前的 recovery stage。
 
-## Receipt
+Authority 文档路径固定为 `_shared/stage-authority/<seq>-<stage>/{open,gate}.json`；
+current receipt schema 为 `quwoquan_data.stage_receipt`，其 `authority` 必须绑定
+open/gate/workflow/artifacts/release/acceptance。公开 task parser 不再暴露 `stage-record`，
+也不接受调用者自报 command/exitCode/next/actor/成功事实。CLI 退出码统一为：成功 `0`、
+参数或协议拒绝 `2`、create-once 冲突 `3`。
 
-- schema 真相源：`quwoquan_data/schema/execution/stage_receipt.schema.json`
-  （字段含 `executionId`、`stage`、`sequence`、`verdict=pass|blocked`、
-  `actor{host,modelFamily,sessionId}`、四个交接字段、`recordedAt`）。
-- 存放位置：`.qwq_output/data/tasks/<executionId>/_shared/receipts/`，
-  文件名 `<sequence 3 位>-<stage>.json`，create-once 原子写（tmp+rename），
-  已登记为 `_shared` 权威条目（`core/paths.py`），不可改写、不可删除。
-- 记录命令（唯一写入口）：
-
-```bash
-python3 quwoquan_data/scripts/cli.py task stage-record \
-  --execution-id <id> --stage <stage> --verdict pass|blocked \
-  --actor-host <cursor|codex> \
-  --actor-model-family <族名，auto 路由时记实际族> \
-  --actor-session <会话标识> \
-  --artifact <相对路径> [--artifact ...] \
-  --next <stage|END> \
-  --evidence-command "<命令>::<退出码>" [--evidence-command ...] \
-  --issue-count <N> --repair-rounds <0..3> \
-  [--open-item "<描述>::<return_to_stage|gate_block|out_of_scope>[::<returnStage>]"]
-```
-
-- `actor.modelFamily` 是评审独立性凭据：`4.draft` receipt 记录生成模型族，
-  `5.review` 派发时读取它并指定异族 judge，`verify rubric --generation-family` 兜底。
+`sources|2.quality|3.compose|4.draft|5.review` 的 actor 只从 machine gate 绑定的 canonical
+semantic result wrapper 读取；`5.review` recorder 强制具名异族 modelFamily。其它阶段由
+确定性 authority 标记机器身份。release receipt 必须绑定自身 release；ship open/gate/close
+均重验该绑定与前驱 release receipt 的 `authority.releaseBinding` 完全相同。
 
 ## execution_state 合并方式（写入权移交，DEC-005）
 
 - `_shared/execution_state.json` 是 receipt reducer 产生的只读最小投影；唯一写盘入口是
   `content.execution.receipt_state_reducer.reduce_receipt_projection`。`context.save_execution_state`
   永久拒绝业务写者；agent、skill 与其他命令一律不手写。
-- `task stage-record` 先 create-once 写 receipt，再由全部 receipt 确定性重算 projection：
+- `task stage-close` 先 create-once 写 receipt，再由全部 receipt 确定性重算 projection：
   - `stage=ship` 且 `verdict=pass` → `status=succeeded`（execution 终态的唯一合法来源）。
   - `verdict=blocked` → `status=manual_required`。
   - 其余 pass receipt → `status=running`。

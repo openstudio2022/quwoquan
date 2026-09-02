@@ -16,7 +16,6 @@ from content.source.professional_safety_evidence import file_sha256
 HOST_SOURCE_REVIEW_PENDING = "DATA.SOURCE.HOST_REVIEW_PENDING"
 HOST_SOURCE_REVIEW_INVALID = "DATA.SOURCE.HOST_REVIEW_INVALID"
 HOST_SOURCE_REVIEW_CONFLICT = "DATA.SOURCE.HOST_REVIEW_CONFLICT"
-CONTRACT_VERSION = "host-source-review/v1"
 _RUBRIC = {
     "rubricId": "media-source-semantic-review",
     "version": "1.0.0",
@@ -147,7 +146,6 @@ def prepare_host_source_review_request(
     }
     stable = {
         "schema": "quwoquan_data.host_source_review_request",
-        "contractVersion": CONTRACT_VERSION,
         "sourceIdentity": identity,
         "assetBinding": {
             "assetKind": asset_kind,
@@ -261,7 +259,6 @@ def record_host_source_review_result(
     _validate_verdict(result_input["verdict"])
     stable = {
         "schema": "quwoquan_data.host_source_review_result",
-        "contractVersion": CONTRACT_VERSION,
         "requestRef": str(result_input["requestRef"]),
         "requestDigest": str(result_input["requestDigest"]),
         "sourceIdentity": dict(request["sourceIdentity"]),
@@ -332,7 +329,7 @@ def read_host_source_review_result(
 
 
 __all__ = [
-    "CONTRACT_VERSION", "HOST_SOURCE_REVIEW_CONFLICT", "HOST_SOURCE_REVIEW_INVALID",
+    "HOST_SOURCE_REVIEW_CONFLICT", "HOST_SOURCE_REVIEW_INVALID",
     "HOST_SOURCE_REVIEW_PENDING", "HostSourceReviewError", "HostSourceReviewPending",
     "prepare_host_source_review_request", "read_host_source_review_result",
     "record_host_source_review_result",

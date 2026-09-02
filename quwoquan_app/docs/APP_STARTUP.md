@@ -1,64 +1,99 @@
 # App 启动入口
 
-公开启动面只有四个。它们最终都进入 canonical launcher；不要把 `run.sh`、原始 Xcode/Gradle、绝对路径 Flutter SDK 或设备发现命令包装成新的公开入口。
+公开启动面只有四个：字面 `flutter run`（受管一键入口，等价进入 canonical launcher）、`run.sh`（canonical launcher）、`make app-dev`/`make app-uat`（编排入口）、IDE canonical profile。终端 PATH 注入是它们的环境前提，不是第五个启动面；不要把原始 Xcode/Gradle、绝对路径 Flutter SDK 或设备发现命令包装成新入口。
 
-## 1. 人类一键开发：`make app-dev`
+## 1. 终端 PATH 注入（一次性激活）
+
+仓库只有一个具名激活入口。在仓库根运行：
+
+```bash
+make app-activate-flutter-facade FACADE_ACTION="--scope all"
+```
+
+激活只做两件事：把 launcher bin 目录（含全局 `run.sh` wrapper 与字面 `flutter` dispatcher）与钉定的 Flutter/CocoaPods/Python bin 前置到 PATH，并导出对应身份变量。不再有 ZDOTDIR bridge 或 terminal carrier receipt。
+
+- `--scope cursor`（默认）：写入 Cursor `terminal.integrated.env.osx` 受管块与 IDE 投影；完成后执行 **Reload Window**，新开的 Cursor terminal 才消费新 env。
+- `--scope user-zsh`：为独立 Terminal/iTerm 的交互 zsh 写入可识别、可移除的 `~/.zshrc` managed block，并生成 `~/.config/quwoquan/flutter-facade.zsh`。显式 opt-in，不会由 build phase 或 App 启动静默修改用户 shell。
+
+新开的终端自动生效；已经打开的 zsh 须显式刷新一次：
+
+```bash
+source ~/.config/quwoquan/flutter-facade.zsh && rehash
+```
+
+### status 与回退
+
+```bash
+make app-activate-flutter-facade FACADE_ACTION="--scope all --status"
+make app-activate-flutter-facade FACADE_ACTION="--scope all --deactivate"
+```
+
+deactivate 移除全部受管块并逐字保留用户自有内容；Cursor 回退后执行 Reload Window。若受管投影发生 drift，写入路径 fail closed，不会删除无法证明归属的内容。
+
+命令输出只用于状态判断。文档、issue、日志和聊天中不得粘贴本机绝对 SDK/Pod/Python identity、HOME 路径、完整 PATH 或任何 secret。
+
+## 2. 字面 `flutter run`：受管一键入口
+
+在已注入 PATH 的终端、准备启动的 App 工作树（`quwoquan_app/` 或其子目录）：
+
+```bash
+flutter run                # 无 -d 时委托 canonical device authority：
+                           # 单设备自动、多设备 TTY 编号选择、非 TTY typed 阻断
+flutter run -d <device-id> # 显式设备，exact 翻译为 canonical --device
+```
+
+- dispatcher 从 cwd 向上定位最近的 `quwoquan_app`，并前台 exec **该工作树**的 `run.sh`；多个 clone/worktree 并存时不会跳回激活 facade 的那棵树。cwd 位于别的 Flutter project 时，`flutter run` 逐字透传真实 SDK；cwd 不属于任何 Flutter project 时才回退 facade 自身所在树。
+- App 内的 `run` 白名单翻译为 `run.sh --env alpha --device <id>`，默认走下节的 Debug-nonprod 开发直连；键位（r/R/q）与 runtime configuration provenance 和字面 `run.sh` 相同。
+- 白名单只有 `-d <id>`/`--device-id <id>` 与 `-v`/`--verbose`（后者以 `QWQ_LAUNCH_VERBOSE=1` 传递）。任何其他参数（`--target`、`--flavor`、`--dart-define*`、`--profile`/`--release`、端口类参数等）输出一行 `APP.LAUNCH.managed_argument_unsupported: <参数>` 并 exit 2；需要这些能力时使用 `run.sh` 的 canonical 参数面。
+- 其余全部 flutter 子命令（`--version`、`doctor`、`analyze`、`test`、`pub`、`build` 等）由 dispatcher 解析真实 SDK 后 exact argv/env/cwd 透传，退出码保留；真实 SDK 解析失败输出 typed `APP.LAUNCH.workspace_flutter_sdk_unavailable:` 并退出非零。
+- `native_flutter_run` provenance 与 `embedded_default_package` 构建期默认供给已退役：Debug-nonprod 在无 canonical handoff 时不再物化嵌入默认 alpha trust/package。用真实 SDK 绝对路径绕过 dispatcher 的 raw `flutter run` 会在既有 trust gate 以 `APP.LAUNCH.runtime_config_trust_missing` fail-closed。
+- 需要非 alpha 环境时使用 `run.sh --env beta|gamma`（见下节）。
+
+## 3. `run.sh`：开发直连与 hermetic 路径
+
+PATH wrapper 与 dispatcher 一样按 cwd 定位工作树；请在准备启动的仓库根、`quwoquan_app/` 或其子目录执行：
+
+```bash
+run.sh                                      # Debug-nonprod 开发直连，默认 alpha
+run.sh --env beta -d <device-id> --mode ui-only
+run.sh --hermetic --env alpha -d <device-id> # 发布级 hermetic 流水线
+```
+
+默认开发直连只做：设备/真实 SDK 解析；pub 输入摘要变化时执行可见的 `flutter pub get`；生成签名 handoff/trust；调用既有 executor 完成 build → install → native activation → launch → `flutter attach`。它直接构建当前工作树，不冻结源码、不切 HOME/PUB_CACHE/CocoaPods HOME、不取 consumer lease、不生成 launch receipt/test_live report。iOS Pods 由标准 `flutter build ios` 按需处理。
+
+`--hermetic`，以及 `QWQ_CANONICAL_LAUNCH_ACTOR=app-content-uat` 的调用，继续走原有源码冻结、依赖胶囊、preflight、lease、supervisor、receipt/report 链路。Prod/Release、`make app-uat`、CI 的 trust 与供应链门禁没有放宽。
+
+- 无 `-d`：单设备自动，多设备在 TTY 显示编号选择；非 TTY typed fail closed。
+- 开发直连参数仅为 `--env alpha|beta|gamma`、`--target <env>-local`、`-d/--device`、`--mode content-live|ui-only`、`-v`；其他参数数秒内 typed 拒绝并提示使用 `--hermetic`。
+- 前台支持 `r` 热重载、`R` 热重启、`q` 退出；同设备重复启动会先终止既有进程再启动。
+- 首次遇到已退役的 `embedded_default_package` iOS Simulator/Android receipt 时，只清理这组旧 runtime 文件一次；当前 `external_runtime_package` 状态不会被重置。
+- Android emulator 使用同一 handoff 与 executor，并通过 `QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT` 只嵌入 trust envelope。alpha/beta/gamma 默认是远端 HTTPS/WSS 地址，不需要 `adb reverse` 或 lease；只有将 endpoint 显式改为宿主机 localhost 时才应走 `--hermetic` 的受管 transport。
+
+## 4. 人类一键开发：`make app-dev`
 
 在仓库根运行：
 
 ```bash
 make app-dev
-```
-
-默认值是 `ENV=alpha`、`MODE=content-live`。可显式选择 Alpha/Beta/Gamma、运行模式与设备：
-
-```bash
 make app-dev ENV=beta MODE=content-live
 make app-dev ENV=gamma MODE=ui-only DEVICE_ID=<flutter-device-id>
 ```
 
-`ENV` 只接受 `alpha|beta|gamma`，`MODE` 只接受 `content-live|ui-only`（A/B/G only）。省略 `DEVICE_ID` 时由 stackctl 的 canonical device authority 选择唯一设备；有多个候选设备时按其 typed blocker 补传 `DEVICE_ID`。Make 只映射参数，不运行 `flutter devices`，也不解析 target、不持有交互、状态机或 receipt。
+默认 `ENV=alpha`、`MODE=content-live`。`ENV` 只接受 `alpha|beta|gamma`，`MODE` 只接受 `content-live|ui-only`。Make 只映射参数并委托 stackctl/canonical device authority，不拥有设备发现、target 扩展、交互、provenance、状态机或 receipt。
 
-`content-live` 要求当前非生产内容 release 与服务 readback；`ui-only` 是显式、不可提升的降级开发模式，不把服务或内容未就绪包装为已通过。
+## 5. IDE canonical profile
 
-## 2. fresh Workspace Terminal：字面 `flutter run`
-
-首次使用或本地投影失效时，在仓库根执行：
-
-```bash
-make app-activate-flutter-facade
-```
-
-随后执行 Cursor 的 **Reload Window**，再打开一个全新的 Workspace Terminal。旧 PTY 不会获得新投影，也不能复用其 terminal receipt。新终端中确认：
-
-```bash
-command -v flutter
-flutter run -d <flutter-device-id>
-```
-
-`command -v flutter` 必须解析到仓库内 `quwoquan_app/scripts/tools/flutter_facade/bin/flutter`。不要手工传 `--host-vmservice-port`、`--dds-port` 或 `--no-pub`；facade 会把字面命令归一化到 canonical launcher。`agents-window` 仅可用于 optional diagnostics，不是字面 `flutter run` 或 UAT 的 required surface。
-
-查看投影状态可运行：
-
-```bash
-make app-activate-flutter-facade FACADE_ACTION=--status
-```
-
-旧 PTY 的准确恢复方式始终是重新运行激活入口、**Reload Window**、关闭旧终端并新建 Workspace Terminal，而不是修改全局 PATH 或 Flutter 安装。需要回退本地投影时运行 `make app-activate-flutter-facade FACADE_ACTION=--deactivate`，然后再次 Reload Window。
-
-## 3. IDE canonical profile
-
-先完成同一激活与 Reload Window，然后在 Cursor/VS Code 的 Run and Debug 中选择：
+完成 Cursor scope 激活并 Reload Window 后，在 Run and Debug 中选择：
 
 ```text
 QuWoQuan: canonical launch + IDE attach
 ```
 
-该 profile 通过受版本控制源重建的本地 `.vscode/tasks.json` / `.vscode/launch.json` 投影启动 canonical launcher，再由 IDE attach；不要新建第二套 Dart launch profile。环境只选 Alpha/Beta/Gamma，设备 ID 显式输入，模式只选 `content-live|ui-only`。
+该 profile 通过受版本控制的本地投影执行 canonical pre-launch，再由 IDE attach attempt-scoped VM service。环境只选 Alpha/Beta/Gamma，设备与模式显式输入；不要新建第二套 Dart launch profile。
 
-## 4. AI/自动化 UAT：`make app-uat`
+## 6. AI/自动化 UAT：`make app-uat`
 
-该入口无交互，三个参数都必须显式提供：
+该入口无交互，参数必须显式提供：
 
 ```bash
 make app-uat \
@@ -67,14 +102,36 @@ make app-uat \
   DEVICE_ID=<flutter-device-id>
 ```
 
-`TARGETS` 是 `alpha-local|beta-local|gamma-local` 的非空、无重复子集；禁止 Prod。`PLATFORM` 使用 stackctl 当前闭集：`ios-simulator|android|android-physical|ios-physical`。该 adapter 把全局 `--output-format json` 放在 `app-content-uat` 子命令之前，向 AI/自动化返回结构化结果；Make 不扩展 targets，也不代替 stackctl 的 argparse/domain 校验与 UAT raw evidence 编排。
+`TARGETS` 只能是 `alpha-local|beta-local|gamma-local` 的非空、无重复子集，禁止 Prod。`PLATFORM` 使用 stackctl 当前闭集。该入口编排 canonical raw evidence，不替代 `make app-dev`、原生 `flutter run` 或 IDE 人类 surface。
 
-## 生命周期与证据分层
+## 7. 不受支持的 raw 路径
 
-服务 lifecycle 与 App receipt 是两层证据：
+原始 Xcode backend、原始 Gradle backend 与绝对路径真实 SDK 的 raw `flutter run` 都不属于受支持入口。一切 buildMode/buildProfile 缺少 canonical handoff/trust 时必须在构建/安装前以 `APP.LAUNCH.runtime_config_trust_missing` typed fail closed；build phase 只验证，不会创建、刷新或修复 PATH 注入、handoff 或 runtime config 投影（构建期默认供给已退役，无任何物化例外）。不得关闭 Prod trust gate。
 
-- stackctl 管理环境服务的 package/up/health、内容 release/readback 与 teardown；服务就绪不等于 App 已启动。
-- canonical launcher 管理 App 的 compile/install/configure/launch、安全终态与启动 receipt；App receipt 不签发服务 lifecycle、内容 readiness、Prod 准出或 UAT authority。
-- `app-content-uat` 产生的 raw `ReadinessCaseResult`/父级只读投影也不替代 `run.sh`、fresh Workspace Terminal 或 IDE 三个人类启动面的真实验收。
+## 8. 生命周期与证据分层
 
-`quwoquan_app/run.sh` 是 canonical launcher 的 internal executor 与高级诊断入口，不是第五个公开角色入口。只有在定位 launcher/backend 问题或执行既定的人类 surface 证据时才直接调用，并继续要求显式设备与 canonical trust/binding。
+- stackctl 管理环境 package/up/health、内容 release/readback 与 teardown；服务就绪不等于 App 已启动。
+- canonical launcher 管理 compile/install/configure/launch、安全终态与 caller-bound launch attempt；PID 存活或 VM attach 不等于 `launched`。
+- 字面 `flutter run` 经 dispatcher 进入同一 canonical launcher，证据语义与 `run.sh` 完全一致；`native_flutter_run` provenance 已退役，不存在无 receipt 的第二启动协议。
+- raw `ReadinessCaseResult` 与父级只读投影不替代任一 required human surface，也不能用旧 receipt 冒充当前通过。
+
+
+## 9. 开发启动验收协议
+
+固定在实际编辑的主工作树 `quwoquan_app/` 验证；`git rev-parse --show-toplevel` 必须打印该主仓。facade 代码变化后重新执行 `make app-activate-flutter-facade FACADE_ACTION="--scope all"`，Cursor Reload Window，并分别新开一个 Cursor terminal 与一个 macOS Terminal/iTerm。
+
+两个新终端都先确认 `which flutter` 与 `which run.sh` 指向主仓 launcher bin，再分别字面执行：
+
+```bash
+flutter run -d <ios-simulator-udid>
+run.sh --env alpha -d <ios-simulator-udid>
+```
+
+一次有效验收必须同时具备：
+
+1. 冷启动 5 分钟内、热启动 90 秒内出现 `QWQ_APP_LAUNCH_PHASE status=launched` 并保持 r/R/q attach 交互态；
+2. 模拟器截图是正常首页/欢迎页，不是启动配置错误页；
+3. 输出包含 `configurationState=complete`（或可证明已向 alpha gateway 发出真实请求）；
+4. 修改一处可见 Dart 文案并按 `r` 后，模拟器内容变化。
+
+连续执行两次，中间不清缓存、不重激活。contract test、facade status、receipt、服务健康数都只算回归信号，不能替代上述用户工作树的字面命令、首帧与热重载证据。任何阶段静默超过 60 秒应作为启动缺陷处理。

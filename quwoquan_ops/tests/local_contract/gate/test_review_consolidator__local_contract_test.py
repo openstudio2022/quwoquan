@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import shutil
 import sys
@@ -24,8 +25,10 @@ import review_consolidator  # noqa: E402
 import review_dispatch  # noqa: E402
 import handoff_consumer  # noqa: E402
 from lib.agent_governance_contract import canonical_bytes_sha256, contract_schema_version  # noqa: E402
+from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
 from lib.feature_tree.commands import _context_manifest, discover_nodes  # noqa: E402
 from lib.feature_tree.ownership import resolve_target_details  # noqa: E402
+from lib.local_readiness.core import LocalReadinessError, _load_review_inputs  # noqa: E402
 
 REGISTRY_PATH = ROOT / ".agents/skills/review/references/registry.yaml"
 CASE_ROOT = ROOT / ".qwq_output/env/repo/local/review-consolidator-tests"
@@ -45,6 +48,7 @@ class ReviewConsolidatorTest(unittest.TestCase):
                 "command": "printf fixture",
                 "segment": "POST",
                 "required": True,
+                "timeout_seconds": 300,
                 "covers": [],
             }
         }
@@ -59,8 +63,15 @@ class ReviewConsolidatorTest(unittest.TestCase):
         manifest["evidence_fingerprint"] = review_dispatch.embedded_fingerprint_binding(
             review_dispatch.build_feature_context_fingerprint(manifest, repo_root=ROOT)
         )
-        self.manifest_path = self.case / "owner-manifest.json"
-        self.manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+        manifest_bytes = canonical_json_bytes(manifest)
+        manifest_root = (
+            ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint"
+        )
+        manifest_root.mkdir(parents=True, exist_ok=True)
+        self.manifest_path = manifest_root / (
+            hashlib.sha256(manifest_bytes).hexdigest() + ".json"
+        )
+        self.manifest_path.write_bytes(manifest_bytes)
         with mock.patch.object(
             review_dispatch, "_checklist_evidence", return_value=["fixture"]
         ):
@@ -264,6 +275,44 @@ class ReviewConsolidatorTest(unittest.TestCase):
             self.evidence["run_id"],
             result["reviewer_results"][0]["evidence_run_id"],
         )
+
+
+    def test_local_readiness_accepts_exact_consolidation_evidence_identity(self) -> None:
+        consolidation = self._consolidate([self._result("developer")])
+        consolidation_path = self.case / "consolidation.json"
+        consolidation_path.write_text(json.dumps(consolidation), encoding="utf-8")
+
+        refs, identity = _load_review_inputs(
+            consolidation_path,
+            [self.evidence_path],
+            repo_root=ROOT,
+            required=True,
+        )
+
+        self.assertEqual(
+            [
+                consolidation_path.relative_to(ROOT).as_posix(),
+                self.evidence_path.relative_to(ROOT).as_posix(),
+            ],
+            refs,
+        )
+        self.assertEqual(1, len(identity["evidence"]))
+
+    def test_local_readiness_rejects_drifted_consolidation_evidence_identity(self) -> None:
+        consolidation = self._consolidate([self._result("developer")])
+        consolidation["evidence_identities"][0]["canonical_bytes_sha256"] = (
+            "sha256:" + "0" * 64
+        )
+        consolidation_path = self.case / "consolidation-drifted.json"
+        consolidation_path.write_text(json.dumps(consolidation), encoding="utf-8")
+
+        with self.assertRaisesRegex(LocalReadinessError, "未绑定提供的 required evidence"):
+            _load_review_inputs(
+                consolidation_path,
+                [self.evidence_path],
+                repo_root=ROOT,
+                required=True,
+            )
 
 
     def test_result_from_evidence_run_one_rejected_for_run_two(self) -> None:

@@ -41,6 +41,8 @@ def _identity(environment: str, target: str) -> dict[str, str]:
         "deploymentTarget": target,
         "releaseId": "release-a",
         "releaseDigest": RELEASE_DIGEST,
+        "importRunId": "import-run-a",
+        "verifyRunId": "verify-run-a",
     }
 
 
@@ -176,16 +178,25 @@ def _evidence(
     cas_readback = ready("active-cas-readback", "passed")
     arguments: dict[str, object] = {
         "evidence_root": root,
+        "acceptance_profile": "environment_promotion",
         "environment": environment,
         "target": target,
         "release_id": "release-a",
         "release_digest": RELEASE_DIGEST,
+        "import_run_id": "import-run-a",
+        "verify_run_id": "verify-run-a",
         "sample_plan_ref": plan_ref["ref"],
         "sample_plan_digest": plan_ref["digest"],
         "target_binding_refs": bindings,
         "required_raw_results": raw_results,
         "required_target_profiles": list(profiles),
-        "data_readiness": ready("data-readiness", "passed"),
+        "data_readiness": _write_json(root, f"{environment}/data-readiness.json", {
+            **identity, "status": "passed",
+            "activationEnvelope": {
+                "importReportRef": ready("import-report", "imported")["ref"],
+                "importReportDigest": ready("import-report", "imported")["digest"],
+            },
+        }),
         "active_cas": {
             "ref": cas["ref"], "digest": cas["digest"],
             "readbackRef": cas_readback["ref"], "readbackDigest": cas_readback["digest"],
@@ -555,3 +566,117 @@ def test_release_order_projection_uses_fact_existence_not_passed_field(tmp_path:
     assert "passed" not in fact
     assert view["environments"][0]["state"] == "accepted"
     assert view["environments"][1]["availableActions"] == ["create_acceptance"]
+
+
+def _m1_api_evidence(root: Path) -> tuple[dict[str, object], list[dict[str, str]]]:
+    arguments, _profiles = _evidence(root)
+    arguments["acceptance_profile"] = "m1_api_consumer"
+    arguments["target_binding_refs"] = []
+    arguments["required_target_profiles"] = []
+    plan = json.loads((root / str(arguments["sample_plan_ref"])).read_text(encoding="utf-8"))
+    plan["samples"] = [
+        {
+            "sampleId": f"m1-{carrier}-001",
+            "carrier": carrier,
+            "objectId": f"{carrier}-001",
+            "objectRef": (
+                f"objects/entities/{carrier}-001"
+                if carrier == "homepage"
+                else f"objects/posts/{carrier}/{carrier}-001"
+            ),
+            "objectDigest": "sha256:" + str(index) * 64,
+        }
+        for index, carrier in enumerate(subject._CARRIERS, 1)
+    ]
+    plan["entryCarrierCells"] = [
+        {
+            "entry": entry,
+            "carrier": carrier,
+            "applicability": "required",
+            "specRef": SPEC_REF,
+            "runnerClass": f"qwq_service.content_api.{entry}.{carrier}.v1",
+        }
+        for entry in subject._ENTRIES
+        for carrier in subject._CARRIERS
+    ]
+    plan_ref = _write_json(root, "release/m1-sample-plan.json", plan)
+    arguments["sample_plan_ref"] = plan_ref["ref"]
+    arguments["sample_plan_digest"] = plan_ref["digest"]
+    samples = {item["carrier"]: item for item in plan["samples"]}
+    results = []
+    for cell in plan["entryCarrierCells"]:
+        sample = samples[cell["carrier"]]
+        raw = {
+            **_identity("alpha", "alpha-local"),
+            "producer": "service",
+            "layer": "api_integration",
+            "status": "passed",
+            "entrySurface": cell["entry"],
+            "carrier": cell["carrier"],
+            "specRef": cell["specRef"],
+            "runnerIdentity": cell["runnerClass"],
+            "objectId": sample["objectId"],
+        }
+        raw_ref = _write_json(
+            root,
+            f"alpha/m1-raw-{cell['entry']}-{cell['carrier']}.json",
+            raw,
+        )
+        results.append({
+            **raw_ref,
+            "slotId": subject.required_raw_slot_id(
+                sample_id=sample["sampleId"],
+                entry_surface=cell["entry"],
+                carrier=cell["carrier"],
+                spec_ref=cell["specRef"],
+                runner_identity=cell["runnerClass"],
+            ),
+            "status": "passed",
+        })
+    arguments["required_raw_results"] = results
+    return arguments, []
+
+
+def test_m1_api_consumer_is_alpha_service_only_without_promotion_authority(tmp_path: Path) -> None:
+    arguments, profiles = _m1_api_evidence(tmp_path)
+    fact = subject.build_environment_acceptance_fact(**arguments)  # type: ignore[arg-type]
+    _schema_validator().validate(fact)
+    assert fact["acceptanceProfile"] == "m1_api_consumer"
+    assert fact["environment"] == "alpha" and fact["target"] == "alpha-local"
+    assert fact["targetBindingRefs"] == []
+    assert len(fact["requiredRawResults"]) == 16
+    subject.validate_environment_acceptance_fact(
+        fact, evidence_root=tmp_path, required_target_profiles=profiles,
+    )
+
+    wrong_target = deepcopy(fact)
+    wrong_target["target"] = "alpha-proof"
+    wrong_target["factId"] = subject.derive_fact_id(wrong_target)
+    with pytest.raises(subject.EnvironmentAcceptanceFactError, match="alpha-local"):
+        subject.validate_environment_acceptance_fact(
+            wrong_target, evidence_root=tmp_path, required_target_profiles=[],
+        )
+
+    promoted = deepcopy(fact)
+    promoted["acceptanceProfile"] = "environment_promotion"
+    promoted["factId"] = subject.derive_fact_id(promoted)
+    with pytest.raises(subject.EnvironmentAcceptanceFactError, match="non-empty"):
+        subject.validate_environment_acceptance_fact(
+            promoted, evidence_root=tmp_path, required_target_profiles=[],
+        )
+
+
+def test_m1_api_consumer_rejects_app_raw_and_binding_derived_slot(tmp_path: Path) -> None:
+    arguments, _ = _m1_api_evidence(tmp_path)
+    fact = subject.build_environment_acceptance_fact(**arguments)  # type: ignore[arg-type]
+    first = fact["requiredRawResults"][0]
+    path = tmp_path / first["ref"]
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw.update({"producer": "app", "layer": "user_acceptance"})
+    path.write_text(json.dumps(raw, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    first["digest"] = subject.exact_byte_digest(path)
+    fact["factId"] = subject.derive_fact_id(fact)
+    with pytest.raises(subject.EnvironmentAcceptanceFactError, match="Service API integration"):
+        subject.validate_environment_acceptance_fact(
+            fact, evidence_root=tmp_path, required_target_profiles=[],
+        )

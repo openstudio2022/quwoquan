@@ -1,10 +1,44 @@
 package reliabletask
 
 import (
+	"context"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 )
+
+var dataContentMemoryCheckpoints = struct {
+	sync.Mutex
+	byStore map[*MemoryStore]map[string]DataContentPartitionCheckpoint
+}{
+	byStore: map[*MemoryStore]map[string]DataContentPartitionCheckpoint{},
+}
+
+func (s *MemoryStore) FlushDataContentPartitionCheckpoint(
+	ctx context.Context,
+	checkpoint DataContentPartitionCheckpoint,
+) error {
+	_ = ctx
+	key := checkpoint.ExecutionID + "|" + checkpoint.Stage + "|" + checkpoint.PartitionKey
+	dataContentMemoryCheckpoints.Lock()
+	defer dataContentMemoryCheckpoints.Unlock()
+	checkpoints := dataContentMemoryCheckpoints.byStore[s]
+	if checkpoints == nil {
+		checkpoints = map[string]DataContentPartitionCheckpoint{}
+		dataContentMemoryCheckpoints.byStore[s] = checkpoints
+	}
+	if existing, ok := checkpoints[key]; ok {
+		if existing.JobSetDigest != checkpoint.JobSetDigest {
+			return errors.New("DATA.RELIABLETASK.STALE_FENCE: partition checkpoint jobSetDigest drift")
+		}
+		if existing.CompletedCount > checkpoint.CompletedCount {
+			return errors.New("DATA.RELIABLETASK.STALE_CHECKPOINT: partition checkpoint cannot move backwards")
+		}
+	}
+	checkpoints[key] = checkpoint
+	return nil
+}
 
 type dataContentCheckpointProgress struct {
 	completedCount int

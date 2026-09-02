@@ -41,10 +41,47 @@ func researchSupplyService(reader *terminalActiveSupplyReader) *FeedService {
 	)
 }
 
-func TestListFeedResearchReleaseConvergesForNonResearchPrincipal(t *testing.T) {
-	active := &terminalActiveSupplyReader{active: true, releaseClass: "research"}
-	service := researchSupplyService(active)
+type multiResearchFeedReader struct {
+	posts []postports.PostFeedItemSlice
+}
 
+func (reader multiResearchFeedReader) FindPublishedFeedPost(
+	_ context.Context,
+	postID postports.PostID,
+) (postports.PostFeedItemSlice, bool, error) {
+	for _, post := range reader.posts {
+		if post.PostID == postID {
+			return post, true, nil
+		}
+	}
+	return postports.PostFeedItemSlice{}, false, nil
+}
+
+func (reader multiResearchFeedReader) FindPublishedFeedPosts(
+	ctx context.Context,
+	request postports.PostFeedHydrationRequest,
+) (map[postports.PostID]postports.PostFeedItemSlice, error) {
+	result := make(map[postports.PostID]postports.PostFeedItemSlice)
+	for _, postID := range request.PostIDs() {
+		post, found, err := reader.FindPublishedFeedPost(ctx, postID)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			result[postID] = post
+		}
+	}
+	return result, nil
+}
+
+func (reader multiResearchFeedReader) ListPublishedFeedPosts(
+	context.Context,
+	postports.PostFeedReadRequest,
+) (postports.PostFeedSlice, error) {
+	return postports.PostFeedSlice{Items: append([]postports.PostFeedItemSlice(nil), reader.posts...)}, nil
+}
+
+func TestListFeedResearchReleaseConvergesForNonResearchPrincipal(t *testing.T) {
 	for name, request := range map[string]ListFeedRequest{
 		"anonymous initial": {
 			UserID: "u-anon", SessionID: "s-anon", ChannelID: "recommend", Limit: 10,
@@ -53,18 +90,32 @@ func TestListFeedResearchReleaseConvergesForNonResearchPrincipal(t *testing.T) {
 			UserID: "u-member", ViewerPersonaID: "persona-member",
 			SessionID: "s-member", ChannelID: "recommend", Limit: 10,
 		},
-		// s4-verify-011 抓到的真实泄露路径：identity=work（无 type）走
-		// PostReader 具名浏览时间线，绕过只挂在推荐/视频书分支上的收敛。
+		// strict preflight 抓到的真实泄露路径：identity=work（无 type）走
+		// PostReader 具名浏览时间线，不能绕过 query owner 的统一收敛。
 		"anonymous named browse identity=work": {
 			UserID: "u-anon", SessionID: "s-anon",
 			Identity: "work", Sort: "recommend", Limit: 10,
 		},
+		"homepage recommend": {
+			UserID: "u-anon", SessionID: "s-homepage",
+			ChannelID: "recommend", Sort: "recommend", Limit: 10,
+		},
 		"anonymous video book identity=work type=video": {
-			UserID: "u-anon", SessionID: "s-anon",
+			UserID: "u-anon", SessionID: "s-video",
 			Identity: "work", Type: "video", Sort: "recommend", Limit: 10,
+		},
+		"premium": {
+			UserID: "u-anon", SessionID: "s-premium",
+			ChannelID: "premium", Sort: "recommend", Limit: 10,
+		},
+		"following": {
+			UserID: "u-member", ViewerPersonaID: "persona-member",
+			SessionID: "s-following", ChannelID: "following", Limit: 10,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			active := &terminalActiveSupplyReader{active: true, releaseClass: "research"}
+			service := researchSupplyService(active)
 			response, err := service.ListFeed(context.Background(), request)
 			if err != nil {
 				t.Fatalf("ListFeed: %v", err)
@@ -88,7 +139,85 @@ func TestListFeedResearchReleaseConvergesForNonResearchPrincipal(t *testing.T) {
 					t.Fatalf("converged wire must omit %s, got %#v", forbidden, envelope[forbidden])
 				}
 			}
+			if active.calls != 1 {
+				t.Fatalf("research convergence must read active release once, calls=%d", active.calls)
+			}
 		})
+	}
+}
+
+func TestListFeedResearchReleaseConvergesPaginationBeforeRouteReplay(t *testing.T) {
+	active := &terminalActiveSupplyReader{active: true, releaseClass: "commercial"}
+	now := time.Now().UTC()
+	posts := []postports.PostFeedItemSlice{
+		{
+			PostID: postports.NewPostID("post-page-1"), AuthorPersonaID: postports.NewPersonaID("author-page-1"),
+			ContentType: "image", ContentIdentity: "work", Visibility: "public", CreatedAt: now,
+			SourceOwner: "qwq_data", ReleaseID: "rel_local_contract", ManifestDigest: terminalManifestDigest,
+			LifecycleStatus: "active",
+		},
+		{
+			PostID: postports.NewPostID("post-page-2"), AuthorPersonaID: postports.NewPersonaID("author-page-2"),
+			ContentType: "image", ContentIdentity: "work", Visibility: "public", CreatedAt: now.Add(-time.Minute),
+			SourceOwner: "qwq_data", ReleaseID: "rel_local_contract", ManifestDigest: terminalManifestDigest,
+			LifecycleStatus: "active",
+		},
+	}
+	candidates := []rtrec.ContentCandidate{
+		{
+			ContentID: "post-page-1", ContentType: "image", AuthorID: "author-page-1", PublishedAt: now,
+			SourceOwner: "qwq_data", SupplySource: "data_engineering", ReleaseID: "rel_local_contract",
+			ManifestDigest: terminalManifestDigest, LifecycleStatus: "active",
+		},
+		{
+			ContentID: "post-page-2", ContentType: "image", AuthorID: "author-page-2", PublishedAt: now.Add(-time.Minute),
+			SourceOwner: "qwq_data", SupplySource: "data_engineering", ReleaseID: "rel_local_contract",
+			ManifestDigest: terminalManifestDigest, LifecycleStatus: "active",
+		},
+	}
+	service := newTerminalFeedService(
+		newTerminalFeedEngine(candidates),
+		multiResearchFeedReader{posts: posts},
+		WithActiveSupplyReader(active),
+		feedDeliveryPageStoreOption(),
+	)
+	request := ListFeedRequest{
+		UserID: "u-page", ViewerPersonaID: "persona-page", SessionID: "s-page",
+		ChannelID: "following", Limit: 1, ResearchPrincipal: true,
+	}
+	first, err := service.ListFeed(context.Background(), request)
+	if err != nil || first.NextCursor == "" {
+		t.Fatalf("create commercial pagination cursor: response=%+v err=%v", first, err)
+	}
+	active.releaseClass = "research"
+	request.Cursor = first.NextCursor
+	request.FeedRequestID = first.FeedRequestID
+	request.ResearchPrincipal = false
+
+	response, err := service.ListFeed(context.Background(), request)
+	if err != nil {
+		t.Fatalf("research pagination convergence: %v", err)
+	}
+	if response.Outcome != FeedResponseOutcomeEmpty ||
+		response.EmptyReason != FeedEmptyReasonNoActiveRelease ||
+		len(response.Items) != 0 {
+		t.Fatalf("pagination must converge before delivery-page replay: %+v", response)
+	}
+	wire, marshalErr := json.Marshal(response)
+	if marshalErr != nil {
+		t.Fatalf("marshal pagination convergence: %v", marshalErr)
+	}
+	var envelope map[string]any
+	if unmarshalErr := json.Unmarshal(wire, &envelope); unmarshalErr != nil {
+		t.Fatalf("unmarshal pagination convergence: %v", unmarshalErr)
+	}
+	for _, forbidden := range []string{"releaseId", "manifestDigest"} {
+		if _, has := envelope[forbidden]; has {
+			t.Fatalf("pagination convergence must omit %s: %#v", forbidden, envelope)
+		}
+	}
+	if active.calls != 2 {
+		t.Fatalf("initial+pagination active supply calls=%d, want 2", active.calls)
 	}
 }
 

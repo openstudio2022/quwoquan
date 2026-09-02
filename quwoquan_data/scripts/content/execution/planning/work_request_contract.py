@@ -6,8 +6,8 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from content.execution.campaign.carrier_execution_policy import carrier_policy_digest
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+from content.execution.planning.carrier_policy import carrier_policy_digest
+from content.execution.planning.carrier_demand import CAMPAIGN_CARRIERS
 from content.execution.planning.work_request_dependencies import (
     canonical_dependency_ref,
     canonical_digest,
@@ -42,7 +42,6 @@ _ALLOWED_INPUTS = frozenset(
         "externalInputRefsByCarrier",
         "acquisitionRootRef",
         "predecessorExecutionIdsByCarrier",
-        "predecessorReconciliationReceiptRef",
         "promotionReceiptRef",
     }
 )
@@ -288,17 +287,6 @@ def _normalize(intent: Mapping[str, Any]) -> dict[str, Any]:
         "predecessorExecutionIdsByCarrier": dict(
             intent.get("predecessorExecutionIdsByCarrier") or {}
         ),
-        "predecessorReconciliationReceiptRef": (
-            canonical_dependency_ref(
-                resolve_dependency_path(
-                    intent["predecessorReconciliationReceiptRef"]
-                )
-            )
-            if str(
-                intent.get("predecessorReconciliationReceiptRef") or ""
-            ).strip()
-            else ""
-        ),
         "promotionReceiptRef": (
             canonical_dependency_ref(
                 resolve_dependency_path(intent["promotionReceiptRef"])
@@ -365,8 +353,7 @@ def _input_issues(intent: Mapping[str, Any]) -> list[str]:
     if semantic == "cursor_auto" and mode != "retry":
         issues.append("cursorAutoRetryRequired")
     predecessors = intent.get("predecessorExecutionIdsByCarrier") or {}
-    reconciliation = intent.get("predecessorReconciliationReceiptRef")
-    if mode == "fresh" and (predecessors or reconciliation):
+    if mode == "fresh" and predecessors:
         issues.append("freshRetryConflict")
     if mode == "retry":
         if not isinstance(predecessors, Mapping) or not predecessors or any(
@@ -374,8 +361,6 @@ def _input_issues(intent: Mapping[str, Any]) -> list[str]:
             for value in predecessors.values()
         ):
             issues.append("predecessorExecutionIdsByCarrier")
-        if not reconciliation:
-            issues.append("predecessorReconciliationReceiptRef")
     return issues
 
 

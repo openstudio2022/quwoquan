@@ -11,26 +11,27 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrContentDeleted                 = errors.New("CONTENT.USER.content_deleted")
-	ErrContentTooLong                 = errors.New("CONTENT.USER.content_too_long")
-	ErrFeedCapacityUnavailable        = errors.New("CONTENT.SYSTEM.feed_capacity_unavailable")
-	ErrForbiddenDelete                = errors.New("CONTENT.USER.forbidden_delete")
-	ErrForbiddenEdit                  = errors.New("CONTENT.USER.forbidden_edit")
-	ErrGatheringParticipationRequired = errors.New("CONTENT.USER.gathering_participation_required")
-	ErrIdempotencyConflict            = errors.New("CONTENT.USER.idempotency_conflict")
-	ErrInternalError                  = errors.New("CONTENT.SYSTEM.internal_error")
-	ErrInvalidArgument                = errors.New("CONTENT.USER.invalid_argument")
-	ErrInvalidContentType             = errors.New("CONTENT.USER.invalid_content_type")
-	ErrPostNotFound                   = errors.New("CONTENT.USER.post_not_found")
-	ErrPublicationRejected            = errors.New("CONTENT.USER.publication_rejected")
-	ErrRateLimited                    = errors.New("CONTENT.USER.rate_limited")
-	ErrRequiredDependencyUnavailable  = errors.New("CONTENT.SYSTEM.required_dependency_unavailable")
-	ErrResearchIdentityInvalid        = errors.New("CONTENT.USER.research_identity_invalid")
-	ErrStorageReadFailed              = errors.New("CONTENT.SYSTEM.storage_read_failed")
-	ErrStorageWriteFailed             = errors.New("CONTENT.SYSTEM.storage_write_failed")
-	ErrUnauthorized                   = errors.New("CONTENT.USER.unauthorized")
-	ErrUpstreamTimeout                = errors.New("CONTENT.MIDDLEWARE.upstream_timeout")
-	ErrVersionConflict                = errors.New("CONTENT.USER.version_conflict")
+	ErrContentDeleted                  = errors.New("CONTENT.USER.content_deleted")
+	ErrContentTooLong                  = errors.New("CONTENT.USER.content_too_long")
+	ErrFeedCapacityUnavailable         = errors.New("CONTENT.SYSTEM.feed_capacity_unavailable")
+	ErrForbiddenDelete                 = errors.New("CONTENT.USER.forbidden_delete")
+	ErrForbiddenEdit                   = errors.New("CONTENT.USER.forbidden_edit")
+	ErrGatheringParticipationRequired  = errors.New("CONTENT.USER.gathering_participation_required")
+	ErrIdempotencyConflict             = errors.New("CONTENT.USER.idempotency_conflict")
+	ErrInternalError                   = errors.New("CONTENT.SYSTEM.internal_error")
+	ErrInvalidArgument                 = errors.New("CONTENT.USER.invalid_argument")
+	ErrInvalidContentType              = errors.New("CONTENT.USER.invalid_content_type")
+	ErrPostNotFound                    = errors.New("CONTENT.USER.post_not_found")
+	ErrPublicationRejected             = errors.New("CONTENT.USER.publication_rejected")
+	ErrRateLimited                     = errors.New("CONTENT.USER.rate_limited")
+	ErrRequiredDependencyUnavailable   = errors.New("CONTENT.SYSTEM.required_dependency_unavailable")
+	ErrResearchIdentityInvalid         = errors.New("CONTENT.USER.research_identity_invalid")
+	ErrResearchReleaseStateUnavailable = errors.New("CONTENT.SYSTEM.research_release_state_unavailable")
+	ErrStorageReadFailed               = errors.New("CONTENT.SYSTEM.storage_read_failed")
+	ErrStorageWriteFailed              = errors.New("CONTENT.SYSTEM.storage_write_failed")
+	ErrUnauthorized                    = errors.New("CONTENT.USER.unauthorized")
+	ErrUpstreamTimeout                 = errors.New("CONTENT.MIDDLEWARE.upstream_timeout")
+	ErrVersionConflict                 = errors.New("CONTENT.USER.version_conflict")
 )
 
 // AppErrorFromContentDeleted returns *AppError for CONTENT.USER.content_deleted (user_message from errors.yaml).
@@ -121,6 +122,12 @@ func AppErrorFromRequiredDependencyUnavailable(debugMessage string) *rterr.AppEr
 func AppErrorFromResearchIdentityInvalid(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.research_identity_invalid")
 	return rterr.NewAppError(code, "当前研究态身份无效或已过期", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromResearchReleaseStateUnavailable returns *AppError for CONTENT.SYSTEM.research_release_state_unavailable (user_message from errors.yaml).
+func AppErrorFromResearchReleaseStateUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.SYSTEM.research_release_state_unavailable")
+	return rterr.NewAppError(code, "研究回读所需内容状态暂不可用，请稍后重试", debugMessage).WithMetadata("research_release_state_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 5)
 }
 
 // AppErrorFromStorageReadFailed returns *AppError for CONTENT.SYSTEM.storage_read_failed (user_message from errors.yaml).

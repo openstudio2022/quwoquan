@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign.capsule_seal import capsule_tree_digest
-from content.execution.campaign.external_inputs import payload_digest
+from content.execution.source_pool.capsule_seal import capsule_tree_digest
+from content.execution.source_pool.external_inputs import payload_digest
 from content.release.canonical.garbage_collection_contract import (
     GC_REFERENCE_GRAPH_SCHEMA,
     validate_reference_graph,

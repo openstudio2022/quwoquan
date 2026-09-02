@@ -11,7 +11,7 @@
 
 ## 2. Story 协作与状态流
 
-- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：仓库只保留 `dev1.0` 与 `main`；日常开发直接进入 `dev1.0`，唯一 PR 边为 `dev1.0 -> main` promotion。
+- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：仓库只保留 `dev1.0`、`main` 与六条声明的长期 lane；日常开发只经 `lane/* -> dev1.0` PR 合入，发布 PR 边为 `dev1.0 -> main` promotion。
 - [`gray-release-to-prod`](./gray-release-to-prod/spec.md)：**统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
 - [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
 - [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：beta 云侧本地集成栈始终只允许**一套**，启动新实例前必须先停止旧实例再重启。
@@ -30,13 +30,13 @@
 
 <a id="dec-001"></a>
 ### DEC-001 dev1.0 集成与 main 发布组成唯一受控主链
-- 决策：仓库只保留 `dev1.0`、`main` 两个分支。长期集成真相源固定为 `dev1.0` 并接受日常直接开发，唯一发布真相源固定为 `main` 且只接受 `dev1.0 -> main` promotion PR；promotion 成功后仅受管系统可把 `main` fast-forward backsync 到 `dev1.0`。
+- 决策：仓库只保留 `dev1.0`、`main` 与六条声明的长期 lane。日常开发面固定为 lane，长期集成真相源固定为 `dev1.0` 且只接受 `lane/* -> dev1.0` PR 与过渡期受控 direct push；唯一发布真相源固定为 `main` 且只接受 `dev1.0 -> main` promotion PR；promotion 成功后仅受管系统可把 `main` fast-forward backsync 到 `dev1.0`。
 - 单向状态流：`dev1.0` push 只生成绑定精确 SHA 的 `03/04/05` hosted check evidence，不取得 release eligibility。`dev1.0` 合入 `main` 后生成 promotion receipt 并允许 mainline candidate admission。系统 backsync 只同步 ref，不生成新的 promotion 或 release eligibility。
-- 同 SHA 证据所有权：候选级 App `static/tests/serial/coverage` 只由 `dev1.0` push lane 执行。push 使用 `merge-base(origin/main, HEAD) -> HEAD` 判断候选 App 是否受影响，并以绑定 base/head/changed-path digest 的 `required|not_required` scope receipt 表达，不从 skipped 推导。PR 继续拥有 `main -> head` 区间 gate，但不重复执行候选级 App 测试。PR 通过只读 GitHub Actions authority 验签唯一 push run ID 的 workflow path、repository、event、head branch/SHA、最高 attempt、completed/success 状态与 7-job 完整成功闭包。缺失、多个 run ID、仍运行、失败/取消/skipped、attempt 混用、job 集漂移均 fail closed。不允许按 head SHA 合并两条 workflow concurrency group，也不允许用静态路径、本地缓存或调用方布尔值冒充 hosted evidence。
+- 同 SHA 证据所有权：候选级 App `static/tests/serial/coverage` 只由对应 lane 或 `dev1.0` source 分支的 push lane 执行。push 使用当前 source 的 exact push 区间（lane 首推回退到 `merge-base(origin/dev1.0, HEAD) -> HEAD`）判断候选 App 是否受影响，并以绑定 base/head/changed-path digest 的 `required|not_required` scope receipt 表达，不从 skipped 推导。PR 继续拥有 base SHA 到 head SHA 的区间 gate，但不重复执行候选级 App 测试。PR 通过只读 GitHub Actions authority 验签唯一 push run ID 的 workflow path、repository、event、head branch/SHA、最高 attempt、completed/success 状态与 7-job 完整成功闭包。缺失、多个 run ID、仍运行、失败/取消/skipped、attempt 混用、job 集漂移均 fail closed。不允许按 head SHA 合并两条 workflow concurrency group，也不允许用静态路径、本地缓存或调用方布尔值冒充 hosted evidence。
 - 计时边界：`03.delivery_gate` 的唯一预算来源是 `pr_gate_timing_budgets.json` 的 1500/1800。`600` 是上层 mainline 软目标，不覆盖本 gate。PR 公式固定为 `created_at -> max(local interval gates completed_at, push App evidence verifier completed_at)`。push phase durations 只作为 external machine diagnostic 与本地 sibling 取 max，不改变 PR calendar。verifier 从 PR run 官方 created_at 派生 1500/1800 绝对 deadline，排队不重置。workflow_call/mainline release 在自身 DAG 内运行完整 App 证据，不依赖另一个可变 run。
 - GitHub authority 读取：复用单一只读分页/重试 helper，最小权限 `actions:read`。暂态重试遵守服务端退避并 clamp 到 evidence deadline，终态错误与耗尽均结构化 `GATE_BLOCK`，诊断不含 token。唯一 run ID rerun 时只接受最高 attempt，多个 run ID 必须新 SHA。回滚只允许整体 Git revert，不保留 PR 本地 App fallback 或 feature flag。
 - 三层测试映射：`local_contract` 以最小 typed run/job fixture 锁定零/一/多 run、identity、最高 attempt、7-job 闭包、skipped/失败/取消、分页、deadline、API 暂态与 PR machine/calendar 公式，并直接绑定 `SIT-001.t1`。`api_integration` 使用 production reader/CLI 只读当前仓库真实 GitHub API，证明分页、权限、唯一 run/attempt 与 job timestamps，不在测试内另写 HTTP verifier。`user_acceptance` 由最终候选 SHA 的真实 `dev1.0` push、promotion PR 与 workflow_call CaseResult 证明 required-check、双区间与官方日历边界。真实 hosted 闭环在本增量完成前不得关闭 `daily-merge-release-strategy OPEN-001`。
-- 机器真相源：`quwoquan_ops/policies/branch_policy.yaml` 唯一声明两个分支、唯一 PR 边、integration/release/production-source 角色与 system backsync。hook、Actions、release governance 和 Prod source admission 只消费该合同，不各自维护第二份 allowlist。
+- 机器真相源：`quwoquan_ops/policies/branch_policy.yaml` 唯一声明允许分支闭集、合法 PR 边闭集、integration/release/production-source 角色与 system backsync。hook、Actions、release governance 和 Prod source admission 只消费该合同，不各自维护第二份 allowlist。
 - 对象边界：`BranchPolicy` 是从上述版本化合同加载的不可变配置，`BranchTransition` 是一次评估的不可变输入值，`BranchDecision` 是不可变判断结果。Integration evidence 直接使用 GitHub 对精确 SHA 的 hosted Check Runs；Platform Ops 的 `BranchGovernanceEvidenceWriter` 只负责 promotion、backsync 与 blocker receipt，receipt 只引用 Git/GitHub 权威事实和 policy digest，不成为可修改分支状态或第二套 policy。
 - 决策导出面：生产模块提供纯 `BranchTransition(event, actorKind, repository, head, base, beforeOid, afterOid, refs) -> BranchDecision(status, reasonCode, stringContext)`。`status` 只允许 `allowed|blocked`，`reasonCode` 只使用 `OPS.BRANCH.*` 稳定身份，OID、ref、actor 与远端诊断只进入 string context；local contract 直接调用该生产 evaluator。
 - Git authority 端口：`BranchRefReader.readHeads(repository) -> BranchRefSnapshot` 读取权威 heads、精确 OID 与 ancestry。`BranchBacksyncWriter.fastForward(expectedBeforeOid, promotionOid) -> BranchBacksyncResult` 只执行无 force fast-forward 并回读 exact after OID。equal 为幂等 no-op；同一 attempt 发现 before OID 漂移即返回 `OPS.BRANCH.BACKSYNC_CAS_CONFLICT` 且零写，只有新 attempt 取得新快照后才能重新判定。任何分叉、main 落后、non-fast-forward、权限或网络不可确认都不写 ref。
@@ -45,8 +45,8 @@
 - Prod effect isolation：任一逐次 readback 不可证明时 fail-closed，只产 blocker receipt；candidate、credential materialization、Provider 与 `stackctl` rollout command 均不可达。
 - Private-free 边界：无原生 protection/ruleset 时记录 `hostedProtectionVerified=false` 并阻断 `formalProd` 声明，具备上述逐次证据的 release validation 可以继续；满足父能力的 hosted protection 与 approval 后才交给 `gray-release-to-prod` 的 effectful rollout。
 - 理由：把频繁集成和唯一发布拆开可以稳定 integration checks，同时保持未晋级代码无法取得 release eligibility；共享 evaluator、真实 Git 端口与 hosted readback使三层证据绑定同一 repository、run 与 OID。
-- 被否决方案：`main` 同时承担日常集成、创建任何临时或第三长期分支、非 `dev1.0 -> main` PR 直达发布、人工 `main -> dev1.0`、force backsync、用环境变量自报 system identity，或由 hook/workflow复制分支规则。
-- 约束与影响：GitHub 原生保护不可用时，仓内 gate 只能阻断 eligibility 而不能声称远端 direct push 未发生。`dev1.0` 异常只允许在同一分支追加修复提交，禁止临时 reconcile 分支、自动 merge、force push 或历史改写。
+- 被否决方案：`main` 同时承担日常集成、创建任何白名单外分支或额外长期分支、非 `dev1.0 -> main` PR 直达发布、人工 `main -> dev1.0`、force backsync、用环境变量自报 system identity，或由 hook/workflow复制分支规则。
+- 约束与影响：GitHub 原生保护不可用时，仓内 gate 只能阻断 eligibility 而不能声称远端 direct push 未发生。异常增量只允许在其 lead lane（或过渡期 `dev1.0`）追加修复提交，禁止白名单外 reconcile 分支、自动 merge、force push 或历史改写。
 - 合法 main promotion 入库后自动启动同一 DAG，完成不可变 OCI `ReleaseEvidenceManifest` 的 `component-ready -> candidate-ready` 总装与 Alpha/Beta/Gamma 阻断验证；正式 Prod apply 不由 workflow_run 或 push 静默执行，必须由人工 dispatch 绑定可达 `main` 的精确 Git SHA、显式设置非 dry-run，并通过 production environment approval。
 - `candidate-ready` 必须绑定四环境配置包、Android/iOS 的 nonprod/prod 组件、单一 Web bundle、ContractGraph、真实 Provider readiness 与三层测试。Alpha、Beta、Gamma 环境 composition 引用同一 nonprod App bytes digest，按序接受回执并绑定 rollback readiness 后才成为 `deployable`，Prod 全量验证后才成为 `released`。
 - 同一候选制品就绪后，Alpha、Beta、Gamma-local 在隔离运行面并行执行；聚合器仍按 `alpha -> beta -> gamma` 验证回执，任一失败均不得申请 Prod approval。

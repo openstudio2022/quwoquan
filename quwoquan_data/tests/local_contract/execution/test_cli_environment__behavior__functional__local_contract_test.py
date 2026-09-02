@@ -61,7 +61,11 @@ def test_cli_exposes_only_host_only_task_facades():
     )
     assert choices.split(",") == [
         "init",
-        "stage-record",
+        "stage-open",
+        "stage-gate",
+        "stage-close",
+        "semantic-prepare",
+        "semantic-record",
         "lane-claim",
         "fleet-status",
         "acquire-images",
@@ -73,7 +77,8 @@ def test_cli_exposes_only_host_only_task_facades():
         "terminal-evidence-precheck",
     ]
     for retired in (
-        "preflight", "compile-intent", "calibrate-capacity", "capacity-bootstrap",
+        "preflight", "compile-intent", "project-init-inputs",
+        "calibrate-capacity", "capacity-bootstrap",
         "prepare-campaign", "execute", "recipe", "drain-pool-delivery", "discard",
         "plan-images", "probe-images", "reconcile-stale", "reconcile-failed-campaign",
         "reconcile-submissions", "runtime-evidence",

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ..data_execution_fleet import project_canonical_runtime_owned_ports
+from ..runtime_port_ownership import project_canonical_runtime_owned_ports
 from ..port_manifest import load_port_manifest
 from .attestation import exact_removal_commands
 from .constants import (
@@ -399,8 +399,8 @@ def required_released_endpoints(
 
     收敛边界是目标 runtime 自有的 published endpoint：只取 attested 清单会漏掉「属该
     target 但这次 project 没发布」的 canonical role，那种残留同样说明目标 runtime 没停
-    干净；旧栈的非 canonical 端口只在 attested 里有，两者取并集才闭合。Data fleet 自有
-    role 由投影排除——它是长驻栈，不该被要求释放。
+    干净；旧栈的非 canonical 端口只在 attested 里有，两者取并集才闭合。canonical
+    role 全部来自现役 target runtime 的 port profile。
 
     判否与回执共用本函数：收敛回执若只记 attested 子集，字段名承诺的范围就大于内容，
     读回执的人会以为并集里那部分也被证过。

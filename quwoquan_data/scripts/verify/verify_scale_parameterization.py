@@ -98,7 +98,7 @@ def verify_consumers_agree() -> list[str]:
 
     if str(SCRIPTS_ROOT) not in sys.path:
         sys.path.insert(0, str(SCRIPTS_ROOT))
-    from content.execution.campaign.scale import campaign_workload_targets
+    from content.execution.planning.scale import campaign_workload_targets
     from content.release.canonical import environment_release_selection, pool_inspection
     from governance.coverage.distribution import load_content_distribution_policy
 

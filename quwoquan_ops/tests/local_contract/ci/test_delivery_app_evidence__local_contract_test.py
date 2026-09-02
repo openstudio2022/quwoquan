@@ -13,8 +13,10 @@ from pathlib import Path
 
 from quwoquan_ops.ci.verify_delivery_app_evidence import (
     EvidenceError,
+    _evidence_branch,
     verify_app_evidence,
 )
+from quwoquan_ops.gate.verify_git_branch_policy import load_policy
 
 
 SHA = "a" * 40
@@ -187,6 +189,18 @@ class DeliveryAppEvidenceTest(unittest.TestCase):
         self.assertNotIn("jobs", result)
         datetime.fromisoformat(str(result["observedAt"]).replace("Z", "+00:00")).astimezone(timezone.utc)
 
+    def test_evidence_branch_accepts_integration_and_declared_lanes_only(self) -> None:
+        policy = load_policy()
+        self.assertEqual(_evidence_branch(policy, ""), "dev1.0")
+        self.assertEqual(_evidence_branch(policy, "dev1.0"), "dev1.0")
+        self.assertEqual(
+            _evidence_branch(policy, "lane/small-fix"), "lane/small-fix"
+        )
+        for undeclared in ("main", "lane/undeclared", "feature/x"):
+            with self.subTest(branch=undeclared):
+                with self.assertRaisesRegex(EvidenceError, "INPUT_INVALID"):
+                    _evidence_branch(policy, undeclared)
+
     def test_cli_fixture_emits_exact_workflow_outputs(self) -> None:
         script = (
             Path(__file__).resolve().parents[4]
@@ -212,7 +226,8 @@ class DeliveryAppEvidenceTest(unittest.TestCase):
                     "--current-run-id",
                     "303",
                     "--run-created-at",
-                    "2026-08-26T00:00:00Z",
+                    # deadline 相对 run 创建时刻，用当前时刻避免 fixture 过期炸弹。
+                    datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                     "--evidence-deadline-seconds",
                     "86400",
                     "--runs-json",

@@ -1,5 +1,5 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-005
-"""历史视频字节改挂当前来源身份时，必须由一次全新的受治理评审做桥。
+"""历史视频字节改挂当前来源身份时，必须由一次全新的宿主源审做桥。
 
 `REQ-005`：「上游历史 `sourceDigests/executionIds` 只能以冻结 provenance 留在 adoption
 receipt，不得被提升为新 release 的多 source active identity。」`REQ-001` 进一步禁止
@@ -11,10 +11,10 @@ receipt，不得被提升为新 release 的多 source active identity。」`REQ-
 1. 身份分层：新 manifest 的 active identity 只来自当前 handoff，历史身份与历史
    receipt 只能作为冻结 provenance 出现在 `frozenPhysicalInput` 与 `frozenAsset`；
 2. 评审重做：历史 safetyReview 不得被复制，评审请求必须绑定当前身份与这份精确字节，
-   评审结论只能来自本次受治理 Grok journal；
-3. 结论不放宽：评审无效、失败或 blocked 都是 typed exclusion，只作废它自己；零成功时
-   fail closed 且不落 manifest；权利事实原样透传，不因重挂而升级；
-4. 同一身份不重复评审：同身份同字节重放只读回同一 create-once journal；身份一变必须
+   评审结论只能由宿主经 create-once host source review 记录；
+3. 结论不放宽：评审 blocked、词表外或宿主缺席都是 typed exclusion，只作废它自己；
+   零成功时 fail closed 且不落 manifest；权利事实原样透传，不因重挂而升级；
+4. 同一身份不重复评审：同身份同字节重放只读回同一 create-once 结果；身份一变必须
    重新评审。
 """
 from __future__ import annotations
@@ -25,11 +25,16 @@ from typing import Any
 
 import pytest
 from content.execution.agent.outcome import AgentRunOutcome
-from content.execution.campaign.scale import campaign_workload_targets
+from content.execution.planning.scale import campaign_workload_targets
 from content.source.pre_acquisition_handoff import (
     write_pre_acquisition_handoff,
 )
 from content.source import professional_video_rebind as rebind
+from content.source.host_source_review import (
+    HOST_SOURCE_REVIEW_INVALID,
+    HostSourceReviewError,
+    record_host_source_review_result,
+)
 from content.source.professional_safety_evidence import file_sha256
 from content.source.professional_video_receipt import document_digest, file_digest
 from content.source.professional_video_rebind import (
@@ -245,32 +250,6 @@ def _handoff(
     return path
 
 
-class _Reviewer:
-    """One governed reviewer double recording every prompt it is handed."""
-
-    def __init__(self, *, blocked: frozenset[str] = frozenset()) -> None:
-        self.prompts: list[str] = []
-        self._blocked = blocked
-
-    def __call__(self, prompt: str) -> AgentRunOutcome:
-        self.prompts.append(prompt)
-        request = json.loads(prompt)
-        asset_id = str(request["assetId"])
-        judgment = dict(_PASSED_JUDGMENT)
-        if asset_id in self._blocked:
-            judgment.update(status="blocked", privacyRisk="present")
-        return AgentRunOutcome.finished(
-            provider=AgentProvider.CURSOR_SDK,
-            run_id=f"run-{asset_id}",
-            agent_id=f"agent-{asset_id}",
-            request_id=f"request-{asset_id}",
-            duration_ms=25,
-            attempts=1,
-            warm_attempts=1,
-            result_text=json.dumps(judgment, ensure_ascii=False),
-        )
-
-
 @pytest.fixture()
 def bridge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     """Isolate media decoding so the identity/review bridge is what is measured."""
@@ -317,10 +296,9 @@ def bridge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     }
 
 
-def _run(
+def _run_once(
     bridge: dict[str, Any],
     *,
-    runner: _Reviewer,
     destination: str = "manifests/rebound.json",
     asset_ids: tuple[str, ...] = (),
 ) -> tuple[dict[str, Any], Path | None]:
@@ -331,8 +309,93 @@ def _run(
         destination=bridge["root"] / destination,
         output_root=bridge["root"],
         asset_ids=asset_ids,
-        runner=runner,
     )
+
+
+def _pending_requests(root: Path) -> list[tuple[str, dict[str, Any]]]:
+    """Frozen review requests that the host has not answered yet."""
+    requests_root = root / "host-source-reviews" / "requests"
+    results_root = root / "host-source-reviews" / "results"
+    pending: list[tuple[str, dict[str, Any]]] = []
+    if not requests_root.is_dir():
+        return pending
+    for path in sorted(requests_root.glob("*.json")):
+        if (results_root / path.name).exists():
+            continue
+        pending.append(
+            (f"host-source-reviews/requests/{path.name}", read_json(path))
+        )
+    return pending
+
+
+def _result_input(
+    request_ref: str,
+    request: dict[str, Any],
+    *,
+    passed: bool,
+) -> dict[str, Any]:
+    asset_id = str(request["assetBinding"]["assetId"])
+    return {
+        "schema": "quwoquan_data.host_source_review_result_input",
+        "requestRef": request_ref,
+        "requestDigest": request["requestDigest"],
+        "actor": {
+            "host": "cursor",
+            "sessionId": "rebind-review-session",
+            "modelFamily": "gpt-5",
+            "auditRunId": f"rebind-audit-{asset_id}",
+        },
+        "reviewedAt": "2026-08-19T00:05:00Z",
+        "verdict": {
+            "status": "passed" if passed else "blocked",
+            "entityMatch": "matched",
+            "qualityStatus": "passed",
+            "privacyRisk": "none" if passed else "present",
+            "minorRisk": "none",
+            "maliciousMediaRisk": "none",
+            "watermarkStatus": "absent",
+            "findings": [] if passed else ["privacy risk is present in frame samples"],
+        },
+    }
+
+
+def _record_reviews(
+    root: Path,
+    *,
+    blocked: frozenset[str] = frozenset(),
+    skip: frozenset[str] = frozenset(),
+) -> int:
+    recorded = 0
+    for request_ref, request in _pending_requests(root):
+        asset_id = str(request["assetBinding"]["assetId"])
+        if asset_id in skip:
+            continue
+        record_host_source_review_result(
+            evidence_root=root,
+            result_input=_result_input(
+                request_ref, request, passed=asset_id not in blocked
+            ),
+        )
+        recorded += 1
+    return recorded
+
+
+def _run(
+    bridge: dict[str, Any],
+    *,
+    blocked: frozenset[str] = frozenset(),
+    destination: str = "manifests/rebound.json",
+    asset_ids: tuple[str, ...] = (),
+) -> tuple[dict[str, Any], Path | None]:
+    """两阶段驱动：宿主对 pending 审核请求记录结论后重入同一命令。"""
+    try:
+        return _run_once(bridge, destination=destination, asset_ids=asset_ids)
+    except ProfessionalVideoRebindError as error:
+        if "DATA.SOURCE.HOST_REVIEW_PENDING" not in error.detail:
+            raise
+        if not _record_reviews(bridge["root"], blocked=blocked):
+            raise
+        return _run_once(bridge, destination=destination, asset_ids=asset_ids)
 
 
 def _current_identity(bridge: dict[str, Any]) -> dict[str, str]:
@@ -346,11 +409,26 @@ def _current_identity(bridge: dict[str, Any]) -> dict[str, str]:
     }
 
 
-def _review_requests(root: Path) -> dict[str, dict[str, Any]]:
-    return {
-        str(read_json(path)["assetId"]): read_json(path)
-        for path in sorted((root / "video-rebind").glob("*/review-request.json"))
-    }
+def _review_requests(root: Path) -> dict[str, list[dict[str, Any]]]:
+    requests_root = root / "host-source-reviews" / "requests"
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    if not requests_root.is_dir():
+        return grouped
+    for path in sorted(requests_root.glob("*.json")):
+        document = read_json(path)
+        grouped.setdefault(
+            str(document["assetBinding"]["assetId"]), []
+        ).append(document)
+    return grouped
+
+
+def _evidence_document(
+    root: Path, request: dict[str, Any], *, role: str
+) -> dict[str, Any]:
+    binding = next(
+        row for row in request["evidenceBindings"] if row["role"] == role
+    )
+    return read_json(root / binding["ref"])
 
 
 def test_the_new_manifest_active_identity_is_only_the_current_handoff(
@@ -358,7 +436,7 @@ def test_the_new_manifest_active_identity_is_only_the_current_handoff(
 ) -> None:
     """新 manifest 的 active identity 只能是当前 handoff 身份。"""
 
-    _result, manifest_path = _run(bridge, runner=_Reviewer())
+    _result, manifest_path = _run(bridge)
     manifest = read_json(manifest_path)
     identity = _current_identity(bridge)
 
@@ -373,7 +451,7 @@ def test_the_historical_identity_survives_only_as_frozen_provenance(
 ) -> None:
     """历史身份只能作为冻结 provenance，不得成为第二个 active source identity。"""
 
-    _result, manifest_path = _run(bridge, runner=_Reviewer())
+    _result, manifest_path = _run(bridge)
     manifest = read_json(manifest_path)
     frozen = manifest["frozenPhysicalInput"]
     history = bridge["history"]
@@ -396,7 +474,7 @@ def test_each_rebound_item_binds_the_exact_historical_bytes(
 ) -> None:
     """每个重挂对象都必须指回历史 CAS 中那一份精确字节。"""
 
-    _result, manifest_path = _run(bridge, runner=_Reviewer())
+    _result, manifest_path = _run(bridge)
     manifest = read_json(manifest_path)
     history = bridge["history"]
 
@@ -418,21 +496,31 @@ def test_the_review_request_binds_the_current_identity_and_the_frozen_bytes(
 ) -> None:
     """评审请求是身份桥：当前身份 + 这份精确历史字节，两者都必须在请求里。"""
 
-    _result, _manifest_path = _run(bridge, runner=_Reviewer())
+    _result, _manifest_path = _run(bridge)
     requests = _review_requests(bridge["root"])
     history = bridge["history"]
     identity = _current_identity(bridge)
 
     assert set(requests) == {"legacy-a", "legacy-b"}
-    for asset_id, request in requests.items():
+    for asset_id, documents in requests.items():
+        assert len(documents) == 1
+        request = documents[0]
         asset_ref, content_sha256, byte_count = history["bindings"][asset_id]
         assert request["sourceIdentity"] == identity
-        assert request["frozenAssetRef"] == asset_ref
-        assert request["contentSha256"] == content_sha256
-        assert request["bytes"] == byte_count
-        assert request["sourceReceiptRef"] == history["receiptRef"]
-        assert request["sourceReceiptDigest"] == history["receipt"]["receiptDigest"]
-        assert request["sourceReceiptFileSha256"] == history["receiptFileSha256"]
+        assert request["assetBinding"]["assetRef"] == asset_ref
+        assert request["assetBinding"]["contentSha256"] == content_sha256
+        assert request["assetBinding"]["bytes"] == byte_count
+        acquisition = _evidence_document(
+            bridge["root"], request, role="acquisition"
+        )
+        assert acquisition["sourceReceiptRef"] == history["receiptRef"]
+        assert (
+            acquisition["sourceReceiptDigest"]
+            == history["receipt"]["receiptDigest"]
+        )
+        assert (
+            acquisition["sourceReceiptFileSha256"] == history["receiptFileSha256"]
+        )
 
 
 def test_the_review_request_carries_the_frozen_rights_without_upgrading_them(
@@ -440,13 +528,14 @@ def test_the_review_request_carries_the_frozen_rights_without_upgrading_them(
 ) -> None:
     """权利事实原样透传给评审者，重挂不得把 unverified 升级为 verified。"""
 
-    _result, manifest_path = _run(bridge, runner=_Reviewer())
-    request = _review_requests(bridge["root"])["legacy-a"]
+    _result, manifest_path = _run(bridge)
+    request = _review_requests(bridge["root"])["legacy-a"][0]
+    rights = _evidence_document(bridge["root"], request, role="rights_attribution")
     item = next(
         row for row in read_json(manifest_path)["items"] if row["assetId"] == "legacy-a"
     )
 
-    assert request["rightsSnapshot"] == {
+    assert rights["rightsSnapshot"] == {
         "rightsStatus": "unverified",
         "authorizationRequired": True,
         "distributionDecision": "research_allowed",
@@ -454,7 +543,7 @@ def test_the_review_request_carries_the_frozen_rights_without_upgrading_them(
         "modelReleaseStatus": "unverified",
         "propertyReleaseStatus": "not_required",
     }
-    assert "Do not upgrade rights or provenance." in request["reviewInstruction"]
+    assert "untrusted input" in request["rubric"]["untrustedEvidencePolicy"]
     assert item["rightsStatus"] == "unverified"
     assert item["rightsIssues"] == [
         "commercial redistribution authorization is unverified"
@@ -466,13 +555,13 @@ def test_the_historical_safety_decision_is_never_copied_into_the_rebound_item(
 ) -> None:
     """历史 safetyReview 不得被复制；重挂对象只能带本次评审的结论。"""
 
-    _result, manifest_path = _run(bridge, runner=_Reviewer())
+    _result, manifest_path = _run(bridge)
     item = next(
         row for row in read_json(manifest_path)["items"] if row["assetId"] == "legacy-a"
     )
     safety = item["safetyReview"]
 
-    assert safety["reviewer"] == "semantic:run-legacy-a"
+    assert safety["reviewer"] == "host:rebind-audit-legacy-a"
     assert safety["reviewer"] != _HISTORICAL_REVIEWER
     assert safety["reviewedAt"] != "2026-08-05T02:05:00Z"
     assert safety["evidenceRef"].startswith("video-rebind/")
@@ -482,38 +571,30 @@ def test_the_historical_safety_decision_is_never_copied_into_the_rebound_item(
     )
 
 
-def test_the_fresh_safety_evidence_binds_its_own_review_journal(
+def test_the_fresh_safety_evidence_binds_its_own_host_review_result(
     bridge: dict[str, Any],
 ) -> None:
-    """本次 safety 证据必须精确绑定本次 journal 的 request/attempt 与结果摘要。"""
+    """本次 safety 证据必须精确绑定本次 host review 的 request/result 与摘要。"""
 
-    _result, manifest_path = _run(bridge, runner=_Reviewer())
+    _result, manifest_path = _run(bridge)
     item = next(
         row for row in read_json(manifest_path)["items"] if row["assetId"] == "legacy-a"
     )
     root = bridge["root"]
     evidence = read_json(root / item["safetyReview"]["evidenceRef"])
     review = evidence["reviewEvidence"]
-    attempt = read_json(root / review["sourceReviewAttemptRef"])
+    request = read_json(root / review["requestRef"])
+    result = read_json(root / review["resultRef"])
 
-    assert review["sourceReview"] == {
-        **_current_identity(bridge),
-        "requestDigest": _review_requests(root)["legacy-a"]["requestDigest"],
-    }
-    assert review["provider"] == "cursor_sdk"
-    assert review["model"] == "grok-4.6"
-    assert review["runId"] == "run-legacy-a"
-    assert (
-        file_sha256(root / review["sourceReviewRequestRef"])
-        == review["sourceReviewRequestSha256"]
-    )
-    assert (
-        file_sha256(root / review["sourceReviewAttemptRef"])
-        == review["sourceReviewAttemptSha256"]
-    )
-    assert attempt["status"] == "finished"
-    assert attempt["resultSha256"] == review["resultSha256"]
-    assert attempt["recordedAt"] == item["safetyReview"]["reviewedAt"]
+    assert request["sourceIdentity"] == _current_identity(bridge)
+    assert review["requestDigest"] == request["requestDigest"]
+    assert review["requestDigest"] == result["requestDigest"]
+    assert review["resultDigest"] == result["resultDigest"]
+    assert review["actor"]["host"] == "cursor"
+    assert "provider" not in review
+    assert "model" not in review
+    assert evidence["reviewedAt"] == result["reviewedAt"]
+    assert item["safetyReview"]["reviewedAt"] == result["reviewedAt"]
 
 
 def test_the_historical_popularity_catalog_binding_is_dropped(
@@ -521,7 +602,7 @@ def test_the_historical_popularity_catalog_binding_is_dropped(
 ) -> None:
     """历史热度目录绑定属于上一次运行，不得随字节一起进入当前 manifest。"""
 
-    _result, manifest_path = _run(bridge, runner=_Reviewer())
+    _result, manifest_path = _run(bridge)
     item = next(
         row for row in read_json(manifest_path)["items"] if row["assetId"] == "legacy-a"
     )
@@ -539,32 +620,39 @@ def test_the_historical_popularity_catalog_binding_is_dropped(
 def test_the_reviewer_is_handed_exactly_the_persisted_review_request(
     bridge: dict[str, Any],
 ) -> None:
-    """评审者只消费落盘的 create-once 请求文件，不是另拼一份 prompt。"""
+    """宿主只消费落盘的 create-once 请求文件，结果必须指回同一请求摘要。"""
 
-    runner = _Reviewer()
-    _result, _manifest_path = _run(bridge, runner=runner)
+    _result, _manifest_path = _run(bridge)
     root = bridge["root"]
-    persisted = {
-        path.read_text(encoding="utf-8")
-        for path in (root / "video-rebind").glob("*/review-request.json")
-    }
+    requests = _review_requests(root)
 
-    assert len(runner.prompts) == 2
-    assert set(runner.prompts) == persisted
+    assert set(requests) == {"legacy-a", "legacy-b"}
+    for documents in requests.values():
+        assert len(documents) == 1
+        request = documents[0]
+        result_path = (
+            root
+            / "host-source-reviews"
+            / "results"
+            / f"{request['requestDigest'].removeprefix('sha256:')}.json"
+        )
+        result = read_json(result_path)
+        assert result["requestDigest"] == request["requestDigest"]
 
 
-def test_one_identity_reviews_once_and_replay_reads_back_the_same_journal(
+def test_one_identity_reviews_once_and_replay_reads_back_the_same_result(
     bridge: dict[str, Any],
 ) -> None:
-    """同身份同字节重放只读回同一 journal，不得再调一次 Provider。"""
+    """同身份同字节重放只读回同一 create-once 结果，不得再开一次评审。"""
 
-    runner = _Reviewer()
-    first, first_path = _run(bridge, runner=runner)
-    second, second_path = _run(bridge, runner=runner)
+    first, first_path = _run(bridge)
+    second, second_path = _run_once(bridge)
 
-    assert len(runner.prompts) == 2
     assert second_path == first_path
     assert second == first
+    requests = _review_requests(bridge["root"])
+    assert sorted(requests) == ["legacy-a", "legacy-b"]
+    assert all(len(documents) == 1 for documents in requests.values())
 
 
 def test_a_new_current_identity_requires_a_new_review(
@@ -573,9 +661,8 @@ def test_a_new_current_identity_requires_a_new_review(
 ) -> None:
     """身份一变必须重新评审，旧结论不得被复用来顶替新身份。"""
 
-    runner = _Reviewer()
-    _first, _first_path = _run(bridge, runner=runner, asset_ids=("legacy-a",))
-    first_request = _review_requests(bridge["root"])["legacy-a"]
+    _first, _first_path = _run(bridge, asset_ids=("legacy-a",))
+    first_request = _review_requests(bridge["root"])["legacy-a"][0]
 
     bridge["handoff"] = _handoff(
         tmp_path / "handoff-output-2",
@@ -586,28 +673,23 @@ def test_a_new_current_identity_requires_a_new_review(
     )
     _second, second_path = _run(
         bridge,
-        runner=runner,
         destination="manifests/rebound-next.json",
         asset_ids=("legacy-a",),
     )
-    requests = [
-        request
-        for request in _review_requests(bridge["root"]).values()
-        if request["assetId"] == "legacy-a"
-    ]
+    requests = _review_requests(bridge["root"])["legacy-a"]
 
-    assert len(runner.prompts) == 2
-    assert len(requests) == 1
-    second_request = read_json(
+    assert len(requests) == 2
+    review = read_json(
         bridge["root"]
         / next(
             row
             for row in read_json(second_path)["items"]
             if row["assetId"] == "legacy-a"
         )["safetyReview"]["evidenceRef"]
-    )["reviewEvidence"]["sourceReview"]
-    assert second_request["requestDigest"] != first_request["requestDigest"]
-    assert second_request["sourceDigest"] == "sha256:" + "4" * 64
+    )["reviewEvidence"]
+    assert review["requestDigest"] != first_request["requestDigest"]
+    second_request = read_json(bridge["root"] / review["requestRef"])
+    assert second_request["sourceIdentity"]["sourceDigest"] == "sha256:" + "4" * 64
 
 
 def test_a_blocked_fresh_review_excludes_only_its_own_asset(
@@ -615,9 +697,7 @@ def test_a_blocked_fresh_review_excludes_only_its_own_asset(
 ) -> None:
     """一次 blocked 评审只作废它自己，兄弟对象照常进入当前 manifest。"""
 
-    result, manifest_path = _run(
-        bridge, runner=_Reviewer(blocked=frozenset({"legacy-a"}))
-    )
+    result, manifest_path = _run(bridge, blocked=frozenset({"legacy-a"}))
     manifest = read_json(manifest_path)
 
     assert result["reboundCount"] == 1
@@ -634,39 +714,61 @@ def test_a_blocked_review_still_leaves_its_own_typed_evidence(
 ) -> None:
     """blocked 也必须留下可复核证据，失败不得退化为无痕跳过。"""
 
-    result, _manifest_path = _run(
-        bridge, runner=_Reviewer(blocked=frozenset({"legacy-a"}))
-    )
+    result, _manifest_path = _run(bridge, blocked=frozenset({"legacy-a"}))
     reference = result["exclusions"][0]["failure"].split("evidence=")[1]
     evidence = read_json(bridge["root"] / reference)
 
     assert evidence["assetId"] == "legacy-a"
     assert evidence["status"] == "blocked"
     assert evidence["privacyRisk"] == "present"
-    assert evidence["reviewer"] == "semantic:run-legacy-a"
+    assert evidence["reviewer"] == "host:rebind-audit-legacy-a"
 
 
+@pytest.mark.parametrize(
+    "verdict",
+    [
+        "the video looks fine to me",
+        {"status": "passed"},
+        {**_PASSED_JUDGMENT, "extraField": "ignored"},
+        {**_PASSED_JUDGMENT, "privacyRisk": "detected"},
+    ],
+)
 def test_an_out_of_vocabulary_verdict_cannot_be_written_as_admission_evidence(
     bridge: dict[str, Any],
+    verdict: Any,
 ) -> None:
-    """评审词表是闭集：词表外取值不得落成证据，也不得让该资产通过。"""
+    """评审词表是闭集：词表外或字段集不符的结论不得落成证据，也不得让该资产通过。"""
 
-    def runner(prompt: str) -> AgentRunOutcome:
-        asset_id = str(json.loads(prompt)["assetId"])
-        judgment = dict(_PASSED_JUDGMENT)
-        if asset_id == "legacy-a":
-            judgment["privacyRisk"] = "detected"
-        return AgentRunOutcome.finished(
-            provider=AgentProvider.CURSOR_SDK,
-            run_id=f"run-{asset_id}",
-            result_text=json.dumps(judgment, ensure_ascii=False),
+    with pytest.raises(ProfessionalVideoRebindError):
+        _run_once(bridge)
+    pending = {
+        str(request["assetBinding"]["assetId"]): (request_ref, request)
+        for request_ref, request in _pending_requests(bridge["root"])
+    }
+    request_ref, request = pending["legacy-a"]
+    invalid_input = _result_input(request_ref, request, passed=True)
+    invalid_input["verdict"] = verdict
+
+    with pytest.raises(HostSourceReviewError) as rejected:
+        record_host_source_review_result(
+            evidence_root=bridge["root"], result_input=invalid_input
         )
+    assert rejected.value.code == HOST_SOURCE_REVIEW_INVALID
 
-    result, manifest_path = _run(bridge, runner=runner)
+    _record_reviews(bridge["root"], skip=frozenset({"legacy-a"}))
+    result, manifest_path = _run_once(bridge)
 
     assert [row["assetId"] for row in read_json(manifest_path)["items"]] == ["legacy-b"]
-    assert [row["assetId"] for row in result["exclusions"]] == ["legacy-a"]
-    assert result["exclusions"][0]["failureCode"].startswith("DATA.SOURCE.REBIND_")
+    exclusion = result["exclusions"][0]
+    assert exclusion["assetId"] == "legacy-a"
+    assert exclusion["failureCode"] == "DATA.SOURCE.HOST_REVIEW_PENDING"
+    result_path = (
+        bridge["root"]
+        / "host-source-reviews"
+        / "results"
+        / f"{request['requestDigest'].removeprefix('sha256:')}.json"
+    )
+    assert not result_path.exists()
 
 
 def test_zero_admitted_assets_fails_closed_without_writing_a_manifest(
@@ -674,76 +776,48 @@ def test_zero_admitted_assets_fails_closed_without_writing_a_manifest(
 ) -> None:
     """零成功必须 fail closed，且不得留下一份空的当前 manifest。"""
 
-    runner = _Reviewer(blocked=frozenset({"legacy-a", "legacy-b"}))
-
     with pytest.raises(ProfessionalVideoRebindError) as error:
-        _run(bridge, runner=runner)
+        _run(bridge, blocked=frozenset({"legacy-a", "legacy-b"}))
 
     assert error.value.code == "DATA.SOURCE.REBIND_NO_SUCCESS"
     assert "DATA.SOURCE.REBIND_FRESH_REVIEW_BLOCKED" in error.value.detail
     assert not (bridge["root"] / "manifests" / "rebound.json").exists()
 
 
-@pytest.mark.parametrize(
-    "result_text",
-    [
-        "the video looks fine to me",
-        json.dumps({"status": "passed"}),
-        json.dumps({**_PASSED_JUDGMENT, "extraField": "ignored"}),
-    ],
-)
-def test_an_unusable_judgment_is_a_typed_exclusion_not_an_admission(
+def test_an_absent_host_review_is_a_typed_exclusion_not_an_admission(
     bridge: dict[str, Any],
-    result_text: str,
 ) -> None:
-    """评审结论无法解析或字段集不符时必须排除该资产，不得当作通过。"""
+    """宿主缺席（不记录结论）是失败，不得被当作缺席或默认通过。"""
 
-    def runner(_prompt: str) -> AgentRunOutcome:
-        return AgentRunOutcome.finished(
-            provider=AgentProvider.CURSOR_SDK,
-            run_id="run-invalid",
-            result_text=result_text,
+    with pytest.raises(ProfessionalVideoRebindError) as error:
+        _run_once(bridge)
+
+    assert error.value.code == "DATA.SOURCE.REBIND_NO_SUCCESS"
+    assert "DATA.SOURCE.HOST_REVIEW_PENDING" in error.value.detail
+
+    with pytest.raises(ProfessionalVideoRebindError) as replay:
+        _run_once(bridge)
+
+    assert replay.value.code == "DATA.SOURCE.REBIND_NO_SUCCESS"
+    assert not (bridge["root"] / "manifests" / "rebound.json").exists()
+
+
+def test_a_review_from_an_ungoverned_host_cannot_stand_in(
+    bridge: dict[str, Any],
+) -> None:
+    """actor.host 是闭集：非 cursor/codex 宿主的结论不得顶替 host review 证据。"""
+
+    with pytest.raises(ProfessionalVideoRebindError):
+        _run_once(bridge)
+    request_ref, request = _pending_requests(bridge["root"])[0]
+    foreign_input = _result_input(request_ref, request, passed=True)
+    foreign_input["actor"]["host"] = "external-sdk"
+
+    with pytest.raises(HostSourceReviewError) as rejected:
+        record_host_source_review_result(
+            evidence_root=bridge["root"], result_input=foreign_input
         )
-
-    with pytest.raises(ProfessionalVideoRebindError) as error:
-        _run(bridge, runner=runner)
-
-    assert error.value.code == "DATA.SOURCE.REBIND_NO_SUCCESS"
-    assert "DATA.AGENT.REVIEW_INVALID" in error.value.detail
-
-
-def test_a_failed_reviewer_invocation_is_a_typed_exclusion(
-    bridge: dict[str, Any],
-) -> None:
-    """Provider 调用失败是失败，不得被当作缺席或默认通过。"""
-
-    def runner(_prompt: str) -> AgentRunOutcome:
-        raise RuntimeError("reviewer runtime is unavailable")
-
-    with pytest.raises(ProfessionalVideoRebindError) as error:
-        _run(bridge, runner=runner)
-
-    assert error.value.code == "DATA.SOURCE.REBIND_NO_SUCCESS"
-    assert "DATA.AGENT.REVIEW_FAILED" in error.value.detail
-
-
-def test_a_review_from_another_provider_cannot_stand_in(
-    bridge: dict[str, Any],
-) -> None:
-    """非受治理 Provider 的结论不得顶替 Grok 证据。"""
-
-    def runner(_prompt: str) -> AgentRunOutcome:
-        return AgentRunOutcome.finished(
-            provider=AgentProvider.CODEX_SDK,
-            run_id="run-foreign",
-            result_text=json.dumps(_PASSED_JUDGMENT),
-        )
-
-    with pytest.raises(ProfessionalVideoRebindError) as error:
-        _run(bridge, runner=runner)
-
-    assert error.value.code == "DATA.SOURCE.REBIND_NO_SUCCESS"
-    assert "DATA.AGENT.REVIEW_FAILED" in error.value.detail
+    assert rejected.value.code == HOST_SOURCE_REVIEW_INVALID
 
 
 def test_an_asset_absent_from_the_historical_pair_is_excluded_by_name(
@@ -752,7 +826,7 @@ def test_an_asset_absent_from_the_historical_pair_is_excluded_by_name(
     """请求一个历史证据里不存在的资产时排除它自己并具名。"""
 
     result, manifest_path = _run(
-        bridge, runner=_Reviewer(), asset_ids=("legacy-a", "legacy-missing")
+        bridge, asset_ids=("legacy-a", "legacy-missing")
     )
 
     assert result["reboundCount"] == 1

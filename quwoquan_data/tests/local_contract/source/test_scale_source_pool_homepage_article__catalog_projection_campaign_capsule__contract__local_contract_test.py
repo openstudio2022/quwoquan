@@ -15,7 +15,7 @@ from content.execution.campaign.external_input_runtime import (
     ExternalInputRuntimeContext,
     bind_runtime_external_input_context,
 )
-from content.execution.campaign.source_pool_binding import (
+from content.execution.source_pool.binding import (
     _selected_evidence_refs,
     bind_scale_source_pool,
     materialize_bound_scale_source_pool,
@@ -70,6 +70,20 @@ def test_campaign_capsule_collects_media_admission_receipt_evidence_and_asset_by
         expected_refs.add(str(receipt["assetSnapshot"]["assetRef"]))
         expected_refs.update(
             str(binding["ref"]) for binding in receipt["evidenceBindings"]
+        )
+        # host review result 的闭包也必须进入 capsule：冻结 request 与其绑定证据。
+        review_ref = next(
+            str(binding["ref"])
+            for binding in receipt["evidenceBindings"]
+            if binding["role"] == "source_semantic_review"
+        )
+        result_doc = json.loads((tmp_path / review_ref).read_text(encoding="utf-8"))
+        expected_refs.add(str(result_doc["requestRef"]))
+        request_doc = json.loads(
+            (tmp_path / str(result_doc["requestRef"])).read_text(encoding="utf-8")
+        )
+        expected_refs.update(
+            str(row["ref"]) for row in request_doc["evidenceBindings"]
         )
 
     refs = _selected_evidence_refs(candidates, evidence_root=tmp_path)
@@ -467,6 +481,7 @@ def test_campaign_capsule_copies_only_selected_candidate_capsules_and_cas(
         assert manifest is not None
         unit = execution_root / "sources" / manifest["sourceUnitId"]
         assert (unit / "source.md").is_file()
+        assert (unit / "source.layout.json").is_file()
         assert (unit / "assets/index.json").is_file()
         assert manifest["assetCount"] >= 1
         if carrier == "homepage":

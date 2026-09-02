@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from content.execution.campaign.scale import campaign_workload_targets
+from content.execution.planning.scale import campaign_workload_targets
 from content.execution.controller.progress import project_execution_progress
 from content.release.canonical import environment_release_selection, pool_inspection
 from governance.coverage.distribution import load_content_distribution_policy

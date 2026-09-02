@@ -277,8 +277,11 @@ def _run_install(
     except (OSError, subprocess.TimeoutExpired) as error:
         raise ValueError(f"iOS Pod {phase} offline install execution failed") from error
     if result.returncode != 0:
+        output = (result.stdout + "\n" + result.stderr).strip()
+        tail = "\n".join(output.splitlines()[-20:])
         raise ValueError(
             f"iOS Pod {phase} offline install failed with exit code {result.returncode}"
+            + (f"\n{tail}" if tail else "")
         )
     return result
 
@@ -448,9 +451,17 @@ def run_offline_cocoapods_install(
         before = seed_pods.get(relative)
         after = projected_pods.get(relative)
         if before is None or after is None or before.as_dict() != after.as_dict():
+            state = (
+                "added"
+                if before is None
+                else "removed"
+                if after is None
+                else "changed"
+            )
             raise ValueError(
-                "iOS Pod first offline install changed sealed Pods payload outside "
-                f"Pods.xcodeproj/project.pbxproj: {relative}"
+                "APP.DEPENDENCY.ios_pod_offline_payload_drift: "
+                "first offline install changed sealed Pods payload outside "
+                f"Pods.xcodeproj/project.pbxproj: {relative}; state={state}"
             )
     projected_project = _project_node(projected_pods)
     _validate_projected_project(

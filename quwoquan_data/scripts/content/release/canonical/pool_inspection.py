@@ -7,7 +7,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign.lane import normalize_workloads
+from content.execution.planning.carrier_demand import normalize_workloads
 from content.release.canonical.aggregate_release_pool import pool_post_refs
 from content.release.canonical.aggregate_release_pool_closure import (
     entity_candidate_closure,

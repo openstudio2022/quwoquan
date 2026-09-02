@@ -84,10 +84,10 @@ def _candidate() -> dict[str, object]:
     }
 
 
-def test_cli_preflight_bootstrap_does_not_import_video_probe_dependencies() -> None:
-    result = _run_cli_with_blocked_imageio("task", "preflight", "--help")
+def test_cli_task_bootstrap_does_not_import_video_probe_dependencies() -> None:
+    result = _run_cli_with_blocked_imageio("task", "acquire-videos", "--help")
     assert result.returncode == 0, result.stderr
-    assert "--no-semantic-agent-credential" in result.stdout
+    assert "--manifest" in result.stdout
 
 
 def test_acquire_video_reports_typed_missing_probe_dependency() -> None:

@@ -188,10 +188,31 @@ def _delivery_workflow(policy: Any) -> str:
     return matches[0]
 
 
+def _evidence_branch(policy: Any, head_branch: str) -> str:
+    """解析持有 push 侧 App 证据的分支：integration branch 或声明的 lane 分支。"""
+
+    if not head_branch:
+        return str(policy.integration_branch)
+    if head_branch == policy.integration_branch:
+        return head_branch
+    if head_branch in policy.allowed_remote and any(
+        head_branch.startswith(prefix) for prefix in policy.pull_request_prefixes
+    ):
+        return head_branch
+    raise EvidenceError(
+        f"INPUT_INVALID: head branch {head_branch!r} is not a declared push evidence branch"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY", ""))
     parser.add_argument("--head-sha", required=True)
+    parser.add_argument(
+        "--head-branch",
+        default="",
+        help="PR head 分支；lane PR 的 push 证据在 lane 分支上，默认 integration branch",
+    )
     parser.add_argument("--current-run-id", required=True)
     parser.add_argument("--token", default=os.environ.get("GITHUB_TOKEN", ""))
     parser.add_argument("--run-created-at", default="")
@@ -205,6 +226,7 @@ def main() -> int:
             raise EvidenceError("INPUT_INVALID: repository, run ID and exact head SHA are required")
         policy = load_policy()
         workflow = _delivery_workflow(policy)
+        evidence_branch = _evidence_branch(policy, args.head_branch)
         authority_stats: dict[str, int | None] = {
             "requestCount": 0,
             "retryCount": 0,
@@ -248,7 +270,7 @@ def main() -> int:
                     key="workflow_runs",
                     query={
                         "event": "push",
-                        "branch": policy.integration_branch,
+                        "branch": evidence_branch,
                         "head_sha": args.head_sha,
                     },
                     deadline=deadline_at,
@@ -298,7 +320,7 @@ def main() -> int:
             jobs=[item for item in jobs if isinstance(item, dict)],
             expected_repository=args.repository,
             expected_workflow=workflow,
-            expected_branch=policy.integration_branch,
+            expected_branch=evidence_branch,
             expected_sha=args.head_sha,
             observed_at=observed_at,
             deadline_at=deadline_at.isoformat().replace("+00:00", "Z"),

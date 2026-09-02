@@ -7,9 +7,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
-import content.execution.campaign.request_envelope as envelopes
+import content.execution.planning.request_envelope as envelopes
 import pytest
-from content.execution.campaign.scale import CampaignScaleError, resolve_campaign_scale
+from content.execution.planning.scale import CampaignScaleError, resolve_campaign_scale
 from content.execution.scale import promotion as scale_promotion
 from core.io import read_json, write_json
 from core.runtime_policy import active_runtime_policy

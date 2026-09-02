@@ -10,37 +10,23 @@ metadata:
 
 ## 触发与输入
 
-用于实现已冻结 Story/能力/对象扩展或修复。输入必须包含 owner manifest、当前 REQ/验收、必要 DEC/contracts、影响路径与共享写点状态。
-
-
-
-自然语言触发与显式 Skill 调用同轨，字段、闭集与审计隔离只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.dev`：
-
-- PRE：`progress_update` / `agent_led_implementation` / `engineering_delivery_owner`。
+用于实现已冻结 Story、能力、对象扩展或修复。输入是用户目标、plan/diff、已知路径、冻结验收与共享写点；调用前不要求 owner manifest。角色交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.dev`，可见输出由 canonical projector 生成。
 
 ## 执行
 
-1. PRE 由主会话确认 owner、scope、验收、OPEN、依赖和命名 evidence，自动 Reviewer 为零。
-2. metadata/contract 变更先改 authoring source，再 verify/codegen；不手改生成物。实现按 Red/Green/Refactor 闭环，测试 `spec_ref` 绑定对应验收。
-3. 尊守 manifest 加载的领域/技术设计；不从 Review 角色复制功能事实，不为错误实现保留 shim/fallback。
-4. 执行影响面最小且足够的 `local_contract/api_integration/user_acceptance` 与 gate。POST 先运行 Review plan 中去重 evidence，再派 Developer 主审与最多一名专审。
-
-- 执行中：`exception_escalation` / `agent_led_implementation` / `$route`。
-
-`$route` 表示按当前决定责任动态路由；Skill 不复制 envelope schema，所有可见输出统一由 canonical projector 生成。
+1. PRE 从用户目标、plan/diff 与已知路径确定 exact target；读取最近子树 `AGENTS.md`，运行默认 compact `make feature-context TARGET=<exact-path>`，保存 stdout 的 immutable exact ref，再确认 owner、scope、验收、OPEN、依赖和命名 evidence。
+2. metadata/contract 变更先改 authoring source，再 verify/codegen；实现按 Red/Green/Refactor 闭环，测试 `spec_ref` 绑定对应验收，不为错误实现保留 shim/fallback。
+3. 执行影响面最小且足够的 `local_contract/api_integration/user_acceptance` 与 gate，分层报告源码、编译、runtime、release 与 UAT。
+4. POST 原样复用 PRE 的 immutable ref，报告命名 evidence 命令与退出码；默认零 Reviewer。只在用户显式 `/review`，或增量进入 lane→`dev1.0` PR、handoff、release 准出时，才按 review Skill 派 Developer 主审与最多一名专审。
 
 ## 完成证据
 
-实现字节、生成物身份、测试/gate 命令与退出码、未执行验证、OPEN 变化和 POST Review 均绑定当前 HEAD+脏树指纹。源码 PASS、编译、runtime 与 UAT 分层报告。
-
-- POST：`completion_report` / `agent_led_implementation` / `engineering_delivery_owner`。
+实现字节、生成物身份、测试/gate 命令与退出码、未执行验证与 OPEN 变化均绑定 current HEAD、脏树指纹与 immutable ref；未评审的增量如实标注"未评审"，不伪称已准出。
 
 ## 失败与停止
 
-spec/design/owner 未冻结时回 prd/design/explore。required evidence 失败时返回首个 typed blocker 且不启 Reviewer；required Reviewer incomplete 不自动重试。不因外域脏树红项伪称本 scope 成功。
+spec/design/owner 未冻结或 exact ref stale 时回 prd/design/explore。required evidence 失败时保留首个 typed blocker；不因外域脏树红项伪称本 scope 成功。
 
 ## 条件性交接
 
-六类触发（跨会话未完成、多人并行、环境/发布、外部阻断、证据复用、用户显式要求）统一调用 canonical handoff producer；普通闭环不落持久交接。
-
-仅当路由结果要求真实人类责任时，使用统一 `$route`、project/card 与 hosted authority readback；routine execution 不新造 checkpoint。Reviewer PASS 只是评审证据，不能签发或替代 authority receipt。
+只有 canonical 六类 handoff 触发成立时持久交接；普通闭环不落第二状态。需要环境操作、内容发布或事故检视时交对应专用 Skill，但源码/spec mutation 仍回 Feature workflow。

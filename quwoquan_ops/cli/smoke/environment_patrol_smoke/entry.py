@@ -1,10 +1,8 @@
 """CLI 入口：main 编排（设备矩阵、证据采集、报告落盘）与 write_report。"""
 from __future__ import annotations
 
-import atexit
 import base64
 import json
-import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -25,17 +23,11 @@ from quwoquan_ops.cli.lib.local_controlled_edge_fault import (
 from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
     release_consumer_lease,
 )
-from quwoquan_ops.cli.lib.local_runtime_reservation import (
-    acquire_local_runtime_use_lock,
-)
 from quwoquan_ops.cli.lib.patrol_cli import resolve_patrol_cli
 
 # PATROL_EXECUTION_LOCK 是原入口的历史 import，运行时无调用点；随包保留。
 from quwoquan_ops.cli.lib.patrol_execution_lock import (
     PATROL_EXECUTION_LOCK,  # noqa: F401
-)
-from quwoquan_ops.cli.lib.patrol_execution_lock import (
-    acquire_patrol_execution_lock as _acquire_patrol_execution_lock,
 )
 
 from . import artifact_binding_report, host_activation
@@ -54,6 +46,7 @@ from .constants import (
 from .device_runtime import (
     _acquire_patrol_consumer_lease,
     _bind_patrol_consumer_lease_to_handoff,
+    _cleanup_android_local_port_reverse,
     _device_command_env,
     _local_tls_trust_evidence,
     _prepare_android_local_port_reverse,
@@ -98,13 +91,13 @@ from .handoff import (
 )
 from .report_state import finish_report, new_report, write_report
 from .request_validation import static_request_issue
+from .runtime_locks import acquire_patrol_runtime_locks
 from .session import (
     TypedTestDataActor,
     TypedTestDataConversation,
     _account_enforcement_phase,
     _is_account_enforcement_target,
     _is_controlled_edge_fault_target,
-    _is_local_target,
     _is_runtime_recovery_target,
     _local_target_for_environment_alias,
     _missing_required_args,
@@ -135,28 +128,11 @@ def main() -> int:
     report_path = Path(args.report)
     if not report_path.is_absolute():
         report_path = REPO_ROOT / report_path
-    execution_lock = None
-    runtime_use_lock = None
-    if not args.dry_run:
-        try:
-            execution_lock = _acquire_patrol_execution_lock(
-                env_name=args.env_name,
-                target=args.target,
-            )
-            atexit.register(execution_lock.close)
-            if _is_local_target(args.env_name):
-                runtime_use_lock = acquire_local_runtime_use_lock(
-                    target=_local_target_for_environment_alias(args.env_name),
-                    purpose="environment-patrol-smoke",
-                )
-                atexit.register(runtime_use_lock.close)
-        except RuntimeError as exc:
-            if runtime_use_lock is not None:
-                runtime_use_lock.close()
-            if execution_lock is not None:
-                execution_lock.close()
-            print(f"GATE_BLOCK: {exc}", file=sys.stderr)
-            return 2
+    if not args.dry_run and not acquire_patrol_runtime_locks(
+        env_name=args.env_name,
+        target=args.target,
+    ):
+        return 2
 
     runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
     api_contract_env = args.api_contract_env.strip() or runtime_env
@@ -347,10 +323,12 @@ def main() -> int:
                     device,
                 )
             except RuntimeError as exc:
-                android_port_reverse = {
-                    "status": "failed",
-                    "reason": str(exc),
-                }
+                attached = getattr(exc, "android_port_reverse", None)
+                android_port_reverse = (
+                    attached
+                    if isinstance(attached, dict)
+                    else {"status": "failed", "reason": str(exc)}
+                )
                 report["runs"].append(
                     {
                         "device": device,
@@ -374,6 +352,7 @@ def main() -> int:
             release_uat_state_reset = _reset_release_uat_device_state(args, device)
         except RuntimeError as exc:
             release_uat_state_reset = {"status": "failed", "reason": str(exc)}
+            _cleanup_android_local_port_reverse(args, device, android_port_reverse)
             report["runs"].append(
                 {
                     "device": device,
@@ -498,6 +477,7 @@ def main() -> int:
             )
         except BaseException as exc:
             _cleanup_patrol_target_wrapper(patrol_wrapper_cleanup)
+            _cleanup_android_local_port_reverse(args, device, android_port_reverse)
             if consumer_lease is not None:
                 release_consumer_lease(
                     target=consumer_lease[0],
@@ -688,6 +668,18 @@ def main() -> int:
                         device=consumer_lease[1],
                         consumer=consumer_lease[2],
                     )
+                reverse_teardown = _cleanup_android_local_port_reverse(
+                    args, device, android_port_reverse
+                )
+                if (
+                    reverse_teardown.get("status") == "failed"
+                    and int(result.get("exitCode") or 0) == 0
+                ):
+                    result["exitCode"] = 2
+                    result["outputSummary"] = (
+                        str(result.get("outputSummary") or "")
+                        + "\nowned Android reverse cleanup failed"
+                    ).strip()
                 if secret_define_path is not None:
                     secret_define_path.unlink(missing_ok=True)
                 _cleanup_patrol_target_wrapper(patrol_wrapper_cleanup)

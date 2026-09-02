@@ -15,7 +15,7 @@ import pytest
 from content.execution.campaign.distributed_review_barrier import (
     wait_for_parallel_review_claims,
 )
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+from content.execution.planning.carrier_demand import CAMPAIGN_CARRIERS
 
 _PLAN = {
     "planDigest": "sha256:" + "a" * 64,

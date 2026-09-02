@@ -92,9 +92,9 @@
 ### REQ-007 环境构建、安装与运行证据必须绑定同一启动清单
 
 - 每次受支持构建只生成并嵌入 build-profile trust 与 immutable AppArtifact identity；每次受支持启动在安装后 activation 中生成符合 `app_launch_manifest.app_effective_launch_manifest` 共享协议的 target manifest。构建、安装、启动与发布证据不能以同一 artifact identity、active manifest 摘要和 transport 约束串联时必须 fail closed，target/environment 不得烘焙进 nonprod AppArtifact。
-- `quwoquan_app/run.sh -d <device>` 是显式设备选择与 transport 准备的唯一执行体。新工作区终端的字面 `flutter run`（`workspace_flutter_run`）与受控制 IDE Run/Debug（`workspace_ide_debug`）分别薄包装并归一化进入同一执行体（`QWQ_ENVIRONMENT=alpha|beta|gamma` 显式选择，默认 Alpha），不建立第二条启动协议。
+- `quwoquan_app/run.sh [-d <device>]` 是显式环境选择与 transport 准备的 canonical 执行体，受控制 IDE Run/Debug（`workspace_ide_debug`）薄包装进入同一执行体（`QWQ_ENVIRONMENT=alpha|beta|gamma` 显式选择，默认 Alpha）。受管 PATH 中的字面 `flutter run` 经 launcher `flutter` dispatcher 归一化进入同一 canonical launcher（launch provenance=`canonical_launcher`，固定 alpha/content-live），完成严格 readiness preflight 后前台 exec `run.sh`，不建立第二条启动协议；非 `run` 子命令与其他项目由 dispatcher 以 exact argv/env/cwd 透传真实 SDK。
 - 所有路径的运行时环境、target 与 endpoint 只经安装后 runtime package activation 成立，不进入 `DART_DEFINES` 或 Flutter 编译输入。冷启动、Hot Reload 与 Hot Restart 消费同一 active package 与 digest。
-- 未经 facade/canonical handoff 的原始 Xcode/Gradle backend 在缺 build-profile trust envelope 时 fail-closed，typed blocker 信息指向 `run.sh` 或工作区 facade 激活。禁止 native build phase 临时拼装第二份 URL、密钥或 release 配置。
+- 构建期默认供给已退役：任何 buildMode/buildProfile 的未经 canonical handoff 构建——含原始 Xcode/Gradle backend 与绕过 dispatcher 的 raw SDK 绝对路径 `flutter run`——在缺 build-profile trust envelope 时 fail-closed，typed blocker 信息指向 `run.sh` 或受管字面 `flutter run`。禁止 native build phase 临时拼装第二份 URL、密钥或 release 配置。
 - 本地 Debug 安装前必须执行只读 App 预检。Alpha/Beta/Gamma `test_live` 的 `ui-only` 与 `content-live` 在 runtime、Provider、内容、观测或容量 readiness 不健康时都只记录结构化 warning，并继续真实编译、安装、activation 与启动。`content-live` 启动后真实请求 Remote 内容并进入成功、`no_active_release` 或 typed unavailable。只有身份/信任、非法 target、最小 runtime package、工具链/真实编译与 activation 失败仍 fail closed。immutable candidate、内容 UAT 与 Prod 的 release、readiness、rollback/replay、首页、视频书、Creator/头像及媒体证据继续严格阻断。
 - Android `BuildConfig` 与 iOS `QWQNativeRuntime.plist` 只内嵌 AppArtifact identity 与 build-profile trust 摘要；启动失败标记、runtime probe 和 provenance 必须同时回报该 artifact identity 与安装后 active effective manifest 摘要，禁止跨 target、跨环境或重打包复用。
 - package-only 四环境编译只能证明组件可构建，不得标记为 runtime UAT。运行证据必须来自真实 `MAIN/LAUNCHER` 或 iOS scene 启动，且包含非 `unknown` 的本次 attempt ID、当前 motion contract、safe terminal、Gate/Main 或 scene 结果和单一 task。
@@ -131,7 +131,7 @@
 - AND iOS 在调用 Flutter AppDelegate 启动生命周期和创建 implicit Flutter Engine 前进入原生恢复 root；恢复分支不初始化 Flutter 或商业插件。
 - AND 缺失 runtime package 的 Android/iOS 构建在安装前失败；恢复页、safeRecovery 或 Flutter 首帧均不得作为构建入口可用性的成功证据。
 - AND 安装后运行时配置校验失败（例如旧构建派生物携带被禁止或缺失的 runtime package 键）时，App 呈现阻断式配置错误页并列出脱敏键名，不进入业务壳，不显示网络或版本恢复文案。
-- AND 连续冷启动、Hot Restart 与再次冷启动中，每个 attempt 的 `launchProvenance` 均来自 metadata 闭集并与本次入口绑定为 `canonical_launcher`、`workspace_flutter_run` 或 `workspace_ide_debug`，且 `configurationState=complete`；Hot Restart 的 fatal 请求被拒绝，安全 Shell 与 fatal 矛盾 marker 在 Flutter Engine 创建前自愈清理。
+- AND 连续冷启动、Hot Restart 与再次冷启动中，每个 attempt 的 `launchProvenance` 均来自 metadata 闭集并与本次入口绑定为 `canonical_launcher` 或 `workspace_ide_debug`，且 `configurationState=complete`；Hot Restart 的 fatal 请求被拒绝，安全 Shell 与 fatal 矛盾 marker 在 Flutter Engine 创建前自愈清理。
 - AND 首帧立即提供网页版。有新版且存在当前平台可安装通道时，Android 经官网 HTTPS 端点下载正式签名 APK，公众 iOS 继续使用 PWA/网页版。已最新、没有合规原生通道或检查未完成时提供网页版且不存在启动重试。
 
 <a id="gwt-003"></a>

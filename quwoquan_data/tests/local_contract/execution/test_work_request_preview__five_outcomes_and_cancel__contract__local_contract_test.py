@@ -9,9 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from content.execution.controller.execute import (
-    pre_acquisition_handoff as handoff_api,
-)
+from content.source import pre_acquisition_handoff as handoff_api
 from content.execution.planning import (
     work_request_contract,
     work_request_dependencies,
@@ -243,6 +241,16 @@ def test_fresh_retry_conflict_and_unknown_carrier_remain_needs_input(
         )
     )
     retry_without_lineage = query.preview(_intent(tmp_path, mode="retry"))
+    retired_reconciliation = query.preview(
+        _intent(
+            tmp_path,
+            mode="retry",
+            predecessorExecutionIdsByCarrier={"homepage": "old"},
+            predecessorReconciliationReceiptRef=str(
+                tmp_path / "reconciliation.json"
+            ),
+        )
+    )
 
     assert conflict["outcome"] == "needs_input"
     assert "freshRetryConflict" in conflict["missingFields"]
@@ -263,7 +271,10 @@ def test_fresh_retry_conflict_and_unknown_carrier_remain_needs_input(
     assert retry_without_lineage["outcome"] == "needs_input"
     assert retry_without_lineage["missingFields"] == [
         "predecessorExecutionIdsByCarrier",
-        "predecessorReconciliationReceiptRef",
+    ]
+    assert retired_reconciliation["outcome"] == "needs_input"
+    assert retired_reconciliation["missingFields"] == [
+        "unknown:predecessorReconciliationReceiptRef"
     ]
 
 
@@ -496,6 +507,103 @@ def test_dependency_set_binds_source_revision_and_external_inputs(
         )
 
 
+def test_retry_terminal_binding_closes_blocked_receipt_and_state_exactly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root = tmp_path / "output"
+    tasks_root = output_root / "data" / "tasks"
+    execution_id = "20260901--travel-homepage-workload--china--scale-001"
+    execution_root = tasks_root / execution_id
+    receipt_path = execution_root / "_shared/receipts/002-sources.json"
+    state_path = execution_root / "_shared/execution_state.json"
+    receipt_path.parent.mkdir(parents=True)
+    receipt = {
+        "executionId": execution_id,
+        "sequence": 2,
+        "stage": "sources",
+        "verdict": "blocked",
+        "next": "sources",
+        "recordedAt": "2026-09-01T00:00:02Z",
+    }
+    receipt_path.write_text(
+        json.dumps(receipt, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    receipt_digest = work_request_dependencies.file_digest(receipt_path)
+    state = {
+        "schema": "quwoquan.content.execution_state_projection",
+        "executionId": execution_id,
+        "completed": ["0.plan"],
+        "status": "manual_required",
+        "latestStage": "sources",
+        "next": "sources",
+        "latestReceiptRef": "_shared/receipts/002-sources.json",
+        "latestReceiptDigest": receipt_digest,
+        "updatedAt": "2026-09-01T00:00:02Z",
+    }
+    state_path.write_text(
+        json.dumps(state, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(paths, "OUTPUT_ROOT", output_root)
+    monkeypatch.setattr(paths, "DATA_EXECUTIONS_ROOT", tasks_root)
+
+    def validate(
+        candidate_execution_id: str,
+        candidate_receipt: Path,
+        *,
+        verify_current_workflow: bool,
+    ) -> dict[str, object]:
+        assert candidate_execution_id == execution_id
+        assert candidate_receipt == receipt_path
+        assert verify_current_workflow is False
+        return dict(receipt)
+
+    monkeypatch.setattr(
+        work_request_dependencies,
+        "validate_stage_receipt_authority",
+        validate,
+    )
+    rows = work_request_dependencies._predecessor_terminal_dependency_rows(
+        {"predecessorExecutionIdsByCarrier": {"homepage": execution_id}},
+        {"homepage": 1},
+    )
+
+    assert rows == {
+        "predecessorTerminalReceipt:homepage": {
+            "ref": (
+                f"data/tasks/{execution_id}/_shared/receipts/"
+                "002-sources.json"
+            ),
+            "digest": receipt_digest,
+        },
+        "predecessorExecutionState:homepage": {
+            "ref": f"data/tasks/{execution_id}/_shared/execution_state.json",
+            "digest": work_request_dependencies.file_digest(state_path),
+        },
+    }
+
+    receipt["verdict"] = "pass"
+    with pytest.raises(ValueError, match="requires canonical workflow_drift"):
+        work_request_dependencies._predecessor_terminal_dependency_rows(
+            {"predecessorExecutionIdsByCarrier": {"homepage": execution_id}},
+            {"homepage": 1},
+        )
+
+    receipt["verdict"] = "blocked"
+    state["latestReceiptDigest"] = "sha256:" + "0" * 64
+    state_path.write_text(
+        json.dumps(state, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="current receipt-derived projection"):
+        work_request_dependencies._predecessor_terminal_dependency_rows(
+            {"predecessorExecutionIdsByCarrier": {"homepage": execution_id}},
+            {"homepage": 1},
+        )
+
+
 def test_preview_digest_uses_portable_governed_dependency_refs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -528,3 +636,175 @@ def test_preview_digest_uses_portable_governed_dependency_refs(
     assert relative["normalizedRequest"]["scaleSourcePoolPlanRef"] == (
         "quwoquan_data/pool.json"
     )
+
+
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md#gwt-001.t2
+WORKFLOW_DRIFT_EXECUTION_ID = "20260901--travel-article-workflow-drift--china--scale-016"
+
+
+def _workflow_drift_predecessor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path, Path, dict[str, object]]:
+    output_root = tmp_path / "output"
+    tasks_root = output_root / "data/tasks"
+    root = tasks_root / WORKFLOW_DRIFT_EXECUTION_ID
+    receipt_path = root / "_shared/receipts/006-4.draft.json"
+    state_path = root / "_shared/execution_state.json"
+    supersession_path = root / "_shared/reconciliation/supersession-workflow.json"
+    receipt_path.parent.mkdir(parents=True)
+    supersession_path.parent.mkdir(parents=True)
+    receipt = {
+        "executionId": WORKFLOW_DRIFT_EXECUTION_ID,
+        "sequence": 6,
+        "stage": "4.draft",
+        "verdict": "pass",
+        "next": "5.review",
+        "recordedAt": "2026-09-01T00:00:06Z",
+    }
+    receipt_path.write_text(json.dumps(receipt) + "\n", encoding="utf-8")
+    receipt_digest = work_request_dependencies.file_digest(receipt_path)
+    state = {
+        "schema": "quwoquan.content.execution_state_projection",
+        "executionId": WORKFLOW_DRIFT_EXECUTION_ID,
+        "completed": [
+            "0.plan", "sources", "1.download", "2.quality", "3.compose", "4.draft"
+        ],
+        "status": "running",
+        "latestStage": "4.draft",
+        "next": "5.review",
+        "latestReceiptRef": "_shared/receipts/006-4.draft.json",
+        "latestReceiptDigest": receipt_digest,
+        "updatedAt": receipt["recordedAt"],
+    }
+    state_path.write_text(json.dumps(state) + "\n", encoding="utf-8")
+    supersession = {
+        "decision": "superseded",
+        "reason": "workflow_drift",
+        "receiptDigest": "sha256:" + "9" * 64,
+    }
+    supersession_path.write_text(json.dumps(supersession) + "\n", encoding="utf-8")
+    monkeypatch.setattr(paths, "OUTPUT_ROOT", output_root)
+    monkeypatch.setattr(paths, "DATA_EXECUTIONS_ROOT", tasks_root)
+    monkeypatch.setattr(
+        work_request_dependencies,
+        "validate_stage_receipt_authority",
+        lambda _execution_id, _path, *, verify_current_workflow: dict(receipt),
+    )
+    return root, receipt_path, state_path, supersession
+
+
+def test_retry_accepts_only_workflow_drift_supersession_and_binds_both_exact_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, _receipt_path, state_path, supersession = _workflow_drift_predecessor(
+        tmp_path, monkeypatch
+    )
+    supersession_path = root / "_shared/reconciliation/supersession-workflow.json"
+    terminal = SimpleNamespace(
+        decision="superseded",
+        receipt=supersession,
+        path=supersession_path,
+    )
+    monkeypatch.setattr(
+        work_request_dependencies,
+        "load_terminal_execution_evidence",
+        lambda _root: terminal,
+    )
+
+    rows = work_request_dependencies._predecessor_terminal_dependency_rows(
+        {"predecessorExecutionIdsByCarrier": {"article": WORKFLOW_DRIFT_EXECUTION_ID}},
+        {"article": 1},
+    )
+
+    assert rows["predecessorTerminalReceipt:article"] == {
+        "ref": (
+            f"data/tasks/{WORKFLOW_DRIFT_EXECUTION_ID}/_shared/reconciliation/"
+            "supersession-workflow.json"
+        ),
+        "digest": work_request_dependencies.file_digest(supersession_path),
+    }
+    assert rows["predecessorExecutionState:article"]["digest"] == (
+        work_request_dependencies.file_digest(state_path)
+    )
+
+    terminal.receipt["reason"] = "source_drift"
+    with pytest.raises(ValueError, match="requires canonical workflow_drift"):
+        work_request_dependencies._predecessor_terminal_dependency_rows(
+            {"predecessorExecutionIdsByCarrier": {"article": WORKFLOW_DRIFT_EXECUTION_ID}},
+            {"article": 1},
+        )
+
+
+def test_retry_workflow_drift_rejects_missing_receipt_and_state_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, _receipt_path, state_path, supersession = _workflow_drift_predecessor(
+        tmp_path, monkeypatch
+    )
+    supersession_path = root / "_shared/reconciliation/supersession-workflow.json"
+    monkeypatch.setattr(
+        work_request_dependencies,
+        "load_terminal_execution_evidence",
+        lambda _root: None,
+    )
+    with pytest.raises(ValueError, match="requires canonical workflow_drift"):
+        work_request_dependencies._predecessor_terminal_dependency_rows(
+            {"predecessorExecutionIdsByCarrier": {"article": WORKFLOW_DRIFT_EXECUTION_ID}},
+            {"article": 1},
+        )
+
+    terminal = SimpleNamespace(
+        decision="superseded",
+        receipt=supersession,
+        path=supersession_path,
+    )
+    monkeypatch.setattr(
+        work_request_dependencies,
+        "load_terminal_execution_evidence",
+        lambda _root: terminal,
+    )
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["latestReceiptDigest"] = "sha256:" + "0" * 64
+    state_path.write_text(json.dumps(state) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="current receipt-derived projection"):
+        work_request_dependencies._predecessor_terminal_dependency_rows(
+            {"predecessorExecutionIdsByCarrier": {"article": WORKFLOW_DRIFT_EXECUTION_ID}},
+            {"article": 1},
+        )
+
+
+
+def test_retry_workflow_drift_rechecks_terminal_evidence_for_toctou(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, _receipt_path, _state_path, supersession = _workflow_drift_predecessor(
+        tmp_path, monkeypatch
+    )
+    supersession_path = root / "_shared/reconciliation/supersession-workflow.json"
+    valid = SimpleNamespace(
+        decision="superseded",
+        receipt=supersession,
+        path=supersession_path,
+    )
+    calls = 0
+
+    def changing_terminal(_root: Path) -> object | None:
+        nonlocal calls
+        calls += 1
+        return valid if calls == 1 else None
+
+    monkeypatch.setattr(
+        work_request_dependencies,
+        "load_terminal_execution_evidence",
+        changing_terminal,
+    )
+    with pytest.raises(ValueError, match="changed during validation"):
+        work_request_dependencies._predecessor_terminal_dependency_rows(
+            {"predecessorExecutionIdsByCarrier": {"article": WORKFLOW_DRIFT_EXECUTION_ID}},
+            {"article": 1},
+        )
+    assert calls == 2

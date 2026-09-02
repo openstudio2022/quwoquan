@@ -16,7 +16,7 @@
 | 无 `_shared/receipts/` 或目录为空 | 工作包已由 `task init` 原子创建时从 `0.plan` 契约开始；三文件缺失则 `GATE_BLOCK` |
 | 最新 receipt `verdict=pass` 且 `next≠END` | 进入 `next` 指向的阶段 |
 | 最新 receipt `verdict=pass` 且 `next=END` | execution 已完成；只做只读核验，不得再写 |
-| 最新 receipt `verdict=blocked` | 读 `openItems`：`return_to_stage` → 进入 `returnStage`；`gate_block` → 停，报告用户；`out_of_scope` → 按剩余项处置 |
+| 最新 receipt `verdict=blocked` | 读 `typedIssues`：按唯一 `recoveryStage` 新建 retry execution；无法安全恢复则 typed GATE_BLOCK 并停 |
 | `execution_state.status ∈ {succeeded, superseded}` | 终态保护：**不可 resume**，见下 |
 | receipt 与磁盘产物矛盾（PRE 复验失败） | 以磁盘复验结果为准，落 `verdict=blocked` receipt 说明矛盾，报告用户 |
 | 存在活跃 claim（心跳未过 TTL，见 [orchestration.md](orchestration.md)） | 不接手；另选 execution 或等待 |

@@ -16,7 +16,6 @@ from core.control_types import RuntimeEnvironment
 from core.runtime_policy import (
     active_runtime_policy,
     load_runtime_policy,
-    runtime_profile_digest,
 )
 
 
@@ -247,61 +246,33 @@ def execution_model_pair(
 
 
 def execution_model_pair_for_execution(execution_id: str) -> ExecutionModelPair:
-    """Resolve the immutable model contract referenced by one execution manifest."""
-    return semantic_execution_binding_for_execution(execution_id).pair
+    """Retired: current execution model identity lives in stage actor evidence."""
+    from content.execution.workspace import load_execution_manifest
 
-
-def _model_binding_document(binding: SemanticExecutionBinding) -> dict[str, object]:
-    author = binding.pair.author
-    reviewer = binding.pair.reviewer
-    if author.provider is not reviewer.provider:
-        raise ValueError("execution manifest supports one provider for both roles")
-    return {
-        "provider": author.provider.value,
-        "authorModel": author.model_id,
-        "authorModelFamily": author.family.value,
-        "authorModelParameters": author.selection.parameters_document(),
-        "reviewerModel": reviewer.model_id,
-        "reviewerModelFamily": reviewer.family.value,
-        "reviewerModelParameters": reviewer.selection.parameters_document(),
-    }
+    manifest = load_execution_manifest(execution_id)
+    if manifest.get("hostRuntime") != "external_host_agent":
+        raise ValueError(
+            "execution manifest hostRuntime must be external_host_agent"
+        )
+    raise ValueError(
+        "current execution model pair is not manifest state; read stage semantic actor evidence"
+    )
 
 
 def semantic_execution_binding_for_execution(
     execution_id: str,
 ) -> SemanticExecutionBinding:
-    """Resolve provider/model/runtime only from one frozen execution manifest."""
-    from content.execution.planning.recipe.model import load_recipe
-    from content.execution.workspace import (
-        execution_manifest_recipe_ref,
-        load_execution_manifest,
-    )
+    """Retired for current manifests; stage actor evidence is authoritative."""
+    from content.execution.workspace import load_execution_manifest
 
-    recipe_ref = execution_manifest_recipe_ref(execution_id)
-    recipe = load_recipe(recipe_ref)
-    runtime_profile = str(recipe.get("runtimeProfile") or "").strip()
     manifest = load_execution_manifest(execution_id)
-    if (
-        manifest.get("runtimeProfileId") != runtime_profile
-        or manifest.get("runtimeProfileDigest")
-        != runtime_profile_digest(runtime_profile)
-    ):
+    if manifest.get("hostRuntime") != "external_host_agent":
         raise ValueError(
-            "execution manifest runtime profile identity drift; create retryOf"
+            "execution manifest hostRuntime must be external_host_agent"
         )
-    binding = semantic_execution_binding(
-        recipe,
-        manifest.get("semanticSelectionId"),
+    raise ValueError(
+        "current semantic binding is not manifest state; read stage semantic actor evidence"
     )
-    if manifest.get("semanticRuntime") != binding.runtime.value:
-        raise ValueError(
-            "execution manifest semantic runtime identity drift; create retryOf"
-        )
-    if manifest.get("modelBinding") != _model_binding_document(binding):
-        raise ValueError(
-            "execution manifest semantic model binding drift; create retryOf"
-        )
-    return binding
 
 
 __all__ = [

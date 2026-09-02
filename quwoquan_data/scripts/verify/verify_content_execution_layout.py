@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 import json
+import hashlib
 
 import yaml
 
@@ -25,6 +26,7 @@ from content.execution.execution_terminal import (
 from content.execution.spec_contract import ExecutionSpec
 from content.execution.store import load_spec
 from content.execution.workspace import load_execution_manifest, load_frozen_target_set
+from verify import verify_task_init_contract
 
 
 _RETIRED_SOURCE_DIRS = (
@@ -69,6 +71,41 @@ def _display_path(path: Path) -> str:
         return str(path)
 
 
+def _task_init_generation(execution_root: Path) -> str | None:
+    """Classify current versus the retired raw-byte digest generation."""
+    try:
+        manifest = json.loads(
+            (execution_root / "execution_manifest.json").read_text(encoding="utf-8")
+        )
+        request = json.loads(
+            (execution_root / "0.plan/request.json").read_text(encoding="utf-8")
+        )
+        target_set_path = execution_root / "0.plan/target_set.json"
+        target_set = json.loads(target_set_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("hostRuntime") != "external_host_agent"
+        or not isinstance(request, dict)
+        or request.get("schema") != "quwoquan_data.task_init_request"
+        or not isinstance(target_set, dict)
+    ):
+        return None
+    target_set_digest = manifest.get("targetSetDigest")
+    canonical_digest = hashlib.sha256(
+        json.dumps(
+            target_set, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+    ).hexdigest()
+    if target_set_digest == canonical_digest:
+        return "current"
+    raw_bytes_digest = hashlib.sha256(target_set_path.read_bytes()).hexdigest()
+    if target_set_digest == raw_bytes_digest:
+        return "legacy_raw_bytes"
+    return "current_drift"
+
+
 def _identity_issues(execution_root: Path) -> list[str]:
     issues: list[str] = []
 
@@ -104,8 +141,21 @@ def _identity_issues(execution_root: Path) -> list[str]:
 
 def _object_stage_issues(root: Path) -> list[str]:
     issues: list[str] = []
-    for stage in root.rglob("1.download"):
-        object_root = stage.parent
+    object_depth = {"entities": 3, "posts": 4}.get(root.name)
+    object_roots = {
+        stage.parent
+        for stage_name in OBJECT_STAGES
+        for stage in root.rglob(stage_name)
+        if stage.is_dir()
+    }
+    if object_depth is not None:
+        object_roots.update(
+            candidate
+            for candidate in root.rglob("*")
+            if candidate.is_dir()
+            and len(candidate.relative_to(root).parts) == object_depth
+        )
+    for object_root in sorted(object_roots):
         missing = [name for name in OBJECT_STAGES if not (object_root / name).is_dir()]
         if missing:
             issues.append(
@@ -233,7 +283,23 @@ def _execution_work_package_issues(entry: Path) -> list[str]:
         if child.name not in EXECUTION_ROOT_ALLOWED_ENTRIES:
             issues.append(f"{_display_path(child)}: not allowed in an execution work package")
     issues.extend(_identity_issues(entry))
-    issues.extend(_frozen_target_issues(entry))
+    generation = _task_init_generation(entry)
+    if generation in {"current", "current_drift"}:
+        try:
+            current_failures = verify_task_init_contract.issues(entry.name)
+        except (OSError, TypeError, ValueError) as exc:
+            current_failures = [f"unreadable current task-init document: {exc}"]
+        issues.extend(
+            f"{_display_path(entry)}: invalid current task-init contract: {failure}"
+            for failure in current_failures
+        )
+    elif generation is None:
+        # Managed packages remain on their immutable legacy contract until the
+        # retired runtime family is physically deleted. A host task-init package
+        # whose digest equals the complete file bytes is the known pre-canonical
+        # generation and is left to terminal/stale migration rather than current
+        # contract reinterpretation.
+        issues.extend(_frozen_target_issues(entry))
     issues.extend(_object_stage_issues(entry / "entities"))
     issues.extend(_object_stage_issues(entry / "posts"))
     return issues

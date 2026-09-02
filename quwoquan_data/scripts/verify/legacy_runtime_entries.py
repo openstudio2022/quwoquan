@@ -147,14 +147,28 @@ def _legacy_text_kinds(
             if pattern.search(text):
                 kinds.add(kind)
     is_ops_source = relative.parts and relative.parts[0] == "quwoquan_ops"
-    if is_ops_source and (
-        LEGACY_OPS_TOPOLOGY_RE.search(text)
-        or (
+    if is_ops_source:
+        ops_path_kind = legacy_source_path_kind(relative, suffix=suffix)
+        retired_source_declaration = (
+            relative.as_posix()
+            == "quwoquan_ops/environments/local_env_port_manifest.yaml"
+            and '"retiredComposeSources"' in text
+        )
+        if ops_path_kind is not None and (
+            LEGACY_OPS_TOPOLOGY_RE.search(text)
+            or (
+                suffix in {".json", ".toml", ".yaml", ".yml"}
+                and LEGACY_COMPOSE_WORKER_RE.search(text)
+            )
+        ):
+            kinds.add("retired Ops data-execution-fleet topology reference")
+        elif retired_source_declaration:
+            pass
+        elif LEGACY_OPS_TOPOLOGY_RE.search(text) or (
             suffix in {".json", ".toml", ".yaml", ".yml"}
             and LEGACY_COMPOSE_WORKER_RE.search(text)
-        )
-    ):
-        kinds.add("retired Ops data-execution-fleet topology reference")
+        ):
+            kinds.add("active Ops surface references retired data topology")
     return tuple(sorted(kinds))
 
 

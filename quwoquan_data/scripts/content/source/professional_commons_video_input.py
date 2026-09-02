@@ -444,7 +444,6 @@ def _prepared_candidate(
         judgment = result["verdict"]
         accepted = judgment["status"] == "passed"
         evidence = {
-            "contractVersion": result["contractVersion"],
             "requestRef": request_ref,
             "requestDigest": request["requestDigest"],
             "resultRef": (

@@ -1,5 +1,7 @@
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t1
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t2
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t3
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t4
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-002.t1
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-002.t2
 from __future__ import annotations
@@ -32,6 +34,17 @@ from quwoquan_ops.gate.verify_git_branch_policy import (
     pull_request_context_from_environment,
     repository_branch_context_from_environment,
 )
+
+
+LANE_BRANCHES = (
+    "lane/product-mainline",
+    "lane/data-engineering",
+    "lane/agent-engineering",
+    "lane/ops",
+    "lane/small-fix",
+    "lane/refactor",
+)
+ALL_LONG_LIVED = ("dev1.0", "main", *LANE_BRANCHES)
 
 
 def _repository_policy() -> BranchPolicy:
@@ -70,12 +83,12 @@ def _update(
     )
 
 
-def test_repository_policy_declares_dev_integration_and_main_release() -> None:
+def test_repository_policy_declares_dev_integration_main_release_and_six_lanes() -> None:
     policy = _repository_policy()
 
-    assert policy.allowed_local == {"dev1.0", "main"}
-    assert policy.allowed_remote == {"dev1.0", "main"}
-    assert policy.pull_request_prefixes == set()
+    assert policy.allowed_local == set(ALL_LONG_LIVED)
+    assert policy.allowed_remote == set(ALL_LONG_LIVED)
+    assert policy.pull_request_prefixes == {"lane/"}
     assert policy.integration_branch == "dev1.0"
     assert policy.release_branch == "main"
     assert policy.production_source_branch == "main"
@@ -96,12 +109,19 @@ def test_repository_policy_declares_dev_integration_and_main_release() -> None:
     )
     assert policy.allowed_pull_request_edges == (
         PullRequestEdge(base="main", head="dev1.0"),
+        PullRequestEdge(base="dev1.0", head="lane/*"),
     )
     assert policy.system_backsync == SystemBacksync(
         head="main",
         base="dev1.0",
         mode="fast-forward-only",
     )
+    assert policy.persistent_lane_admission is not None
+    assert policy.persistent_lane_admission.isolation == "branch_per_writer"
+    assert policy.persistent_lane_admission.promotion == "declared_pull_request_edge_only"
+    assert policy.persistent_lane_admission.resync == "mandatory_fast_forward_after_integration_or_abort"
+    assert policy.persistent_lane_admission.worktree_lifecycle == "retained"
+    assert policy.persistent_lane_admission.concurrency_evidence == "required"
     assert dict(policy.failure_codes) == {
         "authority_unavailable": "OPS.BRANCH.AUTHORITY_UNAVAILABLE",
         "backsync_cas_conflict": "OPS.BRANCH.BACKSYNC_CAS_CONFLICT",
@@ -113,11 +133,22 @@ def test_repository_policy_declares_dev_integration_and_main_release() -> None:
     }
 
 
-@pytest.mark.parametrize("current_branch", ["dev1.0", "main"])
-def test_branch_policy_accepts_both_declared_long_lived_branches(
+@pytest.mark.parametrize("current_branch", list(ALL_LONG_LIVED))
+def test_branch_policy_accepts_every_declared_long_lived_branch(
     current_branch: str,
 ) -> None:
     assert _issues(current_branch=current_branch) == []
+
+
+def test_branch_policy_accepts_six_persistent_lane_refs_locally_and_remotely() -> None:
+    assert (
+        _issues(
+            current_branch="dev1.0",
+            local_branches=list(ALL_LONG_LIVED),
+            remote_branches=list(ALL_LONG_LIVED),
+        )
+        == []
+    )
 
 
 def test_branch_policy_rejects_a_third_long_lived_branch() -> None:
@@ -160,6 +191,20 @@ def test_branch_policy_accepts_dev_to_main_promotion() -> None:
     )
 
 
+@pytest.mark.parametrize("lane", list(LANE_BRANCHES))
+def test_branch_policy_accepts_every_lane_to_dev_pull_request_edge(lane: str) -> None:
+    assert (
+        _issues(
+            current_branch=None,
+            local_branches=[],
+            remote_branches=["dev1.0", "main", lane],
+            ci_head_branch=lane,
+            ci_base_branch="dev1.0",
+        )
+        == []
+    )
+
+
 @pytest.mark.parametrize(
     ("head", "base"),
     [
@@ -169,6 +214,11 @@ def test_branch_policy_accepts_dev_to_main_promotion() -> None:
         ("dev1.0", "dev1.0"),
         ("main", "main"),
         ("release/other", "main"),
+        ("lane/small-fix", "main"),
+        ("lane/small-fix", "lane/refactor"),
+        ("lane/undeclared", "dev1.0"),
+        ("dev1.0", "lane/small-fix"),
+        ("main", "lane/small-fix"),
     ],
 )
 def test_branch_policy_rejects_every_undeclared_pull_request_edge(
@@ -276,6 +326,8 @@ def test_main_only_fixture_still_fails_closed_for_dev_branch(tmp_path: Path) -> 
     payload["allowed_remote_branches"] = ["main"]
     payload["integration_branch"] = "main"
     payload["allowed_pull_request_edges"] = [{"head": "main", "base": "main"}]
+    payload["pull_request_branch_prefixes"] = []
+    payload.pop("persistent_lane_admission")
     payload.pop("system_backsync")
     fixture_policy.write_text(
         yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
@@ -441,17 +493,70 @@ def test_policy_byte_loader_rejects_unknown_or_missing_root_fields() -> None:
         load_policy_bytes(raw.replace(b"production_workflow:", b"removed_workflow:", 1))
 
 
-def test_temporary_execution_admission_schema_is_exact_and_closed() -> None:
+def test_persistent_lane_admission_schema_is_exact_and_closed() -> None:
+    payload = yaml.safe_load(
+        (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(encoding="utf-8")
+    )
+    assert payload["persistent_lane_admission"] == {
+        "isolation": "branch_per_writer",
+        "promotion": "declared_pull_request_edge_only",
+        "resync": "mandatory_fast_forward_after_integration_or_abort",
+        "worktree_lifecycle": "retained",
+        "concurrency_evidence": "required",
+    }
+    for mutate in (
+        lambda value: value.update(unexpected=True),
+        lambda value: value.update(resync="optional"),
+        lambda value: value.update(worktree_lifecycle="deleted"),
+        lambda value: value.pop("concurrency_evidence"),
+    ):
+        broken = yaml.safe_load(
+            (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        mutate(broken["persistent_lane_admission"])
+        with pytest.raises(ValueError, match="exact isolation/promotion/resync/worktree_lifecycle|must be"):
+            load_policy_bytes(
+                yaml.safe_dump(broken, allow_unicode=True, sort_keys=False).encode(
+                    "utf-8"
+                )
+            )
+
+
+def test_persistent_lane_admission_requires_exact_six_lane_closed_set() -> None:
+    canonical = yaml.safe_load(
+        (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    for mutate in (
+        lambda value: value["allowed_local_branches"].remove("lane/refactor"),
+        lambda value: value["allowed_remote_branches"].append("lane/other"),
+        lambda value: value["allowed_pull_request_edges"].append(
+            {"head": "lane/ops", "base": "main"}
+        ),
+        lambda value: value.update(pull_request_branch_prefixes=["feature/"]),
+    ):
+        broken = yaml.safe_load(yaml.safe_dump(canonical, sort_keys=False))
+        mutate(broken)
+        with pytest.raises(
+            ValueError, match="persistent lane admission|declared pull-request prefix"
+        ):
+            load_policy_bytes(
+                yaml.safe_dump(broken, allow_unicode=True, sort_keys=False).encode(
+                    "utf-8"
+                )
+            )
+
+
+def test_legacy_temporary_execution_admission_key_is_rejected() -> None:
     raw = (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_bytes()
-    lifecycle = b"""temporary_execution_admission:
-  isolation: branch_per_writer
-  promotion: declared_pull_request_edge_only
-  cleanup: mandatory_after_promotion_or_abort
-  concurrency_evidence: required
-  unexpected: true
-"""
-    with pytest.raises(ValueError, match="exact isolation/promotion/cleanup"):
-        load_policy_bytes(raw + lifecycle)
+    legacy = raw.replace(
+        b"persistent_lane_admission:", b"temporary_execution_admission:", 1
+    )
+    with pytest.raises(ValueError, match="root fields drifted"):
+        load_policy_bytes(legacy)
 
 
 def test_policy_loader_rejects_missing_canonical_failure_code(tmp_path: Path) -> None:
@@ -509,7 +614,36 @@ def test_transition_evaluator_has_single_typed_result_semantics() -> None:
     assert blocked.allowed is False
 
 
-def test_pre_push_accepts_only_matching_dev_remote_branch() -> None:
+@pytest.mark.parametrize(
+    ("head", "base", "allowed"),
+    [
+        ("lane/ops", "lane/ops", True),
+        ("lane/refactor", "lane/refactor", True),
+        ("lane/ops", "dev1.0", False),
+        ("lane/undeclared", "lane/undeclared", False),
+    ],
+)
+def test_transition_evaluator_direct_push_decision_covers_lane_branches(
+    head: str, base: str, allowed: bool,
+) -> None:
+    decision = evaluate_transition(
+        policy=_repository_policy(),
+        transition=BranchTransition(
+            event="direct_push",
+            actor_kind="human",
+            repository="owner/repo",
+            head=head,
+            base=base,
+        ),
+    )
+
+    assert decision.allowed is allowed
+    if not allowed:
+        assert decision.reason_code == "OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED"
+        assert decision.recovery_action == "open_allowed_pull_request_then_retry"
+
+
+def test_pre_push_accepts_only_matching_dev_bootstrap_remote_branch() -> None:
     policy = _repository_policy()
 
     assert (
@@ -517,26 +651,109 @@ def test_pre_push_accepts_only_matching_dev_remote_branch() -> None:
             policy=policy,
             current_branch="dev1.0",
             update_lines=[
+                _update(local_branch="dev1.0", remote_branch="dev1.0")
+            ],
+            environment={},
+        )
+        == []
+    )
+    for current_branch in ("main", "lane/ops"):
+        issues = pre_push_issues(
+            policy=policy,
+            current_branch=current_branch,
+            update_lines=[
+                _update(local_branch=current_branch, remote_branch="dev1.0")
+            ],
+            environment={},
+        )
+        assert any("matching local dev1.0 branch" in issue for issue in issues)
+        assert all(
+            issue.startswith("OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED:")
+            for issue in issues
+        )
+
+
+def test_pre_push_accepts_only_matching_lane_remote_branch() -> None:
+    policy = _repository_policy()
+
+    assert (
+        pre_push_issues(
+            policy=policy,
+            current_branch="lane/small-fix",
+            update_lines=[
                 _update(
-                    local_branch="dev1.0",
-                    remote_branch="dev1.0",
+                    local_branch="lane/small-fix",
+                    remote_branch="lane/small-fix",
                 )
             ],
             environment={},
         )
         == []
     )
-    issues = pre_push_issues(
+    foreign_source = pre_push_issues(
         policy=policy,
-        current_branch="main",
+        current_branch="dev1.0",
         update_lines=[
-            _update(local_branch="main", remote_branch="dev1.0")
+            _update(local_branch="dev1.0", remote_branch="lane/small-fix")
         ],
         environment={},
     )
-    assert any("matching local dev1.0 branch" in issue for issue in issues)
+    assert any(
+        "persistent lane push must update its matching remote ref" in issue
+        for issue in foreign_source
+    )
+    lane_to_dev = pre_push_issues(
+        policy=policy,
+        current_branch="lane/small-fix",
+        update_lines=[
+            _update(local_branch="lane/small-fix", remote_branch="dev1.0")
+        ],
+        environment={},
+    )
+    assert any("matching local dev1.0 branch" in issue for issue in lane_to_dev)
+    lane_to_main = pre_push_issues(
+        policy=policy,
+        current_branch="lane/small-fix",
+        update_lines=[
+            _update(local_branch="lane/small-fix", remote_branch="main")
+        ],
+        environment={},
+    )
+    assert any("dev1.0 -> main promotion PR" in issue for issue in lane_to_main)
 
 
+@pytest.mark.parametrize(
+    ("operation", "local_sha", "remote_sha"),
+    [
+        ("create", "a" * 40, ZERO_SHA),
+        ("update", "a" * 40, "b" * 40),
+        ("delete", ZERO_SHA, "b" * 40),
+    ],
+)
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t3
+def test_pre_push_rejects_undeclared_lane_create_update_and_delete(
+    operation: str, local_sha: str, remote_sha: str,
+) -> None:
+    issues = pre_push_issues(
+        policy=_repository_policy(),
+        current_branch="lane/undeclared",
+        update_lines=[
+            _update(
+                local_branch="lane/undeclared",
+                remote_branch="lane/undeclared",
+                local_sha=local_sha,
+                remote_sha=remote_sha,
+            )
+        ],
+        environment={},
+    )
+    assert issues, operation
+    assert all(issue.startswith("OPS.BRANCH.REF_NOT_ALLOWED:") for issue in issues)
+    assert all("terminal=blocked" in issue for issue in issues)
+    assert all("recovery=use_declared_branch_and_allowed_pr_edge_then_retry" in issue for issue in issues)
+
+
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-003.t3
 def test_pre_push_blocks_direct_main_update() -> None:
     issues = pre_push_issues(
         policy=_repository_policy(),
@@ -551,6 +768,8 @@ def test_pre_push_blocks_direct_main_update() -> None:
     assert all(
         issue.startswith("OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED:") for issue in issues
     )
+    assert all("terminal=blocked" in issue for issue in issues)
+    assert all("recovery=open_allowed_pull_request_then_retry" in issue for issue in issues)
 
 
 def test_pre_push_rejects_self_reported_system_backsync_identity() -> None:
@@ -572,6 +791,32 @@ def test_pre_push_rejects_self_reported_system_backsync_identity() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "transition",
+    [
+        BranchTransition(
+            event="system_backsync", actor_kind="human", repository="owner/repo",
+            head="main", base="dev1.0", before_oid="b" * 40, after_oid="a" * 40,
+        ),
+        BranchTransition(
+            event="system_backsync", actor_kind="system", repository="owner/repo",
+            head="lane/small-fix", base="dev1.0", before_oid="b" * 40, after_oid="a" * 40,
+        ),
+        BranchTransition(
+            event="system_backsync", actor_kind="system", repository="owner/repo",
+            head="main", base="dev1.0", before_oid=None, after_oid="a" * 40,
+        ),
+    ],
+)
+def test_invalid_system_backsync_identity_has_stable_recovery(
+    transition: BranchTransition,
+) -> None:
+    decision = evaluate_transition(policy=_repository_policy(), transition=transition)
+    assert decision.allowed is False
+    assert decision.reason_code == "OPS.BRANCH.REF_NOT_ALLOWED"
+    assert decision.recovery_action == "use_declared_branch_and_allowed_pr_edge_then_retry"
+
+
 def test_transition_evaluator_fails_closed_when_ancestry_query_is_unavailable() -> None:
     decision = evaluate_transition(
         policy=_repository_policy(),
@@ -591,6 +836,7 @@ def test_transition_evaluator_fails_closed_when_ancestry_query_is_unavailable() 
 
     assert decision.allowed is False
     assert decision.reason_code == "OPS.BRANCH.AUTHORITY_UNAVAILABLE"
+    assert decision.recovery_action == "restore_git_authority_then_retry"
 
 
 @pytest.mark.parametrize(
@@ -630,10 +876,13 @@ def test_system_backsync_decision_table_is_pure_and_fail_closed(
 
     assert decision.allowed is allowed
     assert decision.reason_code == reason_code
+    if reason_code is not None:
+        assert decision.recovery_action is not None
 
 
 @pytest.mark.parametrize(
-    "remote_branch", ["dev1.0", "main", "codex/merged", "release/other"]
+    "remote_branch",
+    ["dev1.0", "main", "lane/small-fix", "lane/data-engineering", "codex/merged", "release/other"],
 )
 def test_pre_push_blocks_long_lived_or_undeclared_branch_deletion(
     remote_branch: str,
@@ -652,6 +901,7 @@ def test_pre_push_blocks_long_lived_or_undeclared_branch_deletion(
     )
 
     assert issues == [
-        "OPS.BRANCH.REF_NOT_ALLOWED: deletion of protected or undeclared branch "
-        f"'{remote_branch}' is blocked"
+        "OPS.BRANCH.REF_NOT_ALLOWED: terminal=blocked; deletion of protected or undeclared "
+        f"branch '{remote_branch}' is blocked; "
+        "recovery=use_declared_branch_and_allowed_pr_edge_then_retry"
     ]

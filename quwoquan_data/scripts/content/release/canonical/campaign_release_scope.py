@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from content.execution.campaign.lane import (
+from content.execution.planning.carrier_demand import (
     CAMPAIGN_CARRIERS,
     normalize_active_carriers,
     normalize_workloads,
 )
-from content.execution.campaign.scale import campaign_workload_targets
+from content.execution.planning.scale import campaign_workload_targets
 from content.execution.identity import parse_execution_id
 from core.source_digest import ExecutionBundleIdentity
 

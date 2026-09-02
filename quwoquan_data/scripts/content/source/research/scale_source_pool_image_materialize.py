@@ -7,6 +7,7 @@ from typing import Any
 
 from core.io import read_json
 from core.schema import assert_valid
+from core.source_layout import rejected_layout
 
 from content.source.media_source_admission import (
     MediaSourceAdmissionQuery,
@@ -142,10 +143,19 @@ def _materialize_frozen_image_source_unit(
         "---\n\n"
         f"{entity_id} 专业图片来源集合，仅供结构化资产与授权链使用。\n"
     )
-    object_dir = _runtime.resolve_entity_object_dir(
-        execution_id,
-        entity_id,
-        etype_hint=entity_type,
+    parts = Path(str(row.get("objectRef") or "")).parts
+    if len(parts) < 3 or parts[:2] != ("posts", "image"):
+        raise _fail(f"image target ref is non-canonical: {row.get('objectRef')}")
+    suffix = parts[2:]
+    angle, title, sequence = (
+        ("/".join(suffix[:-2]), suffix[-2], int(suffix[-1]))
+        if len(suffix) >= 3 and suffix[-1].isdigit()
+        else (suffix[0], suffix[1], 1)
+        if len(suffix) == 2
+        else ("美图", suffix[0], 1)
+    )
+    object_dir = _runtime.execution_post_object_dir(
+        execution_id, "image", angle, title, sequence
     )
     return _runtime.write_source_unit(
         object_dir,
@@ -167,7 +177,7 @@ def _materialize_frozen_image_source_unit(
         source_category="image_collection",
         source_kind="image_collection",
         extractor="frozen_professional_image_acquisition",
-        policy_revision="scale-source-pool-image-v1",
+        policy_revision="receipt-protocol-image-v1",
         source_use_mode=(
             "licensed_adaptation"
             if asset.get("rightsStatus") == "verified"
@@ -180,6 +190,12 @@ def _materialize_frozen_image_source_unit(
         target_ref=str(row["entityRef"]),
         relevance=str(asset["relevance"]),
         images=[image],
+        layout=rejected_layout(
+            source_kind="image_collection",
+            extractor="frozen_professional_image_acquisition",
+            title=str(asset["displayName"]),
+            reject_reason="image_collection_has_no_textual_structure",
+        ),
         execution_id=execution_id,
         build_variants=False,
         source={"sourceAttribution": source_attribution},

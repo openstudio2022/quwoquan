@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 from content.execution.campaign import prepare as prepare_campaign
-from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+from content.execution.planning.carrier_demand import CAMPAIGN_CARRIERS
 from core.io import write_json
 from support.capacity_calibration_fixture import (
     synthetic_capacity_source_binding,

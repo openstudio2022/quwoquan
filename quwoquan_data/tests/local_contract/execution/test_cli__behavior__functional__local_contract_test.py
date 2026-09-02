@@ -32,7 +32,12 @@ def test_task_help():
     )
     assert result.returncode == 0
     assert "init" in result.stdout
-    assert "stage-record" in result.stdout
+    assert "stage-record" not in result.stdout
+    assert "stage-open" in result.stdout
+    assert "stage-gate" in result.stdout
+    assert "stage-close" in result.stdout
+    assert "semantic-prepare" in result.stdout
+    assert "semantic-record" in result.stdout
     assert "execute" not in result.stdout
 
 
@@ -67,7 +72,21 @@ sys.meta_path.insert(0, _BlockCanonicalRelease())
     assert "usage: qwq-data ship" in result.stdout
 
 
-@pytest.mark.parametrize("retired_command", ["execute", "recipe", "prepare-campaign", "preflight", "calibrate-capacity", "reconcile-stale", "runtime-evidence", "plan-images"])
+@pytest.mark.parametrize(
+    "retired_command",
+    [
+        "execute",
+        "recipe",
+        "prepare-campaign",
+        "preflight",
+        "compile-intent",
+        "project-init-inputs",
+        "calibrate-capacity",
+        "reconcile-stale",
+        "runtime-evidence",
+        "plan-images",
+    ],
+)
 def test_retired_task_commands_are_rejected(retired_command: str):
     result = subprocess.run(
         [sys.executable, "-B", str(CLI_PATH), "task", retired_command, "--help"],
@@ -77,6 +96,27 @@ def test_retired_task_commands_are_rejected(retired_command: str):
     )
     assert result.returncode == 2
     assert "invalid choice" in result.stderr
+
+@pytest.mark.parametrize(
+    "retired_command",
+    [
+        "campaign-aggregate",
+        "pool-dispatch",
+        "campaign-scale-evidence",
+        "pool-append",
+        "pool-backfill",
+    ],
+)
+def test_retired_release_commands_are_rejected(retired_command: str):
+    result = subprocess.run(
+        [sys.executable, "-B", str(CLI_PATH), "release", retired_command, "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "invalid choice" in result.stderr
+
 
 def test_host_only_task_parser_import_has_side_effect_free_cold_start():
     result = subprocess.run(

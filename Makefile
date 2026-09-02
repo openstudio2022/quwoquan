@@ -1,6 +1,5 @@
 .PHONY: gate
 .PHONY: local-readiness-plan local-readiness-run local-readiness-inspect verify-local-readiness test-local-readiness
-.PHONY: verify-workflow-resolution test-workflow-resolution
 .PHONY: verify-governance-pipeline-admission test-governance-pipeline-admission
 .PHONY: verify-review-dispatch test-review-dispatch verify-review-consolidation test-review-consolidation test-named-evidence test-evidence-fingerprint test-handoff-contracts verify-review-evidence-handoff
 .PHONY: verify-knowledge-asset-s0-migration
@@ -85,7 +84,6 @@
 .PHONY: observability-es-bootstrap
 .PHONY: observability-es-smoke
 .PHONY: observability-alert-drill
-.PHONY: verify-reliable-task-topology
 .PHONY: verify-service-architecture
 .PHONY: verify-canonical-coverage
 .PHONY: verify-canonical-coverage-app
@@ -275,7 +273,7 @@ verify-app-startup-ttid:
 	@python3 quwoquan_app/scripts/device/verify_startup_ttid_baseline.py
 	@python3 quwoquan_app/test/local_contract/runtime/startup_welcome_motion_probe__local_contract_test.py
 
-verify-app-startup-environment-pr:
+verify-app-startup-environment-pr: prepare-test-python
 	@python3 quwoquan_ops/gate/verify_python_syntax.py \
 		quwoquan_app/scripts/device/verify_flutter_run_defines.py \
 		quwoquan_app/scripts/device/verify_ios_hot_restart.py \
@@ -285,8 +283,17 @@ verify-app-startup-environment-pr:
 	@python3 quwoquan_app/test/local_contract/runtime/ios_runtime_dart_defines__direct_debug__local_contract_test.py
 	@python3 quwoquan_app/test/local_contract/runtime/flutter_facade_command__local_contract_test.py
 	@python3 quwoquan_app/test/local_contract/runtime/workspace_flutter_facade_projection__local_contract_test.py
-	@python3 quwoquan_app/test/local_contract/runtime/workspace_flutter_facade_terminal_receipt__local_contract_test.py
-	@python3 quwoquan_app/test/local_contract/runtime/workspace_flutter_facade_zsh_startup__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/default_debug_supply__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/run_sh_hot_reload_key_bridge__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/managed_flutter_dispatcher__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/canonical_launcher_managed_entry__local_contract_test.py
+	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
+		quwoquan_app/test/local_contract/runtime/run_sh_dependency_auto_sync__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/stackctl/test_app_dependency_capsule__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/stackctl/test_app_dependency_sync_process_result__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/stackctl/test_app_dependency_sync_transaction__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/stackctl/test_stackctl_app_managed_prepare__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/stackctl/test_stackctl_managed_runtime_authority__local_contract_test.py -q
 	@python3 quwoquan_app/test/local_contract/runtime/ios_hot_restart_launcher__local_contract_test.py
 	@python3 quwoquan_app/test/local_contract/runtime/startup_probe_parser__local_contract_test.py
 	@python3 quwoquan_app/test/local_contract/runtime/startup_probe_parser__environment_matrix__local_contract_test.py
@@ -300,7 +307,7 @@ verify-app-ios-hot-restart:
 		--env alpha \
 		--device-id "$(IOS_SIMULATOR_ID)"
 
-# 把仓库级 flutter facade 注入当前 Cursor 工作区 PATH（FACADE_ACTION=--deactivate|--status 可逆/查询）
+# 投影 Cursor 全 profile + 显式 user-zsh（FACADE_ACTION="--scope cursor|user-zsh|all --deactivate|--status"）
 app-activate-flutter-facade:
 	@python3 quwoquan_app/scripts/tools/flutter_facade/activate_cursor_workspace.py $(FACADE_ACTION)
 
@@ -616,12 +623,6 @@ observability-es-smoke:
 # 校验控制面回流。证据写入 .qwq_output/env/repo/runs/alert-drill/。
 observability-alert-drill:
 	@ALERTMANAGER_URL="$(ALERTMANAGER_URL)" python3 quwoquan_ops/tools/alert_drill.py
-
-verify-reliable-task-topology:
-	@python3 quwoquan_service/scripts/runtime/reliabletask/verify_reliable_task_catalog.py
-	@python3 quwoquan_service/scripts/runtime/reliabletask/verify_reliable_task_retention_policy.py
-	@python3 quwoquan_service/scripts/runtime/packaging/verify_module_permission_scope.py
-	@python3 quwoquan_service/scripts/runtime/reliabletask/verify_reliable_task_migration.py
 
 verify-service-architecture:
 	@find . \( -path './.git' -o -path './.qwq_output' \) -prune -o -type d \( -name '__pycache__' -o -name '.pytest_cache' \) -exec rm -rf {} + ; true
@@ -1159,7 +1160,6 @@ gate:
 	@$(MAKE) verify-test-no-fake
 	@$(MAKE) verify-test-nonfunctional-coverage
 	# local_contract 只在 gate_repo scope 内跑一次，禁止与 test-local-contract 双跑。
-	@$(MAKE) verify-reliable-task-topology
 	@$(MAKE) verify-markdown-article-no-article-document
 	@$(MAKE) verify-article-contract-purity
 	@python3 quwoquan_ops/cli/stackctl.py verify --kind all --profile baseline
@@ -1239,7 +1239,6 @@ verify:
 	@bash quwoquan_ops/environments/verify/verify_service_domain_layout.sh
 	@bash quwoquan_service/scripts/runtime/packaging/verify_runtime_packaging.sh
 	@bash quwoquan_ops/environments/verify/verify_ff_config_contract.sh
-	@$(MAKE) verify-reliable-task-topology
 	@bash quwoquan_service/scripts/recommendation-service/verify_recommendation_service_contract.sh
 	@$(MAKE) verify-quwoquan-data
 
@@ -1378,8 +1377,6 @@ test-gate-companion-local-contract: test-review-dispatch test-review-consolidati
 		quwoquan_ops/tests/local_contract/gate/test_objective_execution__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_hotl_admission__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_hotl_admission__evaluator__local_contract_test.py \
-		quwoquan_ops/tests/local_contract/gate/test_workflow_resolution__resolver__local_contract_test.py \
-		quwoquan_ops/tests/local_contract/gate/test_workflow_resolution__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_handoff_manifest__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_local_env_port_manifest__reverse_closure__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_gate_repo_summary__gate__local_contract_test.py \
@@ -1551,9 +1548,6 @@ test-runtime-local-contract:
 
 test-runtime-api-integration:
 	@$(MAKE) -C quwoquan_service test-runtime-api-integration
-
-test-runtime-api-integration-gamma:
-	@bash quwoquan_ops/cli/gamma/run_reliabletask_gamma_api_integration.sh
 
 test-local-contract:
 	@$(MAKE) prepare-test-python
@@ -1755,15 +1749,6 @@ test-local-readiness: prepare-test-python
 
 verify-local-readiness: test-local-readiness
 	@python3 -B quwoquan_ops/cli/local_readiness.py inspect >/dev/null
-
-# 显式命令与自然语言同轨；真实 Cursor/Codex discovery 仍由外部 smoke 证明。
-test-workflow-resolution: prepare-test-python
-	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \
-		quwoquan_ops/tests/local_contract/gate/test_workflow_resolution__resolver__local_contract_test.py \
-		quwoquan_ops/tests/local_contract/gate/test_workflow_resolution__gate__local_contract_test.py -q
-
-verify-workflow-resolution: test-workflow-resolution
-	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/gate/verify_workflow_resolution.py
 
 # 只读 admission；成功只表示 contract/evaluator 自洽，不签发外部 authority。
 test-governance-pipeline-admission: prepare-test-python

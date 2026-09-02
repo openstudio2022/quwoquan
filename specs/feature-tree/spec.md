@@ -60,7 +60,7 @@
 - 运行中发生根级不可恢复异常时只允许一次受控主容器重建；成功直接替换路由进入首页，失败后不得形成恢复循环。
 - 恢复页在全部状态提供官方网页版。
 - 版本服务确认有新版且存在当前平台可安装通道后，Android 进入趣我圈官网受信 APK 下载通道或引导到本机来源的已登记受信应用市场（华为、小米、OPPO、vivo、应用宝）；公众 iOS 进入 App Store 官方更新通道，PWA 与网页版继续作为无原生通道时的恢复兜底，已登记测试设备才可使用受控 Ad Hoc 通道。只有版本服务确认后才能显示“需要更新”或“已是最新版本”。
-- 同一环境与同一服务端状态下，所有受支持的构建、安装与启动路径必须进入同一业务行为：同一配置完成态、同一首个安全终态、同一路由与登录态、同一内容 outcome 与 release identity、同一恢复动作。有效路径集合（含经工作区 facade 的字面 `flutter run`）与等价指纹定义由 [`environment-topology-and-packaging` REQ-004](./runtime/runtime-config/environment-topology-and-packaging/spec.md#req-004) 唯一拥有，本条只引用不复制。BuildMode、启动来源（launch provenance）与安装渠道（install channel）只允许作为观测事实记录，不得改变任何用户可见行为。
+- 同一环境与同一服务端状态下，所有受支持的构建、安装与启动路径必须进入同一业务行为：同一配置完成态、同一首个安全终态、同一路由与登录态、同一内容 outcome 与 release identity、同一恢复动作。有效路径集合（含受管 PATH 中经 launcher dispatcher 进入 canonical launcher 的字面 `flutter run`）与等价指纹定义由 [`environment-topology-and-packaging` REQ-004](./runtime/runtime-config/environment-topology-and-packaging/spec.md#req-004) 唯一拥有，本条只引用不复制。BuildMode、启动来源（launch provenance）与安装渠道（install channel）只允许作为观测事实记录，不得改变任何用户可见行为。
 - 页面只表达已确认事实、恢复状态和当前动作，不显示技术原因、诊断编号、日志进度、错误码或缺乏操作价值的不确定描述。
 
 <a id="req-004"></a>
@@ -670,7 +670,7 @@
 - THEN 确认已最新、地址不可用或检查未完成时仍可进入官方网页版。
 - THEN 页面不存在技术原因、诊断编号或日志状态；脱敏异常先保存后异步上报，上报失败不影响任何恢复动作。
 - THEN Android/iOS 安装包、原生身份、runtime probe 与发布 provenance 绑定同一 effective launch manifest；package-only 编译不得替代真实 launcher/scene、safe terminal、motion、非 `unknown` attempt 与 telemetry readback 证据。
-- THEN <a id="install-launch-equivalence"></a>同一环境与同一服务端状态下，[`environment-topology-and-packaging` REQ-004](./runtime/runtime-config/environment-topology-and-packaging/spec.md#req-004) 所列全部有效路径——含经工作区 facade 的字面 `flutter run`（launch provenance=`workspace_flutter_run`）与受控制 IDE profile（`workspace_ide_debug`）——的规范化启动行为指纹一致：配置完成态、首个安全终态、路由/登录态、内容 outcome 与 release identity、恢复动作均相同，且无 fatal recovery 差异；BuildMode、launch provenance 与 install channel 仅出现在观测事实中。
+- THEN <a id="install-launch-equivalence"></a>同一环境与同一服务端状态下，[`environment-topology-and-packaging` REQ-004](./runtime/runtime-config/environment-topology-and-packaging/spec.md#req-004) 所列全部有效路径——含受管字面 `flutter run`（经 launcher `flutter` dispatcher 进入 canonical launcher，launch provenance=`canonical_launcher`）与受控制 IDE profile（`workspace_ide_debug`）——的规范化启动行为指纹一致：配置完成态、首个安全终态、路由/登录态、内容 outcome 与 release identity、恢复动作均相同，且无 fatal recovery 差异；BuildMode、launch provenance 与 install channel 仅出现在观测事实中。
 - THEN 应用市场与官网 APK 安装的验收各自绑定真实下载/安装回执与安装后冷启动 telemetry 回读，package-only、side-load 或另一渠道的回执不得互相替代。
 
 <a id="uat-004"></a>

@@ -45,7 +45,7 @@ def direct_selected_rows(
         or not str(evidence_ref or "").strip()
     ):
         raise ValueError("standalone source-pool runtime binding is incomplete")
-    from content.execution.campaign.source_pool_binding import (
+    from content.execution.source_pool.binding import (
         validate_bound_scale_source_pool,
         validate_lane_source_pool_selection,
     )

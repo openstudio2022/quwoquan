@@ -19,7 +19,7 @@ from content.execution.campaign.external_input_runtime import (
 )
 from content.execution.campaign.runtime import read_lane_checkpoint
 from content.execution.campaign.workspace import CampaignRuntimePaths
-from content.execution.campaign.request_envelope import workload_intent
+from content.execution.planning.request_envelope import workload_intent
 from content.execution.identity import build_execution_id
 from content.execution.request import RuntimeExecutionRequest
 from core.control_types import TargetSelector

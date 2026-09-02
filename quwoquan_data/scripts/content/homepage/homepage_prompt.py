@@ -13,7 +13,6 @@ from core.entity_page_quality import entity_page_quality_issues
 from core.localization import fold_to_simplified
 from core.prompt_render import render
 from content.execution.prompt_snapshot import prompt_bundle_revision, write_prompt_snapshot
-from content.execution.model_contract import execution_model_pair_for_execution
 from core.baike_source_contract import HOMEPAGE_SOURCE_POLICY_REVISION
 from core.template_fingerprints import template_fingerprint_issues
 from core.post_evidence_chain import build_finalization_report
@@ -482,7 +481,6 @@ def _write_entity_page_prompt_and_placeholder(
     run_id = "author_" + canonical_sha256(
         {"executionId": execution["executionId"], "objectRef": object_ref}
     ).removeprefix("sha256:")[:20]
-    author_model = execution_model_pair_for_execution(execution_id).author
     prompt_sha = sha256_text(prompt_text)
     write_json(
         draft_dir / "author_job_packet.json",
@@ -494,8 +492,8 @@ def _write_entity_page_prompt_and_placeholder(
             "composePacketRef": "3.compose/entity_page_input.json",
             "promptRef": "4.draft/prompt.md",
             "promptSnapshotRef": "4.draft/prompt_snapshot.json",
-            "provider": author_model.provider.value,
-            "model": author_model.model_id,
+            "hostRuntime": "external_host_agent",
+            "hostActor": {"host": "external_host_agent", "role": "author"},
             "runId": run_id,
             "outputRefs": [
                 "4.draft/page.md",
@@ -512,8 +510,7 @@ def _write_entity_page_prompt_and_placeholder(
         template_family="entity_homepage",
         variables={"payload": payload},
         rendered_prompt=prompt_text,
-        provider=author_model.provider.value,
-        model=author_model.model_id,
+        host_actor={"host": "external_host_agent", "role": "author"},
         run_id=run_id,
         output_refs=[
             "4.draft/page.md",
@@ -530,8 +527,8 @@ def _write_entity_page_prompt_and_placeholder(
             **execution,
             "objectRef": object_ref,
             "status": "pending_agent",
-            "provider": author_model.provider.value,
-            "model": author_model.model_id,
+            "hostRuntime": "external_host_agent",
+            "hostActor": {"host": "external_host_agent", "role": "author"},
             "agentRunId": run_id,
             "promptSha256": prompt_sha,
             "draftSha256": None,

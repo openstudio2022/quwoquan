@@ -14,6 +14,11 @@ PATH_RE = re.compile(
 ENGINEERING_CLAIM_RE = re.compile(
     r"^-\s+(App|Contracts|Metadata|Service|Data|Ops|CI|Agent)(?:（[^）]*）)?："
 )
+# 仓库根单例：只允许精确匹配、不作为目录前缀参与归属。闭集而非通用路径语法，
+# 避免把 `report.json` 之类任意根文件也纳入 owner 解析。
+REPOSITORY_SINGLETON_ROOTS = frozenset(
+    {"Makefile", "AGENTS.md", "README.md", "specs/feature-tree/README.md"}
+)
 SPEC_REF_RE = re.compile(
     r"specs/feature-tree/(?:[A-Za-z0-9_.-]+/)*spec\.md#[A-Za-z0-9_.%\-\u4e00-\u9fff]+"
 )

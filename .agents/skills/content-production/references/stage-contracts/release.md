@@ -42,9 +42,9 @@ python3 quwoquan_data/scripts/cli.py verify media-release-contract
   再重新 build；不改已产出 release。
 - attestation/digest 不一致 → 废弃该 releaseId 重新 build，不原地修文件。
 
-按 [handoff-protocol.md](../handoff-protocol.md) 落 receipt。
+按 [handoff-protocol.md](../handoff-protocol.md) 执行 `task stage-open` → `task stage-gate` → `task stage-close`；宿主不填写 command 退出码、verdict 或 next。
 
 ## 交接（HANDOFF）
 
-- `releaseId` 写入 receipt `evidence`。
+- gate context 结构化绑定 `releaseId` 与 `releaseDigest`，machine gate receipt 冻结 exact identity；release close 重验 receipt `authority.releaseBinding` 就是本次 machine gate 的 releaseBinding。
 - `next=ship`。

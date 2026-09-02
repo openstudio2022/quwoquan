@@ -4,8 +4,7 @@
 
 1. `specs/feature-tree/README.md`
 2. 目标特性父链，或运行 `make feature-context TARGET=<path>`
-3. `.agents/skills/environment-ops/SKILL.md`
-4. `quwoquan_ops/gate/gate_repo.sh`
+3. `quwoquan_ops/gate/gate_repo.sh`
 
 ## 运维与门禁硬约束
 
@@ -36,8 +35,7 @@
 - 外部 Provider 依赖使用 `ProviderCapabilityKey`，由 `stackctl test-data-evidence` 从当前 conformance readiness 仅投影选中 request 的精确闭包并绑定 candidate/request digest；测试不得直接书写 Provider capability 字符串。
 - `quwoquan_ops/cli/lib/test_data/capabilities/**` 只公开 frozen params/result 与 capability 引用，`providers/**` 只实现所属领域且不得导入兄弟 Provider；测试不得导入 Provider、书写 capability key 或传裸 `dict` params。不得建立 registry/inventory、兼容双轨或测试专用业务 API。
 
-## 典型触发与 E2E
+## 运维领域 E2E
 
-- 用户说“启动环境、部署、放量、回滚、健康检查、巡检、修复、门禁、CI”时，默认加载本文件。
 - 环境任务通常是跨域收口层；必须把 App/Service/Data/Portal 的验证证据汇总到 stackctl 或 gate 输出。
 - prod-hosted、密钥、破坏性 repair、回滚版本和流量放量必须人工确认后再执行。

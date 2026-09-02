@@ -57,7 +57,7 @@ def freeze_carrier_pre_acquisition_inputs(
     bind_handoff: Callable[..., tuple[dict[str, Any], dict[str, Any]]],
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     """Freeze external refs only while their governed handoff identity matches."""
-    from content.execution.campaign.external_inputs import bind_external_input_refs
+    from content.execution.source_pool.external_inputs import bind_external_input_refs
 
     frozen = bind_external_input_refs(
         carrier,

@@ -793,7 +793,9 @@ def _content_live_report(
             startup_started_at is not None and report_time >= startup_started_at
         )
         generation_match = (
-            payload.get("status") == "passed"
+            # 写入方（app_preflight_uat_receipt）的状态闭集是 planned/gate_block/
+            # complete；green 语义对应 complete，而不是并不存在的 passed。
+            payload.get("status") == "complete"
             and payload.get("releaseId") == release_id
             and payload.get("manifestDigest") == manifest_digest
             and readiness_digest in (payload.get("readinessReceiptDigests") or [])

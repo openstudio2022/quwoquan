@@ -40,7 +40,7 @@
 
 - 每个发布对象必须闭合 creator、tag、entity、media、source、rights 与 independent review；运行 receipt 只能写入 execution/output，不回写静态真相源。
 - homepage、article、image、video 共享 canonical entity catalog，但各自拥有 candidate-backed immutable execution。唯一推进主体是直接执行 `.agents/skills/content-production/SKILL.md` 的宿主 Cursor/Codex IDE/CLI Agent；新任务不得调用仓内 Cursor/Codex SDK/provider agent/controller/queue/campaign/recovery、`task execute`（含 plan-only）或 pool-dispatch。
-- candidate-backed work package 只由已实现的中性 `task init` 原子创建；它只写 `execution_manifest.json`、`0.plan/request.json`、`0.plan/target_set.json` 且零 stage 副作用。宿主随后严格推进 `0.plan -> sources -> 1.download -> 2.quality -> 3.compose -> 4.draft -> 5.review -> publish -> release -> ship`，每阶段只以 `task stage-record` 写 create-once receipt。
+- candidate-backed work package 只由已实现的中性 `task init` 原子创建；它只写 `execution_manifest.json`、`0.plan/request.json`、`0.plan/target_set.json` 且零 stage 副作用。宿主随后严格推进 `0.plan -> sources -> 1.download -> 2.quality -> 3.compose -> 4.draft -> 5.review -> publish -> release -> ship`；每阶段先由 `task stage-open` 冻结 authority，再由 `task stage-gate` 执行 canonical machine gate，最后只由 `task stage-close` 派生 verdict/next 并写 create-once authority-bound receipt。
 - 两个薄 runner 只负责启动/结束宿主进程、只读 receipt 与有限基础设施退避；不得选择 candidate、解释业务终态、调用 semantic provider、写 pool/release/environment 或建立 campaign/fleet 业务身份。active execution 可串行或重叠，固定并发、workspace smoke、capacity soak、calibration receipt 与 provider/model preflight 均不是 dispatch、对象准入或 promotion 前置。
 - 单载体失败不得覆盖其它工作包，也不得阻止其它载体已合格对象入池。`quota` 是目标下限；`partial` 必须保留全部已合格对象并写 typed shortfall，零合格才 blocked。每个实际启动对象/阶段必须有 typed terminal，排队与诊断观测不得冒充结果。
 - accepted independent review 后只生成 reviewed delivery intent，并经 drain → canonical 单对象事务追加。canonical object package + append-only pool record 是 producer→consumer 唯一持久交接事实；release owner 只读字段白名单 handoff query projection。SourcePool、execution/campaign/provider/model、semantic journal 与宿主 session 不进入 consumer identity、eligibility、release cohort 或 App DTO。
@@ -95,7 +95,7 @@
 ### REQ-006 宿主并发与运行观测不构成业务 authority
 
 - `loop_driver.sh` 和 `fleet_dispatcher.sh` 是唯一允许保留的无业务判断薄 runner；并发上限只来自显式 runner 参数，且只约束同时启动的宿主执行器数。
-- 新任务不得读取或生成 managed scheduler、ReliableTask fleet、capacity bootstrap/calibration、workspace/soak 或 provider/model preflight 来授权 execution、candidate、对象准入或 milestone。旧 wire/代码仅作为待退役存量，不是合法入口。
+- 新任务不得读取或生成 managed scheduler、ReliableTask fleet、capacity bootstrap/calibration、workspace/soak 或 provider/model preflight 来授权 execution、candidate、对象准入或 milestone。旧 wire/代码仅作为待退役存量，不是合法入口；其物理删除只能由 [`GWT-034`](#gwt-034) 的 current exact-evidence precheck 授权，删除后的 inventory=`retired` 只能在 post-delete gates 全部通过后写入。
 - 每个 execution 与对象仍按 receipt 写真实 stage terminal；runner crash、宿主限流或 deadline 只停止未启动工作，不撤销已完成 review、pool record、release 或 acceptance facts。
 - 运行报告可记录 execution 数、stage 分布、blocked code、elapsed 与实际宿主并行度；这些字段只用于人工评估后续 `--max-parallel`，不得自动回写业务配置或改变同一输入的对象结果。
 - `qualified == 0` 必须携带单一 typed 原因、观测阶段、next action 与 evidence refs；该事实由观测 stage receipt 单写，release/pool/fleet view 只读投影，不建立 lane/campaign/fleet 多层枚举。
@@ -324,12 +324,12 @@
 <a id="gwt-020"></a>
 ### GWT-020 宿主 execution 十阶段生命周期可达 succeeded
 
-- GIVEN 一个 candidate-backed 单 article execution 由宿主 Agent 按 canonical Skill 阶段表推进，每阶段 POST 以 `task stage-record` 落 create-once receipt，`_shared/receipts/` 链是进度唯一真相源。
+- GIVEN 一个 candidate-backed 单 article execution 由宿主 Agent 按 canonical Skill 阶段表推进，每阶段依次执行 `task stage-open`、适用时的 canonical semantic prepare/record、`task stage-gate` 与 `task stage-close`，authority 文档与 close receipt 链是进度唯一真相源。
 - WHEN `5.review` pass 后 execution 进入 publish → release → ship 后缀。
 - THEN publish 阶段存在宿主单轨下的正向原子链：成品物化（对象根 `article.md` + `manifest.json`）与 approved 对象写入 canonical publish 由单命令或冻结序列完成，其 PRE/POST 判据不依赖退役编排层的 `verify execution-readiness` 或 `model_readiness.json`。
 - THEN article 对象布局归 `posts/article/**`；布局漂移在 `0.plan`/`1.download` 即被 `verify content-execution-layout` fail closed 拦截，`verify stage-artifacts --through` 在每个阶段截面都能发现全部对象。
-- THEN ship pass 落 `next=END` receipt 后 `execution_state.status=succeeded`，且 ship pass 是 succeeded 的唯一合法 writer；pool readback、release readback、projection 或完整性查询都不能写 terminal。`verify release-lifecycle` 与 `stackctl verify --env gamma` 通过，receipt 链完整覆盖十阶段并保留逐阶段 `actor.host/actor.session` 证据，允许多宿主接手。
-- THEN 驱动层保持薄 IO 契约：`task stage-record` 同步 execution_state 有独立可测断言，`lane-claim` 与 `stage-record` 的 CLI 退出码 0/2/3 语义冻结，stage 枚举只有单一真相源。
+- THEN ship 的 `task stage-close` 只有在 machine gate 与 acceptance exact closure 均通过时才写 `verdict=pass,next=END` receipt，receipt reducer 随后唯一导出 `execution_state.status=succeeded`；pool readback、release readback、projection 或完整性查询都不能写 terminal。`verify release-lifecycle` 与 `stackctl verify --env gamma` 通过，receipt 链完整覆盖十阶段并保留逐阶段 authority/actor 证据，允许多宿主接手。
+- THEN authority 边界可独立测试：`stage-open` create-once 冻结 workflow/前驱 closure，`stage-gate` 冻结 canonical argv、真实 exit 与 artifact exact bytes，`stage-close` 只从 open/gate/typed issues 派生 verdict/next 并同步只读 execution projection；三命令的 CLI 退出码 0/2/3 语义冻结，stage 枚举只有单一真相源。
 - THEN `loop_driver.sh` 超时按进程组终止宿主子进程，claim 获取与释放只属执行者会话，驱动只做只读预检；`fleet_dispatcher.sh` 只起收 loop 进程。两者均无 candidate 选择、campaign/pool-dispatch、capacity authority 或业务重试。
 
 <a id="gwt-021"></a>
@@ -473,16 +473,25 @@
 - THEN 同一 release/asset identity 的 local contract、edge integration 与真实 App UAT 分别证明授权边界、过期恢复和可定位播放终态。
 
 <a id="gwt-034"></a>
-### GWT-034 pre-delete 稳产证明由同一 operational fingerprint 上三次独立 M1 proof unit 构成
+### GWT-034 pre-delete 准入绑定 static verify、public CLI live-import 与单份 Alpha M1 API 消费证明
 
-- GIVEN retirement inventory 已由单独治理动作进入 `operationally_retired`，旧家族仍物理在场但不再可达；调用方显式提供当前 operational fingerprint 上恰好三份 proof unit，不发现 latest、不运行环境、不生产内容。
-- WHEN 只读 `stable-production-proof` 对三份 unit 求值，并由 `legacy-retirement-precheck` 汇总准入。
-- THEN 每份 unit 恰含 `homepage|article|image|video` 四键；每键绑定一个由 canonical `task init` 输入、manifest 与 target set 构造的独立单载体 execution，且 demand quota、candidate count、target count 与 workUnitCount 均为 1，十阶段 receipt 完整有序、ship pass 唯一导出 `succeeded`。
-- THEN 每个 execution 的 canonical publish 恰有一个本载体目标；canonical pool delivery result 只能是 `appended + poolDelta=1` 或 exact `replayed + poolDelta=0`，其它对象态、数量或载体漂移 fail closed。
-- THEN 每份 unit 绑定自己的 immutable Research content release，header/attestation/desired state 与 `ReleaseUatSamplePlan` exact refs 全部闭合；`milestone=null`，exact cohort 与 sample distribution 均为 homepage/article/image/video=`1/1/1/1`，16 个 entry surface × carrier cell 全部 required。三份 unit 的 unitId、四 executionId、releaseId 与 acceptance factId 两两独立，不得共享 release 或 acceptance。
-- THEN 每份 unit 只绑定一个真实非生产环境 `alpha|beta|gamma` 的 import/readback/activation/lifecycle/rollback 与一份 canonical `EnvironmentAcceptanceFact`；该 fact 复用 canonical validator，直接绑定 registered provider/runner、registered physical device、`profile=promotable`、`nonPromotable=false` 的 `TargetUatBinding`，以及 16 个 fresh raw `ReadinessCaseResult` exact bytes。emulator/simulator、rehearsal、nonPromotable 或缺任一 raw cell 均 fail closed。
-- THEN 三份 unit 合计至少一个 execution 是对 failed terminal predecessor 的真实 `retryOf` 恢复，predecessor manifest/state exact bytes 在场；非 terminal、同 identity 或伪造 retry 不能计数。
-- THEN passing proof 只证明 legacy 物理删除的 pre-delete 准入，不替代 M100、不关闭 M100 Gamma evidence gap、不启动 M1000，也不充当 post-delete package/runtime zero evidence。`operationally_retired + current passing proof` 足以令 precheck 返回 `eligible`，无需预先证明 physical zero；`retired` 只能由后续物理删除与 post-delete gate 写入。
+- GIVEN retirement inventory 已由单独治理动作进入 `operationally_retired`，旧家族仍物理在场但不再可达；调用方显式绑定 current operational fingerprint 下的一份真实四载体 M1 proof、一次 canonical Data static-all verify receipt 与一次 public CLI live-import receipt 的 exact ref/digest，不发现 latest、不在 evaluator 内运行命令或生产内容。
+- WHEN 只读 `stable-production-proof` 求值该单份 M1，并由 `legacy-retirement-precheck` 对三类 exact evidence 汇总准入。
+- THEN static verify receipt 必须证明 `python3 quwoquan_data/scripts/cli.py verify all` 在同一 current operational fingerprint 上全绿；precheck 重验 receipt exact bytes、command identity、source fingerprint 与通过终态，不接受调用时现场执行、调用方自报 boolean、stdout 文本或旧 receipt。
+- THEN public CLI live-import receipt 必须来自 fresh 隔离解释器：按 canonical public CLI command-module 清单逐个 import 全部模块后，`sys.modules` 中不存在 `content.execution.agent|queue|controller|recovery|campaign` 任一模块及其子模块；receipt exact 绑定被导入模块清单、解释器/source fingerprint 与上述零加载结果，任一漏导入、旧家族命中或摘要漂移均 fail closed。
+- THEN 单份 M1 恰含 homepage/article/image/video 四个彼此独立的 canonical 单载体 execution；每个 demand quota、candidate count、target count 与 workUnitCount 均为 1，十阶段 authority-bound receipt 完整有序、ship close 唯一导出 `succeeded`，canonical publish/pool 各交付一个本载体目标。
+- THEN M1 绑定一份 `milestone=null`、homepage/article/image/video=`1/1/1/1` 的 immutable Research release；该 release 在 Alpha 以同一 `releaseId + importRunId + verifyRunId` 完成 import/readback/activation，并形成 canonical `EnvironmentAcceptanceFact`，其 `acceptanceProfile=m1_api_consumer` 直接绑定 16 个 fresh API 集成 consumer entry×carrier readback `ReadinessCaseResult` exact bytes。该 profile 的字段与非 promotion 边界只由环境 owner [`REQ-005/006`](../../../runtime/runtime-config/environment-topology-and-packaging/spec.md#req-006) 定义；proof 不得伪造 `TargetUatBinding`、App 用户验收结果、物理设备或 promotion predecessor。
+- THEN `operationally_retired + current static verify exact PASS + current public CLI live-import zero + current passing single M1/Alpha API acceptance` 足以令 precheck 返回 physical-delete `eligible`。三份独立 proof、registered physical-device 16-cell UAT 与至少一次真实 `retryOf` 仅属于 [`OPEN-020`](#open-020) 的 M100 放量置信，不再参与本 precheck，也不阻塞旧轨物理删除。
+- THEN passing proof 只授权后续独立 physical-delete 增量，不替代 M100 Gamma acceptance、不启动 M1000，也不充当 post-delete package/runtime zero evidence。inventory=`retired` 只能在无 dual-read/shim 的物理删除完成且受影响门禁、post-delete package/runtime zero 与 minimal production probe 全部通过后写入。
+
+<a id="gwt-035"></a>
+### GWT-035 M100 放量置信独立于 legacy physical-delete authority
+
+- GIVEN 同一 operational fingerprint 上存在三份 identity 独立的四载体 M1 proof，每份各自绑定独立 Research release 与普通 `acceptanceProfile=environment_promotion` 的 canonical nonprod EnvironmentAcceptanceFact。
+- WHEN 只读 M100 scale-confidence evaluator 求值三份 exact evidence。
+- THEN 三份 proof 的 unitId、四组 executionId、releaseId 与 acceptance factId 两两独立；每份 fact 由环境 owner 的普通 promotion validator 直接闭合 registered physical-device 16-cell required raw App `ReadinessCaseResult`，不得用 `m1_api_consumer`、API integration、模拟器或共享 acceptance 冒充。
+- THEN 三份合计至少一个 execution 的 `retryOf` exact 指向真实 failed terminal predecessor 且前驱 manifest/state bytes 在场；非 terminal、同 identity、缺 exact predecessor 或自报 retry 均不计数。
+- THEN 全部证据 current 且通过时只产生 M100 scale-confidence PASS；任一缺失只保持 [`OPEN-020`](#open-020) 未关闭，不改变 [`GWT-034`](#gwt-034) 的 legacy physical-delete eligible/blocked 裁定，不替代 M100 Gamma acceptance，也不启动 M1000。
 
 ## 6. 依赖
 
@@ -516,17 +525,27 @@
 - 依赖：权利证据侧 owner 判定 rights 证据引用的 acquisition receipt 永久缺席是否可接受；`GWT-007.t3` 依赖真实放量窗口。
 
 <a id="open-006"></a>
-### OPEN-006 旧编排物理删除仍缺三次独立 M1 pre-delete 稳产证据
+### OPEN-006 旧编排物理删除待按轻量 precheck 实施
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：managed SDK/provider agent/controller/queue/campaign/recovery、ReliableTask 与 capacity bootstrap 已 operationally retired 但仍物理在场，尚缺轻量 precheck 实现与后续无 shim 物理删除。删除 authority 已由 [`GWT-034`](#gwt-034) 收敛为 current static verify exact PASS、public CLI live-import zero、一份真实四载体 M1 与 Alpha `m1_api_consumer` EnvironmentAcceptanceFact；旧三份 proof、physical-device UAT 与 `retryOf` 不再阻塞删除。
+- 尚缺实现：现有 proof request/result/precheck 仍承载旧三份 physical-UAT 形状，需改为只读消费上述三类 exact evidence，并复用环境 owner 的同一 EnvironmentAcceptanceFact schema/validator profile 分支。precheck eligible 后仍需无 shim 原子删除旧五家族及其专属 wire/codegen/topology/tests，并执行 post-delete package/runtime zero gate；本 Story 不拥有或复制 EnvironmentAcceptanceFact 字段 schema。
+- 尚缺验收证据：同一 current operational fingerprint 上的一次 canonical `verify all` exact PASS receipt、一次逐个 import 全部 public CLI command modules 后旧五家族及子模块 `sys.modules` 零加载的 exact receipt、一份真实四载体 M1，以及同 release/importRunId/verifyRunId 的 Alpha import/readback/activation 与 16 个 fresh API integration consumer readback CaseResult 所形成的 `m1_api_consumer` fact。fixture/local contract 只能证明 evaluator，不能冒充这些 fresh evidence。
+- 完成判定：[`GWT-020`](#gwt-020) 的 stage-open/gate/close 十阶段 terminal 与 [`GWT-034`](#gwt-034) 全部由真实 exact-byte evidence满足，inventory=`operationally_retired` 且 current precheck=eligible 后，另开删除增量无 dual-read/shim 原子删除旧家族；受影响 gate、post-delete public CLI/package/runtime zero 与 minimal production probe 全绿后才写 inventory=`retired`。M1 API profile 不替代 M100/Alpha promotion 或 physical UAT。
+- 依赖：Alpha 真实 import/readback/activation 与 API integration runner、停量窗口；不依赖 registered physical device、三份 proof 或 terminal `retryOf`，不得用旧 receipt、测试 fixture或 post-delete 零证据倒填 pre-delete proof。
+
+<a id="open-020"></a>
+### OPEN-020 M100 放量置信仍缺三份独立 proof、真机 UAT 与 retry 恢复样本
 
 - 类型：`external_blocker`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：managed SDK/provider agent/controller/queue/campaign/recovery、ReliableTask 与 capacity bootstrap 已 operationally retired 但仍物理在场。专用 proof request/result/precheck 只读契约与 evaluator 已按 [`GWT-034`](#gwt-034) 收敛；契约变更不得运行环境、生产内容或伪造 evidence，缺真实 proof 时不能授权物理删除。
-- 尚缺实现：pre-delete proof 与 retirement precheck 无剩余实现缺口；`task init` 已实现。旧家族的无 shim 原子物理删除、专属 wire/codegen/topology/tests 清理及 post-delete package/runtime zero gate 属取得 pre-delete 准入后的后续独立增量。
-- 尚缺验收证据：同一 current operational fingerprint 上恰好三份独立 proof unit；每份四个单载体 M1 execution、独立 baseline Research release、单一真实 nonprod acceptance 与 registered physical-device promotable 16-cell raw UAT；三份合计至少一次真实 terminal `retryOf`。缺失时必须保持 `GATE_BLOCK`，fixture/local contract 只能证明 evaluator，不得冒充真实 proof。
-- 完成判定：[`GWT-020`](#gwt-020) 的十阶段/ship terminal、[`GWT-030`](#gwt-030) 的 raw result authority 与 [`GWT-034`](#gwt-034) 全部由真实 exact-byte evidence 满足；retirement inventory 为 `operationally_retired` 且 current proof verdict=pass 时，precheck 返回 physical-delete `eligible`。随后另开删除增量，无 dual-read/shim 原子删除旧家族，运行受影响 gate 与 post-delete minimal production probe，最后才允许 inventory 进入 `retired`。M1 proof 不替代 M100 且不启动 M1000。
-- 依赖：真实非生产环境、registered physical device 与停量窗口；不得用旧轨 fallback、旧 receipt、测试 fixture 或 post-delete 零证据倒填 pre-delete proof。
-
+- 影响或价值：三份独立四载体 M1、registered physical-device 16-cell raw UAT 与真实 terminal `retryOf` 仍可提高 M100 放量置信，但这些证据不再具有 legacy physical-delete authority，也不得反向阻塞 [`OPEN-006`](#open-006) 的轻量 precheck 与删除。
+- 尚缺验收证据：同一 operational fingerprint 上三份 identity 独立的四载体 M1 proof；每份绑定独立 Research release 与普通 `acceptanceProfile=environment_promotion` 的 nonprod canonical EnvironmentAcceptanceFact，直接闭合 registered physical-device required raw `ReadinessCaseResult`；三份合计至少一个 execution 真实恢复 failed terminal predecessor 并 exact 绑定 `retryOf`。
+- 完成判定：[`GWT-035`](#gwt-035) 由真实 exact-byte evidence 满足：三份 proof 的 unit/release/execution/acceptance identities 两两独立，physical-device required cells 由环境 owner 的普通 promotion 语义验证，至少一次 terminal retry 恢复成立，且全部 evidence 保持 current exact-byte closure。该结论只关闭 M100 scale-confidence gap，不替代 M100 Gamma acceptance、不启动 M1000，也不改变已完成或待执行的 legacy physical-delete verdict。
+- 依赖：M100 放量窗口、registered physical devices 与 canonical environment-promotion UAT authority；不依赖旧家族继续物理在场。
 
 <a id="open-009"></a>
 ### OPEN-009 confirmed 请求的 M100 Gamma 消费后缀尚未闭环
@@ -546,9 +565,9 @@
 - 类型：`risk`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：receipt/claim 驱动层的关键行为缺少直接测试或门禁，语义漂移只能靠人工发现。`task stage-record` 对 execution_state 的同步、`writing_pack` schema 校验失败路径、`lane-claim` 与 `stage-record` 的 CLI 退出码语义（0 成功、2 参数拒绝、3 冲突）均无独立 local_contract。orchestration 与 handoff-protocol 文档所述判据与实现之间没有漂移门禁。
+- 影响或价值：receipt/claim 驱动层的关键行为缺少直接测试或门禁，语义漂移只能靠人工发现。`task stage-close` 的 receipt reducer 同步、`writing_pack` schema 校验失败路径、`lane-claim` 与 `stage-open/gate/close` 的 CLI 退出码语义（0 成功、2 参数拒绝、3 冲突）均无独立 local_contract。orchestration 与 handoff-protocol 文档所述判据与实现之间没有漂移门禁。
   三项驱动层实现缺口已清偿：`loop_driver.sh` 的单轮 hard timeout 改为终止整个会话进程组（`set -m` 建组、`kill -9 -$pid` 杀组），宿主派生的孙进程不再残留；`--round-timeout` 与 claim TTL 的关系由 `task lane-claim --check --round-timeout-seconds` 在驱动启动时判定，超出「TTL 减安全余量」即退出码 64，两者关系不再靠默认值巧合成立；十阶段 stage 闭集收敛到 `core.control_types.ReceiptStage`，`RECEIPT_STAGES`、`OBJECT_STAGES`、工作包目录闭集、`stage_artifact_contract.STAGES` 与 `verify --through` 的 CLI choices 全部由它派生。
-- 尚缺实现：`task stage-record` 的 execution_state 同步、`writing_pack` 校验失败路径与 CLI 退出码语义仍无独立 local_contract；orchestration/handoff-protocol 的文档-实现漂移门禁仍缺。
+- 尚缺实现：`task stage-close` 的 receipt reducer 同步、`writing_pack` 校验失败路径与 stage authority CLI 退出码语义仍无独立 local_contract；orchestration/handoff-protocol 的文档-实现漂移门禁仍缺。
 - 尚缺验收证据：上列剩余各行为的 local_contract 或门禁，每项一测且不放宽生产语义。
 - 完成判定：`GWT-020.t4..t5` 成立。
 - 依赖：无外部阻断。

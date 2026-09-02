@@ -13,28 +13,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("release", help="构建不可变的通用内容发布包")
     commands = parser.add_subparsers(dest="release_command", required=True)
 
-    aggregate = commands.add_parser(
-        "campaign-aggregate",
-        help="只从 immutable campaign plan/current retry chain 聚合发布包",
-    )
-    aggregate.add_argument("--release-id", required=True)
-    aggregate.add_argument("--root-execution-id", required=True)
-    aggregate.add_argument(
-        "--target-environment",
-        choices=("alpha", "beta", "gamma", "prod"),
-        help=(
-            "按同一内容池的稳定前缀构建环境 ReleaseManifest；"
-            "alpha/beta/gamma cap 分别为 2.1k/10k/100k"
-        ),
-    )
-    aggregate.add_argument(
-        "--release-class",
-        choices=("research", "commercial"),
-        required=True,
-    )
-    aggregate.add_argument("--output-root")
-    aggregate.set_defaults(handler=owner.handle_campaign_aggregate_release)
-
     pool_build = commands.add_parser(
         "pool-build",
         help="从同一 canonical 池按显式 Research/Commercial 权限构建 ReleaseManifest",
@@ -161,53 +139,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     pool_inspect.set_defaults(handler=owner.handle_pool_inspect)
 
-    pool_dispatch = commands.add_parser(
-        "pool-dispatch",
-        help="从 pool-inspect 的物理 waveInput 冻结 carrier-selective 单 execution 请求",
-    )
-    pool_dispatch.add_argument("--dispatch-id", required=True)
-    pool_dispatch.add_argument("--pool-inspection-ref", required=True)
-    pool_dispatch.add_argument(
-        "--semantic-preflight-receipt",
-        help="可选 preflight 观测 receipt；不参与 dispatch 准入",
-    )
-    pool_dispatch.add_argument(
-        "--capacity-calibration-receipt",
-        required=True,
-        help="受治理 M100 soak 产出的 capacity calibration receipt",
-    )
-    pool_dispatch.add_argument("--run-date", required=True)
-    pool_dispatch.add_argument("--scope", required=True)
-    pool_dispatch.add_argument("--region-ref", required=True)
-    pool_dispatch.add_argument("--sequence-start", type=int, default=1)
-    pool_dispatch.add_argument(
-        "--workload",
-        action="append",
-        default=[],
-        metavar="CARRIER=QUOTA",
-        help="再次显式绑定 inspection 中的活动载体与精确目标",
-    )
-    pool_dispatch.add_argument(
-        "--predecessor-dispatch-ref",
-        help="retry wave 的 immutable predecessor dispatch manifest output ref",
-    )
-    pool_dispatch.add_argument(
-        "--retry-predecessor",
-        action="append",
-        default=[],
-        metavar="SLOT_ID=EXECUTION_ID",
-        help="逐 slot 显式绑定失败 predecessor；retry wave 只物化这些 exact slots",
-    )
-    pool_dispatch.add_argument(
-        "--retry-unfinished-ref",
-        action="append",
-        default=[],
-        metavar="SLOT_ID=OBJECT_REF",
-        help="逐 slot 按 predecessor state 的 exact ordered unfinished ref 缩窄 retry",
-    )
-    pool_dispatch.add_argument("--publish-root")
-    pool_dispatch.set_defaults(handler=owner.handle_pool_dispatch)
-
     supply_chain_drill = commands.add_parser(
         "supply-chain-drill",
         help="经正式发布、验证与运行时入口演练一个不可变 Release",
@@ -242,46 +173,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         help="显式执行物化与 canonical 写入；省略时只校验并输出 plan 结果",
     )
     publish_execution.set_defaults(handler=owner.handle_publish_execution)
-
-    pool_append = commands.add_parser(
-        "pool-append",
-        help="逐对象校验或显式追加作者、实体主页和内容准入记录",
-    )
-    pool_append.add_argument("--input", required=True)
-    pool_append.add_argument("--publish-root")
-    pool_append.add_argument(
-        "--apply",
-        action="store_true",
-        help="显式写入；省略时只验证并输出 plan 结果",
-    )
-    pool_append.set_defaults(handler=owner.handle_pool_append)
-
-    pool_backfill = commands.add_parser(
-        "pool-backfill",
-        help="从现有 canonical 证据派生只读 backfill 计划",
-    )
-    pool_backfill_actions = pool_backfill.add_subparsers(
-        dest="pool_backfill_action", required=True
-    )
-    pool_backfill_plan = pool_backfill_actions.add_parser(
-        "plan", help="仅输出证据绑定的 pool-append batch；不写 canonical"
-    )
-    pool_backfill_plan.add_argument("--publish-root")
-    pool_backfill_plan.set_defaults(handler=owner.handle_pool_backfill_plan)
-    pool_backfill_repair = pool_backfill_actions.add_parser(
-        "repair-attribution",
-        help="从 exact source-ready candidate 计划或追加显式 attribution pool record",
-    )
-    pool_backfill_repair.add_argument("--bindings", required=True)
-    pool_backfill_repair.add_argument("--source-pool-ref", required=True)
-    pool_backfill_repair.add_argument(
-        "--source-pool-evidence-root-ref", required=True
-    )
-    pool_backfill_repair.add_argument("--publish-root")
-    pool_backfill_repair.add_argument("--apply", action="store_true")
-    pool_backfill_repair.set_defaults(
-        handler=owner.handle_pool_attribution_repair
-    )
 
     pool_object = commands.add_parser(
         "pool-object",
@@ -537,28 +428,3 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     gc_backfill.add_argument("--publish-root")
     gc_backfill.add_argument("--release-root")
     gc_backfill.set_defaults(handler=owner.handle_gc_backfill_tombstones)
-
-    scale_evidence = commands.add_parser(
-        "campaign-scale-evidence",
-        help="从四 lane canonical 真相源派生累计 research scale evidence",
-    )
-    scale_evidence.add_argument("--evidence-id", required=True)
-    scale_evidence.add_argument("--release-id", required=True)
-    scale_evidence.add_argument(
-        "--target-scale", required=True, choices=("M100", "M1000", "M10000")
-    )
-    scale_evidence.add_argument("--predecessor-promotion")
-    scale_evidence.add_argument("--campaign-plan", required=True)
-    scale_evidence.add_argument(
-        "--runtime-session",
-        help="可选 runtime/resource/fault 诊断 session；缺失或失败不阻断 promotion",
-    )
-    scale_evidence.add_argument(
-        "--calibration-preflight-receipt",
-        required=True,
-        help="sol_calibration startup receipt；resource soak 另为可选诊断",
-    )
-    scale_evidence.add_argument("--tasks-root")
-    scale_evidence.add_argument("--release-root")
-    scale_evidence.add_argument("--output-root")
-    scale_evidence.set_defaults(handler=owner.handle_campaign_scale_evidence)

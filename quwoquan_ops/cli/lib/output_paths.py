@@ -474,31 +474,39 @@ def validate_env_run_evidence_dir(
     if any(part == ".." for part in candidate_input.parts):
         raise ValueError("report directory cannot contain parent traversal")
 
-    root = output_root().expanduser().resolve()
-    expected_runs_root = (root / "env" / normalize_env(env_name) / "runs").resolve()
-    if candidate_input.is_absolute():
-        candidate = candidate_input.resolve()
-    else:
-        candidate = (ROOT / candidate_input).resolve()
-    if not _is_within(candidate, expected_runs_root) or candidate == expected_runs_root:
+    output_root_absolute = output_root().expanduser().absolute()
+    expected_runs_absolute = (
+        output_root_absolute / "env" / normalize_env(env_name) / "runs"
+    )
+    expected_runs_root = expected_runs_absolute.resolve()
+    candidate_absolute = (
+        candidate_input
+        if candidate_input.is_absolute()
+        else ROOT / candidate_input
+    ).absolute()
+    candidate = candidate_absolute.resolve()
+    if (
+        candidate_absolute == expected_runs_absolute
+        or candidate == expected_runs_root
+        or not _is_within(candidate, expected_runs_root)
+    ):
         raise ValueError(
             "report directory must stay inside the canonical environment runs subtree: "
             f"{expected_runs_root}"
         )
 
-    current = expected_runs_root
-    try:
+    if _is_within(candidate_absolute, expected_runs_absolute):
+        current = expected_runs_absolute
+        relative_parts = candidate_absolute.relative_to(expected_runs_absolute).parts
+    else:
+        current = expected_runs_root
         relative_parts = candidate.relative_to(expected_runs_root).parts
-    except ValueError as exc:
-        raise ValueError(
-            f"report directory escapes canonical environment runs subtree: {candidate}"
-        ) from exc
     for part in relative_parts:
         current /= part
         if current.is_symlink():
             raise ValueError(
-                "report directory cannot traverse a symbolic link: "
-                f"{current}"
+                "report directory cannot traverse a symbolic link inside the "
+                f"canonical environment runs subtree: {current}"
             )
     return candidate
 

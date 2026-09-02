@@ -149,7 +149,7 @@ class RuntimeExecutionRequest:
                 raise ValueError("scale source pool runtime binding is incomplete")
             from core.schema import assert_valid
 
-            from content.execution.campaign.source_pool_binding import (
+            from content.execution.source_pool.binding import (
                 validate_lane_source_pool_selection,
             )
 
@@ -319,7 +319,7 @@ class RuntimeExecutionRequest:
             # workloadMode/activeCarriers/workloadTargets 是 plan 的确定性投影：
             # 调用方已用 planFileSha256 把 plan 字节绑定进请求，这里按该摘要
             # 复验后读取补齐，不构成第二可写真相源。
-            from content.execution.campaign.source_pool_binding_io import (
+            from content.execution.source_pool.binding_io import (
                 file_sha256,
             )
             from core.io import read_json

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/execution/stable_production_proof_set.schema.json",
-  "title": "OPEN-006 three-unit pre-delete stable production proof projection",
+  "title": "OPEN-006 one-unit pre-delete stable production proof projection",
   "description": "Pure read-only deterministic projection over caller-selected exact proof evidence.",
   "type": "object",
   "additionalProperties": false,
@@ -10,12 +10,14 @@
     "specRef",
     "openItemRef",
     "expectedFingerprint",
+    "evidenceAuthority",
     "proofUnitCount",
     "unitIds",
     "releaseIds",
     "executionIds",
     "executionCount",
-    "retryRecoveryExecutionIds",
+    "verifyAllReceipt",
+    "publicCliLiveImportZeroReceipt",
     "carrierCountsPerUnit",
     "proofUnits",
     "verdict"
@@ -34,12 +36,12 @@
       "$ref": "#/$defs/digest"
     },
     "proofUnitCount": {
-      "const": 3
+      "const": 1
     },
     "unitIds": {
       "type": "array",
-      "minItems": 3,
-      "maxItems": 3,
+      "minItems": 1,
+      "maxItems": 1,
       "uniqueItems": true,
       "items": {
         "type": "string",
@@ -48,8 +50,8 @@
     },
     "releaseIds": {
       "type": "array",
-      "minItems": 3,
-      "maxItems": 3,
+      "minItems": 1,
+      "maxItems": 1,
       "uniqueItems": true,
       "items": {
         "type": "string",
@@ -58,8 +60,8 @@
     },
     "executionIds": {
       "type": "array",
-      "minItems": 12,
-      "maxItems": 12,
+      "minItems": 4,
+      "maxItems": 4,
       "uniqueItems": true,
       "items": {
         "type": "string",
@@ -67,16 +69,13 @@
       }
     },
     "executionCount": {
-      "const": 12
+      "const": 4
     },
-    "retryRecoveryExecutionIds": {
-      "type": "array",
-      "minItems": 1,
-      "uniqueItems": true,
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
+    "verifyAllReceipt": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "publicCliLiveImportZeroReceipt": {
+      "$ref": "#/$defs/exactRef"
     },
     "carrierCountsPerUnit": {
       "type": "object",
@@ -104,14 +103,20 @@
     },
     "proofUnits": {
       "type": "array",
-      "minItems": 3,
-      "maxItems": 3,
+      "minItems": 1,
+      "maxItems": 1,
       "items": {
         "$ref": "#/$defs/proofUnit"
       }
     },
     "verdict": {
       "const": "pass"
+    },
+    "evidenceAuthority": {
+      "enum": [
+        "canonical_runtime",
+        "test_only"
+      ]
     }
   },
   "$defs": {
@@ -179,42 +184,12 @@
         }
       }
     },
-    "retryRecovery": {
-      "oneOf": [
-        {
-          "type": "null"
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "retryOf",
-            "executionManifest",
-            "executionState"
-          ],
-          "properties": {
-            "retryOf": {
-              "type": "string",
-              "minLength": 1
-            },
-            "executionManifest": {
-              "$ref": "#/$defs/exactRef"
-            },
-            "executionState": {
-              "$ref": "#/$defs/exactRef"
-            }
-          }
-        }
-      ]
-    },
     "carrierExecution": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "executionId",
         "carrier",
-        "retryOf",
-        "retryRecovery",
         "carrierDemand",
         "candidateBindings",
         "taskInitRequest",
@@ -223,7 +198,10 @@
         "stageReceipts",
         "executionState",
         "canonicalPublish",
-        "poolDeliveryResult"
+        "poolDeliveryResult",
+        "objectTransactionPackage",
+        "applyReport",
+        "poolRecord"
       ],
       "properties": {
         "executionId": {
@@ -237,15 +215,6 @@
             "image",
             "video"
           ]
-        },
-        "retryOf": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "retryRecovery": {
-          "$ref": "#/$defs/retryRecovery"
         },
         "carrierDemand": {
           "$ref": "#/$defs/exactRef"
@@ -278,6 +247,15 @@
           "items": {
             "$ref": "#/$defs/exactRef"
           }
+        },
+        "objectTransactionPackage": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "applyReport": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "poolRecord": {
+          "$ref": "#/$defs/exactRef"
         }
       }
     },
@@ -347,7 +325,7 @@
         "readback",
         "lifecycle",
         "rollback",
-        "appConsumerRawResults"
+        "apiConsumerRawResults"
       ],
       "properties": {
         "activation": {
@@ -365,7 +343,7 @@
         "rollback": {
           "$ref": "#/$defs/exactRef"
         },
-        "appConsumerRawResults": {
+        "apiConsumerRawResults": {
           "type": "array",
           "minItems": 16,
           "maxItems": 16,
@@ -381,6 +359,7 @@
       "required": [
         "unitId",
         "fingerprint",
+        "evidenceAuthority",
         "carrierCounts",
         "carrierExecutions",
         "release",
@@ -438,6 +417,12 @@
         },
         "environmentEvidence": {
           "$ref": "#/$defs/environmentEvidence"
+        },
+        "evidenceAuthority": {
+          "enum": [
+            "canonical_runtime",
+            "test_only"
+          ]
         }
       }
     }

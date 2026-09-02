@@ -113,7 +113,12 @@ def _write_transaction(
     return transaction
 
 
-def _fixture(monkeypatch, tmp_path: Path) -> Path:
+def _fixture(
+    monkeypatch,
+    tmp_path: Path,
+    *,
+    patch_homepage_verdict: bool = True,
+) -> Path:
     root = tmp_path / EXECUTION_ID
     monkeypatch.setattr(gate, "DATA_EXECUTIONS_ROOT", tmp_path)
     monkeypatch.setattr(
@@ -127,23 +132,27 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
         "homepage_media_completeness_report",
         lambda execution_id: {"executionId": execution_id, "passed": True, "issues": []},
     )
-    monkeypatch.setattr(
-        gate,
-        "_resolve_homepage_quota_verdict",
-        lambda _execution_id: SimpleNamespace(
-            qualified_refs=("地点/景区/验收景区",),
-            qualified_count=1,
-        ),
-    )
+    if patch_homepage_verdict:
+        monkeypatch.setattr(
+            gate,
+            "_resolve_homepage_quota_verdict",
+            lambda _execution_id: SimpleNamespace(
+                qualified_refs=("地点/景区/验收景区",),
+                qualified_count=1,
+            ),
+        )
     _write(
         root / "_shared/execution_state.json",
         {
-            "schema": "quwoquan.content.execution_state",
+            "schema": "quwoquan.content.execution_state_projection",
             "executionId": EXECUTION_ID,
-            "completed": ["download_fetch", "build_homepage", "build_validate"],
+            "completed": ["0.plan", "sources", "5.review", "ship"],
             "status": "succeeded",
+            "latestStage": "ship",
+            "next": "terminal",
+            "latestReceiptRef": "_shared/receipts/010-ship.json",
+            "latestReceiptDigest": "sha256:" + "e" * 64,
             "updatedAt": "2026-07-13T00:00:00Z",
-            "failedObjects": [],
         },
     )
     _write(
@@ -209,6 +218,8 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
             "executionBinding": "frozen",
             "objectRef": OBJECT_REF,
             "status": "completed",
+            "hostRuntime": "external_host_agent",
+            "hostActor": {"host": "external_host_agent", "role": "author"},
             "provider": "cursor_sdk",
             "model": governed_cursor_grok_model(),
             "agentRunId": "author-run-001",
@@ -273,6 +284,38 @@ def _fixture(monkeypatch, tmp_path: Path) -> Path:
         },
     )
     return root
+
+
+def test_homepage_readiness_uses_current_review_closure_without_controller_import(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    root = _fixture(monkeypatch, tmp_path, patch_homepage_verdict=False)
+    monkeypatch.setattr(
+        "content.execution.closure.homepage_review.validate_entity_pages",
+        lambda _execution_id, _spec: [],
+    )
+    for name in tuple(sys.modules):
+        if name.startswith("content.execution.controller"):
+            sys.modules.pop(name)
+
+    verdict = gate._resolve_homepage_quota_verdict(EXECUTION_ID)
+
+    assert verdict.qualified_refs == ("地点/景区/验收景区",)
+    assert verdict.qualified_count == 1
+    assert not any(
+        name == "content.execution.controller"
+        or name.startswith("content.execution.controller.")
+        for name in sys.modules
+    )
+
+    attestation = root / "entities/地点/景区/验收景区/5.review/attestation.json"
+    payload = read_json(attestation)
+    payload["decision"] = "rejected"
+    _write(attestation, payload)
+    verdict = gate._resolve_homepage_quota_verdict(EXECUTION_ID)
+    assert verdict.qualified_refs == ()
+    assert "地点/景区/验收景区" in verdict.discarded
 
 
 def test_execution_readiness__requires_terminal_bound_author_and_reviewer_evidence__local_contract(
@@ -386,8 +429,8 @@ def test_execution_readiness__rejects_interrupted_execution__local_contract(monk
     state_path = root / "_shared/execution_state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
     state["status"] = "manual_required"
-    state["waitingCheckpoint"] = "build_validate"
-    state["failedObjects"] = ["build_validate interrupted"]
+    state["latestStage"] = "5.review"
+    state["next"] = "5.review"
     state_path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
 
     issues = gate.execution_readiness_issues(
@@ -395,7 +438,6 @@ def test_execution_readiness__rejects_interrupted_execution__local_contract(monk
     )
 
     assert any("execution status is not succeeded" in issue for issue in issues)
-    assert any("execution still waiting" in issue for issue in issues)
 
 
 def test_execution_readiness__requires_homepage_media_closure__local_contract(
@@ -446,12 +488,15 @@ def _article_fixture(monkeypatch, tmp_path: Path) -> tuple[str, Path]:
     _write(
         root / "_shared/execution_state.json",
         {
-            "schema": "quwoquan.content.execution_state",
+            "schema": "quwoquan.content.execution_state_projection",
             "executionId": execution_id,
-            "completed": ["post_author", "post_review", "publish"],
+            "completed": ["0.plan", "sources", "5.review", "ship"],
             "status": "succeeded",
+            "latestStage": "ship",
+            "next": "terminal",
+            "latestReceiptRef": "_shared/receipts/010-ship.json",
+            "latestReceiptDigest": "sha256:" + "e" * 64,
             "updatedAt": "2026-07-22T00:00:00Z",
-            "failedObjects": [],
         },
     )
     _write(
@@ -520,6 +565,8 @@ def _article_fixture(monkeypatch, tmp_path: Path) -> tuple[str, Path]:
             "ref": object_ref,
             "generator": "agent",
             "status": "completed",
+            "hostRuntime": "external_host_agent",
+            "hostActor": {"host": "external_host_agent", "role": "author"},
             "provider": "cursor_sdk",
             "model": governed_cursor_grok_model(),
             "agentRunId": "author-run-902",

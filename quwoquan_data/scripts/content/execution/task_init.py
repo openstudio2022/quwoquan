@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from content.execution.identity import parse_execution_id, validate_execution_id
+from content.execution.operational_fingerprint import operational_fingerprint
 from content.execution.workspace import REQUEST_REF, TARGET_SET_REF
 from core import paths
 from core.io import read_json
@@ -64,15 +65,21 @@ def _normalized_targets(value: object, *, carrier: str) -> list[dict[str, Any]]:
         target = dict(raw)
         name = str(target.get("name") or "").strip()
         entity_type = str(target.get("entityType") or "").strip().strip("/")
-        ref = f"{entity_type}/{name}"
-        if not name or len(entity_type.split("/")) != 2 or ref in refs:
-            raise TaskInitError(f"invalid or duplicate immutable candidate target: {ref}")
-        if carrier != "homepage" and (
-            not str(target.get("publishAngle") or "").strip()
-            or not str(target.get("publishTitle") or "").strip()
-        ):
-            raise TaskInitError(f"post candidate lacks frozen publish coordinates: {name}")
-        refs.add(ref)
+        entity_ref = f"{entity_type}/{name}"
+        if not name or len(entity_type.split("/")) != 2:
+            raise TaskInitError(f"invalid immutable candidate target: {entity_ref}")
+        if carrier == "homepage":
+            target_ref = entity_ref
+        else:
+            angle = str(target.get("publishAngle") or "").strip()
+            title = str(target.get("publishTitle") or "").strip()
+            sequence = target.get("publishSeq") or 1
+            if not angle or not title or isinstance(sequence, bool) or not isinstance(sequence, int):
+                raise TaskInitError(f"post candidate lacks frozen publish coordinates: {name}")
+            target_ref = f"posts/{carrier}/{angle}/{title}/{sequence}"
+        if target_ref in refs:
+            raise TaskInitError(f"duplicate immutable candidate target: {target_ref}")
+        refs.add(target_ref)
         normalized.append(target)
     return normalized
 
@@ -101,7 +108,7 @@ def _validate_retry(execution_id: str, retry_of: object) -> str | None:
 def _init_lock(execution_id: str) -> Iterator[None]:
     root = paths.DATA_EXECUTIONS_ROOT
     root.mkdir(parents=True, exist_ok=True)
-    lock_root = paths.DATA_LOCAL_ROOT / "locks/task-init"
+    lock_root = paths.DATA_LOCAL_ROOT / "runs/locks/task-init"
     lock_root.mkdir(parents=True, exist_ok=True)
     lock_path = lock_root / f"{execution_id}.lock"
     with lock_path.open("a+", encoding="utf-8") as handle:
@@ -186,7 +193,15 @@ def initialize_task(*, carrier_demand_path: Path, candidate_bindings_path: Path)
         "candidateBinding": {"ref": candidate_ref, "digest": candidate_digest},
         "retryOf": retry_of,
     }
-    target_refs = sorted(f"{row['entityType'].strip('/')}/{row['name'].strip()}" for row in targets)
+    target_refs = sorted(
+        (
+            f"{row['entityType'].strip('/')}/{row['name'].strip()}"
+            if carrier == "homepage"
+            else f"posts/{carrier}/{row['publishAngle'].strip()}/"
+            f"{row['publishTitle'].strip()}/{int(row.get('publishSeq') or 1)}"
+        )
+        for row in targets
+    )
     target_set: dict[str, Any] = {
         "executionId": execution_id,
         "selectionPolicy": "frozen",
@@ -197,12 +212,17 @@ def initialize_task(*, carrier_demand_path: Path, candidate_bindings_path: Path)
         "targetRefs": target_refs,
         "targets": targets,
     }
-    target_digest = hashlib.sha256(_canonical_bytes(target_set)).hexdigest()
+    target_digest = hashlib.sha256(
+        json.dumps(
+            target_set, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+    ).hexdigest()
     manifest: dict[str, Any] = {
         "executionId": execution_id,
         "familyRef": {"ref": family_ref, "sha256": hashlib.sha256(family_path.read_bytes()).hexdigest()},
         "sourceDigest": demand["sourceDigest"],
         "executionBundle": demand["executionBundle"],
+        "operationalFingerprint": operational_fingerprint(repo_root=paths.REPO_ROOT),
         "hostRuntime": "external_host_agent",
         "carrierDemand": request["carrierDemand"],
         "requestRef": REQUEST_REF,

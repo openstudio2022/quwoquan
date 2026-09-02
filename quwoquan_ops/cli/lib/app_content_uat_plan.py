@@ -539,6 +539,53 @@ def _first_sample_identities(samples: list[dict[str, str]]) -> dict[str, str]:
     return selected
 
 
+def _release_feed_binding(
+    readiness: Mapping[str, Any],
+    *,
+    name: str,
+    query_pattern: str,
+    release_post_ids: set[str],
+) -> dict[str, Any]:
+    raw_queries = readiness.get("feedQueries")
+    if not isinstance(raw_queries, list):
+        raise ValueError("App content UAT release feedQueries are missing")
+    matches = [
+        row
+        for row in raw_queries
+        if isinstance(row, Mapping) and row.get("name") == name
+    ]
+    if len(matches) != 1:
+        if name == "premium_stream":
+            typed = [
+                row
+                for row in raw_queries
+                if isinstance(row, Mapping) and row.get("name") == "typed_video"
+            ]
+            if len(typed) == 1:
+                matches = [{**dict(typed[0]), "query": ""}]
+            else:
+                raise ValueError(
+                    f"App content UAT {name} exact feed binding is missing"
+                )
+        else:
+            raise ValueError(f"App content UAT {name} exact feed binding is missing")
+    row = matches[0]
+    query = str(row.get("query") or "").strip()
+    if query and re.fullmatch(query_pattern, query) is None:
+        raise ValueError(f"App content UAT {name} exact query is not canonical")
+    raw_ids = row.get("matchedPostIds")
+    if not isinstance(raw_ids, list):
+        raise ValueError(f"App content UAT {name} expected post IDs are missing")
+    expected_ids = [_required_text(value, label=f"{name} postId") for value in raw_ids]
+    if (
+        not expected_ids
+        or len(expected_ids) != len(set(expected_ids))
+        or not set(expected_ids).issubset(release_post_ids)
+    ):
+        raise ValueError(f"App content UAT {name} expected post IDs are not release-bound")
+    return {"query": query, "expectedPostIds": expected_ids}
+
+
 def build_app_content_uat_plan(
     readiness: Mapping[str, Any],
     *,
@@ -573,6 +620,36 @@ def build_app_content_uat_plan(
     video_ids = [
         sample["objectId"] for sample in samples if sample["carrier"] == "video"
     ]
+    release_post_ids = {
+        _required_text(value, label="release postId")
+        for value in readiness.get("postIds") or []
+    }
+    if not release_post_ids:
+        raise ValueError("App content UAT release postIds are missing")
+    homepage_recommendation = _release_feed_binding(
+        readiness,
+        name="homepage_recommend",
+        query_pattern=r"sort=recommend&channelId=recommend&limit=[1-9][0-9]*",
+        release_post_ids=release_post_ids,
+    )
+    typed_video = _release_feed_binding(
+        readiness,
+        name="typed_video",
+        query_pattern=r"identity=work&type=video&limit=[1-9][0-9]*",
+        release_post_ids=release_post_ids,
+    )
+    premium_video = _release_feed_binding(
+        readiness,
+        name="premium_stream",
+        query_pattern=r"sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*",
+        release_post_ids=release_post_ids,
+    )
+    if not set(premium_video["expectedPostIds"]).intersection(
+        typed_video["expectedPostIds"]
+    ):
+        raise ValueError(
+            "App content UAT premium_stream has no release-bound typed video"
+        )
     search_canaries = [
         {
             "kind": carrier,
@@ -600,6 +677,9 @@ def build_app_content_uat_plan(
             "automatic": True,
             "imageWorkId": selected["image"],
             "videoWorkIds": video_ids,
+            "homepageRecommendation": homepage_recommendation,
+            "typedVideo": typed_video,
+            "premiumVideo": premium_video,
         },
     }
 

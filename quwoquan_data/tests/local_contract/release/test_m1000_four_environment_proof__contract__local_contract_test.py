@@ -203,6 +203,7 @@ def _build(
         lifecycle_ref = _write(tmp_path, f"{environment}/lifecycle.json", lifecycle)
         acceptance = {
             "schema": "quwoquan_ops.environment_acceptance_fact.v1",
+            "acceptanceProfile": "environment_promotion",
             "factId": "sha256:" + ({"alpha": "1", "beta": "2", "gamma": "3", "prod": "4"}[environment]) * 64,
             "environment": environment,
             "target": target,

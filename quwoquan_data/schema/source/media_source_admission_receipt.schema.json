@@ -16,7 +16,6 @@
     "evidenceBindings",
     "assetSnapshot",
     "sourceReview",
-    "sourceReviewContractVersion",
     "admissionDecision",
     "blockers",
     "recordedAt",
@@ -85,9 +84,6 @@
     },
     "receiptDigest": {
       "$ref": "#/$defs/sha256"
-    },
-    "sourceReviewContractVersion": {
-      "const": "host-source-review/v1"
     }
   },
   "allOf": [

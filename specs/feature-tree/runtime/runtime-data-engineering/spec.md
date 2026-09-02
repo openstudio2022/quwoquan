@@ -180,9 +180,9 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现：本节点无独立实现缺口；owner OPEN 中声明的后续物理删除实现仍缺。本节点不复制退役范围、pre-delete proof、状态机或事实；唯一 owner 是 discovery [`multi-carrier-release OPEN-006`](../../discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-006)。
-- 尚缺验收证据：owner OPEN 中声明的三份真实 proof unit 与 post-delete evidence 仍缺，必须由 owner 裁定。
-- 完成判定：[`SIT-001`](#sit-001) 的 runtime consumer boundary 保持成立，且 discovery owner [`multi-carrier-release OPEN-006`](../../discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-006) 已按 owner 验收裁定关闭后，迁移本节点存量 `spec_ref` 并删除该只读锚点；runtime-data-engineering 无独立 evidence，不得据本域验收单独关闭 owner 缺口。
+- 影响或价值：本节点无独立实现缺口；owner OPEN 中声明的轻量 pre-delete 与后续物理删除仍缺。本节点不复制退役范围、EAF schema、precheck 状态机或事实；唯一 owner 是 discovery [`multi-carrier-release OPEN-006`](../../discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-006)，EAF profile 字段由 environment owner 单写。
+- 尚缺验收证据：owner OPEN 声明的一份真实四载体 M1、canonical `verify all` exact PASS、public CLI live-import zero、Alpha 同 release/importRunId/verifyRunId 的 16-cell API consumer readback acceptance，以及删除后的受影响 gate、package/runtime zero 与 minimal production probe evidence 仍缺，必须由各 owner 裁定。三份 proof、physical-device UAT 与 `retryOf` 仅镜像为 M100 放量置信，不再是删除前置。
+- 完成判定：[`SIT-001`](#sit-001) 的 runtime consumer boundary 保持成立，且 discovery owner [`multi-carrier-release OPEN-006`](../../discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-006) 已以一份 proof 取得 precheck eligible、完成无 shim 物理删除并通过 post-delete evidence 后，迁移本节点存量 `spec_ref` 并删除该只读锚点；runtime-data-engineering 无独立 evidence，不得据本域验收单独关闭 owner 缺口或提前写 inventory=`retired`。
 
 <a id="open-008"></a>
 ### OPEN-008 runtime consumption projection 尚缺实现闭环

@@ -16241,6 +16241,7 @@
       "errorCodes": [
         "CONTENT.USER.unauthorized",
         "CONTENT.USER.research_identity_invalid",
+        "CONTENT.SYSTEM.research_release_state_unavailable",
         "CONTENT.SYSTEM.required_dependency_unavailable",
         "CONTENT.SYSTEM.internal_error"
       ],
@@ -29869,13 +29870,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "3441da57a805ae46502a43168e5accb845605b9c6022f62bea749bae3bde826c"
+    "sha256": "17adbe4a9033bb4c06765f3a8d34e7ac1054af7b4b774d2c0af74933543822fd"
   },
   "contractGraph": {
     "compilerHash": "sha256:3b7d4716dcaad122fc0404b0e7b782f81b45913a95ff7dadc0d26fa4974d9e45",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "cf8ee7c1582b8c9e2135f4599d8f446c231e24743149d31ec4dcb8f4fad2cc4f",
-    "sourceDigestSetSha256": "c591815b8893a093aedbe6f86359b3ccefe87436211d1e49d176b0ce13abd7fb"
+    "sha256": "0cc2789e805667e2728b001e7a199ec0c4bf9ff6e553b0bbf0098808429cea88",
+    "sourceDigestSetSha256": "1e01af3e10a2651098017bf66d7ae8a54fb21400a70494df93fd126ebaaaa38e"
   },
   "generator": "app-cloud-handoff"
 }

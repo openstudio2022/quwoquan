@@ -14,6 +14,7 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from content.execution.identity import parse_execution_id
+from content.execution.closure.homepage_review import load_homepage_review_closure
 from content.execution.closure.post_review import load_post_review_closure
 from content.execution.runtime_contract import file_sha256
 from content.execution.workspace import load_execution_manifest
@@ -139,19 +140,11 @@ def _transaction_object(root: Path, object_root: Path, content_type: ContentType
 
 
 def _resolve_homepage_quota_verdict(execution_id: str) -> Any:
-    """Resolve the canonical homepage quota verdict behind an isolation seam."""
-    from types import SimpleNamespace
+    """Resolve reviewed-qualified homepage objects from the current closure."""
 
-    from content.execution import store as execution_store
-    from content.execution.controller.homepage_authoring import (
-        homepage_quota_verdict,
-    )
-
-    return homepage_quota_verdict(
-        SimpleNamespace(
-            execution_id=execution_id,
-            spec=execution_store.load_spec_model(execution_id),
-        )
+    return load_homepage_review_closure(
+        execution_id,
+        root=DATA_EXECUTIONS_ROOT / execution_id,
     )
 
 

@@ -56,6 +56,15 @@ from quwoquan_ops.cli.commands.app_preflight_uat_raw_results import (
     AppUatRawResultError,
     expected_app_uat_raw_coverage,
 )
+from quwoquan_ops.cli.commands.app_preflight_uat_orchestration import (
+    app_content_uat_suite_plan,
+    build_app_uat_patrol_authority,
+    finalize_app_content_uat,
+    prepare_app_content_uat_context,
+)
+from quwoquan_ops.cli.commands.app_preflight_uat_target_binding import (
+    _target_uat_binding_for_execution,
+)
 from quwoquan_ops.cli.commands.app_preflight_uat_support import (
     _ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS,
     _BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS,
@@ -111,157 +120,6 @@ __all__ = [
 ]
 
 
-def _target_uat_binding_for_execution(
-    *,
-    stackctl: Any,
-    evidence_root: Path,
-    preflight: Mapping[str, Any],
-    runtime_binding: Mapping[str, Any],
-    launch_binding: Mapping[str, Any],
-    uat_profile: Mapping[str, Any],
-    device_id: str,
-) -> tuple[dict[str, Any], dict[str, str]]:
-    from quwoquan_ops.cli.lib.target_uat_binding import (
-        build_target_uat_binding,
-        canonical_target_uat_binding_bytes,
-        target_uat_binding_digest,
-        write_create_once_target_uat_binding,
-    )
-
-    target = str(runtime_binding["target"])
-    release_id = str(runtime_binding["releaseId"])
-    activation = preflight.get("activationEnvelope")
-    if not isinstance(activation, Mapping):
-        raise ValueError("canonical Data activation envelope is missing")
-    def evidence_ref(value: object, *, label: str) -> str:
-        raw = str(value or "").strip()
-        if not raw:
-            raise ValueError(f"{label} exact-byte reference is missing")
-        candidate = Path(raw).expanduser()
-        resolved = (
-            candidate.resolve()
-            if candidate.is_absolute()
-            else (evidence_root / candidate).resolve()
-        )
-        try:
-            relative = resolved.relative_to(evidence_root).as_posix()
-        except ValueError as exc:
-            raise ValueError(f"{label} escapes QWQ_OUTPUT_ROOT") from exc
-        if resolved.is_symlink() or not resolved.is_file():
-            raise ValueError(f"{label} exact bytes are missing or unsafe")
-        return relative
-
-    def verify_file_digest(ref: str, digest: str, *, label: str) -> None:
-        if not digest:
-            raise ValueError(f"{label} exact-byte digest is missing")
-        observed = "sha256:" + hashlib.sha256((evidence_root / ref).read_bytes()).hexdigest()
-        if observed != digest:
-            raise ValueError(f"{label} exact-byte digest drifted")
-
-    activation_ref = evidence_ref(
-        activation.get("importReportRef"), label="active CAS"
-    )
-    activation_digest = str(activation.get("importReportDigest") or "")
-    readback_ref = evidence_ref(
-        preflight.get("readinessReceiptRef"), label="readback"
-    )
-    readback_digest = str(preflight.get("readinessReceiptDigest") or "")
-    provider_ref = evidence_ref(
-        launch_binding.get("contractGraphRef"), label="Provider ContractGraph"
-    )
-    provider_digest = str(launch_binding.get("contractGraphDigest") or "")
-    for ref, digest, label in (
-        (activation_ref, activation_digest, "active CAS"),
-        (provider_ref, provider_digest, "Provider ContractGraph"),
-    ):
-        verify_file_digest(ref, digest, label=label)
-    if not readback_digest:
-        raise ValueError("readback exact-byte digest is missing")
-    readback_payload = stackctl._read_json_object(str(evidence_root / readback_ref))
-    if stackctl._canonical_document_checksum(readback_payload) != readback_digest:
-        raise ValueError("readback canonical digest drifted")
-    runner_source_paths = (
-        "quwoquan_ops/cli/commands/app_preflight_uat.py",
-        "quwoquan_ops/cli/smoke/environment_patrol_smoke/app_uat_case_execution.py",
-        "quwoquan_ops/cli/smoke/environment_patrol_smoke/evidence.py",
-        "quwoquan_app/test/user_acceptance/journeys/release_bound_sample_matrix/"
-        "release_bound_sample_matrix__user_acceptance_test.dart",
-        "quwoquan_app/test/support/runtime/patrol/release_uat_sample_plan.dart",
-        "quwoquan_app/test/support/runtime/patrol/patrol_app_uat_case_evidence.dart",
-    )
-    runner_source_path = runner_source_paths[3]
-    runner_hasher = hashlib.sha256()
-    for source_path in runner_source_paths:
-        encoded_path = source_path.encode("utf-8")
-        encoded_source = (stackctl.ROOT / source_path).read_bytes()
-        runner_hasher.update(len(encoded_path).to_bytes(4, "big"))
-        runner_hasher.update(encoded_path)
-        runner_hasher.update(len(encoded_source).to_bytes(8, "big"))
-        runner_hasher.update(encoded_source)
-    runner_digest = "sha256:" + runner_hasher.hexdigest()
-    profile = str(uat_profile.get("profile") or "")
-    registered = profile in {"promotable", "production"}
-    binding = build_target_uat_binding(
-        runtime_binding,
-        launch_binding,
-        {
-            "releaseId": release_id,
-            "releaseUatSamplePlanRef": str(
-                preflight.get("releaseUatSamplePlanRef") or ""
-            ),
-            "releaseUatSamplePlanDigest": str(
-                preflight.get("releaseUatSamplePlanDigest") or ""
-            ),
-        },
-        active_cas={"ref": activation_ref, "digest": activation_digest},
-        readback={"ref": readback_ref, "digest": readback_digest},
-        artifact_class="production_behavior",
-        build_mode="debug",
-        build_profile="nonprod",
-        provider={
-            "identity": "first-party-https",
-            "class": "first_party",
-            "type": "https",
-            "registered": registered,
-            "conformanceEvidence": {
-                "ref": provider_ref,
-                "digest": provider_digest,
-            },
-        },
-        device={
-            "identity": device_id,
-            "class": str(uat_profile.get("deviceClass") or ""),
-            "registered": bool(uat_profile.get("deviceRegistered")),
-        },
-        runner={
-            "identity": "app-content-uat",
-            "sourcePath": runner_source_path,
-            "digest": runner_digest,
-            "registered": registered,
-        },
-        profile=profile,
-        non_promotable=bool(uat_profile.get("nonPromotable")),
-        created_at=str(
-            (
-                stackctl._read_json_object(str(launch_binding["launchAttemptRef"]))
-                .get("transitions", [{}])[0]
-                .get("at")
-            )
-            or ""
-        ),
-    )
-    written = write_create_once_target_uat_binding(
-        output_root=evidence_root,
-        binding=binding,
-    )
-    if (
-        written.digest != target_uat_binding_digest(binding)
-        or written.path.read_bytes() != canonical_target_uat_binding_bytes(binding)
-    ):
-        raise ValueError("TargetUatBinding exact bytes drifted after create-once write")
-    return binding, {"ref": written.ref, "digest": written.digest}
-
-
 def _command_app_content_uat(
     args: argparse.Namespace,
     *,
@@ -269,39 +127,20 @@ def _command_app_content_uat(
 ) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
-    allowed_targets = {"alpha-local", "beta-local", "gamma-local"}
-    targets = [
-        item.strip()
-        for item in str(getattr(args, "targets", "")).split(",")
-        if item.strip()
-    ]
-    report_dir = (
-        Path(args.report_dir)
-        if getattr(args, "report_dir", "")
-        else _stackctl.repo_run_dir("app-content-uat", target="nonprod-local")
+    (
+        targets,
+        report_dir,
+        canonical_output_root,
+        issues,
+        unsupported,
+        device_id,
+        uat_profile,
+    ) = prepare_app_content_uat_context(
+        args=args,
+        stackctl=_stackctl,
+        resolve_uat_profile=app_content_uat_cli_profile,
+        initial_issues=initial_issues,
     )
-    canonical_output_root = Path(_stackctl.output_root()).expanduser().resolve()
-    issues = list(initial_issues)
-    if not targets or len(targets) != len(set(targets)):
-        issues.append("--targets must contain unique non-empty targets")
-    unsupported = sorted(set(targets) - allowed_targets)
-    if unsupported:
-        issues.append("unsupported App content UAT targets: " + ", ".join(unsupported))
-    device_id = str(getattr(args, "device_id", "") or "").strip()
-    if not device_id:
-        issues.append("--device-id is required")
-    uat_profile: dict[str, Any] = {}
-    if device_id:
-        try:
-            uat_profile = app_content_uat_cli_profile(
-                platform=str(getattr(args, "platform", "") or ""),
-                device_id=device_id,
-                device_registration_ref=str(
-                    getattr(args, "device_registration_ref", "") or ""
-                ),
-            )
-        except ValueError as exc:
-            issues.append(str(exc))
 
     if unsupported:
         return {
@@ -564,56 +403,9 @@ def _command_app_content_uat(
                 write_launch_control=write_app_content_launch_control,
             ):
                 break
-            suite_plan: list[tuple[str, str, bool, str]] = [
-                (
-                    "release-sample-matrix",
-                    RELEASE_SAMPLE_MATRIX_UAT_TEST_TARGET,
-                    False,
-                    "",
-                ),
-                ("homepage-feed", _stackctl.DISCOVERY_FEED_UAT_TEST_TARGET, False, ""),
-                # 作者主页旅程：他人主页「记录」列表必须真实解码渲染（回归
-                # ListUserPosts 契约漂移导致的「共有 0 条记录」+错误态事故）。
-                (
-                    "profile-journey",
-                    PROFILE_JOURNEY_UAT_TEST_TARGET,
-                    False,
-                    "",
-                ),
-                (
-                    "message-home",
-                    MESSAGE_HOME_UAT_TEST_TARGET,
-                    False,
-                    "",
-                ),
-                # 先固定首帧与真实进度证据；视频书若缺第二个 release-bound
-                # 页面仍由后续 app-core fail-closed，但不能短路独立视频验收。
-                (
-                    "home-video-playback",
-                    _stackctl.HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
-                    True,
-                    release_video_work_id,
-                ),
-                (
-                    "app-core-readback",
-                    _stackctl.APP_CORE_READBACK_UAT_TEST_TARGET,
-                    True,
-                    release_video_work_id,
-                ),
-            ]
-            # Every target owns its own controlled-fault evidence after the
-            # positive homepage readback. The Patrol host resolves only the
-            # current receipt-bound Compose project and exact API Edge
-            # containers, restores them in its existing finally path, regains
-            # health, then retries in the same installation.
-            suite_plan.insert(
-                1,
-                (
-                    "controlled-edge-recovery",
-                    _stackctl.CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
-                    False,
-                    "",
-                ),
+            suite_plan = app_content_uat_suite_plan(
+                stackctl=_stackctl,
+                release_video_work_id=release_video_work_id,
             )
             if not bool(getattr(args, "dry_run", False)):
                 recorded_launch = launch_bindings.get(target)
@@ -637,67 +429,19 @@ def _command_app_content_uat(
                 target_uat_binding_refs[target] = binding_ref
             app_uat_authority: dict[str, str] | None = None
             if not bool(getattr(args, "dry_run", False)):
-                sample_plan_selection = sample_plan.get("selectionEvidence")
-                recorded_launch = launch_bindings.get(target)
-                binding_ref = target_uat_binding_refs.get(target)
-                if (
-                    not isinstance(sample_plan_selection, Mapping)
-                    or not isinstance(recorded_launch, Mapping)
-                    or not isinstance(binding_ref, Mapping)
-                ):
-                    issues.append(
-                        f"{target}: App UAT Patrol authority inputs are incomplete"
-                    )
-                    break
-                sample_plan_ref = str(preflight.get("releaseUatSamplePlanRef") or "")
-                header_ref = Path(
-                    str(preflight.get("releaseHeaderRef") or "")
-                ).expanduser()
-                sample_plan_path = (
-                    Path(sample_plan_ref).expanduser()
-                    if Path(sample_plan_ref).expanduser().is_absolute()
-                    else header_ref.parent / sample_plan_ref
-                )
-                if not sample_plan_path.is_file():
-                    sample_plan_path = header_ref.parent / "uat" / "sample_plan.json"
                 try:
-                    sample_plan_authority_ref = sample_plan_path.resolve().relative_to(
-                        canonical_output_root
-                    ).as_posix()
-                    binding_authority_ref = str(binding_ref.get("ref") or "")
-                    candidate_manifest_path = (
-                        Path(str(runtime_binding["sourceCapsuleManifestRef"]))
-                        .parent.parent
-                        / "manifest.json"
+                    app_uat_authority, sample_plan_path = (
+                        build_app_uat_patrol_authority(
+                        preflight=preflight,
+                        sample_plan=sample_plan,
+                        launch_binding=launch_bindings.get(target),
+                        target_uat_binding_ref=target_uat_binding_refs.get(target),
+                        runtime_binding=runtime_binding,
+                            output_root=canonical_output_root,
+                        )
                     )
-                    candidate_manifest_sha256 = hashlib.sha256(
-                        candidate_manifest_path.read_bytes()
-                    ).hexdigest()
-                    graph_path = Path(str(recorded_launch["contractGraphRef"]))
-                    contract_graph_source_hash = hashlib.sha256(
-                        graph_path.read_bytes()
-                    ).hexdigest()
-                    app_uat_authority = {
-                        "releaseId": str(preflight.get("releaseId") or ""),
-                        "samplePlanRef": sample_plan_authority_ref,
-                        "samplePlanSha256": str(
-                            preflight.get("releaseUatSamplePlanDigest") or ""
-                        ),
-                        "targetUatBindingRef": binding_authority_ref,
-                        "targetUatBindingSha256": str(binding_ref.get("digest") or ""),
-                        "targetUatBindingDigest": str(binding_ref.get("digest") or ""),
-                        "releaseDigest": str(sample_plan.get("releaseDigest") or ""),
-                        "sourceIdentitySetDigest": str(
-                            sample_plan_selection.get("sourceIdentitySetDigest") or ""
-                        ),
-                        "commitSha": str(runtime_binding.get("sourceRevision") or ""),
-                        "contractGraphSourceHash": contract_graph_source_hash,
-                        "candidateManifestSha256": candidate_manifest_sha256,
-                    }
-                except (KeyError, OSError, ValueError) as exc:
-                    issues.append(
-                        f"{target}: App UAT Patrol authority binding failed: {exc}"
-                    )
+                except (OSError, TypeError, ValueError) as exc:
+                    issues.append(f"{target}: {exc}")
                     break
             typed_actor_context: TestDataContext | None = None
             if not bool(getattr(args, "dry_run", False)) and any(
@@ -1193,11 +937,7 @@ def _command_app_content_uat(
                             attempt_ref=str(recorded_launch["launchAttemptRef"]),
                             platform=str(args.platform),
                             device_id=device_id,
-                            launch_provenance=(
-                                "workspace_flutter_run"
-                                if args.platform == "ios-simulator"
-                                else "canonical_launcher"
-                            ),
+                            launch_provenance="canonical_launcher",
                             launch_projection=launch_projections[target],
                         )
                     except (OSError, RuntimeError, TypeError, ValueError) as exc:
@@ -1210,89 +950,24 @@ def _command_app_content_uat(
             if issues:
                 break
 
-    dry_run = bool(getattr(args, "dry_run", False))
-    if not issues and not dry_run and set(launch_bindings) != set(targets):
-        issues.append("canonical launch bindings are incomplete for requested targets")
-    if dry_run:
-        for preflight in preflights:
-            target = str(preflight.get("target") or "")
-            sample_plan = preflight.get("releaseUatSamplePlan")
-            if target and isinstance(sample_plan, Mapping):
-                try:
-                    expected_raw_coverage[target] = expected_app_uat_raw_coverage(
-                        sample_plan
-                    )
-                except AppUatRawResultError as exc:
-                    issues.append(f"{target}: {exc}")
-    try:
-        raw_authority_projection, raw_projection_issues = (
-            project_app_content_uat_raw_authority(
-                evidence_root=canonical_output_root,
-                targets=targets,
-                raw_results=raw_results,
-                expected_raw_coverage=expected_raw_coverage,
-                dry_run=dry_run,
-            )
-        )
-    except (OSError, TypeError, ValueError) as exc:
-        raw_authority_projection = {
-            "rawResultRefs": {target: [] for target in targets},
-            "rawResultDigests": {target: [] for target in targets},
-            "rawCoverage": {
-                target: {
-                    "expected": int(expected_raw_coverage.get(target) or 0),
-                    "present": 0,
-                    "missing": int(expected_raw_coverage.get(target) or 0),
-                }
-                for target in targets
-            },
-            "rawGaps": {target: [str(exc)] for target in targets},
-        }
-        raw_projection_issues = [str(exc)]
-    issues.extend(
-        item for item in raw_projection_issues if item not in issues
-    )
-    status = "gate_block" if issues else ("planned" if dry_run else "complete")
-    payload = build_app_content_uat_receipt(
-        status=status,
+    return finalize_app_content_uat(
+        args=args,
+        stackctl=_stackctl,
+        report_dir=report_dir,
+        output_root=canonical_output_root,
         targets=targets,
-        platform=str(args.platform),
-        device_id=device_id,
         uat_profile=uat_profile,
         runtime_bindings=runtime_bindings,
         launch_bindings=launch_bindings,
         target_uat_binding_refs=target_uat_binding_refs,
-        raw_authority_projection=raw_authority_projection,
+        raw_results=raw_results,
+        expected_raw_coverage=expected_raw_coverage,
         preflights=preflights,
         runs=runs,
         experience_screenshot_digests=experience_screenshot_digests,
         issues=issues,
-        dry_run=dry_run,
-        canonical_checksum=_stackctl._canonical_document_checksum,
+        expected_raw_coverage_for_plan=expected_app_uat_raw_coverage,
+        project_raw_authority=project_app_content_uat_raw_authority,
+        build_receipt=build_app_content_uat_receipt,
+        select_first_blocker=first_canonical_app_blocker,
     )
-    first_blocker, first_blocker_audit = first_canonical_app_blocker(
-        status=status,
-        preflights=preflights,
-        runs=runs,
-    )
-    payload["firstBlocker"] = first_blocker
-    if first_blocker_audit.get("fallback") is True and not payload["details"]:
-        payload["details"].append(
-            "APP.LAUNCH.receipt_invalid: parent gate_block lacked a canonical "
-            "child blocker; inspect retained preflights/runs evidence for the "
-            "original cause"
-        )
-    _stackctl.write_json(report_dir / "report.json", payload)
-    _stackctl.write_json(report_dir / "findings.json", {"issues": issues})
-    return {
-        **payload,
-        "exitCode": 0 if not issues else 2,
-        "summary": (
-            "App content UAT dry-run planned"
-            if not issues and dry_run
-            else "App content UAT raw authority projection complete"
-            if not issues
-            else "App content UAT is GATE_BLOCK"
-        ),
-        "reportDir": _stackctl.relpath(report_dir),
-    }

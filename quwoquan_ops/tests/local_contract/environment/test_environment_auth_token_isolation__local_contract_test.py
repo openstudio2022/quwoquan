@@ -148,6 +148,41 @@ def test_public_release_readback_does_not_require_candidate_identity(
     assert "TEST_AUTH_TOKEN" not in run_probe.call_args.kwargs["env"]
 
 
+def test_research_consumer_secrets_use_env_not_argv_or_probe_report(
+    tmp_path: Path,
+) -> None:
+    bearer = "research-bearer-secret"
+    attestation = "research-attestation-secret"
+    completed = ({"ok": True}, "passed", [])
+    with (
+        mock.patch.object(stackctl, "_resolve_test_auth_token", return_value="ambient"),
+        mock.patch.object(stackctl, "_run_script_probe", return_value=completed) as run_probe,
+        mock.patch.object(
+            stackctl,
+            "root_certificate_path",
+            return_value=Path("/tmp/alpha-local-root.crt"),
+        ),
+    ):
+        result = stackctl._run_environment_integration_probe(
+            stackctl.load_environment_topology(),
+            "alpha-local",
+            tmp_path,
+            research_consumer_token=bearer,
+            research_consumer_attestation=attestation,
+            release_post_expectations={"content_feed": {"post-a"}},
+            only_checks=("content_feed",),
+        )
+
+    assert result == completed
+    kwargs = run_probe.call_args.kwargs
+    rendered_argv = " ".join(kwargs["argv"])
+    assert bearer not in rendered_argv
+    assert attestation not in rendered_argv
+    assert "--test-auth-token" not in kwargs["argv"]
+    assert kwargs["env"]["TEST_AUTH_TOKEN"] == bearer
+    assert kwargs["env"]["RESEARCH_CONSUMER_ATTESTATION"] == attestation
+
+
 def test_intersection_smoke_keeps_acceptance_token_out_of_process_argv() -> None:
     module = runpy.run_path(str(INTERSECTION_SMOKE_RUNNER))
     completed = SimpleNamespace(returncode=0)

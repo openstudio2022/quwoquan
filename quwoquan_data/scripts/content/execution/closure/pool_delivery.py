@@ -30,7 +30,6 @@ from content.execution.closure.pool_delivery_identity import (
     reserve_post_identity as _reserve_post_identity,
 )
 from content.execution.identity import validate_execution_id
-from content.execution.queue.model import QueueJob
 from content.execution.workspace import execution_root
 from content.release.canonical.object_transaction_lock import (
     canonical_publish_serialized,
@@ -472,41 +471,6 @@ def write_pool_delivery_intent(
     return intent, path
 
 
-def validate_pool_delivery_intent_for_job(job: QueueJob) -> dict[str, Any]:
-    metadata = job.metadata_document()
-    raw_ref = str(metadata.get("poolDeliveryIntentRef") or "").strip()
-    expected_digest = str(metadata.get("poolDeliveryIntentDigest") or "").strip()
-    if not raw_ref or not expected_digest:
-        raise ValueError("ReliableTask publish job lacks pool delivery intent binding")
-    root = execution_root(job.execution_id).resolve()
-    candidate = root / raw_ref
-    path = candidate.resolve()
-    try:
-        path.relative_to(root)
-    except ValueError as exc:
-        raise ValueError("pool delivery intent ref escapes execution root") from exc
-    raw_parts = Path(raw_ref).parts
-    if any(
-        (root / Path(*raw_parts[:index])).is_symlink()
-        for index in range(1, len(raw_parts) + 1)
-    ):
-        raise ValueError("pool delivery intent ref cannot traverse symlinks")
-    payload = read_json(path)
-    validated = validate_pool_delivery_intent_document(payload, root=root)
-    if validated.get("intentId") != expected_digest:
-        raise ValueError("pool delivery intent digest binding mismatch")
-    carrier = job.carrier.value if job.carrier is not None else ""
-    if (
-        validated["executionId"] != job.execution_id
-        or validated["objectRef"] != job.ref
-        or validated["carrier"] != carrier
-        or job.content_object_dir != validated["contentObjectDir"]
-        or metadata.get("sourceRevision") != validated["transactionInputDigest"]
-    ):
-        raise ValueError("pool delivery intent job routing drift")
-    return validated
-
-
 def validate_pool_delivery_intent_document(
     payload: object,
     *,
@@ -582,6 +546,5 @@ __all__ = [
     "load_reserved_post_identity",
     "pool_delivery_intent_path",
     "validate_pool_delivery_intent_document",
-    "validate_pool_delivery_intent_for_job",
     "write_pool_delivery_intent",
 ]

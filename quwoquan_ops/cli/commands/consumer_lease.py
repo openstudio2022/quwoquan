@@ -24,7 +24,7 @@ def register_parser(
     )
     consumer_lease_parser.add_argument(
         "action",
-        choices=("acquire", "release", "status"),
+        choices=("acquire", "bind", "release", "status"),
     )
     consumer_lease_parser.add_argument(
         "--target",
@@ -54,6 +54,7 @@ def register_parser(
         type=int,
         default=_stackctl.DEFAULT_BUILD_GRACE_SECONDS,
     )
+    consumer_lease_parser.add_argument("--lease-id", default="")
     consumer_lease_parser.add_argument("--handoff-digest", default="")
     consumer_lease_parser.add_argument("--release-id", default="")
     consumer_lease_parser.add_argument("--manifest-digest", default="")
@@ -68,7 +69,7 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
     device = str(getattr(args, "device", "") or "").strip()
     consumer = str(getattr(args, "consumer", "flutter-run") or "flutter-run").strip()
     platform = str(getattr(args, "platform", "android") or "android").strip()
-    if action in {"acquire", "release"} and not device:
+    if action in {"acquire", "bind", "release"} and not device:
         return {
             "exitCode": 2,
             "summary": f"consumer-lease {action} requires --device",
@@ -137,6 +138,38 @@ def command_consumer_lease(args: argparse.Namespace) -> dict[str, Any]:
                     f"consumer={consumer}",
                     f"ports={','.join(str(port) for port in ports) or 'none'}",
                     f"leaseId={lease['leaseId']}",
+                    f"lease={_stackctl.relpath(Path(str(lease['path'])))}",
+                ],
+                "lease": lease,
+            }
+        if action == "bind":
+            use_lock = _stackctl.acquire_local_runtime_use_lock(
+                target=target,
+                purpose=f"consumer-lease-bind:{device}",
+            )
+            try:
+                lease = _stackctl.bind_consumer_lease(
+                    target=target,
+                    device=device,
+                    consumer=consumer,
+                    lease_id=str(getattr(args, "lease_id", "") or ""),
+                    handoff_digest=str(getattr(args, "handoff_digest", "") or ""),
+                    release_id=str(getattr(args, "release_id", "") or ""),
+                    manifest_digest=str(getattr(args, "manifest_digest", "") or ""),
+                    readiness_receipt_digest=str(
+                        getattr(args, "readiness_receipt_digest", "") or ""
+                    ),
+                )
+            finally:
+                use_lock.close()
+            return {
+                "exitCode": 0,
+                "summary": f"consumer lease bound for {target}",
+                "details": [
+                    f"device={device}",
+                    f"consumer={consumer}",
+                    f"leaseId={lease['leaseId']}",
+                    f"handoffDigest={lease['handoffDigest']}",
                     f"lease={_stackctl.relpath(Path(str(lease['path'])))}",
                 ],
                 "lease": lease,

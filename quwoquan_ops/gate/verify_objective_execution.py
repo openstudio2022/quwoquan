@@ -99,8 +99,8 @@ def main() -> int:
         descriptor = None
         issues.append(f"public admission descriptor unavailable: {_detail(error)}")
     try:
-        admission = inspect_admission()
-        validate_admission_readback(admission)
+        inspected_admission = inspect_admission()
+        admission = validate_admission_readback(inspected_admission)
     except Exception as error:
         issues.append(f"canonical admission inspection failed: {_detail(error)}")
 
@@ -112,11 +112,6 @@ def main() -> int:
         "admitted", "not_admitted", "blocked",
     ]:
         issues.append("Objective v2 admission_status closed set drifted")
-    if contract.get("schemas", {}).get("admission_readback", {}).get("required_fields") != [
-        "status", "stage", "write_concurrency", "temporary_branch_allowed",
-        "branch_policy_digest", "reason", "terminal",
-    ]:
-        issues.append("Objective v2 admission_readback wire drifted")
     graph = contract.get("transition_graph", {})
     if graph.get("graph_version") != 1 or graph.get("reducer_version") != 1:
         issues.append("Objective transition graph/reducer version drifted")
@@ -140,24 +135,23 @@ def main() -> int:
     required_errors = {"OEX.JOURNAL_RECOVERY_REQUIRED", "OEX.TRANSITION_INVALID", "OEX.PENDING_COMMAND_CONFLICT", "OEX.EFFECT_IDENTITY_CONFLICT"}
     if not required_errors.issubset(contract.get("errors", {})):
         issues.append("Objective P0 typed errors are incomplete")
-    expected_causes = {
-        "admitted_requires_all": [
-            "pull_request_prefix_declared", "isolated_writer_branch",
-            "declared_promotion_path", "mandatory_cleanup_after_promotion_or_abort",
-            "concurrency_evidence_required",
-        ]
-    }
-    if contract.get("admission", {}).get("derivation") != expected_causes:
-        issues.append("Objective admission derivation must contain only lifecycle causes")
     if descriptor != contract.get("admission", {}).get("readback_contract"):
         issues.append("public admission descriptor must project the Objective owner contract")
     if admission is not None:
         if admission["status"] == "blocked":
             issues.append("dynamic Objective admission inspection is blocked")
-        elif admission["status"] != "not_admitted" or admission["write_concurrency"] != 1:
-            issues.append("current branch policy must derive S4 not_admitted/write_concurrency=1")
-        if admission["temporary_branch_allowed"] is not False:
-            issues.append("current branch policy must reject temporary branch execution")
+        elif descriptor is not None:
+            admitted_policy = descriptor["statuses"]["admitted"]
+            expected_admitted = {
+                "status": "admitted",
+                "stage": descriptor["stage"],
+                "write_concurrency": admitted_policy["write_concurrency"],
+                "persistent_lane_allowed": admitted_policy["persistent_lane_allowed"],
+                "reason": admitted_policy["reason"],
+                "terminal": admitted_policy["terminal"],
+            }
+            if any(admission.get(field) != value for field, value in expected_admitted.items()):
+                issues.append("current branch policy must derive the canonical admitted readback")
 
     try:
         human = yaml.safe_load(

@@ -1,7 +1,6 @@
 """governed stock 视频 provider（Pexels/Pixabay）走同一 acquisition/审查链的本地合同。"""
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -9,14 +8,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
-from content.execution.agent.outcome import AgentRunOutcome
-from core.control_types import AgentProvider
 from content.source import professional_commons_video_input as commons_input
 from content.source import professional_video_acquisition
+from content.source.host_source_review import record_host_source_review_result
 from content.source.research import auto_plan_video_stock as stock
 from content.source.research.network_io import HttpFetchResult
 
-_SHA = lambda value: "sha256:" + hashlib.sha256(value).hexdigest()
 _SOURCE_DIGEST = "sha256:" + "1" * 64
 _ENTITY_DIGEST = "sha256:" + "2" * 64
 _REVISION = "sha256:" + "3" * 64
@@ -73,41 +70,48 @@ def _handoff() -> dict[str, object]:
     }
 
 
-def _review_journal(root: Path, calls: list[str]):
-    def run(**kwargs):
-        calls.append(str(kwargs["prompt"]))
-        journal_root = root / "source-reviews" / "stock-journal"
-        request_path = journal_root / "request.json"
-        attempt_path = journal_root / "attempts" / "001.json"
-        request_path.parent.mkdir(parents=True, exist_ok=True)
-        attempt_path.parent.mkdir(parents=True, exist_ok=True)
-        result = (
-            '{"status":"passed","entityMatch":"matched","privacyRisk":"none",'
-            '"minorRisk":"none","maliciousMediaRisk":"none",'
-            '"watermarkStatus":"absent","qualityStatus":"passed","findings":[]}'
+def _record_pending_reviews(root: Path, outcomes) -> int:
+    """宿主对每个 HOST_REVIEW_PENDING 请求记录一次 passed 语义结论。"""
+    recorded = 0
+    for row in outcomes:
+        if row.get("failureCode") != "DATA.SOURCE.HOST_REVIEW_PENDING":
+            continue
+        request_ref = str(row["requestRef"])
+        request = json.loads((root / request_ref).read_text(encoding="utf-8"))
+        record_host_source_review_result(
+            evidence_root=root,
+            result_input={
+                "schema": "quwoquan_data.host_source_review_result_input",
+                "requestRef": request_ref,
+                "requestDigest": request["requestDigest"],
+                "actor": {
+                    "host": "cursor",
+                    "sessionId": "stock-review-session",
+                    "modelFamily": "gpt-5",
+                    "auditRunId": "stock-review-audit-001",
+                },
+                "reviewedAt": "2026-08-13T08:01:00Z",
+                "verdict": {
+                    "status": "passed",
+                    "entityMatch": "matched",
+                    "qualityStatus": "passed",
+                    "privacyRisk": "none",
+                    "minorRisk": "none",
+                    "maliciousMediaRisk": "none",
+                    "watermarkStatus": "absent",
+                    "findings": [],
+                },
+            },
         )
-        request_path.write_text("{}", encoding="utf-8")
-        attempt = {
-            "status": "finished",
-            "provider": "cursor_sdk",
-            "runId": "stock-grok-review",
-            "recordedAt": "2026-08-13T08:01:00Z",
-            "resultSha256": _SHA(result.encode()),
-        }
-        attempt_path.write_text(json.dumps(attempt), encoding="utf-8")
-        outcome = AgentRunOutcome.finished(
-            provider=AgentProvider.CURSOR_SDK,
-            run_id="stock-grok-review",
-            result_text=result,
-        )
-        return {
-            "requestPath": request_path,
-            "attemptPath": attempt_path,
-            "attempt": attempt,
-            "outcome": outcome,
-        }, attempt_path
+        recorded += 1
+    return recorded
 
-    return run
+
+def _result_files(root: Path) -> list[Path]:
+    results_root = root / "host-source-reviews" / "results"
+    if not results_root.is_dir():
+        return []
+    return sorted(results_root.glob("*.json"))
 
 
 def _install_stock_fakes(
@@ -115,8 +119,7 @@ def _install_stock_fakes(
     *,
     root: Path,
     source: Path,
-) -> tuple[list[str], list[bool]]:
-    calls: list[str] = []
+) -> list[bool]:
     supported_api_flags: list[bool] = []
 
     monkeypatch.setattr(
@@ -173,8 +176,8 @@ def _install_stock_fakes(
             "samples": [],
         },
     )
-    monkeypatch.setattr(commons_input, "run_source_review", _review_journal(root, calls))
-    return calls, supported_api_flags
+    del root
+    return supported_api_flags
 
 
 def test_pexels_supported_api_walks_the_same_admission_chain(
@@ -182,23 +185,29 @@ def test_pexels_supported_api_walks_the_same_admission_chain(
 ) -> None:
     video_root = tmp_path / "acquisition" / "video"
     source = _video(tmp_path / "source.mp4", seed=1)
-    calls, supported_api_flags = _install_stock_fakes(
+    supported_api_flags = _install_stock_fakes(
         monkeypatch, root=video_root, source=source
     )
     handoff = tmp_path / "handoff.json"
     handoff.write_text("{}", encoding="utf-8")
 
-    outcomes = commons_input.acquire_stock_sourced_videos(
-        provider="pexels_videos",
-        entity_id="张家界",
-        entity_aliases=("Zhangjiajie",),
-        handoff_ref=handoff,
-        output_root=video_root,
-        runner=lambda _prompt: pytest.fail("source journal fake must own runner"),
-        discovery=lambda *_args, **_kwargs: [_pexels_candidate()],
-    )
+    def _acquire() -> list[dict[str, object]]:
+        return commons_input.acquire_stock_sourced_videos(
+            provider="pexels_videos",
+            entity_id="张家界",
+            entity_aliases=("Zhangjiajie",),
+            handoff_ref=handoff,
+            output_root=video_root,
+            discovery=lambda *_args, **_kwargs: [_pexels_candidate()],
+        )
 
-    assert len(calls) == 1
+    try:
+        outcomes = _acquire()
+    except commons_input.CommonsVideoBatchBlocked as blocked:
+        assert _record_pending_reviews(video_root, blocked.outcomes) == 1
+        outcomes = _acquire()
+
+    assert len(_result_files(video_root)) == 1
     assert outcomes[0]["acquisitionStatus"] == "acquired", json.dumps(
         outcomes, ensure_ascii=False
     )
@@ -224,18 +233,10 @@ def test_pexels_supported_api_walks_the_same_admission_chain(
     assert safety["sourceAttribution"]["provider"] == "pexels_videos"
     assert safety["sourceAttribution"]["license"] == "Pexels License"
 
-    replay = commons_input.acquire_stock_sourced_videos(
-        provider="pexels_videos",
-        entity_id="张家界",
-        entity_aliases=("Zhangjiajie",),
-        handoff_ref=handoff,
-        output_root=video_root,
-        runner=lambda _prompt: pytest.fail("replay must not re-run review"),
-        discovery=lambda *_args, **_kwargs: [_pexels_candidate()],
-    )
+    replay = _acquire()
     assert replay[0]["preflight"] == "replayed"
     assert replay[0]["receiptDigest"] == outcomes[0]["receiptDigest"]
-    assert len(calls) == 1
+    assert len(_result_files(video_root)) == 1
 
 
 def test_unregistered_stock_provider_is_typed(tmp_path: Path) -> None:

@@ -1,13 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/execution/stable_production_proof_request.schema.json",
-  "title": "Explicit three-unit stable production proof request",
-  "description": "Caller-selected exact evidence for exactly three independent four-carrier M1 proof units on the current operational fingerprint. No latest discovery or proof production is permitted.",
+  "title": "Explicit one-unit stable production proof request",
+  "description": "Caller-selected exact evidence for exactly one independent four-carrier M1 proof unit on the current operational fingerprint. No latest discovery or proof production is permitted.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema",
     "fingerprint",
+    "verifyAllReceipt",
+    "publicCliLiveImportZeroReceipt",
     "proofUnits"
   ],
   "properties": {
@@ -21,10 +23,16 @@
     "fingerprint": {
       "$ref": "#/$defs/digest"
     },
+    "verifyAllReceipt": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "publicCliLiveImportZeroReceipt": {
+      "$ref": "#/$defs/exactRef"
+    },
     "proofUnits": {
       "type": "array",
-      "minItems": 3,
-      "maxItems": 3,
+      "minItems": 1,
+      "maxItems": 1,
       "items": {
         "$ref": "#/$defs/proofUnit"
       }
@@ -56,34 +64,6 @@
         }
       }
     },
-    "retryRecovery": {
-      "oneOf": [
-        {
-          "type": "null"
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "retryOf",
-            "executionManifest",
-            "executionState"
-          ],
-          "properties": {
-            "retryOf": {
-              "type": "string",
-              "minLength": 1
-            },
-            "executionManifest": {
-              "$ref": "#/$defs/exactRef"
-            },
-            "executionState": {
-              "$ref": "#/$defs/exactRef"
-            }
-          }
-        }
-      ]
-    },
     "carrierExecution": {
       "type": "object",
       "additionalProperties": false,
@@ -98,7 +78,9 @@
         "executionState",
         "canonicalPublish",
         "poolDeliveryResult",
-        "retryRecovery"
+        "objectTransactionPackage",
+        "applyReport",
+        "poolRecord"
       ],
       "properties": {
         "executionId": {
@@ -137,8 +119,14 @@
         "poolDeliveryResult": {
           "$ref": "#/$defs/exactRef"
         },
-        "retryRecovery": {
-          "$ref": "#/$defs/retryRecovery"
+        "objectTransactionPackage": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "applyReport": {
+          "$ref": "#/$defs/exactRef"
+        },
+        "poolRecord": {
+          "$ref": "#/$defs/exactRef"
         }
       }
     },
@@ -196,6 +184,7 @@
       "required": [
         "unitId",
         "fingerprint",
+        "evidenceAuthority",
         "carrierExecutions",
         "release",
         "environment",
@@ -224,6 +213,12 @@
         },
         "environmentAcceptanceFact": {
           "$ref": "#/$defs/exactRef"
+        },
+        "evidenceAuthority": {
+          "enum": [
+            "canonical_runtime",
+            "test_only"
+          ]
         }
       }
     }

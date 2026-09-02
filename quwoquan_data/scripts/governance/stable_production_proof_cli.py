@@ -47,7 +47,7 @@ def handle_stable_production_proof(args: argparse.Namespace) -> None:
         raise SystemExit(
             "[governance stable-production-proof] GATE_BLOCK "
             "DATA.STABLE_PRODUCTION_PROOF.CURRENT_EVIDENCE_REQUIRED: "
-            "current evidence for exactly three proof units is required: " + str(exc)
+            "current evidence for exactly one proof unit is required: " + str(exc)
         ) from exc
 
 
@@ -92,7 +92,7 @@ def register_stable_production_proof_parsers(
 ) -> None:
     stable = subparsers.add_parser(
         "stable-production-proof",
-        help="只读 stdout 求值显式三 unit、十二 execution 稳产 proof request",
+        help="只读 stdout 求值显式 one unit、四 execution 稳产 proof request",
     )
     _common(stable)
     stable.set_defaults(handler=handle_stable_production_proof)

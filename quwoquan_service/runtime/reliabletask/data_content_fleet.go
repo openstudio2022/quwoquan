@@ -3,7 +3,9 @@ package reliabletask
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -231,6 +233,19 @@ func (j DataContentJob) payload(idempotencyKey string) map[string]string {
 		}
 	}
 	return payload
+}
+
+// FencedReadyQueue is the retired Data worker's generation-fenced claim seam.
+// It remains in this exclusive file until the physical-delete increment.
+type FencedReadyQueue interface {
+	ClaimReadyTaskByIDWithFence(
+		ctx context.Context,
+		taskID string,
+		workerID string,
+		leaseTTL time.Duration,
+		now time.Time,
+		fence map[string]string,
+	) (*ReliableAsyncTask, error)
 }
 
 // DataContentFleet 复用 runtime/reliabletask 的 Store/ReadyIndex/Worker，
@@ -561,12 +576,259 @@ func (f DataContentFleet) ProcessOne(ctx context.Context, handler TaskHandler) (
 			return policy, nil
 		},
 		Now: f.Now,
-		ClaimFence: func() map[string]string {
-			if f.WorkerFence == nil {
-				return nil
-			}
-			return f.WorkerFence.payload()
-		}(),
 	}
-	return worker.ProcessOne(ctx, handler)
+	if f.WorkerFence == nil || f.Ready == nil {
+		return worker.ProcessOne(ctx, handler)
+	}
+	fencedStore, ok := f.Store.(FencedReadyQueue)
+	if !ok {
+		return false, fmt.Errorf("reliabletask data fleet requires fenced ready queue")
+	}
+	claimNow := time.Now().UTC()
+	if f.Now != nil {
+		claimNow = f.Now().UTC()
+	}
+	leaseTTL := f.LeaseTTL
+	if leaseTTL <= 0 {
+		leaseTTL = 30 * time.Second
+	}
+	messages, err := f.Ready.Claim(ctx, workerID, 1, 0)
+	if err != nil {
+		return false, err
+	}
+	for _, message := range messages {
+		task, claimErr := fencedStore.ClaimReadyTaskByIDWithFence(
+			ctx, message.TaskID, workerID, leaseTTL, claimNow, f.WorkerFence.payload(),
+		)
+		if claimErr != nil {
+			return false, claimErr
+		}
+		if task == nil {
+			if ackErr := f.Ready.Ack(ctx, message); ackErr != nil {
+				return false, ackErr
+			}
+			continue
+		}
+		return worker.processClaimed(ctx, handler, task, &message)
+	}
+	return false, nil
+}
+
+// DispatchDataContentExecution mirrors the production Mongo execution scope.
+func (s *MemoryStore) DispatchDataContentExecution(
+	ctx context.Context,
+	executionID string,
+	now time.Time,
+	limit int,
+) ([]ReliableAsyncTask, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return nil, errors.New("data content executionId is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.dispatchDueTasksLocked(now, limit, func(record TaskOutboxRecord) bool {
+		return record.TaskType == DataContentTaskType &&
+			record.Payload["executionId"] == executionID
+	})
+}
+
+func (s *MemoryStore) AdvanceDataContentTaskFence(
+	ctx context.Context,
+	taskID string,
+	fence DataContentWorkerFence,
+	now time.Time,
+) (bool, error) {
+	_ = ctx
+	if err := fence.Validate(); err != nil {
+		return false, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	task, ok := s.tasks[strings.TrimSpace(taskID)]
+	if !ok {
+		return false, nil
+	}
+	current, _ := strconv.Atoi(task.Payload["workerHostGeneration"])
+	if current > fence.Generation {
+		return false, nil
+	}
+	if current == fence.Generation && current > 0 {
+		for key, value := range fence.payload() {
+			if task.Payload[key] != value {
+				return false, nil
+			}
+		}
+		return true, nil
+	}
+	if task.Status == TaskStatusSucceeded || task.Status == TaskStatusDead {
+		return false, nil
+	}
+	for key, value := range fence.payload() {
+		task.Payload[key] = value
+	}
+	task.Status = TaskStatusReady
+	task.LeaseOwner = ""
+	task.LeaseToken = ""
+	task.LeaseUntil = time.Time{}
+	task.NextAttemptAt = now.UTC()
+	task.UpdatedAt = now.UTC()
+	s.tasks[task.TaskID] = task
+	return true, nil
+}
+
+// ListReadyDataContentExecution mirrors the production Mongo execution scope.
+func (s *MemoryStore) ListReadyDataContentExecution(
+	ctx context.Context,
+	executionID string,
+	limit int,
+	now time.Time,
+) ([]ReliableAsyncTask, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return nil, errors.New("data content executionId is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.listReadyTasksLocked(
+		[]string{DataContentTaskType},
+		limit,
+		now,
+		func(task ReliableAsyncTask) bool {
+			return task.Payload["executionId"] == executionID
+		},
+	), nil
+}
+
+// PurgeDataContentExecution mirrors the production exact execution cleanup.
+func (s *MemoryStore) PurgeDataContentExecution(
+	ctx context.Context,
+	executionID string,
+) (DataContentExecutionPurgeResult, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return DataContentExecutionPurgeResult{}, errors.New("data content executionId is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := DataContentExecutionPurgeResult{}
+	for taskID, task := range s.tasks {
+		if task.TaskType != DataContentTaskType || task.Payload["executionId"] != executionID {
+			continue
+		}
+		delete(s.tasks, taskID)
+		delete(s.taskByDedupe, task.DedupeKey)
+		result.TaskIDs = append(result.TaskIDs, taskID)
+		result.TasksDeleted++
+	}
+	for outboxID, outbox := range s.outboxes {
+		if outbox.TaskType != DataContentTaskType || outbox.Payload["executionId"] != executionID {
+			continue
+		}
+		delete(s.outboxes, outboxID)
+		delete(s.outboxByDedupe, outbox.DedupeKey)
+		if outbox.IdempotencyKey != "" {
+			delete(s.outboxByIdempotency, outbox.IdempotencyKey)
+		}
+		result.OutboxesDeleted++
+	}
+	return result, nil
+}
+
+func (s *MemoryStore) CountDataContentOutboxesByIdempotencyKeys(
+	ctx context.Context,
+	executionID string,
+	stage string,
+	idempotencyKeys []string,
+) (int64, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	stage = strings.TrimSpace(stage)
+	if executionID == "" || (stage != "author" && stage != "publish") {
+		return 0, errors.New("data content executionId and stage are required")
+	}
+	keys := make(map[string]struct{}, len(idempotencyKeys))
+	for _, key := range idempotencyKeys {
+		if key = strings.TrimSpace(key); key != "" {
+			keys[key] = struct{}{}
+		}
+	}
+	if len(keys) == 0 {
+		return 0, errors.New("data content idempotency keys are required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var count int64
+	for _, outbox := range s.outboxes {
+		if outbox.TaskType == DataContentTaskType &&
+			outbox.Payload["executionId"] == executionID &&
+			outbox.Payload["stage"] == stage {
+			if _, exists := keys[outbox.IdempotencyKey]; !exists {
+				continue
+			}
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (s *MemoryStore) ListDataContentExecutionTasks(
+	ctx context.Context,
+	executionID string,
+) ([]ReliableAsyncTask, error) {
+	_ = ctx
+	executionID = strings.TrimSpace(executionID)
+	if executionID == "" {
+		return nil, errors.New("data content executionId is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tasks := make([]ReliableAsyncTask, 0)
+	for _, task := range s.tasks {
+		if task.TaskType != DataContentTaskType || task.Payload["executionId"] != executionID {
+			continue
+		}
+		task.Payload = CloneStringMap(task.Payload)
+		tasks = append(tasks, task)
+	}
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].Payload["jobId"] < tasks[j].Payload["jobId"]
+	})
+	return tasks, nil
+}
+
+func (s *MemoryStore) ClaimReadyTaskByIDWithFence(
+	ctx context.Context,
+	taskID string,
+	workerID string,
+	leaseTTL time.Duration,
+	now time.Time,
+	fence map[string]string,
+) (*ReliableAsyncTask, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	task, ok := s.tasks[strings.TrimSpace(taskID)]
+	if !ok {
+		return nil, nil
+	}
+	for key, expected := range fence {
+		if task.Payload[key] != expected {
+			return nil, nil
+		}
+	}
+	leaseExpired := !task.LeaseUntil.IsZero() && !task.LeaseUntil.After(now)
+	if !(task.Status == TaskStatusReady || task.Status == TaskStatusRetryWait || (task.Status == TaskStatusProcessing && leaseExpired)) || task.NextAttemptAt.After(now) {
+		return nil, nil
+	}
+	task.Status = TaskStatusProcessing
+	task.LeaseOwner = strings.TrimSpace(workerID)
+	task.LeaseToken = NewRecordID("lease")
+	task.LeaseUntil = now.Add(leaseTTL).UTC()
+	task.UpdatedAt = now.UTC()
+	s.tasks[task.TaskID] = task
+	return &task, nil
 }

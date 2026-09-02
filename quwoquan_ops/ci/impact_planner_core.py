@@ -11,6 +11,7 @@ from typing import Iterable, Mapping
 
 SCOPE_NAMES = ("service", "app", "portal", "topology", "data")
 LOCAL_SCOPE_NAMES = (*SCOPE_NAMES, "spec_contract")
+INTEGRATION_DEPTHS = ("no_live", "alpha_integration", "abg_release_sensitive")
 SOURCE_IDENTITY = "quwoquan-impact-planner"
 SOURCE_VERSION = "impact-planner-v1"
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -192,6 +193,29 @@ def _classify_one(path: str, scopes: dict[str, bool]) -> None:
         scopes["service"] = True
     if path.startswith("quwoquan_app/"):
         scopes["app"] = True
+
+
+def derive_integration_depth(classification: Mapping[str, object]) -> str:
+    """由 typed impact scopes 派生 G2 集成深度档位；档位只能派生，不得人工降档。
+
+    - data/topology 影响属 release-sensitive 面，要求 Alpha→Beta→Gamma 全链验证；
+    - app/service/portal 任一 runtime 影响默认要求 Alpha 真实集成；
+    - 五个 runtime scope 全空才允许 runtime-neutral 免真启档。
+    """
+
+    if not isinstance(classification, Mapping):
+        raise ImpactPlannerError("integration depth 输入必须为 classify_impacts 结果")
+    scopes = classification.get("scopes")
+    if not isinstance(scopes, Mapping) or set(scopes) != set(SCOPE_NAMES):
+        raise ImpactPlannerError("integration depth 需要完整 typed runtime scopes")
+    for name in SCOPE_NAMES:
+        if not isinstance(scopes[name], bool):
+            raise ImpactPlannerError(f"runtime scope {name} 必须为 bool")
+    if scopes["data"] or scopes["topology"]:
+        return "abg_release_sensitive"
+    if scopes["app"] or scopes["service"] or scopes["portal"]:
+        return "alpha_integration"
+    return "no_live"
 
 
 def classify_impacts(paths: Iterable[str], *, fail_closed_empty: bool = False) -> dict[str, object]:

@@ -13,7 +13,7 @@ import tempfile
 import time
 import uuid
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -26,6 +26,11 @@ from quwoquan_app.scripts.device.build_launcher_handoff import (
     materialize_runtime_config_trust_envelope,
 )
 from quwoquan_ops.cli.commands import app_dependency_sync_builder as _builder
+from quwoquan_ops.cli.lib.app_dependency_sync_process_result import (
+    PROCESS_RESULT_SCHEMA as _PROCESS_RESULT_SCHEMA,
+    atomic_process_result as _atomic_process_result,
+    process_result_payload as _process_result_payload,
+)
 from quwoquan_ops.cli.lib.output_paths import output_root
 from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
     build_runtime_config_trust_envelope,
@@ -100,6 +105,18 @@ class _PublicationProgress:
     active_write_started: bool = False
 
 
+@dataclass(slots=True)
+class DependencyBuildProgress:
+    """Process-only phase marker; never participates in publication identity."""
+
+    current_phase: str = "component-build"
+
+    def begin(self, phase: str) -> None:
+        if not phase or not all(character.islower() or character.isdigit() or character == "-" for character in phase):
+            raise ValueError("APP.DEPENDENCY.process_phase_invalid")
+        self.current_phase = phase
+
+
 @dataclass(frozen=True, slots=True)
 class DependencyComponentBuildContext:
     """Attempt-owned inputs exposed to an injectable five-component builder."""
@@ -111,6 +128,7 @@ class DependencyComponentBuildContext:
     generation_root: Path
     flutter_identity: Mapping[str, str]
     source_identity: Mapping[str, str]
+    progress: DependencyBuildProgress = field(default_factory=DependencyBuildProgress)
 
 
 ComponentBuilder = Callable[[DependencyComponentBuildContext], Mapping[str, Path]]
@@ -487,9 +505,11 @@ def _publish_dependency_generation(
     source_identity: Mapping[str, str],
     components: Mapping[str, Mapping[str, Any]],
     progress: _PublicationProgress,
+    before_active_write: Callable[[], None],
 ) -> tuple[dict[str, Any], dict[str, Any], Path, Path]:
     def atomic_json(path: Path, value: dict[str, Any]) -> None:
         if path == active_root / "active.json":
+            before_active_write()
             progress.active_write_started = True
         _atomic_json(path, value, mode=0o600)
 
@@ -557,14 +577,30 @@ def command_app_dependency_sync(
     attempt_id = uuid.uuid4().hex
     work_root: Path | None = None
     generation_root: Path | None = None
+    process_root: Path | None = None
     active_path: Path | None = None
     active_committed = False
     active_commit_ambiguous = False
     active_commit_cause = ""
+    failed_phase = "initialization"
+    failure_cause = ""
+    outcome: dict[str, Any] | None = None
     cleanup_warnings: list[str] = []
     sensitive_failure_values: list[str] = []
+    output = output_root().expanduser().absolute()
+    process_root = output / "env/repo/local/app-dependency-sync/process" / attempt_id
     try:
+        process_base = process_root.parent
+        process_base.mkdir(parents=True, exist_ok=True, mode=0o700)
+        assert_real_directory(process_base, label="dependency sync process base")
+        process_base.chmod(0o700)
+        process_root.mkdir(mode=0o700)
+        assert_real_directory(process_root, label="dependency sync process root")
+        process_root.chmod(0o700)
+        failed_phase = "live-source-seal"
+        live_source_seal = _builder.resolution_seal(repo_root)
         with _sync_lock():
+            failed_phase = "toolchain-identity"
             try:
                 flutter_identity = resolved_flutter_identity(dict(os.environ))
             except FacadeError as exc:
@@ -577,13 +613,8 @@ def command_app_dependency_sync(
                     flutter_identity=flutter_identity,
                 )
             )
-            output = output_root().expanduser().absolute()
             active_root = managed_dependency_bundle_root().absolute()
             active_path = active_root / "active.json"
-            process_root = (
-                output / "env/repo/local/app-dependency-sync/process" / attempt_id
-            )
-            process_root.mkdir(parents=True, mode=0o700)
             work_root = active_root / "work" / attempt_id
             work_root.mkdir(parents=True, mode=0o700)
             snapshots_root = active_root / "snapshots"
@@ -595,6 +626,7 @@ def command_app_dependency_sync(
             if generation_root.exists() or generation_root.is_symlink():
                 raise ValueError("APP.DEPENDENCY.attempt_identity_collision")
             generation_root.mkdir(mode=0o700)
+            progress = DependencyBuildProgress()
             context = DependencyComponentBuildContext(
                 repo_root=repo_root,
                 attempt_id=attempt_id,
@@ -603,7 +635,9 @@ def command_app_dependency_sync(
                 generation_root=generation_root,
                 flutter_identity=dict(flutter_identity),
                 source_identity=source_identity,
+                progress=progress,
             )
+            failed_phase = progress.current_phase
             if component_builder is None:
                 with _attempt_android_runtime_trust(
                     repo_root,
@@ -616,6 +650,11 @@ def command_app_dependency_sync(
                     )
             else:
                 roots = component_builder(context)
+            failed_phase = "live-source-readback"
+            _builder.assert_live_resolution_seal(
+                repo_root=repo_root,
+                expected=live_source_seal,
+            )
             try:
                 current_flutter = resolved_flutter_identity(dict(os.environ))
             except FacadeError as exc:
@@ -630,11 +669,13 @@ def command_app_dependency_sync(
             )
             if current_source != source_identity:
                 raise ValueError("APP.DEPENDENCY.source_identity_drift_during_sync")
+            failed_phase = "component-readback"
             components = _component_declarations(
                 context=context,
                 component_roots=roots,
             )
             publication_progress = _PublicationProgress()
+            failed_phase = "publication"
             try:
                 published = _publish_dependency_generation(
                     publisher=publisher or publish_dependency_bundle_activation,
@@ -644,6 +685,10 @@ def command_app_dependency_sync(
                     source_identity=source_identity,
                     components=components,
                     progress=publication_progress,
+                    before_active_write=lambda: _builder.assert_live_resolution_seal(
+                        repo_root=repo_root,
+                        expected=live_source_seal,
+                    ),
                 )
                 if not isinstance(published, tuple) or len(published) != 4:
                     raise ValueError("APP.DEPENDENCY.publisher_result_invalid")
@@ -668,6 +713,19 @@ def command_app_dependency_sync(
                     or published_active_path != active_path
                 ):
                     raise ValueError("APP.DEPENDENCY.publisher_result_invalid")
+                commit_state = _active_pointer_commit_state(
+                    path=active_path,
+                    attempt_id=attempt_id,
+                )
+                if commit_state is not _ActivePointerCommitState.SELECTS_ATTEMPT:
+                    raise ValueError(
+                        "APP.DEPENDENCY.activation_readback_invalid: "
+                        f"readback={commit_state.value}"
+                    )
+                _builder.assert_live_resolution_seal(
+                    repo_root=repo_root,
+                    expected=live_source_seal,
+                )
             except (
                 OSError,
                 RuntimeError,
@@ -679,7 +737,7 @@ def command_app_dependency_sync(
             ) as exc:
                 # The atomic rename may already have committed even when its
                 # directory fsync or the injectable publisher acknowledgement
-                # fails.  Decide while still holding the sync lock, and never
+                # fails. Decide while still holding the sync lock, and never
                 # delete a generation selected by the freshly read pointer.
                 commit_state = None
                 if publication_progress.active_write_started:
@@ -699,8 +757,13 @@ def command_app_dependency_sync(
                     ) from exc
                 raise
             active_committed = True
+            failed_phase = "post-publication-live-source-readback"
+            _builder.assert_live_resolution_seal(
+                repo_root=repo_root,
+                expected=live_source_seal,
+            )
             _cleanup_attempt_root(work_root, cleanup_warnings)
-        return {
+        outcome = {
             "exitCode": 0,
             "summary": "App dependency sync completed",
             "details": [
@@ -729,6 +792,18 @@ def command_app_dependency_sync(
         json.JSONDecodeError,
         subprocess.SubprocessError,
     ) as exc:
+        failure_cause = _builder.dependency_failure_cause(exc)
+        if 'progress' in locals() and failed_phase == "component-build":
+            failed_phase = progress.current_phase
+        seal_failure: BaseException | None = None
+        if 'live_source_seal' in locals():
+            try:
+                _builder.assert_live_resolution_seal(
+                    repo_root=repo_root,
+                    expected=live_source_seal,
+                )
+            except (OSError, RuntimeError, TypeError, UnicodeError, ValueError) as seal_exc:
+                seal_failure = seal_exc
         if not active_committed:
             _cleanup_attempt_root(work_root, cleanup_warnings)
         if not active_committed and not active_commit_ambiguous:
@@ -740,18 +815,51 @@ def command_app_dependency_sync(
         if not detail.startswith("APP.DEPENDENCY"):
             detail = (
                 "APP.DEPENDENCY.sync_blocked: "
-                f"cause={_builder.dependency_failure_cause(exc)}"
+                f"cause={failure_cause}; detail={detail}"
             )
-        return {
+        details = [
+            detail,
+            *(
+                [f"cause={active_commit_cause}"]
+                if active_commit_ambiguous
+                else []
+            ),
+            *cleanup_warnings,
+        ]
+        if seal_failure is not None:
+            details.append(
+                _builder.redact_dependency_failure_text(
+                    str(seal_failure) or type(seal_failure).__name__,
+                    sensitive_values=tuple(sensitive_failure_values),
+                )
+            )
+        outcome = {
             "exitCode": 2,
             "summary": "App dependency sync blocked",
-            "details": [
-                detail,
-                *(
-                    [f"cause={active_commit_cause}"]
-                    if active_commit_ambiguous
-                    else []
-                ),
-                *cleanup_warnings,
-            ],
+            "details": details,
         }
+    result_ref = (process_root / "result.json").relative_to(output).as_posix()
+    outcome_details = outcome.setdefault("details", [])
+    if not any(str(item).startswith("attemptId=") for item in outcome_details):
+        outcome_details.append(f"attemptId={attempt_id}")
+    outcome_details.append(f"processResult={result_ref}")
+    if process_root is not None:
+        try:
+            process_result = _process_result_payload(
+                attempt_id=attempt_id,
+                outcome=outcome,
+                failed_phase=failed_phase,
+                cause=failure_cause,
+                output=output,
+                process_root=process_root,
+                sensitive_values=tuple(sensitive_failure_values),
+                redact=_builder.redact_dependency_failure_text,
+            )
+            _atomic_process_result(process_root / "result.json", process_result)
+        except (OSError, RuntimeError, TypeError, UnicodeError, ValueError) as exc:
+            result_warning = (
+                "APP.DEPENDENCY.process_result_write_warning: "
+                f"cause={_builder.dependency_failure_cause(exc)}"
+            )
+            outcome.setdefault("details", []).append(result_warning)
+    return outcome

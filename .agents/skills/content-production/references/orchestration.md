@@ -108,7 +108,7 @@
   能力事实，由该宿主自己声明；skill 不硬编码具体模型名）。
 - 该 slug 的模型族必须与 `4.draft` receipt 的 `actor.modelFamily` 不同，判定在派发前
   完成，不是评完再看。
-- 取不到具名异族 slug 就是能力缺席，本阶段落 `verdict=blocked` 并在 `openItems`
+- 取不到具名异族 slug 就是能力缺席，本阶段落 `verdict=blocked` 并在 `typedIssues`
   点名缺失的派发能力。**禁止**退回 `auto` 派发后再从 receipt 反读族别当作满足——
   那让合规规则的成立与否取决于路由运气。
 - `verify rubric --generation-family` 仍然兜底，但它是事后对账，不能替代派发前判定。

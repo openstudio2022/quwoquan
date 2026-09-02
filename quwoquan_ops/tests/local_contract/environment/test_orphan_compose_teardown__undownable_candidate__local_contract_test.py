@@ -177,7 +177,11 @@ def test_running_receipt_is_admitted_only_when_its_candidate_is_unusable(
         "_normal_down_structurally_impossible",
         lambda _target, _startup: "candidate sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa is no longer present",
     )
-    assert stackctl._orphan_compose_runtime_gate("gamma-local") == running
+    assert stackctl._orphan_compose_runtime_gate("gamma-local") == {
+        "startup": running,
+        "staleMutableStartup": None,
+        "expectedProject": "",
+    }
 
     monkeypatch.setattr(
         stackctl,

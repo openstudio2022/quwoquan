@@ -298,8 +298,93 @@ class EvidenceFingerprintCanonicalContractTest(unittest.TestCase):
             self.assertEqual("missing", by_path["absent.txt"]["state"])
             status_calls = [args for args in calls if args and args[0] == "status"]
             global_status_calls = [args for args in status_calls if "--" not in args]
+            ls_tree_calls = [args for args in calls if args and args[0] == "ls-tree"]
             self.assertEqual(2, len(status_calls))
             self.assertEqual(1, len(global_status_calls))
+            self.assertEqual(1, len(ls_tree_calls))
+
+    def test_large_pathspecs_are_batched_and_special_names_remain_exact(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            special_paths = [
+                "-leading option.txt",
+                "space name.txt",
+                "目录/雪 花.txt",
+            ]
+            for relative in special_paths:
+                target = repo / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(relative + "\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "--", *special_paths], cwd=repo, check=True
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "user.name=Fixture",
+                    "-c",
+                    "user.email=fixture@example.invalid",
+                    "commit",
+                    "-qm",
+                    "special paths",
+                ],
+                cwd=repo,
+                check=True,
+            )
+            long_missing_paths = [
+                f"missing/{index:04d}-{'长路径' * 12}.txt"
+                for index in range(240)
+            ]
+
+            import lib.evidence_fingerprint as evidence_fingerprint
+
+            real_git = evidence_fingerprint._git
+            budget = 2048
+            calls: list[tuple[str, ...]] = []
+
+            def bounded_git(
+                root: Path, *args: str
+            ) -> subprocess.CompletedProcess[bytes]:
+                calls.append(args)
+                argv_bytes = sum(
+                    len(argument.encode("utf-8")) + 1
+                    for argument in ("git", *args)
+                )
+                if "--" in args and argv_bytes > budget:
+                    raise OSError(7, "Argument list too long")
+                return real_git(root, *args)
+
+            with (
+                mock.patch.object(
+                    evidence_fingerprint,
+                    "_GIT_PATHSPEC_ARGV_BUDGET_BYTES",
+                    budget,
+                ),
+                mock.patch.object(
+                    evidence_fingerprint, "_git", side_effect=bounded_git
+                ),
+            ):
+                snapshots = snapshot_paths(
+                    special_paths + long_missing_paths,
+                    repo_root=repo,
+                )
+
+            by_path = {item["path"]: item for item in snapshots}
+            for relative in special_paths:
+                self.assertTrue(by_path[relative]["tracked"])
+                self.assertEqual("file", by_path[relative]["state"])
+            self.assertEqual(
+                "missing", by_path[long_missing_paths[-1]]["state"]
+            )
+            for command in ("ls-files", "ls-tree", "status"):
+                pathspec_calls = [
+                    args
+                    for args in calls
+                    if args and args[0] == command and "--" in args
+                ]
+                self.assertGreater(len(pathspec_calls), 1)
 
     def test_tracked_untracked_and_deleted_snapshots_are_distinct(self) -> None:
         tracked = snapshot_path("README.md", repo_root=_REPO_ROOT)

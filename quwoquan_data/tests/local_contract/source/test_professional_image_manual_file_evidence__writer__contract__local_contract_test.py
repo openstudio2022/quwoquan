@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from PIL import Image
-from content.execution.campaign.scale import campaign_workload_targets
+from content.execution.planning.scale import campaign_workload_targets
 from content.source.pre_acquisition_handoff import (
     write_pre_acquisition_handoff,
 )

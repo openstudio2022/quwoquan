@@ -100,7 +100,11 @@ def build_message(summary: dict[str, object], *, hooks_ok: bool, policy) -> str:
     if not lines:
         return ""
 
-    tail = ["  处置：把工作合回 dev1.0 后删除该副本，或确认无用后直接删除该目录。"] if rows else []
+    tail = [
+        "  处置：长期 lane 在 integration/abort 后 fast-forward resync 到 canonical dev1.0，",
+        "  并保留 worktree 供下轮复用；",
+        "  clone 或额外废弃副本是否删除仍由人工决定。",
+    ] if rows else []
     return "\n".join(["[worktree] 本地工作副本提醒", *lines, *tail])
 
 

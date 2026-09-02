@@ -451,7 +451,7 @@ func TestMain(m *testing.M) {
 		bson.M{"$set": bson.M{
 			"environment": integrationEnvironment, "sourceOwner": "qwq_data",
 			"status": "active", "activeReleaseId": integrationReleaseID,
-			"manifestDigest": integrationManifestDigest,
+			"manifestDigest": integrationManifestDigest, "releaseClass": "commercial",
 		}},
 		mongoopts.UpdateOne().SetUpsert(true),
 	); err != nil {

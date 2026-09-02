@@ -65,13 +65,33 @@ def canonical_project(target: str) -> str:
         raise OrphanComposeTeardownError(str(exc)) from exc
 
 
-def require_canonical_project(target: str, value: object) -> str:
-    try:
-        return require_formal_release_compose_project(target, value)
-    except ValueError as exc:
+def mutable_test_live_project(target: str) -> str:
+    if target not in LOCAL_TARGETS:
         raise OrphanComposeTeardownError(
-            "orphan Compose project mismatch: formal release identity is invalid"
-        ) from exc
+            "mutable test-live Compose project requires a local target"
+        )
+    environment = target.removesuffix("-local")
+    return f"quwoquan_{environment}_test_live"
+
+
+def canonical_project_kind(target: str, value: object) -> str:
+    project = str(value or "").strip()
+    try:
+        require_formal_release_compose_project(target, project)
+    except ValueError:
+        if project == mutable_test_live_project(target):
+            return "mutable_test_live"
+        raise OrphanComposeTeardownError(
+            "orphan Compose project mismatch: expected the target-bound formal "
+            "release project or exact mutable test-live project"
+        ) from None
+    return "formal_release"
+
+
+def require_canonical_project(target: str, value: object) -> str:
+    project = str(value or "").strip()
+    canonical_project_kind(target, project)
+    return project
 
 
 def _normalize_published_endpoints(value: object) -> list[dict[str, object]]:

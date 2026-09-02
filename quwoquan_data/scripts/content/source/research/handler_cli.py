@@ -6,11 +6,14 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from core.paths import SOURCE_ACQUISITION_ROOT
-from content.execution.campaign.lane import normalize_workloads
+from content.execution.planning.carrier_demand import normalize_workloads
 
 from content.source.professional_image_discovery_governed import (
     build_professional_image_governed_candidate_catalog,
     write_professional_image_governed_candidate_catalog,
+)
+from content.source.research.pre_acquisition_handoff_cli import (
+    handle_prepare_handoff as prepare_pre_acquisition_handoff,
 )
 from content.source.research.handler_cli_io import (
     canonical_candidates_destination,
@@ -77,6 +80,13 @@ def _workload_targets(args: argparse.Namespace) -> dict[str, int] | None:
         except ValueError as exc:
             raise ValueError("--workload quota must be a positive integer") from exc
     return normalize_workloads(values)
+
+
+def handle_prepare_handoff(args: argparse.Namespace) -> None:
+    workloads = _workload_targets(args)
+    if workloads is None:
+        raise SystemExit("[source-pool prepare-handoff] GATE_BLOCK requires --workload")
+    prepare_pre_acquisition_handoff(args, workload_targets=workloads)
 
 
 def handle_plan(args: argparse.Namespace) -> None:
@@ -387,6 +397,30 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     register_seed_selection_parser(commands)
     register_host_source_review_parsers(commands)
 
+    handoff = commands.add_parser(
+        "prepare-handoff",
+        help="从显式需求 create-once 冻结 current-identity pre-acquisition handoff",
+    )
+    handoff.add_argument("--handoff-id", required=True)
+    handoff.add_argument("--handoff-revision", type=int, required=True)
+    handoff.add_argument("--supersedes-handoff-ref")
+    handoff.add_argument("--vertical", required=True)
+    handoff.add_argument("--lifecycle", choices=("research", "commercial"), required=True)
+    handoff.add_argument(
+        "--scope-type",
+        choices=("vertical", "region", "topic", "region_topic"),
+        required=True,
+    )
+    handoff.add_argument("--region-ref")
+    handoff.add_argument("--primary-topic-ref")
+    handoff.add_argument("--related-topic-ref", action="append", default=[])
+    handoff.add_argument("--run-date", required=True)
+    handoff.add_argument("--sequence", type=int, required=True)
+    handoff.add_argument("--retry-of")
+    handoff.add_argument("--source-selection", action="append", required=True)
+    handoff.add_argument("--workload", action="append", required=True)
+    handoff.set_defaults(handler=handle_prepare_handoff)
+
     acquire_content = commands.add_parser(
         "acquire-homepage-article",
         help="从 current-identity coverage 与公开 MediaWiki 原始证据冻结 source-ready capsules",
@@ -557,6 +591,7 @@ __all__ = [
     "handle_freeze_professional_video_catalog",
     "handle_merge_homepage_article",
     "handle_plan",
+    "handle_prepare_handoff",
     "handle_project_candidates",
     "handle_validate",
     "handle_write",

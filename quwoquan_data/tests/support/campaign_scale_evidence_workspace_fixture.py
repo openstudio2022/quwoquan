@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from content.execution.campaign.source_pool_binding import (
+from content.execution.source_pool.binding import (
     materialize_bound_scale_source_pool,
 )
 from content.release.canonical.campaign_scale_evidence import (

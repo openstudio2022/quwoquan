@@ -93,8 +93,7 @@ def build_prompt_snapshot(
     template_family: str,
     variables: Mapping[str, Any],
     rendered_prompt: str,
-    provider: str,
-    model: str,
+    host_actor: Mapping[str, str],
     run_id: str,
     output_refs: Sequence[str],
 ) -> dict[str, Any]:
@@ -104,6 +103,9 @@ def build_prompt_snapshot(
     material = prompt_template_material(template_family)
     partials = list(material["partials"])
     execution = stage_execution_context(execution_id)
+    actor = {str(key): str(value).strip() for key, value in host_actor.items()}
+    if actor != {"host": "external_host_agent", "role": "author"}:
+        raise ValueError("prompt snapshot hostActor must bind the external author host")
     bundle_revision = prompt_bundle_revision(template_family)
     return {
         "schema": "quwoquan_data.prompt_snapshot",
@@ -123,11 +125,12 @@ def build_prompt_snapshot(
         "variables": dict(variables),
         "promptBundleRevision": bundle_revision,
         "renderedHash": sha256_text(rendered_prompt),
-        "provider": provider,
-        "model": model,
+        "hostRuntime": "external_host_agent",
+        "hostActor": actor,
         "runId": run_id,
         "outputRefs": list(output_refs),
     }
+
 
 
 def write_prompt_snapshot(path: Path, **kwargs: Any) -> Path:

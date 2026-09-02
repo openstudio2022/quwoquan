@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "quwoquan_data" / "scripts"))
 from content.execution.campaign.source_snapshot import (  # noqa: E402
     reference_governed_inputs,
 )
-from content.execution.campaign.capsule_seal import (  # noqa: E402
+from content.execution.source_pool.capsule_seal import (  # noqa: E402
     capsule_tree_is_sealed,
     discard_capsule_tree,
     seal_capsule_tree,

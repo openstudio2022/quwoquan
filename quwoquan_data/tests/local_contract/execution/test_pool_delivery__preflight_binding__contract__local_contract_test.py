@@ -111,7 +111,7 @@ def test_pool_delivery_preflight__standalone_m100_dispatch_uses_exact_pool_fence
     )
     validated: list[tuple[object, str]] = []
     monkeypatch.setattr(
-        "content.execution.campaign.source_pool_binding.validate_bound_scale_source_pool",
+        "content.execution.source_pool.binding.validate_bound_scale_source_pool",
         lambda pool, *, evidence_root_ref, output_root: (
             validated.append((pool, evidence_root_ref))
             or {

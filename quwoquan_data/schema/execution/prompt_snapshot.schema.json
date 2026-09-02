@@ -17,8 +17,8 @@
     "variables",
     "promptBundleRevision",
     "renderedHash",
-    "provider",
-    "model",
+    "hostRuntime",
+    "hostActor",
     "runId",
     "outputRefs"
   ],
@@ -105,13 +105,17 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
-    "provider": {
-      "type": "string",
-      "minLength": 1
+    "hostRuntime": {
+      "const": "external_host_agent"
     },
-    "model": {
-      "type": "string",
-      "minLength": 1
+    "hostActor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "role"],
+      "properties": {
+        "host": {"const": "external_host_agent"},
+        "role": {"const": "author"}
+      }
     },
     "runId": {
       "type": "string",

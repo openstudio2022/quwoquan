@@ -635,10 +635,14 @@ final class RuntimeConfigActivationCoordinator {
 
   private static JsonObject readDocument(File file, String malformedCode)
       throws IOException, RuntimeConfigPackageStore.RuntimeConfigException {
-    byte[] payload;
     try (InputStream input = new FileInputStream(file)) {
-      payload = input.readNBytes(RuntimeConfigPackageStore.MAX_BYTES + 1);
+      return readStreamDocument(input, malformedCode);
     }
+  }
+
+  private static JsonObject readStreamDocument(InputStream input, String malformedCode)
+      throws IOException, RuntimeConfigPackageStore.RuntimeConfigException {
+    byte[] payload = input.readNBytes(RuntimeConfigPackageStore.MAX_BYTES + 1);
     if (payload.length == 0 || payload.length > RuntimeConfigPackageStore.MAX_BYTES) {
       throw new RuntimeConfigPackageStore.RuntimeConfigException(malformedCode);
     }

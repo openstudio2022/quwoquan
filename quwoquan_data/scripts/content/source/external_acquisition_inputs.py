@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 def external_input_error(code: str, detail: str) -> ValueError:
-    from content.execution.campaign.external_inputs import CampaignExternalInputError
+    from content.execution.source_pool.external_inputs import CampaignExternalInputError
 
     return CampaignExternalInputError(
         f"DATA.CAMPAIGN.EXTERNAL_INPUT_{code}",
@@ -81,7 +81,7 @@ def professional_video_plan_binding(
     requested = _receipt_refs(data, media_kind="video")
     if not requested:
         return [], None
-    from content.execution.campaign.external_inputs import (
+    from content.execution.source_pool.external_inputs import (
         PROFESSIONAL_VIDEO_ACQUISITION_KIND,
     )
 
@@ -99,7 +99,7 @@ def professional_video_context_binding(
     """Return the complete frozen video receipt set, when one is declared."""
     if external_input_context is None:
         return [], None
-    from content.execution.campaign.external_inputs import (
+    from content.execution.source_pool.external_inputs import (
         PROFESSIONAL_VIDEO_ACQUISITION_KIND,
     )
 
@@ -168,7 +168,7 @@ def professional_image_specs_from_plan(
 
 
 def _professional_image_kind() -> str:
-    from content.execution.campaign.external_inputs import (
+    from content.execution.source_pool.external_inputs import (
         PROFESSIONAL_IMAGE_ACQUISITION_KIND,
     )
 

@@ -35,7 +35,11 @@ def _homepage_media_dispositions(root: Path) -> dict[str, list[dict[str, Any]]]:
     """Index runtime disposition evidence by immutable source-asset reference."""
 
     rows: dict[str, list[dict[str, Any]]] = {}
-    for path in sorted(root.glob("entities/*/*/*/evidence/media_dispositions.json")):
+    evidence_paths = [
+        *root.glob("entities/*/*/*/evidence/media_dispositions.json"),
+        *root.glob("posts/*/*/*/*/evidence/media_dispositions.json"),
+    ]
+    for path in sorted(evidence_paths):
         payload = read_json(path)
         for row in _mapping_rows(payload.get("assets")):
             source_asset_ref = str(row.get("sourceAssetRef") or "").strip()
@@ -146,10 +150,46 @@ def _media_report(
         )
     if include_fulfillment:
         issues.extend(fulfillment.scan_manifests(manifests))
+    source_meta_paths = (
+        list((root / "sources").glob("*/meta.json")) if root.is_dir() else []
+    )
+    zero_image_video_decision = False
+    if root.is_dir() and not checked_sources and include_decision and not include_fulfillment:
+        request_path = root / "0.plan/request.json"
+        try:
+            request = read_json(request_path) if request_path.is_file() else {}
+            source_metas = [read_json(path) for path in source_meta_paths]
+        except (OSError, ValueError, TypeError):
+            request = {}
+            source_metas = []
+        zero_image_video_decision = (
+            request.get("executionId") == execution_id
+            and request.get("carrier") == "video"
+            and bool(source_metas)
+            and all(
+                meta.get("researchLane") == "video"
+                and isinstance(meta.get("imagePlacements"), list)
+                and not meta["imagePlacements"]
+                and not [
+                    row
+                    for row in _mapping_rows(
+                        read_json(path.parent / "assets/index.json").get("assets")
+                        if (path.parent / "assets/index.json").is_file()
+                        else []
+                    )
+                    if Path(str(row.get("fileName") or "")).suffix.lower()
+                    in {".gif", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
+                ]
+                for path, meta in zip(source_meta_paths, source_metas, strict=True)
+                if isinstance(meta, Mapping)
+            )
+            and len(source_metas)
+            == sum(isinstance(meta, Mapping) for meta in source_metas)
+        )
     report = {
         "passed": (
             not issues
-            and checked_sources > 0
+            and (checked_sources > 0 or zero_image_video_decision)
             and (bool(manifests) or not include_fulfillment)
         ),
         "executionId": execution_id,
@@ -157,7 +197,7 @@ def _media_report(
         "checkedHomepageCount": len(manifests),
         "issues": [issue.as_dict() for issue in issues],
     }
-    if not checked_sources:
+    if not checked_sources and not zero_image_video_decision:
         report["issues"].append(
             _issue(
                 DataIssueCode.MEDIA_ENUMERATION_INCOMPLETE,

@@ -19,7 +19,7 @@ from typing import Any
 from core.io import read_json
 from core.schema import assert_valid
 from core.source_attribution import canonical_source_attribution
-from content.execution.campaign.lane import normalize_workloads
+from content.execution.planning.carrier_demand import normalize_workloads
 
 from content.source.media_source_admission import (
     MediaSourceAdmissionError,

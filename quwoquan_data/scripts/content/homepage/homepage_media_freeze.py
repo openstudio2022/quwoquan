@@ -139,6 +139,124 @@ def freeze_homepage_media_dispositions(
     )
 
 
+def _image_publish_admission_issue(image: Mapping[str, Any]) -> str:
+    """Return a stable exclusion reason, or an empty string when publishable."""
+    from core.image_safety import assess_image
+
+    verdict = assess_image(Path(str(image.get("path") or "")))
+    if verdict.blocks_image_publish:
+        return "safety:" + ("/".join(verdict.reasons) or verdict.status)
+    decision = str(image.get("distributionDecision") or "").strip()
+    if decision:
+        if decision not in {"research_allowed", "commercial_allowed"}:
+            return f"provenance:distributionDecision={decision or 'missing'}"
+    elif not all(
+        str(image.get(field) or "").strip()
+        for field in ("license", "collectionPageUrl", "authorizationProof", "usageScope")
+    ):
+        return "provenance:attribution_incomplete"
+    if str(image.get("acquisitionStatus") or "acquired").strip() not in {"", "acquired"}:
+        return "provenance:acquisition_not_completed"
+    if str(image.get("rightsStatus") or image.get("rightsAuditStatus") or "unverified").strip() in {
+        "blocked",
+        "restricted",
+        "rejected",
+    }:
+        return "provenance:rights_blocked"
+    return ""
+
+
+def freeze_image_media_dispositions(
+    execution_id: str,
+    target: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Freeze every indexed image for one image-post object at `1.download`."""
+    from content.execution.asset_registry import (
+        allocate_post_asset_id,
+        load_execution_asset_registry,
+    )
+    from content.execution.runtime_state import load_execution_runtime_state
+    from content.homepage.homepage_assets import write_homepage_media_dispositions
+    from content.source.source_assets import object_image_candidates
+    from core.paths import execution_post_object_dir
+
+    name = str(target.get("name") or "").strip()
+    angle = str(target.get("publishAngle") or "").strip()
+    title = str(target.get("publishTitle") or "").strip()
+    try:
+        sequence = int(target.get("publishSeq") or 1)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name}: image target publishSeq is invalid") from exc
+    if not name or not angle or not title or sequence <= 0:
+        raise ValueError(f"image target lacks frozen post coordinates: {dict(target)}")
+    object_dir = execution_post_object_dir(
+        execution_id, "image", angle, title, sequence
+    )
+    candidates = sorted(
+        object_image_candidates(object_dir, execution_id),
+        key=lambda row: str(row.get("sourceAssetRef") or ""),
+    )
+    runtime_state = load_execution_runtime_state(execution_id)
+    execution_sequence = int(runtime_state.execution_sequence if runtime_state else 0)
+    if execution_sequence <= 0:
+        raise ValueError(
+            f"{title}: cannot freeze image media without a bound execution sequence"
+        )
+    registry = load_execution_asset_registry(execution_id, execution_sequence)
+    records: list[HomepageMediaDisposition] = []
+    published_count = 0
+    object_ref = object_dir.relative_to(object_dir.parents[4]).as_posix()
+    for image in candidates:
+        source_asset_ref = str(image.get("sourceAssetRef") or "").strip()
+        exclusion = _image_publish_admission_issue(image)
+        if exclusion:
+            records.append(
+                HomepageMediaDisposition(
+                    source_asset_ref=source_asset_ref,
+                    source_asset_id=str(image.get("sourceAssetId") or "").strip(),
+                    disposition=HomepageAssetDisposition.POLICY_EXCLUDED,
+                    reason=exclusion,
+                )
+            )
+            continue
+        role = "cover" if published_count == 0 else "node"
+        disposition = (
+            HomepageAssetDisposition.COVER
+            if published_count == 0
+            else HomepageAssetDisposition.RELATED
+        )
+        asset_id = allocate_post_asset_id(
+            entity_name=name,
+            role=role,
+            ref=f"{object_ref}#{source_asset_ref}",
+            execution_sequence=execution_sequence,
+            registry=registry,
+            caption=str(image.get("caption") or ""),
+            ordinal=1,
+        )
+        records.append(
+            HomepageMediaDisposition(
+                source_asset_ref=source_asset_ref,
+                source_asset_id=str(image.get("sourceAssetId") or "").strip(),
+                asset_id=asset_id,
+                disposition=disposition,
+                reason="published",
+            )
+        )
+        published_count += 1
+    if published_count == 0:
+        raise ValueError(
+            f"DATA.MEDIA.PUBLISHABLE_SHORTFALL: {object_ref} has no safe, "
+            "provenance-admitted image"
+        )
+    return write_homepage_media_dispositions(
+        entity_dir=object_dir,
+        execution_id=execution_id,
+        object_ref=object_ref,
+        records=records,
+    )
+
+
 def frozen_publishable_images(
     execution_id: str,
     domain: str,
@@ -214,6 +332,7 @@ def frozen_disposition_by_source_asset(entity_dir: Path) -> dict[str, dict[str, 
 
 __all__ = [
     "freeze_homepage_media_dispositions",
+    "freeze_image_media_dispositions",
     "frozen_asset_id",
     "frozen_disposition_by_source_asset",
     "frozen_publishable_images",

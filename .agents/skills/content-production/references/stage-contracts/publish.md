@@ -56,7 +56,7 @@ python3 quwoquan_data/scripts/cli.py verify publish-closure
 - closure 报孤立 creator/media 或悬空引用 → 补齐被引用对象的 publish 或
   修正引用，重跑原子命令。
 
-按 [handoff-protocol.md](../handoff-protocol.md) 落 receipt。
+按 [handoff-protocol.md](../handoff-protocol.md) 执行 `task stage-open` → `task stage-gate` → `task stage-close`；宿主不填写 command 退出码、verdict 或 next。
 
 ## 交接（HANDOFF）
 

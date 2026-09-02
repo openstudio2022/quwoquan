@@ -121,7 +121,7 @@ def build_external_media_plan_context(
     )
     professional_image_index = None
     if professional_image_bound:
-        from content.execution.campaign.external_inputs import (
+        from content.execution.source_pool.external_inputs import (
             PROFESSIONAL_IMAGE_ACQUISITION_KIND,
         )
         from content.source.professional_image_acquisition_index import (

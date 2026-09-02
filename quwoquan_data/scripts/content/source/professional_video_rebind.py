@@ -353,7 +353,6 @@ def _rebind_one(
         "reviewedAt": str(result["reviewedAt"]),
         "reviewer": "host:" + str(result["actor"]["auditRunId"]),
         "reviewEvidence": {
-            "contractVersion": result["contractVersion"],
             "requestRef": request_ref,
             "requestDigest": request["requestDigest"],
             "resultRef": result_ref,

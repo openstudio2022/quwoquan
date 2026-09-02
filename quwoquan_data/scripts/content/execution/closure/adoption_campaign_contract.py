@@ -15,7 +15,7 @@ from core.source_digest import (
 )
 
 from content.execution.identity import parse_execution_id
-from content.execution.campaign.lane import normalize_active_carriers
+from content.execution.planning.carrier_demand import normalize_active_carriers
 from content.execution.closure.adoption_contract import (
     ReviewedClosureAdoptionError,
     canonical_digest,

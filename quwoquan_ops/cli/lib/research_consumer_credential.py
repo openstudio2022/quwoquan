@@ -101,9 +101,38 @@ def issue_research_consumer_credential(
     subject_hash = str((issuance or {}).get("subjectHash") or "").strip()
     attestation_token = str((issuance or {}).get("attestationId") or "").strip()
     expires_at = str((issuance or {}).get("expiresAt") or "").strip()
-    if not subject_hash or not attestation_token:
+    if not subject_hash or not attestation_token or not expires_at:
         raise ResearchConsumerCredentialError(
-            "research session issuance response lacks subjectHash/attestationId"
+            "research session issuance response lacks subjectHash/attestationId/expiresAt"
+        )
+    try:
+        readback = request_local_environment_json(
+            api_base,
+            path="/auth/research/session/attestation",
+            session=actor.session,
+            method="GET",
+            body=None,
+            headers={
+                "X-Research-Identity-Attestation": attestation_token,
+            },
+            timeout_seconds=timeout_seconds,
+        )
+    except LocalEnvironmentHTTPError as exc:
+        raise ResearchConsumerCredentialError(
+            f"research session attestation readback returned HTTP {exc.status}"
+        ) from exc
+    expected_readback = {
+        "subjectHash": subject_hash,
+        "attestationId": attestation_token,
+        "expiresAt": expires_at,
+    }
+    if not isinstance(readback, dict) or set(readback) != set(expected_readback):
+        raise ResearchConsumerCredentialError(
+            "research session attestation readback field set drifted"
+        )
+    if any(readback.get(field) != value for field, value in expected_readback.items()):
+        raise ResearchConsumerCredentialError(
+            "research session attestation readback drifted from issuance"
         )
     return {
         "apiBaseUrl": api_base,

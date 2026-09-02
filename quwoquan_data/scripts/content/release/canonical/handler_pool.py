@@ -9,10 +9,6 @@ from pathlib import Path
 from content.release.canonical.aggregate_release import build_pool_release
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from content.release.canonical.object_transaction_lock import canonical_publish_lock
-from content.release.canonical.pool_append import append_pool_batch, plan_pool_backfill
-from content.release.canonical.pool_attribution_repair import (
-    repair_pool_attribution,
-)
 from content.release.canonical.pool_delivery_intent_inspection import (
     inspect_pool_delivery_intents,
 )
@@ -23,12 +19,8 @@ from content.release.canonical.pool_source_ready_input import (
     load_p10_throughput,
     load_source_ready_input,
 )
-from content.release.canonical.semantic_wave_dispatch import (
-    SemanticWaveDispatchError,
-    write_create_once_semantic_wave_dispatch,
-)
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
-from content.execution.campaign.lane import normalize_workloads
+from content.execution.planning.carrier_demand import normalize_workloads
 
 
 def _workload_targets(values: tuple[str, ...]) -> dict[str, int] | None:
@@ -206,135 +198,6 @@ def handle_pool_inspect(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
-def handle_pool_dispatch(args: argparse.Namespace) -> None:
-    """Freeze candidate-backed standalone task requests without executing them."""
-
-    output_root = Path(OUTPUT_ROOT).resolve()
-    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
-    try:
-        predecessor_execution_ids: dict[str, str] = {}
-        for raw in getattr(args, "retry_predecessor", ()) or ():
-            slot_id, separator, execution_id = str(raw).partition("=")
-            slot_id = slot_id.strip()
-            execution_id = execution_id.strip()
-            if not separator or not slot_id or not execution_id:
-                raise ValueError(
-                    "--retry-predecessor must be SLOT_ID=EXECUTION_ID"
-                )
-            if slot_id in predecessor_execution_ids:
-                raise ValueError(
-                    f"duplicate --retry-predecessor slotId: {slot_id}"
-                )
-            predecessor_execution_ids[slot_id] = execution_id
-        predecessor_unfinished_refs: dict[str, list[str]] = {}
-        for raw in getattr(args, "retry_unfinished_ref", ()) or ():
-            slot_id, separator, object_ref = str(raw).partition("=")
-            slot_id = slot_id.strip()
-            object_ref = object_ref.strip()
-            if not separator or not slot_id or not object_ref:
-                raise ValueError(
-                    "--retry-unfinished-ref must be SLOT_ID=OBJECT_REF"
-                )
-            rows = predecessor_unfinished_refs.setdefault(slot_id, [])
-            if object_ref in rows:
-                raise ValueError(
-                    f"duplicate --retry-unfinished-ref for {slot_id}: {object_ref}"
-                )
-            rows.append(object_ref)
-        document, path = write_create_once_semantic_wave_dispatch(
-            dispatch_id=str(args.dispatch_id),
-            pool_inspection_ref=str(args.pool_inspection_ref),
-            semantic_preflight_receipt_ref=(
-                str(args.semantic_preflight_receipt)
-                if args.semantic_preflight_receipt
-                else None
-            ),
-            capacity_calibration_receipt_ref=str(
-                args.capacity_calibration_receipt
-            ),
-            run_date=str(args.run_date),
-            scope=str(args.scope),
-            region_ref=str(args.region_ref),
-            sequence_start=int(args.sequence_start),
-            predecessor_dispatch_ref=(
-                str(args.predecessor_dispatch_ref).strip()
-                if str(args.predecessor_dispatch_ref or "").strip()
-                else None
-            ),
-            predecessor_execution_ids=predecessor_execution_ids or None,
-            predecessor_unfinished_refs={
-                slot_id: tuple(refs)
-                for slot_id, refs in predecessor_unfinished_refs.items()
-            } or None,
-            workload_targets=_workload_targets(
-                tuple(getattr(args, "workload", ()) or ())
-            ),
-            output_root=output_root,
-            publish_root=publish_root,
-        )
-    except (
-        FileNotFoundError,
-        OSError,
-        SemanticWaveDispatchError,
-        TypeError,
-        ValueError,
-    ) as exc:
-        raise SystemExit(f"[release pool-dispatch] GATE_BLOCK {exc}") from exc
-    print(
-        json.dumps(
-            {
-                **document,
-                "manifestRef": path.relative_to(output_root).as_posix(),
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
-
-
-def handle_pool_backfill_plan(args: argparse.Namespace) -> None:
-    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
-    try:
-        report = plan_pool_backfill(publish_root=publish_root)
-    except (
-        FileNotFoundError,
-        OSError,
-        ObjectTransactionError,
-        TypeError,
-        ValueError,
-    ) as exc:
-        raise SystemExit(f"[release pool-backfill plan] GATE_BLOCK {exc}") from exc
-    print(json.dumps(report, ensure_ascii=False, indent=2))
-
-
-def handle_pool_append(args: argparse.Namespace) -> None:
-    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
-    input_path = Path(args.input).expanduser().resolve()
-    try:
-        if bool(args.apply):
-            with canonical_publish_lock(publish_root):
-                report = append_pool_batch(
-                    input_path=input_path,
-                    publish_root=publish_root,
-                    apply=True,
-                )
-        else:
-            report = append_pool_batch(
-                input_path=input_path,
-                publish_root=publish_root,
-                apply=False,
-            )
-    except (
-        FileNotFoundError,
-        OSError,
-        ObjectTransactionError,
-        TypeError,
-        ValueError,
-    ) as exc:
-        raise SystemExit(f"[release pool-append] GATE_BLOCK {exc}") from exc
-    print(json.dumps(report, ensure_ascii=False, indent=2))
-
-
 def handle_pool_object_retire(args: argparse.Namespace) -> None:
     """Write one create-once retirement receipt; never touch original evidence."""
 
@@ -370,48 +233,8 @@ def handle_pool_object_retire(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
-def handle_pool_attribution_repair(args: argparse.Namespace) -> None:
-    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
-    output_root = Path(OUTPUT_ROOT).resolve()
-    bindings_path = Path(args.bindings).expanduser().resolve()
-    try:
-        if bool(args.apply):
-            with canonical_publish_lock(publish_root):
-                report = repair_pool_attribution(
-                    publish_root=publish_root,
-                    output_root=output_root,
-                    bindings_path=bindings_path,
-                    source_pool_ref=str(args.source_pool_ref),
-                    evidence_root_ref=str(args.source_pool_evidence_root_ref),
-                    apply=True,
-                )
-        else:
-            report = repair_pool_attribution(
-                publish_root=publish_root,
-                output_root=output_root,
-                bindings_path=bindings_path,
-                source_pool_ref=str(args.source_pool_ref),
-                evidence_root_ref=str(args.source_pool_evidence_root_ref),
-                apply=False,
-            )
-    except (
-        FileNotFoundError,
-        OSError,
-        ObjectTransactionError,
-        TypeError,
-        ValueError,
-    ) as exc:
-        raise SystemExit(
-            f"[release pool-backfill repair-attribution] GATE_BLOCK {exc}"
-        ) from exc
-    print(json.dumps(report, ensure_ascii=False, indent=2))
-
 
 __all__ = [
-    "handle_pool_append",
-    "handle_pool_attribution_repair",
-    "handle_pool_backfill_plan",
-    "handle_pool_dispatch",
     "handle_pool_inspect",
     "handle_pool_object_retire",
     "handle_pool_release_build",

@@ -6,6 +6,7 @@ import ctypes
 import errno
 import fcntl
 import os
+import platform
 import secrets
 import stat
 import sys
@@ -17,8 +18,15 @@ sys.dont_write_bytecode = True
 
 DIRECTORY_MODE = 0o700
 FILE_MODE = 0o600
-_RENAME_SWAP = 0x00000002
-_RENAME_EXCL = 0x00000004
+_DARWIN_RENAME_SWAP = 0x00000002
+_DARWIN_RENAME_EXCL = 0x00000004
+_LINUX_RENAME_NOREPLACE = 0x00000001
+_LINUX_RENAME_EXCHANGE = 0x00000002
+_LINUX_RENAMEAT2_SYSCALLS = {
+    "aarch64": 276,
+    "arm64": 276,
+    "x86_64": 316,
+}
 Failpoint = Callable[[str], None]
 
 
@@ -502,11 +510,24 @@ def _write_complete(fd: int, content: bytes, failpoint: Failpoint | None) -> Non
 
 
 
+def _encoded_entry_name(name: str, label: str) -> bytes:
+    try:
+        encoded = os.fsencode(name)
+    except (TypeError, UnicodeEncodeError) as error:
+        raise StorageError(f"{label} is not a valid filesystem entry name") from error
+    if not encoded or b"\x00" in encoded:
+        raise StorageError(f"{label} is not a valid filesystem entry name")
+    return encoded
+
+
 def _darwin_renameatx_np(parent_fd: int, source: str, destination: str, flags: int) -> None:
     """Small testable wrapper around Darwin renameatx_np."""
     if sys.platform != "darwin":
         raise StorageError("platform lacks supported Darwin renameatx_np")
-    libc = ctypes.CDLL(None, use_errno=True)
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+    except (OSError, TypeError) as error:
+        raise StorageError("Darwin libc is unavailable") from error
     renameatx_np = getattr(libc, "renameatx_np", None)
     if renameatx_np is None:
         raise StorageError("Darwin renameatx_np is unavailable")
@@ -515,21 +536,85 @@ def _darwin_renameatx_np(parent_fd: int, source: str, destination: str, flags: i
     ]
     renameatx_np.restype = ctypes.c_int
     result = renameatx_np(
-        parent_fd, os.fsencode(source), parent_fd, os.fsencode(destination), flags,
+        parent_fd, _encoded_entry_name(source, "source"),
+        parent_fd, _encoded_entry_name(destination, "destination"), flags,
     )
     if result != 0:
         error_number = ctypes.get_errno()
         raise OSError(error_number, os.strerror(error_number), destination)
 
-def exclusive_publish_at(parent_fd: int, source: str, destination: str) -> None:
+
+def _linux_renameat2(parent_fd: int, source: str, destination: str, flags: int) -> None:
+    """Descriptor-relative Linux renameat2 with a fail-closed symbol/syscall path."""
+    if sys.platform != "linux":
+        raise StorageError("platform lacks supported Linux renameat2")
     try:
-        _darwin_renameatx_np(parent_fd, source, destination, _RENAME_EXCL)
-    except FileExistsError:
-        raise
-    except StorageError:
-        raise
-    except OSError:
-        raise
+        libc = ctypes.CDLL(None, use_errno=True)
+    except (OSError, TypeError) as error:
+        raise StorageError("Linux libc is unavailable") from error
+    source_bytes = _encoded_entry_name(source, "source")
+    destination_bytes = _encoded_entry_name(destination, "destination")
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is not None:
+        renameat2.argtypes = [
+            ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint,
+        ]
+        renameat2.restype = ctypes.c_int
+        result = renameat2(
+            parent_fd, source_bytes, parent_fd, destination_bytes, flags,
+        )
+    else:
+        syscall = getattr(libc, "syscall", None)
+        syscall_number = _LINUX_RENAMEAT2_SYSCALLS.get(platform.machine().lower())
+        if syscall is None or syscall_number is None:
+            raise StorageError("Linux renameat2 is unavailable for this architecture")
+        syscall.restype = ctypes.c_long
+        result = syscall(
+            ctypes.c_long(syscall_number), ctypes.c_int(parent_fd),
+            ctypes.c_char_p(source_bytes), ctypes.c_int(parent_fd),
+            ctypes.c_char_p(destination_bytes), ctypes.c_uint(flags),
+        )
+    if result != 0:
+        error_number = ctypes.get_errno()
+        if error_number == errno.ENOSYS:
+            raise StorageError("Linux renameat2 syscall is unavailable")
+        if error_number in {errno.EINVAL, errno.EOPNOTSUPP, errno.ENOTSUP}:
+            raise StorageError(
+                f"Linux renameat2 flags are unsupported: {os.strerror(error_number)}"
+            )
+        raise OSError(error_number, os.strerror(error_number), destination)
+
+
+def _exclusive_rename_at(parent_fd: int, source: str, destination: str) -> None:
+    if sys.platform == "darwin":
+        _darwin_renameatx_np(
+            parent_fd, source, destination, _DARWIN_RENAME_EXCL,
+        )
+        return
+    if sys.platform == "linux":
+        _linux_renameat2(
+            parent_fd, source, destination, _LINUX_RENAME_NOREPLACE,
+        )
+        return
+    raise StorageError(f"platform {sys.platform!r} lacks supported exclusive rename")
+
+
+def _exchange_rename_at(parent_fd: int, source: str, destination: str) -> None:
+    if sys.platform == "darwin":
+        _darwin_renameatx_np(
+            parent_fd, source, destination, _DARWIN_RENAME_SWAP,
+        )
+        return
+    if sys.platform == "linux":
+        _linux_renameat2(
+            parent_fd, source, destination, _LINUX_RENAME_EXCHANGE,
+        )
+        return
+    raise StorageError(f"platform {sys.platform!r} lacks supported exchange rename")
+
+
+def exclusive_publish_at(parent_fd: int, source: str, destination: str) -> None:
+    _exclusive_rename_at(parent_fd, source, destination)
 
 
 def publish_staged_event(lease: StorageLease, final_name: str, content: bytes, *, failpoint: Failpoint | None = None) -> None:
@@ -588,10 +673,10 @@ def replace_regular_at(lease: StorageLease, name: str, content: bytes, *, failpo
             destination_exists = True
             _close(existing_fd)
         if destination_exists:
-            _darwin_renameatx_np(lease.subject_fd, temporary_name, name, _RENAME_SWAP)
+            _exchange_rename_at(lease.subject_fd, temporary_name, name)
             os.unlink(temporary_name, dir_fd=lease.subject_fd)
         else:
-            _darwin_renameatx_np(lease.subject_fd, temporary_name, name, _RENAME_EXCL)
+            _exclusive_rename_at(lease.subject_fd, temporary_name, name)
         temporary_name = ""
         _fsync(lease.subject_fd, "subject directory")
         if failpoint is not None:

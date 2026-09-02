@@ -88,8 +88,7 @@ def test_prompt_snapshot_is_replayable_and_rejects_secret_vars(
         template_family="demo",
         variables={"name": "西湖"},
         rendered_prompt=prompt,
-        provider="cursor",
-        model="composer",
+        host_actor={"host": "external_host_agent", "role": "author"},
         run_id="run-1",
         output_refs=["4.draft/page.md"],
     )
@@ -98,6 +97,13 @@ def test_prompt_snapshot_is_replayable_and_rejects_secret_vars(
     assert prompt_snapshot.prompt_snapshot_issues(snapshot, prompt_path) == []
     assert_valid(snapshot, "execution", "prompt_snapshot")
     assert snapshot["templateRefs"]["partials"] == ["_shared/partials/common.md"]
+    assert snapshot["hostRuntime"] == "external_host_agent"
+    assert snapshot["hostActor"] == {
+        "host": "external_host_agent",
+        "role": "author",
+    }
+    assert "provider" not in snapshot
+    assert "model" not in snapshot
 
     with pytest.raises(ValueError, match="secret-like"):
         prompt_snapshot.build_prompt_snapshot(
@@ -106,8 +112,7 @@ def test_prompt_snapshot_is_replayable_and_rejects_secret_vars(
             template_family="demo",
             variables={"apiToken": "do-not-store"},
             rendered_prompt=prompt,
-            provider="cursor",
-            model="composer",
+            host_actor={"host": "external_host_agent", "role": "author"},
             run_id="run-2",
             output_refs=["4.draft/page.md"],
         )

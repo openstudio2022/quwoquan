@@ -13,6 +13,7 @@ from quwoquan_ops.cli.lib.target_uat_binding import (
     validate_target_uat_binding,
 )
 from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import (
+    ACCEPTANCE_PROFILES,
     ENVIRONMENTS,
     PREDECESSOR,
     PROD_ROLLOUT_STAGES,
@@ -207,18 +208,22 @@ def _require_status(payload: Mapping[str, Any], *, label: str, allowed: set[str]
         _block(_EVIDENCE, f"{label} is not ready: got {observed!r}")
 def _require_evidence_identity(
     payload: Mapping[str, Any], *, label: str, environment: str, target: str,
-    release_id: str, release_digest: str,
+    release_id: str, release_digest: str, import_run_id: str, verify_run_id: str,
 ) -> None:
     expected = {
         "environment": environment,
         "releaseId": release_id,
         "releaseDigest": release_digest,
+        "importRunId": import_run_id,
+        "verifyRunId": verify_run_id,
     }
     for field, value in expected.items():
         if payload.get(field) != value:
             _block(_EVIDENCE, f"{label} identity drifted at {field}")
     observed_target = payload.get("deploymentTarget", payload.get("target"))
     if observed_target != target:
+        _block(_EVIDENCE, f"{label} identity drifted at target")
+    if "target" in payload and payload.get("target") != target:
         _block(_EVIDENCE, f"{label} identity drifted at target")
 def _normalize_exact_ref(value: object, *, label: str) -> dict[str, str]:
     if not isinstance(value, Mapping) or set(value) != _EXACT_REF_KEYS:
@@ -250,7 +255,7 @@ def _binding_device_profile(binding: Mapping[str, Any]) -> str:
     return profile
 def required_raw_slot_id(
     *,
-    target_uat_binding_digest: str,
+    target_uat_binding_digest: str | None = None,
     sample_id: str,
     entry_surface: str,
     carrier: str,
@@ -258,15 +263,16 @@ def required_raw_slot_id(
     runner_identity: str,
 ) -> str:
     material = {
-        "targetUatBindingDigest": _digest(
-            target_uat_binding_digest, field="targetUatBindingDigest"
-        ),
         "sampleId": _identity(sample_id, field="sampleId"),
         "entrySurface": entry_surface,
         "carrier": carrier,
         "specRef": spec_ref,
         "runnerIdentity": runner_identity,
     }
+    if target_uat_binding_digest is not None:
+        material["targetUatBindingDigest"] = _digest(
+            target_uat_binding_digest, field="targetUatBindingDigest"
+        )
     return "sha256:" + hashlib.sha256(canonical_fact_bytes(material)).hexdigest()
 def _required_plan_cells(plan: Mapping[str, Any]) -> dict[tuple[str, str, str, str], dict[str, str]]:
     matrix = plan.get("entryCarrierCells")
@@ -317,10 +323,13 @@ def _fact_id_material(fact: Mapping[str, Any]) -> dict[str, Any]:
     predecessor = fact.get("predecessorAcceptance")
     return {
         "schema": fact.get("schema"),
+        "acceptanceProfile": fact.get("acceptanceProfile"),
         "environment": fact.get("environment"),
         "target": fact.get("target"),
         "releaseId": fact.get("releaseId"),
         "releaseDigest": fact.get("releaseDigest"),
+        "importRunId": fact.get("importRunId"),
+        "verifyRunId": fact.get("verifyRunId"),
         "samplePlanDigest": fact.get("samplePlanDigest"),
         "targetBindingDigests": sorted(
             (
@@ -519,7 +528,8 @@ def validate_predecessor_acceptance(
             _PREDECESSOR_BLOCKED, f"predecessor acceptance is invalid: {exc}"
         ) from exc
     if (
-        previous.get("environment") != expected
+        previous.get("acceptanceProfile") != "environment_promotion"
+        or previous.get("environment") != expected
         or previous.get("releaseId") != release_id
         or previous.get("releaseDigest") != release_digest
         or previous.get("factId") != normalized["factId"]
@@ -535,13 +545,24 @@ def validate_environment_acceptance_fact(
     fact = dict(payload)
     if fact.get("schema") != SCHEMA:
         _block(_INVALID, "schema is not EnvironmentAcceptanceFact v1")
+    acceptance_profile = _text(fact.get("acceptanceProfile"), field="acceptanceProfile")
+    if acceptance_profile not in ACCEPTANCE_PROFILES:
+        _block(_INVALID, "acceptanceProfile is unknown")
     fact_id = _digest(fact.get("factId"), field="factId")
     environment = _text(fact.get("environment"), field="environment")
     if environment not in ENVIRONMENTS:
         _block(_INVALID, "environment is unknown")
     target = _identity(fact.get("target"), field="target")
+    if acceptance_profile == "m1_api_consumer" and (
+        environment != "alpha" or target != "alpha-local"
+    ):
+        _block(_INVALID, "m1_api_consumer requires environment=alpha,target=alpha-local")
     release_id = _identity(fact.get("releaseId"), field="releaseId")
     release_digest = _digest(fact.get("releaseDigest"), field="releaseDigest")
+    import_run_id = _identity(fact.get("importRunId"), field="importRunId")
+    verify_run_id = _identity(fact.get("verifyRunId"), field="verifyRunId")
+    if import_run_id == verify_run_id:
+        _block(_INVALID, "importRunId and verifyRunId must be distinct invocation identities")
     _timestamp(fact.get("createdAt"), field="createdAt")
     _digest(fact.get("sourceFingerprint"), field="sourceFingerprint")
     plan_ref = _relative_ref(
@@ -550,12 +571,15 @@ def validate_environment_acceptance_fact(
     plan_digest = _digest(
         fact.get("samplePlanDigest"), field="samplePlanDigest"
     )
-    expected_profiles = _normalize_profiles(
-        required_target_profiles, label="required_target_profiles"
+    expected_profiles = (
+        _normalize_profiles(required_target_profiles, label="required_target_profiles")
+        if verify_references and acceptance_profile == "environment_promotion"
+        else set()
     )
     identity = {
         "environment": environment, "target": target,
         "release_id": release_id, "release_digest": release_digest,
+        "import_run_id": import_run_id, "verify_run_id": verify_run_id,
     }
     root = _absolute_real_root(evidence_root, label="evidence root")
     if not verify_references:
@@ -628,8 +652,12 @@ def validate_environment_acceptance_fact(
                 }
             )
     bindings = fact.get("targetBindingRefs")
-    if not isinstance(bindings, list) or not bindings:
-        _block(_INVALID, "targetBindingRefs must be non-empty")
+    if not isinstance(bindings, list):
+        _block(_INVALID, "targetBindingRefs must be an array")
+    if acceptance_profile == "environment_promotion" and not bindings:
+        _block(_INVALID, "environment_promotion targetBindingRefs must be non-empty")
+    if acceptance_profile == "m1_api_consumer" and bindings:
+        _block(_INVALID, "m1_api_consumer targetBindingRefs must be empty")
     binding_by_digest: dict[str, tuple[str, str, str]] = {}
     observed_profiles: set[tuple[str, str]] = set()
     seen_binding_refs: set[str] = set()
@@ -677,7 +705,7 @@ def validate_environment_acceptance_fact(
                 profile,
                 str(binding["provider"]["identity"]),
             )
-    if observed_profiles != expected_profiles:
+    if acceptance_profile == "environment_promotion" and observed_profiles != expected_profiles:
         _block(_EVIDENCE, "targetBindingRefs do not exactly cover required platform/device profiles")
     raw_results = fact.get("requiredRawResults")
     if not isinstance(raw_results, list) or not raw_results:
@@ -700,26 +728,46 @@ def validate_environment_acceptance_fact(
         observed_slots.add(slot_id)
         if verify_references:
             raw_result, _ = _load_exact(root, exact, label=label)
-            if raw_result.get("producer") != "app" or raw_result.get("layer") != "user_acceptance":
-                _block(_EVIDENCE, f"{label} is not a direct raw App ReadinessCaseResult")
+            if acceptance_profile == "environment_promotion":
+                if raw_result.get("producer") != "app" or raw_result.get("layer") != "user_acceptance":
+                    _block(_EVIDENCE, f"{label} is not a direct raw App ReadinessCaseResult")
+            elif raw_result.get("producer") != "service" or raw_result.get("layer") != "api_integration":
+                _block(_EVIDENCE, f"{label} is not a direct raw Service API integration result")
             if raw_result.get("status") != "passed":
                 _block(_EVIDENCE, f"{label} referenced raw status is not passed")
             _require_evidence_identity(raw_result, label=label, **identity)
-            binding_digest = raw_result.get("targetUatBindingDigest")
-            binding_digest = str(binding_digest)
-            profile = binding_by_digest.get(binding_digest)
-            if profile is None:
-                _block(_EVIDENCE, f"{label} targetUatBindingDigest is not directly listed")
-            platform, device_profile, provider_identity = profile
-            if (
-                raw_result.get("platform") != platform
-                or raw_result.get("uatProfile") != device_profile
-                or raw_result.get("provider") != provider_identity
-            ):
-                _block(
-                    _EVIDENCE,
-                    f"{label} platform/device profile/provider identity drifted",
-                )
+            binding_digest: str | None = None
+            if acceptance_profile == "environment_promotion":
+                binding_digest = str(raw_result.get("targetUatBindingDigest"))
+                profile = binding_by_digest.get(binding_digest)
+                if profile is None:
+                    _block(_EVIDENCE, f"{label} targetUatBindingDigest is not directly listed")
+                platform, device_profile, provider_identity = profile
+                if (
+                    raw_result.get("platform") != platform
+                    or raw_result.get("uatProfile") != device_profile
+                    or raw_result.get("provider") != provider_identity
+                ):
+                    _block(
+                        _EVIDENCE,
+                        f"{label} platform/device profile/provider identity drifted",
+                    )
+            else:
+                required_api_keys = {
+                    "entrySurface", "carrier", "specRef", "runnerIdentity", "objectId",
+                }
+                if any(not isinstance(raw_result.get(field), str) or not raw_result.get(field) for field in required_api_keys):
+                    _block(_EVIDENCE, f"{label} lacks direct API authority material")
+                forbidden_api_authority = {
+                    "targetUatBindingDigest", "platform", "uatProfile", "deviceId",
+                    "device", "app", "appArtifactDigest", "appPackageDigest",
+                }
+                present_forbidden = sorted(forbidden_api_authority & set(raw_result))
+                if present_forbidden:
+                    _block(
+                        _EVIDENCE,
+                        f"{label} m1_api_consumer must not bind App/device authority: {present_forbidden}",
+                    )
             cell_key = (
                 str(raw_result.get("entrySurface") or ""),
                 str(raw_result.get("carrier") or ""),
@@ -751,7 +799,7 @@ def validate_environment_acceptance_fact(
     if verify_references:
         expected_slots = {
             required_raw_slot_id(
-                target_uat_binding_digest=binding_digest,
+                target_uat_binding_digest=(binding_digest if acceptance_profile == "environment_promotion" else None),
                 sample_id=sample["sampleId"],
                 entry_surface=cell["entrySurface"],
                 carrier=cell["carrier"],
@@ -761,13 +809,18 @@ def validate_environment_acceptance_fact(
             for sample in plan_samples
             for cell in plan_cells.values()
             if sample["carrier"] == cell["carrier"]
-            for binding_digest, (platform, device_profile, _provider) in binding_by_digest.items()
-            if (platform, device_profile) in expected_profiles
+            for binding_digest, platform, device_profile in (
+                [(digest, values[0], values[1]) for digest, values in binding_by_digest.items()]
+                if acceptance_profile == "environment_promotion"
+                else [(None, None, None)]
+            )
+            if acceptance_profile == "m1_api_consumer" or (platform, device_profile) in expected_profiles
         }
         if observed_slots != expected_slots:
             missing = sorted(expected_slots - observed_slots)
             extra = sorted(observed_slots - expected_slots)
             _block(_EVIDENCE, f"required raw exact coverage drifted: missing={missing}, extra={extra}")
+    data_payload: dict[str, Any] | None = None
     exact_evidence = (
         ("dataReadiness", {"passed", "ready"}),
         ("lifecycleExit", {"Exit"}),
@@ -778,9 +831,25 @@ def validate_environment_acceptance_fact(
     for field, statuses in exact_evidence:
         exact = _normalize_exact_ref(fact.get(field), label=field)
         if verify_references:
-            _verify_common_evidence(
+            verified_payload = _verify_common_evidence(
                 root, exact, label=field, allowed_statuses=statuses, identity=identity
             )
+            if field == "dataReadiness":
+                data_payload = verified_payload
+    if verify_references:
+        if not isinstance(data_payload, Mapping):
+            _block(_EVIDENCE, "dataReadiness payload is unavailable")
+        envelope = data_payload.get("activationEnvelope")
+        if not isinstance(envelope, Mapping) or set(envelope) != {"importReportRef", "importReportDigest"}:
+            _block(_EVIDENCE, "dataReadiness activationEnvelope fields are invalid")
+        import_report = {
+            "ref": envelope.get("importReportRef"),
+            "digest": envelope.get("importReportDigest"),
+        }
+        _verify_common_evidence(
+            root, import_report, label="dataReadiness.importReport",
+            allowed_statuses={"imported", "passed", "ready"}, identity=identity,
+        )
     active = fact.get("activeCas")
     if not isinstance(active, Mapping) or set(active) != _ACTIVE_CAS_KEYS:
         _block(_INVALID, "activeCas fields are invalid")
@@ -810,17 +879,23 @@ def validate_environment_acceptance_fact(
         root, fact.get("prodReleaseFacts"), environment=environment,
         identity=identity, verify_references=verify_references,
     )
-    validate_predecessor_acceptance(
-        environment=environment,
-        predecessor_acceptance=fact.get("predecessorAcceptance"),
-        evidence_root=root, release_id=release_id, release_digest=release_digest,
-    )
+    if acceptance_profile == "m1_api_consumer":
+        if fact.get("predecessorAcceptance") is not None:
+            _block(_PREDECESSOR_BLOCKED, "m1_api_consumer must not provide predecessor acceptance")
+        if fact.get("prodReleaseFacts") is not None:
+            _block(_INVALID, "m1_api_consumer must not provide prodReleaseFacts")
+    else:
+        validate_predecessor_acceptance(
+            environment=environment,
+            predecessor_acceptance=fact.get("predecessorAcceptance"),
+            evidence_root=root, release_id=release_id, release_digest=release_digest,
+        )
     if derive_fact_id(fact) != fact_id:
         _block(_INVALID, "factId drifted from the authority digest collection")
     return fact
 def build_environment_acceptance_fact(
-    *, evidence_root: Path, environment: str, target: str, release_id: str,
-    release_digest: str, sample_plan_ref: str,
+    *, evidence_root: Path, acceptance_profile: str, environment: str, target: str, release_id: str,
+    release_digest: str, import_run_id: str, verify_run_id: str, sample_plan_ref: str,
     sample_plan_digest: str,
     target_binding_refs: Sequence[Mapping[str, Any]],
     required_raw_results: Sequence[Mapping[str, Any]],
@@ -836,10 +911,13 @@ def build_environment_acceptance_fact(
     fact: dict[str, Any] = {
         "schema": SCHEMA,
         "factId": "sha256:" + "0" * 64,
+        "acceptanceProfile": acceptance_profile,
         "environment": environment,
         "target": target,
         "releaseId": release_id,
         "releaseDigest": release_digest,
+        "importRunId": import_run_id,
+        "verifyRunId": verify_run_id,
         "samplePlanRef": sample_plan_ref,
         "samplePlanDigest": sample_plan_digest,
         "targetBindingRefs": [dict(item) for item in target_binding_refs],
@@ -983,18 +1061,16 @@ def load_environment_acceptance_fact(
     raw = _secure_read(evidence_root, ref, label="environmentAcceptanceFact")
     fact = _decode_json(raw, label="environmentAcceptanceFact")
     profiles = required_target_profiles
+    if verify_references and profiles is None:
+        _block(_INVALID, "required_target_profiles must be supplied by the caller authority")
     if profiles is None:
-        refs = fact.get("targetBindingRefs")
-        profiles = [
-            {"platform": item.get("platform"), "deviceProfile": item.get("deviceProfile")}
-            for item in refs
-        ] if isinstance(refs, list) else []
+        profiles = []
     validated = validate_environment_acceptance_fact(
         fact, evidence_root=evidence_root,
         required_target_profiles=profiles, verify_references=verify_references,
     )
     return validated, exact_byte_digest(raw)
-__all__ = ["ENVIRONMENTS", "PREDECESSOR", "PROD_ROLLOUT_STAGES", "SCHEMA", "SCHEMA_PATH",
+__all__ = ["ACCEPTANCE_PROFILES", "ENVIRONMENTS", "PREDECESSOR", "PROD_ROLLOUT_STAGES", "SCHEMA", "SCHEMA_PATH",
     "EnvironmentAcceptanceFactError", "build_environment_acceptance_fact", "canonical_fact_bytes", "create_environment_acceptance_fact", "derive_fact_id",
     "environment_acceptance_fact_relative_path", "exact_byte_digest", "load_environment_acceptance_fact", "required_raw_slot_id",
     "validate_environment_acceptance_fact", "validate_predecessor_acceptance", "write_environment_acceptance_fact"]

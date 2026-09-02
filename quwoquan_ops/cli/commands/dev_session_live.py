@@ -662,6 +662,7 @@ def _dev_session_resume_running_mutable_runtime(
         "composeDigest",
         "configurationDigest",
         "providerRuntimeDigest",
+        "observabilityLogSinkDigest",
         "portProfile",
         "portBlock",
         "publishedPorts",
@@ -701,6 +702,18 @@ def _dev_session_resume_running_mutable_runtime(
             path,
             label=f"running mutable execution Compose file {index}",
         )
+        source_refs = runtime_plan.get("composeFiles")
+        if not isinstance(source_refs, list) or len(source_refs) != len(execution_refs):
+            raise ValueError("running mutable source/execution Compose closure drifted")
+        if str(source_refs[index]) == (
+            "quwoquan_service/services/product-ops-service/deploy/"
+            "local-elasticsearch.compose.yaml"
+        ) and "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest() != str(
+            receipt["observabilityLogSinkDigest"]
+        ):
+            raise ValueError(
+                "running mutable observability log-sink composition drifted"
+            )
         services = compose.get("services")
         if services is not None and not isinstance(services, dict):
             raise ValueError("running mutable execution Compose services are invalid")

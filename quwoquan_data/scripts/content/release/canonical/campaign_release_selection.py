@@ -8,15 +8,15 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign.external_inputs import (
+from content.execution.source_pool.external_inputs import (
     content_source_revision,
     external_inputs_digest,
 )
-from content.execution.campaign.submission import campaign_root, load_submissions
-from content.execution.campaign.submission_reconciliation import (
+from content.release.canonical.campaign_submission_reader import campaign_root, load_submissions
+from content.release.canonical.campaign_reconciliation_reader import (
     load_reconciliation_reference,
 )
-from content.execution.campaign.submission_reconciliation_workload import (
+from content.release.canonical.campaign_reconciliation_reader import (
     campaign_root_for_submission,
 )
 from content.execution.closure.adoption_campaign_contract import (

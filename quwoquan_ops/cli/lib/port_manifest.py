@@ -19,6 +19,7 @@ REQUIRED_PLANES = ("edge", "media", "service", "dataDebug")
 PROFILE_CANONICAL_CONTAINER_PORT = "profileCanonical"
 HOST_PORT_VARIABLES_KEY = "composeHostPortVariables"
 UNOWNED_COMPOSE_SOURCES_KEY = "unownedComposeSources"
+RETIRED_COMPOSE_SOURCES_KEY = "retiredComposeSources"
 _ENVIRONMENT_VARIABLE_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 
 
@@ -90,27 +91,40 @@ def _host_port_variable_issues(
     return issues
 
 
-def _unowned_compose_source_issues(manifest: dict[str, Any]) -> list[str]:
-    """不受端口所有权模型管辖的 Compose 源，必须带理由声明在 manifest 里。
-
-    这类豁免原先只存在于门禁代码内，门禁同时是判据和自己的豁免出处 —— 那正是棘轮治理
-    要防的形态。声明位放在 manifest，门禁只读取。
-    """
-    declared = manifest.get(UNOWNED_COMPOSE_SOURCES_KEY)
+def _compose_source_adjudication_issues(
+    manifest: dict[str, Any],
+    *,
+    key: str,
+) -> list[str]:
+    declared = manifest.get(key)
     if declared is None:
-        return [f"{UNOWNED_COMPOSE_SOURCES_KEY} must be declared"]
+        return [f"{key} must be declared"]
     if not isinstance(declared, dict):
-        return [f"{UNOWNED_COMPOSE_SOURCES_KEY} must be a mapping"]
+        return [f"{key} must be a mapping"]
     issues: list[str] = []
     for name, reason in sorted(declared.items()):
         if not isinstance(name, str) or not name.strip():
-            issues.append(f"{UNOWNED_COMPOSE_SOURCES_KEY}: file name is invalid")
+            issues.append(f"{key}: file name is invalid")
             continue
         if not isinstance(reason, str) or not reason.strip():
-            issues.append(
-                f"{UNOWNED_COMPOSE_SOURCES_KEY}[{name}]: reason is required"
-            )
+            issues.append(f"{key}[{name}]: reason is required")
     return issues
+
+
+def _unowned_compose_source_issues(manifest: dict[str, Any]) -> list[str]:
+    """不受端口所有权模型管辖的 Compose 源，必须带理由声明在 manifest 里。"""
+    return _compose_source_adjudication_issues(
+        manifest,
+        key=UNOWNED_COMPOSE_SOURCES_KEY,
+    )
+
+
+def _retired_compose_source_issues(manifest: dict[str, Any]) -> list[str]:
+    """已从现役拓扑断开的 Compose 源必须单独声明，禁止混入永久豁免。"""
+    return _compose_source_adjudication_issues(
+        manifest,
+        key=RETIRED_COMPOSE_SOURCES_KEY,
+    )
 
 
 def validate_port_manifest(manifest: dict[str, Any]) -> list[str]:
@@ -132,6 +146,16 @@ def validate_port_manifest(manifest: dict[str, Any]) -> list[str]:
         return issues
     issues.extend(_host_port_variable_issues(manifest, roles))
     issues.extend(_unowned_compose_source_issues(manifest))
+    issues.extend(_retired_compose_source_issues(manifest))
+    unowned_sources = manifest.get(UNOWNED_COMPOSE_SOURCES_KEY)
+    retired_sources = manifest.get(RETIRED_COMPOSE_SOURCES_KEY)
+    if isinstance(unowned_sources, dict) and isinstance(retired_sources, dict):
+        overlap = sorted(set(unowned_sources) & set(retired_sources))
+        if overlap:
+            issues.append(
+                "Compose sources cannot be both unowned and retired: "
+                + ", ".join(overlap)
+            )
 
     for plane_name in REQUIRED_PLANES:
         plane = planes.get(plane_name)

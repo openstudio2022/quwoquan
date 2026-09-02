@@ -168,20 +168,39 @@ def _make_asset(
     execution_sequence: int,
     asset_registry: ExecutionAssetRegistry,
     verdict=None,
+    frozen_asset_id: str = "",
+    frozen_owner_ref: str = "",
 ) -> dict[str, Any]:
     path = candidate["path"]
     # 成品资产文件名即 assetId（可由 article.md 的 asset:// 直查文件，无需翻 manifest）。
     # owner ref 必须精确到单张源图：同一 post 内同实体同角色多图（gallery）
     # 若共享 owner key 会复用同一 assetId 导致文件互相覆盖。
-    asset_id = allocate_post_asset_id(
-        entity_name=entity_name,
-        role=role,
-        ref=f"{ref}#{candidate.get('sourceAssetRef') or path.name}",
-        execution_sequence=execution_sequence,
-        registry=asset_registry,
-        caption=caption,
-        ordinal=1,
-    )
+    owner_ref = frozen_owner_ref or f"{ref}#{candidate.get('sourceAssetRef') or path.name}"
+    if frozen_asset_id:
+        from content.execution.asset_registry import execution_asset_owner_key
+
+        owner_key = execution_asset_owner_key(
+            execution_sequence=execution_sequence,
+            entity_name=entity_name,
+            role=role,
+            ref=owner_ref,
+        )
+        if asset_registry.resolve(owner_key) != frozen_asset_id:
+            raise RuntimeError(
+                f"{ref}: frozen image assetId is not bound to its execution owner key: "
+                f"{candidate.get('sourceAssetRef') or path.name}"
+            )
+        asset_id = frozen_asset_id
+    else:
+        asset_id = allocate_post_asset_id(
+            entity_name=entity_name,
+            role=role,
+            ref=owner_ref,
+            execution_sequence=execution_sequence,
+            registry=asset_registry,
+            caption=caption,
+            ordinal=1,
+        )
     ext = path.suffix.lower() or ".jpg"
     asset = {
         "assetId": asset_id,
@@ -269,8 +288,15 @@ def _build_route_assets(
         raise RuntimeError(f"missing executionSequence for execution={execution_id}")
     asset_registry = load_execution_asset_registry(execution_id, execution_sequence)
     layouts = _image_plan_layouts(image_plan)
+    declared_carrier = str(brief.get("carrier") or "").lower()
     route_nodes = [node for node in (evidence_bundle.get("routeNodes") or []) if node.get("entityName")]
     entity_names = [str(node["entityName"]) for node in route_nodes]
+    if not entity_names and declared_carrier == "image":
+        entity_names = [
+            str(value).strip().strip("/").rsplit("/", 1)[-1]
+            for value in (brief.get("entityRefs") or [])
+            if str(value).strip().strip("/")
+        ]
     if not entity_names:
         return []
     ref_by_name = {str(node["entityName"]): str(node.get("entityRef") or "") for node in route_nodes}
@@ -283,7 +309,6 @@ def _build_route_assets(
     assets: list[dict[str, Any]] = []
     chosen: list[Path] = []
 
-    declared_carrier = str(brief.get("carrier") or "").lower()
     base_source_ref = ""
     if declared_carrier != "image":
         base_source_ref = str(brief.get("baseSourceRef") or "").strip()
@@ -292,69 +317,122 @@ def _build_route_assets(
         if _article_without_assets_allowed(brief):
             return []
     if declared_carrier == "image":
+        from content.homepage.homepage_media_freeze import (
+            frozen_disposition_by_source_asset,
+        )
+        from content.post.object_index import content_object_dir
+        from content.source.source_assets import object_image_candidates
+
         collection_id = str(brief.get("sourceCollectionId") or "").strip()
         declared_refs = {
-            str(ref).strip()
-            for ref in (brief.get("assetRefs") or [])
-            if str(ref).strip()
+            str(asset_ref).strip()
+            for asset_ref in (brief.get("assetRefs") or [])
+            if str(asset_ref).strip()
         }
-        candidates = [
-            candidate
+        object_dir = content_object_dir(execution_id, ref)
+        frozen_rows = frozen_disposition_by_source_asset(object_dir)
+        if not frozen_rows:
+            raise RuntimeError(f"{ref}: frozen image media dispositions are missing")
+        frozen_candidates: dict[str, dict[str, Any]] = {}
+        from core.paths import execution_root
+
+        object_ref = object_dir.relative_to(execution_root(execution_id)).as_posix()
+        frozen_owner_refs = {
+            source_asset_ref: f"{object_ref}#{source_asset_ref}"
+            for source_asset_ref in frozen_rows
+        }
+        for candidate in object_image_candidates(object_dir, execution_id):
+            source_asset_ref = str(candidate.get("sourceAssetRef") or "").strip()
+            if source_asset_ref:
+                frozen_candidates[source_asset_ref] = candidate
+        candidate_by_ref = {
+            str(candidate.get("sourceAssetRef") or "").strip(): candidate
             for rows in per_entity.values()
             for candidate in rows
-            if str(candidate.get("researchLane") or "") == "image"
-            and (
-                not collection_id
-                or str(candidate.get("sourceCollectionId") or "") == collection_id
-            )
-            and (
-                not declared_refs
-                or str(candidate.get("sourceAssetRef") or "") in declared_refs
-            )
-        ]
-        candidates.sort(key=lambda row: str(row.get("sourceAssetRef") or row.get("path") or ""))
+            if str(candidate.get("sourceAssetRef") or "").strip()
+        }
+        candidate_by_ref.update(frozen_candidates)
+        scoped_refs = declared_refs or set(frozen_rows)
         if declared_refs:
-            matched_refs = {str(candidate.get("sourceAssetRef") or "") for candidate in candidates}
-            missing_refs = sorted(declared_refs - matched_refs)
-            if missing_refs:
+            missing_decisions = sorted(declared_refs - set(frozen_rows))
+            if missing_decisions:
                 raise RuntimeError(
-                    f"{ref}: image assetRefs missing source assets {len(missing_refs)}/{len(declared_refs)}: "
-                    f"{missing_refs[:3]}"
+                    f"{ref}: image assetRefs missing frozen dispositions "
+                    f"{len(missing_decisions)}/{len(declared_refs)}: {missing_decisions[:3]}"
                 )
-        blocked_by_safety: list[str] = []
-        for position, candidate in enumerate(candidates[:20]):
-            verdict = assess_image(candidate["path"])
-            if verdict.status == STATUS_UNSAFE:
-                blocked_by_safety.append(
-                    f"{candidate.get('sourceAssetRef') or candidate.get('path')}:"
-                    f"{'/'.join(verdict.reasons) or verdict.status}"
+        non_publish_decisions = sorted(
+            source_asset_ref
+            for source_asset_ref in declared_refs
+            if str(frozen_rows[source_asset_ref].get("disposition") or "")
+            not in {"cover", "inline", "related"}
+        )
+        if non_publish_decisions:
+            raise RuntimeError(
+                f"{ref}: image assetRefs contain policy-excluded frozen decisions: "
+                f"{non_publish_decisions[:3]}"
+            )
+        extra_decisions = sorted(
+            source_asset_ref
+            for source_asset_ref, row in frozen_rows.items()
+            if source_asset_ref not in scoped_refs
+            and str(row.get("disposition") or "") in {"cover", "inline", "related"}
+        )
+        if extra_decisions:
+            raise RuntimeError(
+                f"{ref}: frozen publish dispositions exceed declared image assetRefs: "
+                f"{extra_decisions[:3]}"
+            )
+        publish_rows = [
+            (source_asset_ref, frozen_rows[source_asset_ref])
+            for source_asset_ref in sorted(scoped_refs)
+            if str(frozen_rows[source_asset_ref].get("disposition") or "")
+            in {"cover", "inline", "related"}
+        ]
+        candidates: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        for source_asset_ref, row in publish_rows:
+            candidate = candidate_by_ref.get(source_asset_ref)
+            if candidate is None or not Path(str(candidate.get("path") or "")).is_file():
+                raise RuntimeError(
+                    f"{ref}: frozen image disposition has no source candidate: {source_asset_ref}"
                 )
-                continue
-            chosen.append(candidate["path"])
+            if collection_id and str(candidate.get("sourceCollectionId") or "") != collection_id:
+                raise RuntimeError(
+                    f"{ref}: frozen image disposition crosses sourceCollectionId: {source_asset_ref}"
+                )
+            candidates.append((candidate, row))
+        if declared_refs and {
+            str(candidate.get("sourceAssetRef") or "") for candidate, _row in candidates
+        } != {
+            source_asset_ref
+            for source_asset_ref in declared_refs
+            if str(frozen_rows[source_asset_ref].get("disposition") or "")
+            in {"cover", "inline", "related"}
+        }:
+            raise RuntimeError(f"{ref}: frozen image disposition/candidate set drift")
+        for candidate, row in candidates:
+            disposition = str(row.get("disposition") or "")
+            role = "cover" if disposition == "cover" else "node"
             assets.append(
                 _make_asset(
                     ref,
-                    role="cover" if position == 0 else "node",
+                    role=role,
                     candidate=candidate,
                     layout="gallery",
                     caption=str(candidate.get("caption") or ""),
                     entity_name=entity_names[0],
                     execution_sequence=execution_sequence,
                     asset_registry=asset_registry,
-                    verdict=verdict,
+                    frozen_asset_id=str(row.get("assetId") or "").strip(),
+                    frozen_owner_ref=frozen_owner_refs[
+                        str(candidate.get("sourceAssetRef") or "").strip()
+                    ],
                 )
-            )
-        if declared_refs and len(assets) != len(declared_refs):
-            if blocked_by_safety:
-                raise RuntimeError(
-                    f"{ref}: image assetRefs blocked by image safety gate "
-                    f"{len(blocked_by_safety)}/{len(declared_refs)}: {blocked_by_safety[:3]}"
-                )
-            raise RuntimeError(
-                f"{ref}: image assetRefs resolved {len(assets)}/{len(declared_refs)}"
             )
         if not assets:
-            raise RuntimeError(f"{ref}: no safe image assets for collection {collection_id!r}")
+            raise RuntimeError(
+                f"{ref}: DATA.MEDIA.PUBLISHABLE_SHORTFALL: frozen image decisions "
+                "contain no publishable assets"
+            )
         collection_ids = {
             str(asset.get("sourceCollectionId") or "") for asset in assets
         }

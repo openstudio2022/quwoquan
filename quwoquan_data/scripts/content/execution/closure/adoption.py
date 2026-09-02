@@ -31,7 +31,7 @@ from content.execution.campaign.submission import (
     load_submissions,
     write_adoption_submission,
 )
-from content.execution.campaign.lane import normalize_active_carriers
+from content.execution.planning.carrier_demand import normalize_active_carriers
 from content.execution.campaign.workspace import (
     CampaignRuntimePaths,
     current_branch,

@@ -25,7 +25,6 @@ import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
-from urllib import error, request
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 from uuid import uuid4
 
@@ -45,6 +44,7 @@ from .local_environment_auth import (
 from .local_target_handoff import target_for_hostname
 from .output_paths import output_root
 from .public_domain_tls import root_certificate_path
+from . import research_isolation_runtime_probe_media as _media
 from .research_isolation_proof_document import (
     _DIGEST,
     _PROBE_ENVIRONMENTS,
@@ -81,48 +81,59 @@ def fetch_media_status(
     headers: Mapping[str, str] | None = None,
     timeout_seconds: float = 12.0,
 ) -> int:
-    """对一个媒体 URL 执行真实 GET 并返回 HTTP status（不解析 body）。
+    """经入口模块可补丁依赖执行媒体状态探针。"""
 
-    使用与身份链相同的 target root certificate；只读取少量字节以确认响应
-    已开始交付。media 探针只需要状态码证据，不需要完整媒体负载。
-    """
-
-    host = urlsplit(url).hostname
-    if not host:
-        raise ResearchIsolationProbeError(
-            "OPS.RESEARCH.PROBE_INPUT_INVALID",
-            "media probe URL has no hostname",
-        )
-    target_name = target_for_hostname(host)
-    if target_name is None:
-        raise ResearchIsolationProbeError(
-            "OPS.RESEARCH.PROBE_INPUT_INVALID",
-            "media probe URL is not a canonical local target",
-        )
-    ca_file = root_certificate_path(target_name)
-    if not ca_file.is_file() or ca_file.is_symlink():
-        raise ResearchIsolationProbeError(
-            "OPS.RESEARCH.PROBE_TRANSPORT_FAILED",
-            "media probe root certificate is unavailable",
-        )
-    context = ssl.create_default_context(cafile=str(ca_file))
-    opener = request.build_opener(
-        request.ProxyHandler({}),
-        request.HTTPSHandler(context=context),
+    return _media.fetch_media_status(
+        url,
+        headers=headers,
+        timeout_seconds=timeout_seconds,
+        target_resolver=target_for_hostname,
+        certificate_resolver=root_certificate_path,
     )
-    req = request.Request(url, headers=dict(headers or {}), method="GET")
-    try:
-        with opener.open(req, timeout=max(1.0, timeout_seconds)) as response:
-            response.read(1)
-            return int(response.status)
-    except error.HTTPError as exc:
-        return int(exc.code)
-    except Exception as exc:  # noqa: BLE001
-        raise ResearchIsolationProbeError(
-            "OPS.RESEARCH.PROBE_TRANSPORT_FAILED",
-            f"media probe transport failed: {type(exc).__name__}",
-        ) from exc
 
+
+def _fetch_media_bytes(
+    url: str,
+    *,
+    headers: Mapping[str, str] | None = None,
+    timeout_seconds: float = 12.0,
+    max_bytes: int,
+) -> tuple[int, bytes, str, str]:
+    """经入口模块可补丁依赖读取有界签名媒体字节。"""
+
+    return _media.fetch_media_bytes(
+        url,
+        headers=headers,
+        timeout_seconds=timeout_seconds,
+        max_bytes=max_bytes,
+        target_resolver=target_for_hostname,
+        certificate_resolver=root_certificate_path,
+    )
+
+
+def probe_release_bound_signed_media(
+    *,
+    api_base_url: str,
+    session: LocalAcceptanceSession,
+    asset: Mapping[str, Any],
+    attestation_token: str = "",
+    timeout_seconds: float = 12.0,
+) -> dict[str, Any]:
+    """签发 release 资产授权，并验证精确字节与视频 Range。"""
+
+    return _media.probe_release_bound_signed_media(
+        api_base_url=api_base_url,
+        session=session,
+        asset=asset,
+        attestation_token=attestation_token,
+        timeout_seconds=timeout_seconds,
+        request_json=request_local_environment_json,
+        fetch_bytes=_fetch_media_bytes,
+        identity_factory=new_probe_identity,
+        required_string=_required_string,
+        required_digest=_required_digest,
+        response_invalid=_response_invalid,
+    )
 
 def _perform_operation(
     *,
@@ -957,6 +968,7 @@ __all__ = [
     "collect_research_isolation_probe_segments",
     "fetch_media_status",
     "new_probe_identity",
+    "probe_release_bound_signed_media",
     "run_research_isolation_runtime_probe",
     "runtime_proof_output_path",
     "write_runtime_proof_create_once",

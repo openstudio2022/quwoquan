@@ -99,6 +99,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
             "composeDigest": _B,
             "configurationDigest": _C,
             "providerRuntimeDigest": _D,
+            "observabilityLogSinkDigest": "sha256:" + "9" * 64,
             "portProfile": "alpha-local",
             "portBlock": {"start": 17000, "end": 17999},
             "publishedPorts": [

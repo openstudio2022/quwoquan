@@ -15,15 +15,6 @@ from content.release.canonical.baseline_release import build_empty_baseline_rele
 from content.release.canonical.build_lookup_indexes import (
     build_publish_lookup_indexes,
 )
-from content.release.canonical.campaign_release import (
-    CampaignReleaseError,
-    CampaignReleaseRoots,
-    build_campaign_release,
-)
-from content.release.canonical.campaign_scale_evidence import (
-    CampaignScaleEvidenceError,
-    write_campaign_scale_evidence,
-)
 from content.release.canonical.commercial_transition import (
     CommercialTransitionError,
     write_commercial_transition,
@@ -39,10 +30,6 @@ from content.release.canonical.publish_execution import (
     handle_publish_execution,  # noqa: F401
 )
 from content.release.canonical.handler_pool import (
-    handle_pool_append,  # noqa: F401
-    handle_pool_attribution_repair,  # noqa: F401
-    handle_pool_backfill_plan,  # noqa: F401
-    handle_pool_dispatch,  # noqa: F401
     handle_pool_inspect,  # noqa: F401
     handle_pool_object_retire,  # noqa: F401
     handle_pool_precheck,  # noqa: F401
@@ -84,39 +71,6 @@ from core.io import read_json
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
 from core.release_layout import attestation_root
 from verify.verify_release_lifecycle import release_lifecycle_issues
-
-
-def handle_campaign_aggregate_release(args: argparse.Namespace) -> None:
-    output_root = Path(args.output_root or OUTPUT_ROOT).resolve()
-    roots = CampaignReleaseRoots(
-        output_root=output_root,
-        campaigns_root=(
-            output_root / "data/local/workspace/content-campaign-submissions"
-        ),
-        tasks_root=output_root / "data/tasks",
-        publish_root=PUBLISH_ROOT,
-        release_root=output_root / "data/releases",
-    )
-    try:
-        report = build_campaign_release(
-            root_execution_id=str(args.root_execution_id),
-            release_id=str(args.release_id),
-            release_class=str(args.release_class),
-            roots=roots,
-            target_environment=(
-                str(getattr(args, "target_environment", None))
-                if getattr(args, "target_environment", None) is not None
-                else None
-            ),
-        )
-    except (
-        CampaignReleaseError,
-        FileNotFoundError,
-        ObjectTransactionError,
-        ValueError,
-    ) as exc:
-        raise SystemExit(f"[release campaign-aggregate] GATE_BLOCK {exc}") from exc
-    print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
 def handle_release_contract_migration(args: argparse.Namespace) -> None:
@@ -525,45 +479,5 @@ def handle_gc_backfill_tombstones(args: argparse.Namespace) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
-def handle_campaign_scale_evidence(args: argparse.Namespace) -> None:
-    output_root = Path(args.output_root or OUTPUT_ROOT)
-    release_root = Path(args.release_root or (output_root / "data/releases"))
-    tasks_root = Path(args.tasks_root or (output_root / "data/tasks"))
-    try:
-        document, path = write_campaign_scale_evidence(
-            evidence_id=str(args.evidence_id),
-            release_id=str(args.release_id),
-            campaign_plan_path=Path(args.campaign_plan),
-            runtime_session_path=(
-                Path(args.runtime_session) if args.runtime_session else None
-            ),
-            calibration_preflight_receipt_path=Path(
-                args.calibration_preflight_receipt
-            ),
-            tasks_root=tasks_root,
-            release_root=release_root,
-            output_root=output_root,
-            target_scale=str(args.target_scale),
-            predecessor_promotion_path=(
-                Path(args.predecessor_promotion)
-                if args.predecessor_promotion
-                else None
-            ),
-        )
-    except (
-        CampaignScaleEvidenceError,
-        FileNotFoundError,
-        ObjectTransactionError,
-        TypeError,
-        ValueError,
-    ) as exc:
-        raise SystemExit(f"[release campaign-scale-evidence] GATE_BLOCK {exc}") from exc
-    print(
-        json.dumps(
-            {**document, "evidenceRef": path.relative_to(output_root).as_posix()},
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
 
 from content.release.canonical.handler_cli import register_parser  # noqa: F401

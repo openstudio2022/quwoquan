@@ -10,11 +10,11 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from content.execution.closure.pool_delivery import (
-    validate_pool_delivery_intent_for_job,
-    write_pool_delivery_intent,
-)
+from content.execution.closure.pool_delivery import write_pool_delivery_intent
 from content.execution.queue.reliabletask import jobs as reliable_jobs
+from content.execution.queue.reliabletask.publish import (
+    validate_pool_delivery_intent_for_job,
+)
 from content.release.canonical.object_source_identity import source_identity_digest
 from content.release.canonical.pool_delivery_intent_inspection import (
     inspect_pool_delivery_intents,

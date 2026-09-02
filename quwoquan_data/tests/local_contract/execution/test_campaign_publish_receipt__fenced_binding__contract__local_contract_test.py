@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 import pytest
-from content.execution.campaign.external_inputs import payload_digest
+from content.execution.source_pool.external_inputs import payload_digest
 from content.execution.campaign.receipt import (
     CampaignReceiptError,
     lane_receipt_path,

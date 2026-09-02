@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from content.execution.campaign.external_inputs import payload_digest
+from content.execution.source_pool.external_inputs import payload_digest
 from content.release.canonical.garbage_collection import plan_canonical_gc
 from content.release.canonical.garbage_collection_contract import (
     write_create_once_json,

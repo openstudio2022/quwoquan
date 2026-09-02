@@ -70,7 +70,21 @@ def handle_verify(args: argparse.Namespace) -> None:
 
         raise SystemExit(import_module(f"verify.{_NO_ARG_VERIFIER_MODULES[cmd]}").main())
     if cmd == "all":
-        handle_all()
+        output = getattr(args, "verify_all_output", None)
+        if output:
+            from verify.verify_all_receipt import (
+                VerifyAllReceiptError,
+                run_with_receipt,
+            )
+
+            try:
+                run_with_receipt(output=Path(output), run=handle_all)
+            except (OSError, TypeError, VerifyAllReceiptError) as exc:
+                raise SystemExit(
+                    f"[verify all] GATE_BLOCK DATA.VERIFY_ALL.RECEIPT_WRITE_FAILED: {exc}"
+                ) from exc
+        else:
+            handle_all()
         return
     if cmd == "rubric":
         handle_rubric(args)
@@ -84,6 +98,12 @@ def handle_verify(args: argparse.Namespace) -> None:
     if cmd == "promote-golden":
         handle_promote_golden(args)
         return
+    if cmd == "task-init-contract":
+        from verify.verify_task_init_contract import main as task_init_contract_main
+
+        raise SystemExit(
+            task_init_contract_main(["--execution-id", str(args.execution_id)])
+        )
     if cmd == "content-execution-layout":
         from verify.verify_content_execution_layout import main as execution_layout_main
 
@@ -241,7 +261,7 @@ def _run_static_gate(name: str, run: Callable[[], int | None]) -> tuple[str, int
     return name, int(result or 0)
 
 
-def handle_all() -> None:
+def handle_all() -> list[str]:
     """Run the repository-owned static Data gate through the one public CLI.
 
     Environment import/API/UAT proofs are intentionally not hidden here: they
@@ -257,6 +277,7 @@ def handle_all() -> None:
     from verify import verify_execution_identity_purity
     from verify import verify_output_root_isolation
     from verify import verify_publish_closure
+    from verify import verify_public_cli_live_import_zero
     from verify import verify_script_architecture
     from verify import verify_python_symbols
     from verify import verify_control_literals
@@ -280,6 +301,7 @@ def handle_all() -> None:
 
     gates = (
         ("cli-first", verify_cli_first.main),
+        ("public-cli-live-import-zero", lambda: verify_public_cli_live_import_zero.main([])),
         ("data-layout", verify_data_layout.main),
         ("script-architecture", verify_script_architecture.main),
         ("python-symbols", verify_python_symbols.main),
@@ -317,6 +339,7 @@ def handle_all() -> None:
     if failed:
         raise SystemExit(f"[verify all] FAIL: {', '.join(failed)}")
     print("[verify all] OK")
+    return [name for name, _run in gates]
 
 
 def handle_rubric(args: argparse.Namespace) -> None:
@@ -422,7 +445,17 @@ def handle_promote_golden(args: argparse.Namespace) -> None:
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("verify", help="Verify post packages (scoped)")
     sub = p.add_subparsers(dest="verify_command")
-    sub.add_parser("all", help="运行唯一的仓内 Data 静态门禁；环境闭环另行显式验证")
+    all_parser = sub.add_parser(
+        "all", help="运行唯一的仓内 Data 静态门禁；环境闭环另行显式验证"
+    )
+    all_parser.add_argument(
+        "--output",
+        dest="verify_all_output",
+        help=(
+            "可选 create-once PASS receipt；必须位于 "
+            ".qwq_output/data/local/runs/**"
+        ),
+    )
     p.add_argument("--execution-id", help="Execution ID (verify one runtime work package)")
     p.add_argument("--release", help="Release ID under release/")
     p.add_argument("--data-release-file", help="Verify immutable release <releaseId>/desired_state.json consistency")
@@ -468,7 +501,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("single-contract-source", help="校验内容供给生产契约只有一个无版本真源")
     sub.add_parser("works-classification", help="校验作品 vs 随记判定 schema/config/registry 一致性 + 判定 smoke")
     sub.add_parser("output-root-isolation", help="仓外输出根隔离门：repo allowlist/阶段树/批次轴/摘要索引")
-    cel = sub.add_parser("content-execution-layout", help="校验唯一 execution 工作包与五阶段目录")
+    task_init_contract = sub.add_parser(
+        "task-init-contract", help="校验 task init 的三文件 current work-package 合同"
+    )
+    task_init_contract.add_argument("--execution-id", required=True)
+    cel = sub.add_parser("content-execution-layout", help="校验历史 execution 工作包与对象阶段目录")
     cel.add_argument("--execution-id", help="只校验一个显式命名的 execution 工作包")
     per = sub.add_parser("execution-readiness", help="校验单个 execution 工作包的准出证据")
     per.add_argument("--execution-id", required=True)

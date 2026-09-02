@@ -561,6 +561,15 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 },
             }
 
+            release_uat_sample_plan = {
+                "schema": "quwoquan_data.release_uat_sample_plan",
+                "releaseId": "release-a",
+                "releaseDigest": manifest_digest,
+                "selectionEvidence": {
+                    "sourceIdentitySetDigest": "sha256:" + "d" * 64
+                },
+            }
+
             def preflight(args: object) -> dict[str, object]:
                 target = str(vars(args)["target"])
                 environment = target.removesuffix("-local")
@@ -593,6 +602,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     ),
                     "readinessReceiptDigest": "sha256:" + ordinal * 64,
                     "lifecycleExitRef": "",
+                    "releaseUatSamplePlan": release_uat_sample_plan,
                     "releaseUatSamplePlanRef": "uat/sample_plan.json",
                     "releaseUatSamplePlanDigest": sample_plan_digest,
                     "appUatPlan": uat_plan,
@@ -649,10 +659,10 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                         json.dumps(
                             {
                                 "status": "passed",
-                                "launchProvenance": "workspace_flutter_run",
+                                "launchProvenance": "canonical_launcher",
                                 "runtimeConfigSupplyMode": ("external_runtime_package"),
                                 "consumerLeaseId": "sha256:" + "7" * 64,
-                                "reportPath": "reports/workspace-flutter-run.json",
+                                "reportPath": "reports/canonical-hot-restart.json",
                             }
                         ),
                         "",
@@ -674,6 +684,11 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     uat,
                     "_app_content_readiness_path",
                     side_effect=lambda item: Path(str(item["readinessReceiptRef"])),
+                ),
+                patch.object(
+                    uat,
+                    "expected_app_uat_raw_coverage",
+                    return_value=16,
                 ),
                 patch.object(
                     stackctl,
@@ -722,11 +737,11 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 len(set(result["runtimeBindingDigests"].values())),
                 3,
             )
-            self.assertIn("no runtime evidence", result["details"][0])
-            # 三个 target 均执行 6 个页面 P0 suite；每环境另有 release
-            # probe + workspace Flutter run。
-            self.assertEqual(len(result["runs"]), 24)
-            self.assertEqual(run.call_count, 21)
+            self.assertIn("no raw result was written", result["details"][0])
+            # 三个 target 均执行 7 个页面 P0 suite（含 release-sample-matrix）；
+            # 每环境另有 release probe + canonical hot-restart run。
+            self.assertEqual(len(result["runs"]), 27)
+            self.assertEqual(run.call_count, 24)
             self.assertEqual(result["appUatPlan"], uat_plan)
             direct_calls = [
                 call
@@ -741,7 +756,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     str(stackctl.output_root().expanduser().resolve()),
                 )
                 self.assertIn("--launch-provenance", direct_argv)
-                self.assertIn("workspace_flutter_run", direct_argv)
+                self.assertIn("canonical_launcher", direct_argv)
                 self.assertNotIn("--launch-surface", direct_argv)
                 self.assertIn("--run-mode", direct_argv)
                 self.assertIn("content-live", direct_argv)
@@ -758,16 +773,16 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     direct_argv[cold_native_argument + 1],
                     "12000",
                 )
-            workspace_runs = [
+            hot_restart_runs = [
                 item
                 for item in result["runs"]
-                if item["suite"] == "workspace-flutter-run"
+                if item["suite"] == "canonical-hot-restart"
             ]
-            self.assertEqual(len(workspace_runs), 3)
-            for item in workspace_runs:
+            self.assertEqual(len(hot_restart_runs), 3)
+            for item in hot_restart_runs:
                 self.assertEqual(
                     item["launchProvenance"],
-                    "workspace_flutter_run",
+                    "canonical_launcher",
                 )
                 self.assertEqual(
                     item["runtimeConfigSupplyMode"],
@@ -951,6 +966,7 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     for call in smoke_profile.call_args_list
                 },
                 {
+                    "app-content-release-sample-matrix",
                     "app-content-homepage-feed",
                     "app-content-profile-journey",
                     "app-content-message-home",

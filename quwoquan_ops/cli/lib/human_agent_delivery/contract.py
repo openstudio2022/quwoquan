@@ -1,10 +1,15 @@
 """Human-Agent Delivery canonical machine contract loader and validator."""
 from __future__ import annotations
 
+import errno
+import os
+import re
+import stat
+from collections.abc import Mapping
 from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import yaml
 
@@ -12,9 +17,412 @@ CONTRACT_PATH = Path(__file__).resolve().parents[3] / "policies/human_agent_deli
 
 
 class ContractError(ValueError):
-    """Fail-closed contract validation error."""
+    """Fail-closed contract validation error with a stable causal category."""
 
     code = "HAD.CONTRACT_INVALID"
+
+    def __init__(
+        self,
+        detail: str,
+        *,
+        code: str | None = None,
+        causal_category: str = "contract_invalid",
+    ) -> None:
+        super().__init__(detail)
+        self.code = code or type(self).code
+        self.detail = detail
+        self.causal_category = causal_category
+
+
+_CANONICAL_WORKFLOW_SKILL_ROOT = ".agents/skills"
+_SKILL_FRONTMATTER = re.compile(
+    r"\A---(?:\r\n|\n)(?P<body>.*?)(?:\r\n|\n)---(?:(?:\r\n|\n)|\Z)",
+    re.DOTALL,
+)
+_DIRECTORY_FLAGS = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+_FILE_FLAGS = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+
+
+def _contract_error(
+    code: str,
+    causal_category: str,
+    detail: str,
+    error: BaseException | None = None,
+) -> ContractError:
+    failure = ContractError(detail, code=code, causal_category=causal_category)
+    if error is not None:
+        failure.__cause__ = error
+    return failure
+
+
+def _classify_io_error(
+    exc: OSError,
+    *,
+    label: str,
+    expected_type: str,
+    parent_fd: int | None = None,
+    name: str | os.PathLike[str] | None = None,
+) -> ContractError:
+    if isinstance(exc, PermissionError):
+        return _contract_error(
+            "HAD.SKILL_DISCOVERY_PERMISSION_DENIED",
+            "permission",
+            f"无权限访问 {label}",
+            exc,
+        )
+    is_symlink = exc.errno == errno.ELOOP
+    if not is_symlink and name is not None:
+        try:
+            metadata = (
+                os.stat(name, follow_symlinks=False)
+                if parent_fd is None
+                else os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            )
+            is_symlink = stat.S_ISLNK(metadata.st_mode)
+        except OSError:
+            pass
+    if is_symlink:
+        return _contract_error(
+            "HAD.SKILL_DISCOVERY_SYMLINK_FORBIDDEN",
+            "symlink",
+            f"{label} 不得为 symlink",
+            exc,
+        )
+    if isinstance(exc, (FileNotFoundError, NotADirectoryError, IsADirectoryError)):
+        return _contract_error(
+            "HAD.SKILL_DISCOVERY_PATH_TYPE_INVALID",
+            "path_type",
+            f"{label} 必须为 {expected_type}",
+            exc,
+        )
+    return _contract_error(
+        "HAD.SKILL_DISCOVERY_IO_FAILED",
+        "io",
+        f"无法访问 {label}: {exc}",
+        exc,
+    )
+
+
+def _secure_open_directory(
+    parent_fd: int | None,
+    name: str | os.PathLike[str],
+    *,
+    label: str,
+) -> int:
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    if not nofollow or not directory:
+        raise _contract_error(
+            "HAD.FILESYSTEM_PRIMITIVE_UNSUPPORTED",
+            "unsupported",
+            "workflow Skill 发现要求 O_NOFOLLOW/O_DIRECTORY",
+        )
+    flags = _DIRECTORY_FLAGS | nofollow | directory
+    try:
+        descriptor = (
+            os.open(name, flags)
+            if parent_fd is None
+            else os.open(name, flags, dir_fd=parent_fd)
+        )
+    except OSError as exc:
+        raise _classify_io_error(
+            exc,
+            label=label,
+            expected_type="真实 non-symlink directory",
+            parent_fd=parent_fd,
+            name=name,
+        ) from exc
+    try:
+        metadata = os.fstat(descriptor)
+    except OSError as exc:
+        os.close(descriptor)
+        raise _contract_error(
+            "HAD.SKILL_DISCOVERY_IO_FAILED",
+            "io",
+            f"无法核验 {label}",
+            exc,
+        ) from exc
+    if not stat.S_ISDIR(metadata.st_mode):
+        os.close(descriptor)
+        raise _contract_error(
+            "HAD.SKILL_DISCOVERY_PATH_TYPE_INVALID",
+            "path_type",
+            f"{label} 必须为真实 non-symlink directory",
+        )
+    return descriptor
+
+
+def _secure_open_absolute_directory(path: Path, *, label: str) -> int:
+    if not path.is_absolute():
+        raise _contract_error(
+            "HAD.SKILL_DISCOVERY_PATH_TYPE_INVALID",
+            "path_type",
+            f"{label} 必须为绝对路径",
+        )
+    descriptor = _secure_open_directory(None, path.anchor, label=f"{label} filesystem root")
+    try:
+        for component in path.parts[1:]:
+            next_descriptor = _secure_open_directory(
+                descriptor, component, label=f"{label} ancestor {component}",
+            )
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _secure_read_regular_file(
+    parent_fd: int,
+    name: str,
+    *,
+    label: str,
+) -> tuple[str, tuple[int, int, int, int, int, int, int]]:
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    nonblock = getattr(os, "O_NONBLOCK", 0)
+    if not nofollow:
+        raise _contract_error(
+            "HAD.FILESYSTEM_PRIMITIVE_UNSUPPORTED",
+            "unsupported",
+            "workflow Skill 读取要求 O_NOFOLLOW",
+        )
+    flags = _FILE_FLAGS | nofollow | nonblock
+    try:
+        descriptor = os.open(name, flags, dir_fd=parent_fd)
+    except OSError as exc:
+        raise _classify_io_error(
+            exc,
+            label=label,
+            expected_type="regular non-symlink file",
+            parent_fd=parent_fd,
+            name=name,
+        ) from exc
+    try:
+        try:
+            before = os.fstat(descriptor)
+            if not stat.S_ISREG(before.st_mode):
+                raise _contract_error(
+                    "HAD.SKILL_DISCOVERY_PATH_TYPE_INVALID",
+                    "path_type",
+                    f"{label} 必须为 regular non-symlink file",
+                )
+            chunks: list[bytes] = []
+            while True:
+                chunk = os.read(descriptor, 64 * 1024)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            after = os.fstat(descriptor)
+            content = b"".join(chunks)
+        except ContractError:
+            raise
+        except OSError as exc:
+            raise _contract_error(
+                "HAD.SKILL_DISCOVERY_IO_FAILED",
+                "io",
+                f"无法安全读取 {label}",
+                exc,
+            ) from exc
+        identity = lambda value: (
+            value.st_dev,
+            value.st_ino,
+            value.st_mode,
+            value.st_nlink,
+            value.st_size,
+            value.st_mtime_ns,
+            value.st_ctime_ns,
+        )
+        if identity(before) != identity(after) or len(content) != after.st_size:
+            raise _contract_error(
+                "HAD.SKILL_DISCOVERY_CONCURRENT_DRIFT",
+                "concurrent_drift",
+                f"{label} 在读取期间发生身份漂移",
+            )
+        try:
+            return content.decode("utf-8"), identity(after)
+        except UnicodeDecodeError as exc:
+            raise ContractError(f"{label} 必须为 UTF-8 文本") from exc
+    finally:
+        os.close(descriptor)
+
+
+def _directory_identity(descriptor: int, *, label: str) -> tuple[int, int, int, int, int]:
+    try:
+        metadata = os.fstat(descriptor)
+    except OSError as exc:
+        raise _contract_error(
+            "HAD.SKILL_DISCOVERY_IO_FAILED",
+            "io",
+            f"无法核验 {label}",
+            exc,
+        ) from exc
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _list_direct_children(skills_fd: int) -> tuple[str, ...]:
+    try:
+        return tuple(sorted(os.listdir(skills_fd)))
+    except OSError as exc:
+        raise _classify_io_error(
+            exc,
+            label="canonical workflow Skill root",
+            expected_type="readable directory",
+        ) from exc
+
+
+def _parse_workflow_skill(text: str, *, child_name: str, skill_label: str) -> str:
+    match = _SKILL_FRONTMATTER.match(text)
+    if match is None:
+        raise ContractError(f"{skill_label} 缺合法 frontmatter")
+    try:
+        frontmatter = yaml.safe_load(match.group("body"))
+    except yaml.YAMLError as exc:
+        raise ContractError(f"{skill_label} frontmatter YAML 非法") from exc
+    if not isinstance(frontmatter, dict):
+        raise ContractError(f"{skill_label} frontmatter 非 mapping")
+    metadata = frontmatter.get("metadata")
+    if not isinstance(metadata, dict):
+        raise ContractError(f"{skill_label} metadata 非 mapping")
+    if metadata.get("kind") != "workflow":
+        raise ContractError(f"{skill_label} metadata.kind 必须为 workflow")
+    name = frontmatter.get("name")
+    if not isinstance(name, str) or name != child_name:
+        raise ContractError(f"{skill_label} name 与目录不一致")
+    description = frontmatter.get("description")
+    if not isinstance(description, str) or not description.strip():
+        raise ContractError(f"{skill_label} description 必须为非空字符串")
+    return name
+
+
+def _workflow_skill_names(skill_root: object) -> tuple[str, ...]:
+    if skill_root != _CANONICAL_WORKFLOW_SKILL_ROOT:
+        raise ContractError(
+            f"workflow binding skill_root 必须精确为 {_CANONICAL_WORKFLOW_SKILL_ROOT}"
+        )
+    repo_root = CONTRACT_PATH.parents[2]
+    descriptors: list[int] = []
+    child_descriptors: dict[str, int] = {}
+    try:
+        repo_fd = _secure_open_absolute_directory(repo_root, label="repository root")
+        descriptors.append(repo_fd)
+        repo_identity = _directory_identity(repo_fd, label="repository root")
+        agents_fd = _secure_open_directory(repo_fd, ".agents", label=".agents")
+        descriptors.append(agents_fd)
+        skills_fd = _secure_open_directory(agents_fd, "skills", label=".agents/skills")
+        descriptors.append(skills_fd)
+        agents_identity = _directory_identity(agents_fd, label=".agents")
+        skills_identity = _directory_identity(skills_fd, label=".agents/skills")
+        child_names_before = _list_direct_children(skills_fd)
+
+        names: list[str] = []
+        opened_identities: dict[str, tuple[int, int, int, int, int]] = {}
+        skill_file_identities: dict[str, tuple[int, int, int, int, int, int, int]] = {}
+        for child_name in child_names_before:
+            child_label = f".agents/skills/{child_name}"
+            child_fd = _secure_open_directory(skills_fd, child_name, label=child_label)
+            child_descriptors[child_name] = child_fd
+            opened_identities[child_name] = _directory_identity(child_fd, label=child_label)
+            skill_label = f"{child_label}/SKILL.md"
+            text, skill_identity = _secure_read_regular_file(
+                child_fd, "SKILL.md", label=skill_label,
+            )
+            skill_file_identities[child_name] = skill_identity
+            names.append(
+                _parse_workflow_skill(
+                    text, child_name=child_name, skill_label=skill_label,
+                )
+            )
+
+        current_repo_fd = _secure_open_absolute_directory(
+            repo_root, label="repository root",
+        )
+        try:
+            if (
+                _directory_identity(current_repo_fd, label="repository root")
+                != repo_identity
+            ):
+                raise _contract_error(
+                    "HAD.SKILL_DISCOVERY_CONCURRENT_DRIFT",
+                    "concurrent_drift",
+                    "repository root 在 workflow Skill 发现期间发生身份替换",
+                )
+            current_agents_fd = _secure_open_directory(
+                current_repo_fd, ".agents", label=".agents",
+            )
+            try:
+                if (
+                    _directory_identity(current_agents_fd, label=".agents")
+                    != agents_identity
+                ):
+                    raise _contract_error(
+                        "HAD.SKILL_DISCOVERY_CONCURRENT_DRIFT",
+                        "concurrent_drift",
+                        ".agents 在 workflow Skill 发现期间发生身份替换",
+                    )
+                current_skills_fd = _secure_open_directory(
+                    current_agents_fd, "skills", label=".agents/skills",
+                )
+                try:
+                    child_names_after = _list_direct_children(current_skills_fd)
+                    if child_names_after != child_names_before:
+                        raise _contract_error(
+                            "HAD.SKILL_DISCOVERY_CONCURRENT_DRIFT",
+                            "concurrent_drift",
+                            "workflow Skill direct-child 集合在发现期间发生增删或替换",
+                        )
+                    if (
+                        _directory_identity(current_skills_fd, label=".agents/skills")
+                        != skills_identity
+                    ):
+                        raise _contract_error(
+                            "HAD.SKILL_DISCOVERY_CONCURRENT_DRIFT",
+                            "concurrent_drift",
+                            "workflow Skill root 在发现期间发生身份替换",
+                        )
+                    for child_name in child_names_before:
+                        child_label = f".agents/skills/{child_name}"
+                        current_fd = _secure_open_directory(
+                            current_skills_fd, child_name, label=child_label,
+                        )
+                        try:
+                            current_identity = _directory_identity(
+                                current_fd, label=child_label,
+                            )
+                            _, current_skill_identity = _secure_read_regular_file(
+                                current_fd, "SKILL.md", label=f"{child_label}/SKILL.md",
+                            )
+                        finally:
+                            os.close(current_fd)
+                        if (
+                            current_identity != opened_identities[child_name]
+                            or current_skill_identity != skill_file_identities[child_name]
+                        ):
+                            raise _contract_error(
+                                "HAD.SKILL_DISCOVERY_CONCURRENT_DRIFT",
+                                "concurrent_drift",
+                                f"{child_label} 在发现期间发生身份替换",
+                            )
+                finally:
+                    os.close(current_skills_fd)
+            finally:
+                os.close(current_agents_fd)
+        finally:
+            os.close(current_repo_fd)
+        if not names:
+            raise ContractError("skill_root 未发现 Workflow Skill")
+        return tuple(names)
+    finally:
+        for descriptor in reversed(tuple(child_descriptors.values())):
+            os.close(descriptor)
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
 
 
 @lru_cache(maxsize=1)
@@ -185,7 +593,6 @@ def validate_contract(value: object) -> None:
     ):
         raise ContractError("Human calibration authority/source semantics 漂移")
     session_schema = schemas["human_calibration_session"]
-    observation_schema = schemas["human_calibration_observation"]
     readback_schema = schemas["human_calibration_readback"]
     if session_schema.get("free_text_allowed") is not False:
         raise ContractError("Human calibration 不得保存自由文本")
@@ -272,25 +679,27 @@ def validate_contract(value: object) -> None:
     ):
         raise ContractError("Cursor/Codex harness projection 必须显式校验且同源")
     workflow = value.get("workflow_interaction_binding")
-    expected_skills = [
-        "commit", "content-production", "continue", "design", "dev", "distill",
-        "environment-ops", "explore", "incident-inspection", "plan-next", "prd", "review",
-    ]
-    if not isinstance(workflow, dict) or workflow.get("required_skills") != expected_skills:
-        raise ContractError("角色交互 workflow binding 必须覆盖 12 份 canonical Skill")
-    if workflow.get("natural_language_and_explicit_skill_same_track") is not True:
-        raise ContractError("自然语言与显式 Skill 必须同轨")
+    if not isinstance(workflow, dict):
+        raise ContractError("缺 workflow_interaction_binding")
+    expected_workflow_fields = {
+        "canonical_projector", "skill_root", "required_phases",
+        "required_binding_fields", "dynamic_audience_role", "bindings",
+    }
+    if set(workflow) != expected_workflow_fields:
+        raise ContractError("workflow interaction binding 字段闭包漂移")
     if workflow.get("canonical_projector") != "quwoquan_ops/cli/lib/human_agent_delivery/projection.py#project_role_interaction":
         raise ContractError("workflow binding 必须使用 canonical projector")
+    skill_names = _workflow_skill_names(workflow.get("skill_root"))
     bindings = workflow.get("bindings")
-    if not isinstance(bindings, dict) or set(bindings) != set(expected_skills):
-        raise ContractError("workflow binding 覆盖漂移")
+    if not isinstance(bindings, dict) or set(bindings) != set(skill_names):
+        raise ContractError("workflow bindings 必须动态覆盖 skill_root 的 Workflow Skill 闭包")
     phases = workflow.get("required_phases")
     fields = workflow.get("required_binding_fields")
     if phases != ["PRE", "DURING", "POST"] or fields != ["phase", "event_type", "delivery_stage", "audience_role"]:
         raise ContractError("workflow binding phase/field 契约漂移")
-    for skill, skill_bindings in bindings.items():
-        if not isinstance(skill_bindings, list) or len(skill_bindings) != 3:
+    for skill in skill_names:
+        skill_bindings = bindings[skill]
+        if not isinstance(skill_bindings, list) or len(skill_bindings) != len(phases):
             raise ContractError(f"{skill} 必须声明 PRE/DURING/POST 三段交互")
         if [item.get("phase") for item in skill_bindings if isinstance(item, dict)] != phases:
             raise ContractError(f"{skill} 交互 phase 漂移")

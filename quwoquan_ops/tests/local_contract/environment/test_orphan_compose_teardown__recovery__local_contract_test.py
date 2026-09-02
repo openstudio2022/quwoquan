@@ -18,6 +18,7 @@ candidate 客观不可用时的合法拆除见
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 from subprocess import CompletedProcess
@@ -139,6 +140,229 @@ def test_repair_plans_without_mutation_then_consumes_only_after_confirmation(
             {"role": "api-edge", "hostPort": 17000, "protocol": "tcp"},
         ]
     ]
+
+
+def test_stale_mutable_receipt_plan_and_confirmation_seal_exact_resources_then_allow_receipt_reclaim(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    project = "quwoquan_alpha_test_live"
+    stale_receipt = {
+        "schema": "stackctl.mutable_test_live_startup_attempt",
+        "launchPolicy": "test_live",
+        "nonPromotable": True,
+        "environment": "alpha",
+        "target": "alpha-local",
+        "status": "running",
+        "workload": "full",
+        "composeProject": project,
+        "attemptId": "test-live-observability-stale",
+        "retiredGeneration": "pre-observability-log-sink-digest",
+    }
+    monkeypatch.setattr(stackctl, "load_startup_attempt", lambda _target: None)
+    monkeypatch.setattr(
+        stackctl,
+        "load_test_live_startup_attempt",
+        lambda _target: (_ for _ in ()).throw(
+            ValueError("test-live startup receipt fields mismatch")
+        ),
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "read_stale_test_live_startup_attempt",
+        lambda _target: dict(stale_receipt),
+    )
+    discovery_calls: list[str] = []
+    monkeypatch.setattr(
+        contract,
+        "discover_exact_project",
+        lambda **kwargs: discovery_calls.append(str(kwargs["target"])) or project,
+    )
+    snapshot = multi_sample(project=project)
+    samples = iter((snapshot, snapshot, post_sample(snapshot)))
+    sampled_projects: list[str] = []
+
+    def sample_snapshot(**kwargs: object) -> dict[str, object]:
+        sampled_projects.append(str(kwargs["project"]))
+        return next(samples)
+
+    monkeypatch.setattr(contract, "sample_snapshot", sample_snapshot)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        stackctl,
+        "run",
+        lambda argv: commands.append(list(argv))
+        or CompletedProcess(argv, 0, "removed", ""),
+    )
+    path = tmp_path / "orphaned-compose-teardown-attestation.json"
+
+    planned = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=False),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert planned["exitCode"] == 0
+    assert discovery_calls == ["alpha-local"]
+    assert commands == []
+    plan = json.loads((report_dir / "repair_plan.json").read_text(encoding="utf-8"))
+    assert plan["project"] == project
+    assert plan["projectKind"] == "mutable_test_live"
+    assert plan["containerIds"] == [CONTAINER_ID, SECOND_CONTAINER_ID]
+    assert plan["networkIds"] == [NETWORK_ID, SECOND_NETWORK_ID]
+    assert plan["preservedVolumeNames"] == [f"{project}_mongo-data"]
+    attestation = contract.load_attestation(
+        path,
+        allowed_root=tmp_path,
+        expected_target="alpha-local",
+    )
+    assert attestation["project"] == project
+    assert "projectKind" not in attestation
+
+    confirmed = stackctl._repair_orphaned_compose(
+        repair_args(path, confirm=True),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert confirmed["exitCode"] == 0
+    assert sampled_projects == [project, project, project]
+    assert commands == [
+        ["docker", "rm", "--force", CONTAINER_ID],
+        ["docker", "rm", "--force", SECOND_CONTAINER_ID],
+        ["docker", "network", "rm", NETWORK_ID],
+        ["docker", "network", "rm", SECOND_NETWORK_ID],
+    ]
+    consumption = json.loads(
+        path.with_name("orphaned-compose-teardown-consumption.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert consumption["preservedVolumeNames"] == [f"{project}_mongo-data"]
+
+    monkeypatch.setattr(stackctl, "_mutable_test_live_container_ids", lambda _project: [])
+    monkeypatch.setattr(
+        stackctl,
+        "_mutable_test_live_resource_names",
+        lambda kind, *, compose_project: (
+            [f"{project}_mongo-data"] if kind == "volume" else []
+        ),
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "_runtime_owned_port_occupancy_report",
+        lambda _target, **_kwargs: {"publishedEndpoints": []},
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "test_live_startup_attempt_path",
+        lambda _target: tmp_path / "process/test_live_startup_attempt.json",
+    )
+    reclaimed: list[str] = []
+    monkeypatch.setattr(
+        stackctl,
+        "reclaim_stale_test_live_startup_attempt",
+        lambda target: reclaimed.append(target) or dict(stale_receipt),
+    )
+    stale_report_dir = tmp_path / "stale-receipt-report"
+    stale_report_dir.mkdir()
+    stale_result = stackctl._repair_stale_test_live_receipt(
+        argparse.Namespace(
+            target="alpha-local",
+            fix="reclaim-stale-test-live-receipt",
+            confirm_stale_test_live_receipt_reclaim=True,
+        ),
+        environment="alpha",
+        report_dir=stale_report_dir,
+    )
+
+    assert stale_result["exitCode"] == 0
+    assert reclaimed == ["alpha-local"]
+
+
+def test_stale_mutable_receipt_project_mismatch_blocks_before_docker(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    stale = {
+        "schema": "stackctl.mutable_test_live_startup_attempt",
+        "launchPolicy": "test_live",
+        "nonPromotable": True,
+        "environment": "alpha",
+        "target": "alpha-local",
+        "status": "running",
+        "workload": "full",
+        "composeProject": "quwoquan_beta_test_live",
+        "attemptId": "test-live-foreign-project",
+    }
+    monkeypatch.setattr(stackctl, "load_startup_attempt", lambda _target: None)
+    monkeypatch.setattr(
+        stackctl,
+        "load_test_live_startup_attempt",
+        lambda _target: (_ for _ in ()).throw(
+            ValueError("test-live startup receipt fields mismatch")
+        ),
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "read_stale_test_live_startup_attempt",
+        lambda _target: stale,
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "run",
+        lambda _argv: (_ for _ in ()).throw(
+            AssertionError("foreign stale receipt must block before Docker")
+        ),
+    )
+
+    result = stackctl._repair_orphaned_compose(
+        repair_args(
+            tmp_path / "orphaned-compose-teardown-attestation.json",
+            confirm=False,
+        ),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert result["exitCode"] == 2
+    assert "bounded replacement boundary" in result["details"][0]
+
+
+def test_unreadable_unsafe_mutable_receipt_never_falls_back_to_untrusted_read(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    report_dir = install_stackctl_fakes(monkeypatch, tmp_path)
+    monkeypatch.setattr(stackctl, "load_startup_attempt", lambda _target: None)
+    monkeypatch.setattr(
+        stackctl,
+        "load_test_live_startup_attempt",
+        lambda _target: (_ for _ in ()).throw(
+            stackctl.UnsafeTestLiveStartupReceiptPath("symlink receipt")
+        ),
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "read_stale_test_live_startup_attempt",
+        lambda _target: (_ for _ in ()).throw(
+            AssertionError("unsafe receipt must not be decoded through fallback")
+        ),
+    )
+
+    result = stackctl._repair_orphaned_compose(
+        repair_args(
+            tmp_path / "orphaned-compose-teardown-attestation.json",
+            confirm=False,
+        ),
+        environment="alpha",
+        report_dir=report_dir,
+    )
+
+    assert result["exitCode"] == 2
+    assert "symlink receipt" in result["details"][0]
 
 
 def test_receipt_and_attestation_project_conflict_blocks_before_docker_or_transition(

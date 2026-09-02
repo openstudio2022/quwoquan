@@ -8,5 +8,5 @@
 
 读 `.agents/skills/content-production/SKILL.md`。对 `<executionId>` 按
 `references/recovery.md` 判定表定位断点。只执行**一个**阶段的做前（PRE）/
-做中（DURING）/做后（POST）。通过后调 `task stage-record` 落 receipt 并退出 0。
+做中（DURING）/做后（POST）。通过后依次调用 `task stage-gate` 与 `task stage-close`，由 authority 派生 receipt 后退出 0。
 blocked 时落 `verdict=blocked` receipt 后退出 2。不要开始下一个阶段。

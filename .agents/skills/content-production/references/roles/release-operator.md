@@ -10,6 +10,6 @@
   逐 execution 过 `verify execution-readiness` 后串行执行。
 - **输出**：canonical 增量、release、环境导入回执与 UAT 结果；ship pass
   receipt 是 execution `succeeded` 的唯一合法来源。
-- **receipt actor**：`host` + `modelFamily` + `sessionId`。
+- **receipt actor**：`host` + `sessionId` + `modelFamily` + `invocation{provider,model,runId}`。
 - **禁止**：修改 canonical 历史；dual-read 或旧路径 fallback；跳过幂等导入
   与回滚重放证据；手拷文件进 publish/release 目录。

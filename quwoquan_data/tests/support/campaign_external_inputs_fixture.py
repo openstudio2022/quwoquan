@@ -10,7 +10,7 @@ import io
 from pathlib import Path
 
 import pytest
-from content.execution.campaign.external_inputs import (
+from content.execution.source_pool.external_inputs import (
     bind_external_input_refs,
     content_source_revision,
 )

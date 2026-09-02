@@ -198,11 +198,12 @@ def _prior_rebindable_physical_inputs(
                 request = load_document(
                     request_path,
                     group="source",
-                    name="professional_image_supported_api_review_request",
+                    name="host_source_review_request",
                 )
+                asset_binding = request["assetBinding"]
                 if (
-                    request["contentSha256"] != evidence["contentSha256"]
-                    or request["originalAssetSha256"] != file_sha256(asset_path)
+                    asset_binding["contentSha256"] != evidence["contentSha256"]
+                    or asset_binding["fileSha256"] != file_sha256(asset_path)
                 ):
                     continue
                 provider_asset_id = str(evidence["providerAssetId"])
@@ -223,11 +224,14 @@ def _assert_rebindable_provenance(
     request: Mapping[str, Any],
 ) -> None:
     """Fail closed when a matching provider asset changed source, rights, or entity."""
+    entity_binding = request.get("entityBinding") or {}
     checks = {
         "provider": (candidate["provider"], evidence["provider"]),
         "providerAssetId": (candidate["providerAssetId"], evidence["providerAssetId"]),
-        "entityId": (candidate["entityId"], request["entityId"]),
-        "observedEntityId": (candidate["observedEntityId"], request["observedEntityId"]),
+        "entityId": (candidate["entityId"], entity_binding.get("entityId")),
+        "observedEntityId": (
+            candidate["observedEntityId"], entity_binding.get("observedEntityId")
+        ),
         "sourcePageUrl": (meta["sourcePageUrl"], evidence["sourcePageUrl"]),
         "originalAssetUrl": (meta["originalAssetUrl"], evidence["originalAssetUrl"]),
         "creator": (meta["creator"], evidence["creator"]),
@@ -309,7 +313,7 @@ def _manifest_item(
             "privacyRisk": "none", "minorRisk": "none", "maliciousMediaRisk": "none",
             "watermarkStatus": "absent",
             "reviewedAt": str(judgment.get("reviewerReviewedAt") or ""),
-            "reviewer": "semantic:" + str(judgment.get("reviewerRunId") or "bound-result"),
+            "reviewer": "host:" + str(judgment.get("reviewerRunId") or "bound-result"),
             "evidenceRef": safety_ref, "safetyEvidenceFileSha256": safety_sha,
         },
         "sourceAttribution": source_attribution(
@@ -351,7 +355,10 @@ def _review_bindings(
         )
     source_bindings = [
         {
-            "sourceReview": dict(row["sourceIdentity"]),
+            "sourceReview": {
+                **dict(row["sourceIdentity"]),
+                "requestDigest": str(row["requestDigest"]),
+            },
             "reviewerResultRef": str(row["evidenceRef"]),
             "reviewerResultSha256": file_sha256(row["evidencePath"]),
         }

@@ -80,7 +80,11 @@ Data 离线流水线使用 `scripts/core/data_issue.py` 与
 python3 quwoquan_data/scripts/cli.py task init --help
 
 # 阶段 receipt 与只读状态
-python3 quwoquan_data/scripts/cli.py task stage-record --help
+python3 quwoquan_data/scripts/cli.py task stage-open --help
+python3 quwoquan_data/scripts/cli.py task semantic-prepare --help
+python3 quwoquan_data/scripts/cli.py task semantic-record --help
+python3 quwoquan_data/scripts/cli.py task stage-gate --help
+python3 quwoquan_data/scripts/cli.py task stage-close --help
 python3 quwoquan_data/scripts/cli.py task fleet-status --help
 
 # 结构与发布门禁

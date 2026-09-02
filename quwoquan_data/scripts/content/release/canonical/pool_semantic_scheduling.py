@@ -7,7 +7,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from content.execution.campaign.lane import normalize_workloads
+from content.execution.planning.carrier_demand import normalize_workloads
 
 _CARRIERS = ("homepage", "article", "image", "video")
 _WAVE_SIZE = 12

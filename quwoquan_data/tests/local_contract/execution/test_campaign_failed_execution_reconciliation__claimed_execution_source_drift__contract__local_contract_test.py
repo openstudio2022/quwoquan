@@ -12,7 +12,7 @@ from content.execution.campaign import (
     failed_execution_reconciliation_post_publish as post_publish_contract,
 )
 from content.execution.campaign import request_envelope_writer
-from content.execution.campaign.external_inputs import payload_digest
+from content.execution.source_pool.external_inputs import payload_digest
 from content.execution.campaign.submission_reconciliation_contract import (
     CampaignSubmissionReconciliationError,
     canonical_digest,

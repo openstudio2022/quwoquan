@@ -7,11 +7,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import content.execution.campaign.request_envelope as _request_envelope_owner  # noqa: F401
-from content.execution.campaign import request_envelope_build
-from content.execution.controller.execute import (
-    pre_acquisition_handoff as handoff_api,
-)
+import content.execution.planning.request_envelope as _request_envelope_owner  # noqa: F401
+from content.execution.planning import request_envelope_build
+from content.source import pre_acquisition_handoff as handoff_api
+
 from content.execution.planning import (
     work_request_contract,
     work_request_dependencies,

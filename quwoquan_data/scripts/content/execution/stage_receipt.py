@@ -30,6 +30,7 @@ DEFAULT_CLAIM_TTL_MINUTES = 45
 # 不是给在飞会话续命用的。
 CLAIM_TTL_SAFETY_MARGIN_MINUTES = 5
 _RECEIPT_NAME_RE = re.compile(r"^(\d{3})-(.+)\.json$")
+_RECEIPT_WRITER_TOKEN = object()
 
 
 def receipts_dir(execution_id: str) -> Path:
@@ -92,78 +93,29 @@ def _next_sequence(execution_id: str) -> int:
     return entries[-1][0] + 1 if entries else 1
 
 
-def build_receipt(
-    *,
-    execution_id: str,
-    stage: str,
-    verdict: str,
-    actor_host: str,
-    actor_model_family: str,
-    actor_session: str,
-    artifacts: list[str],
-    open_items: list[dict],
-    next_stage: str,
-    evidence_commands: list[dict],
-    issue_count: int,
-    repair_rounds: int,
-) -> dict:
-    """构建并做协议级校验；schema 校验由 assert_valid 兜底。"""
-    if actor_model_family.strip().lower() == "auto":
-        raise ValueError(
-            "actor.modelFamily must record the actual routed family, not literal 'auto'"
-        )
-    if verdict == "blocked" and not open_items:
-        raise ValueError("blocked receipt requires at least one --open-item")
-    if verdict == "pass":
-        if stage == "ship" and next_stage != "END":
-            raise ValueError("ship pass receipt must set next=END")
-        if stage != "ship" and next_stage == "END":
-            raise ValueError("next=END is only legal for the ship stage")
-    for item in open_items:
-        if item["disposition"] == "return_to_stage" and "returnStage" not in item:
-            raise ValueError(
-                f"open item requires returnStage for return_to_stage: {item['item']}"
-            )
-    payload = {
-        "schema": RECEIPT_SCHEMA,
-        "executionId": execution_id,
-        "stage": stage,
-        "sequence": _next_sequence(execution_id),
-        "verdict": verdict,
-        "actor": {
-            "host": actor_host,
-            "modelFamily": actor_model_family,
-            "sessionId": actor_session,
-        },
-        "artifacts": list(artifacts),
-        "openItems": list(open_items),
-        "next": next_stage,
-        "evidence": {
-            "commands": list(evidence_commands),
-            "issueCount": issue_count,
-            "repairRounds": repair_rounds,
-        },
-        "recordedAt": _now_iso(),
-    }
-    assert_valid(payload, "execution", "stage_receipt", label="stage-record")
-    return payload
 
-
-def write_receipt_create_once(execution_id: str, payload: dict) -> Path:
-    """tmp + os.link 原子 create-once：目标已存在即失败，绝不覆盖历史。"""
+def _write_current_receipt_create_once(
+    execution_id: str, payload: dict, *, writer_token: object
+) -> Path:
+    """Current receipt 的唯一物理 writer；仅 stage_authority 持有准入 token。"""
+    if writer_token is not _RECEIPT_WRITER_TOKEN:
+        raise PermissionError("current stage receipt writer admission denied")
     if payload.get("executionId") != execution_id:
         raise ValueError("receipt executionId must match target execution")
     root = receipts_dir(execution_id)
     root.mkdir(parents=True, exist_ok=True)
     target = root / f"{payload['sequence']:03d}-{payload['stage']}.json"
-    tmp = root / f".tmp-{os.getpid()}-{target.name}"
-    tmp.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+    encoded = (
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        + "\n"
     )
+    tmp = root / f".tmp-{os.getpid()}-{target.name}"
+    tmp.write_text(encoded, encoding="utf-8")
     try:
         os.link(tmp, target)
     except FileExistsError as exc:
+        if target.is_file() and target.read_text(encoding="utf-8") == encoded:
+            return target
         raise FileExistsError(
             f"receipt already exists (create-once): {target}"
         ) from exc
@@ -172,55 +124,18 @@ def write_receipt_create_once(execution_id: str, payload: dict) -> Path:
     return target
 
 
+def _stage_authority_writer_token() -> object:
+    """仅供同一受管执行内核的 stage_authority 获取不透明准入 token。"""
+    return _RECEIPT_WRITER_TOKEN
+
+
 def receipt_state_status(payload: dict) -> ExecutionStateStatus:
-    """receipt → execution_state.status 的唯一映射（handoff-protocol.md）。"""
+    """receipt → execution_state.status 的唯一映射。"""
     if payload["verdict"] == "blocked":
         return ExecutionStateStatus.MANUAL_REQUIRED
     if payload["stage"] == "ship":
         return ExecutionStateStatus.SUCCEEDED
     return ExecutionStateStatus.RUNNING
-
-
-def _matches_stage_record(existing: dict, kwargs: dict[str, object]) -> bool:
-    expected = {
-        "executionId": str(kwargs["execution_id"]),
-        "stage": str(kwargs["stage"]),
-        "verdict": str(kwargs["verdict"]),
-        "actor": {
-            "host": str(kwargs["actor_host"]),
-            "modelFamily": str(kwargs["actor_model_family"]),
-            "sessionId": str(kwargs["actor_session"]),
-        },
-        "artifacts": list(kwargs["artifacts"]),
-        "openItems": list(kwargs["open_items"]),
-        "next": str(kwargs["next_stage"]),
-        "evidence": {
-            "commands": list(kwargs["evidence_commands"]),
-            "issueCount": int(kwargs["issue_count"]),
-            "repairRounds": int(kwargs["repair_rounds"]),
-        },
-    }
-    return all(existing.get(key) == value for key, value in expected.items())
-
-
-def record_stage_receipt(**kwargs: object) -> Path:
-    """Create one receipt or replay it solely to heal the derived projection."""
-    execution_id = str(kwargs["execution_id"])
-    entries = list_receipt_files(execution_id)
-    if entries:
-        latest = load_receipt(entries[-1][2])
-        state_path = execution_root(execution_id) / "_shared/execution_state.json"
-        if _matches_stage_record(latest, kwargs) and not state_path.is_file():
-            from content.execution.receipt_state_reducer import reduce_receipt_projection
-
-            reduce_receipt_projection(execution_id)
-            return entries[-1][2]
-    payload = build_receipt(**kwargs)  # type: ignore[arg-type]
-    target = write_receipt_create_once(execution_id, payload)
-    from content.execution.receipt_state_reducer import reduce_receipt_projection
-
-    reduce_receipt_projection(execution_id)
-    return target
 
 
 def acquire_lane_claim(
@@ -346,10 +261,10 @@ def _execution_status_entry(execution_id: str) -> dict:
         "stage": receipt["stage"],
         "verdict": receipt["verdict"],
         "next": receipt["next"],
-        "modelFamily": receipt["actor"]["modelFamily"],
+        "modelFamily": (receipt.get("actor") or {}).get("modelFamily"),
         "blockedItems": [
-            item["item"]
-            for item in receipt["openItems"]
+            item["code"]
+            for item in receipt.get("typedIssues", [])
             if receipt["verdict"] == "blocked"
         ],
     }

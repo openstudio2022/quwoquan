@@ -15,9 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from content.execution.controller.execute import (
-    pre_acquisition_handoff as handoffs,
-)
+from content.source import pre_acquisition_handoff as handoffs
 from content.execution.planning import work_request_contract
 from content.execution.planning.work_request_contract import WorkRequestPreviewQuery
 from core.source_digest import ExecutionBundleIdentity, SourceDefinitionSnapshot
@@ -247,7 +245,7 @@ def test_work_request_accepts_no_independent_demand_input_path() -> None:
     assert leaked == []
     assert "preAcquisitionHandoffRef" in work_request_contract._REQUIRED_INPUTS
 
-    from content.execution.campaign import request_envelope
+    from content.execution.planning import request_envelope
 
     writer_signature = inspect.signature(request_envelope.write_scale_envelopes)
     assert "source_providers" not in writer_signature.parameters

@@ -261,6 +261,8 @@ public final class StartupGateActivity extends Activity {
       finishAndRemoveTask();
       return;
     }
+    // 嵌入默认供给（embedded_default_package）已退役：缺 canonical supply 时由
+    // 既有 typed trust/config 阻断在 Flutter 侧 fail-closed，此处不再补供给。
     StartupHealthStore.promoteConfirmedPlatformStartupCrash(this);
     if (!StartupHealthStore.shouldRecoverConfirmedStartupFatal(this)) {
       if (!isTaskRoot()) {

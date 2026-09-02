@@ -111,7 +111,7 @@ def _workspace_smoke_report(
     carriers: tuple[str, ...],
 ) -> dict:
     """Observe exactly the active carrier workspaces requested by the caller."""
-    from content.execution.campaign.lane import CAMPAIGN_CARRIERS
+    from content.execution.planning.carrier_demand import CAMPAIGN_CARRIERS
 
     if not carriers:
         raise ValueError("workspace smoke requires at least one active carrier")

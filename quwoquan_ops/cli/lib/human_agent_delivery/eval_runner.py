@@ -1,15 +1,24 @@
 """Deterministic representative-path evaluator over canonical delivery helpers."""
 from __future__ import annotations
 
+import errno
 import json
+import os
+import stat
+import uuid
 from collections import Counter
 from copy import deepcopy
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Sequence
 
 import yaml
 
-from .contract import CONTRACT_PATH, ContractError, load_contract
+from .contract import (
+    CONTRACT_PATH,
+    ContractError,
+    _workflow_skill_names,
+    load_contract,
+)
 from .projection import project_authorization_grant, project_role_card, project_role_interaction
 from .router import balanced_permutations, legal_option_ids, route
 from .states import (
@@ -32,8 +41,25 @@ class _Checks:
     def __init__(self) -> None:
         self.items: list[dict[str, Any]] = []
 
-    def add(self, check_id: str, passed: bool, detail: str = "") -> None:
-        self.items.append({"check_id": check_id, "passed": bool(passed), "detail": detail})
+    def add(
+        self,
+        check_id: str,
+        passed: bool,
+        detail: str = "",
+        *,
+        code: str | None = None,
+        causal_category: str | None = None,
+    ) -> None:
+        item: dict[str, Any] = {
+            "check_id": check_id,
+            "passed": bool(passed),
+            "detail": detail,
+        }
+        if code is not None:
+            item["code"] = code
+        if causal_category is not None:
+            item["causal_category"] = causal_category
+        self.items.append(item)
 
 
 def load_eval_policy(path: Path | str = POLICY_PATH) -> dict[str, Any]:
@@ -204,17 +230,31 @@ def _evaluate_role_interactions(policy: Mapping[str, Any], checks: _Checks) -> N
     contract = load_contract()
     workflow = contract.get("workflow_interaction_binding") or {}
     bindings = workflow.get("bindings") or {}
+    discovery_error: ContractError | None = None
+    try:
+        skill_names = _workflow_skill_names(workflow.get("skill_root"))
+    except ContractError as error:
+        skill_names = ()
+        discovery_error = error
     skill_ok = (
-        workflow.get("natural_language_and_explicit_skill_same_track") is True
-        and set(bindings) == set(workflow.get("required_skills") or ())
+        bool(skill_names)
+        and set(bindings) == set(skill_names)
         and all(
-            [item.get("phase") for item in items] == ["PRE", "DURING", "POST"]
-            for items in bindings.values()
-            if isinstance(items, list)
+            [item.get("phase") for item in bindings[name]]
+            == workflow.get("required_phases")
+            for name in skill_names
+            if isinstance(bindings.get(name), list)
         )
-        and len(bindings) == 12
     )
-    checks.add("global.skill_interaction_bindings", skill_ok)
+    checks.add(
+        "global.skill_interaction_bindings",
+        skill_ok,
+        discovery_error.detail if discovery_error is not None else "",
+        code=discovery_error.code if discovery_error is not None else None,
+        causal_category=(
+            discovery_error.causal_category if discovery_error is not None else None
+        ),
+    )
     replay = policy.get("conversation_replay")
     replay_ok = (
         isinstance(replay, Mapping)
@@ -239,11 +279,30 @@ def evaluate_policy(policy: Mapping[str, Any]) -> dict[str, Any]:
     checks = _Checks()
     contract_loaded = True
     contract_detail = ""
+    contract_code: str | None = None
+    contract_causal_category: str | None = None
     try:
         load_contract()
-    except (ContractError, OSError, yaml.YAMLError) as exc:
+    except ContractError as exc:
+        contract_loaded = False
+        contract_detail = exc.detail
+        contract_code = exc.code
+        contract_causal_category = exc.causal_category
+    except yaml.YAMLError as exc:
         contract_loaded = False
         contract_detail = str(exc)
+        contract_code = "HAD.CONTRACT_INVALID"
+        contract_causal_category = "contract_syntax"
+    except OSError as exc:
+        contract_loaded = False
+        contract_detail = str(exc)
+        is_permission = isinstance(exc, PermissionError)
+        contract_code = (
+            "HAD.SKILL_DISCOVERY_PERMISSION_DENIED"
+            if is_permission
+            else "HAD.SKILL_DISCOVERY_IO_FAILED"
+        )
+        contract_causal_category = "permission" if is_permission else "io"
     shape_errors = _validate_policy_shape(policy)
     checks.add("global.policy_shape", not shape_errors, "; ".join(shape_errors))
     expected_count = evaluation.get("expected_fixture_count")
@@ -272,7 +331,13 @@ def evaluate_policy(policy: Mapping[str, Any]) -> dict[str, Any]:
             "pause_deny_abort", "recovery", "post_check",
         ],
     )
-    checks.add("global.canonical_contract_loaded", contract_loaded, contract_detail)
+    checks.add(
+        "global.canonical_contract_loaded",
+        contract_loaded,
+        contract_detail,
+        code=contract_code,
+        causal_category=contract_causal_category,
+    )
     if contract_loaded:
         _evaluate_role_interactions(policy, checks)
     proxy = policy.get("readability_proxy") or {}
@@ -369,15 +434,307 @@ def evaluate_policy(policy: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _report_error(
+    code: str,
+    causal_category: str,
+    detail: str,
+    error: BaseException | None = None,
+) -> ContractError:
+    failure = ContractError(
+        detail, code=code, causal_category=causal_category,
+    )
+    if error is not None:
+        failure.__cause__ = error
+    return failure
+
+
+def _report_io_error(
+    exc: OSError,
+    *,
+    label: str,
+    parent_fd: int | None = None,
+    name: str | os.PathLike[str] | None = None,
+) -> ContractError:
+    if isinstance(exc, PermissionError):
+        return _report_error(
+            "HAD.EVAL_REPORT_PERMISSION_DENIED",
+            "permission",
+            f"无权限写入 {label}",
+            exc,
+        )
+    is_symlink = exc.errno == errno.ELOOP
+    if not is_symlink and name is not None:
+        try:
+            metadata = (
+                os.stat(name, follow_symlinks=False)
+                if parent_fd is None
+                else os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            )
+            is_symlink = stat.S_ISLNK(metadata.st_mode)
+        except OSError:
+            pass
+    if is_symlink:
+        return _report_error(
+            "HAD.EVAL_REPORT_SYMLINK_FORBIDDEN",
+            "symlink",
+            f"{label} 不得包含 symlink",
+            exc,
+        )
+    if isinstance(exc, (NotADirectoryError, IsADirectoryError)):
+        return _report_error(
+            "HAD.EVAL_REPORT_PATH_INVALID",
+            "path_type",
+            f"{label} 路径类型非法",
+            exc,
+        )
+    return _report_error(
+        "HAD.EVAL_REPORT_IO_FAILED",
+        "io",
+        f"写入 {label} 失败: {exc}",
+        exc,
+    )
+
+
+def _open_real_directory(path: Path, *, label: str) -> int:
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    if not nofollow or not directory:
+        raise _report_error(
+            "HAD.FILESYSTEM_PRIMITIVE_UNSUPPORTED",
+            "unsupported",
+            "eval report 写入要求 O_NOFOLLOW/O_DIRECTORY",
+        )
+    absolute = path if path.is_absolute() else path.absolute()
+    try:
+        descriptor = os.open(
+            absolute.anchor,
+            os.O_RDONLY | directory | nofollow | getattr(os, "O_CLOEXEC", 0),
+        )
+    except OSError as exc:
+        raise _report_io_error(exc, label=f"{label} filesystem root") from exc
+    try:
+        for component in absolute.parts[1:]:
+            try:
+                child = os.open(
+                    component,
+                    os.O_RDONLY | directory | nofollow | getattr(os, "O_CLOEXEC", 0),
+                    dir_fd=descriptor,
+                )
+            except OSError as exc:
+                raise _report_io_error(exc, label=f"{label} ancestor {component}") from exc
+            os.close(descriptor)
+            descriptor = child
+        if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise _report_error(
+                "HAD.EVAL_REPORT_PATH_INVALID",
+                "path_type",
+                f"{label} 必须为真实目录",
+            )
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _canonical_report_parts(path: Path | str) -> tuple[str, ...]:
+    raw = os.fspath(path)
+    if not isinstance(raw, str) or not raw:
+        raise _report_error(
+            "HAD.EVAL_REPORT_PATH_INVALID",
+            "path_type",
+            "eval report_path 必须为非空路径",
+        )
+    normalized = raw.replace("\\", "/")
+    lexical_components = normalized.split("/")
+    if any(component in {"", ".", ".."} for component in lexical_components):
+        if not (normalized.startswith("/") and lexical_components[0] == ""):
+            raise _report_error(
+                "HAD.EVAL_REPORT_PATH_INVALID",
+                "path_type",
+                "eval report_path 不得包含空、. 或 .. 组件",
+            )
+        lexical_components = lexical_components[1:]
+        if any(component in {"", ".", ".."} for component in lexical_components):
+            raise _report_error(
+                "HAD.EVAL_REPORT_PATH_INVALID",
+                "path_type",
+                "eval report_path 不得包含空、. 或 .. 组件",
+            )
+
+    supplied = PurePosixPath(normalized)
+    if supplied.is_absolute():
+        repo_parts = PurePosixPath(REPO_ROOT.as_posix()).parts
+        if supplied.parts[: len(repo_parts)] != repo_parts:
+            raise _report_error(
+                "HAD.EVAL_REPORT_PATH_OUTSIDE_RUNTIME_ROOT",
+                "path_boundary",
+                "absolute eval report_path 越出真实 repository root",
+            )
+        relative_parts = supplied.parts[len(repo_parts):]
+    else:
+        relative_parts = supplied.parts
+    if len(relative_parts) < 2 or relative_parts[0] != ".qwq_output":
+        raise _report_error(
+            "HAD.EVAL_REPORT_PATH_OUTSIDE_RUNTIME_ROOT",
+            "path_boundary",
+            "eval report_path 必须位于 canonical .qwq_output runtime root",
+        )
+    return tuple(relative_parts)
+
+
 def write_report(report: Mapping[str, Any], path: Path | str) -> None:
-    destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    """Atomically write one report below the real repo runtime root without links."""
+
+    parts = _canonical_report_parts(path)
+    repo_fd = _open_real_directory(REPO_ROOT, label="repository root")
+    parent_fd = repo_fd
+    opened: list[int] = []
+    temporary_name = f".{parts[-1]}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+    temporary_created = False
+    try:
+        directory_flags = (
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        for index, component in enumerate(parts[:-1]):
+            try:
+                child_fd = os.open(component, directory_flags, dir_fd=parent_fd)
+            except FileNotFoundError:
+                if index == 0:
+                    raise _report_error(
+                        "HAD.EVAL_REPORT_RUNTIME_ROOT_INVALID",
+                        "path_boundary",
+                        "canonical .qwq_output runtime root 不存在",
+                    )
+                try:
+                    os.mkdir(component, 0o755, dir_fd=parent_fd)
+                except FileExistsError:
+                    pass
+                except OSError as exc:
+                    raise _report_io_error(
+                        exc,
+                        label=f"eval report parent {component}",
+                        parent_fd=parent_fd,
+                        name=component,
+                    ) from exc
+                try:
+                    child_fd = os.open(component, directory_flags, dir_fd=parent_fd)
+                except OSError as exc:
+                    raise _report_io_error(
+                        exc,
+                        label=f"eval report parent {component}",
+                        parent_fd=parent_fd,
+                        name=component,
+                    ) from exc
+            except OSError as exc:
+                raise _report_io_error(
+                    exc,
+                    label=f"eval report parent {component}",
+                    parent_fd=parent_fd,
+                    name=component,
+                ) from exc
+            opened.append(child_fd)
+            parent_fd = child_fd
+
+        final_name = parts[-1]
+        try:
+            existing = os.stat(final_name, dir_fd=parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            existing = None
+        except OSError as exc:
+            raise _report_io_error(exc, label="eval report destination") from exc
+        if existing is not None:
+            if stat.S_ISLNK(existing.st_mode):
+                raise _report_error(
+                    "HAD.EVAL_REPORT_SYMLINK_FORBIDDEN",
+                    "symlink",
+                    "eval report destination 不得为 symlink",
+                )
+            if not stat.S_ISREG(existing.st_mode):
+                raise _report_error(
+                    "HAD.EVAL_REPORT_PATH_INVALID",
+                    "path_type",
+                    "eval report destination 必须为 regular file",
+                )
+        destination_identity = (
+            None
+            if existing is None
+            else (existing.st_dev, existing.st_ino, existing.st_mode)
+        )
+
+        content = (
+            json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+        try:
+            descriptor = os.open(
+                temporary_name,
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_CLOEXEC", 0),
+                0o644,
+                dir_fd=parent_fd,
+            )
+            temporary_created = True
+            try:
+                view = memoryview(content)
+                while view:
+                    written = os.write(descriptor, view)
+                    if written <= 0:
+                        raise OSError(errno.EIO, "eval report short write")
+                    view = view[written:]
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            try:
+                current = os.stat(
+                    final_name, dir_fd=parent_fd, follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                current_identity = None
+            else:
+                if stat.S_ISLNK(current.st_mode):
+                    raise _report_error(
+                        "HAD.EVAL_REPORT_SYMLINK_FORBIDDEN",
+                        "symlink",
+                        "eval report destination 在写入期间被替换为 symlink",
+                    )
+                current_identity = (
+                    current.st_dev, current.st_ino, current.st_mode,
+                )
+            if current_identity != destination_identity:
+                raise _report_error(
+                    "HAD.EVAL_REPORT_CONCURRENT_DRIFT",
+                    "concurrent_drift",
+                    "eval report destination 在写入期间发生身份漂移",
+                )
+            os.replace(
+                temporary_name,
+                final_name,
+                src_dir_fd=parent_fd,
+                dst_dir_fd=parent_fd,
+            )
+            temporary_created = False
+            os.fsync(parent_fd)
+        except OSError as exc:
+            raise _report_io_error(exc, label="eval report destination") from exc
+    finally:
+        if temporary_created:
+            try:
+                os.unlink(temporary_name, dir_fd=parent_fd)
+            except OSError:
+                pass
+        for descriptor in reversed(opened):
+            os.close(descriptor)
+        os.close(repo_fd)
 
 
 def run_eval(*, policy_path: Path | str = POLICY_PATH, report_path: Path | str | None = None) -> dict[str, Any]:
     policy = load_eval_policy(policy_path)
     report = evaluate_policy(policy)
-    destination = report_path or REPO_ROOT / policy["evaluation"]["report_path"]
+    destination = report_path or policy["evaluation"]["report_path"]
     write_report(report, destination)
     return report

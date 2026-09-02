@@ -176,6 +176,64 @@ def test_gate_loaded_contract_projects_canonical_error_descriptors(
     assert "Traceback" not in captured.out + captured.err
 
 
+def test_gate_malformed_admission_is_contract_invalid_without_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    from importlib.util import module_from_spec, spec_from_file_location
+
+    spec = spec_from_file_location(
+        "verify_objective_execution_malformed_admission",
+        ROOT / "quwoquan_ops/gate/verify_objective_execution.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(module, "inspect_admission", lambda: {"status": "admitted"})
+
+    assert module.main() == 1
+    captured = capsys.readouterr()
+    assert "code=OEX.CONTRACT_INVALID" in captured.err
+    assert "code=OEX.ADMISSION_BLOCKED" not in captured.err
+    assert "Traceback" not in captured.out + captured.err
+
+
+def test_gate_derives_admitted_values_from_public_descriptor(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    from copy import deepcopy
+    from importlib.util import module_from_spec, spec_from_file_location
+    from lib.objective_execution.contract import load_contract
+
+    spec = spec_from_file_location(
+        "verify_objective_execution_descriptor_derived_admission",
+        ROOT / "quwoquan_ops/gate/verify_objective_execution.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    contract = deepcopy(load_contract())
+    descriptor = contract["admission"]["readback_contract"]
+    descriptor["statuses"]["admitted"]["write_concurrency"] = 7
+    admission = {
+        "status": "admitted",
+        "stage": descriptor["stage"],
+        "write_concurrency": 7,
+        "persistent_lane_allowed": True,
+        "branch_policy_digest": "sha256:" + "a" * 64,
+        "reason": descriptor["statuses"]["admitted"]["reason"],
+        "terminal": descriptor["statuses"]["admitted"]["terminal"],
+    }
+    monkeypatch.setattr(module, "load_contract", lambda: contract)
+    monkeypatch.setattr(module, "admission_readback_contract", lambda: descriptor)
+    monkeypatch.setattr(module, "inspect_admission", lambda: admission)
+    monkeypatch.setattr(module, "validate_admission_readback", lambda value: dict(value))
+
+    assert module.main() == 0
+    captured = capsys.readouterr()
+    assert "single-track verified" in captured.out
+    assert captured.err == ""
+
+
 def test_gate_source_does_not_duplicate_canonical_recovery_values() -> None:
     from lib.objective_execution.contract import load_contract
 
@@ -186,3 +244,5 @@ def test_gate_source_does_not_duplicate_canonical_recovery_values() -> None:
         assert descriptor["recovery"] not in source
     assert "repair_canonical_contract" not in source
     assert "repair_branch_policy_or_keep_single_writer" not in source
+    assert "temporary_branch_allowed" not in source
+    assert "write_concurrency=2" not in source

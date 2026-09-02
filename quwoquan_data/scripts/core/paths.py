@@ -259,8 +259,11 @@ EXECUTION_SHARED_AUTHORITATIVE_ENTRIES = frozenset({
     # non-resumable work package.
     "reconciliation",
     # DEC-005 阶段交接回执链（stage_receipt.schema.json）：跨会话交接与恢复的
-    # 唯一状态源，由 `task stage-record` create-once 原子写入，不可重算。
+    # 唯一状态源，由 `task stage-close` 基于 open/gate authority create-once 原子写入，不可重算。
     "receipts",
+    # stage open/gate 与 semantic prepare/result create-once authority。
+    "stage-authority",
+    "stage-semantics",
     # 执行级真相源（人工决策记录 / 放弃归因 / 账本，均不可重算）
     "source_catalog.json",
     "asset_id_registry.json",

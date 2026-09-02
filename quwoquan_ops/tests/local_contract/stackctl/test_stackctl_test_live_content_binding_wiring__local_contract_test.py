@@ -215,7 +215,7 @@ class StackctlTestLiveContentBindingWiringContract(unittest.TestCase):
         topology_target = {
             "env": "alpha",
             "portProfile": "alpha-local",
-            "publicBases": {"api": "https://api.alpha.quwoquan.com"},
+            "publicBases": {"api": "https://api.alpha.quwoquan.com:17000"},
         }
         composition = {
             "runtimeCompositionDigest": _DIGEST_C,

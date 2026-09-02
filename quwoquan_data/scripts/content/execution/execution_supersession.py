@@ -27,12 +27,16 @@ from core.source_digest import (
     current_source_digest,
 )
 
+from content.execution.operational_fingerprint import operational_fingerprint
+
 from content.execution.closure.execution_supersession_admission import (
+    _RETIRED_MANAGED_STATE_SCHEMA,
     _completion_evidence_binding,
     _lease_disposition,
     _process_evidence,
     _settled_execution_state,
     _validate_pre_controller_closure,
+    _workflow_drift_state_status,
 )
 from content.execution.closure.execution_supersession_inventory import (
     _ANCHOR_REFS,
@@ -46,10 +50,16 @@ from content.execution.closure.execution_supersession_inventory import (
 from content.execution.identity import validate_execution_id
 
 _REASONS = frozenset(
-    {"source_drift", "missing_canonical_input", "unbound_completion_evidence"}
+    {
+        "source_drift",
+        "workflow_drift",
+        "missing_canonical_input",
+        "unbound_completion_evidence",
+    }
 )
 _ERROR_CODES = {
     "source_drift": "DATA.EXECUTION.SOURCE_DRIFT_SUPERSEDED",
+    "workflow_drift": "DATA.EXECUTION.WORKFLOW_DRIFT_SUPERSEDED",
     "missing_canonical_input": "DATA.EXECUTION.MISSING_CANONICAL_INPUT_SUPERSEDED",
     "unbound_completion_evidence": (
         "DATA.EXECUTION.UNBOUND_COMPLETION_EVIDENCE_SUPERSEDED"
@@ -84,6 +94,7 @@ def validate_execution_supersession_receipt(
     *,
     path: Path,
     execution_root: Path,
+    repo_root: Path | None = None,
 ) -> dict[str, Any]:
     receipt = dict(document)
     assert_valid(
@@ -99,6 +110,42 @@ def validate_execution_supersession_receipt(
         raise ValueError("execution supersession executionId drift")
     if receipt["errorCode"] != _ERROR_CODES[receipt["reason"]]:
         raise ValueError("execution supersession error code does not match its reason")
+    workflow_fields = (
+        "manifestOperationalFingerprint",
+        "observedOperationalFingerprint",
+    )
+    workflow_values = tuple(receipt.get(field) for field in workflow_fields)
+    if receipt["reason"] == "workflow_drift":
+        manifest = _optional_object(
+            execution_root / _ANCHOR_REFS["executionManifest"]
+        )
+        if manifest is None:
+            raise ValueError("workflow_drift supersession requires an execution manifest")
+        manifest_fingerprint = _operational_fingerprint(
+            manifest.get("operationalFingerprint"),
+            label="execution manifest operationalFingerprint",
+        )
+        current_fingerprint = _operational_fingerprint(
+            operational_fingerprint(
+                repo_root=(repo_root or paths.REPO_ROOT).resolve()
+            ),
+            label="current operational fingerprint",
+        )
+        if workflow_values != (manifest_fingerprint, current_fingerprint):
+            raise ValueError("execution supersession workflow fingerprint binding drift")
+        if manifest_fingerprint == current_fingerprint:
+            raise ValueError("workflow_drift supersession requires operational drift")
+        state = _settled_execution_state(execution_root)
+        if state is None:
+            raise ValueError("workflow_drift supersession requires execution state")
+        previous_status = _workflow_drift_state_status(execution_root, state)
+        if receipt["previousStatus"] != previous_status:
+            raise ValueError("execution supersession previous status drift")
+    elif any(value is not None for value in workflow_values):
+        raise ValueError(
+            "execution supersession carries workflow fingerprint binding without "
+            "the reason that proves it"
+        )
     binding = receipt.get("completionEvidenceBinding")
     if receipt["reason"] == "unbound_completion_evidence":
         if binding != _completion_evidence_binding(execution_root):
@@ -127,12 +174,24 @@ def validate_execution_supersession_receipt(
             raise ValueError("execution supersession root inventory drift")
         if receipt["rootInventoryEntryCount"] != len(inventory):
             raise ValueError("execution supersession root inventory count drift")
-        expected_state_evidence = (
-            "settled_snapshot"
-            if (execution_root / _ANCHOR_REFS["executionState"]).is_file()
-            else "missing_pre_controller"
-        )
-        if receipt["stateEvidence"] != expected_state_evidence:
+        state_path = execution_root / _ANCHOR_REFS["executionState"]
+        if not state_path.is_file():
+            expected_state_evidence = {"missing_pre_controller"}
+        else:
+            snapshot = _optional_object(state_path)
+            if (
+                isinstance(snapshot, Mapping)
+                and snapshot.get("schema") == _RETIRED_MANAGED_STATE_SCHEMA
+            ):
+                # 早于本契约区分的不可变历史收据记录的是 settled_snapshot；
+                # 收据 create-once，不得追溯改写，因此两个值都合法。
+                expected_state_evidence = {
+                    "settled_snapshot",
+                    "settled_retired_managed_snapshot",
+                }
+            else:
+                expected_state_evidence = {"settled_snapshot"}
+        if receipt["stateEvidence"] not in expected_state_evidence:
             raise ValueError("execution supersession state evidence drift")
         if receipt["processEvidence"].get("livenessProbe") != _LIVENESS_PROBE:
             raise ValueError("execution supersession liveness probe drift")
@@ -149,6 +208,17 @@ def validate_execution_supersession_receipt(
     return receipt
 
 
+def _operational_fingerprint(value: object, *, label: str) -> str:
+    fingerprint = str(value or "")
+    if (
+        len(fingerprint) != 71
+        or not fingerprint.startswith("sha256:")
+        or any(character not in "0123456789abcdef" for character in fingerprint[7:])
+    ):
+        raise ValueError(f"{label} must be sha256:<64 lowercase hex>")
+    return fingerprint
+
+
 def _source_identity_kind(document: object) -> str:
     """Validate one v1 or v2 source identity without weakening either shape."""
 
@@ -162,6 +232,8 @@ def _source_identity_kind(document: object) -> str:
 
 def load_execution_supersession_receipt(
     execution_root: Path,
+    *,
+    repo_root: Path | None = None,
 ) -> tuple[dict[str, Any], Path] | None:
     candidates = sorted(
         (execution_root / "_shared/reconciliation").glob("supersession-*.json")
@@ -179,6 +251,7 @@ def load_execution_supersession_receipt(
             value,
             path=path,
             execution_root=execution_root,
+            repo_root=repo_root,
         ),
         path,
     )
@@ -195,7 +268,7 @@ def supersede_execution(
     normalized_reason = str(reason or "").strip()
     if normalized_reason not in _REASONS:
         raise ValueError(
-            "supersession reason must be source_drift or missing_canonical_input"
+            "supersession reason must be one of: " + ", ".join(sorted(_REASONS))
         )
     output = (executions_root or paths.DATA_EXECUTIONS_ROOT).resolve()
     root = output / normalized
@@ -208,7 +281,10 @@ def supersede_execution(
         )
         if stale_receipts:
             raise ValueError("stale-reconciled execution is already terminal")
-        existing = load_execution_supersession_receipt(root)
+        existing = load_execution_supersession_receipt(
+            root,
+            repo_root=source_repo,
+        )
         if existing is not None:
             receipt, path = existing
             if receipt["reason"] != normalized_reason:
@@ -240,13 +316,32 @@ def supersede_execution(
                 ).to_document()
         else:
             observed_source = current_source_digest(repo_root=source_repo).to_document()
+        workflow_binding: tuple[str, str] | None = None
+        if normalized_reason == "workflow_drift":
+            if manifest is None:
+                raise ValueError(
+                    "workflow_drift supersession requires an execution manifest"
+                )
+            manifest_fingerprint = _operational_fingerprint(
+                manifest.get("operationalFingerprint"),
+                label="execution manifest operationalFingerprint",
+            )
+            observed_fingerprint = _operational_fingerprint(
+                operational_fingerprint(repo_root=source_repo),
+                label="current operational fingerprint",
+            )
+            if manifest_fingerprint == observed_fingerprint:
+                raise ValueError(
+                    "workflow_drift supersession requires operational drift"
+                )
+            workflow_binding = (manifest_fingerprint, observed_fingerprint)
         completion_binding: dict[str, object] | None = None
         if normalized_reason == "source_drift":
             if manifest_source is None or manifest_source == observed_source:
                 raise ValueError("source_drift supersession requires manifest drift")
         elif normalized_reason == "unbound_completion_evidence":
             completion_binding = _completion_evidence_binding(root)
-        elif all(
+        elif normalized_reason == "missing_canonical_input" and all(
             bool(anchors[name]["exists"])
             for name in ("executionManifest", "request", "targetSet")
         ):
@@ -260,7 +355,12 @@ def supersede_execution(
             reason=normalized_reason,
         )
         inventory, inventory_digest = _root_inventory(root)
-        state_evidence = "settled_snapshot"
+        state_evidence = (
+            "settled_retired_managed_snapshot"
+            if state is not None
+            and state.get("schema") == _RETIRED_MANAGED_STATE_SCHEMA
+            else "settled_snapshot"
+        )
         if state is None:
             if normalized_reason != "source_drift":
                 raise ValueError(
@@ -294,13 +394,17 @@ def supersede_execution(
             "retryPolicy": "new_execution_with_retryOf",
             "evidenceDisposition": "protected_read_only",
         }
+        if workflow_binding is not None:
+            stable["manifestOperationalFingerprint"] = workflow_binding[0]
+            stable["observedOperationalFingerprint"] = workflow_binding[1]
         if completion_binding is not None:
             stable["completionEvidenceBinding"] = completion_binding
         receipt = {**stable, "receiptDigest": _digest(stable)}
-        validate_execution_supersession_receipt(
+        assert_valid(
             receipt,
-            path=path,
-            execution_root=root,
+            "execution",
+            "execution_supersession_receipt",
+            label=f"execution supersession receipt:{path}",
         )
         observed_again = (
             current_source_definition_snapshot(repo_root=source_repo).to_document()
@@ -309,12 +413,39 @@ def supersede_execution(
         )
         if observed_again != observed_source:
             raise ValueError("source changed while writing supersession receipt")
+        if workflow_binding is not None:
+            current_manifest = _optional_object(manifest_path)
+            if current_manifest is None:
+                raise ValueError(
+                    "execution manifest changed while writing supersession receipt"
+                )
+            manifest_fingerprint_again = _operational_fingerprint(
+                current_manifest.get("operationalFingerprint"),
+                label="execution manifest operationalFingerprint",
+            )
+            observed_fingerprint_again = _operational_fingerprint(
+                operational_fingerprint(repo_root=source_repo),
+                label="current operational fingerprint",
+            )
+            if (
+                manifest_fingerprint_again,
+                observed_fingerprint_again,
+            ) != workflow_binding:
+                raise ValueError(
+                    "workflow fingerprint changed while writing supersession receipt"
+                )
         current_inventory, current_inventory_digest = _root_inventory(root)
         if (
             current_inventory_digest != inventory_digest
             or len(current_inventory) != len(inventory)
         ):
             raise ValueError("execution root changed while writing supersession receipt")
+        validate_execution_supersession_receipt(
+            receipt,
+            path=path,
+            execution_root=root,
+            repo_root=source_repo,
+        )
         body = json.dumps(receipt, ensure_ascii=False, indent=2).encode("utf-8") + b"\n"
         path.parent.mkdir(parents=True, exist_ok=True)
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
@@ -350,7 +481,10 @@ def register_supersede_execution_parser(
 ) -> None:
     parser = subparsers.add_parser(
         "supersede-execution",
-        help="以 create-once receipt 终结 source-drift/缺 canonical input 的 execution，保留旧证据",
+        help=(
+            "以 create-once receipt 终结 source/workflow drift、缺 canonical input "
+            "或 unbound completion evidence 的 execution，保留旧证据"
+        ),
     )
     parser.add_argument("execution_id")
     parser.add_argument("--reason", required=True, choices=tuple(sorted(_REASONS)))

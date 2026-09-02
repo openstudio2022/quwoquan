@@ -209,7 +209,7 @@
 - `CommercialReadinessDecision` 只允许 Go、Limited Go、Hold、Abort。Limited Go 仅能在 policy 允许时缩小可逆的人群、渠道、时间或流量范围，并明确退出条件；不得绕过 required evidence、安全、合规、生产 SLO 或回滚硬门。
 - `ProductionCampaignApproval` 与商用准备决定分离。正常生产路径只批准一次 campaign，在其绑定的生产来源、不可变候选、流量阶段、SLO、窗口、停止条件与回滚目标内自动执行逐阶段技术 gate；正常阶段推进不重复索要人工批准。
 - campaign 遇停止谓词先暂停或按预授权回滚；resume、更换候选、扩大范围或修改 SLO、窗口、停止与回滚条件必须产生新的有效决定。
-- 在当前仅允许 `dev1.0` 与 `main` 的 branch policy 下，S4 并发执行保持 `not_admitted`，写并发退回 `1`；不得通过短命分支或同一 authority 并发积压规避职责和决策顺序。
+- S4 并发执行只消费 [`objective-execution` REQ-003](../objective-execution/spec.md#req-003) 及 Objective contract `admission` 的动态 readback；Human owner 不复制分支列表、admission 状态或固定写并发值。只有兼容且未漂移的 `admitted` readback 才可按其返回上限开放彼此隔离的写入单元；`not_admitted`、`blocked`、policy/readback 漂移或调用方试图扩大并发时必须 fail-closed，策略外分支、同一 subject 或 authority 的并发写与共享 host mutation 均不得旁路各自单写者约束。
 - outcome 只能是 `attained`、`not_attained` 或 `inconclusive`。只有在观察开始前已冻结延期次数、预算、样本、窗口和退出条件时，`inconclusive` 才可经 `observing → paused → observing` 延长；否则必须进入 `clarify`、`escalated` 或 `aborted`，不得无限观察或包装为 attained。
 
 <a id="req-007"></a>
@@ -299,7 +299,7 @@ Human owner 必须提供版本化、可校验且由 exact session bytes 派生�
 - THEN CommercialReadinessDecision 与 ProductionCampaignApproval 分别记录，商用 Go 或 Limited Go 不产生生产副作用授权。
 - AND required evidence、安全、合规、生产 SLO 或回滚硬门失败时 Go 与 Limited Go 均不可用，Limited Go 只能缩小 policy 允许的可逆范围。
 - AND 一次有效 production campaign 在冻结范围内自动推进阶段技术 gate，停止谓词触发 pause 或预授权 rollback，resume 或约束变化要求新决定。
-- AND 当前 branch policy 下 S4 为 not_admitted、写并发为 1，短命分支或同一 authority 并发不能成为旁路。
+- AND S4 消费者忠实使用 Objective-owned 动态 admission readback：`admitted` 时只开放 readback 限定的隔离写入单元，`not_admitted`、`blocked`、policy/readback 漂移或调用方越权扩大并发时 fail-closed；策略外分支、同一 subject 或 authority 与共享 host mutation 始终受各自单写者约束。
 - AND 渠道公开与 outcome 接受分别需要自己的 evidence owner 和 result acceptor，released 或 published 不自动得到 attained。
 - AND outcome 只落 attained、not_attained 或 inconclusive；仅预冻结延期策略允许 observing→paused→observing，否则进入 clarify、escalated 或 aborted。
 

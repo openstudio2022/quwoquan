@@ -8,7 +8,7 @@ import pytest
 from content.execution.campaign import external_inputs as campaign_external_inputs
 from content.execution.campaign import request_envelope as envelopes
 from content.execution.campaign import request_envelope_build as envelope_build
-from content.execution.campaign.scale import campaign_workload_targets
+from content.execution.planning.scale import campaign_workload_targets
 from content.execution.controller.execute import pre_acquisition_handoff as handoffs
 from content.source.research.scale_source_pool import (
     build_scale_source_pool_plan,

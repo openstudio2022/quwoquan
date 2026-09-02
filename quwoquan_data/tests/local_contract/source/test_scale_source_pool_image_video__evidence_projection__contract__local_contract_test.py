@@ -165,7 +165,7 @@ def test_frozen_image_materializes_from_source_admission_without_publish_review(
 
     from content.source.research import scale_source_pool_runtime as runtime
 
-    monkeypatch.setattr(runtime, "resolve_entity_object_dir", lambda *_args, **_kwargs: tmp_path)
+    monkeypatch.setattr(runtime, "execution_post_object_dir", lambda *_args, **_kwargs: tmp_path)
 
     def write_source_unit(_object_dir: Path, **kwargs: object) -> dict[str, object]:
         captured.update(kwargs)
@@ -189,4 +189,79 @@ def test_frozen_image_materializes_from_source_admission_without_publish_review(
     image = captured["images"][0]
     assert image["professionalAssetId"] == "image-asset-1"
     assert image["sourcePath"] == tmp_path / receipt["assetSnapshot"]["assetRef"]
+    assert captured["layout"] == {
+        "schema": "quwoquan_data.source_layout",
+        "sourceKind": "image_collection",
+        "extractor": "frozen_professional_image_acquisition",
+        "title": "Frozen professional image",
+        "parseStatus": "rejected",
+        "rejectReason": "image_collection_has_no_textual_structure",
+        "blocks": [],
+        "figureCount": 0,
+        "tables": [],
+    }
     assert "independentAssetReview" not in row
+
+
+def test_frozen_image_direct_materialization_writes_complete_source_unit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from core.image_decode import ImageProbe
+    from core.paths import execution_source_unit_dir
+    from core.stage_artifact_contract import SOURCE_UNIT_ARTIFACTS
+    from content.source import source_unit_writer
+    from content.source.research import scale_source_pool_runtime as runtime
+
+    _receipt, receipt_ref = _admit_materializable_image(tmp_path)
+    projected = _project(tmp_path, image_refs=[receipt_ref], video_refs=None)
+    row = dict(projected["candidates"][0])
+    row["sourcePoolEvidenceRoot"] = tmp_path
+    execution_id = "20260902--travel-image-direct-layout--china--pilot-001"
+    object_dir = tmp_path / "posts/image/美图/Frozen-professional-image/1"
+
+    monkeypatch.setattr(image_materialize, "assert_valid", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        source_unit_writer,
+        "stage_execution_context",
+        lambda value: {"executionId": value, "executionBinding": "frozen"},
+    )
+    monkeypatch.setattr(
+        runtime,
+        "execution_post_object_dir",
+        lambda *_args, **_kwargs: object_dir,
+    )
+    monkeypatch.setattr(
+        source_unit_writer,
+        "probe_image_bytes",
+        lambda _body: ImageProbe(width=1600, height=1200, mime_type="image/jpeg"),
+    )
+    monkeypatch.setattr(
+        source_unit_writer,
+        "stage_execution_context",
+        lambda _execution_id: {
+            "executionId": execution_id,
+            "executionBinding": "frozen",
+        },
+    )
+
+    manifest = _materialize_frozen_image_source_unit(
+        execution_id=execution_id,
+        entity_id="entity-1",
+        entity_type="地点/景区",
+        row=row,
+    )
+
+    unit = execution_source_unit_dir(execution_id, manifest["sourceUnitId"])
+    assert all((unit / relative).is_file() for relative in SOURCE_UNIT_ARTIFACTS)
+    layout = json.loads((unit / "source.layout.json").read_text(encoding="utf-8"))
+    assert layout["parseStatus"] == "rejected"
+    assert layout["rejectReason"] == "image_collection_has_no_textual_structure"
+    assert layout["blocks"] == []
+    assert manifest["layoutSummary"] == {
+        "parseStatus": "rejected",
+        "rejectReason": "image_collection_has_no_textual_structure",
+        "blockCount": 0,
+        "figureCount": 0,
+        "tableCount": 0,
+    }

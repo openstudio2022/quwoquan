@@ -4,46 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
-
-from core.io import read_json
-from core.paths import PUBLISH_ROOT
-from core.schema import assert_valid
-from core.source_attribution import canonical_source_attribution
-from core.tree_integrity import tree_integrity_stats
-from governance.creators.assignment import (
-    CREATOR_ASSIGNMENT_FIELDS,
-    creator_assignment_issues,
-    creator_from_payload,
-    resolve_registry_creator_assignment,
-)
-
-from content.execution.closure.pool_delivery_identity import (
-    load_post_identity_reservation as _load_reservation,
-)
-from content.execution.closure.pool_delivery_identity import (
-    load_reserved_post_identity,
-)
-from content.execution.closure.pool_delivery_identity import (
-    reserve_post_identity as _reserve_post_identity,
-)
-from content.execution.identity import validate_execution_id
-from content.execution.queue.model import QueueJob
-from content.execution.workspace import execution_root
-from content.release.canonical.object_transaction_lock import (
-    canonical_publish_serialized,
-)
-from content.release.canonical.pool_source_attribution import (
-    source_attribution_complete,
-)
-
-POOL_DELIVERY_INTENT_DIR = "_shared/pool_delivery_intents"
-_SCHEMA = "quwoquan_data.pool_delivery_intent"
-_CARRIERS = frozenset({"homepage", "article", "image", "video"})
-_CREATOR_BINDING_FIELDS = (*CREATOR_ASSIGNMENT_FIELDS, "creatorProfileVersion")
 
 
 def _digest(value: object) -> str:

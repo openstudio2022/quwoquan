@@ -7,6 +7,7 @@ module never mutates the execution root.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import socket
 from collections.abc import Mapping
@@ -25,6 +26,10 @@ from content.execution.closure.execution_supersession_inventory import (
     _pid_alive,
     _require_regular_file,
 )
+from content.execution.stage_authority_validation import (
+    validate_stage_receipt_authority,
+)
+from content.execution.stage_receipt import RECEIPT_STAGES, receipt_state_status
 from content.execution.terminal_state_integrity import verify_terminal_state_integrity
 
 _PRE_CONTROLLER_REQUIRED_FILES = frozenset(
@@ -55,6 +60,15 @@ _PRE_CONTROLLER_IDENTITY_FILES = frozenset(
     }
 )
 _SUPERSESSION_ELIGIBLE_STATE_STATUSES = {"manual_required", "stopped_at_until"}
+# 退役 managed 轨的 execution_state 是 AI 自报投影，不是 receipt-derived 事实。
+# 这种冻结历史形状下连 `succeeded` 都不具备当前 receipt authority，且其 manifest
+# 已不满足现行契约、永远不可 resume；supersession 是它唯一的合法终态出路。
+_RETIRED_MANAGED_STATE_SCHEMA = "quwoquan.content.execution_state"
+_RETIRED_MANAGED_ELIGIBLE_STATE_STATUSES = {
+    "manual_required",
+    "stopped_at_until",
+    "succeeded",
+}
 # A `succeeded` execution is terminal-protected, and stays that way for every
 # reason that argues about its inputs. It is reachable only for
 # `unbound_completion_evidence`, where the claim is about the completion itself:
@@ -92,7 +106,11 @@ def _settled_execution_state(root: Path) -> dict[str, Any] | None:
     assert_valid(
         state,
         "execution",
-        "execution_state",
+        (
+            "execution_state_retired_managed"
+            if state.get("schema") == _RETIRED_MANAGED_STATE_SCHEMA
+            else "execution_state"
+        ),
         label=f"execution supersession state:{root.name}",
     )
     if state.get("executionId") != root.name:
@@ -125,6 +143,82 @@ def _settled_execution_state(root: Path) -> dict[str, Any] | None:
     # Pure verifier: pending/torn journal recovery is forbidden above.
     verify_terminal_state_integrity(state_path)
     return state
+
+
+def _validate_receipt_derived_state(
+    root: Path,
+    state: Mapping[str, Any],
+) -> None:
+    """Prove the current projection from the immutable stage receipt chain."""
+
+    if state.get("schema") != "quwoquan.content.execution_state_projection":
+        raise ValueError("workflow_drift requires current receipt-derived state")
+    receipts_root = root / "_shared/receipts"
+    if receipts_root.is_symlink() or not receipts_root.is_dir():
+        raise ValueError("workflow_drift requires an immutable stage receipt chain")
+    paths = sorted(receipts_root.iterdir(), key=lambda item: item.name)
+    if not paths or len(paths) > len(RECEIPT_STAGES):
+        raise ValueError("workflow_drift stage receipt chain is empty or oversized")
+    completed: list[str] = []
+    latest: dict[str, Any] | None = None
+    latest_path: Path | None = None
+    for index, receipt_path in enumerate(paths, start=1):
+        if receipt_path.is_symlink() or not receipt_path.is_file():
+            raise ValueError("workflow_drift stage receipt chain is not regular")
+        expected_stage = RECEIPT_STAGES[index - 1]
+        if receipt_path.name != f"{index:03d}-{expected_stage}.json":
+            raise ValueError("workflow_drift stage receipt chain order drift")
+        receipt = validate_stage_receipt_authority(
+            root.name,
+            receipt_path,
+            verify_current_workflow=False,
+        )
+        if (
+            receipt.get("executionId") != root.name
+            or receipt.get("sequence") != index
+            or receipt.get("stage") != expected_stage
+        ):
+            raise ValueError("workflow_drift stage receipt identity drift")
+        if latest is not None and latest.get("verdict") != "pass":
+            raise ValueError("workflow_drift blocked receipt has a successor")
+        if receipt.get("verdict") == "pass":
+            completed.append(expected_stage)
+        latest = receipt
+        latest_path = receipt_path
+    assert latest is not None and latest_path is not None
+    receipt_digest = "sha256:" + hashlib.sha256(latest_path.read_bytes()).hexdigest()
+    expected = {
+        "schema": "quwoquan.content.execution_state_projection",
+        "executionId": root.name,
+        "completed": completed,
+        "status": receipt_state_status(latest).value,
+        "latestStage": str(latest["stage"]),
+        "next": str(latest["next"]),
+        "latestReceiptRef": f"_shared/receipts/{latest_path.name}",
+        "latestReceiptDigest": receipt_digest,
+        "updatedAt": str(latest["recordedAt"]),
+    }
+    if dict(state) != expected:
+        raise ValueError(
+            "workflow_drift execution state is not the current receipt-derived projection"
+        )
+
+
+def _workflow_drift_state_status(
+    root: Path,
+    state: Mapping[str, Any] | None,
+) -> str:
+    if state is None:
+        raise ValueError("workflow_drift supersession requires execution state")
+    status = str(state.get("status") or "missing")
+    eligible = set(_SUPERSESSION_ELIGIBLE_STATE_STATUSES)
+    if state.get("schema") != _RETIRED_MANAGED_STATE_SCHEMA:
+        eligible.add("running")
+    if status not in eligible:
+        raise ValueError(f"execution state is not supersession-eligible: {status}")
+    if status == "running":
+        _validate_receipt_derived_state(root, state)
+    return status
 
 
 def _validate_pre_controller_closure(
@@ -201,6 +295,14 @@ def _stage_release_identity(
             continue
         if document.get("verdict") != "pass":
             continue
+        authority = document.get("authority")
+        if isinstance(authority, Mapping):
+            release_binding = authority.get("releaseBinding")
+            if isinstance(release_binding, Mapping):
+                identity = str(release_binding.get("releaseId") or "")
+                return (identity or None), path.name
+            return None, path.name
+        # 冻结历史 receipt 只读兼容：旧 schema 只能从已记录命令提取 identity。
         commands = (document.get("evidence") or {}).get("commands") or []
         for entry in commands:
             if not isinstance(entry, Mapping):
@@ -287,13 +389,20 @@ def _process_evidence(
         raise ValueError("execution controller lease executionId drift")
     lease_disposition = _lease_disposition(lease)
     state_status = str((state or {}).get("status") or "missing")
-    eligible = set(_SUPERSESSION_ELIGIBLE_STATE_STATUSES)
-    if reason == "unbound_completion_evidence":
-        eligible = set(_COMPLETION_BOUND_ELIGIBLE_STATE_STATUSES)
-    if state is not None and state_status not in eligible:
-        raise ValueError(
-            f"execution state is not supersession-eligible: {state_status}"
-        )
+    if reason == "workflow_drift":
+        # workflow_drift 只为 current receipt-derived running 打开窄门；不得继承
+        # retired managed 对 succeeded 的历史豁免。
+        state_status = _workflow_drift_state_status(root, state)
+    else:
+        eligible = set(_SUPERSESSION_ELIGIBLE_STATE_STATUSES)
+        if state is not None and state.get("schema") == _RETIRED_MANAGED_STATE_SCHEMA:
+            eligible = set(_RETIRED_MANAGED_ELIGIBLE_STATE_STATUSES)
+        if reason == "unbound_completion_evidence":
+            eligible = set(_COMPLETION_BOUND_ELIGIBLE_STATE_STATUSES)
+        if state is not None and state_status not in eligible:
+            raise ValueError(
+                f"execution state is not supersession-eligible: {state_status}"
+            )
     controller = state.get("controller") if state else None
     controller_row = controller if isinstance(controller, Mapping) else {}
     pid = _optional_pid((lease or {}).get("pid") or controller_row.get("pid"))

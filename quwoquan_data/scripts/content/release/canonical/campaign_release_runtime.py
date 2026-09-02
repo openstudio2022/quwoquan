@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from content.execution.campaign.submission import campaign_root
+from content.release.canonical.campaign_submission_reader import campaign_root
 from content.release.canonical.campaign_release_contract import (
     CampaignReleaseRoots,
     read_regular,

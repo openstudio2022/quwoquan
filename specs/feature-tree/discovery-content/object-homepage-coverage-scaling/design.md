@@ -103,7 +103,7 @@
 - 理由：宿主 IDE/CLI Agent 的并发容量由宿主账号和外部服务决定，仓内测量不能授权或代表它；把 receipt 设为前置会再次形成“先跑 M100 才能跑内容”的启动环。
 - 被否决方案：默认容量、受治理 calibration、SDK probe、runtime profile、旧规格数值或 hand-written receipt 作为 execution authority。
 - 约束与影响：吞吐/成本只由真实 stage/fleet receipts 事后评估，不改变对象准入、dispatch、milestone 或 promotion。旧 capacity 代码与 schema 只作为待退役存量，不得被新任务引用。
-- 可测试面：静态与 local_contract 断言 canonical Skill、work package init、stage-record 与两薄 runner 无 capacity receipt 读取路径。
+- 可测试面：静态与 local_contract 断言 canonical Skill、work package init、stage-open/gate/close 与两薄 runner 无 capacity receipt 读取路径。
 - 适用工程根：`.agents/skills/content-production/SKILL.md`
 - 关联要求：`REQ-001`
 - 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md)
@@ -633,21 +633,22 @@
 - 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-032`，开放项为 [`OPEN-015`](./multi-carrier-release/spec.md#open-015) 与 [`OPEN-017`](./multi-carrier-release/spec.md#open-017)
 
 <a id="dec-041"></a>
-### DEC-041 pre-delete 稳产准入是三份独立四载体 M1 proof unit 的只读投影
+### DEC-041 pre-delete 轻量准入是三类 current exact evidence 的只读合取
 
-- 对象边界：`StableProductionProofUnit` 不是生产对象或新 evidence owner，只是 exact refs 的只读投影。一个 unit 固定聚合四个彼此独立的单载体 execution、一个独立 baseline Research release、一个非生产 target 的 canonical `EnvironmentAcceptanceFact`；proof set 恰有三个 unit。它不发现 latest、不写 evidence、不改 inventory、不删除路径。
-- execution 边界：每个 carrier execution 必须由同一 current operational fingerprint 下的 canonical `task init` demand/manifest/target set 闭合，quota/candidate/target/workUnit 均为 1，十阶段 receipt 与 ship-derived succeeded 完整；publish 恰一目标，delivery result 复用 canonical writer/normalizer，只允许 append delta 1 或 exact replay delta 0。四载体不得塞进一个 execution。
-- release 边界：每个 unit 创建自己的 `releaseClass=research/productLifecycleState=research` content release；header、attestation、desired state 与 sample plan 使用各自 canonical schema，不给 attestation 加私有 alias。proof 只接受 `milestone=null` 且 exact cohort/sample=`1/1/1/1` 的 baseline plan，16 个 required cells 由 canonical plan 声明。三 unit 不共享 release identity。
-- environment 边界：每 unit 只绑定一个 `alpha|beta|gamma` target。proof 直接调用 canonical `validate_target_uat_binding` 与 `validate_environment_acceptance_fact`，不复制或放宽 Ops 判据；profile 必须 promotable、device/provider/runner registered、device physical、nonPromotable false，16 个 raw cell exact closure。import/readback/activation/lifecycle/rollback 由同一 acceptance owner refs 证明。
-- recovery：三 unit 合计至少一个 execution 的 `retryOf` 必须指向真实 failed terminal predecessor；非 terminal 或缺 exact predecessor refs 不计数。retry 只证明宿主单轨可恢复，不允许重写 predecessor。
-- fingerprint：fingerprint 只覆盖仍可达的现役 task-init/stage/publish/pool handoff/release/sample-plan/ship/import/readback/TargetUatBinding/EnvironmentAcceptanceFact/raw-result/runner/policy 输入；retirement inventory 是治理状态，不进入 fingerprint。旧不可达家族亦不进入。任一现役输入漂移都会使旧 proof 失效。
-- 准入状态：inventory=`operationally_retired` 与 current passing proof 即足以授权下一增量 physical delete；physical zero 是 post-delete 证据，`retired` 是 post-delete 状态。precheck 始终只读。M1 仅是退役安全探针，不替代 M100，不触发 `DEC-039` 的 M1000 start gate。
-- 被否决方案：顶层三个 executionId、共享 M100 release、四环境 map、pre-delete package/runtime zero、把四载体合成一个 execution、自己实现弱化的 UAT validator、测试 fixture 冒充 production proof，以及双读旧 proof 形状。
-- 可测试面：schema/local contract 固定 3×4 execution、3 release、3 acceptance、每 unit 16 raw cells，覆盖缺 carrier、M100 冒充、共享 release/acceptance、emulator/nonPromotable、缺 raw cell、append/replay delta、terminal retry、fingerprint 与 CLI stdout-only；真实 proof 仍只由后续非生产运行取得。
+- 对象边界：legacy retirement precheck 不是生产对象或新 evidence owner，只是 current operational fingerprint 上三类 exact refs 的只读合取：canonical Data `verify all` receipt、public CLI live-import receipt、单份真实四载体 M1 proof（含 Alpha `m1_api_consumer` EnvironmentAcceptanceFact）。precheck 不发现 latest、不运行命令、不写 evidence、不改 inventory、不删除路径。
+- static verify 边界：`verify all` 必须由 canonical static-all 入口事先执行并形成 exact receipt；precheck 只重验 receipt 的 command identity、source/operational fingerprint、通过终态与 digest。调用 evaluator 时现场运行 verify、自报 boolean、解析裸 stdout 或复用旧 fingerprint receipt 均无 authority。
+- live-import 边界：fresh 隔离解释器按 canonical public CLI command-module 集合逐个 import 后，`sys.modules` 对 `content.execution.agent|queue|controller|recovery|campaign` 及全部子模块为零。receipt exact 绑定完整模块清单、解释器/source fingerprint 与零加载结果；检查只证明 public CLI 不加载旧家族，不以源码字符串扫描或 import 单个入口替代。
+- M1 execution/release 边界：proof 只含 homepage/article/image/video 四个独立单载体 execution，各自 quota/candidate/target/workUnit=1，经 stage-open/gate/close 十阶段 authority closure 到 ship-derived succeeded，并各向 canonical publish/pool 交付一个目标；四者汇入一份 `milestone=null`、exact cohort=`1/1/1/1` 的 immutable Research release。无需第二、第三份 proof，也不要求 `retryOf`。
+- Alpha environment 边界：同一 M1 release 在 `alpha/alpha-local` 完成 import/readback/activation并冻结同一 `releaseId + importRunId + verifyRunId`。proof 直接调用环境 owner 的 canonical EnvironmentAcceptanceFact schema/validator，选择 `acceptanceProfile=m1_api_consumer`，以 `targetBindingRefs=[]` 和 `requiredRawResults` 直接 exact 绑定 16 个 fresh API integration entry×carrier consumer readback CaseResult；profile 不创建 App TargetUatBinding、不要求设备或 App raw UAT，且没有 promotion/predecessor authority。字段条件与普通 promotion 语义唯一归环境 owner，本 DEC 不复制 validator。
+- fingerprint：operational fingerprint 只覆盖仍可达的现役 task-init/stage/publish/pool/release/ship/import/readback/API consumer/public CLI/verify policy 输入；retirement inventory 是治理状态，不进入 fingerprint，旧不可达家族亦不进入。任一现役输入漂移都会使 verify、live-import 或 M1 proof 失效。
+- 准入与状态：inventory=`operationally_retired` 与三类 current passing evidence 足以授权下一增量 physical delete；physical zero 与 post-delete minimal production probe 是删除后证据，inventory=`retired` 是全部 post-delete gates 通过后的状态。precheck 始终只读，M1 只作退役安全探针，不替代 M100 或触发 M1000 start gate。
+- M100 置信分层：三份 identity 独立 proof、registered physical-device 16-cell raw UAT 与至少一次 failed-terminal `retryOf` 下放到 [`multi-carrier-release OPEN-020`](./multi-carrier-release/spec.md#open-020)，继续使用普通 `environment_promotion` EAF 语义；该置信缺口与 physical-delete verdict 正交，不得让 M100 证据反向成为删除前置。
+- 被否决方案：继续以三份 proof/physical UAT/retry 阻塞删除、为 M1 API 消费另建 fact schema、伪造 TargetUatBinding/App UAT/physical device、让普通 EAF 的 promotable 语义兼容 API profile、现场运行 verify、以 boolean/stdout 替代 exact receipt、只导入单个 CLI 入口、pre-delete 要求 package/runtime physical zero，以及双读旧 proof 形状。
+- 可测试面：local_contract 锁定三类 exact binding、单份 4×M1 execution、Alpha-only API profile、16 个 API integration slots、旧五家族 live-import zero、receipt/fingerprint 漂移与 CLI stdout-only；负例覆盖第二份 proof 被误设必填、physical/device/retry 被误设前置、App raw result 冒充 API slot、m1 fact 被用作 promotion/predecessor，以及 post-delete gates 前 inventory 提前写 `retired`。真实 proof 仍只由后续 Alpha 运行取得。
 - 适用工程根：`quwoquan_data/scripts/content/execution/stable_production_proof.py`、`quwoquan_data/scripts/governance/stable_production_proof.py`、`quwoquan_data/scripts/content/execution/operational_fingerprint.py`
 - 关联要求：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `REQ-006`、`REQ-007`
-- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的旧编排退役准入
-- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-034`
+- 影响 Story：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的旧编排退役准入与 M100 放量置信分层
+- 关联验收：[`multi-carrier-release`](./multi-carrier-release/spec.md) 的 `GWT-034` 与 `GWT-035`，开放项为 [`OPEN-006`](./multi-carrier-release/spec.md#open-006) 与 [`OPEN-020`](./multi-carrier-release/spec.md#open-020)
 
 ## 5. 失败与恢复
 

@@ -19,7 +19,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign.request_envelope import envelopes_root
+from content.execution.planning.request_envelope import envelopes_root
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _read_json,

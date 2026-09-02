@@ -150,17 +150,22 @@ func (allowAllFeedViewerBlockReader) ListBlockedPersonaIDs(
 	return []string{}, nil
 }
 
-type readyFeedActiveSupplyReader struct{}
+type readyFeedActiveSupplyReader struct{ releaseClass string }
 
-func (readyFeedActiveSupplyReader) ActiveSupplySnapshot(
+func (reader readyFeedActiveSupplyReader) ActiveSupplySnapshot(
 	context.Context,
 ) (feedapp.ActiveSupplySnapshot, error) {
+	releaseClass := strings.TrimSpace(reader.releaseClass)
+	if releaseClass == "" {
+		releaseClass = "commercial"
+	}
 	return feedapp.ActiveSupplySnapshot{
 		Environment:     "local_contract",
 		SourceOwner:     "qwq_data",
 		Status:          "active",
 		ActiveReleaseID: "rel_local_contract",
 		ManifestDigest:  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ReleaseClass:    releaseClass,
 		ReadbackStatus:  "passed",
 		Posts:           1,
 		PlayableVideos:  1,
@@ -222,6 +227,12 @@ func newTestHandler() http.Handler {
 }
 
 func newTestHandlerWithHotPath() (http.Handler, *rtrec.HotPath) {
+	return newTestHandlerWithActiveSupply(readyFeedActiveSupplyReader{})
+}
+
+func newTestHandlerWithActiveSupply(
+	activeSupply feedapp.ActiveSupplyReader,
+) (http.Handler, *rtrec.HotPath) {
 	redis := testsupport.NewFakeRedis()
 	hotPath := rtrec.NewHotPath(redis)
 	seedPosts := recinfra.DefaultSeedPosts()
@@ -250,7 +261,7 @@ func newTestHandlerWithHotPath() (http.Handler, *rtrec.HotPath) {
 		feedsupport.RankedRecommendationOptions(
 			rankedEngine,
 			feedapp.WithFeedViewerBlockReader(allowAllFeedViewerBlockReader{}),
-			feedapp.WithActiveSupplyReader(readyFeedActiveSupplyReader{}),
+			feedapp.WithActiveSupplyReader(activeSupply),
 			feedapp.WithFeedDeliveryPageStore(
 				deliveryredis.NewStore(rtredis.NewMemoryClient()),
 			),
@@ -329,6 +340,41 @@ func TestHealthz(t *testing.T) {
 	newTestHandler().ServeHTTP(rec, req)
 	if rec.Code != 200 {
 		t.Fatalf("unexpected status: %d", rec.Code)
+	}
+}
+
+// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-032
+func TestAnonymousIdentityWorkFeedConvergesResearchReleaseOnWire(t *testing.T) {
+	handler, _ := newTestHandlerWithActiveSupply(
+		readyFeedActiveSupplyReader{releaseClass: "research"},
+	)
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/content/feed?identity=work&sort=recommend&limit=1",
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("anonymous research feed status=%d: %s", recorder.Code, recorder.Body.String())
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode anonymous research feed: %v", err)
+	}
+	if envelope["outcome"] != "empty" || envelope["emptyReason"] != "no_active_release" {
+		t.Fatalf("anonymous research feed must converge to no_active_release: %#v", envelope)
+	}
+	items, itemsPresent := envelope["items"].([]any)
+	if !itemsPresent || len(items) != 0 {
+		t.Fatalf("anonymous research feed items=%#v, want required empty list", envelope["items"])
+	}
+	for _, forbidden := range []string{"releaseId", "manifestDigest"} {
+		if _, has := envelope[forbidden]; has {
+			t.Fatalf("anonymous research wire must omit %s: %#v", forbidden, envelope)
+		}
 	}
 }
 

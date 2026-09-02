@@ -316,7 +316,7 @@ def test_old_content_live_receipt_cannot_promote_new_startup(
         json.dumps(
             {
                 "schema": "quwoquan_ops.app_content_uat_receipt",
-                "status": "passed",
+                "status": "complete",
                 "releaseId": "release-1",
                 "manifestDigest": DIGEST,
                 "readinessReceiptDigests": [DIGEST],
@@ -383,7 +383,7 @@ def test_content_live_finds_the_aggregate_receipt_in_the_repo_runs_root(
         json.dumps(
             {
                 "schema": "quwoquan_ops.app_content_uat_receipt",
-                "status": "passed",
+                "status": "complete",
                 "releaseId": "release-1",
                 "manifestDigest": DIGEST,
                 "readinessReceiptDigests": [DIGEST],
@@ -438,7 +438,7 @@ def test_content_live_rejects_target_baseline_or_startup_candidate_drift(
         json.dumps(
             {
                 "schema": "quwoquan_ops.app_content_uat_receipt",
-                "status": "passed",
+                "status": "complete",
                 "releaseId": "release-1",
                 "manifestDigest": DIGEST,
                 "readinessReceiptDigests": [DIGEST],
@@ -510,7 +510,7 @@ def test_content_live_still_rejects_a_repo_receipt_from_another_generation(
         json.dumps(
             {
                 "schema": "quwoquan_ops.app_content_uat_receipt",
-                "status": "passed",
+                "status": "complete",
                 "releaseId": "release-1",
                 "manifestDigest": DIGEST,
                 "readinessReceiptDigests": [DIGEST],

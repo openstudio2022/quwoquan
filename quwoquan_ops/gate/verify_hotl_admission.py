@@ -13,13 +13,13 @@ sys.path.insert(0, str(ROOT))
 
 from lib.hotl_admission import contract_failure, inspect, load_contract  # noqa: E402
 
+# write expansion blocker 是否必须在场由动态 S4 准入态派生（objective-execution REQ-003）。
 CURRENT_BLOCKERS = (
     "AUTHORITY_PROVIDER_UNAVAILABLE",
     "HUMAN_BOTTLENECK_COHORT_MISSING",
     "CONTROL_PROOF_MISSING",
     "COMMERCIAL_AUTHORITY_NOT_CLOSED",
     "CHECKPOINT_POLICY_UNRESOLVED",
-    "WRITE_EXPANSION_NOT_ADMITTED",
 )
 
 _BLOCKER_ERROR_CODES = {
@@ -155,14 +155,27 @@ def main() -> int:
     if activation.get("provider_available") is not False or activation.get("supplied_receipt_trust") != "audit_only":
         issues.append(("v1 activation provider boundary drifted", None, "HOTL.ACTIVATION_BLOCKED"))
 
-    for blocker in CURRENT_BLOCKERS:
+    try:
+        from lib.objective_execution import inspect_admission
+
+        expected_s4_status = str(inspect_admission().get("status"))
+    except Exception as error:
+        _emit_issue(
+            contract=contract, code="HOTL.OBJECTIVE_ADMISSION_BLOCKED",
+            detail=f"canonical S4 derivation unavailable: {_detail(error)}",
+        )
+        return 1
+    required_blockers = list(CURRENT_BLOCKERS)
+    if expected_s4_status != "admitted":
+        required_blockers.append("WRITE_EXPANSION_NOT_ADMITTED")
+    for blocker in required_blockers:
         if blocker not in blocker_values:
             issues.append(("current readback is missing required fail-closed blocker", blocker, None))
     if readback.get("activation_required") is not True:
         issues.append(("current readback must still require activation", "ACTIVATION_PROVIDER_UNAVAILABLE", None))
     s4 = readback.get("s4_readback")
-    if not isinstance(s4, Mapping) or s4.get("status") != "not_admitted":
-        issues.append(("dynamic S4 readback must remain not_admitted under current branch policy", "OBJECTIVE_ADMISSION_BLOCKED", None))
+    if not isinstance(s4, Mapping) or s4.get("status") != expected_s4_status:
+        issues.append(("dynamic S4 readback must match canonical branch policy derivation", "OBJECTIVE_ADMISSION_BLOCKED", None))
     try:
         cli = (ROOT / "quwoquan_ops/cli/hotl_admission.py").read_text(encoding="utf-8")
         parser_region = cli[cli.index("def build_parser"):cli.index("def _emit")]

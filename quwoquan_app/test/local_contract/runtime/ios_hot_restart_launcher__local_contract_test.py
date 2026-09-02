@@ -51,7 +51,7 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         self,
     ) -> None:
         attempt = {
-            "launchProvenance": "workspace_flutter_run",
+            "launchProvenance": "canonical_launcher",
             "runtimeConfigSupplyMode": "external_runtime_package",
             "bootstrapFailure": False,
             "terminalSurface": "router_shell",
@@ -66,7 +66,7 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         default_issues = _attempt_evidence_issues(
             "cold",
             attempt,
-            expected_launch_provenance="workspace_flutter_run",
+            expected_launch_provenance="canonical_launcher",
             is_cold=True,
         )
         self.assertEqual(
@@ -80,7 +80,7 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
             _attempt_evidence_issues(
                 "cold",
                 attempt,
-                expected_launch_provenance="workspace_flutter_run",
+                expected_launch_provenance="canonical_launcher",
                 is_cold=True,
                 max_cold_native_safe_terminal_ms=12000,
             ),
@@ -97,7 +97,7 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
             _attempt_evidence_issues(
                 "cold",
                 embedded_package,
-                expected_launch_provenance="workspace_flutter_run",
+                expected_launch_provenance="canonical_launcher",
                 is_cold=True,
                 max_cold_native_safe_terminal_ms=12000,
             ),
@@ -110,7 +110,7 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
             _attempt_evidence_issues(
                 "cold",
                 recovery_surface,
-                expected_launch_provenance="workspace_flutter_run",
+                expected_launch_provenance="canonical_launcher",
                 is_cold=True,
                 max_cold_native_safe_terminal_ms=12000,
             ),
@@ -122,7 +122,7 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
             _attempt_evidence_issues(
                 "cold",
                 cold_reported_slow,
-                expected_launch_provenance="workspace_flutter_run",
+                expected_launch_provenance="canonical_launcher",
                 is_cold=True,
                 max_cold_native_safe_terminal_ms=12000,
             ),
@@ -136,7 +136,7 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         hot_issues = _attempt_evidence_issues(
             "hot_restart_1",
             hot_slow,
-            expected_launch_provenance="workspace_flutter_run",
+            expected_launch_provenance="canonical_launcher",
             is_cold=False,
             max_cold_native_safe_terminal_ms=12000,
         )
@@ -186,9 +186,11 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         source = LAUNCHER.read_text(encoding="utf-8")
         self.assertIn('--launch-provenance "$LAUNCH_PROVENANCE"', source)
         self.assertIn(
-            "canonical_launcher|workspace_flutter_run|workspace_ide_debug",
+            "canonical_launcher|workspace_ide_debug",
             source,
         )
+        # workspace facade 已退役：launcher 不再承认 workspace_flutter_run。
+        self.assertNotIn("workspace_flutter_run", source)
         # runtime config 走签名 package 的安装后激活，不进编译期 define；构建输入的
         # 所有权也整体归 canonical executor，因此 launcher 既不写 dart define，
         # 也不自持第二处 define 校验。
@@ -211,25 +213,22 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
             '--target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
             source,
         )
-        # workspace surface（IDE Flutter Debug / 字面 flutter run）没有命令行
-        # --mode 通道；mode 与环境同构，经 QWQ_RUN_MODE 环境变量选择，默认
+        # workspace surface（IDE Flutter Debug）没有命令行 --mode 通道；
+        # mode 与环境同构，经 QWQ_RUN_MODE 环境变量选择，默认
         # content-live，非法值走同一 GATE_BLOCK 校验。
         self.assertIn('RUN_MODE="${QWQ_RUN_MODE:-content-live}"', source)
 
-    def test_hot_restart_smoke_covers_both_surfaces_and_three_restarts(self) -> None:
+    def test_hot_restart_smoke_covers_canonical_surface_and_three_restarts(self) -> None:
         source = HOT_RESTART.read_text(encoding="utf-8")
         self.assertIn('APP_DIR / "run.sh"', source)
-        # workspace surface 模拟工作区 facade 终端：facade bin 前置 PATH，
-        # mode 经 QWQ_RUN_MODE 透传给同一 canonical 执行体。
-        self.assertIn('environment["QWQ_RUN_MODE"] = args.run_mode', source)
-        self.assertIn("scripts/tools/flutter_facade/bin", source)
-        # workspace surface 走字面 flutter run（工作区 facade 归一化）；环境仅由
-        # QWQ_ENVIRONMENT 表达，不再携带 --flavor 等启动配置参数。
-        self.assertIn('["flutter", "run", "-d", args.device_id]', source)
+        # workspace facade 已退役：smoke 只驱动 canonical launcher，
+        # mode 经 --mode 参数透传。
+        self.assertNotIn("flutter_facade", source)
+        self.assertNotIn("workspace_flutter_run", source)
+        self.assertNotIn('["flutter", "run", "-d", args.device_id]', source)
         self.assertNotIn('"--flavor"', source)
-        self.assertIn('"workspace_flutter_run"', source)
         self.assertIn('"--launch-provenance"', source)
-        self.assertIn('environment["QWQ_ENVIRONMENT"] = args.env', source)
+        self.assertIn('environment["QWQ_APP_RUNTIME_ENV"] = args.env', source)
         # resident 会话是 flutter attach --machine（daemon 协议）：hot restart
         # 走 app.restart JSON-RPC；交互式 R 键仅作为非 daemon 会话的后备。
         self.assertIn('"method": "app.restart"', source)

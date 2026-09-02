@@ -206,6 +206,7 @@ def _fixture(
         "env/alpha/facts/release-m100.json",
         {
             "schema": "quwoquan_ops.environment_acceptance_fact.v1",
+            "acceptanceProfile": "environment_promotion",
             "factId": "sha256:" + "7" * 64,
             "environment": "alpha",
             "target": "alpha-local",

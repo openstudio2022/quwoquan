@@ -12,7 +12,7 @@ from content.execution.campaign import submission as campaign_submission
 from content.execution.campaign import (
     submission_identity as campaign_submission_identity,
 )
-from content.execution.campaign.external_inputs import (
+from content.execution.source_pool.external_inputs import (
     CampaignExternalInputError,
     bind_external_input_refs,
     envelope_acquisition_root,

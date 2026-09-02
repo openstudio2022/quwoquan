@@ -101,6 +101,8 @@ def evaluate_stable_production_proof_request(
     return stable.evaluate_stable_production_proof(
         artifact_root=Path(str(selected_root)),
         expected_fingerprint=request.get("fingerprint", ""),
+        verify_all_receipt=request.get("verifyAllReceipt", {}),
+        public_cli_live_import_zero_receipt=request.get("publicCliLiveImportZeroReceipt", {}),
         proof_units=request.get("proofUnits", []),
     )
 
@@ -243,7 +245,7 @@ def evaluate_legacy_retirement_precheck(
             proof = None
             proof_binding = None
             proof_error = str(exc)
-            missing.append("current stable production proof for exactly three independent four-carrier units")
+            missing.append("current stable production proof for exactly one four-carrier unit")
 
     inventory: dict[str, Any] | None = None
     inventory_ref: dict[str, str] | None = None

@@ -9,16 +9,14 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
-from content.execution.agent.outcome import AgentRunOutcome
-from core.control_types import AgentProvider
-from content.execution.campaign.external_inputs import (
+from content.execution.source_pool.external_inputs import (
     bind_external_input_refs,
     payload_digest,
 )
 from content.source import professional_commons_video_input as commons_input
 from content.source import professional_video_acquisition
+from content.source.host_source_review import record_host_source_review_result
 from content.source.professional_safety_evidence import file_sha256
-from content.execution.model_contract import governed_cursor_grok_model
 
 _SHA = lambda value: "sha256:" + hashlib.sha256(value).hexdigest()
 _SOURCE_DIGEST = "sha256:" + "1" * 64
@@ -77,41 +75,48 @@ def _handoff() -> dict[str, object]:
     }
 
 
-def _review_journal(root: Path, calls: list[str]):
-    def run(**kwargs):
-        calls.append(str(kwargs["prompt"]))
-        journal_root = root / "source-reviews" / "test-journal"
-        request_path = journal_root / "request.json"
-        attempt_path = journal_root / "attempts" / "001.json"
-        request_path.parent.mkdir(parents=True, exist_ok=True)
-        attempt_path.parent.mkdir(parents=True, exist_ok=True)
-        result = (
-            '{"status":"passed","entityMatch":"matched","privacyRisk":"none",'
-            '"minorRisk":"none","maliciousMediaRisk":"none",'
-            '"watermarkStatus":"absent","qualityStatus":"passed","findings":[]}'
+def _record_pending_reviews(root: Path, outcomes) -> int:
+    """宿主对每个 HOST_REVIEW_PENDING 请求记录一次 passed 语义结论。"""
+    recorded = 0
+    for row in outcomes:
+        if row.get("failureCode") != "DATA.SOURCE.HOST_REVIEW_PENDING":
+            continue
+        request_ref = str(row["requestRef"])
+        request = json.loads((root / request_ref).read_text(encoding="utf-8"))
+        record_host_source_review_result(
+            evidence_root=root,
+            result_input={
+                "schema": "quwoquan_data.host_source_review_result_input",
+                "requestRef": request_ref,
+                "requestDigest": request["requestDigest"],
+                "actor": {
+                    "host": "cursor",
+                    "sessionId": "commons-review-session",
+                    "modelFamily": "gpt-5",
+                    "auditRunId": "commons-review-audit-001",
+                },
+                "reviewedAt": "2026-08-12T12:01:00Z",
+                "verdict": {
+                    "status": "passed",
+                    "entityMatch": "matched",
+                    "qualityStatus": "passed",
+                    "privacyRisk": "none",
+                    "minorRisk": "none",
+                    "maliciousMediaRisk": "none",
+                    "watermarkStatus": "absent",
+                    "findings": [],
+                },
+            },
         )
-        request_path.write_text("{}", encoding="utf-8")
-        attempt = {
-            "status": "finished",
-            "provider": "cursor_sdk",
-            "runId": "commons-grok-review",
-            "recordedAt": "2026-08-12T12:01:00Z",
-            "resultSha256": _SHA(result.encode()),
-        }
-        attempt_path.write_text(json.dumps(attempt), encoding="utf-8")
-        outcome = AgentRunOutcome.finished(
-            provider=AgentProvider.CURSOR_SDK,
-            run_id="commons-grok-review",
-            result_text=result,
-        )
-        return {
-            "requestPath": request_path,
-            "attemptPath": attempt_path,
-            "attempt": attempt,
-            "outcome": outcome,
-        }, attempt_path
+        recorded += 1
+    return recorded
 
-    return run
+
+def _result_files(root: Path) -> list[Path]:
+    results_root = root / "host-source-reviews" / "results"
+    if not results_root.is_dir():
+        return []
+    return sorted(results_root.glob("*.json"))
 
 
 def _install_common_fakes(
@@ -120,8 +125,7 @@ def _install_common_fakes(
     root: Path,
     source: Path,
     replacement: Path | None = None,
-) -> list[str]:
-    calls: list[str] = []
+) -> None:
     fetch_count = 0
 
     monkeypatch.setattr(
@@ -189,11 +193,9 @@ def _install_common_fakes(
             "samples": [],
         },
     )
-    monkeypatch.setattr(commons_input, "run_source_review", _review_journal(root, calls))
-    return calls
 
 
-def _acquire(
+def _acquire_once(
     root: Path,
     *,
     discovery=commons_input.discover_commons_sourced_videos,
@@ -206,9 +208,22 @@ def _acquire(
         entity_aliases=("杭州西湖",),
         handoff_ref=handoff,
         output_root=root,
-        runner=lambda _prompt: pytest.fail("source journal fake must own runner"),
         discovery=discovery,
     )
+
+
+def _acquire(
+    root: Path,
+    *,
+    discovery=commons_input.discover_commons_sourced_videos,
+) -> list[dict[str, object]]:
+    """两阶段驱动：宿主对 pending 审核请求记录结论后重入同一命令。"""
+    try:
+        return _acquire_once(root, discovery=discovery)
+    except commons_input.CommonsVideoBatchBlocked as blocked:
+        if not _record_pending_reviews(root, blocked.outcomes):
+            raise
+        return _acquire_once(root, discovery=discovery)
 
 
 def test_commons_public_direct_bytes_review_and_campaign_binding(
@@ -217,11 +232,11 @@ def test_commons_public_direct_bytes_review_and_campaign_binding(
     acquisition_root = tmp_path / "acquisition"
     video_root = acquisition_root / "video"
     source = _video(tmp_path / "source.mp4", moving=True, seed=1)
-    calls = _install_common_fakes(monkeypatch, root=video_root, source=source)
+    _install_common_fakes(monkeypatch, root=video_root, source=source)
 
     outcomes = _acquire(video_root, discovery=commons_input.discover_commons_sourced_videos)
 
-    assert len(calls) == 1, json.dumps(outcomes, ensure_ascii=False)
+    assert len(_result_files(video_root)) == 1, json.dumps(outcomes, ensure_ascii=False)
     assert outcomes[0]["acquisitionStatus"] == "acquired", json.dumps(
         outcomes, ensure_ascii=False
     )
@@ -243,7 +258,14 @@ def test_commons_public_direct_bytes_review_and_campaign_binding(
         "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
         "authorizationProof": _candidate()["authorizationProofUrl"],
     }
-    assert safety["reviewEvidence"]["model"] == governed_cursor_grok_model()
+    review_evidence = safety["reviewEvidence"]
+    assert review_evidence["actor"]["host"] == "cursor"
+    assert "model" not in review_evidence
+    assert "provider" not in review_evidence
+    result_document = json.loads(
+        (video_root / review_evidence["resultRef"]).read_text(encoding="utf-8")
+    )
+    assert result_document["resultDigest"] == review_evidence["resultDigest"]
     refs = bind_external_input_refs(
         "video",
         [
@@ -270,7 +292,7 @@ def test_commons_public_direct_bytes_review_and_campaign_binding(
     assert replay[0]["receiptRef"] == outcomes[0]["receiptRef"]
     assert replay[0]["receiptDigest"] == outcomes[0]["receiptDigest"]
     assert replay[0]["contentSha256"] == outcomes[0]["contentSha256"]
-    assert len(calls) == 1
+    assert len(_result_files(video_root)) == 1
 
 
 def test_commons_download_failure_is_typed(
@@ -327,7 +349,7 @@ def test_commons_unplayable_preflight_is_typed_without_review(
 ) -> None:
     root = tmp_path / "acquisition" / "video"
     source = _video(tmp_path / "static.mp4", moving=False, seed=4)
-    calls = _install_common_fakes(monkeypatch, root=root, source=source)
+    _install_common_fakes(monkeypatch, root=root, source=source)
     unplayable_probe = {
         "width": 320,
         "height": 180,
@@ -356,7 +378,7 @@ def test_commons_unplayable_preflight_is_typed_without_review(
     assert outcome["preflight"] == "DATA.SOURCE.NOT_PLAYABLE_MOTION_VIDEO"
     assert outcome["distributionDecision"] == "blocked"
     assert outcome["failureCode"] == "DATA.SOURCE.SAFETY_REVIEW_BLOCKED"
-    assert calls == []
+    assert _result_files(root) == []
 
 
 def test_commons_resume_adopts_frozen_candidate_despite_fresh_observed_at(
@@ -365,18 +387,11 @@ def test_commons_resume_adopts_frozen_candidate_despite_fresh_observed_at(
     """发现层每次运行都会盖新的 observedAt；resume 必须采纳冻结观测而非 create-once 冲突。"""
     root = tmp_path / "acquisition" / "video"
     source = _video(tmp_path / "source.mp4", moving=True, seed=6)
-    calls = _install_common_fakes(monkeypatch, root=root, source=source)
-    monkeypatch.setattr(
-        commons_input,
-        "run_source_review",
-        lambda **_kwargs: (_ for _ in ()).throw(
-            RuntimeError("simulated crash after metadata freeze")
-        ),
-    )
+    _install_common_fakes(monkeypatch, root=root, source=source)
     with pytest.raises(commons_input.CommonsVideoBatchBlocked) as captured:
-        _acquire(root, discovery=commons_input.discover_commons_sourced_videos)
+        _acquire_once(root, discovery=commons_input.discover_commons_sourced_videos)
     assert captured.value.outcomes[0]["failureCode"] == (
-        "DATA.SOURCE.CANDIDATE_EXCLUDED"
+        "DATA.SOURCE.HOST_REVIEW_PENDING"
     )
     metadata_files = list(root.glob("commons-direct/*/metadata.json"))
     assert len(metadata_files) == 1
@@ -386,7 +401,6 @@ def test_commons_resume_adopts_frozen_candidate_despite_fresh_observed_at(
 
     fresh = _candidate()
     fresh["popularitySignals"] = {"observedAt": "2026-08-13T09:00:00+00:00"}
-    monkeypatch.setattr(commons_input, "run_source_review", _review_journal(root, calls))
 
     outcome = _acquire(root, discovery=lambda *_args, **_kwargs: [fresh])[0]
 
@@ -404,20 +418,12 @@ def test_commons_resume_still_blocks_stable_field_drift(
 ) -> None:
     root = tmp_path / "acquisition" / "video"
     source = _video(tmp_path / "source.mp4", moving=True, seed=7)
-    calls = _install_common_fakes(monkeypatch, root=root, source=source)
-    monkeypatch.setattr(
-        commons_input,
-        "run_source_review",
-        lambda **_kwargs: (_ for _ in ()).throw(
-            RuntimeError("simulated crash after metadata freeze")
-        ),
-    )
+    _install_common_fakes(monkeypatch, root=root, source=source)
     with pytest.raises(commons_input.CommonsVideoBatchBlocked) as captured:
-        _acquire(root, discovery=commons_input.discover_commons_sourced_videos)
+        _acquire_once(root, discovery=commons_input.discover_commons_sourced_videos)
     assert captured.value.outcomes[0]["failureCode"] == (
-        "DATA.SOURCE.CANDIDATE_EXCLUDED"
+        "DATA.SOURCE.HOST_REVIEW_PENDING"
     )
-    monkeypatch.setattr(commons_input, "run_source_review", _review_journal(root, calls))
     # relevance 不参与 candidate token，但属于冻结 metadata 的稳定字段。
     drifted = _candidate()
     drifted["relevance"] = "被篡改的证据描述"

@@ -13,6 +13,10 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
+from content.source.host_source_review import (
+    prepare_host_source_review_request,
+    record_host_source_review_result,
+)
 from content.source.media_source_admission import MediaSourceAdmissionCommandWriter
 from content.source.research.scale_source_pool_homepage_article import (
     project_scale_source_pool_homepage_article,
@@ -477,24 +481,69 @@ def _media_admission_row(
             "distributionDecision": "research_allowed",
             "sourceAttribution": attribution,
         },
-        "source_semantic_review": {
-            "schema": "quwoquan_data.fixture_media_source_semantic_review",
-            **common,
-            "status": "passed",
-            "entityMatch": "matched",
-            "qualityStatus": "passed",
-            "privacyRisk": "none",
-            "minorRisk": "none",
-            "maliciousMediaRisk": "none",
-            "watermarkStatus": "absent",
-            "findings": [],
-        },
     }
     evidence_refs: dict[str, str] = {}
     for role, document in evidence_documents.items():
         ref = (evidence_dir / f"{role}.json").as_posix()
         _write_json(evidence_root / ref, document)
         evidence_refs[role] = ref
+    # 现役单轨：source_semantic_review 只能是 canonical host source review result。
+    safety_scan_ref = (evidence_dir / "safety_scan.json").as_posix()
+    _write_json(
+        evidence_root / safety_scan_ref,
+        {
+            "schema": "quwoquan_data.fixture_media_safety_scan",
+            **common,
+            "machineVerdict": {"status": "passed"},
+        },
+    )
+    request, request_ref = prepare_host_source_review_request(
+        evidence_root=evidence_root,
+        source_identity={
+            **identity,
+            "executionBundleDigest": "sha256:" + "d" * 64,
+            "handoffDigest": "sha256:" + "e" * 64,
+        },
+        asset_kind=carrier,
+        asset_id=asset_id,
+        asset_ref=asset_ref,
+        content_sha256=content_sha256,
+        entity_id=entity_id,
+        observed_entity_id=entity_id,
+        content_ref=source_url,
+        evidence_refs={
+            "acquisition": evidence_refs["acquisition"],
+            "media_probe": evidence_refs["media_probe"],
+            "safety_scan": safety_scan_ref,
+            "rights_attribution": evidence_refs["rights_attribution"],
+        },
+    )
+    _result, review_result_ref = record_host_source_review_result(
+        evidence_root=evidence_root,
+        result_input={
+            "schema": "quwoquan_data.host_source_review_result_input",
+            "requestRef": request_ref,
+            "requestDigest": request["requestDigest"],
+            "actor": {
+                "host": "cursor",
+                "sessionId": "scale-pool-fixture-session",
+                "modelFamily": "gpt-5",
+                "auditRunId": "scale-pool-fixture-audit-001",
+            },
+            "reviewedAt": "2026-08-08T00:00:00Z",
+            "verdict": {
+                "status": "passed",
+                "entityMatch": "matched",
+                "qualityStatus": "passed",
+                "privacyRisk": "none",
+                "minorRisk": "none",
+                "maliciousMediaRisk": "none",
+                "watermarkStatus": "absent",
+                "findings": [],
+            },
+        },
+    )
+    evidence_refs["source_semantic_review"] = review_result_ref
     receipt, receipt_ref = MediaSourceAdmissionCommandWriter(evidence_root).write(
         asset_kind=carrier,
         asset_id=asset_id,

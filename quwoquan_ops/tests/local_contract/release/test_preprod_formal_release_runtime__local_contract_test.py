@@ -630,6 +630,96 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
             self.assertTrue(integration["skipped"])
             self.assertFalse(integration["ok"])
 
+    def test_content_consumer_health_does_not_require_device_or_app_uat(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            report_dir = Path(temp) / "health"
+            args = argparse.Namespace(
+                target="alpha-local",
+                scope="content-consumer",
+                request_timeout_seconds=1,
+                retry_attempts=1,
+                retry_sleep_seconds=0,
+                read_only=True,
+                deadline_epoch=0,
+            )
+            availability = ready_availability_report("alpha-local", "alpha")
+            for layer in availability["userAvailability"]:
+                if layer["name"] in {"device_bound", "content_live_passed"}:
+                    layer.update(status="blocked", issues=[f"{layer['name']} not required"])
+            availability.update(
+                status="failed", firstBlockerClass="device",
+                firstBlocker="device_bound not required",
+            )
+            with (
+                mock.patch.object(stackctl, "resolve_report_dir", return_value=report_dir),
+                mock.patch.object(
+                    stackctl, "_health_checks_for_target",
+                    return_value=[{"name": "api-health", "scope": "edge", "url": "https://api.alpha.invalid/healthz"}],
+                ),
+                mock.patch.object(
+                    stackctl, "fetch_url", return_value=(True, 200, "ok", "application/json")
+                ),
+                mock.patch.object(
+                    stackctl, "_read_only_user_availability_report", return_value=availability
+                ),
+                mock.patch.object(stackctl, "_write_summary_bundle"),
+                mock.patch.object(stackctl, "_write_stdout_markdown"),
+                mock.patch.object(stackctl, "relpath", side_effect=str),
+            ):
+                result = stackctl.command_health(args)
+
+            self.assertEqual(result["exitCode"], 0, result)
+            report = json.loads((report_dir / "report.json").read_text())
+            self.assertEqual(
+                report["requiredUserAvailabilityLayers"],
+                [
+                    "build_ready", "runtime_full_ready", "provider_ready",
+                    "release_active", "content_exact_queries_ready",
+                ],
+            )
+            self.assertEqual(report["userAvailabilityReport"]["status"], "failed")
+
+    def test_content_consumer_health_still_fails_on_api_required_layer(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            report_dir = Path(temp) / "health"
+            args = argparse.Namespace(
+                target="alpha-local",
+                scope="content-consumer",
+                request_timeout_seconds=1,
+                retry_attempts=1,
+                retry_sleep_seconds=0,
+                read_only=True,
+                deadline_epoch=0,
+            )
+            availability = ready_availability_report("alpha-local", "alpha")
+            for layer in availability["userAvailability"]:
+                if layer["name"] == "content_exact_queries_ready":
+                    layer.update(status="blocked", issues=["content exact queries failed"])
+            availability.update(
+                status="failed", firstBlockerClass="content_exact_queries",
+                firstBlocker="content exact queries failed",
+            )
+            with (
+                mock.patch.object(stackctl, "resolve_report_dir", return_value=report_dir),
+                mock.patch.object(
+                    stackctl, "_health_checks_for_target",
+                    return_value=[{"name": "api-health", "scope": "edge", "url": "https://api.alpha.invalid/healthz"}],
+                ),
+                mock.patch.object(
+                    stackctl, "fetch_url", return_value=(True, 200, "ok", "application/json")
+                ),
+                mock.patch.object(
+                    stackctl, "_read_only_user_availability_report", return_value=availability
+                ),
+                mock.patch.object(stackctl, "_write_summary_bundle"),
+                mock.patch.object(stackctl, "_write_stdout_markdown"),
+                mock.patch.object(stackctl, "relpath", side_effect=str),
+            ):
+                result = stackctl.command_health(args)
+
+            self.assertEqual(result["exitCode"], 1)
+            self.assertIn("content exact queries failed", "\n".join(result["details"]))
+
     def test_health_http_checks_run_concurrently_and_preserve_declared_order(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             report_dir = Path(temp) / "health"

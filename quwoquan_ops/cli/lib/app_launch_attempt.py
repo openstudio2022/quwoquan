@@ -86,8 +86,15 @@ def validate_app_launch_attempt(value: object) -> dict[str, Any]:
     )
     if value.get("buildProfile") != expected_profile:
         raise ValueError("App launch attempt build profile is invalid")
-    if value.get("launchProvenance") not in LAUNCH_PROVENANCES:
+    launch_provenance = str(value.get("launchProvenance") or "")
+    if launch_provenance not in LAUNCH_PROVENANCES:
         raise ValueError("App launch attempt launch provenance is invalid")
+    # terminal carrier receipt 机制已退役：两个字段保留 schema 形状但只允许空值。
+    for field in ("terminalCarrierReceiptDigest", "terminalCarrierReceiptRef"):
+        if str(value.get(field) or ""):
+            raise ValueError(
+                "App launch attempt terminal carrier identity is retired and must stay empty"
+            )
     if value.get("runtimeConfigSupplyMode") not in RUNTIME_CONFIG_SUPPLY_MODES:
         raise ValueError("App launch attempt runtime config supply mode is invalid")
     status = str(value.get("status") or "")
@@ -205,6 +212,8 @@ def create_app_launch_attempt(
         "applicationId": application_id,
         "flutterVersion": flutter_version,
         "commandResolutionDigest": command_resolution_digest,
+        "terminalCarrierReceiptDigest": "",
+        "terminalCarrierReceiptRef": "",
         "launchDigest": launch_digest,
         "startupTerminalAttemptId": "",
         "startupTerminalEvidenceDigest": "",

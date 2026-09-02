@@ -14,6 +14,7 @@ SCHEMA = "quwoquan_ops.environment_acceptance_fact.v1"
 ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
 PREDECESSOR = {"alpha": None, "beta": "alpha", "gamma": "beta", "prod": "gamma"}
 PROD_ROLLOUT_STAGES = ("canary", "5", "20", "50", "100")
+ACCEPTANCE_PROFILES = ("environment_promotion", "m1_api_consumer")
 _DIGEST_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
 _IDENTITY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
 _PLATFORMS = frozenset({"android", "ios"})
@@ -22,8 +23,8 @@ _ENTRIES = ("feed", "search", "recommendation", "direct_or_object_route")
 _CARRIERS = ("homepage", "article", "image", "video")
 _FACT_KEYS = frozenset(
     {
-        "schema", "factId", "environment", "target", "releaseId", "releaseDigest",
-        "samplePlanRef", "samplePlanDigest", "targetBindingRefs",
+        "schema", "factId", "acceptanceProfile", "environment", "target", "releaseId", "releaseDigest",
+        "importRunId", "verifyRunId", "samplePlanRef", "samplePlanDigest", "targetBindingRefs",
         "requiredRawResults", "dataReadiness", "activeCas", "lifecycleExit",
         "providerReadiness", "observabilityReadiness", "rollbackReadiness",
         "predecessorAcceptance", "resourceFinalization", "prodReleaseFacts",
@@ -44,5 +45,5 @@ _PROD_FACT_KEYS = frozenset(
     {"engineeringEligibility", "durableApproval", "rolloutStages", "rollbackReadiness"}
 )
 __all__ = [
-    "ENVIRONMENTS", "PREDECESSOR", "PROD_ROLLOUT_STAGES", "SCHEMA", "SCHEMA_PATH",
+    "ACCEPTANCE_PROFILES", "ENVIRONMENTS", "PREDECESSOR", "PROD_ROLLOUT_STAGES", "SCHEMA", "SCHEMA_PATH",
 ]

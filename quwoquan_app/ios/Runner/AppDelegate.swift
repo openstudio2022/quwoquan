@@ -671,6 +671,8 @@ private final class RecoveryFailureEncryptedStore {
       // 进入 Flutter；当前进程只提交原生 CAS，绝不能创建 implicit engine。
       return true
     }
+    // 嵌入默认供给（embedded_default_package）已退役：缺 canonical supply 时由
+    // 既有 typed trust/config 阻断 fail-closed，Debug 构建不再补默认 alpha 包。
     confirmedPreviousBuildFatal = NativeCrashMarkerStore.shouldRecoverCurrentBuild()
     if confirmedPreviousBuildFatal {
       // FlutterAppDelegate 的 will/didFinish 都不得进入；恢复 gate 必须先于

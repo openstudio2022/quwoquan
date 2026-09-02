@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign.source_pool_binding import (
+from content.execution.source_pool.binding import (
     validate_capsule_scale_source_pool,
     validate_lane_source_pool_selection,
 )

@@ -181,7 +181,7 @@ def classify(paths: list[str]) -> dict[str, bool]:
 
 
 def static_checks(flags: dict[str, bool]) -> list[str]:
-    checks = ["branch_policy", "local_worktree_lifecycle", "entrypoint_script_paths"]
+    checks = ["branch_policy", "entrypoint_script_paths"]
     if flags["has_specs"]:
         checks.append("feature_tree")
     for scope in ("app", "service", "ops", "data"):
@@ -316,12 +316,23 @@ def select_pytest_paths(paths: list[str]) -> tuple[list[str], list[str]]:
         ("quwoquan_ops/cli/lib/local_worktree_inventory.py", worktree_lifecycle_tests),
         ("quwoquan_ops/policies/worktree_policy.yaml", worktree_lifecycle_tests),
         (
+            "quwoquan_ops/gate/lib/process_group_deadline.py",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_commit_gate_fast_path__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_process_group_deadline__local_contract_test.py",
+            ),
+        ),
+        (
             "quwoquan_ops/gate/commit_gate",
             (
                 "quwoquan_ops/tests/local_contract/ci/"
                 "test_commit_gate_fast_path__local_contract_test.py",
                 "quwoquan_ops/tests/local_contract/gate/"
                 "test_commit_gate_select__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_process_group_deadline__local_contract_test.py",
             ),
         ),
         (

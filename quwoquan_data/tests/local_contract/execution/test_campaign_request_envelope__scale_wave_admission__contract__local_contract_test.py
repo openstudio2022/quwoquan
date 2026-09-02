@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import content.execution.campaign.request_envelope as envelopes
+import content.execution.planning.request_envelope as envelopes
 import pytest
 from content.release.canonical.research_scale_capacity import throughput_basis_digest
 from content.release.canonical.research_scale_promotion_acceptance import (

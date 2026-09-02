@@ -1,6 +1,7 @@
-"""Canonical three-unit stable-production-proof fixture for local contracts."""
+"""Canonical one-unit stable-production-proof fixture for local contracts."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from collections.abc import Mapping
@@ -17,6 +18,8 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from content.execution import stable_production_proof as proof
+from content.execution import stage_authority, stage_semantic_recorder
+from content.execution.operational_fingerprint import operational_fingerprint
 from content.execution.closure.pool_delivery_result import (
     build_pool_delivery_drain_result,
     build_pool_delivery_object_result,
@@ -27,7 +30,8 @@ from content.release.canonical.aggregate_release_documents import (
     release_desired_state_document,
     release_header_document,
 )
-from content.release.canonical.object_source_identity import source_identity_set
+from content.release.canonical.content_pool_record import pool_payload_digest
+from content.release.canonical.object_source_identity import source_identity_digest, source_identity_set
 from content.release.canonical.release_uat_sample_plan import (
     PLAN_REF,
     build_release_uat_sample_plan,
@@ -39,11 +43,13 @@ from core.source_digest import (
     SourceDefinitionSnapshot,
     content_source_revision,
 )
+from core import paths
+from core.tree_integrity import tree_integrity_stats
+from core.stage_artifact_contract import required_stage_artifacts
 from quwoquan_ops.cli.lib.environment_acceptance_fact import (
     build_environment_acceptance_fact,
     required_raw_slot_id,
 )
-from quwoquan_ops.cli.lib.target_uat_binding import build_target_uat_binding
 
 FINGERPRINT = "sha256:" + "f" * 64
 SOURCE_DIGEST = "sha256:" + "a" * 64
@@ -66,22 +72,6 @@ def write_exact(root: Path, ref: str, value: object, *, canonical: bool = False)
     )
     path.write_bytes(raw)
     return {"ref": ref, "exactByteDigest": proof.exact_byte_digest(raw)}
-
-
-def _receipt(execution_id: str, stage: str, sequence: int, verdict: str = "pass") -> dict[str, object]:
-    return {
-        "schema": "quwoquan_data.stage_receipt",
-        "executionId": execution_id,
-        "stage": stage,
-        "sequence": sequence,
-        "verdict": verdict,
-        "actor": {"host": "test-host", "modelFamily": "fixture", "sessionId": "stable-proof"},
-        "artifacts": [f"artifact/{stage}.json"],
-        "openItems": ([] if verdict == "pass" else [{"item": "terminal fixture", "disposition": "gate_block"}]),
-        "next": (proof.STAGES[sequence] if verdict == "pass" and sequence < len(proof.STAGES) else "END"),
-        "evidence": {"commands": [{"command": f"fixture {stage}", "exitCode": 0 if verdict == "pass" else 1}], "issueCount": 0 if verdict == "pass" else 1, "repairRounds": 0},
-        "recordedAt": f"2026-08-29T07:{sequence:02d}:00Z",
-    }
 
 
 def _execution_state(execution_id: str, receipt_ref: dict[str, str], *, status: str, completed: list[str], stage: str, next_stage: str) -> dict[str, object]:
@@ -139,54 +129,119 @@ def _task_documents(root: Path, execution_id: str, carrier: str, retry_of: str |
     manifest = {
         "executionId": execution_id,
         "familyRef": {"ref": family_ref, "sha256": "c" * 64},
-        "sourceDigest": source, "executionBundle": bundle, "hostRuntime": "external_host_agent",
+        "sourceDigest": source, "executionBundle": bundle,
+        "operationalFingerprint": FINGERPRINT, "hostRuntime": "external_host_agent",
         "carrierDemand": {"ref": demand_ref["ref"], "digest": demand_ref["exactByteDigest"], "workRequestRef": work_request_ref, "workRequestDigest": work_request_digest},
         "requestRef": "0.plan/request.json", "targetSetRef": "0.plan/target_set.json",
-        "targetSetDigest": proof.exact_byte_digest(root / target_ref["ref"]).removeprefix("sha256:"),
+        "targetSetDigest": hashlib.sha256(
+            json.dumps(
+                target_set, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest(),
         "retryOf": retry_of,
     }
     manifest_ref = write_exact(root, f"{base}/execution_manifest.json", manifest)
     return {"carrierDemand": demand_ref, "candidateBindings": candidate_ref, "taskInitRequest": request_ref, "executionManifest": manifest_ref, "targetSet": target_ref}
 
 
-def _retry_recovery(root: Path, predecessor_id: str) -> dict[str, object]:
-    base = f"data/tasks/{predecessor_id}"
-    terminal = _receipt(predecessor_id, "ship", 10, "blocked")
-    terminal_ref = write_exact(root, f"{base}/_shared/receipts/010-ship.json", terminal)
-    manifest = _task_documents(root, predecessor_id, "video", None)["executionManifest"]
-    state = _execution_state(predecessor_id, terminal_ref, status="manual_required", completed=list(proof.STAGES[:-1]), stage="ship", next_stage="END")
-    state_ref = write_exact(root, f"{base}/_shared/execution_state.json", state)
-    return {"retryOf": predecessor_id, "executionManifest": manifest, "executionState": state_ref}
-
-
-def _carrier_execution(root: Path, *, unit: int, carrier: str, retry: bool) -> dict[str, object]:
-    sequence = 2 if retry else 1
-    execution_id = f"20260829--travel-{carrier}-stable-unit{unit}--cn--full-{sequence:03d}"
-    predecessor_id = f"20260829--travel-{carrier}-stable-unit{unit}--cn--full-001" if retry else None
-    documents = _task_documents(root, execution_id, carrier, predecessor_id)
-    receipts = [write_exact(root, f"data/tasks/{execution_id}/_shared/receipts/{index:03d}-{stage}.json", _receipt(execution_id, stage, index)) for index, stage in enumerate(proof.STAGES, 1)]
-    state = _execution_state(execution_id, receipts[-1], status="succeeded", completed=list(proof.STAGES), stage="ship", next_stage="END")
-    state_ref = write_exact(root, f"data/tasks/{execution_id}/_shared/execution_state.json", state)
-    object_ref = f"travel/place/proof-unit-{unit}" if carrier == "homepage" else f"{carrier}/proof-unit-{unit}/1"
-    publish = {"schema": "quwoquan_data.execution_publish_ref", "executionId": execution_id, "canonicalPublishRoot": "canonical-publish", "publishedRefs": {"entities": [object_ref] if carrier == "homepage" else [], "posts": [] if carrier == "homepage" else [object_ref]}}
-    publish_ref = write_exact(root, f"data/tasks/{execution_id}/publish_ref.json", publish)
-    result_kind = "replayed" if carrier == "video" and unit == 3 else "appended"
-    canonical_object = {
-        "transactionId": f"transaction-{execution_id}", "applyReportRef": f"apply/{execution_id}.json",
-        "canonicalObjectRef": f"entities/proof-unit-{unit}" if carrier == "homepage" else f"posts/{object_ref}",
-        "canonicalObjectSha256": canonical_sha256({"objectRef": object_ref}),
-        "objectClosureDigest": canonical_sha256({"closure": object_ref}),
-        "admissionResult": result_kind,
-        "poolRecord": {"recordRef": f"pool/{object_ref}.json", "recordSha256": canonical_sha256({"record": object_ref}), "contentVersion": 1, "recordSequence": 1, "payloadDigest": canonical_sha256({"payload": object_ref})},
+def _source_attribution() -> dict[str, object]:
+    return {
+        "isOriginal": False,
+        "originalCreatorName": "fixture source author",
+        "platform": "fixture-source",
+        "sourcePostUrl": "https://fixture.example/post",
+        "originalAssetUrl": "https://fixture.example/asset",
+        "attributionText": "fixture source author / fixture-source",
+        "rightsBasis": "public research reference",
+        "commercialAuthorizationStatus": "unverified",
+        "publicationAdmission": "research_release",
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": "2026-08-29T07:00:00Z",
+        "takedownPolicy": "remove on substantiated request",
+        "derivedModifications": [],
     }
-    object_result = build_pool_delivery_object_result(execution_id=execution_id, object_ref=object_ref, intent_id=canonical_sha256({"intent": object_ref}), result=result_kind, canonical_object=canonical_object)
+
+
+def _carrier_execution(root: Path, *, unit: int, carrier: str) -> dict[str, object]:
+    execution_id = f"20260829--travel-{carrier}-stable-unit{unit}--cn--full-001"
+    documents = _task_documents(root, execution_id, carrier, None)
+    published_target = f"travel/place/unit-{unit}-homepage" if carrier == "homepage" else f"{carrier}/unit-{unit}-{carrier}/1"
+    canonical_ref = f"entities/{published_target}" if carrier == "homepage" else f"posts/{published_target}"
+    publish = {"schema": "quwoquan_data.execution_publish_ref", "executionId": execution_id, "canonicalPublishRoot": "canonical-publish", "publishedRefs": {"entities": [published_target] if carrier == "homepage" else [], "posts": [] if carrier == "homepage" else [published_target]}}
+    publish_ref = write_exact(root, f"data/tasks/{execution_id}/publish_ref.json", publish)
+    result_kind = "replayed" if carrier == "video" else "appended"
+    transaction_id = f"transaction-{execution_id}"
+    closure_digest = canonical_sha256({"closure": published_target})
+    object_kind = "entities" if carrier == "homepage" else "posts"
+    object_schema = "quwoquan_data.entity_object" if carrier == "homepage" else "quwoquan_data.post_object"
+    package = {
+        "schema": "quwoquan_data.object_transaction_package",
+        "transactionId": transaction_id,
+        "executionId": execution_id,
+        "publishMediaMode": "not_applicable" if carrier == "homepage" else "text_only",
+        "sourcePolicyRevision": "encyclopedia-primary" if carrier == "homepage" else "rights-cleared-content",
+        "target": {"layoutSchema": "quwoquan_data.canonical_publish", "objectKind": object_kind, "objectRef": published_target, "objectSchema": object_schema, "packageObjectRef": "object"},
+        "closure": {"creatorRefs": [], "tagRefs": [], "sourceCatalogRef": "source_catalog.json", "rightsRef": "rights.json", "casRefs": ([{"sourceRef": "cas/a.bin", "objectKey": "media/objects/sha256/aa/aa/" + "a" * 64 + ".bin", "sha256": "sha256:" + "a" * 64, "bytes": 1}] if carrier == "homepage" else [])},
+        "review": {"attestationRef": "attestation.json", "evidenceIndexRef": "evidence_index.json"},
+        "objectClosureDigest": closure_digest,
+    }
+    package_ref = write_exact(root, f"data/tasks/{execution_id}/evidence/object-transactions/{transaction_id}/object_transaction_package.json", package)
+    apply_ref_name = f"data/local/workspace/object-transactions/{transaction_id}/apply_report.json"
+    apply_report = {
+        "schema": "quwoquan_data.object_transaction_apply", "transactionId": transaction_id,
+        "executionId": execution_id, "status": "applied", "objectKind": object_kind,
+        "objectRef": published_target, "objectClosureDigest": closure_digest,
+    }
+    apply_ref = write_exact(root, apply_ref_name, apply_report)
+    object_root = root / "canonical-publish" / canonical_ref
+    object_root.mkdir(parents=True, exist_ok=True)
+    evidence = {"schema": "quwoquan_data.review_attestation", "decision": "approved"}
+    evidence_ref = write_exact(root, f"canonical-publish/{canonical_ref}/attestation.json", evidence)
+    identity: dict[str, object] = {
+        "executionId": execution_id, "sourceRevision": SOURCE_REVISION,
+        "sourceDigest": SOURCE_DIGEST, "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+    }
+    identity["identityDigest"] = source_identity_digest(identity)
+    manifest = {
+        "schema": object_schema,
+        ("entityId" if carrier == "homepage" else "contentId"): f"proof-{carrier}-{unit}",
+        "version": 1, "executionId": execution_id,
+        "sourceDigest": SourceDefinitionSnapshot(SOURCE_DIGEST).to_document(),
+        "sourceIdentity": identity, "sourceAttribution": _source_attribution(),
+        "status": "active", "admission": {"processResult": "completed", "qualityResult": "passed", "usageScope": "research", "evidenceRef": "attestation.json", "evidenceDigest": evidence_ref["exactByteDigest"]},
+    }
+    write_exact(root, f"canonical-publish/{canonical_ref}/manifest.json", manifest)
+    write_exact(root, f"canonical-publish/{canonical_ref}/content.json", {"carrier": carrier, "unit": unit})
+    payload_digest = pool_payload_digest(object_root)
+    pool_record = {
+        "schema": "quwoquan_data.pool_object_record", "objectType": "homepage" if carrier == "homepage" else "content",
+        "objectId": f"proof-{carrier}-{unit}", "objectRef": published_target,
+        "recordSequence": 1, "contentVersion": 1, "status": "active",
+        "processResult": "completed", "qualityResult": "passed", "eligibilityResult": "passed",
+        "usageScope": "research", "evidenceRef": "attestation.json", "evidenceDigest": evidence_ref["exactByteDigest"],
+        "payloadDigest": payload_digest, "canonicalObjectDigest": payload_digest,
+        "sourceIdentity": identity, "sourceAttribution": _source_attribution(),
+    }
+    pool_ref_name = f"canonical-publish/{canonical_ref}/_pool/versions/1.json"
+    pool_ref = write_exact(root, pool_ref_name, pool_record)
+    canonical_object = {
+        "transactionId": transaction_id, "applyReportRef": apply_ref_name,
+        "canonicalObjectRef": canonical_ref,
+        "canonicalObjectSha256": tree_integrity_stats(object_root)["merkleRoot"],
+        "objectClosureDigest": closure_digest, "admissionResult": result_kind,
+        "poolRecord": {"recordRef": f"{canonical_ref}/_pool/versions/1.json", "recordSha256": pool_ref["exactByteDigest"], "contentVersion": 1, "recordSequence": 1, "payloadDigest": payload_digest},
+    }
+    object_result = build_pool_delivery_object_result(execution_id=execution_id, object_ref=published_target, intent_id=canonical_sha256({"intent": published_target}), result=result_kind, canonical_object=canonical_object)
     delivery = build_pool_delivery_drain_result(execution_id=execution_id, recovery_mode="host_publish", object_results=[object_result])
     delivery_ref = write_exact(root, f"data/tasks/{execution_id}/pool_delivery_result.json", delivery)
     return {
-        "executionId": execution_id, **documents, "stageReceipts": receipts,
-        "executionState": state_ref, "canonicalPublish": publish_ref,
-        "poolDeliveryResult": delivery_ref,
-        "retryRecovery": _retry_recovery(root, predecessor_id) if predecessor_id else None,
+        "executionId": execution_id, **documents, "stageReceipts": [],
+        "executionState": {}, "canonicalPublish": publish_ref,
+        "poolDeliveryResult": delivery_ref, "objectTransactionPackage": package_ref,
+        "applyReport": apply_ref, "poolRecord": pool_ref,
     }
 
 
@@ -194,7 +249,7 @@ def _release(root: Path, *, unit: int, carriers: Mapping[str, Mapping[str, objec
     release_id = f"stable-proof-baseline-{unit}"
     release_root = root / f"data/releases/{release_id}/payload"
     objects_root = release_root / "objects"
-    homepage_id = f"unit-{unit}-homepage"
+    homepage_id = f"travel/place/unit-{unit}-homepage"
     (objects_root / "entities" / homepage_id).mkdir(parents=True, exist_ok=True)
     (objects_root / "entities" / homepage_id / "entity.json").write_text(json.dumps({"id": homepage_id}), encoding="utf-8")
     contents: list[dict[str, object]] = []
@@ -234,7 +289,7 @@ def _release(root: Path, *, unit: int, carriers: Mapping[str, Mapping[str, objec
         milestone=None, sample_plan_ref=PLAN_REF, sample_plan_digest=exact_document_sha256(plan),
         source_identities=identities, source_identity_set_digest=identity_set_digest,
     )
-    desired = release_desired_state_document(release_id=release_id, desired={"entities": [f"entity/{homepage_id}"], "posts": [str(row["postRef"]) for row in contents], "creators": [], "tags": []})
+    desired = release_desired_state_document(release_id=release_id, desired={"entities": [homepage_id], "posts": [str(row["postRef"]) for row in contents], "creators": [], "tags": []})
     attestation = release_attestation_document(
         release_id=release_id, execution_ids=execution_ids, source_revision=None,
         source_digest=None, entity_catalog_digest=None, source_digests=(SourceDefinitionSnapshot(SOURCE_DIGEST),),
@@ -251,88 +306,424 @@ def _release(root: Path, *, unit: int, carriers: Mapping[str, Mapping[str, objec
     }, str(plan["releaseDigest"]), plan)
 
 
-def _ready(root: Path, ref: str, *, environment: str, target: str, release_id: str, release_digest: str, status: str) -> dict[str, str]:
-    return write_exact(root, ref, {"environment": environment, "target": target, "deploymentTarget": target, "releaseId": release_id, "releaseDigest": release_digest, "status": status})
+def _ready(
+    root: Path, ref: str, *, environment: str, target: str, release_id: str,
+    release_digest: str, import_run_id: str, verify_run_id: str, status: str,
+) -> dict[str, str]:
+    return write_exact(root, ref, {
+        "environment": environment, "target": target, "deploymentTarget": target,
+        "releaseId": release_id, "releaseDigest": release_digest,
+        "importRunId": import_run_id, "verifyRunId": verify_run_id, "status": status,
+    })
 
 
-def _acceptance(root: Path, *, unit: int, environment: str, release: Mapping[str, str], release_digest: str, plan: Mapping[str, Any]) -> dict[str, str]:
+def _m1_api_acceptance(
+    root: Path, *, unit: int, release: Mapping[str, str],
+    release_digest: str, plan: Mapping[str, Any],
+) -> dict[str, str]:
+    environment = "alpha"
+    target = "alpha-local"
     release_id = str(plan["releaseId"])
-    target = f"{environment}-proof-{unit}"
-    plan_ref = str(release["ref"])
-    plan_digest = str(release["exactByteDigest"])
-    runner_identity = str(plan["entryCarrierCells"][0]["runnerClass"])
-    binding = build_target_uat_binding(
-        runtime_binding={"environment": environment, "target": target, "releaseId": release_id, "manifestDigest": release_digest, "candidateDigest": canonical_sha256({"candidate": unit}), "packageDigest": canonical_sha256({"package": unit}), "runtimeConfigDigest": canonical_sha256({"runtime": unit}), "environmentRuntimeDigest": canonical_sha256({"environment": unit}), "startupIdentity": {"configurationDigest": canonical_sha256({"config": unit})}},
-        launch_binding={"environment": environment, "target": target, "platform": "android", "deviceId": f"physical-{unit}", "artifactDigest": canonical_sha256({"artifact": unit}), "applicationId": "com.quwoquan.proof"},
-        sample_plan_binding={"releaseId": release_id, "releaseUatSamplePlanRef": plan_ref, "releaseUatSamplePlanDigest": plan_digest},
-        active_cas={"ref": f"env/{unit}/active.json", "digest": canonical_sha256({"active": unit})},
-        readback={"ref": f"env/{unit}/readback.json", "digest": canonical_sha256({"readback": unit})},
-        artifact_class="production_behavior", build_mode="release", build_profile="nonprod",
-        provider={"identity": "first-party-https", "class": "first_party", "type": "https", "registered": True, "conformanceEvidence": {"ref": f"env/{unit}/provider.json", "digest": canonical_sha256({"provider": unit})}},
-        device={"identity": f"physical-{unit}", "class": "physical", "registered": True},
-        runner={"identity": runner_identity, "sourcePath": "quwoquan_app/test/user_acceptance/stable_production_uat.dart", "digest": canonical_sha256({"runner": unit}), "registered": True},
-        profile="promotable", non_promotable=False, created_at="2026-08-29T09:00:00Z",
-    )
-    binding_ref = write_exact(root, f"env/{unit}/target-binding.json", binding)
-    raw_results: list[dict[str, str]] = []
+    import_run_id = f"m1-import-run-{unit}"
+    verify_run_id = f"m1-verify-run-{unit}"
     sample_by_carrier = {str(row["carrier"]): row for row in plan["samples"]}
-    for entry in ENTRIES:
-        for carrier in proof.CARRIERS:
-            sample = sample_by_carrier[carrier]
-            cell = next(row for row in plan["entryCarrierCells"] if row["entry"] == entry and row["carrier"] == carrier)
-            raw = {
-                "environment": environment, "target": target, "deploymentTarget": target,
-                "releaseId": release_id, "releaseDigest": release_digest,
-                "producer": "app", "layer": "user_acceptance", "status": "passed",
-                "caseId": sample["sampleId"], "objectId": sample["objectId"],
-                "targetUatBindingDigest": binding_ref["exactByteDigest"],
-                "entrySurface": entry, "carrier": carrier, "specRef": cell["specRef"],
-                "runnerIdentity": cell["runnerClass"], "platform": "android",
-                "provider": binding["provider"]["identity"], "uatProfile": "promotable",
-            }
-            raw_ref = write_exact(root, f"env/{unit}/raw-{entry}-{carrier}.json", raw)
-            raw_results.append({"ref": raw_ref["ref"], "digest": raw_ref["exactByteDigest"], "slotId": required_raw_slot_id(target_uat_binding_digest=binding_ref["exactByteDigest"], sample_id=str(sample["sampleId"]), entry_surface=entry, carrier=carrier, spec_ref=str(cell["specRef"]), runner_identity=str(cell["runnerClass"])), "status": "passed"})
-    active = _ready(root, f"env/{unit}/active.json", environment=environment, target=target, release_id=release_id, release_digest=release_digest, status="active")
-    readback = _ready(root, f"env/{unit}/readback.json", environment=environment, target=target, release_id=release_id, release_digest=release_digest, status="passed")
-    import_report = _ready(root, f"env/{unit}/import.json", environment=environment, target=target, release_id=release_id, release_digest=release_digest, status="imported")
-    data_readiness = write_exact(root, f"env/{unit}/data-readiness.json", {"environment": environment, "target": target, "deploymentTarget": target, "releaseId": release_id, "releaseDigest": release_digest, "status": "passed", "activationEnvelope": {"importReportRef": import_report["ref"], "importReportDigest": import_report["exactByteDigest"]}})
-    def evidence(name: str, status: str) -> dict[str, str]:
-        return _ready(root, f"env/{unit}/{name}.json", environment=environment, target=target, release_id=release_id, release_digest=release_digest, status=status)
-    lifecycle = evidence("lifecycle", "Exit")
-    provider_readiness = evidence("provider-readiness", "ready")
-    observability_readiness = evidence("observability-readiness", "ready")
-    rollback_readiness = evidence("rollback-readiness", "ready")
-    lease_revocation = evidence("lease-revocation", "revoked")
-    lock_release = evidence("lock-release", "released")
-    gc_protection = evidence("gc-protection", "protected")
+    raw_results: list[dict[str, str]] = []
+    for cell in plan["entryCarrierCells"]:
+        entry = str(cell["entry"])
+        carrier = str(cell["carrier"])
+        sample = sample_by_carrier[carrier]
+        raw = {
+            "environment": environment, "target": target, "deploymentTarget": target,
+            "releaseId": release_id, "releaseDigest": release_digest,
+            "importRunId": import_run_id, "verifyRunId": verify_run_id,
+            "producer": "service", "layer": "api_integration", "status": "passed",
+            "entrySurface": entry, "carrier": carrier,
+            "specRef": cell["specRef"], "runnerIdentity": cell["runnerClass"],
+            "objectId": sample["objectId"],
+        }
+        raw_ref = write_exact(root, f"env/{unit}/m1-api-{entry}-{carrier}.json", raw)
+        raw_results.append({
+            "ref": raw_ref["ref"], "digest": raw_ref["exactByteDigest"],
+            "slotId": required_raw_slot_id(
+                sample_id=str(sample["sampleId"]), entry_surface=entry,
+                carrier=carrier, spec_ref=str(cell["specRef"]),
+                runner_identity=str(cell["runnerClass"]),
+            ),
+            "status": "passed",
+        })
+    def ready(name: str, status: str) -> dict[str, str]:
+        return _ready(
+            root, f"env/{unit}/m1-{name}.json", environment=environment,
+            target=target, release_id=release_id, release_digest=release_digest,
+            import_run_id=import_run_id, verify_run_id=verify_run_id, status=status,
+        )
+    active = ready("active", "active")
+    readback = ready("readback", "passed")
+    import_report = ready("import", "imported")
+    data_readiness = write_exact(root, f"env/{unit}/m1-data-readiness.json", {
+        "environment": environment, "target": target, "deploymentTarget": target,
+        "releaseId": release_id, "releaseDigest": release_digest,
+        "importRunId": import_run_id, "verifyRunId": verify_run_id,
+        "status": "passed", "activationEnvelope": {
+            "importReportRef": import_report["ref"],
+            "importReportDigest": import_report["exactByteDigest"],
+        },
+    })
+    lifecycle = ready("lifecycle", "Exit")
+    provider = ready("provider-readiness", "ready")
+    observability = ready("observability-readiness", "ready")
+    rollback = ready("rollback-readiness", "ready")
+    lease = ready("lease-revocation", "revoked")
+    lock = ready("lock-release", "released")
+    gc = ready("gc-protection", "protected")
     fact = build_environment_acceptance_fact(
-        evidence_root=root, environment=environment, target=target, release_id=release_id,
-        release_digest=release_digest, sample_plan_ref=plan_ref, sample_plan_digest=plan_digest,
-        target_binding_refs=[{"ref": binding_ref["ref"], "digest": binding_ref["exactByteDigest"], "platform": "android", "deviceProfile": "promotable"}],
-        required_raw_results=raw_results, required_target_profiles=[{"platform": "android", "deviceProfile": "promotable"}],
+        evidence_root=root, acceptance_profile="m1_api_consumer",
+        environment=environment, target=target, release_id=release_id,
+        release_digest=release_digest, import_run_id=import_run_id,
+        verify_run_id=verify_run_id, sample_plan_ref=str(release["ref"]),
+        sample_plan_digest=str(release["exactByteDigest"]), target_binding_refs=[],
+        required_raw_results=raw_results, required_target_profiles=[],
         data_readiness={"ref": data_readiness["ref"], "digest": data_readiness["exactByteDigest"]},
-        active_cas={"ref": active["ref"], "digest": active["exactByteDigest"], "readbackRef": readback["ref"], "readbackDigest": readback["exactByteDigest"], "releaseId": release_id, "releaseDigest": release_digest},
+        active_cas={
+            "ref": active["ref"], "digest": active["exactByteDigest"],
+            "readbackRef": readback["ref"], "readbackDigest": readback["exactByteDigest"],
+            "releaseId": release_id, "releaseDigest": release_digest,
+        },
         lifecycle_exit={"ref": lifecycle["ref"], "digest": lifecycle["exactByteDigest"]},
-        provider_readiness={"ref": provider_readiness["ref"], "digest": provider_readiness["exactByteDigest"]},
-        observability_readiness={"ref": observability_readiness["ref"], "digest": observability_readiness["exactByteDigest"]},
-        rollback_readiness={"ref": rollback_readiness["ref"], "digest": rollback_readiness["exactByteDigest"]},
+        provider_readiness={"ref": provider["ref"], "digest": provider["exactByteDigest"]},
+        observability_readiness={"ref": observability["ref"], "digest": observability["exactByteDigest"]},
+        rollback_readiness={"ref": rollback["ref"], "digest": rollback["exactByteDigest"]},
         predecessor_acceptance=None,
-        resource_finalization={"leaseRevocationRefs": [{"ref": lease_revocation["ref"], "digest": lease_revocation["exactByteDigest"]}], "lockReleaseRefs": [{"ref": lock_release["ref"], "digest": lock_release["exactByteDigest"]}], "gcProtectionRefs": [{"ref": gc_protection["ref"], "digest": gc_protection["exactByteDigest"]}]},
-        prod_release_facts=None, created_at="2026-08-29T09:30:00Z", source_fingerprint=FINGERPRINT,
+        resource_finalization={
+            "leaseRevocationRefs": [{"ref": lease["ref"], "digest": lease["exactByteDigest"]}],
+            "lockReleaseRefs": [{"ref": lock["ref"], "digest": lock["exactByteDigest"]}],
+            "gcProtectionRefs": [{"ref": gc["ref"], "digest": gc["exactByteDigest"]}],
+        },
+        prod_release_facts=None, created_at="2026-08-29T09:35:00Z",
+        source_fingerprint=FINGERPRINT,
     )
-    return write_exact(root, f"env/{unit}/environment-acceptance.json", fact)
+    return write_exact(root, f"env/{unit}/m1-environment-acceptance.json", fact)
+
+
+def _write_stage_semantic_outputs(root: Path, execution_id: str, carrier: str, stage: str) -> list[str]:
+    execution_root = root / f"data/tasks/{execution_id}"
+    object_root = execution_root / f"posts/{carrier}/proof/proof/1"
+    if carrier == "homepage":
+        object_root = execution_root / "entities/travel/place/proof/1"
+    if stage == "sources":
+        unit = execution_root / "sources/source-001"
+        values: dict[str, object] = {
+            "meta.json": {
+                "schema": "quwoquan_data.source_unit", "stage": "1.download",
+                "executionId": execution_id, "executionBinding": "frozen",
+                "sourceUnitId": "source-001", "entityName": "proof", "title": "proof",
+                "sourceKind": "wikipedia", "extractor": "wikipedia_api",
+                "canonicalUrl": "https://zh.wikipedia.org/wiki/proof",
+                "finalUrl": "https://zh.wikipedia.org/wiki/proof",
+                "fetchedAt": "2026-08-29T07:00:00Z",
+                "rawSha256": canonical_sha256({"raw": execution_id}),
+                "cleanSha256": canonical_sha256({"clean": execution_id}),
+                "policyRevision": "encyclopedia-primary",
+                "sourceUseMode": "factual_reference_only",
+                "rightsMode": "factual_reference_only",
+            },
+            "source.md": "source\n", "source.clean.md": "source\n",
+            "source.layout.json": {}, "source.quality.json": {}, "assets/index.json": {},
+        }
+        refs: list[str] = []
+        for name, value in values.items():
+            path = unit / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                (json.dumps(value, ensure_ascii=False) + "\n") if isinstance(value, dict) else str(value),
+                encoding="utf-8",
+            )
+            refs.append(path.relative_to(execution_root).as_posix())
+        return sorted(refs)
+    if stage == "2.quality":
+        value = {
+            "schema": "quwoquan_data.quality_analysis", "stage": stage,
+            "executionId": execution_id, "executionBinding": "frozen",
+            "sourcePolicyRevision": "encyclopedia-primary",
+            "sourceRevision": canonical_sha256({"source": execution_id}),
+            "recommendation": "proceed", "sourcePaths": ["sources/source-001/source.clean.md"],
+            "sourceAdmissions": [{"sourceRef": "sources/source-001", "decision": "selected", "evidenceHash": canonical_sha256({"evidence": execution_id})}],
+            "rejectionReasons": [], "evidenceHashes": [canonical_sha256({"evidence": execution_id})],
+        }
+        path = object_root / "2.quality/quality_analysis.json"
+    elif stage == "3.compose":
+        if carrier == "homepage":
+            value = {
+                "schema": "quwoquan_data.stage_envelope", "stage": stage,
+                "executionId": execution_id, "executionBinding": "frozen",
+                "sourcePolicyRevision": "encyclopedia-primary",
+                "sourceRevision": canonical_sha256({"source": execution_id}),
+                "promptBundleRevision": canonical_sha256({"prompt": execution_id}),
+                "step": "entity_page", "ref": "proof-homepage",
+                "selectedSourceUrls": ["https://zh.wikipedia.org/wiki/proof"],
+                "payload": {"name": "proof", "entityRef": "travel/place/proof", "baseDraft": {}, "draftPage": "4.draft/page.md", "minChars": 1, "minSectionChars": 1},
+            }
+            path = object_root / "3.compose/entity_page_input.json"
+        else:
+            value = {
+                "schema": "quwoquan_data.writing_pack", "stage": stage,
+                "executionId": execution_id, "executionBinding": "frozen",
+                "sourcePolicyRevision": "encyclopedia-primary",
+                "sourceRevision": canonical_sha256({"source": execution_id}),
+                "promptBundleRevision": canonical_sha256({"prompt": execution_id}),
+                "selectedSourceUrls": ["https://zh.wikipedia.org/wiki/proof"],
+                "ref": f"proof-{carrier}", "kind": carrier, "title": "proof", "carrier": carrier,
+            }
+            path = object_root / "3.compose/writing_pack.json"
+    elif stage == "4.draft":
+        draft_dir = object_root / "4.draft"
+        draft_dir.mkdir(parents=True, exist_ok=True)
+        authored_name = "page.md" if carrier == "homepage" else ("draft.article.md" if carrier == "article" else "draft_meta.json")
+        authored = draft_dir / authored_name
+        if not authored.exists():
+            authored.write_text("proof draft\n" if authored.suffix == ".md" else "{}\n", encoding="utf-8")
+        value = {
+            "schema": "quwoquan.agent_result_envelope", "executionId": execution_id,
+            "jobId": "stable-proof-author", "ref": f"proof-{carrier}", "stage": stage,
+            "agent": {"provider": "cursor", "model": "gpt", "runId": f"{execution_id}-4.draft-run", "promptSha256": canonical_sha256({"prompt": execution_id})},
+            "files": [{"path": authored.name, "sha256": proof.exact_byte_digest(authored)}],
+            "gates": [{"schema": "quwoquan.gate_verdict", "gateId": "draft", "decision": "passed", "final": True, "inputHash": canonical_sha256({"input": execution_id}), "outputHash": proof.exact_byte_digest(authored)}],
+        }
+        path = draft_dir / "agent_result_envelope.json"
+    else:
+        review_dir = object_root / "5.review"
+        review_dir.mkdir(parents=True, exist_ok=True)
+        reviewer = {
+            "schema": "quwoquan_data.reviewer_result", "stage": stage,
+            "executionId": execution_id, "executionBinding": "frozen", "objectRef": f"proof-{carrier}",
+            "provider": "cursor", "model": "claude", "modelFamily": "claude",
+            "runId": f"{execution_id}-5.review-run", "verdict": "passed", "issues": [],
+            "resultHash": canonical_sha256({"review": execution_id}),
+        }
+        rubric = {
+            "schema": "quwoquan_data.rubric_review", "ref": f"proof-{carrier}",
+            "generationModelFamily": "gpt",
+            "judges": [{"modelId": "claude", "modelFamily": "claude", "promptHash": canonical_sha256({"rubric": execution_id}), "temperature": 0}],
+            "biasControls": {"positionSwapApplied": True, "lengthControlApplied": True},
+            "dimensions": [{"name": "professionalism", "scores": [9, 9], "verdict": "pass", "rationale": "pass"}],
+            "decision": "approved",
+        }
+        refs = []
+        for name, value in (("reviewer_result.json", reviewer), ("rubric_review.json", rubric)):
+            target = review_dir / name
+            target.write_text(json.dumps(value, ensure_ascii=False) + "\n", encoding="utf-8")
+            refs.append(target.relative_to(execution_root).as_posix())
+        return sorted(refs)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, ensure_ascii=False) + "\n", encoding="utf-8")
+    return [path.relative_to(execution_root).as_posix()]
+
+
+def _ensure_stage_artifacts(root: Path, execution_id: str, carrier: str, stage: str) -> list[dict[str, str]]:
+    execution_root = root / f"data/tasks/{execution_id}"
+    object_root = execution_root / ("entities/travel/place/proof/1" if carrier == "homepage" else f"posts/{carrier}/proof/proof/1")
+    refs: list[dict[str, str]] = []
+    for name in required_stage_artifacts(carrier).get(stage, ()):
+        path = object_root / stage / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            path.write_text("proof\n" if path.suffix == ".md" else "{}\n", encoding="utf-8")
+        refs.append({"scope": "execution", "ref": path.relative_to(execution_root).as_posix()})
+    return refs
+
+
+def _complete_authority(
+    root: Path, execution: dict[str, object], *, carrier: str,
+    release_id: str, release_digest: str, acceptance: Mapping[str, str],
+) -> None:
+    execution_id = str(execution["executionId"])
+    acceptance_document = json.loads(
+        (root / str(acceptance["ref"])).read_text(encoding="utf-8")
+    )
+    receipts: list[dict[str, str]] = []
+    for stage in proof.STAGES:
+        stage_authority.open_stage(execution_id, stage)
+        context: dict[str, object] = {"artifactRefs": []}
+        actor_family = "gpt"
+        if stage in stage_semantic_recorder.SEMANTIC_STAGES:
+            if stage == "4.draft":
+                draft_dir = root / f"data/tasks/{execution_id}" / ("entities/travel/place/proof/1/4.draft" if carrier == "homepage" else f"posts/{carrier}/proof/proof/1/4.draft")
+                draft_dir.mkdir(parents=True, exist_ok=True)
+                for name in ("prompt.md", "prompt_snapshot.json", "author_job_packet.json"):
+                    path = draft_dir / name
+                    if not path.exists():
+                        path.write_text("prompt\n" if path.suffix == ".md" else "{}\n", encoding="utf-8")
+            if stage in {"2.quality", "3.compose", "4.draft", "5.review"}:
+                previous = "1.download" if stage == "2.quality" else None
+                if previous:
+                    _ensure_stage_artifacts(root, execution_id, carrier, previous)
+            refs = _write_stage_semantic_outputs(root, execution_id, carrier, stage)
+            request_path = stage_semantic_recorder.prepare_stage_semantic_request(execution_id, stage)
+            request = json.loads(request_path.read_text(encoding="utf-8"))
+            actor_family = "claude" if stage == "5.review" else "gpt"
+            result = stage_semantic_recorder.record_stage_semantic_result(execution_id, stage, {
+                "schema": "quwoquan_data.stage_semantic_result_input",
+                "requestRef": request_path.relative_to(root / f"data/tasks/{execution_id}").as_posix(),
+                "requestDigest": request["requestDigest"],
+                "actor": {
+                    "host": "cursor", "modelFamily": actor_family,
+                    "sessionId": f"{execution_id}-{stage}-session",
+                    "invocation": {"provider": "cursor", "model": actor_family, "runId": f"{execution_id}-{stage}-run"},
+                },
+                "resultRefs": refs,
+            })
+            context.update({
+                "semanticResultRef": result.relative_to(root / f"data/tasks/{execution_id}").as_posix(),
+                "semanticResultDigest": proof.exact_byte_digest(result),
+            })
+        if stage in {"1.download", "2.quality", "3.compose", "4.draft", "5.review"}:
+            context["artifactRefs"] = _ensure_stage_artifacts(root, execution_id, carrier, stage)
+        elif stage == "publish":
+            context["artifactRefs"] = [{"scope": "execution", "ref": "publish_ref.json"}]
+        elif stage == "release":
+            context.update({
+                "releaseId": release_id, "releaseDigest": release_digest,
+                "releaseClass": "research",
+                "artifactRefs": [{"scope": "output", "ref": f"data/releases/{release_id}/payload/release.json"}],
+            })
+        elif stage == "ship":
+            context.update({
+                "releaseId": release_id, "releaseDigest": release_digest,
+                "environment": "alpha",
+                "importRunId": acceptance_document["importRunId"],
+                "verifyRunId": acceptance_document["verifyRunId"],
+                "readinessPhase": "research", "target": "alpha-local",
+                "acceptanceProfile": "m1_api_consumer",
+                "requiredTargetProfiles": [],
+                "environmentAcceptanceFactRef": acceptance["ref"],
+                "environmentAcceptanceFactDigest": acceptance["exactByteDigest"],
+                "artifactRefs": [{"scope": "output", "ref": acceptance["ref"]}],
+            })
+        gate = stage_authority.run_stage_gate(
+            execution_id, stage, close_context=context,
+            runner=lambda _argv: type("Result", (), {"returncode": 0, "stdout": "fixture pass", "stderr": ""})(),
+        )
+        receipt = stage_authority.close_stage(execution_id, stage)
+        receipts.append({
+            "ref": receipt.relative_to(root).as_posix(),
+            "exactByteDigest": proof.exact_byte_digest(receipt),
+        })
+    execution["stageReceipts"] = receipts
+    state = root / f"data/tasks/{execution_id}/_shared/execution_state.json"
+    execution["executionState"] = {
+        "ref": state.relative_to(root).as_posix(),
+        "exactByteDigest": proof.exact_byte_digest(state),
+    }
+
+
+def _operational_receipts(root: Path) -> tuple[dict[str, str], dict[str, str]]:
+    output = {"stdoutDigest": canonical_sha256({"stdout": "pass"}), "stderrDigest": canonical_sha256({"stderr": ""})}
+    verify = write_exact(root, "operational/verify-all.json", {
+        "schema": "quwoquan_data.verify_all_receipt", "sourceFingerprint": FINGERPRINT,
+        "command": {"commandId": "data.verify.all", "entrypoint": "quwoquan_data/scripts/cli.py", "arguments": ["verify", "all"]},
+        "exitCode": 0, "verdict": "pass", "capturedOutput": output,
+        "closedModules": ["cli-first", "data-layout", "reusable-data-contract"],
+    })
+    loaded = ["cli", "governance", "governance.stable_production_proof"]
+    probe_digest = canonical_sha256({"probe": "fixture-public-cli-live-import-zero"})
+    loaded_modules_digest = exact_document_sha256({"loadedModules": loaded})
+    receipt_id = exact_document_sha256({
+        "sourceFingerprint": FINGERPRINT,
+        "probeDigest": probe_digest,
+        "checkedCommands": ["task", "source-pool", "filter-catalog", "release", "ship", "template", "governance", "verify"],
+        "forbiddenPrefixes": list(proof._FORBIDDEN_LIVE_PREFIXES),
+        "loadedModulesDigest": loaded_modules_digest,
+    })
+    discovered_commands = {
+        "filter-catalog": ["content.filter_catalog.handler"],
+        "governance": ["governance.handler"],
+        "release": ["content.release.canonical.handler"],
+        "ship": ["content.release.environment.cli"],
+        "source-pool": ["content.source.research.handler_cli"],
+        "task": ["content.execution.handler"],
+        "template": ["content.templates.handler"],
+        "verify": ["verify.handler"],
+    }
+    imported_modules = sorted({
+        module for modules in discovered_commands.values() for module in modules
+    })
+    live = write_exact(root, "operational/public-cli-live-import-zero.json", {
+        "schema": "quwoquan_data.public_cli_live_import_zero_receipt", "sourceFingerprint": FINGERPRINT,
+        "command": {"commandId": "data.public_cli.live_import_zero", "entrypoint": "quwoquan_data/scripts/cli.py", "arguments": ["governance", "public-cli-live-import-zero"]},
+        "exitCode": 0, "verdict": "pass", "capturedOutput": output,
+        "probeDigest": probe_digest,
+        "checkedCommands": ["task", "source-pool", "filter-catalog", "release", "ship", "template", "governance", "verify"],
+        "discoveredCommands": discovered_commands,
+        "forbiddenPrefixes": list(proof._FORBIDDEN_LIVE_PREFIXES),
+        "importedModules": imported_modules,
+        "loadedModules": loaded,
+        "loadedModulesDigest": loaded_modules_digest,
+        "receiptId": receipt_id,
+        "forbiddenLoadedModules": [],
+    })
+    return verify, live
 
 
 def build_proof_fixture(root: Path) -> dict[str, object]:
-    units: list[dict[str, object]] = []
-    for unit in range(1, 4):
-        carriers = {carrier: _carrier_execution(root, unit=unit, carrier=carrier, retry=(unit == 3 and carrier == "video")) for carrier in proof.CARRIERS}
-        release, release_digest, plan = _release(root, unit=unit, carriers=carriers)
-        environment = "alpha"
-        acceptance = _acceptance(root, unit=unit, environment=environment, release=release["samplePlan"], release_digest=release_digest, plan=plan)
-        units.append({"unitId": f"proof-unit-{unit}", "fingerprint": FINGERPRINT, "carrierExecutions": carriers, "release": release, "environment": environment, "environmentAcceptanceFact": acceptance})
-    return {"schema": "quwoquan_data.stable_production_proof_request", "artifactRoot": str(root), "fingerprint": FINGERPRINT, "proofUnits": units}
-
+    global FINGERPRINT
+    unit = 1
+    root = root.resolve()
+    FINGERPRINT = operational_fingerprint()
+    carriers = {carrier: _carrier_execution(root, unit=unit, carrier=carrier) for carrier in proof.CARRIERS}
+    release, release_digest, plan = _release(root, unit=unit, carriers=carriers)
+    acceptance = _m1_api_acceptance(
+        root, unit=unit, release=release["samplePlan"], release_digest=release_digest, plan=plan,
+    )
+    original = (paths.OUTPUT_ROOT, paths.DATA_EXECUTIONS_ROOT, paths.RELEASE_ROOT)
+    original_artifacts = stage_authority._artifact_bindings
+    original_authority_fingerprint = stage_authority.operational_fingerprint
+    original_semantic_fingerprint = stage_semantic_recorder.operational_fingerprint
+    try:
+        paths.OUTPUT_ROOT = root
+        paths.DATA_EXECUTIONS_ROOT = root / "data/tasks"
+        paths.RELEASE_ROOT = root / "data/releases"
+        stage_authority.operational_fingerprint = lambda **_kwargs: FINGERPRINT
+        stage_semantic_recorder.operational_fingerprint = lambda **_kwargs: FINGERPRINT
+        def fixture_artifacts(execution_id: str, stage: str, refs):
+            if stage not in {"release", "ship"}:
+                return original_artifacts(execution_id, stage, refs)
+            execution_root = root / f"data/tasks/{execution_id}"
+            bindings = []
+            for index, item in enumerate(refs):
+                source = root / str(item["ref"])
+                target = execution_root / f"_shared/authority-artifacts/{stage}/{index}.json"
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(source.read_bytes())
+                bindings.append(
+                    stage_authority._binding(
+                        target, scope="execution", root=execution_root
+                    )
+                )
+            return bindings
+        stage_authority._artifact_bindings = fixture_artifacts
+        for carrier in proof.CARRIERS:
+            _complete_authority(
+                root, carriers[carrier], carrier=carrier, release_id=str(plan["releaseId"]),
+                release_digest=release_digest, acceptance=acceptance,
+            )
+    finally:
+        stage_authority._artifact_bindings = original_artifacts
+        stage_authority.operational_fingerprint = original_authority_fingerprint
+        stage_semantic_recorder.operational_fingerprint = original_semantic_fingerprint
+        paths.OUTPUT_ROOT, paths.DATA_EXECUTIONS_ROOT, paths.RELEASE_ROOT = original
+    verify, live = _operational_receipts(root)
+    unit_value = {
+        "unitId": "proof-unit-1", "fingerprint": FINGERPRINT,
+        "evidenceAuthority": "test_only",
+        "carrierExecutions": carriers, "release": release, "environment": "alpha",
+        "environmentAcceptanceFact": acceptance,
+    }
+    return {
+        "schema": "quwoquan_data.stable_production_proof_request",
+        "artifactRoot": str(root), "fingerprint": FINGERPRINT,
+        "verifyAllReceipt": verify, "publicCliLiveImportZeroReceipt": live,
+        "proofUnits": [unit_value],
+    }
 
 def clone_request(value: Mapping[str, object]) -> dict[str, object]:
     return deepcopy(dict(value))

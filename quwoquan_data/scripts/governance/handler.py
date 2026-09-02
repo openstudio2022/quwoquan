@@ -212,6 +212,16 @@ def handle_governance(args: argparse.Namespace) -> None:
             )
         )
         return
+    if cmd == "operational-fingerprint":
+        from content.execution.operational_fingerprint import operational_fingerprint
+
+        print(operational_fingerprint())
+        return
+    if cmd == "public-cli-live-import-zero":
+        from verify.verify_public_cli_live_import_zero import main as live_import_main
+
+        argv = ["--output", str(args.output)] if args.output else []
+        raise SystemExit(live_import_main(argv))
     if cmd == "review-candidates":
         argv: list[str] = []
         if getattr(args, "root", None):
@@ -261,6 +271,15 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     register_taxonomy_parser(sub)
     register_coverage_parser(sub)
     register_stable_production_proof_parsers(sub)
+    sub.add_parser(
+        "operational-fingerprint",
+        help="只读输出当前 host-only operational fingerprint",
+    )
+    live_import = sub.add_parser(
+        "public-cli-live-import-zero",
+        help="隔离导入全部 public CLI command modules 并证明旧五家族零加载",
+    )
+    live_import.add_argument("--output", help="可选 create-once passing receipt 路径")
 
     media_probe = sub.add_parser(
         "media-probe",

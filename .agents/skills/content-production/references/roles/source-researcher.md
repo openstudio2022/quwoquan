@@ -8,6 +8,6 @@
 - **输入**：`0.plan` 冻结的目标清单、taxonomy/schema、reference、信源政策
   （`quwoquan_data/AGENTS.md` 分轨规则）。
 - **输出**：`sources/` 来源单元与保留/淘汰判定；逐图来源与权利线索。
-- **receipt actor**：`host` + `modelFamily` + `sessionId`。
+- **receipt actor**：`host` + `sessionId` + `modelFamily` + `invocation{provider,model,runId}`。
 - **禁止**：无来源引用的事实；不可回溯的图片；用估算或历史数据顶替真实来源；
   把 OTA/门户/媒体投影为正文底稿。

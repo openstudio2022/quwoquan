@@ -176,7 +176,7 @@
           "$ref": "#/$defs/digest"
         },
         "proofUnitCount": {
-          "const": 3
+          "const": 1
         },
         "verdict": {
           "const": "pass"
@@ -186,8 +186,8 @@
         },
         "releaseIds": {
           "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
+          "minItems": 1,
+          "maxItems": 1,
           "uniqueItems": true,
           "items": {
             "type": "string",
@@ -195,7 +195,7 @@
           }
         },
         "executionCount": {
-          "const": 12
+          "const": 4
         }
       }
     },

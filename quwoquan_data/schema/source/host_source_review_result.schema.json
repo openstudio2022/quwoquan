@@ -5,13 +5,12 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema", "contractVersion", "requestRef", "requestDigest", "sourceIdentity",
+    "schema", "requestRef", "requestDigest", "sourceIdentity",
     "assetBinding", "entityBinding", "evidenceBindings", "rubric", "actor",
     "reviewedAt", "verdict", "resultDigest"
   ],
   "properties": {
     "schema": {"const": "quwoquan_data.host_source_review_result"},
-    "contractVersion": {"const": "host-source-review/v1"},
     "requestRef": {"$ref": "host_source_review_result_input.schema.json#/$defs/safeRef"},
     "requestDigest": {"$ref": "host_source_review_result_input.schema.json#/$defs/sha256"},
     "sourceIdentity": {"$ref": "host_source_review_request.schema.json#/$defs/sourceIdentity"},

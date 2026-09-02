@@ -9,7 +9,7 @@ from content.execution.campaign.external_input_runtime import (
     freeze_execution_external_input_envelope,
     resolve_runtime_external_input_context,
 )
-from content.execution.campaign.external_inputs import (
+from content.execution.source_pool.external_inputs import (
     CampaignExternalInputError,
     external_inputs_digest,
     lane_acquisition_root,

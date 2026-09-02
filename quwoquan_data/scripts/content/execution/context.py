@@ -375,5 +375,5 @@ def save_execution_state(*_args: object, **_kwargs: object) -> Path:
     """Reject legacy business writers; stage receipts own the projection."""
     raise ValueError(
         "GATE_BLOCK DATA.EXECUTION.STATE_WRITER_RETIRED: "
-        "execution_state is derived only by task stage-record receipt reducer"
+        "execution_state is derived only by task stage-close receipt reducer"
     )

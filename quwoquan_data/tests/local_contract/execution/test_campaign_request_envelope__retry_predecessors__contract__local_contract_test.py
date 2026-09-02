@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import content.execution.campaign.request_envelope as envelopes
+import content.execution.planning.request_envelope as envelopes
 import pytest
-from content.execution.campaign.external_inputs import content_source_revision
+from content.execution.source_pool.external_inputs import content_source_revision
 from core.source_digest import SourceDefinitionSnapshot
 from core.io import read_json, write_json
 from support.campaign_request_envelope_fixture import (

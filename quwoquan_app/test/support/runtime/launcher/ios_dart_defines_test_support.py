@@ -137,9 +137,10 @@ def _install_direct_handoff(
     runtime_environment: str,
     artifact_root: Path,
 ) -> dict[str, object]:
+    # native_flutter_run provenance 已退役；direct debug 走 workspace_ide_debug。
     handoff, trust_envelope = _build_handoff(
         runtime_environment,
-        launch_provenance="workspace_flutter_run",
+        launch_provenance="workspace_ide_debug",
     )
     environment["QWQ_TEST_LAUNCHER_HANDOFF_JSON"] = json.dumps(
         handoff,

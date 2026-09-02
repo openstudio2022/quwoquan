@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from .android_gradle_capsule import build_android_gradle_snapshot, digest_bytes
@@ -42,7 +42,11 @@ from .ios_pod_inputs import (
 )
 from .patrol_command_envelope import build_patrol_command_envelope
 from .patrol_pub_cache import PATROL_HOST_RELATIVE
-from .pub_cache_capsule import PubCacheSnapshot, build_pub_cache_snapshot
+from .pub_cache_capsule import (
+    PubCacheSnapshot,
+    build_pub_cache_snapshot,
+    is_canonical_pub_cache_transient,
+)
 
 
 def pub_identity(snapshot: PubCacheSnapshot) -> dict[str, Any]:
@@ -56,14 +60,8 @@ def pub_identity(snapshot: PubCacheSnapshot) -> dict[str, Any]:
     }
 
 
-_PUB_TRANSIENT_ROOTS = frozenset({"active_roots", "_temp", "log"})
-
-
-def _pub_transient(relative: str, is_directory: bool) -> bool:
-    parts = PurePosixPath(relative).parts
-    return bool(parts and parts[0] in _PUB_TRANSIENT_ROOTS) or (
-        relative == "README.md" and not is_directory
-    )
+# Compatibility import for dependency_projection_readback and existing callers.
+_pub_transient = is_canonical_pub_cache_transient
 
 
 def _pub_component(

@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from content.execution.campaign.source_pool_binding import (
+from content.execution.source_pool.binding import (
     bound_scale_source_pool_snapshot_digest,
 )
 from content.execution.scale.semantic_promotion import (

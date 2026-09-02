@@ -12,7 +12,7 @@ from typing import Any
 
 from core.io import read_json
 from core.schema import assert_valid, load_schema, validate_strict
-from content.execution.campaign.lane import normalize_workloads
+from content.execution.planning.carrier_demand import normalize_workloads
 
 from content.source.research.scale_source_pool import (
     SOURCE_POOL_CREATE_ONCE_COLLISION,

@@ -11,23 +11,21 @@ from core.control_types import AgentProvider
 from content.execution.model_contract import governed_cursor_grok_model
 
 
-def test_cli_exposes_explicit_acquisition_and_asset_ids() -> None:
+def test_cli_no_longer_exposes_retired_author_dispatch() -> None:
     import argparse
     from content.execution.handler import register_parser
 
     parser = argparse.ArgumentParser()
     register_parser(parser.add_subparsers(dest="root", required=True))
-    args = parser.parse_args([
-        "task", "author-image-supported-api-input",
-        "--execution-id", "20260812--travel-image-author--china--pilot-001",
-        "--acquisition-root", "/tmp/acquisition",
-        "--acquisition-receipt-ref", "receipts/exact.json",
-        "--asset-id", "openverse:asset:a",
-        "--asset-id", "openverse:asset:b",
-    ])
-    assert args.asset_id == ["openverse:asset:a", "openverse:asset:b"]
-    assert not hasattr(args, "verdict")
-    assert not hasattr(args, "run_id")
+    # 旧 SDK author dispatch 已退役：公开 task 面不再暴露该语义命令。
+    with pytest.raises(SystemExit):
+        parser.parse_args([
+            "task", "author-image-supported-api-input",
+            "--execution-id", "20260812--travel-image-author--china--pilot-001",
+            "--acquisition-root", "/tmp/acquisition",
+            "--acquisition-receipt-ref", "receipts/exact.json",
+            "--asset-id", "openverse:asset:a",
+        ])
 
 
 def test_author_result_parser_requires_exact_contract() -> None:

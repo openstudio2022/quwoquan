@@ -188,7 +188,7 @@ def execute_canonical_platform_launch(
             "--device-id",
             device_id,
             "--launch-provenance",
-            "workspace_flutter_run",
+            "canonical_launcher",
             "--run-mode",
             "content-live",
             # app-content-uat covers dependency capsule
@@ -204,7 +204,7 @@ def execute_canonical_platform_launch(
             "--max-cold-native-safe-terminal-ms",
             "12000",
             "--output-dir",
-            str(report_dir / target / "workspace-flutter-run"),
+            str(report_dir / target / "canonical-hot-restart"),
         ]
         if bool(getattr(args, "dry_run", False)):
             direct_command.append("--preflight-only")
@@ -281,7 +281,7 @@ def execute_canonical_platform_launch(
                 }
                 direct_execution_lock = stackctl.acquire_patrol_execution_lock(
                     env_name=target,
-                    target=f"workspace-flutter-run:{device_id}",
+                    target=f"canonical-hot-restart:{device_id}",
                 )
             direct_result = stackctl.run(
                 direct_command,
@@ -309,7 +309,7 @@ def execute_canonical_platform_launch(
                     attempt_ref=launch_attempt_path,
                     platform="ios-simulator",
                     device_id=device_id,
-                    launch_provenance="workspace_flutter_run",
+                    launch_provenance="canonical_launcher",
                     launch_projection=launch_projection,
                 )
                 launch_attempt_path = (
@@ -393,7 +393,7 @@ def execute_canonical_platform_launch(
                     attempt_ref=launch_attempt_path,
                     platform="ios-simulator",
                     device_id=device_id,
-                    launch_provenance="workspace_flutter_run",
+                    launch_provenance="canonical_launcher",
                     launch_projection=launch_projection,
                 )
             except (OSError, RuntimeError, TypeError, ValueError) as exc:
@@ -419,7 +419,7 @@ def execute_canonical_platform_launch(
             and isinstance(direct_evidence, dict)
             and direct_evidence.get("status") == "passed"
             and direct_evidence.get("launchProvenance")
-            == "workspace_flutter_run"
+            == "canonical_launcher"
             and direct_evidence.get("runtimeConfigSupplyMode")
             == "external_runtime_package"
             and stackctl._DATA_READINESS_DIGEST_RE.fullmatch(
@@ -438,7 +438,7 @@ def execute_canonical_platform_launch(
         )
         run_payload = {
             "target": target,
-            "suite": "workspace-flutter-run",
+            "suite": "canonical-hot-restart",
             "status": "passed" if direct_passed else "failed",
             "exitCode": (
                 1 if direct_binding_issue else direct_result.returncode

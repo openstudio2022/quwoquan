@@ -8,6 +8,10 @@ from pathlib import Path
 import pytest
 
 import content.source.research.scale_source_pool_image_video as media_projection
+from content.source.host_source_review import (
+    prepare_host_source_review_request,
+    record_host_source_review_result,
+)
 from content.source.media_source_admission import (
     MEDIA_SOURCE_ADMISSION_INVALID,
     MEDIA_SOURCE_SAFETY_REVIEW_BLOCKED,
@@ -25,6 +29,11 @@ IDENTITY = {
     "sourceRevision": "sha256:" + "a" * 64,
     "sourceDigest": "sha256:" + "b" * 64,
     "entityCatalogDigest": "sha256:" + "c" * 64,
+}
+REVIEW_IDENTITY = {
+    **IDENTITY,
+    "executionBundleDigest": "sha256:" + "d" * 64,
+    "handoffDigest": "sha256:" + "e" * 64,
 }
 ENTITY_CATALOG_REF = "quwoquan_data/reference/travel/entities/china"
 
@@ -124,7 +133,6 @@ def _portable_evidence(
     acquisition_ref = f"acquisition/{kind}.json"
     probe_ref = f"probe/{kind}.json"
     rights_ref = f"rights/{kind}.json"
-    review_ref = f"source-review/{kind}.json"
     common = {
         "assetId": asset_id,
         "entityId": "entity-1",
@@ -188,26 +196,34 @@ def _portable_evidence(
         "distributionDecision": "research_allowed",
         "sourceAttribution": _source_attribution(kind),
     }
-    source_review = {
-        "schema": "quwoquan_data.fixture_media_source_semantic_review",
+    safety_scan = {
+        "schema": "quwoquan_data.fixture_media_safety_scan",
         **common,
-        "status": "passed" if entity_match == "matched" else "blocked",
-        "entityMatch": entity_match,
-        "qualityStatus": "passed",
-        "privacyRisk": "none",
-        "minorRisk": "none",
-        "maliciousMediaRisk": "none",
-        "watermarkStatus": "absent",
-        "findings": [] if entity_match == "matched" else ["entity mismatch"],
+        "watermarkDetected": False,
     }
+    safety_ref = f"safety/{kind}.json"
     for ref, value in (
         (catalog_ref, catalog),
         (acquisition_ref, acquisition),
         (probe_ref, probe),
         (rights_ref, rights),
-        (review_ref, source_review),
+        (safety_ref, safety_scan),
     ):
         _write_json(root, ref, value)
+    review_ref = _record_host_review(
+        root,
+        kind=kind,
+        asset_id=asset_id,
+        asset_ref=asset_ref,
+        content_sha256=content_sha256,
+        entity_match=entity_match,
+        evidence_refs={
+            "acquisition": acquisition_ref,
+            "media_probe": probe_ref,
+            "safety_scan": safety_ref,
+            "rights_attribution": rights_ref,
+        },
+    )
     return asset_id, {
         "catalog": catalog_ref,
         "acquisition": acquisition_ref,
@@ -215,6 +231,57 @@ def _portable_evidence(
         "rights_attribution": rights_ref,
         "source_semantic_review": review_ref,
     }
+
+
+def _record_host_review(
+    root: Path,
+    *,
+    kind: str,
+    asset_id: str,
+    asset_ref: str,
+    content_sha256: str,
+    entity_match: str,
+    evidence_refs: dict[str, str],
+) -> str:
+    request, request_ref = prepare_host_source_review_request(
+        evidence_root=root,
+        source_identity=REVIEW_IDENTITY,
+        asset_kind=kind,
+        asset_id=asset_id,
+        asset_ref=asset_ref,
+        content_sha256=content_sha256,
+        entity_id="entity-1",
+        observed_entity_id="entity-1",
+        content_ref="entity:entity-1",
+        evidence_refs=evidence_refs,
+    )
+    passed = entity_match == "matched"
+    _result, result_ref = record_host_source_review_result(
+        evidence_root=root,
+        result_input={
+            "schema": "quwoquan_data.host_source_review_result_input",
+            "requestRef": request_ref,
+            "requestDigest": request["requestDigest"],
+            "actor": {
+                "host": "cursor",
+                "sessionId": "portable-bridge-session",
+                "modelFamily": "gpt-5",
+                "auditRunId": "portable-bridge-audit-001",
+            },
+            "reviewedAt": "2026-08-20T00:00:30Z",
+            "verdict": {
+                "status": "passed" if passed else "blocked",
+                "entityMatch": entity_match,
+                "qualityStatus": "passed",
+                "privacyRisk": "none",
+                "minorRisk": "none",
+                "maliciousMediaRisk": "none",
+                "watermarkStatus": "absent",
+                "findings": [] if passed else ["entity mismatch"],
+            },
+        },
+    )
+    return result_ref
 
 
 def _admit(

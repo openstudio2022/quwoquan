@@ -370,6 +370,7 @@ class Fixture:
             self.root / "environment-acceptance.json",
             {
                 "schema": "quwoquan_ops.environment_acceptance_fact.v1",
+                "acceptanceProfile": "environment_promotion",
                 "factId": DIGEST_A,
                 "environment": self.environment,
                 "target": self.target,

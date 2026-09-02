@@ -9,7 +9,6 @@ patch 锚点，包内消费一律经 ``_pkg.`` 属性访问。
 from __future__ import annotations
 
 from typing import Any
-from uuid import uuid4
 
 import quwoquan_ops.cli.lib.local_device_trust as _pkg
 
@@ -39,7 +38,12 @@ def install_device_trust(
     path = _pkg._receipt_path(target, platform_name, selected)
     previous = _read_receipt(path)
     leases = list(previous.get("leases") or []) if previous else []
-    normalized_lease = str(lease_id or "").strip() or uuid4().hex
+    # trust 回执必须绑定真实 consumer lease，禁止 fabricated lease 身份。
+    normalized_lease = str(lease_id or "").strip()
+    if not normalized_lease:
+        raise LocalDeviceTrustError(
+            "device trust install requires a real consumer lease id"
+        )
     if normalized_lease not in leases:
         leases.append(normalized_lease)
     android_identity = (

@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from content.execution.campaign.m100_alpha_acceptance import (
+from content.release.canonical.m100_alpha_acceptance import (
     M100AlphaAcceptanceError,
     bind_m100_alpha_acceptance,
     validate_m100_alpha_acceptance_binding,

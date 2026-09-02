@@ -48,7 +48,7 @@ class UserProfileGammaPatrolMatrixContractTest(unittest.TestCase):
                 f"{profile_name} 必须在设备矩阵实际调度用户主页 UAT",
             )
 
-    def test_self_hosted_workflow_resolves_registered_target(self) -> None:
+    def test_self_hosted_workflow_uses_registered_target(self) -> None:
         workflow = "\n".join(
             path.read_text(encoding="utf-8")
             for path in (WORKFLOW_PATH, MATRIX_RUNNER_PATH)

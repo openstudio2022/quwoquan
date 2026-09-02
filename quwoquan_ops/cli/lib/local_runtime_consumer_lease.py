@@ -39,6 +39,26 @@ def _lease_path(*, target: str, device: str, consumer: str) -> Path:
     return consumer_lease_dir() / f"{filename}.json"
 
 
+def _consumer_lease_id(*, platform: str, target: str, device: str, consumer: str) -> str:
+    return "sha256:" + hashlib.sha256(
+        (
+            f"{platform.strip().lower()}\0{target.strip()}\0{device.strip()}\0"
+            f"{consumer.strip()}"
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _require_sha256_identity(value: str, *, field: str) -> str:
+    normalized = str(value or "").strip()
+    if (
+        len(normalized) != 71
+        or not normalized.startswith("sha256:")
+        or any(character not in "0123456789abcdef" for character in normalized[7:])
+    ):
+        raise ValueError(f"{field} must be a canonical sha256 identity")
+    return normalized
+
+
 def acquire_consumer_lease(
     *,
     target: str,
@@ -66,12 +86,12 @@ def acquire_consumer_lease(
     if normalized_platform == "android" and not normalized_ports:
         raise ValueError("at least one positive port is required for Android")
     path = _lease_path(target=target, device=device, consumer=consumer)
-    lease_id = "sha256:" + hashlib.sha256(
-        (
-            f"{normalized_platform}\0{target.strip()}\0{device.strip()}\0"
-            f"{consumer.strip()}"
-        ).encode("utf-8")
-    ).hexdigest()
+    lease_id = _consumer_lease_id(
+        platform=normalized_platform,
+        target=target,
+        device=device,
+        consumer=consumer,
+    )
     payload: dict[str, Any] = {
         "schema": "qwq.local_runtime_consumer_lease",
         "leaseId": lease_id,
@@ -94,6 +114,91 @@ def acquire_consumer_lease(
     ):
         if value.strip():
             payload[key] = value.strip()
+    write_json(path, payload)
+    return {**payload, "path": str(path)}
+
+
+def bind_consumer_lease(
+    *,
+    target: str,
+    device: str,
+    consumer: str,
+    lease_id: str,
+    handoff_digest: str,
+    release_id: str = "",
+    manifest_digest: str = "",
+    readiness_receipt_digest: str = "",
+) -> dict[str, Any]:
+    """Exact-read an active lease and append final handoff evidence.
+
+    bind is deliberately not acquire: it preserves the original startedAt, ports,
+    package identity and build grace while proving that the same consumer generation
+    reached the final launcher handoff.
+    """
+
+    normalized_target = target.strip()
+    normalized_device = device.strip()
+    normalized_consumer = consumer.strip()
+    if not normalized_target or not normalized_device or not normalized_consumer:
+        raise ValueError("target, device and consumer are required")
+    normalized_lease_id = _require_sha256_identity(lease_id, field="lease_id")
+    normalized_handoff = _require_sha256_identity(
+        handoff_digest,
+        field="handoff_digest",
+    )
+    path = _lease_path(
+        target=normalized_target,
+        device=normalized_device,
+        consumer=normalized_consumer,
+    )
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("consumer lease receipt is missing")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError("consumer lease receipt is unreadable") from exc
+    if not isinstance(payload, dict) or payload.get("schema") != "qwq.local_runtime_consumer_lease":
+        raise ValueError("consumer lease receipt schema is invalid")
+    for field, expected in (
+        ("target", normalized_target),
+        ("device", normalized_device),
+        ("consumer", normalized_consumer),
+        ("leaseId", normalized_lease_id),
+    ):
+        if payload.get(field) != expected:
+            raise ValueError(f"consumer lease receipt {field} mismatch")
+    platform = str(payload.get("platform") or "").strip().lower()
+    expected_lease_id = _consumer_lease_id(
+        platform=platform,
+        target=normalized_target,
+        device=normalized_device,
+        consumer=normalized_consumer,
+    )
+    if normalized_lease_id != expected_lease_id:
+        raise ValueError("consumer lease id is not canonical for its exact identity")
+    if "releasedAt" in payload:
+        raise ValueError("consumer lease is already released")
+    if not str(payload.get("startedAt") or "").strip():
+        raise ValueError("consumer lease startedAt is missing")
+    ports = payload.get("ports")
+    if not isinstance(ports, list) or any(type(port) is not int or port <= 0 for port in ports):
+        raise ValueError("consumer lease ports are invalid")
+
+    evidence = {
+        "handoffDigest": normalized_handoff,
+        "releaseId": str(release_id or "").strip(),
+        "manifestDigest": str(manifest_digest or "").strip(),
+        "readinessReceiptDigest": str(readiness_receipt_digest or "").strip(),
+    }
+    for field in ("manifestDigest", "readinessReceiptDigest"):
+        if evidence[field]:
+            _require_sha256_identity(evidence[field], field=field)
+    for field, value in evidence.items():
+        existing = str(payload.get(field) or "").strip()
+        if existing and value and existing != value:
+            raise ValueError(f"consumer lease {field} conflicts with existing evidence")
+        if value:
+            payload[field] = value
     write_json(path, payload)
     return {**payload, "path": str(path)}
 

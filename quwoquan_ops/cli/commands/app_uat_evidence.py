@@ -27,6 +27,7 @@ from quwoquan_ops.cli.lib.app_uat_result_bundle import (
     write_projection,
 )
 from quwoquan_ops.cli.lib.environment_acceptance_fact import (
+    ACCEPTANCE_PROFILES,
     EnvironmentAcceptanceFactError,
     build_environment_acceptance_fact,
     exact_byte_digest,
@@ -206,9 +207,9 @@ def _source(ref: str, digest: str, *, label: str) -> dict[str, str]:
     }
 
 
-def _source_argument(raw: Sequence[str], *, label: str) -> list[dict[str, str]]:
+def _source_argument(raw: Sequence[str] | None, *, label: str) -> list[dict[str, str]]:
     sources: list[dict[str, str]] = []
-    for index, value in enumerate(raw):
+    for index, value in enumerate(raw or ()):
         parts = value.split("=", 1)
         if len(parts) != 2:
             _block(
@@ -221,9 +222,9 @@ def _source_argument(raw: Sequence[str], *, label: str) -> list[dict[str, str]]:
     return sources
 
 
-def _profile_argument(raw: Sequence[str]) -> list[dict[str, str]]:
+def _profile_argument(raw: Sequence[str] | None) -> list[dict[str, str]]:
     profiles: list[dict[str, str]] = []
-    for index, value in enumerate(raw):
+    for index, value in enumerate(raw or ()):
         parts = value.split("=", 1)
         if len(parts) != 2 or not all(part for part in parts):
             _block(
@@ -239,9 +240,9 @@ def _profile_argument(raw: Sequence[str]) -> list[dict[str, str]]:
     return profiles
 
 
-def _target_binding_argument(raw: Sequence[str]) -> list[dict[str, str]]:
+def _target_binding_argument(raw: Sequence[str] | None) -> list[dict[str, str]]:
     bindings: list[dict[str, str]] = []
-    for index, value in enumerate(raw):
+    for index, value in enumerate(raw or ()):
         parts = value.split("=", 3)
         if len(parts) != 4:
             _block(
@@ -266,9 +267,9 @@ def _target_binding_argument(raw: Sequence[str]) -> list[dict[str, str]]:
     return bindings
 
 
-def _required_raw_argument(raw: Sequence[str]) -> list[dict[str, str]]:
+def _required_raw_argument(raw: Sequence[str] | None) -> list[dict[str, str]]:
     results: list[dict[str, str]] = []
-    for index, value in enumerate(raw):
+    for index, value in enumerate(raw or ()):
         parts = value.split("=", 3)
         if len(parts) != 4:
             _block(
@@ -477,8 +478,9 @@ def build_app_uat_bundle_command(
 
 
 def build_environment_acceptance_append_command(
-    *, evidence_root: Path, acceptance_root: Path, environment: str, target: str,
-    release_id: str, release_digest: str, sample_plan_ref: str,
+    *, evidence_root: Path, acceptance_root: Path, acceptance_profile: str,
+    environment: str, target: str, release_id: str, release_digest: str,
+    import_run_id: str, verify_run_id: str, sample_plan_ref: str,
     sample_plan_digest: str, target_binding_refs: Sequence[Mapping[str, Any]],
     required_raw_results: Sequence[Mapping[str, Any]],
     required_target_profiles: Sequence[Mapping[str, str]],
@@ -502,21 +504,77 @@ def build_environment_acceptance_append_command(
             "OPS.APP_UAT_EVIDENCE.path_blocked",
             "acceptanceRoot must be contained by evidenceRoot",
         ) from error
-    predecessor = validate_predecessor_acceptance(
-        environment=environment,
-        release_id=release_id,
-        release_digest=release_digest,
-        predecessor_ref=predecessor_ref,
-        predecessor_digest=predecessor_digest,
-        predecessor_fact_id=predecessor_fact_id,
-        evidence_root=root,
-    )
+    if acceptance_profile not in ACCEPTANCE_PROFILES:
+        _block(
+            "OPS.APP_UAT_EVIDENCE.invalid_argument",
+            "acceptanceProfile must be explicitly selected from the canonical profiles",
+        )
+    if not required_raw_results:
+        _block(
+            "OPS.APP_UAT_EVIDENCE.invalid_argument",
+            "requiredRawResults must be non-empty",
+        )
+    if acceptance_profile == "environment_promotion":
+        if not target_binding_refs:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "environment_promotion requires targetBinding",
+            )
+        if not required_target_profiles:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "environment_promotion requires requiredProfile",
+            )
+        predecessor = validate_predecessor_acceptance(
+            environment=environment,
+            release_id=release_id,
+            release_digest=release_digest,
+            predecessor_ref=predecessor_ref,
+            predecessor_digest=predecessor_digest,
+            predecessor_fact_id=predecessor_fact_id,
+            evidence_root=root,
+        )
+    else:
+        if environment != "alpha" or target != "alpha-local":
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer requires environment=alpha,target=alpha-local",
+            )
+        if target_binding_refs:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer must not provide targetBinding",
+            )
+        if required_target_profiles:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer must not provide requiredProfile",
+            )
+        if any((predecessor_ref, predecessor_digest, predecessor_fact_id)):
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer must not provide predecessor",
+            )
+        if prod_release_facts is not None:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer must not provide prodReleaseFacts",
+            )
+        if len(required_raw_results) != 16:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer requires exactly 16 requiredRaw results",
+            )
+        predecessor = None
     fact = build_environment_acceptance_fact(
         evidence_root=root,
+        acceptance_profile=acceptance_profile,
         environment=environment,
         target=target,
         release_id=release_id,
         release_digest=release_digest,
+        import_run_id=import_run_id,
+        verify_run_id=verify_run_id,
         sample_plan_ref=sample_plan_ref,
         sample_plan_digest=sample_plan_digest,
         target_binding_refs=target_binding_refs,
@@ -607,12 +665,20 @@ def command_environment_acceptance_append(args: argparse.Namespace) -> dict[str,
     try:
         return build_environment_acceptance_append_command(
             evidence_root=Path(args.evidence_root), acceptance_root=Path(args.acceptance_root),
-            environment=args.environment, target=args.target, release_id=args.release_id,
-            release_digest=args.release_digest, sample_plan_ref=args.sample_plan_ref,
+            acceptance_profile=args.acceptance_profile, environment=args.environment,
+            target=args.target, release_id=args.release_id,
+            release_digest=args.release_digest, import_run_id=args.import_run_id,
+            verify_run_id=args.verify_run_id, sample_plan_ref=args.sample_plan_ref,
             sample_plan_digest=args.sample_plan_digest,
-            target_binding_refs=_target_binding_argument(args.target_binding),
+            target_binding_refs=(
+                _target_binding_argument(args.target_binding)
+                if args.target_binding else []
+            ),
             required_raw_results=_required_raw_argument(args.required_raw),
-            required_target_profiles=_profile_argument(args.required_profile),
+            required_target_profiles=(
+                _profile_argument(args.required_profile)
+                if args.required_profile else []
+            ),
             data_readiness=_source(args.data_readiness_ref, args.data_readiness_digest, label="dataReadiness"),
             active_cas={
                 "ref": args.active_cas_ref, "digest": args.active_cas_digest,
@@ -687,7 +753,7 @@ def register_parser(
     )
     for name in (
         "evidence-root", "acceptance-root", "environment", "target", "release-id",
-        "release-digest", "sample-plan-ref", "sample-plan-digest", "data-readiness-ref",
+        "release-digest", "import-run-id", "verify-run-id", "sample-plan-ref", "sample-plan-digest", "data-readiness-ref",
         "data-readiness-digest", "active-cas-ref", "active-cas-digest",
         "active-cas-readback-ref", "active-cas-readback-digest", "lifecycle-exit-ref",
         "lifecycle-exit-digest", "provider-readiness-ref", "provider-readiness-digest",
@@ -696,12 +762,15 @@ def register_parser(
         "source-fingerprint",
     ):
         append.add_argument(f"--{name}", required=True)
-    append.add_argument("--target-binding", action="append", required=True)
-    append.add_argument("--required-raw", action="append", required=True)
-    append.add_argument("--required-profile", action="append", required=True)
-    append.add_argument("--lease-revocation", action="append", required=True)
-    append.add_argument("--lock-release", action="append", required=True)
-    append.add_argument("--gc-protection", action="append", required=True)
+    append.add_argument(
+        "--acceptance-profile", choices=ACCEPTANCE_PROFILES, required=True
+    )
+    append.add_argument("--target-binding", action="append", default=[])
+    append.add_argument("--required-raw", action="append", default=[])
+    append.add_argument("--required-profile", action="append", default=[])
+    append.add_argument("--lease-revocation", action="append", default=[])
+    append.add_argument("--lock-release", action="append", default=[])
+    append.add_argument("--gc-protection", action="append", default=[])
     append.add_argument("--prod-release-facts", default="")
     append.add_argument("--predecessor-ref", default="")
     append.add_argument("--predecessor-digest", default="")

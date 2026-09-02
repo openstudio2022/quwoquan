@@ -11,52 +11,136 @@
     "familyRef": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ref", "sha256"],
+      "required": [
+        "ref",
+        "sha256"
+      ],
       "properties": {
-        "ref": {"type": "string", "minLength": 1},
-        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
       }
     },
     "sourceDigest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["algorithm", "digest", "inputs"],
+      "required": [
+        "algorithm",
+        "digest",
+        "inputs"
+      ],
       "properties": {
-        "algorithm": {"const": "sha256"},
-        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "algorithm": {
+          "const": "sha256"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
         "inputs": {
           "type": "array",
           "minItems": 1,
-          "items": {"type": "string", "minLength": 1}
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
     "executionBundle": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["algorithm", "digest", "inputs"],
+      "required": [
+        "algorithm",
+        "digest",
+        "inputs"
+      ],
       "properties": {
-        "algorithm": {"const": "sha256"},
-        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-        "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+        "algorithm": {
+          "const": "sha256"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     },
-    "hostRuntime": { "const": "external_host_agent" },
+    "operationalFingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "hostRuntime": {
+      "const": "external_host_agent"
+    },
     "carrierDemand": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ref", "digest", "workRequestRef", "workRequestDigest"],
+      "required": [
+        "ref",
+        "digest",
+        "workRequestRef",
+        "workRequestDigest"
+      ],
       "properties": {
-        "ref": {"type": "string", "minLength": 1},
-        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-        "workRequestRef": {"type": "string", "minLength": 1},
-        "workRequestDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "workRequestRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workRequestDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
       }
     },
-    "requestRef": {"const": "0.plan/request.json"},
-    "targetSetRef": {"const": "0.plan/target_set.json"},
-    "targetSetDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "retryOf": {"type": ["string", "null"]}
+    "requestRef": {
+      "const": "0.plan/request.json"
+    },
+    "targetSetRef": {
+      "const": "0.plan/target_set.json"
+    },
+    "targetSetDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "retryOf": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
   },
-  "required": ["executionId", "familyRef", "sourceDigest", "executionBundle", "hostRuntime", "carrierDemand", "requestRef", "targetSetRef", "targetSetDigest", "retryOf"]
+  "required": [
+    "executionId",
+    "familyRef",
+    "sourceDigest",
+    "executionBundle",
+    "operationalFingerprint",
+    "hostRuntime",
+    "carrierDemand",
+    "requestRef",
+    "targetSetRef",
+    "targetSetDigest",
+    "retryOf"
+  ]
 }

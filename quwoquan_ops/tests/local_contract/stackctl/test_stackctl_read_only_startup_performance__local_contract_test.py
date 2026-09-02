@@ -63,6 +63,49 @@ def test_bootstrap_command_does_not_treat_global_option_value_as_command__local_
 
 
 
+def test_main_dispatch_uses_live_stackctl_monkeypatch_surface__local_contract(
+    monkeypatch,
+) -> None:
+    from argparse import Namespace
+
+    from quwoquan_ops.cli import stackctl
+
+    expected = {"exitCode": 7, "summary": "patched package handler"}
+    received: list[Namespace] = []
+
+    class Parser:
+        @staticmethod
+        def parse_args() -> Namespace:
+            return Namespace(command="package", output_format="json")
+
+    def patched_handler(args: Namespace) -> dict[str, object]:
+        received.append(args)
+        return expected
+
+    monkeypatch.setattr(stackctl, "build_parser", Parser)
+    monkeypatch.setattr(stackctl, "command_package", patched_handler)
+
+    assert stackctl.main() == 7
+    assert len(received) == 1
+    assert received[0].command == "package"
+
+
+def test_dispatch_covers_every_registered_parser_command__local_contract() -> None:
+    import argparse
+
+    from quwoquan_ops.cli import stackctl
+    from quwoquan_ops.cli.commands import stackctl_dispatch
+
+    command_action = next(
+        action
+        for action in stackctl.build_parser()._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    handlers = stackctl_dispatch.command_handlers(vars(stackctl))
+
+    assert set(handlers) == set(command_action.choices)
+
+
 def test_stackctl_contract_exports_defined_canonical_constants__local_contract() -> None:
     from quwoquan_ops.cli.commands import stackctl_contract
 

@@ -59,6 +59,12 @@ EXECUTION_ROOT_MODULES = frozenset(
         "runtime_state.py",
         "spec_contract.py",
         "stable_production_proof.py",
+        "stage_authority.py",
+        "stage_authority_close.py",
+        "stage_authority_io.py",
+        "stage_authority_validation.py",
+        "stage_gate_registry.py",
+        "stage_semantic_recorder.py",
         "stage_receipt.py",
         "stage_receipt_cli.py",
         "stage_reports.py",
@@ -415,8 +421,22 @@ def script_architecture_issues() -> list[str]:
     return issues
 
 
+def _current_receipt_writer_issues() -> list[str]:
+    issues: list[str] = []
+    execution = SCRIPTS_ROOT / "content/execution"
+    for path in sorted(execution.rglob("*.py")):
+        if path.name in {"stage_authority.py", "stage_authority_close.py", "stage_receipt.py"}:
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "_write_current_receipt_create_once" in text or "_stage_authority_writer_token" in text:
+            issues.append(
+                f"{path.relative_to(REPO_ROOT)}: current receipt writer is stage_authority-only"
+            )
+    return issues
+
+
 def main() -> int:
-    issues = script_architecture_issues()
+    issues = [*script_architecture_issues(), *_current_receipt_writer_issues()]
     if issues:
         print("[verify_script_architecture] FAIL")
         for issue in issues:

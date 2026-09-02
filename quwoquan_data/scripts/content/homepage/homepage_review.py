@@ -116,34 +116,6 @@ def _entity_review_paths(execution_id: str, domain: str, etype: str, name: str) 
         review_dir / "finalization_report.json",
     )
 
-def _entity_homepage_agent_run_id(
-    execution_id: str, domain: str, etype: str, name: str
-) -> str:
-    draft_meta_path = _entity_draft_dir(execution_id, domain, etype, name) / "draft_meta.json"
-    if draft_meta_path.is_file():
-        meta = read_json(draft_meta_path)
-        run_id = str(meta.get("agentRunId") or "").strip()
-        if run_id and not run_id.startswith("build-homepage:"):
-            return run_id
-    try:
-        from content.execution.context import load_execution_state
-        state = load_execution_state(execution_id)
-    except (ImportError, OSError, ValueError, TypeError):
-        return ""
-    from content.execution.agent.history import state_managed_agent_runs
-    from core.control_types import ExecutionStage
-
-    for run in reversed(state_managed_agent_runs(state)):
-        if run.stage is not ExecutionStage.BUILD_HOMEPAGE:
-            continue
-        for job_outcome in run.outcomes:
-            if not job_outcome.succeeded:
-                continue
-            run_id = job_outcome.outcome.run_id
-            if run_id:
-                return run_id
-    return ""
-
 def _build_entity_provenance(
     *,
     execution_id: str,

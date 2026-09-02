@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from content.execution.campaign.carrier_execution_policy import (
+from content.execution.planning.carrier_policy import (
     carrier_execution_policy,
     carrier_policy_digest,
     load_carrier_execution_policy,

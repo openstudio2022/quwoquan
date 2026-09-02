@@ -21,13 +21,10 @@ from typing import Any
 from core.carrier_contract import research_plan_files
 from core.entity_object import parse_entity_ref
 from core.io import read_json, write_json
-from core.paths import OUTPUT_ROOT, STAGE_DOWNLOAD
+from core.paths import OUTPUT_ROOT, STAGE_DOWNLOAD, execution_post_object_dir
 from core.schema import assert_valid
 
-from content.execution.campaign.external_input_runtime import (
-    bound_runtime_external_input_context,
-)
-from content.execution.campaign.source_pool_binding import load_capsule_source_pool
+from content.execution.source_pool.binding import load_capsule_source_pool
 from content.source.research.scale_source_pool_runtime_inputs import (
     direct_selected_rows,
     source_ready_capsule,
@@ -38,6 +35,9 @@ from content.source.research.scale_source_pool_homepage_media import (
 )
 from content.source.research.scale_source_pool_image_materialize import (
     _materialize_frozen_image_source_unit,
+)
+from content.source.research.scale_source_pool_video_materialize import (
+    _materialize_frozen_video_source_unit,
 )
 from content.source.research.scale_source_pool_runtime_blockers import (
     RUNTIME_INPUT_UNBOUND,
@@ -82,6 +82,20 @@ def _selected_rows(
     carrier: str,
     direct_selection: Mapping[str, Any] | None = None,
 ) -> tuple[Path, Path, dict[str, Any], list[dict[str, Any]]]:
+    if direct_selection is not None:
+        try:
+            return direct_selected_rows(
+                execution_id=execution_id,
+                carrier=carrier,
+                direct_selection=direct_selection,
+                output_root=OUTPUT_ROOT,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            raise _fail(str(exc)) from exc
+    from content.execution.campaign.external_input_runtime import (
+        bound_runtime_external_input_context,
+    )
+
     context = bound_runtime_external_input_context(execution_id, carrier)
     if context is None or context.capsule_root is None:
         try:
@@ -284,13 +298,17 @@ def materialize_frozen_scale_source_pool_entity(
     carrier: str,
     entity_id: str,
     entity_type: str,
+    *,
+    direct_selection: Mapping[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Materialize selected body/media bytes without any network discovery."""
 
-    if carrier not in {"homepage", "article", "image"}:
+    if carrier not in {"homepage", "article", "image", "video"}:
         return None
     matches: list[dict[str, Any]] = []
-    for row in frozen_scale_source_pool_candidates(execution_id, carrier):
+    for row in frozen_scale_source_pool_candidates(
+        execution_id, carrier, direct_selection=direct_selection
+    ):
         parsed = parse_entity_ref(str(row["entityRef"]))
         if parsed is not None and parsed[2] == entity_id:
             matches.append(row)
@@ -300,6 +318,14 @@ def materialize_frozen_scale_source_pool_entity(
     if carrier == "image":
         return _materialize_frozen_image_source_unit(
             execution_id=execution_id,
+            entity_id=entity_id,
+            entity_type=entity_type,
+            row=row,
+        )
+    if carrier == "video":
+        return _materialize_frozen_video_source_unit(
+            execution_id=execution_id,
+            object_ref=str(row["objectRef"]),
             entity_id=entity_id,
             entity_type=entity_type,
             row=row,
@@ -328,6 +354,15 @@ def materialize_frozen_scale_source_pool_entity(
         from core.wiki_wikitext import placements_from_layout
 
         image_placements = placements_from_layout(layout)
+    else:
+        from core.source_layout import rejected_layout
+
+        layout = rejected_layout(
+            source_kind=str(source.get("sourceKind") or "article"),
+            extractor=str(source.get("extractor") or "frozen_scale_source_pool"),
+            title=str(source.get("resolvedTitle") or entity_id),
+            reject_reason="source_ready_capsule_has_no_structured_layout",
+        )
     images: list[dict[str, Any]] = []
     for index, asset in enumerate(_image_rows(candidate, carrier), start=1):
         binding = media_by_id.get(str(asset["assetId"]))
@@ -352,9 +387,27 @@ def materialize_frozen_scale_source_pool_entity(
                 ),
             }
         )
-    object_dir = resolve_entity_object_dir(
-        execution_id, entity_id, etype_hint=entity_type
-    )
+    if carrier == "homepage":
+        object_dir = resolve_entity_object_dir(
+            execution_id, entity_id, etype_hint=entity_type
+        )
+        target_ref = str(row["entityRef"])
+    else:
+        parts = Path(str(row.get("objectRef") or "")).parts
+        if len(parts) < 3 or parts[:2] != ("posts", carrier):
+            raise _fail(f"{carrier} target ref is non-canonical: {row.get('objectRef')}")
+        suffix = parts[2:]
+        angle, title, sequence = (
+            ("/".join(suffix[:-2]), suffix[-2], int(suffix[-1]))
+            if len(suffix) >= 3 and suffix[-1].isdigit()
+            else (suffix[0], suffix[1], 1)
+            if len(suffix) == 2
+            else ({"article": "攻略"}[carrier], suffix[0], 1)
+        )
+        object_dir = execution_post_object_dir(
+            execution_id, carrier, angle, title, sequence
+        )
+        target_ref = f"posts/{carrier}/{angle}/{title}/{sequence}"
     source_unit = candidate["primarySource"] if carrier == "homepage" else candidate
     assert isinstance(source_unit, Mapping)
     publish_media_mode = (

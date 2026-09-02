@@ -8,10 +8,7 @@ from pathlib import Path
 from typing import Any
 from core.io import read_json
 from core.schema import assert_valid
-from content.source.host_source_review import (
-    CONTRACT_VERSION as HOST_SOURCE_REVIEW_CONTRACT_VERSION,
-    read_host_source_review_result,
-)
+from content.source.host_source_review import read_host_source_review_result
 from content.source.media_source_admission_contract import (
     MEDIA_SOURCE_ADMISSION_BLOCKED,
     MEDIA_SOURCE_ADMISSION_INVALID,
@@ -132,7 +129,7 @@ def _normalized_review(
     document: Mapping[str, Any], *, root: Path, asset_id: str, result_ref: str
 ) -> dict[str, Any]:
     if document.get("schema") != "quwoquan_data.host_source_review_result":
-        raise _invalid("source semantic review must use host-source-review/v1")
+        raise _invalid("source semantic review must be one validated host source review result")
     try:
         result = read_host_source_review_result(
             evidence_root=root,
@@ -404,7 +401,6 @@ def _prepare_receipt(
         "evidenceBindings": bindings,
         "assetSnapshot": snapshot,
         "sourceReview": review,
-        "sourceReviewContractVersion": HOST_SOURCE_REVIEW_CONTRACT_VERSION,
         "admissionDecision": "blocked" if blockers else "accepted",
         "blockers": blockers,
         "recordedAt": str(recorded_at),
@@ -525,11 +521,11 @@ class MediaSourceAdmissionQuery:
             raise _invalid(exc) from exc
         if not isinstance(payload, dict):
             raise _invalid("media source admission receipt must be one object")
-        current = payload.get("sourceReviewContractVersion") == HOST_SOURCE_REVIEW_CONTRACT_VERSION
-        schema_name = ("media_source_admission_receipt" if current
-                       else "media_source_admission_receipt_legacy_v0")
         try:
-            assert_valid(payload, "source", schema_name, label="media source admission receipt")
+            assert_valid(
+                payload, "source", "media_source_admission_receipt",
+                label="media source admission receipt",
+            )
         except (FileNotFoundError, TypeError, ValueError) as exc:
             raise _invalid(exc) from exc
         stable = {key: value for key, value in payload.items() if key != "receiptDigest"}
@@ -545,10 +541,6 @@ class MediaSourceAdmissionQuery:
         bindings = payload.get("evidenceBindings")
         if not isinstance(bindings, list):
             raise _invalid("media source admission evidence bindings are absent")
-        if not current:
-            return {"status": str(payload["admissionDecision"]), "receiptRef": canonical_ref,
-                    "receiptDigest": str(payload["receiptDigest"]), "receipt": payload,
-                    "contractVersion": "legacy-v0-read-only"}
         evidence_refs = {
             str(binding.get("role") or ""): str(binding.get("ref") or "")
             for binding in bindings if isinstance(binding, Mapping)
@@ -575,8 +567,6 @@ class MediaSourceAdmissionQuery:
 
     def require_accepted(self, receipt_ref: str) -> dict[str, Any]:
         result = self.read(receipt_ref)
-        if result.get("contractVersion") == "legacy-v0-read-only":
-            raise _invalid("legacy media source admission is historical read-only")
         if result["status"] != "accepted":
             receipt = result["receipt"]
             blockers = receipt.get("blockers") if isinstance(receipt, Mapping) else None

@@ -3382,6 +3382,30 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "key": "sys.platform-ops-service.human_authority.issuer",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.provider_commit",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.provider_version",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "key": "sys.platform-ops-service.human_authority.role_mappings",
       "reload": "restart",
       "rollout": "progressive",

@@ -421,10 +421,10 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
     )
     # publish 执行只消费 reviewed pool delivery intent；本测试的交付物是
     # author evidence 与 job 绑定，intent 校验由对象级替身给出最小结果。
-    from content.execution.closure import pool_delivery as closure_pool_delivery
+    from content.execution.queue.reliabletask import publish as reliabletask_publish
 
     monkeypatch.setattr(
-        closure_pool_delivery,
+        reliabletask_publish,
         "validate_pool_delivery_intent_for_job",
         lambda _job: {
             "intentId": "sha256:" + "9" * 64,

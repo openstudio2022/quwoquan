@@ -9,7 +9,7 @@ from content.execution.campaign import submission_reconciliation as reconciliati
 from content.execution.campaign import failed_execution_reconciliation
 from content.execution.planning.recipe import request as recipe_request
 from content.execution.planning.recipe import request_retry_scope
-from content.execution.campaign.external_inputs import payload_digest
+from content.execution.source_pool.external_inputs import payload_digest
 from core.io import read_json, write_json
 from core.schema import assert_valid
 from support.semantic_preflight_fixture import ready_semantic_preflight

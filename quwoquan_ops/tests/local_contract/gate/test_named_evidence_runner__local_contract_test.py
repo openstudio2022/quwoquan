@@ -7,9 +7,11 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
-import json
+import os
 import shutil
+import stat
 import subprocess
 import sys
 import unittest
@@ -24,6 +26,7 @@ sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
 
 import evidence_runner as runner  # noqa: E402
 import review_dispatch as review  # noqa: E402
+from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
 from lib.feature_tree.commands import _context_manifest, discover_nodes  # noqa: E402
 from lib.feature_tree.ownership import resolve_target_details  # noqa: E402
 
@@ -51,8 +54,11 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
         manifest["evidence_fingerprint"] = review.embedded_fingerprint_binding(
             review.build_feature_context_fingerprint(manifest, repo_root=ROOT)
         )
-        path = self.case_root / "owner-manifest.json"
-        path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+        raw = canonical_json_bytes(manifest)
+        manifest_root = ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint"
+        manifest_root.mkdir(parents=True, exist_ok=True)
+        path = manifest_root / (hashlib.sha256(raw).hexdigest() + ".json")
+        path.write_bytes(raw)
         self.manifest_ref = path.relative_to(ROOT).as_posix()
         return manifest
 
@@ -61,6 +67,7 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
         commands: list[tuple[str, bool, str]],
         *,
         changed_paths: list[str] | None = None,
+        timeout_seconds: int = 300,
     ) -> tuple[dict, dict]:
         registry = copy.deepcopy(
             yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
@@ -70,6 +77,7 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
                 "command": command,
                 "segment": "POST",
                 "required": required,
+                "timeout_seconds": timeout_seconds,
                 "covers": [],
             }
             for evidence_id, required, command in commands
@@ -123,13 +131,11 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
         ):
             mutated = copy.deepcopy(plan)
             mutated["terminal"] = terminal
-            with mock.patch.object(runner.subprocess, "run") as command, self.assertRaisesRegex(
+            with mock.patch.object(runner, "run_command") as command, self.assertRaisesRegex(
                 runner.EvidenceRunnerError, "TERMINAL_CONTRACT_INVALID|FINGERPRINT_CHANGED"
             ):
                 self._run(mutated, registry)
-            self.assertFalse(
-                any(call.args and call.args[0][:2] == ["/bin/sh", "-c"] for call in command.call_args_list)
-            )
+            command.assert_not_called()
 
     def test_terminal_mutation_with_old_fingerprint_is_rejected(self) -> None:
         plan, registry = self._plan([("safe", True, "printf safe")])
@@ -146,16 +152,15 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
             [("safe", True, "printf safe")], changed_paths=[relative]
         )
         (ROOT / relative).write_text("after\n", encoding="utf-8")
-        real_run = subprocess.run
+        real_run = runner.run_command
         shell_calls: list[list[str]] = []
 
         def record(args, *positional, **kwargs):
-            if args[:2] == ["/bin/sh", "-c"]:
-                shell_calls.append(args)
+            shell_calls.append(list(args))
             return real_run(args, *positional, **kwargs)
 
         with (
-            mock.patch.object(runner.subprocess, "run", side_effect=record),
+            mock.patch.object(runner, "run_command", side_effect=record),
             self.assertRaisesRegex(
                 runner.EvidenceRunnerError, "REVIEW.FINGERPRINT_CHANGED"
             ),
@@ -183,6 +188,138 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
             runner.EvidenceRunnerError, "REVIEW.FINGERPRINT_CHANGED"
         ):
             self._run(plan, registry)
+
+    def test_data_static_contract_declares_isolated_output_and_cleanup(self) -> None:
+        registry = yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
+        command = str(registry["evidence"]["data-static-contract"]["command"])
+
+        self.assertIn(
+            'isolated_output_root="$(mktemp -d '
+            '"${TMPDIR:-/tmp}/qwq-data-static-contract.XXXXXX")"',
+            command,
+        )
+        self.assertIn('QWQ_OUTPUT_ROOT="$isolated_output_root"', command)
+        self.assertIn('rm -rf -- "$isolated_output_root"', command)
+        self.assertIn("trap cleanup_data_static_contract_output EXIT", command)
+        self.assertTrue(
+            command.rstrip().endswith(
+                "python3 -B quwoquan_data/scripts/cli.py verify all"
+            )
+        )
+        self.assertNotIn(".qwq_output/data/tasks", command)
+
+    def test_data_static_contract_actual_command_cleans_isolated_output(self) -> None:
+        registry = yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
+        command = str(registry["evidence"]["data-static-contract"]["command"])
+        fake_bin = self.case_root / "bin"
+        fake_bin.mkdir()
+        fake_python = fake_bin / "python3"
+        fake_python.write_text(
+            "#!/bin/sh\n"
+            "printf '%s\\n' \"$QWQ_OUTPUT_ROOT\" \"$PWD\" \"$*\" > \"$QWQ_PROBE_RECEIPT\"\n"
+            "mkdir -p \"$QWQ_OUTPUT_ROOT/data/tasks\"\n"
+            "printf 'probe\\n' > \"$QWQ_OUTPUT_ROOT/data/tasks/probe\"\n"
+            "exit \"$QWQ_PROBE_EXIT_CODE\"\n",
+            encoding="utf-8",
+        )
+        fake_python.chmod(fake_python.stat().st_mode | stat.S_IXUSR)
+
+        for expected_exit_code in (0, 23):
+            with self.subTest(exit_code=expected_exit_code):
+                case_root = self.case_root / f"case-{expected_exit_code}"
+                temp_parent = case_root / "temporary root [isolated]"
+                temp_parent.mkdir(parents=True)
+                shared_output_root = case_root / "shared output"
+                shared_output_root.mkdir()
+                shared_sentinel = shared_output_root / "must-survive.txt"
+                shared_sentinel.write_text("user data\n", encoding="utf-8")
+                receipt = case_root / "output-root.txt"
+                environment = {
+                    **os.environ,
+                    "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+                    "TMPDIR": str(temp_parent),
+                    "QWQ_OUTPUT_ROOT": str(shared_output_root),
+                    "QWQ_PROBE_RECEIPT": str(receipt),
+                    "QWQ_PROBE_EXIT_CODE": str(expected_exit_code),
+                }
+
+                completed = subprocess.run(
+                    ["/bin/sh", "-c", command],
+                    cwd=ROOT,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assertEqual(expected_exit_code, completed.returncode)
+                isolated_root_raw, command_cwd, command_args = receipt.read_text(
+                    encoding="utf-8"
+                ).splitlines()
+                isolated_root = Path(isolated_root_raw)
+                self.assertEqual(temp_parent, isolated_root.parent)
+                self.assertNotEqual(shared_output_root, isolated_root)
+                self.assertEqual(str(ROOT), command_cwd)
+                self.assertEqual(
+                    "-B quwoquan_data/scripts/cli.py verify all", command_args
+                )
+                self.assertFalse(isolated_root.exists())
+                self.assertEqual([], list(temp_parent.iterdir()))
+                self.assertEqual(
+                    "user data\n", shared_sentinel.read_text(encoding="utf-8")
+                )
+
+    def test_timeout_terminates_evidence_process_group_and_emits_typed_result(self) -> None:
+        child_pid = self.case_root / "child.pid"
+        command = (
+            "python3 -c \"import pathlib,subprocess,sys,time; "
+            "child=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']); "
+            f"pathlib.Path({str(child_pid)!r}).write_text(str(child.pid)); "
+            "time.sleep(30)\""
+        )
+        plan, registry = self._plan(
+            [("slow", True, command)], timeout_seconds=1
+        )
+
+        started = __import__("time").monotonic()
+        receipt = self._run(plan, registry)
+        elapsed = __import__("time").monotonic() - started
+
+        self.assertLess(elapsed, 12)
+        self.assertEqual("GATE_BLOCK", receipt["terminal"]["status"])
+        self.assertEqual("REVIEW.EVIDENCE_TIMEOUT", receipt["terminal"]["code"])
+        result = receipt["evidence"][0]
+        self.assertEqual(124, result["exit_code"])
+        self.assertEqual("timeout", result["outcome"])
+        self.assertTrue(result["timed_out"])
+        self.assertEqual(1, result["timeout_seconds"])
+        self.assertIn(result["termination_signal"], {"SIGTERM", "SIGKILL"})
+        pid = int(child_pid.read_text(encoding="utf-8"))
+        for _ in range(50):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                break
+            __import__("time").sleep(0.02)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(pid, 0)
+
+    def test_timeout_declaration_must_match_registry_and_stay_bounded(self) -> None:
+        plan, registry = self._plan([("safe", True, "printf safe")])
+        plan["evidence"][0]["timeout_seconds"] = 301
+        with self.assertRaisesRegex(
+            runner.EvidenceRunnerError, "FINGERPRINT_CHANGED|timeout_seconds"
+        ):
+            self._run(plan, registry)
+
+        for invalid in (0, -1, 3601, True, None):
+            with self.subTest(invalid=invalid):
+                plan, registry = self._plan([("safe", True, "printf safe")])
+                registry["evidence"]["safe"]["timeout_seconds"] = invalid
+                with self.assertRaisesRegex(
+                    runner.EvidenceRunnerError, "INVALID_EVIDENCE|timeout_seconds"
+                ):
+                    self._run(plan, registry)
 
     def test_required_failure_projects_real_exit_and_stops(self) -> None:
         plan, registry = self._plan(

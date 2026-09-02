@@ -10,10 +10,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-from content.execution.campaign.carrier_execution_policy import (
+from content.execution.planning.carrier_policy import (
     POLICY_PATH as CARRIER_POLICY_PATH,
 )
-from content.execution.campaign.request_envelope import (
+from content.execution.planning.request_envelope import (
     envelopes_root,
     scale_root,
 )

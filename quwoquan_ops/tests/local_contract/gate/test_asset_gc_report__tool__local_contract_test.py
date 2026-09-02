@@ -60,19 +60,15 @@ class AssetGcReportTest(unittest.TestCase):
             )
             self.assertEqual(_tool.collect_zombie_references(root), [])
 
-    def test_forked_stub_and_dead_pointer_are_reported(self) -> None:
+    def test_any_harness_workflow_stub_is_reported(self) -> None:
         with self._tmp() as root:
             _write(
-                root / ".cursor/skills/forked/SKILL.md",
-                "---\nname: forked\n---\n\n自带完整语义，不指向真相源。\n",
-            )
-            _write(
-                root / ".cursor/skills/dead/SKILL.md",
-                "---\nname: dead\n---\n\n见 .agents/skills/gone/SKILL.md\n",
+                root / ".cursor/skills/forwarding/SKILL.md",
+                "---\nname: forwarding\n---\n\n见 .agents/skills/forwarding/SKILL.md\n",
             )
             issues = _tool.collect_harness_forks(root)
-            self.assertTrue(any("分叉候选" in i for i in issues), issues)
-            self.assertTrue(any("死指针" in i for i in issues), issues)
+            self.assertEqual(len(issues), 1, issues)
+            self.assertIn("宿主专属 Workflow stub", issues[0])
 
     def test_duplicate_body_between_agents_and_tree_is_reported(self) -> None:
         paragraph = "这是一段足够长的治理正文，" * 10

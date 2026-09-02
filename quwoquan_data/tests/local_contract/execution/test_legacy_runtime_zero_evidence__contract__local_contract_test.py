@@ -60,6 +60,51 @@ def test_real_legacy_entry_blocks_and_create_writes_nothing(tmp_path: Path) -> N
     assert not output.exists()
 
 
+def test_ops_scan_distinguishes_exclusive_retired_file_from_active_surface_reference(
+    tmp_path: Path,
+) -> None:
+    repo = _repo(tmp_path / "repo")
+    exclusive = repo / "quwoquan_ops/cli/lib/data_execution_fleet.py"
+    exclusive.parent.mkdir(parents=True)
+    exclusive.write_text("DataExecutionFleet\n", encoding="utf-8")
+    active = repo / "quwoquan_ops/cli/stackctl.py"
+    active.parent.mkdir(parents=True, exist_ok=True)
+    active.write_text("data-execution-fleet\n", encoding="utf-8")
+
+    scan = subject.scan_package_runtime_zero_evidence(
+        repo_root=repo, source_fingerprint=FINGERPRINT
+    )
+
+    refs = set(scan["legacyEntryRefs"])
+    assert (
+        "quwoquan_ops/cli/lib/data_execution_fleet.py"
+        "#retired Ops data-execution-fleet topology reference"
+    ) in refs
+    assert (
+        "quwoquan_ops/cli/stackctl.py"
+        "#active Ops surface references retired data topology"
+    ) in refs
+
+
+def test_ops_scan_accepts_only_the_explicit_retired_compose_declaration(
+    tmp_path: Path,
+) -> None:
+    repo = _repo(tmp_path / "repo")
+    manifest = repo / "quwoquan_ops/environments/local_env_port_manifest.yaml"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(
+        '{"retiredComposeSources": {'
+        '"docker-compose.data-execution-fleet.yaml": "R13 physical delete candidate"}}\n',
+        encoding="utf-8",
+    )
+
+    scan = subject.scan_package_runtime_zero_evidence(
+        repo_root=repo, source_fingerprint=FINGERPRINT
+    )
+
+    assert scan["legacyEntryRefs"] == []
+
+
 def test_zero_entry_scan_creates_exact_create_once_evidence(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "repo")
     safe = repo / "quwoquan_service/runtime/reliabletask/runtime.go"

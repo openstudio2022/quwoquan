@@ -222,7 +222,6 @@
     "sourceReviewEvidence": {
       "type": "object",
       "required": [
-        "contractVersion",
         "requestRef",
         "requestDigest",
         "resultRef",
@@ -231,9 +230,6 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "contractVersion": {
-          "const": "host-source-review/v1"
-        },
         "requestRef": {
           "$ref": "#/$defs/relativeRef"
         },

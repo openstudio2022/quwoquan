@@ -206,7 +206,7 @@ def _publish_homepage_execution(
     entity, and the entity transaction reads that same document.
     """
     from content.execution.closure.pool_delivery import write_pool_delivery_intent
-    from content.execution.controller.publish import publish_homepage_object
+    from content.release.canonical.publish_homepage_object import publish_homepage_object
     from content.execution.workspace import write_publish_ref
 
     results: list[dict[str, Any]] = []

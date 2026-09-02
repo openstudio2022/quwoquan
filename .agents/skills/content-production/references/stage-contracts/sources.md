@@ -43,10 +43,10 @@ python3 quwoquan_data/scripts/cli.py verify source-digest --execution-id <id>
 - source identity 缺字段 → 补齐来源单元 `meta.json` 的抓取 URL/时间/许可证线索。
 - digest 不一致 → 不改历史字节；以新来源单元替换并重新判定。
 
-按 [handoff-protocol.md](../handoff-protocol.md) 落 receipt。
+按 [handoff-protocol.md](../handoff-protocol.md) 执行 `task stage-open` → `task semantic-prepare --stage sources` → 宿主语义工作 → `task semantic-record --stage sources --input <json>` → `task stage-gate`（context 只绑定 canonical `semanticResultRef + semanticResultDigest`）→ `task stage-close`；宿主不填写 command 退出码、verdict、next 或自由 input refs。
 
 ## 交接（HANDOFF）
 
 - 每目标合格来源 ≥ 配额 → `next=1.download`。
-- 3 轮补源后仍有缺口 → `verdict=blocked`，`openItems` 逐条列缺口目标与已试策略
+- 3 轮补源后仍有缺口 → `verdict=blocked`，`typedIssues` 逐条列缺口目标与 `recoveryStage=sources`
   （`gate_block`），报告用户裁决（缩目标集或换区域）。

@@ -9,8 +9,8 @@
     "executionBinding",
     "objectRef",
     "status",
-    "provider",
-    "model",
+    "hostRuntime",
+    "hostActor",
     "agentRunId",
     "promptSha256",
     "draftSha256",
@@ -40,14 +40,6 @@
         "completed",
         "failed"
       ]
-    },
-    "provider": {
-      "type": "string",
-      "minLength": 1
-    },
-    "model": {
-      "type": "string",
-      "minLength": 1
     },
     "agentRunId": {
       "type": "string",
@@ -92,6 +84,25 @@
     },
     "schema": {
       "const": "quwoquan_data.draft_meta"
+    },
+    "hostRuntime": {
+      "const": "external_host_agent"
+    },
+    "hostActor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "role"
+      ],
+      "properties": {
+        "host": {
+          "const": "external_host_agent"
+        },
+        "role": {
+          "const": "author"
+        }
+      }
     }
   }
 }

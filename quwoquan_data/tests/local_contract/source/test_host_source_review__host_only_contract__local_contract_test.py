@@ -148,7 +148,6 @@ def _prepare(root: Path, *, kind: str = "video") -> tuple[dict, str, dict]:
 def _input(request: dict, request_ref: str, *, passed: bool = True) -> dict:
     return {
         "schema": "quwoquan_data.host_source_review_result_input",
-        "contractVersion": "host-source-review/v1",
         "requestRef": request_ref,
         "requestDigest": request["requestDigest"],
         "actor": {
@@ -262,7 +261,7 @@ def _admission_documents(root: Path, physical: dict, result_ref: str) -> dict[st
     return refs
 
 
-def test_legacy_unversioned_admission_remains_read_only_but_cannot_be_rewritten(
+def test_legacy_unversioned_admission_fails_closed_and_cannot_be_rewritten(
     tmp_path: Path,
 ) -> None:
     request, request_ref, physical = _prepare(tmp_path, kind="image")
@@ -278,8 +277,7 @@ def test_legacy_unversioned_admission_remains_read_only_but_cannot_be_rewritten(
         recorded_at="2026-08-31T00:02:00Z",
     )
     legacy = copy.deepcopy(receipt)
-    legacy.pop("sourceReviewContractVersion")
-    legacy["sourceReview"] = dict(legacy["verdict"]) if "verdict" in legacy else {
+    legacy["sourceReview"] = {
         key: legacy["sourceReview"][key] for key in (
             "status", "entityMatch", "qualityStatus", "privacyRisk", "minorRisk",
             "maliciousMediaRisk", "watermarkStatus", "findings",
@@ -289,8 +287,9 @@ def test_legacy_unversioned_admission_remains_read_only_but_cannot_be_rewritten(
     legacy["receiptDigest"] = canonical_digest(stable)
     path = tmp_path / receipt_ref
     path.write_text(json.dumps(legacy, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
-    historical = MediaSourceAdmissionQuery(tmp_path).read(receipt_ref)
-    assert historical["contractVersion"] == "legacy-v0-read-only"
+    with pytest.raises(MediaSourceAdmissionError) as historical:
+        MediaSourceAdmissionQuery(tmp_path).read(receipt_ref)
+    assert historical.value.code == MEDIA_SOURCE_ADMISSION_INVALID
     with pytest.raises(MediaSourceAdmissionError) as ineligible:
         MediaSourceAdmissionQuery(tmp_path).require_accepted(receipt_ref)
     assert ineligible.value.code == MEDIA_SOURCE_ADMISSION_INVALID
@@ -319,7 +318,7 @@ def test_new_admission_accepts_only_validated_host_result_and_rejects_legacy_sdk
         recorded_at="2026-08-31T00:02:00Z",
     )
     assert receipt["admissionDecision"] == "accepted"
-    assert receipt["sourceReviewContractVersion"] == "host-source-review/v1"
+    assert "sourceReviewContractVersion" not in receipt
     assert receipt["sourceReview"]["resultDigest"] == result["resultDigest"]
     assert "provider" not in receipt["sourceReview"]
     assert "model" not in receipt["sourceReview"]

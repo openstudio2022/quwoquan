@@ -22,7 +22,7 @@ from content.execution.agent.reliabletask_dispatch import (
     dispatch_reliabletask_checkpoint,
 )
 from content.execution.runtime_contract import canonical_sha256
-from content.execution.closure.pool_delivery import (
+from content.execution.queue.reliabletask.publish import (
     validate_pool_delivery_intent_for_job,
 )
 from content.execution.context import ExecutionContext, load_execution_state

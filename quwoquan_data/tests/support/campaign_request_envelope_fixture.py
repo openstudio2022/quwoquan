@@ -5,14 +5,12 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-import content.execution.campaign.request_envelope as envelopes
-from content.execution.campaign import (
-    m100_alpha_acceptance,
-    request_envelope_build,
-    request_envelope_writer,
-)
-from content.execution.campaign.external_inputs import content_source_revision
-from content.execution.campaign.scale import resolve_campaign_scale
+import content.execution.planning.request_envelope as envelopes
+from content.release.canonical import m100_alpha_acceptance
+from content.execution.planning import request_envelope_build, request_envelope_writer
+
+from content.execution.source_pool.external_inputs import content_source_revision
+from content.execution.planning.scale import resolve_campaign_scale
 from core.source_digest import SourceDefinitionSnapshot
 from content.release.canonical.research_scale_capacity import throughput_basis_digest
 from core.io import write_json
@@ -110,6 +108,21 @@ def _patch_envelope_deps(monkeypatch) -> None:
         request_envelope_writer,
         "load_pre_acquisition_handoff",
         lambda _path: dict(fixture_handoff_document),
+    )
+    from content.source import pre_acquisition_handoff as handoff_api
+
+    def load_handoff(_path: Path) -> dict[str, object]:
+        from content.source import pre_acquisition_handoff as handoff_owner
+
+        current = handoff_owner.load_pre_acquisition_handoff
+        if current is not load_handoff:
+            return dict(current(_path))
+        return dict(fixture_handoff_document)
+
+    monkeypatch.setattr(
+        handoff_api,
+        "load_pre_acquisition_handoff",
+        load_handoff,
     )
     monkeypatch.setattr(
         request_envelope_build,

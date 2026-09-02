@@ -48,6 +48,16 @@
 - 关联要求：`REQ-001`
 - 关联能力：[`observability-and-alerting`](./observability-and-alerting/spec.md)
 
+<a id="dec-003"></a>
+### DEC-003 App 依赖 bundle 同步以 receipt-first/active-last 原子事务推进单槽 active 代际
+- 决策：`stackctl app-dependency-sync` 在单一 sync lock 内一次构建全部五个依赖组件闭包（production Pub、Patrol Pub、production iOS Pods、Patrol iOS Pods、Android Gradle），按在线解析 → fresh 私有 home 完整离线回放 → 封存不可变组件快照 → readback 验证的固定顺序执行；先原子落盘本次 attempt 的 sync receipt，最后一步以原子替换推进单槽 active pointer，commit 后 active readback 必须与本次 attempt 一致才算 committed。
+- 理由：App 打包、UAT 与 canonical launcher 消费的是一份跨组件一致的依赖代际。按组件分次更新或在线成功即激活会产生不可复现或跨 attempt 混合的闭包；receipt-first/active-last 保证任何时刻 active pointer 指向的代际都有完整 receipt 可回读，消费方无需推断中间态。
+- 被否决方案：按组件独立激活、在线解析成功即切换 active、无锁并发同步互相覆盖、以同步顺带更新锁定声明、把 work 目录或未 commit receipt 作为消费面、把 ambiguous commit 静默重试成成功。
+- 失败恢复：source/toolchain identity 漂移、在线解析失败、离线回放失败、封存或 readback 失败均保留首个 typed blocker 且 active pointer 保持上一份已验证代际；active 写入已开始但无法证明 commit 结果时以 activation ambiguous 的 typed blocker 报告，禁止自动重试，只能由显式重新同步收敛。锁定声明永不更新，锁漂移是独立 typed blocker，不由同步修复。
+- 约束与影响：调用方（打包、UAT、canonical launcher 的交互式 stale 恢复）只能消费 committed active readback。launcher 侧触发边界（live outer launcher only、pre-projection、one-shot、双 TTY、保留首个 stale blocker）由 [`runtime-config` design DEC-003](../runtime/runtime-config/design.md#dec-003) 拥有，本 DEC 只拥有 sync 事务本身的对象与恢复语义。
+- 关联要求：`REQ-005`
+- 关联能力：[`config-and-reliability-governance`](./config-and-reliability-governance/spec.md)
+
 ## 6. 质量与运行约束
 
 - 沿用 AppRoot 全局质量约束并保持 metadata/code/test 单轨。

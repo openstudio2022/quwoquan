@@ -14,7 +14,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from content.execution.closure.pool_delivery import (
+from content.execution.queue.reliabletask.publish import (
     validate_pool_delivery_intent_for_job,
 )
 from content.execution.controller.execute import drain_pool_delivery as delivery_drain

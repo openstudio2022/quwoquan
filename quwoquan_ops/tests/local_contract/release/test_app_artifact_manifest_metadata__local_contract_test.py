@@ -156,7 +156,6 @@ class AppArtifactManifestMetadataTest(unittest.TestCase):
             set(self.document["launch_provenances"]),
             {
                 "canonical_launcher",
-                "workspace_flutter_run",
                 "workspace_ide_debug",
                 "release_package",
                 "hot_restart",
@@ -443,9 +442,10 @@ class InstallLaunchPathMatrixTest(unittest.TestCase):
             ("prod", "ios", "release", "store", "release_package"),
             self.tuples,
         )
-        # 工作区 Flutter Debug 与官网 APK 下载安装。
+        # 受管字面 flutter run 经 launcher dispatcher 归一化为 canonical_launcher
+        # 的 Debug 开发面，与官网 APK 下载安装。
         self.assertIn(
-            ("alpha", "ios", "debug", "dev_direct", "workspace_flutter_run"),
+            ("alpha", "ios", "debug", "dev_direct", "canonical_launcher"),
             self.tuples,
         )
         self.assertIn(
@@ -477,7 +477,7 @@ class InstallLaunchPathMatrixTest(unittest.TestCase):
     def test_workspace_launch_provenances_are_non_promotable(self) -> None:
         for path in self.paths:
             if path.launch_provenance in {
-                "workspace_flutter_run",
+                "canonical_launcher",
                 "workspace_ide_debug",
             }:
                 self.assertFalse(path.promotable, path)
