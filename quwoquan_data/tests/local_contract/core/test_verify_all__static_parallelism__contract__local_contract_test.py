@@ -17,20 +17,45 @@ if str(SCRIPTS_ROOT) not in sys.path:
 from verify import handler as verify_handler  # noqa: E402
 
 
-def test_verify_all_runs_only_deduplicated_static_gates(
+def test_verify_all_rehydrates_before_deduplicated_static_gates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    observed_names: list[str] = []
+    observed: list[str] = []
 
-    def controlled_gate(name: str, _argv: object = None) -> int:
-        observed_names.append(name)
+    def admit_carried_media() -> int:
+        observed.append("rehydrate-media-holdings")
         return 0
 
+    def controlled_gate(name: str, _argv: object = None) -> int:
+        observed.append(name)
+        return 0
+
+    monkeypatch.setattr(
+        verify_handler, "_admit_carried_media_holdings", admit_carried_media
+    )
     monkeypatch.setattr(verify_handler, "_run", controlled_gate)
 
     verify_handler.handle_all()
 
+    assert observed[0] == "rehydrate-media-holdings"
+    observed_names = observed[1:]
     assert len(observed_names) == len(set(observed_names))
     assert "active-runtime-preflight" not in observed_names
     assert "publish-purity" in observed_names
     assert "publish-closure" in observed_names
+
+
+def test_verify_all_stops_when_carried_media_cannot_be_admitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(verify_handler, "_admit_carried_media_holdings", lambda: 1)
+
+    def unexpected_gate(_name: str, _argv: object = None) -> int:
+        pytest.fail("static gates must not run with unresolved carried media")
+
+    monkeypatch.setattr(verify_handler, "_run", unexpected_gate)
+
+    with pytest.raises(SystemExit) as failure:
+        verify_handler.handle_all()
+
+    assert failure.value.code == 1
