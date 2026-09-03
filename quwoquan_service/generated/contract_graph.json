@@ -119940,7 +119940,7 @@
         "domain": [
           {
             "path": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model/human_contract_generated.go",
-            "sha256": "2ce7ef1eb305ce8e5dd43b4929325d1fac89864d369932da103bf74ab9a49639"
+            "sha256": "3153aacdd71f4e36da46174d9f010d9deceda25fcddd94193da10e1f959fcc81"
           },
           {
             "path": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model/model.go",

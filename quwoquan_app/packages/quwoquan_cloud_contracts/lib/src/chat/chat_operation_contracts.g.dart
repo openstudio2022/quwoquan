@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: f0eee4f0b9ff176c7304633cd01a0214bdcdf9e55fc1b4c4084acc791f8e9752
+// ContractGraph SHA256: 569cc5db0ce32ce81f7493f8473fb1cb24a0da718c7e0adb37a6e14d4d9c5372
 
 library;
 
