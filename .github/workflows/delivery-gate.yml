@@ -314,6 +314,7 @@ jobs:
             --expected-source-sha "$HEAD_SHA" \
             --github-output "$RUNNER_TEMP/validated-impact-outputs"
       - name: Upload versioned Delivery impact plan
+        if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: delivery-impact-plan-${{ github.run_id }}-${{ github.run_attempt }}

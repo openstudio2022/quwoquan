@@ -216,6 +216,7 @@ jobs:
             --expected-plan-digest "$(awk -F= '$1 == "plan_digest" {print $2}' "$GITHUB_OUTPUT" | tail -n 1)" \
             --github-output "$RUNNER_TEMP/validated-device-impact"
       - name: Upload typed device impact plan
+        if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: app-device-impact-plan-${{ github.run_id }}-${{ github.run_attempt }}

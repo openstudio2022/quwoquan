@@ -97,6 +97,7 @@ jobs:
             --expected-source-sha "${{ steps.range.outputs.head_sha }}" \
             --expected-plan-digest "${{ steps.impact.outputs.plan_digest }}"
       - name: Upload canonical PR-light impact plan
+        if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: pre-release-impact-plan-${{ github.run_id }}-${{ github.run_attempt }}
