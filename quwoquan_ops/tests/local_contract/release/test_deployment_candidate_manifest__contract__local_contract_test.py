@@ -108,7 +108,7 @@ class DeploymentCandidateManifestContractTest(
             candidate_root=self.candidate,
         )
 
-    def test_teardown_projects_only_legacy_non_prod_sim_nullable_field(self) -> None:
+    def test_teardown_projects_only_previous_non_prod_sim_nullable_field(self) -> None:
         path = subject.write_candidate_manifest(
             "alpha",
             "alpha-local",
@@ -117,11 +117,11 @@ class DeploymentCandidateManifestContractTest(
             rollback_release_attestation=str(self.rollback),
         )
         canonical = json.loads(path.read_text(encoding="utf-8"))
-        legacy = dict(canonical)
-        legacy.pop("appLaunchBundle")
+        previous = dict(canonical)
+        previous.pop("appLaunchBundle")
 
         projected = subject.validate_candidate_manifest(
-            legacy,
+            previous,
             expected_environment="alpha",
             expected_target="alpha-local",
             require_full=True,
@@ -130,10 +130,10 @@ class DeploymentCandidateManifestContractTest(
         )
 
         self.assertIsNone(projected["appLaunchBundle"])
-        self.assertNotIn("appLaunchBundle", legacy)
+        self.assertNotIn("appLaunchBundle", previous)
         with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
             subject.validate_candidate_manifest(
-                legacy,
+                previous,
                 expected_environment="alpha",
                 expected_target="alpha-local",
                 require_full=True,
@@ -141,10 +141,10 @@ class DeploymentCandidateManifestContractTest(
                 purpose="self_verify",
             )
 
-        prod_sim_legacy = {**legacy, "environment": "prod", "target": "prod-sim"}
+        prod_sim_previous = {**legacy, "environment": "prod", "target": "prod-sim"}
         with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
             subject.validate_candidate_manifest(
-                prod_sim_legacy,
+                prod_sim_previous,
                 expected_environment="prod",
                 expected_target="prod-sim",
                 require_full=True,
@@ -152,7 +152,7 @@ class DeploymentCandidateManifestContractTest(
                 purpose="teardown",
             )
 
-        missing_other_field = dict(legacy)
+        missing_other_field = dict(previous)
         missing_other_field.pop("runtimeConfigDigest")
         with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
             subject.validate_candidate_manifest(
@@ -164,7 +164,7 @@ class DeploymentCandidateManifestContractTest(
                 purpose="teardown",
             )
 
-        extra_field = {**legacy, "legacyField": None}
+        extra_field = {**previous, "unexpectedField": None}
         with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
             subject.validate_candidate_manifest(
                 extra_field,

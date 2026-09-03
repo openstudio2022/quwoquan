@@ -109,7 +109,7 @@ void main() {
     });
   });
 
-  group('ContentPost media binding — normal 与 legacy 边界', () {
+  group('ContentPost media binding — normal 与 previous-version 边界', () {
     test('null accessMode + URL 保持 contract failure，不隐式公开', () {
       final dto = ContentPostViewData.fromWire(
         contentPostProjectionFixture(
@@ -128,14 +128,16 @@ void main() {
       expect(binding.isPublic, isFalse);
     });
 
-    test('typed public 与具名 legacy public 都显式进入 public 状态', () {
+    test('typed public 与具名 previous-version public 都显式进入 public 状态', () {
       const typed = MediaDeliveryBinding.public(publicUrl: _imageUrl);
-      const legacy = MediaDeliveryBinding.legacyPublic(publicUrl: _imageUrl);
+      const previous = MediaDeliveryBinding.previousPublic(
+        publicUrl: _imageUrl,
+      );
 
       expect(typed.isPublic, isTrue);
-      expect(legacy.isPublic, isTrue);
+      expect(previous.isPublic, isTrue);
       expect(typed.accessMode, MediaDeliveryAccessMode.public);
-      expect(legacy.accessMode, MediaDeliveryAccessMode.public);
+      expect(previous.accessMode, MediaDeliveryAccessMode.public);
     });
 
     test('article accessMode unknown 保持 null contract failure sentinel', () {

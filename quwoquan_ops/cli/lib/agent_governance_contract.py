@@ -268,7 +268,7 @@ def _validate_evidence_fingerprint_contract(definition: dict[str, Any]) -> None:
         "windows-separator-normalization",
         "symlink-target-content-and-broken-target",
         "review-tracked-untracked-deleted",
-        "legacy-review-algorithm-not-consumed",
+        "retired-review-algorithm-not-consumed",
         "handoff-stale-missing-fingerprint-and-recovery-failure",
         "feature-manifest-v4-content-addressed-owner-identity-and-budget",
         "named-evidence-dedup-drift-failure-and-result",

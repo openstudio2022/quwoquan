@@ -156,14 +156,14 @@ def test_contract_freezes_v2_schema_graph_and_recovery_terminals() -> None:
             validate_contract(broken)
 
 
-def test_legacy_v1_contract_envelope_and_event_hard_fail_without_dual_read(tmp_path: Path) -> None:
-    for field, legacy_value in (("schema_id", "objective-execution-contract-v1"), ("schema_version", 1)):
-        legacy_contract = deepcopy(load_contract())
-        legacy_contract[field] = legacy_value
+def test_retired_v1_contract_envelope_and_event_hard_fail_without_dual_read(tmp_path: Path) -> None:
+    for field, retired_value in (("schema_id", "objective-execution-contract-v1"), ("schema_version", 1)):
+        retired_contract = deepcopy(load_contract())
+        retired_contract[field] = retired_value
         with pytest.raises(ContractError, match="identity/version"):
-            validate_contract(legacy_contract)
+            validate_contract(retired_contract)
 
-    journal = tmp_path / "legacy-event"
+    journal = tmp_path / "retired-event"
     record_and_transition(journal)
     event_path = journal / "objective/objective-1/events/00000000000000000001.json"
     event = json.loads(event_path.read_text(encoding="utf-8"))
@@ -172,16 +172,16 @@ def test_legacy_v1_contract_envelope_and_event_hard_fail_without_dual_read(tmp_p
     failed = readback(journal, "objective", "objective-1")
     assert failed.status == "failed" and failed.terminal == "OEX.JOURNAL_TAMPERED"
 
-    legacy_envelope = envelope(
-        action="create_objective", target_state="draft", effect_id="effect-v1", key="legacy-v1"
+    retired_envelope = envelope(
+        action="create_objective", target_state="draft", effect_id="effect-v1", key="retired-v1"
     )
-    legacy_envelope["schema_version"] = 1
-    with pytest.raises(ContractError, match="legacy v1 is not accepted"):
+    retired_envelope["schema_version"] = 1
+    with pytest.raises(ContractError, match="retired v1 is not accepted"):
         append_event(journal / "envelope", command(
             event_kind="human_decision_recorded", action="create_objective",
             from_state=None, to_state=None, expected_head="absent",
-            expected_generation=0, key="legacy-v1", effect_id="effect-v1",
-            command_envelope=legacy_envelope,
+            expected_generation=0, key="retired-v1", effect_id="effect-v1",
+            command_envelope=retired_envelope,
         ))
 
 

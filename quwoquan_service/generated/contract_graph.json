@@ -112610,7 +112610,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/media_delivery_image_routing__local_contract_test.dart",
-            "sha256": "46c0d3cce8b0cd850e5e36abd76dd3ecd0a70c59ff876947864dd3302e27e049"
+            "sha256": "b3a1fff0c5d1456031bf137aaa6e4d8e100a10b559c5cf1a1544305bf64d48cb"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/original_access_quota_errors__local_contract_test.dart",
@@ -112995,7 +112995,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/loader.go",
-            "sha256": "a98ee5e3aaf565e684d1d9875ae873553fd1bd0ac97aac0a10c2d8acc9a9ba60"
+            "sha256": "0a07e5772079bc5c8e409bc16918a19928e9b762c9f7829a2ecb0a9455074e72"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/post_manifest_validation.go",
@@ -114952,7 +114952,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/post_media_delivery_binding__local_contract_test.dart",
-            "sha256": "528f4aa296ce3b41266f49c920b40c600c3cd1142db8698de626b7cb5110e53e"
+            "sha256": "6923bbaaf9de7aef4304f79692a6176e9260fff1df6f649a8de3c2927a3caa7f"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/post_publication_continuation_registry__local_contract_test.dart",
@@ -119948,7 +119948,7 @@
         "domain": [
           {
             "path": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model/human_contract_generated.go",
-            "sha256": "3153aacdd71f4e36da46174d9f010d9deceda25fcddd94193da10e1f959fcc81"
+            "sha256": "f5ba623f53cacb911c9154bd8ecdd0dc7b1cc9d689f0e3f7db7c575920147f85"
           },
           {
             "path": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model/model.go",
@@ -130975,7 +130975,7 @@
     },
     {
       "path": "content/content/post/fields.yaml",
-      "sha256": "8a5fbd828b850cf12d48f9930f954318007835788494af3acd6924ed5e9f43cc"
+      "sha256": "9e4dbf6208df175daf73379a04afaa7f116697c14383640438cbf780c3a13344"
     },
     {
       "path": "content/content/post/markdown_block_sequence_cases.json",
@@ -131487,7 +131487,7 @@
     },
     {
       "path": "entity/entity_homepage/homepage/projections/homepage_introduction_asset.yaml",
-      "sha256": "d2e50a019d2214eca9c09d62136dd1f296375c1f3e545f763b0a0dd1cb88a4fb"
+      "sha256": "81b86bdf2b0896b98fd129abe70e4f1de3b06ef657a6919b78243b7a67c25d5d"
     },
     {
       "path": "entity/entity_homepage/homepage/projections/homepage_introduction_section.yaml",
@@ -259889,7 +259889,7 @@
     },
     {
       "path": "content/content/post/fields.yaml",
-      "sha256": "8a5fbd828b850cf12d48f9930f954318007835788494af3acd6924ed5e9f43cc",
+      "sha256": "9e4dbf6208df175daf73379a04afaa7f116697c14383640438cbf780c3a13344",
       "mediaType": "application/yaml",
       "content": {
         "description": "内容主体（聚合根）",
@@ -262818,7 +262818,7 @@
         },
         "value_objects": {
           "PostArticleAsset": {
-            "description": "文章素材清单中的单个不可变 typed 媒体引用。新 release/projected asset 必须 显式声明 accessMode=public|signed_grant；null/absent 只允许由具名 legacy-public migration adapter 适配，正常消费必须 fail closed。public 时 publicSliceKey 为 canonical public slice；signed_grant 时 assetId 为必需的 release authority，App 经 ReserveOriginalImageAccessGrant 换取短时签名 URL。 private HLS 当前 unsupported 并 fail closed（DEC-033/DEC-040）。",
+            "description": "文章素材清单中的单个不可变 typed 媒体引用。新 release/projected asset 必须 显式声明 accessMode=public|signed_grant；null/absent 只允许由具名 previous-version public migration adapter 适配，正常消费必须 fail closed。public 时 publicSliceKey 为 canonical public slice；signed_grant 时 assetId 为必需的 release authority，App 经 ReserveOriginalImageAccessGrant 换取短时签名 URL。 private HLS 当前 unsupported 并 fail closed（DEC-033/DEC-040）。",
             "fields": [
               {
                 "constraints": [
@@ -262838,7 +262838,7 @@
                 "constraints": [
                   "NULLABLE"
                 ],
-                "description": "新 release/projected asset 必须显式 public 或 signed_grant；null 仅允许在具名 legacy-public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 assetId，private HLS 当前 unsupported。",
+                "description": "新 release/projected asset 必须显式 public 或 signed_grant；null 仅允许在具名 previous-version public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 assetId，private HLS 当前 unsupported。",
                 "enum_ref": "MediaDeliveryAccessMode",
                 "name": "accessMode",
                 "type": "enum"
@@ -263372,7 +263372,7 @@
             ]
           },
           "PostMediaItem": {
-            "description": "Post 统一媒体序列中的 typed 交付引用。新 release/projected item 必须显式 声明 accessMode=public|signed_grant；null/absent 不得隐式解释为 public，只能 在具名 legacy-public migration adapter 边界适配。public 时 url/coverUrl 为 canonical public slice；signed_grant 时字段存 release authority 的相对私有 引用，mediaAssetId 必须在场，App 经 ReserveOriginalImageAccessGrant 换取 短时签名 URL。private HLS（m3u8/mpd/manifest）当前 unsupported 并 fail closed （DEC-031/DEC-033/DEC-040）。",
+            "description": "Post 统一媒体序列中的 typed 交付引用。新 release/projected item 必须显式 声明 accessMode=public|signed_grant；null/absent 不得隐式解释为 public，只能 在具名 previous-version public migration adapter 边界适配。public 时 url/coverUrl 为 canonical public slice；signed_grant 时字段存 release authority 的相对私有 引用，mediaAssetId 必须在场，App 经 ReserveOriginalImageAccessGrant 换取 短时签名 URL。private HLS（m3u8/mpd/manifest）当前 unsupported 并 fail closed （DEC-031/DEC-033/DEC-040）。",
             "fields": [
               {
                 "constraints": [
@@ -263399,7 +263399,7 @@
                 "constraints": [
                   "NULLABLE"
                 ],
-                "description": "新 release/projected item 必须显式 public 或 signed_grant；null 仅允许在具名 legacy-public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 mediaAssetId，private HLS 当前 unsupported。",
+                "description": "新 release/projected item 必须显式 public 或 signed_grant；null 仅允许在具名 previous-version public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 mediaAssetId，private HLS 当前 unsupported。",
                 "enum_ref": "MediaDeliveryAccessMode",
                 "name": "accessMode",
                 "type": "enum"
@@ -299348,7 +299348,7 @@
     },
     {
       "path": "entity/entity_homepage/homepage/projections/homepage_introduction_asset.yaml",
-      "sha256": "d2e50a019d2214eca9c09d62136dd1f296375c1f3e545f763b0a0dd1cb88a4fb",
+      "sha256": "81b86bdf2b0896b98fd129abe70e4f1de3b06ef657a6919b78243b7a67c25d5d",
       "mediaType": "application/yaml",
       "content": {
         "consumers": [

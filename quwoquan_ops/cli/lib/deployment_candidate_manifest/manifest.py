@@ -774,11 +774,11 @@ def validate_candidate_manifest(
     if not isinstance(payload, dict):
         raise ValueError("deployment candidate manifest fields mismatch")
     actual_fields = set(payload)
-    legacy_teardown_fields = required - {"appLaunchBundle"}
+    previous_teardown_fields = required - {"appLaunchBundle"}
     if (
         purpose == "teardown"
         and payload.get("target") != "prod-sim"
-        and actual_fields == legacy_teardown_fields
+        and actual_fields == previous_teardown_fields
     ):
         # 单代历史候选只在退出时投影新增 nullable 字段；不改写封存字节。
         payload = {**payload, "appLaunchBundle": None}

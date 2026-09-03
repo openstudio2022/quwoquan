@@ -18,7 +18,7 @@ fields:
 - name: url
   type: string
 # 交付访问模式（DEC-033/DEC-040）：新 release/projected asset 必须显式 public
-# 或 signed_grant；null/absent 只允许在具名 legacy-public migration adapter 边界
+# 或 signed_grant；null/absent 只允许在具名 previous-version public migration adapter 边界
 # 适配，正常消费必须 fail closed。signed_grant 时 url 为相对私有引用且 assetId
 # 必须在场；private HLS 当前 unsupported。
 - name: accessMode

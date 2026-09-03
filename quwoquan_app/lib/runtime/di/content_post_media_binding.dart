@@ -51,7 +51,7 @@ MediaDeliveryBinding contentPostAuthorAvatarBinding(ContentPostViewData post) {
 ///
 /// 投影未声明该 URL 的交付形态时返回 contract-failure 绑定；不替它猜 public。
 /// legacy public 必须由已确认 contract version 的调用方显式使用
-/// [MediaDeliveryBinding.legacyPublic]。
+/// [MediaDeliveryBinding.previousPublic]。
 MediaDeliveryBinding contentPostMediaBinding(
   ContentPostViewData post,
   String url,

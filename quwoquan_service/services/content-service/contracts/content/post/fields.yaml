@@ -960,7 +960,7 @@ value_objects:
     description: >-
       Post 统一媒体序列中的 typed 交付引用。新 release/projected item 必须显式
       声明 accessMode=public|signed_grant；null/absent 不得隐式解释为 public，只能
-      在具名 legacy-public migration adapter 边界适配。public 时 url/coverUrl 为
+      在具名 previous-version public migration adapter 边界适配。public 时 url/coverUrl 为
       canonical public slice；signed_grant 时字段存 release authority 的相对私有
       引用，mediaAssetId 必须在场，App 经 ReserveOriginalImageAccessGrant 换取
       短时签名 URL。private HLS（m3u8/mpd/manifest）当前 unsupported 并 fail closed
@@ -979,7 +979,7 @@ value_objects:
         type: enum
         enum_ref: MediaDeliveryAccessMode
         constraints: [NULLABLE]
-        description: 新 release/projected item 必须显式 public 或 signed_grant；null 仅允许在具名 legacy-public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 mediaAssetId，private HLS 当前 unsupported。
+        description: 新 release/projected item 必须显式 public 或 signed_grant；null 仅允许在具名 previous-version public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 mediaAssetId，private HLS 当前 unsupported。
       - name: url
         type: string
         constraints: [NOT_NULL]
@@ -1027,7 +1027,7 @@ value_objects:
     description: >-
       文章素材清单中的单个不可变 typed 媒体引用。新 release/projected asset 必须
       显式声明 accessMode=public|signed_grant；null/absent 只允许由具名
-      legacy-public migration adapter 适配，正常消费必须 fail closed。public 时
+      previous-version public migration adapter 适配，正常消费必须 fail closed。public 时
       publicSliceKey 为 canonical public slice；signed_grant 时 assetId 为必需的
       release authority，App 经 ReserveOriginalImageAccessGrant 换取短时签名 URL。
       private HLS 当前 unsupported 并 fail closed（DEC-033/DEC-040）。
@@ -1042,7 +1042,7 @@ value_objects:
         type: enum
         enum_ref: MediaDeliveryAccessMode
         constraints: [NULLABLE]
-        description: 新 release/projected asset 必须显式 public 或 signed_grant；null 仅允许在具名 legacy-public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 assetId，private HLS 当前 unsupported。
+        description: 新 release/projected asset 必须显式 public 或 signed_grant；null 仅允许在具名 previous-version public migration adapter 输入边界，正常消费必须 fail closed。signed_grant 必须同时携带 assetId，private HLS 当前 unsupported。
       - name: publicSliceKey
         type: string
         constraints: [NULLABLE]

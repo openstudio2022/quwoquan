@@ -109,7 +109,7 @@ def _release_search_canaries(args: argparse.Namespace) -> list[dict[str, str]]:
         "image": "content.post",
         "video": "content.post",
     }
-    legacy_expected_types = {
+    previous_expected_types = {
         "post": "content.post",
         "homepage": "entity.homepage",
         "persona": "user.profile",
@@ -133,12 +133,12 @@ def _release_search_canaries(args: argparse.Namespace) -> list[dict[str, str]]:
         canary = {key: str(value.get(key) or "").strip() for key in value}
         kind = canary["kind"]
         active_types = (
-            legacy_expected_types
+            previous_expected_types
             if set(
                 str(json.loads(str(item)).get("kind") or "")
                 for item in raw_canaries
                 if isinstance(json.loads(str(item)), dict)
-            ).issubset(legacy_expected_types)
+            ).issubset(previous_expected_types)
             else expected_types
         )
         if (
@@ -152,11 +152,11 @@ def _release_search_canaries(args: argparse.Namespace) -> list[dict[str, str]]:
         observed_kinds.add(kind)
         canaries.append(canary)
     if observed_kinds != set(expected_types) and observed_kinds != set(
-        legacy_expected_types
+        previous_expected_types
     ):
         raise ValueError(
             "release search canaries must cover Homepage/Article/Image/Video "
-            "or the legacy Post/Homepage/Persona set"
+            "or the previous Post/Homepage/Persona set"
         )
     return canaries
 

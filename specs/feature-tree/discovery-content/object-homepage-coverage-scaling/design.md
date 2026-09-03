@@ -589,7 +589,7 @@
 <a id="dec-040"></a>
 ### DEC-040 Research 私有视频以 progressive MP4 单签续播，private HLS 保持 unsupported
 
-- 交付契约：当前 Research projection 每条媒体引用的 `accessMode` 与稳定资产标识必填；只有明确 legacy-public contract version 可把 null/absent 解释为 public。当前 Research/private 缺字段直接 typed blocked，不从 URL、CAS key、环境名或缺席推断。
+- 交付契约：当前 Research projection 每条媒体引用的 `accessMode` 与稳定资产标识必填；只有明确 previous-version public contract version 可把 null/absent 解释为 public。当前 Research/private 缺字段直接 typed blocked，不从 URL、CAS key、环境名或缺席推断。
 - progressive MP4：App 私有视频原子只接收已校验短签交付引用，原生播放器发起 Range。edge verifier 对每个 Range 请求重新验签。首次 401/403 使当前 grant 失效，协调器强制换签最多一次，并以播放器已确认 position 恢复。二次失败进入 canonical typed terminal，禁止循环或 public fallback。
 - private HLS：当前 contract 明确返回 unsupported typed terminal，manifest/segment/key 不进入 progressive MP4 fallback。HLS 的分片授权、key authority、TTL 恢复与播放器状态属于独立能力，由 [`multi-carrier-release` OPEN-017](./multi-carrier-release/spec.md#open-017) 关闭；它不阻断 progressive MP4 的 fresh UAT，也不能靠放宽 `accessMode` 绕过。
 - 失败恢复与观测：Range 验签失败、换签次数、恢复前后 position 与 terminal code 由现有 grant/audit 和播放器 raw `ReadinessCaseResult` 派生，不新增播放 ledger。位置恢复允许播放器容器的受治理 seek tolerance，但 identity、asset、release 与换签上限必须精确；tolerance 数值归播放器 runtime contract owner，不在本设计复制。

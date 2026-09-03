@@ -118,7 +118,7 @@ class PostPreviewListTile extends StatelessWidget {
                         mediaDeliveryImage(
                           binding: coverBinding.hasRenderableSource
                               ? coverBinding
-                              : MediaDeliveryBinding.legacyPublic(
+                              : MediaDeliveryBinding.previousPublic(
                                   publicUrl: coverUrl,
                                 ),
                           kind: MediaDeliveryKind.image,
