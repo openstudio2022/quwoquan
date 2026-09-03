@@ -50,6 +50,30 @@ _WORKTREE_POLICY_FIELDS = frozenset(
 _SKIP_DIR_NAMES = frozenset(
     {"node_modules", ".qwq_output", "build", "Pods", ".dart_tool", "vendor", "target"}
 )
+# Git hooks export repository-local variables for the invoking worktree.  Every
+# command in this module may inspect a different worktree or clone, so those
+# variables must not override its cwd.  This is the static, reviewed set
+# reported by `git rev-parse --local-env-vars`; global auth/SSH/PATH variables
+# deliberately remain inherited.
+_GIT_REPOSITORY_LOCAL_ENV_VARS = frozenset(
+    {
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_CONFIG",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_PARAMETERS",
+        "GIT_DIR",
+        "GIT_GRAFT_FILE",
+        "GIT_IMPLICIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_NO_REPLACE_OBJECTS",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_PREFIX",
+        "GIT_REPLACE_REF_BASE",
+        "GIT_SHALLOW_FILE",
+        "GIT_WORK_TREE",
+    }
+)
 
 
 class PolicyError(ValueError):
@@ -371,10 +395,14 @@ def load_policy(
 
 
 def _git(cwd: Path, *args: str) -> tuple[int, str]:
+    command_env = os.environ.copy()
+    for name in _GIT_REPOSITORY_LOCAL_ENV_VARS:
+        command_env.pop(name, None)
     try:
         completed = subprocess.run(
             ["git", *args],
             cwd=cwd,
+            env=command_env,
             capture_output=True,
             text=True,
             timeout=20,

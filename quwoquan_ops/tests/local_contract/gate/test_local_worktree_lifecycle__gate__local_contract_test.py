@@ -701,6 +701,55 @@ def test_discovery_validates_bare_hub_without_probing_it(tmp_path, policy, monke
     assert all(copy.path != str(hub) for copy in copies)
 
 
+def test_discovery_ignores_hook_repository_environment_and_preserves_copy_facts(
+    tmp_path: Path, policy, monkeypatch
+) -> None:
+    project = tmp_path / "project"
+    hub = project / policy.bare_hub_directory
+    integration = project / policy.integration_directory
+    lane = project / dict(policy.lane_worktree_directories)["lane/engineering"]
+    hub.parent.mkdir(parents=True)
+    _run_git(hub.parent, "init", "--bare", "-q", str(hub))
+    _run_git(hub, "worktree", "add", "-q", "-b", policy.integration_branch, str(integration))
+    (integration / "seed.txt").write_text("seed\n", encoding="utf-8")
+    _run_git(integration, "add", "seed.txt")
+    _run_git(integration, "commit", "-qm", "seed")
+    _run_git(
+        hub,
+        "worktree",
+        "add",
+        "-q",
+        "-b",
+        "lane/engineering",
+        str(lane),
+        policy.integration_branch,
+    )
+    (lane / "ahead.txt").write_text("ahead\n", encoding="utf-8")
+    _run_git(lane, "add", "ahead.txt")
+    _run_git(lane, "commit", "-qm", "ahead")
+    (lane / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+
+    test_policy = inventory.WorktreePolicy(
+        **{
+            **vars(policy),
+            "project_root": str(project),
+            "discovery_roots": (str(project),),
+        }
+    )
+    monkeypatch.setenv("GIT_DIR", str(hub / "worktrees" / lane.name))
+    monkeypatch.setenv("GIT_WORK_TREE", str(lane))
+
+    copies = inventory.discover_work_copies(root=integration, policy=test_policy)
+    by_branch = {copy.branch: copy for copy in copies}
+    assert set(by_branch) == {policy.integration_branch, "lane/engineering"}
+    assert all(copy.path != str(hub.resolve()) for copy in copies), "bare hub is authority, not a copy"
+    assert all(copy.probe_error == "" for copy in copies)
+    assert by_branch[policy.integration_branch].dirty == 0
+    assert by_branch[policy.integration_branch].ahead == 0
+    assert by_branch["lane/engineering"].dirty == 1
+    assert by_branch["lane/engineering"].ahead == 1
+
+
 @pytest.mark.parametrize(
     "copies_factory, fragment",
     [
