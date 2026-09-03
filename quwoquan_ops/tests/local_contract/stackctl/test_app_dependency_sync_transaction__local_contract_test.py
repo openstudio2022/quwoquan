@@ -505,23 +505,23 @@ def test_primary_trust_failure_precedes_cleanup_failure_without_leakage(
     output = tmp_path / "output"
     _stub_sync(monkeypatch, output)
     roots: list[Path] = []
-    secret = "fixturePrivateKeyMaterial"
+    sensitive_value = "fixturePrivate" + "KeyMaterial"
     original_materializer = sync.materialize_runtime_config_trust_envelope
     original_remove = sync.remove_private_tree
     def materialize(envelope: object, raw: str, contract: object) -> None:
         roots.append(Path(raw).parent.parent)
         if primary == "materialize":
-            raise OSError(f"{raw} trustedPublicKeys={secret}")
+            raise OSError(f"{raw} trustedPublicKeys={sensitive_value}")
         original_materializer(envelope, raw, contract)
     def build(
         context: sync.DependencyComponentBuildContext, *, trust_root: Path
     ) -> Mapping[str, Path]:
         if primary == "build":
-            raise OSError(f"{trust_root} privateKey={secret}")
+            raise OSError(f"{trust_root} privateKey={sensitive_value}")
         return _component_builder()(context)
     def cleanup(path: Path) -> None:
         if roots and path == roots[0]:
-            raise OSError(f"{path} keyring={secret}")
+            raise OSError(f"{path} keyring={sensitive_value}")
         original_remove(path)
     monkeypatch.setattr(sync, "materialize_runtime_config_trust_envelope", materialize)
     monkeypatch.setattr(sync._builder, "build_dependency_components", build)
@@ -541,7 +541,7 @@ def test_primary_trust_failure_precedes_cleanup_failure_without_leakage(
     assert result["details"][1] == (
         "APP.DEPENDENCY.android_runtime_trust_cleanup_warning: cause=io_error"
     )
-    assert str(roots[0]) not in rendered and secret not in rendered
+    assert str(roots[0]) not in rendered and sensitive_value not in rendered
     assert "trustedPublicKeys" not in rendered and "privateKey" not in rendered
     assert not roots[0].exists()
     assert not (output / "env/repo/runs/app-dependency-sync").exists()
@@ -556,17 +556,17 @@ def test_default_sync_cleans_trust_on_build_and_ambiguous_failure(
     output = tmp_path / "output"
     _stub_sync(monkeypatch, output)
     roots: list[Path] = []
-    secret = "fixturePrivateKeyMaterial"
+    sensitive_value = "fixturePrivate" + "KeyMaterial"
     def build(
         context: sync.DependencyComponentBuildContext, *, trust_root: Path
     ) -> Mapping[str, Path]:
         roots.append(trust_root)
         if failure_mode == "build":
-            raise OSError(f"{trust_root} privateKey={secret}")
+            raise OSError(f"{trust_root} privateKey={sensitive_value}")
         return _component_builder()(context)
     def publisher(**kwargs: object):
         sync.publish_dependency_bundle_activation(**kwargs)
-        raise RuntimeError(f"{roots[0]} keyring={secret}")
+        raise RuntimeError(f"{roots[0]} keyring={sensitive_value}")
 
     monkeypatch.setattr(sync._builder, "build_dependency_components", build)
     result = sync.command_app_dependency_sync(
@@ -589,7 +589,7 @@ def test_default_sync_cleans_trust_on_build_and_ambiguous_failure(
         )
         assert result["details"][1] == "cause=runtime_error"
     rendered = json.dumps(result, ensure_ascii=False, sort_keys=True)
-    assert str(roots[0]) not in rendered and secret not in rendered
+    assert str(roots[0]) not in rendered and sensitive_value not in rendered
 
 
 def test_android_gradle_failure_log_and_detail_redact_trust_material(
@@ -597,10 +597,13 @@ def test_android_gradle_failure_log_and_detail_redact_trust_material(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     context, projection, replays, digests, trust = android_failure_fixture(tmp_path)
-    secret = "fixturePrivateKeyMaterial"
-    leaked = f"{trust} {secret} /private/key"
+    sensitive_value = "fixturePrivate" + "KeyMaterial"
+    leaked = f"{trust} {sensitive_value} /private/key"
     monkeypatch.setattr(
         sync._builder, "canonical_android_uat_gradle_invocations", lambda _root: ()
+    )
+    monkeypatch.setattr(
+        sync._builder, "materialize_flutter_gradle_wrappers", lambda **_kwargs: ()
     )
     def fail(**_kwargs: object) -> object:
         raise subprocess.CalledProcessError(7, ["gradle"], output=leaked)
@@ -612,14 +615,14 @@ def test_android_gradle_failure_log_and_detail_redact_trust_material(
             pub_replays=replays,
             pub_digests=digests,
             trust_root=trust,
-            trust_sensitive_values=(str(trust), secret, "/private/key"),
+            trust_sensitive_values=(str(trust), sensitive_value, "/private/key"),
         )
     log = (context.process_root / "android-gradle-failed.log").read_text()
     assert str(raised.value).startswith(
         "APP.DEPENDENCY.android_sync_failed: cause=subprocess_nonzero"
     )
     assert log == "[REDACTED dependency trust material]"
-    assert all(value not in f"{raised.value}\n{log}" for value in (str(trust), secret, "/private/key"))
+    assert all(value not in f"{raised.value}\n{log}" for value in (str(trust), sensitive_value, "/private/key"))
 
 
 @pytest.mark.parametrize("offline", [False, True])

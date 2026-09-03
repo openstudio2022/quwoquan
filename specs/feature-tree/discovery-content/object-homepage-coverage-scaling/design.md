@@ -328,7 +328,7 @@
 - 可测试面：local_contract 锁定三文件原子性、候选绑定、数量三轴分离、旧 WorkRequest/SourcePool/campaign 入口零引用与 `task execute` 拒绝。
 - 适用工程根：`quwoquan_data/scripts/content/execution/task_init.py`、`quwoquan_data/schema/execution/task_init_request.schema.json`
 - 关联要求：[`work-request-compilation`](./work-request-compilation/spec.md) 的 `REQ-001`
-- 影响 Story：[`work-request-compilation`](./work-request-compilation/spec.md) 与 [`multi-carrier-release`](./multi-carrier-release/spec.md)
+- 影响 Story：[`work-request-compilation`](./work-request-compilation/spec.md)
 - 关联验收：[`work-request-compilation`](./work-request-compilation/spec.md) 的 `GWT-001`
 
 <a id="dec-021"></a>

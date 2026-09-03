@@ -47,7 +47,19 @@ def _run(name: str, argv: list[str] | None = None) -> int:
     return int(result or 0)
 
 
+def _admit_carried_media_holdings() -> int:
+    from content.release.canonical.rehydrate_media_holdings import main as rehydrate_main
+
+    return int(rehydrate_main() or 0)
+
+
 def handle_all() -> list[str]:
+    # Closure gates resolve media through the repository-external content library.
+    # A clean checkout starts with an empty library, so first admit the exact,
+    # hash-verified bodies carried beside canonical publish in version control.
+    if _admit_carried_media_holdings() != 0:
+        raise SystemExit(1)
+
     failed = [
         name
         for name in _STATIC_GATES

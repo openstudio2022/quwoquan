@@ -168,7 +168,13 @@ CloudOperationInvocationContext contentQueryInvocationContext(
 }) {
   final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
   final persona = ref.read(activePersonaContextProvider).asData?.value;
-  final personaId = persona?.personaId.trim() ?? '';
+  final projectedPersonaId = persona?.personaId.trim() ?? '';
+  final authenticatedPersonaId = ref
+      .read(resolvedActivePersonaIdProvider)
+      .trim();
+  final personaId = projectedPersonaId.isNotEmpty
+      ? projectedPersonaId
+      : authenticatedPersonaId;
   return CloudOperationInvocationContext(
     surfaceId: surface.id,
     clientPageId: clientPageId,

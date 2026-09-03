@@ -184,8 +184,9 @@ def _flutter_probe_environment(environ: dict[str, str]) -> dict[str, str]:
     """构造版本探针 allowlist env，并把所有用户状态封闭进可删除输出树。"""
 
     state_root = _ensure_private_probe_directory(_flutter_probe_state_root(environ))
-    home = _ensure_private_probe_directory(state_root / "home")
-    config_home = _ensure_private_probe_directory(state_root / "config")
+    process_root = _ensure_private_probe_directory(state_root / "process")
+    home = _ensure_private_probe_directory(process_root / "home")
+    config_home = _ensure_private_probe_directory(process_root / "config")
     cache_home = _ensure_private_probe_directory(state_root / "cache")
     probe_environment = {
         key: environ[key]

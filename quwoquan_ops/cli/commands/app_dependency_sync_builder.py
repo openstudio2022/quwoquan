@@ -14,6 +14,9 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Protocol
 
+from quwoquan_ops.cli.commands.app_dependency_sync_ios import (
+    assert_ios_generated_metadata as _assert_ios_generated_metadata,
+)
 from quwoquan_ops.cli.commands.app_dependency_sync_projection import project
 from quwoquan_ops.cli.lib.app_dependency_sync_diagnostics import (
     dependency_failure_cause,
@@ -29,6 +32,7 @@ from quwoquan_ops.cli.lib.package_reuse.android_gradle_component import (
 )
 from quwoquan_ops.cli.lib.package_reuse.android_gradle_store import (
     canonical_android_uat_gradle_invocations,
+    materialize_flutter_gradle_wrappers,
     synchronize_android_gradle_dependencies,
 )
 from quwoquan_ops.cli.lib.package_reuse.dependency_fs import (
@@ -680,26 +684,6 @@ def _pod_environment(
     return environment, home, cache
 
 
-def _assert_ios_generated_metadata(app_root: Path) -> None:
-    ios_root = app_root / "ios"
-    encoded, _mode = read_regular_nofollow(
-        ios_root / "Flutter/Generated.xcconfig", label="fresh Generated.xcconfig"
-    )
-    expected = f"FLUTTER_APPLICATION_PATH={app_root}"
-    if expected not in encoded.decode("utf-8").splitlines():
-        raise ValueError("APP.DEPENDENCY.generated_xcconfig_projection_mismatch")
-    read_regular_nofollow(
-        ios_root / "Flutter/Flutter.podspec", label="fresh Flutter.podspec"
-    )
-    project, _mode = read_regular_nofollow(
-        ios_root / "Runner.xcodeproj/project.pbxproj", label="iOS project"
-    )
-    if b"FlutterGeneratedPluginSwiftPackage" in project or list(
-        ios_root.rglob("FlutterGeneratedPluginSwiftPackage")
-    ):
-        raise ValueError("APP.DEPENDENCY.flutter_spm_residue_forbidden")
-
-
 def _build_ios_component(
     *,
     context: BuildContext,
@@ -845,6 +829,15 @@ def _build_android_component(
     )
     invocations = canonical_android_uat_gradle_invocations(projection_root)
     gradle_roots = [item.gradle_root for item in invocations]
+    flutter = str(context.flutter_identity.get("executable") or "")
+    if not flutter:
+        raise ValueError("APP.DEPENDENCY.flutter_executable_missing")
+    context.progress.begin("gradle-wrapper-materialization")
+    materialize_flutter_gradle_wrappers(
+        project_root=projection_root,
+        gradle_roots=gradle_roots,
+        flutter_executable=flutter,
+    )
     context.progress.begin("gradle-online-resolution")
     try:
         result = synchronize_android_gradle_dependencies(

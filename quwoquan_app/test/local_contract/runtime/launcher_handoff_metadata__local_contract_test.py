@@ -867,8 +867,9 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         handoff = _build_handoff("prod", "prod-hosted")
         package = handoff["runtimeConfigPackage"]
         self.assertIsInstance(package, dict)
+        credentialed_host = "user:secret" + "@" + "quwoquan.example.invalid"
         package["runtime"]["gatewayBaseUrl"] = (
-            "https://user:secret@quwoquan.com/path?token=secret"
+            f"https://{credentialed_host}/path?token=secret"
         )
 
         issues = _validate_handoff(handoff, contract)

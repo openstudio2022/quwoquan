@@ -172,17 +172,45 @@ def test_stale_error_rejects_unknown_identity_field() -> None:
         bundle.AppDependencyBundleStaleError("receiptDigest")
 
 
-def test_missing_active_pointer_is_not_classified_stale(
+def test_missing_bundle_root_raises_typed_bundle_missing_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, root, _active = _fixture(tmp_path, monkeypatch)
+    for path in sorted(root.rglob("*"), reverse=True):
+        if path.is_file():
+            path.unlink()
+        else:
+            path.rmdir()
+    root.rmdir()
+
+    with pytest.raises(bundle.AppDependencyBundleMissingError) as excinfo:
+        bundle.load_active_dependency_bundle(repo_root=repo)
+
+    error = excinfo.value
+    assert isinstance(error, ValueError)
+    assert error.code == "APP.DEPENDENCY.bundle_missing"
+    assert error.resource == "managedDependencyBundle"
+    assert error.field == "root"
+
+
+def test_missing_active_pointer_raises_typed_bundle_missing_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo, root, _active = _fixture(tmp_path, monkeypatch)
     (root / "active.json").unlink()
 
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(bundle.AppDependencyBundleMissingError) as excinfo:
         bundle.load_active_dependency_bundle(repo_root=repo)
 
-    assert not isinstance(excinfo.value, bundle.AppDependencyBundleStaleError)
-    assert "is stale for" not in str(excinfo.value)
+    error = excinfo.value
+    assert error.code == "APP.DEPENDENCY.bundle_missing"
+    assert error.resource == "managedDependencyBundle"
+    assert error.field == "activePointer"
+
+
+def test_missing_error_rejects_unknown_location() -> None:
+    with pytest.raises(ValueError, match="missing location is unknown"):
+        bundle.AppDependencyBundleMissingError("managedDependencyBundle", "receipt")
 
 
 def test_corrupt_active_pointer_is_not_classified_stale(
@@ -194,8 +222,69 @@ def test_corrupt_active_pointer_is_not_classified_stale(
     with pytest.raises(ValueError) as excinfo:
         bundle.load_active_dependency_bundle(repo_root=repo)
 
-    assert not isinstance(excinfo.value, bundle.AppDependencyBundleStaleError)
+    assert not isinstance(
+        excinfo.value,
+        (
+            bundle.AppDependencyBundleMissingError,
+            bundle.AppDependencyBundleStaleError,
+        ),
+    )
     assert "is stale for" not in str(excinfo.value)
+
+
+def test_permission_failure_is_not_classified_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, root, _active = _fixture(tmp_path, monkeypatch)
+    original_lstat = Path.lstat
+
+    def _permission_denied(path: Path):
+        if path == root.parent:
+            raise PermissionError("fixture permission denied")
+        return original_lstat(path)
+
+    monkeypatch.setattr(Path, "lstat", _permission_denied)
+    monkeypatch.setattr(
+        bundle,
+        "assert_real_directory",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ValueError("App dependency managed dependency bundle root is unavailable")
+        ),
+    )
+
+    with pytest.raises(ValueError) as excinfo:
+        bundle.load_active_dependency_bundle(repo_root=repo)
+
+    assert not isinstance(excinfo.value, bundle.AppDependencyBundleMissingError)
+
+
+def test_active_pointer_symlink_is_not_classified_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, root, _active = _fixture(tmp_path, monkeypatch)
+    active = root / "active.json"
+    target = root / "active-target.json"
+    active.rename(target)
+    active.symlink_to(target.name)
+
+    with pytest.raises(ValueError) as excinfo:
+        bundle.load_active_dependency_bundle(repo_root=repo)
+
+    assert not isinstance(excinfo.value, bundle.AppDependencyBundleMissingError)
+
+
+def test_bundle_root_symlink_is_not_classified_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, root, _active = _fixture(tmp_path, monkeypatch)
+    target = root.with_name("cache-target")
+    root.rename(target)
+    root.symlink_to(target.name, target_is_directory=True)
+
+    with pytest.raises(ValueError) as excinfo:
+        bundle.load_active_dependency_bundle(repo_root=repo)
+
+    assert not isinstance(excinfo.value, bundle.AppDependencyBundleMissingError)
 
 
 def test_receipt_drift_is_not_classified_stale(
@@ -210,7 +299,13 @@ def test_receipt_drift_is_not_classified_stale(
     with pytest.raises(ValueError) as excinfo:
         bundle.load_active_dependency_bundle(repo_root=repo)
 
-    assert not isinstance(excinfo.value, bundle.AppDependencyBundleStaleError)
+    assert not isinstance(
+        excinfo.value,
+        (
+            bundle.AppDependencyBundleMissingError,
+            bundle.AppDependencyBundleStaleError,
+        ),
+    )
 
 
 def test_active_bundle_rejects_receipt_rebinding(
