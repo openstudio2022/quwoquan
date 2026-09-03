@@ -99,10 +99,11 @@ def test_two_targets_write_distinct_immutable_refs_without_cross_consumption(
         assert "profiles" not in manifest
 
 
+@pytest.mark.skipif(
+    not hasattr(ft_commands.fcntl, "F_GETPATH"),
+    reason="仅 macOS F_GETPATH 可用时验证",
+)
 def test_fd_path_reads_current_macos_directory_with_bytes_buffer() -> None:
-    if not hasattr(ft_commands.fcntl, "F_GETPATH"):
-        pytest.skip("仅 macOS F_GETPATH 可用时验证")
-
     descriptor = ft_commands.os.open(
         ROOT, ft_commands.os.O_RDONLY | ft_commands.os.O_DIRECTORY
     )
