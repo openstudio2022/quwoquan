@@ -4,20 +4,25 @@ Clause bindings stay next to the test that actually asserts each outcome.
 """
 from __future__ import annotations
 
+import errno
 import json
+import os
 import subprocess
 import sys
 from copy import deepcopy
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[4]
 CLI = ROOT / "quwoquan_ops/cli/human_agent_delivery.py"
 if str(ROOT / "quwoquan_ops/cli") not in sys.path:
     sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
 
-from lib.human_agent_delivery import (  # noqa: E402
+import lib.human_agent_delivery.contract as contract_module
+import lib.human_agent_delivery.states as states_module
+from lib.human_agent_delivery import (
     ContractError,
     advance_campaign,
     balanced_permutations,
@@ -33,7 +38,6 @@ from lib.human_agent_delivery import (  # noqa: E402
     transition_inconclusive_outcome,
     validate_contract,
 )
-
 
 FIELDS = (
     "option_id", "neutral_label", "user_outcome", "business_outcome", "cost",
@@ -299,8 +303,27 @@ def test_campaign_uses_one_approval_and_stage_technical_gates() -> None:
     assert changed["code"] == "HAD.CAMPAIGN_REAPPROVAL_REQUIRED"
 
 
-def test_s4_not_admitted_and_write_concurrency_is_one() -> None:
-    assert production_concurrency_policy() == {"s4_admission": "not_admitted", "write_concurrency": 1}
+@pytest.mark.parametrize(
+    ("admission", "expected"),
+    [
+        (
+            {"status": "admitted", "write_concurrency": 2},
+            {"s4_admission": "admitted", "write_concurrency": 2},
+        ),
+        (
+            {"status": "not_admitted", "write_concurrency": 1},
+            {"s4_admission": "not_admitted", "write_concurrency": 1},
+        ),
+    ],
+)
+def test_s4_projection_follows_dynamic_objective_admission(
+    admission: dict[str, object],
+    expected: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/human-agent-delivery-interaction/spec.md#gwt-003.t4
+    monkeypatch.setattr(states_module, "inspect_admission", lambda: admission)
+    assert production_concurrency_policy() == expected
 
 
 def test_channel_release_and_outcome_do_not_impersonate_each_other() -> None:
@@ -429,22 +452,319 @@ def test_completion_report_cannot_accept_another_role_domain() -> None:
     assert blocked["code"] == "HAD.INTERACTION_ROLE_OVERRUN"
 
 
-def test_all_twelve_skills_bind_pre_during_post_without_copying_schema() -> None:
+def _temporary_workflow_contract() -> dict[str, object]:
     contract = load_contract()
     workflow = contract["workflow_interaction_binding"]
-    assert workflow["natural_language_and_explicit_skill_same_track"] is True
-    assert len(workflow["required_skills"]) == len(workflow["bindings"]) == 12
+    sample_binding = deepcopy(next(iter(workflow["bindings"].values())))
+    workflow["bindings"] = {"dynamic-skill": sample_binding}
+    return contract
+
+
+def _temporary_contract_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    repo_root = tmp_path / "repo"
+    contract_path = repo_root / "quwoquan_ops/policies/human_agent_delivery_contract.yaml"
+    contract_path.parent.mkdir(parents=True)
+    monkeypatch.setattr(contract_module, "CONTRACT_PATH", contract_path)
+    return repo_root
+
+
+def _write_workflow_skill(skill_root: Path, text: str | None = None) -> Path:
+    skill_dir = skill_root / "dynamic-skill"
+    skill_dir.mkdir(parents=True)
+    skill_path = skill_dir / "SKILL.md"
+    skill_path.write_text(
+        text
+        or """---
+name: dynamic-skill
+description: Dynamically discovered workflow.
+metadata:
+  kind: workflow
+---
+
+# Dynamic workflow
+""",
+        encoding="utf-8",
+    )
+    return skill_path
+
+
+def _assert_skill_discovery_fails_before_binding_closure(
+    contract: dict[str, object],
+    match: str,
+    *,
+    code: str | None = None,
+    causal_category: str | None = None,
+) -> ContractError:
+    with pytest.raises(ContractError, match=match) as failure:
+        validate_contract(contract)
+    assert "动态覆盖" not in str(failure.value)
+    if code is not None:
+        assert failure.value.code == code
+    if causal_category is not None:
+        assert failure.value.causal_category == causal_category
+    return failure.value
+
+
+@pytest.mark.parametrize("symlink_level", ["agents", "skills", "child", "skill-file"])
+def test_workflow_skill_discovery_rejects_symlink_boundaries(
+    symlink_level: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    contract = _temporary_workflow_contract()
+    repo_root = _temporary_contract_repo(monkeypatch, tmp_path)
+    agents_root = repo_root / ".agents"
+    external_root = tmp_path / "external"
+    if symlink_level == "agents":
+        _write_workflow_skill(external_root / "skills")
+        agents_root.symlink_to(external_root, target_is_directory=True)
+        expected = r"\.agents.*不得为 symlink"
+    elif symlink_level == "skills":
+        agents_root.mkdir(parents=True)
+        _write_workflow_skill(external_root)
+        (agents_root / "skills").symlink_to(external_root, target_is_directory=True)
+        expected = r"\.agents/skills.*不得为 symlink"
+    elif symlink_level == "child":
+        skills_root = agents_root / "skills"
+        skills_root.mkdir(parents=True)
+        _write_workflow_skill(external_root)
+        (skills_root / "dynamic-skill").symlink_to(
+            external_root / "dynamic-skill", target_is_directory=True,
+        )
+        expected = r"dynamic-skill.*不得为 symlink"
+    else:
+        skill_dir = agents_root / "skills/dynamic-skill"
+        skill_dir.mkdir(parents=True)
+        external_skill = external_root / "SKILL.md"
+        external_skill.parent.mkdir(parents=True)
+        external_skill.write_text("untrusted", encoding="utf-8")
+        (skill_dir / "SKILL.md").symlink_to(external_skill)
+        expected = r"SKILL\.md.*不得为 symlink"
+    _assert_skill_discovery_fails_before_binding_closure(
+        contract,
+        expected,
+        code="HAD.SKILL_DISCOVERY_SYMLINK_FORBIDDEN",
+        causal_category="symlink",
+    )
+
+
+def test_workflow_skill_discovery_rejects_noncanonical_skill_root() -> None:
+    contract = load_contract()
+    contract["workflow_interaction_binding"]["skill_root"] = ".agents/skills/../skills"
+    _assert_skill_discovery_fails_before_binding_closure(contract, "必须精确为")
+
+
+def test_workflow_skill_discovery_rejects_non_directory_child(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    contract = _temporary_workflow_contract()
+    repo_root = _temporary_contract_repo(monkeypatch, tmp_path)
+    skills_root = repo_root / ".agents/skills"
+    skills_root.mkdir(parents=True)
+    (skills_root / "dynamic-skill").write_text("not a directory", encoding="utf-8")
+    _assert_skill_discovery_fails_before_binding_closure(
+        contract,
+        r"dynamic-skill.*non-symlink directory",
+        code="HAD.SKILL_DISCOVERY_PATH_TYPE_INVALID",
+        causal_category="path_type",
+    )
+
+
+def test_workflow_skill_discovery_rejects_direct_child_without_skill_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    contract = _temporary_workflow_contract()
+    repo_root = _temporary_contract_repo(monkeypatch, tmp_path)
+    (repo_root / ".agents/skills/dynamic-skill").mkdir(parents=True)
+    _assert_skill_discovery_fails_before_binding_closure(
+        contract,
+        r"SKILL\.md.*regular non-symlink file",
+        code="HAD.SKILL_DISCOVERY_PATH_TYPE_INVALID",
+        causal_category="path_type",
+    )
+
+
+@pytest.mark.parametrize(
+    ("raised", "code", "causal_category"),
+    [
+        (
+            PermissionError(errno.EACCES, "denied"),
+            "HAD.SKILL_DISCOVERY_PERMISSION_DENIED",
+            "permission",
+        ),
+        (
+            OSError(errno.EIO, "io failure"),
+            "HAD.SKILL_DISCOVERY_IO_FAILED",
+            "io",
+        ),
+    ],
+)
+def test_workflow_skill_discovery_preserves_permission_and_io_categories(
+    raised: OSError,
+    code: str,
+    causal_category: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    contract = _temporary_workflow_contract()
+    repo_root = _temporary_contract_repo(monkeypatch, tmp_path)
+    _write_workflow_skill(repo_root / ".agents/skills")
+
+    def fail_listdir(_descriptor: int) -> list[str]:
+        raise raised
+
+    monkeypatch.setattr(contract_module.os, "listdir", fail_listdir)
+    failure = _assert_skill_discovery_fails_before_binding_closure(
+        contract,
+        "canonical workflow Skill root",
+        code=code,
+        causal_category=causal_category,
+    )
+    assert failure.detail
+
+
+def test_workflow_skill_discovery_rejects_direct_child_collection_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    contract = _temporary_workflow_contract()
+    repo_root = _temporary_contract_repo(monkeypatch, tmp_path)
+    _write_workflow_skill(repo_root / ".agents/skills")
+    original_listdir = contract_module.os.listdir
+    calls = 0
+
+    def drifting_listdir(descriptor: int) -> list[str]:
+        nonlocal calls
+        calls += 1
+        current = list(original_listdir(descriptor))
+        if calls == 2:
+            current.append("concurrent-added-skill")
+        return current
+
+    monkeypatch.setattr(contract_module.os, "listdir", drifting_listdir)
+    _assert_skill_discovery_fails_before_binding_closure(
+        contract,
+        "direct-child 集合",
+        code="HAD.SKILL_DISCOVERY_CONCURRENT_DRIFT",
+        causal_category="concurrent_drift",
+    )
+
+
+def test_workflow_skill_discovery_rejects_opened_skill_identity_replacement(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    contract = _temporary_workflow_contract()
+    repo_root = _temporary_contract_repo(monkeypatch, tmp_path)
+    skill_path = _write_workflow_skill(repo_root / ".agents/skills")
+    original_read = contract_module._secure_read_regular_file
+    replaced = False
+
+    def replacing_read(
+        parent_fd: int,
+        name: str,
+        *,
+        label: str,
+    ) -> tuple[str, tuple[int, int, int, int, int, int, int]]:
+        nonlocal replaced
+        result = original_read(parent_fd, name, label=label)
+        if not replaced:
+            replaced = True
+            replacement = skill_path.with_name("SKILL.md.replacement")
+            replacement.write_text(skill_path.read_text(encoding="utf-8"), encoding="utf-8")
+            os.replace(replacement, skill_path)
+        return result
+
+    monkeypatch.setattr(contract_module, "_secure_read_regular_file", replacing_read)
+    _assert_skill_discovery_fails_before_binding_closure(
+        contract,
+        "身份替换",
+        code="HAD.SKILL_DISCOVERY_CONCURRENT_DRIFT",
+        causal_category="concurrent_drift",
+    )
+
+
+@pytest.mark.parametrize(("skill_text", "expected"), [
+    ("# no frontmatter\n", "缺合法 frontmatter"),
+    ("---\nname: [\n---\n", "frontmatter YAML 非法"),
+    ("---\n- not\n- a-mapping\n---\n", "frontmatter 非 mapping"),
+    (
+        "---\nname: dynamic-skill\ndescription: valid\n---\n",
+        "metadata 非 mapping",
+    ),
+    (
+        "---\nname: dynamic-skill\ndescription: valid\nmetadata: []\n---\n",
+        "metadata 非 mapping",
+    ),
+    (
+        "---\nname: dynamic-skill\ndescription: valid\nmetadata: {}\n---\n",
+        "metadata.kind 必须为 workflow",
+    ),
+    (
+        "---\nname: dynamic-skill\ndescription: valid\nmetadata:\n  kind: reference\n---\n",
+        "metadata.kind 必须为 workflow",
+    ),
+    (
+        "---\nname: drift\ndescription: valid\nmetadata:\n  kind: workflow\n---\n",
+        "name 与目录不一致",
+    ),
+    (
+        "---\nname: dynamic-skill\nmetadata:\n  kind: workflow\n---\n",
+        "description 必须为非空字符串",
+    ),
+])
+def test_workflow_skill_discovery_rejects_invalid_frontmatter(
+    skill_text: str, expected: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    contract = _temporary_workflow_contract()
+    repo_root = _temporary_contract_repo(monkeypatch, tmp_path)
+    _write_workflow_skill(repo_root / ".agents/skills", skill_text)
+    _assert_skill_discovery_fails_before_binding_closure(contract, expected)
+
+
+def test_workflow_skill_discovery_accepts_valid_dynamic_skill(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    contract = _temporary_workflow_contract()
+    repo_root = _temporary_contract_repo(monkeypatch, tmp_path)
+    _write_workflow_skill(repo_root / ".agents/skills")
+    validate_contract(contract)
+
+
+def test_dynamic_workflow_skills_bind_pre_during_post_without_static_inventory() -> None:
+    contract = load_contract()
+    workflow = contract["workflow_interaction_binding"]
+    skill_root = ROOT / workflow["skill_root"]
+    workflow_skills = {}
+    for skill_path in sorted(skill_root.glob("*/SKILL.md")):
+        frontmatter = yaml.safe_load(skill_path.read_text(encoding="utf-8").split("---\n", 2)[1])
+        if (frontmatter.get("metadata") or {}).get("kind") == "workflow":
+            workflow_skills[skill_path.parent.name] = skill_path
+    assert set(workflow) == {
+        "canonical_projector", "skill_root", "required_phases",
+        "required_binding_fields", "dynamic_audience_role", "bindings",
+    }
+    assert set(workflow["bindings"]) == set(workflow_skills)
     schema_fields = set(contract["schemas"]["role_interaction_envelope"]["required_fields"])
-    for skill in workflow["required_skills"]:
+    for skill, skill_path in workflow_skills.items():
         bindings = workflow["bindings"][skill]
         assert [item["phase"] for item in bindings] == ["PRE", "DURING", "POST"]
-        skill_text = (ROOT / ".agents/skills" / skill / "SKILL.md").read_text(encoding="utf-8")
+        skill_text = skill_path.read_text(encoding="utf-8")
         headings = [line[3:] for line in skill_text.splitlines() if line.startswith("## ")]
         assert headings == [
             "触发与输入", "执行", "完成证据", "失败与停止", "条件性交接",
         ]
-        binding_ref = f"#workflow_interaction_binding.{skill}"
+        binding_ref = f"#workflow_interaction_binding.bindings.{skill}"
         assert binding_ref in skill_text
         assert "canonical projector" in skill_text
         assert not schema_fields.issubset(set(skill_text.split()))
+
+    missing = deepcopy(contract)
+    missing["workflow_interaction_binding"]["bindings"].pop(next(iter(workflow_skills)))
+    with pytest.raises(ContractError, match="动态覆盖"):
+        validate_contract(missing)
+    extra = deepcopy(contract)
+    extra["workflow_interaction_binding"]["bindings"]["hard-coded-shadow"] = deepcopy(
+        next(iter(extra["workflow_interaction_binding"]["bindings"].values()))
+    )
+    with pytest.raises(ContractError, match="动态覆盖"):
+        validate_contract(extra)
 

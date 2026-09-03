@@ -19,10 +19,10 @@ DELIVERY_GATE = ROOT / ".github" / "workflows" / "delivery-gate.yml"
 
 
 class CommitGateFastPathTest(unittest.TestCase):
-    def test_pre_commit_consumes_fresh_staged_scope_receipt_only(self) -> None:
+    def test_pre_commit_only_checks_staged_boundary(self) -> None:
         source = PRE_COMMIT.read_text(encoding="utf-8")
-        self.assertIn("local_readiness.py verify --level scope --staged", source)
-        self.assertIn("local_readiness.py scope --staged", source)
+        self.assertIn("local_readiness.py staged-boundary", source)
+        self.assertNotIn("verify --level", source)
         self.assertNotIn("commit_gate.sh", source)
         self.assertNotRegex(source, r"(?m)^\s*make gate\b")
         self.assertNotIn("gate_repo.sh --scope", source)
@@ -147,6 +147,13 @@ class CommitGateFastPathTest(unittest.TestCase):
         self.assertIn("HARD_BUDGET", source)
         self.assertIn("SOFT_BUDGET", source)
         self.assertIn("entrypoint_script_paths", source)
+        self.assertIn("process_group_deadline.py", source)
+        self.assertIn("--deadline-epoch-seconds", source)
+        self.assertIn("COMMIT_GATE.HARD_TIMEOUT", source)
+        self.assertIn("HARD_DEADLINE", source)
+        self.assertIn("jobs", source)
+        self.assertIn("local_worktree_lifecycle is forbidden", source)
+        self.assertNotIn("verify_local_worktree_lifecycle.py", source)
         self.assertNotRegex(source, r"(?m)^\s*make gate\b")
         self.assertNotIn("gate_repo.sh --scope all", source)
 

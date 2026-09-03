@@ -29,7 +29,7 @@ void main() {
     expect(matrix.slots.first.sample.runtimeObjectId, 'runtime-homepage');
     expect(
       matrix.slots.last.runnerIdentity,
-      'qwq_app.content_uat.direct_or_object_route.video.v1',
+      'qwq.content_consumer.direct_or_object_route.video.v1',
     );
   });
 
@@ -133,7 +133,7 @@ Map<String, Object?> _plan() => <String, Object?>{
           'carrier': carrier,
           'applicability': 'required',
           'specRef': 'spec.md#gwt-004',
-          'runnerClass': 'qwq_app.content_uat.$entry.$carrier.v1',
+          'runnerClass': 'qwq.content_consumer.$entry.$carrier.v1',
         },
   ],
 };

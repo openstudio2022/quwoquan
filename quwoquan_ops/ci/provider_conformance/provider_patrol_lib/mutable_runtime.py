@@ -14,7 +14,7 @@ from typing import Any
 from quwoquan_ops.ci.provider_conformance import (
     run_provider_patrol_uat as _rppu,
 )
-from quwoquan_ops.cli.lib.data_execution_fleet import require_published_endpoint_port
+from quwoquan_ops.cli.lib.runtime_port_ownership import require_published_endpoint_port
 from quwoquan_ops.ci.provider_conformance.provider_patrol_lib.runtime_identity import (
     ROOT,
     _NONPROD_ENVIRONMENTS,
@@ -27,7 +27,8 @@ _MUTABLE_PLAN_FIELDS = frozenset({
     "schema", "environment", "target", "composeProject", "portProfile",
     "portBlock", "publishedPorts", "composeFiles", "executionComposeFiles",
     "composeProfiles", "composeDigest", "configurationDigest",
-    "providerRuntimeDigest", "mediaLocalRef", "mediaRoot", "tlsProfile",
+    "providerRuntimeDigest", "observabilityLogSinkDigest", "mediaLocalRef",
+    "mediaRoot", "tlsProfile",
     "resolverHandoffDigest", "publicWebPackage", "workspaceIdentity",
     "graphqlReadRegistry", "serviceCoreModules",
 })
@@ -89,7 +90,8 @@ def _load_mutable_runtime_plan(
     receipt_fields = (
         "environment", "target", "composeProject", "portProfile", "portBlock",
         "publishedPorts", "composeDigest", "configurationDigest",
-        "providerRuntimeDigest", "tlsProfile", "resolverHandoffDigest",
+        "providerRuntimeDigest", "observabilityLogSinkDigest", "tlsProfile",
+        "resolverHandoffDigest",
         "publicWebPackage",
     )
     for field in receipt_fields:
@@ -351,7 +353,10 @@ def _load_mutable_test_live_runtime_identity(
         provider_runtime_digest=provider_runtime_digest,
         elasticsearch_binding_digest="",
         elasticsearch_image_digest="",
-        elasticsearch_compose_digest="",
+        elasticsearch_compose_digest=_require_digest(
+            receipt.get("observabilityLogSinkDigest"),
+            label="mutable Elasticsearch Compose",
+        ),
         elasticsearch_cluster_ref="",
         release_id="",
         release_digest="",

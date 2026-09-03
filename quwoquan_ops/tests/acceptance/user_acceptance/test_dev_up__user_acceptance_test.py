@@ -411,7 +411,7 @@ class DevUpTest(unittest.TestCase):
                 "--target",
                 "alpha-local",
                 "--launch-provenance",
-                "workspace_flutter_run",
+                "canonical_launcher",
             ],
             cwd=ROOT / "quwoquan_app",
             check=True,

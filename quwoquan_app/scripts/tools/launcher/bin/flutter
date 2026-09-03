@@ -14,6 +14,9 @@
   `APP.LAUNCH.workspace_flutter_sdk_unavailable:` 行并退出非零。
 - 白名单外的 run 参数输出一行 typed `APP.LAUNCH.managed_argument_unsupported:
   <参数>` 并 exit 2；本文件按自身物理路径定位仓库根，任意 cwd 可用。
+- 启动的是"当前所站的那棵树"：从 cwd 向上找到本 App 根（pubspec 旁有 run.sh、
+  同仓有 quwoquan_ops/cli/stackctl.py）即 exec 该树的 run.sh；cwd 不在任何本 App
+  树内时退回 dispatcher 自身所在树。多 clone/worktree 并存时修改与启动因此同源。
 """
 
 from __future__ import annotations
@@ -114,9 +117,37 @@ def _nearest_pubspec_project_root(cwd: Path) -> Path | None:
         current = parent
 
 
-def _run_is_foreign_project(cwd: Path) -> bool:
+def _is_app_root(candidate: Path) -> bool:
+    """本 App 根：pubspec 旁有常规 run.sh，且同仓存在 quwoquan_ops/cli/stackctl.py。"""
+    run_sh = candidate / "run.sh"
+    stackctl = candidate.parent / "quwoquan_ops/cli/stackctl.py"
+    return (
+        run_sh.is_file()
+        and not run_sh.is_symlink()
+        and (candidate / "pubspec.yaml").is_file()
+        and stackctl.is_file()
+    )
+
+
+def _launch_root_for(cwd: Path) -> Path | None:
+    """cwd 所在的本 App 树；cwd 位于外部 Flutter project 时返回 None（应透传）。
+
+    先看最近 pubspec 根：是本 App 则用它，是别的 Flutter project 则透传。
+    没有 pubspec 时再向上找仓库根下的 quwoquan_app/（例如站在仓库根执行）。
+    都找不到则退回 dispatcher 自身所在树，保持"任意 cwd 可用"。
+    """
     project_root = _nearest_pubspec_project_root(cwd)
-    return project_root is not None and project_root != _APP_ROOT
+    if project_root is not None:
+        return project_root if _is_app_root(project_root) else None
+    current = cwd.absolute()
+    while True:
+        nested = current / "quwoquan_app"
+        if _is_app_root(nested):
+            return nested
+        parent = current.parent
+        if parent == current:
+            return _APP_ROOT
+        current = parent
 
 
 def _validate_managed_ambient_selectors(environment: dict[str, str]) -> None:
@@ -159,13 +190,16 @@ def _parse_managed_run_arguments(arguments: list[str]) -> tuple[str, bool]:
     return device_id, verbose
 
 
-def _canonical_device_id() -> str:
+def _canonical_device_id(launch_root: Path) -> str:
     """复用 canonical device authority：单设备自动/多设备 TTY 选择/非 TTY 阻断。"""
     real_flutter = _resolve_real_flutter()
+    device_authority = launch_root / _DEVICE_AUTHORITY.relative_to(_APP_ROOT)
+    if not device_authority.is_file():
+        device_authority = _DEVICE_AUTHORITY
     completed = subprocess.run(
         [
             sys.executable,
-            str(_DEVICE_AUTHORITY),
+            str(device_authority),
             "--pick",
             "--real-flutter",
             str(real_flutter),
@@ -187,21 +221,22 @@ def _canonical_device_id() -> str:
     return device_id
 
 
-def _managed_run(arguments: list[str]) -> int:
+def _managed_run(arguments: list[str], launch_root: Path) -> int:
     _validate_managed_ambient_selectors(dict(os.environ))
     device_id, verbose = _parse_managed_run_arguments(arguments)
     if not device_id:
-        device_id = _canonical_device_id()
-    if not os.access(_CANONICAL_RUN_SH, os.X_OK):
+        device_id = _canonical_device_id(launch_root)
+    run_sh = launch_root / "run.sh"
+    if not os.access(run_sh, os.X_OK):
         print(
-            f"{_ENTRYPOINT_BLOCKER}: canonical launcher 不可执行：{_CANONICAL_RUN_SH}",
+            f"{_ENTRYPOINT_BLOCKER}: canonical launcher 不可执行：{run_sh}",
             file=sys.stderr,
         )
         raise SystemExit(2)
     environment = dict(os.environ)
     environment["QWQ_MANAGED_FLUTTER_ENTRY"] = "1"
     launcher_arguments = [
-        str(_CANONICAL_RUN_SH),
+        str(run_sh),
         "--env",
         _MANAGED_ENVIRONMENT,
         "--device",
@@ -209,16 +244,17 @@ def _managed_run(arguments: list[str]) -> int:
     ]
     if verbose:
         launcher_arguments.append("--verbose")
-    os.execve(str(_CANONICAL_RUN_SH), launcher_arguments, environment)
+    os.execve(str(run_sh), launcher_arguments, environment)
     return 127  # pragma: no cover - execve 不返回
 
 
 def main(argv: list[str]) -> int:
     if len(argv) < 2 or argv[1] != "run":
         return _passthrough(argv[1:])
-    if _run_is_foreign_project(Path.cwd()):
+    launch_root = _launch_root_for(Path.cwd())
+    if launch_root is None:
         return _passthrough(argv[1:])
-    return _managed_run(argv[2:])
+    return _managed_run(argv[2:], launch_root)
 
 
 if __name__ == "__main__":

@@ -1,84 +1,43 @@
 # 阶段契约：ship
 
-把 immutable release 幂等导入目标环境并完成消费侧核验。execution `succeeded`
-终态的唯一合法来源是本阶段 pass receipt。
+AI 显式执行 apply、readback/health 与 `EnvironmentAcceptanceFact` 创建；不存在 gate registry 或自动 terminal reducer。
 
-## 身份
+## PRE
 
-- stage：`ship`（与磁盘目录一字不差）
-- 前置阶段：`release`
-- 合法 next：`END`（终态）
-- 角色人设：[release-operator](../roles/release-operator.md)
-- 写目录 allowlist：`.qwq_output/env/<env>/runs/data-release/<releaseId>/<runId>/`
-  （只经 ship 命令与核验流程）
+- `release` CLOSE 为 pass。
+- OPEN 显式冻结 releaseId/releaseDigest、environment/target、import/verify run identities、`acceptanceProfile` 与所需环境 owner refs。
+- `acceptanceProfile` 仅为 `m1_api_consumer|environment_promotion`，不得从环境名猜测。
 
-## 做前（PRE）
+## DURING
 
-- `release` receipt `verdict=pass`；复跑：
+AI 按顺序显式调用并记录 exact facts：
 
-```bash
-python3 quwoquan_data/scripts/cli.py verify release-integrity --release <releaseId>
-python3 quwoquan_data/scripts/cli.py verify media-release-contract
-```
+1. `ship apply` 导入同一 immutable release；
+2. `ship verify` 和对应环境 readback/health；
+3. 需要时 activate；
+4. 逐 cell 执行该 profile 所要求的真实 consumer checks；
+5. 调用 canonical writer 创建同 identity 的 EAF。
 
-- 目标环境健康：
+`m1_api_consumer` 只要求 Alpha 服务/API consumer 的 entry surface × carrier 16-cell fresh raw facts；不得生成/引用 App UAT、device/platform、`TargetUatBinding` 或 promotion predecessor。
 
-```bash
-python3 quwoquan_ops/cli/stackctl.py health --env gamma
-```
+`environment_promotion` 才要求 target-bound App UAT raw facts、target binding、predecessor/promotion closure。两分支均不得用 fixture、旧 receipt、counts 或另一 release 的事实代替。
 
-- 涉及环境操作时同步加载 `quwoquan_ops/AGENTS.md`。
+## POST
 
-## 做中（DURING）
-
-- 唯一 CLI：`python3 quwoquan_data/scripts/cli.py ship apply --env gamma …`
-  幂等导入；回执、API 核验、回滚与重放证据写环境 run
-  （`.qwq_output/env/gamma/runs/data-release/<releaseId>/<runId>/`）。
-- App UAT：用真实 App 消费链路验证内容可发现、可搜索、可消费，证据入环境 run。
-- [MUST NOT] 修改 canonical 或 release；[MUST NOT] 用 fixture、seed 或旧回执
-  顶替本次导入证据。
-
-## 做后（POST）
-
-交付件：导入回执 + API 核验 + App UAT 证据。完成判据：
+逐条运行当前 profile 适用的真实环境 verifier。基础环境动作使用：
 
 ```bash
-python3 quwoquan_data/scripts/cli.py verify release-lifecycle \
-  --release <releaseId> --environment gamma --import-run <runId>
-python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --profile integration
+python3 quwoquan_data/scripts/cli.py ship apply --release-id <releaseId> --env <env> \
+  --run-id <importRunId> --import --full-sync
+python3 quwoquan_data/scripts/cli.py ship verify --release-id <releaseId> --env <env> \
+  --import-run-id <importRunId> --run-id <verifyRunId> --readiness-phase <phase>
 ```
 
-常见 issue → 修复：
+`m1_api_consumer` 只附加 Alpha 服务/API consumer health 与 16-cell raw facts，再由现有 Ops `environment-acceptance-append` writer 写 EAF；不得运行 promotion-only release lifecycle/rollback-replay Exit。`environment_promotion` 才运行其声明的 App UAT、predecessor 与 EAF validators。
 
-- 导入计数不等（Manifest/导入/active/Search/Recommendation） → 按 issue 定位
-  断链环节重跑幂等导入，不手补投影。
-- 环境不健康 → 走 `environment-ops` 工作流修环境，本阶段保持未完成。
+AI 逐条绑定真实 argv/exit/ref/digest，在 CLOSE 中显式提交 pass/blocked。内核只重验 facts，不派生 END 或 succeeded。
 
-### verify 失败重试 SOP
+## HANDOFF
 
-verify run 是 append-only 证据：失败的 run 目录原样保留，禁止改写或删除。
-失败重入的固定操作序，逐条依次判断：
-
-1. **换新 run-id 重跑 verify，不重导入**：`ship apply` 导入是幂等的且证据
-   独立于 verify；只要 release、导入结果与环境 runtime 没变，重试只发生在
-   verify 层。
-2. **research isolation proof 自动复用**：runtime proof 效度域为
-   `releaseId + manifestDigest + runtime 策略快照 + 24 小时时效`（DEC-034），
-   不绑 verify run。同一 release 的后续 verify run 会自动发现并复用最近一次
-   未超龄 PASS proof（重绑当前 run-id、`reusedFromVerifyRunId` 写明来源后
-   落盘），无需重跑完整 probe。release 内容、导入或 runtime 策略变更，或
-   proof 超过 24 小时时效时，必须重新执行
-   `stackctl research-isolation-probe`。
-3. **需要重导入的唯一情形**：release 本身变更（新 releaseId 或 manifest
-   digest 漂移），此时从 `ship apply` 重新开始，旧 run 证据保留。
-4. **环境卡点不在本阶段修**：`stackctl down` 对孤儿 compose 网络幂等回收；
-   若 down/up 仍不收敛，走 `stackctl doctor` → `repair`（environment-ops），
-   不得手工 `docker` 清理后继续本阶段。
-
-按 [handoff-protocol.md](../handoff-protocol.md) 落 receipt；
-`verdict=pass` 时 `task stage-record` 写入终态 receipt；receipt reducer 随后确定性投影 `execution_state.status=succeeded`。
-
-## 交接（HANDOFF）
-
-- 终态 receipt：`next=END`。
-- HANDOFF 报告用户或交 `plan-next`：release 与 UAT 证据路径、OPEN 变化、剩余阻断。
+- `resultRefs`：import、verify/readback/health、activation（适用时）、raw consumer facts、EAF exact refs/digests。
+- ship pass 后按 Skill 固定到 END；完成报告必须说明 profile，且只在 `environment_promotion` 声称 App UAT 闭合。

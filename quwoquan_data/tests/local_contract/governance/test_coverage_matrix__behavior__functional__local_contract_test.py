@@ -26,7 +26,6 @@ from governance.coverage.coverage_matrix import (  # noqa: E402
 )
 from governance.coverage.coverage_finalize import finalize_discovery_source_cells  # noqa: E402
 from governance.coverage import coverage_matrix as coverage_matrix_module  # noqa: E402
-from core.runtime_policy import active_runtime_policy  # noqa: E402
 from core.source_digest import SourceDigest  # noqa: E402
 
 
@@ -41,8 +40,7 @@ def _freeze_source_digest(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _guardrails(**overrides: object) -> CoverageMatrixGuardrails:
-    base = CoverageMatrixGuardrails.from_runtime_policy(
-        active_runtime_policy(),
+    base = CoverageMatrixGuardrails.defaults(
         safe_pool_minimum=1,
         until_saturated=True,
     )

@@ -14,7 +14,7 @@ from .parsing import (
     engineering_roots,
     headings,
 )
-from .patterns import APP_TEST_LAYERS, PATH_RE
+from .patterns import APP_TEST_LAYERS, PATH_RE, REPOSITORY_SINGLETON_ROOTS
 
 _DEC_BLOCK_RE = re.compile(
     r'<a\s+id=["\'](dec-\d{3,})["\']\s*></a>([\s\S]*?)'
@@ -134,7 +134,7 @@ def owners_for_path(target: Path, nodes: Iterable[Node]) -> list[Node]:
     for node in nodes:
         for root in engineering_roots(node):
             root = root.rstrip("/")
-            exact_singleton = root == "Makefile"
+            exact_singleton = root in REPOSITORY_SINGLETON_ROOTS
             if rel == root or (not exact_singleton and rel.startswith(root + "/")):
                 matches.append((len(root), node))
     if not matches:

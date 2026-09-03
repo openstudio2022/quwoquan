@@ -5,9 +5,13 @@
 trust envelope 与生产 App 受同一组判否约束，否则「宿主起得来」证明不了生产启动路径。
 两个工程的 configuration 命名不同（生产带 buildProfile flavor 后缀，宿主没有），因此
 build profile 由调用方显式交出，本脚本不从 configuration 名反推。
+
+构建期默认供给（embedded_default_package）已退役：资源目录只嵌 trust envelope，
+并清除任何残留 package/默认供给材料；target runtime package 不得随构建进入产物。
 """
 from __future__ import annotations
 
+import argparse
 import base64
 import json
 import os
@@ -115,32 +119,50 @@ def _verified_trust_envelope(trust_path: Path, build_profile: str) -> None:
             )
 
 
-def _embed(trust_path: Path, resource_root: Path) -> None:
-    resource_root.mkdir(parents=True, exist_ok=True)
-    # target runtime package 不得随构建进入产物：装配期只交 trust envelope，package 由
-    # 运行时 activation 供给。资源目录可被增量构建复用，因此每次都清掉残留 package。
-    package_destination = resource_root / "runtime-config-package.json"
-    if package_destination.exists() or package_destination.is_symlink():
-        package_destination.unlink()
-    destination = resource_root / "runtime-config-trust.json"
+# 已退役的默认供给材料命名：增量构建可能残留旧字节，装配期必须清除。
+_RETIRED_DEFAULT_PACKAGE_FILE_NAME = "runtime-config-default-package.json"
+_RETIRED_DEFAULT_MANIFEST_FILE_NAME = "runtime-config-default-manifest.json"
+
+
+def _copy_into_resources(source: Path, destination: Path) -> None:
     temporary = destination.with_suffix(destination.suffix + ".tmp")
-    shutil.copyfile(trust_path, temporary)
+    shutil.copyfile(source, temporary)
     os.chmod(temporary, 0o600)
     temporary.replace(destination)
 
 
+def _remove_if_present(destination: Path) -> None:
+    if destination.exists() or destination.is_symlink():
+        destination.unlink()
+
+
+def _embed(trust_path: Path, resource_root: Path) -> None:
+    resource_root.mkdir(parents=True, exist_ok=True)
+    # target runtime package 不得随构建进入产物：装配期只交 trust envelope，package 由
+    # 运行时 activation 供给。资源目录可被增量构建复用，因此每次都清掉残留 package
+    # 与已退役默认供给材料。
+    _remove_if_present(resource_root / "runtime-config-package.json")
+    _remove_if_present(resource_root / _RETIRED_DEFAULT_PACKAGE_FILE_NAME)
+    _remove_if_present(resource_root / _RETIRED_DEFAULT_MANIFEST_FILE_NAME)
+    _copy_into_resources(trust_path, resource_root / "runtime-config-trust.json")
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 5:
-        raise SystemExit(
-            "usage: build_embed_runtime_config_trust.py "
-            "<trust-path> <build-profile> <target-build-dir> <resources-folder-path>"
-        )
-    trust_path = Path(argv[1]).expanduser()
-    build_profile = argv[2].strip()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("trust_path")
+    parser.add_argument("build_profile")
+    parser.add_argument("target_build_dir")
+    parser.add_argument("resources_folder_path")
+    arguments = parser.parse_args(argv[1:])
+    trust_path = Path(arguments.trust_path).expanduser()
+    build_profile = arguments.build_profile.strip()
     if not build_profile:
         raise SystemExit("build profile must be declared by the calling build phase")
     _verified_trust_envelope(trust_path, build_profile)
-    _embed(trust_path, Path(argv[3]) / argv[4] / "qwq_runtime")
+    _embed(
+        trust_path,
+        Path(arguments.target_build_dir) / arguments.resources_folder_path / "qwq_runtime",
+    )
     return 0
 
 

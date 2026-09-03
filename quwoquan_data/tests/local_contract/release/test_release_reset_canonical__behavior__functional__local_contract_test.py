@@ -57,7 +57,6 @@ def _receipt(output_root: Path, environment: str) -> None:
 
 def test_release_reset_canonical__clears_only_canonical_output_after_baseline_receipts__functional__local_contract(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     release_root = tmp_path / "data/releases"
     output_root = tmp_path
@@ -68,7 +67,6 @@ def test_release_reset_canonical__clears_only_canonical_output_after_baseline_re
     (publish_root / "creators/example").mkdir(parents=True)
     (publish_root / "entities/example").mkdir(parents=True)
     (publish_root / "tags/Topic").mkdir(parents=True)
-    monkeypatch.setattr(reset, "active_runtime_processes", lambda: [])
 
     removed = reset.reset_canonical_publish(
         empty_baseline_release=BASELINE_ID,
@@ -107,13 +105,11 @@ def _publish_one_object(publish_root: Path) -> None:
 
 def test_release_reset_canonical__drops_the_inventory_sidecar_with_the_tree__functional__local_contract(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     release_root = tmp_path / "data/releases"
     publish_root = tmp_path / "publish"
     _baseline(release_root)
     _receipt(tmp_path, "alpha")
-    monkeypatch.setattr(reset, "active_runtime_processes", lambda: [])
     _publish_one_object(publish_root)
     assert load_or_bootstrap_inventory(publish_root)["stats"]["fileCount"] == 1
 
@@ -136,12 +132,10 @@ def test_release_reset_canonical__drops_the_inventory_sidecar_with_the_tree__fun
 
 def test_release_reset_canonical__blocks_without_every_baseline_receipt__functional__local_contract(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     release_root = tmp_path / "data/releases"
     _baseline(release_root)
     _receipt(tmp_path, "alpha")
-    monkeypatch.setattr(reset, "active_runtime_processes", lambda: [])
 
     with pytest.raises(RuntimeError, match="empty baseline is not applied"):
         reset.reset_canonical_publish(

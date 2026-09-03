@@ -142,6 +142,16 @@ class CanonicalLaunchExecutorContractTest(
     CanonicalLaunchPlatformContractMixin,
     unittest.TestCase,
 ):
+    def test_platform_drivers_execute_canonical_install_and_launch_commands(
+        self,
+    ) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {"QWQ_REAL_FLUTTER": "flutter"},
+            clear=False,
+        ):
+            super().test_platform_drivers_execute_canonical_install_and_launch_commands()
+
     def test_private_runtime_file_allowlist_is_exact(self) -> None:
         for file_name in (
             executor.REQUEST_FILE_NAME,
@@ -526,6 +536,7 @@ class CanonicalLaunchExecutorContractTest(
                 "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": "sha256:" + "b" * 64,
                 "QWQ_CONTENT_RELEASE_ID": "release-1",
                 "ANDROID_LOCAL_GATEWAY_BASE_URL": "http://127.0.0.1:8080",
+                "FLUTTER_STORAGE_BASE_URL": "https://ambient-flutter.invalid",
                 "QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT": "/tmp/profile-trust",
                 "QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH": "/tmp/profile-trust.json",
                 "QWQ_APP_RUNTIME_CONFIG_TRUST_PATH": "/tmp/profile-trust.json",
@@ -560,6 +571,7 @@ class CanonicalLaunchExecutorContractTest(
         self.assertNotIn("QWQ_LAUNCH_TARGET", environment)
         self.assertNotIn("QWQ_CONTENT_RELEASE_ID", environment)
         self.assertNotIn("ANDROID_LOCAL_GATEWAY_BASE_URL", environment)
+        self.assertNotIn("FLUTTER_STORAGE_BASE_URL", environment)
 
     def test_ios_child_environment_requires_exact_cocoapods_identity(self) -> None:
         driver = executor.IOSSimulatorPlatformDriver(
@@ -568,33 +580,226 @@ class CanonicalLaunchExecutorContractTest(
             entrypoint="lib/main_prod.dart",
         )
         exact_environment = {"PATH": "/exact/bin"}
+        ambient_build_settings = {
+            key: f"/stale/projection/{key.lower()}"
+            for key in executor.XCODE_BUILD_ISOLATION_ENVIRONMENT_KEYS
+        }
         with mock.patch.object(
             activation,
             "validate_cocoapods_child_environment",
-            return_value=(mock.sentinel.identity, exact_environment),
+            return_value=(mock.sentinel.identity, exact_environment.copy()),
         ) as validate:
-            child = driver.child_environment({"PATH": "/hostile/bin"})
+            child = driver.child_environment(
+                {
+                    "PATH": "/hostile/bin",
+                    **ambient_build_settings,
+                    "QWQ_APP_RUNTIME_ENV": "hostile",
+                }
+            )
 
-        self.assertEqual(child, exact_environment)
+        self.assertEqual(child, {"PATH": "/exact/bin"})
         validate.assert_called_once()
-        self.assertEqual(validate.call_args.args[0]["PATH"], "/hostile/bin")
+        validated_input = validate.call_args.args[0]
+        self.assertEqual(validated_input["PATH"], "/hostile/bin")
+        self.assertTrue(
+            executor.XCODE_BUILD_ISOLATION_ENVIRONMENT_KEYS.isdisjoint(
+                validated_input
+            )
+        )
+        self.assertNotIn("QWQ_APP_RUNTIME_ENV", validated_input)
 
-    def test_ios_build_and_attach_use_the_same_validated_child_environment(self) -> None:
+    def test_ios_builds_use_projection_private_xcode_build_settings(self) -> None:
+        projection_root = Path(tempfile.gettempdir()).resolve() / "qwq-projections"
+        projected_app_dirs = (
+            projection_root / "projection-a/quwoquan_app",
+            projection_root / "projection-b/quwoquan_app",
+        )
+        driver_contracts = (
+            (
+                executor.IOSSimulatorPlatformDriver,
+                "build/ios/iphonesimulator/Runner.app",
+            ),
+            (
+                executor.IOSPhysicalPlatformDriver,
+                "build/ios/iphoneos/Runner.app",
+            ),
+        )
+        observed_setting_sets: set[tuple[str, ...]] = set()
+
+        for projected_app_dir in projected_app_dirs:
+            for driver_type, artifact_relative_path in driver_contracts:
+                with self.subTest(
+                    projection=projected_app_dir,
+                    driver=driver_type.__name__,
+                ):
+                    driver = driver_type(
+                        device_id="ios-device-1",
+                        application_id="com.leadwise.quwoquan.nonprod.debug",
+                        entrypoint="lib/main_prod.dart",
+                    )
+                    ambient_build_settings = {
+                        key: f"/stale/projection/{key.lower()}"
+                        for key in (
+                            executor.XCODE_BUILD_ISOLATION_ENVIRONMENT_KEYS
+                        )
+                    }
+
+                    def validate_cocoapods(environment):
+                        self.assertTrue(
+                            executor.XCODE_BUILD_ISOLATION_ENVIRONMENT_KEYS.isdisjoint(
+                                environment
+                            )
+                        )
+                        return mock.sentinel.identity, dict(environment)
+
+                    with mock.patch.object(
+                        executor,
+                        "APP_DIR",
+                        projected_app_dir,
+                    ), mock.patch.object(
+                        activation,
+                        "validate_cocoapods_child_environment",
+                        side_effect=validate_cocoapods,
+                    ) as validate, mock.patch.object(
+                        executor,
+                        "_run_checked",
+                    ) as run_checked, mock.patch.object(
+                        Path,
+                        "exists",
+                        return_value=True,
+                    ):
+                        driver.build(
+                            {
+                                "PATH": "/canonical/bin",
+                                "CP_HOME_DIR": "/canonical/cocoapods",
+                                **ambient_build_settings,
+                                "QWQ_APP_RUNTIME_ENV": "hostile",
+                                "QWQ_ANDROID_RELEASE_STORE_PASSWORD": "secret",
+                            }
+                        )
+                        self.assertEqual(
+                            driver.artifact_path(),
+                            projected_app_dir / artifact_relative_path,
+                        )
+
+                    validate.assert_called_once()
+                    child = run_checked.call_args.kwargs["environment"]
+                    expected_build_settings = {
+                        key: str(projected_app_dir / relative_path)
+                        for key, relative_path in (
+                            executor.IOS_XCODE_BUILD_ISOLATION_RELATIVE_PATHS.items()
+                        )
+                    }
+                    actual_build_settings = {
+                        key: value
+                        for key, value in child.items()
+                        if key.startswith("FLUTTER_XCODE_")
+                    }
+                    self.assertEqual(
+                        actual_build_settings, expected_build_settings
+                    )
+                    self.assertEqual(
+                        set(actual_build_settings),
+                        {
+                            "FLUTTER_XCODE_OBJROOT",
+                            "FLUTTER_XCODE_MODULE_CACHE_DIR",
+                            "FLUTTER_XCODE_SHARED_PRECOMPS_DIR",
+                        },
+                    )
+                    self.assertEqual(
+                        len(set(actual_build_settings.values())),
+                        len(actual_build_settings),
+                    )
+                    self.assertEqual(child["PATH"], "/canonical/bin")
+                    self.assertEqual(
+                        child["CP_HOME_DIR"], "/canonical/cocoapods"
+                    )
+                    self.assertNotIn("QWQ_APP_RUNTIME_ENV", child)
+                    self.assertFalse(
+                        any(
+                            key.startswith("QWQ_ANDROID_RELEASE_")
+                            for key in child
+                        )
+                    )
+                    observed_setting_sets.add(
+                        tuple(sorted(actual_build_settings.values()))
+                    )
+
+        self.assertEqual(len(observed_setting_sets), len(projected_app_dirs))
+
+    def test_android_build_does_not_receive_xcode_isolation_settings(self) -> None:
+        driver = executor.AndroidPlatformDriver(
+            device_id="android-device-1",
+            application_id="com.leadwise.quwoquan.nonprod.debug",
+            entrypoint="lib/main_prod.dart",
+        )
+        ambient_build_settings = {
+            key: f"/stale/projection/{key.lower()}"
+            for key in executor.XCODE_BUILD_ISOLATION_ENVIRONMENT_KEYS
+        }
+        with mock.patch.object(
+            activation,
+            "validate_cocoapods_child_environment",
+        ) as validate, mock.patch.object(
+            executor,
+            "_run_checked",
+        ) as run_checked, mock.patch.object(
+            Path,
+            "exists",
+            return_value=True,
+        ):
+            driver.build(
+                {
+                    "PATH": "/canonical/bin",
+                    **ambient_build_settings,
+                    "QWQ_APP_RUNTIME_ENV": "hostile",
+                }
+            )
+
+        validate.assert_not_called()
+        child = run_checked.call_args.kwargs["environment"]
+        self.assertEqual(child, {"PATH": "/canonical/bin"})
+        self.assertEqual(
+            driver.artifact_path(),
+            executor.APP_DIR
+            / "build/app/outputs/flutter-apk/app-nonprod-debug.apk",
+        )
+
+    def test_ios_build_only_settings_do_not_enter_attach_environment(self) -> None:
         driver = executor.IOSSimulatorPlatformDriver(
             device_id="simulator-1",
             application_id="com.leadwise.quwoquan.nonprod.debug",
             entrypoint="lib/main_prod.dart",
         )
-        build_environment = {"PATH": "/exact/bin", "PHASE": "build"}
-        attach_environment = {"PATH": "/exact/bin", "PHASE": "attach"}
         process = _AttachProcess(
             '[{"event":"app.started","params":{"appId":"daemon-app-1"}}]\n'
         )
-        with mock.patch.object(
-            driver,
-            "child_environment",
-            side_effect=(build_environment, attach_environment),
-        ) as child_environment, mock.patch.object(
+        ambient_build_settings = {
+            key: f"/stale/projection/{key.lower()}"
+            for key in executor.XCODE_BUILD_ISOLATION_ENVIRONMENT_KEYS
+        }
+
+        def validate_cocoapods(environment):
+            self.assertTrue(
+                executor.XCODE_BUILD_ISOLATION_ENVIRONMENT_KEYS.isdisjoint(
+                    environment
+                )
+            )
+            return mock.sentinel.identity, dict(environment)
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "PATH": "/exact/attach/bin",
+                "PHASE": "attach",
+                **ambient_build_settings,
+            },
+            clear=True,
+        ), mock.patch.object(
+            activation,
+            "validate_cocoapods_child_environment",
+            side_effect=validate_cocoapods,
+        ) as validate, mock.patch.object(
             executor,
             "_run_checked",
         ) as run_checked, mock.patch.object(
@@ -618,346 +823,46 @@ class CanonicalLaunchExecutorContractTest(
             return_value=(),
         ):
             artifact_path.return_value.exists.return_value = True
-            driver.build({"PATH": "/hostile/build"})
+            driver.build(
+                {
+                    "PATH": "/exact/build/bin",
+                    "PHASE": "build",
+                    **ambient_build_settings,
+                }
+            )
             self.assertEqual(
                 driver.attach((), timeout_seconds=10.0, on_attached=lambda: None),
                 0,
             )
 
-        self.assertEqual(child_environment.call_count, 2)
-        run_checked.assert_called_once()
-        self.assertEqual(run_checked.call_args.kwargs["environment"], build_environment)
-        self.assertEqual(popen.call_args.kwargs["env"], attach_environment)
-
-    def test_attach_argument_sanitizer_rejects_executor_owned_inputs(self) -> None:
-        for arguments in (
-            ("--flavor", "prod"),
-            ("--flavor=prod",),
-            ("--dart-define", "ENV=prod"),
-            ("--dart-define=ENV=prod",),
-            ("-DENV=prod",),
-            ("--debug-uri", "http://127.0.0.1:9999/token/"),
-            ("--debug-uri=http://127.0.0.1:9999/token/",),
-            ("--vm-service-port", "4567"),
-            ("--vm-service-port=4567",),
-            ("--device-timeout", "5"),
-            ("--device-timeout=5",),
-            ("--device-connection", "wireless"),
-            ("--device-user", "10"),
-            ("--release",),
-            ("--machine",),
-        ):
-            with self.subTest(arguments=arguments):
-                with self.assertRaises(executor.CanonicalExecutorError):
-                    executor._sanitize_attach_arguments(arguments)
-
-        for arguments in (
-            ("-d", "device-1"),
-            ("--device-id", "device-1"),
-            ("--device-id=device-1",),
-            ("-d",),
-            ("--device-id",),
-        ):
-            with self.subTest(device_arguments=arguments):
-                with self.assertRaises(executor.CanonicalExecutorError):
-                    executor._sanitize_attach_arguments(arguments)
-
-        self.assertEqual(executor._sanitize_attach_arguments(("--verbose",)), ["--verbose"])
-
-    def test_main_rejects_executor_owned_attach_inputs_before_platform_actions(
-        self,
-    ) -> None:
-        driver = mock.Mock()
-        with mock.patch.object(
-            executor,
-            "_load_handoff",
-            return_value={},
-        ), mock.patch.object(
-            executor,
-            "build_platform_driver",
-            return_value=driver,
-        ), mock.patch.object(
-            sys,
-            "argv",
-            [
-                "run_app_instance.py",
-                "--device-kind",
-                "android_emulator",
-                "--device",
-                "device-1",
-                "--application-id",
-                "com.leadwise.quwoquan.nonprod.debug",
-                "--entrypoint",
-                "lib/main_prod.dart",
-                "--",
-                "--dart-define=APP_RUNTIME_ENV=prod",
-            ],
-        ):
-            self.assertEqual(executor.main(), 2)
-
-        driver.build.assert_not_called()
-        driver.install.assert_not_called()
-        driver.write_activation_request.assert_not_called()
-        driver.launch_activation.assert_not_called()
-        driver.launch_application.assert_not_called()
-        driver.attach.assert_not_called()
-
-    def test_main_rejects_invalid_timeouts_before_loading_inputs_or_platform_actions(
-        self,
-    ) -> None:
-        for flag, value in (
-            ("--activation-timeout-seconds", "0"),
-            ("--activation-timeout-seconds", "-1"),
-            ("--activation-timeout-seconds", "nan"),
-            ("--activation-timeout-seconds", "inf"),
-            ("--attach-timeout-seconds", "0"),
-            ("--attach-timeout-seconds", "-1"),
-            ("--attach-timeout-seconds", "nan"),
-            ("--attach-timeout-seconds", "inf"),
-        ):
-            with self.subTest(flag=flag, value=value), mock.patch.object(
-                executor,
-                "_load_handoff",
-            ) as load_handoff, mock.patch.object(
-                executor,
-                "build_platform_driver",
-            ) as build_driver, mock.patch.object(
-                sys,
-                "argv",
-                [
-                    "run_app_instance.py",
-                    "--device-kind",
-                    "android_emulator",
-                    "--device",
-                    "device-1",
-                    "--application-id",
-                    "com.leadwise.quwoquan.nonprod.debug",
-                    "--entrypoint",
-                    "lib/main_prod.dart",
-                    flag,
-                    value,
-                ],
-            ):
-                with self.assertRaises(SystemExit) as raised:
-                    executor.main()
-                self.assertEqual(raised.exception.code, 2)
-                load_handoff.assert_not_called()
-                build_driver.assert_not_called()
-
-    def test_launcher_rejects_device_conflicts_and_invalid_timeouts_before_tools(
-        self,
-    ) -> None:
-        launcher = APP_DIR / "run.sh"
-        cases = (
-            (["-d"], {}, "requires a device id"),
-            (
-                ["-d", "device-a", "--device-id=device-b"],
-                {},
-                "conflicting device selectors",
-            ),
-            (
-                ["-d", "device-a"],
-                {"QWQ_APP_ACTIVATION_TIMEOUT_SECONDS": "nan"},
-                "positive finite numbers",
-            ),
-            (
-                ["-d", "device-a"],
-                {"QWQ_APP_LAUNCH_TIMEOUT_SECONDS": "0"},
-                "positive finite numbers",
-            ),
-            (
-                ["-d", "device-a", "--dart-define=APP_RUNTIME_ENV=prod"],
-                {},
-                "canonical executor owns Flutter attach argument",
-            ),
-            (
-                ["-d", "device-a", "--debug-uri=http://127.0.0.1:9999/token/"],
-                {},
-                "canonical executor owns Flutter attach argument",
-            ),
-            (
-                ["-d", "device-a", "--vm-service-port=4567"],
-                {},
-                "canonical executor owns Flutter attach argument",
-            ),
-            (
-                ["-d", "device-a", "--device-timeout", "5"],
-                {},
-                "canonical executor owns Flutter attach argument",
-            ),
-        )
-        for arguments, overrides, expected_error in cases:
-            with self.subTest(arguments=arguments, overrides=overrides), tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
-                tool_log = root / "tools.log"
-                for tool in ("flutter", "adb", "xcrun"):
-                    executable = root / tool
-                    executable.write_text(
-                        "#!/usr/bin/env bash\n"
-                        f"printf '%s\\n' {tool!r} >> {str(tool_log)!r}\n"
-                        "exit 97\n",
-                        encoding="utf-8",
-                    )
-                    executable.chmod(0o755)
-                environment = {
-                    **os.environ,
-                    "PATH": f"{root}{os.pathsep}{os.environ.get('PATH', '')}",
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                    **overrides,
-                }
-                result = subprocess.run(
-                    ["bash", str(launcher), *arguments],
-                    cwd=ROOT,
-                    env=environment,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                self.assertEqual(
-                    result.returncode,
-                    2,
-                    result.stdout + result.stderr,
-                )
-                self.assertIn(expected_error, result.stderr)
-                self.assertFalse(tool_log.exists())
-
-    def test_attach_timeout_terminates_and_reaps_the_process_group(self) -> None:
-        process = _AttachProcess(wait_timeouts=1)
-        driver = executor.AndroidPlatformDriver(
-            device_id="device-1",
-            application_id="com.leadwise.quwoquan.nonprod.debug",
-            entrypoint="lib/main_prod.dart",
-        )
-        with mock.patch.object(
-            executor.subprocess, "Popen", return_value=process
-        ), mock.patch.object(
-            executor.time, "monotonic", side_effect=(0.0, 2.0)
-        ), mock.patch.object(executor.os, "killpg") as killpg:
-            with self.assertRaisesRegex(
-                executor.CanonicalExecutorError,
-                "did not establish a VM service session",
-            ):
-                driver.attach((), timeout_seconds=1.0, on_attached=lambda: None)
-
-        self.assertEqual(
-            killpg.call_args_list,
-            [mock.call(process.pid, signal.SIGTERM), mock.call(process.pid, signal.SIGKILL)],
-        )
-        self.assertEqual(process.wait_calls, [5.0, None])
-
-    def test_attach_interrupt_escalates_and_reaps_before_returning(self) -> None:
-        process = _AttachProcess(wait_timeouts=2)
-        driver = executor.AndroidPlatformDriver(
-            device_id="device-1",
-            application_id="com.leadwise.quwoquan.nonprod.debug",
-            entrypoint="lib/main_prod.dart",
-        )
-        with mock.patch.object(
-            executor.subprocess, "Popen", return_value=process
-        ), mock.patch.object(
-            executor.queue.Queue, "get", side_effect=KeyboardInterrupt
-        ), mock.patch.object(executor.os, "killpg") as killpg:
-            self.assertEqual(
-                driver.attach((), timeout_seconds=10.0, on_attached=lambda: None),
-                130,
+        self.assertEqual(validate.call_count, 2)
+        build_child = run_checked.call_args.kwargs["environment"]
+        expected_build_settings = {
+            key: str(executor.APP_DIR / relative_path)
+            for key, relative_path in (
+                executor.IOS_XCODE_BUILD_ISOLATION_RELATIVE_PATHS.items()
             )
-
+        }
         self.assertEqual(
-            killpg.call_args_list,
-            [
-                mock.call(process.pid, signal.SIGINT),
-                mock.call(process.pid, signal.SIGTERM),
-                mock.call(process.pid, signal.SIGKILL),
-            ],
+            {
+                key: value
+                for key, value in build_child.items()
+                if key.startswith("FLUTTER_XCODE_")
+            },
+            expected_build_settings,
         )
-        self.assertEqual(process.wait_calls, [5.0, 5.0, None])
-
-    def test_attach_term_and_hup_forward_escalate_and_reap_before_returning(self) -> None:
-        cases = (
-            (
-                signal.SIGTERM,
-                1,
-                [signal.SIGTERM, signal.SIGKILL],
-                [5.0, None],
-            ),
-            (
-                signal.SIGHUP,
-                2,
-                [signal.SIGHUP, signal.SIGTERM, signal.SIGKILL],
-                [5.0, 5.0, None],
-            ),
-        )
-        for received_signal, wait_timeouts, expected_signals, expected_waits in cases:
-            with self.subTest(received_signal=received_signal):
-                process = _AttachProcess(wait_timeouts=wait_timeouts)
-                driver = executor.AndroidPlatformDriver(
-                    device_id="device-1",
-                    application_id="com.leadwise.quwoquan.nonprod.debug",
-                    entrypoint="lib/main_prod.dart",
-                )
-                handlers: dict[int, object] = {}
-
-                def install_handler(signum: int, handler: object) -> object:
-                    if callable(handler):
-                        handlers[signum] = handler
-                    return signal.SIG_DFL
-
-                def receive_signal(*_: object, **__: object) -> None:
-                    handler = handlers[received_signal]
-                    assert callable(handler)
-                    handler(received_signal, None)
-
-                with mock.patch.object(
-                    executor.subprocess, "Popen", return_value=process
-                ), mock.patch.object(
-                    executor.signal, "signal", side_effect=install_handler
-                ), mock.patch.object(
-                    executor.queue.Queue, "get", side_effect=receive_signal
-                ), mock.patch.object(executor.os, "killpg") as killpg:
-                    self.assertEqual(
-                        driver.attach(
-                            (), timeout_seconds=10.0, on_attached=lambda: None
-                        ),
-                        128 + received_signal,
-                    )
-
-                self.assertEqual(
-                    killpg.call_args_list,
-                    [mock.call(process.pid, item) for item in expected_signals],
-                )
-                self.assertEqual(process.wait_calls, expected_waits)
-                self.assertIn(signal.SIGTERM, handlers)
-                self.assertIn(signal.SIGHUP, handlers)
-
-    def test_attach_callback_failure_terminates_and_reaps_process_group(self) -> None:
-        process = _AttachProcess(
-            '[{"event":"app.started","params":{"appId":"daemon-app-1"}}]\n',
-            wait_timeouts=1,
-        )
-        driver = executor.AndroidPlatformDriver(
-            device_id="device-1",
-            application_id="com.leadwise.quwoquan.nonprod.debug",
-            entrypoint="lib/main_prod.dart",
-        )
-        with mock.patch.object(
-            executor.subprocess, "Popen", return_value=process
-        ), mock.patch.object(
-            executor.threading, "Thread", _ImmediateThread
-        ), mock.patch.object(executor.os, "killpg") as killpg:
-            with self.assertRaisesRegex(RuntimeError, "phase receipt write failed"):
-                driver.attach(
-                    (),
-                    timeout_seconds=10.0,
-                    on_attached=mock.Mock(
-                        side_effect=RuntimeError("phase receipt write failed")
-                    ),
-                )
-
+        self.assertEqual(build_child["PHASE"], "build")
+        attach_child = popen.call_args.kwargs["env"]
         self.assertEqual(
-            killpg.call_args_list,
-            [mock.call(process.pid, signal.SIGTERM), mock.call(process.pid, signal.SIGKILL)],
+            attach_child,
+            {"PATH": "/exact/attach/bin", "PHASE": "attach"},
         )
-        self.assertEqual(process.wait_calls, [5.0, None])
+        self.assertTrue(
+            executor.XCODE_BUILD_ISOLATION_ENVIRONMENT_KEYS.isdisjoint(
+                attach_child
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

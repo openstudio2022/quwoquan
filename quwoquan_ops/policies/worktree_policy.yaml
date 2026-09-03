@@ -4,8 +4,8 @@
 # 分支白名单不在本文件重复声明，一律读 quwoquan_ops/policies/branch_policy.yaml 的
 # allowed_local_branches；两份声明会立刻成为第二真相源。
 
-# 创建授权凭据：随命令一次性传递的显式意图声明。
-# 不存在「已授权工作副本清单」——授权是交互闸，不是台账。
+# 创建授权凭据：随命令一次性传递的显式意图声明（留痕用，hook 只提醒不阻断）。
+# 不存在「已授权工作副本清单」——授权是行为规则，不是台账。
 authorization_env_var: QWQ_WORKTREE_AUTHZ
 
 # 未合入工作的滞留阈值与提醒最小间隔。
@@ -20,7 +20,7 @@ discovery_roots:
   - "/private/tmp"
 discovery_max_depth: 2
 
-# 刻意不设 linked worktree 数量硬上限：授权闸已管住创建入口，再加一道上限会让
+# 刻意不设 linked worktree 数量硬上限：创建入口已有授权提醒，再加一道上限会让
 # 「已获授权的工作副本」同时把聚合门禁打红，制造授权与门禁互斥的死结。
 # 数量压力由 REQ-002 的滞留提醒承担，它针对的是真正的危害——未合入工作滞留。
 

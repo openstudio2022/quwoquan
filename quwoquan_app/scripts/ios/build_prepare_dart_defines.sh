@@ -31,10 +31,12 @@ fi
 
 # trust 是 AppArtifact 的第一道制品门：先于 Python/toolchain、Flutter backend 与
 # 任何编译动作判否，确保 raw Xcode 也得到与 canonical executor 相同的 typed blocker。
+# 构建期默认供给（embedded_default_package）已退役：一切 configuration 缺外部注入
+# 即 fail-closed；字面 flutter run 经受管 dispatcher 进入 canonical launcher 闭环。
 RUNTIME_TRUST_PATH="${QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH:-}"
 if [[ -z "$RUNTIME_TRUST_PATH" ]]; then
-  echo "[ios-runtime-config] GATE_BLOCK: $TRUST_BLOCKER: build-profile runtime trust envelope is required for every iOS AppArtifact." >&2
-  echo "[ios-runtime-config] launch through ./quwoquan_app/run.sh -d <device>, or run 'make app-activate-flutter-facade', Reload Window, then use a new workspace terminal whose 'command -v flutter' resolves to the workspace facade; both canonical paths materialize the trust envelope." >&2
+  echo "[ios-runtime-config] GATE_BLOCK: $TRUST_BLOCKER: build-profile runtime trust envelope is required for every ${CONFIGURATION:-} iOS AppArtifact." >&2
+  echo "[ios-runtime-config] launch through ./quwoquan_app/run.sh -d <device>; the canonical launcher materializes the trust envelope." >&2
   exit 2
 fi
 if [[ -z "${TARGET_BUILD_DIR:-}" || -z "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ]]; then
@@ -137,6 +139,7 @@ if [[ -n "${QWQ_APP_RUNTIME_TRUSTED_PUBLIC_KEYS_JSON:-}" ]]; then
 fi
 
 # trust 嵌入与 Patrol UAT test host 共用同一份实现，宿主与生产因此受同一组判否约束。
+# 只嵌 trust envelope，任何 runtime package 材料不得进入 Runner.app。
 if ! "$RUNTIME_PYTHON" "$APP_DIR/scripts/ios/build_embed_runtime_config_trust.py" \
   "$RUNTIME_TRUST_PATH" "$BUILD_PROFILE" \
   "$TARGET_BUILD_DIR" "$UNLOCALIZED_RESOURCES_FOLDER_PATH"; then

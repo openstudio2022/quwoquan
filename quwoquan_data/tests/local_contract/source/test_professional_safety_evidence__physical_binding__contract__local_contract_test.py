@@ -174,6 +174,12 @@ def test_video_evidence_binds_manual_file_probe_and_contact_sheet(
         "sourceUrl": "https://commons.wikimedia.org/wiki/File:Panda.webm",
         "acquisitionPath": "manual_file",
         "manualFile": "panda.mp4",
+        "provider": "wikimedia_commons_video",
+        "assetUrl": "https://upload.wikimedia.org/wikipedia/commons/Panda.webm",
+        "creator": "Commons Creator",
+        "license": "CC BY 4.0",
+        "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+        "authorizationProof": "https://commons.wikimedia.org/wiki/File:Panda.webm",
         "safetyReview": _review("evidence/video-a.json"),
     }
     review = item["safetyReview"]
@@ -190,6 +196,15 @@ def test_video_evidence_binds_manual_file_probe_and_contact_sheet(
         "contactSheetRef": "evidence/panda-contact.jpg",
         "contactSheetSha256": file_sha256(contact),
         "mediaProbe": _video_probe(),
+        "sourceAttribution": {
+            "provider": item["provider"],
+            "sourcePostUrl": item["sourceUrl"],
+            "originalAssetUrl": item["assetUrl"],
+            "creator": item["creator"],
+            "license": item["license"],
+            "termsUrl": item["termsUrl"],
+            "authorizationProof": item["authorizationProof"],
+        },
         **{key: review[key] for key in (
             "status", "entityMatch", "privacyRisk", "minorRisk",
             "maliciousMediaRisk", "watermarkStatus", "reviewedAt", "reviewer",

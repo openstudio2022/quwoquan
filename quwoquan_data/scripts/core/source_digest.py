@@ -26,7 +26,6 @@ _SOURCE_DEFINITION_INPUT_ROOTS = (
     "quwoquan_data/verticals/travel",
     "quwoquan_data/reference",
     "quwoquan_data/requirements.txt",
-    "quwoquan_data/requirements-cursor.txt",
     "quwoquan_service/services/content-service/contracts/media/media_asset",
     "quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml",
     "quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml",
@@ -34,7 +33,6 @@ _SOURCE_DEFINITION_INPUT_ROOTS = (
 _EXECUTION_BUNDLE_INPUT_ROOTS = (
     "quwoquan_data/scripts",
     "quwoquan_data/requirements.txt",
-    "quwoquan_data/requirements-cursor.txt",
     "quwoquan_ops/policies/branch_policy.yaml",
     "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/spec.md",
     "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md",

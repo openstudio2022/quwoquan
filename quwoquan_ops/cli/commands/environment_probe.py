@@ -511,9 +511,12 @@ def _run_environment_integration_probe(
     require_non_empty_content_feed: bool = False,
     research_anonymous_convergence: bool = False,
     research_consumer_token: str = "",
+    research_consumer_attestation: str = "",
     release_post_expectations: dict[str, set[str]] | None = None,
     release_search_canaries: Sequence[Mapping[str, str]] = (),
     release_samples: Sequence[Mapping[str, Any]] = (),
+    release_creator_profiles: Sequence[Mapping[str, str]] = (),
+    release_signed_media: Sequence[Mapping[str, Any]] = (),
     release_readiness_path: Path | None = None,
     video_page_size: int = 1,
     only_checks: tuple[str, ...] = (),
@@ -536,7 +539,15 @@ def _run_environment_integration_probe(
         "--report",
         str(report_file),
     ]
-    if require_non_empty_content_feed:
+    if bool(research_consumer_token) != bool(research_consumer_attestation):
+        raise ValueError(
+            "research consumer bearer and attestation must be supplied together"
+        )
+    if research_consumer_token and research_anonymous_convergence:
+        raise ValueError(
+            "research consumer and anonymous convergence identities conflict"
+        )
+    if require_non_empty_content_feed or research_consumer_token:
         argv.append("--require-non-empty-content-feed")
     if research_anonymous_convergence:
         argv.append("--research-anonymous-convergence")
@@ -547,6 +558,7 @@ def _run_environment_integration_probe(
         argv.extend(["--only-check", check_name])
     expectation_flags = {
         "content_feed": "--expected-discovery-post-id",
+        "homepage_recommend": "--expected-homepage-recommend-post-id",
         "video_book_feed": "--expected-video-post-id",
         "premium_feed": "--expected-premium-video-post-id",
     }
@@ -575,6 +587,30 @@ def _run_environment_integration_probe(
                 "--release-sample",
                 json.dumps(
                     dict(sample),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+            ]
+        )
+    for profile in release_creator_profiles:
+        argv.extend(
+            [
+                "--release-creator-profile",
+                json.dumps(
+                    dict(profile),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+            ]
+        )
+    for asset in release_signed_media:
+        argv.extend(
+            [
+                "--release-signed-media",
+                json.dumps(
+                    dict(asset),
                     ensure_ascii=False,
                     sort_keys=True,
                     separators=(",", ":"),
@@ -621,6 +657,7 @@ def _run_environment_integration_probe(
     temporary_actor_instance_id = ""
     public_release_checks = {
         "content_feed",
+        "homepage_recommend",
         "video_book_feed",
         "premium_feed",
         "media_sample",
@@ -681,6 +718,8 @@ def _run_environment_integration_probe(
             probe_env["BETA_TEST_AUTH_TOKEN"] = token
         elif env_name == "prod":
             probe_env["PROD_TEST_AUTH_TOKEN"] = token
+    if research_consumer_attestation:
+        probe_env["RESEARCH_CONSUMER_ATTESTATION"] = research_consumer_attestation
     probe_result = _stackctl._run_script_probe(
         name=probe_name,
         scope="full",

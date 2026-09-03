@@ -2,30 +2,21 @@
 
 本文件只声明全仓始终成立的执行不变量。领域、服务、功能、交付件和 Review 角色约束按目标渐进加载，不复制到这里。
 
-## 最小上下文
+## Skill-first 最小上下文
 
-1. 先读本文件与目标路径上最近的子树 `AGENTS.md`。
-2. 已知 spec 或代码路径时运行 `make feature-context TARGET=<path>`，消费默认 compact manifest；只有人工诊断才请求 expanded 格式。
-3. manifest 是开发 PRE 与 Review POST 共享的 owner 事实。多 owner、无 owner 或锚点冲突时返回 typed `GATE_BLOCK`，先修正特性树归属。
-4. 只读 manifest 列出的 canonical spec/design/contracts、适用 `AGENTS.md`、Workflow Skill 与必要测试；不沿角色 reference 或 IDE rule 追链功能事实。
+顺序固定为：根 `AGENTS.md` → `.agents/skills/*/SKILL.md` metadata 选择唯一 Workflow Skill（简单问答可跳过）→ Skill body → PRE 确定 exact target → 最近子树 `AGENTS.md` → exact contexts/tests。已知路径可先读子树规则，但子树不参与路由；不建中央关键词表、resolver 或第二流程正文。
 
-Feature Tree 结构与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-tree/README.md)。AppRoot/L1/L2/L3 各自只拥有对应层级的 Journey/DOM/SIT/GWT 与设计决定；不建中央 backlog、feature registry、第二状态台账或完成日志。
+`explore`、`plan-next` 和 `continue` 的只读恢复 best-effort 运行 `make feature-context TARGET=<exact-path>`：唯一 owner 时消费 compact immutable exact ref；无 owner、多 owner或解析失败时记录 typed 结果，按当前 Git 快照继续只读且不得据此 mutation。`prd`、`design`、`dev` 写入前必须持有唯一 current ref，否则 `GATE_BLOCK`；显式或准出 Review 原样复用该 ref。expanded 仅供人工诊断。
+
+Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-tree/README.md)。各层只拥有本层 Journey/DOM/SIT/GWT 与设计决定；不建中央 backlog、registry、第二台账或完成日志。
 
 ## 工作流选择
 
-`.agents/skills/<name>/SKILL.md` 是 Workflow Skill 唯一真相源。根据用户意图选择最早且足以闭环的工作流：
+`.agents/skills/<name>/SKILL.md` 同时是 Workflow Skill 的唯一 authoring source 与宿主发现面。自然语言与显式入口必须加载同一 Skill body 并进入同一生命周期，不以机器 boolean、route receipt 或中央 manifest 自证同轨。
 
-- 定位与风险：`explore`
-- 需求与可测验收：`prd`
-- 边界、回滚、观测与架构决定：`design`
-- 已冻结规格的实现/修复：`dev`
-- 中断续跑：`continue`
-- 轮次收口：`plan-next`
-- 评审：`review`
-- 用户明确要求提交：`commit`
-- 环境、内容生产、事故检视与教训沉淀：分别由 `environment-ops`、`content-production`、`incident-inspection`、`distill` 按触发词加载。
-
-自然语言与显式 Skill 进入同一执行契约。Skill 就地声明触发与输入、执行、完成证据、失败停止和条件性交接；根规则不复制各工作流步骤。
+- 始终选择当前最早且足以闭环的 Skill；执行中若目标、证据或阻断改变，应重新按 metadata 自适应切换到足以闭环的 Skill，而不是沿用错误流程。
+- Skill 就地声明输入、执行、完成证据、失败停止和条件性交接；根规则不复制步骤，子树 `AGENTS.md` 不声明自然语言路由。
+- 工作流切换只改变执行契约，不扩大用户授权；提交、发布、外部写入、不可逆动作和高风险环境操作仍须满足原有明确授权与确认边界。
 
 ## 真相源与修改顺序
 
@@ -41,7 +32,7 @@ Feature Tree 结构与 owner 算法见 [`specs/feature-tree/README.md`](specs/fe
 
 - 验证与影响面匹配，分开报告源码/契约、本地测试、编译/打包/安装/启动、runtime health、release/import/readback 和真实设备/UAT；上游 PASS 不代表下游闭环。
 - 任一 required 证据失败时保留首个 typed blocker，不用旧 receipt、旧 plan 或旧指纹冒充当前完成。
-- Review PRE 不自动派 Reviewer；POST 消费同一 owner manifest，先执行去重命名 evidence，再按 Review Skill 的角色预算派发。Reviewer 不补跑 gate。
+- 开发期 POST 默认零 Reviewer，只报告命名 evidence；仅显式 `/review` 或准出（lane→`dev1.0` PR、handoff、release）派审，原样复用 owner manifest，先去重 evidence，再按主审加最多一名专审执行；Reviewer 不补跑 gate。
 - 无法证明时返回 `GATE_BLOCK`。失败门禁不包装为成功，也不因工作树其他红项隐藏本任务结果。
 
 ## 共享工作树与安全
@@ -53,7 +44,7 @@ Feature Tree 结构与 owner 算法见 [`specs/feature-tree/README.md`](specs/fe
 
 ## Git 不变量
 
-- 本地与远端只允许 `dev1.0` 与 `main`；日常开发合入 `dev1.0`，唯一 PR 边为 `dev1.0 -> main`。Prod source 必须是可达 `main` 的精确 SHA。
+- 本地与远端只允许 `dev1.0`、`main` 与六条声明的长期 `lane/*` 分支；日常开发只经 `lane/* -> dev1.0` PR 合入集成分支，唯一发布 PR 边为 `dev1.0 -> main`。Prod source 必须是可达 `main` 的精确 SHA。
 - 新建 linked worktree 或再次 clone 每次都须先取得用户明确授权，并以 `QWQ_WORKTREE_AUTHZ="<授权理由>" <command>` 执行。clone 后先运行 `make install-hooks`。
 - 只有用户明确要求时才创建提交；提交按 `commit` Skill 执行，不用 `--no-verify` 作为常规通道。
 

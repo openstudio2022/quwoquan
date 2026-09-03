@@ -12,23 +12,15 @@ import (
 
 // Store 使用 MongoDB 持久化可靠任务事实、通知账本与租约。
 type Store struct {
-	db                     *mongo.Database
-	outboxes               *mongo.Collection
-	tasks                  *mongo.Collection
-	notifications          *mongo.Collection
-	ledgers                *mongo.Collection
-	attempts               *mongo.Collection
-	resultOutboxes         *mongo.Collection
-	recoveryReceipts       *mongo.Collection
-	leases                 *mongo.Collection
-	dataContentCheckpoints *mongo.Collection
-}
-
-// DataContentStore is the Post import task adapter. It intentionally exposes
-// only the task state machine; notification, provider and shard-lease
-// collections are not initialized in the content database.
-type DataContentStore struct {
-	*Store
+	db               *mongo.Database
+	outboxes         *mongo.Collection
+	tasks            *mongo.Collection
+	notifications    *mongo.Collection
+	ledgers          *mongo.Collection
+	attempts         *mongo.Collection
+	resultOutboxes   *mongo.Collection
+	recoveryReceipts *mongo.Collection
+	leases           *mongo.Collection
 }
 
 var (
@@ -39,7 +31,6 @@ var (
 	_ reliabletask.IdempotentDLQRecoveryStore       = (*Store)(nil)
 	_ reliabletask.RetentionCleanupStore            = (*Store)(nil)
 	_ reliabletask.MetricsStore                     = (*Store)(nil)
-	_ reliabletask.DataContentExecutionStore        = (*DataContentStore)(nil)
 )
 
 // New 创建 MongoDB 可靠任务存储适配器。
@@ -70,19 +61,6 @@ func NewNotificationDeliveryJobs(db *mongo.Database) *Store {
 	store.notifications = db.Collection("notification_delivery_jobs")
 	store.ledgers = db.Collection("notification_delivery_job_recipients")
 	return store
-}
-
-// NewDataContentImport binds the reliable task state machine to collections
-// owned by content.Post. Reusing Integration's generic queue names would make
-// a Content worker a cross-service database writer.
-func NewDataContentImport(db *mongo.Database) *DataContentStore {
-	return &DataContentStore{Store: &Store{
-		db:                     db,
-		outboxes:               db.Collection("post_import_task_outbox"),
-		tasks:                  db.Collection("post_import_task"),
-		recoveryReceipts:       db.Collection("post_import_task_recovery_receipt"),
-		dataContentCheckpoints: db.Collection("post_import_task_checkpoint"),
-	}}
 }
 
 func newStore(db *mongo.Database) *Store {
@@ -227,24 +205,6 @@ func (s *Store) ensureRecoveryIndexes(ctx context.Context) error {
 				SetName("idx_reliable_task_recovery_receipt_expiry").
 				SetExpireAfterSeconds(0),
 		},
-	})
-	return err
-}
-
-func (s *DataContentStore) EnsureIndexes(ctx context.Context) error {
-	if err := s.ensureTaskIndexes(ctx); err != nil {
-		return err
-	}
-	if err := s.ensureRecoveryIndexes(ctx); err != nil {
-		return err
-	}
-	_, err := s.dataContentCheckpoints.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{
-			{Key: "executionId", Value: 1},
-			{Key: "stage", Value: 1},
-			{Key: "partitionKey", Value: 1},
-		},
-		Options: options.Index().SetUnique(true),
 	})
 	return err
 }

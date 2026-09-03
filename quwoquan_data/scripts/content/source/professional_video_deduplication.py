@@ -20,7 +20,7 @@ def source_identity(document: Mapping[str, Any]) -> tuple[str, str, str]:
     )
 
 
-def _receipt_source_identity_header(path: Path) -> tuple[str, str, str]:
+def _receipt_source_identity_header(path: Path) -> tuple[str, str, str] | None:
     """Read only the immutable identity header before current-schema validation.
 
     Historical receipts from another source identity are not candidates for
@@ -32,7 +32,10 @@ def _receipt_source_identity_header(path: Path) -> tuple[str, str, str]:
         raise TypeError(
             f"professional video acquisition receipt header must be an object: {path}"
         )
-    if document.get("schema") != "quwoquan_data.professional_video_acquisition_receipt":
+    schema = document.get("schema")
+    if schema == "quwoquan_data.professional_image_acquisition_receipt":
+        return None
+    if schema != "quwoquan_data.professional_video_acquisition_receipt":
         raise ValueError(
             f"professional video acquisition receipt header schema is invalid: {path}"
         )
@@ -62,7 +65,8 @@ def prior_content_index(
         if path.resolve() == current_receipt.resolve():
             continue
         ref = path.relative_to(output_root).as_posix()
-        if _receipt_source_identity_header(path) != source_identity:
+        header = _receipt_source_identity_header(path)
+        if header is None or header != source_identity:
             continue
         receipt = load_professional_video_acquisition_receipt(ref, root=output_root)
         for row in receipt["assets"]:

@@ -477,6 +477,14 @@ def _run_app_content_release_probe(
         or not raw_pagination["expectedWorkIds"]
         or not isinstance(raw_media, Mapping)
         or raw_media.get("automatic") is not True
+        or (
+            readiness_phase == ReadinessPhase.RESEARCH.value
+            and (
+                not isinstance(raw_media.get("homepageRecommendation"), Mapping)
+                or not isinstance(raw_media.get("typedVideo"), Mapping)
+                or not isinstance(raw_media.get("premiumVideo"), Mapping)
+            )
+        )
     ):
         raise ValueError("App content UAT plan is incomplete")
     video_work_ids = {
@@ -539,6 +547,61 @@ def _run_app_content_release_probe(
         and item.get("carrier") == "video"
         and str(item.get("readObjectId") or "")
     }
+    def _expected_ids(binding: object, *, label: str) -> set[str]:
+        if not isinstance(binding, Mapping):
+            raise ValueError(f"App content UAT {label} binding is missing")
+        raw_ids = binding.get("expectedPostIds")
+        if not isinstance(raw_ids, list):
+            raise ValueError(f"App content UAT {label} expected IDs are missing")
+        values = {str(value).strip() for value in raw_ids if str(value).strip()}
+        if not values or len(values) != len(raw_ids):
+            raise ValueError(f"App content UAT {label} expected IDs are invalid")
+        return values
+
+    def _readiness_feed_ids(name: str, *, label: str) -> set[str]:
+        matches = [
+            row
+            for row in readiness.get("feedQueries") or []
+            if isinstance(row, Mapping) and row.get("name") == name
+        ]
+        if len(matches) != 1:
+            raise ValueError(f"App content UAT {label} readiness binding is missing")
+        raw_ids = matches[0].get("matchedPostIds")
+        if not isinstance(raw_ids, list):
+            raise ValueError(f"App content UAT {label} expected IDs are missing")
+        values = {str(value).strip() for value in raw_ids if str(value).strip()}
+        if not values or len(values) != len(raw_ids):
+            raise ValueError(f"App content UAT {label} expected IDs are invalid")
+        return values
+
+    strict_feed_bindings = readiness_phase == ReadinessPhase.RESEARCH.value
+    discovery_ids = (
+        _readiness_feed_ids("discovery_work", label="discovery feed")
+        if strict_feed_bindings
+        else set()
+    )
+    homepage_recommend_ids = (
+        _expected_ids(
+            raw_media.get("homepageRecommendation"),
+            label="homepage recommendation",
+        )
+        if strict_feed_bindings
+        else set()
+    )
+    typed_video_ids = (
+        _expected_ids(raw_media.get("typedVideo"), label="typed video")
+        if strict_feed_bindings
+        else runtime_video_ids
+    )
+    premium_video_ids = (
+        _expected_ids(raw_media.get("premiumVideo"), label="premium video")
+        if strict_feed_bindings
+        else runtime_video_ids
+    )
+    if not premium_video_ids.intersection(typed_video_ids):
+        raise ValueError(
+            "App content UAT premium video IDs do not intersect typed video IDs"
+        )
     expected_video_count = sum(
         1
         for item in app_uat_plan.get("orderedSamples") or []
@@ -552,6 +615,7 @@ def _run_app_content_release_probe(
     }
     research = readiness_phase == ReadinessPhase.RESEARCH.value
     research_consumer_token = ""
+    research_consumer_attestation = ""
     if research:
         # research 相位匿名内容面已按 DEC-032 收敛为 no_active_release 空页，
         # release-bound 非空读回必须以 research consumer 凭证消费（凭证只在
@@ -569,9 +633,13 @@ def _run_app_content_release_probe(
             verify_run_id=str(readiness.get("verifyRunId") or ""),
         )
         research_consumer_token = str(credential.get("bearerToken") or "")
-        if not research_consumer_token:
+        research_consumer_attestation = str(
+            credential.get("attestationToken") or ""
+        )
+        if not research_consumer_token or not research_consumer_attestation:
             raise ValueError(
-                "research consumer credential issuance returned no bearer token"
+                "research consumer credential issuance returned an incomplete "
+                "Bearer/attestation chain"
             )
     check, _output, findings = _stackctl._run_environment_integration_probe(
         _stackctl.load_environment_topology(),
@@ -579,7 +647,19 @@ def _run_app_content_release_probe(
         report_dir,
         require_non_empty_content_feed=True,
         research_consumer_token=research_consumer_token,
-        release_post_expectations={"video_book_feed": runtime_video_ids},
+        research_consumer_attestation=research_consumer_attestation,
+        release_post_expectations={
+            **(
+                {
+                    "content_feed": discovery_ids,
+                    "homepage_recommend": homepage_recommend_ids,
+                }
+                if strict_feed_bindings
+                else {}
+            ),
+            "video_book_feed": typed_video_ids,
+            "premium_feed": premium_video_ids,
+        },
         release_search_canaries=search_canaries,
         release_samples=[
             {
@@ -590,9 +670,24 @@ def _run_app_content_release_probe(
             for item in sample_resolution.get("samples") or []
             if isinstance(item, Mapping)
         ],
+        release_creator_profiles=[
+            dict(item)
+            for item in sample_resolution.get("creatorProfiles") or []
+            if isinstance(item, Mapping)
+        ],
+        release_signed_media=[
+            dict(item)
+            for item in sample_resolution.get("strictMediaChecks") or []
+            if isinstance(item, Mapping)
+        ],
         release_readiness_path=readiness_path,
         video_page_size=20,
         only_checks=(
+            *(
+                ("content_feed", "homepage_recommend")
+                if strict_feed_bindings
+                else ()
+            ),
             "video_book_feed",
             # App 视频书页真实消费 premium_stream 频道；typed_video 绿不代表
             # 视频书绿，设备 UAT 前必须同时证明 premium 池非空。
@@ -602,7 +697,16 @@ def _run_app_content_release_probe(
             *(("feed_media_slices",) if not research else ()),
             *(("global_search",) if search_canaries_required else ()),
             *(("media_sample",) if not research else ()),
-            *(("release_sample",) if sample_resolution else ()),
+            *(
+                ("release_creator_profile", "release_signed_media")
+                if research
+                else ()
+            ),
+            *(
+                ("release_sample", "author_posts_contract")
+                if research and sample_resolution
+                else (("release_sample",) if sample_resolution else ())
+            ),
         ),
         probe_name="app-content-release-bound-search-and-video-page",
     )
@@ -610,6 +714,12 @@ def _run_app_content_release_probe(
         raise ValueError(
             "; ".join(str(item) for item in findings)
             or "release-bound Search/video/media probe did not pass"
+        )
+    strict_execution: dict[str, Any] = {}
+    if research and sample_resolution:
+        strict_execution = _stackctl.validate_release_strict_probe(
+            report=_stackctl._read_json_object(str(report_dir / "integration-probe.json")),
+            resolved=sample_resolution,
         )
     sample_execution: dict[str, Any] = {}
     if sample_resolution:
@@ -629,6 +739,7 @@ def _run_app_content_release_probe(
         "searchCanaries": search_canaries,
         "videoPagination": dict(raw_pagination),
         "mediaChecks": dict(raw_media),
+        "strictExecution": strict_execution,
         "sampleExecution": sample_execution,
         "executedSampleCount": int(
             sample_execution.get("executedSampleCount") or 0

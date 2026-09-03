@@ -1,7 +1,8 @@
 // post 对象 generated 错误码的端侧断言覆盖:
 // 覆盖 post 对象声明、当前尚无断言证据的错误码(idempotency_conflict、
-// research_identity_invalid、gathering_participation_required、
-// feed_capacity_unavailable),并以代表性码走 CloudErrorMapper 映射负例。
+// research_identity_invalid、research_release_state_unavailable、
+// gathering_participation_required、feed_capacity_unavailable),并以代表性码走
+// CloudErrorMapper 映射负例。
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
@@ -32,6 +33,13 @@ void main() {
       recoveryAction: 'surface',
       recoveryAfterSeconds: 0,
       httpStatus: 403,
+    ),
+    (
+      wire: 'CONTENT.SYSTEM.research_release_state_unavailable',
+      value: ContentErrorCode.researchReleaseStateUnavailable,
+      recoveryAction: 'retry',
+      recoveryAfterSeconds: 5,
+      httpStatus: 503,
     ),
     (
       wire: 'CONTENT.USER.gathering_participation_required',

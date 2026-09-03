@@ -42,7 +42,7 @@
       "then": {
         "properties": {
           "assetSnapshot": {
-            "required": ["mediaProbe", "popularitySignals"]
+            "required": ["mediaProbe", "popularitySignals", "poster"]
           }
         }
       }
@@ -160,9 +160,43 @@
         "acquisitionStatus": {"const": "acquired"},
         "rightsStatus": {"enum": ["verified", "unverified", "restricted", "unknown"]},
         "authorizationRequired": {"type": "boolean"},
-        "distributionDecision": {"enum": ["research_allowed", "commercial_allowed", "blocked"]}
-        ,"mediaProbe": {"$ref": "#/$defs/mediaProbe"}
+        "distributionDecision": {"enum": ["research_allowed", "commercial_allowed", "blocked"]},
+        "poster": {"$ref": "#/$defs/poster"},
+        "mediaProbe": {"$ref": "#/$defs/mediaProbe"}
         ,"popularitySignals": {"$ref": "#/$defs/popularitySignals"}
+      }
+    },
+    "poster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contentSha256", "casRef", "bytes", "mimeType", "rights"],
+      "properties": {
+        "contentSha256": {"$ref": "#/$defs/sha256"},
+        "casRef": {"$ref": "#/$defs/safeRef"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "mimeType": {"const": "image/png"},
+        "rights": {"$ref": "#/$defs/posterRights"}
+      }
+    },
+    "posterRights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "derivation", "sourceAssetId", "sourceUrl", "license", "termsUrl",
+        "authorizationProof", "rightsStatus", "authorizationRequired",
+        "distributionDecision", "rightsIssues"
+      ],
+      "properties": {
+        "derivation": {"const": "frame_from_licensed_video"},
+        "sourceAssetId": {"type": "string", "minLength": 1},
+        "sourceUrl": {"type": "string", "pattern": "^https://"},
+        "license": {"type": "string", "minLength": 1},
+        "termsUrl": {"type": "string"},
+        "authorizationProof": {"type": "string"},
+        "rightsStatus": {"enum": ["verified", "unverified", "restricted", "unknown"]},
+        "authorizationRequired": {"type": "boolean"},
+        "distributionDecision": {"enum": ["research_allowed", "commercial_allowed", "blocked"]},
+        "rightsIssues": {"type": "array", "items": {"type": "string", "minLength": 1}}
       }
     },
     "mediaProbe": {

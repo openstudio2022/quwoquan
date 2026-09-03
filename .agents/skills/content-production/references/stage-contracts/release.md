@@ -1,50 +1,26 @@
 # 阶段契约：release
 
-从 canonical 构建 immutable release。
+immutable release 只能消费宿主 AI 显式 cohort；禁止隐式 `all-publishable` 或按目录全选。
 
-## 身份
+## PRE
 
-- stage：`release`（与磁盘目录一字不差）
-- 前置阶段：`publish`
-- 合法 next：`ship`
-- 角色人设：[release-operator](../roles/release-operator.md)
-- 写目录 allowlist：`.qwq_output/data/releases/<releaseId>/`（只经 release 命令）
+- `publish` CLOSE 为 pass。
+- AI 在 OPEN 显式冻结 cohort 中每个 canonical object/pool record exact ref/digest、release class、release identity 与 taxonomy/content-library bindings。
+- cohort 必须逐对象列出且非空；对象资格由既有 schema/硬事实 verifier 重验，不由 release builder 自动扩展。
 
-## 做前（PRE）
+## DURING
 
-- `publish` receipt `verdict=pass`；复跑：
+AI 调用现有 immutable release build 原子 IO，并把显式 cohort 作为输入。逐对象不合格时 AI 决定排除并重开本阶段的新 execution 尝试，或提交 blocked；不得让 builder 回退到所有可发布对象，也不得原地修改既有 release。
 
-```bash
-python3 quwoquan_data/scripts/cli.py verify publish-purity
-python3 quwoquan_data/scripts/cli.py verify publish-closure
-```
-
-## 做中（DURING）
-
-- 唯一 CLI：`python3 quwoquan_data/scripts/cli.py release pool-build
-  --release-class research|commercial …` 产出 immutable release；
-  release class 语义见 `runtime-data-engineering` REQ-002。
-- [MUST NOT] 事后修改 release payload；[MUST NOT] 建立第二发布身份。
-
-## 做后（POST）
-
-交付件：`.qwq_output/data/releases/<releaseId>/`（desired state + payload +
-attestations）。完成判据：
+## POST
 
 ```bash
 python3 quwoquan_data/scripts/cli.py verify release-integrity --release <releaseId>
-python3 quwoquan_data/scripts/cli.py verify media-release-contract
 ```
 
-常见 issue → 修复：
+AI 对账 release payload 与 OPEN cohort 完全一致，保存 releaseId/releaseDigest 与 verifier facts。
 
-- 引用闭包缺对象 → 回 `publish` 补齐 canonical（该对象重走 readiness），
-  再重新 build；不改已产出 release。
-- attestation/digest 不一致 → 废弃该 releaseId 重新 build，不原地修文件。
+## HANDOFF
 
-按 [handoff-protocol.md](../handoff-protocol.md) 落 receipt。
-
-## 交接（HANDOFF）
-
-- `releaseId` 写入 receipt `evidence`。
-- `next=ship`。
+- `resultRefs`：immutable release exact refs/digests、显式 cohort binding。
+- pass 后由 Skill 固定进入 `ship`。

@@ -84,6 +84,7 @@ def _plan_evidence(plan: dict[str, Any]) -> list[dict[str, Any]]:
                 "command": str(raw["command"]),
                 "command_digest": str(raw["command_digest"]),
                 "required": bool(raw["required"]),
+                "timeout_seconds": int(raw["timeout_seconds"]),
             }
         )
     return results
@@ -122,7 +123,12 @@ def validate_named_evidence_ref_payload(
     by_id = {item["id"]: item for item in evidence}
     for result in receipt["evidence"]:
         planned = by_id[result["id"]]
-        for field in ("command", "command_digest", "required"):
+        for field in (
+            "command",
+            "command_digest",
+            "required",
+            "timeout_seconds",
+        ):
             if result[field] != planned[field]:
                 raise HandoffConsumerError(
                     f"named evidence receipt {result['id']} {field} 与 plan 不一致"

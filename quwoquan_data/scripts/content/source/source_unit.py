@@ -28,7 +28,6 @@ from typing import Any, Mapping, Sequence
 
 from core.io import read_json, write_json
 from content.execution.runtime_contract import stage_execution_context
-from core import ops_governance as og
 from core.image_variants import build_local_variants, image_dimensions
 from core.paths import (
     STAGE_DOWNLOAD,
@@ -39,7 +38,7 @@ from core.paths import (
     relative_execution_ref,
     object_source_unit_dir,
 )
-from governance.coverage.entity_extract import require_domain_etype, resolve_domain_etype
+from governance.coverage.entity_type_taxonomy import require_domain_etype, resolve_domain_etype
 
 SOURCE_UNIT_MANIFEST = "meta.json"
 SOURCE_UNIT_ASSET_INDEX = "assets/index.json"

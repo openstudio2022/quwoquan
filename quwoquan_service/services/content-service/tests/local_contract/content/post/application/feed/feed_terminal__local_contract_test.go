@@ -68,13 +68,17 @@ func (r *terminalActiveSupplyReader) ActiveSupplySnapshot(context.Context) (Acti
 	if r.zeroPlayableVideo {
 		playableVideos = 0
 	}
+	releaseClass := r.releaseClass
+	if releaseClass == "" {
+		releaseClass = "commercial"
+	}
 	return ActiveSupplySnapshot{
 		Environment:     "local_contract",
 		SourceOwner:     "qwq_data",
 		Status:          "active",
 		ActiveReleaseID: releaseID,
 		ManifestDigest:  manifestDigest,
-		ReleaseClass:    r.releaseClass,
+		ReleaseClass:    releaseClass,
 		ReadbackStatus:  "passed",
 		Posts:           1,
 		PlayableVideos:  playableVideos,

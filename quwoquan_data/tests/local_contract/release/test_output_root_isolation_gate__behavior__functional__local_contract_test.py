@@ -18,7 +18,7 @@ def test_data_output_allows_only_tasks_releases_local(tmp_path, monkeypatch):
     tasks = output / "tasks"
     releases = output / "releases"
     local = output / "local"
-    for path in (tasks, releases, local / "cache", local / "workspace"):
+    for path in (tasks, releases, local / "cache", local / "runs", local / "workspace"):
         path.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(gate, "DATA_EXECUTIONS_ROOT", tasks)
     monkeypatch.setattr(gate, "RELEASE_ROOT", releases)
@@ -39,7 +39,7 @@ def test_data_output_blocks_parallel_runtime_branches(tmp_path, monkeypatch):
     issues = gate._output_layout_issues()
     assert len(issues) == 3
     assert any("only allows tasks/, releases/, local/" in issue for issue in issues)
-    assert any("data/local only allows cache/ and workspace/" in issue for issue in issues)
+    assert any("data/local only allows cache/, runs/, and workspace/" in issue for issue in issues)
 
 
 def test_retired_source_and_runtime_roots_fail_closed(tmp_path):

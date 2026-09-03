@@ -2,7 +2,7 @@
 import Foundation
 
 enum AppLaunchContract {
-  static let sourceDigest = "sha256:edcb4f0bd745d5d751cfaba1f37e5d6dd1319b5324e148fd39a77ebf2892a015"
+  static let sourceDigest = "sha256:b785d8b40858ba194fc0b7a0db07b39835ebb9bb56f6b96dd8a789af4dbbf7e1"
   static let environments: [String] = [
     "alpha",
     "beta",
@@ -32,7 +32,6 @@ enum AppLaunchContract {
   ]
   static let launchProvenances: [String] = [
     "canonical_launcher",
-    "workspace_flutter_run",
     "workspace_ide_debug",
     "release_package",
     "hot_restart",

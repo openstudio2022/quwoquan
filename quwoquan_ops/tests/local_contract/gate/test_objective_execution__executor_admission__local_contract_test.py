@@ -454,25 +454,25 @@ def test_contract_freezes_pending_identity_transition_graph_and_errors() -> None
             validate_contract(broken)
 
 
-def test_s4_admission_is_dynamic_not_admitted_single_writer_and_no_temporary_branch() -> None:
+def test_s4_admission_immediately_admits_six_persistent_lane_writers() -> None:
     descriptor = admission_readback_contract()
     admission = inspect_admission()
     assert descriptor["schema"] == "admission_readback"
     assert descriptor["stage"] == "S4"
     assert admission == admission_readback(
-        "not_admitted", branch_policy_digest=admission["branch_policy_digest"],
+        "admitted", branch_policy_digest=admission["branch_policy_digest"],
     )
-    assert admission["write_concurrency"] == 1
-    assert admission["temporary_branch_allowed"] is False
-    assert production_concurrency_policy() == {"s4_admission": "not_admitted", "write_concurrency": 1}
+    assert admission["write_concurrency"] == 6
+    assert admission["persistent_lane_allowed"] is True
+    assert production_concurrency_policy() == {"s4_admission": "admitted", "write_concurrency": 6}
 
 
 def test_objective_contract_strictly_owns_admission_wire_reason_terminal_and_consistency() -> None:
     contract = load_contract()
     descriptor = admission_readback_contract()
     assert descriptor == contract["admission"]["readback_contract"]
-    assert descriptor["statuses"]["admitted"]["reason"] == "temporary_execution_lifecycle_admitted"
-    assert descriptor["statuses"]["not_admitted"]["reason"] == "temporary_execution_lifecycle_not_admitted"
+    assert descriptor["statuses"]["admitted"]["reason"] == "persistent_lane_lifecycle_admitted"
+    assert descriptor["statuses"]["not_admitted"]["reason"] == "persistent_lane_lifecycle_not_admitted"
     assert descriptor["statuses"]["blocked"]["terminal"] == "OEX.ADMISSION_BLOCKED"
 
     valid = admission_readback(
@@ -483,7 +483,7 @@ def test_objective_contract_strictly_owns_admission_wire_reason_terminal_and_con
         lambda value: value.update(stage="S3"),
         lambda value: value.update(reason="unknown_reason"),
         lambda value: value.update(write_concurrency=1),
-        lambda value: value.update(temporary_branch_allowed=False),
+        lambda value: value.update(persistent_lane_allowed=False),
         lambda value: value.update(branch_policy_digest=None),
         lambda value: value.update(terminal="not_admitted"),
     ):
@@ -530,6 +530,14 @@ def test_objective_v2_admission_status_and_readback_wire_are_exact_closed_sets(m
     broken = yaml.safe_load(yaml.safe_dump(load_contract(), sort_keys=False))
     mutate(broken)
     with pytest.raises(ContractError):
+        validate_contract(broken)
+
+
+def test_legacy_temporary_branch_wire_is_rejected() -> None:
+    broken = yaml.safe_load(yaml.safe_dump(load_contract(), sort_keys=False))
+    fields = broken["schemas"]["admission_readback"]["required_fields"]
+    fields[fields.index("persistent_lane_allowed")] = "temporary_branch_allowed"
+    with pytest.raises(ContractError, match="admission_readback.required_fields"):
         validate_contract(broken)
 
 
@@ -614,7 +622,8 @@ def test_admission_derivation_is_complete_closed_lifecycle_causes_only() -> None
             "pull_request_prefix_declared",
             "isolated_writer_branch",
             "declared_promotion_path",
-            "mandatory_cleanup_after_promotion_or_abort",
+            "mandatory_fast_forward_resync_after_integration_or_abort",
+            "retained_worktree_lifecycle",
             "concurrency_evidence_required",
         ]
     }
@@ -630,7 +639,7 @@ def test_admission_derivation_is_complete_closed_lifecycle_causes_only() -> None
 
 
 @pytest.mark.parametrize(
-    "duplicate_field", ["status", "write_concurrency", "temporary_branch_allowed"],
+    "duplicate_field", ["status", "write_concurrency", "persistent_lane_allowed"],
 )
 def test_admission_rejects_reintroduced_derivation_result_fields(duplicate_field: str) -> None:
     broken = yaml.safe_load(yaml.safe_dump(load_contract(), sort_keys=False))
@@ -657,33 +666,37 @@ def test_admission_top_level_is_exact_and_emergency_fallback_is_yaml_independent
     )
     assert emergency_blocked_admission_fallback() == {
         "status": "blocked", "stage": "S4", "write_concurrency": 0,
-        "temporary_branch_allowed": False, "branch_policy_digest": None,
+        "persistent_lane_allowed": False, "branch_policy_digest": None,
         "reason": "dynamic_inspection_unavailable", "terminal": "OEX.ADMISSION_BLOCKED",
     }
 
 
-def test_temporary_prefix_alone_is_not_admitted_and_complete_lifecycle_is_admitted() -> None:
+def test_prefix_or_lifecycle_alone_is_not_admitted_and_complete_policy_is_admitted() -> None:
     from lib.objective_execution.admission import (
-        temporary_execution_admitted_from_policy_bytes,
+        persistent_lane_admitted_from_policy_bytes,
     )
-    policy = yaml.safe_load(
-        (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(encoding="utf-8")
-    )
-    policy["pull_request_branch_prefixes"] = ["increment/"]
-    policy["allowed_pull_request_edges"].append(
-        {"head": "increment/*", "base": "dev1.0"}
-    )
-    prefix_only_raw = yaml.safe_dump(policy, sort_keys=False).encode("utf-8")
-    assert temporary_execution_admitted_from_policy_bytes(prefix_only_raw) is False
+    canonical_raw = (
+        ROOT / "quwoquan_ops/policies/branch_policy.yaml"
+    ).read_bytes()
+    assert persistent_lane_admitted_from_policy_bytes(canonical_raw) is True
 
-    policy["temporary_execution_admission"] = {
-        "isolation": "branch_per_writer",
-        "promotion": "declared_pull_request_edge_only",
-        "cleanup": "mandatory_after_promotion_or_abort",
-        "concurrency_evidence": "required",
-    }
-    complete_raw = yaml.safe_dump(policy, sort_keys=False).encode("utf-8")
-    assert temporary_execution_admitted_from_policy_bytes(complete_raw) is True
+    prefix_only = yaml.safe_load(canonical_raw.decode("utf-8"))
+    prefix_only.pop("persistent_lane_admission")
+    prefix_only_raw = yaml.safe_dump(prefix_only, sort_keys=False).encode("utf-8")
+    assert persistent_lane_admitted_from_policy_bytes(prefix_only_raw) is False
+
+    lifecycle_without_prefix = yaml.safe_load(canonical_raw.decode("utf-8"))
+    lifecycle_without_prefix["pull_request_branch_prefixes"] = []
+    lifecycle_without_prefix["allowed_pull_request_edges"] = [
+        edge
+        for edge in lifecycle_without_prefix["allowed_pull_request_edges"]
+        if "*" not in edge["head"]
+    ]
+    lifecycle_without_prefix_raw = yaml.safe_dump(
+        lifecycle_without_prefix, sort_keys=False
+    ).encode("utf-8")
+    with pytest.raises(ValueError, match="persistent lane admission|pull-request prefix"):
+        persistent_lane_admitted_from_policy_bytes(lifecycle_without_prefix_raw)
 
 
 def test_inspect_admission_has_no_path_injection_and_reads_canonical_bytes_once(
@@ -740,7 +753,7 @@ def test_parallel_admission_queries_use_cached_import_and_independent_exact_read
     with ThreadPoolExecutor(max_workers=8) as executor:
         results = list(executor.map(lambda _index: inspect_admission(), range(24)))
     assert len({result["branch_policy_digest"] for result in results}) == 1
-    assert all(result["status"] == "not_admitted" for result in results)
+    assert all(result["status"] == "admitted" for result in results)
 
 
 def test_writer_lease_loser_has_zero_effect_and_zero_event(tmp_path: Path) -> None:

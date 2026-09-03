@@ -113,6 +113,7 @@ def _mutable_teardown_receipt(
         "composeDigest": "sha256:" + "1" * 64,
         "configurationDigest": "sha256:" + "2" * 64,
         "providerRuntimeDigest": "sha256:" + "3" * 64,
+        "observabilityLogSinkDigest": "sha256:" + "9" * 64,
         "portProfile": "alpha-local",
         "portBlock": {"start": 17000, "end": 17999},
         "publishedPorts": [
@@ -161,6 +162,7 @@ def _runtime_started_with_identity(report_dir: Path) -> dict[str, object]:
         "composeDigest": "sha256:" + "1" * 64,
         "configurationDigest": "sha256:" + "2" * 64,
         "providerRuntimeDigest": "sha256:" + "3" * 64,
+        "observabilityLogSinkDigest": "sha256:" + "9" * 64,
         "portProfile": "alpha-local",
         "portBlock": {"start": 17000, "end": 17999},
         "publishedPorts": [

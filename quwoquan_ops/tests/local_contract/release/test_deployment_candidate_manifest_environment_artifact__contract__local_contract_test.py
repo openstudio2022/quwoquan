@@ -156,6 +156,24 @@ class DeploymentCandidateEnvironmentArtifactContractTest(
                     candidate_root=self.candidate,
                 )
 
+    def test_environment_artifact_rejects_retired_runtime_topology_schema(self) -> None:
+        payload = self._write_candidate()
+        topology = json.loads(self.runtime_topology_path.read_text(encoding="utf-8"))
+        topology["schema"] = "qwq.runtime_topology_package.v3"
+        self.runtime_topology_path.write_text(
+            json.dumps(topology, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ValueError, "runtime topology schema mismatch"):
+            subject.validate_candidate_manifest(
+                payload,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_full=True,
+                candidate_root=self.candidate,
+            )
+
     def test_environment_artifact_rejects_package_owned_topology_tampering(self) -> None:
         payload = self._write_candidate()
         self.runtime_topology_path.write_text(

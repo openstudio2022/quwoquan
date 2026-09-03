@@ -61,18 +61,15 @@ def _probe_endpoint_with_curl(url: str, *, timeout_seconds: float) -> dict:
     if not curl:
         row["error"] = "curl not found"
         return row
-    from core.runtime_policy import active_runtime_policy
-
-    policy = active_runtime_policy()
     proc = subprocess.run(
         [
             curl,
             "-I",
             "-L",
             "--retry",
-            str(policy.curl_retries),
+            "1",
             "--retry-delay",
-            str(policy.curl_retry_delay_seconds),
+            "1",
             "--retry-all-errors",
             "--max-time",
             str(max(1, int(timeout_seconds))),
@@ -108,9 +105,7 @@ def check_network_endpoints(
 ) -> dict:
     """Probe Cursor and source-network reachability without exposing credentials."""
     if timeout_seconds is None:
-        from core.runtime_policy import active_runtime_policy
-
-        timeout_seconds = float(active_runtime_policy().preflight_network_timeout_seconds)
+        timeout_seconds = 5.0
     configured = os.environ.get("QWQ_ENV_NETWORK_ENDPOINTS")
     if endpoints is None and configured:
         endpoints = [part.strip() for part in configured.split(",") if part.strip()]

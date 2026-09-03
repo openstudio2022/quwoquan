@@ -1,40 +1,16 @@
-# 三层职责边界（DEC-005）
+# Data 内容生产职责边界
 
-真相源：[`object-homepage-coverage-scaling/design.md#dec-027`](../../../../specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-027)。
-
-## 三层分工
-
-| 层 | 负责 | 禁止 |
+| 主体 | 允许 | 禁止 |
 | --- | --- | --- |
-| 宿主 agent（执行主体） | 来源调研、正文创作、评审判断、流程推进决策、读校验报错自修产物、派发子会话/并发 lane | 手改 verify/schema、放宽门禁、伪造证据、手写 `execution_state.json` 或 receipt 文件 |
-| Skill（契约文档） | 阶段序、每阶段产物位置/结构/文档要求、完成判据绑定、恢复与重试语义、自修轮次上限与升级出口、角色独立性 | 含任何代码逻辑；复制 schema/枚举/路径常量（第二真相源） |
-| 脚本（检查 + IO） | verify 门禁、schema 校验、确定性下载/媒体 CAS、publish/release/ship 原子操作、stage PRE 与 receipt 原子记录 | 宿主 key/model/SDK semantic preflight、驱动或等待 agent、自动推进状态机、内置业务重试循环、生成正文 |
+| 宿主 AI | 读上下文、显式选择 input refs 与来源、写业务产物、创作、自检、独立 review、决定 pass/blocked/typed issues、按 Skill 固定顺序推进、原生串并行 | 伪造证据、放宽 schema/verifier、手写 receipt、修改已冻结输入或 immutable release |
+| Skill | 十阶段唯一业务说明、每阶段输入/输出、显式 verifier、固定后继与完成证据 | 复制 schema/代码常量、建立第二流程、registry、processor、模型/并发策略或状态机 |
+| 代码内核 | `task init`、stage-open exact input freeze、stage-close create-once、下载/CAS、schema/硬事实 verify、单对象 publish、immutable release、ship 原子 IO | 来源/选材/创作/review、verdict/issue/next 派生、stage-gate registry、semantic wrapper、runner/fleet/claim、自动恢复、execution-state reducer |
 
-## 十条教训 → 设计规则
+硬约束：
 
-1. **单执行主体**（scale-005 `waiting_agent` 挂起）：脚本永不等待 agent；agent 同步调脚本、脚本同步返回，交接断点归零。
-2. **补源循环**（scale-002/004 `RETAINED_SHORTFALL` 刚性停机）：sources 阶段内置合格判据 + 最大 3 轮扩策略检索；超限带缺口清单 `GATE_BLOCK`，不再一票 `manual_required`。
-3. **自修契约**（scale-006 publish 盲试 3 次放弃）：verify 输出结构化 issue，agent 按 issue 修产物复验，每阶段 ≤3 轮，超限升级而非重试。见 [self-repair.md](self-repair.md)。
-4. **skill 零代码**：新增代码只允许检查器与 IO 工具，单文件 ≤300 行。
-5. **第二真相源禁令**：skill 只引用 `quwoquan_data/schema/**`、`quwoquan_data/scripts/core/stage_artifact_contract.py` 与 verify 命令；阶段名与磁盘目录名一字不差。
-6. **渐进披露**：SKILL.md ≤150 行、每份契约 ≤200 行；agent 只按需读当前阶段契约。
-7. **release 后缀同权**：publish 之后的 release/ship 与前段同等地位、同样有契约文件与验收命令；「成功」的定义包含环境导入回执。
-8. **评审独立性**：`5.review` 必须由独立会话执行（有 subagent 能力的宿主派 subagent，无此能力的宿主起新 loop 轮次），author 会话不得自评；`verify rubric --generation-family` 的 judge≠generator 校验兜底。
-9. **宿主无关**：skill 文本只依赖三种最低宿主能力——读文件、跑 shell 命令、（可选）派发子会话。规范真相源在 `.agents/skills/content-production/`，Cursor 与 Codex 直接消费同一份 Skill；各宿主 adapter/命令只是薄壳。禁止任何形态的全文镜像拷贝。
-10. **磁盘即交接**：任何阶段的交接物全部落在工作包磁盘（产物 + stage receipt），不依赖会话上下文。任何宿主、任何新会话都能从 [recovery.md](recovery.md) 判定表 + receipt 链恢复到精确断点。
-11. **宿主并发不是业务 authority**：并发上限只来自显式 fleet 参数，真实 receipt 只供人工诊断；不读取、不生成 calibration receipt。M1000 只能在 M100 Gamma E2E acceptance 后启动首 slot，不能由吞吐或并发解锁。
-
-## 什么算编排代码（评审判据）
-
-新增代码命中以下任一特征即越界，评审时 `GATE_BLOCK`：
-
-1. 等待 agent（轮询 agent 状态、阻塞等 agent 回写）。
-2. 自动推进状态机（代码决定「下一个业务阶段做什么」）。
-3. 内置业务重试循环（对业务失败自动重跑）。
-
-**唯一豁免**（阶段语义零感知的驱动层）：
-
-- `loop_driver.sh` ≤50 行：只读最新 receipt 的 `verdict` 决定「再起一轮全新会话」或「停」。
-- `fleet_dispatcher.sh` ≤100 行：只做进程起/收/记录退出码；宿主/API 瞬时错误可指数退避重启会话 ≤3 次——这是基础设施重试，不是业务重试。
-
-二者不含业务判断、不解析 receipt 的业务字段、不等待 agent 中间态。
+1. 代码同步返回，不等待 AI 回写。
+2. verifier 只验证可重复的硬事实，不作语义判断。
+3. 每个 approved 对象独立原子 publish；一个对象失败不回滚其它已成功对象。
+4. release 必须消费 AI 显式 cohort，禁止隐式 all-publishable。
+5. ship 的 apply、readback/health 与 EAF 由 AI 显式调用和绑定。
+6. receipt 与 immutable/environment facts 是跨会话唯一状态；无 shim、dual-read、legacy fallback 或 sequence-017 兼容。

@@ -22,6 +22,18 @@ def _args() -> Namespace:
         release_readiness="",
         test_auth_token="",
         require_non_empty_content_feed=True,
+        research_anonymous_convergence=False,
+        research_consumer_readback=False,
+        research_consumer_attestation="",
+        expected_discovery_post_id=[],
+        expected_homepage_recommend_post_id=[],
+        expected_video_post_id=[],
+        expected_premium_video_post_id=[],
+        release_search_canary=[],
+        release_sample=[],
+        release_creator_profile=[],
+        release_signed_media=[],
+        only_check=[],
     )
 
 
@@ -178,7 +190,6 @@ def test_release_content_probe__rejects_empty_feed_envelopes__local_contract() -
 def test_research_convergence__accepts_no_active_release_empty_page__local_contract() -> (
     None
 ):
-    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
     issue, count = probe._research_anonymous_convergence_issue(
         json.dumps(
             {
@@ -195,8 +206,44 @@ def test_research_convergence__accepts_no_active_release_empty_page__local_contr
     assert count == 0
 
 
+def test_research_convergence__rejects_no_eligible_content_even_without_identity__local_contract() -> None:
+    issue, count = probe._research_anonymous_convergence_issue(
+        json.dumps(
+            {
+                "items": [],
+                "objectCards": [],
+                "outcome": "empty",
+                "emptyReason": "no_eligible_content",
+            }
+        )
+    )
+
+    assert count == 0
+    assert issue == (
+        'research convergence expects emptyReason "no_active_release", '
+        'got "no_eligible_content"'
+    )
+
+
+def test_research_convergence__rejects_release_bound_no_eligible_content_identity__local_contract() -> None:
+    issue, count = probe._research_anonymous_convergence_issue(
+        json.dumps(
+            {
+                "items": [],
+                "objectCards": [],
+                "outcome": "empty",
+                "emptyReason": "no_eligible_content",
+                "releaseId": "research-release",
+                "manifestDigest": "sha256:" + "a" * 64,
+            }
+        )
+    )
+
+    assert count == 0
+    assert issue is not None and "no_active_release" in issue
+
+
 def test_research_convergence__rejects_leaked_items__local_contract() -> None:
-    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
     issue, count = probe._research_anonymous_convergence_issue(
         json.dumps(
             {
@@ -219,15 +266,6 @@ def test_research_convergence__rejects_leaked_items__local_contract() -> None:
                 "items": [],
                 "objectCards": [],
                 "outcome": "empty",
-                "emptyReason": "no_eligible_content",
-            },
-            'expects emptyReason "no_active_release"',
-        ),
-        (
-            {
-                "items": [],
-                "objectCards": [],
-                "outcome": "empty",
                 "emptyReason": "no_active_release",
                 "releaseId": "rel-research-001",
             },
@@ -243,7 +281,6 @@ def test_research_convergence__rejects_wrong_empty_semantics__local_contract(
     payload: dict[str, object],
     expected_fragment: str,
 ) -> None:
-    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
     issue, _count = probe._research_anonymous_convergence_issue(json.dumps(payload))
 
     assert issue is not None and expected_fragment in issue
@@ -252,7 +289,6 @@ def test_research_convergence__rejects_wrong_empty_semantics__local_contract(
 def test_research_convergence__mode_builds_feed_checks_and_report_flag__local_contract() -> (
     None
 ):
-    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
     args = _args()
     args.require_non_empty_content_feed = False
     args.research_anonymous_convergence = True
@@ -260,6 +296,18 @@ def test_research_convergence__mode_builds_feed_checks_and_report_flag__local_co
     checks = {item["name"] for item in probe.build_checks(args)}
 
     assert {"content_feed", "video_book_feed", "premium_feed"} <= checks
+
+
+def test_research_convergence__all_private_feeds_are_explicitly_anonymous__local_contract() -> None:
+    args = _args()
+    args.require_non_empty_content_feed = False
+    args.research_anonymous_convergence = True
+    args.test_auth_token = "ambient-non-research-token"
+
+    checks = {row["name"]: row for row in probe.build_checks(args)}
+
+    for name in probe.PRIVATE_FEED_CHECK_NAMES:
+        assert "Authorization" not in checks[name]["headers"]
 
 
 def test_release_content_probe__rejects_non_release_item_even_when_non_empty__local_contract() -> (

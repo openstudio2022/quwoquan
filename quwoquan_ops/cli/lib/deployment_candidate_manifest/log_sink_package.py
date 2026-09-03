@@ -195,6 +195,82 @@ def _local_elasticsearch_runtime_selection(
     }
 
 
+def canonical_observability_log_sink_compose_bytes(compose: object) -> bytes:
+    """Serialize one normalized local log-sink Compose document canonically."""
+
+    if not isinstance(compose, dict) or "x-qwq-package-elasticsearch" in compose:
+        raise ValueError("normalized local Elasticsearch composition is invalid")
+    services = compose.get("services")
+    elasticsearch = (
+        services.get("elasticsearch") if isinstance(services, dict) else None
+    )
+    if not isinstance(elasticsearch, dict):
+        raise ValueError("normalized local Elasticsearch workload is missing")
+    return (
+        json.dumps(
+            compose,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def observability_log_sink_composition_digest(compose: object) -> str:
+    """Digest the same canonical bytes used by mutable and immutable execution."""
+
+    return "sha256:" + hashlib.sha256(
+        canonical_observability_log_sink_compose_bytes(compose)
+    ).hexdigest()
+
+
+def canonical_local_observability_log_sink_composition(
+    source_path: Path,
+    *,
+    machine: str | None = None,
+) -> dict[str, Any]:
+    """Resolve one source Compose into the exact local runtime composition.
+
+    Both immutable packaging and mutable test-live execution consume this
+    helper.  Its digest covers the normalized Compose bytes after the canonical
+    platform selector has been removed and its image/JVM values have been
+    fixed, so the identity describes the bytes that Compose actually executes.
+    """
+
+    source = Path(source_path).resolve()
+    if not source.is_file() or source.is_symlink():
+        raise ValueError("canonical local Elasticsearch workload is unsafe")
+    try:
+        compose = yaml.safe_load(source.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        raise ValueError(
+            f"canonical local Elasticsearch workload is unreadable: {exc}"
+        ) from exc
+    selection = _local_elasticsearch_runtime_selection(compose, machine=machine)
+    services = compose.get("services") if isinstance(compose, dict) else None
+    elasticsearch = (
+        services.get("elasticsearch") if isinstance(services, dict) else None
+    )
+    if not isinstance(elasticsearch, dict):
+        raise TypeError("canonical Product Ops Elasticsearch workload is missing")
+    compose.pop("x-qwq-package-elasticsearch", None)
+    elasticsearch["image"] = selection["image"]
+    environment = elasticsearch.get("environment")
+    if not isinstance(environment, dict):
+        raise TypeError("canonical Product Ops Elasticsearch environment is missing")
+    environment["CLI_JAVA_OPTS"] = selection["cliJavaOpts"]
+    environment["ES_JAVA_OPTS"] = selection["esJavaOpts"]
+    compose_bytes = canonical_observability_log_sink_compose_bytes(compose)
+    return {
+        "compose": compose,
+        "composeBytes": compose_bytes,
+        "composeDigest": observability_log_sink_composition_digest(compose),
+        "sourceComposeDigest": _sha256_file(source),
+        "selection": selection,
+    }
+
+
 def materialize_observability_log_sink_package(
     env_name: str,
     target_name: str,
@@ -247,35 +323,9 @@ def materialize_observability_log_sink_package(
             / "deploy"
             / "local-elasticsearch.compose.yaml"
         )
-        try:
-            compose = yaml.safe_load(source_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, yaml.YAMLError) as exc:
-            raise ValueError(
-                f"canonical local Elasticsearch workload is unreadable: {exc}"
-            ) from exc
-        selection = _local_elasticsearch_runtime_selection(compose)
-        services = compose.get("services") if isinstance(compose, dict) else None
-        elasticsearch = (
-            services.get("elasticsearch") if isinstance(services, dict) else None
-        )
-        if not isinstance(elasticsearch, dict):
-            raise TypeError(
-                "canonical Product Ops Elasticsearch workload is missing"
-            )
-        compose.pop("x-qwq-package-elasticsearch", None)
-        elasticsearch["image"] = selection["image"]
-        environment = elasticsearch.get("environment")
-        if not isinstance(environment, dict):
-            raise TypeError(
-                "canonical Product Ops Elasticsearch environment is missing"
-            )
-        environment["CLI_JAVA_OPTS"] = selection["cliJavaOpts"]
-        environment["ES_JAVA_OPTS"] = selection["esJavaOpts"]
-        compose_bytes = yaml.safe_dump(
-            compose,
-            allow_unicode=True,
-            sort_keys=False,
-        ).encode("utf-8")
+        canonical = canonical_local_observability_log_sink_composition(source_path)
+        selection = canonical["selection"]
+        compose_bytes = canonical["composeBytes"]
         staged_files["elasticsearch.compose.yaml"] = compose_bytes
         deployment_ref = (
             artifact_relative / "elasticsearch.compose.yaml"
@@ -286,11 +336,9 @@ def materialize_observability_log_sink_package(
             "platform": selection["platform"],
             "runtimeEndpoint": selection["runtimeEndpoint"],
             "imageDigest": selection["imageDigest"],
-            "sourceComposeDigest": _sha256_file(source_path),
+            "sourceComposeDigest": canonical["sourceComposeDigest"],
             "composeRef": deployment_ref,
-            "composeDigest": (
-                "sha256:" + hashlib.sha256(compose_bytes).hexdigest()
-            ),
+            "composeDigest": canonical["composeDigest"],
             "clusterRef": f"target:{target_name}/product-ops/elasticsearch",
         }
     validate_observability_log_sink_package(

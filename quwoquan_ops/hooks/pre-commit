@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 本地 pre-commit 只做边界检查（秒级）：staged 内 secret/PII、generated/cache 边界与
+# branch policy。范围就绪回执与 Review 不在这里消费——硬门只在准出
+# （lane→dev1.0 PR 的 CI Delivery Gate、交接），日常 lane 提交不背负回执。
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 export QWQ_OUTPUT_ROOT="$ROOT/.qwq_output"
 export PYTHONDONTWRITEBYTECODE=1
 
 if ! git diff --cached --quiet; then
-  recovery="python3 quwoquan_ops/cli/local_readiness.py scope --staged"
-  if ! python3 -B quwoquan_ops/cli/local_readiness.py staged-boundary || \
-     ! python3 -B quwoquan_ops/cli/local_readiness.py verify --level scope --staged >/dev/null 2>&1; then
-    echo "[pre-commit] GATE_BLOCK: staged boundary or fresh Review-terminal scope_ready receipt failed" >&2
-    echo "[pre-commit] RECOVER: $recovery" >&2
+  if ! python3 -B quwoquan_ops/cli/local_readiness.py staged-boundary; then
+    echo "[pre-commit] GATE_BLOCK: staged boundary failed (secret/PII、generated/cache 边界或 branch policy)" >&2
+    echo "[pre-commit] RECOVER: python3 -B quwoquan_ops/cli/local_readiness.py staged-boundary" >&2
     exit 1
   fi
-  echo "[pre-commit] fresh staged Review-terminal scope_ready receipt accepted"
+  echo "[pre-commit] staged boundary ok"
 fi

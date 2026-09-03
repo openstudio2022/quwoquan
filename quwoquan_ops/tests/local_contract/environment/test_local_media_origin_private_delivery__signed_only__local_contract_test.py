@@ -1,6 +1,4 @@
-"""spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020
-
-DEC-031 网络层边缘守卫：本地 media origin 作为共享私有交付协议的
+"""DEC-031 网络层边缘守卫：本地 media origin 作为共享私有交付协议的
 adapter，对私有前缀（media/objects/**、media/processed/**）在字节交付
 边缘复算 HMAC-SHA256 签名并判定绝对到期。签名缺失、伪造、篡改、过期
 或 signKey 未配置均 403（fail closed），公开 /s/ 切片保持匿名可达。

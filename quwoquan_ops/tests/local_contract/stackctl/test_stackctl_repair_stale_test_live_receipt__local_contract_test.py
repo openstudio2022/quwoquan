@@ -15,7 +15,6 @@ import json
 from pathlib import Path
 
 from quwoquan_ops.cli import stackctl
-from quwoquan_ops.cli.lib.data_execution_fleet import load_data_execution_fleet_config
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 from quwoquan_ops.cli.lib.test_live_startup_attempt_receipt import (
     validate_test_live_startup_attempt,
@@ -145,85 +144,6 @@ def test_confirmed_reclaim_archives_the_receipt_before_removing_it(
     assert report["preservedVolumes"] == VOLUMES
 
 
-def test_beta_fleet_ports_do_not_block_confirmed_stale_receipt_reclaim(
-    monkeypatch, tmp_path: Path
-) -> None:
-    removals: list[str] = []
-    manifest = load_port_manifest()
-    beta_ports = profile_ports(manifest, "beta-local")
-    fleet = load_data_execution_fleet_config()
-    beta_receipt = {
-        **STALE_RECEIPT,
-        "environment": "beta",
-        "target": "beta-local",
-        "composeProject": "quwoquan_beta_test_live",
-        "portProfile": "beta-local",
-        "portBlock": {"start": 18000, "end": 18999},
-        "publishedPorts": sorted(
-            [
-                {"role": "api-edge", "hostPort": beta_ports["api-edge"], "protocol": "tcp"},
-                *[
-                    {"role": role, "hostPort": beta_ports[role], "protocol": "tcp"}
-                    for role in (fleet.mongo_port_role, fleet.redis_port_role)
-                ],
-            ],
-            key=lambda endpoint: (
-                int(endpoint["hostPort"]),
-                str(endpoint["protocol"]),
-                str(endpoint["role"]),
-            ),
-        ),
-        "publicWebPackage": {
-            **STALE_RECEIPT["publicWebPackage"],
-            "environment": "beta",
-            "publicOrigin": stackctl.get_target(
-                stackctl.load_environment_topology(), "beta-local"
-            )["publicBases"]["publicWeb"],
-        },
-        "runRoot": str(stackctl.env_runs_root("beta") / "stale-test-live-receipt"),
-    }
-    current_beta = dict(beta_receipt)
-    current_beta.pop("retiredGeneration")
-    validate_test_live_startup_attempt(
-        current_beta,
-        expected_environment="beta",
-        expected_target="beta-local",
-    )
-    _clean_runtime(monkeypatch, volumes=["quwoquan_beta_test_live-mongo"])
-    probed_roles: list[str] = []
-
-    def probe(endpoint: dict) -> bool:
-        probed_roles.append(str(endpoint["role"]))
-        return False
-
-    monkeypatch.setattr(stackctl, "_published_endpoint_is_occupied", probe)
-    monkeypatch.setattr(
-        stackctl,
-        "read_stale_test_live_startup_attempt",
-        lambda _target: dict(beta_receipt),
-    )
-    def _reclaim(target: str) -> dict:
-        removals.append(target)
-        return dict(beta_receipt)
-
-    monkeypatch.setattr(stackctl, "reclaim_stale_test_live_startup_attempt", _reclaim)
-
-    result = _run(
-        tmp_path,
-        confirm=True,
-        environment="beta",
-        target="beta-local",
-    )
-
-    assert result["exitCode"] == 0
-    assert removals == ["beta-local"]
-    assert "api-edge" in probed_roles
-    assert fleet.mongo_port_role not in probed_roles
-    assert fleet.redis_port_role not in probed_roles
-    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
-    assert report["preservedVolumes"] == ["quwoquan_beta_test_live-mongo"]
-
-
 def test_untrusted_receipt_published_ports_are_not_required_for_reclaim(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -324,6 +244,10 @@ def test_live_runtime_residue_blocks_the_reclaim(monkeypatch, tmp_path: Path) ->
     assert result["exitCode"] == 2
     assert removals == []
     assert any("still owns containers" in item for item in result["details"])
+    assert any(
+        "reclaim-orphaned-compose" in item and "reclaim-stale-test-live-receipt" in item
+        for item in result["details"]
+    )
 
 
 def test_active_consumer_lease_blocks_the_reclaim(monkeypatch, tmp_path: Path) -> None:

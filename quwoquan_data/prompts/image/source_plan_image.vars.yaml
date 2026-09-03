@@ -1,9 +1,0 @@
-# source_plan image lane checkpoint prompt 变量契约。
-# ai_image_policy：按批次 imagePolicy 注入「本批允许 AI 原创图，但必须写完整 synthetic
-# provenance。」或「本批禁止 AI 图。」，是运行时策略数据不是静态指令。
-system:
-  required: []
-  optional: []
-task:
-  required: [execution_id, entity_id, output_path, lane_source_prompt, ai_image_policy, image_works_quota]
-  optional: [repair_block]

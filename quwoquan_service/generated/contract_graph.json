@@ -23158,6 +23158,7 @@
       "errorCodes": [
         "CONTENT.USER.unauthorized",
         "CONTENT.USER.research_identity_invalid",
+        "CONTENT.SYSTEM.research_release_state_unavailable",
         "CONTENT.SYSTEM.required_dependency_unavailable",
         "CONTENT.SYSTEM.internal_error"
       ],
@@ -110891,7 +110892,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/feed_delivery_page/feed_load_patrol_evidence__local_contract_test.py",
-            "sha256": "9b890a8a98de96e8808b3f1d8a8379222b81fb9775fc0169d6d75261ce304b90"
+            "sha256": "07a2b3baecf85576a029a570d7e07c8e9aca4fb727fe06027052c49d2ba28938"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/feed_delivery_page/feed_object_cards_mock_contract__local_contract_test.dart",
@@ -110914,7 +110915,7 @@
           },
           {
             "path": "quwoquan_app/test/user_acceptance/service/content_service/content/feed_delivery_page/feed_load__user_acceptance_test.dart",
-            "sha256": "f5b46d2e17f86b008cb68902ea68fccf0c8a9b57c4b7cbe342a52a989b47b29d"
+            "sha256": "3b53bdaeca97f0251dbae44d2fd099c86d512b46f8d8180fc2843b5a550ae48d"
           }
         ],
         "pageParticipant": false,
@@ -112788,7 +112789,7 @@
         "domain": [
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/active_supply.go",
-            "sha256": "e766c33df2c76fa0e68935b68fae96c4ddbbf58ae9070a344338ea36bf278e1a"
+            "sha256": "bf046f07497711053d8e45005b6cf701ffb9ba3c01c33d6280e9a68799e08d9c"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/aggregate_store.go",
@@ -112882,11 +112883,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/active_supply_snapshot_cache.go",
-            "sha256": "f296e1df1f3f65f9055b9892c368b6b4a27bfbc83d4529a826bcaa65f3ef36cf"
+            "sha256": "f75bcb73243617ba62994362a5e96d7a8712919617eb76170af1ca13a690d1c3"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_active_supply_reader.go",
-            "sha256": "b5927f549df0faf1ee9f34f5e269da564d20f418ace47910ebc63fe90ed016e9"
+            "sha256": "3d4c4457e633ef1baaa3a061a0382ca9976d9dd0cccb4f40d90ab84d27e8b23a"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_post_outbox.go",
@@ -113109,7 +113110,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/feed/feed_service.go",
-            "sha256": "34012ef551a16326f2e8987825fcbff27d51c3073b224bf88714a3b9d64607c1"
+            "sha256": "77306637f623e9b1086074836696b0eeaef89437e87f6077ae5fd4d72a9657c4"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/feed/ranked_recommendation_support.go",
@@ -113126,14 +113127,6 @@
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/identity/anonymous_identity.go",
             "sha256": "697bb3d6520f37d4c5e5ef3442956c75e6809efc29d77a92e80aa2c30b4e0dc7"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/internal/content/post/application/importer/data_fleet.go",
-            "sha256": "f0677360c48ad4bc52a40610a58843e4944958c6314e8dba9276a35200a09983"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/internal/content/post/application/importer/data_fleet_runner.go",
-            "sha256": "350e7899c609f31437f6fdcbdcebba8c1b20783bbfeb1e07992fb40ebff910a0"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/application/media_visibility_reader.go",
@@ -113267,7 +113260,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/content_handler_research_readback.go",
-            "sha256": "f9144425d2017c5a3c2a4e68c0e6bbb413532e6a2a5e2bdd52ed75e8eb78f9d2"
+            "sha256": "69bcb9209a4d8a140d83dee1de44735e01ddeb11b543a352cde3871f3fd22308"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/feed_admission_rejection.go",
@@ -113305,7 +113298,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go",
-            "sha256": "2d8968d35dceb4f3791839049ce9d0f6e34cf037dc72779070d80d406377d325"
+            "sha256": "62a56d43950b420252d2d28f1417bfa2baa16daad9536da301d2febe5246b156"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler_helpers__security__local_contract_test.go",
@@ -113320,8 +113313,16 @@
             "sha256": "6a8aa54dc8d677a0e8a83361588bfd65ebf21b087aac150feef65fa65c0d5e2a"
           },
           {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/feed_research_principal_wiring__security__local_contract_test.go",
+            "sha256": "6537c417080b133b10d252504008e2abb4e1233b74e326b8899ff76180304ad2"
+          },
+          {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/get_post_source_attribution_projection__contract__local_contract_test.go",
             "sha256": "1989d6336fa10e3bea38873539f0497a73de477ceb6e96d8ac574a8ddd44aea1"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/research_release_readback_error_mapping__security__local_contract_test.go",
+            "sha256": "30e3beece16b6403891a6bd81d7854a3dc4a5af45c0961b83e2a4014ec015ad6"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/retired_bulk_import_route__single_track__local_contract_test.go",
@@ -113361,7 +113362,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_block_visibility__local_contract_test.go",
-            "sha256": "516bbe9337df64422515d6be738dc9f4377c5c6db6b6a26188f1817bd3fbec9b"
+            "sha256": "7a336f0d9e03a951132810415ab1b484186266b3fa428e0033d0645348f8d0e7"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_cursor_security__local_contract_test.go",
@@ -113397,15 +113398,15 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_research_anonymous_convergence__local_contract_test.go",
-            "sha256": "142898f285b662769d406e1af730b305b647905835b29c1b97038f1fecf83f37"
+            "sha256": "73be4bcb0e4982b8227fec8ae874228a412c954aa94f79266cc5c03531d32730"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_service_read_path__local_contract_test.go",
-            "sha256": "f6c529760ae953794379698eee615bdc0655957c91b84a73b195473dbf2956a4"
+            "sha256": "bd3f95eeb7f99204b4f7033a98ba9f27835b87b5e9ed9178f08abd02f81ffe37"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_terminal__local_contract_test.go",
-            "sha256": "b50a7fc2f3da9864c4d53d461d0c2c01df4b90b1a703186830bbbdf418342a4f"
+            "sha256": "25db14f07691549a475294c0e7aa1b5d3266b5f23b209d04be4c9c8bcbc3bdb2"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/feed/feed_viewer_liked_attach__local_contract_test.go",
@@ -113418,10 +113419,6 @@
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/identity/ranked_feed_window_subject__local_contract_test.go",
             "sha256": "7e2c7c9ad93dc4f12f0e1b81b21cbf97b4f7c2df61f17c5dbbdcc95fd31f63c0"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/importer/data_worker_environment__local_contract_test.go",
-            "sha256": "f217f4c821e7d27f3e93d1f049855023c232781c88582bb7584349780dbdf31f"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/media/processing/artifact_cleanup__local_contract_test.go",
@@ -113520,16 +113517,12 @@
             "sha256": "1da29bedef7306b322f5d891d2d28bb72cdcf3ba1ea46889d37d5ab4504595a2"
           },
           {
-            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/data_fleet__local_contract_test.go",
-            "sha256": "153f2477731c189cbb3c2af45b5afcffdc3e285a8c646090267b01646f0c8441"
-          },
-          {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/data_release_staged_activation__contract__local_contract_test.go",
             "sha256": "fb79cb86a2620bd43f13f674cc25b238fa64abcf9e9e9a26bbd29fc6b62bd054"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/domain/active_supply_snapshot__contract__local_contract_test.go",
-            "sha256": "475a9ceb40e037cc7061a17abbe494d96e4cd68a9185c9ba81a84e3737811f98"
+            "sha256": "e15b893d24507b9ea211c315fcae3ed693f97190c89630c4eec6e57f9c8a6e4b"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/domain/media/model/media_capture_metadata__local_contract_test.go",
@@ -113709,7 +113702,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/releaseimport/runtime_projection__local_contract_test.go",
-            "sha256": "41455ca6b97698bd130adbf5bc11832870ee53feb3af2d724b12eea83e38dda6"
+            "sha256": "e8c5a31c9b3a30335e21d7aaf0d85f89c80e87392775363c93560bd701b83716"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/searchindex/backfill__local_contract_test.go",
@@ -113819,7 +113812,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/active_supply_reader__data_consistency__api_integration_test.go",
-            "sha256": "5fb3228c129fc2ffb5ae1fad9b3d4286cc9a83f9a4055676e536cb292019e043"
+            "sha256": "cf5d07c416bb448344272b8e92fdb01046e2f28e69f893c51714e0d807746e2f"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/app_config__api_integration_test.go",
@@ -114035,7 +114028,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/testmain__support__api_integration_test.go",
-            "sha256": "ae9f4bc8d354ecd95747862a9687e081bf1f27cda4562ea0924177f25c70f305"
+            "sha256": "b139fd40ab7d6ac2e663b0ace0b2a113e0c771ebf041ce916f6ecb7ea8df92ef"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/user_account_closed_cleanup__data_consistency__api_integration_test.go",
@@ -114663,7 +114656,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_post_errors__local_contract_test.dart",
-            "sha256": "299e3bf6b0b9da29a708953a04674f03b70a615f25bc409424e4ff39c16c0a32"
+            "sha256": "65706769a689c5a231a87f735bae2c24d58783bcfd4567b90b4b4eeba5ed4377"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_post_facet_composition__contract__local_contract_test.dart",
@@ -129514,7 +129507,7 @@
     },
     {
       "path": "_schemas/readiness_result_bundle.schema.json",
-      "sha256": "8fe6dcf50e37181e5fd09462453e81b5c414822182b490b3a875ced0918b2e83"
+      "sha256": "74c7360e61ec70b459bf8090befcb5a93d111179d40456cbbe759b3f960898be"
     },
     {
       "path": "_schemas/storage.schema.json",
@@ -129522,11 +129515,11 @@
     },
     {
       "path": "_shared/app_artifact_manifest.yaml",
-      "sha256": "eac5260bc4c96a638be83488020d1622f6e37397b669c818b51a5a690a4d149b"
+      "sha256": "0fca2fecf5d9cd03ee1a7a6cf133bc789b1bab2e556f69f09fe40ce2ce46d949"
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "69c957b6d4e34f2b8f6a4e04b1c61a2214a0e2f70e5c3a7fdf7969f2d65950e9"
+      "sha256": "68d7c43820d427203d4d0c7ebf97b238dda50d308762c4909fadd80046f0b77f"
     },
     {
       "path": "_shared/app_pages.yaml",
@@ -130966,7 +130959,7 @@
     },
     {
       "path": "content/content/post/errors.yaml",
-      "sha256": "0b981e253c7e646e8d41f8eb40fbb92cb234b9c400f35fd0673a44df6dc08f91"
+      "sha256": "2d5e201f93ea730df5afdbee898a58a68a34f6a653e35dcadb9061230a54b570"
     },
     {
       "path": "content/content/post/events.yaml",
@@ -130986,7 +130979,7 @@
     },
     {
       "path": "content/content/post/operations.yaml",
-      "sha256": "29f31fb67871f68d6ee001477efdcb9bed8b98c1921b49bc31bab8c5362a524e"
+      "sha256": "1c87d43c006453c45ba163d53092156e61a8c3edfa38e145142a0195de7d55fc"
     },
     {
       "path": "content/content/post/persisted_queries/content_post_detail.yaml",
@@ -131122,7 +131115,7 @@
     },
     {
       "path": "content/content/post/storage.yaml",
-      "sha256": "53c17ad07919fd7faa29fc41ba61a412b8df63d8b37e026c086db4eccfe1b4bb"
+      "sha256": "5d416b3ce5b1fcce9a5664b2d07087a853a4b0dd1dfa251021437b2ebec338af"
     },
     {
       "path": "content/content/post/ui_config.yaml",
@@ -132350,7 +132343,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "09e4ec242eb3b3b3f6569611cc09b64bc91e3e0f8fac4b1df715a577b2322a1d"
+      "sha256": "e77e49930eb900ec13ef519d9bd8412804f759b359b9d8f433eb292937e34e7a"
     },
     {
       "path": "realtime/openapi.yaml",
@@ -134820,7 +134813,7 @@
     },
     {
       "path": "_shared/app_artifact_manifest.yaml",
-      "sha256": "eac5260bc4c96a638be83488020d1622f6e37397b669c818b51a5a690a4d149b",
+      "sha256": "0fca2fecf5d9cd03ee1a7a6cf133bc789b1bab2e556f69f09fe40ce2ce46d949",
       "mediaType": "application/yaml",
       "content": {
         "application_identity": {
@@ -135025,7 +135018,6 @@
             "description": "flutter run、ADB/Xcode 直装与本机可安装 Debug 制品。",
             "launch_provenances": [
               "canonical_launcher",
-              "workspace_flutter_run",
               "workspace_ide_debug",
               "hot_restart",
               "icon_cold_launch"
@@ -135072,7 +135064,6 @@
             "description": "登记设备 Development/Ad Hoc 分发。",
             "launch_provenances": [
               "canonical_launcher",
-              "workspace_flutter_run",
               "workspace_ide_debug",
               "release_package",
               "icon_cold_launch"
@@ -135092,7 +135083,6 @@
             "description": "Simulator/Emulator 安装制品；Flutter iOS simulator 只支持 Debug，iOS AOT Release 必须编译 iphoneos 制品且不能用 simulator 冒充。",
             "launch_provenances": [
               "canonical_launcher",
-              "workspace_flutter_run",
               "workspace_ide_debug",
               "release_package",
               "icon_cold_launch"
@@ -135137,7 +135127,6 @@
         ],
         "launch_provenances": [
           "canonical_launcher",
-          "workspace_flutter_run",
           "workspace_ide_debug",
           "release_package",
           "hot_restart",
@@ -135559,7 +135548,7 @@
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
-      "sha256": "69c957b6d4e34f2b8f6a4e04b1c61a2214a0e2f70e5c3a7fdf7969f2d65950e9",
+      "sha256": "68d7c43820d427203d4d0c7ebf97b238dda50d308762c4909fadd80046f0b77f",
       "mediaType": "application/yaml",
       "content": {
         "app_launch_attempt_forward_states": [
@@ -135603,6 +135592,7 @@
         },
         "launch_blockers": {
           "APP.DEPENDENCY.bundle_missing": "启动未获得经验证的 source capsule 与原子依赖 bundle。",
+          "APP.DEPENDENCY.bundle_stale": "active 依赖 bundle 与当前 source/toolchain identity 不一致；仅 canonical 交互式 launcher 可执行一次有界 canonical 同步恢复，非交互 fail-closed，不得更新 lock。",
           "APP.DEPENDENCY.cocoapods_missing": "iOS 启动缺少契约锁定的 CocoaPods 可执行文件。",
           "APP.DEPENDENCY.cocoapods_mixed": "iOS 依赖投影混用了不同 CocoaPods 可执行文件或版本。",
           "APP.DEPENDENCY.cross_platform_generated_tooling_unsafe": "当前平台投影中的跨平台生成工具残留无法安全检查或剪除。",
@@ -135619,6 +135609,7 @@
           "APP.LAUNCH.ios_release_simulator_unsupported": "Flutter iOS Simulator 只支持 Debug，不得伪造 Release 启动回执。",
           "APP.LAUNCH.launch_failed": "已安装但未能到达 launched。",
           "APP.LAUNCH.launch_surface_unsupported": "启动入口不属于 canonical launcher、工作区字面 Flutter 或受控制 IDE profile。",
+          "APP.LAUNCH.managed_argument_unsupported": "受管字面 flutter run 收到会改变 canonical build/runtime identity 的参数（如 --target、flavor、dart-define、Profile/Release 或端口类），typed 阻断而非静默忽略。",
           "APP.LAUNCH.platform_unsupported": "目标平台不属于 android、ios。",
           "APP.LAUNCH.prod_artifact_invalid": "给出的 Prod artifact manifest 与 exact 身份或摘要不符。",
           "APP.LAUNCH.prod_artifact_required": "prod-sim 必须显式给出 canonical Release artifact manifest。",
@@ -135634,6 +135625,10 @@
           "APP.LAUNCH.runtime_dependency_unavailable": "目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。",
           "APP.LAUNCH.workspace_entrypoint_inactive": "工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。",
           "APP.LAUNCH.workspace_flutter_sdk_unavailable": "工作区激活时无法解析真实 Flutter SDK 或 SDK 版本与仓库锁定不符；激活必须在写入任何 workspace facade 投影前以本码阻断。",
+          "APP.PREPARATION.content_binding_unavailable": "无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=research 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。",
+          "APP.PREPARATION.receipt_invalid": "managed preparation receipt 缺失、schema/digest 非法或与本次 launch 身份不一致，canonical launcher 不得复用。",
+          "APP.PREPARATION.runtime_unavailable": "managed 准备无法复用 exact running full runtime，且不满足有界替换条件（非 target lock 内、存在其他 live consumer lease 或替换失败）。",
+          "APP.PREPARATION.strict_preflight_failed": "managed 严格预检（TLS、api-edge、user-service、integration-service、SMS Provider/relay identity、真实 OTP journey 与 homepage/creator avatar/image/typed video/premium stream 媒体字节）任一失败，在 Flutter build 前阻断。",
           "APP.UAT.page_artifact_binding_missing": "页面自动化实际安装并启动的 AppArtifact 缺少与同 target canonical launch 的完整身份绑定或逐字段不一致，禁止生成页面通过结果。",
           "APP.WEB.recovery_unavailable": "恢复 Web 静态面不可达，不得据此生成 launched 或 ready 假证据。"
         },
@@ -135935,6 +135930,7 @@
               "prepared/compiling 允许 artifactDigest 为空；写入 compiled transition 时必须在同一次原子回执更新中填入本次 canonical executor 实际产出的 Android APK 或 iOS .app payload sha256，installed transition 前必须在真实安装完成后对同一路径按 AppArtifact payload digest 算法重读且完全相等。出现 compiled 后 artifactDigest 必须始终非空且不可变；产物缺失或不可读以 APP.LAUNCH.compile_failed 阻断，安装前后错配以 APP.LAUNCH.install_failed 阻断，源码、配置、handoff 或 package digest 不得冒充制品摘要。",
               "buildProfile 必须与 environment 满足 launch_policies 和 app_artifact_manifest.build_profiles 的单轨映射；launchProvenance 必须来自 app_artifact_manifest.launch_provenances，runtimeConfigSupplyMode 必须来自 runtime_config_supply_modes。",
               "runtimeConfigTrustEnvelopeDigest/runtimeConfigPackageDigest 必须与同 attempt 的 handoff、制品回读与 activation receipt 一致；applicationId 必须匹配 buildProfile × buildMode 的生成身份，commandResolutionDigest 只记录脱敏后的 SDK/入口解析身份。",
+              "terminal carrier receipt 机制已退役：所有 launchProvenance 下 terminalCarrierReceiptDigest/terminalCarrierReceiptRef 必须全空；受管字面 `flutter run` 经 launcher dispatcher 归一化进入 canonical launcher，以 launchProvenance=canonical_launcher 产生同一 canonical launch attempt，不存在第二种字面命令 attempt 形态。",
               "release-artifact attempt 的 candidateDigest/artifactManifestDigest/launcherHandoffDigest 必须全为 canonical sha256 且分别绑定 fixed deployment candidate、exact AppArtifactManifest 与 canonical launcher handoff；非 release-artifact attempt 三者必须全空。startup safe-terminal 通过 launchAttemptId 闭包继承这三项身份，不得从 latest、日志或外部 mutable pointer 补猜。",
               "startupTerminalAttemptId/startupTerminalEvidenceDigest/startupTerminalEvidenceRef 必须全空或全非空；非空时 evidence 必须是同一 launchAttemptId、artifactDigest、device/applicationId、launchProvenance/runtimeConfigSupplyMode/effectiveLaunchManifestDigest 的 cold startup_safe_terminal/routerShell canonical receipt。严格 app-content-uat 必须先原子绑定该 receipt 才可把 VM attach 推进为 launched；仅有 app.started/debugPort 不构成 launched。",
               "编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；缺 build-profile trust 使用 APP.LAUNCH.runtime_config_trust_missing，无 active package 使用 APP.LAUNCH.runtime_config_missing，runtime package 验证、原子写入或 readback 失败使用 APP.LAUNCH.runtime_config_activation_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。",
@@ -136115,6 +136111,13 @@
                 ],
                 "type": "string"
               },
+              "terminalCarrierReceiptDigest": {
+                "format": "optional_sha256_identity",
+                "type": "string"
+              },
+              "terminalCarrierReceiptRef": {
+                "type": "string"
+              },
               "transitions": {
                 "items": {
                   "type": "object"
@@ -136152,6 +136155,8 @@
               "applicationId",
               "flutterVersion",
               "commandResolutionDigest",
+              "terminalCarrierReceiptDigest",
+              "terminalCarrierReceiptRef",
               "launchDigest",
               "startupTerminalAttemptId",
               "startupTerminalEvidenceDigest",
@@ -136265,6 +136270,212 @@
               "effectiveLaunchManifestDigest"
             ],
             "schema_value": "app-launcher-handoff"
+          },
+          "app_managed_preparation": {
+            "additional_fields": false,
+            "constraints": [
+              "receipt-first：本 receipt 是 private managed preparation 事实，唯一写入方与消费方是 canonical launcher；canonical launcher 必须在前台 exec canonical run.sh 之前原子写入本 receipt，status=blocked 时不得继续 Flutter build。",
+              "exact readback：runtimeIdentity（复用或有界替换后的 runtime attempt/compose identity）、consumerId、consumerLeaseId、Android reverse transport/所有权、device trust receipt、contentBinding、strict debug preflight receipt 与 strict content preflight receipt 的全部身份字段必须来自本次 preparation 的真实 readback，不得从 latest、缓存或历史 receipt 补猜。",
+              "consumerId 是 dispatcher/run.sh 为本次前台启动预先确定的稳定 consumer identity；preparation 必须以该 consumer 获取 consumerLeaseId，保持该 lease active 并交给同一 run.sh 接管。run.sh exact readback 后不得重复 acquire，最终 cleanup 只释放同一 consumer；consumerLeaseId 必须是 canonical sha256 identity。",
+              "androidReversePorts 是同一 lease 的完整 canonical same-port transport 集合，Android prepared receipt 必须非空，非 Android 必须为空；androidReverseOwnedPorts 只记录 preparation 在获取同一 consumer lease 前新建、且启动 cleanup 可以安全移除的 Android same-port reverse 集合；非 Android 或没有新建映射时为空，不得把既存映射声明为本次所有。",
+              "contentBinding 必须保留 create_test_live_content_binding 返回的完整 canonical binding，并向 prepared receipt 投影 releaseId、verifyRunId、manifestDigest、readinessPhase、readinessReceiptRef 与 readinessReceiptDigest；readinessReceiptRef 必须是 absolute regular no-symlink exact receipt，digest 必须是该文件 exact bytes 的 sha256，JSON 必须同一 releaseId/verifyRunId/manifestDigest/readinessPhase=research/passed=true。服务端 active release readback 的合法候选必须唯一；零个或多个候选一律以 APP.PREPARATION.content_binding_unavailable 阻断。",
+              "deviceTrustReceiptRef/deviceTrustReceiptDigest 必须同时为空或同时非空；无需 local trust 的 physical device 允许两者为空，非空 digest 必须是 canonical sha256 identity。verify-first 只在已有 trust receipt 的 leases 包含当前 consumerLeaseId 时复用，否则必须以当前真实 lease install/bind 后再 verify。",
+              "strictPreflightReceiptRef/strictPreflightReceiptDigest 继续绑定 write_app_debug_preflight_receipt 生成的 exact debug preflight envelope；strictContentPreflightReceiptRef/strictContentPreflightReceiptDigest 必须绑定本次 preparation 私有原子写入的 quwoquan_ops.app_content_preflight_exact.v1 envelope；envelope 顶层投影 absolute readiness 身份并在 payload 中原样保留 command_app_content_preflight 返回的 exact payload，禁止信任 command 自写的 mutable report path。两组 ref 必须是 absolute regular no-symlink，digest 均为文件 exact bytes sha256。",
+              "strict content payload 必须 schema=quwoquan_ops.app_content_preflight、target 与本次 target 一致、status=passed，并与 contentBinding 的 releaseId/manifestDigest/readinessReceiptRef/readinessReceiptDigest 完全一致；releaseProbe 必须 exitCode=0、executedSampleCount\u003e0 且 mediaChecks.automatic=true。readiness receipt 还必须同一 verifyRunId/readinessPhase=research/passed=true，确保 release/verify/manifest/research 身份单轨。",
+              "status=blocked 时 firstBlocker 必须非空且取 launch_blockers 闭集，尚未完成的 target/environment/platform/deviceId/runtimeIdentity/consumer/transport/trust/content/preflight 字段允许按本 schema 取空值；不得伪造中间身份。status=prepared 时 firstBlocker 必须为空，target/environment/platform/deviceId/runtimeIdentity/consumerId/consumerLeaseId/contentBinding/strictPreflightReceiptRef/strictPreflightReceiptDigest/strictContentPreflightReceiptRef/strictContentPreflightReceiptDigest 必须全部非空且逐字段合法，trust ref/digest 必须满足成对约束。",
+              "canonical run.sh 必须在 Flutter build 前独立严格验证 receipt、readiness exact receipt、strict debug preflight envelope 与 strict content preflight exact payload 的字段集、类型、闭集、byte sha256、consumer/runtime/content/trust 身份和本次 target/device/purpose；任何漂移以 APP.PREPARATION.receipt_invalid 阻断，并把 readinessReceiptDigest 交给 final consumer-lease bind。"
+            ],
+            "fields": {
+              "androidReverseOwnedPorts": {
+                "type": "string"
+              },
+              "androidReversePorts": {
+                "type": "string"
+              },
+              "consumerId": {
+                "allow_empty": true,
+                "min_length": 1,
+                "type": "string"
+              },
+              "consumerLeaseId": {
+                "format": "optional_sha256_identity",
+                "type": "string"
+              },
+              "contentBinding": {
+                "additional_fields": false,
+                "allow_empty": true,
+                "fields": {
+                  "manifestDigest": {
+                    "format": "sha256_identity",
+                    "type": "string"
+                  },
+                  "readinessPhase": {
+                    "allowed_values": [
+                      "research"
+                    ],
+                    "type": "string"
+                  },
+                  "readinessReceiptDigest": {
+                    "format": "sha256_identity",
+                    "type": "string"
+                  },
+                  "readinessReceiptRef": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "releaseId": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "verifyRunId": {
+                    "min_length": 1,
+                    "type": "string"
+                  }
+                },
+                "required_fields": [
+                  "releaseId",
+                  "verifyRunId",
+                  "manifestDigest",
+                  "readinessPhase",
+                  "readinessReceiptRef",
+                  "readinessReceiptDigest"
+                ],
+                "type": "object"
+              },
+              "createdAt": {
+                "format": "rfc3339_utc",
+                "type": "string"
+              },
+              "deviceId": {
+                "allow_empty": true,
+                "min_length": 1,
+                "type": "string"
+              },
+              "deviceTrustReceiptDigest": {
+                "format": "optional_sha256_identity",
+                "type": "string"
+              },
+              "deviceTrustReceiptRef": {
+                "type": "string"
+              },
+              "environment": {
+                "allow_empty": true,
+                "allowed_values": [
+                  "alpha"
+                ],
+                "type": "string"
+              },
+              "firstBlocker": {
+                "allow_empty": true,
+                "allowed_values_ref": "launch_blockers",
+                "type": "string"
+              },
+              "platform": {
+                "allow_empty": true,
+                "allowed_values": [
+                  "android",
+                  "ios"
+                ],
+                "type": "string"
+              },
+              "runtimeIdentity": {
+                "additional_fields": false,
+                "allow_empty": true,
+                "fields": {
+                  "composeDigest": {
+                    "format": "sha256_identity",
+                    "type": "string"
+                  },
+                  "composeProject": {
+                    "min_length": 1,
+                    "type": "string"
+                  },
+                  "configurationDigest": {
+                    "format": "sha256_identity",
+                    "type": "string"
+                  },
+                  "providerRuntimeDigest": {
+                    "format": "sha256_identity",
+                    "type": "string"
+                  },
+                  "replaced": {
+                    "type": "boolean"
+                  },
+                  "reused": {
+                    "type": "boolean"
+                  },
+                  "startupAttemptId": {
+                    "min_length": 1,
+                    "type": "string"
+                  }
+                },
+                "required_fields": [
+                  "startupAttemptId",
+                  "composeProject",
+                  "composeDigest",
+                  "configurationDigest",
+                  "providerRuntimeDigest",
+                  "reused",
+                  "replaced"
+                ],
+                "type": "object"
+              },
+              "schema": {
+                "const": "quwoquan_ops.app_managed_preparation.v1",
+                "type": "string"
+              },
+              "status": {
+                "allowed_values": [
+                  "prepared",
+                  "blocked"
+                ],
+                "type": "string"
+              },
+              "strictContentPreflightReceiptDigest": {
+                "format": "optional_sha256_identity",
+                "type": "string"
+              },
+              "strictContentPreflightReceiptRef": {
+                "type": "string"
+              },
+              "strictPreflightReceiptDigest": {
+                "format": "optional_sha256_identity",
+                "type": "string"
+              },
+              "strictPreflightReceiptRef": {
+                "type": "string"
+              },
+              "target": {
+                "allow_empty": true,
+                "allowed_values": [
+                  "alpha-local"
+                ],
+                "type": "string"
+              }
+            },
+            "required_fields": [
+              "schema",
+              "target",
+              "environment",
+              "platform",
+              "deviceId",
+              "runtimeIdentity",
+              "consumerId",
+              "consumerLeaseId",
+              "androidReversePorts",
+              "androidReverseOwnedPorts",
+              "deviceTrustReceiptRef",
+              "deviceTrustReceiptDigest",
+              "contentBinding",
+              "strictPreflightReceiptRef",
+              "strictPreflightReceiptDigest",
+              "strictContentPreflightReceiptRef",
+              "strictContentPreflightReceiptDigest",
+              "createdAt",
+              "status",
+              "firstBlocker"
+            ],
+            "schema_value": "quwoquan_ops.app_managed_preparation.v1"
           },
           "runtime_config_activation_receipt": {
             "additional_fields": false,
@@ -258626,7 +258837,7 @@
     },
     {
       "path": "content/content/post/errors.yaml",
-      "sha256": "0b981e253c7e646e8d41f8eb40fbb92cb234b9c400f35fd0673a44df6dc08f91",
+      "sha256": "2d5e201f93ea730df5afdbee898a58a68a34f6a653e35dcadb9061230a54b570",
       "mediaType": "application/yaml",
       "content": {
         "description": "Post 对象与 content 域共享的结构化错误码声明。格式：MODULE.KIND.REASON。\n对象专属错误码位于各对象目录（comment、media_asset、original_access_quota、\nreport、post_moderation_case 的 errors.yaml）；codegen 与端云 parity 门禁按\ncontent 域固定文件列表合并生成 Dart ContentErrorCode enum + Go errors.go，\n合并时 code 必须全域唯一。CloudErrorMapper 解析 response body \"code\" 字段。\n",
@@ -258865,6 +259076,28 @@
             "user_message": {
               "en": "The research identity is invalid or expired",
               "zh": "当前研究态身份无效或已过期"
+            }
+          },
+          {
+            "code": "CONTENT.SYSTEM.research_release_state_unavailable",
+            "dart_const": "researchReleaseStateUnavailable",
+            "disruption_level": "snackbar",
+            "emitted_by": [
+              {
+                "operations": [
+                  "GetResearchReleaseReadback"
+                ],
+                "surface": "http"
+              }
+            ],
+            "go_const": "ErrResearchReleaseStateUnavailable",
+            "http_status": 503,
+            "reason": "research_release_state_unavailable",
+            "recovery_action": "retry",
+            "recovery_after_seconds": 5,
+            "user_message": {
+              "en": "The content state required for research readback is temporarily unavailable",
+              "zh": "研究回读所需内容状态暂不可用，请稍后重试"
             }
           },
           {
@@ -263914,7 +264147,7 @@
     },
     {
       "path": "content/content/post/operations.yaml",
-      "sha256": "29f31fb67871f68d6ee001477efdcb9bed8b98c1921b49bc31bab8c5362a524e",
+      "sha256": "1c87d43c006453c45ba163d53092156e61a8c3edfa38e145142a0195de7d55fc",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -263941,6 +264174,7 @@
             "error_codes": [
               "CONTENT.USER.unauthorized",
               "CONTENT.USER.research_identity_invalid",
+              "CONTENT.SYSTEM.research_release_state_unavailable",
               "CONTENT.SYSTEM.required_dependency_unavailable",
               "CONTENT.SYSTEM.internal_error"
             ],
@@ -269895,7 +270129,7 @@
     },
     {
       "path": "content/content/post/storage.yaml",
-      "sha256": "53c17ad07919fd7faa29fc41ba61a412b8df63d8b37e026c086db4eccfe1b4bb",
+      "sha256": "5d416b3ce5b1fcce9a5664b2d07087a853a4b0dd1dfa251021437b2ebec338af",
       "mediaType": "application/yaml",
       "content": {
         "backend": "mongodb",
@@ -270062,83 +270296,6 @@
               }
             ],
             "publication_role": "not_published"
-          },
-          "post_import_task": {
-            "description": "Post import job 的租约、重试与终态；仅 data-content-worker 的 typed store 可读写。",
-            "entity": "Post",
-            "indexes": [
-              {
-                "keys": {
-                  "dedupeKey": 1,
-                  "status": 1
-                },
-                "name": "uq_post_import_task_active_dedupe",
-                "partial_filter": {
-                  "status": {
-                    "in": [
-                      "ready",
-                      "processing",
-                      "retry_wait"
-                    ]
-                  }
-                },
-                "unique": true
-              }
-            ],
-            "publication_role": "not_published",
-            "role": "authoritative"
-          },
-          "post_import_task_outbox": {
-            "description": "不可变 Data release 中单个 Post import job 的宣告 outbox；与 Integration reliable-task 物理隔离。",
-            "entity": "Post",
-            "indexes": [
-              {
-                "keys": {
-                  "idempotencyKey": 1
-                },
-                "name": "uq_post_import_task_outbox_idempotency",
-                "partial_filter": {
-                  "idempotencyKey": {
-                    "type": "string"
-                  }
-                },
-                "unique": true
-              },
-              {
-                "keys": {
-                  "dedupeKey": 1,
-                  "status": 1
-                },
-                "name": "uq_post_import_task_outbox_pending_dedupe",
-                "partial_filter": {
-                  "status": "pending"
-                },
-                "unique": true
-              }
-            ],
-            "publication_role": "not_published",
-            "role": "authoritative"
-          },
-          "post_import_task_recovery_receipt": {
-            "description": "已审计 dead Post import task 的幂等恢复回执。",
-            "entity": "Post",
-            "indexes": [
-              {
-                "keys": {
-                  "taskId": 1
-                },
-                "name": "idx_post_import_task_recovery_task"
-              },
-              {
-                "expire_after_seconds": 0,
-                "keys": {
-                  "expiresAt": 1
-                },
-                "name": "idx_post_import_task_recovery_expiry"
-              }
-            ],
-            "publication_role": "not_published",
-            "role": "authoritative"
           },
           "posts": {
             "entity": "Post",
@@ -355948,7 +356105,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "09e4ec242eb3b3b3f6569611cc09b64bc91e3e0f8fac4b1df715a577b2322a1d",
+      "sha256": "e77e49930eb900ec13ef519d9bd8412804f759b359b9d8f433eb292937e34e7a",
       "mediaType": "application/yaml",
       "content": {
         "configs": [
@@ -358398,17 +358555,6 @@
           {
             "default": 120,
             "key": "sys.content.mongo.max_pool_size",
-            "owner": "platform-ops",
-            "reload": "restart",
-            "risk_level": "medium",
-            "rollout": "progressive",
-            "scope": "service",
-            "type": "int",
-            "ui_editable": false
-          },
-          {
-            "default": 16,
-            "key": "sys.content.worker.concurrency",
             "owner": "platform-ops",
             "reload": "restart",
             "risk_level": "medium",

@@ -257,7 +257,7 @@ def load_reviewer_results(
     execution_source_identity: Mapping[str, Any] | None = None,
     source_review_identity: Mapping[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Load only validated host-source-review/v1 results for new source writes."""
+    """Load only validated host source review results for new source writes."""
     del catalog, digest, execution_source_identity
     from content.source.host_source_review import read_host_source_review_result
 
@@ -273,7 +273,7 @@ def load_reviewer_results(
             raise ValueError("reviewer evidence ref is unsafe or missing")
         raw = read_json(path)
         if not isinstance(raw, Mapping) or raw.get("schema") != "quwoquan_data.host_source_review_result":
-            raise ValueError("new image source review requires host-source-review/v1 result")
+            raise ValueError("new image source review requires one validated host source review result")
         result = read_host_source_review_result(
             evidence_root=resolved_root,
             request_ref=str(raw.get("requestRef") or ""),

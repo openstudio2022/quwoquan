@@ -43,8 +43,8 @@
 
 - canonical：`quwoquan_data/verticals/<vertical>/providers.yaml`
 - canonical：`quwoquan_data/verticals/travel/rights/license_policy.yaml`
-- canonical：`quwoquan_data/scripts/content/release/canonical/gate.py`
-- canonical：`quwoquan_data/scripts/content/review/publish_filter.py`
+- canonical：`quwoquan_data/scripts/content/release/canonical/release_admission.py`
+- canonical：`quwoquan_data/scripts/content/release/canonical/effective_admission.py`
 - release media authority：`quwoquan_data/schema/release/media_manifest.schema.json`
 - MediaAsset authority：`quwoquan_service/services/content-service/contracts/media/media_asset/fields.yaml`
 - public slice authority：`quwoquan_service/runtime/media/asset_ref.go`
@@ -75,6 +75,16 @@
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
 
 ## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 approved-only publish/release 边界尚缺直接证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：[`GWT-001`](#gwt-001) 的前两条结果子句已有 `gwt-001.t1` 与 `gwt-001.t2` local_contract 绑定，只证明四类内容的 MediaAsset/public slice 闭包以及 owner/rights 身份漂移 fail-closed。第三条“中间文件只进入 execution，approved 对象才进入 publish/release”尚无职责匹配的直接证据；现有 legacy golden release gate 测试没有同时观察中间文件、未批准对象与 approved 对象的 IO 边界，不能据此冒充 `gwt-001.t3`。
+- 完成判定：[`GWT-001.t3`](#gwt-001) 由职责匹配且在当前 revision 实际通过的 local_contract 或 api_integration 直接绑定：同一输入中构造中间文件、未批准对象与 approved 对象，断言前两者不进入 publish/release、仅 approved 对象可进入；同时 `gwt-001.t1` 与 `gwt-001.t2` 继续通过。在此之前本 OPEN 保持开放。
+- 依赖：当前 execution 业务产物边界、canonical object transaction 与 release admission；不得恢复旧 orchestration、campaign 或 fixture proof 来补证据。
 
 <a id="open-002"></a>
 ### OPEN-002 四环境 activation 与 rollback 晋级证据

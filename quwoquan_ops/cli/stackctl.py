@@ -181,7 +181,9 @@ from quwoquan_ops.cli.lib.content_release_readiness import (
 )
 from quwoquan_ops.cli.lib.app_content_uat_plan import build_app_content_uat_plan
 from quwoquan_ops.cli.lib.app_content_uat_release_samples import (
-    resolve_release_sample_requests, validate_release_sample_probe,
+    resolve_release_sample_requests,
+    validate_release_sample_probe,
+    validate_release_strict_probe,
 )
 from quwoquan_ops.cli.lib.content_delivery_verification import verify_content_delivery
 from quwoquan_ops.cli.lib.research_content_isolation import verify_research_content_isolation
@@ -191,11 +193,12 @@ from quwoquan_ops.cli.lib.research_isolation_runtime_probe import (
 from quwoquan_ops.cli.lib.research_consumer_credential import (
     ResearchConsumerCredentialError, issue_research_consumer_credential,
 )
-from quwoquan_ops.cli.lib.data_execution_fleet import (
-    FLEET_ACTIONS, manage_data_execution_fleet, project_canonical_runtime_owned_ports,
-    project_compose_published_endpoints, project_runtime_owned_ports,
+from quwoquan_ops.cli.lib.content_api_consumer import run_content_api_consumer
+from quwoquan_ops.cli.lib.runtime_port_ownership import (
+    project_canonical_runtime_owned_ports,
+    project_compose_published_endpoints,
+    project_runtime_owned_ports,
     require_published_endpoint_port,
-    resolve_data_execution_fleet_endpoint,
 )
 from quwoquan_ops.cli.lib.domain_remote_api_integration import (
     GOVERNED_DOMAINS as REMOTE_API_INTEGRATION_DOMAINS,
@@ -207,8 +210,7 @@ from quwoquan_ops.cli.lib.domain_remote_api_integration import (
 )
 from quwoquan_ops.cli.lib.local_runtime_reservation import (
     LocalOperationLockBusyError,
-    acquire_local_runtime_use_lock, active_conflicting_local_targets,
-    assert_local_runtime_available,
+    acquire_local_runtime_use_lock, active_conflicting_local_targets, assert_local_runtime_available,
     assert_no_running_mutable_runtime,
     global_local_operation_lock as _reservation_global_local_operation_lock,
     local_runtime_peer_targets,
@@ -221,6 +223,9 @@ from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
     inspect_consumer_leases, release_consumer_lease,
 )
 from quwoquan_ops.cli.lib import orphan_compose_teardown
+from quwoquan_ops.cli.lib.orphan_compose_runtime_gate import (
+    orphan_compose_runtime_gate as _orphan_compose_runtime_gate,
+)
 from quwoquan_ops.cli.lib import output_layout_reconciliation
 from quwoquan_ops.cli.lib import service_core_cutover
 from quwoquan_ops.cli.lib import startup_health_failure_evidence
@@ -230,6 +235,7 @@ from quwoquan_ops.cli.lib.startup_attempt_receipt import (
     transition_startup_attempt,
 )
 from quwoquan_ops.cli.lib.test_live_startup_attempt_receipt import (
+    UnsafeTestLiveStartupReceiptPath,
     bounded_replace_stale_test_live_startup_attempt, load_test_live_startup_attempt,
     read_stale_test_live_startup_attempt, reclaim_stale_test_live_startup_attempt,
     require_bounded_stale_test_live_startup_attempt,
@@ -278,11 +284,13 @@ from quwoquan_ops.cli.lib.service_core_composition import (
     project_compose_document,
 )
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
-    RELEASE_INPUT_CLASSIFICATIONS, canonical_contract_graph_digest, load_candidate_manifest,
+    RELEASE_INPUT_CLASSIFICATIONS, canonical_contract_graph_digest,
+    canonical_local_observability_log_sink_composition, load_candidate_manifest,
     load_provider_binding_overlay, materialize_mutable_provider_binding_overlay,
     materialize_observability_log_sink_package,
     materialize_provider_binding_overlay, materialize_provider_runtime_package,
-    provider_binding_overlay_build_inputs, provider_runtime_image_environment_key,
+    observability_log_sink_composition_digest, provider_binding_overlay_build_inputs,
+    provider_runtime_image_environment_key,
     release_input_classification as classify_release_inputs, seal_provider_runtime_package_images,
     validate_observability_log_sink_package, validate_release_attestations,
     write_candidate_manifest,
@@ -308,15 +316,15 @@ from quwoquan_ops.cli.lib.test_data.operations import TestDataRuntime
 from quwoquan_ops.cli.lib.test_data.serialization import case_request_document, load_case_requests
 from quwoquan_ops.cli.lib.dev_up import (
     DEV_UP_ENVS, DEV_UP_STACK_TARGETS, app_target_for_env, build_start_app_command,
-    detect_device_kind, find_device, launch_app, pick_dev_up_env, resolve_device_id,
+    detect_device_kind, enable_android_adb_reverse, find_device, launch_app,
+    pick_dev_up_env, resolve_device_id,
 )
 from quwoquan_ops.cli.lib.managed_preparation import (
     MANAGED_PREPARATION_SCHEMA, ManagedPreparationBlocked,
-    _managed_active_release_readback, _managed_android_adb_reverse_ports,
-    _managed_content_binding, _managed_device_identity, _managed_device_trust,
-    _managed_inspect_running_full_runtime, _managed_research_readiness_candidates,
-    _managed_runtime_ready, _managed_strict_preflight,
-    _write_managed_preparation_receipt, run_managed_preparation,
+    _managed_active_release_readback, _managed_android_adb_reverse_ports, _managed_content_binding, _managed_device_identity,
+    _managed_device_trust, _managed_inspect_running_full_runtime,
+    _managed_research_readiness_candidates, _managed_runtime_ready,
+    _managed_strict_preflight, _write_managed_preparation_receipt, run_managed_preparation,
 )
 from quwoquan_ops.cli.lib.filter_catalog_release import (
     LOCAL_FILTER_CATALOG_TARGETS, MUTATING_ACTIONS as FILTER_CATALOG_MUTATING_ACTIONS,
@@ -372,6 +380,7 @@ def _global_local_operation_lock(
 # 子命令域外挂模块：argparse 表面与编排胶水迁往 quwoquan_ops/cli/commands/**，
 # stackctl 保持唯一入口；此处 import + 再导出保证 dispatch 与测试
 # monkeypatch（mock.patch.object(stackctl, ...)）语义零漂移。
+from quwoquan_ops.cli.commands import stackctl_dispatch
 from quwoquan_ops.cli.commands import app_managed_prepare as app_managed_prepare_commands
 from quwoquan_ops.cli.commands import app_preflight as app_preflight_commands
 from quwoquan_ops.cli.commands import app_uat_evidence as app_uat_evidence_commands
@@ -381,7 +390,6 @@ from quwoquan_ops.cli.commands import app_dependency_sync as app_dependency_sync
 from quwoquan_ops.cli.commands import assistant_skill_package as assistant_skill_package_commands
 from quwoquan_ops.cli.commands import consumer_lease as consumer_lease_commands
 from quwoquan_ops.cli.commands import content_acceptance as content_acceptance_commands
-from quwoquan_ops.cli.commands import data_execution_fleet as data_execution_fleet_commands
 from quwoquan_ops.cli.commands import deploy_domain as deploy_domain_commands
 from quwoquan_ops.cli.commands import dev_session_domain as dev_session_domain_commands
 from quwoquan_ops.cli.commands import device_trust as device_trust_commands
@@ -456,9 +464,9 @@ from quwoquan_ops.cli.commands.consumer_lease import command_consumer_lease
 from quwoquan_ops.cli.commands.content_acceptance import (
     _content_release_uat_command, _release_feed_post_expectations, _run_data_acceptance_lease,
     _run_release_feed_readback_probe, _run_release_video_delivery_probe,
-    command_account_enforcement_uat, command_content_readiness, command_content_uat,
+    command_account_enforcement_uat, command_content_api_consumer,
+    command_content_readiness, command_content_uat,
 )
-from quwoquan_ops.cli.commands.data_execution_fleet import command_data_execution_fleet
 from quwoquan_ops.cli.commands.device_trust import command_device_trust
 from quwoquan_ops.cli.commands.diagnostics_shared import (
     _CONTENT_DATA_PLANE_ROLES, _candidate_workspace_report, _content_commercial_health_checks,
@@ -602,6 +610,7 @@ from quwoquan_ops.cli.commands.dev_session_runtime import (
     _dev_session_finalize_runtime_plan, _dev_session_phase,
     _dev_session_render_runtime_inputs, _dev_session_runtime_preflight,
     _dev_session_target_media_root, _dev_session_workload_conflict,
+    _mutable_observability_log_sink_launch_environment,
     _mutable_test_live_operation_identity_environment, _mutable_workspace_snapshot,
 )
 from quwoquan_ops.cli.lib.local_portal_materialization import (
@@ -645,7 +654,7 @@ from quwoquan_ops.cli.commands.repair_runtime_recovery import (
     _complete_orphan_compose_audit_convergence, _current_runtime_health_scope,
     _global_local_build_cache_lock, _global_output_layout_reconciliation_lock,
     _normal_down_structurally_impossible,
-    _orphan_compose_runtime_gate, _prod_release_lock, _repair_orphaned_compose,
+    _prod_release_lock, _repair_orphaned_compose,
     _wait_for_attested_orphan_compose_ports_released,
 )
 from quwoquan_ops.cli.commands.repair_stale_test_live_receipt import (
@@ -684,7 +693,6 @@ from quwoquan_ops.cli.commands.verify_profiles import (
     _media_publication_lifecycle_profile_command,
     _onboarding_author_impact_gamma_api_integration_profile_command,
     _profile_proposal_gamma_api_integration_profile_command,
-    _reliabletask_gamma_api_integration_profile_command,
     _report_feedback_lifecycle_profile_command, _search_remote_api_integration_profile_command,
     _target_media_preflight_profile_command,
 )
@@ -786,6 +794,7 @@ def build_parser() -> argparse.ArgumentParser:
     prod_hosted_plan_commands.register_parser(subparsers)
 
     content_acceptance_commands.register_content_readiness_parser(subparsers)
+    content_acceptance_commands.register_content_api_consumer_parser(subparsers)
 
     app_managed_prepare_commands.register_parser(subparsers)
     app_preflight_commands.register_parser(subparsers)
@@ -793,8 +802,6 @@ def build_parser() -> argparse.ArgumentParser:
     provider_debug_commands.register_parser(subparsers)
     app_preflight_uat_commands.register_parser(subparsers)
     app_uat_evidence_commands.register_parser(subparsers)
-
-    data_execution_fleet_commands.register_parser(subparsers)
 
     content_acceptance_commands.register_uat_parsers(subparsers)
 
@@ -956,55 +963,7 @@ _TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES = frozenset(
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    dispatch = {
-        "package": command_package,
-        "verify": command_verify,
-        "test-data-request": command_test_data_request,
-        "test-data-evidence": command_test_data_evidence,
-        "matrix": command_matrix,
-        "tls": command_tls,
-        "device-trust": command_device_trust,
-        "store-channels": command_store_channels,
-        "store-distribution": command_store_distribution,
-        "provider-conformance": command_provider_conformance,
-        "provider-config": command_provider_config,
-        "assistant-skill-package": command_assistant_skill_package,
-        "dev-session": command_dev_session,
-        "up": command_up,
-        "product-telemetry-log-sink": command_product_telemetry_log_sink,
-        "down": command_down,
-        "consumer-lease": command_consumer_lease,
-        "status": command_status,
-        "health": command_health,
-        "loadtest": command_loadtest,
-        "drill": command_drill,
-        "prod-hosted-plan": command_prod_hosted_plan,
-        "inspect": command_inspect,
-        "doctor": command_doctor,
-        "content-readiness": command_content_readiness,
-        "research-isolation-probe": command_research_isolation_probe,
-        "research-consumer-credential": command_research_consumer_credential,
-        "app-managed-prepare": app_managed_prepare_commands.command_app_managed_prepare,
-        "app-content-preflight": command_app_content_preflight,
-        "app-debug-preflight": command_app_debug_preflight,
-        "app-domain-api-integration": command_app_domain_api_integration,
-        "app-dependency-sync": command_app_dependency_sync,
-        "provider-debug": command_provider_debug,
-        "app-content-uat": command_app_content_uat,
-        **app_uat_evidence_commands.COMMAND_HANDLERS,
-        "data-execution-fleet": command_data_execution_fleet,
-        "content-uat": command_content_uat,
-        "account-enforcement-uat": command_account_enforcement_uat,
-        "filter-catalog": command_filter_catalog,
-        "premium-pool": command_premium_pool,
-        "repair": command_repair,
-        "roll": command_roll,
-        "deploy": command_deploy,
-        "hosted-release-receipt": command_hosted_release_receipt,
-        "hosted-read-only": hosted_read_only_commands.command_hosted_read_only,
-        "migration": travel_to_gathering_migration.command,
-    }
-    payload = dispatch[args.command](args)
+    payload = stackctl_dispatch.dispatch(args, globals())
     return print_result(args, payload)
 
 

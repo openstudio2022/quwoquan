@@ -1,4 +1,4 @@
-# 旅行文章内容基线 preset（默认值唯一真相源；execution spec 的 presetRef 指向本文件）。
+# 旅行文章内容基线 preset（默认值唯一真相源；family recipe 的 presetRef 指向本文件）。
 # defaults 与 execution spec 同构：实例未显式声明的字段由此补齐。
 schema: quwoquan.content.preset
 presetId: content/travel/article/base
@@ -15,8 +15,6 @@ defaults:
     - article
     modalityContract: separated_research
     research:
-      lanes:
-      - article
       imageAssetStrategy: attribution_audited_publish
       imageCountPolicy: score_bonus
       allowAiImages: false

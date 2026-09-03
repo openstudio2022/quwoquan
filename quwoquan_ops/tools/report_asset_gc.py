@@ -7,8 +7,8 @@ AGENTS.md 与特性树重复正文让两处各自漂移。本工具可重复生�
 
 1. 僵尸 reference：`.agents/skills/**/references/**` 下未被任何技能资产、
    registry、命令或 AGENTS.md 引用的 Markdown 文件。
-2. harness 分叉：`.cursor/skills` / `.codex/skills` 中不指向 `.agents/skills/`
-   真相源的实体 stub，以及指向不存在真相源的死指针。
+2. harness Workflow stub：`.cursor/skills` / `.codex/skills` 中任何宿主专属
+   Workflow Skill stub；Workflow 发现面只能是 `.agents/skills/*/SKILL.md`。
 3. 重复正文：各级 AGENTS.md 段落与 `specs/feature-tree/**` 正文逐字重复
    （normalize 后 >=120 字符），两处各自漂移的前兆。
 
@@ -123,22 +123,16 @@ def collect_zombie_references(root: Path) -> list[str]:
 
 
 def collect_harness_forks(root: Path) -> list[str]:
-    """Cursor/Codex skill stub 中不指向真相源的实体与死指针。"""
+    """拒绝 Cursor/Codex 宿主专属 Workflow Skill stub。"""
+
     issues: list[str] = []
     for pattern in (".cursor/skills/*/SKILL.md", ".codex/skills/*/SKILL.md"):
         for stub in sorted(root.glob(pattern)):
             rel = stub.relative_to(root).as_posix()
-            if stub.is_symlink():
-                if not stub.resolve().is_file():
-                    issues.append(f"{rel}: symlink 指向不存在的真相源（死指针）")
-                continue
-            text = stub.read_text(encoding="utf-8")
-            if ".agents/skills/" not in text:
-                issues.append(f"{rel}: 实体 stub 未指向 .agents/skills/ 真相源（分叉候选）")
-                continue
-            for target in re.findall(r"\.agents/skills/[\w\-]+/SKILL\.md", text):
-                if not (root / target).is_file():
-                    issues.append(f"{rel}: 指向不存在的真相源 {target}（死指针）")
+            issues.append(
+                f"{rel}: 宿主专属 Workflow stub 必须删除；"
+                "Workflow 只从 .agents/skills 动态发现"
+            )
     return issues
 
 
@@ -185,7 +179,7 @@ def build_report(root: Path) -> str:
         "- 性质：候选清单，回收裁决走 distill / plan-next；本报告可删可重建。\n\n"
         + _section("僵尸 reference（未被任何资产引用）", zombies)
         + "\n"
-        + _section("harness 分叉与死指针", forks)
+        + _section("harness Workflow stub", forks)
         + "\n"
         + _section("AGENTS.md 与特性树重复正文", duplicates)
     )

@@ -82,7 +82,7 @@
 <a id="req-005"></a>
 ### REQ-005 宿主 execution 与运营视图只作为上游只读事实
 
-- 宿主 Agent 十阶段、stage receipt、reviewed delivery、pool 与 ship terminal 全部归 discovery owner；runtime-data-engineering 不拥有执行命令、状态机、recovery、milestone 或完成结论。
+- 宿主 AI 十阶段、OPEN/CLOSE receipts、逐对象 publish、显式 cohort release 与 ship facts 全部归 discovery owner；runtime-data-engineering 不拥有执行命令、状态机、recovery、milestone 或完成结论。
 - 本域的消费状态查询只能读取 immutable release、importer/outbox 与 active pointer facts；不得从 execution/campaign/provider/model 推导消费资格，也不得回写上游 terminal。
 - 任何跨域运营 projection 均无 command、Repository、checkpoint 或独立 lifecycle，删除后可从公开 owner facts exact rebuild。
 
@@ -102,7 +102,7 @@
 - fresh 环境/物理设备 evidence 由 discovery OPEN 跟踪；本节点不得复制证据 OPEN 或据本域测试关闭上游缺口。
 - 证据执行隔离：验证执行产生的临时字节只进入 tempfile 临时根，不得写入仓库根或 `QWQ_OUTPUT_ROOT`；runner 与落盘隔离门属于 evidence contract。
 - 验收证据层：`SIT-001` 的对象、pool、holder、promotion 与 receipt 约束由 `local_contract` 承接，真实 import/readback/Search/Recommendation/lifecycle 由 `api_integration` 承接，App 消费结果由 `user_acceptance` raw `ReadinessCaseResult` 承接。
-- 验收证据层：`SIT-003` 的 stage writer、terminal reducer 与 projection query 由 `local_contract` 承接，真实 ship 与 owner receipt ref/digest 串联由 `api_integration` 承接。
+- 验收证据层：`SIT-003` 的 OPEN/CLOSE create-once 与 projection query 由 `local_contract` 承接，真实 ship 与 owner receipt ref/digest 串联由 `api_integration` 承接。
 - 验收证据层：`SIT-004` 的 wire schema、append-only 与 fail-closed evaluator 由 `local_contract` 承接，真实 activation/readback/package/device 与 predecessor 串联由 `api_integration` 承接，真实 App consumer case 由 `user_acceptance` 承接。
 - 「可发布」判定单轨：在数据工程内，环境 readiness 收据是否可发布只由 `quwoquan_data/scripts/verify/release_publishability.py` 的 typed 谓词裁定，CLI 入口为 `verify release-publishability`；phase 闭集与 phase↔lifecycle 对齐规则不得在数据工程脚本中重复定义。对象池准入、素材可发布与 execution 准出是各自独立的谓词，不共用该措辞。跨仓消费方（如 `quwoquan_ops/ci/generate_release_bound_environment_identity.py` 的 release-bound 身份校验）以 wire schema `environment_release_readiness.schema.json` 为锚做收据身份验证，属已登记消费，不构成第二份可发布谓词。
 
@@ -173,16 +173,6 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现：发布物的采集通道声明止步于 taxonomy，没有随标签进入在线特征。排序侧对一篇内容的全部标签施加同一个由停留深度与来源渠道推导的权重，因此拍摄元数据测量出的机身与焦段、地点选择解析出的行政区、创作者自行勾选的风格三者在召回与排序中完全等价。自填标签的噪声因此被当作实测证据参与分发，而实测证据也拿不到应有的置信优势。对象标签倒排只存扁平 tagRef 数组，不承载单条赋值的权重与置信度，所以该信息在存储层同样缺位。
 - 完成判定：单条标签赋值的采集通道与置信度可从发布物经倒排索引到达排序侧，排序按该置信度区分实测标签与自填标签。置信度只有发布物声明这一个来源，Go 侧不得按 tagRef 路径前缀推测采集通道。倒排索引改造后，反查与子树前缀反查的命中集合与改造前等价，并有真实存储证据。
-
-<a id="open-006"></a>
-### OPEN-006 旧执行编排退役只读重定向
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现：本节点无独立实现缺口；owner OPEN 中声明的后续物理删除实现仍缺。本节点不复制退役范围、pre-delete proof、状态机或事实；唯一 owner 是 discovery [`multi-carrier-release OPEN-006`](../../discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-006)。
-- 尚缺验收证据：owner OPEN 中声明的三份真实 proof unit 与 post-delete evidence 仍缺，必须由 owner 裁定。
-- 完成判定：[`SIT-001`](#sit-001) 的 runtime consumer boundary 保持成立，且 discovery owner [`multi-carrier-release OPEN-006`](../../discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#open-006) 已按 owner 验收裁定关闭后，迁移本节点存量 `spec_ref` 并删除该只读锚点；runtime-data-engineering 无独立 evidence，不得据本域验收单独关闭 owner 缺口。
 
 <a id="open-008"></a>
 ### OPEN-008 runtime consumption projection 尚缺实现闭环

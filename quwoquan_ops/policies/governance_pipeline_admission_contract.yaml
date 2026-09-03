@@ -1,7 +1,6 @@
 schema_id: governance-pipeline-admission-contract
-schema_version: 2
+schema_version: 3
 owner_story: specs/feature-tree/runtime/development-workflow-governance/governance-pipeline-observe-only/spec.md
-workflow_resolve_source: quwoquan_ops/policies/workflow_resolution_contract.yaml
 local_readiness_source: quwoquan_ops/policies/local_readiness_contract.yaml
 human_eval_source: quwoquan_ops/policies/evals/human_agent_delivery_interaction_v1.yaml
 human_authority_source: quwoquan_ops/policies/human_agent_delivery_contract.yaml
@@ -69,12 +68,11 @@ schemas:
   evidence_bundle:
     required_fields: [schema_id, schema_version, subject_fingerprint, subject_fingerprint_receipt, assembled_at, receipts]
   evidence_bundle_receipts:
-    required_fields: [owner_manifest, workflow_resolve, local_scope_ready, local_release_ready, review_plan, named_evidence, review_consolidation, handoff, human_calibration, objective_inspect, hotl_inspect, hosted_authority_source, external]
+    required_fields: [owner_manifest, local_scope_ready, local_release_ready, review_plan, named_evidence, review_consolidation, handoff, human_calibration, objective_inspect, hotl_inspect, hosted_authority_source, external]
   bundle_receipt:
     required_fields: [provider_id, receipt_ref, exact_bytes_base64]
 
 evidence_layers:
-  workflow_resolve: {qualifying_result: selected, missing_blocker: WORKFLOW_RESOLVE_RECEIPT_MISSING, failed_blocker: WORKFLOW_RESOLVE_RECEIPT_FAILED, unqualified_blocker: WORKFLOW_RESOLVE_NOT_SELECTED}
   owner_manifest: {qualifying_result: pass, missing_blocker: OWNER_MANIFEST_MISSING, failed_blocker: OWNER_MANIFEST_INVALID, unqualified_blocker: OWNER_MANIFEST_NOT_CURRENT}
   local_scope_ready: {qualifying_result: scope_ready, missing_blocker: LOCAL_SCOPE_RECEIPT_MISSING, failed_blocker: LOCAL_SCOPE_RECEIPT_INVALID, unqualified_blocker: LOCAL_SCOPE_NOT_READY}
   local_release_ready: {qualifying_result: release_ready, missing_blocker: LOCAL_RELEASE_RECEIPT_MISSING, failed_blocker: LOCAL_RELEASE_RECEIPT_INVALID, unqualified_blocker: LOCAL_RELEASE_NOT_READY}
@@ -104,8 +102,7 @@ evidence_layers:
 
 
 layer_admission:
-  workflow_resolve: {provider_id: workflow_resolver_v1, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 1800, verifier_id: governance.workflow.v1, interface: local}
-  owner_manifest: {provider_id: feature_context_manifest_v2, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 1800, verifier_id: governance.owner_manifest.v1, interface: local}
+  owner_manifest: {provider_id: feature_context_manifest_v3, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 1800, verifier_id: governance.owner_manifest.v1, interface: local}
   local_scope_ready: {provider_id: local_readiness_receipt_v1, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.local_readiness.read_only.v1, interface: local}
   local_release_ready: {provider_id: local_readiness_receipt_v1, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.local_readiness.read_only.v1, interface: local}
   review_terminal: {provider_id: review_consolidator_v1, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.review.v1, interface: local}
@@ -154,7 +151,6 @@ current_repository_evidence:
     - .agents/skills/review/references/registry.yaml
     - quwoquan_ops/policies/agent_governance_contract.yaml
     - quwoquan_ops/policies/governance_pipeline_admission_contract.yaml
-    - quwoquan_ops/policies/workflow_resolution_contract.yaml
     - quwoquan_ops/policies/local_readiness_contract.yaml
     - quwoquan_ops/policies/human_agent_delivery_contract.yaml
     - quwoquan_ops/policies/objective_execution_contract.yaml
@@ -162,12 +158,19 @@ current_repository_evidence:
     - specs/feature-tree/runtime/development-workflow-governance/design.md
     - specs/feature-tree/runtime/development-workflow-governance/governance-pipeline-observe-only/spec.md
     - quwoquan_ops/cli/handoff_consumer.py
+  named_evidence_plan_binding:
+    workflow: dev
+    segment: POST
+    deliverable: implementation
+    scope: specs/feature-tree/runtime/development-workflow-governance/governance-pipeline-observe-only/spec.md
+    owner_manifest_target: specs/feature-tree/runtime/development-workflow-governance/governance-pipeline-observe-only/spec.md
+    registry_ref: .agents/skills/review/references/registry.yaml
+    subject: {subject_id: current-repository, candidate_id: working-tree, scope_id: governance-pipeline}
   named_evidence_layers:
     portal_test: {evidence_id: portal-test, qualifying_result: pass}
     portal_build: {evidence_id: portal-build, qualifying_result: pass}
   provider_adapters:
-    owner_manifest: {provider_id: feature_context_manifest_v2, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 1800, verifier_id: governance.owner_manifest.v1}
-    workflow_resolve: {provider_id: workflow_resolver_v1, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 1800, verifier_id: governance.workflow.v1}
+    owner_manifest: {provider_id: feature_context_manifest_v3, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 1800, verifier_id: governance.owner_manifest.v1}
     local_readiness: {provider_id: local_readiness_receipt_v1, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.local_readiness.read_only.v1}
     review_consolidation: {provider_id: review_consolidator_v1, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.review.v1}
     named_evidence: {provider_id: review_named_evidence_v1, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.named_evidence.v1}
@@ -261,7 +264,6 @@ observation_metrics:
     - {metric_id: governance_deferred_age_ms, kind: gauge, unit: milliseconds, dimensions: [scope], sensitive_fields: []}
     - {metric_id: governance_commit_freshness_ms, kind: gauge, unit: milliseconds, dimensions: [scope], sensitive_fields: []}
     - {metric_id: governance_hosted_mismatch_total, kind: counter, unit: count, dimensions: [evidence_layer], sensitive_fields: []}
-    - {metric_id: governance_resolve_latency_ms, kind: histogram, unit: milliseconds, dimensions: [workflow, status], sensitive_fields: []}
     - {metric_id: governance_authority_wait_ms, kind: histogram, unit: milliseconds, dimensions: [delivery_stage, status], sensitive_fields: []}
     - {metric_id: governance_authority_transfer_total, kind: counter, unit: count, dimensions: [delivery_stage, status], sensitive_fields: []}
     - {metric_id: governance_authority_timeout_total, kind: counter, unit: count, dimensions: [delivery_stage, terminal], sensitive_fields: []}
@@ -282,9 +284,6 @@ blocker_priority:
   - HUMAN_CALIBRATION_SELF_ASSERTED
   - OBJECTIVE_ADMISSION_BLOCKED
   - EVALUATION_IDENTITY_FAILED
-  - WORKFLOW_RESOLVE_RECEIPT_MISSING
-  - WORKFLOW_RESOLVE_RECEIPT_FAILED
-  - WORKFLOW_RESOLVE_NOT_SELECTED
   - OWNER_MANIFEST_MISSING
   - OWNER_MANIFEST_INVALID
   - OWNER_MANIFEST_NOT_CURRENT

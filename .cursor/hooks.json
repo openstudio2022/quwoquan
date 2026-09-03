@@ -1,27 +1,17 @@
 {
   "version": 1,
   "hooks": {
-    "subagentStart": [
-      {
-        "command": "python3 quwoquan_ops/hooks/subagent_start_guard.py"
-      }
-    ],
     "beforeShellExecution": [
       {
-        "command": "python3 quwoquan_ops/hooks/shell_cli_first_guard.py",
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/hooks/shell_cli_first_guard.py",
         "matcher": "python"
       },
       {
-        "command": "python3 quwoquan_ops/hooks/worktree_authz_guard.py --harness cursor",
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/hooks/worktree_authz_guard.py --harness cursor",
         "matcher": "worktree\\s+add|git\\s+clone|checkout\\s+-[bB]|switch\\s+-[cC]|git\\s+branch"
       },
       {
         "command": "bash quwoquan_ops/hooks/worktree_session_reminder_gate.sh"
-      }
-    ],
-    "afterFileEdit": [
-      {
-        "command": "python3 quwoquan_ops/hooks/local_readiness_after_edit.py"
       }
     ]
   }

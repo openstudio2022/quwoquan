@@ -13,9 +13,9 @@ import json
 import os
 import re
 import stat
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path, PurePosixPath
-from typing import Any, Callable
+from typing import Any
 
 from quwoquan_ops.cli.commands.environment_acceptance_predecessor import (
     validate_predecessor_acceptance,
@@ -27,6 +27,7 @@ from quwoquan_ops.cli.lib.app_uat_result_bundle import (
     write_projection,
 )
 from quwoquan_ops.cli.lib.environment_acceptance_fact import (
+    ACCEPTANCE_PROFILES,
     EnvironmentAcceptanceFactError,
     build_environment_acceptance_fact,
     exact_byte_digest,
@@ -56,7 +57,9 @@ def _block(code: str, detail: str) -> None:
 
 def _digest(value: object, *, field: str) -> str:
     if not isinstance(value, str) or _DIGEST_RE.fullmatch(value) is None:
-        _block("OPS.APP_UAT_EVIDENCE.invalid_digest", f"{field} must be canonical sha256")
+        _block(
+            "OPS.APP_UAT_EVIDENCE.invalid_digest", f"{field} must be canonical sha256"
+        )
     return value
 
 
@@ -91,7 +94,11 @@ def _root(value: str | Path, *, field: str) -> Path:
         raise AppUatEvidenceCommandError(
             "OPS.APP_UAT_EVIDENCE.path_blocked", f"{field} is unavailable"
         ) from error
-    if candidate.is_symlink() or not stat.S_ISDIR(metadata.st_mode) or resolved != candidate:
+    if (
+        candidate.is_symlink()
+        or not stat.S_ISDIR(metadata.st_mode)
+        or resolved != candidate
+    ):
         _block(
             "OPS.APP_UAT_EVIDENCE.path_blocked",
             f"{field} must be a real non-symlink directory",
@@ -153,8 +160,7 @@ def _read_exact_json(
     encoded = b"".join(chunks)
     identity = (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns)
     if (
-        identity
-        != (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+        identity != (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
         or identity != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
         or len(encoded) != opened.st_size
     ):
@@ -206,9 +212,9 @@ def _source(ref: str, digest: str, *, label: str) -> dict[str, str]:
     }
 
 
-def _source_argument(raw: Sequence[str], *, label: str) -> list[dict[str, str]]:
+def _source_argument(raw: Sequence[str] | None, *, label: str) -> list[dict[str, str]]:
     sources: list[dict[str, str]] = []
-    for index, value in enumerate(raw):
+    for index, value in enumerate(raw or ()):
         parts = value.split("=", 1)
         if len(parts) != 2:
             _block(
@@ -221,9 +227,9 @@ def _source_argument(raw: Sequence[str], *, label: str) -> list[dict[str, str]]:
     return sources
 
 
-def _profile_argument(raw: Sequence[str]) -> list[dict[str, str]]:
+def _profile_argument(raw: Sequence[str] | None) -> list[dict[str, str]]:
     profiles: list[dict[str, str]] = []
-    for index, value in enumerate(raw):
+    for index, value in enumerate(raw or ()):
         parts = value.split("=", 1)
         if len(parts) != 2 or not all(part for part in parts):
             _block(
@@ -239,9 +245,9 @@ def _profile_argument(raw: Sequence[str]) -> list[dict[str, str]]:
     return profiles
 
 
-def _target_binding_argument(raw: Sequence[str]) -> list[dict[str, str]]:
+def _target_binding_argument(raw: Sequence[str] | None) -> list[dict[str, str]]:
     bindings: list[dict[str, str]] = []
-    for index, value in enumerate(raw):
+    for index, value in enumerate(raw or ()):
         parts = value.split("=", 3)
         if len(parts) != 4:
             _block(
@@ -266,9 +272,9 @@ def _target_binding_argument(raw: Sequence[str]) -> list[dict[str, str]]:
     return bindings
 
 
-def _required_raw_argument(raw: Sequence[str]) -> list[dict[str, str]]:
+def _required_raw_argument(raw: Sequence[str] | None) -> list[dict[str, str]]:
     results: list[dict[str, str]] = []
-    for index, value in enumerate(raw):
+    for index, value in enumerate(raw or ()):
         parts = value.split("=", 3)
         if len(parts) != 4:
             _block(
@@ -328,54 +334,94 @@ def _require_complete(
 
 
 def build_target_uat_binding_command(
-    *, evidence_root: Path, output_root: Path, runtime_binding_ref: str,
-    runtime_binding_digest: str, launch_binding_ref: str, launch_binding_digest: str,
-    sample_plan_ref: str, sample_plan_digest: str, active_cas_ref: str,
-    active_cas_digest: str, readback_ref: str, readback_digest: str,
-    artifact_class: str, build_mode: str, build_profile: str,
-    provider_identity: str, provider_class: str, provider_type: str,
-    provider_registered: bool, provider_conformance_ref: str,
+    *,
+    evidence_root: Path,
+    output_root: Path,
+    runtime_binding_ref: str,
+    runtime_binding_digest: str,
+    launch_binding_ref: str,
+    launch_binding_digest: str,
+    sample_plan_ref: str,
+    sample_plan_digest: str,
+    active_cas_ref: str,
+    active_cas_digest: str,
+    readback_ref: str,
+    readback_digest: str,
+    artifact_class: str,
+    build_mode: str,
+    build_profile: str,
+    provider_identity: str,
+    provider_class: str,
+    provider_type: str,
+    provider_registered: bool,
+    provider_conformance_ref: str,
     provider_conformance_digest: str,
-    device_identity: str, device_class: str, device_registered: bool,
-    runner_identity: str, runner_source_path: str, runner_digest: str,
-    runner_registered: bool, profile: str, non_promotable: bool, created_at: str,
+    device_identity: str,
+    device_class: str,
+    device_registered: bool,
+    runner_identity: str,
+    runner_source_path: str,
+    runner_digest: str,
+    runner_registered: bool,
+    profile: str,
+    non_promotable: bool,
+    created_at: str,
 ) -> dict[str, Any]:
     """Pure command handler for explicit TargetUatBinding authoring."""
 
     root = _root(evidence_root, field="evidenceRoot")
     runtime = _read_exact_json(
-        evidence_root=root, ref=runtime_binding_ref, digest=runtime_binding_digest,
+        evidence_root=root,
+        ref=runtime_binding_ref,
+        digest=runtime_binding_digest,
         label="runtimeBinding",
     )
     launch = _read_exact_json(
-        evidence_root=root, ref=launch_binding_ref, digest=launch_binding_digest,
+        evidence_root=root,
+        ref=launch_binding_ref,
+        digest=launch_binding_digest,
         label="launchBinding",
     )
     plan = _read_exact_json(
-        evidence_root=root, ref=sample_plan_ref, digest=sample_plan_digest,
+        evidence_root=root,
+        ref=sample_plan_ref,
+        digest=sample_plan_digest,
         label="releaseUatSamplePlan",
     )
     activation = _read_exact_json(
-        evidence_root=root, ref=active_cas_ref, digest=active_cas_digest,
+        evidence_root=root,
+        ref=active_cas_ref,
+        digest=active_cas_digest,
         label="activeCas",
     )
     readback = _read_exact_json(
-        evidence_root=root, ref=readback_ref, digest=readback_digest,
+        evidence_root=root,
+        ref=readback_ref,
+        digest=readback_digest,
         label="readback",
     )
     _require_complete(
-        activation, label="activeCas", allowed=frozenset({"active", "activated", "completed", "passed", "ready"}),
+        activation,
+        label="activeCas",
+        allowed=frozenset({"active", "activated", "completed", "passed", "ready"}),
     )
     _require_complete(
-        readback, label="readback", allowed=frozenset({"active", "activated", "completed", "passed", "ready"}),
+        readback,
+        label="readback",
+        allowed=frozenset({"active", "activated", "completed", "passed", "ready"}),
     )
     if plan.get("schema") != "quwoquan_data.release_uat_sample_plan":
-        _block("OPS.TARGET_UAT_BINDING.sample_plan_invalid", "ReleaseUatSamplePlan schema is invalid")
-    if (
-        plan.get("releaseId") != runtime.get("releaseId")
-        or plan.get("releaseDigest") != runtime.get("manifestDigest")
-    ):
-        _block("OPS.TARGET_UAT_BINDING.stale", "ReleaseUatSamplePlan release identity drifted")
+        _block(
+            "OPS.TARGET_UAT_BINDING.sample_plan_invalid",
+            "ReleaseUatSamplePlan schema is invalid",
+        )
+    if plan.get("releaseId") != runtime.get("releaseId") or plan.get(
+        "releaseDigest"
+    ) != runtime.get("manifestDigest"):
+        _block(
+            "OPS.TARGET_UAT_BINDING.stale",
+            "ReleaseUatSamplePlan release identity drifted",
+        )
     for label, payload in (("activeCas", activation), ("readback", readback)):
         for field, expected in (
             ("environment", runtime.get("environment")),
@@ -385,7 +431,9 @@ def build_target_uat_binding_command(
             if observed is not None and observed != expected:
                 _block("OPS.TARGET_UAT_BINDING.stale", f"{label}.{field} drifted")
         observed_digest = payload.get("releaseDigest", payload.get("manifestDigest"))
-        if observed_digest is not None and observed_digest != runtime.get("manifestDigest"):
+        if observed_digest is not None and observed_digest != runtime.get(
+            "manifestDigest"
+        ):
             _block("OPS.TARGET_UAT_BINDING.stale", f"{label}.releaseDigest drifted")
         observed_target = payload.get("deploymentTarget", payload.get("target"))
         if observed_target is not None and observed_target != runtime.get("target"):
@@ -395,8 +443,12 @@ def build_target_uat_binding_command(
         launch,
         {
             "releaseId": plan.get("releaseId"),
-            "releaseUatSamplePlanRef": _ref(sample_plan_ref, field="releaseUatSamplePlan.ref"),
-            "releaseUatSamplePlanDigest": _digest(sample_plan_digest, field="releaseUatSamplePlan.digest"),
+            "releaseUatSamplePlanRef": _ref(
+                sample_plan_ref, field="releaseUatSamplePlan.ref"
+            ),
+            "releaseUatSamplePlanDigest": _digest(
+                sample_plan_digest, field="releaseUatSamplePlan.digest"
+            ),
         },
         active_cas=_source(active_cas_ref, active_cas_digest, label="activeCas"),
         readback=_source(readback_ref, readback_digest, label="readback"),
@@ -414,7 +466,11 @@ def build_target_uat_binding_command(
                 label="provider.conformanceEvidence",
             ),
         },
-        device={"identity": device_identity, "class": device_class, "registered": device_registered},
+        device={
+            "identity": device_identity,
+            "class": device_class,
+            "registered": device_registered,
+        },
         runner={
             "identity": runner_identity,
             "sourcePath": runner_source_path,
@@ -438,7 +494,9 @@ def build_target_uat_binding_command(
     )
     return {
         "exitCode": 0,
-        "summary": "TargetUatBinding created" if written.created else "TargetUatBinding exact replay verified",
+        "summary": "TargetUatBinding created"
+        if written.created
+        else "TargetUatBinding exact replay verified",
         "details": [f"binding: {written.ref}"],
         "bindingRef": written.ref,
         "bindingDigest": written.digest,
@@ -448,9 +506,13 @@ def build_target_uat_binding_command(
 
 
 def build_app_uat_bundle_command(
-    *, evidence_root: Path, sample_plan: Mapping[str, Any],
-    target_bindings: Sequence[Mapping[str, Any]], raw_results: Sequence[Mapping[str, Any]],
-    output_ref: str, generated_at: str,
+    *,
+    evidence_root: Path,
+    sample_plan: Mapping[str, Any],
+    target_bindings: Sequence[Mapping[str, Any]],
+    raw_results: Sequence[Mapping[str, Any]],
+    output_ref: str,
+    generated_at: str,
 ) -> dict[str, Any]:
     """Pure read-only projection command; coverage is diagnostic, never a verdict."""
 
@@ -463,7 +525,9 @@ def build_app_uat_bundle_command(
         generated_at=generated_at,
     )
     output = write_projection(
-        evidence_root=root, relative_path=_ref(output_ref, field="outputRef"), document=projection
+        evidence_root=root,
+        relative_path=_ref(output_ref, field="outputRef"),
+        document=projection,
     )
     return {
         "exitCode": 0,
@@ -477,18 +541,35 @@ def build_app_uat_bundle_command(
 
 
 def build_environment_acceptance_append_command(
-    *, evidence_root: Path, acceptance_root: Path, environment: str, target: str,
-    release_id: str, release_digest: str, sample_plan_ref: str,
-    sample_plan_digest: str, target_binding_refs: Sequence[Mapping[str, Any]],
+    *,
+    evidence_root: Path,
+    acceptance_root: Path,
+    acceptance_profile: str,
+    environment: str,
+    target: str,
+    release_id: str,
+    release_digest: str,
+    import_run_id: str,
+    verify_run_id: str,
+    sample_plan_ref: str,
+    sample_plan_digest: str,
+    target_binding_refs: Sequence[Mapping[str, Any]],
     required_raw_results: Sequence[Mapping[str, Any]],
     required_target_profiles: Sequence[Mapping[str, str]],
-    data_readiness: Mapping[str, str], active_cas: Mapping[str, str],
-    lifecycle_exit: Mapping[str, str], provider_readiness: Mapping[str, str],
-    observability_readiness: Mapping[str, str], rollback_readiness: Mapping[str, str],
-    predecessor_ref: str | None, predecessor_digest: str | None,
+    data_readiness: Mapping[str, str],
+    manifest_digest: str | None = None,
+    consumer_health: Mapping[str, str] | None = None,
+    active_cas: Mapping[str, str] | None = None,
+    lifecycle_exit: Mapping[str, str] | None = None,
+    provider_readiness: Mapping[str, str] | None = None,
+    observability_readiness: Mapping[str, str] | None = None,
+    rollback_readiness: Mapping[str, str] | None = None,
+    predecessor_ref: str | None,
+    predecessor_digest: str | None,
     predecessor_fact_id: str | None,
-    resource_finalization: Mapping[str, Sequence[Mapping[str, str]]],
-    prod_release_facts: Mapping[str, Any] | None, created_at: str,
+    resource_finalization: Mapping[str, Sequence[Mapping[str, str]]] | None = None,
+    prod_release_facts: Mapping[str, Any] | None = None,
+    created_at: str,
     source_fingerprint: str,
 ) -> dict[str, Any]:
     """Pure append handler; predecessor validation always precedes fact building."""
@@ -502,27 +583,145 @@ def build_environment_acceptance_append_command(
             "OPS.APP_UAT_EVIDENCE.path_blocked",
             "acceptanceRoot must be contained by evidenceRoot",
         ) from error
-    predecessor = validate_predecessor_acceptance(
-        environment=environment,
-        release_id=release_id,
-        release_digest=release_digest,
-        predecessor_ref=predecessor_ref,
-        predecessor_digest=predecessor_digest,
-        predecessor_fact_id=predecessor_fact_id,
-        evidence_root=root,
-    )
+    if acceptance_profile not in ACCEPTANCE_PROFILES:
+        _block(
+            "OPS.APP_UAT_EVIDENCE.invalid_argument",
+            "acceptanceProfile must be explicitly selected from the canonical profiles",
+        )
+    if not required_raw_results:
+        _block(
+            "OPS.APP_UAT_EVIDENCE.invalid_argument",
+            "requiredRawResults must be non-empty",
+        )
+    if acceptance_profile == "environment_promotion":
+        if manifest_digest is not None:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "environment_promotion must not provide manifestDigest",
+            )
+        if consumer_health is not None:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "environment_promotion must not provide consumerHealth",
+            )
+        if not target_binding_refs:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "environment_promotion requires targetBinding",
+            )
+        if not required_target_profiles:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "environment_promotion requires requiredProfile",
+            )
+        predecessor = validate_predecessor_acceptance(
+            environment=environment,
+            release_id=release_id,
+            release_digest=release_digest,
+            predecessor_ref=predecessor_ref,
+            predecessor_digest=predecessor_digest,
+            predecessor_fact_id=predecessor_fact_id,
+            evidence_root=root,
+        )
+    else:
+        if environment != "alpha" or target != "alpha-local":
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer requires environment=alpha,target=alpha-local",
+            )
+        if target_binding_refs:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer must not provide targetBinding",
+            )
+        if required_target_profiles:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer must not provide requiredProfile",
+            )
+        if any((predecessor_ref, predecessor_digest, predecessor_fact_id)):
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer must not provide predecessor",
+            )
+        if prod_release_facts is not None:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer must not provide prodReleaseFacts",
+            )
+        promotion_arguments = {
+            "activeCas": active_cas,
+            "lifecycleExit": lifecycle_exit,
+            "providerReadiness": provider_readiness,
+            "observabilityReadiness": observability_readiness,
+            "rollbackReadiness": rollback_readiness,
+            "resourceFinalization": resource_finalization,
+        }
+        present_promotion = sorted(
+            field for field, value in promotion_arguments.items() if value is not None
+        )
+        if present_promotion:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                f"m1_api_consumer must not provide promotion-only fields: {present_promotion}",
+            )
+        if consumer_health is None:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer requires consumerHealth",
+            )
+        if manifest_digest is None:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer requires manifestDigest",
+            )
+        if len(required_raw_results) != 16:
+            _block(
+                "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                "m1_api_consumer requires exactly 16 requiredRaw results",
+            )
+        predecessor = None
+    if acceptance_profile == "m1_api_consumer":
+        from quwoquan_ops.cli.lib.environment_acceptance_fact import (
+            derive_m1_source_fingerprint,
+        )
+
+        if manifest_digest is not None and consumer_health is not None:
+            derived_fingerprint = derive_m1_source_fingerprint(
+                environment=environment,
+                target=target,
+                release_id=release_id,
+                release_digest=release_digest,
+                manifest_digest=manifest_digest,
+                import_run_id=import_run_id,
+                verify_run_id=verify_run_id,
+                sample_plan={"ref": sample_plan_ref, "digest": sample_plan_digest},
+                data_readiness=data_readiness,
+                consumer_health=consumer_health,
+                required_raw_results=required_raw_results,
+            )
+            if source_fingerprint != derived_fingerprint:
+                _block(
+                    "OPS.APP_UAT_EVIDENCE.invalid_argument",
+                    "m1_api_consumer sourceFingerprint drifted from exact authorities",
+                )
     fact = build_environment_acceptance_fact(
         evidence_root=root,
+        acceptance_profile=acceptance_profile,
         environment=environment,
         target=target,
         release_id=release_id,
         release_digest=release_digest,
+        import_run_id=import_run_id,
+        verify_run_id=verify_run_id,
         sample_plan_ref=sample_plan_ref,
         sample_plan_digest=sample_plan_digest,
         target_binding_refs=target_binding_refs,
         required_raw_results=required_raw_results,
         required_target_profiles=required_target_profiles,
         data_readiness=data_readiness,
+        manifest_digest=manifest_digest,
+        consumer_health=consumer_health,
         active_cas=active_cas,
         lifecycle_exit=lifecycle_exit,
         provider_readiness=provider_readiness,
@@ -564,13 +763,20 @@ def _gate_block(error: Exception) -> dict[str, Any]:
 def command_app_uat_target_bind(args: argparse.Namespace) -> dict[str, Any]:
     try:
         return build_target_uat_binding_command(
-            evidence_root=Path(args.evidence_root), output_root=Path(args.binding_output_root),
-            runtime_binding_ref=args.runtime_binding_ref, runtime_binding_digest=args.runtime_binding_digest,
-            launch_binding_ref=args.launch_binding_ref, launch_binding_digest=args.launch_binding_digest,
-            sample_plan_ref=args.sample_plan_ref, sample_plan_digest=args.sample_plan_digest,
-            active_cas_ref=args.active_cas_ref, active_cas_digest=args.active_cas_digest,
-            readback_ref=args.readback_ref, readback_digest=args.readback_digest,
-            artifact_class=args.artifact_class, build_mode=args.build_mode,
+            evidence_root=Path(args.evidence_root),
+            output_root=Path(args.binding_output_root),
+            runtime_binding_ref=args.runtime_binding_ref,
+            runtime_binding_digest=args.runtime_binding_digest,
+            launch_binding_ref=args.launch_binding_ref,
+            launch_binding_digest=args.launch_binding_digest,
+            sample_plan_ref=args.sample_plan_ref,
+            sample_plan_digest=args.sample_plan_digest,
+            active_cas_ref=args.active_cas_ref,
+            active_cas_digest=args.active_cas_digest,
+            readback_ref=args.readback_ref,
+            readback_digest=args.readback_digest,
+            artifact_class=args.artifact_class,
+            build_mode=args.build_mode,
             build_profile=args.build_profile,
             provider_identity=args.provider_identity,
             provider_class=args.provider_class,
@@ -579,13 +785,23 @@ def command_app_uat_target_bind(args: argparse.Namespace) -> dict[str, Any]:
             provider_conformance_ref=args.provider_conformance_ref,
             provider_conformance_digest=args.provider_conformance_digest,
             device_identity=args.device_identity,
-            device_class=args.device_class, device_registered=args.device_registered,
-            runner_identity=args.runner_identity, runner_source_path=args.runner_source_path,
-            runner_digest=args.runner_digest, runner_registered=args.runner_registered,
+            device_class=args.device_class,
+            device_registered=args.device_registered,
+            runner_identity=args.runner_identity,
+            runner_source_path=args.runner_source_path,
+            runner_digest=args.runner_digest,
+            runner_registered=args.runner_registered,
             profile=args.profile,
-            non_promotable=args.non_promotable, created_at=args.created_at,
+            non_promotable=args.non_promotable,
+            created_at=args.created_at,
         )
-    except (AppUatEvidenceCommandError, TargetUatBindingError, OSError, TypeError, ValueError) as error:
+    except (
+        AppUatEvidenceCommandError,
+        TargetUatBindingError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as error:
         return _gate_block(error)
 
 
@@ -593,62 +809,158 @@ def command_app_uat_bundle(args: argparse.Namespace) -> dict[str, Any]:
     try:
         return build_app_uat_bundle_command(
             evidence_root=Path(args.evidence_root),
-            sample_plan=_source(args.sample_plan_ref, args.sample_plan_digest, label="samplePlan"),
-            target_bindings=_source_argument(args.target_binding, label="targetBinding"),
+            sample_plan=_source(
+                args.sample_plan_ref, args.sample_plan_digest, label="samplePlan"
+            ),
+            target_bindings=_source_argument(
+                args.target_binding, label="targetBinding"
+            ),
             raw_results=_source_argument(args.raw_result, label="rawResult"),
             output_ref=args.output_ref,
             generated_at=args.generated_at,
         )
-    except (AppUatEvidenceCommandError, AppUatResultBundleError, OSError, TypeError, ValueError) as error:
+    except (
+        AppUatEvidenceCommandError,
+        AppUatResultBundleError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as error:
         return _gate_block(error)
 
 
 def command_environment_acceptance_append(args: argparse.Namespace) -> dict[str, Any]:
     try:
         return build_environment_acceptance_append_command(
-            evidence_root=Path(args.evidence_root), acceptance_root=Path(args.acceptance_root),
-            environment=args.environment, target=args.target, release_id=args.release_id,
-            release_digest=args.release_digest, sample_plan_ref=args.sample_plan_ref,
+            evidence_root=Path(args.evidence_root),
+            acceptance_root=Path(args.acceptance_root),
+            acceptance_profile=args.acceptance_profile,
+            environment=args.environment,
+            target=args.target,
+            release_id=args.release_id,
+            release_digest=args.release_digest,
+            manifest_digest=(args.manifest_digest or None),
+            import_run_id=args.import_run_id,
+            verify_run_id=args.verify_run_id,
+            sample_plan_ref=args.sample_plan_ref,
             sample_plan_digest=args.sample_plan_digest,
-            target_binding_refs=_target_binding_argument(args.target_binding),
+            target_binding_refs=(
+                _target_binding_argument(args.target_binding)
+                if args.target_binding
+                else []
+            ),
             required_raw_results=_required_raw_argument(args.required_raw),
-            required_target_profiles=_profile_argument(args.required_profile),
-            data_readiness=_source(args.data_readiness_ref, args.data_readiness_digest, label="dataReadiness"),
-            active_cas={
-                "ref": args.active_cas_ref, "digest": args.active_cas_digest,
-                "readbackRef": args.active_cas_readback_ref,
-                "readbackDigest": args.active_cas_readback_digest,
-                "releaseId": args.release_id, "releaseDigest": args.release_digest,
-            },
-            lifecycle_exit=_source(args.lifecycle_exit_ref, args.lifecycle_exit_digest, label="lifecycleExit"),
-            provider_readiness=_source(args.provider_readiness_ref, args.provider_readiness_digest, label="providerReadiness"),
-            observability_readiness=_source(args.observability_readiness_ref, args.observability_readiness_digest, label="observabilityReadiness"),
-            rollback_readiness=_source(args.rollback_readiness_ref, args.rollback_readiness_digest, label="rollbackReadiness"),
+            required_target_profiles=(
+                _profile_argument(args.required_profile)
+                if args.required_profile
+                else []
+            ),
+            data_readiness=_source(
+                args.data_readiness_ref,
+                args.data_readiness_digest,
+                label="dataReadiness",
+            ),
+            consumer_health=(
+                _source(
+                    args.consumer_health_ref,
+                    args.consumer_health_digest,
+                    label="consumerHealth",
+                )
+                if args.consumer_health_ref or args.consumer_health_digest
+                else None
+            ),
+            active_cas=(
+                {
+                    "ref": args.active_cas_ref,
+                    "digest": args.active_cas_digest,
+                    "readbackRef": args.active_cas_readback_ref,
+                    "readbackDigest": args.active_cas_readback_digest,
+                    "releaseId": args.release_id,
+                    "releaseDigest": args.release_digest,
+                }
+                if args.active_cas_ref
+                or args.active_cas_digest
+                or args.active_cas_readback_ref
+                or args.active_cas_readback_digest
+                else None
+            ),
+            lifecycle_exit=(
+                _source(
+                    args.lifecycle_exit_ref,
+                    args.lifecycle_exit_digest,
+                    label="lifecycleExit",
+                )
+                if args.lifecycle_exit_ref or args.lifecycle_exit_digest
+                else None
+            ),
+            provider_readiness=(
+                _source(
+                    args.provider_readiness_ref,
+                    args.provider_readiness_digest,
+                    label="providerReadiness",
+                )
+                if args.provider_readiness_ref or args.provider_readiness_digest
+                else None
+            ),
+            observability_readiness=(
+                _source(
+                    args.observability_readiness_ref,
+                    args.observability_readiness_digest,
+                    label="observabilityReadiness",
+                )
+                if args.observability_readiness_ref
+                or args.observability_readiness_digest
+                else None
+            ),
+            rollback_readiness=(
+                _source(
+                    args.rollback_readiness_ref,
+                    args.rollback_readiness_digest,
+                    label="rollbackReadiness",
+                )
+                if args.rollback_readiness_ref or args.rollback_readiness_digest
+                else None
+            ),
             predecessor_ref=args.predecessor_ref or None,
             predecessor_digest=args.predecessor_digest or None,
             predecessor_fact_id=args.predecessor_fact_id or None,
-            resource_finalization={
-                "leaseRevocationRefs": _source_argument(
-                    args.lease_revocation, label="leaseRevocation"
-                ),
-                "lockReleaseRefs": _source_argument(
-                    args.lock_release, label="lockRelease"
-                ),
-                "gcProtectionRefs": _source_argument(
-                    args.gc_protection, label="gcProtection"
-                ),
-            },
+            resource_finalization=(
+                {
+                    "leaseRevocationRefs": _source_argument(
+                        args.lease_revocation, label="leaseRevocation"
+                    ),
+                    "lockReleaseRefs": _source_argument(
+                        args.lock_release, label="lockRelease"
+                    ),
+                    "gcProtectionRefs": _source_argument(
+                        args.gc_protection, label="gcProtection"
+                    ),
+                }
+                if args.lease_revocation or args.lock_release or args.gc_protection
+                else None
+            ),
             prod_release_facts=_prod_release_facts(args.prod_release_facts),
-            created_at=args.created_at, source_fingerprint=args.source_fingerprint,
+            created_at=args.created_at,
+            source_fingerprint=args.source_fingerprint,
         )
-    except (AppUatEvidenceCommandError, EnvironmentAcceptanceFactError, OSError, TypeError, ValueError) as error:
+    except (
+        AppUatEvidenceCommandError,
+        EnvironmentAcceptanceFactError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as error:
         return _gate_block(error)
 
 
-def _add_boolean(parser: argparse.ArgumentParser, name: str, *, destination: str) -> None:
+def _add_boolean(
+    parser: argparse.ArgumentParser, name: str, *, destination: str
+) -> None:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(name, dest=destination, action="store_true")
-    group.add_argument(f"--no-{name.removeprefix('--')}", dest=destination, action="store_false")
+    group.add_argument(
+        f"--no-{name.removeprefix('--')}", dest=destination, action="store_false"
+    )
 
 
 def register_parser(
@@ -659,13 +971,33 @@ def register_parser(
         help="从显式 ReleaseUatSamplePlan/CAS/readback/candidate/device refs create-once TargetUatBinding",
     )
     for name in (
-        "evidence-root", "binding-output-root", "runtime-binding-ref", "runtime-binding-digest",
-        "launch-binding-ref", "launch-binding-digest", "sample-plan-ref", "sample-plan-digest",
-        "active-cas-ref", "active-cas-digest", "readback-ref", "readback-digest",
-        "artifact-class", "build-mode", "build-profile", "provider-identity",
-        "provider-class", "provider-type", "provider-conformance-ref",
-        "provider-conformance-digest", "device-identity", "device-class",
-        "runner-identity", "runner-source-path", "runner-digest", "profile", "created-at",
+        "evidence-root",
+        "binding-output-root",
+        "runtime-binding-ref",
+        "runtime-binding-digest",
+        "launch-binding-ref",
+        "launch-binding-digest",
+        "sample-plan-ref",
+        "sample-plan-digest",
+        "active-cas-ref",
+        "active-cas-digest",
+        "readback-ref",
+        "readback-digest",
+        "artifact-class",
+        "build-mode",
+        "build-profile",
+        "provider-identity",
+        "provider-class",
+        "provider-type",
+        "provider-conformance-ref",
+        "provider-conformance-digest",
+        "device-identity",
+        "device-class",
+        "runner-identity",
+        "runner-source-path",
+        "runner-digest",
+        "profile",
+        "created-at",
     ):
         bind.add_argument(f"--{name}", required=True)
     _add_boolean(bind, "--provider-registered", destination="provider_registered")
@@ -674,9 +1006,16 @@ def register_parser(
     _add_boolean(bind, "--non-promotable", destination="non_promotable")
 
     bundle = subparsers.add_parser(
-        "app-uat-bundle", help="从显式 plan/binding/raw refs 构建无 verdict 的只读诊断投影"
+        "app-uat-bundle",
+        help="从显式 plan/binding/raw refs 构建无 verdict 的只读诊断投影",
     )
-    for name in ("evidence-root", "sample-plan-ref", "sample-plan-digest", "output-ref", "generated-at"):
+    for name in (
+        "evidence-root",
+        "sample-plan-ref",
+        "sample-plan-digest",
+        "output-ref",
+        "generated-at",
+    ):
         bundle.add_argument(f"--{name}", required=True)
     bundle.add_argument("--target-binding", action="append", required=True)
     bundle.add_argument("--raw-result", action="append", required=True)
@@ -686,22 +1025,49 @@ def register_parser(
         help="校验全部 direct raw/readiness/predecessor authority 后 create-once 追加 acceptance fact",
     )
     for name in (
-        "evidence-root", "acceptance-root", "environment", "target", "release-id",
-        "release-digest", "sample-plan-ref", "sample-plan-digest", "data-readiness-ref",
-        "data-readiness-digest", "active-cas-ref", "active-cas-digest",
-        "active-cas-readback-ref", "active-cas-readback-digest", "lifecycle-exit-ref",
-        "lifecycle-exit-digest", "provider-readiness-ref", "provider-readiness-digest",
-        "observability-readiness-ref", "observability-readiness-digest",
-        "rollback-readiness-ref", "rollback-readiness-digest", "created-at",
+        "evidence-root",
+        "acceptance-root",
+        "environment",
+        "target",
+        "release-id",
+        "release-digest",
+        "import-run-id",
+        "verify-run-id",
+        "sample-plan-ref",
+        "sample-plan-digest",
+        "data-readiness-ref",
+        "data-readiness-digest",
+        "created-at",
         "source-fingerprint",
     ):
         append.add_argument(f"--{name}", required=True)
-    append.add_argument("--target-binding", action="append", required=True)
-    append.add_argument("--required-raw", action="append", required=True)
-    append.add_argument("--required-profile", action="append", required=True)
-    append.add_argument("--lease-revocation", action="append", required=True)
-    append.add_argument("--lock-release", action="append", required=True)
-    append.add_argument("--gc-protection", action="append", required=True)
+    append.add_argument("--manifest-digest", default="")
+    append.add_argument(
+        "--acceptance-profile", choices=ACCEPTANCE_PROFILES, required=True
+    )
+    for name in (
+        "consumer-health-ref",
+        "consumer-health-digest",
+        "active-cas-ref",
+        "active-cas-digest",
+        "active-cas-readback-ref",
+        "active-cas-readback-digest",
+        "lifecycle-exit-ref",
+        "lifecycle-exit-digest",
+        "provider-readiness-ref",
+        "provider-readiness-digest",
+        "observability-readiness-ref",
+        "observability-readiness-digest",
+        "rollback-readiness-ref",
+        "rollback-readiness-digest",
+    ):
+        append.add_argument(f"--{name}", default="")
+    append.add_argument("--target-binding", action="append", default=[])
+    append.add_argument("--required-raw", action="append", default=[])
+    append.add_argument("--required-profile", action="append", default=[])
+    append.add_argument("--lease-revocation", action="append", default=[])
+    append.add_argument("--lock-release", action="append", default=[])
+    append.add_argument("--gc-protection", action="append", default=[])
     append.add_argument("--prod-release-facts", default="")
     append.add_argument("--predecessor-ref", default="")
     append.add_argument("--predecessor-digest", default="")
@@ -715,8 +1081,8 @@ COMMAND_HANDLERS: dict[str, Callable[[argparse.Namespace], dict[str, Any]]] = {
 }
 
 __all__ = [
-    "AppUatEvidenceCommandError",
     "COMMAND_HANDLERS",
+    "AppUatEvidenceCommandError",
     "build_app_uat_bundle_command",
     "build_environment_acceptance_append_command",
     "build_target_uat_binding_command",

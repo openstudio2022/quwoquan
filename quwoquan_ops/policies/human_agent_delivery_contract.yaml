@@ -369,10 +369,8 @@ harness_projection:
   identical_json_projection: true
 
 workflow_interaction_binding:
-  natural_language_and_explicit_skill_same_track: true
   canonical_projector: quwoquan_ops/cli/lib/human_agent_delivery/projection.py#project_role_interaction
   skill_root: .agents/skills
-  required_skills: [commit, content-production, continue, design, dev, distill, environment-ops, explore, incident-inspection, plan-next, prd, review]
   required_phases: [PRE, DURING, POST]
   required_binding_fields: [phase, event_type, delivery_stage, audience_role]
   dynamic_audience_role: $route
@@ -456,6 +454,19 @@ errors:
   HAD.CAMPAIGN_REAPPROVAL_REQUIRED: {terminal: hold, recovery: record_new_campaign_decision}
   HAD.RECOMMENDATION_FORBIDDEN: {terminal: pause, recovery: render_neutral_symmetric_options}
   HAD.CONTRACT_INVALID: {terminal: abort, recovery: repair_canonical_contract}
+  HAD.FILESYSTEM_PRIMITIVE_UNSUPPORTED: {terminal: abort, recovery: run_on_platform_with_nofollow_descriptor_io}
+  HAD.SKILL_DISCOVERY_PATH_TYPE_INVALID: {terminal: abort, recovery: restore_canonical_skill_directory_and_regular_files}
+  HAD.SKILL_DISCOVERY_SYMLINK_FORBIDDEN: {terminal: abort, recovery: replace_skill_symlink_with_canonical_real_path}
+  HAD.SKILL_DISCOVERY_PERMISSION_DENIED: {terminal: hold, recovery: restore_read_permission_then_retry_skill_discovery}
+  HAD.SKILL_DISCOVERY_IO_FAILED: {terminal: hold, recovery: repair_skill_storage_io_then_retry}
+  HAD.SKILL_DISCOVERY_CONCURRENT_DRIFT: {terminal: hold, recovery: retry_after_skill_tree_reaches_static_window}
+  HAD.EVAL_REPORT_PATH_INVALID: {terminal: abort, recovery: use_canonical_runtime_report_path}
+  HAD.EVAL_REPORT_PATH_OUTSIDE_RUNTIME_ROOT: {terminal: abort, recovery: write_eval_report_under_canonical_runtime_root}
+  HAD.EVAL_REPORT_RUNTIME_ROOT_INVALID: {terminal: abort, recovery: restore_real_canonical_runtime_root}
+  HAD.EVAL_REPORT_SYMLINK_FORBIDDEN: {terminal: abort, recovery: replace_report_symlink_parent_with_real_directory}
+  HAD.EVAL_REPORT_PERMISSION_DENIED: {terminal: hold, recovery: restore_runtime_report_write_permission_then_retry}
+  HAD.EVAL_REPORT_IO_FAILED: {terminal: hold, recovery: repair_runtime_report_storage_then_retry}
+  HAD.EVAL_REPORT_CONCURRENT_DRIFT: {terminal: hold, recovery: retry_after_report_destination_reaches_static_window}
   HAD.UNKNOWN_HARNESS: {terminal: abort, recovery: select_declared_harness}
   HAD.INTERACTION_FIELD_INVALID: {terminal: pause, recovery: repair_role_interaction_envelope}
   HAD.INTERACTION_TERM_LEAK: {terminal: pause, recovery: move_internal_detail_to_audit_details}

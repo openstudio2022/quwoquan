@@ -51,6 +51,10 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
             "QWQ_LAUNCH_HANDOFF_JSON",
             "QWQ_IOS_RUNTIME_CONFIG_PACKAGE_PATH",
             "QWQ_APP_RUNTIME_TRUSTED_PUBLIC_KEYS_JSON",
+            "QWQ_REAL_FLUTTER",
+            "QWQ_REAL_FLUTTER_VERSION",
+            "QWQ_REAL_FLUTTER_COMMAND_RESOLUTION_DIGEST",
+            "FLUTTER_ROOT",
             "DART_DEFINES",
         ):
             environment.pop(key, None)
@@ -158,6 +162,8 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
                     )
 
     def test_xcode_wrapper_stops_before_backend_without_trust_envelope(self) -> None:
+        # 默认供给已退役：包括 Debug-nonprod 在内的一切配置 trust 缺席都必须在
+        # backend 之前停下，且不物化任何 runtime config 资源。
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             flutter_root = root / "flutter"
@@ -174,20 +180,26 @@ class IosRuntimeDartDefinesDirectDebugContractTest(unittest.TestCase):
                 f"#!/bin/sh\ntouch {shlex.quote(str(marker))}\n",
                 encoding="utf-8",
             )
-            environment = self._environment(root)
-            environment["QWQ_APP_BUILD_PROFILE"] = "nonprod"
-            environment["FLUTTER_ROOT"] = str(flutter_root)
-            result = subprocess.run(
-                ["bash", str(BUILD_WRAPPER)],
-                cwd=APP_DIR,
-                env=environment,
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(result.returncode, 2)
-            self.assertFalse(marker.exists())
-            self.assertIn("trust envelope is required", result.stderr)
+            for configuration in ("Debug-nonprod", "Release-nonprod"):
+                with self.subTest(configuration=configuration):
+                    environment = self._environment(root)
+                    environment["CONFIGURATION"] = configuration
+                    environment["QWQ_APP_BUILD_PROFILE"] = "nonprod"
+                    environment["FLUTTER_ROOT"] = str(flutter_root)
+                    result = subprocess.run(
+                        ["bash", str(BUILD_WRAPPER)],
+                        cwd=APP_DIR,
+                        env=environment,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(result.returncode, 2)
+                    self.assertFalse(marker.exists())
+                    self.assertIn("trust envelope is required", result.stderr)
+                    self.assertFalse(
+                        (root / "build/Runner.app/qwq_runtime").exists()
+                    )
 
     def test_xcode_wrapper_invokes_backend_after_trust_materialization(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

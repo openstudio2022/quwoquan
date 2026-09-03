@@ -1,9 +1,9 @@
 """Candidate-independent, exact-resource recovery for orphaned local Compose stacks.
 
 This module deliberately does not accept a Compose project from argv. The
-eligible project is either the exact formal identity bound by a receipt or
-attestation, or the one formal identity discovered from Docker labels when the
-receipt is absent. A read-only
+eligible project is either the exact target-bound formal release identity or
+the target's one canonical mutable test-live identity, bound by a receipt or
+attestation or uniquely discovered from Docker labels. A read-only
 inventory is sealed once, expires quickly, and must match a complete
 second inventory before any exact resource ID is removed.
 
@@ -31,6 +31,8 @@ from .constants import (  # noqa: F401
     _timestamp,
     _utc_text,
     canonical_project,
+    canonical_project_kind,
+    mutable_test_live_project,
     require_canonical_project,
 )
 from .inventory import (  # noqa: F401

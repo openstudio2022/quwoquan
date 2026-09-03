@@ -38,6 +38,7 @@ def _provider_runtime(*, candidate_bound: bool) -> dict[str, object]:
                 {
                     "role": "sms-provider-substitute",
                     "adapterIds": ["ext.sms.local_capture"],
+                    "capabilityIds": ["identity.sms.otp"],
                 }
             ],
         },
@@ -81,8 +82,10 @@ def _login_receipt(*, runtime_mode: str) -> dict[str, object]:
 
 
 def _fetch(url: str, **_kwargs: object) -> tuple[bool, int, str, str]:
-    body = (
-        json.dumps(
+    if url.endswith("/auth/otp/readiness"):
+        body = '{"availability":"ready","retryAfterSeconds":0}'
+    elif "17330" in url:
+        body = json.dumps(
             {
                 "status": "ready",
                 "adapterId": "ext.sms.local_capture",
@@ -92,9 +95,8 @@ def _fetch(url: str, **_kwargs: object) -> tuple[bool, int, str, str]:
                 "nonPromotable": True,
             }
         )
-        if "17330" in url
-        else '{"status":"ok"}'
-    )
+    else:
+        body = '{"status":"ok"}'
     return True, 200, body, "application/json"
 
 
@@ -254,6 +256,7 @@ class StackctlAppDebugPreflightRuntimeModeIsolationTest(unittest.TestCase):
         provider_runtime_error: Exception | None = None,
         tls_error: Exception | None = None,
         network_unavailable: bool = False,
+        otp_readiness_available: bool = True,
         container_issues: list[str] | None = None,
         capacity_issues: list[str] | None = None,
         api_base_url: str = "https://api.alpha.quwoquan.com:17000",
@@ -269,6 +272,18 @@ class StackctlAppDebugPreflightRuntimeModeIsolationTest(unittest.TestCase):
         content_preflight_command = mock.Mock(return_value=content_preflight or {})
         container_issues = list(container_issues or [])
         capacity_issues = list(capacity_issues or [])
+
+        def fetch(url: str, **kwargs: object) -> tuple[bool, int, str, str]:
+            if url.endswith("/auth/otp/readiness") and not otp_readiness_available:
+                return (
+                    True,
+                    200,
+                    '{"availability":"temporarily_unavailable",'
+                    '"retryAfterSeconds":5}',
+                    "application/json",
+                )
+            return _fetch(url, **kwargs)
+
         with (
             tempfile.TemporaryDirectory() as temporary,
             mock.patch.object(stackctl, "load_environment_topology", return_value={}),
@@ -371,7 +386,7 @@ class StackctlAppDebugPreflightRuntimeModeIsolationTest(unittest.TestCase):
                 side_effect=(
                     (lambda *_args, **_kwargs: (False, None, "", ""))
                     if network_unavailable
-                    else _fetch
+                    else fetch
                 ),
             ),
             mock.patch.object(
@@ -527,6 +542,75 @@ class StackctlAppDebugPreflightRuntimeModeIsolationTest(unittest.TestCase):
         ):
             self.assertIn(category, combined)
         content_preflight_command.assert_not_called()
+
+    def test_sms_provider_ready_but_relay_unavailable_warns_and_managed_blocks(
+        self,
+    ) -> None:
+        result, _content_loader, _content_preflight_command = self._invoke(
+            runtime_mode="test_live",
+            purpose="content_live",
+            content_binding={"releaseId": "release-alpha-a"},
+            otp_readiness_available=False,
+        )
+
+        self.assertEqual(result["exitCode"], 0, result)
+        self.assertEqual(result["status"], "warning")
+        self.assertTrue(result["provider"]["ready"])
+        self.assertEqual(
+            result["smsOtpReadiness"],
+            {
+                "operationId": (
+                    "user.authentication_challenge.GetOtpDeliveryReadiness"
+                ),
+                "path": "/auth/otp/readiness",
+                "statusCode": 200,
+                "availability": "temporarily_unavailable",
+                "retryAfterSeconds": 5,
+                "ready": False,
+            },
+        )
+        self.assertIn(
+            "readiness.provider: SMS Provider/relay readiness is unavailable",
+            " ".join(result["warnings"]),
+        )
+        with (
+            mock.patch.object(
+                stackctl,
+                "command_app_debug_preflight",
+                return_value=result,
+            ),
+            mock.patch.object(
+                stackctl,
+                "command_app_content_preflight",
+                side_effect=AssertionError(
+                    "strict debug finding must stop before content preflight"
+                ),
+            ),
+            self.assertRaises(stackctl.ManagedPreparationBlocked) as raised,
+        ):
+            stackctl._managed_strict_preflight(
+                environment="alpha",
+                target="alpha-local",
+                content_binding={"releaseId": "release-alpha-a"},
+                report_dir=Path("unused"),
+            )
+        self.assertEqual(
+            raised.exception.blocker,
+            "APP.PREPARATION.strict_preflight_failed",
+        )
+
+    def test_canonical_sms_relay_readiness_ready_passes_strict_candidate(
+        self,
+    ) -> None:
+        result, _content_loader, _content_preflight_command = self._invoke(
+            runtime_mode="immutable_candidate",
+        )
+
+        self.assertEqual(result["exitCode"], 0, result)
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["smsOtpReadiness"]["availability"], "ready")
+        self.assertEqual(result["smsOtpReadiness"]["retryAfterSeconds"], 0)
+        self.assertTrue(result["smsOtpReadiness"]["ready"])
 
     def test_immutable_candidate_keeps_liveness_and_capacity_strict(self) -> None:
         result, _content_loader, _content_preflight_command = self._invoke(

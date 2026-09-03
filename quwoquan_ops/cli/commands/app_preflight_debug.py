@@ -34,6 +34,12 @@ from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
 from quwoquan_ops.cli.lib.content_release_readiness import ReadinessPhase
 
 
+from quwoquan_ops.cli.commands.app_preflight_debug_readiness import (
+    _read_otp_delivery_readiness,
+    _runtime_container_liveness_evidence,
+)
+
+
 def _execute_otp_login_journey(
     *,
     environment: str,
@@ -118,6 +124,7 @@ def _execute_otp_login_journey(
                 "sourceRevision",
                 "configurationDigest",
                 "providerRuntimeDigest",
+                "observabilityLogSinkDigest",
             )
         }
         if not api_base_url:
@@ -173,6 +180,9 @@ def _execute_otp_login_journey(
             "sourceRevision": before_identity["sourceRevision"],
             "configurationDigest": before_identity["configurationDigest"],
             "providerRuntimeDigest": before_identity["providerRuntimeDigest"],
+            "observabilityLogSinkDigest": before_identity[
+                "observabilityLogSinkDigest"
+            ],
             "startupAttemptId": before_identity["attemptId"],
             "challengePresent": True,
             "sessionPresent": True,
@@ -185,60 +195,6 @@ def _execute_otp_login_journey(
         **receipt,
         "receiptRef": _stackctl.relpath(receipt_path),
         "receiptDigest": receipt_digest,
-    }
-
-
-def _runtime_container_liveness_evidence(
-    startup: Mapping[str, Any],
-) -> dict[str, Any]:
-    """复验 running receipt 声明的容器现况，供编译安装前阻断使用。"""
-    import quwoquan_ops.cli.stackctl as _stackctl
-    from quwoquan_ops.cli.lib.runtime_container_liveness import (
-        RUNTIME_DEPENDENCY_BLOCKER,
-        ComposeProjectAbsent,
-        verify_running_receipt_liveness,
-    )
-
-    empty = {
-        "status": "not_applicable",
-        "composeProject": str(startup.get("composeProject") or ""),
-        "blocker": "",
-        "containers": [],
-        "issues": [],
-        "warnings": [],
-    }
-    try:
-        report = verify_running_receipt_liveness(startup, runner=_stackctl.run)
-    except ComposeProjectAbsent:
-        # receipt 合法性归 startup receipt 契约（composeProject 是必填非空），
-        # 这里不重复判定，只如实记为未命中，避免建立第二真相源。
-        return empty
-    except (OSError, RuntimeError, TypeError, ValueError) as exc:
-        return {
-            **empty,
-            "status": "unavailable",
-            "blocker": RUNTIME_DEPENDENCY_BLOCKER,
-            "issues": [f"runtime container liveness is unverifiable: {exc}"],
-        }
-    if report is None:
-        return empty
-    return {
-        "status": report.status,
-        "composeProject": report.compose_project,
-        "blocker": report.blocker,
-        "containers": [
-            {
-                "service": item.service or item.name,
-                "state": item.state,
-                "health": item.health,
-                "exitCode": item.exit_code,
-                "live": item.is_live,
-                "completedTask": item.is_completed_task,
-            }
-            for item in report.containers
-        ],
-        "issues": report.issues(),
-        "warnings": [],
     }
 
 
@@ -524,7 +480,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                 str(item["role"])
                 for item in workloads
                 if isinstance(item, Mapping)
-                and "ext.sms.local_capture" in item.get("adapterIds", [])
+                and "identity.sms.otp" in item.get("capabilityIds", [])
             }
             provider_ca_file = str(
                 _stackctl.root_certificate_path(target_name, require_ready=False)
@@ -544,6 +500,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                 f"selected Provider runtime diagnostics are unavailable: {exc}"
             )
     provider_readback: dict[str, Any] = {}
+    otp_delivery_readiness: dict[str, Any] = {}
     check_receipts: list[dict[str, Any]] = []
     for name, url, ca_file, headers in checks:
         if url.endswith(":0/healthz") or url == "/healthz":
@@ -629,6 +586,29 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                     "provider",
                     "SMS substitute adapter/environment/readiness mismatch"
                 )
+
+    # Provider /healthz proves the selected adapter identity, but not that the
+    # user-service -> integration-service -> SMS result-relay chain accepts a
+    # fresh request.  The public contract intentionally exposes no Provider or
+    # relay identifiers, so preserve identity evidence from /healthz and use
+    # the canonical typed operation only for end-to-end delivery readiness.
+    if sms_capture_roles:
+        try:
+            otp_delivery_readiness = _read_otp_delivery_readiness(
+                api_base_url=str(public_bases.get("api") or "").rstrip("/"),
+            )
+            if otp_delivery_readiness.get("ready") is not True:
+                record_readiness_finding(
+                    "provider",
+                    "SMS Provider/relay readiness is unavailable: "
+                    f"availability={otp_delivery_readiness.get('availability')}, "
+                    "retryAfterSeconds="
+                    + str(otp_delivery_readiness.get("retryAfterSeconds")),
+                )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            record_readiness_finding(
+                "provider", f"SMS Provider/relay readiness is unavailable: {exc}"
+            )
 
     if not details and not warnings and provider_runtime_binding is not None:
         try:
@@ -861,6 +841,9 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         "providerRuntimeDigest": str(
             startup.get("providerRuntimeDigest") or ""
         ),
+        "observabilityLogSinkDigest": str(
+            startup.get("observabilityLogSinkDigest") or ""
+        ),
         "runtimeChecks": check_receipts,
         "runtimeContainerLiveness": container_liveness,
         "capacity": capacity["evidence"],
@@ -869,6 +852,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             "status": str(tls_evidence.get("status") or ""),
         },
         "provider": provider_readback,
+        "smsOtpReadiness": otp_delivery_readiness,
         "loginJourney": login_journey,
         "loginJourneyReceiptRef": login_journey.get("receiptRef", ""),
         "loginJourneyReceiptDigest": login_journey.get("receiptDigest", ""),

@@ -177,8 +177,222 @@ class LocalAssistantSkillPackageKeysSecurityTest(unittest.TestCase):
                 "prod-hosted",
                 package_source_root=ROOT,
                 package_environment={"QWQ_PACKAGE_SOURCE_REVISION": "a" * 40},
-                output_root=Path(tempfile.gettempdir()) / "unused-prod-skill-package",
+                output_root=Path.home() / "unused-prod-skill-package",
             )
+
+    def test_package_builder_uses_one_absolute_root_across_cwd_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.home()) as temporary:
+            root = Path(temporary)
+            package_source_root = root / "repository"
+            caller_cwd = root / "caller"
+            package_source_root.mkdir()
+            caller_cwd.mkdir()
+            relative_output_root = Path("reports/managed/skill-packages/official")
+            expected_output_root = package_source_root / relative_output_root
+            expected_output_root.mkdir(parents=True)
+            signing = assistant_skill_package_artifact.SigningMaterial(
+                key_id="local-key",
+                private_key_base64="private-key",
+                public_keys_json='{"local-key":"public-key"}',
+            )
+            completed = mock.Mock(
+                returncode=0,
+                stdout=json.dumps({"buildId": "build-id"}),
+                stderr="",
+            )
+            previous_cwd = Path.cwd()
+            try:
+                os.chdir(caller_cwd)
+                with (
+                    mock.patch.object(
+                        assistant_skill_package_artifact,
+                        "_signing_material",
+                        return_value=signing,
+                    ) as signing_material,
+                    mock.patch.object(
+                        assistant_skill_package_artifact,
+                        "_source_digest",
+                        return_value="sha256:" + "b" * 64,
+                    ) as source_digest,
+                    mock.patch.object(
+                        assistant_skill_package_artifact,
+                        "derive_official_skill_package_release_identity",
+                        return_value={
+                            "buildId": "build-id",
+                            "commandId": "command-id",
+                        },
+                    ) as derive_identity,
+                    mock.patch.object(
+                        assistant_skill_package_artifact.shutil,
+                        "rmtree",
+                    ) as rmtree,
+                    mock.patch.object(
+                        assistant_skill_package_artifact.subprocess,
+                        "run",
+                        return_value=completed,
+                    ) as run,
+                    mock.patch.object(
+                        assistant_skill_package_artifact,
+                        "materialize_packaged_official_skill_release",
+                        return_value={"buildId": "build-id"},
+                    ) as materialize,
+                ):
+                    report = assistant_skill_package_artifact.build_official_skill_package_publication(
+                        "alpha",
+                        "alpha-local",
+                        package_source_root=package_source_root,
+                        package_environment={"QWQ_PACKAGE_SOURCE_REVISION": "a" * 40},
+                        output_root=relative_output_root,
+                    )
+            finally:
+                os.chdir(previous_cwd)
+
+            rmtree.assert_called_once_with(expected_output_root)
+            command = run.call_args.args[0]
+            output_index = command.index("--output-root") + 1
+            self.assertEqual(command[output_index], str(expected_output_root))
+            self.assertEqual(report["argv"][output_index], str(expected_output_root))
+            self.assertEqual(
+                run.call_args.kwargs["cwd"],
+                str(package_source_root / "quwoquan_service"),
+            )
+            self.assertEqual(
+                materialize.call_args.kwargs["output_root"],
+                expected_output_root,
+            )
+            signing_material.assert_called_once()
+            source_digest.assert_called_once()
+            derive_identity.assert_called_once()
+            materialize.assert_called_once()
+
+    def test_package_builder_rejects_symlinked_output_root_components(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.home()) as temporary:
+            root = Path(temporary)
+            package_source_root = root / "repository"
+            outside = root / "outside"
+            package_source_root.mkdir()
+            outside.mkdir()
+            (package_source_root / "linked-parent").symlink_to(
+                outside,
+                target_is_directory=True,
+            )
+            (package_source_root / "linked-target").symlink_to(
+                outside,
+                target_is_directory=True,
+            )
+            with (
+                mock.patch.object(
+                    assistant_skill_package_artifact,
+                    "_signing_material",
+                ) as signing_material,
+                mock.patch.object(
+                    assistant_skill_package_artifact,
+                    "_source_digest",
+                ) as source_digest,
+                mock.patch.object(
+                    assistant_skill_package_artifact,
+                    "derive_official_skill_package_release_identity",
+                ) as derive_identity,
+                mock.patch.object(
+                    assistant_skill_package_artifact.subprocess,
+                    "run",
+                ) as run,
+                mock.patch.object(
+                    assistant_skill_package_artifact,
+                    "materialize_packaged_official_skill_release",
+                ) as materialize,
+            ):
+                for unsafe_output_root in (
+                    Path("linked-parent/official"),
+                    Path("linked-target"),
+                ):
+                    with (
+                        self.subTest(output_root=unsafe_output_root),
+                        self.assertRaisesRegex(RuntimeError, "must not contain symlinks"),
+                    ):
+                        assistant_skill_package_artifact.build_official_skill_package_publication(
+                            "alpha",
+                            "alpha-local",
+                            package_source_root=package_source_root,
+                            package_environment={
+                                "QWQ_PACKAGE_SOURCE_REVISION": "a" * 40
+                            },
+                            output_root=unsafe_output_root,
+                        )
+
+            signing_material.assert_not_called()
+            source_digest.assert_not_called()
+            derive_identity.assert_not_called()
+            run.assert_not_called()
+            materialize.assert_not_called()
+
+    def test_package_builder_rejects_symlink_created_before_readback(self) -> None:
+        with tempfile.TemporaryDirectory(dir=Path.home()) as temporary:
+            root = Path(temporary)
+            package_source_root = root / "repository"
+            outside = root / "outside"
+            package_source_root.mkdir()
+            outside.mkdir()
+            relative_output_root = Path("reports/managed/skill-packages/official")
+            absolute_output_root = package_source_root / relative_output_root
+            absolute_output_root.parent.mkdir(parents=True)
+            signing = assistant_skill_package_artifact.SigningMaterial(
+                key_id="local-key",
+                private_key_base64="private-key",
+                public_keys_json='{"local-key":"public-key"}',
+            )
+
+            def create_unsafe_output(*args: object, **kwargs: object) -> mock.Mock:
+                absolute_output_root.symlink_to(outside, target_is_directory=True)
+                return mock.Mock(
+                    returncode=0,
+                    stdout=json.dumps({"buildId": "build-id"}),
+                    stderr="",
+                )
+
+            with (
+                mock.patch.object(
+                    assistant_skill_package_artifact,
+                    "_signing_material",
+                    return_value=signing,
+                ),
+                mock.patch.object(
+                    assistant_skill_package_artifact,
+                    "_source_digest",
+                    return_value="sha256:" + "b" * 64,
+                ),
+                mock.patch.object(
+                    assistant_skill_package_artifact,
+                    "derive_official_skill_package_release_identity",
+                    return_value={
+                        "buildId": "build-id",
+                        "commandId": "command-id",
+                    },
+                ),
+                mock.patch.object(
+                    assistant_skill_package_artifact.subprocess,
+                    "run",
+                    side_effect=create_unsafe_output,
+                ) as run,
+                mock.patch.object(
+                    assistant_skill_package_artifact,
+                    "materialize_packaged_official_skill_release",
+                ) as materialize,
+            ):
+                report = assistant_skill_package_artifact.build_official_skill_package_publication(
+                    "alpha",
+                    "alpha-local",
+                    package_source_root=package_source_root,
+                    package_environment={"QWQ_PACKAGE_SOURCE_REVISION": "a" * 40},
+                    output_root=relative_output_root,
+                )
+
+            command = run.call_args.args[0]
+            output_index = command.index("--output-root") + 1
+            self.assertEqual(command[output_index], str(absolute_output_root))
+            self.assertEqual(report["exitCode"], 1)
+            self.assertIn("must not contain symlinks", report["stderr"])
+            materialize.assert_not_called()
 
     def test_package_builder_emits_release_identity_and_trust_material(self) -> None:
         source = (

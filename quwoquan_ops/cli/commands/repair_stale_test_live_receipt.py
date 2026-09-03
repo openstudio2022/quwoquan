@@ -180,7 +180,14 @@ def repair_stale_test_live_receipt(
         return _blocked(
             report_dir=report_dir,
             target=target,
-            details=residue,
+            details=[
+                *residue,
+                (
+                    "recovery: run the governed reclaim-orphaned-compose "
+                    "plan/confirmation for this target, then rerun "
+                    "reclaim-stale-test-live-receipt"
+                ),
+            ],
             summary=summary,
         )
 

@@ -44,10 +44,10 @@
 - deferred queue 必须持久化且可检查，不能把本地可执行工作留给 GitHub 后继续声称范围就绪。
 
 <a id="req-003"></a>
-### REQ-003 Git hook 消费新鲜回执
+### REQ-003 Git hook 只做边界检查，回执在准出消费
 
-- pre-commit 不得自动运行全面测试，只接受绑定当前 staged fingerprint 的 fresh `scope_ready` 回执；缺失或过期时只能给出唯一恢复命令。
-- pre-push 必须继续执行 branch policy，并在 push updates 可精确绑定时只接受 fresh `release_ready` 回执。
+- 硬门只在准出（lane→`dev1.0` PR、交接、发布）。本地 git hooks 不消费 `scope_ready`/`release_ready` 回执，也不自动运行全面测试：pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界、branch policy），失败时只给出唯一恢复命令；pre-push 只运行 branch policy，阻断直推 `dev1.0`/`main` 与非白名单分支。
+- `scope_ready`/`release_ready` 仍由显式 CLI 产出并绑定精确输入 fingerprint，供 Skill 报告、交接单与 lane→`dev1.0` PR 说明消费；PR 准出由 CI Delivery Gate 重新执行 required checks，不信任本地回执。
 - staged 中某个已修改文件继续改变内容时，即使 `git status` 文本不变，也必须判定旧回执失效。
 
 ## 4. 契约引用
@@ -63,7 +63,7 @@
 
 - GIVEN 当前 staged 范围已有 `scope_ready` 回执。
 - WHEN 已标记为 M 的文件内容继续变化而 Git status 文本保持相同。
-- THEN pre-commit 拒绝旧回执并只输出当前 staged producer 恢复命令。
+- THEN 回执校验判定旧回执 stale，任何消费者（Skill 报告、交接、PR 说明）都不得再引用它。
 - AND exact-input cache 对 source、lockfile、toolchain、command 与 owner manifest 的变化全部 miss。
 
 <a id="gwt-002"></a>
@@ -75,12 +75,12 @@
 - AND Portal 范围必须真实执行 `npm test` 与 `npm run build` 后才能范围就绪。
 
 <a id="gwt-003"></a>
-### GWT-003 Git hooks 只消费精确范围证据
+### GWT-003 Git hooks 只做边界检查
 
-- GIVEN 开发者显式执行 staged scope producer 或绑定 push updates 的 release producer。
+- GIVEN 开发者在 lane worktree 上暂存改动并提交或推送。
 - WHEN pre-commit 或 pre-push 运行。
-- THEN hook 同时校验 readiness 等级、PASS、新鲜度、输入 fingerprint 与对应 Git 范围。
-- AND pre-push 仍执行 branch policy，任一校验异常都不会伪造 PASS。
+- THEN pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界、branch policy），pre-push 只运行 branch policy；两者都不读取 readiness 回执，秒级完成。
+- AND 任一边界检查失败都阻断并只返回一个稳定 recovery。hook 不读取 readiness receipt、也不输出 readiness PASS，缺少 `scope_ready`/`release_ready` 不构成 lane 提交或推送的阻断理由。
 
 ## 6. 依赖
 
@@ -91,4 +91,12 @@
 
 ## 7. 开放事项
 
-当前无本 Story 内开放事项。
+<a id="open-001"></a>
+### OPEN-001 readiness 队列的空闲触发与积压可见性
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：after-edit hook 能短时入队但当前没有可靠的宿主 idle 触发，队列可长期停留在 `PENDING`；这不应阻断普通 Skill 或用户指令，但会延迟 L0/L1 反馈并诱发人工反复执行重型检查。
+- 完成判定：`GWT-002` 增加可执行子句，证明宿主 idle 或等价受管触发会幂等启动一次 bounded worker、积压量与最老入队时间可见、失败保留 typed pending 且不会伪造 `scope_ready` / `release_ready`。
+- 依赖：Cursor/Codex 可用的 idle/session 生命周期事件与 `local_readiness.py worker --once`。

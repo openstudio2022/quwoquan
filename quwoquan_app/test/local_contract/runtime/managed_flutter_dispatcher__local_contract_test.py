@@ -66,6 +66,9 @@ class ManagedFlutterDispatcherContractTest(unittest.TestCase):
             "    sdk: flutter\n",
             encoding="utf-8",
         )
+        stackctl = self.app_root.parent / "quwoquan_ops/cli/stackctl.py"
+        stackctl.parent.mkdir(parents=True)
+        stackctl.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
         self.dispatcher = self.launcher_bin / "flutter"
         self.run_capture = self.root / "run-sh-capture.txt"
         self.sdk_capture = self.root / "real-flutter-capture.txt"
@@ -405,6 +408,27 @@ class ManagedFlutterDispatcherContractTest(unittest.TestCase):
         self.assertIn("managed=1", lines)
         self.assertIn(f"cwd={app_cwd.resolve()}", lines)
         self.assertFalse(self.sdk_capture.exists())
+
+    def test_run_follows_app_tree_under_cwd_not_dispatcher_tree(self) -> None:
+        self._install_run_sh_stub()
+        other_app = self.root / "other/quwoquan_app"
+        other_cwd = other_app / "lib/deep"
+        other_cwd.mkdir(parents=True)
+        (other_app / "pubspec.yaml").write_text("name: quwoquan_app\n", encoding="utf-8")
+        other_capture = self.root / "other-run-capture.txt"
+        _write_executable(
+            other_app / "run.sh",
+            "#!/usr/bin/env bash\nprintf '%s\n' \"$0\" > " + str(other_capture) + "\n",
+        )
+        stackctl = other_app.parent / "quwoquan_ops/cli/stackctl.py"
+        stackctl.parent.mkdir(parents=True)
+        stackctl.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+        result = self._run_dispatcher("run", "-d", "cwd-device", cwd=other_cwd)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(other_capture.read_text(encoding="utf-8").strip(), str(other_app / "run.sh"))
+        self.assertFalse(self.run_capture.exists())
 
     # ------------------------------------------------------------------
     # 真实 SDK：非 run 与 foreign Flutter project exact passthrough

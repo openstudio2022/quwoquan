@@ -2,65 +2,41 @@ package reliabletask
 
 import (
 	"context"
-	"errors"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 type MemoryStore struct {
-	mu                     sync.Mutex
-	outboxes               map[string]TaskOutboxRecord
-	outboxByDedupe         map[string]string
-	outboxByIdempotency    map[string]string
-	tasks                  map[string]ReliableAsyncTask
-	taskByDedupe           map[string]string
-	notifications          map[string]NotificationOutboxRecord
-	ledgers                map[string]NotificationDeliveryLedgerRecord
-	attempts               map[string]ProviderAttemptRecord
-	resultOutboxes         map[string]ExternalInteractionResultOutboxRecord
-	taskRecoveryReceipts   map[string]TaskRecoveryReceipt
-	leases                 map[string]TaskLease
-	dataContentCheckpoints map[string]DataContentPartitionCheckpoint
+	mu                   sync.Mutex
+	outboxes             map[string]TaskOutboxRecord
+	outboxByDedupe       map[string]string
+	outboxByIdempotency  map[string]string
+	tasks                map[string]ReliableAsyncTask
+	taskByDedupe         map[string]string
+	notifications        map[string]NotificationOutboxRecord
+	ledgers              map[string]NotificationDeliveryLedgerRecord
+	attempts             map[string]ProviderAttemptRecord
+	resultOutboxes       map[string]ExternalInteractionResultOutboxRecord
+	taskRecoveryReceipts map[string]TaskRecoveryReceipt
+	leases               map[string]TaskLease
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		outboxes:               map[string]TaskOutboxRecord{},
-		outboxByDedupe:         map[string]string{},
-		outboxByIdempotency:    map[string]string{},
-		tasks:                  map[string]ReliableAsyncTask{},
-		taskByDedupe:           map[string]string{},
-		notifications:          map[string]NotificationOutboxRecord{},
-		ledgers:                map[string]NotificationDeliveryLedgerRecord{},
-		attempts:               map[string]ProviderAttemptRecord{},
-		resultOutboxes:         map[string]ExternalInteractionResultOutboxRecord{},
-		taskRecoveryReceipts:   map[string]TaskRecoveryReceipt{},
-		leases:                 map[string]TaskLease{},
-		dataContentCheckpoints: map[string]DataContentPartitionCheckpoint{},
+		outboxes:             map[string]TaskOutboxRecord{},
+		outboxByDedupe:       map[string]string{},
+		outboxByIdempotency:  map[string]string{},
+		tasks:                map[string]ReliableAsyncTask{},
+		taskByDedupe:         map[string]string{},
+		notifications:        map[string]NotificationOutboxRecord{},
+		ledgers:              map[string]NotificationDeliveryLedgerRecord{},
+		attempts:             map[string]ProviderAttemptRecord{},
+		resultOutboxes:       map[string]ExternalInteractionResultOutboxRecord{},
+		taskRecoveryReceipts: map[string]TaskRecoveryReceipt{},
+		leases:               map[string]TaskLease{},
 	}
-}
-
-func (s *MemoryStore) FlushDataContentPartitionCheckpoint(
-	ctx context.Context,
-	checkpoint DataContentPartitionCheckpoint,
-) error {
-	_ = ctx
-	key := checkpoint.ExecutionID + "|" + checkpoint.Stage + "|" + checkpoint.PartitionKey
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if existing, ok := s.dataContentCheckpoints[key]; ok {
-		if existing.JobSetDigest != checkpoint.JobSetDigest {
-			return errors.New("DATA.RELIABLETASK.STALE_FENCE: partition checkpoint jobSetDigest drift")
-		}
-		if existing.CompletedCount > checkpoint.CompletedCount {
-			return errors.New("DATA.RELIABLETASK.STALE_CHECKPOINT: partition checkpoint cannot move backwards")
-		}
-	}
-	s.dataContentCheckpoints[key] = checkpoint
-	return nil
 }
 
 func (s *MemoryStore) RunInTransaction(ctx context.Context, fn func(context.Context) error) error {
@@ -144,26 +120,6 @@ func (s *MemoryStore) DispatchDueTasksForShard(ctx context.Context, now time.Tim
 	defer s.mu.Unlock()
 	return s.dispatchDueTasksLocked(now, limit, func(record TaskOutboxRecord) bool {
 		return shardID < 0 || record.ShardID == shardID
-	})
-}
-
-// DispatchDataContentExecution mirrors the production Mongo execution scope.
-func (s *MemoryStore) DispatchDataContentExecution(
-	ctx context.Context,
-	executionID string,
-	now time.Time,
-	limit int,
-) ([]ReliableAsyncTask, error) {
-	_ = ctx
-	executionID = strings.TrimSpace(executionID)
-	if executionID == "" {
-		return nil, errors.New("data content executionId is required")
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.dispatchDueTasksLocked(now, limit, func(record TaskOutboxRecord) bool {
-		return record.TaskType == DataContentTaskType &&
-			record.Payload["executionId"] == executionID
 	})
 }
 
@@ -285,83 +241,6 @@ func (s *MemoryStore) ClaimReadyTaskByID(ctx context.Context, taskID string, wor
 	return &task, nil
 }
 
-func (s *MemoryStore) ClaimReadyTaskByIDWithFence(
-	ctx context.Context,
-	taskID string,
-	workerID string,
-	leaseTTL time.Duration,
-	now time.Time,
-	fence map[string]string,
-) (*ReliableAsyncTask, error) {
-	_ = ctx
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	task, ok := s.tasks[strings.TrimSpace(taskID)]
-	if !ok {
-		return nil, nil
-	}
-	for key, expected := range fence {
-		if task.Payload[key] != expected {
-			return nil, nil
-		}
-	}
-	leaseExpired := !task.LeaseUntil.IsZero() && !task.LeaseUntil.After(now)
-	if !(task.Status == TaskStatusReady || task.Status == TaskStatusRetryWait || (task.Status == TaskStatusProcessing && leaseExpired)) || task.NextAttemptAt.After(now) {
-		return nil, nil
-	}
-	task.Status = TaskStatusProcessing
-	task.LeaseOwner = strings.TrimSpace(workerID)
-	task.LeaseToken = NewRecordID("lease")
-	task.LeaseUntil = now.Add(leaseTTL).UTC()
-	task.UpdatedAt = now.UTC()
-	s.tasks[task.TaskID] = task
-	return &task, nil
-}
-
-func (s *MemoryStore) AdvanceDataContentTaskFence(
-	ctx context.Context,
-	taskID string,
-	fence DataContentWorkerFence,
-	now time.Time,
-) (bool, error) {
-	_ = ctx
-	if err := fence.Validate(); err != nil {
-		return false, err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	task, ok := s.tasks[strings.TrimSpace(taskID)]
-	if !ok {
-		return false, nil
-	}
-	current, _ := strconv.Atoi(task.Payload["workerHostGeneration"])
-	if current > fence.Generation {
-		return false, nil
-	}
-	if current == fence.Generation && current > 0 {
-		for key, value := range fence.payload() {
-			if task.Payload[key] != value {
-				return false, nil
-			}
-		}
-		return true, nil
-	}
-	if task.Status == TaskStatusSucceeded || task.Status == TaskStatusDead {
-		return false, nil
-	}
-	for key, value := range fence.payload() {
-		task.Payload[key] = value
-	}
-	task.Status = TaskStatusReady
-	task.LeaseOwner = ""
-	task.LeaseToken = ""
-	task.LeaseUntil = time.Time{}
-	task.NextAttemptAt = now.UTC()
-	task.UpdatedAt = now.UTC()
-	s.tasks[task.TaskID] = task
-	return true, nil
-}
-
 func (s *MemoryStore) ListReadyTasks(
 	ctx context.Context,
 	taskTypes []string,
@@ -372,128 +251,6 @@ func (s *MemoryStore) ListReadyTasks(
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.listReadyTasksLocked(taskTypes, limit, now, func(ReliableAsyncTask) bool { return true }), nil
-}
-
-// ListReadyDataContentExecution mirrors the production Mongo execution scope.
-func (s *MemoryStore) ListReadyDataContentExecution(
-	ctx context.Context,
-	executionID string,
-	limit int,
-	now time.Time,
-) ([]ReliableAsyncTask, error) {
-	_ = ctx
-	executionID = strings.TrimSpace(executionID)
-	if executionID == "" {
-		return nil, errors.New("data content executionId is required")
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.listReadyTasksLocked(
-		[]string{DataContentTaskType},
-		limit,
-		now,
-		func(task ReliableAsyncTask) bool {
-			return task.Payload["executionId"] == executionID
-		},
-	), nil
-}
-
-// PurgeDataContentExecution mirrors the production exact execution cleanup.
-func (s *MemoryStore) PurgeDataContentExecution(
-	ctx context.Context,
-	executionID string,
-) (DataContentExecutionPurgeResult, error) {
-	_ = ctx
-	executionID = strings.TrimSpace(executionID)
-	if executionID == "" {
-		return DataContentExecutionPurgeResult{}, errors.New("data content executionId is required")
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	result := DataContentExecutionPurgeResult{}
-	for taskID, task := range s.tasks {
-		if task.TaskType != DataContentTaskType || task.Payload["executionId"] != executionID {
-			continue
-		}
-		delete(s.tasks, taskID)
-		delete(s.taskByDedupe, task.DedupeKey)
-		result.TaskIDs = append(result.TaskIDs, taskID)
-		result.TasksDeleted++
-	}
-	for outboxID, outbox := range s.outboxes {
-		if outbox.TaskType != DataContentTaskType || outbox.Payload["executionId"] != executionID {
-			continue
-		}
-		delete(s.outboxes, outboxID)
-		delete(s.outboxByDedupe, outbox.DedupeKey)
-		if outbox.IdempotencyKey != "" {
-			delete(s.outboxByIdempotency, outbox.IdempotencyKey)
-		}
-		result.OutboxesDeleted++
-	}
-	return result, nil
-}
-
-func (s *MemoryStore) CountDataContentOutboxesByIdempotencyKeys(
-	ctx context.Context,
-	executionID string,
-	stage string,
-	idempotencyKeys []string,
-) (int64, error) {
-	_ = ctx
-	executionID = strings.TrimSpace(executionID)
-	stage = strings.TrimSpace(stage)
-	if executionID == "" || (stage != "author" && stage != "publish") {
-		return 0, errors.New("data content executionId and stage are required")
-	}
-	keys := make(map[string]struct{}, len(idempotencyKeys))
-	for _, key := range idempotencyKeys {
-		if key = strings.TrimSpace(key); key != "" {
-			keys[key] = struct{}{}
-		}
-	}
-	if len(keys) == 0 {
-		return 0, errors.New("data content idempotency keys are required")
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var count int64
-	for _, outbox := range s.outboxes {
-		if outbox.TaskType == DataContentTaskType &&
-			outbox.Payload["executionId"] == executionID &&
-			outbox.Payload["stage"] == stage {
-			if _, exists := keys[outbox.IdempotencyKey]; !exists {
-				continue
-			}
-			count++
-		}
-	}
-	return count, nil
-}
-
-func (s *MemoryStore) ListDataContentExecutionTasks(
-	ctx context.Context,
-	executionID string,
-) ([]ReliableAsyncTask, error) {
-	_ = ctx
-	executionID = strings.TrimSpace(executionID)
-	if executionID == "" {
-		return nil, errors.New("data content executionId is required")
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	tasks := make([]ReliableAsyncTask, 0)
-	for _, task := range s.tasks {
-		if task.TaskType != DataContentTaskType || task.Payload["executionId"] != executionID {
-			continue
-		}
-		task.Payload = CloneStringMap(task.Payload)
-		tasks = append(tasks, task)
-	}
-	sort.Slice(tasks, func(i, j int) bool {
-		return tasks[i].Payload["jobId"] < tasks[j].Payload["jobId"]
-	})
-	return tasks, nil
 }
 
 func (s *MemoryStore) listReadyTasksLocked(

@@ -39,6 +39,33 @@ from quwoquan_ops.cli.lib.content_release_readiness import (
 )
 
 
+def register_content_api_consumer_parser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Register the explicit-authority Alpha Research API consumer."""
+
+    parser = subparsers.add_parser(
+        "content-api-consumer",
+        help="消费显式 Alpha Research release 权威并写 4×4 只读 API raw 结果",
+    )
+    parser.add_argument("--target", choices=("alpha-local",), required=True)
+    parser.add_argument("--release-id", required=True)
+    parser.add_argument("--import-run-id", required=True)
+    parser.add_argument("--verify-run-id", required=True)
+    parser.add_argument(
+        "--manifest-digest",
+        required=True,
+        help="显式 immutable payload/Data readiness manifestDigest（不等于 releaseDigest）",
+    )
+    parser.add_argument("--sample-plan-ref", required=True)
+    parser.add_argument("--sample-plan-digest", required=True)
+    parser.add_argument("--data-readiness-ref", required=True)
+    parser.add_argument("--data-readiness-digest", required=True)
+    parser.add_argument("--consumer-health-ref", required=True)
+    parser.add_argument("--consumer-health-digest", required=True)
+    parser.add_argument("--report-dir", required=True)
+
+
 def register_content_readiness_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
@@ -142,15 +169,11 @@ def register_uat_parsers(
     )
     account_enforcement_uat_parser.add_argument(
         "--candidate-digest",
-        default=os.environ.get(
-            "QWQ_ACCOUNT_ENFORCEMENT_GAMMA_CANDIDATE_DIGEST", ""
-        ),
+        default=os.environ.get("QWQ_ACCOUNT_ENFORCEMENT_GAMMA_CANDIDATE_DIGEST", ""),
     )
     account_enforcement_uat_parser.add_argument(
         "--journey-receipt",
-        default=os.environ.get(
-            "QWQ_ACCOUNT_ENFORCEMENT_GAMMA_JOURNEY_RECEIPT", ""
-        ),
+        default=os.environ.get("QWQ_ACCOUNT_ENFORCEMENT_GAMMA_JOURNEY_RECEIPT", ""),
     )
     account_enforcement_uat_parser.add_argument(
         "--suspended-device-report",
@@ -245,7 +268,9 @@ def _run_release_video_delivery_probe(
         evidence.get("schema") != "quwoquan_ops.release_video_delivery_evidence"
         or evidence.get("status") != "passed"
     ):
-        raise ValueError("release video delivery probe did not emit a passed typed report")
+        raise ValueError(
+            "release video delivery probe did not emit a passed typed report"
+        )
     return evidence, report_path
 
 
@@ -339,15 +364,17 @@ def _run_release_feed_readback_probe(
                 )
             ),
             release_readiness_path=readiness_path,
-            only_checks=tuple(
-                (
-                    "content_feed",
-                    "video_book_feed",
-                    *(("premium_feed",) if readiness_phase in _PREMIUM_BOUND_PHASES else ()),
-                    # research 私有交付没有匿名可采样的公开图片 slice；私有媒体
-                    # 的拒绝与短签取回由 Data research isolation 证据覆盖。
-                    *(("media_sample",) if not research else ()),
-                )
+            only_checks=(
+                "content_feed",
+                "video_book_feed",
+                *(
+                    ("premium_feed",)
+                    if readiness_phase in _PREMIUM_BOUND_PHASES
+                    else ()
+                ),
+                # research 私有交付没有匿名可采样的公开图片 slice；私有媒体
+                # 的拒绝与短签取回由 Data research isolation 证据覆盖。
+                *(("media_sample",) if not research else ()),
             ),
             probe_name="release-bound-feed-readback",
         )
@@ -358,6 +385,37 @@ def _run_release_feed_readback_probe(
         details = findings or ["release-bound feed readback did not pass"]
         raise ValueError("; ".join(str(item) for item in details))
     return report, report_file
+
+
+def command_content_api_consumer(args: argparse.Namespace) -> dict[str, Any]:
+    """Run the strict read-only content API matrix from explicit authorities."""
+
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.lib.content_api_consumer import ContentApiConsumerError
+
+    try:
+        return _stackctl.run_content_api_consumer(
+            target=args.target,
+            release_id=args.release_id,
+            import_run_id=args.import_run_id,
+            verify_run_id=args.verify_run_id,
+            manifest_digest=args.manifest_digest,
+            sample_plan_ref=args.sample_plan_ref,
+            sample_plan_digest=args.sample_plan_digest,
+            data_readiness_ref=args.data_readiness_ref,
+            data_readiness_digest=args.data_readiness_digest,
+            consumer_health_ref=args.consumer_health_ref,
+            consumer_health_digest=args.consumer_health_digest,
+            report_dir=Path(args.report_dir),
+            output_root=_stackctl.output_root(),
+        )
+    except (ContentApiConsumerError, OSError, ValueError) as exc:
+        return {
+            "exitCode": 2,
+            "summary": "content API consumer is GATE_BLOCK",
+            "details": [str(exc)],
+            "reportDir": str(args.report_dir),
+        }
 
 
 def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
@@ -375,7 +433,9 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
     report_dir = (
         Path(args.report_dir)
         if getattr(args, "report_dir", "")
-        else _stackctl.repo_run_dir("content-readiness", target=f"{args.env}-{phase.value}")
+        else _stackctl.repo_run_dir(
+            "content-readiness", target=f"{args.env}-{phase.value}"
+        )
     )
     started_monotonic, started_at = _stackctl._start_timing()
     health = _stackctl.command_health(
@@ -387,7 +447,8 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             # research 相位的匿名 feed 正确形态是 no_active_release 空页
             # （DEC-032 收敛）：health 的 content-consumer scope 在 research
             # 下改跑匿名收敛断言，非空断言只对公开 serving 相位成立。
-            require_non_empty_content_feed=phase in {
+            require_non_empty_content_feed=phase
+            in {
                 ReadinessPhase.CONSUMER,
                 ReadinessPhase.COMMERCIAL,
             },
@@ -407,9 +468,7 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
         # 而首个 release 的导入正是为了创造这份证据（bootstrap），不得把
         # 导入后才存在的 readiness receipt 倒置为导入前置。
         details = [
-            item
-            for item in details
-            if not str(item).startswith("user availability/")
+            item for item in details if not str(item).startswith("user availability/")
         ]
     if phase is ReadinessPhase.RESEARCH:
         # research readiness 的消费主体是受保护内部研究身份（API 面），App
@@ -423,8 +482,12 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
         ]
     executed_checks = [
         item
-        for item in _stackctl._read_json_object(str(report_dir / "health" / "report.json")).get("checks", [])
-        if isinstance(item, dict) and str(item.get("name") or "") and not item.get("skipped")
+        for item in _stackctl._read_json_object(
+            str(report_dir / "health" / "report.json")
+        ).get("checks", [])
+        if isinstance(item, dict)
+        and str(item.get("name") or "")
+        and not item.get("skipped")
     ]
     probes = [str(item["name"]) for item in executed_checks]
     executed_scopes = {str(item.get("scope") or "") for item in executed_checks}
@@ -437,18 +500,22 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
     lifecycle_exit_receipt: dict[str, Any] | None = None
     lifecycle_exit_path: Path | None = None
     research_isolation: dict[str, Any] | None = None
-    has_research_verify_receipt = (
-        phase is ReadinessPhase.RESEARCH
-        and bool(str(getattr(args, "verify_run_id", "") or "").strip())
+    has_research_verify_receipt = phase is ReadinessPhase.RESEARCH and bool(
+        str(getattr(args, "verify_run_id", "") or "").strip()
     )
-    if phase in {ReadinessPhase.CONSUMER, ReadinessPhase.COMMERCIAL} or has_research_verify_receipt:
+    if (
+        phase in {ReadinessPhase.CONSUMER, ReadinessPhase.COMMERCIAL}
+        or has_research_verify_receipt
+    ):
         try:
-            data_readiness_receipt, data_readiness_path = _stackctl._load_data_release_readiness(
-                environment=args.env,
-                release_id=getattr(args, "release_id", ""),
-                verify_run_id=getattr(args, "verify_run_id", ""),
-                manifest_digest=getattr(args, "manifest_digest", ""),
-                readiness_phase=phase,
+            data_readiness_receipt, data_readiness_path = (
+                _stackctl._load_data_release_readiness(
+                    environment=args.env,
+                    release_id=getattr(args, "release_id", ""),
+                    verify_run_id=getattr(args, "verify_run_id", ""),
+                    manifest_digest=getattr(args, "manifest_digest", ""),
+                    readiness_phase=phase,
+                )
             )
             probes.append("canonical-data-release-readiness")
         except ValueError as exc:
@@ -502,7 +569,10 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
                     details.append(str(exc))
     for capability in requirement.capabilities:
         binding = policy.probe_binding_for(capability)
-        if binding.source is ProbeSource.HEALTH_SCOPE and binding.health_scope not in executed_scopes:
+        if (
+            binding.source is ProbeSource.HEALTH_SCOPE
+            and binding.health_scope not in executed_scopes
+        ):
             details.append(
                 f"capability {capability.value} declares probe scope "
                 f"{binding.health_scope} but no probe executed for {requirement.target}"
@@ -511,12 +581,8 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             try:
                 research_isolation = _stackctl.verify_research_content_isolation(
                     args.env,
-                    release_id=str(
-                        getattr(args, "release_id", "") or ""
-                    ).strip(),
-                    verify_run_id=str(
-                        getattr(args, "verify_run_id", "") or ""
-                    ).strip(),
+                    release_id=str(getattr(args, "release_id", "") or "").strip(),
+                    verify_run_id=str(getattr(args, "verify_run_id", "") or "").strip(),
                     manifest_digest=str(
                         getattr(args, "manifest_digest", "") or ""
                     ).strip(),
@@ -587,7 +653,9 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             "releaseId": getattr(args, "release_id", ""),
             "verifyRunId": getattr(args, "verify_run_id", ""),
             "manifestDigest": getattr(args, "manifest_digest", ""),
-            "receiptRef": _stackctl.relpath(data_readiness_path) if data_readiness_path else "",
+            "receiptRef": _stackctl.relpath(data_readiness_path)
+            if data_readiness_path
+            else "",
             "receipt": data_readiness_receipt,
             "lifecycleExitRef": (
                 str(getattr(args, "lifecycle_exit_ref", "")).strip()
@@ -717,7 +785,9 @@ def command_content_uat(args: argparse.Namespace) -> dict[str, Any]:
         }
 
     result = _stackctl.run(command["argv"], cwd=command["cwd"], env=command.get("env"))
-    runner_report = _stackctl._read_json_object(str(_stackctl.ROOT / str(command["reportPath"])))
+    runner_report = _stackctl._read_json_object(
+        str(_stackctl.ROOT / str(command["reportPath"]))
+    )
     runner_status = str(runner_report.get("status") or "failed")
     lease_revoke: dict[str, Any] | None = None
     lease_revoke_error = ""
@@ -731,8 +801,14 @@ def command_content_uat(args: argparse.Namespace) -> dict[str, Any]:
         )
     except ValueError as exc:
         lease_revoke_error = str(exc)
-    status = "ok" if result.returncode == 0 and runner_status == "passed" else (
-        "gate_block" if result.returncode == 2 or runner_status == "gate_block" else "failed"
+    status = (
+        "ok"
+        if result.returncode == 0 and runner_status == "passed"
+        else (
+            "gate_block"
+            if result.returncode == 2 or runner_status == "gate_block"
+            else "failed"
+        )
     )
     details = _stackctl._command_details(result)
     if lease_revoke_error:
@@ -758,7 +834,9 @@ def command_content_uat(args: argparse.Namespace) -> dict[str, Any]:
         **timing,
     }
     _stackctl.write_json(report_dir / "report.json", payload)
-    _stackctl.write_json(report_dir / "findings.json", {"issues": details if status != "ok" else []})
+    _stackctl.write_json(
+        report_dir / "findings.json", {"issues": details if status != "ok" else []}
+    )
     _stackctl._write_summary_bundle(
         report_dir,
         command="content-uat",
@@ -767,7 +845,9 @@ def command_content_uat(args: argparse.Namespace) -> dict[str, Any]:
         summary=(
             "content UAT passed"
             if status == "ok"
-            else "content UAT is GATE_BLOCK" if status == "gate_block" else "content UAT failed"
+            else "content UAT is GATE_BLOCK"
+            if status == "gate_block"
+            else "content UAT failed"
         ),
         details=details,
         extra={
@@ -783,7 +863,9 @@ def command_content_uat(args: argparse.Namespace) -> dict[str, Any]:
         "summary": (
             "content UAT passed"
             if status == "ok"
-            else "content UAT is GATE_BLOCK" if status == "gate_block" else "content UAT failed"
+            else "content UAT is GATE_BLOCK"
+            if status == "gate_block"
+            else "content UAT failed"
         ),
         "details": details,
         "reportDir": _stackctl.relpath(report_dir),
@@ -968,5 +1050,7 @@ def _run_data_acceptance_lease(
         or payload.get("leaseId") != lease_id
         or not str(payload.get("eventRef") or "")
     ):
-        raise ValueError("Data acceptance lease command returned identity-drifted evidence")
+        raise ValueError(
+            "Data acceptance lease command returned identity-drifted evidence"
+        )
     return payload

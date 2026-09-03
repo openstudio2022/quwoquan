@@ -1,8 +1,8 @@
+# `task init` 从已确认 carrier demand 的 familyRef 读取本 recipe；本文件不包含实例参数。
 schema: quwoquan.content.recipe
 recipeId: content/travel/article/article
 title: 旅行文章执行（通用模板）
 presetRef: content/travel/article/base
-runtimeProfile: semantic_agent_local_calibrated
 selection:
   # Article selection spans every admitted 地点 subtype; source readiness,
   # rather than a scenic-only recipe label, decides the frozen pool.

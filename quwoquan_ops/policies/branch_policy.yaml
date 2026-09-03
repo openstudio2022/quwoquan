@@ -1,12 +1,25 @@
 allowed_local_branches:
   - dev1.0
   - main
+  - lane/product-mainline
+  - lane/data-engineering
+  - lane/engineering
+  - lane/ops
+  - lane/small-fix
+  - lane/refactor
 
 allowed_remote_branches:
   - dev1.0
   - main
+  - lane/product-mainline
+  - lane/data-engineering
+  - lane/engineering
+  - lane/ops
+  - lane/small-fix
+  - lane/refactor
 
-pull_request_branch_prefixes: []
+pull_request_branch_prefixes:
+  - lane/
 
 integration_branch: dev1.0
 release_branch: main
@@ -24,11 +37,23 @@ required_promotion_checks:
 allowed_pull_request_edges:
   - head: dev1.0
     base: main
+  - head: lane/*
+    base: dev1.0
 
 system_backsync:
   head: main
   base: dev1.0
   mode: fast-forward-only
+
+# 六条固定 lane 是长期 writer 分支：最多六个不同 lane writer，同一 lane
+# 同一时刻至多一个 writer；integration/abort 后 worktree retained，并强制
+# fast-forward resync 到新的 dev1.0。共享 host mutation 仍保持单 writer。
+persistent_lane_admission:
+  isolation: branch_per_writer
+  promotion: declared_pull_request_edge_only
+  resync: mandatory_fast_forward_after_integration_or_abort
+  worktree_lifecycle: retained
+  concurrency_evidence: required
 
 failure_codes:
   policy_invalid: OPS.BRANCH.POLICY_INVALID

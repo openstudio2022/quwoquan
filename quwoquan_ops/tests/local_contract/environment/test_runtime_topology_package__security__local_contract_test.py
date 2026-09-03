@@ -99,6 +99,50 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
         )
         alert_policy.parent.mkdir(parents=True, exist_ok=True)
         alert_policy.write_text("schema: telemetry-alert-policy\n", encoding="utf-8")
+        local_elasticsearch = (
+            self.repo
+            / "quwoquan_service/services/product-ops-service/deploy"
+            / "local-elasticsearch.compose.yaml"
+        )
+        local_elasticsearch.write_text(
+            yaml.safe_dump(
+                {
+                    "x-qwq-package-elasticsearch": {
+                        "runtimeEndpoint": "http://elasticsearch:9200",
+                        "platforms": {
+                            platform: {
+                                "image": "quwoquan/elasticsearch-cjk:8.13.4",
+                                "cliJavaOpts": "",
+                                "esJavaOpts": "-Xms512m -Xmx512m",
+                            }
+                            for platform in ("arm64", "amd64")
+                        },
+                    },
+                    "services": {
+                        "elasticsearch": {
+                            "image": "${QWQ_COMPOSE_ELASTICSEARCH_IMAGE:-quwoquan/elasticsearch-cjk:8.13.4}",
+                            "environment": {
+                                "cluster.name": "quwoquan-${QWQ_LOCAL_RELEASE_TARGET:?QWQ_LOCAL_RELEASE_TARGET is required}-logs",
+                                "node.name": "${QWQ_LOCAL_RELEASE_TARGET:?QWQ_LOCAL_RELEASE_TARGET is required}-logs-0",
+                                "CLI_JAVA_OPTS": "${QWQ_COMPOSE_ELASTICSEARCH_CLI_JAVA_OPTS:-}",
+                                "ES_JAVA_OPTS": "${QWQ_COMPOSE_ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}",
+                            },
+                            "volumes": [
+                                "product-ops-elasticsearch-data:/usr/share/elasticsearch/data"
+                            ],
+                        },
+                        "product-ops-service": {
+                            "depends_on": {
+                                "elasticsearch": {"condition": "service_healthy"}
+                            }
+                        },
+                    },
+                    "volumes": {"product-ops-elasticsearch-data": None},
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -289,6 +333,31 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
                 )
                 self.assertEqual(ungated, [])
 
+    def test_bounded_search_execution_copy_matches_candidate_bytes(self) -> None:
+        from quwoquan_ops.cli.lib.runtime_topology_package import (
+            materialize_bounded_search_elasticsearch_compose,
+        )
+
+        self._materialize()
+        execution = self.root / "execution/search-elasticsearch.compose.yaml"
+        materialize_bounded_search_elasticsearch_compose(
+            execution,
+            repo_root=self.repo,
+        )
+        release = load_runtime_topology_package(
+            self.candidate,
+            environment="gamma",
+            target="gamma-local",
+            workload="content-release",
+        )
+        candidate_dependency = next(
+            path
+            for path in release["composeFiles"]
+            if path.name == "elasticsearch.compose.yaml"
+        )
+
+        self.assertEqual(execution.read_bytes(), candidate_dependency.read_bytes())
+
     def test_stackctl_runtime_shared_package_seals_the_runtime_topology(self) -> None:
         from quwoquan_ops.cli import stackctl
 
@@ -334,11 +403,38 @@ class RuntimeTopologyPackageSecurityTest(unittest.TestCase):
         commercial_paths = "\n".join(str(path) for path in commercial["composeFiles"])
         for service in CONTENT_RELEASE_SERVICES:
             self.assertIn(f"/services/{service}/", release_paths)
+        self.assertIn(
+            "/dependencies/search/elasticsearch.compose.yaml",
+            release_paths,
+        )
         self.assertNotIn("/services/product-ops-service/", release_paths)
         self.assertIn("/services/product-ops-service/", commercial_paths)
         self.assertIn("/services/chat-service/", commercial_paths)
         self.assertIn("/services/search-service/", commercial_paths)
         self.assertNotIn("/control-plane/", commercial_paths)
+
+    def test_content_release_search_dependency_excludes_product_ops(self) -> None:
+        self._materialize()
+
+        release = load_runtime_topology_package(
+            self.candidate,
+            environment="gamma",
+            target="gamma-local",
+            workload="content-release",
+        )
+        search_dependency = next(
+            path
+            for path in release["composeFiles"]
+            if path.name == "elasticsearch.compose.yaml"
+        )
+        compose = yaml.safe_load(search_dependency.read_text(encoding="utf-8"))
+
+        self.assertEqual(set(compose["services"]), {"elasticsearch"})
+        self.assertNotIn("product-ops-service", compose["services"])
+        serialized = search_dependency.read_text(encoding="utf-8")
+        self.assertNotIn("product-ops", serialized)
+        self.assertIn("bounded-search-elasticsearch-data", serialized)
+        self.assertIn("-search", serialized)
 
     def test_symlinked_candidate_artifact_is_rejected(self) -> None:
         manifest = self._materialize()

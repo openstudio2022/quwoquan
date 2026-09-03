@@ -209,8 +209,6 @@ def _validate_accepted_asset(
         "originalAssetUrl": str(row.get("assetUrl") or row["sourceUrl"]),
         "platform": str(provider["platform"]),
         "sourceId": str(provider["sourceId"]),
-        "discoveryCandidateId": str(row["discoveryCandidateId"]),
-        "discoveryUrl": str(row["discoveryUrl"]),
         "creator": str(row["creator"]),
         "credit": str(row["creator"]),
         "capturedAt": str(row["capturedAt"]),

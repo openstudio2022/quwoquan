@@ -17,8 +17,7 @@
 - [`objective-execution`](./objective-execution/spec.md)：Objective/Increment 的执行状态由 TransitionEvent 单轨拥有，executor 只消费 authenticated authority 与 effect readback，S4 准入从 branch policy 推导。
 - [`hotl-expansion-control`](./hotl-expansion-control/spec.md)：S6 只拥有 HOTL applicability、固定 cohort 瓶颈、checkpoint delta、紧急控制 proof、capability admission 与 fallback，并动态消费 Human authority、Objective S4 与生产事实。
 - [`local-continuous-integration`](./local-continuous-integration/spec.md)：基于 canonical EvidenceFingerprint 规划并调度本地 checks，逐级产出不可冒充外部证据的 readiness receipt。
-- [`workflow-resolution`](./workflow-resolution/spec.md)：以同一 contract/resolver 收敛显式与自然语言输入，并在 owner manifest 或宿主证据不足时保持保守终态。
-- [`governance-pipeline-observe-only`](./governance-pipeline-observe-only/spec.md)：只读汇聚 workflow、readiness、Review、Human、Objective、环境和发布 owner 的独立 readback，并维持零 authority/零 mutation 边界。
+- [`governance-pipeline-observe-only`](./governance-pipeline-observe-only/spec.md)：从 owner manifest 的 immutable exact ref 开始，只读汇聚 readiness、Review、Human、Objective、环境和发布 owner 的独立 readback，并维持零 authority/零 mutation 边界。
 
 ## 3. 端云与数据流
 
@@ -42,10 +41,10 @@
 
 <a id="dec-002"></a>
 ### DEC-002 规则按稳定作用域分层，Workflow Skill 采用五段最小契约
-- 决策：根 AGENTS 只放全仓不变量，最近子树 AGENTS 只放该子树每次变更都成立的不变量。Workflow Skill 只保留触发与输入、执行、完成证据、失败停止、条件性交接五段。Feature 行为与设计只落 spec/design/contracts；角色只保留职责/盲区，checklist 只保留判定。
+- 决策：根 AGENTS 只放全仓不变量；最近子树 AGENTS 只放该子树每次变更都成立的不变量，不参与自然语言工作流路由。`.agents/skills/*/SKILL.md` 的 metadata 是唯一宿主发现面，body 是唯一 Workflow Skill 正文，并只保留触发与输入、执行、完成证据、失败停止、条件性交接五段。Feature 行为与设计只落 spec/design/contracts；角色只保留职责/盲区，checklist 只保留判定。
 - 决策：删除共享 interaction/completion 跳转、强制 brief-back、checklist copy-in 与普通任务的持久交接。只有跨会话未完成、多人并行、环境/发布、外部阻断、证据需复用或用户显式要求交接时生成交接单。
-- 决策：有 Cursor 命令的 Workflow Skill 与 `.cursor/commands` 双向一一对应；命令文件只作一行式发现入口。`prd` 拥有可测试规格，`design` 仅在达到门槛时拥有 DEC，简单规格可直达 `dev`。
-- 适用工程根：`.agents/README.md`、`.agents/skills`、`.cursor/commands`、`.cursor/skills`、`.cursor/hooks.json`、`.codex/skills`、`.codex/hooks.json`
+- 决策：有显式 Cursor 入口的 Workflow Skill 与 `.cursor/commands` 双向一一对应；命令文件只是一行式入口，并指向同一 Skill body。`prd` 拥有可测试规格，`design` 仅在达到门槛时拥有 DEC，简单规格可直达 `dev`。
+- 适用工程根：`.agents/README.md`、`.agents/skills`、`.cursor/commands`、`.cursor/hooks.json`、`.codex/hooks.json`
 - 理由：常驻规则与递归 reference 会在任务开始前吃掉上下文；把功能事实放进角色或 harness 文件又会让开发与 Review 加载不同版本。稳定作用域分层让同一事实只有一个 owner，并让加载触发可判定。
 - 被否决方案：继续以八段模板和共享完成表追求形式一致。也不保留功能角色 reference 再由 Cursor rule 指向，或提交 workflow manifest/规则 inventory 作为第二真相源。
 - 关联要求：`REQ-001`
@@ -55,7 +54,7 @@
 <a id="dec-003"></a>
 ### DEC-003 Review 使用主审加唯一专审、命名 Evidence 与定向复审
 - 决策：Review plan、结构化 ReviewResult/Finding/Consolidation 与 typed terminal 由 canonical agent governance contract 单点拥有；workflow primary、profile specialist、预算与命名 evidence 路由由 registry 单点拥有。PRE/POST 只消费这两处真相源。实现可发射 `REVIEW.*` code 与 contract 静态闭集相等且 recovery 一对一。
-- 决策：`explore` 与 `plan-next` 不产生送审交付件。`continue` 复用被恢复 workflow，`review` 不递归自审，`commit` 只消费已评审增量。这五个控制型 workflow 默认不自动派审，其他 workflow 禁止关闭 automatic review。
+- 决策：`explore` 与 `plan-next` 不产生送审交付件。`continue` 复用被恢复 workflow，`review` 不递归自审，`commit` 只做 lane 提交、不要求 Review evidence。这五个控制型 workflow 在 registry 中声明零 Reviewer；其他 workflow 在 registry 保留 primary/specialist 配置以供显式 `/review` 与准出派发，但开发期 POST 默认不派审——Review 触发点只在用户显式请求或准出（lane→`dev1.0` PR、handoff、release），硬门不进入日常开发。
 - 决策：initial、finding-owner 定向复审、并发与总调用预算严格取 registry 的 limits；禁止自动第二轮复审、失败重试或 passed 角色陪跑。
 - 决策：checklist 只引用 registry evidence ID 或客观 check。Board 按 contract 的 plan/fingerprint schema 装配、去重执行并共享证据，Reviewer 不拥有命令执行权。纯 consolidator 消费 current plan、fresh named evidence 与宿主外部提供的结构化 reviewer results，required/optional incomplete 分别收敛到 GATE_BLOCK/PR_WARN，按 finding ID 稳定去重并拒绝旧 fingerprint result；仓库实现不直接启动 Cursor Reviewer。
 - 适用工程根：`.agents/skills/review`、`quwoquan_ops/cli/review_dispatch.py`、`quwoquan_ops/cli/review_consolidator.py`、`quwoquan_ops/cli/lib/review_terminal_contract.py`、`quwoquan_ops/tests/local_contract/gate/test_review_dispatch__cli__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_review_consolidator__local_contract_test.py`
@@ -67,8 +66,8 @@
 
 <a id="dec-004"></a>
 ### DEC-004 Owner manifest 与 Cursor/Codex adapter 共享中性真相源
-- 决策：`feature-context` 的默认 manifest 严格遵守 canonical agent governance contract 的字段与预算；expanded 格式仅供显式人工诊断。
-- 决策：代码路径先按最长 L1 工程根确定领域，再读取该 L1 下 L2 DEC 的“适用工程根”与唯一“影响 Story”下钻。开发 PRE 与非控制型 workflow 的 Review POST 使用同一 resolver 与 current manifest；缺失、旧 schema、target/scope 不匹配或 stale 时 fail-closed。控制型零 Reviewer workflow 只允许 registry 控制交付件，不能包装送审交付件旁路 manifest。profile 不复制 owner。
+- 决策：Skill PRE 确定 exact target 后，`feature-context` 生成严格遵守 canonical agent governance contract 字段与预算的 compact manifest，并以内容摘要形成 immutable exact ref；expanded 格式仅供显式人工诊断。`explore`、`plan-next` 及 `continue` 的只读恢复以 best-effort 方式调用：唯一 owner 成功时保存并消费 ref，无 owner、多 owner或解析失败时记录 typed 结果，基于当前 Git 快照继续只读，不因此阻断整个控制流程，也不获得 mutation 授权。
+- 决策：代码路径先按最长 L1 工程根确定领域，再读取该 L1 下 L2 DEC 的“适用工程根”与唯一“影响 Story”下钻。prd、design、dev 等 mutation workflow 进入写入前，以及用户显式或准出 Review 派发前，必须取得唯一且 current 的 immutable exact ref；ref 缺失、旧 schema、摘要漂移、owner 多义或锚点冲突时 fail-closed。显式/准出 Review 原样复用该 ref；manifest 不包含 profiles，Review profile 只由 current `changed_paths + deliverable` 派生且不复制 owner。控制型零 Reviewer workflow 不能包装送审交付件旁路 manifest。
 - 决策：Reviewer executor 是受版本控制的中性 authoring source。生成器单向渲染必须随仓库分发的 Cursor Markdown 与 Codex TOML tracked projection，并检查缺失、漂移、孤儿和手改。运行期 plan/context 仍只写 `.qwq_output`。仓库删除 Claude Code 的入口、桥接和当前支持声明，历史 receipt 与模型族值保持可读。
 - 适用工程根：`quwoquan_ops/policies/agent_governance_contract.yaml`、`quwoquan_ops/cli/lib/agent_governance_contract.py`、`quwoquan_ops/cli/lib/evidence_fingerprint.py`、`quwoquan_ops/cli/lib/evidence_generation.py`、`quwoquan_ops/cli/lib/review_fingerprint.py`、`quwoquan_ops/cli/evidence_runner.py`、`quwoquan_ops/cli/handoff_manifest.py`、`quwoquan_ops/cli/handoff_consumer.py`、`quwoquan_ops/gate/verify_handoff_manifest.py`、`.agents/skills/review/references/reviewer-executor.md`、`.cursor/agents`、`.codex/agents`、`quwoquan_ops/cli/feature_tree.py`、`quwoquan_ops/cli/lib/feature_tree`、`quwoquan_ops/tools/generate_agent_adapters.py`、`quwoquan_ops/tests/local_contract/gate/test_feature_tree__directory_native__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_feature_tree__clause_binding__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_agent_adapter_generator__tool__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_named_evidence_runner__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_handoff_manifest__gate__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_handoff_manifest_producer__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_evidence_fingerprint__contract__local_contract_test.py`
 - 理由：默认 expanded context 曾拼入约 178KiB 父链正文，且 pageflip 两条路径落在不同 L1。Reviewer 真相源又反向放在 Claude Code adapter 目录下。精确 manifest 与中性 adapter 同时消除过载和 harness 倒置所有权。
@@ -89,8 +88,8 @@
 
 <a id="dec-006"></a>
 ### DEC-006 知识七类唯一 owner、动态 facets 与 Skill-first 上下文顺序
-- 决策：知识按 L2 `REQ-005` 七类划分，物理位置由唯一 owner 决定；facets 动态派生，不建中央 registry。上下文装配唯一顺序为 根+最近 AGENTS → Skill metadata RESOLVE → 唯一 SKILL.md body → Skill 请求 feature-context → exact path#anchor contexts → 直接 tests/contracts/profile refs。(workflow, profile) 的选择先于 feature-context 请求、由已选中的唯一 Skill 决定，禁止 manifest-before-skill。
-- 理由：分类与位置解耦后，强制度由 binding closure 决定而非目录名；Skill-first 保证同一任务在自然语言与显式命令下装配同一上下文。
+- 决策：知识按 L2 `REQ-005` 七类划分，物理位置由唯一 owner 决定；facets 动态派生，不建中央 registry。上下文装配唯一顺序为根 AGENTS → 宿主基于 `.agents/skills` metadata 选择 Skill → 唯一 `SKILL.md` body → Skill PRE 确定 exact target → 最近子树 AGENTS + compact manifest immutable exact ref → exact path#anchor contexts 与直接 tests/contracts。已知目标路径时可先读最近子树 AGENTS 以遵守路径不变量，但子树不参与自然语言路由；禁止 manifest-before-skill。Review profile 不属于 manifest，只在 POST 由 `changed_paths + deliverable` 派生。
+- 理由：分类与位置解耦后，强制度由 binding closure 决定而非目录名；Skill-first 保证自然语言与显式入口由真实宿主加载同一 Skill body 和生命周期，而不依赖中央解析收据自证。
 - 被否决方案：顶层 knowledge-base、中央 decisions/gotcha 库、session ledger、manifest-first 装配、八类知识对应八个物理目录。
 - 约束与影响：GC 与 Review 按 facets 查询；违反唯一 owner 的新增内容 fail-closed。
 - 关联要求：L2 `REQ-005`
@@ -179,22 +178,9 @@
 - 影响 Story：[`local-continuous-integration`](./local-continuous-integration/spec.md)（本地就绪调度与回执）
 - 关联验收：`local-continuous-integration/GWT-001` 至 `local-continuous-integration/GWT-003`
 
-<a id="dec-012"></a>
-### DEC-012 Workflow resolver 让自然语言与显式 Skill 同轨且宿主中性
-- 决策：workflow resolver 是显式 Skill 命令和自然语言意图的唯一解析入口，两种 input mode 共享 workflow/Skill/readiness/next-segment 语义；歧义、低置信、contract 或 owner manifest 漂移 fail closed。Cursor/Codex host label 不参与语义，真实双宿主 discovery 只由外部 smoke 关闭。
-- 决策：公开 `verify-workflow-resolution` 使用受管 pytest runner 执行 resolver/gate focused local contracts，再执行 canonical verify script；`gate_repo.sh` 只执行 verify script 一次，companion tests 由既有 companion target 承接。
-- 适用工程根：`quwoquan_ops/policies/workflow_resolution_contract.yaml`、`quwoquan_ops/cli/lib/workflow_resolution/`、`quwoquan_ops/cli/workflow_resolver.py`、`quwoquan_ops/gate/verify_workflow_resolution.py`、`quwoquan_ops/tests/local_contract/gate/test_workflow_resolution__resolver__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_workflow_resolution__gate__local_contract_test.py`
-- L1 归属：Workflow resolver 路径归 runtime L1 `Agent` 根，本 DEC 将其唯一映射到 `workflow-resolution`；`quwoquan_ops` 项目级 App 根不参与该路径裁决。
-- 理由：宿主各自解析会造成 workflow/Skill/readiness 分叉；同一 resolver 使自然语言与命令只在输入形式上不同。
-- 被否决方案：不使用宿主专属 resolver、自由文本猜测或由 Review/Human binding 复制 workflow 闭集。
-- 约束与影响：真实 Cursor/Codex discovery 在外部 smoke 前保持 `workflow-resolution/OPEN-001`；本地 PASS 只证明 resolver contract 与 fixture。
-- 关联要求：`workflow-resolution/REQ-001` 至 `REQ-003`
-- 影响 Story：[`workflow-resolution`](./workflow-resolution/spec.md)（工作流同轨解析）
-- 关联验收：`workflow-resolution/GWT-001` 至 `workflow-resolution/GWT-003`
-
 <a id="dec-013"></a>
 ### DEC-013 治理 pipeline admission 只读聚合并保持零 authority/零 mutation
-- 决策：governance pipeline admission 是 query-only 聚合边界，只消费各 owner 的 exact readback，并按 schema、freshness、fingerprint 与证据层级返回保守终态。无独立 authenticated activation verifier 时最多 eligibility；所有终态保持 `production_ready=false`、`commercial_ready=false`、`hotl_admitted=false` 与 Prod/HOTL/global mutation false。
+- 决策：governance pipeline admission 是 query-only 聚合边界，从 Skill PRE 产出的 owner manifest immutable exact ref 开始，只消费各 owner 的 exact readback，并按 schema、freshness、fingerprint 与证据层级返回保守终态；它不消费 workflow route boolean、resolution receipt 或其他路由证据。无独立 authenticated activation verifier 时最多 eligibility；所有终态保持 `production_ready=false`、`commercial_ready=false`、`hotl_admitted=false` 与 Prod/HOTL/global mutation false。
 - 决策：公开 `verify-governance-pipeline-admission` 使用受管 pytest runner 执行 evaluator/CLI/gate focused local contracts，再执行 canonical verify script；`gate_repo.sh` 只执行 verify script 一次，companion tests 由既有 companion target 承接。Review consolidation 只提供唯一公开 focused verify/test target，不在仓库门禁链重复执行。
 - 适用工程根：`quwoquan_ops/policies/governance_pipeline_admission_contract.yaml`、`quwoquan_ops/cli/lib/governance_pipeline_admission/`、`quwoquan_ops/cli/governance_pipeline_admission.py`、`quwoquan_ops/gate/verify_governance_pipeline_admission.py`、`quwoquan_ops/tests/local_contract/gate/test_governance_pipeline_admission__evaluator__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_governance_pipeline_admission__contract_cli_gate__local_contract_test.py`、`quwoquan_ops/tests/local_contract/gate/test_governance_pipeline_admission__evidence_bundle__local_contract_test.py`
 - L1 归属：Governance pipeline admission 文件由 runtime L1 `Agent` 根认领，本 DEC 将其唯一落到 `governance-pipeline-observe-only`；项目级 `quwoquan_ops` App 根不构成竞争 owner。

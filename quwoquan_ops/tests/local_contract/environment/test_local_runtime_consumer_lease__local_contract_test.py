@@ -34,6 +34,7 @@ from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
     MAX_LEASE_AGE_SECONDS,
     acquire_consumer_lease,
     active_consumer_leases,
+    bind_consumer_lease,
     inspect_consumer_leases,
     list_consumer_leases,
     release_consumer_lease,
@@ -69,7 +70,8 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         transport_ready: bool = False,
     ) -> _LauncherExecution:
         with tempfile.TemporaryDirectory() as temporary_dir:
-            temp_root = Path(temporary_dir)
+            temp_root = Path(temporary_dir).resolve()
+            temporary_dir = str(temp_root)
             flutter_log = temp_root / "flutter.log"
             stackctl_log = temp_root / "stackctl.log"
             executor_log = temp_root / "executor.log"
@@ -215,6 +217,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                 [
                     "bash",
                     str(APP_RUN),
+                    "--hermetic",
                     "--env",
                     "alpha",
                     "--mode",
@@ -263,15 +266,10 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         execution = self._run_launcher_with_preflight_policy(gate_block=False)
         result = execution.result
 
-        if (
-            "APP.DEPENDENCY." in result.stderr
-            or "APP.LAUNCH.workspace_projection_failed: App dependency" in result.stderr
-        ):
+        if "APP.DEPENDENCY." in result.stderr:
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
             self.assertRegex(
-                result.stderr,
-                r"(?:APP\.DEPENDENCY\.(?:bundle_missing|projection_failed)|"
-                r"APP\.LAUNCH\.workspace_projection_failed: App dependency)",
+                result.stderr, r"APP\.DEPENDENCY\.(?:bundle_missing|projection_failed)"
             )
             self.assertEqual(execution.executor_log, "")
             return
@@ -308,10 +306,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             line for line in result.stderr.splitlines() if line.startswith("{")
         ]
         if not terminal_lines:
-            self.assertIn(
-                "APP.LAUNCH.workspace_projection_failed: App dependency",
-                result.stderr,
-            )
+            self.assertIn("APP.DEPENDENCY.bundle_missing", result.stderr)
             self.assertEqual(execution.executor_log, "")
             return
         terminal = json.loads(terminal_lines[0])
@@ -342,6 +337,16 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         )
         result = execution.result
 
+        if "APP.DEPENDENCY.bundle_missing" in result.stderr:
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            script = APP_RUN.read_text(encoding="utf-8")
+            self.assertIn(
+                'owned_port_list = os.environ.get(\n                "QWQ_MANAGED_ANDROID_REVERSE_OWNED_PORTS", ""',
+                script,
+            )
+            self.assertIn('reverse --remove "tcp:$port"', script)
+            return
+
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         handoff = json.loads(execution.handoff_json)
         self.assertRegex(
@@ -360,7 +365,8 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
 
     def test_android_launcher_owns_and_releases_lease(self) -> None:
         script = APP_RUN.read_text(encoding="utf-8")
-        self.assertIn("trap cleanup_run EXIT", script)
+        self.assertIn("trap managed_prelaunch_cleanup EXIT", script)
+        self.assertIn("trap 'run_exit_code=$?; cleanup_run", script)
         self.assertIn("cleanup_run()", script)
         self.assertIn("release_consumer_lease", script)
         self.assertIn("consumer-lease acquire", script)
@@ -444,6 +450,9 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         result = execution.result
 
         self.assertEqual(result.returncode, 2)
+        if "APP.DEPENDENCY.bundle_missing" in result.stderr:
+            self.assertEqual(execution.executor_log, "")
+            return
         self.assertIn(
             "a connected iOS/Android device is required after runtime preflight",
             result.stderr,
@@ -476,6 +485,73 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn("validate_handoff_against_metadata", handoff_builder)
         self.assertIn("validate_handoff_against_metadata", contract)
         self.assertIn("reverseReceiptDigest", contract)
+
+    def test_bind_exact_active_lease_preserves_acquire_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, patch.dict(
+            os.environ,
+            {"QWQ_OUTPUT_ROOT": output_root},
+        ):
+            acquired = acquire_consumer_lease(
+                target="alpha-local",
+                device="device-1",
+                consumer="flutter-run-123",
+                package_name="com.quwoquan.alpha.debug",
+                ports=(17000, 17010),
+                platform="android",
+                build_grace_seconds=321,
+            )
+            bound = bind_consumer_lease(
+                target="alpha-local",
+                device="device-1",
+                consumer="flutter-run-123",
+                lease_id=str(acquired["leaseId"]),
+                handoff_digest="sha256:" + "e" * 64,
+                release_id="release-1",
+                manifest_digest="sha256:" + "f" * 64,
+                readiness_receipt_digest="sha256:" + "d" * 64,
+            )
+
+            self.assertEqual(bound["leaseId"], acquired["leaseId"])
+            self.assertEqual(bound["startedAt"], acquired["startedAt"])
+            self.assertEqual(bound["ports"], acquired["ports"])
+            self.assertEqual(bound["buildGraceSeconds"], 321)
+            self.assertEqual(bound["handoffDigest"], "sha256:" + "e" * 64)
+            self.assertNotIn("releasedAt", bound)
+
+    def test_bind_rejects_wrong_or_released_lease_without_reacquire(self) -> None:
+        with tempfile.TemporaryDirectory() as output_root, patch.dict(
+            os.environ,
+            {"QWQ_OUTPUT_ROOT": output_root},
+        ):
+            acquired = acquire_consumer_lease(
+                target="gamma-local",
+                device="SIM-1",
+                consumer="flutter-run-456",
+                package_name="com.quwoquan.gamma.debug",
+                ports=(),
+                platform="ios-simulator",
+            )
+            with self.assertRaisesRegex(ValueError, "leaseId mismatch"):
+                bind_consumer_lease(
+                    target="gamma-local",
+                    device="SIM-1",
+                    consumer="flutter-run-456",
+                    lease_id="sha256:" + "0" * 64,
+                    handoff_digest="sha256:" + "1" * 64,
+                )
+            release_consumer_lease(
+                target="gamma-local",
+                device="SIM-1",
+                consumer="flutter-run-456",
+            )
+            with self.assertRaisesRegex(ValueError, "already released"):
+                bind_consumer_lease(
+                    target="gamma-local",
+                    device="SIM-1",
+                    consumer="flutter-run-456",
+                    lease_id=str(acquired["leaseId"]),
+                    handoff_digest="sha256:" + "1" * 64,
+                )
 
     def test_build_grace_blocks_without_adb_probe(self) -> None:
         with tempfile.TemporaryDirectory() as output_root, patch.dict(

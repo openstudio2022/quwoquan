@@ -123,6 +123,12 @@ def test_contract_freezes_v2_schema_graph_and_recovery_terminals() -> None:
     assert contract["schema_version"] == 2
     assert contract["schema_id"] == "objective-execution-contract"
     assert contract["journal"]["event_chain_authority"] is True
+    assert contract["journal"]["exclusive_publish"] == {
+        "darwin": "renameatx_np_RENAME_EXCL",
+        "linux": "renameat2_RENAME_NOREPLACE",
+        "unsupported_platform": "fail_closed",
+        "overwrite_fallback_allowed": False,
+    }
     assert contract["commands"]["read_execution_state"]["materialization_allowed"] is False
     assert contract["transition_graph"]["terminal_reopen_policy"] == "explicit_edges_only"
     assert contract["transition_graph"]["subjects"]["objective"]["terminal_states"] == ["accepted", "aborted"]
@@ -132,6 +138,10 @@ def test_contract_freezes_v2_schema_graph_and_recovery_terminals() -> None:
         lambda value: value["errors"].pop("OEX.JOURNAL_RECOVERY_REQUIRED"),
         lambda value: value["errors"].pop("OEX.TRANSITION_INVALID"),
         lambda value: value["errors"].pop("OEX.PENDING_COMMAND_CONFLICT"),
+        lambda value: value["journal"]["exclusive_publish"].pop("linux"),
+        lambda value: value["journal"]["exclusive_publish"].update(
+            {"linux": "renameat2_or_unsafe_fallback"}
+        ),
     ):
         broken = deepcopy(contract)
         mutation(broken)

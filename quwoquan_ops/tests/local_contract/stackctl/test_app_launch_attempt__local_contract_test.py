@@ -89,6 +89,7 @@ def _supervisor_argv(
     require_safe_terminal: bool = False,
     startup_terminal_receipt: Path | None = None,
     warning: str = "",
+    launch_provenance: str = "canonical_launcher",
 ) -> list[str]:
     target = f"{environment}-local" if environment != "prod" else "prod-sim"
     if artifact_path is None:
@@ -124,7 +125,7 @@ def _supervisor_argv(
         "--application-id",
         "com.quwoquan.fixture",
         "--launch-provenance",
-        "canonical_launcher",
+        launch_provenance,
         "--runtime-config-supply-mode",
         "external_runtime_package",
         "--runtime-config-trust-envelope-digest",

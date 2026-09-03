@@ -8,7 +8,6 @@ are executed by the board before dispatch, never by reviewers.
 
 from __future__ import annotations
 
-import argparse
 import datetime as _dt
 import fnmatch
 import json
@@ -17,7 +16,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 sys.dont_write_bytecode = True
 
@@ -27,19 +25,18 @@ REGISTRY_PATH = REFERENCES_DIR / "registry.yaml"
 GRADING_PATH = REFERENCES_DIR / "grading.md"
 
 sys.path.insert(0, str(REPO_ROOT / "quwoquan_ops/cli"))
+from lib import review_dispatch_cli as _review_dispatch_cli  # noqa: E402
+from lib import review_owner_manifest as _review_owner_manifest  # noqa: E402
 from lib.agent_governance_contract import (  # noqa: E402
-    canonical_bytes_sha256,
     contract_schema_version,
     contract_section,
     declared_object,
     validate_declared_fields,
-    validate_feature_context_manifest,
     validate_required_fields,
 )
 from lib.feature_context_fingerprint import (  # noqa: E402
     build_feature_context_fingerprint,
     embedded_fingerprint_binding,
-    validate_current_feature_context_fingerprint,
 )
 from lib.evidence_fingerprint import (  # noqa: E402
     EvidenceFingerprintError,
@@ -56,16 +53,17 @@ from lib.review_fingerprint import (  # noqa: E402
 )
 
 _EVIDENCE_LINE_RE = re.compile(r"^\s*evidence:\s*(?P<evidence>[a-z0-9][a-z0-9-]*)\s*$")
-
-
-class ReviewDispatchError(ValueError):
-    """Typed refusal emitted before an invalid review can be dispatched."""
-
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-
+ReviewDispatchError = _review_owner_manifest.ReviewDispatchError
+_OWNER_MANIFEST_DIRECTORY_PARTS = (
+    _review_owner_manifest.OWNER_MANIFEST_DIRECTORY_PARTS
+)
+os = _review_owner_manifest.os
+validate_feature_context_manifest = (
+    _review_owner_manifest.validate_feature_context_manifest
+)
+validate_current_feature_context_fingerprint = (
+    _review_owner_manifest.validate_current_feature_context_fingerprint
+)
 
 def derive_profiles(
     profiles: dict[str, Any], changed_paths: list[str], deliverable: str
@@ -375,12 +373,34 @@ def _validate_registry_header(registry: dict[str, Any]) -> None:
     max_invocations = limits.get("max_role_invocations")
     if not isinstance(max_invocations, int) or max_invocations > 4:
         _refuse("REVIEW.INVALID_LIMIT", "max_role_invocations 必须是不大于 4 的整数")
+    max_evidence_timeout = limits.get("max_evidence_timeout_seconds")
+    if max_evidence_timeout != 3600:
+        _refuse(
+            "REVIEW.INVALID_LIMIT",
+            "max_evidence_timeout_seconds 必须为 3600",
+        )
     commands: dict[str, str] = {}
     for evidence_id, config in (registry.get("evidence") or {}).items():
+        if not isinstance(config, dict):
+            _refuse(
+                "REVIEW.INVALID_EVIDENCE",
+                f"evidence={evidence_id} 必须为 mapping",
+            )
         if not isinstance(config.get("covers"), list):
             _refuse(
                 "REVIEW.INVALID_EVIDENCE",
                 f"evidence={evidence_id} 必须显式声明 covers list",
+            )
+        timeout_seconds = config.get("timeout_seconds")
+        if (
+            not isinstance(timeout_seconds, int)
+            or isinstance(timeout_seconds, bool)
+            or timeout_seconds <= 0
+            or timeout_seconds > max_evidence_timeout
+        ):
+            _refuse(
+                "REVIEW.INVALID_EVIDENCE",
+                f"evidence={evidence_id} timeout_seconds 必须为 1..{max_evidence_timeout} 的整数",
             )
         command = str(config.get("command") or "")
         if not command:
@@ -562,6 +582,7 @@ def _resolve_evidence(
                     "segment": segment,
                     "required": bool(config.get("required", True)),
                     "covers": list(config.get("covers") or []),
+                    "timeout_seconds": int(config["timeout_seconds"]),
                     "command_digest": _sha256_text(command),
                     "consumers": [],
                 }
@@ -583,6 +604,14 @@ def _checklist_evidence(checklist: str) -> list[str]:
     return list(evidence)
 
 
+def _read_owner_manifest_exact_bytes(manifest_ref: str) -> bytes:
+    """Compatibility export for the descriptor-relative exact-ref reader."""
+
+    return _review_owner_manifest.read_owner_manifest_exact_bytes(
+        manifest_ref, repo_root=REPO_ROOT
+    )
+
+
 def _normalize_contexts(
     manifest: dict[str, Any],
     *,
@@ -590,116 +619,16 @@ def _normalize_contexts(
     expected_scope: str = "",
     required: bool = False,
 ) -> tuple[list[dict[str, Any]], int, str, dict[str, Any]]:
-    if not manifest:
-        if required:
-            _refuse(
-                "REVIEW.OWNER_MANIFEST_REQUIRED",
-                "非控制型 workflow 的 POST Review 必须携带 current owner manifest",
-            )
-        return [], 0, "", declared_object(
-            {
-                "ref": None,
-                "canonical_bytes_sha256": None,
-                "target": "",
-                "scope": expected_scope,
-                "resolved_owner": "",
-                "fingerprint_ref": None,
-                "fingerprint_digest": None,
-            },
-            "review_plan",
-            "owner_manifest_identity_fields",
-        )
-    expected_version = contract_schema_version("feature_context_manifest")
-    if manifest.get("schema_version") != expected_version:
-        _refuse(
-            "REVIEW.OWNER_MANIFEST_SCHEMA_UNSUPPORTED",
-            f"owner manifest schema_version 必须为 {expected_version}",
-        )
-    try:
-        validate_feature_context_manifest(manifest)
-    except (KeyError, TypeError, ValueError) as exc:
-        _refuse("REVIEW.OWNER_MANIFEST_INVALID", str(exc))
-    encoded = json.dumps(
-        manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    manifest_limit = int(contract_section("feature_context_manifest")["max_bytes"])
-    if len(encoded) > manifest_limit:
-        _refuse(
-            "REVIEW.CONTEXT_MANIFEST_BUDGET_EXCEEDED",
-            f"manifest={len(encoded)} bytes 超过 {manifest_limit}",
-        )
-    if not manifest_ref:
-        _refuse(
-            "REVIEW.OWNER_MANIFEST_REQUIRED",
-            "POST Review 必须携带 owner manifest exact ref",
-        )
-    normalized_manifest_ref = _repo_relative(manifest_ref)
-    manifest_path = REPO_ROOT / normalized_manifest_ref
-    if not manifest_path.is_file() or manifest_path.is_symlink():
-        _refuse(
-            "REVIEW.OWNER_MANIFEST_INVALID",
-            f"owner manifest ref 必须为仓库内 regular file：{normalized_manifest_ref}",
-        )
-    try:
-        referenced = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        _refuse("REVIEW.OWNER_MANIFEST_INVALID", str(exc))
-    if referenced != manifest:
-        _refuse(
-            "REVIEW.OWNER_MANIFEST_STALE",
-            "owner manifest ref canonical bytes 已被替换",
-        )
-    target = _repo_relative(str(manifest["target"]))
-    if expected_scope and target != _repo_relative(expected_scope):
-        _refuse(
-            "REVIEW.OWNER_MANIFEST_SCOPE_MISMATCH",
-            f"owner manifest target={target} 与 Review scope={expected_scope} 不一致",
-        )
-    chain = manifest.get("owner_chain") or []
-    if not chain or chain[-1].get("path") != manifest.get("resolved_owner"):
-        _refuse(
-            "REVIEW.OWNER_MANIFEST_TARGET_MISMATCH",
-            "owner manifest resolved_owner 必须等于 owner_chain 末节点",
-        )
-    try:
-        validate_current_feature_context_fingerprint(manifest, repo_root=REPO_ROOT)
-    except EvidenceFingerprintError as exc:
-        _refuse("REVIEW.OWNER_MANIFEST_STALE", str(exc))
-    contexts: list[dict[str, Any]] = []
-    for raw in manifest["canonical_contexts"]:
-        relative = _repo_relative(str(raw["path"]))
-        snapshot = _snapshot_path(relative)
-        contexts.append(
-            declared_object(
-                {
-                    "path": relative,
-                    "anchor": raw.get("anchor"),
-                    "kind": raw.get("kind"),
-                    "exists": snapshot["exists"],
-                    "content_digest": snapshot["content_digest"],
-                },
-                "review_plan",
-                "context_fields",
-            )
-        )
-    binding = manifest["evidence_fingerprint"]
-    owner_identity = declared_object(
-        {
-            "ref": normalized_manifest_ref,
-            "canonical_bytes_sha256": "sha256:" + __import__("hashlib").sha256(
-                manifest_path.read_bytes()
-            ).hexdigest(),
-            "target": target,
-            "scope": expected_scope or target,
-            "resolved_owner": str(manifest["resolved_owner"]),
-            "fingerprint_ref": binding["ref"],
-            "fingerprint_digest": binding["digest"],
-        },
-        "review_plan",
-        "owner_manifest_identity_fields",
+    return _review_owner_manifest.normalize_contexts(
+        manifest,
+        manifest_ref=manifest_ref,
+        expected_scope=expected_scope,
+        required=required,
+        repo_root=REPO_ROOT,
+        reader=_read_owner_manifest_exact_bytes,
+        validate_manifest=validate_feature_context_manifest,
+        validate_current_fingerprint=validate_current_feature_context_fingerprint,
     )
-    return contexts, len(encoded), target, owner_identity
-
 
 def _measure_reviewer_contexts(
     registry: dict[str, Any],
@@ -858,67 +787,13 @@ def validate_plan_terminal_for_phase(
 
 
 def _validate_current_owner_manifest(plan: dict[str, Any]) -> dict[str, Any]:
-    identity = plan.get("owner_manifest_identity")
-    if not isinstance(identity, dict):
-        _refuse("REVIEW.OWNER_MANIFEST_REQUIRED", "Review plan 缺 owner manifest identity")
-    validate_declared_fields(
-        identity, "review_plan", "owner_manifest_identity_fields"
+    return _review_owner_manifest.validate_current_owner_manifest(
+        plan,
+        repo_root=REPO_ROOT,
+        reader=_read_owner_manifest_exact_bytes,
+        validate_manifest=validate_feature_context_manifest,
+        validate_current_fingerprint=validate_current_feature_context_fingerprint,
     )
-    raw_ref = identity.get("ref")
-    if not isinstance(raw_ref, str) or not raw_ref:
-        _refuse("REVIEW.OWNER_MANIFEST_REQUIRED", "Review plan 缺 owner manifest ref")
-    ref = _repo_relative(raw_ref)
-    path = REPO_ROOT / ref
-    if not path.is_file() or path.is_symlink():
-        _refuse("REVIEW.OWNER_MANIFEST_STALE", f"owner manifest ref stale：{ref}")
-    try:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        _refuse("REVIEW.OWNER_MANIFEST_INVALID", str(exc))
-    if not isinstance(manifest, dict):
-        _refuse("REVIEW.OWNER_MANIFEST_INVALID", "owner manifest 必须为 JSON object")
-    if (
-        "sha256:" + __import__("hashlib").sha256(path.read_bytes()).hexdigest()
-        != identity.get("canonical_bytes_sha256")
-    ):
-        _refuse("REVIEW.OWNER_MANIFEST_STALE", "owner manifest canonical bytes 已漂移")
-    if (
-        manifest.get("target") != identity.get("target")
-        or manifest.get("resolved_owner") != identity.get("resolved_owner")
-        or identity.get("scope") != plan.get("scope")
-    ):
-        _refuse("REVIEW.OWNER_MANIFEST_TARGET_MISMATCH", "owner target/scope/owner 已漂移")
-    binding = manifest.get("evidence_fingerprint") or {}
-    if (
-        binding.get("ref") != identity.get("fingerprint_ref")
-        or binding.get("digest") != identity.get("fingerprint_digest")
-    ):
-        _refuse("REVIEW.OWNER_MANIFEST_STALE", "owner manifest fingerprint binding 已漂移")
-    try:
-        validate_feature_context_manifest(manifest)
-        validate_current_feature_context_fingerprint(manifest, repo_root=REPO_ROOT)
-        from lib.feature_tree.commands import _context_manifest, discover_nodes
-        from lib.feature_tree.ownership import resolve_target_details
-
-        nodes = discover_nodes()
-        current = _context_manifest(
-            str(manifest["target"]),
-            resolve_target_details(str(manifest["target"]), nodes),
-            nodes,
-        )
-    except (EvidenceFingerprintError, KeyError, TypeError, ValueError) as exc:
-        _refuse("REVIEW.OWNER_MANIFEST_STALE", str(exc))
-    for field in (
-        "target", "resolved_owner", "owner_chain", "canonical_contexts",
-        "applicable_agents", "profiles", "open_items",
-    ):
-        if current[field] != manifest[field]:
-            _refuse(
-                "REVIEW.OWNER_MANIFEST_STALE",
-                f"current owner manifest {field} 已漂移",
-            )
-    return manifest
-
 
 def validate_current_review_plan(
     plan: dict[str, Any], registry: dict[str, Any], *, phase: str = "evidence"
@@ -1070,102 +945,20 @@ def _refuse(code: str, message: str) -> None:
     raise ReviewDispatchError(code, message)
 
 
-def _load_json(path: str | None, *, label: str) -> dict[str, Any] | None:
-    if not path:
-        return None
-    source = Path(path)
-    if not source.is_file():
-        _refuse(f"REVIEW.{label.upper()}_MISSING", f"{label} 不存在：{path}")
-    value = json.loads(source.read_text(encoding="utf-8"))
-    if not isinstance(value, dict):
-        _refuse(f"REVIEW.{label.upper()}_INVALID", f"{label} 必须是 JSON object")
-    return value
-
-
-def _resolve_output_dir(raw_path: str) -> Path:
-    runtime_root_value = contract_section("runtime_outputs").get("root")
-    if not isinstance(runtime_root_value, str) or not runtime_root_value:
-        _refuse(
-            "REVIEW.RUNTIME_OUTPUT_CONTRACT_INVALID",
-            "runtime_outputs.root 必须为非空仓库相对路径",
-        )
-    runtime_root = (REPO_ROOT / runtime_root_value).resolve(strict=False)
-    try:
-        runtime_root.relative_to(REPO_ROOT.resolve())
-    except ValueError:
-        _refuse(
-            "REVIEW.RUNTIME_OUTPUT_CONTRACT_INVALID",
-            f"runtime_outputs.root 越出仓库：{runtime_root_value}",
-        )
-    candidate = Path(raw_path)
-    resolved = (
-        candidate.resolve(strict=False)
-        if candidate.is_absolute()
-        else (REPO_ROOT / candidate).resolve(strict=False)
-    )
-    try:
-        resolved.relative_to(runtime_root)
-    except ValueError:
-        _refuse(
-            "REVIEW.OUTPUT_PATH_OUTSIDE_RUNTIME_ROOT",
-            f"--out 必须位于 {runtime_root_value}/ 下：{raw_path}",
-        )
-    return resolved
-
-
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--workflow", required=True)
-    parser.add_argument("--segment", required=True, choices=["PRE", "POST"])
-    parser.add_argument("--deliverable", default=None)
-    parser.add_argument("--changed-paths", nargs="*", default=[])
-    parser.add_argument("--scope", default="")
-    parser.add_argument("--round", dest="round_name", choices=["initial", "rereview"], default="initial")
-    parser.add_argument("--finding-owner", action="append", default=[])
-    parser.add_argument("--previous-plan", default=None)
-    parser.add_argument("--context-manifest", default=None)
-    parser.add_argument("--incomplete-role", action="append", default=[])
-    parser.add_argument("--evidence-failed", action="append", default=[])
-    parser.add_argument("--cancelled", action="store_true")
-    parser.add_argument("--out", default=None, help="评审产物目录；plan.json 写入其中")
-    args = parser.parse_args(argv)
-
-    try:
-        out_dir = _resolve_output_dir(args.out) if args.out else None
-        registry = yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
-        plan = build_plan(
-            registry,
-            args.workflow,
-            args.segment,
-            args.deliverable,
-            args.changed_paths,
-            round_name=args.round_name,
-            finding_owners=args.finding_owner,
-            previous_plan=_load_json(args.previous_plan, label="previous_plan"),
-            context_manifest=_load_json(args.context_manifest, label="context_manifest"),
-            context_manifest_ref=args.context_manifest,
-            scope=args.scope,
-            incomplete_roles=args.incomplete_role,
-            failed_evidence_ids=args.evidence_failed,
-            cancelled=args.cancelled,
-        )
-    except (ReviewDispatchError, json.JSONDecodeError) as exc:
-        if isinstance(exc, ReviewDispatchError):
-            code, message = exc.code, exc.message
-        else:
-            code, message = "REVIEW.JSON_INVALID", str(exc)
-        print(f"[review_dispatch] {code}: {message}", file=sys.stderr)
-        return 2
-
-    rendered = json.dumps(plan, ensure_ascii=False, indent=2)
-    if out_dir is not None:
-        out_dir.mkdir(parents=True, exist_ok=True)
-        plan_path = out_dir / "plan.json"
-        plan_path.write_text(rendered + "\n", encoding="utf-8")
-        print(f"[review_dispatch] 派发清单已落盘：{plan_path}")
-    else:
-        print(rendered)
-    return 0
+    runtime_output_root = contract_section("runtime_outputs").get("root")
+    return _review_dispatch_cli.main(
+        argv,
+        description=__doc__.splitlines()[0],
+        repo_root=REPO_ROOT,
+        registry_path=REGISTRY_PATH,
+        runtime_output_root=(
+            runtime_output_root if isinstance(runtime_output_root, str) else ""
+        ),
+        build_plan=build_plan,
+        refuse=_refuse,
+        error_type=ReviewDispatchError,
+    )
 
 
 if __name__ == "__main__":

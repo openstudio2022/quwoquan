@@ -103,6 +103,7 @@ def _mutable_test_live_runtime_plan_from_receipt(
         "composeDigest",
         "configurationDigest",
         "providerRuntimeDigest",
+        "observabilityLogSinkDigest",
         "portProfile",
         "portBlock",
         "publishedPorts",

@@ -7,7 +7,7 @@
 已 allowlist 的 verify 直跑）→ 标记并提示。
 
 观测态（observe-only）：始终 permission=allow，仅附 agent_message；不阻断。
-稳定后可改 permission=ask。读 JSON(stdin) → 写 JSON(stdout) → exit 0（fail open）。
+保持 observe-only，不升级为 ask/deny。读 JSON(stdin) → 写 JSON(stdout) → exit 0（fail open）。
 """
 from __future__ import annotations
 

@@ -26,18 +26,6 @@ type ReadyQueue interface {
 	FailTask(ctx context.Context, taskID string, leaseToken string, failure RuntimeFailure, policy RetryPolicy, now time.Time) error
 }
 
-// FencedReadyQueue atomically validates immutable generation ownership while claiming.
-type FencedReadyQueue interface {
-	ClaimReadyTaskByIDWithFence(
-		ctx context.Context,
-		taskID string,
-		workerID string,
-		leaseTTL time.Duration,
-		now time.Time,
-		fence map[string]string,
-	) (*ReliableAsyncTask, error)
-}
-
 type ReadyIndex interface {
 	Ensure(ctx context.Context) error
 	EnqueueReadyOrMerge(ctx context.Context, task ReliableAsyncTask) error
@@ -76,7 +64,7 @@ type IndexEnsurer interface {
 }
 
 // TaskStore is the smallest durable boundary required by task dispatchers and
-// workers. Data content execution must not depend on notification delivery or
+// workers. Domain task execution must not depend on notification delivery or
 // provider ledgers merely because those adapters share the same state machine.
 type TaskStore interface {
 	TransactionRunner
@@ -163,7 +151,6 @@ type Worker struct {
 	RetryPolicyForTask func(ReliableAsyncTask) (RetryPolicy, error)
 	Now                func() time.Time
 	PendingMinIdle     time.Duration
-	ClaimFence         map[string]string
 }
 
 func (w Worker) claimByID(
@@ -172,17 +159,8 @@ func (w Worker) claimByID(
 	leaseTTL time.Duration,
 	now time.Time,
 ) (*ReliableAsyncTask, error) {
-	if len(w.ClaimFence) == 0 {
-		return w.Store.ClaimReadyTaskByID(
-			ctx, taskID, w.WorkerID, leaseTTL, now,
-		)
-	}
-	store, ok := w.Store.(FencedReadyQueue)
-	if !ok {
-		return nil, fmt.Errorf("reliabletask fenced worker requires fenced ready queue")
-	}
-	return store.ClaimReadyTaskByIDWithFence(
-		ctx, taskID, w.WorkerID, leaseTTL, now, w.ClaimFence,
+	return w.Store.ClaimReadyTaskByID(
+		ctx, taskID, w.WorkerID, leaseTTL, now,
 	)
 }
 
@@ -229,9 +207,19 @@ func (w Worker) ProcessOne(ctx context.Context, handler TaskHandler) (bool, erro
 	if err != nil || task == nil {
 		return false, err
 	}
+	return w.processClaimed(ctx, handler, task, message)
+}
+
+func (w Worker) processClaimed(
+	ctx context.Context,
+	handler TaskHandler,
+	task *ReliableAsyncTask,
+	message *ReadyIndexMessage,
+) (bool, error) {
 	policy := w.Retry
 	if w.RetryPolicyForTask != nil {
-		policy, err = w.RetryPolicyForTask(*task)
+		resolvedPolicy, err := w.RetryPolicyForTask(*task)
+		policy = resolvedPolicy
 		if err != nil {
 			now := time.Now().UTC()
 			if w.Now != nil {

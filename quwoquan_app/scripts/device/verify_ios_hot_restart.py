@@ -63,7 +63,8 @@ from quwoquan_ops.cli.lib.app_launch_attempt import read_app_launch_attempt
 
 LAUNCHER = APP_DIR / "run.sh"
 ENVIRONMENTS = ("alpha", "beta", "gamma")
-LAUNCH_PROVENANCES = ("canonical_launcher", "workspace_flutter_run")
+# workspace facade 已退役：本 smoke 只验证 canonical launcher 路径。
+LAUNCH_PROVENANCES = ("canonical_launcher",)
 RUNTIME_CONFIG_SUPPLY_MODE = "external_runtime_package"
 SAFE_TERMINAL_HARD_LIMIT_MS = 6000
 
@@ -568,10 +569,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--run-mode",
         choices=("content-live", "ui-only"),
         default="content-live",
-        help=(
-            "canonical launcher 经 --mode 透传；workspace_flutter_run "
-            "经 QWQ_RUN_MODE 环境变量透传给同一执行体。"
-        ),
+        help="canonical launcher 经 --mode 透传。",
     )
     parser.add_argument("--output-dir", default="")
     # canonical launcher 冷路径包含 pod install 与 xcodebuild 增量构建，
@@ -651,19 +649,14 @@ def main(argv: list[str] | None = None) -> int:
         args.device_id,
         args.bundle,
     )
-    # workspace surface 走字面 flutter run（工作区 facade 接管归一化）；环境仅由
-    # QWQ_ENVIRONMENT 表达，facade 拒绝 --flavor/--mode 等启动配置参数。
-    if args.launch_provenance == "canonical_launcher":
-        command = [
-            "bash",
-            str(LAUNCHER),
-            "--mode",
-            args.run_mode,
-            "-d",
-            args.device_id,
-        ]
-    else:
-        command = ["flutter", "run", "-d", args.device_id]
+    command = [
+        "bash",
+        str(LAUNCHER),
+        "--mode",
+        args.run_mode,
+        "-d",
+        args.device_id,
+    ]
     baseline_captured_at = dt.datetime.now()
     baseline_simulator_log = read_simulator_startup_log(args.device_id)
     baseline_attempt_ids = frozenset(
@@ -673,31 +666,7 @@ def main(argv: list[str] | None = None) -> int:
     instance_state_root = run_dir / "app-instance-state"
     environment = dict(os.environ)
     environment["QWQ_IOS_SIMULATOR_UDID"] = args.device_id
-    if args.launch_provenance == "canonical_launcher":
-        environment["QWQ_APP_RUNTIME_ENV"] = args.env
-    else:
-        # Workspace Flutter Debug is selected only by QWQ_ENVIRONMENT. A partial
-        # QWQ_APP_* identity must continue to fail closed.
-        for key in (
-            "QWQ_APP_RUNTIME_ENV",
-            "QWQ_APP_LAUNCH_PROVENANCE",
-            "QWQ_RUNTIME_CONFIG_SUPPLY_MODE",
-            "QWQ_LAUNCH_TARGET",
-            "QWQ_DART_DEFINES_DIGEST",
-            "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST",
-            "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST",
-        ):
-            environment.pop(key, None)
-        environment["QWQ_ENVIRONMENT"] = args.env
-        # mode 与环境同构经环境变量透传给同一 canonical 执行体。
-        environment["QWQ_RUN_MODE"] = args.run_mode
-        # workspace surface 的语义是「工作区 facade 终端里的字面 flutter run」：
-        # facade bin 必须前置 PATH，否则解析到裸 SDK 会因缺 trust envelope
-        # 在 Xcode build phase fail closed（那是负例路径，不是本 surface）。
-        facade_bin = APP_DIR / "scripts/tools/flutter_facade/bin"
-        environment["PATH"] = (
-            f"{facade_bin}{os.pathsep}{environment.get('PATH', '')}"
-        )
+    environment["QWQ_APP_RUNTIME_ENV"] = args.env
     environment["QWQ_APP_INSTANCE_PRESERVE_TTY"] = "1"
     environment["APP_INSTANCE_STATE_ROOT"] = str(instance_state_root)
     master_fd, slave_fd = pty.openpty()

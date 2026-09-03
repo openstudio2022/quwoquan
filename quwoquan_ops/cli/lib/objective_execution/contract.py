@@ -17,7 +17,7 @@ BRANCH_POLICY_PATH = REPO_ROOT / "quwoquan_ops/policies/branch_policy.yaml"
 _SCHEMA_VERSION = 2
 _ADMISSION_STATUSES = ("admitted", "not_admitted", "blocked")
 _ADMISSION_READBACK_FIELDS = (
-    "status", "stage", "write_concurrency", "temporary_branch_allowed",
+    "status", "stage", "write_concurrency", "persistent_lane_allowed",
     "branch_policy_digest", "reason", "terminal",
 )
 _ADMISSION_TOP_LEVEL_FIELDS = (
@@ -148,7 +148,7 @@ _ERROR_DESCRIPTORS = {
 }
 _EMERGENCY_BLOCKED_ADMISSION_FALLBACK = {
     "status": "blocked", "stage": "S4", "write_concurrency": 0,
-    "temporary_branch_allowed": False, "branch_policy_digest": None,
+    "persistent_lane_allowed": False, "branch_policy_digest": None,
     "reason": "dynamic_inspection_unavailable", "terminal": "OEX.ADMISSION_BLOCKED",
 }
 _EMERGENCY_CONTRACT_INVALID_TERMINAL = {
@@ -258,16 +258,16 @@ def _validate_admission_readback_contract(admission: Mapping[str, Any], closed_s
     if not isinstance(statuses, Mapping) or tuple(statuses) != closed_statuses:
         raise ContractError("admission readback statuses drifted")
     expected = {
-        "admitted": {"reason_policy": "fixed", "reason": "temporary_execution_lifecycle_admitted", "terminal": "admitted", "write_concurrency": 2, "temporary_branch_allowed": True, "branch_policy_digest": "sha256_required"},
-        "not_admitted": {"reason_policy": "fixed", "reason": "temporary_execution_lifecycle_not_admitted", "terminal": "not_admitted", "write_concurrency": 1, "temporary_branch_allowed": False, "branch_policy_digest": "sha256_required"},
+        "admitted": {"reason_policy": "fixed", "reason": "persistent_lane_lifecycle_admitted", "terminal": "admitted", "write_concurrency": 6, "persistent_lane_allowed": True, "branch_policy_digest": "sha256_required"},
+        "not_admitted": {"reason_policy": "fixed", "reason": "persistent_lane_lifecycle_not_admitted", "terminal": "not_admitted", "write_concurrency": 1, "persistent_lane_allowed": False, "branch_policy_digest": "sha256_required"},
     }
     for status, mapping in expected.items():
         _require_exact_mapping(statuses.get(status), mapping, f"admission.readback_contract.statuses.{status}")
     blocked = statuses.get("blocked")
-    if not isinstance(blocked, Mapping) or set(blocked) != {"reason_policy", "reason_constraints", "fallback_reason", "terminal", "write_concurrency", "temporary_branch_allowed", "branch_policy_digest"}:
+    if not isinstance(blocked, Mapping) or set(blocked) != {"reason_policy", "reason_constraints", "fallback_reason", "terminal", "write_concurrency", "persistent_lane_allowed", "branch_policy_digest"}:
         raise ContractError("admission readback blocked fields drifted")
     _require_exact_mapping(blocked["reason_constraints"], {"nonempty": True, "trimmed": True, "nul_forbidden": True}, "admission blocked reason constraints")
-    expected_blocked = {"reason_policy": "dynamic_detail", "fallback_reason": "dynamic_inspection_unavailable", "terminal": "OEX.ADMISSION_BLOCKED", "write_concurrency": 0, "temporary_branch_allowed": False, "branch_policy_digest": None}
+    expected_blocked = {"reason_policy": "dynamic_detail", "fallback_reason": "dynamic_inspection_unavailable", "terminal": "OEX.ADMISSION_BLOCKED", "write_concurrency": 0, "persistent_lane_allowed": False, "branch_policy_digest": None}
     for field, expected_value in expected_blocked.items():
         if type(blocked.get(field)) is not type(expected_value) or blocked.get(field) != expected_value:
             raise ContractError(f"admission readback blocked.{field} drifted")
@@ -311,7 +311,7 @@ def validate_contract(value: object) -> None:
     expected_journal = {
         "append_only": True,
         "event_atomic_write": "private_staging_fsync_exclusive_publish_fsync_directory",
-        "exclusive_publish": {"darwin": "renameatx_np_RENAME_EXCL", "unsupported_platform": "fail_closed", "overwrite_fallback_allowed": False},
+        "exclusive_publish": {"darwin": "renameatx_np_RENAME_EXCL", "linux": "renameat2_RENAME_NOREPLACE", "unsupported_platform": "fail_closed", "overwrite_fallback_allowed": False},
         "derived_atomic_write": "descriptor_relative_fsync_replace_fsync_directory",
         "storage_trust": {"owner": "current_effective_uid", "directory_mode": "0700", "file_mode": "0600", "file_type": "regular", "file_link_count": 1, "symlink_policy": "reject_every_ancestor_and_component", "path_identity": "retained_dirfd_and_inode", "mkdir_durability": "fsync_parent_then_new_directory", "lease_capability": "internal_unforgeable_root_subject_inode_scoped", "public_lease_bypass_argument": "forbidden", "staging_authoritative": False, "staging_cleanup_requires_validated_lease": True},
         "hash_chain": "sha256_canonical_json", "cas": "expected_head_and_generation",
@@ -336,7 +336,7 @@ def validate_contract(value: object) -> None:
     for field, expected in {"loser_effect_allowed": False, "loser_event_allowed": False, "reads_may_run_in_parallel": True}.items():
         if type(admission.get(field)) is not bool or admission.get(field) is not expected:
             raise ContractError(f"admission.{field} type/value drifted")
-    expected_causes = ["pull_request_prefix_declared", "isolated_writer_branch", "declared_promotion_path", "mandatory_cleanup_after_promotion_or_abort", "concurrency_evidence_required"]
+    expected_causes = ["pull_request_prefix_declared", "isolated_writer_branch", "declared_promotion_path", "mandatory_fast_forward_resync_after_integration_or_abort", "retained_worktree_lifecycle", "concurrency_evidence_required"]
     if admission.get("derivation") != {"admitted_requires_all": expected_causes}:
         raise ContractError("admission derivation drifted")
     _validate_admission_readback_contract(admission, _ADMISSION_STATUSES)
@@ -491,8 +491,8 @@ def validate_admission_readback(payload: object) -> dict[str, Any]:
     policy = statuses[status]
     if type(payload["write_concurrency"]) is not int or payload["write_concurrency"] != policy["write_concurrency"]:
         raise ContractError("admission_readback status/write_concurrency is inconsistent")
-    if type(payload["temporary_branch_allowed"]) is not bool or payload["temporary_branch_allowed"] is not policy["temporary_branch_allowed"]:
-        raise ContractError("admission_readback status/temporary_branch_allowed is inconsistent")
+    if type(payload["persistent_lane_allowed"]) is not bool or payload["persistent_lane_allowed"] is not policy["persistent_lane_allowed"]:
+        raise ContractError("admission_readback status/persistent_lane_allowed is inconsistent")
     digest = payload["branch_policy_digest"]
     if policy["branch_policy_digest"] == "sha256_required":
         _validate_sha256(digest, "admission_readback.branch_policy_digest")
@@ -520,7 +520,7 @@ def admission_readback(status: str, *, branch_policy_digest: str | None = None, 
     reason = policy.get("reason")
     if policy["reason_policy"] == "dynamic_detail":
         reason = detail or policy["fallback_reason"]
-    return validate_admission_readback({"status": status, "stage": descriptor["stage"], "write_concurrency": policy["write_concurrency"], "temporary_branch_allowed": policy["temporary_branch_allowed"], "branch_policy_digest": branch_policy_digest, "reason": reason, "terminal": policy["terminal"]})
+    return validate_admission_readback({"status": status, "stage": descriptor["stage"], "write_concurrency": policy["write_concurrency"], "persistent_lane_allowed": policy["persistent_lane_allowed"], "branch_policy_digest": branch_policy_digest, "reason": reason, "terminal": policy["terminal"]})
 
 
 def blocked_admission_fallback() -> dict[str, Any]:

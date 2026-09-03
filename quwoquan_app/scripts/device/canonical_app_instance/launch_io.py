@@ -44,6 +44,24 @@ def load_handoff(path: Path | None) -> dict[str, object]:
     return decoded
 
 
+def flutter_daemon_app_id(line: str) -> str:
+    """从 flutter daemon 事件行提取 appId；非 daemon 事件行返回空串。"""
+    try:
+        messages = json.loads(line)
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(messages, list) or len(messages) != 1:
+        return ""
+    message = messages[0]
+    if not isinstance(message, dict):
+        return ""
+    params = message.get("params")
+    if not isinstance(params, dict):
+        return ""
+    app_id = params.get("appId")
+    return app_id if isinstance(app_id, str) else ""
+
+
 def is_flutter_app_started_event(line: str) -> bool:
     try:
         messages = json.loads(line)

@@ -20,7 +20,6 @@ def _good_review() -> dict:
     return {
         "schema": "quwoquan_data.rubric_review",
         "ref": "r1",
-        "generationModelFamily": "composer",
         "judges": [
             {"modelId": "claude-x", "modelFamily": "claude", "promptHash": "abc123", "temperature": 0.0},
             {"modelId": "gpt-x", "modelFamily": "gpt", "promptHash": "abc123", "temperature": 0.0},
@@ -46,11 +45,18 @@ def test_missing_judge_metadata_flagged():
     assert any("promptHash" in i for i in issues)
 
 
-def test_self_preference_family_blocked():
+def test_missing_model_family_record_flagged():
     r = _good_review()
-    r["generationModelFamily"] = "claude"  # 与第一个 judge 同族
+    r["judges"][0].pop("modelFamily")
     issues = rj.review_rigor_issues(r)
-    assert any("self-preference" in i for i in issues)
+    assert any("modelFamily" in issue for issue in issues)
+
+
+def test_same_model_family_is_not_a_rigor_failure():
+    r = _good_review()
+    for judge in r["judges"]:
+        judge["modelFamily"] = "composer"
+    assert rj.review_rigor_issues(r, require_jury=True) == []
 
 
 def test_non_binary_verdict_and_missing_rationale_flagged():

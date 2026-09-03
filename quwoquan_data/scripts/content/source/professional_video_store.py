@@ -28,6 +28,10 @@ def put_video_cas(
     digest = content_sha256.removeprefix("sha256:")
     destination = output_root / "cas" / "sha256" / digest[:2] / f"{digest}{suffix}"
     destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink():
+        raise ProfessionalVideoCasCollision(
+            f"professional video CAS destination must not be a symlink: {destination}"
+        )
     if destination.is_file():
         if file_digest(destination) != content_sha256:
             raise ProfessionalVideoCasCollision(
@@ -49,7 +53,13 @@ def put_video_cas(
                     output.write(chunk)
             output.flush()
             os.fsync(output.fileno())
-        os.replace(temporary, destination)
+        try:
+            os.link(temporary, destination)
+        except FileExistsError:
+            if file_digest(destination) != content_sha256:
+                raise ProfessionalVideoCasCollision(
+                    f"professional video CAS collision: {destination}"
+                ) from None
     finally:
         if temporary:
             Path(temporary).unlink(missing_ok=True)

@@ -25,7 +25,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from core import ops_governance as og
 from content.source.source_unit_asset_entry import build_source_asset_entry
 from core.content_library import link_bytes_from_library, link_from_library
 from core.image_decode import probe_image_bytes
@@ -177,7 +176,9 @@ def write_source_unit(
         if "/" in source_unit_id or source_unit_id in {".", ".."}:
             raise ValueError("frozen sourceUnitId must be one safe path segment")
     else:
-        source_unit_id = og.source_unit_id(
+        from core.source_identity import source_unit_id as stable_source_unit_id
+
+        source_unit_id = stable_source_unit_id(
             canonical_url=canonical_url,
             snapshot_hash=snapshot_hash,
             source_ref=f"{ordinal:02d}.{source_id}",

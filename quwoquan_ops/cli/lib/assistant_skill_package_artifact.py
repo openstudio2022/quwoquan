@@ -6,6 +6,7 @@ import base64
 import json
 import os
 import shutil
+import stat
 import subprocess
 
 from dataclasses import dataclass
@@ -30,6 +31,52 @@ class SigningMaterial:
     key_id: str
     private_key_base64: str
     public_keys_json: str
+
+
+def _assert_output_root_has_no_symlinks(output_root: Path) -> None:
+    current = Path(output_root.anchor)
+    for component in output_root.parts[1:]:
+        current /= component
+        try:
+            metadata = current.lstat()
+        except FileNotFoundError:
+            break
+        except OSError as exc:
+            raise RuntimeError(
+                "assistant Skill package output root is unavailable or unsafe"
+            ) from exc
+        if stat.S_ISLNK(metadata.st_mode):
+            raise RuntimeError(
+                "assistant Skill package output root must not contain symlinks"
+            )
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise RuntimeError(
+                "assistant Skill package output root ancestor must be a directory"
+            )
+
+
+def _normalize_output_root(
+    *, package_source_root: Path, output_root: Path
+) -> Path:
+    """Return one lexical absolute root without following existing symlinks.
+
+    Relative output roots are package-source-root relative, independent of the
+    caller cwd and the Go subprocess cwd.
+    """
+
+    source_root = Path(os.path.abspath(package_source_root.expanduser()))
+    requested = output_root.expanduser()
+    is_relative = not requested.is_absolute()
+    candidate = source_root / requested if is_relative else requested
+    normalized = Path(os.path.abspath(candidate))
+    if normalized == Path(normalized.anchor) or normalized == source_root:
+        raise RuntimeError("assistant Skill package output root is unsafe")
+    if is_relative and not normalized.is_relative_to(source_root):
+        raise RuntimeError(
+            "relative assistant Skill package output root escapes package source root"
+        )
+    _assert_output_root_has_no_symlinks(normalized)
+    return normalized
 
 
 def _signing_material(
@@ -91,6 +138,10 @@ def build_official_skill_package_publication(
     package_environment: dict[str, str],
     output_root: Path,
 ) -> dict[str, Any]:
+    output_root = _normalize_output_root(
+        package_source_root=package_source_root,
+        output_root=output_root,
+    )
     signing = _signing_material(environment, target, package_environment)
     source_root = (
         package_source_root
@@ -108,8 +159,10 @@ def build_official_skill_package_publication(
         public_keys_json=signing.public_keys_json,
         signing_key_id=signing.key_id,
     )
+    _assert_output_root_has_no_symlinks(output_root)
     if output_root.exists():
         shutil.rmtree(output_root)
+    _assert_output_root_has_no_symlinks(output_root)
     command = [
         "go",
         "run",
@@ -158,6 +211,7 @@ def build_official_skill_package_publication(
     if result.returncode == 0:
         try:
             build_report = json.loads(result.stdout)
+            _assert_output_root_has_no_symlinks(output_root)
             release = materialize_packaged_official_skill_release(
                 output_root=output_root,
                 environment=environment,

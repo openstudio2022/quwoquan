@@ -37,7 +37,6 @@
         "chat_group_lifecycle_api_probe",
         "recommendation_feed_api_probe",
         "media_publication_lifecycle_api_probe",
-        "reliabletask_gamma_api_integration",
         "onboarding_author_impact_gamma_api_integration"
       ],
       "smokeCasesBlocking": true,
@@ -64,7 +63,6 @@
         "chat_group_lifecycle_api_probe",
         "recommendation_feed_api_probe",
         "media_publication_lifecycle_api_probe",
-        "reliabletask_gamma_api_integration",
         "onboarding_author_impact_gamma_api_integration"
       ],
       "smokeCasesBlocking": true,
@@ -112,7 +110,6 @@
         "chat_group_lifecycle_api_probe",
         "recommendation_feed_api_probe",
         "media_publication_lifecycle_api_probe",
-        "reliabletask_gamma_api_integration",
         "onboarding_author_impact_gamma_api_integration"
       ],
       "smokeCasesBlocking": true,
@@ -245,16 +242,6 @@
       "currentRole": "真实对象存储、媒体处理、图片/视频原子发布、回读与临时上传清理的黑盒闭环",
       "currentPain": "原有创作发布 UAT 使用本地 fake，无法证明 presigned PUT、FFmpeg/FFprobe、MediaAsset ready、Post 回读与临时对象清理在 Gamma 同时成立。",
       "optimizationPlan": "由 stackctl beta integration 与 gamma release 直接执行；gamma 完整验证 profile 同步登记为阻断证据，禁止以 fixture 测试代替。"
-    },
-    "reliabletask_gamma_api_integration": {
-      "path": "quwoquan_ops/cli/gamma/run_reliabletask_gamma_api_integration.sh",
-      "runner": "bash",
-      "tier": "daily",
-      "budgetSeconds": 600,
-      "longTailType": "environment_coupling",
-      "currentRole": "通过 stackctl Gamma-local MongoDB/Redis 执行 ReliableTask 与真实 data worker API integration",
-      "currentPain": "直接运行 Make 目标缺少 TEST_MONGO_URI、TEST_REDIS_ADDR 与 data worker Python，无法形成可复现的环境证据。",
-      "optimizationPlan": "runner 从 canonical port profile 注入隔离测试连接并生成 fleet report；完整 Gamma profile 阻断失败。"
     },
     "onboarding_author_impact_gamma_api_integration": {
       "path": "quwoquan_app/scripts/gamma/run_local_gamma_onboarding_author_impact_api_uat.sh",

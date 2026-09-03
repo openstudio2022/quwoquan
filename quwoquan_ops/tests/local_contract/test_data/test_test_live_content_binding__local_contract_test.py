@@ -99,6 +99,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
             "composeDigest": _B,
             "configurationDigest": _C,
             "providerRuntimeDigest": _D,
+            "observabilityLogSinkDigest": "sha256:" + "9" * 64,
             "portProfile": "alpha-local",
             "portBlock": {"start": 17000, "end": 17999},
             "publishedPorts": [
@@ -241,7 +242,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
                         "specs/feature-tree/runtime/runtime-config/"
                         "environment-topology-and-packaging/spec.md#req-006"
                     ),
-                    "runnerClass": f"qwq_app.content_uat.{entry}.{carrier}.v1",
+                    "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1",
                 }
                 for entry in (
                     "feed",

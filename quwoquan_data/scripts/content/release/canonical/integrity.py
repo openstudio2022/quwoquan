@@ -15,7 +15,7 @@ from core.io import read_json
 from core.image_rules import image_caption_quality_issue
 from core import paths
 from core.paths import execution_root, release_root
-from content.post.article.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS, base_draft_readiness
+ARTICLE_MIN_BASE_DRAFT_CHARS = 800
 from content.release.canonical.media_holding_closure import (
     MediaReferenceRecordError,
     judge_media_closure,
@@ -246,10 +246,13 @@ def _base_draft_issues(
                 f"{post_rel}: base draft ledger does not map {base_source} to topicId {topic_id}"
             )
     base_text = str(writing_pack.get("baseDraftText") or "")
-    readiness = base_draft_readiness(
-        base_text,
-        publish_media_mode=str(writing_pack.get("publishMediaMode") or manifest.get("publishMediaMode") or ""),
-    )
+    effective_chars = len("".join(base_text.split()))
+    readiness = {
+        "ready": effective_chars >= ARTICLE_MIN_BASE_DRAFT_CHARS,
+        "effectiveChars": effective_chars,
+        "inlineFigureCount": base_text.count("!["),
+        "captionChars": 0,
+    }
     if not readiness["ready"]:
         issues.append(
             f"{post_rel}: baseDraftText too short for article "

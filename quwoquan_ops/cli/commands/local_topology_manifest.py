@@ -550,6 +550,9 @@ def _expected_local_roles(
             "content-service",
             "user-service",
             "entity-service",
+            "recommendation-service",
+            "search-service",
+            "elasticsearch",
         ]
         if workload == "content-commercial":
             roles.extend(

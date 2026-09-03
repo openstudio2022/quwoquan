@@ -29,6 +29,9 @@ MISSING = _Missing()
 _MISSING_KEY = "$evidenceFingerprintMissing"
 _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:/")
+# Keep every pathspec-bearing Git invocation well below platform ARG_MAX,
+# including the inherited environment and Git's fixed arguments.
+_GIT_PATHSPEC_ARGV_BUDGET_BYTES = 64 * 1024
 
 
 def _definition() -> dict[str, Any]:
@@ -332,6 +335,52 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
     )
 
 
+def _git_pathspec_batches(
+    repo_root: Path,
+    fixed_args: tuple[str, ...],
+    paths: list[str],
+) -> subprocess.CompletedProcess[bytes]:
+    """Run a pathspec query in bounded UTF-8 argv batches and merge NUL output."""
+
+    prefix = ["git", *fixed_args, "--"]
+    prefix_bytes = sum(len(argument.encode("utf-8")) + 1 for argument in prefix)
+    if prefix_bytes >= _GIT_PATHSPEC_ARGV_BUDGET_BYTES:
+        raise EvidenceFingerprintError("Git pathspec 固定 argv 超出安全预算")
+
+    batches: list[list[str]] = []
+    batch: list[str] = []
+    batch_bytes = prefix_bytes
+    for relative in paths:
+        argument_bytes = len(relative.encode("utf-8")) + 1
+        if prefix_bytes + argument_bytes > _GIT_PATHSPEC_ARGV_BUDGET_BYTES:
+            raise EvidenceFingerprintError(f"Git pathspec 单路径超出安全预算：{relative}")
+        if batch and batch_bytes + argument_bytes > _GIT_PATHSPEC_ARGV_BUDGET_BYTES:
+            batches.append(batch)
+            batch = []
+            batch_bytes = prefix_bytes
+        batch.append(relative)
+        batch_bytes += argument_bytes
+    if batch:
+        batches.append(batch)
+
+    stdout: list[bytes] = []
+    stderr: list[bytes] = []
+    returncode = 0
+    for current in batches:
+        result = _git(repo_root, *fixed_args, "--", *current)
+        stdout.append(result.stdout)
+        stderr.append(result.stderr)
+        if result.returncode != 0:
+            returncode = result.returncode
+            break
+    return subprocess.CompletedProcess(
+        args=[*prefix, "<batched-pathspecs>"],
+        returncode=returncode,
+        stdout=b"".join(stdout),
+        stderr=b"".join(stderr),
+    )
+
+
 def _head_blob_digest(relative: str, repo_root: Path) -> str | None:
     result = _git(repo_root, "show", f"HEAD:{relative}")
     return (
@@ -458,7 +507,7 @@ def snapshot_paths(
     *,
     repo_root: Path,
 ) -> list[dict[str, Any]]:
-    """Snapshot a path set with one Git index/status read."""
+    """Snapshot a path set with bounded NUL-delimited Git reads."""
 
     normalized = sorted(
         {normalize_repo_relative_path(path, repo_root) for path in raw_paths},
@@ -466,34 +515,26 @@ def snapshot_paths(
     )
     if not normalized:
         return []
-    tracked_result = _git(repo_root, "ls-files", "-z", "--", *normalized)
+    tracked_result = _git_pathspec_batches(
+        repo_root, ("ls-files", "-z"), normalized
+    )
     tracked_paths = {
         normalize_repo_relative_path(raw.decode("utf-8"), repo_root)
         for raw in tracked_result.stdout.split(b"\0")
         if raw
     }
-    head_result = _git(repo_root, "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", *normalized)
-    head_paths = {
-        normalize_repo_relative_path(raw.decode("utf-8"), repo_root)
-        for raw in head_result.stdout.split(b"\0")
-        if raw
-    }
-    head_result = _git(
-        repo_root, "ls-tree", "-z", "--name-only", "HEAD", "--", *normalized
+    head_result = _git_pathspec_batches(
+        repo_root, ("ls-tree", "-z", "--name-only", "HEAD"), normalized
     )
     head_paths = {
         normalize_repo_relative_path(raw.decode("utf-8"), repo_root)
         for raw in head_result.stdout.split(b"\0")
         if raw
     }
-    status_result = _git(
+    status_result = _git_pathspec_batches(
         repo_root,
-        "status",
-        "--porcelain=v1",
-        "-z",
-        "--untracked-files=all",
-        "--",
-        *normalized,
+        ("status", "--porcelain=v1", "-z", "--untracked-files=all"),
+        normalized,
     )
     statuses: dict[str, tuple[str, str | None]] = {}
     if status_result.returncode == 0:
@@ -544,7 +585,9 @@ def snapshot_paths(
             content_digest = _node_content_digest(path, repo_root, frozenset())
         else:
             state = "deleted" if exists_at_head else "missing"
-            content_digest = _head_blob_digest(relative, repo_root)
+            content_digest = (
+                _head_blob_digest(relative, repo_root) if exists_at_head else None
+            )
         result = {
             "path": relative,
             "exists": exists,

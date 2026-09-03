@@ -537,10 +537,23 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         "observabilityMetrics": user_availability["metrics"],
         **timing,
     }
+    required_availability_layers = tuple(
+        name
+        for name in _read_only_user_availability.LAYERS
+        if args.scope != "content-consumer"
+        or name not in {"device_bound", "content_live_passed"}
+    )
+    blocked_required_availability = [
+        layer
+        for layer in user_availability["userAvailability"]
+        if layer.get("name") in required_availability_layers
+        and layer.get("status") != "ready"
+    ]
+    availability_failed = bool(blocked_required_availability)
+    payload["requiredUserAvailabilityLayers"] = list(required_availability_layers)
     _stackctl.write_json(report_dir / "report.json", payload)
     _stackctl.write_json(report_dir / "health.json", {"target": args.target, "scope": args.scope, "checks": statuses})
     _stackctl.write_json(report_dir / "findings.json", {"target": args.target, "scope": args.scope, "issues": findings})
-    availability_failed = user_availability.get("status") != "ready"
     _stackctl._write_summary_bundle(
         report_dir,
         command="health",
@@ -565,9 +578,13 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
     availability_details = (
         [
             "user availability/"
-            + str(user_availability.get("firstBlockerClass") or "unknown")
+            + str(blocked_required_availability[0].get("name") or "unknown")
             + " failed: "
-            + str(user_availability.get("firstBlocker") or "required evidence is unavailable")
+            + str(
+                (blocked_required_availability[0].get("issues") or [
+                    "required evidence is unavailable"
+                ])[0]
+            )
         ]
         if availability_failed
         else []

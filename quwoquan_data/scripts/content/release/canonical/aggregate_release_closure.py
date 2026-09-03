@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from content.execution.identity import parse_execution_id
+from content.release.canonical.object_source_identity import (
+    validate_object_source_identity,
+)
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _execution_id,
@@ -15,7 +18,7 @@ from content.release.canonical.object_transaction_contract import (
 )
 from core.control_types import ContentType
 from core.release_layout import payload_file
-from core.source_digest import SourceDefinitionSnapshot, SourceDigestError
+from core.source_digest import SourceDefinitionSnapshot
 
 OBJECT_KINDS = ("creators", "entities", "posts", "tags")
 
@@ -64,14 +67,10 @@ def execution_publish_closure(
                 manifest_path.parent.relative_to(objects_root).as_posix(),
                 label=f"{kind}Ref",
             ).as_posix()
-            try:
-                source_digest = SourceDefinitionSnapshot.from_document(
-                    manifest.get("sourceDigest")
-                )
-            except SourceDigestError as exc:
-                raise ObjectTransactionError(
-                    f"{execution_id}: canonical {kind}/{ref} lacks a valid frozen sourceDigest"
-                ) from exc
+            source_identity = validate_object_source_identity(manifest)
+            source_digest = SourceDefinitionSnapshot(
+                digest=source_identity["sourceDigest"]
+            )
             matched_refs[kind].append(ref)
             matched_digests.append(source_digest)
     entity_refs = tuple(sorted(matched_refs["entities"]))
@@ -237,7 +236,9 @@ def creator_tag_refs(
 
     tag_refs: set[str] = set()
     for ref in sorted(creator_refs):
-        header = _read_json(object_root(publish_root, "creators", ref) / "_creator.json")
+        header = _read_json(
+            object_root(publish_root, "creators", ref) / "_creator.json"
+        )
         if str(header.get("creatorId") or "") != ref:
             raise ObjectTransactionError(f"canonical creator identity mismatch: {ref}")
         tag_refs.update(
@@ -261,8 +262,7 @@ def existing_refs(release_root: Path) -> dict[str, list[str]]:
     if not isinstance(refs, dict):
         raise ObjectTransactionError("existing release desiredRefs must be an object")
     return {
-        kind: list(normalized_refs(refs.get(kind), label=kind))
-        for kind in OBJECT_KINDS
+        kind: list(normalized_refs(refs.get(kind), label=kind)) for kind in OBJECT_KINDS
     }
 
 

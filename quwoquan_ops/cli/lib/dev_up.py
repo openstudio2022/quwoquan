@@ -18,7 +18,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
-from quwoquan_ops.cli.lib.local_device_trust import install_device_trust
 from quwoquan_ops.cli.lib.local_runtime_consumer_lease import active_consumer_leases
 from quwoquan_ops.cli.lib.output_paths import deployment_render_dir
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
@@ -146,11 +145,35 @@ def summarize_output(output: str, *, max_lines: int = 80) -> str:
 
 
 def extract_json_array(output: str) -> str:
-    start = output.find("[")
-    end = output.rfind("]")
-    if start < 0 or end < start:
+    """Extract one explainable top-level JSON array from noisy Flutter stdout."""
+
+    decoder = json.JSONDecoder()
+    candidates: list[tuple[int, int]] = []
+    for start, character in enumerate(output):
+        if character != "[":
+            continue
+        try:
+            value, consumed = decoder.raw_decode(output[start:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, list):
+            candidates.append((start, start + consumed))
+    maximal = [
+        candidate
+        for candidate in candidates
+        if not any(
+            other != candidate
+            and other[0] <= candidate[0]
+            and other[1] >= candidate[1]
+            for other in candidates
+        )
+    ]
+    if not maximal:
         raise ValueError("flutter devices output missing JSON array")
-    return output[start : end + 1]
+    if len(maximal) != 1:
+        raise ValueError("flutter devices output contains ambiguous JSON arrays")
+    start, end = maximal[0]
+    return output[start:end]
 
 
 def app_target_for_env(env_name: str) -> str:
@@ -181,22 +204,44 @@ def discover_flutter_devices(
     include_mobile: bool = True,
     include_web: bool = True,
     include_desktop: bool = False,
+    flutter_executable: str | Path = "flutter",
 ) -> list[dict[str, Any]]:
-    result = subprocess.run(
-        ["flutter", "devices", "--machine"],
-        cwd=str(app_dir),
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    executable = str(flutter_executable).strip()
+    if not executable:
+        raise RuntimeError("GATE_BLOCK: Flutter device discovery executable is empty.")
+    try:
+        result = subprocess.run(
+            [executable, "devices", "--machine"],
+            cwd=str(app_dir),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as error:
+        raise RuntimeError(
+            f"flutter devices --machine could not start: {error}"
+        ) from error
     if result.returncode != 0:
         raise RuntimeError(
             "flutter devices --machine failed:\n"
             + summarize_output((result.stdout or "") + (result.stderr or ""))
         )
-    raw_devices = json.loads(extract_json_array(result.stdout or ""))
+    try:
+        raw_devices = json.loads(extract_json_array(result.stdout or ""))
+    except (json.JSONDecodeError, ValueError) as error:
+        raise RuntimeError(
+            f"flutter devices --machine returned an invalid inventory: {error}"
+        ) from error
+    if not isinstance(raw_devices, list):
+        raise RuntimeError(
+            "flutter devices --machine returned a non-array inventory"
+        )
     devices: list[dict[str, Any]] = []
     for raw in raw_devices:
+        if not isinstance(raw, dict):
+            raise RuntimeError(
+                "flutter devices --machine inventory contains a non-object device"
+            )
         if not bool(raw.get("isSupported", True)):
             continue
         device_id = str(raw.get("id", "")).strip()
@@ -324,6 +369,29 @@ def pick_dev_up_env(
         print(f"  invalid selection: {choice!r}", file=sys.stderr)
 
 
+def select_device(
+    devices: list[dict[str, Any]],
+    *,
+    device_id: str = "",
+    label: str = "[dev-up]",
+) -> str:
+    """Resolve an explicit exact id or delegate interactive choice to ``pick_device``."""
+
+    explicit = device_id.strip()
+    if device_id and not explicit:
+        raise RuntimeError("GATE_BLOCK: Flutter device id is empty after trimming.")
+    if explicit:
+        for device in devices:
+            candidate = str(device.get("id") or "").strip()
+            if candidate == explicit:
+                return candidate
+        raise RuntimeError(
+            f"GATE_BLOCK: Flutter mobile device {explicit!r} is not visible; "
+            "rerun device discovery or choose a connected iOS/Android device."
+        )
+    return pick_device(devices, label=label)
+
+
 def pick_device(devices: list[dict[str, Any]], *, label: str = "[dev-up]") -> str:
     if not devices:
         raise RuntimeError("GATE_BLOCK: no Flutter device is visible for app launch.")
@@ -354,6 +422,10 @@ def pick_device(devices: list[dict[str, Any]], *, label: str = "[dev-up]") -> st
             index = int(choice)
             if 1 <= index <= len(devices):
                 return str(devices[index - 1].get("id") or "").strip()
+        for device in devices:
+            candidate = str(device.get("id") or "").strip()
+            if choice == candidate:
+                return candidate
         print(f"  invalid selection: {choice!r}", file=sys.stderr)
 
 
@@ -525,39 +597,19 @@ def launch_app(
     command_env = os.environ.copy()
     if str(target.get("backend", "")).strip() == "local" and device_kind.startswith("android"):
         enable_android_adb_reverse(device_id, target_name, topology=manifest)
-    trust_platform = ""
     if (
         str(target.get("backend", "")).strip() == "local"
         and str(device.get("targetPlatform", "")).strip().lower() == "ios"
         and bool(device.get("emulator", False))
     ):
-        trust_platform = "ios-simulator"
         command_env["QWQ_IOS_SIMULATOR_UDID"] = device_id
-    elif (
-        str(target.get("backend", "")).strip() == "local"
-        and device_kind.startswith("android")
-        and bool(device.get("emulator", False))
-    ):
-        trust_platform = "android-emulator"
     if target_name == "prod-sim" and device_kind != "android_emulator":
         raise RuntimeError(
             "APP.LAUNCH.platform_unsupported: prod-sim exact Release supports only "
             "an Android emulator"
         )
-    if trust_platform and target_name in {
-        "alpha-local",
-        "beta-local",
-        "gamma-local",
-    }:
-        trust = install_device_trust(
-            target=target_name,
-            platform_name=trust_platform,
-            device=device_id,
-            lease_id=f"canonical-launcher:{env_name}:{device_id}",
-        )
-        command_env["QWQ_DEVICE_TRUST_PLATFORM"] = trust_platform
-        command_env["QWQ_DEVICE_TRUST_RECEIPT"] = str(trust["receipt"])
-        command_env["QWQ_DEVICE_TRUST_LEASE_ID"] = str(trust["leaseId"])
+    # device trust 由委托链内的 canonical run.sh 以真实 consumer lease 安装；
+    # 这里不再用 fabricated lease 预装一份平行 trust 回执。
     launch_log = log_path or (
         observability_runtime_logs_root(env_name) / f"{env_name}-app-launch.log"
     )
@@ -825,6 +877,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     pick_parser = subparsers.add_parser("pick-device")
     _add_device_args(pick_parser)
+    pick_parser.add_argument("--device-id", default="")
     return parser
 
 

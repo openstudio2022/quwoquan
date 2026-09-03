@@ -90,6 +90,18 @@
 - 容量耗尽必须表达为 typed blocker，不得只依赖对底层 `no space left on device` 文本的字符串匹配。
 - 容量不足或候选身份漂移不得阻断本领域白名单恢复动作本身；恢复路径必须在环境已经不可用时仍然可执行。
 
+<a id="req-005"></a>
+### REQ-005 App 依赖 bundle 的显式同步是单一原子事务
+
+- `stackctl app-dependency-sync` 是 App 依赖 bundle 的唯一显式同步入口：一次 attempt 在单一 sync lock 内完成，并发同步以 typed blocker 拒绝，不得排队互相覆盖。
+- 一次 attempt 必须同时构建全部五个依赖组件闭包（production Pub、Patrol Pub、production iOS Pods、Patrol iOS Pods、Android Gradle），不得部分更新或跨 attempt 混合组件。
+- 事务顺序固定为：在线解析 → fresh 私有 home 完整离线回放 → 封存不可变组件快照 → readback 验证；在线成功不得代替离线可复现性。
+- 激活必须 receipt-first / active-last：先原子落盘本次 attempt 的 sync receipt，最后一步以原子替换推进单槽 active pointer；active readback 与本次 attempt 一致后事务才算 committed。
+- active pointer 写入已开始但 readback 无法证明与本次 attempt 一致时为 activation ambiguous，必须以 typed blocker 报告，不得声明成功或静默重试。
+- 同步开始与封存时的 source/toolchain identity 漂移必须阻断本次 attempt，不得以漂移后的输入继续激活。
+- 同步绝不更新任何锁定声明（Dart lock、Podfile.lock、Gradle 锁定输入）；锁漂移属于独立 typed blocker，不由同步修复。
+- 调用方只能消费 committed active readback；不得读取 work 目录、未 commit 的 receipt 或以同步副产物推断可用性。
+
 ## 6. 领域验收
 
 <a id="dom-001"></a>
@@ -124,6 +136,15 @@
 - 禁止结果：不得因存活探针成功、receipt 仍为 `running` 或容量检查缺席而判定环境可用。
 - 禁止结果：不得把容量耗尽降级为无类型错误或纯字符串匹配，也不得让容量不足阻断白名单恢复动作本身。
 
+<a id="dom-004"></a>
+### DOM-004 App 依赖同步事务的原子性与可判定终态
+
+- 条件：调用方显式发起 `stackctl app-dependency-sync`，当前无其他活跃同步。
+- 可观察结果：成功 attempt 产出五组件同 attempt 的不可变快照、先落盘的 sync receipt 与最后原子推进的 active pointer，active readback 与本次 attempt 一致。
+- 可观察结果：在线解析失败、离线回放失败、封存失败或 readback 不一致时保留首个 typed blocker，active pointer 保持上一份已验证代际。
+- 可观察结果：active 写入已开始但无法证明 commit 结果时，以 activation ambiguous 的 typed blocker 报告，不声明成功。
+- 禁止结果：不得部分更新组件、跨 attempt 混合快照、更新任何锁定声明，或让调用方消费未 committed 的中间产物。
+
 ## 7. 工程归属
 
 - App：`quwoquan_ops`
@@ -154,3 +175,12 @@
 - 准出影响：`track`
 - 影响或价值：缺全局容量规划、灾备与观测统稿的 L2 owner，相关知识散落。具体 P0 缺口已在 [`commercial-readiness-risk-closure/spec.md#OPEN-007`](./commercial-readiness-risk-closure/spec.md#open-007)（备份恢复演练与 RPO/RTO）与 [`commercial-readiness-risk-closure/spec.md#OPEN-008`](./commercial-readiness-risk-closure/spec.md#open-008)（日志统一 collector 上云）登记，本 OPEN 只补「统稿 L2 结构」缺口，不重复登记具体风险项。
 - 完成判定：`DOM-003` 的容量水位可用性证据获得统稿 owner——本 L1 下建立容量/灾备/观测统稿 L2（经 prd→design 流程），上述两条现存 OPEN 由该 L2 承接或保留原节点并被其引用；`make verify-feature-tree` 退出 0。
+
+<a id="open-003"></a>
+### OPEN-003 app-dependency-sync 事务尚缺直接绑定的验收证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：同步事务的公开规格与设计决定（单一 sync lock、五组件同 attempt、online→offline replay→seal→readback、receipt-first/active-last、ambiguous commit 阻断、source drift 阻断、不更新 lock、只消费 committed readback）刚冻结；既有实现与 local_contract 尚未以 `spec_ref` 直接绑定本节点锚点，canonical launcher 侧的交互式 stale 恢复消费面也尚未闭环。
+- 完成判定：`DOM-004` 对应行为满足且真实测试以 `spec_ref` 直接绑定 `DOM-004`。

@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any
 
 from core import paths as _paths
-from core.runtime_policy import RuntimePolicy
 from core.source_digest import current_source_digest
 from governance.coverage.master_list import (
     admin_children,
@@ -60,29 +59,27 @@ class CoverageMatrixGuardrails:
     rate_limit_per_second: float
 
     @classmethod
-    def from_runtime_policy(
+    def defaults(
         cls,
-        policy: RuntimePolicy,
         *,
         safe_pool_minimum: int,
         until_saturated: bool,
     ) -> "CoverageMatrixGuardrails":
         if safe_pool_minimum < 1:
             raise ValueError("coverage safe pool minimum must be positive")
-        config = policy.coverage_discovery
         return cls(
             until_saturated=until_saturated,
-            saturation_threshold=config.saturation_threshold,
-            saturation_rounds=config.saturation_rounds,
-            max_pages_per_cell=config.max_pages_per_cell,
-            max_candidates_per_city_source=config.max_candidates_per_city_source,
-            max_new_per_cell=config.max_new_per_cell,
-            request_budget=config.request_budget,
-            max_total_candidates=config.max_total_candidates,
+            saturation_threshold=0.05,
+            saturation_rounds=2,
+            max_pages_per_cell=20,
+            max_candidates_per_city_source=1000,
+            max_new_per_cell=200,
+            request_budget=20000,
+            max_total_candidates=0,
             safe_pool_minimum=safe_pool_minimum,
-            required_empty_pages=config.required_empty_pages,
-            request_timeout_seconds=config.request_timeout_seconds,
-            rate_limit_per_second=config.rate_limit_per_second,
+            required_empty_pages=2,
+            request_timeout_seconds=90,
+            rate_limit_per_second=0.5,
         )
 
     def as_document(self) -> dict[str, int | float | bool]:

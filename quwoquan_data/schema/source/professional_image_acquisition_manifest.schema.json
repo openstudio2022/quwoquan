@@ -4,7 +4,7 @@
   "type": "object",
   "required": [
     "schema", "manifestId", "sourceRevision", "sourceDigest",
-    "entityCatalogDigest", "discoveryPlanRef", "discoveryPlanDigest", "items"
+    "entityCatalogDigest", "items"
   ],
   "additionalProperties": false,
   "properties": {
@@ -13,18 +13,6 @@
     "sourceRevision": {"type": "string", "minLength": 1},
     "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "executionBundle": {"$ref": "#/$defs/digestDocument"},
-    "frozenPhysicalInput": {"$ref": "#/$defs/frozenPhysicalInput"},
-    "reviewExecutionBindings": {
-      "type": "array",
-      "items": {"$ref": "#/$defs/reviewExecutionBinding"}
-    },
-    "reviewSourceBindings": {
-      "type": "array",
-      "items": {"$ref": "#/$defs/reviewSourceBinding"}
-    },
-    "discoveryPlanRef": {"type": "string", "minLength": 1},
-    "discoveryPlanDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "items": {
       "type": "array",
       "minItems": 1,
@@ -32,7 +20,7 @@
         "type": "object",
         "required": [
           "assetId", "entityId", "observedEntityId", "entityAliases",
-          "sourceId", "displayName", "discoveryCandidateId", "discoveryUrl", "acquisitionPath",
+          "sourceId", "displayName", "acquisitionPath",
           "sourceUrl", "assetUrl", "manualFile", "apiEvidence", "accessEvidence", "creator",
           "capturedAt", "rightsStatus", "license", "licenseSnapshot",
           "usageScope", "modelReleaseStatus", "termsUrl",
@@ -50,8 +38,6 @@
           },
           "sourceId": {"type": "string", "minLength": 1},
           "displayName": {"type": "string", "minLength": 1},
-          "discoveryCandidateId": {"type": "string", "minLength": 1},
-          "discoveryUrl": {"type": "string", "pattern": "^https://"},
           "acquisitionPath": {"enum": ["public_direct", "supported_api", "manual_file"]},
           "sourceUrl": {"type": "string", "pattern": "^https://"},
           "assetUrl": {"type": "string"},
@@ -83,56 +69,6 @@
   },
   "$defs": {
     "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "digestDocument": {
-      "type": "object", "additionalProperties": false,
-      "required": ["algorithm", "digest", "inputs"],
-      "properties": {
-        "algorithm": {"const": "sha256"}, "digest": {"$ref": "#/$defs/sha256"},
-        "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
-      }
-    },
-    "frozenPhysicalInput": {
-      "type": "object", "additionalProperties": false,
-      "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "metadataCatalogDigest", "externalInputsDigest"],
-      "properties": {
-        "sourceRevision": {"$ref": "#/$defs/sha256"},
-        "sourceDigest": {"$ref": "#/$defs/sha256"},
-        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
-        "metadataCatalogDigest": {"$ref": "#/$defs/sha256"},
-        "externalInputsDigest": {"$ref": "#/$defs/sha256"}
-      }
-    },
-    "reviewExecutionBinding": {
-      "type": "object", "additionalProperties": false,
-      "required": ["executionId", "executionBundle", "executionManifestRef", "executionManifestSha256"],
-      "properties": {
-        "executionId": {"type": "string", "minLength": 1},
-        "executionBundle": {"$ref": "#/$defs/digestDocument"},
-        "executionManifestRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
-        "executionManifestSha256": {"$ref": "#/$defs/sha256"}
-      }
-    },
-    "reviewSourceBinding": {
-      "type": "object", "additionalProperties": false,
-      "required": ["sourceReview", "reviewerResultRef", "reviewerResultSha256"],
-      "properties": {
-        "sourceReview": {"$ref": "#/$defs/sourceReview"},
-        "reviewerResultRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
-        "reviewerResultSha256": {"$ref": "#/$defs/sha256"}
-      }
-    },
-    "sourceReview": {
-      "type": "object", "additionalProperties": false,
-      "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "executionBundleDigest", "handoffDigest", "requestDigest"],
-      "properties": {
-        "sourceRevision": {"$ref": "#/$defs/sha256"},
-        "sourceDigest": {"$ref": "#/$defs/sha256"},
-        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
-        "executionBundleDigest": {"$ref": "#/$defs/sha256"},
-        "handoffDigest": {"$ref": "#/$defs/sha256"},
-        "requestDigest": {"$ref": "#/$defs/sha256"}
-      }
-    },
     "accessEvidence": {
       "type": "object",
       "required": [

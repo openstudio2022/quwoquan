@@ -51,6 +51,15 @@ def asset_snapshot(asset: Mapping[str, Any]) -> dict[str, Any]:
         value = asset.get(field)
         if isinstance(value, Mapping):
             snapshot[field] = dict(value)
+    poster_rights = asset.get("posterRights")
+    if isinstance(poster_rights, Mapping):
+        snapshot["poster"] = {
+            "contentSha256": str(asset.get("posterContentSha256") or "").strip(),
+            "casRef": str(asset.get("posterAssetRef") or "").strip(),
+            "bytes": asset.get("posterBytes"),
+            "mimeType": str(asset.get("posterMimeType") or "").strip(),
+            "rights": dict(poster_rights),
+        }
     return snapshot
 
 
@@ -84,6 +93,32 @@ def project_research_judgment_to_acquisition_truth(
 
 
 def assert_video_asset_snapshot_publishable(snapshot: Mapping[str, Any]) -> None:
+    poster = snapshot.get("poster")
+    poster = poster if isinstance(poster, Mapping) else {}
+    poster_rights = poster.get("rights")
+    poster_rights = poster_rights if isinstance(poster_rights, Mapping) else {}
+    inherited = {
+        "sourceUrl": snapshot.get("sourceUrl"),
+        "license": snapshot.get("license"),
+        "termsUrl": snapshot.get("termsUrl"),
+        "authorizationProof": snapshot.get("authorizationProof"),
+        "rightsStatus": snapshot.get("rightsStatus"),
+        "authorizationRequired": snapshot.get("authorizationRequired"),
+        "distributionDecision": snapshot.get("distributionDecision"),
+        "rightsIssues": snapshot.get("rightsIssues"),
+    }
+    if (
+        not str(poster.get("contentSha256") or "").startswith("sha256:")
+        or not str(poster.get("casRef") or "").strip()
+        or not isinstance(poster.get("bytes"), int)
+        or int(poster["bytes"]) < 1
+        or poster.get("mimeType") != "image/png"
+        or poster_rights.get("derivation") != "frame_from_licensed_video"
+        or any(poster_rights.get(key) != value for key, value in inherited.items())
+    ):
+        raise IndependentAssetReviewError(
+            "independent video review lacks exact poster CAS and inherited rights evidence"
+        )
     probe = snapshot.get("mediaProbe")
     if not isinstance(probe, Mapping) or not all(
         (

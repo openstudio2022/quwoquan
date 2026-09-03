@@ -1,5 +1,5 @@
 # 旅行实体主页（homepage-only）内容基线 preset。
-# 家族契约：只产实体主页，article/image 配额为 0；research 单 homepage lane。
+# 家族契约：只产实体主页，article/image 配额为 0。
 schema: quwoquan.content.preset
 presetId: content/travel/homepage/base
 title: 旅行实体主页内容基线
@@ -15,8 +15,6 @@ defaults:
     - homepage
     modalityContract: separated_research
     research:
-      lanes:
-      - homepage
       # 冷启动阶段逐素材保留来源、匹配和权利审计；许可状态不作为发布过滤条件。
       imageAssetStrategy: attribution_audited_publish
       imageCountPolicy: score_bonus

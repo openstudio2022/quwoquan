@@ -9,80 +9,26 @@ metadata:
 
 ## 触发与输入
 
-在环境打包、启动、URL/路由、health、inspect、doctor、repair、部署、灰度、回滚或
-任何 `stackctl` 故障排查时使用。取得目标环境/target、服务和操作意图；发布另需不可变
-image/config/manifest、SLO 与审批状态，恢复另需当前诊断证据和白名单内修复动作。
+用于环境打包、启动、URL/路由、health、inspect、doctor、repair、部署、灰度与回滚。输入是环境/target、服务、操作意图与所需授权；角色交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.environment-ops`，可见输出由 canonical projector 生成。
 
-环境操作者、发布操作者和恢复操作者的特殊步骤只在对应模式下读取
-[roles/](references/roles/)；普通查询不预载发布或恢复约束。
-
-
-
-自然语言触发与显式 Skill 调用同轨，字段、闭集与审计隔离只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.environment-ops`：
-
-- PRE：`progress_update` / `nonproduction_validation` / `environment_reliability_owner`。
+本轮若将产生、更新或恢复 registry 声明的送审交付件 `release-evidence`，PRE 必须从 canonical environment owner fact 唯一反解环境：所选 runtime target 必须只属于一个 `quwoquan_ops/environments/<env>/runtime.yaml` 的 `dataReleaseTarget`/`targets`，并以该 runtime manifest 的 repository-relative exact path 作为 exact target；缺 target、多环境命中或 owner fact 不一致时返回 typed `GATE_BLOCK`。随后运行 `make feature-context TARGET=<exact-path>`，保存 stdout 指向的 content-addressed immutable owner manifest exact ref，PRE 后不得重写或替换该 ref。
 
 ## 执行
 
-唯一操作面是 `python3 quwoquan_ops/cli/stackctl.py`（`make dev-up` 只是受控入口）：
+唯一操作面是 `python3 quwoquan_ops/cli/stackctl.py`。按需执行 package/up/verify/health/inspect/doctor、白名单 repair 或 prod-hosted deploy；环境、URL、端口、拓扑与 rollout 参数只读 canonical manifests/readback，不手写第二事实。打包、启动、健康与巡检只加载 [environment-operator.md](references/roles/environment-operator.md)，候选验证、发布与灰度只加载 [release-operator.md](references/roles/release-operator.md)，诊断、白名单修复与回滚只加载 [recovery-operator.md](references/roles/recovery-operator.md)；组合操作按实际角色加载，不预载无关正文。
 
-- 构建/启动：`package --env <alpha|beta|gamma|prod>`，然后
-  `up --env <alpha|beta|gamma|prod-sim|prod> [--device-id <id>]`。
-- 验证：`verify --kind all --profile <baseline|smoke|integration|release>`；无环境依赖选
-  `baseline`，四环境 Remote 启动和 release 只读探针选 `smoke`，Alpha/Beta/Gamma
-  内容数据平面选 `integration`，Gamma 商业观测和 Prod 选 `release`。
-- 诊断固定为 `health --target <target> --scope <scope>` →
-  `inspect --target <target> --kind <kind>` → `doctor --target <target>`；仅白名单问题才
-  `repair --target <target> --fix <rebuild-packages|restart-stack|reclaim-ports>`。
-- 生产发布只用 `deploy --target prod-hosted ...`，按 `canary / 5 / 20 / 50 / 100`
-  rollout stage 推进；完整参数和停止点从
-  [release-operator.md](references/roles/release-operator.md) 按需加载。
-- 第一方容器预验证只用 `deploy --target prod-hosted --mode prevalidate ...`，且必须传入
-  `--ssh-host`、`--data-mode`、`--prevalidate-scope first-party` 和
-  `--release-manifest`；它不接受 rollout/SLO/rollback 参数，不可提升，也不写正式
-  release ledger/receipt。
-
-`prod-gray` 不是环境；生产灰度属于 `prod` rollout。`gamma` 只表示本地
-`gamma-local`，远端目标只有 `prod-hosted`。端口从
-`quwoquan_ops/environments/local_env_port_manifest.yaml` 读取，拓扑从目标环境
-`runtime.yaml` 读取，禁止手写或把 `--ssh-host` 写入 runtime public base。
-
-- 执行中：`exception_escalation` / `production_campaign` / `$route`。
-
-`$route` 表示按当前决定责任动态路由；Skill 不复制 envelope schema，所有可见输出统一由 canonical projector 生成。
+纯 `status`、`health`、`inspect` 或其他不产生送审交付件的只读操作不要求 Feature owner manifest；它们只以当前 readback、明确的 `read-only/no-review-deliverable` 或 typed blocker 终止，不得调用 POST Review，也不得声称产出 `release-evidence`。若任务需要修改源码、spec、design、contracts 或测试，立即停止该 mutation，并按目标归属交接 explore/prd/design/dev；环境 Skill 不代替 Feature workflow 的 target/manifest/Review 生命周期。
 
 ## 完成证据
 
-分别报告 package、启动、health、运行探针、发布/回滚和真实 UAT 的实际结果，并引用：
+分层报告 package、启动、health、runtime probe、发布/回滚与真实 UAT 的当前 receipt/readback；上游 PASS 不替代下游闭环。至少执行并报告 1–3 个适用入口：`python3 quwoquan_ops/cli/stackctl.py health --target <target> --scope <scope>`，其中 target 与 scope 均读取本轮 environment/workload owner facts；`python3 quwoquan_ops/cli/stackctl.py inspect --target <target> --kind <kind>`；`python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --profile <smoke|integration|release>`（无环境依赖时用 `--profile baseline` 且不传 `--env`）。
 
-- `.qwq_output/env/<env>/runs/<run-id>/report.json` 与 `summary.md`
-- `.qwq_output/env/gamma/local/gamma-local/process/report.json`
-- `QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/<service>.state`
-
-涉及 prod rollout/rollback 的 POST Review 先由主会话按 Review registry 解析并执行一次
-去重的命名 evidence，再调用 `review`（workflow=`environment-ops`、segment=`POST`、
-deliverable=`release-evidence`）。主审是 `ops`，命中环境发布 profile 时至多增加一个
-`infra-capacity` 专审。Reviewer 不运行 gate。纯 `health`、`inspect`、只读 `verify` 不自动
-派审；required evidence 或 required Reviewer 未完成即返回 typed `GATE_BLOCK`。
-
-- POST：`completion_report` / `production_campaign` / `$route`。
+产生 `release-evidence` 时，POST 必须把 PRE 保存的同一个 owner manifest exact ref 原样作为 `--context-manifest` 传给 Review（workflow=`environment-ops`、segment=`POST`、deliverable=`release-evidence`、scope=`<exact-path>`）；先按 plan 去重执行命名 evidence，再派 registry 主审与至多一名专审。manifest ref 缺失、与 PRE 不同或 stale，required evidence/Reviewer 未完成，均不得完成。
 
 ## 失败与停止
 
-以下情况 fail closed，并保留首个 typed blocker：
-
-- 生产审批、放量范围或回滚目标不明确；缺少 credential、hosted base URL 或发布必填
-  service/image/config/step/SLO。
-- prevalidate 缺 OCI digest manifest、来源不是 clean reviewed `main`、主机低于资源门或
-  端口冲突；prevalidate 永远不能作为 release eligibility。
-- `prod-hosted inspect/doctor` 未同时证明 user systemd enabled/active、容器状态和镜像
-  identity；`--ssh-host` 只用于隔离账号巡检。
-- health/inspect/doctor 暴露配置、artifact、host 或 identity 污染；不得用旧 receipt
-  覆盖当前失败。
-- repair 超出白名单或需要破坏性动作；停止并向用户取得额外授权。
+生产授权、凭据、hosted identity、回滚目标、required readback、唯一 exact target 或送审 owner manifest 缺失时 fail closed；repair 超白名单或需破坏性动作时请求额外授权，不用旧 receipt 覆盖失败。
 
 ## 条件性交接
 
-六类触发（跨会话未完成、多人并行、环境/发布、外部阻断、证据复用、用户显式要求）统一调用 canonical handoff producer；普通闭环不落持久交接。
-
-仅当路由结果要求真实人类责任时，使用统一 `$route`、project/card 与 hosted authority readback；routine execution 不新造 checkpoint。Reviewer PASS 只是评审证据，不能签发或替代 authority receipt。
+源码/spec mutation 只交 Feature workflow；外部阻断、环境/发布、跨会话或证据复用满足 canonical 触发时生成 handoff。送审交付的 handoff 必须携带 PRE 保存并在 POST 原样复用的 owner manifest exact ref；纯只读无送审交付不生成替代 manifest。

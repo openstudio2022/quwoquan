@@ -54,6 +54,7 @@ func TestListFeedUsesServerProjectedBlockFacts(t *testing.T) {
 	service := NewFeedService(
 		reader,
 		WithFeedViewerBlockReader(blocks),
+		WithActiveSupplyReader(&terminalActiveSupplyReader{active: true}),
 		WithFeedDeliveryPageStore(deliveryredis.NewStore(rtredis.NewMemoryClient())),
 	)
 
@@ -82,6 +83,7 @@ func TestListFeedFailsClosedWhenBlockProjectionIsUnavailable(t *testing.T) {
 		WithFeedViewerBlockReader(&staticFeedViewerBlockReader{
 			err: errors.New("block projection unavailable"),
 		}),
+		WithActiveSupplyReader(&terminalActiveSupplyReader{active: true}),
 	)
 
 	if _, err := service.ListFeed(context.Background(), ListFeedRequest{

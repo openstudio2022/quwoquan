@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import copy
-import json
+import hashlib
 import importlib.util
 import json
 import shutil
@@ -26,6 +26,7 @@ import evidence_runner  # noqa: E402
 import handoff_consumer  # noqa: E402
 import handoff_manifest as producer  # noqa: E402
 import review_dispatch  # noqa: E402
+from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
 from lib.feature_tree.commands import _context_manifest, discover_nodes  # noqa: E402
 from lib.feature_tree.ownership import resolve_target_details  # noqa: E402
 
@@ -60,8 +61,11 @@ class HandoffManifestProducerTest(unittest.TestCase):
         manifest["evidence_fingerprint"] = review_dispatch.embedded_fingerprint_binding(
             review_dispatch.build_feature_context_fingerprint(manifest, repo_root=ROOT)
         )
-        path = self.case / "owner-manifest.json"
-        path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+        raw = canonical_json_bytes(manifest)
+        manifest_root = ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint"
+        manifest_root.mkdir(parents=True, exist_ok=True)
+        path = manifest_root / (hashlib.sha256(raw).hexdigest() + ".json")
+        path.write_bytes(raw)
         self.manifest_ref = path.relative_to(ROOT).as_posix()
         return manifest
 
@@ -80,14 +84,16 @@ class HandoffManifestProducerTest(unittest.TestCase):
             context_manifest=self._manifest(),
             context_manifest_ref=self.manifest_ref,
         )
-        real_run = evidence_runner.subprocess.run
-
         def execute(args, *positional, **kwargs):
-            if args[:2] == ["/bin/sh", "-c"]:
-                return mock.Mock(returncode=0, stdout=b"fixture", stderr=b"")
-            return real_run(args, *positional, **kwargs)
+            return mock.Mock(
+                returncode=0,
+                stdout=b"fixture",
+                stderr=b"",
+                timed_out=False,
+                termination_signal=None,
+            )
 
-        with mock.patch.object(evidence_runner.subprocess, "run", side_effect=execute):
+        with mock.patch.object(evidence_runner, "run_command", side_effect=execute):
             receipt = evidence_runner.run_plan(plan, registry=registry, cwd=ROOT)
         plan_path = self.case / "plan.json"
         receipt_path = self.case / "receipt.json"

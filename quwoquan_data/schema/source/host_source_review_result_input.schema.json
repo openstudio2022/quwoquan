@@ -4,10 +4,9 @@
   "title": "Host-provided source semantic review result input",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "contractVersion", "requestRef", "requestDigest", "actor", "reviewedAt", "verdict"],
+  "required": ["schema", "requestRef", "requestDigest", "actor", "reviewedAt", "verdict"],
   "properties": {
     "schema": {"const": "quwoquan_data.host_source_review_result_input"},
-    "contractVersion": {"const": "host-source-review/v1"},
     "requestRef": {"$ref": "#/$defs/safeRef"},
     "requestDigest": {"$ref": "#/$defs/sha256"},
     "actor": {"$ref": "#/$defs/actor"},

@@ -1,0 +1,397 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/stage_open_request.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "executionId",
+    "stage",
+    "sequence",
+    "predecessor",
+    "input",
+    "submittedInput",
+    "inputRefs"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.stage_open_request"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
+    },
+    "stage": {
+      "enum": [
+        "0.plan",
+        "sources",
+        "1.download",
+        "2.quality",
+        "3.compose",
+        "4.draft",
+        "5.review",
+        "publish",
+        "release",
+        "ship"
+      ]
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "predecessor": {
+      "$ref": "#/$defs/predecessor"
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "digest"
+      ],
+      "properties": {
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "submittedInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputRefs"
+      ],
+      "properties": {
+        "inputRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/refInput"
+          }
+        }
+      }
+    },
+    "inputRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/refFrozen"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "0.plan"
+          }
+        },
+        "required": [
+          "stage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sequence": {
+            "const": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "sources"
+          }
+        },
+        "required": [
+          "stage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sequence": {
+            "const": 2
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "1.download"
+          }
+        },
+        "required": [
+          "stage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sequence": {
+            "const": 3
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "2.quality"
+          }
+        },
+        "required": [
+          "stage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sequence": {
+            "const": 4
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "3.compose"
+          }
+        },
+        "required": [
+          "stage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sequence": {
+            "const": 5
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "4.draft"
+          }
+        },
+        "required": [
+          "stage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sequence": {
+            "const": 6
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "5.review"
+          }
+        },
+        "required": [
+          "stage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sequence": {
+            "const": 7
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "publish"
+          }
+        },
+        "required": [
+          "stage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sequence": {
+            "const": 8
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "release"
+          }
+        },
+        "required": [
+          "stage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sequence": {
+            "const": 9
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "ship"
+          }
+        },
+        "required": [
+          "stage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "sequence": {
+            "const": 10
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage": {
+            "const": "0.plan"
+          }
+        },
+        "required": [
+          "stage"
+        ]
+      },
+      "then": {
+        "properties": {
+          "predecessor": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "not": {
+          "properties": {
+            "stage": {
+              "const": "0.plan"
+            }
+          },
+          "required": [
+            "stage"
+          ]
+        }
+      },
+      "then": {
+        "properties": {
+          "predecessor": {
+            "$ref": "#/$defs/executionBinding"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "refInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "ref"
+      ],
+      "properties": {
+        "scope": {
+          "enum": [
+            "execution",
+            "output",
+            "repo"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+        }
+      }
+    },
+    "refFrozen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "scope": {
+          "enum": [
+            "execution",
+            "output",
+            "repo"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "executionBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "ref",
+        "digest"
+      ],
+      "properties": {
+        "scope": {
+          "const": "execution"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "predecessor": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/executionBinding"
+        }
+      ]
+    }
+  }
+}

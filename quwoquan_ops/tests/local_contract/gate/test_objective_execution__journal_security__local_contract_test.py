@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import errno
 import inspect
 import json
 import os
@@ -30,7 +31,9 @@ from lib.objective_execution.journal import (  # noqa: E402
     _append_event_under_lease, _read_events_under_lease, append_event, payload_digest,
     read_events, readback, recover_materialization, writer_lease,
 )
-from lib.objective_execution.secure_storage import StorageError, StorageLease  # noqa: E402
+from lib.objective_execution.secure_storage import (  # noqa: E402
+    StorageError, StorageLease, exclusive_publish_at, replace_regular_at,
+)
 
 
 class SimulatedCrash(RuntimeError):
@@ -94,6 +97,223 @@ def _typed_failure(root: Path) -> str:
     assert result.status == "failed"
     assert result.terminal in {"OEX.JOURNAL_TAMPERED", "OEX.JOURNAL_FAILED"}
     return str(result.terminal)
+
+
+
+def _secure_directory_fd(path: Path) -> int:
+    path.mkdir(mode=0o700)
+    path.chmod(0o700)
+    return os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+
+
+def test_platform_rename_dispatch_preserves_darwin_flags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lib.objective_execution import secure_storage
+
+    calls: list[tuple[int, str, str, int]] = []
+    monkeypatch.setattr(secure_storage.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        secure_storage,
+        "_darwin_renameatx_np",
+        lambda parent_fd, source, destination, flags: calls.append(
+            (parent_fd, source, destination, flags)
+        ),
+    )
+
+    secure_storage._exclusive_rename_at(17, "source", "destination")
+    secure_storage._exchange_rename_at(17, "source", "destination")
+
+    assert calls == [
+        (17, "source", "destination", secure_storage._DARWIN_RENAME_EXCL),
+        (17, "source", "destination", secure_storage._DARWIN_RENAME_SWAP),
+    ]
+
+
+def test_platform_rename_dispatch_preserves_linux_flags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lib.objective_execution import secure_storage
+
+    calls: list[tuple[int, str, str, int]] = []
+    monkeypatch.setattr(secure_storage.sys, "platform", "linux")
+    monkeypatch.setattr(
+        secure_storage,
+        "_linux_renameat2",
+        lambda parent_fd, source, destination, flags: calls.append(
+            (parent_fd, source, destination, flags)
+        ),
+    )
+
+    secure_storage._exclusive_rename_at(23, "source", "destination")
+    secure_storage._exchange_rename_at(23, "source", "destination")
+
+    assert calls == [
+        (23, "source", "destination", secure_storage._LINUX_RENAME_NOREPLACE),
+        (23, "source", "destination", secure_storage._LINUX_RENAME_EXCHANGE),
+    ]
+
+
+def test_unsupported_platform_rename_is_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lib.objective_execution import secure_storage
+
+    monkeypatch.setattr(secure_storage.sys, "platform", "win32")
+    with pytest.raises(StorageError, match="lacks supported exclusive rename"):
+        secure_storage._exclusive_rename_at(31, "source", "destination")
+    with pytest.raises(StorageError, match="lacks supported exchange rename"):
+        secure_storage._exchange_rename_at(31, "source", "destination")
+
+
+def test_linux_renameat2_uses_retained_fd_fsencode_and_ctypes_errno(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lib.objective_execution import secure_storage
+
+    class Renameat2Call:
+        argtypes: list[object] = []
+        restype: object = None
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[object, ...]] = []
+            self.result = 0
+
+        def __call__(self, *arguments: object) -> int:
+            self.calls.append(arguments)
+            return self.result
+
+    renameat2 = Renameat2Call()
+    libc = type("Libc", (), {"renameat2": renameat2})()
+    monkeypatch.setattr(secure_storage.sys, "platform", "linux")
+    monkeypatch.setattr(
+        secure_storage.ctypes, "CDLL", lambda *_arguments, **_keywords: libc,
+    )
+
+    secure_storage._linux_renameat2(
+        37, "源文件", "目标文件", secure_storage._LINUX_RENAME_NOREPLACE,
+    )
+    assert renameat2.calls == [(
+        37, os.fsencode("源文件"), 37, os.fsencode("目标文件"),
+        secure_storage._LINUX_RENAME_NOREPLACE,
+    )]
+
+    renameat2.result = -1
+    monkeypatch.setattr(secure_storage.ctypes, "get_errno", lambda: errno.EEXIST)
+    with pytest.raises(FileExistsError):
+        secure_storage._linux_renameat2(
+            37, "源文件", "目标文件", secure_storage._LINUX_RENAME_NOREPLACE,
+        )
+
+
+def test_linux_unknown_architecture_without_symbol_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lib.objective_execution import secure_storage
+
+    class LibcWithoutRenameat2:
+        syscall = None
+
+    monkeypatch.setattr(secure_storage.sys, "platform", "linux")
+    monkeypatch.setattr(secure_storage.platform, "machine", lambda: "mips64")
+    monkeypatch.setattr(
+        secure_storage.ctypes,
+        "CDLL",
+        lambda *_arguments, **_keywords: LibcWithoutRenameat2(),
+    )
+    with pytest.raises(StorageError, match="unavailable for this architecture"):
+        secure_storage._linux_renameat2(
+            41, "source", "destination", secure_storage._LINUX_RENAME_NOREPLACE,
+        )
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="requires Linux renameat2")
+def test_linux_noreplace_does_not_overwrite_existing_destination(
+    tmp_path: Path,
+) -> None:
+    directory = tmp_path / "linux-noreplace"
+    parent_fd = _secure_directory_fd(directory)
+    try:
+        (directory / "source").write_bytes(b"new")
+        (directory / "destination").write_bytes(b"old")
+        with pytest.raises(FileExistsError):
+            exclusive_publish_at(parent_fd, "source", "destination")
+        assert (directory / "source").read_bytes() == b"new"
+        assert (directory / "destination").read_bytes() == b"old"
+    finally:
+        os.close(parent_fd)
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="requires Linux renameat2")
+def test_linux_exchange_leaves_old_destination_in_staging_before_unlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lib.objective_execution import secure_storage
+
+    journal = tmp_path / "linux-exchange"
+    observed_old_content: list[bytes] = []
+    with writer_lease(journal, "objective", "objective-1") as lease:
+        original_unlink = secure_storage.os.unlink
+
+        def inspect_then_unlink(name: str, *, dir_fd: int) -> None:
+            if name.startswith(".snapshot.json.") and name.endswith(".staging"):
+                staging_fd = os.open(name, os.O_RDONLY, dir_fd=dir_fd)
+                try:
+                    observed_old_content.append(os.read(staging_fd, 64))
+                finally:
+                    os.close(staging_fd)
+            original_unlink(name, dir_fd=dir_fd)
+
+        replace_regular_at(lease, "snapshot.json", b"old")
+        monkeypatch.setattr(secure_storage.os, "unlink", inspect_then_unlink)
+        replace_regular_at(lease, "snapshot.json", b"new")
+
+    assert observed_old_content == [b"old"]
+    assert (journal / "objective/objective-1/snapshot.json").read_bytes() == b"new"
+    assert not list((journal / "objective/objective-1").glob(".snapshot.json.*.staging"))
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="requires Linux renameat2")
+def test_linux_concurrent_noreplace_has_exactly_one_winner(tmp_path: Path) -> None:
+    directory = tmp_path / "linux-race"
+    directory.mkdir(mode=0o700)
+    sources = ["source-left", "source-right"]
+    for index, source in enumerate(sources):
+        (directory / source).write_bytes(f"winner-{index}".encode("utf-8"))
+    script = """
+import os, sys
+sys.path.insert(0, sys.argv[1])
+from lib.objective_execution.secure_storage import exclusive_publish_at
+parent_fd = os.open(sys.argv[2], os.O_RDONLY | os.O_DIRECTORY)
+try:
+    exclusive_publish_at(parent_fd, sys.argv[3], "event.json")
+except FileExistsError:
+    raise SystemExit(23)
+finally:
+    os.close(parent_fd)
+"""
+    processes = [
+        subprocess.Popen(
+            [sys.executable, "-B", "-c", script,
+             str(ROOT / "quwoquan_ops/cli"), str(directory), source],
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        )
+        for source in sources
+    ]
+    returncodes = [process.wait(timeout=5) for process in processes]
+
+    assert sorted(returncodes) == [0, 23]
+    assert (directory / "event.json").read_bytes() in {b"winner-0", b"winner-1"}
+    assert sum((directory / source).exists() for source in sources) == 1
+
+
+def test_authoritative_event_publish_source_has_no_overwrite_fallback() -> None:
+    from lib.objective_execution import secure_storage
+
+    source = inspect.getsource(secure_storage.publish_staged_event)
+    source += inspect.getsource(secure_storage.exclusive_publish_at)
+    source += inspect.getsource(secure_storage._exclusive_rename_at)
+    assert "replace(" not in source
 
 
 def test_public_api_has_no_lease_bypass_and_real_lease_conflicts(tmp_path: Path) -> None:

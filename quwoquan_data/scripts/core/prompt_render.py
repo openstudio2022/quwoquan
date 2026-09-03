@@ -29,21 +29,13 @@ TASK_KEY = "task"
 PARTIALS_DIR = "_shared/partials"
 _PROMPT_FAMILY = {
     "article_author": "article",
-    "checkpoint_author_article": "article",
-    "source_plan_article": "article",
-    "checkpoint_author_image": "image",
     "image_curation": "image",
-    "source_plan_image": "image",
     "video_author": "video",
-    "checkpoint_author_video": "video",
-    "checkpoint_build_homepage": "homepage",
-    "checkpoint_content_plan": "homepage",
     "entity_homepage": "homepage",
     "homepage_independent_review": "homepage",
     "homepage_source_judge": "homepage",
     "post_independent_review": "_shared",
     "professional_asset_independent_review": "_shared",
-    "source_plan_homepage": "homepage",
     "review_repair": "_shared",
 }
 

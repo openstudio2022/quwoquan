@@ -10,7 +10,6 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
-from quwoquan_ops.cli.lib.data_execution_fleet import load_data_execution_fleet_config
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 from quwoquan_ops.tests.support.stackctl_dev_session_test_support import (
     StackctlMutableTeardownTestBase,
@@ -24,7 +23,6 @@ class StackctlMutableTestLiveTeardownTest(StackctlMutableTeardownTestBase):
         topology = stackctl.load_environment_topology()
         manifest = load_port_manifest()
         beta_ports = profile_ports(manifest, "beta-local")
-        fleet = load_data_execution_fleet_config()
         runtime_owned_endpoints = [
             {
                 "role": "api-edge",
@@ -42,14 +40,6 @@ class StackctlMutableTestLiveTeardownTest(StackctlMutableTeardownTestBase):
                 "protocol": "udp",
             },
         ]
-        fleet_endpoints = [
-            {
-                "role": role,
-                "hostPort": beta_ports[role],
-                "protocol": "tcp",
-            }
-            for role in (fleet.mongo_port_role, fleet.redis_port_role)
-        ]
         with tempfile.TemporaryDirectory() as temporary:
             report_dir = Path(temporary)
             receipt = _receipt(report_dir)
@@ -60,7 +50,7 @@ class StackctlMutableTestLiveTeardownTest(StackctlMutableTeardownTestBase):
                     "composeProject": "quwoquan_beta_test_live",
                     "portProfile": "beta-local",
                     "portBlock": {"start": 18000, "end": 18999},
-                    "publishedPorts": [*runtime_owned_endpoints, *fleet_endpoints],
+                    "publishedPorts": runtime_owned_endpoints,
                 }
             )
             stopped = {**receipt, "status": "stopped"}

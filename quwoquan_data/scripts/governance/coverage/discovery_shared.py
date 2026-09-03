@@ -5,27 +5,27 @@ import re
 from typing import Any
 
 from content.source.research import network_io
-from core.runtime_policy import active_runtime_policy
 
 
 _WIKI_HOST = "zh.wikipedia.org"
-_RUNTIME_POLICY = active_runtime_policy()
-_OVERPASS_HTTP_TIMEOUT_SECONDS = _RUNTIME_POLICY.provider_timeouts.overpass_seconds
-_WIKI_RETRY_LIMIT = _RUNTIME_POLICY.coverage_wiki_retry_limit
-_WIKI_RETRY_BACKOFF_SECONDS = _RUNTIME_POLICY.coverage_wiki_retry_backoff_seconds
-_WIKI_INTER_REQUEST_DELAY_SECONDS = _RUNTIME_POLICY.coverage_wiki_inter_request_delay_seconds
-_OVERPASS_RETRY_LIMIT = _RUNTIME_POLICY.coverage_overpass_retry_limit
-_OVERPASS_RETRY_BACKOFF_SECONDS = _RUNTIME_POLICY.coverage_overpass_retry_backoff_seconds
-_OVERPASS_INTER_REQUEST_DELAY_SECONDS = _RUNTIME_POLICY.coverage_overpass_inter_request_delay_seconds
-_OVERPASS_QUERY_TIMEOUT_SECONDS = _RUNTIME_POLICY.coverage_overpass_query_timeout_seconds
-_COVERAGE_POLICY = _RUNTIME_POLICY.coverage_discovery
-_RETRY_BACKOFF_MULTIPLIER = _COVERAGE_POLICY.retry_backoff_multiplier
-_WIKI_CATEGORY_PAGE_LIMIT = _COVERAGE_POLICY.max_pages_per_cell
-_WIKI_CATEGORY_DEPTH = _COVERAGE_POLICY.wiki_category_depth
-_WIKIDATA_SPARQL_ENDPOINT = _COVERAGE_POLICY.wikidata_sparql_endpoint
-_WIKIDATA_RESULT_LIMIT = _COVERAGE_POLICY.wikidata_result_limit
-_OVERPASS_RESULT_LIMIT = _COVERAGE_POLICY.overpass_result_limit
-_OVERPASS_ENDPOINTS = _COVERAGE_POLICY.overpass_endpoints
+_OVERPASS_HTTP_TIMEOUT_SECONDS = 75
+_WIKI_RETRY_LIMIT = 3
+_WIKI_RETRY_BACKOFF_SECONDS = 5.0
+_WIKI_INTER_REQUEST_DELAY_SECONDS = 0.3
+_OVERPASS_RETRY_LIMIT = 3
+_OVERPASS_RETRY_BACKOFF_SECONDS = 5.0
+_OVERPASS_INTER_REQUEST_DELAY_SECONDS = 2.0
+_OVERPASS_QUERY_TIMEOUT_SECONDS = 60
+_RETRY_BACKOFF_MULTIPLIER = 2.0
+_WIKI_CATEGORY_PAGE_LIMIT = 20
+_WIKI_CATEGORY_DEPTH = 4
+_WIKIDATA_SPARQL_ENDPOINT = "https://query.wikidata.org/sparql"
+_WIKIDATA_RESULT_LIMIT = 500
+_OVERPASS_RESULT_LIMIT = 500
+_OVERPASS_ENDPOINTS = (
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
+)
 
 # The execution request supplies ``region``. These generic MediaWiki category
 # templates are provider behavior, not a committed rollout target list.

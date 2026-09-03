@@ -285,14 +285,13 @@ lanePolicies:
 siteCrawlProfilePolicy:
   sourceRoot: sources/{vertical}/{sourceId}
   defaultTimeWindowDays: 730
-  scaleQueueBackend: reliabletask
   crawlerTruthSource: vertical providers.yaml
   promptFacts:
     - 网站维度供给线只负责发现、抓取、抽取、评分和映射候选，不直接发布内容。
     - fetchable=false 或 crawlAllowed=false 的站点不得进入批量抓取，只能作为 discovery/reference。
     - controlledTrial.allowed=true 仅代表可做受控 DAG/并发/门禁验证；validationOnly 必须为 true，rawFetchAllowed 和 publishableAssetsAllowed 必须为 false。
-    - 受控试跑候选只能作为 content_plan handoff 结构验证，不代表真实抓取授权，也不得把平台素材作为可发布资产。
-    - 发布主线只接受 content_plan_packet 之后的标准对象，不直接消费 site crawl 产物。
+    - 受控试跑候选只能作为 0.plan handoff 结构验证，不代表真实抓取授权，也不得把平台素材作为可发布资产。
+    - 发布主线只接受 0.plan target_set 冻结后的标准对象，不直接消费 site crawl 产物。
     - 站点主线 execution 声明 supplyMode=site_primary 并记录 sourceKey=siteId；搜索引擎汇聚只作小流量数据补全，必须使用独立 search_supplement execution，禁止与站点主线共用 executionId 或 readiness 口径。
     - 平台发现图不能自动变发布图；逐资产缺 license、credit、sourceUrl、termsUrl、usageScope 即不可发布。
     - 日产 10 万级必须提供站点漏斗、release/import、搜索可见和推荐反馈证据。

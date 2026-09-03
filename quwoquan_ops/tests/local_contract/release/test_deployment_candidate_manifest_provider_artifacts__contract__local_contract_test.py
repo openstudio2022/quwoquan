@@ -81,6 +81,33 @@ class DeploymentCandidateManifestContractTest(
         self.assertNotIn("QWQ_COMPOSE_ELASTICSEARCH_IMAGE", packaged)
         self.assertIn(selection["image"], packaged)
 
+    def test_local_observability_composition_digest_is_canonical_and_drift_sensitive(
+        self,
+    ) -> None:
+        source = (
+            subject.ROOT
+            / "quwoquan_service/services/product-ops-service/deploy"
+            / "local-elasticsearch.compose.yaml"
+        )
+        canonical = subject.canonical_local_observability_log_sink_composition(
+            source,
+            machine="arm64",
+        )
+        reordered = json.loads(json.dumps(canonical["compose"], sort_keys=True))
+        self.assertEqual(
+            subject.observability_log_sink_composition_digest(reordered),
+            canonical["composeDigest"],
+        )
+
+        drifted = json.loads(json.dumps(canonical["compose"]))
+        drifted["services"]["elasticsearch"]["environment"]["ES_JAVA_OPTS"] += (
+            " -Ddrift=true"
+        )
+        self.assertNotEqual(
+            subject.observability_log_sink_composition_digest(drifted),
+            canonical["composeDigest"],
+        )
+
     def test_candidate_rejects_tampered_observability_artifact(self) -> None:
         path = subject.write_candidate_manifest(
             "alpha",

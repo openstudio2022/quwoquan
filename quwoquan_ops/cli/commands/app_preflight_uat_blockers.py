@@ -325,7 +325,7 @@ def first_canonical_app_blocker(
     for index, run in enumerate(runs):
         if not _failed(run):
             continue
-        if run.get("suite") not in {"canonical-launch", "workspace-flutter-run"}:
+        if run.get("suite") not in {"canonical-launch", "canonical-hot-restart"}:
             continue
         code, source = _launch_attempt_blocker(run)
         if code:

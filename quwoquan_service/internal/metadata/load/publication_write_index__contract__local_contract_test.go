@@ -56,7 +56,7 @@ func TestServiceWriteIndexResolvesRepositoryPublicationStores(t *testing.T) {
 		// 不到：包级 join 会因为同包别处有事务写入而把它判成有发布实现。
 		"只有句柄没有写调用": {
 			service:  "content-service",
-			storage:  "post_import_task_outbox",
+			storage:  "rm_search_intent",
 			resolves: false,
 		},
 		// 集合句柄在构造处绑定到结构体字段、写入在方法里发生，字面量与写调用相隔数十行且

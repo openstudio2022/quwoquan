@@ -513,6 +513,28 @@ def _dev_session_finalize_runtime_plan(
     return plan
 
 
+def _mutable_observability_log_sink_launch_environment(
+    *,
+    execution_path: Path,
+    composition: Mapping[str, Any],
+) -> dict[str, str]:
+    """Bind mutable launch identity to the exact rendered Compose bytes."""
+
+    expected_bytes = composition.get("composeBytes")
+    if not isinstance(expected_bytes, bytes):
+        raise ValueError("mutable observability log-sink composition bytes are missing")
+    execution_bytes = execution_path.read_bytes()
+    if execution_bytes != expected_bytes:
+        raise ValueError(
+            "mutable observability log-sink source/execution composition drifted"
+        )
+    digest = "sha256:" + hashlib.sha256(execution_bytes).hexdigest()
+    return {
+        "QWQ_OBSERVABILITY_LOG_SINK_COMPOSE_FILE": str(execution_path),
+        "QWQ_OBSERVABILITY_LOG_SINK_DIGEST": digest,
+    }
+
+
 def _dev_session_render_runtime_inputs(
     *,
     environment: str,
@@ -568,6 +590,26 @@ def _dev_session_render_runtime_inputs(
         target=target,
         provider_composition=provider_composition,
     )
+    local_elasticsearch_source = next(
+        (
+            path
+            for path in compose_files
+            if path.relative_to(_stackctl.ROOT).as_posix()
+            == (
+                "quwoquan_service/services/product-ops-service/deploy/"
+                "local-elasticsearch.compose.yaml"
+            )
+        ),
+        None,
+    )
+    if local_elasticsearch_source is None:
+        raise ValueError("mutable observability log-sink Compose source is missing")
+    observability_composition = (
+        _stackctl.canonical_local_observability_log_sink_composition(
+            local_elasticsearch_source
+        )
+    )
+    selection = observability_composition["selection"]
     compose_digest = "sha256:" + hashlib.sha256(
         b"".join(
             len(path.relative_to(_stackctl.ROOT).as_posix().encode("utf-8")).to_bytes(8, "big")
@@ -626,6 +668,18 @@ def _dev_session_render_runtime_inputs(
         provider_binding_overlay_context=provider_binding_overlay_root,
         provider_binding_manifest_digest=provider_binding_manifest_digest,
     )
+    observability_execution_path = execution_compose_files[
+        compose_files.index(local_elasticsearch_source)
+    ]
+    observability_launch_environment = (
+        _stackctl._mutable_observability_log_sink_launch_environment(
+            execution_path=observability_execution_path,
+            composition=observability_composition,
+        )
+    )
+    observability_execution_digest = observability_launch_environment[
+        "QWQ_OBSERVABILITY_LOG_SINK_DIGEST"
+    ]
     portal_materialization = _stackctl._materialize_local_portal_root(
         topology, target, portal_root
     )
@@ -752,6 +806,7 @@ def _dev_session_render_runtime_inputs(
             "QWQ_PROVIDER_RUNTIME_DIGEST": str(
                 provider_composition["runtimeCompositionDigest"]
             ),
+            **observability_launch_environment,
             "QWQ_PRODUCT_TELEMETRY_AVAILABLE": "1",
             "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT": "http://elasticsearch:9200",
             "QWQ_COMPOSE_REC_POLICY_SOURCE": str(
@@ -797,16 +852,6 @@ def _dev_session_render_runtime_inputs(
         f"{mutable_digest.removeprefix('sha256:')[:16]}"
     )
 
-    elasticsearch = _stackctl.load_json_yaml(
-        _stackctl.ROOT
-        / "quwoquan_service/services/product-ops-service/deploy/local-elasticsearch.compose.yaml"
-    )
-    platforms = ((elasticsearch.get("x-qwq-package-elasticsearch") or {}).get("platforms") or {})
-    machine = os.uname().machine.lower()
-    selected_platform = "arm64" if machine in {"arm64", "aarch64"} else "amd64"
-    selection = platforms.get(selected_platform)
-    if not isinstance(selection, dict) or not str(selection.get("image") or ""):
-        raise ValueError("mutable Elasticsearch platform selection is invalid")
     environment_values.update(
         {
             "QWQ_COMPOSE_ELASTICSEARCH_IMAGE": str(selection["image"]),
@@ -855,6 +900,7 @@ def _dev_session_render_runtime_inputs(
         "composeDigest": compose_digest,
         "configurationDigest": configuration_digest,
         "providerRuntimeDigest": provider_composition["runtimeCompositionDigest"],
+        "observabilityLogSinkDigest": observability_execution_digest,
         "mediaLocalRef": media_local_ref,
         "mediaRoot": _stackctl.relpath(media_root),
         "tlsProfile": tls_profile_name,

@@ -168,15 +168,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "attestationRef",
-        "evidenceIndexRef"
+        "attestationRef"
       ],
       "properties": {
         "attestationRef": {
-          "type": "string",
-          "minLength": 1
-        },
-        "evidenceIndexRef": {
           "type": "string",
           "minLength": 1
         }

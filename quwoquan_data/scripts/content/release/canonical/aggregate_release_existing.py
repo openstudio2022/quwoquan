@@ -34,10 +34,6 @@ from content.release.canonical.release_uat_sample_plan import (
 from content.release.canonical.release_uat_sampling_authority import (
     load_release_uat_sampling_authority,
 )
-from content.release.canonical.reviewed_closure_aggregate import (
-    ReviewedClosureSelection,
-    revalidate_reviewed_closure_selection,
-)
 from content.release.model import DataSourceOwner
 from core.release_layout import (
     attestation_root,
@@ -137,7 +133,7 @@ def reuse_existing_aggregate_release(
     release_class: str,
     reviewed_closure_adoption: Mapping[str, Any] | None,
     adoption_output_root: Path | None,
-    reviewed_selection: ReviewedClosureSelection | None,
+    reviewed_selection: object | None,
     environment_selection: EnvironmentReleaseSelection | None,
     release_contents: list[dict[str, object]] | None,
     release_authors: list[dict[str, object]] | None,
@@ -299,28 +295,7 @@ def reuse_existing_aggregate_release(
             )
 
         media_manifest = _read_json(payload_file(final_root, "media_manifest.json"))
-        if reviewed_selection is not None:
-            expected_media_manifest = {
-                **reviewed_selection.media_manifest,
-                "releaseId": release_id,
-                "sourceOwner": DataSourceOwner.QWQ_DATA,
-            }
-            if media_manifest != expected_media_manifest:
-                raise ObjectTransactionError(
-                    "existing reviewed closure media manifest drifted"
-                )
-            if selected_merkle != objects_merkle(
-                reviewed_selection.source_release_root
-            ):
-                raise ObjectTransactionError(
-                    "existing reviewed closure object bytes drifted"
-                )
-            revalidate_reviewed_closure_selection(
-                reviewed_closure_adoption=reviewed_closure_adoption,
-                output_root=adoption_output_root,
-                selection=reviewed_selection,
-            )
-        else:
+        if True:
             expected_media_manifest = build_release_media_manifest_fn(
                 release_id=release_id,
                 post_refs=desired["posts"],

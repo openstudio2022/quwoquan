@@ -269,7 +269,7 @@ def scan_release_contract(
                 if isinstance(item, Mapping)
                 and str(item.get("creatorRef") or "").strip()
             )
-            # pool selection release（target_environment/all_publishable/milestone）
+            # explicit immutable cohort release
             # 的 creators 允许为 admitted 作者池全集，只要与 release 头 authors 一致；
             # 判据是 selectionScope 而非 targetEnvironment——环境无关 pool release
             # 没有 targetEnvironment 字段。

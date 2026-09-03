@@ -1,6 +1,6 @@
 """百科扩源契约的 registry 投影。
 
-sourceScreen、Local Cursor SDK source bridge 与 downloader 必须消费同一映射；
+sourceScreen、宿主 source bridge 与 downloader 必须消费同一映射；
 本模块不得维护来源枚举副本，只能投影 content_source_registry.yaml。
 """
 from __future__ import annotations

@@ -27,8 +27,22 @@ export QWQ_OUTPUT_ROOT
 QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${HOME}/.cache/quwoquan/deploy}"
 export QWQ_DEPLOY_WORK_ROOT
 ORIGINAL_LAUNCH_ARGUMENTS=("$@")
+QWQ_DEV_LAUNCH_HERMETIC=0
+for argument in "${ORIGINAL_LAUNCH_ARGUMENTS[@]}"; do
+  if [[ "$argument" == "--hermetic" ]]; then
+    QWQ_DEV_LAUNCH_HERMETIC=1
+    break
+  fi
+done
+# 开发默认直连当前 live worktree；--hermetic 与 app-content-uat 保留发布级流水线。
+if [[ "$QWQ_DEV_LAUNCH_HERMETIC" == "0" \
+   && "${QWQ_CANONICAL_LAUNCH_ACTOR:-}" != "app-content-uat" \
+   && -z "${QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST:-}" \
+   && ( -e "$ROOT_DIR/.git" || -L "$ROOT_DIR/.git" ) ]]; then
+  exec "$APP_DIR/scripts/device/dev_launch.sh" "${ORIGINAL_LAUNCH_ARGUMENTS[@]}"
+fi
 
-# Direct run.sh always re-execs from a frozen private source projection.
+# Hermetic direct run.sh always re-execs from a frozen private source projection.
 # app-content-uat already supplies its own candidate projection and therefore
 # skips this workspace-only wrapper.
 enter_workspace_launch_projection() {
@@ -628,6 +642,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     --mode=*)
       RUN_MODE="${1#*=}"
+      shift
+      ;;
+    --hermetic)
       shift
       ;;
     --ensure-runtime)

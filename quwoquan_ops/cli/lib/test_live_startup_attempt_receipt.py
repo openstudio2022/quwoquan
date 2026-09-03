@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from .data_execution_fleet import project_runtime_owned_ports
+from .runtime_port_ownership import project_runtime_owned_ports
 from .environment_topology import get_target, load_environment_topology
 from .output_paths import env_runs_root, target_process_dir
 from .port_manifest import load_port_manifest
@@ -53,6 +53,7 @@ _FIELDS = frozenset(
         "composeDigest",
         "configurationDigest",
         "providerRuntimeDigest",
+        "observabilityLogSinkDigest",
         "portProfile",
         "portBlock",
         "publishedPorts",
@@ -76,6 +77,7 @@ _IDENTITY_FIELDS = (
     "composeDigest",
     "configurationDigest",
     "providerRuntimeDigest",
+    "observabilityLogSinkDigest",
     "portProfile",
     "portBlock",
     "publishedPorts",
@@ -178,6 +180,7 @@ def validate_test_live_startup_attempt(
         "composeDigest",
         "configurationDigest",
         "providerRuntimeDigest",
+        "observabilityLogSinkDigest",
         "resolverHandoffDigest",
         "workspaceStatusDigest",
         "mutableStateDigest",
@@ -298,6 +301,7 @@ def _identity_from_plan(
         "composeDigest": plan.get("composeDigest"),
         "configurationDigest": plan.get("configurationDigest"),
         "providerRuntimeDigest": plan.get("providerRuntimeDigest"),
+        "observabilityLogSinkDigest": plan.get("observabilityLogSinkDigest"),
         "portProfile": plan.get("portProfile"),
         "portBlock": dict(plan.get("portBlock") or {}),
         "publishedPorts": _published_endpoint_documents(

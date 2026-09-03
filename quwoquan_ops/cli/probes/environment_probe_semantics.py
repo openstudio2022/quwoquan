@@ -181,6 +181,7 @@ def _content_feed_semantic_result(
 def _expected_release_post_ids(args: argparse.Namespace, check_name: str) -> set[str]:
     argument_names = {
         "content_feed": "expected_discovery_post_id",
+        "homepage_recommend": "expected_homepage_recommend_post_id",
         "video_book_feed": "expected_video_post_id",
         "premium_feed": "expected_premium_video_post_id",
     }
@@ -195,10 +196,13 @@ def _expected_release_post_ids(args: argparse.Namespace, check_name: str) -> set
 
 
 AUTHOR_POSTS_CHECK_NAME = "author_posts_contract"
+CREATOR_PROFILE_CHECK_NAME = "release_creator_profile"
 FEED_MEDIA_SLICES_CHECK_NAME = "feed_media_slices"
-FEED_MEDIA_SOURCE_CHECK_NAMES = frozenset(
-    {"content_feed", "video_book_feed", "premium_feed"}
+SIGNED_MEDIA_CHECK_NAME = "release_signed_media"
+PRIVATE_FEED_CHECK_NAMES = frozenset(
+    {"content_feed", "homepage_recommend", "video_book_feed", "premium_feed"}
 )
+FEED_MEDIA_SOURCE_CHECK_NAMES = PRIVATE_FEED_CHECK_NAMES
 
 
 def _media_origin(media_image_base_url: str) -> str:
@@ -332,12 +336,24 @@ def _search_semantic_issue(
     return None, len(hits)
 
 
+def _media_delivery_identity(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    parsed = urllib.parse.urlsplit(text)
+    path = parsed.path if parsed.scheme or parsed.netloc else text.partition("?")[0]
+    return path.strip().lstrip("/")
+
+
 def _release_sample_semantic_result(
     payload: str,
     *,
     carrier: str,
     read_object_id: str,
     expected_content_type: str,
+    expected_author_id: str = "",
+    expected_author_display_name: str = "",
+    expected_avatar_delivery_ref: str = "",
 ) -> tuple[str | None, str, str]:
     try:
         decoded = json.loads(payload)
@@ -354,4 +370,48 @@ def _release_sample_semantic_result(
         return f"response {id_field} is not the exact release sample", returned_id, returned_type
     if carrier != "homepage" and returned_type != expected_content_type:
         return "response contentType is not the exact release sample type", returned_id, returned_type
+    if expected_author_id and str(decoded.get("authorId") or "").strip() != expected_author_id:
+        return "response authorId is not the exact release creator", returned_id, returned_type
+    if (
+        expected_author_display_name
+        and str(decoded.get("authorDisplayName") or "").strip()
+        != expected_author_display_name
+    ):
+        return (
+            "response authorDisplayName is not the exact release creator",
+            returned_id,
+            returned_type,
+        )
+    observed_avatar = _media_delivery_identity(decoded.get("authorAvatarUrl"))
+    expected_avatar = _media_delivery_identity(expected_avatar_delivery_ref)
+    if expected_avatar and observed_avatar != expected_avatar:
+        return (
+            "response authorAvatarUrl is not the exact release avatar asset",
+            returned_id,
+            returned_type,
+        )
     return None, returned_id, returned_type
+
+
+def _release_creator_profile_semantic_result(
+    payload: str,
+    *,
+    expected_persona_id: str,
+    expected_display_name: str,
+    expected_avatar_delivery_ref: str,
+) -> tuple[str | None, str, str]:
+    try:
+        decoded = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        return f"response body is not valid JSON: {exc.msg}", "", ""
+    if not isinstance(decoded, dict):
+        return "response payload must be a JSON object", "", ""
+    persona_id = str(decoded.get("personaId") or "").strip()
+    avatar_ref = _media_delivery_identity(decoded.get("avatarUrl"))
+    if persona_id != expected_persona_id:
+        return "response personaId is not the exact release creator", persona_id, avatar_ref
+    if str(decoded.get("displayName") or "").strip() != expected_display_name:
+        return "response displayName is not the exact release creator", persona_id, avatar_ref
+    if avatar_ref != _media_delivery_identity(expected_avatar_delivery_ref):
+        return "response avatarUrl is not the exact release avatar asset", persona_id, avatar_ref
+    return None, persona_id, avatar_ref

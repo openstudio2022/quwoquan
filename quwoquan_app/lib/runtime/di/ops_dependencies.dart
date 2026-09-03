@@ -138,11 +138,19 @@ void initializeStartupTelemetryRuntime() {
   if (StartupTelemetryRuntime.instance.isInitialized) {
     return;
   }
+  // bootstrap recovery 在水合失败后也要安装同一 journal；此时 runtime env
+  // 不存在，取安全占位而不是让第二个异常掩盖原始水合失败原因。
+  String journalRuntimeEnv;
+  try {
+    journalRuntimeEnv = CloudRuntimeConfig.appRuntimeEnv;
+  } on CloudRuntimeConfigurationException {
+    journalRuntimeEnv = 'unhydrated';
+  }
   StartupTelemetryRuntime.instance.initialize(
     StartupTelemetryReporter(
       journal: StartupJournal(SharedPreferencesStartupJournalStore()),
       platform: platformWireName(currentAppPlatform),
-      runtimeEnv: CloudRuntimeConfig.appRuntimeEnv,
+      runtimeEnv: journalRuntimeEnv,
       appVersion: const String.fromEnvironment(
         'APP_VERSION',
         defaultValue: '0.0.0',

@@ -3363,18 +3363,6 @@ export const platformConfig = {
       "sensitive": false
     },
     {
-      "key": "sys.content.worker.concurrency",
-      "type": "int",
-      "owner": "platform-ops",
-      "default": 16,
-      "scope": "service",
-      "reload": "restart",
-      "rollout": "progressive",
-      "risk_level": "medium",
-      "ui_editable": false,
-      "sensitive": false
-    },
-    {
       "key": "sys.entity-service.content_service.base_url",
       "type": "string",
       "owner": "",
@@ -4609,6 +4597,42 @@ export const platformConfig = {
       "risk_level": "",
       "ui_editable": false,
       "sensitive": true
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.issuer",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.provider_commit",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
+    },
+    {
+      "key": "sys.platform-ops-service.human_authority.provider_version",
+      "type": "string",
+      "owner": "",
+      "default": null,
+      "scope": "workload",
+      "reload": "restart",
+      "rollout": "progressive",
+      "risk_level": "",
+      "ui_editable": false,
+      "sensitive": false
     },
     {
       "key": "sys.platform-ops-service.human_authority.role_mappings",

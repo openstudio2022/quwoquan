@@ -150,7 +150,6 @@ python3 -B quwoquan_ops/gate/verify_hotl_admission.py
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-005.t1
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-005.t2
 make verify-local-readiness
-python3 -B quwoquan_ops/gate/verify_workflow_resolution.py
 python3 -B quwoquan_ops/gate/verify_governance_pipeline_admission.py
 python3 quwoquan_ops/gate/verify_knowledge_asset_s0_migration.py
 python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
@@ -263,10 +262,8 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   bash quwoquan_service/scripts/runtime/packaging/verify_runtime_packaging.sh
   bash quwoquan_ops/environments/verify/verify_ff_config_contract.sh
   python3 quwoquan_ops/gate/verify_service_architecture.py
-  python3 quwoquan_service/scripts/runtime/reliabletask/verify_reliable_task_catalog.py
-  python3 quwoquan_service/scripts/runtime/reliabletask/verify_reliable_task_retention_policy.py
+  # Generic ReliableTask remains current; its module permission scope stays canonical.
   python3 quwoquan_service/scripts/runtime/packaging/verify_module_permission_scope.py
-  python3 quwoquan_service/scripts/runtime/reliabletask/verify_reliable_task_migration.py
   # topology 由 delivery-gate topology job / make gate 负责，避免重复
   bash quwoquan_ops/environments/verify/verify_deploy_kustomization.sh
   bash quwoquan_service/scripts/recommendation-service/verify_recommendation_service_contract.sh

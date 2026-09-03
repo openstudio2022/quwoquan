@@ -8,22 +8,16 @@
     "schema",
     "factId",
     "environment",
+    "acceptanceProfile",
     "target",
     "releaseId",
     "releaseDigest",
+    "importRunId",
+    "verifyRunId",
     "samplePlanRef",
     "samplePlanDigest",
-    "targetBindingRefs",
     "requiredRawResults",
     "dataReadiness",
-    "activeCas",
-    "lifecycleExit",
-    "providerReadiness",
-    "observabilityReadiness",
-    "rollbackReadiness",
-    "predecessorAcceptance",
-    "resourceFinalization",
-    "prodReleaseFacts",
     "createdAt",
     "sourceFingerprint"
   ],
@@ -33,6 +27,12 @@
     },
     "factId": {
       "$ref": "#/$defs/digest"
+    },
+    "acceptanceProfile": {
+      "enum": [
+        "environment_promotion",
+        "m1_api_consumer"
+      ]
     },
     "environment": {
       "enum": [
@@ -51,6 +51,15 @@
     "releaseDigest": {
       "$ref": "#/$defs/digest"
     },
+    "manifestDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "importRunId": {
+      "$ref": "#/$defs/identity"
+    },
+    "verifyRunId": {
+      "$ref": "#/$defs/identity"
+    },
     "samplePlanRef": {
       "$ref": "#/$defs/ref"
     },
@@ -59,7 +68,7 @@
     },
     "targetBindingRefs": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -121,6 +130,9 @@
       }
     },
     "dataReadiness": {
+      "$ref": "#/$defs/exactRef"
+    },
+    "consumerHealth": {
       "$ref": "#/$defs/exactRef"
     },
     "activeCas": {
@@ -424,6 +436,135 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "acceptanceProfile": {
+            "const": "environment_promotion"
+          }
+        },
+        "required": [
+          "acceptanceProfile"
+        ]
+      },
+      "then": {
+        "properties": {
+          "targetBindingRefs": {
+            "minItems": 1
+          }
+        },
+        "required": [
+          "targetBindingRefs",
+          "activeCas",
+          "lifecycleExit",
+          "providerReadiness",
+          "observabilityReadiness",
+          "rollbackReadiness",
+          "predecessorAcceptance",
+          "resourceFinalization",
+          "prodReleaseFacts"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "consumerHealth"
+              ]
+            },
+            {
+              "required": [
+                "manifestDigest"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "acceptanceProfile": {
+            "const": "m1_api_consumer"
+          }
+        },
+        "required": [
+          "acceptanceProfile"
+        ]
+      },
+      "then": {
+        "properties": {
+          "environment": {
+            "const": "alpha"
+          },
+          "target": {
+            "const": "alpha-local"
+          },
+          "requiredRawResults": {
+            "minItems": 16,
+            "maxItems": 16
+          },
+          "predecessorAcceptance": {
+            "type": "null"
+          },
+          "prodReleaseFacts": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "consumerHealth",
+          "manifestDigest"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "targetBindingRefs"
+              ]
+            },
+            {
+              "required": [
+                "activeCas"
+              ]
+            },
+            {
+              "required": [
+                "lifecycleExit"
+              ]
+            },
+            {
+              "required": [
+                "providerReadiness"
+              ]
+            },
+            {
+              "required": [
+                "observabilityReadiness"
+              ]
+            },
+            {
+              "required": [
+                "rollbackReadiness"
+              ]
+            },
+            {
+              "required": [
+                "predecessorAcceptance"
+              ]
+            },
+            {
+              "required": [
+                "resourceFinalization"
+              ]
+            },
+            {
+              "required": [
+                "prodReleaseFacts"
+              ]
+            }
+          ]
+        }
+      }
+    },
     {
       "if": {
         "properties": {

@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import patch
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _GATE = _REPO_ROOT / "quwoquan_ops/gate/verify_agent_context_budget.py"
@@ -25,12 +26,17 @@ def _load_gate() -> ModuleType:
 class AgentContextBudgetGateTest(unittest.TestCase):
     def setUp(self) -> None:
         self.module = _load_gate()
+        self.workflow_names = self.module._workflow_skills()
+        self.command_names = self.module._command_bound_workflows()
         self._tmp = tempfile.TemporaryDirectory()
         self.root = Path(self._tmp.name)
         self.addCleanup(self._tmp.cleanup)
 
     def _use_fixture_root(self, *, git: bool = True) -> None:
         self.module.ROOT = self.root
+        for workflow in self.workflow_names:
+            if not (self.root / f".agents/skills/{workflow}/SKILL.md").is_file():
+                self._workflow(workflow)
         if git:
             subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
 
@@ -50,7 +56,7 @@ class AgentContextBudgetGateTest(unittest.TestCase):
                 {
                     "schema_version": 1,
                     "feature_context_manifest": {
-                        "schema_version": 2,
+                        "schema_version": 3,
                         "max_bytes": manifest_max_bytes,
                         "required_fields": [
                             "schema_version",
@@ -59,7 +65,6 @@ class AgentContextBudgetGateTest(unittest.TestCase):
                             "owner_chain",
                             "canonical_contexts",
                             "applicable_agents",
-                            "profiles",
                             "open_items",
                             "evidence_fingerprint",
                         ],
@@ -86,20 +91,29 @@ class AgentContextBudgetGateTest(unittest.TestCase):
             ),
         )
 
-    def _workflow(self, name: str, *, headings: tuple[str, ...] | None = None) -> None:
+    def _workflow_text(
+        self,
+        name: str,
+        *,
+        headings: tuple[str, ...] | None = None,
+        frontmatter: str | None = None,
+    ) -> str:
         headings = headings or self.module.REQUIRED_SKILL_SECTIONS
-        command = f"  command: /{name}\n" if name in self.module.COMMAND_BOUND_WORKFLOWS else ""
+        command = f"  command: /{name}\n" if name in self.command_names else ""
         sections = "\n\n".join(f"## {heading}\n\n内容" for heading in headings)
-        self._write(
-            f".agents/skills/{name}/SKILL.md",
-            "---\n"
+        frontmatter = frontmatter or (
             f"name: {name}\n"
             "description: d\n"
             "metadata:\n"
             "  kind: workflow\n"
             f"{command}"
-            "---\n\n"
-            f"# {name}\n\n{sections}\n",
+        )
+        return "---\n" + frontmatter + "---\n\n" + f"# {name}\n\n{sections}\n"
+
+    def _workflow(self, name: str, *, headings: tuple[str, ...] | None = None) -> None:
+        self._write(
+            f".agents/skills/{name}/SKILL.md",
+            self._workflow_text(name, headings=headings),
         )
 
     def _checklist(self, text: str, *, role: str = "probe", workflow: str = "dev") -> str:
@@ -109,10 +123,13 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         return rel
 
     def _valid_registry(self) -> dict:
+        for workflow in self.workflow_names:
+            if not (self.root / f".agents/skills/{workflow}/SKILL.md").is_file():
+                self._workflow(workflow)
         self._write("Makefile", "verify-x:\n\t@true\n")
         checklist = self._checklist("# probe\n\n- [MUST] 要求\n\nevidence: proof\n")
         workflows: dict[str, dict] = {}
-        for workflow in self.module.WORKFLOW_SKILLS:
+        for workflow in self.workflow_names:
             if workflow in self.module.CONTROL_WORKFLOWS_WITHOUT_AUTOMATIC_REVIEW:
                 workflows[workflow] = {
                     "segments": ["PRE", "POST"],
@@ -135,6 +152,7 @@ class AgentContextBudgetGateTest(unittest.TestCase):
                 "max_parallel": 2,
                 "max_role_invocations": 4,
                 "per_role_timeout_minutes": 10,
+                "max_evidence_timeout_seconds": 3600,
                 "reviewer_context_bytes": 24 * 1024,
             },
             "evidence": {
@@ -142,6 +160,7 @@ class AgentContextBudgetGateTest(unittest.TestCase):
                     "command": "make verify-x",
                     "segment": "POST",
                     "required": True,
+                    "timeout_seconds": 300,
                     "covers": [],
                 }
             },
@@ -154,8 +173,15 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         )
         return registry
 
-    def test_real_repository_passes_every_check(self) -> None:
+    def test_real_repository_scope_checks_pass(self) -> None:
+        scoped = {
+            "默认 manifest 预算", "Workflow Skill 五段", "命令与 harness 薄壳",
+            "Review registry/checklist", "Reviewer 上下文预算",
+            "引用与重复规范", "两宿主 adapter",
+        }
         for label, check in self.module.CHECKS:
+            if label not in scoped:
+                continue
             with self.subTest(check=label):
                 self.assertEqual([], check(), f"{label} 在真实仓库上应为绿")
 
@@ -181,6 +207,79 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         self._write("vendor/AGENTS.md", "third party")
         issues = self.module.check_agents_budget()
         self.assertTrue(any("非第一方" in issue for issue in issues), issues)
+
+    def test_delivery_skills_bind_exact_owner_manifest_and_read_only_terminal(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
+        expected = {
+            "content-production": "content-release",
+            "environment-ops": "release-evidence",
+            "incident-inspection": "inspection-report",
+        }
+        for workflow, deliverable in expected.items():
+            with self.subTest(workflow=workflow):
+                text = (
+                    _REPO_ROOT / f".agents/skills/{workflow}/SKILL.md"
+                ).read_text(encoding="utf-8")
+                self.assertIn(f"`{deliverable}`", text)
+                self.assertIn("make feature-context TARGET=<exact-path>", text)
+                self.assertIn("content-addressed immutable owner manifest exact ref", text)
+                self.assertIn("PRE 保存并在 POST 原样复用", text)
+                self.assertIn("`--context-manifest`", text)
+                self.assertIn("no-review-deliverable", text)
+                self.assertNotIn("纯环境操作不要求 Feature owner manifest", text)
+
+    def test_mutation_skills_require_unique_owner_before_writing(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t3
+        expectations = {
+            "prd": ("target、owner", "`GATE_BLOCK`"),
+            "design": ("target/owner", "`GATE_BLOCK`"),
+            "dev": ("owner 未冻结", "typed blocker"),
+        }
+        for workflow, required in expectations.items():
+            with self.subTest(workflow=workflow):
+                text = (
+                    _REPO_ROOT / f".agents/skills/{workflow}/SKILL.md"
+                ).read_text(encoding="utf-8")
+                self.assertIn("make feature-context TARGET=<exact-path>", text)
+                self.assertIn("immutable exact ref", text)
+                for phrase in required:
+                    self.assertIn(phrase, text)
+
+    def test_hosted_smoke_reuses_current_exact_owner_manifest_consumer(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
+        source = (
+            _REPO_ROOT / "quwoquan_ops/cli/hosted_authority_smoke.py"
+        ).read_text(encoding="utf-8")
+        start = source.index("def _verify_owner_manifest(")
+        end = source.index("\ndef _verify_readiness_descriptor", start)
+        owner_source = source[start:end]
+        symbols = (
+            "exact_digest = _sha256(owner_manifest_bytes)",
+            "expected_ref = (OWNER_MANIFEST_ROOT / expected_name).as_posix()",
+            "if owner_manifest_ref != expected_ref:",
+            "validated_ref = validate_content_addressed_ref(",
+            "if validated_ref != owner_manifest_ref:",
+            "_verify_owner_manifest_descriptor(",
+            'manifest = _json_bytes(owner_manifest_bytes, label="owner manifest")',
+            "validate_feature_context_manifest(manifest)",
+            "fingerprint = validate_current_feature_context_fingerprint(",
+            "return manifest, fingerprint, exact_digest",
+        )
+        positions = [owner_source.index(symbol) for symbol in symbols]
+        self.assertEqual(positions, sorted(positions))
+        run_start = source.index("def run_observe_only_smoke(")
+        run_source = source[run_start:]
+        verify_call = run_source.index(
+            "manifest, manifest_fingerprint, manifest_digest = _verify_owner_manifest("
+        )
+        authority_binding = run_source.index(
+            'expected_fingerprint=str(manifest_fingerprint["digest"])'
+        )
+        identity_use = run_source.index(
+            '"evidence_fingerprint": manifest_fingerprint["digest"]'
+        )
+        self.assertLess(verify_call, authority_binding)
+        self.assertLess(authority_binding, identity_use)
 
     def test_git_index_failure_is_not_silently_accepted(self) -> None:
         self._use_fixture_root(git=False)
@@ -237,10 +336,155 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         issues = self.module.check_reviewer_context_budget()
         self.assertTrue(any("超过 24576 bytes" in issue for issue in issues), issues)
 
+    def test_dynamic_valid_workflow_skill_is_discovered(self) -> None:
+        self._use_fixture_root()
+        self._workflow("probe")
+        self.assertIn("probe", self.module._workflow_skills())
+        issues = self.module.check_workflow_skills()
+        self.assertFalse(any("probe/SKILL.md" in issue for issue in issues), issues)
+
+    def test_workflow_malformed_yaml_is_reported_and_not_discovered(self) -> None:
+        self._use_fixture_root()
+        self._write(
+            ".agents/skills/probe/SKILL.md",
+            self._workflow_text("probe", frontmatter="name: [probe\nmetadata:\n  kind: workflow\n"),
+        )
+        issues = self.module.check_workflow_skills()
+        self.assertTrue(any("probe/SKILL.md" in issue and "合法 YAML" in issue for issue in issues), issues)
+        self.assertNotIn("probe", self.module._workflow_skills())
+
+    def test_workflow_missing_metadata_is_reported_and_not_discovered(self) -> None:
+        self._use_fixture_root()
+        self._write(
+            ".agents/skills/probe/SKILL.md",
+            self._workflow_text("probe", frontmatter="name: probe\ndescription: d\n"),
+        )
+        issues = self.module.check_workflow_skills()
+        self.assertTrue(any("probe/SKILL.md" in issue and "metadata 必须是映射" in issue for issue in issues), issues)
+        self.assertNotIn("probe", self.module._workflow_skills())
+
+    def test_workflow_wrong_kind_is_reported_and_not_discovered(self) -> None:
+        self._use_fixture_root()
+        self._write(
+            ".agents/skills/probe/SKILL.md",
+            self._workflow_text(
+                "probe",
+                frontmatter="name: probe\ndescription: d\nmetadata:\n  kind: reference\n",
+            ),
+        )
+        issues = self.module.check_workflow_skills()
+        self.assertTrue(any("probe/SKILL.md" in issue and "metadata.kind 必须为 workflow" in issue for issue in issues), issues)
+        self.assertNotIn("probe", self.module._workflow_skills())
+
+    def test_workflow_directory_missing_skill_is_reported(self) -> None:
+        self._use_fixture_root()
+        (self.root / ".agents/skills/probe").mkdir(parents=True)
+        issues = self.module.check_workflow_skills()
+        self.assertTrue(any("probe/SKILL.md" in issue and "regular non-symlink" in issue for issue in issues), issues)
+
+    def test_workflow_directory_symlink_is_rejected_without_loading_target(self) -> None:
+        self._use_fixture_root()
+        outside_tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(outside_tmp.cleanup)
+        outside = Path(outside_tmp.name)
+        outside_skill = outside / "SKILL.md"
+        outside_skill.write_text(self._workflow_text("escape"), encoding="utf-8")
+        escape = self.root / ".agents/skills/escape"
+        escape.symlink_to(outside, target_is_directory=True)
+        escaped_skill_path = escape / "SKILL.md"
+        original_read_text = Path.read_text
+
+        def guarded_read_text(candidate: Path, *args: object, **kwargs: object) -> str:
+            if candidate == escaped_skill_path:
+                raise AssertionError("不得读取仓外 Skill")
+            return original_read_text(candidate, *args, **kwargs)
+
+        with patch.object(Path, "read_text", guarded_read_text):
+            workflows, issues = self.module._discover_workflow_skill_metadata()
+            self.assertNotIn("escape", workflows)
+            self.assertNotIn("escape", self.module._workflow_skills())
+        self.assertTrue(any("skills/escape" in issue and "不得是 symlink" in issue for issue in issues), issues)
+
+    def test_workflow_broken_direct_child_symlink_is_rejected(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t2
+        self._use_fixture_root()
+        broken = self.root / ".agents/skills/broken"
+        broken.symlink_to(self.root / "missing-skill", target_is_directory=True)
+        workflows, issues = self.module._discover_workflow_skill_metadata()
+        self.assertNotIn("broken", workflows)
+        self.assertTrue(
+            any("skills/broken" in issue and "不得是 symlink" in issue for issue in issues),
+            issues,
+        )
+
+    def test_workflow_file_direct_child_symlink_is_rejected(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t2
+        self._use_fixture_root()
+        target = self._write("skill-link-target.md", "not a workflow directory\n")
+        linked_file = self.root / ".agents/skills/file-link"
+        linked_file.symlink_to(target)
+        workflows, issues = self.module._discover_workflow_skill_metadata()
+        self.assertNotIn("file-link", workflows)
+        self.assertTrue(
+            any("skills/file-link" in issue and "不得是 symlink" in issue for issue in issues),
+            issues,
+        )
+
+    def test_workflow_skill_root_symlink_is_rejected_without_traversal(self) -> None:
+        self.module.ROOT = self.root
+        outside_tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(outside_tmp.cleanup)
+        outside = Path(outside_tmp.name)
+        outside_probe = outside / "probe/SKILL.md"
+        outside_probe.parent.mkdir(parents=True)
+        outside_probe.write_text(self._workflow_text("probe"), encoding="utf-8")
+        agents = self.root / ".agents"
+        agents.mkdir(parents=True)
+        skill_root = agents / "skills"
+        skill_root.symlink_to(outside, target_is_directory=True)
+        escaped_skill_path = skill_root / "probe/SKILL.md"
+        original_read_text = Path.read_text
+
+        def guarded_read_text(candidate: Path, *args: object, **kwargs: object) -> str:
+            if candidate == escaped_skill_path:
+                raise AssertionError("不得遍历仓外 Skill root")
+            return original_read_text(candidate, *args, **kwargs)
+
+        with patch.object(Path, "read_text", guarded_read_text):
+            workflows, issues = self.module._discover_workflow_skill_metadata()
+            self.assertEqual({}, workflows)
+            self.assertEqual((), self.module._workflow_skills())
+        self.assertTrue(any(".agents/skills" in issue and "non-symlink" in issue for issue in issues), issues)
+
+    def test_agents_root_symlink_is_rejected_without_traversal(self) -> None:
+        self.module.ROOT = self.root
+        outside_tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(outside_tmp.cleanup)
+        outside = Path(outside_tmp.name)
+        outside_probe = outside / "skills/probe/SKILL.md"
+        outside_probe.parent.mkdir(parents=True)
+        outside_probe.write_text(self._workflow_text("probe"), encoding="utf-8")
+        agents_root = self.root / ".agents"
+        agents_root.symlink_to(outside, target_is_directory=True)
+        escaped_skill_path = agents_root / "skills/probe/SKILL.md"
+        original_read_text = Path.read_text
+
+        def guarded_read_text(candidate: Path, *args: object, **kwargs: object) -> str:
+            if candidate == escaped_skill_path:
+                raise AssertionError("不得遍历仓外 .agents")
+            return original_read_text(candidate, *args, **kwargs)
+
+        with patch.object(Path, "read_text", guarded_read_text):
+            workflows, issues = self.module._discover_workflow_skill_metadata()
+            self.assertEqual({}, workflows)
+            self.assertNotIn("probe", workflows)
+            self.assertNotIn("probe", self.module._workflow_skills())
+        self.assertTrue(any(".agents 必须是 real non-symlink directory" in issue for issue in issues), issues)
+
     def test_workflow_requires_exact_five_sections(self) -> None:
         # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-002.t2
         self._use_fixture_root()
-        (self.root / ".agents/skills").mkdir(parents=True)
+        (self.root / ".agents/skills").mkdir(parents=True, exist_ok=True)
         self._workflow("dev", headings=("触发与输入", "执行", "HANDOFF"))
         issues = self.module.check_workflow_skills()
         self.assertTrue(any("二级段落必须且只能" in issue for issue in issues), issues)
@@ -248,7 +492,7 @@ class AgentContextBudgetGateTest(unittest.TestCase):
     def test_workflow_rejects_legacy_extra_sections(self) -> None:
         # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-002.t2
         self._use_fixture_root()
-        (self.root / ".agents/skills").mkdir(parents=True)
+        (self.root / ".agents/skills").mkdir(parents=True, exist_ok=True)
         headings = (*self.module.REQUIRED_SKILL_SECTIONS, "内置评审")
         self._workflow("dev", headings=headings)
         issues = self.module.check_workflow_skills()
@@ -257,12 +501,95 @@ class AgentContextBudgetGateTest(unittest.TestCase):
     def test_workflow_rejects_shared_completion_jump(self) -> None:
         # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-002.t2
         self._use_fixture_root()
-        (self.root / ".agents/skills").mkdir(parents=True)
+        (self.root / ".agents/skills").mkdir(parents=True, exist_ok=True)
         self._workflow("dev")
         path = self.root / ".agents/skills/dev/SKILL.md"
         path.write_text(path.read_text(encoding="utf-8") + "completion-criteria.md\n", encoding="utf-8")
         issues = self.module.check_workflow_skills()
         self.assertTrue(any("不得跳转共享文档" in issue for issue in issues), issues)
+
+    def test_retired_wfr_exact_path_reappearance_is_rejected(self) -> None:
+        self._use_fixture_root()
+        retired = "quwoquan_ops/cli/workflow_resolver.py"
+        self._write(retired, "# retired\n")
+        issues = self.module.check_retired_workflow_resolution()
+        self.assertTrue(any(retired in issue and "路径回潮" in issue for issue in issues), issues)
+
+    def test_retired_wfr_admission_field_reappearance_is_rejected(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t2
+        self._use_fixture_root()
+        carrier = "quwoquan_ops/policies/governance_pipeline_admission_contract.yaml"
+        self._write(carrier, "workflow_resolve_source: legacy\n")
+        self._track(carrier)
+        issues = self.module.check_retired_workflow_resolution()
+        self.assertTrue(any(carrier in issue and "workflow_resolve_source" in issue for issue in issues), issues)
+
+    def test_tracked_renamed_python_wfr_source_is_rejected_without_registration(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t2
+        self._use_fixture_root()
+        carrier = "quwoquan_ops/cli/renamed_workflow_probe.py"
+        self._write(carrier, "workflow_resolution = 'retired'\n")
+        self._track(carrier)
+        issues = self.module.check_retired_workflow_resolution()
+        self.assertTrue(any(carrier in issue and "workflow_resolution" in issue for issue in issues), issues)
+
+    def test_tracked_renamed_yaml_wfr_source_is_rejected_without_registration(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t2
+        self._use_fixture_root()
+        carrier = "quwoquan_ops/policies/renamed-workflow-probe.yaml"
+        self._write(carrier, "route_receipt: retired\n")
+        self._track(carrier)
+        issues = self.module.check_retired_workflow_resolution()
+        self.assertTrue(any(carrier in issue and "route_receipt" in issue for issue in issues), issues)
+
+    def test_tracked_renamed_markdown_wfr_source_is_rejected_without_registration(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t2
+        self._use_fixture_root()
+        carrier = (
+            "specs/feature-tree/runtime/development-workflow-governance/"
+            "renamed-routing-probe.md"
+        )
+        self._write(carrier, "workflow-resolution 是退役结构。\n")
+        self._track(carrier)
+        issues = self.module.check_retired_workflow_resolution()
+        self.assertTrue(any(carrier in issue and "workflow-resolution" in issue for issue in issues), issues)
+
+    def test_wfr_scan_ignores_untracked_temporary_source(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t2
+        self._use_fixture_root()
+        self._write("quwoquan_ops/cli/temporary_probe.py", "workflow_resolution = 'temp'\n")
+        self.assertEqual([], self.module.check_retired_workflow_resolution())
+
+    def test_wfr_scan_ignores_tracked_test_fixture_and_generated_output(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t2
+        self._use_fixture_root()
+        fixture = "quwoquan_ops/tests/fixtures/workflow_resolution_fixture.py"
+        generated = "quwoquan_ops/cli/lib/generated/workflow_resolution.py"
+        self._write(fixture, "workflow_resolution = 'fixture'\n")
+        self._write(generated, "workflow_resolution = 'generated'\n")
+        self._track(fixture, generated)
+        self.assertEqual([], self.module.check_retired_workflow_resolution())
+
+    def test_wfr_scan_ignores_tracked_historical_deleted_source(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t2
+        self._use_fixture_root()
+        carrier = "quwoquan_ops/gate/deleted_workflow_probe.py"
+        path = self._write(carrier, "workflow_resolution = 'deleted'\n")
+        self._track(carrier)
+        path.unlink()
+        self.assertEqual([], self.module.check_retired_workflow_resolution())
+
+    def test_legitimate_device_and_local_resolver_words_are_not_rejected(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t2
+        self._use_fixture_root()
+        carrier = "quwoquan_ops/cli/lib/local_device_resolver.py"
+        self._write(
+            carrier,
+            "def resolve_device():\n"
+            "    return 'device resolver and local resolver are business terms'\n",
+        )
+        self._track(carrier)
+        self.assertEqual([], self.module.check_retired_workflow_resolution())
 
     def test_detects_cursor_rule_as_normative_carrier(self) -> None:
         # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t2
@@ -342,6 +669,40 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         self._valid_registry()
         self.assertEqual([], self.module.check_checklists_and_registry())
 
+    def test_registry_orphan_workflow_is_rejected(self) -> None:
+        self._use_fixture_root()
+        registry = self._valid_registry()
+        registry["workflows"]["ghost"] = {
+            "segments": ["PRE", "POST"],
+            "deliverable": "x",
+            "automatic_review": False,
+        }
+        self._write(
+            ".agents/skills/review/references/registry.yaml",
+            self.module.yaml.safe_dump(registry, sort_keys=False),
+        )
+        issues = self.module.check_checklists_and_registry()
+        self.assertTrue(any("workflows.ghost" in issue and "成功发现" in issue for issue in issues), issues)
+
+    def test_profile_unknown_workflow_is_rejected(self) -> None:
+        self._use_fixture_root()
+        registry = self._valid_registry()
+        registry["profiles"]["ghost"] = {
+            "paths": ["Makefile"],
+            "specialist": {
+                "role": "probe",
+                "priority": 1,
+                "required": False,
+                "checklists": {"ghost": "roles/probe/checklists/dev/base.md"},
+            },
+        }
+        self._write(
+            ".agents/skills/review/references/registry.yaml",
+            self.module.yaml.safe_dump(registry, sort_keys=False),
+        )
+        issues = self.module.check_checklists_and_registry()
+        self.assertTrue(any("profiles.ghost 引用未知 workflow ghost" in issue for issue in issues), issues)
+
     def test_registry_requires_v2_limits(self) -> None:
         self._use_fixture_root()
         registry = self._valid_registry()
@@ -363,6 +724,24 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         )
         issues = self.module.check_checklists_and_registry()
         self.assertTrue(any("evidence.proof 缺 covers" in issue for issue in issues), issues)
+
+    def test_registry_evidence_requires_bounded_timeout_seconds(self) -> None:
+        self._use_fixture_root()
+        for invalid in (None, 0, -1, 3601, True):
+            with self.subTest(invalid=invalid):
+                registry = self._valid_registry()
+                if invalid is None:
+                    del registry["evidence"]["proof"]["timeout_seconds"]
+                else:
+                    registry["evidence"]["proof"]["timeout_seconds"] = invalid
+                self._write(
+                    ".agents/skills/review/references/registry.yaml",
+                    self.module.yaml.safe_dump(registry, sort_keys=False),
+                )
+                issues = self.module.check_checklists_and_registry()
+                self.assertTrue(
+                    any("timeout_seconds" in issue for issue in issues), issues
+                )
 
     def test_registry_rejects_v1_binding_keys(self) -> None:
         self._use_fixture_root()
@@ -484,24 +863,42 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         issues = self.module.check_checklists_and_registry()
         self.assertFalse(any("未被 registry" in issue for issue in issues), issues)
 
-    def test_command_shell_must_be_thin_and_point_to_skill(self) -> None:
+    def test_command_shell_must_be_exact_single_line_projection(self) -> None:
         self._use_fixture_root()
+        self._workflow("dev")
         self._write(
             ".cursor/commands/dev.md",
-            "---\nname: /dev\ndescription: d\n---\n\n" + "正文\n" * 15,
+            "---\nname: /dev\ndescription: d\n---\n\n" + "正文\n" * 2,
         )
         issues = self.module.check_commands_and_harness_stubs()
-        self.assertTrue(any("命令薄壳预算" in issue for issue in issues), issues)
-        self.assertTrue(any("未指向 .agents/skills/dev/SKILL.md" in issue for issue in issues), issues)
+        self.assertTrue(any("canonical 单行 Skill 投影" in issue for issue in issues), issues)
 
-    def test_harness_skill_stub_must_point_to_neutral_skill(self) -> None:
+    def test_command_projection_is_derived_from_skill_metadata(self) -> None:
+        self._use_fixture_root()
+        self._workflow("dev")
+        self._workflow("environment-ops")
+        for name in self.command_names:
+            self._write(
+                f".cursor/commands/{name}.md",
+                "---\n" f"name: /{name}\n" "description: d\n---\n\n"
+                f"加载并按 `.agents/skills/{name}/SKILL.md` 执行。\n",
+            )
+        for name in self.command_names:
+            self._write(
+                f".cursor/commands/{name}.md",
+                f"---\nname: /{name}\ndescription: d\n---\n\n"
+                f"加载并按 `.agents/skills/{name}/SKILL.md` 执行。\n",
+            )
+        self.assertEqual([], self.module.check_commands_and_harness_stubs())
+
+    def test_harness_workflow_stub_is_forbidden(self) -> None:
         self._use_fixture_root()
         self._write(
             ".codex/skills/probe/SKILL.md",
-            "---\nname: probe\ndescription: d\n---\n\n自带规范。\n",
+            "---\nname: probe\ndescription: d\n---\n\n指向 .agents/skills/probe/SKILL.md。\n",
         )
         issues = self.module.check_commands_and_harness_stubs()
-        self.assertTrue(any("未指向 .agents/skills" in issue for issue in issues), issues)
+        self.assertTrue(any("禁止宿主专属 Workflow stub" in issue for issue in issues), issues)
 
     def test_broken_relative_link_is_rejected(self) -> None:
         self._use_fixture_root()

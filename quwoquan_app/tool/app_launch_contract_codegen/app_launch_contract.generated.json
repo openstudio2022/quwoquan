@@ -1,10 +1,10 @@
 {
   "schema": "qwq.app-launch-contract.generated",
-  "sourceDigest": "sha256:edcb4f0bd745d5d751cfaba1f37e5d6dd1319b5324e148fd39a77ebf2892a015",
+  "sourceDigest": "sha256:b785d8b40858ba194fc0b7a0db07b39835ebb9bb56f6b96dd8a789af4dbbf7e1",
   "sources": [
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml",
-      "sha256": "sha256:eac5260bc4c96a638be83488020d1622f6e37397b669c818b51a5a690a4d149b"
+      "sha256": "sha256:0fca2fecf5d9cd03ee1a7a6cf133bc789b1bab2e556f69f09fe40ce2ce46d949"
     },
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml",
@@ -46,7 +46,6 @@
   },
   "launchProvenances": [
     "canonical_launcher",
-    "workspace_flutter_run",
     "workspace_ide_debug",
     "release_package",
     "hot_restart",
@@ -1947,7 +1946,6 @@
         "description": "flutter run、ADB/Xcode 直装与本机可安装 Debug 制品。",
         "launch_provenances": [
           "canonical_launcher",
-          "workspace_flutter_run",
           "workspace_ide_debug",
           "hot_restart",
           "icon_cold_launch"
@@ -1994,7 +1992,6 @@
         "description": "登记设备 Development/Ad Hoc 分发。",
         "launch_provenances": [
           "canonical_launcher",
-          "workspace_flutter_run",
           "workspace_ide_debug",
           "release_package",
           "icon_cold_launch"
@@ -2014,7 +2011,6 @@
         "description": "Simulator/Emulator 安装制品；Flutter iOS simulator 只支持 Debug，iOS AOT Release 必须编译 iphoneos 制品且不能用 simulator 冒充。",
         "launch_provenances": [
           "canonical_launcher",
-          "workspace_flutter_run",
           "workspace_ide_debug",
           "release_package",
           "icon_cold_launch"
@@ -2059,7 +2055,6 @@
     ],
     "launch_provenances": [
       "canonical_launcher",
-      "workspace_flutter_run",
       "workspace_ide_debug",
       "release_package",
       "hot_restart",

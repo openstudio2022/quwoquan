@@ -55,12 +55,12 @@ class CandidateOwnedElasticsearchGovernanceTest(unittest.TestCase):
         self.assertIn("canonical storage view", issues[0])
         self.assertIn("keyset drifted", issues[0])
 
-    def test_data_controller_uses_data_owned_run_manifest_writer(self) -> None:
+    def test_data_runtime_uses_data_owned_run_manifest_writer(self) -> None:
         issues: list[str] = []
 
         GATE._require_text(
-            ROOT / "quwoquan_data/scripts/content/execution/controller/orchestrator.py",
-            ('"repo" / "observability"', "write_data_run_manifest"),
+            ROOT / "quwoquan_data/scripts/core/runtime_observability.py",
+            ('"repo"', "write_data_run_manifest"),
             issues,
         )
 

@@ -1,6 +1,5 @@
 package auth
 
-// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020
 // spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
 //
 // 研究态能力面收敛（DEC-032）：research 身份由服务端签发的 principal role 承载，

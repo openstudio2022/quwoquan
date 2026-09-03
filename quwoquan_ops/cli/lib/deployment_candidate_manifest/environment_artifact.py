@@ -264,6 +264,12 @@ def _runtime_topology_digest(
         raise ValueError("environmentArtifact runtime topology is unreadable") from exc
     if not isinstance(manifest, dict):
         raise TypeError("environmentArtifact runtime topology must be an object")
+    from quwoquan_ops.cli.lib.runtime_topology_package import (
+        SCHEMA as RUNTIME_TOPOLOGY_SCHEMA,
+    )
+
+    if manifest.get("schema") != RUNTIME_TOPOLOGY_SCHEMA:
+        raise ValueError("environmentArtifact runtime topology schema mismatch")
     if (
         manifest.get("environment") != expected_environment
         or manifest.get("target") != expected_target
