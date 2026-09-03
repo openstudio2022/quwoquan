@@ -14,7 +14,7 @@
 
 ### In Scope
 
-- 编辑后的短时反馈、持久待办队列和可选择的 focused check。
+- 显式 readiness 命令、持久 advisory 队列、可选择的 focused check，以及保留作未来/显式 producer 的 after-edit 脚本。
 - `fast_green`、`scope_ready`、`release_ready` 三种逐级就绪状态。
 - 基于 canonical EvidenceFingerprint 的精确输入缓存、回执新鲜度与资源互斥。
 - Go、Python、Dart、Portal 与 spec/contract 的本地影响规划和执行。
@@ -41,12 +41,13 @@
 - 规划、运行、缓存与回执必须复用 canonical EvidenceFingerprint，覆盖 tracked、untracked、deleted、renamed 与 symlink 的实际内容身份。
 - source、lockfile、toolchain、command 或 owner manifest 任一变化都必须 cache miss；运行期间输入漂移必须使本次结果失效。
 - PASS cache 只可按 exact-input 复用；同一资源的执行必须持有本地锁，不能以并发成功覆盖失败或漂移。
-- deferred queue 必须持久化且可检查，不能把本地可执行工作留给 GitHub 后继续声称范围就绪。
+- deferred queue 必须持久化且可检查；在真实宿主 producer 与消费 SLO 闭合前，contract 将 `exact-pending` 与 `foreign-pending` 都标为 advisory，二者必须出现在 receipt/inspect 中但不得阻断显式 `scope`/`release`。显式 readiness 的 required checks 与 Review admission 仍 fail-closed。
 
 <a id="req-003"></a>
 ### REQ-003 Git hook 只做边界检查，回执在准出消费
 
-- 硬门只在准出（lane→`dev1.0` PR、交接、发布）。本地 git hooks 不消费 `scope_ready`/`release_ready` 回执，也不自动运行全面测试：pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界、branch policy），失败时只给出唯一恢复命令；pre-push 只运行 branch policy，阻断直推 `dev1.0`/`main` 与非白名单分支。
+- 硬门只在准出（lane→`dev1.0` PR、交接、发布）。本地 git hooks 不消费 `scope_ready`/`release_ready` 回执，也不自动运行全面测试：pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），失败时只给出唯一恢复命令；pre-push 只运行 branch policy：普通 lane push 只校验同名远端，不要求同时推送全部 lane；canonical activation 为 `active` 时阻断直推 `dev1.0`/`main`，并只放行可证明的受管 system fast-forward backsync。
+- `--local-commit` 必须只校验当前 HEAD 非 detached、Git authority 可读且分支属于 `allowed_local_branches`，不得枚举或治理其他 local/remote-tracking refs；无参数默认模式继续执行全 ref 治理，`--pre-push` 必须消费 canonical activation state。L0 `commit_gate.sh` 的提交前 branch 检查也必须使用 `--local-commit`。
 - `scope_ready`/`release_ready` 仍由显式 CLI 产出并绑定精确输入 fingerprint，供 Skill 报告、交接单与 lane→`dev1.0` PR 说明消费；PR 准出由 CI Delivery Gate 重新执行 required checks，不信任本地回执。
 - staged 中某个已修改文件继续改变内容时，即使 `git status` 文本不变，也必须判定旧回执失效。
 
@@ -70,8 +71,9 @@
 ### GWT-002 deferred 与执行失败不能升级就绪
 
 - GIVEN planner 产生本地 focused、compile/build 或 release 工作。
-- WHEN 任一 required check 失败、worker/hook 异常或队列仍有 deferred。
+- WHEN 任一 required check 或 Review admission 失败。
 - THEN 不生成 `scope_ready` 或 `release_ready` PASS 回执。
+- AND queue backlog（包括 exact candidate pending）仅作为 receipt/inspect advisory 可见；显式 worker 失败不生成 PASS，但 backlog 本身不阻断 scope/release。
 - AND Portal 范围必须真实执行 `npm test` 与 `npm run build` 后才能范围就绪。
 
 <a id="gwt-003"></a>
@@ -79,7 +81,8 @@
 
 - GIVEN 开发者在 lane worktree 上暂存改动并提交或推送。
 - WHEN pre-commit 或 pre-push 运行。
-- THEN pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界、branch policy），pre-push 只运行 branch policy；两者都不读取 readiness 回执，秒级完成。
+- THEN pre-commit 只运行 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），pre-push 只运行既有 `--pre-push` branch policy；普通 lane push 不要求 all lanes，active 集成分支的 direct push 被拒绝，可证明的 system fast-forward backsync 可通过；两者都不读取 readiness 回执，秒级完成。
+- AND 合法 current lane 即使存在非法陈旧 local/remote-tracking refs 也通过 `--local-commit`；非法当前分支、detached HEAD 或 Git authority 不可读必须失败；无参数默认模式仍拒绝额外 refs。
 - AND 任一边界检查失败都阻断并只返回一个稳定 recovery。hook 不读取 readiness receipt、也不输出 readiness PASS，缺少 `scope_ready`/`release_ready` 不构成 lane 提交或推送的阻断理由。
 
 ## 6. 依赖
@@ -97,6 +100,6 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：after-edit hook 能短时入队但当前没有可靠的宿主 idle 触发，队列可长期停留在 `PENDING`；这不应阻断普通 Skill 或用户指令，但会延迟 L0/L1 反馈并诱发人工反复执行重型检查。
-- 完成判定：`GWT-002` 增加可执行子句，证明宿主 idle 或等价受管触发会幂等启动一次 bounded worker、积压量与最老入队时间可见、失败保留 typed pending 且不会伪造 `scope_ready` / `release_ready`。
-- 依赖：Cursor/Codex 可用的 idle/session 生命周期事件与 `local_readiness.py worker --once`。
+- 影响或价值：Cursor 没有 after-edit hook，Codex PostToolUse 当前也未接线且本机无真实 Codex smoke；自动 edit enqueue 已停用，队列没有受管自动 consumer，历史或显式入队项可长期停留在 `PENDING`。因此队列在本能力阶段只作 advisory，不阻断普通 Skill、scope 或 release。
+- 完成判定：真实 Cursor/Codex 宿主 smoke 证明 edit producer 的输入/输出协议受支持，并证明 idle 或等价受管 consumer 在声明 SLO 内幂等启动 bounded worker；随后才可通过新 contract 版本重新评估 queue enforcement。`GWT-002.t3..t4` 持续证明积压量、最老入队时间、`exact-pending`/`foreign-pending` 与失败 typed pending 可见且不伪造 PASS。
+- 依赖：Cursor/Codex 可验证的 edit/idle 生命周期事件、真实 Codex smoke，以及现有 `local_readiness.py enqueue|worker --once|inspect` 显式入口。

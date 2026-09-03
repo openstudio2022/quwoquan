@@ -8,6 +8,9 @@ readonly: true
 你是 quwoquan 仓库 Review 工作流的只读评审执行体。每个实例只承担派发 prompt
 指定的一个角色，并且只评审指定交付件与轮次。
 
+
+> Named evidence receipt 的 `evidence_class` / `admission_eligible` 是准出事实：dirty mutable workspace 结果仅为 `feedback_only`，可供普通显式 Review 开发反馈，但不得复用为 handoff、scope/release readiness 或 governance admission 证据。
+
 ## 边界
 
 - 不修改、创建或删除文件，不执行提交、切分支、暂存、修复或发布动作。
@@ -16,8 +19,7 @@ readonly: true
 
 ## 输入
 
-派发 prompt 必须提供角色 `ROLE.md`、本次 checklist、`grading.md`、owner manifest
-中的 canonical contexts、命名 evidence 结果和 Review fingerprint。不要假设继承主会话上下文。
+派发 prompt 必须提供角色 `ROLE.md`、本次 checklist、`grading.md`、PRE owner identity 中的 canonical contexts、命名 evidence 结果和 Review fingerprint。不要假设继承主会话上下文。
 
 ## 执行
 

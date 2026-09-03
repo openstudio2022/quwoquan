@@ -11,6 +11,8 @@
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-002.t5
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-002.t6
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-002.t7
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-002.t8
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-002.t9
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-003.t1
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-003.t2
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#gwt-003.t3
@@ -33,7 +35,6 @@ import os
 import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
@@ -54,6 +55,11 @@ AUTHZ_SCRIPT = ROOT / "quwoquan_ops/hooks/worktree_authz_guard.py"
 INSTALL_SCRIPT = ROOT / "quwoquan_ops/hooks/run_install_hooks.sh"
 GATE_SCRIPT = ROOT / "quwoquan_ops/gate/verify_local_worktree_lifecycle.py"
 REMINDER_GATE = ROOT / "quwoquan_ops/hooks/worktree_session_reminder_gate.sh"
+REMINDER_SCRIPT = ROOT / "quwoquan_ops/hooks/worktree_merge_reminder.py"
+CURSOR_HOOKS = ROOT / ".cursor/hooks.json"
+CODEX_HOOKS = ROOT / ".codex/hooks.json"
+POST_COMMIT = ROOT / "quwoquan_ops/hooks/post-commit"
+SPEC = ROOT / "specs/feature-tree/runtime/system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md"
 ALLOWED = frozenset({"dev1.0", "main", "lane/product-mainline", "lane/data-engineering", "lane/engineering", "lane/ops", "lane/small-fix", "lane/refactor"})
 
 
@@ -84,13 +90,17 @@ def _detect(command: str) -> guard.Detection | None:
             "clone",
         ),
         (
-            "git clone --depth 1 --origin upstream "
-            "https://github.example.invalid/example/quwoquan.git /tmp/y",
+            (
+                "git clone --depth 1 --origin upstream "
+                "https://github.example.invalid/example/quwoquan.git /tmp/y"
+            ),
             "clone",
         ),
         (
-            "git clone --branch=main --depth=1 "
-            "https://github.example.invalid/example/quwoquan.git /tmp/y",
+            (
+                "git clone --branch=main --depth=1 "
+                "https://github.example.invalid/example/quwoquan.git /tmp/y"
+            ),
             "clone",
         ),
     ],
@@ -373,26 +383,39 @@ def test_gwt_002_t3_threshold_splits_soft_and_strong(policy) -> None:
     assert summary["overdue"] == 1
 
 
-def test_gwt_002_t4_dedup_never_suppresses_new_overdue(policy) -> None:
-    """提交后必提醒；会话按间隔去重；新超期项立即穿透；状态丢失只多提醒一次。"""
-    now = 1_000_000_000
-    interval = policy.reminder_min_interval_hours
-    recent = {"at": now - 60, "overduePaths": ["/tmp/known"]}
-
-    assert reminder.should_emit(recent, reason="commit", overdue_paths=[], interval_hours=interval, now=now) is True
-    assert (
-        reminder.should_emit(recent, reason="session", overdue_paths=["/tmp/known"], interval_hours=interval, now=now)
-        is False
+def test_gwt_002_t4_post_commit_mark_due_skips_policy_inventory_and_git(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """post-commit 窄路径只原子写 due marker，不得加载完整判定依赖。"""
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    monkeypatch.setattr(
+        inventory, "load_policy", lambda: (_ for _ in ()).throw(AssertionError("policy loaded"))
     )
-    assert (
-        reminder.should_emit(recent, reason="session", overdue_paths=["/tmp/new"], interval_hours=interval, now=now)
-        is True
-    ), "新出现的超期副本不得被 24h 去重吞掉"
+    monkeypatch.setattr(
+        reminder, "collect", lambda _policy: (_ for _ in ()).throw(AssertionError("inventory collected"))
+    )
+    monkeypatch.setattr(
+        subprocess, "run", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("git/subprocess run"))
+    )
 
-    stale_state = {"at": now - interval * 3600 - 1, "overduePaths": []}
-    assert reminder.should_emit(stale_state, reason="session", overdue_paths=[], interval_hours=interval, now=now) is True
-    assert reminder.should_emit({}, reason="session", overdue_paths=[], interval_hours=interval, now=now) is True
+    assert reminder.main(["--harness", "git", "--mode", "mark-due"]) == 0
+    marker = tmp_path / "env/repo/local/worktree-governance/cache/reminder-due.json"
+    payload = json.loads(marker.read_text(encoding="utf-8"))
+    assert payload["schemaVersion"] == 1
+    assert payload["reason"] == "post-commit"
+    assert isinstance(payload["dueAt"], int)
+    assert list(marker.parent.glob(f".{marker.name}.tmp.*")) == [], "原子临时文件不得残留"
 
+
+def test_gwt_002_t4_due_check_uses_marker_or_persisted_next_at(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    now = 1_000_000_000
+    assert reminder.scan_is_due(now=now) is True, "状态缺失只退化为本次扫描"
+
+    reminder.save_state(at=now, overdue_paths=[], next_at=now + 3600)
+    assert reminder.scan_is_due(now=now) is False
+    reminder.mark_due(now=now)
+    assert reminder.scan_is_due(now=now) is True
 
 def _run_git(cwd: Path, *args: str) -> str:
     completed = subprocess.run(
@@ -440,58 +463,149 @@ def test_gwt_002_t5_shared_stash_never_fakes_staleness(tmp_path: Path, policy) -
     assert as_clone.stashes == 1
 
 
-def _run_reminder_gate(output_root: Path):
+def _run_reminder(
+    output_root: Path, *args: str, input_text: str = ""
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["bash", str(REMINDER_GATE)],
-        input='{"command":"ls"}',
+        [sys.executable, str(REMINDER_SCRIPT), *args],
+        input=input_text,
         capture_output=True,
         text=True,
         env={**os.environ, "QWQ_OUTPUT_ROOT": str(output_root)},
         cwd=ROOT,
+        check=False,
     )
 
 
-def test_gwt_002_t6_cursor_fallback_channel_stays_silent_until_due(tmp_path: Path) -> None:
-    """Cursor 的 sessionStart 不声明任何输出字段，提醒回落到 beforeShellExecution。
+def test_gwt_002_t6_cursor_session_start_json_shape_and_wiring(tmp_path: Path, monkeypatch, capsys) -> None:
+    """Cursor 使用官方 sessionStart 顶层 additional_context，不保留 every-shell fallback。"""
+    payload = json.loads(CURSOR_HOOKS.read_text(encoding="utf-8"))
+    hooks = payload["hooks"]
+    assert hooks["sessionStart"] == [
+        {
+            "command": (
+                "PYTHONDONTWRITEBYTECODE=1 python3 "
+                "quwoquan_ops/hooks/worktree_merge_reminder.py --harness cursor --reason session"
+            )
+        }
+    ]
+    assert all(
+        "worktree_merge_reminder" not in item["command"]
+        and "worktree_session_reminder_gate" not in item["command"]
+        for item in hooks["beforeShellExecution"]
+    )
 
-    该通道对每条 shell 命令都触发，未到时点必须只返回放行、不带任何消息；无论是否到点
-    都必须放行，因为提醒是告知而不是阻断。
-    """
-    cache = tmp_path / "env/repo/local/worktree-governance/cache"
-    cache.mkdir(parents=True)
-    sentinel = cache / "next-reminder-at"
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    monkeypatch.setattr(reminder, "scan_is_due", lambda: True)
+    monkeypatch.setattr(
+        reminder,
+        "_run_bounded_scan",
+        lambda: reminder.ScanAttempt(
+            {
+                "ok": True,
+                "message": "session context",
+                "overduePaths": [],
+                "intervalHours": 24,
+            },
+            "",
+            False,
+            7,
+        ),
+    )
+    assert reminder.main(["--harness", "cursor", "--reason", "session"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"additional_context": "session context"}
 
-    sentinel.write_text(f"{int(time.time()) + 86_400}\n", encoding="utf-8")
-    early = _run_reminder_gate(tmp_path)
-    assert early.returncode == 0
-    assert json.loads(early.stdout) == {"permission": "allow"}, "未到时点必须纯短路，不带消息"
+    assert reminder.main(["--harness", "codex", "--reason", "session"]) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": "session context",
+        }
+    }
+    codex = json.loads(CODEX_HOOKS.read_text(encoding="utf-8"))
+    assert codex["hooks"]["SessionStart"][0]["hooks"][0]["command"].endswith(
+        'worktree_merge_reminder.py" --harness codex --reason session'
+    )
+    spec_text = SPEC.read_text(encoding="utf-8")
+    assert "OPS.WORKTREE.CLOUD_SESSION_REMINDER_UNSUPPORTED" in spec_text
+    assert "hooks 配置热重载，无需 Reload Window" in spec_text
 
-    sentinel.write_text("0\n", encoding="utf-8")
-    due = _run_reminder_gate(tmp_path)
-    assert due.returncode == 0
-    assert json.loads(due.stdout)["permission"] == "allow"
+
+def test_gwt_002_t7_session_scans_only_when_due(monkeypatch, tmp_path: Path, capsys) -> None:
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    now = 1_000_000_000
+    reminder.save_state(at=now, overdue_paths=[], next_at=now + 3600)
+    monkeypatch.setattr(
+        reminder,
+        "_run_bounded_scan",
+        lambda: (_ for _ in ()).throw(AssertionError("scan started before due")),
+    )
+    assert reminder.main(["--harness", "cursor", "--reason", "session"]) == 0
+    assert capsys.readouterr().out == ""
 
 
-def test_gwt_002_t7_short_circuit_never_inlines_the_interval(tmp_path: Path, policy) -> None:
-    """短路判断只读一个 epoch sentinel，提醒间隔因此仍然只有策略文件一个来源。
+def test_gwt_002_t8_scan_timeout_is_fail_open_and_records_status(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    reminder.mark_due(now=1)
+    monkeypatch.setattr(
+        reminder,
+        "_run_bounded_scan",
+        lambda: reminder.ScanAttempt(None, "budget exhausted", True, 20_123),
+    )
 
-    把间隔写进 shell 会让它成为第二真相源：改策略文件不再改变实际提醒频率，而两处
-    不一致时没有任何门禁会红。
-    """
-    source = REMINDER_GATE.read_text(encoding="utf-8")
-    for literal in ("86400", "86_400", "3600", str(policy.reminder_min_interval_hours * 3600)):
-        assert literal not in source, f"提醒间隔不得内联进 shell（发现 {literal}）"
+    assert reminder.main(["--harness", "cursor", "--reason", "session"]) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert list(output) == ["additional_context"]
+    assert "未被阻断" in output["additional_context"]
+    status_path = tmp_path / "env/repo/local/worktree-governance/cache/last-scan-status.json"
+    status = json.loads(status_path.read_text(encoding="utf-8"))
+    assert status["outcome"] == "timeout"
+    assert status["elapsedMs"] == 20_123
+    assert status["lastError"] == "budget exhausted"
+    assert (status_path.parent / "reminder-due.json").is_file(), "失败后 marker 保留供下次重试"
 
-    cache = tmp_path / "env/repo/local/worktree-governance/cache"
-    cache.mkdir(parents=True)
-    (cache / "next-reminder-at").write_text("0\n", encoding="utf-8")
-    assert _run_reminder_gate(tmp_path).returncode == 0
 
-    # sentinel 由 python 侧按策略间隔写回，内容是纯 epoch，shell 无从得知间隔本身。
-    written = (cache / "next-reminder-at").read_text(encoding="utf-8").strip()
-    assert written.isdigit()
-    assert int(written) > int(time.time()), "sentinel 必须指向未来的下一次提醒时点"
+def test_gwt_002_t9_full_scan_has_an_overall_process_group_deadline(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    attempt = reminder._run_bounded_scan(budget_seconds=0.0)
+    assert attempt.payload is None
+    assert attempt.timed_out is True
+    assert "wall-clock budget" in attempt.error
 
+
+def test_gwt_002_t10_new_commit_marker_survives_an_inflight_scan(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    reminder.mark_due(now=1)
+    old_token = reminder._due_token()
+    assert old_token is not None
+    reminder.mark_due(now=2)
+    reminder._clear_due_if_unchanged(old_token)
+    marker = tmp_path / "env/repo/local/worktree-governance/cache/reminder-due.json"
+    assert json.loads(marker.read_text(encoding="utf-8"))["dueAt"] == 2
+
+
+def test_gwt_002_t9_all_hook_paths_are_fail_open(tmp_path: Path) -> None:
+    invalid = _run_reminder(tmp_path, "--not-a-real-option")
+    assert invalid.returncode == 0
+
+    blocked_output = tmp_path / "output-is-a-file"
+    blocked_output.write_text("x", encoding="utf-8")
+    mark = _run_reminder(blocked_output, "--harness", "git", "--mode", "mark-due")
+    assert mark.returncode == 0
+    assert "未被阻断" in mark.stdout
+
+    source = REMINDER_SCRIPT.read_text(encoding="utf-8")
+    post_source = POST_COMMIT.read_text(encoding="utf-8")
+    assert "exit 2" not in source
+    assert "failClosed" not in source
+    assert "--mode mark-due" in post_source
+    assert "--reason commit" not in post_source
 
 def _linked(
     path: str,
@@ -718,7 +832,11 @@ def test_gwt_003_t3_install_entrypoint_resolves_repo_root(tmp_path: Path, policy
     shutil.copy(INSTALL_SCRIPT, hook_dir / INSTALL_SCRIPT.name)
 
     completed = subprocess.run(
-        ["bash", str(hook_dir / INSTALL_SCRIPT.name)], capture_output=True, text=True, cwd=tmp_path
+        ["bash", str(hook_dir / INSTALL_SCRIPT.name)],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        check=False,
     )
     assert completed.returncode == 0, completed.stderr
 
@@ -727,7 +845,11 @@ def test_gwt_003_t3_install_entrypoint_resolves_repo_root(tmp_path: Path, policy
     )
     assert readback.stdout.strip() == policy.hooks_path
     # 幂等：重复安装不改变结果，也不报错。
-    assert subprocess.run(["bash", str(hook_dir / INSTALL_SCRIPT.name)], capture_output=True).returncode == 0
+    assert subprocess.run(
+        ["bash", str(hook_dir / INSTALL_SCRIPT.name)],
+        capture_output=True,
+        check=False,
+    ).returncode == 0
 
 
 def test_gwt_003_t4_install_refuses_outside_git_toplevel(tmp_path: Path, policy) -> None:
@@ -740,7 +862,11 @@ def test_gwt_003_t4_install_refuses_outside_git_toplevel(tmp_path: Path, policy)
     shutil.copy(INSTALL_SCRIPT, hook_dir / INSTALL_SCRIPT.name)
 
     completed = subprocess.run(
-        ["bash", str(hook_dir / INSTALL_SCRIPT.name)], capture_output=True, text=True, cwd=tmp_path
+        ["bash", str(hook_dir / INSTALL_SCRIPT.name)],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        check=False,
     )
     assert completed.returncode == 2
     assert "not the git toplevel" in completed.stderr
@@ -749,7 +875,11 @@ def test_gwt_003_t4_install_refuses_outside_git_toplevel(tmp_path: Path, policy)
 def test_gate_entrypoint_is_executable_and_reports_typed_codes() -> None:
     """门禁本身必须可被 gate 链执行，且失败身份用稳定错误码表达。"""
     completed = subprocess.run(
-        [sys.executable, str(GATE_SCRIPT), "--json"], capture_output=True, text=True, cwd=ROOT
+        [sys.executable, str(GATE_SCRIPT), "--json"],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        check=False,
     )
     assert completed.returncode in (0, 2)
     payload = json.loads(completed.stdout)
@@ -783,6 +913,14 @@ def test_gate_entrypoint_is_executable_and_reports_typed_codes() -> None:
             lambda raw: raw.replace(
                 b"production_workflow: .github/workflows/deploy-prod-auto.yml\n",
                 b"",
+            ),
+        ),
+        (
+            lambda raw: raw,
+            lambda raw: raw.replace(
+                b"  state: active\n",
+                b"  state: pending\n",
+                1,
             ),
         ),
     ],

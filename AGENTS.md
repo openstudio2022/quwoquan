@@ -6,9 +6,9 @@
 
 顺序固定为：根 `AGENTS.md` → `.agents/skills/*/SKILL.md` metadata 选择唯一 Workflow Skill（简单问答可跳过）→ Skill body → PRE 确定 exact target → 最近子树 `AGENTS.md` → exact contexts/tests。已知路径可先读子树规则，但子树不参与路由；不建中央关键词表、resolver 或第二流程正文。
 
-`explore`、`plan-next` 和 `continue` 的只读恢复 best-effort 运行 `make feature-context TARGET=<exact-path>`：唯一 owner 时消费 compact immutable exact ref；无 owner、多 owner或解析失败时记录 typed 结果，按当前 Git 快照继续只读且不得据此 mutation。`prd`、`design`、`dev` 写入前必须持有唯一 current ref，否则 `GATE_BLOCK`；显式或准出 Review 原样复用该 ref。expanded 仅供人工诊断。
+`explore`、`plan-next` 和 `continue` 的只读恢复 best-effort 运行 `make feature-context TARGET=<exact-path>`：唯一 owner 时消费 compact immutable exact ref；无 owner、多 owner或解析失败时记录 typed 结果，按当前 Git 快照继续只读且不得据此 mutation。`prd`、`design`、`dev` 写入前必须持有唯一 PRE owner identity ref，否则 `GATE_BLOCK`；显式或准出 Review 以该 ref 为 predecessor，并为 exact changed paths 生成 current candidate evidence ref。expanded 仅供人工诊断。
 
-Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-tree/README.md)。各层只拥有本层 Journey/DOM/SIT/GWT 与设计决定；不建中央 backlog、registry、第二台账或完成日志。
+Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-tree/README.md)。各层只拥有本层 Journey/DOM/SIT/GWT 与设计决定；不建中央自然语言 resolver、第二流程正文、backlog 或完成台账，版本化 Human/Review registry 只在各自 owner 内拥有映射。
 
 ## 工作流选择
 
@@ -32,7 +32,7 @@ Feature Tree 与 owner 算法见 [`specs/feature-tree/README.md`](specs/feature-
 
 - 验证与影响面匹配，分开报告源码/契约、本地测试、编译/打包/安装/启动、runtime health、release/import/readback 和真实设备/UAT；上游 PASS 不代表下游闭环。
 - 任一 required 证据失败时保留首个 typed blocker，不用旧 receipt、旧 plan 或旧指纹冒充当前完成。
-- 开发期 POST 默认零 Reviewer，只报告命名 evidence；仅显式 `/review` 或准出（lane→`dev1.0` PR、handoff、release）派审，原样复用 owner manifest，先去重 evidence，再按主审加最多一名专审执行；Reviewer 不补跑 gate。
+- 开发期 POST 默认零 Reviewer，只报告命名 evidence；仅显式 `/review` 或准出（lane→`dev1.0` PR、handoff、release）派审，携带 PRE owner identity + POST candidate predecessor，先去重 evidence，再按主审加最多一名专审执行；Reviewer 不补跑 gate。
 - 无法证明时返回 `GATE_BLOCK`。失败门禁不包装为成功，也不因工作树其他红项隐藏本任务结果。
 
 ## 共享工作树与安全

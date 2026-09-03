@@ -2,7 +2,7 @@
   "_governance": {
     "owner": "delivery-gate",
     "reason": "优化前的门禁耗时基线，用于证明后续优化真实生效；不得被无声重采样掩盖回归",
-    "expires_when": "commit gate 稳定达成 targetAfterOptimization 后，用一次干净机精确采样整体替换",
+    "expires_when": "commit gate 稳定达成 180 秒软目标后，用一次干净机精确采样整体替换",
     "measure": "多次会话实测墙钟 + 门禁结构推算（method=structural_plus_observed_wall_times），非单次干净机精确采样；profiles 按 gate scope 记录 p50/p95 观测墙钟秒数。"
   },
   "capturedAt": "2026-07-27",
@@ -58,9 +58,9 @@
   },
   "targetAfterOptimization": {
     "local_commit_gate": {
-      "p50Seconds": 480,
-      "p95Seconds": 600,
-      "hardFailSeconds": 900
+      "p50Seconds": 120,
+      "p95Seconds": 180,
+      "hardFailSeconds": 300
     },
     "ci_delivery_gate_app_wall": {
       "targetSeconds": 360,

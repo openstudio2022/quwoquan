@@ -34,6 +34,51 @@ REVIEWER_CONTEXT_BYTE_BUDGET = 24 * 1024
 SKILL_LINE_BUDGET = 500
 SKILL_DESCRIPTION_EACH_BUDGET = 500
 SKILL_DESCRIPTION_TOTAL_BUDGET = 8000
+HOTL_RUNTIME_MATRIX_MAX_BYTES = 32 * 1024
+HOTL_RUNTIME_MATRIX_PATH = (
+    "specs/feature-tree/runtime/development-workflow-governance/design.md"
+)
+HOTL_RUNTIME_MATRIX_START = "<!-- HOTL_RUNTIME_MATRIX:START -->"
+HOTL_RUNTIME_MATRIX_END = "<!-- HOTL_RUNTIME_MATRIX:END -->"
+HOTL_RUNTIME_MATRIX_SKILLS = (
+    "commit",
+    "content-production",
+    "continue",
+    "design",
+    "dev",
+    "distill",
+    "environment-ops",
+    "explore",
+    "incident-inspection",
+    "plan-next",
+    "prd",
+    "review",
+)
+HOTL_RUNTIME_MATRIX_BOUNDARIES = (
+    "session",
+    "shell",
+    "edit",
+    "commit",
+    "push",
+    "lane-pr",
+    "handoff",
+    "dev1.0-main",
+    "release",
+)
+HOTL_RUNTIME_MATRIX_COLUMNS = (
+    "场景",
+    "输入/入口",
+    "宿主能力（D/V/U）",
+    "加载规则/上下文",
+    "PRE",
+    "DURING",
+    "POST",
+    "阻断层",
+    "Review 触发/范围",
+    "Human / Agent 责任",
+    "恢复",
+    "预算/效能风险",
+)
 
 PRUNED_DIR_NAMES = {
     ".git",
@@ -399,6 +444,50 @@ def check_required_sources_and_carriers() -> list[str]:
     return issues
 
 
+def check_hotl_runtime_matrix() -> list[str]:
+    """校验单一 HOTL 场景投影的存在、闭集覆盖与独立文档预算。"""
+
+    path = ROOT / HOTL_RUNTIME_MATRIX_PATH
+    if not path.is_file():
+        return [f"缺单一 HOTL 运行矩阵: {HOTL_RUNTIME_MATRIX_PATH}"]
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as error:
+        return [f"{HOTL_RUNTIME_MATRIX_PATH}: 无法读取（{error}）"]
+    issues: list[str] = []
+    if text.count(HOTL_RUNTIME_MATRIX_START) != 1 or text.count(HOTL_RUNTIME_MATRIX_END) != 1:
+        return [
+            f"{HOTL_RUNTIME_MATRIX_PATH}: HOTL 运行矩阵必须且只能包含一组 marker"
+        ]
+    start = text.index(HOTL_RUNTIME_MATRIX_START)
+    end = text.index(HOTL_RUNTIME_MATRIX_END, start)
+    section = text[start : end + len(HOTL_RUNTIME_MATRIX_END)]
+    size = len(section.encode("utf-8"))
+    if size > HOTL_RUNTIME_MATRIX_MAX_BYTES:
+        issues.append(
+            f"{HOTL_RUNTIME_MATRIX_PATH}: HOTL 运行矩阵 {size} bytes 超过 "
+            f"{HOTL_RUNTIME_MATRIX_MAX_BYTES} bytes"
+        )
+    for skill in HOTL_RUNTIME_MATRIX_SKILLS:
+        marker = f"| SKILL:{skill} |"
+        if section.count(marker) != 1:
+            issues.append(
+                f"{HOTL_RUNTIME_MATRIX_PATH}: 场景 {marker.strip('| ')} 必须恰好一行"
+            )
+    for boundary in HOTL_RUNTIME_MATRIX_BOUNDARIES:
+        marker = f"| BOUNDARY:{boundary} |"
+        if section.count(marker) != 1:
+            issues.append(
+                f"{HOTL_RUNTIME_MATRIX_PATH}: 场景 {marker.strip('| ')} 必须恰好一行"
+            )
+    expected_header = "| " + " | ".join(HOTL_RUNTIME_MATRIX_COLUMNS) + " |"
+    if section.count(expected_header) != 2:
+        issues.append(
+            f"{HOTL_RUNTIME_MATRIX_PATH}: Skill/边界矩阵必须各有一份完整固定列头"
+        )
+    return issues
+
+
 def check_agents_budget() -> list[str]:
     issues: list[str] = []
     agents = _find_agents_files()
@@ -705,6 +794,15 @@ def check_checklists_and_registry() -> list[str]:
         if workflow in CONTROL_WORKFLOWS_WITHOUT_AUTOMATIC_REVIEW:
             issues.append(f"registry.yaml: {workflow} 控制型 workflow 必须默认零 Reviewer")
             continue
+        baseline_evidence = config.get("baseline_evidence")
+        if not isinstance(baseline_evidence, str) or not baseline_evidence:
+            issues.append(
+                f"registry.yaml: workflows.{workflow} 缺 baseline_evidence"
+            )
+        elif baseline_evidence not in evidence:
+            issues.append(
+                f"registry.yaml: workflows.{workflow}.baseline_evidence 未注册: {baseline_evidence}"
+            )
         primary = config.get("primary")
         if not isinstance(primary, dict):
             issues.append(f"registry.yaml: workflows.{workflow} 缺 primary")
@@ -906,6 +1004,7 @@ def check_adapter_generation() -> list[str]:
 
 CHECKS = (
     ("载体分层", check_required_sources_and_carriers),
+    ("HOTL 运行矩阵", check_hotl_runtime_matrix),
     ("WFR 回潮", check_retired_workflow_resolution),
     ("AGENTS 链预算", check_agents_budget),
     ("默认 manifest 预算", check_manifest_budget),

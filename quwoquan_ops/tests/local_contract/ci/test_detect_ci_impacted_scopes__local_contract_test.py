@@ -197,7 +197,7 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
             },
         )
         self.assertEqual(
-            validated["captured_metadata"]["planner_version"], "impact-planner-v1"
+            validated["captured_metadata"]["planner_version"], "impact-planner-v2"
         )
 
     def test_receipt_requires_lowercase_exact_shas(self) -> None:
@@ -257,6 +257,83 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         decomposed = classify_impacts(["docs/cafe\u0301.md"])
         self.assertEqual(composed["paths"], decomposed["paths"])
         self.assertEqual(composed["path_digest"], decomposed["path_digest"])
+
+    def test_delivery_impact_plan_is_versioned_and_validated(self) -> None:
+        from quwoquan_ops.ci.impact_planner_core import (
+            build_delivery_impact_plan,
+            validate_delivery_impact_plan,
+        )
+
+        plan = build_delivery_impact_plan(
+            ["quwoquan_app/lib/runtime/shell/startup/app_bootstrap.dart"],
+            source_sha="b" * 40,
+            base_sha="a" * 40,
+        )
+        validated = validate_delivery_impact_plan(
+            plan, expected_source_sha="b" * 40
+        )
+        self.assertEqual(validated["schema"], "delivery-impact-plan")
+        self.assertEqual(validated["schema_version"], 1)
+        self.assertEqual(validated["states"]["device"], "required")
+        self.assertRegex(validated["changed_paths_digest"], r"^sha256:[0-9a-f]{64}$")
+        self.assertRegex(validated["plan_digest"], r"^sha256:[0-9a-f]{64}$")
+
+    def test_device_impact_is_narrow_and_manual_force_is_explicit(self) -> None:
+        from quwoquan_ops.ci.impact_planner_core import build_delivery_impact_plan
+
+        not_required_paths = (
+            "docs/ci/readme.md",
+            "quwoquan_service/services/chat-service/cmd/api/main.go",
+            "quwoquan_app/lib/service/chat_service/chat/message/presentation/message_bubble.dart",
+            "quwoquan_app/lib/design_system/components/primary_button.dart",
+        )
+        required_paths = (
+            "quwoquan_app/lib/runtime/shell/startup/app_bootstrap.dart",
+            "quwoquan_app/lib/runtime/platform/permissions/microphone_permission_guard.dart",
+            "quwoquan_app/android/app/src/main/AndroidManifest.xml",
+            "quwoquan_app/ios/Runner/Runner.entitlements",
+            "quwoquan_app/vendor/plugins/flutter_webrtc/pubspec.yaml",
+            "quwoquan_app/scripts/device/dev_launch.sh",
+            ".github/workflows/beta-device-platform.yml",
+            "quwoquan_ops/environments/beta/runtime.yaml",
+        )
+        for changed_path in not_required_paths:
+            plan = build_delivery_impact_plan(
+                [changed_path], source_sha="b" * 40, base_sha="a" * 40
+            )
+            self.assertEqual(plan["states"]["device"], "not_required", changed_path)
+        for changed_path in required_paths:
+            plan = build_delivery_impact_plan(
+                [changed_path], source_sha="b" * 40, base_sha="a" * 40
+            )
+            self.assertEqual(plan["states"]["device"], "required", changed_path)
+        forced = build_delivery_impact_plan(
+            ["docs/ci/readme.md"], source_sha="b" * 40, base_sha="a" * 40,
+            force_device=True,
+        )
+        self.assertEqual(forced["states"]["device"], "required")
+
+    def test_coverage_governance_path_triggers_contract_closure(self) -> None:
+        from quwoquan_ops.ci.impact_planner_core import build_delivery_impact_plan
+
+        plan = build_delivery_impact_plan(
+            ["quwoquan_ops/policies/gates/canonical_coverage_baseline.json"],
+            source_sha="b" * 40, base_sha="a" * 40,
+        )
+        self.assertEqual(plan["states"]["coverage_service"], "required")
+        self.assertEqual(plan["states"]["coverage_app"], "required")
+
+    def test_plan_digest_or_source_tampering_fails_closed(self) -> None:
+        from quwoquan_ops.ci.impact_planner_core import (
+            ImpactPlannerError, build_delivery_impact_plan, validate_delivery_impact_plan,
+        )
+
+        plan = build_delivery_impact_plan(
+            ["quwoquan_app/lib/main.dart"], source_sha="b" * 40, base_sha="a" * 40
+        )
+        plan["changed_paths_digest"] = "sha256:" + "0" * 64
+        with self.assertRaises(ImpactPlannerError):
+            validate_delivery_impact_plan(plan, expected_source_sha="b" * 40)
 
 
 if __name__ == "__main__":

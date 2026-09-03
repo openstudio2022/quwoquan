@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """本地工作副本清单与未合入滞留判定，全部实时派生。
 
 角色：lib。被 `quwoquan_ops/hooks/worktree_merge_reminder.py` 与
@@ -379,6 +378,7 @@ def _git(cwd: Path, *args: str) -> tuple[int, str]:
             capture_output=True,
             text=True,
             timeout=20,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return 1, str(exc)

@@ -59,7 +59,27 @@ upload.gamma.quwoquan.com
 6 位，不真发短信，也不写入日志、API 回包或 receipt。规格明确禁止固定万能码与
 App `debugCode`（见 `four-environment-commercial-login-maturity` L3 spec）。
 
-真机手机号登录步骤：
+同一流程适用于 `alpha-local|beta-local|gamma-local`，即 `run.sh --env alpha|beta|gamma`
+与受管字面 `flutter run`（固定 alpha）启动的 App；把下文 `gamma-local` 换成当前 target 即可。
+
+### 开发默认：用 Research 白名单身份登录并看到内容
+
+active release 为 `research` 时，匿名或非白名单账号的首页按 DEC-032 只呈现
+「当前内容无法使用」（服务端 `no_active_release` 收敛）；这不是启动失败，真实内容
+要求用本 target 的 Research 白名单账号登录。attach 完成后 `run.sh`/`flutter run`
+前台会话会把下面的命令打印在终端。
+
+1. 在本机交互终端执行（可以先于 App 发码，命令默认等待 60 秒）：
+
+   ```bash
+   make stackctl-otp-read TARGET=gamma-local RESEARCH_IDENTITY=1
+   # 等价：python3 quwoquan_ops/cli/stackctl.py provider-debug otp-read --target gamma-local --research-identity
+   ```
+
+2. 终端 TTY 先显示 `Research phone (gamma-local): +86199…`，把该号码填进 App 并点「获取验证码」。
+3. 终端 TTY 随后显示一行 `OTP: ******`，把 6 位码填进 App；登录后首页、图片与头像即为真实内容。
+
+### 任意手机号登录（只验证登录链，不解锁 research 内容）
 
 1. 在设备 App 上输入手机号并点发送，进入验证码页。
 2. **立即**在本机交互终端执行：
@@ -75,10 +95,12 @@ App `debugCode`（见 `four-environment-commercial-login-maturity` L3 spec）。
 
 注意：
 
-- 读取是**一次性**的，读完即从 substitute 内存删除；超时或读空先在 App 重发再读。
-- 只支持 `alpha-local|beta-local|gamma-local`，且要求交互 TTY；OTP 只写 `/dev/tty`，
-  不进入命令 JSON 输出。
+- 读取是**一次性**的，读完即从 substitute 内存删除；同一手机号后一次发码覆盖前一次。
+  超时或读空先在 App 重发再读；`WAIT_SECONDS=<秒>`（≤300）可调整等待预算。
+- 只支持 `alpha-local|beta-local|gamma-local`，且要求交互 TTY；手机号与 OTP 只写 `/dev/tty`，
+  不进入命令 JSON 输出、日志或 receipt。
 - 输错会得到 `USER.AUTH.otp_mismatch`（「验证码不正确，请重新输入」），重发后重读即可。
+- 非白名单手机号登录成功后首页仍是「当前内容无法使用」，这是 DEC-032 的预期隔离，不是缺陷。
 
 ## 本地覆盖边界
 

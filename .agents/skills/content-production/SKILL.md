@@ -23,7 +23,7 @@ metadata:
 
 同一 execution 的 receipt 链、immutable release、环境 import/readback 与 App UAT exact receipt 必须同时闭合；逐层报告未证明项，不用 publish/release PASS 替代设备 UAT。至少执行并报告 1–3 个适用入口：`python3 quwoquan_data/scripts/cli.py task fleet-status --execution-id <id> --json`；`python3 quwoquan_data/scripts/cli.py verify execution-readiness --execution-id <id> --mode <calibration|research|commercial>`，其中 `--mode` 必须读取当前 execution/readiness owner fact；`python3 quwoquan_data/scripts/cli.py verify release-lifecycle --release <releaseId>` 仅证明顶层 immutable release 的 release-only 局部证据，不证明任何环境 activation、import/readback 或 App UAT 闭合。环境激活的完整命令与 exact receipt 绑定以 [ship.md](references/stage-contracts/ship.md) 为准。
 
-产生 `content-release` 时，POST 必须把 PRE 保存的同一个 owner manifest exact ref 原样作为 `--context-manifest` 传给 Review（workflow=`content-production`、segment=`POST`、deliverable=`content-release`、scope=`<exact-path>`）；先按 plan 去重执行命名 evidence，再派 registry 主审与至多一名专审。manifest ref 缺失、与 PRE 不同或 stale，required evidence/Reviewer 未完成，均不得完成。
+产生 `content-release` 时，POST 必须把 PRE owner identity ref 原样作为 `--owner-identity`，并把 current candidate evidence ref 作为 `--candidate-evidence` 传给 Review（workflow=`content-production`、segment=`POST`、deliverable=`content-release`、scope=`<exact-path>`）；先按 plan 去重执行命名 evidence，再派 registry 主审与至多一名专审。manifest ref 缺失、与 PRE 不同或 stale，required evidence/Reviewer 未完成，均不得完成。
 
 ## 失败与停止
 
@@ -31,4 +31,4 @@ metadata:
 
 ## 条件性交接
 
-源码/spec mutation 只交 Feature workflow；跨宿主接手、环境/发布、外部阻断或证据复用满足 canonical 触发时生成 handoff。送审交付的 handoff 必须携带 PRE 保存并在 POST 原样复用的 owner manifest exact ref；纯只读无送审交付不生成替代 manifest。
+源码/spec mutation 只交 Feature workflow；跨宿主接手、环境/发布、外部阻断或证据复用满足 canonical 触发时生成 handoff。送审交付的 handoff 必须携带 PRE owner identity ref 与 POST candidate evidence predecessor；纯只读无送审交付不生成替代 manifest。

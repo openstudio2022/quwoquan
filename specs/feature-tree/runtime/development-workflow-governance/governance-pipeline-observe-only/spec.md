@@ -33,11 +33,13 @@
 - 各层证据必须保持独立：machine baseline 不得替代 Human-owned calibration readback，Review `READY` 不得替代 `PASS`，且 consolidation 中出现任一 `GATE_BLOCK` finding 时必须拒绝 Review PASS；`scope_ready` 不得替代 `release_ready`。hosted code/integration 不得替代 hosted live，Portal test/build 不得替代 Portal UAT，released、published 与 outcome attained 不得互推。
 - 每层由 contract 冻结唯一 producer/adapter 身份、允许的 provider kind、release eligibility、candidate/scope/fingerprint binding 与最大证据年龄。freshness 只能由 adapter 对 provider-owned timestamp 验证，不接受 `fresh=true`；bundle 保存显式 receipt ref 与 exact bytes，不保存调用方自报 truth boolean。
 - canonical contract 只拥有 schema、required evidence、真实 hosted Story/service contract/adapter 实现引用与命名 evidence 身份，不拥有随运行变化的当前 PASS/absent 状态。当前状态只能从绑定 current EvidenceFingerprint 的 canonical receipt 读取。
+- Local admission 与 Hosted admission 的 handoff 层必须消费同一个显式 `handoff-ref-v1` 及同一 published exact bytes；artifact transport 可以携带 raw bytes/ref，不能把生产机绝对路径、clone/worktree inventory 或 `.qwq_output` projection 作为 hosted runner 硬输入。Local current-workspace 重算是额外 formal proof，不改变 portable exact-byte identity。
+- 本 Story 的 admission contract 固定 `observe_only_requires_all_evidence_layers=true`，因此 `handoff_freshness` 是该特定 pipeline 的 required layer，`no_persistent_handoff` 不能与 manifest 同时提交或替代它。ordinary same-context 的 sentinel 只属于 handoff producer 的条件化 no-op；未来若另一 admission contract 声明 handoff 不适用，必须显式消费 sentinel+reason，不能仍要求 manifest。
 
 <a id="req-002"></a>
 ### REQ-002 observe-only 激活独立且所有 mutation 恒为 false
 
-- 无独立 authenticated activation provider 时，即使全部分层证据满足也最多返回 `eligible_observe_only`，并包含 `ACTIVATION_PROVIDER_UNAVAILABLE`；本地 `inspect`、调用方 receipt、精确摘要自报或本地 fixture 均不得自授 `observe_only`。
+- 无独立 authenticated activation provider 时，即使全部分层证据满足也最多返回 `eligible_observe_only`，并包含 `ACTIVATION_PROVIDER_UNAVAILABLE`；本地 `inspect`、调用方 receipt、精确摘要自报或本地 fixture 均不得自授 `observe_only`。published handoff 及其缓存/projection、Review PASS、当前 Human 聊天同意都不构成 authority proof；activation formal proof 只能来自独立 authenticated exact evaluation readback，正式 provider 缺失继续保持 OPEN/blocked。
 - `observe_only` 只能由注入的独立 verifier 对 authenticated、release-eligible、exact evaluation digest 与 exact evaluation bytes receipt 完成 readback 后返回；不满足时保持 `not_admitted`。
 - 任一终态都必须保持 `production_ready=false`、`commercial_ready=false`、`hotl_admitted=false`、Prod/HOTL/global mutation false。S4 动态消费 Objective readback，但当前输出最大写并发不得大于 1。
 - 外部 effect 只允许受控 allowlist 中的可逆非生产治理动作；`unknown` 只能 `pending` 且禁止 retry，evaluator 自身不执行 effect。

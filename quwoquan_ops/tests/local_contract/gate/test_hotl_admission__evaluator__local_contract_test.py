@@ -16,6 +16,8 @@ from typing import Any
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("isolated_qwq_output_root")
+
 ROOT = Path(__file__).resolve().parents[4]
 SHA256_BRANCH = "sha256:" + "a" * 64
 if str(ROOT / "quwoquan_ops/cli") not in sys.path:
@@ -143,7 +145,7 @@ def test_current_actual_prerequisites_are_deterministic_manual_single_writer_and
     assert CURRENT_BLOCKERS <= set(first["blockers"])
     assert "WRITE_EXPANSION_NOT_ADMITTED" not in first["blockers"]
     assert first["s4_readback"]["status"] == "admitted"
-    assert first["s4_readback"]["write_concurrency"] == 2
+    assert first["s4_readback"]["write_concurrency"] == 6
 
 
 @pytest.mark.parametrize("risk_tier", ["R2", "R3", "R4"])
@@ -317,9 +319,9 @@ def test_ack_without_effect_identity_drift_disconnect_audit_timeout_and_revoke_a
 
 
 def test_requested_concurrency_above_dynamic_s4_is_blocked() -> None:
-    result = assert_not_admitted(complete_input(requested_write_concurrency=3), "REQUESTED_WRITE_CONCURRENCY_EXCEEDED")
+    result = assert_not_admitted(complete_input(requested_write_concurrency=7), "REQUESTED_WRITE_CONCURRENCY_EXCEEDED")
     assert result["max_write_concurrency"] == 1
-    within_dynamic_s4 = inspect(complete_input(requested_write_concurrency=2))
+    within_dynamic_s4 = inspect(complete_input(requested_write_concurrency=6))
     assert "REQUESTED_WRITE_CONCURRENCY_EXCEEDED" not in within_dynamic_s4["blockers"]
     assert within_dynamic_s4["max_write_concurrency"] == 1
 
@@ -531,7 +533,7 @@ def test_s4_reason_drift_returns_objective_typed_blocked(
 def test_all_evaluation_facts_satisfied_only_eligible_without_activation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "lib.hotl_admission.evaluator.inspect_admission",
-        lambda: canonical_s4(write_concurrency=2),
+        lambda: canonical_s4(write_concurrency=6),
     )
     result = inspect(complete_input())
     assert result["status"] == "eligible_for_activation"
@@ -592,7 +594,7 @@ def test_non_admitted_results_always_use_canonical_fallback_even_when_s4_is_high
     )
     result = inspect(complete_input(authority_readback=None))
     assert result["status"] == "not_admitted"
-    assert result["s4_readback"]["write_concurrency"] == 2
+    assert result["s4_readback"]["write_concurrency"] == 6
     assert result["allowed_mode"] == "manual"
     assert result["checkpoint_reduction_allowed"] is False
     assert result["max_write_concurrency"] == 1
@@ -609,7 +611,7 @@ def test_blocked_results_always_use_canonical_fallback_even_when_s4_is_higher(
     )
     result = inspect(complete_input(risk_tier="R4"))
     assert result["status"] == "blocked"
-    assert result["s4_readback"]["write_concurrency"] == 2
+    assert result["s4_readback"]["write_concurrency"] == 6
     assert result["max_write_concurrency"] == 1
     assert result["grant_executable"] is False
     assert result["mutation_allowed"] is False

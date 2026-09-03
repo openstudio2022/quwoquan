@@ -73,9 +73,10 @@ quwoquan/
 
 ## 分支治理
 
-- 本地与远端只允许 `dev1.0`、`main` 与六条声明的长期 `lane/*` 分支：日常开发只经 `lane/* -> dev1.0` PR 合入集成真相源，发布晋级只走 `dev1.0 -> main` PR；`main -> dev1.0` 只允许 promotion 成功后的系统 fast-forward backsync。
+- 本地与远端只允许 `dev1.0`、`main` 与六条声明的长期 `lane/*` 分支：日常开发只经 `lane/* -> dev1.0` PR 合入集成真相源，发布晋级只走 `dev1.0 -> main` PR；canonical `integration_branch_activation.state=active`，因此 `dev1.0` 只接受 lane PR merge 或 promotion 成功后可证明的系统 fast-forward backsync。
 - Prod 只接受可达 `main` 的精确 SHA；禁止白名单外分支、lane 直达 `main` 或绕过 promotion PR 直接更新 `main`。GitHub 原生保护不可用时，仓内 gate 只阻断 release eligibility，不冒充远端 ref 未被修改。
-- 本地执行 `bash quwoquan_ops/hooks/run_install_hooks.sh` 后，`pre-commit` 只做 staged boundary（secret/PII、generated/cache 边界、branch policy），`pre-push` 只做 branch policy 阻断非白名单分支与直推 `dev1.0`/`main`；两者都不消费 readiness 回执，秒级完成。
-- 硬门只在准出：`lane/* -> dev1.0` PR 由 CI Delivery Gate 分片承接全量 local_contract 与 required checks；L0 `make commit-gate`（目标 ≤10 分钟，硬顶 15 分钟）由 commit Skill 在用户要求提交时显式运行，不挂 git hook。
+- 本地执行 `bash quwoquan_ops/hooks/run_install_hooks.sh` 后，`pre-commit` 只做 staged boundary（secret/PII、generated/cache 边界，以及 `--local-commit` 当前 HEAD 分支检查），`pre-push` 只做 branch policy：普通 lane 只推同名远端；当前 `integration_branch_activation.state=active` 时阻断直推 `dev1.0`/`main`，并只放行可证明的受管 system fast-forward backsync；两者都不消费 readiness 回执，秒级完成。
+- `--local-commit` 只要求当前 HEAD 非 detached、Git authority 可读且分支属于 allowed local branches，不枚举或治理其他 local/remote-tracking refs；无参数默认模式仍执行全 ref 治理，`--pre-push` 按 activation state 执行。
+- 硬门只在准出：`lane/* -> dev1.0` PR 由 CI Delivery Gate 分片承接全量 local_contract 与 required checks；L0 `make commit-gate`（目标 ≤10 分钟，硬顶 15 分钟）由 commit Skill 在用户要求提交时显式运行，并使用同一 `--local-commit` 当前分支边界，不挂 git hook。
 
 规格入口见 `specs/feature-tree/README.md`，Codex/Cursor 执行约束见 `AGENTS.md` 与 `.cursor/commands/*.md`。

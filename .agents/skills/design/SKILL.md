@@ -17,7 +17,7 @@ metadata:
 1. PRE 从用户目标、plan/diff 与已知路径确定 exact target；读取最近子树 `AGENTS.md`，运行默认 compact `make feature-context TARGET=<exact-path>`，保存 stdout 的 immutable exact ref 后加载冻结 REQ、验收、contracts 与现有 DEC。
 2. 只在达到设计门槛的 L2/L1 `design.md` 记录 DEC，包含决策、理由、被否决方案、约束/影响、关联要求/验收和影响 Story。
 3. 明确 owner、command/query/event、一致性与幂等、typed 失败、恢复、回滚、SLI/SLO、告警和测试 seam；功能事实与 wire 事实保留在各自 owner。
-4. 运行 `make verify-feature-tree`；POST 原样复用 PRE ref，报告命名 evidence 结果；默认零 Reviewer，只在用户显式 `/review` 或进入 lane→`dev1.0` PR / handoff 准出时有界评审。
+4. 运行 `make verify-feature-tree`；POST 复用 PRE owner identity ref，并生成 current candidate evidence predecessor，报告命名 evidence 结果；默认零 Reviewer，只在用户显式 `/review` 或进入 lane→`dev1.0` PR / handoff 准出时有界评审。
 
 ## 完成证据
 

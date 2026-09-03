@@ -184,6 +184,15 @@
 
 `HumanAuthorityRole` 与 `ReviewRole` 是物理分轨的职责命名空间。Reviewer 只能产出技术证据、finding 与 PASS/阻断评价；Reviewer PASS 不生成 Human Decision，不派生授权，不接受商用、生产、渠道或 outcome 结果。
 
+<a id="req-003a"></a>
+### REQ-003A PRE/DURING/POST 使用显式轻量 Decision Receipt
+
+- 新 objective 或重大 boundary 需要显式留痕时，CLI 只接受结构化输入并 create-once 产生内容寻址 `HumanRuntimeDecisionReceipt`；回执记录 objective ref、判据、authority source、duration scope、`continue / pause / redirect / approve_admission` 决定、接收时间、provider 与 human identity assurance。禁止把自然语言、宿主事件或 Agent 推断自动写成已验证决定。
+- 本地显式输入只能标记 `self_attested`，不得伪造 authenticated actor/provider，也不得满足 formal production authority。正式生产 admission 仍须消费 hosted authenticated authority provider 的回执；Review PASS、本地 receipt 或聊天参与者身份均不能替代。
+- Agent execution、Review 与 Handoff 可选携带 `human_decision_ref`。普通 Skill 内缺回执不阻断，投影必须明确为 `declared / not_projected`；只有 contract 明确要求的 admission 边界才 fail closed。
+- DURING 通过显式 `decision-poll` 读取 objective 最新决定；`pause` 与 `redirect` 返回稳定 typed terminal。禁止 hook 在每次 tool 调用轮询，普通路径不得增加高频 provider/filesystem 开销。
+- 回执 exact bytes、内容寻址 ref 或 objective index 漂移必须拒绝；既有 ref 不覆盖。新决定使用新 receipt，并由显式 poll 选择最新记录。
+
 <a id="req-004"></a>
 ### REQ-004 两轮独立输入抑制推荐偏置并使硬门优先
 
@@ -255,6 +264,8 @@ Human owner 必须提供版本化、可校验且由 exact session bytes 派生�
 - 独立 Human-Agent 交付机器契约：`quwoquan_ops/policies/human_agent_delivery_contract.yaml`，由本 Story 唯一拥有；不得从现有 Review contract 推断字段或 authority。
 - 现有 Review manifest、plan 与 terminal：`quwoquan_ops/policies/agent_governance_contract.yaml`；仅作为 Review 证据边界，不拥有 Human Authority、DecisionUnit 或授权语义。
 - 人类可见卡片是 canonical 决定语义的投影，不复制或反向拥有机器字段。
+- PRE/DURING/POST runtime bridge schema 与 authority 边界：`quwoquan_ops/policies/human_agent_delivery_contract.yaml#runtime_bridge`；CLI：`quwoquan_ops/cli/human_agent_delivery.py` 的 `decision-record / decision-project / decision-poll`。
+- Review/Handoff 只保存可选 ref 与投影形状：`quwoquan_ops/policies/agent_governance_contract.yaml`；Human 决定语义仍只由本 Story 拥有。
 
 ## 5. 验收场景
 
@@ -271,6 +282,14 @@ Human owner 必须提供版本化、可校验且由 exact session bytes 派生�
 - AND 缺席、超时、身份未知、越权或证据过期得到 pause、hold、escalate 或 abort，而不是隐式批准。
 - AND 同一 actor 的角色兼任只能满足 role-record-only 的分开提交，不能满足 independent-principal-required。
 - AND ReviewRole 的 PASS 只成为证据，不生成 Human Decision、AuthorizationGrant 或结果接受。
+
+<a id="gwt-001a"></a>
+### GWT-001A 轻量 runtime bridge 不伪造、不高频硬门
+
+- GIVEN 一个新 objective 或重大 boundary 的显式结构化输入，以及普通执行、正式生产 admission、DURING pause/redirect 四类消费者。
+- WHEN 记录相同决定两次、替换回执字节或漂移 ref/index、无决定运行普通 Skill、以 self-attested receipt 请求 formal prod、并显式 poll 最新决定。
+- THEN 相同 exact input 复用同一内容寻址 ref 且不覆盖；tamper/ref drift fail closed；普通无决定路径为 `declared / not_projected` 且不阻断。
+- AND pause/redirect 产生稳定不同 terminal 与退出码；self-attested 明确不能满足 formal prod；只有显式 record/project/poll 执行读取，不存在每-tool hook 轮询。
 
 <a id="gwt-002"></a>
 ### GWT-002 卡片可理解且无推荐偏置

@@ -15,7 +15,7 @@
 ### In Scope
 
 - 本地 linked worktree 与同源 clone 的创建授权提醒（observe-only 上下文注入），覆盖 Cursor、Codex 两条执行面。
-- 未合入工作（本地领先提交、工作树脏改动、stash）的滞留识别与分级提醒。
+- 未合入工作（本地领先提交、工作树脏改动、stash）的滞留识别与分级提醒；本地 Cursor/Codex 会话支持该提醒，Cloud Agent 当前不支持 session reminder。
 - git hooks 安装状态（`core.hooksPath`）的自检与失效告知。
 - 上述判定所需清单的实时派生方式，以及「不得留存台账」的约束。
 - 项目容器根、bare hub、六条同名 lane worktree 与唯一 `integration/dev1.0` 的固定身份、路径、clean/bootstrap 一致性，在准出门禁中验证。
@@ -50,10 +50,12 @@
 - 「未合入」由三类事实的并集判定：领先 `origin/dev1.0` 的本地提交、工作树脏改动、stash 条目。三类事实全部为空的工作副本不产生提醒。
 - 滞留时长取三类事实中最早的发生时间：最早未合入提交的 committer date、最早脏文件 mtime、最早 stash 时间。
 - 事实必须归属到真正持有它的工作副本。stash 存放在仓库 common dir，全部 linked worktree 与主 worktree 共享同一份，因此 stash 只归属独立 clone；未合入提交必须以主仓库的集成分支为基准判定，不得采用副本自身可能陈旧的远程引用。错误归因会让刚创建的干净副本立刻显示为已滞留，几次假报警之后整条提醒就不再被阅读。
-- 提醒必须在两个时机触达：任何一次向 `dev1.0` 的提交完成后立即触达；每个执行面按最小间隔触达，使自然日内至少提醒一次。
-- 投递事件按执行面各自声明的输出能力选择。执行面的会话开始事件不支持投递消息时，必须回落到该执行面确实支持输出的事件；挂在不支持输出的事件上会让 hook 正常退出却什么也不投递，而静默失效正是本 Story 要治理的那类问题。回落到高频事件时，未到时点的短路判断不得引入第二份间隔参数。
+- `post-commit` 只原子写入可删除的 due/dirty marker，使下一次受支持的 session 检查；该窄路径不得加载 policy、inventory 或执行任何 git 扫描，写入失败必须 fail-open。完整 inventory 只在本地 Cursor/Codex `sessionStart` 到期时运行。
+- Cursor 本地会话使用官方 `sessionStart` 事件，并以 JSON 顶层 `additional_context` 投递；Codex 保持现有 `SessionStart` 与 `hookSpecificOutput.additionalContext` 路径，不在本 Story 推断或改造真实协议。Cursor `beforeShellExecution` 不得保留无 matcher 的 every-shell reminder fallback。Cursor hooks 配置热重载，无需 **Reload Window**。
+- Cloud Agent 当前不支持 `sessionStart`，诊断身份为 `OPS.WORKTREE.CLOUD_SESSION_REMINDER_UNSUPPORTED`：该能力明确标为 unsupported，不以 every-shell 高频 fallback 伪装支持，也不新增硬门。
+- 完整扫描必须受单一总 wall-clock budget 约束，不能只依赖 inventory 子进程逐调用 timeout；超时或任意异常记录 `lastError`/`elapsedMs` 状态、保留 due marker 供下次重试，并始终 fail-open。
 - 滞留时长超过策略阈值的工作副本升级为强提醒，并给出该副本路径、未合入事实计数与滞留天数。
-- 提醒去重状态属于可删除运行输出，丢失后只退化为多提醒一次，不得因其缺失而漏报。
+- 提醒到期、去重与最近扫描状态都属于可删除运行输出；状态缺失只退化为下一次受支持的 session 多扫描一次，不得漏报。
 - 识别范围必须覆盖 linked worktree 与策略声明的发现根下的同源 clone。clone 目标不继承本仓库 hooks，只能由源侧识别。
 - 失败身份为 `OPS.WORKTREE.UNMERGED_OVERDUE`。
 
@@ -61,7 +63,7 @@
 ### REQ-003 hooks 安装状态自检
 
 - `core.hooksPath` 未指向仓内受版本控制的 hook 目录时，本仓库的提交与推送门禁全部失效，该状态本身必须可被发现。
-- 因为 hooks 失效时 pre-commit 不会运行，自检不得只挂在 pre-commit；必须由聚合门禁与执行面会话开始两处交叉承担。
+- 因为 hooks 失效时 pre-commit 不会运行，自检不得只挂在 pre-commit；必须由聚合门禁与受支持的本地执行面 sessionStart 两处交叉承担。Cloud Agent 的能力缺口按 REQ-002 显式诊断，不构造伪自检。
 - 安装入口必须在仓库根被正确解析，并可幂等重复执行。
 - 失败身份为 `OPS.WORKTREE.HOOKS_NOT_INSTALLED`。
 
@@ -76,6 +78,15 @@
 - 设备与 local-runtime 属于同一物理主机上跨 worktree 共享的资源，其互斥锁必须 host-scoped，不得写入任一 worktree 的 `.qwq_output` 冒充隔离；holder evidence 至少包含 `pid`、`worktree`、`lane` 与 `head`。`integration/ -> dev1.0` 是只读集成 worktree；从该目录承载共享 runtime 时，runtime host 身份必须显式声明且不得从 worktree-local pid/receipt 推断。
 - 策略参数（固定布局、滞留阈值、提醒最小间隔、发现根、失败码）集中在唯一策略文件，实现不得内联第二份默认值。
 
+
+### 执行面能力矩阵与诊断
+
+| 执行面 | session reminder | 输出形状 | 诊断/说明 |
+| --- | --- | --- | --- |
+| Cursor 本地 Agent | supported | `sessionStart` → 顶层 `additional_context` | hooks 配置热重载，无需 Reload Window |
+| Codex 本地 | supported | 现有 `SessionStart` → `hookSpecificOutput.additionalContext` | 保持当前命令路径；本 Story 不处理真实协议 |
+| Cloud Agent | unsupported | 无 | `OPS.WORKTREE.CLOUD_SESSION_REMINDER_UNSUPPORTED`；不设 every-shell fallback，不新增硬门 |
+
 ## 4. 契约引用
 
 - canonical（物理布局）：`quwoquan_ops/policies/worktree_policy.yaml`
@@ -83,7 +94,6 @@
 - canonical：`quwoquan_ops/cli/lib/local_worktree_inventory.py`
 - canonical：`quwoquan_ops/hooks/worktree_authz_guard.py`
 - canonical：`quwoquan_ops/hooks/worktree_merge_reminder.py`
-- canonical：`quwoquan_ops/hooks/worktree_session_reminder_gate.sh`
 - canonical：`quwoquan_ops/hooks/run_install_hooks.sh`
 - canonical：`quwoquan_ops/gate/verify_local_worktree_lifecycle.py`
 - canonical：`.cursor/hooks.json`
@@ -103,20 +113,21 @@
 - AND 同一 command 中每个创建 segment 分别留痕；已留痕且 canonical 的 segment 静默放行并写入可删除运行记录，未留痕或非 canonical 的 segment 只附带对应提醒/模板，不产生任何受版本控制的授权清单。
 
 <a id="gwt-002"></a>
-### GWT-002 滞留工作在提交与会话开始时被提醒
+### GWT-002 提交轻量标记且到期会话执行有界扫描
 
 - GIVEN 存在至少一个含未合入提交、脏改动或 stash 的工作副本，且其最早未合入事实早于策略阈值。
-- WHEN 向 `dev1.0` 完成一次提交，或任一执行面开始新会话且距上次提醒已超过最小间隔。
-- THEN 提醒列出该副本路径、未合入事实计数与滞留天数，并以 `OPS.WORKTREE.UNMERGED_OVERDUE` 标识超阈值项。
+- WHEN 完成一次提交，或受支持的本地执行面开始新会话且 due marker 在场/距上次扫描已超过最小间隔。
+- THEN `post-commit` 只原子标记 due，不调用 collect/policy/inventory/git；到期 sessionStart 才在总 wall-clock budget 内扫描，并列出副本路径、未合入事实计数与滞留天数，以 `OPS.WORKTREE.UNMERGED_OVERDUE` 标识超阈值项。
 - AND 三类未合入事实全部为空的工作副本不出现在提醒中；删除提醒去重状态后重新触发只会多提醒一次，不会漏报。
 - AND 刚创建且自身干净的 linked worktree 不因共享 stash 或副本自身的陈旧远程引用被判为滞留。
-- AND 回落到高频事件的投递通道在未到时点时只返回放行、不携带消息，且其短路判断不内联提醒间隔。
+- AND Cursor 输出形状为顶层 `additional_context`，Codex 保持当前 SessionStart 输出形状；所有 reminder hook 路径都返回成功，不出现 `exit 2`/`failClosed`，扫描失败记录诊断并保留 marker。
+- AND `.cursor/hooks.json` 不存在 every-shell reminder；本地 Cursor hooks 热重载无需 Reload Window。Cloud Agent 显式报告 `OPS.WORKTREE.CLOUD_SESSION_REMINDER_UNSUPPORTED`，但不因此阻断任何动作。
 
 <a id="gwt-003"></a>
 ### GWT-003 hooks 失效可被发现且安装入口可正确解析
 
 - GIVEN `core.hooksPath` 未设置，或未指向仓内受版本控制的 hook 目录。
-- WHEN 执行聚合门禁，或任一执行面开始新会话。
+- WHEN 执行聚合门禁，或受支持的本地执行面开始新会话。
 - THEN 返回 `OPS.WORKTREE.HOOKS_NOT_INSTALLED` 并给出安装命令，且该判定不依赖 pre-commit 自身运行。
 - AND 安装入口在仓库根正确解析并可幂等重复执行；执行后 `core.hooksPath` 指向仓内 hook 目录，提交与推送门禁恢复生效。
 

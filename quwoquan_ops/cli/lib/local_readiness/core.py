@@ -43,10 +43,13 @@ from lib.feature_context_fingerprint import (  # noqa: E402
     validate_current_feature_context_fingerprint,
 )
 from lib.agent_governance_contract import validate_feature_context_manifest  # noqa: E402
+from lib.candidate_evidence import CandidateEvidenceError, validate_candidate_ref  # noqa: E402
+from quwoquan_ops.gate.lib.process_group_deadline import run_command  # noqa: E402
 from quwoquan_ops.ci.local_readiness_planner import (  # noqa: E402
     CHECK_FIELDS,
     PLAN_SCHEMA,
     build_impact_plan,
+    load_timeout_policy,
     classify_scopes,
 )
 
@@ -54,7 +57,7 @@ CONTRACT_PATH = ROOT / "quwoquan_ops/policies/local_readiness_contract.yaml"
 DEFAULT_STATE_ROOT = ROOT / ".qwq_output/env/repo/local/local-readiness"
 RECEIPT_SCHEMA = "local-readiness-receipt-v1"
 LEVEL_TO_STATE = {"fast": "fast_green", "scope": "scope_ready", "release": "release_ready"}
-PLAN_FIELDS = ("schema", "impact_planner", "level", "paths", "scopes", "lockfiles", "checks", "deferred", "mode")
+PLAN_FIELDS = ("schema", "impact_planner", "timeout_policy", "level", "paths", "scopes", "lockfiles", "checks", "deferred", "mode")
 _ZERO_SHA = "0" * 40
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _SOURCE_MODES = {"workspace", "staged", "commit", "push"}
@@ -158,6 +161,10 @@ def _load_contract() -> dict[str, Any]:
         raise LocalReadinessError("local readiness contract schema_version 非法")
     if value.get("fingerprint", {}).get("canonical_implementation") != "quwoquan_ops/cli/lib/evidence_fingerprint.py":
         raise LocalReadinessError("local readiness 必须复用 canonical EvidenceFingerprint")
+    try:
+        load_timeout_policy(CONTRACT_PATH)
+    except ValueError as exc:
+        raise LocalReadinessError(str(exc)) from exc
     return value
 
 
@@ -302,7 +309,7 @@ def _versions(commands: list[list[str]]) -> dict[str, str | None]:
     return result
 
 
-def _owner_manifest_assets(owner_manifest: Path | None, *, repo_root: Path) -> tuple[list[str], dict[str, Any] | None]:
+def _owner_manifest_assets(owner_manifest: Path | None, *, repo_root: Path, candidate_evidence: Path | None = None) -> tuple[list[str], dict[str, Any] | None]:
     assets = [] if repo_root.resolve() != ROOT.resolve() else [
         "quwoquan_ops/policies/local_readiness_contract.yaml",
         "quwoquan_ops/cli/lib/evidence_fingerprint.py",
@@ -332,6 +339,15 @@ def _owner_manifest_assets(owner_manifest: Path | None, *, repo_root: Path) -> t
             raise LocalReadinessError(f"owner manifest 非 current canonical manifest: {exc}") from exc
         manifest_value = value
         assets.append(relative)
+        if candidate_evidence is not None:
+            try:
+                candidate_relative = normalize_repo_relative_path(candidate_evidence.as_posix(), repo_root)
+                validate_candidate_ref(candidate_relative, repo_root=repo_root, expected_owner_identity_ref=relative)
+            except (CandidateEvidenceError, ValueError) as exc:
+                raise LocalReadinessError(f"candidate evidence 非 current canonical candidate: {exc}") from exc
+            assets.append(candidate_relative)
+    elif candidate_evidence is not None:
+        raise LocalReadinessError("candidate evidence 要求 owner identity predecessor")
     existing = [item for item in assets if (repo_root / item).exists()]
     return existing, manifest_value
 
@@ -355,13 +371,19 @@ def _load_review_inputs(
         raise LocalReadinessError("required evidence 缺 Review consolidation")
     paths = [review_consolidation, *evidence_paths]
     relatives: list[str] = []
+    exact_bytes: list[bytes] = []
+    repo_absolute = _canonical_absolute(repo_root)
     for item in paths:
+        absolute = _canonical_absolute(
+            item if item.is_absolute() else repo_root / item
+        )
         try:
-            relatives.append(str(item.resolve().relative_to(repo_root.resolve())))
+            relatives.append(absolute.relative_to(repo_absolute).as_posix())
         except ValueError as exc:
             raise LocalReadinessError("Review/evidence receipt 必须位于仓库或 .qwq_output 内") from exc
+        exact_bytes.append(_read_regular_bytes(absolute, label="Review/evidence receipt"))
     try:
-        consolidation = json.loads(review_consolidation.read_text(encoding="utf-8"))
+        consolidation = json.loads(exact_bytes[0].decode("utf-8"))
         validate_required_fields(consolidation, "review_consolidation")
         validate_declared_fields(consolidation, "review_consolidation", "required_fields")
         if consolidation.get("schema_version") != contract_schema_version("review_consolidation"):
@@ -370,10 +392,17 @@ def _load_review_inputs(
             raise ValueError("Review consolidation terminal 非 PASS")
         if any(item.get("severity") == "GATE_BLOCK" for item in consolidation.get("findings", [])):
             raise ValueError("Review consolidation 含 GATE_BLOCK finding")
-        receipts = [json.loads(item.read_text(encoding="utf-8")) for item in evidence_paths]
+        receipts = [json.loads(raw.decode("utf-8")) for raw in exact_bytes[1:]]
         for receipt in receipts:
             validate_declared_fields(receipt, "named_evidence_receipt", "required_fields")
             evidence_runner.validate_named_evidence_receipt(receipt)
+            if required:
+                try:
+                    evidence_runner.require_admission_eligible(
+                        receipt, label="scope/release required named evidence"
+                    )
+                except evidence_runner.EvidenceRunnerError as exc:
+                    raise ValueError(str(exc)) from exc
             if receipt.get("schema_version") != contract_schema_version("named_evidence_receipt"):
                 raise ValueError("required named evidence schema_version 非法")
             if receipt.get("terminal") != {"status": "PASS", "code": "EVIDENCE.PASSED", "failed_evidence": None}:
@@ -384,29 +413,46 @@ def _load_review_inputs(
             if any(item.get("exit_code") != 0 for item in required_results):
                 raise ValueError("required named evidence check 非零退出")
         consolidation_evidence = consolidation.get("evidence_identities") or []
-        supplied_result_digests = {
-            validate_evidence_fingerprint(receipt["result_fingerprint"])["digest"]
-            for receipt in receipts
-        }
-        bound_result_digests = {
-            str(item.get("result_fingerprint_digest") or "")
-            for item in consolidation_evidence
-            if isinstance(item, dict)
-        }
-        if not supplied_result_digests.intersection(bound_result_digests):
-            raise ValueError("Review consolidation 未绑定提供的 required evidence receipt")
-        if not any(
-            receipt.get("plan_fingerprint_ref") == consolidation.get("plan_fingerprint_ref")
-            and receipt.get("plan_fingerprint_digest") == consolidation.get("plan_fingerprint_digest")
-            for receipt in receipts
+        if len(consolidation_evidence) != len(receipts):
+            raise ValueError("Review consolidation evidence identities 与 supplied receipts 数量不一致")
+        supplied_identities: list[dict[str, Any]] = []
+        for relative, raw, receipt in zip(relatives[1:], exact_bytes[1:], receipts):
+            execution = validate_evidence_fingerprint(receipt["execution_fingerprint"])
+            result = validate_evidence_fingerprint(receipt["result_fingerprint"])
+            supplied_identities.append(
+                {
+                    "receipt_ref": relative,
+                    "canonical_bytes_sha256": "sha256:" + hashlib.sha256(raw).hexdigest(),
+                    "run_id": receipt["run_id"],
+                    "generation_id": receipt["generation_id"],
+                    "evidence_class": receipt["evidence_class"],
+                    "admission_eligible": receipt["admission_eligible"],
+                    "plan_fingerprint_ref": receipt["plan_fingerprint_ref"],
+                    "plan_fingerprint_digest": receipt["plan_fingerprint_digest"],
+                    "execution_fingerprint_ref": execution["ref"],
+                    "execution_fingerprint_digest": execution["digest"],
+                    "result_fingerprint_ref": result["ref"],
+                    "result_fingerprint_digest": result["digest"],
+                    "finished_at": receipt["finished_at"],
+                }
+            )
+        if consolidation_evidence != supplied_identities:
+            raise ValueError("Review consolidation 未绑定提供的 required evidence exact identities")
+        if any(
+            identity["plan_fingerprint_ref"] != consolidation.get("plan_fingerprint_ref")
+            or identity["plan_fingerprint_digest"] != consolidation.get("plan_fingerprint_digest")
+            for identity in supplied_identities
         ):
             raise ValueError("Review consolidation 与 evidence plan identity 不一致")
     except (OSError, TypeError, ValueError, KeyError, json.JSONDecodeError) as exc:
         raise LocalReadinessError(f"Review admission receipt 非法: {exc}") from exc
     return relatives, {
         "required": required,
-        "consolidation": canonical_digest(consolidation),
-        "evidence": [canonical_digest(receipt) for receipt in receipts],
+        "consolidation": "sha256:" + hashlib.sha256(exact_bytes[0]).hexdigest(),
+        "evidence": [
+            "sha256:" + hashlib.sha256(raw).hexdigest()
+            for raw in exact_bytes[1:]
+        ],
     }
 
 
@@ -415,9 +461,20 @@ def _execution_plan(plan: dict[str, Any]) -> dict[str, Any]:
     extra = sorted(set(plan) - set(PLAN_FIELDS) - {"fingerprint"})
     if missing or extra:
         raise LocalReadinessError(f"local readiness plan 字段漂移: missing={missing}, extra={extra}")
+    timeout_identity = plan["timeout_policy"]
+    if (
+        not isinstance(timeout_identity, dict)
+        or tuple(timeout_identity) != ("schema", "source", "digest")
+        or not isinstance(timeout_identity.get("digest"), str)
+        or not timeout_identity["digest"].startswith("sha256:")
+    ):
+        raise LocalReadinessError("local readiness timeout policy identity 字段漂移")
     for check in plan["checks"]:
         if not isinstance(check, dict) or tuple(check) != CHECK_FIELDS:
             raise LocalReadinessError("local readiness check 字段漂移")
+        timeout = check.get("timeout_seconds")
+        if isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0:
+            raise LocalReadinessError("local readiness check timeout_seconds 非法")
     return {field: plan[field] for field in PLAN_FIELDS}
 
 
@@ -440,6 +497,7 @@ def capture_fingerprint(
     repo_root: Path = ROOT,
     mode: str,
     owner_manifest: Path | None = None,
+    candidate_evidence: Path | None = None,
     push_updates: list[dict[str, str]] | None = None,
     review_consolidation: Path | None = None,
     required_evidence: list[Path] | None = None,
@@ -450,9 +508,9 @@ def capture_fingerprint(
     paths = list(execution["paths"])
     if not paths:
         raise LocalReadinessError("readiness fingerprint 不接受空输入范围")
-    assets, manifest = _owner_manifest_assets(owner_manifest, repo_root=repo_root)
-    if execution["level"] in {"scope", "release"} and manifest is None and not allow_missing_admission:
-        raise LocalReadinessError("scope/release readiness 要求 current owner manifest")
+    assets, manifest = _owner_manifest_assets(owner_manifest, repo_root=repo_root, candidate_evidence=candidate_evidence)
+    if execution["level"] in {"scope", "release"} and (manifest is None or candidate_evidence is None) and not allow_missing_admission:
+        raise LocalReadinessError("scope/release readiness 要求 owner identity + candidate evidence")
     _review_paths, review_identity = _load_review_inputs(
         review_consolidation,
         required_evidence,
@@ -487,7 +545,8 @@ def capture_fingerprint(
             "assets": {
                 "canonical_assets_digest": canonical_digest({
                     "source_tree": workspace if mode != "workspace" else (workspace_digests(assets, repo_root=repo_root) if assets else {}),
-                    "owner_manifest": manifest,
+                    "owner_identity": manifest,
+                    "candidate_evidence_ref": normalize_repo_relative_path(candidate_evidence.as_posix(), repo_root) if candidate_evidence else None,
                 }),
                 "review_assets_digest": canonical_digest(review_identity),
             },
@@ -581,7 +640,7 @@ def _read_queue(path: Path) -> dict[str, Any] | None:
     from .queue import read_queue
     return read_queue(path)
 
-def enqueue_paths(paths: list[str], *, reason: str = "after_edit", state_root: Path | None = None) -> dict[str, Any]:
+def enqueue_paths(paths: list[str], *, reason: str = "explicit_enqueue", state_root: Path | None = None) -> dict[str, Any]:
     from .queue import enqueue_paths as enqueue
     return enqueue(paths, reason=reason, state_root=state_root)
 
@@ -589,9 +648,9 @@ def _queue_items(*, state_root: Path | None = None) -> list[dict[str, Any]]:
     from .queue import queue_items
     return queue_items(state_root=state_root)
 
-def _assert_scope_queue_closed(plan: dict[str, Any], *, state_root: Path | None = None) -> None:
+def _assert_scope_queue_closed(plan: dict[str, Any], *, state_root: Path | None = None) -> dict[str, Any]:
     from .queue import assert_scope_queue_closed
-    assert_scope_queue_closed(plan, state_root=state_root)
+    return assert_scope_queue_closed(plan, state_root=state_root)
 
 def _clear_queue_exact(paths: list[str], *, state_root: Path | None = None) -> None:
     from .queue import clear_queue_exact
@@ -605,6 +664,7 @@ def plan_readiness(
     repo_root: Path = ROOT,
     mode: str = "workspace",
     owner_manifest: Path | None = None,
+    candidate_evidence: Path | None = None,
     push_updates: list[dict[str, str]] | None = None,
     review_consolidation: Path | None = None,
     required_evidence: list[Path] | None = None,
@@ -617,6 +677,7 @@ def plan_readiness(
         repo_root=repo_root,
         mode=mode,
         owner_manifest=owner_manifest,
+        candidate_evidence=candidate_evidence,
         push_updates=push_updates,
         review_consolidation=review_consolidation,
         required_evidence=required_evidence,
@@ -684,21 +745,35 @@ def _run_check(
     *,
     repo_root: Path,
     execution_env: dict[str, str] | None = None,
+    timeout_seconds: float | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     env = os.environ.copy()
     env.update(execution_env or {})
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    configured_timeout = float(check["timeout_seconds"])
+    effective_timeout = configured_timeout if timeout_seconds is None else min(
+        configured_timeout, max(0.0, float(timeout_seconds))
+    )
     command = list(check["command"])
-    proc = subprocess.run(command, cwd=_safe_cwd(repo_root, str(check["cwd"])), env=env, capture_output=True, text=True, check=False)
+    result = run_command(
+        command,
+        cwd=_safe_cwd(repo_root, str(check["cwd"])),
+        timeout_seconds=effective_timeout,
+        capture_output=True,
+        env=env,
+    )
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_path.write_text(proc.stdout + proc.stderr, encoding="utf-8")
+    log_path.write_bytes(result.stdout + result.stderr)
     return {
         "id": check["id"],
-        "status": "PASS" if proc.returncode == 0 else "FAIL",
-        "exit_code": proc.returncode,
+        "status": "PASS" if result.returncode == 0 else "FAIL",
+        "exit_code": result.returncode,
         "elapsed_ms": int((time.monotonic() - started) * 1000),
         "log": str(log_path),
+        "timed_out": result.timed_out,
+        "termination_signal": result.termination_signal,
+        "outcome": "timeout" if result.timed_out else "exited",
     }
 
 
@@ -759,23 +834,37 @@ def run_readiness(
     *,
     repo_root: Path = ROOT,
     owner_manifest: Path | None = None,
+    candidate_evidence: Path | None = None,
     push_updates: list[dict[str, str]] | None = None,
     review_consolidation: Path | None = None,
     required_evidence: list[Path] | None = None,
     state_root: Path | None = None,
+    wall_clock_budget_seconds: float | None = None,
 ) -> dict[str, Any]:
+    if wall_clock_budget_seconds is not None and (
+        isinstance(wall_clock_budget_seconds, bool)
+        or not isinstance(wall_clock_budget_seconds, (int, float))
+        or wall_clock_budget_seconds <= 0
+    ):
+        raise LocalReadinessError("wall_clock_budget_seconds 必须为正数")
+    wall_clock_deadline = (
+        time.monotonic() + float(wall_clock_budget_seconds)
+        if wall_clock_budget_seconds is not None
+        else None
+    )
     if plan.get("level") != "fast" and plan.get("deferred"):
         raise LocalReadinessError("scope/release readiness 要求 deferred=[]")
     canonical = canonicalize_plan(plan, repo_root=repo_root)
     level, mode = str(canonical["level"]), str(canonical["mode"])
     if level != "fast" and canonical["deferred"]:
         raise LocalReadinessError("scope/release readiness 要求 deferred=[]")
-    _assert_scope_queue_closed(canonical, state_root=state_root)
+    queue_observation = _assert_scope_queue_closed(canonical, state_root=state_root)
     current = capture_fingerprint(
         canonical,
         repo_root=repo_root,
         mode=mode,
         owner_manifest=owner_manifest,
+        candidate_evidence=candidate_evidence,
         push_updates=push_updates,
         review_consolidation=review_consolidation,
         required_evidence=required_evidence,
@@ -795,6 +884,7 @@ def run_readiness(
             repo_root=repo_root,
             mode=mode,
             owner_manifest=owner_manifest,
+            candidate_evidence=candidate_evidence,
             push_updates=push_updates,
             review_consolidation=review_consolidation,
             required_evidence=required_evidence,
@@ -811,7 +901,13 @@ def run_readiness(
                 and cached.get("fingerprint", {}).get("digest") == current["digest"]
                 and cached.get("plan") == canonical
             ):
-                receipt = {**cached, "cache_hit": True, "finished_at": _utc_now()}
+                queue_observation = _assert_scope_queue_closed(canonical, state_root=root)
+                receipt = {
+                    **cached,
+                    "queue_closure": queue_observation,
+                    "cache_hit": True,
+                    "finished_at": _utc_now(),
+                }
                 _write_pass_receipt(receipt, canonical, state_root=root, push_updates=push_updates)
                 if not canonical["deferred"]:
                     _clear_queue_exact(canonical["paths"], state_root=root)
@@ -827,11 +923,19 @@ def run_readiness(
             push_updates=push_updates,
         ) as (execution_root, execution_env, _source_entries):
             for index, check in enumerate(canonical["checks"]):
+                remaining = (
+                    None
+                    if wall_clock_deadline is None
+                    else wall_clock_deadline - time.monotonic()
+                )
+                if remaining is not None and remaining <= 0:
+                    break
                 result = _run_check(
                     check,
                     root / "process/runs" / run_id / f"{index:03d}-{check['id'].replace(':', '-')}.log",
                     repo_root=execution_root,
                     execution_env=execution_env,
+                    timeout_seconds=remaining,
                 )
                 results.append(result)
                 if result["status"] != "PASS":
@@ -841,13 +945,14 @@ def run_readiness(
             repo_root=repo_root,
             mode=mode,
             owner_manifest=owner_manifest,
+            candidate_evidence=candidate_evidence,
             push_updates=push_updates,
             review_consolidation=review_consolidation,
             required_evidence=required_evidence,
             state_root=state_root,
         )
         stable = end["digest"] == current["digest"]
-        _assert_scope_queue_closed(canonical, state_root=root)
+        queue_observation = _assert_scope_queue_closed(canonical, state_root=root)
         status = "PASS" if len(results) == len(canonical["checks"]) and all(item["status"] == "PASS" for item in results) and stable and (level == "fast" or not canonical["deferred"]) else "FAIL"
         admission_paths, admission_identity = _load_review_inputs(review_consolidation, required_evidence, repo_root=repo_root, required=level in {"scope", "release"})
         receipt = {
@@ -866,8 +971,10 @@ def run_readiness(
             "checks": results,
             "cache_hit": False,
             "plan": canonical,
-            "owner_manifest": str(owner_manifest.resolve().relative_to(repo_root.resolve())) if owner_manifest else None,
+            "owner_identity": str(owner_manifest.resolve().relative_to(repo_root.resolve())) if owner_manifest else None,
+            "candidate_evidence": str(candidate_evidence.resolve().relative_to(repo_root.resolve())) if candidate_evidence else None,
             "review_admission": {"paths": admission_paths, "identity": admission_identity},
+            "queue_closure": queue_observation,
             "finished_at": _utc_now(),
         }
         if status == "PASS":
@@ -894,6 +1001,7 @@ def verify_receipt(
     repo_root: Path = ROOT,
     mode: str,
     owner_manifest: Path | None = None,
+    candidate_evidence: Path | None = None,
     push_updates: list[dict[str, str]] | None = None,
     receipt_path: Path | None = None,
     state_root: Path | None = None,
@@ -924,13 +1032,18 @@ def verify_receipt(
         raise LocalReadinessError("readiness receipt 仍含 deferred")
     _assert_scope_queue_closed(canonical, state_root=state_root)
     review_path, evidence_paths = _receipt_admission_paths(receipt, repo_root)
-    if owner_manifest is None and receipt.get("owner_manifest"):
-        owner_manifest = repo_root / normalize_repo_relative_path(receipt["owner_manifest"], repo_root)
+    if receipt.get("owner_manifest") is not None:
+        raise LocalReadinessError("IDENTITY.MIGRATION_REQUIRED: local readiness receipt 使用旧 owner_manifest 字段")
+    if owner_manifest is None and receipt.get("owner_identity"):
+        owner_manifest = repo_root / normalize_repo_relative_path(receipt["owner_identity"], repo_root)
+    if candidate_evidence is None and receipt.get("candidate_evidence"):
+        candidate_evidence = repo_root / normalize_repo_relative_path(receipt["candidate_evidence"], repo_root)
     current = capture_fingerprint(
         canonical,
         repo_root=repo_root,
         mode=mode,
         owner_manifest=owner_manifest,
+        candidate_evidence=candidate_evidence,
         push_updates=push_updates,
         review_consolidation=review_path,
         required_evidence=evidence_paths,

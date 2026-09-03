@@ -39,18 +39,22 @@ class CommitGateFastPathTest(unittest.TestCase):
         source = MAKEFILE.read_text(encoding="utf-8")
         self.assertIn('LOCAL_GAMMA_SKIP_GATE:-1}', source)
 
-    def test_budgets_declare_ten_minute_soft_fifteen_hard(self) -> None:
+    def test_budgets_declare_three_minute_soft_five_minute_hard(self) -> None:
         data = json.loads(BUDGETS.read_text(encoding="utf-8"))
         gate = data["gates"]["00.local_commit_gate"]
-        self.assertEqual(gate["budgetSeconds"], 600)
-        self.assertEqual(gate["hardFailSeconds"], 900)
-        self.assertEqual(gate["phaseBudgetsSeconds"]["L0_static_parallel"], 120)
-        self.assertEqual(gate["phaseBudgetsSeconds"]["L0_impacted_tests_parallel"], 420)
+        self.assertEqual(gate["budgetSeconds"], 180)
+        self.assertEqual(gate["hardFailSeconds"], 300)
+        phases = gate["phaseBudgetsSeconds"]
+        self.assertEqual(phases["L0_static_parallel"], 120)
+        self.assertEqual(phases["L0_impacted_tests_parallel"], 160)
+        self.assertEqual(phases["L0_summary_and_overhead"], 20)
+        self.assertLessEqual(sum(phases.values()), gate["hardFailSeconds"])
 
     def test_baseline_artifact_exists(self) -> None:
         data = json.loads(BASELINE.read_text(encoding="utf-8"))
         self.assertIn("cross_area_pre_commit", data["profiles"])
-        self.assertEqual(data["targetAfterOptimization"]["local_commit_gate"]["p95Seconds"], 600)
+        self.assertEqual(data["targetAfterOptimization"]["local_commit_gate"]["p95Seconds"], 180)
+        self.assertEqual(data["targetAfterOptimization"]["local_commit_gate"]["hardFailSeconds"], 300)
 
     def test_selector_caps_flutter_and_defers_rest(self) -> None:
         proc = subprocess.run(
@@ -146,12 +150,18 @@ class CommitGateFastPathTest(unittest.TestCase):
         self.assertNotIn("git status --porcelain | shasum", source)
         self.assertIn("HARD_BUDGET", source)
         self.assertIn("SOFT_BUDGET", source)
+        self.assertIn('g.get("budgetSeconds",180)', source)
+        self.assertIn('g.get("hardFailSeconds",300)', source)
         self.assertIn("entrypoint_script_paths", source)
         self.assertIn("process_group_deadline.py", source)
         self.assertIn("--deadline-epoch-seconds", source)
         self.assertIn("COMMIT_GATE.HARD_TIMEOUT", source)
         self.assertIn("HARD_DEADLINE", source)
         self.assertIn("jobs", source)
+        self.assertIn(
+            'python3 "$ROOT/quwoquan_ops/gate/verify_git_branch_policy.py" --local-commit',
+            source,
+        )
         self.assertIn("local_worktree_lifecycle is forbidden", source)
         self.assertNotIn("verify_local_worktree_lifecycle.py", source)
         self.assertNotRegex(source, r"(?m)^\s*make gate\b")

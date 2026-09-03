@@ -2,8 +2,8 @@
 """轮次交接单校验门禁。
 
 HANDOFF 是宪法要求的工作流间交接契约，但聊天文本无法校验、无法跨会话消费。
-交接单 `.qwq_output/env/repo/runs/handoff/<轮次>/manifest.md` 是它的物理形态；
-本门禁校验其结构可裁定：
+authoritative 物理形态是 current git-common-dir 下的 create-once exact JSON；
+`.qwq_output/**` Markdown/JSON 仅是可删除 projection。本门禁只消费显式 handoff ref：
 
 1. 头部字段：`intent 终版`、`新轮触发判定`。
 2. 宪法四项段落齐全：`## 产出物`、`## 未决项去向`、`## 唯一合法下游`、`## 证据链`。
@@ -14,11 +14,10 @@ HANDOFF 是宪法要求的工作流间交接契约，但聊天文本无法校验
 5. 证据链每条带「命令 + 退出码 + 时间戳 + 工作树 SHA」，下游消费时过期即复跑。
 
 用法：
-    python3 quwoquan_ops/gate/verify_handoff_manifest.py <manifest.md>
-    python3 quwoquan_ops/gate/verify_handoff_manifest.py   # 校验最新轮次
+    python3 quwoquan_ops/gate/verify_handoff_manifest.py --handoff-ref <explicit-ref>
 
-退出码：0 通过；1 校验失败；2 用法错误或找不到交接单。
-交接单是运行产物（可删可重建）：长期事实必须同时转出到 OPEN/spec，本门禁不校验业务内容。
+退出码：0 通过；1 校验失败；2 用法错误。
+projection 可删可重建；authoritative handoff 不依赖 projection。长期事实仍须转出到 OPEN/spec。
 接入面：on-demand gate，经 `make verify-handoff-manifest` 在轮次收口时调用；
 不接入 gate_repo.sh，不进 L0 commit gate。
 """
@@ -34,7 +33,6 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[2]
-HANDOFF_ROOT = ROOT / ".qwq_output/env/repo/runs/handoff"
 
 sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
 from lib.agent_governance_contract import contract_section  # noqa: E402
@@ -45,7 +43,6 @@ from lib.evidence_fingerprint import (  # noqa: E402
     validate_evidence_fingerprint,
     validate_ref,
 )
-from lib.gate_output import emit_gate_result, finding  # noqa: E402
 import handoff_consumer  # noqa: E402
 
 REQUIRED_HEAD_FIELDS = ("intent 终版", "新轮触发判定")
@@ -94,6 +91,7 @@ def _identity_fields(text: str) -> tuple[dict[str, str], list[str]]:
             issues.append(f"EvidenceFingerprint 字段重复：{key}")
         fields[key] = match.group("value").strip().strip("`")
     required = {
+        "handoff_ref",
         "payload_ref",
         "ref",
         "digest",
@@ -173,20 +171,8 @@ def _validate_identity(text: str, rel: str) -> list[str]:
         issues.append(
             f"{rel}: recovery_token 非法，必须为 {handoff['recovery_token']}"
         )
-    payload_ref = fields.get("payload_ref")
-    if payload_ref:
-        try:
-            _, handoff_payload = handoff_consumer._load_json_ref(
-                payload_ref, label="handoff payload"
-            )
-            handoff_consumer.validate_handoff_payload(handoff_payload)
-            current = validate_evidence_fingerprint(
-                handoff_payload["fingerprint_receipt"]
-            )
-            if current["digest"] != digest or current["ref"] != fields["ref"]:
-                issues.append(f"{rel}: Markdown identity 与 canonical payload 不一致")
-        except (KeyError, TypeError, ValueError) as exc:
-            issues.append(f"{rel}: canonical handoff payload stale：{exc}")
+    # Markdown is a disposable projection. Authoritative exact-byte validation
+    # occurs only through CLI --handoff-ref; projection lint does not read latest/store.
     return issues
 
 
@@ -233,48 +219,21 @@ def validate(text: str, rel: str) -> list[str]:
     return issues
 
 
-def _latest_manifest() -> Path | None:
-    if not HANDOFF_ROOT.is_dir():
-        return None
-    manifests = sorted(HANDOFF_ROOT.glob("*/manifest.md"), key=lambda p: p.stat().st_mtime)
-    return manifests[-1] if manifests else None
-
-
 def main(argv: list[str]) -> int:
-    if len(argv) > 1:
-        target = Path(argv[1])
-        if not target.is_absolute():
-            target = ROOT / target
-    else:
-        found = _latest_manifest()
-        if found is None:
-            print(
-                f"[verify_handoff_manifest] 用法错误：{HANDOFF_ROOT.relative_to(ROOT)} "
-                "下没有任何轮次交接单，且未指定路径",
-                file=sys.stderr,
-            )
-            return 2
-        target = found
+    import argparse
 
-    if not target.is_file():
-        print(f"[verify_handoff_manifest] 找不到交接单 {target}", file=sys.stderr)
-        return 2
-
-    rel = target.relative_to(ROOT).as_posix() if target.is_relative_to(ROOT) else str(target)
-    issues = validate(target.read_text(encoding="utf-8"), rel)
-    emit_gate_result(
-        "verify-handoff-manifest",
-        [finding(issue, path=rel) for issue in issues],
-        ROOT,
-    )
-    if issues:
-        print("[verify_handoff_manifest] FAIL", file=sys.stderr)
-        for issue in issues:
-            print(f"  - {issue}", file=sys.stderr)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--handoff-ref", required=True)
+    args = parser.parse_args(argv[1:])
+    try:
+        payload = handoff_consumer.consume_ref(args.handoff_ref)
+    except (OSError, TypeError, ValueError) as exc:
+        print(f"[verify_handoff_manifest] FAIL: {exc}", file=sys.stderr)
         return 1
+    fingerprint = validate_evidence_fingerprint(payload["fingerprint_receipt"])
     print(
-        f"[verify_handoff_manifest] OK: {rel} canonical fingerprint fresh、"
-        "裁决零悬空、证据字段完整"
+        f"[verify_handoff_manifest] OK: {args.handoff_ref} "
+        f"exact bytes + current fingerprint {fingerprint['digest']}"
     )
     return 0
 

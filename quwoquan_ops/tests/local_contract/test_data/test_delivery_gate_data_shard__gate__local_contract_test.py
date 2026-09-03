@@ -949,25 +949,31 @@ def test_crosscutting_data_changes_defer_the_whole_domain() -> None:
         )
 
 
-def test_narrow_data_changes_do_not_defer_the_whole_domain() -> None:
+def test_narrow_data_changes_defer_only_their_canonical_directory() -> None:
     selected, deferred = cgs.select_pytest_paths(
         ["quwoquan_data/scripts/content/homepage/probe.py"]
     )
-    assert selected == ["quwoquan_data/tests/local_contract/homepage"]
+    assert selected == []
+    assert deferred == ["quwoquan_data/tests/local_contract/homepage"]
     assert cgs.DATA_LOCAL_CONTRACT_ROOT not in deferred
 
 
-def test_overflowing_selection_is_deferred_rather_than_dropped() -> None:
+def test_over_budget_selection_is_deferred_rather_than_dropped() -> None:
     changed = sorted(
         path.relative_to(ROOT).as_posix()
         for path in (ROOT / "quwoquan_ops" / "tests" / "local_contract").rglob(
             "*_local_contract_test.py"
         )
     )
-    assert len(changed) > cgs.PYTEST_CAP, "本判据需要超过上限的在场测试文件才有意义"
+    assert len(changed) > cgs.PYTEST_CAP, "本判据需要超过防御上限的在场测试文件才有意义"
 
-    selected, deferred = cgs.select_pytest_paths(changed)
-    assert len(selected) == cgs.PYTEST_CAP
-    # 超额部分以前被 `selected[:80]` 直接丢掉：改了 85 个测试只跑 80 个，另外 5 个
-    # 既不在本地跑也不在任何摘要里出现。
+    plan = cgs.build_plan(changed, cgs.DEFAULT_FLUTTER_CAP)
+    selected = plan["pytest_paths"]
+    deferred = [path for path in plan["deferred_to_ci"] if path.endswith(".py")]
+    assert plan["estimated_pytest_seconds"] <= plan["pytest_budget_seconds"]
+    assert len(selected) < cgs.PYTEST_CAP
+    assert any(
+        item["reason"] == "estimated_duration_budget"
+        for item in plan["pytest_target_estimates"]
+    )
     assert sorted(selected + deferred) == changed

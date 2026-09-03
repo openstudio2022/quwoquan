@@ -18,6 +18,7 @@ CANONICAL_TOP_LEVEL_KEYS = {
     "sourceGitSha",
     "candidateDigest",
     "status",
+    "outcomePolicy",
     "timestamps",
     "durations",
     "budget",
@@ -37,9 +38,16 @@ def write_budget(tmp_path: Path) -> Path:
                     "test_gate": {
                         "budgetSeconds": 600,
                         "hardFailSeconds": 1800,
-                        "profileHardFailSeconds": {
-                            "pr_light": 5400,
-                            "mainline_auto_prod": 480,
+                        "timingPolicy": "release_sla",
+                        "profileTiming": {
+                            "pr_light": {
+                                "policy": "telemetry_advisory",
+                                "hardFailSeconds": 5400,
+                            },
+                            "mainline_auto_prod": {
+                                "policy": "release_sla",
+                                "hardFailSeconds": 7800,
+                            },
                         },
                         "criticalPath": "candidate + environments + prod",
                         "phaseBudgetsSeconds": {"candidate": 120},
@@ -164,8 +172,14 @@ def test_cli_emits_only_the_canonical_unversioned_shape(tmp_path: Path) -> None:
     assert set(payload) == CANONICAL_TOP_LEVEL_KEYS
     assert payload["schema"] == "ci-timing-summary"
     assert payload["status"] == "within_budget"
+    assert payload["outcomePolicy"] == {
+        "functional": "unknown",
+        "telemetryClassification": "attempted",
+        "timing": "PASS",
+    }
     assert payload["missingEvidence"] == []
     assert payload["budget"] == {
+        "policy": "release_sla",
         "softSeconds": 600,
         "hardSeconds": 1800,
         "deltaFromSoftSeconds": 0,
@@ -260,7 +274,7 @@ def test_soft_and_hard_statuses_come_from_the_budget_file(
     ("profile", "seconds", "expected_hard"),
     [
         ("pr_light", 6000, 5400),
-        ("mainline_auto_prod", 500, 480),
+        ("mainline_auto_prod", 8000, 7800),
     ],
 )
 def test_profile_hard_budget_is_the_canonical_rendered_gate_outcome(
@@ -280,6 +294,33 @@ def test_profile_hard_budget_is_the_canonical_rendered_gate_outcome(
     assert payload["budget"]["profile"] == profile
     assert payload["budget"]["hardSeconds"] == expected_hard
     assert payload["budget"]["gateHardSeconds"] == 1800
+    assert payload["outcomePolicy"]["timing"] == (
+        "GATE_BLOCK" if profile == "mainline_auto_prod" else "PR_WARN"
+    )
+
+
+def test_release_sla_and_advisory_have_distinct_hard_budget_projection(
+    tmp_path: Path,
+) -> None:
+    release = run_renderer(
+        tmp_path,
+        8000,
+        complete=True,
+        budget_profile="mainline_auto_prod",
+    )
+    advisory = run_renderer(
+        tmp_path,
+        6000,
+        complete=True,
+        budget_profile="pr_light",
+    )
+
+    assert release["status"] == "failed"
+    assert release["budget"]["policy"] == "release_sla"
+    assert release["outcomePolicy"]["timing"] == "GATE_BLOCK"
+    assert advisory["status"] == "failed"
+    assert advisory["budget"]["policy"] == "telemetry_advisory"
+    assert advisory["outcomePolicy"]["timing"] == "PR_WARN"
 
 
 def test_unknown_profile_fails_closed_before_writing_summary(tmp_path: Path) -> None:
@@ -305,7 +346,7 @@ def test_unknown_profile_fails_closed_before_writing_summary(tmp_path: Path) -> 
     )
 
     assert completed.returncode != 0
-    assert "canonical profile hard budget is missing: unknown" in completed.stderr
+    assert "canonical profile timing budget is missing: unknown" in completed.stderr
     assert not output_path.exists()
 
 
@@ -475,3 +516,36 @@ def test_upstream_job_timestamp_gap_is_preserved_as_missing_evidence(
     assert payload["durations"]["queueSeconds"] is None
     assert "durations.queueSeconds" in payload["missingEvidence"]
     assert "githubJobs.createdAt" in payload["missingEvidence"]
+
+
+def test_functional_green_with_provider_timeout_is_timing_pr_warn(tmp_path: Path) -> None:
+    output_path = tmp_path / "summary.json"
+    args = complete_args(590)
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "--gate-key", "test_gate",
+         "--budget-file", str(write_budget(tmp_path)), *args,
+         "--functional-outcome", "pass",
+         "--telemetry-classification", "infra",
+         "--write-json", str(output_path)],
+        cwd=REPO_ROOT, check=False, capture_output=True, text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["status"] == "within_budget"
+    assert payload["outcomePolicy"]["functional"] == "pass"
+    assert payload["outcomePolicy"]["timing"] == "PR_WARN"
+
+
+def test_functional_timeout_remains_fail_even_when_timing_is_infra(tmp_path: Path) -> None:
+    output_path = tmp_path / "summary.json"
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "--gate-key", "test_gate",
+         "--budget-file", str(write_budget(tmp_path)), *complete_args(590),
+         "--functional-outcome", "fail",
+         "--telemetry-classification", "infra",
+         "--write-json", str(output_path)],
+        cwd=REPO_ROOT, check=False, capture_output=True, text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["outcomePolicy"]["timing"] == "FUNCTIONAL_FAIL"

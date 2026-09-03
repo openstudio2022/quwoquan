@@ -41,36 +41,76 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  branch_policy:
-    name: Pre-Release — Branch Policy
+  pr_light_governance:
+    name: Pre-Release — PR Light Governance
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 3
+    outputs:
+      profile: ${{ steps.profile.outputs.profile }}
+      impact_plan_digest: ${{ steps.impact.outputs.plan_digest }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
-      - name: Enforce canonical repository branch admission
-        run: python3 quwoquan_ops/gate/verify_git_branch_policy.py
-
-  resolve_profile:
-    name: Resolve validation profile
-    needs: branch_policy
-    runs-on: [self-hosted, macOS, ARM64]
-    outputs:
-      profile: ${{ steps.resolve.outputs.profile }}
-    steps:
-      - id: resolve
-        name: Determine profile
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: profile
+        name: Resolve validation profile
         run: |
           PROFILE="${{ inputs.validation_profile || 'pr_light' }}"
-          echo "profile=${PROFILE}" >> "$GITHUB_OUTPUT"
+          case "$PROFILE" in pr_light|manual_full|mainline_auto_prod) ;; *) exit 2 ;; esac
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+      - id: range
+        name: Resolve exact governance impact range
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          PUSH_BEFORE_SHA: ${{ github.event.before || '' }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          BASE_SHA="$PR_BASE_SHA"
+          if [[ "${{ github.event_name }}" == push ]]; then BASE_SHA="$PUSH_BEFORE_SHA"; fi
+          if [[ "$BASE_SHA" == "0000000000000000000000000000000000000000" || -z "$BASE_SHA" ]]; then
+            BASE_SHA="$(git rev-parse "${HEAD_SHA}^" 2>/dev/null || true)"
+          fi
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] && [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          { echo "base_sha=$BASE_SHA"; echo "head_sha=$HEAD_SHA"; } >> "$GITHUB_OUTPUT"
+      - id: impact
+        name: Generate canonical PR-light impact plan
+        run: |
+          ROOT="$RUNNER_TEMP/pre-release-impact-plan"
+          mkdir -p "$ROOT"
+          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
+            --base-sha "${{ steps.range.outputs.base_sha }}" \
+            --head-sha "${{ steps.range.outputs.head_sha }}" \
+            --impact-plan "$ROOT/impact-plan.json" \
+            --github-output "$GITHUB_OUTPUT"
+          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
+            --validate-impact-plan "$ROOT/impact-plan.json" \
+            --expected-source-sha "${{ steps.range.outputs.head_sha }}" \
+            --expected-plan-digest "$(awk -F= '$1 == "plan_digest" {print $2}' "$GITHUB_OUTPUT" | tail -n 1)" \
+            --github-output "$RUNNER_TEMP/pre-release-impact-validated"
+      - name: Verify changed secret, PII and generated boundaries
+        run: |
+          python3 quwoquan_ops/ci/verify_ci_changed_boundary.py \
+            --impact-plan "$RUNNER_TEMP/pre-release-impact-plan/impact-plan.json" \
+            --expected-source-sha "${{ steps.range.outputs.head_sha }}" \
+            --expected-plan-digest "${{ steps.impact.outputs.plan_digest }}"
+      - name: Upload canonical PR-light impact plan
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pre-release-impact-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pre-release-impact-plan/impact-plan.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
 
   search_runtime_smoke:
     name: Pre-Release — Search /search Runtime Smoke
-    needs:
-      - resolve_profile
-    if: ${{ needs.resolve_profile.outputs.profile != 'pr_light' }}
+    needs: pr_light_governance
+    if: ${{ needs.pr_light_governance.outputs.profile != 'pr_light' }}
     runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Require explicit release environment URL
@@ -104,42 +144,23 @@ jobs:
 
   release-evidence-summary:
     name: 04. Pre-Release Gate
-    needs:
-      - resolve_profile
-      - search_runtime_smoke
+    needs: [pr_light_governance, search_runtime_smoke]
     if: always()
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - name: 输出 04 PR gate 摘要
+      - name: Enforce functional profile closure and publish budget target
         env:
-          PROFILE: ${{ needs.resolve_profile.outputs.profile }}
-        run: |
-          python3 quwoquan_ops/ci/render_ci_timing_summary.py \
-            --gate-key 04.pre_release_gate_pr \
-            --title "04. Pre-Release Gate (pr_light)" \
-            --machine-critical-path-seconds 0 \
-            --phase profile_resolved=0 \
-            --note "pr_light 不访问远端；manual_full/mainline_auto_prod 必须提供 beta/prod base URL 并通过 canonical /search 商业信封探针。hosted gamma 预检保持退役。" \
-            --write-step-summary
-      - name: 汇总并阻断失败项
-        env:
-          PROFILE: ${{ needs.resolve_profile.outputs.profile }}
-          RESOLVE_RESULT: ${{ needs.resolve_profile.result }}
+          PROFILE: ${{ needs.pr_light_governance.outputs.profile }}
+          GOVERNANCE_RESULT: ${{ needs.pr_light_governance.result }}
           SEARCH_RESULT: ${{ needs.search_runtime_smoke.result }}
         run: |
           set -euo pipefail
-          if [ "${RESOLVE_RESULT}" != "success" ]; then
-            echo "::error::resolve_profile expected success, got ${RESOLVE_RESULT}."
-            exit 1
-          fi
-          if [ "${PROFILE}" = "pr_light" ]; then
-            if [ "${SEARCH_RESULT}" != "skipped" ]; then
-              echo "::error::search_runtime_smoke must be skipped for pr_light, got ${SEARCH_RESULT}."
-              exit 1
-            fi
-          elif [ "${SEARCH_RESULT}" != "success" ]; then
-            echo "::error::search_runtime_smoke expected success for ${PROFILE}, got ${SEARCH_RESULT}."
-            exit 1
-          fi
-          echo "::notice::04. Pre-Release Gate passed with profile=${PROFILE}"
+          test "$GOVERNANCE_RESULT" = success
+          if [[ "$PROFILE" != pr_light ]]; then test "$SEARCH_RESULT" = success; fi
+          {
+            echo "### 04. Pre-Release Gate"
+            echo "- pr_light target: <=120s; hard timeout: 180s"
+            echo "- impact plan: ${{ needs.pr_light_governance.outputs.impact_plan_digest }}"
+            echo "- full profiles retain the canonical live /search admission check"
+          } >> "$GITHUB_STEP_SUMMARY"

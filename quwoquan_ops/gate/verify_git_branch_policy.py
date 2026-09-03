@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import subprocess
@@ -49,6 +51,7 @@ BRANCH_POLICY_FIELDS = frozenset(
         "production_workflow",
         "required_promotion_checks",
         "allowed_pull_request_edges",
+        "integration_branch_activation",
         "system_backsync",
         "persistent_lane_admission",
         "failure_codes",
@@ -56,6 +59,16 @@ BRANCH_POLICY_FIELDS = frozenset(
 )
 POLICY_INVALID_RECOVERY = "repair_canonical_branch_policy"
 AUTHORITY_UNAVAILABLE_RECOVERY = "restore_git_authority_then_retry"
+ACTIVATION_EVIDENCE_SCHEMA_VERSION = 1
+ACTIVATION_STATES = frozenset({"bootstrap", "active"})
+ACTIVATION_TRANSITION_COMMAND = (
+    "python3 -B quwoquan_ops/gate/verify_git_branch_policy.py "
+    "--activation-transition --evidence-path "
+    ".qwq_output/env/repo/runs/branch-policy/dev1.0-activation.json"
+)
+SYSTEM_BACKSYNC_WORKFLOW_REF_SUFFIX = (
+    "/.github/workflows/system-backsync.yml@refs/heads/main"
+)
 RECOVERY_BY_FAILURE_KEY = {
     "policy_invalid": POLICY_INVALID_RECOVERY,
     "ref_not_allowed": "use_declared_branch_and_allowed_pr_edge_then_retry",
@@ -132,6 +145,20 @@ class SystemBacksync:
 
 
 @dataclass(frozen=True)
+class IntegrationBranchActivation:
+    state: str
+    transition_command: str
+    evidence_kind: str
+    bootstrap_remote_before_oid: str
+    bootstrap_remote_after_oid: str
+    bootstrap_source_branch: str
+    bootstrap_target_branch: str
+    bootstrap_release_eligibility: bool
+    active_accepted_updates: tuple[str, ...]
+    active_direct_push: str
+
+
+@dataclass(frozen=True)
 class RequiredPromotionCheck:
     name: str
     workflow: str
@@ -157,6 +184,7 @@ class BranchPolicy:
     production_workflow: str
     required_promotion_checks: tuple[RequiredPromotionCheck, ...]
     allowed_pull_request_edges: tuple[PullRequestEdge, ...]
+    integration_branch_activation: IntegrationBranchActivation
     system_backsync: SystemBacksync | None
     persistent_lane_admission: PersistentLaneAdmission | None
     failure_codes: tuple[tuple[str, str], ...]
@@ -290,6 +318,140 @@ def _pull_request_edges(payload: Mapping[str, object]) -> tuple[PullRequestEdge,
     return tuple(edges)
 
 
+def _exact_mapping(
+    value: object, *, label: str, fields: frozenset[str]
+) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise TypeError(f"branch policy {label} must be a mapping")
+    actual = set(value)
+    if actual != fields:
+        raise ValueError(
+            f"branch policy {label} fields drifted; "
+            f"missing={sorted(fields - actual)}, unexpected={sorted(actual - fields, key=repr)}"
+        )
+    return value
+
+
+def _strict_bool(value: object, label: str) -> bool:
+    if type(value) is not bool:
+        raise TypeError(f"branch policy {label} must be a boolean")
+    return value
+
+
+def _string_tuple(
+    payload: Mapping[str, object], key: str, *, label_prefix: str = ""
+) -> tuple[str, ...]:
+    label = f"{label_prefix}.{key}" if label_prefix else key
+    raw = payload.get(key)
+    if not isinstance(raw, list):
+        raise TypeError(f"branch policy {label} must be a list")
+    rows = tuple(
+        _strict_string(value, f"{label}[{index}]")
+        for index, value in enumerate(raw)
+    )
+    if not rows or len(rows) != len(set(rows)):
+        raise ValueError(f"branch policy {label} must be non-empty and duplicate-free")
+    return rows
+
+
+def _integration_branch_activation(
+    payload: Mapping[str, object], *, integration_branch: str
+) -> IntegrationBranchActivation:
+    key = "integration_branch_activation"
+    raw = _exact_mapping(
+        payload.get(key),
+        label=key,
+        fields=frozenset(
+            {"state", "transition_command", "evidence_kind", "bootstrap", "active"}
+        ),
+    )
+    state = _strict_string(raw.get("state"), f"{key}.state")
+    if state not in ACTIVATION_STATES:
+        raise ValueError(
+            "branch policy integration_branch_activation.state must be "
+            "'bootstrap' or 'active'"
+        )
+    transition_command = _strict_string(
+        raw.get("transition_command"), f"{key}.transition_command"
+    )
+    if transition_command != ACTIVATION_TRANSITION_COMMAND:
+        raise ValueError(
+            "branch policy integration_branch_activation.transition_command must equal "
+            "the canonical activation transition CLI"
+        )
+    evidence_kind = _strict_string(raw.get("evidence_kind"), f"{key}.evidence_kind")
+    if evidence_kind != "integration_branch_activation_v1":
+        raise ValueError(
+            "branch policy integration_branch_activation.evidence_kind must be "
+            "'integration_branch_activation_v1'"
+        )
+    bootstrap = _exact_mapping(
+        raw.get("bootstrap"),
+        label=f"{key}.bootstrap",
+        fields=frozenset(
+            {
+                "remote_before_oid",
+                "remote_after_oid",
+                "source_branch",
+                "target_branch",
+                "release_eligibility",
+            }
+        ),
+    )
+    active = _exact_mapping(
+        raw.get("active"),
+        label=f"{key}.active",
+        fields=frozenset({"accepted_updates", "direct_push"}),
+    )
+    activation = IntegrationBranchActivation(
+        state=state,
+        transition_command=transition_command,
+        evidence_kind=evidence_kind,
+        bootstrap_remote_before_oid=_strict_string(
+            bootstrap.get("remote_before_oid"), f"{key}.bootstrap.remote_before_oid"
+        ),
+        bootstrap_remote_after_oid=_strict_string(
+            bootstrap.get("remote_after_oid"), f"{key}.bootstrap.remote_after_oid"
+        ),
+        bootstrap_source_branch=_strict_string(
+            bootstrap.get("source_branch"), f"{key}.bootstrap.source_branch"
+        ),
+        bootstrap_target_branch=_strict_string(
+            bootstrap.get("target_branch"), f"{key}.bootstrap.target_branch"
+        ),
+        bootstrap_release_eligibility=_strict_bool(
+            bootstrap.get("release_eligibility"),
+            f"{key}.bootstrap.release_eligibility",
+        ),
+        active_accepted_updates=_string_tuple(
+            active, "accepted_updates", label_prefix=f"{key}.active"
+        ),
+        active_direct_push=_strict_string(
+            active.get("direct_push"), f"{key}.active.direct_push"
+        ),
+    )
+    if (
+        activation.bootstrap_remote_before_oid != "absent"
+        or activation.bootstrap_remote_after_oid != "exact_local_integration_head"
+        or activation.bootstrap_source_branch != integration_branch
+        or activation.bootstrap_target_branch != integration_branch
+        or activation.bootstrap_release_eligibility is not False
+    ):
+        raise ValueError(
+            "branch policy integration_branch_activation.bootstrap must declare the exact "
+            "create-only matching integration branch exception without release eligibility"
+        )
+    if set(activation.active_accepted_updates) != {
+        "lane_pull_request_merge",
+        "system_fast_forward_backsync",
+    } or activation.active_direct_push != "forbidden":
+        raise ValueError(
+            "branch policy integration_branch_activation.active must accept exactly lane PR "
+            "merge/system fast-forward backsync and forbid direct push"
+        )
+    return activation
+
+
 def _system_backsync(payload: Mapping[str, object]) -> SystemBacksync | None:
     raw = payload.get("system_backsync")
     if raw is None:
@@ -381,18 +543,22 @@ def load_policy_bytes(raw: bytes) -> BranchPolicy:
             "branch policy root fields drifted; "
             f"missing={missing}, unexpected={unexpected}"
         )
+    integration_branch = _required_string(payload, "integration_branch")
     policy = BranchPolicy(
         allowed_local=_string_set(payload, "allowed_local_branches"),
         allowed_remote=_string_set(payload, "allowed_remote_branches"),
         pull_request_prefixes=_string_set(
             payload, "pull_request_branch_prefixes", allow_empty=True
         ),
-        integration_branch=_required_string(payload, "integration_branch"),
+        integration_branch=integration_branch,
         release_branch=_required_string(payload, "release_branch"),
         production_source_branch=_required_string(payload, "production_source_branch"),
         production_workflow=_required_string(payload, "production_workflow"),
         required_promotion_checks=_required_promotion_checks(payload),
         allowed_pull_request_edges=_pull_request_edges(payload),
+        integration_branch_activation=_integration_branch_activation(
+            payload, integration_branch=integration_branch
+        ),
         system_backsync=_system_backsync(payload),
         persistent_lane_admission=_persistent_lane_admission(payload),
         failure_codes=_failure_codes(payload),
@@ -549,13 +715,19 @@ def evaluate_transition(
             string_context=context,
         )
     if transition.event == "direct_push":
-        if transition.head == transition.base and (
-            transition.head == policy.integration_branch
-            or (
-                transition.head in policy.allowed_local
-                and _matches_pull_request_prefix(
-                    transition.head, policy.pull_request_prefixes
-                )
+        integration_direct_push_allowed = (
+            policy.integration_branch_activation.state == "bootstrap"
+            and transition.head == policy.integration_branch
+            and transition.base == policy.integration_branch
+            and transition.before_oid == ZERO_SHA
+            and bool(transition.after_oid)
+            and transition.after_oid != ZERO_SHA
+        )
+        if integration_direct_push_allowed or (
+            transition.head == transition.base
+            and transition.head in policy.allowed_local
+            and _matches_pull_request_prefix(
+                transition.head, policy.pull_request_prefixes
             )
         ):
             return BranchDecision(status="allowed", string_context=context)
@@ -727,6 +899,21 @@ def branch_policy_issues(
 
 def current_repo_issues(policy: BranchPolicy | None = None) -> list[str]:
     policy = policy or load_policy()
+    ci_head_branch, ci_base_branch = pull_request_context_from_environment(os.environ)
+    if (
+        os.environ.get("GITHUB_ACTIONS") == "true"
+        and os.environ.get("GITHUB_EVENT_NAME") == "pull_request"
+    ):
+        # Hosted PR checkout state is an implementation detail. The event's remote
+        # head/base pair is the only branch fact this gate needs to authorize.
+        return branch_policy_issues(
+            policy=policy,
+            local_branches=[],
+            remote_branches=[],
+            current_branch=None,
+            ci_head_branch=ci_head_branch,
+            ci_base_branch=ci_base_branch,
+        )
     local_branches = _run_git("for-each-ref", "--format=%(refname:short)", "refs/heads")
     remote_branches = [
         ref[len("origin/") :]
@@ -735,7 +922,6 @@ def current_repo_issues(policy: BranchPolicy | None = None) -> list[str]:
         )
         if ref not in {"origin", "origin/HEAD"}
     ]
-    ci_head_branch, ci_base_branch = pull_request_context_from_environment(os.environ)
     hosted_branch = repository_branch_context_from_environment(os.environ)
     current_branch = _current_branch()
     if hosted_branch is not None:
@@ -752,6 +938,110 @@ def current_repo_issues(policy: BranchPolicy | None = None) -> list[str]:
     # distinguish a direct push from a server-side PR merge. Direct-push decisions
     # are therefore constructed only by explicit update sources such as pre-push.
     return issues
+
+
+def _failure_key_for_code(policy: BranchPolicy, code: str | None) -> str:
+    for key, candidate in policy.failure_codes:
+        if candidate == code:
+            return key
+    return "policy_invalid"
+
+
+def _git_is_ancestor(ancestor: str, descendant: str) -> bool:
+    completed = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode == 0:
+        return True
+    if completed.returncode == 1:
+        return False
+    raise OSError(_safe_error_detail(RuntimeError(completed.stderr)))
+
+
+def _is_managed_system_backsync_environment(
+    environment: Mapping[str, str],
+) -> bool:
+    workflow_ref = environment.get("GITHUB_WORKFLOW_REF", "")
+    return (
+        environment.get("GITHUB_ACTIONS") == "true"
+        and environment.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+        and environment.get("GITHUB_REF_TYPE") == "branch"
+        and environment.get("GITHUB_REF_NAME") == "main"
+        and environment.get("GITHUB_ACTOR") == "github-actions[bot]"
+        and workflow_ref.endswith(SYSTEM_BACKSYNC_WORKFLOW_REF_SUFFIX)
+    )
+
+
+def activation_readback(policy: BranchPolicy) -> dict[str, object]:
+    activation = policy.integration_branch_activation
+    return {
+        "schema_version": ACTIVATION_EVIDENCE_SCHEMA_VERSION,
+        "kind": activation.evidence_kind,
+        "integration_branch": policy.integration_branch,
+        "state": activation.state,
+        "transition_command": activation.transition_command,
+        "tracked_policy_mutated": False,
+    }
+
+
+def _activation_evidence_path(path_text: str) -> Path:
+    path = Path(path_text)
+    candidate = (ROOT / path).resolve() if not path.is_absolute() else path.resolve()
+    output_root = (ROOT / ".qwq_output").resolve()
+    if candidate == output_root or output_root not in candidate.parents:
+        raise ValueError("activation evidence path must be below .qwq_output")
+    return candidate
+
+
+def write_activation_transition_evidence(
+    *, policy: BranchPolicy, evidence_path: str
+) -> dict[str, object]:
+    activation = policy.integration_branch_activation
+    if activation.state != "bootstrap":
+        raise ValueError(
+            "integration branch activation transition requires current state 'bootstrap'"
+        )
+    path = _activation_evidence_path(evidence_path)
+    payload = {
+        "schema_version": ACTIVATION_EVIDENCE_SCHEMA_VERSION,
+        "kind": activation.evidence_kind,
+        "integration_branch": policy.integration_branch,
+        "from_state": "bootstrap",
+        "proposed_state": "active",
+        "policy_sha256": "sha256:" + hashlib.sha256(POLICY_PATH.read_bytes()).hexdigest(),
+        "tracked_policy_mutated": False,
+        "proposal": {
+            "path": str(POLICY_PATH.relative_to(ROOT)),
+            "field": "integration_branch_activation.state",
+            "current": "bootstrap",
+            "replacement": "active",
+        },
+        "instructions": [
+            f"review evidence at {path.relative_to(ROOT)}",
+            "change integration_branch_activation.state from bootstrap to active",
+            "commit the tracked policy change through the normal human-controlled workflow",
+            "run --activation-readback after the active policy is checked out",
+        ],
+    }
+    encoded = (
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError as error:
+        raise ValueError("activation evidence already exists; create-once transition refused") from error
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(encoded)
+    return payload
+
+
+def _emit_json(payload: Mapping[str, object]) -> None:
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
 
 
 def pre_push_issues(
@@ -833,16 +1123,59 @@ def pre_push_issues(
                 )
             continue
         if remote_branch == policy.integration_branch:
-            if (
-                current_branch != policy.integration_branch
-                or local_ref != f"refs/heads/{policy.integration_branch}"
+            activation = policy.integration_branch_activation
+            matching_integration_source = (
+                current_branch == policy.integration_branch
+                and local_ref == f"refs/heads/{policy.integration_branch}"
+            )
+            matching_backsync_source = (
+                current_branch == policy.release_branch
+                and local_ref == f"refs/heads/{policy.release_branch}"
+            )
+            if activation.state == "bootstrap":
+                if not matching_integration_source or remote_sha != ZERO_SHA:
+                    issues.append(
+                        _issue(
+                            policy,
+                            "direct_push_not_allowed",
+                            f"bootstrap update of '{remote_branch}' is create-only from the "
+                            f"matching local {policy.integration_branch} branch",
+                        )
+                    )
+            elif matching_backsync_source and _is_managed_system_backsync_environment(
+                environment
             ):
+                decision = evaluate_transition(
+                    policy=policy,
+                    transition=BranchTransition(
+                        event="system_backsync",
+                        actor_kind="system",
+                        repository=environment.get("GITHUB_REPOSITORY", "github"),
+                        head=policy.release_branch,
+                        base=policy.integration_branch,
+                        before_oid=remote_sha,
+                        after_oid=local_sha,
+                    ),
+                    is_ancestor=lambda ancestor, descendant: _git_is_ancestor(
+                        ancestor, descendant
+                    ),
+                )
+                if not decision.allowed:
+                    failure_key = _failure_key_for_code(policy, decision.reason_code)
+                    issues.append(
+                        _issue(
+                            policy,
+                            failure_key,
+                            f"managed system backsync to '{remote_branch}' was rejected",
+                        )
+                    )
+            else:
                 issues.append(
                     _issue(
                         policy,
                         "direct_push_not_allowed",
-                        f"direct update of '{remote_branch}' must come from the matching "
-                        f"local {policy.integration_branch} branch",
+                        f"direct update of active integration branch '{remote_branch}' is blocked; "
+                        "use a lane pull request or managed system fast-forward backsync",
                     )
                 )
             continue
@@ -867,9 +1200,26 @@ def pre_push_issues(
 
 
 def local_commit_issues(
-    *, policy: BranchPolicy, current_branch: str | None,
+    policy: BranchPolicy, current_branch: str | None,
 ) -> list[str]:
-    """Reject local commits on read-only integration/release worktrees."""
+    """Validate the commit branch, then enforce read-only integration surfaces."""
+    if not current_branch:
+        return [
+            _issue(
+                policy,
+                "ref_not_allowed",
+                "detached HEAD is forbidden; commit from a declared local branch",
+            )
+        ]
+    if current_branch not in policy.allowed_local:
+        return [
+            _issue(
+                policy,
+                "ref_not_allowed",
+                f"current branch '{current_branch}' is not allowed; declared long-lived branches are "
+                f"{sorted(policy.allowed_local)}",
+            )
+        ]
     if current_branch in {policy.integration_branch, policy.release_branch}:
         return [
             _issue(
@@ -918,7 +1268,23 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="reject local commits from read-only dev1.0/main worktrees",
     )
+    mode.add_argument(
+        "--activation-readback",
+        action="store_true",
+        help="print the canonical integration branch activation state",
+    )
+    mode.add_argument(
+        "--activation-transition",
+        action="store_true",
+        help="create transition evidence and print the tracked-policy proposal",
+    )
+    parser.add_argument(
+        "--evidence-path",
+        help="create-once evidence path below .qwq_output for --activation-transition",
+    )
     args = parser.parse_args(argv)
+    if bool(args.evidence_path) != bool(args.activation_transition):
+        parser.error("--evidence-path is required exactly with --activation-transition")
     try:
         policy = load_policy()
     except (OSError, UnicodeError, TypeError, ValueError, yaml.YAMLError) as error:
@@ -928,6 +1294,16 @@ def main(argv: list[str] | None = None) -> int:
             recovery=POLICY_INVALID_RECOVERY,
         )
     try:
+        if args.activation_readback:
+            _emit_json(activation_readback(policy))
+            return 0
+        if args.activation_transition:
+            _emit_json(
+                write_activation_transition_evidence(
+                    policy=policy, evidence_path=args.evidence_path
+                )
+            )
+            return 0
         if args.pre_push:
             issues = pre_push_issues(
                 policy=policy,

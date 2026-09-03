@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 
-from .commands import command_change_report, command_context, command_overview
+from .commands import command_candidate_evidence, command_change_report, command_context, command_overview
 from .verify import command_verify
 
 _DESCRIPTION = """从目录与 Markdown 直接读取、校验和展示特性树。
@@ -24,6 +24,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="默认仅生成渐进加载 manifest；expanded 仅供人工诊断",
     )
     context_parser.set_defaults(func=command_context)
+    candidate_parser = subparsers.add_parser("candidate-evidence", help="生成 POST candidate evidence")
+    candidate_parser.add_argument("--owner-identity", required=True)
+    candidate_parser.add_argument("--changed-path", action="append", required=True)
+    candidate_parser.set_defaults(func=command_candidate_evidence)
     overview_parser = subparsers.add_parser("overview", help="生成动态特性树总览")
     overview_parser.set_defaults(func=command_overview)
     change_parser = subparsers.add_parser("change-report", help="生成当前 Git 增量影响报告")

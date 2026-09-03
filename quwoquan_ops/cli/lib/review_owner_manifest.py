@@ -23,6 +23,9 @@ from lib.evidence_fingerprint import (
     snapshot_path,
 )
 from lib.descriptor_safe_io import read_repo_relative_regular_single_link
+from lib.candidate_evidence import (
+    CandidateEvidenceError, candidate_identity, validate_candidate_ref,
+)
 from lib.feature_context_fingerprint import (
     validate_content_addressed_ref,
     validate_current_feature_context_fingerprint,
@@ -85,6 +88,8 @@ def normalize_contexts(
     manifest: dict[str, Any],
     *,
     manifest_ref: str | None,
+    candidate_evidence_ref: str | None = None,
+    changed_paths: list[str] | None = None,
     expected_scope: str = "",
     required: bool = False,
     repo_root: Path = REPO_ROOT,
@@ -95,8 +100,8 @@ def normalize_contexts(
     validate_current_fingerprint: Callable[..., dict[str, Any]] = (
         validate_current_feature_context_fingerprint
     ),
-) -> tuple[list[dict[str, Any]], int, str, dict[str, Any]]:
-    """Validate one exact owner manifest and derive Review context identity."""
+) -> tuple[list[dict[str, Any]], int, str, dict[str, Any], dict[str, Any]]:
+    """Validate PRE owner identity plus POST candidate predecessor."""
 
     if not manifest:
         if required:
@@ -119,14 +124,20 @@ def normalize_contexts(
                     "fingerprint_digest": None,
                 },
                 "review_plan",
-                "owner_manifest_identity_fields",
+                "owner_identity_fields",
+            ),
+            declared_object(
+                {"ref": None, "canonical_bytes_sha256": None, "owner_identity_ref": None,
+                 "target": "", "resolved_owner": "", "fingerprint_ref": None,
+                 "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
+                "review_plan", "candidate_evidence_identity_fields",
             ),
         )
     expected_version = contract_schema_version("feature_context_manifest")
     if manifest.get("schema_version") != expected_version:
         _refuse(
-            "REVIEW.OWNER_MANIFEST_SCHEMA_UNSUPPORTED",
-            f"owner manifest schema_version 必须为 {expected_version}",
+            "IDENTITY.MIGRATION_REQUIRED",
+            f"owner identity schema_version 必须为 {expected_version}",
         )
     try:
         validate_manifest(manifest)
@@ -184,7 +195,7 @@ def normalize_contexts(
     try:
         validate_current_fingerprint(manifest, repo_root=repo_root)
     except EvidenceFingerprintError as exc:
-        _refuse("REVIEW.OWNER_MANIFEST_STALE", str(exc))
+        _refuse("IDENTITY.MIGRATION_REQUIRED", str(exc))
     contexts: list[dict[str, Any]] = []
     for raw in manifest["canonical_contexts"]:
         relative = _repo_relative(str(raw["path"]), repo_root=repo_root)
@@ -214,9 +225,28 @@ def normalize_contexts(
             "fingerprint_digest": binding["digest"],
         },
         "review_plan",
-        "owner_manifest_identity_fields",
+        "owner_identity_fields",
     )
-    return contexts, len(encoded), target, identity
+    candidate = declared_object(
+        {"ref": None, "canonical_bytes_sha256": None, "owner_identity_ref": None,
+         "target": "", "resolved_owner": "", "fingerprint_ref": None,
+         "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
+        "review_plan", "candidate_evidence_identity_fields",
+    )
+    if required:
+        if not candidate_evidence_ref:
+            _refuse("IDENTITY.MIGRATION_REQUIRED", "POST Review 必须携带 --candidate-evidence")
+        try:
+            candidate_ref, candidate_raw, candidate_payload, candidate_fp = validate_candidate_ref(
+                candidate_evidence_ref, repo_root=repo_root,
+                expected_owner_identity_ref=normalized_ref,
+                expected_changed_paths=changed_paths or [],
+            )
+        except CandidateEvidenceError as exc:
+            _refuse(exc.code, exc.message)
+        candidate = candidate_identity(candidate_ref, candidate_raw, candidate_payload, candidate_fp)
+        contexts = list(candidate_payload["context_snapshots"])
+    return contexts, len(encoded), target, identity, candidate
 
 
 def validate_current_owner_manifest(
@@ -224,89 +254,49 @@ def validate_current_owner_manifest(
     *,
     repo_root: Path = REPO_ROOT,
     reader: Callable[[str], bytes] | None = None,
-    validate_manifest: Callable[
-        [dict[str, Any]], None
-    ] = validate_feature_context_manifest,
-    validate_current_fingerprint: Callable[..., dict[str, Any]] = (
-        validate_current_feature_context_fingerprint
-    ),
+    validate_manifest: Callable[[dict[str, Any]], None] = validate_feature_context_manifest,
+    validate_current_fingerprint: Callable[..., dict[str, Any]] = validate_current_feature_context_fingerprint,
 ) -> dict[str, Any]:
-    """Revalidate a plan's exact owner manifest against current owner facts."""
+    """Revalidate stable PRE owner identity and current POST candidate bytes."""
 
-    identity = plan.get("owner_manifest_identity")
-    if not isinstance(identity, dict):
-        _refuse(
-            "REVIEW.OWNER_MANIFEST_REQUIRED", "Review plan 缺 owner manifest identity"
-        )
-    validate_declared_fields(identity, "review_plan", "owner_manifest_identity_fields")
+    if "owner_manifest_identity" in plan or "candidate_evidence_identity" not in plan:
+        _refuse("IDENTITY.MIGRATION_REQUIRED", "旧 Review identity schema 不再支持")
+    identity = plan.get("owner_identity")
+    candidate = plan.get("candidate_evidence_identity")
+    if not isinstance(identity, dict) or not isinstance(candidate, dict):
+        _refuse("IDENTITY.MIGRATION_REQUIRED", "Review plan 缺双身份")
+    validate_declared_fields(identity, "review_plan", "owner_identity_fields")
+    validate_declared_fields(candidate, "review_plan", "candidate_evidence_identity_fields")
     raw_ref = identity.get("ref")
     if not isinstance(raw_ref, str) or not raw_ref:
-        _refuse("REVIEW.OWNER_MANIFEST_REQUIRED", "Review plan 缺 owner manifest ref")
+        _refuse("REVIEW.OWNER_MANIFEST_REQUIRED", "Review plan 缺 owner identity ref")
     ref = _repo_relative(raw_ref, repo_root=repo_root)
     try:
-        raw_bytes = (
-            reader(ref)
-            if reader is not None
-            else read_owner_manifest_exact_bytes(ref, repo_root=repo_root)
-        )
-    except (OSError, ValueError) as exc:
-        _refuse("REVIEW.OWNER_MANIFEST_STALE", str(exc))
-    try:
+        raw_bytes = reader(ref) if reader is not None else read_owner_manifest_exact_bytes(ref, repo_root=repo_root)
         validate_content_addressed_ref(ref, raw_bytes=raw_bytes, repo_root=repo_root)
         manifest = json.loads(raw_bytes.decode("utf-8"))
-    except EvidenceFingerprintError as exc:
-        _refuse("REVIEW.OWNER_MANIFEST_STALE", str(exc))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        _refuse("REVIEW.OWNER_MANIFEST_INVALID", str(exc))
-    if not isinstance(manifest, dict):
-        _refuse("REVIEW.OWNER_MANIFEST_INVALID", "owner manifest 必须为 JSON object")
-    if "sha256:" + hashlib.sha256(raw_bytes).hexdigest() != identity.get(
-        "canonical_bytes_sha256"
-    ):
-        _refuse("REVIEW.OWNER_MANIFEST_STALE", "owner manifest canonical bytes 已漂移")
-    if (
-        manifest.get("target") != identity.get("target")
-        or manifest.get("resolved_owner") != identity.get("resolved_owner")
-        or identity.get("scope") != plan.get("scope")
-    ):
-        _refuse(
-            "REVIEW.OWNER_MANIFEST_TARGET_MISMATCH", "owner target/scope/owner 已漂移"
-        )
-    binding = manifest.get("evidence_fingerprint") or {}
-    if binding.get("ref") != identity.get("fingerprint_ref") or binding.get(
-        "digest"
-    ) != identity.get("fingerprint_digest"):
-        _refuse(
-            "REVIEW.OWNER_MANIFEST_STALE", "owner manifest fingerprint binding 已漂移"
-        )
-    try:
         validate_manifest(manifest)
         validate_current_fingerprint(manifest, repo_root=repo_root)
-        from lib.feature_tree.commands import _context_manifest, discover_nodes
-        from lib.feature_tree.ownership import resolve_target_details
-
-        nodes = discover_nodes()
-        current = _context_manifest(
-            str(manifest["target"]),
-            resolve_target_details(str(manifest["target"]), nodes),
-            nodes,
+    except (OSError, ValueError, EvidenceFingerprintError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        _refuse("IDENTITY.MIGRATION_REQUIRED", str(exc))
+    if "sha256:" + hashlib.sha256(raw_bytes).hexdigest() != identity.get("canonical_bytes_sha256"):
+        _refuse("IDENTITY.MIGRATION_REQUIRED", "owner identity canonical bytes 漂移")
+    if manifest.get("target") != identity.get("target") or manifest.get("resolved_owner") != identity.get("resolved_owner") or identity.get("scope") != plan.get("scope"):
+        _refuse("CANDIDATE.OWNER_DRIFT", "owner target/scope/owner 已漂移")
+    raw_candidate_ref = candidate.get("ref")
+    if not isinstance(raw_candidate_ref, str) or not raw_candidate_ref:
+        _refuse("IDENTITY.MIGRATION_REQUIRED", "Review plan 缺 candidate evidence ref")
+    try:
+        candidate_ref, candidate_raw, payload, fingerprint = validate_candidate_ref(
+            raw_candidate_ref, repo_root=repo_root, expected_owner_identity_ref=ref,
+            expected_changed_paths=list(plan.get("changed_paths") or []),
         )
-    except (EvidenceFingerprintError, KeyError, TypeError, ValueError) as exc:
-        _refuse("REVIEW.OWNER_MANIFEST_STALE", str(exc))
-    for field in (
-        "target",
-        "resolved_owner",
-        "owner_chain",
-        "canonical_contexts",
-        "applicable_agents",
-        "open_items",
-    ):
-        if current[field] != manifest[field]:
-            _refuse(
-                "REVIEW.OWNER_MANIFEST_STALE",
-                f"current owner manifest {field} 已漂移",
-            )
-    return manifest
+    except CandidateEvidenceError as exc:
+        _refuse(exc.code, exc.message)
+    expected_candidate = candidate_identity(candidate_ref, candidate_raw, payload, fingerprint)
+    if expected_candidate != candidate:
+        _refuse("CANDIDATE.STALE", "Review plan candidate identity 已漂移")
+    return payload
 
 
 __all__ = [

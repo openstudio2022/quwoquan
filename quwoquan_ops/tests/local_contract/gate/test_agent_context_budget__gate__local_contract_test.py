@@ -23,6 +23,25 @@ def _load_gate() -> ModuleType:
     return module
 
 
+class AgentContextBudgetPlacementTest(unittest.TestCase):
+    def test_slow_verifier_is_governance_manual_only(self) -> None:
+        commit_gate = (_REPO_ROOT / "quwoquan_ops/gate/commit_gate.sh").read_text(encoding="utf-8")
+        repo_gate = (_REPO_ROOT / "quwoquan_ops/gate/gate_repo.sh").read_text(encoding="utf-8")
+        makefile = (_REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        registry = (_REPO_ROOT / ".agents/skills/review/references/registry.yaml").read_text(encoding="utf-8")
+        governance = (_REPO_ROOT / ".github/workflows/domain-governance.yml").read_text(encoding="utf-8")
+        for ordinary in (commit_gate, repo_gate, registry):
+            self.assertNotIn("verify-agent-context-budget", ordinary)
+            self.assertNotIn("verify_agent_context_budget.py", ordinary)
+        self.assertNotIn("$(MAKE) verify-agent-context-budget", makefile[makefile.index("gate:"):makefile.index("verify:")])
+        self.assertIn("make verify-agent-context-budget", governance)
+
+    def test_data_shard_selector_never_selects_ops_context_budget_test(self) -> None:
+        selector = (_REPO_ROOT / "quwoquan_ops/gate/delivery_gate_data_shard.py").read_text(encoding="utf-8")
+        self.assertIn('TEST_ROOT_PARTS = ("quwoquan_data", "tests", "local_contract")', selector)
+        self.assertNotIn("verify_agent_context_budget", selector)
+
+
 class AgentContextBudgetGateTest(unittest.TestCase):
     def setUp(self) -> None:
         self.module = _load_gate()
@@ -140,6 +159,7 @@ class AgentContextBudgetGateTest(unittest.TestCase):
                 workflows[workflow] = {
                     "segments": ["PRE", "POST"],
                     "deliverable": "x",
+                    "baseline_evidence": "proof",
                     "primary": {
                         "role": "probe",
                         "required": True,
@@ -185,6 +205,27 @@ class AgentContextBudgetGateTest(unittest.TestCase):
             with self.subTest(check=label):
                 self.assertEqual([], check(), f"{label} 在真实仓库上应为绿")
 
+    def test_hotl_runtime_matrix_covers_all_scenarios_within_budget(self) -> None:
+        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/spec.md#sit-001.t2
+        self.assertEqual([], self.module.check_hotl_runtime_matrix())
+
+    def test_hotl_runtime_matrix_rejects_missing_scenario_and_oversize(self) -> None:
+        self.module.ROOT = self.root
+        path = self._write(
+            self.module.HOTL_RUNTIME_MATRIX_PATH,
+            self.module.HOTL_RUNTIME_MATRIX_START
+            + "\n| SKILL:commit |\n"
+            + ("x" * (self.module.HOTL_RUNTIME_MATRIX_MAX_BYTES + 1))
+            + "\n"
+            + self.module.HOTL_RUNTIME_MATRIX_END,
+        )
+        self.assertTrue(path.is_file())
+        issues = self.module.check_hotl_runtime_matrix()
+        self.assertTrue(any("超过" in issue for issue in issues), issues)
+        self.assertTrue(any("SKILL:review" in issue for issue in issues), issues)
+        self.assertTrue(any("BOUNDARY:release" in issue for issue in issues), issues)
+        self.assertTrue(any("完整固定列头" in issue for issue in issues), issues)
+
     def test_detects_agents_chain_over_16_kib(self) -> None:
         # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t1
         self._use_fixture_root()
@@ -223,8 +264,9 @@ class AgentContextBudgetGateTest(unittest.TestCase):
                 self.assertIn(f"`{deliverable}`", text)
                 self.assertIn("make feature-context TARGET=<exact-path>", text)
                 self.assertIn("content-addressed immutable owner manifest exact ref", text)
-                self.assertIn("PRE 保存并在 POST 原样复用", text)
-                self.assertIn("`--context-manifest`", text)
+                self.assertIn("PRE owner identity ref", text)
+                self.assertIn("`--owner-identity`", text)
+                self.assertIn("`--candidate-evidence`", text)
                 self.assertIn("no-review-deliverable", text)
                 self.assertNotIn("纯环境操作不要求 Feature owner manifest", text)
 

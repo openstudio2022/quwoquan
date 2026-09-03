@@ -78,6 +78,8 @@ def consolidate(
     *,
     evidence_receipt_ref: str | None = None,
     registry: dict[str, Any] | None = None,
+    generated_at: str | None = None,
+    exact_bytes_by_ref: dict[str, bytes] | None = None,
 ) -> dict[str, Any]:
     active_registry = registry or _registry()
     try:
@@ -110,8 +112,13 @@ def consolidate(
     handoff_consumer.validate_named_evidence_ref_payload(
         exact_evidence, plan=plan, registry=active_registry, label=evidence_ref
     )
-    evidence_identity = handoff_consumer.named_evidence_identity(
-        evidence_ref, exact_evidence
+    evidence_raw = (exact_bytes_by_ref or {}).get(evidence_ref)
+    evidence_identity = (
+        handoff_consumer.named_evidence_identity_from_raw(
+            evidence_ref, evidence_raw, exact_evidence
+        )
+        if evidence_raw is not None
+        else handoff_consumer.named_evidence_identity(evidence_ref, exact_evidence)
     )
 
     expected = {item["role"]: item for item in plan["reviewers"]}
@@ -124,9 +131,19 @@ def consolidate(
         if not isinstance(raw, dict):
             raise ReviewConsolidationError("reviewer result 必须为 mapping")
         try:
-            _, raw, result_identity = handoff_consumer.validate_review_result_ref(
-                result_ref, plan=plan, evidence_identities=[evidence_identity]
-            )
+            result_raw = (exact_bytes_by_ref or {}).get(result_ref)
+            if result_raw is None:
+                _, raw, result_identity = handoff_consumer.validate_review_result_ref(
+                    result_ref, plan=plan, evidence_identities=[evidence_identity]
+                )
+            else:
+                result_identity = handoff_consumer.validate_review_result_ref_payload(
+                    result_ref,
+                    result_raw,
+                    raw,
+                    plan=plan,
+                    evidence_identities=[evidence_identity],
+                )
         except (TypeError, ValueError) as exc:
             raise ReviewConsolidationError(str(exc)) from exc
         reviewer_identities.append(result_identity)
@@ -210,10 +227,49 @@ def consolidate(
         "findings": findings,
         "incomplete_roles": incomplete,
         "terminal": terminal,
-        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at": generated_at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     validate_required_fields(result, "review_consolidation")
     return result
+
+
+def validate_exact_consolidation(
+    consolidation: dict[str, Any],
+    *,
+    plan: dict[str, Any],
+    evidence_pairs: list[tuple[str, dict[str, Any]]],
+    reviewer_pairs: list[tuple[str, dict[str, Any]]],
+    registry: dict[str, Any] | None = None,
+    exact_bytes_by_ref: dict[str, bytes] | None = None,
+    require_pass: bool = True,
+) -> dict[str, Any]:
+    """Recompute the sole exact Review chain; no partial field comparison is valid."""
+
+    validate_required_fields(consolidation, "review_consolidation")
+    if require_pass and consolidation.get("terminal") != {
+        "status": "PASS",
+        "codes": [],
+    }:
+        raise ReviewConsolidationError("review consolidation 非 PASS")
+    recomputed = consolidate(
+        plan,
+        evidence_pairs,
+        reviewer_pairs,
+        registry=registry,
+        generated_at=str(consolidation.get("generated_at") or ""),
+        exact_bytes_by_ref=exact_bytes_by_ref,
+    )
+    if recomputed != consolidation:
+        raise ReviewConsolidationError(
+            "review consolidation does not match exact plan/owner/candidate/"
+            "human/evidence/reviewer chain recomputation"
+        )
+    if any(
+        item.get("severity") == "GATE_BLOCK"
+        for item in consolidation.get("findings") or []
+    ):
+        raise ReviewConsolidationError("review consolidation 含 GATE_BLOCK finding")
+    return consolidation
 
 
 def main(argv: list[str] | None = None) -> int:

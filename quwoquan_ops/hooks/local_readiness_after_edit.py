@@ -62,7 +62,7 @@ def main() -> int:
         if not paths:
             print(json.dumps({"additional_context": context}, ensure_ascii=False) if context else "{}")
             return 0
-        queue = enqueue_paths(paths)
+        queue = enqueue_paths(paths, reason="after_edit_script")
         message = (
             f"local readiness 已入队 {len(paths)} 个路径；待办总数 {len(queue['items'])}。"
             "空闲时运行：python3 quwoquan_ops/cli/local_readiness.py worker --once；"

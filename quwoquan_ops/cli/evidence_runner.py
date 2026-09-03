@@ -6,9 +6,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
-import uuid
+import tempfile
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -26,17 +28,28 @@ from lib.agent_governance_contract import (  # noqa: E402
 from lib.evidence_fingerprint import (  # noqa: E402
     build_evidence_fingerprint,
     canonical_digest,
+    normalize_repo_relative_path,
     snapshot_path,
     validate_evidence_fingerprint,
     validate_ref,
     workspace_digests,
 )
 import review_dispatch as review_dispatch_module  # noqa: E402
+from lib.descriptor_safe_io import (  # noqa: E402
+    read_repo_relative_regular_single_link,
+)
+from lib.readiness_case_result import (  # noqa: E402
+    ReadinessCaseResultError,
+    write_create_once_json,
+)
 
 sys.path.insert(0, str(ROOT / "quwoquan_ops/gate/lib"))
 from process_group_deadline import run_command  # noqa: E402
 
 OUTPUT_ROOT = ROOT / ".qwq_output/env/repo/runs/review-evidence"
+BASELINE_PLAN_ENV = "QWQ_REVIEW_BASELINE_PLAN_PATH"
+BASELINE_PLAN_SHA_ENV = "QWQ_REVIEW_BASELINE_PLAN_SHA256"
+BASELINE_PLAN_REF_ENV = "QWQ_REVIEW_BASELINE_PLAN_REF"
 
 
 class EvidenceRunnerError(ValueError):
@@ -55,13 +68,111 @@ def _command_digest(command: str) -> str:
     return _sha256_bytes(command.encode("utf-8"))
 
 
-def _head_sha() -> str:
+def _git_text(repo_root: Path, *args: str) -> str:
     result = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False
+        ["git", *args], cwd=repo_root, capture_output=True, text=True, check=False
     )
-    if result.returncode != 0 or not result.stdout.strip():
-        raise EvidenceRunnerError("无法读取 source HEAD")
+    if result.returncode != 0:
+        detail = result.stderr.strip() or f"git {' '.join(args)} failed"
+        raise EvidenceRunnerError(detail)
     return result.stdout.strip()
+
+
+def _workspace_source_classification(repo_root: Path = ROOT) -> dict[str, Any]:
+    """Classify the exact current workspace without overstating immutability."""
+
+    head_sha = _git_text(repo_root, "rev-parse", "HEAD")
+    if not head_sha:
+        raise EvidenceRunnerError("无法读取 source HEAD")
+    merge_base_sha = head_sha
+    for base in ("dev1.0", "main"):
+        result = subprocess.run(
+            ["git", "merge-base", head_sha, base],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            merge_base_sha = result.stdout.strip()
+            break
+    status = subprocess.run(
+        ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+    )
+    if status.returncode != 0:
+        raise EvidenceRunnerError(
+            status.stderr.decode("utf-8", errors="replace").strip()
+            or "无法读取 source workspace status"
+        )
+    repository_clean = status.stdout == b""
+    return {
+        "mode": "workspace",
+        "head_sha": head_sha,
+        "merge_base_sha": merge_base_sha,
+        "repository_clean": repository_clean,
+        "immutable": False,
+    }
+
+
+def _evidence_classification(source: dict[str, Any]) -> tuple[str, bool]:
+    eligible = (
+        source.get("mode") == "workspace"
+        and source.get("repository_clean") is True
+        and source.get("immutable") is False
+    )
+    return ("reusable", True) if eligible else ("feedback_only", False)
+
+
+def _validate_source(source: dict[str, Any]) -> None:
+    validate_declared_fields(source, "named_evidence_receipt", "source_fields")
+    if source["mode"] != "workspace" or source["immutable"] is not False:
+        raise EvidenceRunnerError("named evidence source 仅支持 mutable workspace")
+    if type(source["repository_clean"]) is not bool:
+        raise EvidenceRunnerError("named evidence source.repository_clean 必须为 bool")
+    import re
+
+    for field in ("head_sha", "merge_base_sha"):
+        if not isinstance(source[field], str) or re.fullmatch(r"[0-9a-f]{40,64}", source[field]) is None:
+            raise EvidenceRunnerError(f"named evidence source.{field} 非 exact Git SHA")
+
+
+def _assert_source_head(source: dict[str, Any], repo_root: Path) -> None:
+    current = _workspace_source_classification(repo_root)
+    if current["head_sha"] != source["head_sha"]:
+        raise EvidenceRunnerError(
+            "REVIEW.FINGERPRINT_CHANGED: evidence source exact Git SHA 已 stale"
+        )
+    if source["repository_clean"] is True and current["repository_clean"] is not True:
+        raise EvidenceRunnerError(
+            "REVIEW.FINGERPRINT_CHANGED: clean exact Git SHA workspace 在命令后变脏"
+        )
+
+
+def require_admission_eligible(
+    receipt: dict[str, Any], *, label: str = "named evidence receipt"
+) -> dict[str, Any]:
+    """Reject development feedback at any formal admission/reuse boundary."""
+
+    validate_named_evidence_receipt(receipt)
+    if (
+        receipt.get("evidence_class") != "reusable"
+        or receipt.get("admission_eligible") is not True
+    ):
+        source = receipt.get("source") or {}
+        reason = (
+            "dirty mutable workspace"
+            if source.get("mode") == "workspace"
+            and source.get("repository_clean") is False
+            else "non-admission evidence source"
+        )
+        raise EvidenceRunnerError(
+            "REVIEW.EVIDENCE_FEEDBACK_ONLY: "
+            f"{label} 来自 {reason}，仅可用于开发反馈，不得用于正式准出或复用"
+        )
+    return receipt
 
 
 def _managed_paths(plan: dict[str, Any]) -> list[str]:
@@ -81,18 +192,40 @@ def _fingerprint(
     results: list[dict[str, Any]],
     phase: str,
     registry: dict[str, Any],
+    source: dict[str, Any],
+    repo_root: Path = ROOT,
+    plan_bytes_sha256: str | None = None,
+    plan_input_ref: str | None = None,
 ) -> dict[str, Any]:
+    if plan_bytes_sha256 is None or plan_input_ref is None:
+        raise EvidenceRunnerError(
+            "exact plan bytes identity 为 evidence fingerprint 重算必填输入"
+        )
     current_plan = review_dispatch_module.recompute_plan_fingerprint(plan, registry)
     payload = current_plan["digest_payload"]
-    generator = snapshot_path(Path(__file__).relative_to(ROOT), repo_root=ROOT)
+    generator_path = Path(__file__).resolve()
+    try:
+        generator_ref = generator_path.relative_to(repo_root.resolve())
+    except ValueError:
+        generator_ref = None
+    generator = (
+        snapshot_path(generator_ref, repo_root=repo_root)
+        if generator_ref is not None
+        else {"path": str(generator_path), "content_digest": _sha256_bytes(generator_path.read_bytes())}
+    )
     return build_evidence_fingerprint(
         {
-            "git": dict(payload["git"]),
-            "workspace": workspace_digests(_managed_paths(plan), repo_root=ROOT),
+            "git": {
+                "head_sha": source["head_sha"],
+                "merge_base_sha": source["merge_base_sha"],
+            },
+            "workspace": workspace_digests(_managed_paths(plan), repo_root=repo_root),
             "assets": {
                 "canonical_assets_digest": canonical_digest(
                     {
-                        "plan_ref": current_plan["ref"],
+                        "plan_fingerprint_ref": current_plan["ref"],
+                        "plan_input_ref": plan_input_ref,
+                        "plan_bytes_sha256": plan_bytes_sha256,
                         "evidence": [
                             {
                                 "id": item["id"],
@@ -107,6 +240,7 @@ def _fingerprint(
                 "review_assets_digest": canonical_digest(
                     {
                         "plan_assets": payload["assets"],
+                        "source": source,
                         "results": results,
                     }
                 ),
@@ -135,7 +269,12 @@ def _fingerprint(
             },
         },
         captured_by="evidence_runner",
-        captured_metadata={"phase": phase},
+        captured_metadata={
+            "phase": phase,
+            "source": source,
+            "plan_input_ref": plan_input_ref,
+            "plan_bytes_sha256": plan_bytes_sha256,
+        },
     )
 
 
@@ -159,9 +298,25 @@ def run_plan(
     captured_by: str = "evidence_runner",
     cwd: Path = ROOT,
     registry: dict[str, Any] | None = None,
+    plan_bytes: bytes | None = None,
+    plan_ref: str | None = None,
 ) -> dict[str, Any]:
     if registry is None:
         raise EvidenceRunnerError("registry 为 canonical evidence 执行必填输入")
+    if plan_bytes is None or plan_ref is None:
+        raise EvidenceRunnerError(
+            "exact plan bytes/ref 为 canonical evidence 执行必填输入"
+        )
+    exact_plan_bytes = plan_bytes
+    try:
+        exact_plan = json.loads(exact_plan_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EvidenceRunnerError(f"exact plan bytes 非法: {exc}") from exc
+    if not isinstance(exact_plan, dict) or exact_plan != plan:
+        raise EvidenceRunnerError("REVIEW.FINGERPRINT_CHANGED: exact plan bytes 与已验证 plan 不一致")
+    exact_plan_sha256 = _sha256_bytes(exact_plan_bytes)
+    resolved_plan_ref = plan_ref or f"in-memory:{exact_plan_sha256}"
+
     try:
         plan_receipt = review_dispatch_module.validate_current_review_plan(
             plan, registry, phase="evidence"
@@ -191,38 +346,37 @@ def run_plan(
         if not isinstance(command, str) or not command:
             raise EvidenceRunnerError(f"evidence={evidence_id} command 不能为空")
         exact = _command_digest(command)
-        if registry is not None:
-            registered = (registry.get("evidence") or {}).get(evidence_id)
-            if not isinstance(registered, dict):
-                raise EvidenceRunnerError(f"evidence={evidence_id} 不在 registry")
-            registered_command = registered.get("command")
-            if registered_command != command:
-                raise EvidenceRunnerError(
-                    f"evidence={evidence_id} command 与 registry 解析结果不一致"
-                )
-            registered_digest = _command_digest(str(registered_command))
-            timeout_seconds = registered.get("timeout_seconds")
-            max_evidence_timeout = (registry.get("limits") or {}).get(
-                "max_evidence_timeout_seconds"
+        registered = (registry.get("evidence") or {}).get(evidence_id)
+        if not isinstance(registered, dict):
+            raise EvidenceRunnerError(f"evidence={evidence_id} 不在 registry")
+        registered_command = registered.get("command")
+        if registered_command != command:
+            raise EvidenceRunnerError(
+                f"evidence={evidence_id} command 与 registry 解析结果不一致"
             )
-            if (
-                not isinstance(timeout_seconds, int)
-                or isinstance(timeout_seconds, bool)
-                or timeout_seconds <= 0
-                or not isinstance(max_evidence_timeout, int)
-                or timeout_seconds > max_evidence_timeout
-            ):
-                raise EvidenceRunnerError(
-                    f"evidence={evidence_id} timeout_seconds 必须为 registry 正数上限内的整数"
-                )
-            if raw.get("timeout_seconds") != timeout_seconds:
-                raise EvidenceRunnerError(
-                    f"evidence={evidence_id} timeout_seconds 与 registry 漂移"
-                )
-            if command_digest != registered_digest:
-                raise EvidenceRunnerError(
-                    f"evidence={evidence_id} command_digest 与 registry 漂移"
-                )
+        registered_digest = _command_digest(str(registered_command))
+        timeout_seconds = registered.get("timeout_seconds")
+        max_evidence_timeout = (registry.get("limits") or {}).get(
+            "max_evidence_timeout_seconds"
+        )
+        if (
+            not isinstance(timeout_seconds, int)
+            or isinstance(timeout_seconds, bool)
+            or timeout_seconds <= 0
+            or not isinstance(max_evidence_timeout, int)
+            or timeout_seconds > max_evidence_timeout
+        ):
+            raise EvidenceRunnerError(
+                f"evidence={evidence_id} timeout_seconds 必须为 registry 正数上限内的整数"
+            )
+        if raw.get("timeout_seconds") != timeout_seconds:
+            raise EvidenceRunnerError(
+                f"evidence={evidence_id} timeout_seconds 与 registry 漂移"
+            )
+        if command_digest != registered_digest:
+            raise EvidenceRunnerError(
+                f"evidence={evidence_id} command_digest 与 registry 漂移"
+            )
         if command_digest != exact:
             raise EvidenceRunnerError(
                 f"evidence={evidence_id} command digest 漂移：expected={exact} actual={command_digest}"
@@ -237,80 +391,91 @@ def run_plan(
             }
         )
 
+    if not evidence:
+        raise EvidenceRunnerError("plan.evidence 不得为空")
+
     started_at = _now()
+    repo_root = cwd.resolve()
+    source = _workspace_source_classification(repo_root)
+    evidence_class, admission_eligible = _evidence_classification(source)
     execution_fingerprint = _fingerprint(
-        plan=plan,
-        evidence=evidence,
-        results=[],
-        phase="execution_input",
-        registry=registry,
+        plan=plan, evidence=evidence, results=[], phase="execution_input", registry=registry,
+        source=source, repo_root=repo_root, plan_bytes_sha256=exact_plan_sha256, plan_input_ref=resolved_plan_ref,
     )
     results: list[dict[str, Any]] = []
     failed_required: str | None = None
     failed_required_timed_out = False
-    for item in evidence:
-        item_started = _now()
-        # The exact registry-resolved command string is passed as one /bin/sh -c
-        # argument only after its digest has been verified; no interpolation occurs here.
-        completed = run_command(
-            ["/bin/sh", "-c", item["command"]],
-            cwd=cwd,
-            timeout_seconds=float(item["timeout_seconds"]),
-            capture_output=True,
+    with tempfile.TemporaryDirectory(prefix="qwq-review-evidence-plan-") as directory:
+        plan_input = Path(directory) / "exact-plan.json"
+        plan_input.write_bytes(exact_plan_bytes)
+        plan_input.chmod(0o400)
+        command_env = os.environ.copy()
+        for reserved in (BASELINE_PLAN_ENV, BASELINE_PLAN_SHA_ENV, BASELINE_PLAN_REF_ENV):
+            command_env.pop(reserved, None)
+        command_env.update(
+            {
+                BASELINE_PLAN_ENV: str(plan_input),
+                BASELINE_PLAN_SHA_ENV: exact_plan_sha256,
+                BASELINE_PLAN_REF_ENV: resolved_plan_ref,
+            }
         )
-        item_finished = _now()
-        results.append(
-            declared_object(
-                {
-                    "id": item["id"],
-                    "command": item["command"],
-                    "command_digest": item["command_digest"],
-                    "timeout_seconds": item["timeout_seconds"],
-                    "exit_code": completed.returncode,
-                    "outcome": "timeout" if completed.timed_out else "exited",
-                    "timed_out": completed.timed_out,
-                    "termination_signal": completed.termination_signal,
-                    "stdout_digest": _sha256_bytes(completed.stdout),
-                    "stderr_digest": _sha256_bytes(completed.stderr),
-                    "started_at": item_started,
-                    "finished_at": item_finished,
-                    "captured_by": captured_by,
-                    "required": item["required"],
-                },
-                "named_evidence_receipt",
-                "evidence_result_fields",
+        for item in evidence:
+            item_started = _now()
+            completed = run_command(
+                ["/bin/sh", "-c", item["command"]],
+                cwd=cwd,
+                timeout_seconds=float(item["timeout_seconds"]),
+                capture_output=True,
+                env=command_env,
             )
-        )
-        post_command = _fingerprint(
-            plan=plan,
-            evidence=evidence,
-            results=[],
-            phase="post_command",
-            registry=registry,
-        )
-        _assert_same_fingerprint(
-            execution_fingerprint, post_command, phase=f"after {item['id']}"
-        )
-        if completed.returncode != 0 and item["required"]:
-            failed_required = item["id"]
-            failed_required_timed_out = completed.timed_out
-            break
+            item_finished = _now()
+            results.append(
+                declared_object(
+                    {
+                        "id": item["id"],
+                        "command": item["command"],
+                        "command_digest": item["command_digest"],
+                        "timeout_seconds": item["timeout_seconds"],
+                        "exit_code": completed.returncode,
+                        "outcome": "timeout" if completed.timed_out else "exited",
+                        "timed_out": completed.timed_out,
+                        "termination_signal": completed.termination_signal,
+                        "stdout_digest": _sha256_bytes(completed.stdout),
+                        "stderr_digest": _sha256_bytes(completed.stderr),
+                        "started_at": item_started,
+                        "finished_at": item_finished,
+                        "captured_by": captured_by,
+                        "required": item["required"],
+                    },
+                    "named_evidence_receipt",
+                    "evidence_result_fields",
+                )
+            )
+            _assert_source_head(source, repo_root)
+            post_command = _fingerprint(
+                plan=plan, evidence=evidence, results=[], phase="post_command", registry=registry,
+                source=source, repo_root=repo_root,
+                plan_bytes_sha256=exact_plan_sha256, plan_input_ref=resolved_plan_ref,
+            )
+            _assert_same_fingerprint(
+                execution_fingerprint, post_command, phase=f"after {item['id']}"
+            )
+            if completed.returncode != 0 and item["required"]:
+                failed_required = item["id"]
+                failed_required_timed_out = completed.timed_out
+                break
 
     finished_at = _now()
+    _assert_source_head(source, repo_root)
     final_input = _fingerprint(
-        plan=plan,
-        evidence=evidence,
-        results=[],
-        phase="final_input",
-        registry=registry,
+        plan=plan, evidence=evidence, results=[], phase="final_input", registry=registry,
+        source=source, repo_root=repo_root,
+        plan_bytes_sha256=exact_plan_sha256, plan_input_ref=resolved_plan_ref,
     )
     _assert_same_fingerprint(execution_fingerprint, final_input, phase="final")
     result_fingerprint = _fingerprint(
-        plan=plan,
-        evidence=evidence,
-        results=results,
-        phase="execution_result",
-        registry=registry,
+        plan=plan, evidence=evidence, results=results, phase="execution_result", registry=registry,
+        source=source, repo_root=repo_root, plan_bytes_sha256=exact_plan_sha256, plan_input_ref=resolved_plan_ref,
     )
     terminal = declared_object(
         {
@@ -336,6 +501,9 @@ def run_plan(
         "generation_id": result_fingerprint["digest"],
         "plan_fingerprint_ref": plan_receipt["ref"],
         "plan_fingerprint_digest": plan_receipt["digest"],
+        "source": source,
+        "evidence_class": evidence_class,
+        "admission_eligible": admission_eligible,
         "execution_fingerprint": execution_fingerprint,
         "result_fingerprint": result_fingerprint,
         "evidence": results,
@@ -349,7 +517,27 @@ def run_plan(
 
 
 def validate_named_evidence_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
-    validate_required_fields(receipt, "named_evidence_receipt")
+    if receipt.get("schema_version") != contract_schema_version(
+        "named_evidence_receipt"
+    ):
+        raise EvidenceRunnerError(
+            "IDENTITY.MIGRATION_REQUIRED: named evidence receipt schema_version 非法"
+        )
+    try:
+        validate_required_fields(receipt, "named_evidence_receipt")
+    except ValueError as exc:
+        raise EvidenceRunnerError(
+            f"IDENTITY.MIGRATION_REQUIRED: named evidence receipt 字段非法: {exc}"
+        ) from exc
+    source = receipt["source"]
+    if not isinstance(source, dict):
+        raise EvidenceRunnerError("named evidence source 必须为 mapping")
+    _validate_source(source)
+    evidence_class, admission_eligible = _evidence_classification(source)
+    if receipt["evidence_class"] != evidence_class or receipt["admission_eligible"] is not admission_eligible:
+        raise EvidenceRunnerError("named evidence evidence_class/admission_eligible 与 source classification 不一致")
+    if receipt["evidence_class"] not in {"feedback_only", "reusable"}:
+        raise EvidenceRunnerError("named evidence evidence_class 非法")
     for item in receipt["evidence"]:
         if not isinstance(item, dict):
             raise EvidenceRunnerError("named evidence result 必须为 mapping")
@@ -364,8 +552,15 @@ def validate_named_evidence_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
     )
     execution = validate_evidence_fingerprint(receipt["execution_fingerprint"])
     result = validate_evidence_fingerprint(receipt["result_fingerprint"])
+    if receipt.get("generation_id") != result["digest"]:
+        raise EvidenceRunnerError(
+            "named evidence generation_id 与 result fingerprint digest 不一致"
+        )
     if execution["digest_payload"]["workspace"] != result["digest_payload"]["workspace"]:
         raise EvidenceRunnerError("REVIEW.FINGERPRINT_CHANGED: evidence receipt workspace stale")
+    expected_git = {"head_sha": source["head_sha"], "merge_base_sha": source["merge_base_sha"]}
+    if execution["digest_payload"]["git"] != expected_git or result["digest_payload"]["git"] != expected_git:
+        raise EvidenceRunnerError("named evidence source Git identity 与 fingerprint 不一致")
     return receipt
 
 
@@ -375,24 +570,43 @@ def _output_path(run_id: str) -> Path:
     return OUTPUT_ROOT / run_id / "receipt.json"
 
 
+def _write_receipt_create_once(run_id: str, receipt: dict[str, Any]) -> Path:
+    path = _output_path(run_id)
+    try:
+        return write_create_once_json(path, receipt)
+    except ReadinessCaseResultError as exc:
+        raise EvidenceRunnerError(
+            f"run-id={run_id} evidence receipt create-once conflict: {exc}"
+        ) from exc
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--source-mode", choices=("workspace",), default="workspace")
     args = parser.parse_args(argv)
     try:
-        plan = json.loads(Path(args.plan).read_text(encoding="utf-8"))
+        try:
+            plan_ref = normalize_repo_relative_path(args.plan, ROOT)
+            plan_bytes = read_repo_relative_regular_single_link(ROOT, plan_ref)
+        except (OSError, ValueError) as exc:
+            raise EvidenceRunnerError(
+                f"--plan 必须为仓内非 symlink、single-link regular file: {exc}"
+            ) from exc
+        plan = json.loads(plan_bytes.decode("utf-8"))
         if not isinstance(plan, dict):
             raise EvidenceRunnerError("plan 必须为 JSON object")
         import yaml
 
         registry_path = ROOT / ".agents/skills/review/references/registry.yaml"
         registry = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
-        receipt = run_plan(plan, registry=registry, run_id=args.run_id)
-        path = _output_path(args.run_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    except (OSError, json.JSONDecodeError, EvidenceRunnerError, TypeError, ValueError) as exc:
+        receipt = run_plan(
+            plan, registry=registry, run_id=args.run_id,
+            plan_bytes=plan_bytes, plan_ref=plan_ref,
+        )
+        path = _write_receipt_create_once(args.run_id, receipt)
+    except (OSError, json.JSONDecodeError, EvidenceRunnerError, ReadinessCaseResultError, TypeError, ValueError) as exc:
         print(f"[evidence_runner] GATE_BLOCK: {exc}", file=sys.stderr)
         return 2
     print(path.relative_to(ROOT))

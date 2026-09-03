@@ -23,7 +23,7 @@ metadata:
 
 逐 fingerprint 交付脱敏报告、影响环境/版本、对象/模块、样本引用、复现命令与结果、owner，以及 handoff-dev 或 report-only 判定；不包含 secret/PII/raw payload。稳定查询入口是 `python3 quwoquan_service/scripts/tools/observability/es_cli.py triage --domain <product|platform> ... --output <json|markdown>`；若 canonical Product/Platform Ops API、样本级 identity 或确定性复现证据不可用，则只允许无送审的 `report-only/no-review-deliverable` 终态或 typed blocker，不虚构 trace/request 查询命令。
 
-产生 `inspection-report` 时，POST 默认零 Reviewer，只报告命名 evidence 结果并保留 PRE 的 owner manifest exact ref；仅在用户显式 `/review` 或 report 进入 handoff 准出时，才把同一 ref 原样作为 `--context-manifest` 传给 Review（workflow=`incident-inspection`、segment=`POST`、deliverable=`inspection-report`、scope=`<exact-path>`）。manifest ref 缺失、与 PRE 不同或 stale 时不得声称已送审。
+产生 `inspection-report` 时，POST 默认零 Reviewer，只报告命名 evidence 结果并保留 PRE owner identity ref；送审时生成 current candidate evidence predecessor；仅在用户显式 `/review` 或 report 进入 handoff 准出时，才把 PRE ref 作为 `--owner-identity`、current candidate ref 作为 `--candidate-evidence` 传给 Review（workflow=`incident-inspection`、segment=`POST`、deliverable=`inspection-report`、scope=`<exact-path>`）。manifest ref 缺失、与 PRE 不同或 stale 时不得声称已送审。
 
 ## 失败与停止
 
@@ -31,4 +31,4 @@ metadata:
 
 ## 条件性交接
 
-源码/spec mutation 只交 Feature workflow；跨会话、外部阻断或用户显式要求满足 canonical 触发时生成 handoff。送审交付的 handoff 必须携带 PRE 保存并在 POST 原样复用的 owner manifest exact ref；纯只读无送审交付不生成替代 manifest。
+源码/spec mutation 只交 Feature workflow；跨会话、外部阻断或用户显式要求满足 canonical 触发时生成 handoff。送审交付的 handoff 必须携带 PRE owner identity ref 与 POST candidate evidence predecessor；纯只读无送审交付不生成替代 manifest。

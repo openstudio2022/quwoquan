@@ -9,6 +9,8 @@
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/objective-execution/spec.md#gwt-001.t7
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/objective-execution/spec.md#gwt-001.t8
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/objective-execution/spec.md#gwt-001.t9
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/objective-execution/spec.md#gwt-001.t10
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/objective-execution/spec.md#gwt-001.t11
 """
 from __future__ import annotations
 
@@ -20,6 +22,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+pytestmark = pytest.mark.usefixtures("isolated_qwq_output_root")
 
 ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT / "quwoquan_ops/cli") not in sys.path:
@@ -39,15 +43,17 @@ class SimulatedCrash(RuntimeError):
 
 def authority_claims(action: str) -> dict[str, Any]:
     return {
-        "receipt_id": "authority-1", "actor_id": "actor-1",
+        "receipt_id": "authority-1", "decision_id": "authority-1",
+        "decision_unit_id": "unit-1", "actor_id": "actor-1",
         "actor_authenticated": True, "role": "engineering_delivery_owner",
         "scope": {"objective": "objective-1"},
         "expires_at": "2026-08-30T00:00:00Z",
         "evidence_fingerprint": "sha256:evidence",
-        "decision_kind": "delivery_authorization", "actions": [action],
+        "decision_kind": "delivery_authorization", "actions": [action], "provider_kind": "test",
         "provider_version": "test", "provider_commit": "sha256:" + "0" * 64,
         "contract_version": "test", "issuer": "test", "receipt_state": "consumed",
-        "receipt_generation": 2, "receipt_etag": '"test-consumed"',
+        "receipt_previous_generation": 1, "receipt_generation": 2,
+        "receipt_etag": '"test-consumed"',
         "chain_commit": "sha256:" + "1" * 64,
         "winner_idempotency_key": "create-1",
         "winner_command_digest": "sha256:" + "2" * 64,
@@ -66,6 +72,7 @@ def envelope(*, action: str, target_state: str, effect_id: str, key: str, source
         "authority_claims_digest": payload_digest(authority_claims(action)),
         "authority_winner_idempotency_key": authority_claims(action)["winner_idempotency_key"],
         "authority_winner_command_digest": authority_claims(action)["winner_command_digest"],
+        "authority_winner_previous_generation": authority_claims(action)["receipt_previous_generation"],
         "authority_winner_generation": authority_claims(action)["receipt_generation"],
         "authority_chain_commit": authority_claims(action)["chain_commit"],
     }

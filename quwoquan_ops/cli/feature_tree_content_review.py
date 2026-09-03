@@ -489,8 +489,16 @@ def validate_content(review: Review, text: str) -> None:
 
     if "Design" in review.kind:
         normalized_lines: dict[str, int] = {}
-        for raw in text.splitlines():
+        raw_lines = text.splitlines()
+        for index, raw in enumerate(raw_lines):
             line = raw.strip()
+            next_line = raw_lines[index + 1].strip() if index + 1 < len(raw_lines) else ""
+            table_separator = re.fullmatch(r"\|(?:\s*:?-+:?\s*\|)+", line)
+            table_header = line.startswith("|") and re.fullmatch(
+                r"\|(?:\s*:?-+:?\s*\|)+", next_line
+            )
+            if table_header or table_separator:
+                continue
             if len(line) < 20 or line.startswith(
                 (
                     "#",

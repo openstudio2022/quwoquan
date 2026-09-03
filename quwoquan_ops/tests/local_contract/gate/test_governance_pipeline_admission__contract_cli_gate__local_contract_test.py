@@ -51,12 +51,14 @@ def test_contract_owns_real_sources_required_evidence_and_zero_mutation() -> Non
     assert all(value is False for value in contract["authority_boundaries"].values())
     assert contract["admission_policy"]["current_max_write_concurrency"] == 1
     assert contract["admission_policy"]["objective_s4_upper_bound"] == 1
+    assert contract["admission_policy"]["observe_only_requires_all_evidence_layers"] is True
+    assert "handoff_freshness" in contract["evidence_layers"]
     assert set(contract["layer_admission"]) == set(contract["evidence_layers"])
     assert len(contract["evidence_layers"]) == 26
     assert next(iter(contract["evidence_layers"])) == "owner_manifest"
     assert contract["schemas"]["evidence_bundle_receipts"]["required_fields"][0] == "owner_manifest"
-    assert contract["layer_admission"]["owner_manifest"]["provider_id"] == "feature_context_manifest_v3"
-    assert contract["current_repository_evidence"]["provider_adapters"]["owner_manifest"]["provider_id"] == "feature_context_manifest_v3"
+    assert contract["layer_admission"]["owner_manifest"]["provider_id"] == "feature_context_owner_identity_v4"
+    assert contract["current_repository_evidence"]["provider_adapters"]["owner_manifest"]["provider_id"] == "feature_context_owner_identity_v4"
     assert "feature_context_manifest_v2" not in serialized
     assert contract["layer_admission"]["prod"]["provider_kinds"] == ["authenticated_external"]
     assert contract["layer_admission"]["portal_test"]["release_evidence_eligible"] is False
@@ -86,6 +88,33 @@ def test_contract_rejects_status_concurrency_activation_and_metric_drift() -> No
             validate_contract(broken)
 
 
+
+def test_required_named_evidence_cross_contract_closure(monkeypatch: pytest.MonkeyPatch) -> None:
+    contract = load_contract()
+    registry = yaml.safe_load(
+        (ROOT / ".agents/skills/review/references/registry.yaml").read_text(encoding="utf-8")
+    )
+    required_ids = [
+        descriptor["evidence_id"]
+        for descriptor in contract["current_repository_evidence"]["named_evidence_layers"].values()
+    ]
+    assert required_ids == ["portal-test", "portal-build"]
+    assert len(required_ids) == len(set(required_ids))
+    for evidence_id in required_ids:
+        assert registry["evidence"][evidence_id]["segment"] == "POST"
+        assert registry["evidence"][evidence_id]["required"] is True
+
+    duplicate = yaml.safe_load(yaml.safe_dump(contract))
+    duplicate["current_repository_evidence"]["named_evidence_layers"]["portal_build"]["evidence_id"] = "portal-test"
+    with pytest.raises(ContractError, match="unique"):
+        validate_contract(duplicate)
+
+    missing = yaml.safe_load(yaml.safe_dump(registry))
+    missing["evidence"].pop("portal-build")
+    monkeypatch.setattr(contract_module.yaml, "safe_load", lambda _raw: missing)
+    with pytest.raises(ContractError, match="portal-build"):
+        validate_contract(contract)
+
 def test_named_evidence_requires_current_exact_plan_and_governance_subject(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -106,16 +135,20 @@ def test_named_evidence_requires_current_exact_plan_and_governance_subject(
         "segment": binding["segment"],
         "deliverable": binding["deliverable"],
         "scope": binding["scope"],
-        "owner_manifest_identity": {
+        "owner_identity": {
             "ref": "current-owner-manifest.json",
             "target": binding["owner_manifest_target"],
             "resolved_owner": binding["owner_manifest_target"],
             "scope": binding["scope"],
         },
+        "candidate_evidence_identity": {"ref": "candidate.json"},
+        "fingerprint_receipt": dict(current),
     }
     receipt = {
         "plan_fingerprint_ref": current["ref"],
         "plan_fingerprint_digest": current["digest"],
+        "evidence_class": "reusable",
+        "admission_eligible": True,
         "evidence": [{"id": "portal-test", "exit_code": 0}],
         "terminal": {
             "status": "PASS",
@@ -130,11 +163,12 @@ def test_named_evidence_requires_current_exact_plan_and_governance_subject(
     )
     monkeypatch.setattr(
         "handoff_consumer.validate_named_evidence_ref_payload",
-        lambda value, plan, registry, label: value,
+        lambda value, plan, registry, label, **_kwargs: value,
     )
     assert validate_named_evidence_plan_binding(
         plan=plan, receipt=receipt, subject=subject,
-        expected_owner_manifest_ref="current-owner-manifest.json", contract=contract,
+        expected_owner_identity_ref="current-owner-manifest.json",
+        expected_candidate_evidence_ref="candidate.json", contract=contract,
     ) is receipt
 
     other_plan_receipt = dict(receipt)
@@ -145,7 +179,8 @@ def test_named_evidence_requires_current_exact_plan_and_governance_subject(
     with pytest.raises(ContractError, match="different exact Review plan"):
         validate_named_evidence_plan_binding(
             plan=plan, receipt=other_plan_receipt, subject=subject,
-            expected_owner_manifest_ref="current-owner-manifest.json", contract=contract,
+            expected_owner_identity_ref="current-owner-manifest.json",
+            expected_candidate_evidence_ref="candidate.json", contract=contract,
         )
 
     other_candidate = dict(subject)
@@ -153,7 +188,8 @@ def test_named_evidence_requires_current_exact_plan_and_governance_subject(
     with pytest.raises(ContractError, match="candidate_id mismatch"):
         validate_named_evidence_plan_binding(
             plan=plan, receipt=receipt, subject=other_candidate,
-            expected_owner_manifest_ref="current-owner-manifest.json", contract=contract,
+            expected_owner_identity_ref="current-owner-manifest.json",
+            expected_candidate_evidence_ref="candidate.json", contract=contract,
         )
 
 

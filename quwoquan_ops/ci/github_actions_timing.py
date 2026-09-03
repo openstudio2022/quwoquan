@@ -63,6 +63,15 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated phase names running in parallel; layers run in order.",
     )
     parser.add_argument(
+        "--dag-branch",
+        action="append",
+        default=[],
+        help=(
+            "Semicolon-separated serial layers for one parallel branch; each layer "
+            "is a comma-separated phase set. Machine critical path is the longest branch."
+        ),
+    )
+    parser.add_argument(
         "--external-phase",
         action="append",
         default=[],
@@ -122,12 +131,28 @@ def _job_seconds(job: dict[str, Any]) -> int:
     return max(0, int((end - start).total_seconds()))
 
 
+def classify_job_attempt(job: dict[str, Any]) -> str:
+    """Classify Actions job state without treating a skipped job as attempted."""
+
+    conclusion = str(job.get("conclusion") or "")
+    status = str(job.get("status") or "")
+    if conclusion == "skipped":
+        return "skipped"
+    if status != "completed" and conclusion not in {
+        "success", "failure", "cancelled", "timed_out", "action_required", "neutral"
+    }:
+        return "runnable"
+    if conclusion in {"cancelled", "timed_out", "action_required"}:
+        return "infra"
+    return "attempted"
+
+
 def _match_completed(jobs: list[dict[str, Any]], pattern: str) -> list[dict[str, Any]]:
     return [
         job
         for job in jobs
         if pattern in str(job.get("name") or "")
-        and job.get("conclusion") != "skipped"
+        and classify_job_attempt(job) == "attempted"
         and isinstance(job.get("started_at"), str)
         and isinstance(job.get("completed_at"), str)
     ]
@@ -153,6 +178,7 @@ def calculate(
     prod_job: str,
     critical_start: str,
     dag_layers: list[tuple[str, ...]],
+    dag_branches: list[tuple[tuple[str, ...], ...]] | None = None,
     external_phases: dict[str, int] | None = None,
 ) -> dict[str, str | int]:
     external_phases = external_phases or {}
@@ -176,6 +202,11 @@ def calculate(
     if unknown_counts:
         raise ValueError(f"required counts have no phase selector: {sorted(unknown_counts)}")
     relevant = [job for group in matched_by_phase.values() for job in group]
+    job_classifications = {
+        "attempted": 0, "runnable": 0, "skipped": 0, "infra": 0
+    }
+    for job in jobs:
+        job_classifications[classify_job_attempt(job)] += 1
     if not relevant:
         raise ValueError("no completed jobs matched the timing phases")
 
@@ -203,6 +234,7 @@ def calculate(
     calendar_seconds = max(0, int((calendar_end - calendar_start).total_seconds()))
 
     result: dict[str, str | int] = {
+        **{f"jobs_{name}": count for name, count in job_classifications.items()},
         "run_created_at": str(run["created_at"]),
         "candidate_ready_at": str(candidate["completed_at"]),
         "calendar_lead_time_seconds": calendar_seconds,
@@ -211,30 +243,40 @@ def calculate(
         result[f"phase_{name}"] = max(_job_seconds(job) for job in matched)
     for name, seconds in external_phases.items():
         result[f"phase_{name}"] = seconds
-    if not dag_layers:
-        raise ValueError("official machine critical path requires explicit DAG layers")
+    dag_branches = dag_branches or []
+    if not dag_layers and not dag_branches:
+        raise ValueError("official machine critical path requires explicit DAG layers or branches")
+    if dag_layers and dag_branches:
+        raise ValueError("machine critical path must use DAG layers or branches, not both")
     phase_seconds = {
         name: int(result[f"phase_{name}"])
         for name in (*matched_by_phase, *external_phases)
     }
+    branch_layers = list(dag_branches) if dag_branches else [tuple(dag_layers)]
     unknown_dag_phases = {
         name
-        for layer in dag_layers
+        for branch in branch_layers
+        for layer in branch
         for name in layer
         if name not in phases and name not in external_phases
     }
     if unknown_dag_phases:
         raise ValueError(f"DAG names unknown timing phases: {sorted(unknown_dag_phases)}")
     missing_dag_evidence = {
-        name for layer in dag_layers for name in layer if name not in phase_seconds
+        name
+        for branch in branch_layers
+        for layer in branch
+        for name in layer
+        if name not in phase_seconds
     }
     if missing_dag_evidence:
         raise ValueError(
             "DAG phase timing is missing; cannot calculate machine critical path: "
             + ", ".join(sorted(missing_dag_evidence))
         )
-    result["machine_critical_path_seconds"] = sum(
-        max(phase_seconds[name] for name in layer) for layer in dag_layers
+    result["machine_critical_path_seconds"] = max(
+        sum(max(phase_seconds[name] for name in layer) for layer in branch)
+        for branch in branch_layers
     )
 
     # These are official long-tail observations, not guessed additive values.
@@ -319,6 +361,15 @@ def main() -> int:
                 tuple(name.strip() for name in layer.split(",") if name.strip())
                 for layer in args.dag_layer
                 if layer.strip()
+            ],
+            dag_branches=[
+                tuple(
+                    tuple(name.strip() for name in layer.split(",") if name.strip())
+                    for layer in branch.split(";")
+                    if layer.strip()
+                )
+                for branch in args.dag_branch
+                if branch.strip()
             ],
             external_phases=_parse_pairs(args.external_phase, integer=True),
         )

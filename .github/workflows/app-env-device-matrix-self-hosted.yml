@@ -62,6 +62,11 @@ on:
         description: 'Prod 一次性注销证据的唯一 Flutter device id'
         required: false
         default: ''
+      force_device_matrix:
+        description: '强制执行设备矩阵，忽略 changed-path impact filtering'
+        required: false
+        default: true
+        type: boolean
       allow_disabled_mobile_matrix_debug:
         description: '仅独立手动调试：明确允许在 self-hosted mobile matrix 未启用时跳过'
         required: false
@@ -153,8 +158,76 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  impact:
+    name: App Matrix — Impact Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      device_required: ${{ steps.plan.outputs.device }}
+      impact_plan_digest: ${{ steps.plan.outputs.plan_digest }}
+      source_sha: ${{ steps.range.outputs.head_sha }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - id: range
+        name: Resolve exact device impact range
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          PUSH_BEFORE_SHA: ${{ github.event.before || '' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          BASE_SHA="$PR_BASE_SHA"
+          if [[ "$EVENT_NAME" == push ]]; then BASE_SHA="$PUSH_BEFORE_SHA"; fi
+          if [[ "$BASE_SHA" == "0000000000000000000000000000000000000000" || -z "$BASE_SHA" ]]; then
+            BASE_SHA="$(git rev-parse "${HEAD_SHA}^" 2>/dev/null || true)"
+          fi
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] && [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          { echo "base_sha=$BASE_SHA"; echo "head_sha=$HEAD_SHA"; } >> "$GITHUB_OUTPUT"
+      - id: plan
+        name: Generate and validate typed device impact plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          VALIDATION_PROFILE: ${{ inputs.validation_profile || 'pr_light' }}
+          FORCE_DEVICE_INPUT: ${{ inputs.force_device_matrix == true }}
+          PROMOTION_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'dev1.0' && github.event.pull_request.base.ref == 'main' }}
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/app-device-impact-plan"
+          mkdir -p "$ROOT"
+          FORCE_ARGS=()
+          if [[ "$EVENT_NAME" == schedule || "$VALIDATION_PROFILE" != pr_light || "$FORCE_DEVICE_INPUT" == true || "$PROMOTION_PR" == true ]]; then
+            FORCE_ARGS+=(--force-device)
+            echo "::notice::device impact forced event=${EVENT_NAME} profile=${VALIDATION_PROFILE}"
+          fi
+          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
+            --base-sha "${{ steps.range.outputs.base_sha }}" \
+            --head-sha "${{ steps.range.outputs.head_sha }}" \
+            --impact-plan "$ROOT/impact-plan.json" \
+            --github-output "$GITHUB_OUTPUT" \
+            ${FORCE_ARGS[@]+"${FORCE_ARGS[@]}"}
+          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
+            --validate-impact-plan "$ROOT/impact-plan.json" \
+            --expected-source-sha "${{ steps.range.outputs.head_sha }}" \
+            --expected-plan-digest "$(awk -F= '$1 == "plan_digest" {print $2}' "$GITHUB_OUTPUT" | tail -n 1)" \
+            --github-output "$RUNNER_TEMP/validated-device-impact"
+      - name: Upload typed device impact plan
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: app-device-impact-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/app-device-impact-plan/impact-plan.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
   branch_policy:
     name: App Matrix — Branch Policy
+    needs: impact
+    if: ${{ github.event_name != 'pull_request' || needs.impact.outputs.device_required == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -891,7 +964,7 @@ jobs:
 
   app_env_device_matrix_summary:
     name: 05. App Env Device Matrix
-    needs: [beta_stack, android_device_matrix, ios_device_matrix, mobile_matrix, beta_teardown]
+    needs: [impact, beta_stack, android_device_matrix, ios_device_matrix, mobile_matrix, beta_teardown]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 1
@@ -902,15 +975,23 @@ jobs:
       SUMMARY_REPO_DIR: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/summary
     outputs:
       machine_critical_path_seconds: ${{ steps.timing.outputs.machine_critical_path_seconds }}
-      summary_result: ${{ steps.summary.outputs.result }}
+      summary_result: ${{ steps.summary.outputs.result || steps.typed_skip.outputs.result }}
     steps:
+      - id: typed_skip
+        name: Emit typed not-required result
+        if: ${{ github.event_name == 'pull_request' && needs.impact.outputs.device_required != 'true' }}
+        run: |
+          echo "::notice::App Device Matrix typed skipped: state=not_required impact_plan_digest=${{ needs.impact.outputs.impact_plan_digest }}"
+          echo "result=skipped" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        if: ${{ github.event_name != 'pull_request' || needs.impact.outputs.device_required == 'true' }}
         with:
           ref: ${{ needs.beta_stack.outputs.source_git_sha || github.sha }}
           path: .qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/summary
           clean: false
           persist-credentials: false
       - id: timing
+        if: ${{ github.event_name != 'pull_request' || needs.impact.outputs.device_required == 'true' }}
         name: Render official GitHub DAG timing
         working-directory: ${{ env.SUMMARY_REPO_DIR }}
         env:
@@ -964,7 +1045,7 @@ jobs:
             --note "GitHub Jobs API proves explicit Android/iOS jobs share one host-bound stack and execute before one aggregator." \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/app-env-device-matrix-summary.json" \
             --write-step-summary
-          timing_status="$(python3 - <<'PY'
+          readarray -t timing_projection < <(python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -976,19 +1057,23 @@ jobs:
               )
           )
           print(str(summary.get("status") or "missing"))
+          print(str((summary.get("budget") or {}).get("policy") or "missing"))
+          print(str((summary.get("outcomePolicy") or {}).get("timing") or "missing"))
           PY
-          )"
-          if [[ "$timing_status" == "failed" || "$timing_status" == "historical_incomplete" ]]; then
-            echo "::error::GATE_BLOCK: canonical App device timing status=${timing_status}"
+          )
+          timing_status="${timing_projection[0]}"
+          timing_policy_class="${timing_projection[1]}"
+          timing_outcome="${timing_projection[2]}"
+          if [[ "$timing_policy_class" == release_sla && "$timing_outcome" == GATE_BLOCK ]]; then
+            echo "::error::GATE_BLOCK: canonical App device release SLA exceeded: status=${timing_status}"
             exit 2
           fi
-          if [[ -n "${missing_evidence:-}" ]]; then
-            echo "::error::GATE_BLOCK: App device matrix timing is historical_incomplete: ${missing_evidence}"
-            exit 2
+          if [[ "$timing_outcome" == PR_WARN ]]; then
+            echo "::warning::TIMING_PR_WARN: canonical App device timing status=${timing_status}; functional device result remains authoritative"
           fi
       - id: summary
+        if: ${{ github.event_name != 'pull_request' || needs.impact.outputs.device_required == 'true' }}
         name: Block any missing or failed platform
-        if: always()
         env:
           SELF_HOSTED_ENABLED: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
           DEBUG_SKIP_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_disabled_mobile_matrix_debug == true }}

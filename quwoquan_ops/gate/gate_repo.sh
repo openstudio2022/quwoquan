@@ -143,7 +143,6 @@ fi
 bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
 python3 quwoquan_ops/gate/verify_git_branch_policy.py
 python3 quwoquan_ops/gate/verify_github_supply_chain.py
-python3 quwoquan_ops/gate/verify_agent_context_budget.py
 python3 -B quwoquan_ops/gate/verify_human_agent_delivery_eval.py
 python3 -B quwoquan_ops/gate/verify_objective_execution.py
 python3 -B quwoquan_ops/gate/verify_hotl_admission.py

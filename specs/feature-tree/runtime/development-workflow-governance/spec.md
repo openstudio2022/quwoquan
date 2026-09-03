@@ -40,6 +40,7 @@
 - [`hotl-expansion-control`](./hotl-expansion-control/spec.md)：S6 只读评估固定 cohort 人工瓶颈、checkpoint delta、紧急控制 proof 与 capability admission；当前 fail-closed 为 manual/单写者且不授予 mutation。
 - [`local-continuous-integration`](./local-continuous-integration/spec.md)：按编辑、空闲、提交范围与推送范围调度 canonical checks，并以精确输入回执区分 `fast_green`、`scope_ready` 与 `release_ready`。
 - [`governance-pipeline-observe-only`](./governance-pipeline-observe-only/spec.md)：只读聚合全链独立证据并给出 observe-only 准入解释，任何终态都不授予生产、商用或 HOTL mutation。
+- 运行投影：[`场景化 HOTL 运行矩阵`](./design.md#hotl-runtime-matrix) 统一展示 12 个 Skill 与 session 至 release 边界；只引用各 owner，不建立 resolver、第二正文或状态台账。
 
 ## 5. 能力要求
 

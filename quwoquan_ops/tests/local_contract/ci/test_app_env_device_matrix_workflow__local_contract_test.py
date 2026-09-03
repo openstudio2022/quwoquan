@@ -101,6 +101,8 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
 
     def test_promotion_pull_request_is_gated_by_canonical_branch_policy(self) -> None:
         self.assertNotIn("pull_request:\n    branches:", self.workflow)
+        self.assertIn("App Matrix — Impact Plan", self.workflow)
+        self.assertIn("Generate and validate typed device impact plan", self.workflow)
         self.assertIn("App Matrix — Branch Policy", self.workflow)
         self.assertIn("Enforce canonical repository branch admission", self.workflow)
         self.assertIn("needs: branch_policy", self.workflow)
@@ -354,25 +356,26 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
         self.assertIn("echo \"started=true\" >> \"$GITHUB_OUTPUT\"", self.workflow)
         timing_gate = self.timing_budgets["gates"]["05.app_env_device_matrix_pr"]
         self.assertEqual(
-            timing_gate["profileHardFailSeconds"],
+            timing_gate["profileTiming"],
             {
-                "pr_light": 5400,
-                "manual_full": 5400,
-                "release_candidate": 5400,
-                "mainline_auto_prod": 480,
-                "nightly_full": 7200,
+                "pr_light": {"policy": "telemetry_advisory", "hardFailSeconds": 5400},
+                "manual_full": {"policy": "telemetry_advisory", "hardFailSeconds": 7200},
+                "release_candidate": {"policy": "telemetry_advisory", "hardFailSeconds": 7200},
+                "mainline_auto_prod": {"policy": "release_sla", "hardFailSeconds": 7800},
+                "nightly_full": {"policy": "telemetry_advisory", "hardFailSeconds": 7200},
             },
         )
+        self.assertEqual(timing_gate["timingPolicy"], "telemetry_advisory")
         self.assertEqual(
             set(timing_gate["phaseBudgetsSeconds"]),
             {"beta_stack", "android", "ios", "aggregation"},
         )
         self.assertNotIn("profileHardFailSeconds", self.workflow)
         self.assertIn('--budget-profile "$VALIDATION_PROFILE"', self.workflow)
-        self.assertIn(
-            'if [[ "$timing_status" == "failed" || "$timing_status" == "historical_incomplete" ]]',
-            self.workflow,
-        )
+        self.assertIn('"$timing_policy_class" == release_sla', self.workflow)
+        self.assertIn('"$timing_outcome" == GATE_BLOCK', self.workflow)
+        self.assertIn("GATE_BLOCK: canonical App device release SLA exceeded", self.workflow)
+        self.assertIn("TIMING_PR_WARN", self.workflow)
         self.assertNotIn(
             '"$calendar_lead_time_seconds" -gt "$profile_hard_fail_seconds"',
             self.workflow,
@@ -492,6 +495,24 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
             self.workflow,
         )
         self.assertIn("canonical App device timing status", self.workflow)
+
+    def test_pr_device_matrix_is_changed_path_filtered_with_typed_skip(self) -> None:
+        self.assertIn("force_device_matrix:", self.workflow)
+        self.assertIn("device_required: ${{ steps.plan.outputs.device }}", self.workflow)
+        self.assertIn("Emit typed not-required result", self.workflow)
+        self.assertIn("state=not_required impact_plan_digest=", self.workflow)
+        self.assertIn("summary_result: ${{ steps.summary.outputs.result || steps.typed_skip.outputs.result }}", self.workflow)
+        self.assertIn("github.event_name != 'pull_request' || needs.impact.outputs.device_required == 'true'", self.workflow)
+        self.assertIn("VALIDATION_PROFILE: ${{ inputs.validation_profile || 'pr_light' }}", self.workflow)
+        self.assertIn("PROMOTION_PR:", self.workflow)
+        self.assertIn('"$VALIDATION_PROFILE" != pr_light', self.workflow)
+        self.assertIn('"$PROMOTION_PR" == true', self.workflow)
+
+    def test_device_impact_artifact_is_versioned_and_validated_once(self) -> None:
+        self.assertIn('--impact-plan "$ROOT/impact-plan.json"', self.workflow)
+        self.assertIn('--validate-impact-plan "$ROOT/impact-plan.json"', self.workflow)
+        self.assertIn("--expected-plan-digest", self.workflow)
+        self.assertIn("Upload typed device impact plan", self.workflow)
 
 
 if __name__ == "__main__":

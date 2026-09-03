@@ -193,6 +193,16 @@ schemas:
       - scope
       - append_only
       - consumed
+  human_runtime_decision_receipt:
+    schema_version: 1
+    required_fields: [schema_version, serialization_version, objective_ref, criteria, authority, decision, redirect_target, received_at, provider, human_identity, input_mode, formal_production_eligible]
+    authority_fields: [source, duration_scope]
+    duration_scope_fields: [kind, value]
+    provider_fields: [kind, provider_id, provider_receipt_ref]
+    human_identity_fields: [subject, assurance]
+  human_runtime_decision_projection:
+    schema_version: 1
+    required_fields: [schema_version, target_kind, admission_class, human_decision_ref, status, projection, decision, redirect_target, authority_status, formal_admission_satisfied, blocks_execution, terminal]
   authorization_grant:
     required_fields:
       - grant_projection_id
@@ -360,6 +370,24 @@ recommendation_policy:
     - outcome_acceptance
   engineering_recommendation_requires_independent_inputs_sealed: true
 
+runtime_bridge:
+  schema_version: 1
+  serialization_version: human-runtime-decision-v1
+  canonical_cli: quwoquan_ops/cli/human_agent_delivery.py
+  local_store: .qwq_output/env/repo/runs/human-decisions
+  decision_values: [continue, pause, redirect, approve_admission]
+  duration_scope_kinds: [objective, boundary, session, until_replaced]
+  target_kinds: [agent_execution, review, handoff]
+  admission_classes: [ordinary, formal_prod]
+  ordinary_missing_projection: declared_not_projected_nonblocking
+  during_poll: explicit_command_only
+  per_tool_hook_polling: forbidden
+  local_input_mode: explicit_cli_only
+  inferred_natural_language_verified: false
+  self_attested_formal_production_authority: false
+  formal_production_authority_source: hosted_authenticated_authority_provider
+  hosted_authority_adapter: quwoquan_ops/cli/lib/hosted_authority
+
 harness_projection:
   harnesses: [cursor, codex]
   canonical_cli: quwoquan_ops/cli/human_agent_delivery.py
@@ -451,6 +479,11 @@ errors:
   HAD.SOD_FAILED: {terminal: hold, recovery: collect_distinct_authenticated_principal}
   HAD.AUTHORITY_PROVIDER_UNAVAILABLE: {terminal: hold, recovery: keep_projection_non_executable}
   HAD.DECISION_CONSUMPTION_CONFLICT: {terminal: hold, recovery: readback_append_only_record_then_reconcile}
+  HAD.RUNTIME_DECISION_INVALID: {terminal: pause, recovery: provide_explicit_closed_schema_decision_input}
+  HAD.RUNTIME_DECISION_REF_INVALID: {terminal: pause, recovery: provide_current_content_addressed_decision_ref}
+  HAD.RUNTIME_DECISION_TAMPERED: {terminal: abort, recovery: record_new_decision_without_overwriting_receipt}
+  HAD.RUNTIME_DECISION_AUTHORITY_INVALID: {terminal: hold, recovery: use_hosted_authenticated_authority_for_formal_production}
+  HAD.RUNTIME_DECISION_STORE_INVALID: {terminal: abort, recovery: restore_canonical_runtime_decision_store}
   HAD.CAMPAIGN_REAPPROVAL_REQUIRED: {terminal: hold, recovery: record_new_campaign_decision}
   HAD.RECOMMENDATION_FORBIDDEN: {terminal: pause, recovery: render_neutral_symmetric_options}
   HAD.CONTRACT_INVALID: {terminal: abort, recovery: repair_canonical_contract}

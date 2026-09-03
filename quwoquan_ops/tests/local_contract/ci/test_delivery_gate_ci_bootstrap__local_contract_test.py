@@ -172,8 +172,11 @@ def test_delivery_gate_bootstrap_uses_pinned_verified_toolchains() -> None:
     assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in workflow
     assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in workflow
     assert "pip install -r quwoquan_data/requirements.txt" in workflow
-    assert "github.com/rhysd/actionlint/cmd/actionlint@v1.7.7" in workflow
-    assert 'actionlint\" -version | head -n 1)\" = \"v1.7.7\"' in workflow
+    assert 'go install "github.com/rhysd/actionlint/cmd/actionlint@v$ACTIONLINT_VERSION"' in workflow
+    assert "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830" in workflow
+    assert "actionlint-${{ runner.os }}-${{ runner.arch }}-v1.7.7" in workflow
+    assert "timeout 180s env GOBIN=" in workflow
+    assert "awk 'NR == 1 {print; exit}'" in workflow
 
 
 def test_common_governance_is_one_exact_sha_bounded_job() -> None:
@@ -188,7 +191,11 @@ def test_common_governance_is_one_exact_sha_bounded_job() -> None:
     assert "git status --porcelain" in common
     assert common.count("verify_git_branch_policy.py") == 1
     assert common.count("verify_github_supply_chain.py") == 1
-    assert "github.com/rhysd/actionlint/cmd/actionlint@v1.7.7" in common
+    assert "github.com/rhysd/actionlint/cmd/actionlint@v$ACTIONLINT_VERSION" in common
+    assert "steps.workflow_impact.outputs.workflow_required == 'true'" in common
+    assert "state=NOT_REQUIRED" in common
+    assert "base_sha=$BASE_SHA head_sha=$HEAD_SHA" in common
+    assert "steps.actionlint_cache.outputs.cache-hit != 'true'" in common
     assert "Validate optional LocalReadiness verifier wiring" in common
     assert "quwoquan_ops/policies/local_readiness_contract.yaml" in common
     assert "quwoquan_ops/cli/local_readiness.py" in common
@@ -197,31 +204,49 @@ def test_common_governance_is_one_exact_sha_bounded_job() -> None:
     assert "bash quwoquan_ops/gate/gate_repo.sh" not in common
     assert "GATE_SKIP" not in workflow
     topology = _job_body(workflow, "topology_regression")
-    assert "needs: common_governance" in topology
+    assert "needs: common_governance" not in topology
     assert "verify_git_branch_policy.py" not in topology
     assert "verify_github_supply_chain.py" not in topology
 
 
-def test_data_jobs_are_impact_gated_as_one_complete_closure() -> None:
+def test_common_and_topology_start_independently_but_both_gate_summary() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
-    expected_if = "if: ${{ needs.topology_regression.outputs.data == 'true' }}"
+    topology = _job_body(workflow, "topology_regression")
+    summary = _job_body(workflow, "delivery_gate_summary")
+
+    assert "needs: common_governance" not in topology
+    assert "- common_governance" in summary
+    assert "- topology_regression" in summary
+    assert 'expect_success "common_governance"' in summary
+    assert 'expect_success "topology_regression"' in summary
+    assert '--dag-branch "common_governance${RELEASE_BRANCH_SUFFIX}"' in summary
+    assert '--dag-branch "topology;' in summary
+    assert 'RELEASE_BRANCH_SUFFIX=";release_evidence"' in summary
+    assert '--dag-layer "release_evidence"' not in summary
+
+
+def test_data_jobs_are_unconditional_complete_delivery_closure() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     data = _job_body(workflow, "quwoquan_data")
     shards = _job_body(workflow, "quwoquan_data_tests")
 
-    assert expected_if in data
-    assert expected_if in shards
+    data_if = "if: ${{ needs.topology_regression.outputs.data == 'true' }}"
+    assert data_if not in data
+    assert data_if not in shards
     assert "GATE_DATA_PHASE: verify" in data
     assert "GATE_DATA_PHASE: local_contract" in shards
     assert 'DATA_TEST_TOTAL_SHARDS: "4"' in shards
     assert "shard_index: [0, 1, 2, 3]" in shards
-    assert 'if [[ "$DATA_IMPACTED" == "true" ]]; then' in workflow
-    assert '--require-count "data=1" --require-count "data_tests=4"' in workflow
-    assert 'expect_typed_pending_or_skipped "quwoquan_data"' in workflow
-    assert 'expect_typed_pending_or_skipped "quwoquan_data_tests"' in workflow
-    assert 'expect_typed_pending_or_skipped "quwoquan_data"' in workflow
-    assert 'expect_typed_pending_or_skipped "quwoquan_data_tests"' in workflow
-    assert 'if [ "$impacted" = "true" ]; then' in workflow
-    assert 'expect_success "$name" "$val" "$hint"' in workflow
+    assert 'if [[ "$DATA_IMPACTED" == "true" ]]; then' not in workflow
+    assert '--local-required data' in workflow
+    assert '--local-required data_tests' in workflow
+    assert '--require-count "data=1"' in workflow
+    assert '--require-count "data_tests=4"' in workflow
+    assert 'FANOUT=(data data_tests)' in workflow
+    assert 'expect_success "quwoquan_data" "${DATA}"' in workflow
+    assert 'expect_success "quwoquan_data_tests" "${DATA_TESTS}"' in workflow
+    assert 'expect_typed_pending_or_skipped "quwoquan_data"' not in workflow
+    assert 'expect_typed_pending_or_skipped "quwoquan_data_tests"' not in workflow
 
 
 def test_pull_request_reruns_service_closure_and_defers_app_to_push_evidence() -> None:
@@ -231,14 +256,13 @@ def test_pull_request_reruns_service_closure_and_defers_app_to_push_evidence() -
     # G1：service impacted 的 exact merge candidate 必须在 PR merge ref 上重跑
     # Service closure，required scope 不得以 skipped 计绿。
     service_if = "if: ${{ needs.topology_regression.outputs.service == 'true' }}"
-    for job_name in (
-        "quwoquan_service",
-        "quwoquan_service_packaging",
-        "quwoquan_service_coverage",
-    ):
+    for job_name in ("quwoquan_service", "quwoquan_service_packaging"):
         body = _job_body(workflow, job_name)
         assert pr_exclusion not in body
         assert service_if in body
+    coverage_body = _job_body(workflow, "quwoquan_service_coverage")
+    assert pr_exclusion not in coverage_body
+    assert "outputs.coverage_service == 'true'" in coverage_body
     for job_name in (
         "quwoquan_service",
         "quwoquan_service_packaging",
@@ -442,15 +466,11 @@ def test_delivery_runs_service_core_and_packaging_as_parallel_siblings() -> None
     assert coverage_fn.index("prepare-test-python") < coverage_fn.index(
         "verify_canonical_coverage.py --collect --scope cloud"
     )
-    assert (
-        '--require-count "service=1" --require-count "service_packaging=3"'
-        ' --require-count "service_coverage=1"'
-    ) in workflow
-    assert "FANOUT+=(service service_packaging service_coverage)" in workflow
-    assert (
-        "--local-required service --local-required service_packaging"
-        " --local-required service_coverage"
-    ) in workflow
+    assert '--require-count "service=1" --require-count "service_packaging=3"' in workflow
+    assert 'if [[ "$SERVICE_COVERAGE_IMPACTED" == "true" ]]' in workflow
+    assert '--require-count "service_coverage=1"' in workflow
+    assert "--local-required service --local-required service_packaging" in workflow
+    assert "ARGS+=(--local-required service_coverage)" in workflow
     assert "SERVICE_PACKAGING: ${{ needs.quwoquan_service_packaging.result }}" in workflow
     assert "SERVICE_COVERAGE: ${{ needs.quwoquan_service_coverage.result }}" in workflow
     summary_start = workflow.index("      - name: 汇总并阻断失败项")
@@ -622,28 +642,51 @@ def test_pull_request_jobs_checkout_and_diff_the_exact_merge_candidate() -> None
 def test_delivery_and_promotion_gates_defer_edges_to_canonical_evaluator() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     pre_release = (ROOT / ".github/workflows/pre-release-gate.yml").read_text(encoding="utf-8")
-
-    assert "pull_request:\n    branches:" not in workflow
-    assert "pull_request:\n    branches:" not in pre_release
-    # Delivery Gate 由 lane push 生产 G0/App 证据；promotion 门禁仍只跟 dev1.0。
-    assert "\n  push:\n    branches: [dev1.0, 'lane/**']\n" in workflow
-    assert "\n  push:\n    branches: [dev1.0]\n" in pre_release
     app_matrix = (
         ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
     ).read_text(encoding="utf-8")
+    policy = (ROOT / "quwoquan_ops/policies/branch_policy.yaml").read_text(encoding="utf-8")
+
+    assert "pull_request:\n    branches:" not in workflow
+    assert "pull_request:\n    branches:" not in pre_release
+    assert "\n  push:\n    branches: [dev1.0, 'lane/**']\n" in workflow
+    assert "\n  push:\n    branches: [dev1.0]\n" in pre_release
     assert "\n  push:\n    branches: [dev1.0]\n" in app_matrix
-    assert (
-        "github.event.pull_request.base.sha || github.event.before || ''"
-        in workflow
-    )
-    for source in (workflow, pre_release, app_matrix):
+    assert "PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}" in workflow
+    assert "PUSH_BEFORE_SHA: ${{ github.event.before || '' }}" in workflow
+
+    # Delivery 与设备矩阵仍拥有各自 required check 的 canonical admission。
+    for source in (workflow, app_matrix):
         assert "Enforce canonical repository branch admission" in source
         assert "python3 quwoquan_ops/gate/verify_git_branch_policy.py" in source
-    assert "Admit direct dev1.0 integration push" not in pre_release
     assert "Admit direct dev1.0 integration push" not in app_matrix
-    assert "verify_git_branch_policy.py" in workflow
-    assert "Pre-Release — Branch Policy" in pre_release
-    assert "needs: branch_policy" in pre_release
+
+    # pr_light 不重复 pre-push/上游的 branch-policy-only job；它保留自己独有的
+    # changed-candidate 安全边界与 canonical impact plan。
+    assert "Enforce canonical repository branch admission" not in pre_release
+    assert "verify_git_branch_policy.py" not in pre_release
+    assert "Pre-Release — Branch Policy" not in pre_release
+    assert "Pre-Release — PR Light Governance" in pre_release
+    assert "Verify changed secret, PII and generated boundaries" in pre_release
+    assert "Generate canonical PR-light impact plan" in pre_release
+    assert "--validate-impact-plan" in pre_release
+    assert "Verify fast CI governance contracts" not in pre_release
+    for duplicate in (
+        "test_detect_ci_impacted_scopes__local_contract_test.py",
+        "test_github_actions_timing__local_contract_test.py",
+        "test_ci_timing_summary__canonical__local_contract_test.py",
+    ):
+        assert duplicate not in pre_release
+
+    # promotion 合法边没有丢失：single authority policy 仍声明 dev1.0 -> main，
+    # 并把三条 required check 绑定到各自 workflow；pr_light 只不重复执行 evaluator。
+    assert "- head: dev1.0\n    base: main" in policy
+    assert "name: 03. Delivery Gate" in policy
+    assert "workflow: .github/workflows/delivery-gate.yml" in policy
+    assert "name: 04. Pre-Release Gate" in policy
+    assert "workflow: .github/workflows/pre-release-gate.yml" in policy
+    assert "name: 05. App Env Device Matrix" in policy
+    assert "workflow: .github/workflows/app-env-device-matrix-self-hosted.yml" in policy
 
 
 def test_app_pipeline_uses_only_the_repository_pinned_flutter_version() -> None:
@@ -766,14 +809,18 @@ def test_hosted_delivery_budgets_match_observed_parallel_shape() -> None:
     assert delivery["budgetSeconds"] == 1500
     assert delivery["hardFailSeconds"] == 1800
     assert delivery["machinePath"] == (
-        "topology_regression + max(quwoquan_service, "
-        "quwoquan_service_packaging, quwoquan_service_coverage, "
-        "search_contract_smoke, "
-        "quwoquan_app_static, quwoquan_app_tests, "
-        "quwoquan_app_serial, quwoquan_app_coverage, quwoquan_data, ops_portal); "
-        "pull_request sources quwoquan_app_* from verified push evidence while "
-        "calendar still ends at its own verifier completion"
+        "max(common_governance, topology_regression + "
+        "max(quwoquan_service, quwoquan_service_packaging, "
+        "quwoquan_service_coverage, search_contract_smoke, "
+        "quwoquan_app_static, quwoquan_app_tests, quwoquan_app_serial, "
+        "quwoquan_app_coverage, quwoquan_data, quwoquan_data_tests, "
+        "ops_portal)); Data verify and all Data test shards run on every Delivery; "
+        "pull_request "
+        "sources quwoquan_app_* from verified push evidence while calendar "
+        "still ends at its own verifier completion; produce_release_evidence "
+        "appends release_evidence after both parallel branches converge"
     )
+    assert delivery["timingPolicy"] == "telemetry_advisory"
     assert set(delivery["phaseBudgetsSeconds"]) >= {
         "quwoquan_app_static",
         "quwoquan_app_tests",
@@ -881,7 +928,8 @@ def test_delivery_pr_reuses_push_owned_app_evidence_without_merging_ranges() -> 
         "github.event_name != 'pull_request' && (github.event_name == "
         "'workflow_call' || needs.topology_regression.outputs.candidate_app == 'true')"
     )
-    assert workflow.count(local_app_if) == 4
+    assert workflow.count(local_app_if) == 3
+    assert "needs.topology_regression.outputs.coverage_app == 'true'" in workflow
     assert "name: Detect candidate-level App scope" in workflow
     assert "git merge-base origin/main \"$HEAD_SHA\"" in workflow
     assert "--scope-receipt" in workflow
@@ -984,3 +1032,29 @@ def test_ff_config_contract_uses_portable_grep() -> None:
 
     assert 'grep -nF -- "$token" "$spec"' in script
     assert "rg -n" not in script
+
+
+def test_delivery_impact_plan_is_generated_once_and_artifacted() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    topology = _job_body(workflow, "topology_regression")
+    assert topology.count("--impact-plan") == 1
+    assert "--validate-impact-plan" in topology
+    assert "Upload versioned Delivery impact plan" in topology
+    assert "impact_plan_digest: ${{ steps.detect.outputs.plan_digest }}" in topology
+    for job_name in ("quwoquan_app_tests", "quwoquan_data_tests"):
+        assert "detect_ci_impacted_scopes.py" not in _job_body(workflow, job_name)
+
+
+def test_coverage_jobs_use_business_impact_or_governance_contract_closure() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    assert "outputs.coverage_service == 'true'" in _job_body(workflow, "quwoquan_service_coverage")
+    assert "outputs.coverage_app == 'true'" in _job_body(workflow, "quwoquan_app_coverage")
+    assert 'expect_typed_pending_or_skipped "quwoquan_service_coverage" "${SERVICE_COVERAGE}" "$SERVICE_COVERAGE_IMPACTED"' in workflow
+
+
+def test_delivery_timing_provider_failure_is_pr_warn_not_red_on_green() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    assert "telemetry_classification=infra" in workflow
+    assert "TIMING_PR_WARN" in workflow
+    assert "functional Delivery checks remain authoritative" in workflow
+    assert "Delivery Gate timing is historical_incomplete" not in workflow
