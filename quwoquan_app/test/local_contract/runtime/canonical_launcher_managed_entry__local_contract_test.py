@@ -238,7 +238,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
         readiness_ref.write_text(
             json.dumps(
                 {
-                    "schema": "quwoquan_data.environment_release_readiness",
+                    "schema": "quwoquan_data.release_readiness.v1",
                     "releaseId": "research-alpha",
                     "verifyRunId": "verify-alpha",
                     "manifestDigest": _MANIFEST_DIGEST,
@@ -280,7 +280,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
         strict_content_ref.write_text(
             json.dumps(
                 {
-                    "schema": "quwoquan_ops.app_content_preflight_exact",
+                    "schema": "quwoquan_ops.app_content_preflight_exact.v1",
                     "target": "alpha-local",
                     "status": "passed",
                     "releaseId": "research-alpha",
@@ -301,7 +301,7 @@ class CanonicalLauncherManagedEntryContractTest(unittest.TestCase):
         receipt_path.write_text(
             json.dumps(
                 {
-                    "schema": "quwoquan_ops.app_managed_preparation",
+                    "schema": "quwoquan_ops.app_managed_preparation.v1",
                     "target": target,
                     "environment": "alpha",
                     "platform": "ios",

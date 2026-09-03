@@ -54,9 +54,8 @@ _EVIDENCE = "OPS.ENVIRONMENT_ACCEPTANCE_FACT.evidence_blocked"
 _PREDECESSOR_BLOCKED = "OPS.ENVIRONMENT_ACCEPTANCE_FACT.predecessor_blocked"
 _CREATE_CONFLICT = "OPS.ENVIRONMENT_ACCEPTANCE_FACT.create_once_conflict"
 _PATH_BLOCKED = "OPS.ENVIRONMENT_ACCEPTANCE_FACT.path_blocked"
-_M1_HEALTH_SCHEMA = "qwq.content_api_consumer.health_binding"
-_M1_OBSERVATION_SCHEMA = "qwq.content_api_consumer.observation"
-_M1_SOURCE_FINGERPRINT_SCHEMA = "qwq.m1_api_consumer.source_fingerprint"
+_M1_HEALTH_SCHEMA = "qwq.content_api_consumer.health_binding.v1"
+_M1_OBSERVATION_SCHEMA = "qwq.content_api_consumer.observation.v1"
 _M1_REQUIRED_HEALTH_LAYERS = (
     "build_ready",
     "runtime_full_ready",
@@ -417,7 +416,7 @@ def derive_m1_source_fingerprint(
             }
         )
     material = {
-        "schema": _M1_SOURCE_FINGERPRINT_SCHEMA,
+        "schema": "qwq.m1_api_consumer.source_fingerprint.v1",
         "environment": _text(environment, field="sourceFingerprint.environment"),
         "target": _identity(target, field="sourceFingerprint.target"),
         "releaseId": _identity(release_id, field="sourceFingerprint.releaseId"),

@@ -13,17 +13,18 @@ from pathlib import Path, PurePosixPath
 from .scanner import Finding, Inventory
 
 BASELINE_SCHEMA = "single-track-exact-fingerprint-baseline"
+BASELINE_REVISION = "b227730d2a43eefe3a676e9cec0473e4b7537869"
 FINGERPRINT_ALGORITHM = "sha256(category\0path\0normalized-detail)-v1"
 DEFAULT_BASELINE = (
     Path(__file__).resolve().parents[2]
-    / "policies/gates/single_track_exact_fingerprint_baseline.json"
+    / "policies/baselines/single_track_contracts_fingerprint_baseline.json"
 )
 BASELINE_PATH = DEFAULT_BASELINE
 GOVERNANCE = {
     "owner": "cloud-contract-governance",
     "reason": (
-        "canonical dev1.0@ed5a190ea contains 116 historical single-track "
-        "findings across 81 exact semantic identities; each identity may only fall"
+        "canonical dev1.0 already contains single-track findings; exact identities "
+        "may only be removed while the historical debt is retired"
     ),
     "expires_when": (
         "findings is empty; delete this baseline and restore the zero-only gate"

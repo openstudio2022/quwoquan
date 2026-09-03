@@ -127,6 +127,7 @@ from .ownership import (  # noqa: E402
 )
 from .baseline import (  # noqa: E402
     BASELINE_PATH,
+    BASELINE_REVISION,
     BASELINE_SCHEMA,
     DEFAULT_BASELINE,
     FINGERPRINT_ALGORITHM,
@@ -272,6 +273,7 @@ __all__ = [
     "should_skip",
     "write_inventory",
     "BASELINE_PATH",
+    "BASELINE_REVISION",
     "BASELINE_SCHEMA",
     "DEFAULT_BASELINE",
     "FINGERPRINT_ALGORITHM",

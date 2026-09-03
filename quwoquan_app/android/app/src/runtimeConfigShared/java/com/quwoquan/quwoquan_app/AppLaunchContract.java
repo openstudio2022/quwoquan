@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class AppLaunchContract {
-  public static final String SOURCE_DIGEST = "sha256:77c9518fc94b32b8565e015d4901077d59b3fdd21c1c86ccc8d3c9e75f01b0f8";
+  public static final String SOURCE_DIGEST = "sha256:b785d8b40858ba194fc0b7a0db07b39835ebb9bb56f6b96dd8a789af4dbbf7e1";
   public static final List<String> ENVIRONMENTS = Collections.unmodifiableList(Arrays.asList(
       "alpha",
       "beta",
@@ -155,7 +155,7 @@ public final class AppLaunchContract {
       {"app_effective_launch_manifest", "app-effective-launch-manifest"},
       {"app_launch_attempt", "app-launch-attempt"},
       {"app_launcher_handoff", "app-launcher-handoff"},
-      {"app_managed_preparation", "quwoquan_ops.app_managed_preparation"},
+      {"app_managed_preparation", "quwoquan_ops.app_managed_preparation.v1"},
       {"runtime_config_activation_receipt", "app-runtime-config-activation-receipt"},
       {"runtime_config_activation_request", "app-runtime-config-activation-request"},
       {"runtime_config_package", "app-runtime-config-package"},

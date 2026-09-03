@@ -359,7 +359,7 @@ def _m1_acceptance_arguments(root: Path, store: Path) -> dict[str, object]:
             "artifactPath": f"alpha/m1-{cell['entry']}-{cell['carrier']}-artifact.json",
         }
         observation = {
-            "schema": acceptance._M1_OBSERVATION_SCHEMA,
+            "schema": "qwq.content_api_consumer.observation.v1",
             "sampleId": sample["sampleId"],
             "entrySurface": cell["entry"],
             "carrier": cell["carrier"],
@@ -454,7 +454,7 @@ def _m1_acceptance_arguments(root: Path, store: Path) -> dict[str, object]:
         root,
         "alpha/consumer-health.json",
         {
-            "schema": acceptance._M1_HEALTH_SCHEMA,
+            "schema": "qwq.content_api_consumer.health_binding.v1",
             "status": "passed",
             "environment": "alpha",
             "deploymentTarget": "alpha-local",

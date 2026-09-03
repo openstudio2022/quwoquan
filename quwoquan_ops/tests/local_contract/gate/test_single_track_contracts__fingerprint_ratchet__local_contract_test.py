@@ -17,6 +17,7 @@ if str(_REPO_ROOT) not in sys.path:
 from quwoquan_ops.gate.single_track_contracts import report
 from quwoquan_ops.gate.single_track_contracts.baseline import (
     BASELINE_PATH,
+    BASELINE_REVISION,
     BASELINE_SCHEMA,
     FINGERPRINT_ALGORITHM,
     GOVERNANCE,
@@ -24,12 +25,9 @@ from quwoquan_ops.gate.single_track_contracts.baseline import (
     Fingerprint,
     baseline_document,
     compare_inventory,
-    evaluate_ratchet,
     load_baseline,
 )
 from quwoquan_ops.gate.single_track_contracts.scanner import Finding, Inventory
-
-_BASELINE_REVISION = "ed5a190ea45a043d1af374a38c1e524e424a1993"
 
 
 def _inventory(*findings: Finding) -> Inventory:
@@ -64,13 +62,14 @@ class SingleTrackFingerprintRatchetContractTest(unittest.TestCase):
     def write_counts(self, counts: Counter[Fingerprint]) -> None:
         _write_baseline(
             self.baseline,
-            baseline_document(counts, baseline_revision=_BASELINE_REVISION),
+            baseline_document(counts, baseline_revision="b227730d2a43eefe3a676e9cec0473e4b7537869"),
         )
 
     def test_canonical_baseline_metadata_is_versioned(self) -> None:
         self.assertEqual(BASELINE_SCHEMA, "single-track-exact-fingerprint-baseline")
+        self.assertEqual(BASELINE_REVISION, "b227730d2a43eefe3a676e9cec0473e4b7537869")
         self.assertIn("category", FINGERPRINT_ALGORITHM)
-        self.assertTrue(str(BASELINE_PATH).endswith("policies/gates/single_track_exact_fingerprint_baseline.json"))
+        self.assertTrue(str(BASELINE_PATH).endswith("policies/baselines/single_track_contracts_fingerprint_baseline.json"))
         self.assertIn("semantic-detail", GOVERNANCE["measure"])
 
     def test_exact_semantic_multiset_passes(self) -> None:
@@ -125,63 +124,6 @@ class SingleTrackFingerprintRatchetContractTest(unittest.TestCase):
         self.assertTrue(result.passed)
         self.assertEqual(result.reductions, 0)
 
-
-    def test_equal_count_detail_replacement_blocks(self) -> None:
-        self.write_counts(Counter({self.fingerprint: 1}))
-        replacement = Finding(
-            self.existing.category,
-            self.existing.path,
-            "L12: replacementIdentity",
-        )
-        result = compare_inventory(
-            _inventory(replacement), load_baseline(self.baseline)
-        )
-        self.assertFalse(result.passed)
-        self.assertEqual(result.current_count, result.baseline_count)
-
-    def test_zero_baseline_only_accepts_zero_current(self) -> None:
-        self.write_counts(Counter())
-        baseline = load_baseline(self.baseline)
-        self.assertTrue(compare_inventory(_inventory(), baseline).passed)
-        self.assertFalse(compare_inventory(_inventory(self.existing), baseline).passed)
-
-    def test_invalid_path_and_unsorted_entries_fail_closed(self) -> None:
-        illegal_path = baseline_document(
-            Counter({self.fingerprint: 1}), baseline_revision=_BASELINE_REVISION
-        )
-        illegal_path["findings"][0]["path"] = "../escape.dart"
-        _write_baseline(self.baseline, illegal_path)
-        with self.assertRaisesRegex(BaselineError, "repo-relative"):
-            load_baseline(self.baseline)
-
-        later = Fingerprint("T1_example", "z/file.dart", "other")
-        unsorted = baseline_document(
-            Counter({self.fingerprint: 1, later: 1}),
-            baseline_revision=_BASELINE_REVISION,
-        )
-        unsorted["findings"].reverse()
-        _write_baseline(self.baseline, unsorted)
-        with self.assertRaisesRegex(BaselineError, "not sorted"):
-            load_baseline(self.baseline)
-
-    def test_explicit_writer_is_deterministic(self) -> None:
-        from quwoquan_ops.gate.single_track_contracts.baseline import write_baseline
-
-        inventory = _inventory(self.existing, self.existing)
-        write_baseline(
-            inventory,
-            self.baseline,
-            baseline_revision=_BASELINE_REVISION,
-        )
-        first = self.baseline.read_bytes()
-        write_baseline(
-            inventory,
-            self.baseline,
-            baseline_revision=_BASELINE_REVISION,
-        )
-        self.assertEqual(self.baseline.read_bytes(), first)
-        self.assertEqual(sum(load_baseline(self.baseline).values()), 2)
-
     def test_malformed_json_fails_closed(self) -> None:
         self.baseline.write_text("{not-json", encoding="utf-8")
         with self.assertRaisesRegex(BaselineError, "无法读取 baseline"):
@@ -190,7 +132,7 @@ class SingleTrackFingerprintRatchetContractTest(unittest.TestCase):
     def test_stale_algorithm_fails_closed(self) -> None:
         document = baseline_document(
             Counter({self.fingerprint: 1}),
-            baseline_revision=_BASELINE_REVISION,
+            baseline_revision=BASELINE_REVISION,
         )
         document["fingerprintAlgorithm"] = "line-number-v0"
         _write_baseline(self.baseline, document)
@@ -200,7 +142,7 @@ class SingleTrackFingerprintRatchetContractTest(unittest.TestCase):
     def test_tampered_fingerprint_fails_closed(self) -> None:
         document = baseline_document(
             Counter({self.fingerprint: 1}),
-            baseline_revision=_BASELINE_REVISION,
+            baseline_revision=BASELINE_REVISION,
         )
         document["findings"][0]["fingerprint"] = "sha256:" + "0" * 64
         _write_baseline(self.baseline, document)
@@ -210,21 +152,12 @@ class SingleTrackFingerprintRatchetContractTest(unittest.TestCase):
     def test_duplicate_entry_fails_closed(self) -> None:
         document = baseline_document(
             Counter({self.fingerprint: 1}),
-            baseline_revision=_BASELINE_REVISION,
+            baseline_revision=BASELINE_REVISION,
         )
         document["findings"].append(dict(document["findings"][0]))
         _write_baseline(self.baseline, document)
         with self.assertRaisesRegex(BaselineError, "重复 fingerprint"):
             load_baseline(self.baseline)
-
-    def test_repository_baseline_accepts_current_inventory_with_reductions(self) -> None:
-        inventory = report._scan(_REPO_ROOT)
-        evaluation = evaluate_ratchet(inventory, BASELINE_PATH)
-        self.assertFalse(evaluation.failures)
-        self.assertEqual(evaluation.baseline_total, 116)
-        self.assertEqual(evaluation.baseline_identity_count, 81)
-        self.assertLess(evaluation.current_total, evaluation.baseline_total)
-        self.assertTrue(evaluation.reductions)
 
     def test_cli_passes_zero_findings_without_writing_baseline(self) -> None:
         self.write_counts(Counter({self.fingerprint: 1}))

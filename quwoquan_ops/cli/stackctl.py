@@ -320,7 +320,7 @@ from quwoquan_ops.cli.lib.dev_up import (
     pick_dev_up_env, resolve_device_id,
 )
 from quwoquan_ops.cli.lib.managed_preparation import (
-    MANAGED_CONTENT_PREFLIGHT_SCHEMA, MANAGED_PREPARATION_SCHEMA, ManagedPreparationBlocked,
+    MANAGED_PREPARATION_SCHEMA, ManagedPreparationBlocked,
     _managed_active_release_readback, _managed_android_adb_reverse_ports, _managed_content_binding, _managed_device_identity,
     _managed_device_trust, _managed_inspect_running_full_runtime,
     _managed_research_readiness_candidates, _managed_runtime_ready,

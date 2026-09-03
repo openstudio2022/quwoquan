@@ -154,7 +154,7 @@ def _matrix() -> list[dict[str, str]]:
             "carrier": carrier,
             "applicability": "required",
             "specRef": _SPEC_REF,
-            "runnerClass": f"qwq.content_consumer.{entry}.{carrier}",
+            "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1",
         }
         for entry in ENTRIES
         for carrier in CARRIERS

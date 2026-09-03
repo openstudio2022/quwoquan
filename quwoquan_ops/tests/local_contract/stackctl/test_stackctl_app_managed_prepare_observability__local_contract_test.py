@@ -34,7 +34,7 @@ def _resume_payload(attempt_id: str = "alpha-attempt-1") -> dict[str, Any]:
 
 def _readiness_payload() -> dict[str, Any]:
     return {
-        "schema": stackctl._DATA_READINESS_SCHEMA,
+        "schema": "quwoquan_data.release_readiness.v1",
         "releaseId": "alpha-slice-003",
         "verifyRunId": "verify-20260830T1600Z",
         "manifestDigest": _DIGEST,
