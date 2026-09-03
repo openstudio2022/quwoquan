@@ -297,7 +297,7 @@ def test_all_five_negative_classes_report_together_deterministically() -> None:
 @pytest.mark.parametrize(
     "broken",
     [
-        bundle(candidate_digest="sha256:short"),
+        bundle(candidate_digest="invalid-short-digest"),
         bundle(integration_depth="no_live"),
         bundle(integration_depth="manual_downgrade"),
         bundle(launch_receipt=launch_receipt(device_class="emulator_farm")),

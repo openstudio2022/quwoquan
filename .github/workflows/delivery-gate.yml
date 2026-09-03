@@ -11,7 +11,7 @@ permissions:
   actions: read
 
 env:
-  QWQ_OUTPUT_ROOT: .qwq_output
+  QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
   PUB_HOSTED_URL: https://pub.flutter-io.cn
   FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
 
@@ -438,7 +438,10 @@ jobs:
 
   quwoquan_service_packaging:
     name: Delivery Gate — Service Packaging (${{ matrix.packaging_env }})
-    runs-on: ubuntu-latest
+    # Canonical App dependency sync seals both CocoaPods hosts, while runtime
+    # packaging also builds OCI images. Keep both on the controlled macOS runner
+    # so one physical Flutter/CocoaPods/Docker toolchain owns the real bundle.
+    runs-on: [self-hosted, macOS, ARM64]
     # 构建期固化恢复后，三个环境各自是一次真实镜像构建（环境固化输入进了
     # buildInputDigest 闭包），不再是 alpha 之后两次廉价复用：
     # 事故前 820+126+119 秒，恢复后 884+461+426 秒，串行装不进门禁的
@@ -455,17 +458,47 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
+        with: {distribution: temurin, java-version: '17'}
+      - id: flutter
+        name: Resolve repository-pinned Flutter SDK
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
+      - name: Install verified Flutter SDK
+        env:
+          FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
+          FLUTTER_CACHE_PATH: ${{ steps.flutter.outputs.cache_path }}
+          FLUTTER_SHA256: ${{ steps.flutter.outputs.sha256 }}
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py install \
+            --archive-url "$FLUTTER_ARCHIVE_URL" \
+            --cache-path "$FLUTTER_CACHE_PATH" \
+            --sha256 "$FLUTTER_SHA256"
+      - id: strict_inputs
+        name: Prepare fresh source-bound packaging inputs
+        env:
+          EXPECTED_SOURCE: ${{ inputs.head_sha || github.sha }}
+          QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.packaging_env }}
+        run: |
+          set -euo pipefail
+          python3 quwoquan_ops/ci/prepare_app_pipeline_inputs.py \
+            --build-product-id android-nonprod-apk \
+            --environment "${{ matrix.packaging_env }}" \
+            --target "${{ matrix.packaging_env }}-local" \
+            --expected-source-git-sha "$EXPECTED_SOURCE" \
+            --work-root "$RUNNER_TEMP/delivery-packaging-inputs-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.packaging_env }}" \
+            --github-output "$GITHUB_OUTPUT"
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
-      - name: 安装 Service Packaging 系统测试依赖
-        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_service packaging)
         env:
+          QWQ_OUTPUT_ROOT: ${{ steps.strict_inputs.outputs.qwq_output_root }}
+          QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.packaging_env }}
+          QWQ_COCOAPODS_EXECUTABLE: ${{ steps.strict_inputs.outputs.cocoapods_executable }}
           GATE_SERVICE_PHASE: packaging
           QWQ_PACKAGING_ENVS: ${{ matrix.packaging_env }}
         run: bash quwoquan_ops/gate/gate_repo.sh --scope service
@@ -488,7 +521,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
@@ -592,6 +625,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -625,6 +659,8 @@ jobs:
       - name: Resolve locked Patrol test host dependencies
         working-directory: quwoquan_app/test_host/patrol
         run: flutter pub get --enforce-lockfile
+      - name: Install repository test native dependencies
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_app static + PA core)
         env:
           GATE_APP_PHASE: static
@@ -651,6 +687,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -679,8 +716,7 @@ jobs:
       - name: Resolve locked App dependencies
         working-directory: quwoquan_app
         run: flutter pub get --enforce-lockfile
-      - name: Install App shared contract native dependencies
-        if: ${{ matrix.shard_index == 0 }}
+      - name: Install repository test native dependencies
         run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_app tests shard)
         env:
@@ -709,6 +745,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -761,6 +798,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -854,6 +892,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -865,6 +904,8 @@ jobs:
           cache-dependency-path: quwoquan_data/requirements.txt
       - name: 安装 Data 依赖
         run: pip install -r quwoquan_data/requirements.txt
+      - name: Install repository test native dependencies
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_data verify)
         env:
           GATE_DATA_PHASE: verify
@@ -891,6 +932,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -902,6 +944,8 @@ jobs:
           cache-dependency-path: quwoquan_data/requirements.txt
       - name: 安装 Data 依赖
         run: pip install -r quwoquan_data/requirements.txt
+      - name: Install repository test native dependencies
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_data local_contract shard)
         env:
           GATE_DATA_PHASE: local_contract
@@ -926,6 +970,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -937,6 +982,8 @@ jobs:
           node-version: "20.19.0"
           cache: npm
           cache-dependency-path: quwoquan_ops/portal/package-lock.json
+      - name: Install repository test native dependencies
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (ops-portal)
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope portal
@@ -1218,17 +1265,17 @@ jobs:
           ARGS=(
             --repository "${{ github.repository }}"
             --run-id "${{ github.run_id }}"
-            --phase "common_governance=Delivery Gate — Common Governance"
-            --phase "topology=Delivery Gate — Topology"
-            --phase "service=Delivery Gate — Service Core (L2)"
-            --phase "service_packaging=Delivery Gate — Service Packaging"
-            --phase "service_coverage=Delivery Gate — Service Canonical Coverage"
-            --phase "search=Delivery Gate — Search /search Contract Smoke"
-            --phase "app_evidence=Delivery Gate — App (L1)"
-            --phase "data=Delivery Gate — Data"
-            --phase "data_tests=Delivery Gate — Data Tests Shard "
-            --phase "portal=Delivery Gate — Ops Portal"
-            --phase "release_evidence=Delivery Gate — Candidate qualification evidence"
+            --phase-exact "common_governance=Delivery Gate — Common Governance"
+            --phase-exact "topology=Delivery Gate — Topology"
+            --phase-exact "service=Delivery Gate — Service Core (L2)"
+            --phase-prefix "service_packaging=Delivery Gate — Service Packaging"
+            --phase-exact "service_coverage=Delivery Gate — Service Canonical Coverage"
+            --phase-exact "search=Delivery Gate — Search /search Contract Smoke"
+            --phase-exact "app_evidence=Delivery Gate — App (L1)"
+            --phase-exact "data=Delivery Gate — Data"
+            --phase-prefix "data_tests=Delivery Gate — Data Tests Shard "
+            --phase-exact "portal=Delivery Gate — Ops Portal"
+            --phase-exact "release_evidence=Delivery Gate — Candidate qualification evidence"
             --require-count "common_governance=1"
             --require-count "topology=1"
             --dag-layer "common_governance"
@@ -1260,10 +1307,10 @@ jobs:
               )
             else
               ARGS+=(
-                --phase "app_static=Delivery Gate — App Static"
-                --phase "app_tests=Delivery Gate — App Tests Shard "
-                --phase "app_serial=Delivery Gate — App Serial"
-                --phase "app_coverage=Delivery Gate — App Canonical Coverage"
+                --phase-exact "app_static=Delivery Gate — App Static"
+                --phase-prefix "app_tests=Delivery Gate — App Tests Shard "
+                --phase-exact "app_serial=Delivery Gate — App Serial"
+                --phase-exact "app_coverage=Delivery Gate — App Canonical Coverage"
                 --require-count "app_static=1"
                 --require-count "app_tests=4"
                 --require-count "app_serial=1"

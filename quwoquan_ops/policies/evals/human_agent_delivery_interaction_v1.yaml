@@ -2998,7 +2998,7 @@ fixtures:
     kind: production_concurrency
   expected_state:
     s4_admission: admitted
-    write_concurrency: 2
+    write_concurrency: 6
 - id: G08
   family: G
   stage: channel_distribution
