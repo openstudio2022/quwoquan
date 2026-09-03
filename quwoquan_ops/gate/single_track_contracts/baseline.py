@@ -17,7 +17,7 @@ BASELINE_REVISION = "b227730d2a43eefe3a676e9cec0473e4b7537869"
 FINGERPRINT_ALGORITHM = "sha256(category\0path\0normalized-detail)-v1"
 DEFAULT_BASELINE = (
     Path(__file__).resolve().parents[2]
-    / "policies/gates/single_track_exact_fingerprint_baseline.json"
+    / "policies/baselines/single_track_contracts_fingerprint_baseline.json"
 )
 BASELINE_PATH = DEFAULT_BASELINE
 GOVERNANCE = {
