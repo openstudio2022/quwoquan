@@ -26,11 +26,13 @@ hooks 安装自检与安装入口的路径解析回归、lane 身份在准出门
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -518,10 +520,23 @@ def test_inventory_list_failure_is_typed_fail_closed(monkeypatch, policy) -> Non
     assert caught.value.code == inventory.INVENTORY_UNAVAILABLE
 
 
+@pytest.fixture
+def hook_env_temp_path() -> Iterator[Path]:
+    """在仓外系统临时目录创建并清理跨仓 Git 环境回归夹具。"""
+    system_temp_root = Path("/tmp").resolve()
+    assert system_temp_root.is_dir()
+    with tempfile.TemporaryDirectory(
+        prefix="qwq-hook-env-regression-", dir=system_temp_root
+    ) as temp_dir:
+        path = Path(temp_dir).resolve()
+        assert not path.is_relative_to(ROOT.resolve())
+        yield path
+
+
 def test_discovery_ignores_hook_repository_environment_and_preserves_copy_facts(
-    tmp_path: Path, policy, monkeypatch
+    hook_env_temp_path: Path, policy, monkeypatch
 ) -> None:
-    project = tmp_path / "project"
+    project = hook_env_temp_path / "project"
     integration = project / "integration"
     engineering = project / "engineering"
     ops = project / "ops"
