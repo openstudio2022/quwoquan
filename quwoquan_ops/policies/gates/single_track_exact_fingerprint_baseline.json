@@ -1,0 +1,573 @@
+{
+  "_governance": {
+    "owner": "cloud-contract-governance",
+    "reason": "canonical dev1.0 already contains single-track findings; exact identities may only be removed while the historical debt is retired",
+    "expires_when": "findings is empty; delete this baseline and restore the zero-only gate",
+    "measure": "verify_single_track_contracts.py scans constants.py:SCAN_ROOTS and compares the exact multiset sha256(category NUL repo-relative-path NUL semantic-detail) after removing only a leading L<line>:; every identity count may only decrease"
+  },
+  "schema": "single-track-exact-fingerprint-baseline",
+  "fingerprintAlgorithm": "sha256(category\u0000path\u0000normalized-detail)-v1",
+  "baselineRevision": "b227730d2a43eefe3a676e9cec0473e4b7537869",
+  "findings": [
+    {
+      "fingerprint": "sha256:66417360980363e403402ec566f26d257f0981a2d0c6e794e8219d6d6c68f3c2",
+      "category": "T1_forbidden_envelope_field",
+      "path": "quwoquan_ops/cli/lib/objective_execution/hosted_provider.py",
+      "detail": "contractVersion",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:f836e061d84460210517c2f17f17a6e5beb9f6e0451897de1f4d93836c06665f",
+      "category": "T1_forbidden_envelope_field",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_hosted_authority_adapter__local_contract_test.py",
+      "detail": "contractVersion",
+      "count": 3
+    },
+    {
+      "fingerprint": "sha256:fdc4516b5970de8b934d11943ac3c20bdf210b195631cfcf309c6e44de0069ab",
+      "category": "T1_forbidden_envelope_field",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_hosted_authority_adapter__local_contract_test.py",
+      "detail": "schemaVersion",
+      "count": 3
+    },
+    {
+      "fingerprint": "sha256:cd5c93e883ec6a49a1745b15462e0f179309113e66786af789f5b89f79369870",
+      "category": "T1_forbidden_envelope_field",
+      "path": "quwoquan_service/generated/contract_graph.json",
+      "detail": "contractVersion",
+      "count": 3
+    },
+    {
+      "fingerprint": "sha256:aab3eafc07833d9fe7e27117b102267bb113b88603e9ddce5f133ddea9aa03d9",
+      "category": "T1_forbidden_envelope_field",
+      "path": "quwoquan_service/generated/contract_graph.json",
+      "detail": "schemaVersion",
+      "count": 3
+    },
+    {
+      "fingerprint": "sha256:abb3e86d0925f48e1e334ac2efd8951ef4d2a74ada01a43c4b59fac32e38ffc0",
+      "category": "T1_noncanonical_policy_digest_literal",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_hotl_admission__evaluator__local_contract_test.py",
+      "detail": "sha256:branch",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:6e642a77f9b5dbe59a20870a4c271d17b76b027c7bea26565ec8fe3ef9de851f",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_handoff_manifest__gate__local_contract_test.py",
+      "detail": "sha256:0",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:aab4beffdc2c5f38928ca67488d3c8e0f10e32cedb068e1f9f239750f53a7248",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_hosted_authority_adapter__local_contract_test.py",
+      "detail": "sha256:evidence",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:c1e2c3a7ab1b9c70944ab0e8e8abc072e302ef17a70f170292729195cc684bc8",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_hotl_admission__evaluator__local_contract_test.py",
+      "detail": "sha256:branch",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:3f5babd9cb4f2f1cb5b3091ea1eb564b1d77b3050e610f0e3903613ef74121b0",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_hotl_admission__evaluator__local_contract_test.py",
+      "detail": "sha256:cohort",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:c4b975397c2f44ffa15f630b4fb28953f0304088ab4f29f00ffbd8c8331a7560",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_hotl_admission__evaluator__local_contract_test.py",
+      "detail": "sha256:drift",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:b83aed7eb6fa8d69d39383b2a180d07aae827cf2594bca6a09cd6930eaca0c78",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_human_agent_delivery__contract_router__governance__local_contract_test.py",
+      "detail": "sha256:abc",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:a5e5d35c3f58f74dd993d4766c5c9c04daa4e11d21b83d60e57df62a25b00556",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_objective_execution__executor_admission__local_contract_test.py",
+      "detail": "sha256:evidence",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:77ec1787fa1c6fafadf3f83115559084a971bd73e6908b488bc7794f33d3cb88",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_objective_execution__executor_admission__local_contract_test.py",
+      "detail": "sha256:other",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:a48881aa11b3f273ddcdc4369d1a5c70dab77dd17a4f8f2b01bf6ee35ed7ecd5",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_objective_execution__journal_authority__local_contract_test.py",
+      "detail": "sha256:evidence",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:146a0d28f81cdb1429413f40130925c22284871eac658a9d4f06816b4f9671c0",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_objective_execution__journal_security__local_contract_test.py",
+      "detail": "sha256:evidence",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:0ccf8f290ca7880eeba888795e4dcf2127a6936ec98c81d6b0684cc3f806877e",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_dependency_bundle__local_contract_test.py",
+      "detail": "sha256:x",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:f3368d0c3b4ce6db67e15096d706acd70542f4d9e1e02926fc4d139a200a4206",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_dependency_sync_projection__local_contract_test.py",
+      "detail": "sha256:wrong",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:f3a374fd8add1fc3f6b5e1b3d1be9c7efa0f19c17e1d877e98dad219bb291916",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/runtime/controlplane/config_sync_result__local_contract_test.go",
+      "detail": "sha256:abc",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:771c0a7dff966824b5fce819129c14ddbebc92e1fc24c54ca45e16e92cd5a56e",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/runtime/servicekit/bootstrap__local_contract_test.go",
+      "detail": "sha256:cfg-fixture",
+      "count": 4
+    },
+    {
+      "fingerprint": "sha256:1006310f7b1cd0d4a1985fca5af0a5c985dc1a53cb476e7b13725333b4d9e538",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/runtime/servicekit/bootstrap_extensions__local_contract_test.go",
+      "detail": "sha256:cfg-fixture",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:4cb287e6eae4275c48e7edd3bd07675a15106e22af386b36ec9e6aead9e59abd",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/runtime/servicekit/config__local_contract_test.go",
+      "detail": "sha256:abc",
+      "count": 5
+    },
+    {
+      "fingerprint": "sha256:9779b70897fb780ec03c88e9d13635cb73013f3f88407ec155234acaeee6a3a6",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/runtime/servicekit/config__local_contract_test.go",
+      "detail": "sha256:expected",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:49d483bf391f9657a8ab3176eaac73f0394b1c5860e8ef8a208b5171f02cbbe0",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/runtime/servicekit/config__local_contract_test.go",
+      "detail": "sha256:other",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:a31366361041bc37e6ac41fca026ef314086f43b0e57d47f1e004320de9f4ead",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/runtime/servicekit/configsync__local_contract_test.go",
+      "detail": "sha256:abc",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:dbf910dd02e3f626ad7f04eff4838cbdf8ddc84fa55222d8bdac842fc78dd0ae",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/runtime/servicekit/configsync__local_contract_test.go",
+      "detail": "sha256:cfg",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:6b276e18728bd6f940ca853a9ec60525ac92e5d366372d09a228880a667286fb",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/runtime/servicekit/identity__local_contract_test.go",
+      "detail": "sha256:abc",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:5018636f4d49e24003271679710f31c799fb9cb6f511b495c01a8f999e991203",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/runtime/servicekit/module__local_contract_test.go",
+      "detail": "sha256:abc",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:04ad104f618d95df78088575e157ce50a32f34ca21e30d169adabbfbae29d443",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/services/tag-service/tests/local_contract/tag/tag_taxonomy_release/taxonomy_release_commands__local_contract_test.go",
+      "detail": "sha256:concurrent-taxonomy-snapshot",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:4ddfea4d3292d25f09ced0a559d76aa129155854204b98b265de119d1bf06318",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/services/tag-service/tests/local_contract/tag/tag_taxonomy_release/taxonomy_release_commands__local_contract_test.go",
+      "detail": "sha256:drifted-taxonomy-snapshot",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:8470c535ae3b1c191df28de34de06850e4b31a96e54ae2271dd3da96fcc64564",
+      "category": "T1_noncanonical_sha256_literal",
+      "path": "quwoquan_service/services/tag-service/tests/local_contract/tag/tag_taxonomy_release/taxonomy_release_commands__local_contract_test.go",
+      "detail": "sha256:shared-taxonomy-snapshot",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:6bf8f36b47ba2fe7d62ab38f46f492fab49bc8fc016494f2a89b6fa91349d7b9",
+      "category": "T1_versioned_local_identity",
+      "path": "quwoquan_app/test/local_contract/runtime/release_uat_sample_plan__local_contract_test.dart",
+      "detail": "qwq.content_consumer.direct_or_object_route.video.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:2a2d5f7fe8788c6f9f6f0e204ba2a90e53744c28b61e637f6f88b2b011c82583",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_app/scripts/gamma/gamma_case_result.py",
+      "detail": "quwoquan.gamma-readiness-blocker.v1",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:82c127f5e6d4c91ae99afc5faac29b586d96d0ebdeace4efcecf5df746d7f896",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_app/scripts/gamma/run_local_gamma_release_consumer_api.py",
+      "detail": "quwoquan.gamma-release-consumer-diagnostic.v1",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:a4c81bbecf9bdccc45ead1bc0bb2563b1ed375f842b859b00c35d7c6f3b17747",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_app/test/local_contract/runtime/canonical_launcher_managed_entry__local_contract_test.py",
+      "detail": "quwoquan_data.release_readiness.v1",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:1258d2cff86aedcd910713306f4f4da90d53e51562058f01150f8a39c65643dd",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_app/test/local_contract/runtime/canonical_launcher_managed_entry__local_contract_test.py",
+      "detail": "quwoquan_ops.app_content_preflight_exact.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:6b6352ae7eb26f18c2b9f3f026c4768a43c0b6dd4f6ebfe014f6baebbf2efc5c",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_app/test/local_contract/runtime/canonical_launcher_managed_entry__local_contract_test.py",
+      "detail": "quwoquan_ops.app_managed_preparation.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:ff48b5cf29d28adf98130fd3e385b3748451bda6458079a4f01b415b6fbaa61c",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_app/test/local_contract/runtime/launch_release_artifact__local_contract_test.py",
+      "detail": "quwoquan_app.startup_safe_terminal.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:f3b7ffa3373e842b7aaf9ccfdb230b3fcded2e440c1b9ffbc30a62e497356fd3",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_app/test/local_contract/runtime/release_uat_sample_plan__local_contract_test.dart",
+      "detail": "quwoquan_ops.app_uat_sample_runtime_binding.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:27010b043e0bd1a3803fec2af55d2b4407c537adc968dc1f217ec798b2b48b5f",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_app/test/support/runtime/patrol/patrol_app_uat_case_evidence_payload.dart",
+      "detail": "quwoquan_app.app_uat_case_evidence.v1",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:f91185445c72b48f36ade0f4628032197365f187a010f5dec688fe70510ced16",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_app/test/support/runtime/patrol/patrol_app_uat_case_evidence_payload.dart",
+      "detail": "quwoquan_app.app_uat_page_evidence_ready.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:287129aee72a6e44092220fac55522b05360b40ea32a30bb8366ccfdc548769a",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/commands/app_preflight_uat.py",
+      "detail": "quwoquan_ops.app_uat_sample_runtime_binding.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:6df7fbfcb68e0c423ba13201d67e1278c4f2e1b58cfcfa471c2a4053d302114f",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/commands/app_preflight_uat_launch.py",
+      "detail": "quwoquan_ops.app_content_uat_launch_control.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:f403cf387cb545fa0a207774316b8f99ece0f6ec044c53f0d7291567c905da06",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/commands/app_preflight_uat_launch_binding.py",
+      "detail": "quwoquan_ops.app_content_uat_launch_control.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:f5ea6e58cc68f5e798548904811c94cb23feb842a8b558bf1eaf5e88b6542157",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/commands/app_preflight_uat_patrol_dependency.py",
+      "detail": "quwoquan_ops.app_content_uat_patrol_dependency_readback.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:3170bdb66fccba4ca31c87c8905c91d70a2c569b54977965abbce1337e807fd5",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/lib/content_api_consumer.py",
+      "detail": "qwq.content_api_consumer.health_binding.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:379051f372dd4accb47d2d019d4837cdf6c8758656b829792e59d3d0a4f4766c",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/lib/content_api_consumer.py",
+      "detail": "qwq.content_api_consumer.observation.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:b3b680d7b499cee235e14781873cc7248ba740f681e6d11de0c0397cc3cc0b3c",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/lib/content_api_consumer.py",
+      "detail": "qwq.content_api_consumer.report.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:f69130dfa6042f5df01928d56fdc3dd6566a173ef19bbd2d28b9b74841474602",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/lib/deployment_candidate_manifest/prod_sim_app_launch_materialization.py",
+      "detail": "stackctl-prod-sim-app-launch-bundle.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:88e2c7565a108f4321d85378ae07de46578986618b10e4b96350a20ed9b6d667",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/lib/environment_acceptance_fact.py",
+      "detail": "qwq.m1_api_consumer.source_fingerprint.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:b67039ed756382bf1cdde3d6ff7539e9f08989f03870ea921a03686fb140c92c",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/lib/local_readiness/worker.py",
+      "detail": "local-readiness-worker-result-v2",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:a9bcb20c11d68789fe0e4265619b519d0e6fcbd8986d5553477eb89341807dc3",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/lib/managed_preparation.py",
+      "detail": "quwoquan_ops.app_content_preflight_exact.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:21d8b8dc07dc6df436a32124e388aa83c88447bbd0a2859f0b43a4fae9daf53a",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/lib/package_reuse/android_gradle_component.py",
+      "detail": "stackctl-android-gradle-invocation-set.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:1ad645690552ad4385dbd0cac0416294c20860df68111dc5b8fde11421a52742",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/lib/package_reuse/android_gradle_store.py",
+      "detail": "stackctl-android-gradle-resolution-lock.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:9de4de5a22717d90edbf1171c4c254535f3a84ae7e069bd7df44309571df7326",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/lib/package_reuse/android_gradle_store.py",
+      "detail": "stackctl-android-gradle-verification-metadata.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:f39b29b2caf047279ab828936f9fa041217a1608ed43285d0d9d3fb69b7ded4a",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/lib/package_reuse/dependency_projection_contract.py",
+      "detail": "stackctl-app-dependency-command-environment.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:591cde5e70f4129404e0f2381578b87f160d52073f6d57136d7f73420db30d68",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/cli/lib/package_reuse/ios_pod_projection.py",
+      "detail": "stackctl-ios-pod-offline-projection-evidence.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:4bc57330afee91b51c0a47ac66cf462038d3b126f3cd06a2c66e9e008a031f6f",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/environment/test_environment_patrol_smoke__external_aut_driver__local_contract_test.py",
+      "detail": "environment-page-smoke.external-aut-native-driver-artifact.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:f209f9645cb9557e9ea05c190a011bf3e59ca52c8cb7df4f639eba538368bebd",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/environment/test_environment_patrol_smoke__external_aut_driver_entry__local_contract_test.py",
+      "detail": "environment-page-smoke.external-aut-native-driver-artifact.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:895fe5888761c80b1eda0a51f3d235807bb902569650b729abfdbb026e7bb931",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/environment/test_environment_patrol_smoke__local_contract_test.py",
+      "detail": "quwoquan_app.app_uat_page_evidence_ready.v1",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:835f76704254d4b998a46360012cdb08aea21f035fcc580858e1824d307c3d58",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/release/test_app_pipeline_candidate_chain__local_contract_test.py",
+      "detail": "stackctl-app-dependency-command-environment.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:aae7cc58ba81c16d4cd06e4129f0a41af40189b65bb1a3e1fb56f5ddbdcd9254",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/release/test_app_pipeline_candidate_chain__local_contract_test.py",
+      "detail": "stackctl-app-dependency-projection-expectation.v2",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:36bbe648d5d63c15b1f44902d208c9fb30c8ed8b00241584bb4db898a7de54f6",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/release/test_app_pipeline_candidate_chain__local_contract_test.py",
+      "detail": "stackctl-app-dependency-projection-readback.v2",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:0195380b41394322bada0727705ed709d37f1e59e15e312e0380d5ae4609ed3e",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_content_uat_build_projection_cas__local_contract_test.py",
+      "detail": "stackctl-package-input-capsule.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:6e3ceaf94d30429d62a18a4472522e971d456ebf21d350c624b3e39fb5960fff",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_content_uat_candidate_source_projection__local_contract_test.py",
+      "detail": "stackctl-package-input-capsule.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:533b4c9025a6a47f26d7cf921ac05f7b830282d486116fbac8af434525c24254",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_content_uat_launch_artifact_binding__local_contract_test.py",
+      "detail": "quwoquan_app.launch_teardown.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:9f6059b8867aa4a5bf4ba1b6683e0c47d063f9867f5553b781d59fc65012183d",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_content_uat_launch_artifact_binding__local_contract_test.py",
+      "detail": "quwoquan_ops.app_build_projection_seal.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:d9c78f6785e31cc88a2246a6a50140c6656011ac5833b8c5cf21f6136882e149",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_content_uat_launch_artifact_binding__local_contract_test.py",
+      "detail": "quwoquan_ops.app_content_uat_launch_control.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:b42ee216000217bd392199bd1e6bcb9c89c160efab89ebc49808fb1785232954",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_content_uat_launch_artifact_binding__local_contract_test.py",
+      "detail": "quwoquan_ops.app_content_uat_source_projection.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:38333e4f984fbeb22c0b1980e919cbe77ccdcb5b0446b7f0aeda54b1b98d2349",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_content_uat_launch_artifact_binding__local_contract_test.py",
+      "detail": "stackctl-app-dependency-projection-expectation.v2",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:d71ecb8af19ac4beb02d1e2924f48d50cbbf89809729fb118972bac6d0c90ac4",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_content_uat_launch_artifact_binding__local_contract_test.py",
+      "detail": "stackctl-app-dependency-projection-readback.v2",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:8fca5dc9e54ea2c0453981c64121e10c8aa2330de0687617629f8a6587f7d351",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_content_uat_raw_result_producer__local_contract_test.py",
+      "detail": "quwoquan_ops.target_uat_binding.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:9e8cbbc27e06d108bfeba666661635948b76b222141f33e05289cbd590d6d162",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_uat_evidence_commands__local_contract_test.py",
+      "detail": "quwoquan_ops.app_uat_result_bundle.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:7b04742e194dcf694a5ed0eb1f3f236eb4547027630f560ab1f29a6319c722f9",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_uat_evidence_commands__local_contract_test.py",
+      "detail": "qwq.content_api_consumer.health_binding.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:020a1e9058449e14d68d7768c5a8598026c91b1eb4d9678264977e125ee55295",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_app_uat_evidence_commands__local_contract_test.py",
+      "detail": "qwq.content_api_consumer.observation.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:36de515abb3518efbabed20f48763581c66b77a9f6fa9802855e46b61cffa5a5",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_stackctl_app_managed_prepare__local_contract_test.py",
+      "detail": "quwoquan_data.release_readiness.v1",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:d876395f99733017ae21ebda8a22747e027bcb91d0f989b04a3f0839a4946e88",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/stackctl/test_stackctl_app_managed_prepare_observability__local_contract_test.py",
+      "detail": "quwoquan_data.release_readiness.v1",
+      "count": 2
+    },
+    {
+      "fingerprint": "sha256:fb2b40c82c10c501e0dd890d571f260ed02aa4e3b117c3e73c496347da55ceec",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/local_contract/test_data/test_test_data_handoff_evidence__local_contract_test.py",
+      "detail": "qwq.test_data_evidence.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:894fb9b33267738b08a2ac539c6e6153bf460d55dc5101e2ec1ba517feb09f71",
+      "category": "T1_versioned_schema_identity",
+      "path": "quwoquan_ops/tests/support/release_bound_environment_identity_test_support.py",
+      "detail": "quwoquan_ops.environment_acceptance_fact.v1",
+      "count": 1
+    },
+    {
+      "fingerprint": "sha256:b4887a21b68437d4b99f96f3ab559a700a5aa57f5708af10f6e71bec50e01205",
+      "category": "compat_smell",
+      "path": "quwoquan_ops/tests/local_contract/gate/test_objective_execution__journal_authority__local_contract_test.py",
+      "detail": "def test_legacy_v1_contract_envelope_and_event_hard_fail_without_dual_read(tmp_path: Path) -> None:",
+      "count": 1
+    }
+  ]
+}
