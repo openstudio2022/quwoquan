@@ -12,7 +12,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
 
 ROOT = Path(__file__).resolve().parents[6]
 STACKCTL = ROOT / "quwoquan_ops/cli/stackctl.py"
@@ -33,8 +32,9 @@ _ARGUMENTS = {
 
 
 def test_real_alpha_content_api_consumer_matrix() -> None:
-    if os.environ.get(_ENABLED) != "1":
-        pytest.skip(f"set {_ENABLED}=1 with explicit live authority refs/digests")
+    assert os.environ.get(_ENABLED) == "1", (
+        f"set {_ENABLED}=1 with explicit live authority refs/digests"
+    )
     missing = [
         name for name in _ARGUMENTS.values() if not os.environ.get(name, "").strip()
     ]

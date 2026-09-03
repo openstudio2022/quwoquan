@@ -6,6 +6,11 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+SINGLE_TRACK_BASELINE_RELATIVE_PATH = (
+    "quwoquan_ops/policies/gates/single_track_exact_fingerprint_baseline.json"
+)
+SINGLE_TRACK_BASELINE_PATH = SINGLE_TRACK_BASELINE_RELATIVE_PATH
+SINGLE_TRACK_BASELINE_SCHEMA = "single-track-exact-fingerprint-baseline"
 
 FORBIDDEN_ENVELOPE_FIELDS = (
     "schemaVersion",

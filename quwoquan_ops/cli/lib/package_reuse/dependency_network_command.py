@@ -43,6 +43,20 @@ _TRANSIENT_HTTP_STATUS = re.compile(
     flags=re.IGNORECASE,
 )
 _TLS_EOF = re.compile(r"(?:tls|ssl).*\beof\b|\beof\b.*(?:tls|ssl)", re.IGNORECASE)
+_CURL_PARTIAL_FILE = re.compile(
+    r"\bcurl:\s*\(18\)\s+transferred a partial file\b", re.IGNORECASE
+)
+_HTTP2_STREAM_CLOSE = re.compile(
+    r"\bhttp/2 stream\b[^\r\n]*(?:was not closed cleanly|\bcancel\b)",
+    re.IGNORECASE,
+)
+_GIT_RPC_CURL_TRANSPORT = re.compile(
+    r"\brpc failed\b[^\r\n]*\bcurl\s+\d+\b", re.IGNORECASE
+)
+_GIT_EARLY_EOF = re.compile(r"\bfatal:\s*early eof\b", re.IGNORECASE)
+_GIT_FETCH_CONTEXT = re.compile(
+    r"\b(?:git\s+fetch|fetch-pack|index-pack)\b", re.IGNORECASE
+)
 
 
 class DependencyProcessGroupCleanupError(RuntimeError):
@@ -68,6 +82,21 @@ def transient_network_cause(output: object) -> str | None:
     for marker, cause in _TRANSIENT_MARKER_CAUSES:
         if marker in lowered:
             return cause
+    if _CURL_PARTIAL_FILE.search(text) is not None:
+        return "curl_partial_file"
+    if _HTTP2_STREAM_CLOSE.search(text) is not None:
+        return "http2_stream_close"
+    if _GIT_RPC_CURL_TRANSPORT.search(text) is not None:
+        return "git_rpc_curl_transport"
+    if "unexpected disconnect while reading sideband packet" in lowered:
+        return "git_sideband_disconnect"
+    if "fetch-pack: invalid index-pack output" in lowered:
+        return "git_invalid_index_pack"
+    if (
+        _GIT_EARLY_EOF.search(text) is not None
+        and _GIT_FETCH_CONTEXT.search(text) is not None
+    ):
+        return "git_early_eof"
     if _TLS_EOF.search(text) is not None:
         return "tls_eof"
     return None

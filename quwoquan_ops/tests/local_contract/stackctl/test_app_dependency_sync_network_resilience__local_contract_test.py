@@ -39,6 +39,19 @@ def _run(
         "javax.net.ssl.SSLHandshakeException: Remote host terminated the handshake",
         "Received status code 503 from server",
         "curl: (22) The requested URL returned error: 503",
+        "curl: (18) Transferred a partial file",
+        "error: curl 92 HTTP/2 stream 5 was not closed cleanly: CANCEL (err 8)",
+        "error: RPC failed; curl 16 Error in the HTTP2 framing layer",
+        "fetch-pack: unexpected disconnect while reading sideband packet",
+        "git fetch origin refs/heads/main\nfatal: early EOF",
+        "fatal: fetch-pack: invalid index-pack output",
+        (
+            "error: RPC failed; curl 92 HTTP/2 stream 5 was not closed "
+            "cleanly: CANCEL (err 8)\n"
+            "fetch-pack: unexpected disconnect while reading sideband packet\n"
+            "fatal: early EOF\n"
+            "fatal: fetch-pack: invalid index-pack output"
+        ),
     ],
 )
 def test_online_sync_retries_transient_failure_in_the_same_private_state(
@@ -84,6 +97,8 @@ def test_online_sync_retries_transient_failure_in_the_same_private_state(
         "SSLHandshakeException: PKIX path building failed",
         "SSL_connect: certificate verify failed",
         "Unable to find a specification for `MissingPod`",
+        "fatal: early EOF",
+        "compiler error: unexpected EOF while parsing source.c",
     ],
 )
 def test_online_sync_does_not_retry_deterministic_failure(

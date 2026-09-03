@@ -1,6 +1,6 @@
 """图片安全/美学门 contract tests（真实 CV：人脸/水印/OCR/去重 + 降级）。
 
-可直接运行：python3 quwoquan_data/tests/local_contract/homepage/test_image_safety_gate__behavior__functional__local_contract_test.py
+可直接运行：python3 quwoquan_data/tests/local_contract/core/test_image_safety_gate__behavior__functional__local_contract_test.py
 """
 from __future__ import annotations
 

@@ -92,6 +92,23 @@ def test_canonical_policy_passes_fixed_denominator_and_keeps_human_calibration_h
     assert report["human_calibration"]["machine_baseline_is_human_usability_evidence"] is False
 
 
+def test_g07_tracks_persistent_six_lane_canonical_admission() -> None:
+    loaded = policy()
+    fixture = next(item for item in loaded["fixtures"] if item["id"] == "G07")
+
+    assert fixture["state_probe"] == {"kind": "production_concurrency"}
+    assert fixture["expected_state"] == {
+        "s4_admission": "admitted",
+        "write_concurrency": 6,
+    }
+    result = next(
+        item
+        for item in evaluate_policy(loaded)["fixture_results"]
+        if item["fixture_id"] == "G07"
+    )
+    assert result["passed"] is True
+
+
 def test_every_declared_legal_branch_is_reachable_without_reprompting() -> None:
     report = evaluate_policy(policy())
     for result in report["fixture_results"]:

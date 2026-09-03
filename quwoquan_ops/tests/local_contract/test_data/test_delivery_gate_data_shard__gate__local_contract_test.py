@@ -949,12 +949,15 @@ def test_crosscutting_data_changes_defer_the_whole_domain() -> None:
         )
 
 
-def test_narrow_data_changes_do_not_defer_the_whole_domain() -> None:
+@pytest.mark.parametrize("retired_owner", ("homepage", "post"))
+def test_retired_content_owner_paths_have_no_stale_commit_gate_mapping(
+    retired_owner: str,
+) -> None:
     selected, deferred = cgs.select_pytest_paths(
-        ["quwoquan_data/scripts/content/homepage/probe.py"]
+        [f"quwoquan_data/scripts/content/{retired_owner}/probe.py"]
     )
-    assert selected == ["quwoquan_data/tests/local_contract/homepage"]
-    assert cgs.DATA_LOCAL_CONTRACT_ROOT not in deferred
+    assert selected == []
+    assert deferred == []
 
 
 def test_overflowing_selection_is_deferred_rather_than_dropped() -> None:
