@@ -518,6 +518,48 @@ def test_inventory_list_failure_is_typed_fail_closed(monkeypatch, policy) -> Non
     assert caught.value.code == inventory.INVENTORY_UNAVAILABLE
 
 
+def test_discovery_ignores_hook_repository_environment_and_preserves_copy_facts(
+    tmp_path: Path, policy, monkeypatch
+) -> None:
+    project = tmp_path / "project"
+    integration = project / "integration"
+    engineering = project / "engineering"
+    ops = project / "ops"
+    integration.mkdir(parents=True)
+    integration_branch = "dev1.0"
+    assert integration_branch in policy.allowed_local_branches
+    _run_git(integration, "init", "-q", "-b", integration_branch)
+    (integration / "seed.txt").write_text("seed\n", encoding="utf-8")
+    _run_git(integration, "add", "seed.txt")
+    _run_git(integration, "commit", "-qm", "seed")
+    _run_git(integration, "worktree", "add", "-q", "-b", "lane/engineering", str(engineering))
+    _run_git(integration, "worktree", "add", "-q", "-b", "lane/ops", str(ops))
+
+    (engineering / "ahead.txt").write_text("ahead\n", encoding="utf-8")
+    _run_git(engineering, "add", "ahead.txt")
+    _run_git(engineering, "commit", "-qm", "ahead")
+    (engineering / "dirty.txt").write_text("dirty\n", encoding="utf-8")
+
+    test_policy = inventory.WorktreePolicy(
+        **{
+            **vars(policy),
+            "discovery_roots": (str(project),),
+        }
+    )
+    monkeypatch.setenv("GIT_DIR", _run_git(engineering, "rev-parse", "--git-dir"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(engineering))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(integration / ".git" / "index"))
+
+    copies = inventory.discover_work_copies(root=integration, policy=test_policy)
+    by_branch = {copy.branch: copy for copy in copies}
+    assert set(by_branch) == {"lane/engineering", "lane/ops"}
+    assert all(copy.probe_error == "" for copy in copies)
+    assert by_branch["lane/engineering"].dirty == 1
+    assert by_branch["lane/engineering"].ahead == 1
+    assert by_branch["lane/ops"].dirty == 0
+    assert by_branch["lane/ops"].ahead == 0
+
+
 @pytest.mark.parametrize(
     "copies, fragment",
     [
