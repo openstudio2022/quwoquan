@@ -6,8 +6,7 @@
 - **职责**：approved 对象原子发布到 canonical、创建 immutable release、
   `ship apply|rollback` 环境导入、服务 API 核验与 App UAT；只调正式原子
   命令，读 verify issue 自修产物（≤3 轮）。
-- **输入**：`5.review` 双审通过的对象、releaseId、目标环境；并发汇合时
-  逐 execution 过 `verify execution-readiness` 后串行执行。
+- **输入**：`5.review` 双审通过的对象、releaseId、目标环境；publish 时逐 approved 对象调用单对象事务，release 时消费 AI 显式 cohort。
 - **输出**：canonical 增量、release、环境导入回执与 UAT 结果；ship pass
   receipt 是 execution `succeeded` 的唯一合法来源。
 - **receipt actor**：`host` + `sessionId` + `modelFamily` + `invocation{provider,model,runId}`。

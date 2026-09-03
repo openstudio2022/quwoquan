@@ -17,9 +17,6 @@ from governance.coverage.distribution import (
 )
 
 from content.source.professional_image_admission import pre_acquisition_block
-from content.source.professional_image_discovery_binding import (
-    validate_discovery_binding as default_discovery_validator,
-)
 from content.source.professional_image_source_attribution import (
     bound_image_source_attribution,
     build_image_plan_spec,
@@ -54,6 +51,19 @@ def validate_professional_image_item(
         if not str(item.get(field) or "").strip():
             raise ValueError(f"{asset_id}.{field} must be frozen and non-empty")
     rights_status = RightsStatus(str(item.get("rightsStatus") or ""))
+    terms_url = str(item.get("termsUrl") or "").strip()
+    authorization_proof = str(item.get("authorizationProof") or "").strip()
+    if terms_url and not terms_url.startswith("https://"):
+        raise ValueError(f"{asset_id}: termsUrl must be empty or use HTTPS")
+    if authorization_proof and not authorization_proof.startswith("https://"):
+        raise ValueError(f"{asset_id}: authorizationProof must be empty or use HTTPS")
+    if rights_status is RightsStatus.VERIFIED and (
+        not terms_url.startswith("https://")
+        or not authorization_proof.startswith("https://")
+    ):
+        raise ValueError(
+            f"{asset_id}: verified rights require HTTPS termsUrl and authorizationProof"
+        )
     rights_issues = [
         str(value).strip()
         for value in (item.get("rightsIssues") or [])
@@ -112,8 +122,6 @@ def _row_base(
         "observedEntityId": str(item["observedEntityId"]),
         "entityAliases": list(item["entityAliases"]),
         "displayName": str(item["displayName"]),
-        "discoveryCandidateId": str(item["discoveryCandidateId"]),
-        "discoveryUrl": str(item["discoveryUrl"]),
         "provider": str(provider.get("sourceId") or item.get("sourceId") or "unknown"),
         "platform": str(provider.get("platform") or "unregistered"),
         "acquisitionPath": str(item["acquisitionPath"]),
@@ -176,29 +184,18 @@ def _excluded_row(
 def acquire_professional_image_item(
     item: Mapping[str, Any],
     *,
-    discovery_candidates: Mapping[str, Any],
     manual_root: Path | None,
     output_root: Path,
     seen_content: dict[str, str],
     manual_loader: PayloadLoader,
     network_loader: PayloadLoader,
-    frozen_loader: PayloadLoader,
     cas_writer: CasWriter,
     content_digest: Callable[[bytes], str],
     portable_ref: Callable[[Path, Path], str],
-    discovery_validator: Callable[..., None] = default_discovery_validator,
     safety_loader: Callable[..., Mapping[str, Any]] = default_safety_loader,
     safety_validator: Callable[..., None] = default_safety_validator,
 ) -> dict[str, Any]:
     """Return one accepted row or one typed exclusion; CAS errors remain fatal."""
-    try:
-        discovery_validator(item, candidates=discovery_candidates)
-    except (KeyError, TypeError, ValueError) as exc:
-        return _excluded_row(
-            item,
-            code="DATA.SOURCE.DISCOVERY_BINDING_FAILED",
-            detail=str(exc),
-        )
     try:
         rights_status, provider = validate_professional_image_item(item)
     except (KeyError, TypeError, ValueError) as exc:
@@ -243,12 +240,6 @@ def acquire_professional_image_item(
             if manual_root is None:
                 raise ValueError("manual_root is required by manual_file acquisition")
             payload = manual_loader(str(item["manualFile"]), manual_root=manual_root)
-        elif (
-            item["acquisitionPath"] == "supported_api"
-            and not str(item.get("apiEvidence") or "").startswith("https://")
-            and (output_root / str(item.get("apiEvidence") or "")).is_file()
-        ):
-            payload = frozen_loader(item, output_root=output_root)
         else:
             payload = network_loader(
                 str(item["assetUrl"]),

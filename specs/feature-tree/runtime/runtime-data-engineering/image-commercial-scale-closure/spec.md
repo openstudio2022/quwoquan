@@ -56,7 +56,7 @@
 
 - canonical：`quwoquan_data/verticals/<vertical>/providers.yaml`
 - canonical：`quwoquan_data/schema/release/asset_rights_closure.schema.json`
-- canonical：`quwoquan_data/scripts/content/post/image`
+- canonical：`quwoquan_data/scripts/content/source/image_payload.py`
 - canonical：`quwoquan_data/scripts/content/release`
 - canonical：`quwoquan_data/scripts/governance/coverage/benchmark.py`
 

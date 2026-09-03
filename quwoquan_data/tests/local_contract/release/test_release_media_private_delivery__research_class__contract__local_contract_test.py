@@ -1,5 +1,4 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-031
-# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020
 """DEC-031：research release 媒体以 CAS objectKey 私有交付，commercial 保留公开切片。"""
 from __future__ import annotations
 

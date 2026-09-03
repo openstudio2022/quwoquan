@@ -8,14 +8,16 @@ import urllib.parse
 from typing import Any
 
 from core.rate_limit import shared_rate_limiter
-from core.runtime_policy import active_runtime_policy
-from content.source.research import network_breaker
 
 
-USER_AGENT = "quwoquan-data/1.0 (+https://github.com/quwoquan; contact: data-ops@quwoquan.example)"
+USER_AGENT = "quwoquan-data/1.0 (+https://github.com/quwoquan; contact: data-ops@example.org)"
 _HTTP_METADATA_MARKER = b"\n__QWQ_HTTP_META__"
 _HTTP_METADATA_FORMAT = "\n__QWQ_HTTP_META__%{http_code}\t%{url_effective}"
 _MEDIAWIKI_LIMITER_ID = "mediawiki_api"
+_CURL_RETRIES = 1
+_CURL_RETRY_DELAY_SECONDS = 1
+_MEDIAWIKI_TIMEOUT_SECONDS = 20
+_MEDIAWIKI_INTER_REQUEST_DELAY_SECONDS = 0.3
 
 
 class NetworkFetchError(RuntimeError):
@@ -64,10 +66,7 @@ def fetch_http(
     timeout: int,
     headers: dict[str, str] | None = None,
 ) -> HttpFetchResult:
-    if network_breaker.BREAKER.is_open(url):
-        return HttpFetchResult(returncode=-1, status_code=0, final_url="", body=b"")
     effective_timeout = max(1, int(timeout))
-    policy = active_runtime_policy()
     header_arguments: list[str] = []
     for name, value in (headers or {}).items():
         header_arguments.extend(["-H", f"{name}: {value}"])
@@ -80,9 +79,9 @@ def fetch_http(
             USER_AGENT,
             *header_arguments,
             "--retry",
-            str(max(1, int(policy.curl_retries))),
+            str(_CURL_RETRIES),
             "--retry-delay",
-            str(policy.curl_retry_delay_seconds),
+            str(_CURL_RETRY_DELAY_SECONDS),
             "--retry-all-errors",
             "--max-time",
             str(effective_timeout),
@@ -109,10 +108,6 @@ def fetch_http(
             except ValueError:
                 status_code = 0
             final_url = final_url_bytes.decode("utf-8", errors="replace").strip()
-    if proc.returncode == 0:
-        network_breaker.BREAKER.record_success(url)
-    elif proc.returncode in network_breaker.NETWORK_CURL_EXIT_CODES:
-        network_breaker.BREAKER.record_network_failure(url)
     return HttpFetchResult(
         returncode=int(proc.returncode),
         status_code=status_code,
@@ -157,14 +152,6 @@ def post_form_json(
     timeout: int,
 ) -> dict[str, Any]:
     """POST form fields once and decode JSON; the source adapter owns retries."""
-    if network_breaker.BREAKER.is_open(url):
-        raise NetworkFetchError(
-            url,
-            status_code=0,
-            returncode=-1,
-            reason="network breaker is open",
-        )
-    policy = active_runtime_policy()
     command = [
         "curl",
         "-sS",
@@ -175,7 +162,7 @@ def post_form_json(
         "--retry",
         "0",
         "--retry-delay",
-        str(policy.curl_retry_delay_seconds),
+        str(_CURL_RETRY_DELAY_SECONDS),
         "--retry-all-errors",
         "--max-time",
         str(max(1, int(timeout))),
@@ -184,10 +171,6 @@ def post_form_json(
         command.extend(["--data-urlencode", f"{key}={value}"])
     command.append(url)
     proc = subprocess.run(command, capture_output=True, check=False)
-    if proc.returncode == 0:
-        network_breaker.BREAKER.record_success(url)
-    elif proc.returncode in network_breaker.NETWORK_CURL_EXIT_CODES:
-        network_breaker.BREAKER.record_network_failure(url)
     if proc.returncode != 0:
         raise NetworkFetchError(
             url,
@@ -235,14 +218,13 @@ def wiki_api(host: str, params: dict[str, str | int]) -> dict[str, Any]:
     add up into a burst no single one of them intended.
     """
     query = urllib.parse.urlencode(params)
-    policy = active_runtime_policy()
     shared_rate_limiter(
         _MEDIAWIKI_LIMITER_ID,
         f"https://{host}",
         max_requests_per_second=0.0,
-        crawl_delay=policy.mediawiki_inter_request_delay_seconds,
+        crawl_delay=_MEDIAWIKI_INTER_REQUEST_DELAY_SECONDS,
     ).wait()
     return curl_json(
         f"https://{host}/w/api.php?{query}",
-        timeout=policy.provider_timeouts.mediawiki_seconds,
+        timeout=_MEDIAWIKI_TIMEOUT_SECONDS,
     )

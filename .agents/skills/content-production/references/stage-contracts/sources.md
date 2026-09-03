@@ -1,52 +1,28 @@
 # 阶段契约：sources
 
-逐目标收集可追溯来源单元。
+每个 target 只产生来源计划；本阶段不得抓取、下载或物化 source unit。
 
-## 身份
+## PRE
 
-- stage：`sources`（与磁盘目录一字不差）
-- 前置阶段：`0.plan`
-- 合法 next：`1.download`
-- 角色人设：[source-researcher](../roles/source-researcher.md)
-- 写目录 allowlist：`sources/`
+- `0.plan` CLOSE 为 pass。
+- OPEN 由 AI 显式冻结 target set、request、source policy、taxonomy/vertical policy refs。
 
-## 做前（PRE）
+## DURING
 
-- `0.plan` receipt `verdict=pass`；复跑以下判据命令确认 target_set 已冻结：
+AI 逐 target 调研并写一份 source plan，再用 `python3 quwoquan_data/scripts/cli.py task write-source-plan --input <source-plan.json>` 提交。命令把 plan 的 `executionId`、`carrier`、`targetRef` 精确绑定当前 execution 的 `0.plan/target_set.json`，并 create-once 写到 `sources/plans/<sha256(targetRef UTF-8)>.json`（64 位小写十六进制、不带 `sha256:`）；不得直接构造可逆路径、使用目录扫描或近似匹配推测 target。每个 plan 至少说明候选 HTTPS URL/作品页、source class、目标关联理由、预期用途（正文底稿/结构化事实/媒体）、由 AI 明确选择的 `sourceUseMode`（`licensed_adaptation|factual_reference_only|rights_audit_only`）、rights 调查项、下载需求与替代候选。
 
-```bash
-python3 quwoquan_data/scripts/cli.py verify runtime-input-ownership
-python3 quwoquan_data/scripts/cli.py verify content-execution-layout --execution-id <id>
-```
+正文底稿保持三百科闭集；结构化事实可额外规划官网或政府/文旅门户，且必须规划逐字段 `factSources`。搜索索引只能发现候选，不能冒充最终来源。AI 可迭代调研，但不得在本阶段写 `source unit`、`source_refs`、抓取正文或媒体 holdings。
 
-## 做中（DURING）
-
-- 逐目标收集来源单元写入 `sources/`：URL、抓取时间、许可证线索、与目标的
-  关联证据。来源单元产物清单真相源：`stage_artifact_contract.py` 的
-  `SOURCE_UNIT_ARTIFACTS`。
-- 信源政策按 `quwoquan_data/AGENTS.md` 分轨执行：正文底稿锁三百科闭集，
-  结构化事实额外允许官网与政府/文旅门户；每条结构化事实逐字段落 `factSources`。
-- **补源循环**（教训 2）：某目标合格来源不足配额时，更换检索策略再收集，
-  每轮记录已试策略；最多 3 轮。
-- [MUST NOT] 伪造来源、复用未授权来源、把 OTA/门户/媒体投影为正文底稿。
-
-## 做后（POST）
-
-交付件：`sources/` 来源单元 + 保留/淘汰判定记录。完成判据：
+## POST
 
 ```bash
-python3 quwoquan_data/scripts/cli.py verify source-digest --execution-id <id>
+python3 quwoquan_data/scripts/cli.py verify source-plan --execution-id <id>
 ```
 
-常见 issue → 修复：
+该门按 `target_set.targetRefs` 精确计算路径并要求逐 target 唯一覆盖，不扫描猜测计划。AI 另行自检每个 target 是否有可执行来源计划、rights 调查路径和替代候选，提交真实 verifier facts。
 
-- source identity 缺字段 → 补齐来源单元 `meta.json` 的抓取 URL/时间/许可证线索。
-- digest 不一致 → 不改历史字节；以新来源单元替换并重新判定。
+## HANDOFF
 
-按 [handoff-protocol.md](../handoff-protocol.md) 执行 `task stage-open` → `task semantic-prepare --stage sources` → 宿主语义工作 → `task semantic-record --stage sources --input <json>` → `task stage-gate`（context 只绑定 canonical `semanticResultRef + semanticResultDigest`）→ `task stage-close`；宿主不填写 command 退出码、verdict、next 或自由 input refs。
-
-## 交接（HANDOFF）
-
-- 每目标合格来源 ≥ 配额 → `next=1.download`。
-- 3 轮补源后仍有缺口 → `verdict=blocked`，`typedIssues` 逐条列缺口目标与 `recoveryStage=sources`
-  （`gate_block`），报告用户裁决（缩目标集或换区域）。
+- `resultRefs`：逐 target source plans。
+- pass 后由 Skill 固定进入 `1.download`。
+- 无可执行来源时 blocked；新尝试使用新 execution，不在原 execution 回跳。

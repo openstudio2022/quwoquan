@@ -1485,16 +1485,9 @@ test-gate-companion-local-contract: test-review-dispatch test-review-consolidati
 		quwoquan_ops/tests/local_contract/gate/test_cloud_environment_artifact_binding__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_local_worktree_lifecycle__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_service_probe_homology__gate__local_contract_test.py \
-		quwoquan_data/tests/local_contract/release/test_execution_readiness__behavior__functional__local_contract_test.py \
-		quwoquan_data/tests/local_contract/release/test_pool_precheck__handoff_gate__contract__local_contract_test.py \
 		quwoquan_data/tests/local_contract/release/test_publish_fail_closed__carried_media__contract__local_contract_test.py \
-		quwoquan_data/tests/local_contract/release/test_publish_execution__homepage_carrier__contract__local_contract_test.py \
 		quwoquan_data/tests/local_contract/release/test_publish_purity__canonical_media__contract__local_contract_test.py \
 		quwoquan_data/tests/local_contract/release/test_publish_purity__committed_transaction_holds_no_media__contract__local_contract_test.py \
-		quwoquan_data/tests/local_contract/execution/test_content_execution_layout__identity_keys__contract__local_contract_test.py \
-		quwoquan_data/tests/local_contract/execution/test_scale_parameterization__single_source__contract__local_contract_test.py \
-		quwoquan_data/tests/local_contract/execution/test_script_architecture__retired_module_names__contract__local_contract_test.py \
-		quwoquan_data/tests/local_contract/execution/test_source_digest__execution_release__contract__local_contract_test.py \
 		quwoquan_data/tests/local_contract/release/test_source_digest__immutable_identity_generations__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_environment_assembly__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_environment_packaging_contract__gate__local_contract_test.py \
@@ -1505,7 +1498,6 @@ test-gate-companion-local-contract: test-review-dispatch test-review-consolidati
 		quwoquan_ops/tests/local_contract/gate/test_object_size_budget__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_pageflip_backward_mainline__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_app_identity_state_isolation__gate__local_contract_test.py \
-		quwoquan_ops/tests/local_contract/gate/test_media_release_contract__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_publish_closure__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_reusable_data_contract__gate__local_contract_test.py \
 		-q

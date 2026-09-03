@@ -1,0 +1,302 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/stage_close_input.schema.json",
+  "description": "AI 提交的 stage 语义 verdict 与宿主 verifier attestations；stage-close 不执行命令。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "actor",
+    "verdict",
+    "typedIssues",
+    "resultRefs",
+    "verifierFacts"
+  ],
+  "properties": {
+    "actor": {
+      "$ref": "#/$defs/actor"
+    },
+    "verdict": {
+      "enum": [
+        "pass",
+        "blocked"
+      ]
+    },
+    "typedIssues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/typedIssue"
+      }
+    },
+    "resultRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/refInput"
+      }
+    },
+    "verifierFacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/verifierFact"
+      },
+      "description": "宿主 attestation；不可信任宿主的消费者必须重跑 stage contract 点名 verifier。"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "pass"
+          }
+        },
+        "required": [
+          "verdict"
+        ]
+      },
+      "then": {
+        "properties": {
+          "typedIssues": {
+            "type": "array",
+            "maxItems": 0
+          },
+          "resultRefs": {
+            "type": "array",
+            "minItems": 1
+          },
+          "verifierFacts": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "status",
+                "exitCode",
+                "evidenceRef",
+                "evidenceDigest"
+              ],
+              "properties": {
+                "status": {
+                  "const": "passed"
+                },
+                "exitCode": {
+                  "const": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "blocked"
+          }
+        },
+        "required": [
+          "verdict"
+        ]
+      },
+      "then": {
+        "properties": {
+          "typedIssues": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "refInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "ref"
+      ],
+      "properties": {
+        "scope": {
+          "enum": [
+            "execution",
+            "output",
+            "repo"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "modelFamily",
+        "sessionId",
+        "invocation"
+      ],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modelFamily": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "invocation": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "provider",
+                "model",
+                "runId"
+              ],
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "model": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "runId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "typedIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "recoveryStage"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recoveryStage": {
+          "enum": [
+            "0.plan",
+            "sources",
+            "1.download",
+            "2.quality",
+            "3.compose",
+            "4.draft",
+            "5.review",
+            "publish",
+            "release",
+            "ship"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "verifierFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "status",
+        "command",
+        "exitCode",
+        "observedAt"
+      ],
+      "description": "宿主对已执行显式 verifier 的 attestation；内核不会执行或证明该命令，只冻结声明字段与 evidence 实际字节。",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed"
+          ]
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "必须记录 stage contract 点名的完整 argv；1.download..5.review 的 stage-artifacts 命令必须携带匹配阶段的 --through，只有 publish 后 final closure 可省略 --through。"
+        },
+        "exitCode": {
+          "type": "integer"
+        },
+        "observedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceRef": {
+          "$ref": "#/$defs/refInput"
+        },
+        "evidenceDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "evidenceDigest"
+            ]
+          },
+          "then": {
+            "required": [
+              "evidenceRef"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "passed"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "exitCode": {
+                "const": 0
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

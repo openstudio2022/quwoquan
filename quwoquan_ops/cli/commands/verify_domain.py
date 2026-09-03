@@ -490,7 +490,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         stdout_sections.append((command_key, "\n".join(filter(None, [result.stdout, result.stderr]))))
         if result.returncode != 0:
             issues.append(result.stderr.strip() or result.stdout.strip() or "unknown verify failure")
-    test_data_content_readiness_ready = True
+    content_readiness_ready = True
     if phase is not None and readiness_payload is not None:
         steps.append(
             {
@@ -502,7 +502,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
         if readiness_payload["exitCode"] != 0:
-            test_data_content_readiness_ready = False
+            content_readiness_ready = False
             issues.extend(
                 f"content readiness: {detail}"
                 for detail in readiness_payload.get("details", [])
@@ -513,7 +513,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
     # backup and unrelated static/profile failures still block the full verify,
     # but must not suppress independently safe data evidence.
     test_data_prerequisites_passed = (
-        test_data_package_ready and test_data_content_readiness_ready
+        test_data_package_ready and content_readiness_ready
     )
     profile_actor_context: TestDataContext | None = None
     profile_actor_runtime = TestDataRuntime()

@@ -20,7 +20,6 @@ from content.release.canonical.release_operation_lock import (
     release_operation_lock_root,
 )
 from content.release.model import ReleaseKind
-from verify.verify_no_active_data_runtime import active_runtime_processes
 
 
 def _empty_baseline_is_applied(
@@ -73,9 +72,6 @@ def reset_canonical_publish(
     release_id = _safe_id(empty_baseline_release, label="emptyBaselineRelease")
     if not environments or any(not environment for environment in environments):
         raise ValueError("at least one target environment is required")
-    if active_runtime_processes():
-        raise RuntimeError("GATE_BLOCK active task execute owns canonical publish")
-
     with release_operation_guard(
         lock_root=release_operation_lock_root(release_root),
         global_exclusive=True,

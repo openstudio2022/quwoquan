@@ -48,7 +48,7 @@ def _plan(root: Path, *, na: tuple[str, str] | None = ("recommendation", "video"
             if na == (entry, carrier):
                 cells.append({"entry": entry, "carrier": carrier, "applicability": "not_applicable", "reasonCode": "APP.UAT.NOT_APPLICABLE"})
             else:
-                cells.append({"entry": entry, "carrier": carrier, "applicability": "required", "specRef": SPEC, "runnerClass": f"qwq_app.content_uat.{entry}.{carrier}.v1"})
+                cells.append({"entry": entry, "carrier": carrier, "applicability": "required", "specRef": SPEC, "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1"})
     distribution = {"homepage": 25, "article": 25, "image": 40, "video": 10}
     release_digest = RELEASE_DIGEST
     plan = {
@@ -144,7 +144,7 @@ def _raw(
     state: str = "passed",
     ref_suffix: str = "",
 ) -> dict[str, str]:
-    runner = f"qwq_app.content_uat.{entry}.{carrier}.v1"
+    runner = f"qwq.content_consumer.{entry}.{carrier}.v1"
     selected_object_id = object_id or (
         f"/entity/{carrier}-001" if carrier == "homepage" else f"{carrier}-001"
     )

@@ -150,3 +150,67 @@ def find_entity_type_node_path(domain: str, type_name: str, *, tags_root: Path |
         if definition.parent.name == name
     )
     return matches[0] if matches else None
+
+TYPE_TO_DOMAIN_ETYPE: dict[str, tuple[str, str]] = {
+    "景区": ("地点", "景区"),
+    "景点": ("地点", "景区"),
+    "博物馆": ("地点", "博物馆"),
+    "古镇": ("地点", "古镇"),
+    "遗址": ("地点", "遗址"),
+    "打卡地": ("地点", "打卡地"),
+    "餐厅": ("地点", "餐厅"),
+    "民宿": ("地点", "民宿"),
+    "山峰": ("地点", "自然景观"),
+    "湖泊": ("地点", "自然景观"),
+    "自然景观": ("地点", "自然景观"),
+    "牧场": ("地点", "自然景观"),
+    "学校": ("机构", "学校"),
+}
+DEFAULT_DOMAIN_ETYPE = ("地点", "打卡地")
+
+
+def resolve_domain_etype(
+    etype_hint: str | None,
+    *,
+    allow_default_on_missing: bool = True,
+    allow_default_on_unknown: bool = True,
+) -> tuple[str, str]:
+    """Normalize an entity type against the governed Entity taxonomy."""
+    if not etype_hint or not str(etype_hint).strip().strip("/"):
+        if allow_default_on_missing:
+            return DEFAULT_DOMAIN_ETYPE
+        raise ValueError("entityType missing")
+    hint = str(etype_hint).strip().strip("/")
+    if "/" in hint:
+        parts = hint.split("/", 1)
+        if all(parts):
+            return parts[0], parts[1]
+    mapped = TYPE_TO_DOMAIN_ETYPE.get(hint)
+    if mapped is not None:
+        return mapped
+    matches = sorted(
+        path for path in known_entity_type_paths() if path.rsplit("/", 1)[-1] == hint
+    )
+    if len(matches) == 1:
+        domain, entity_type = matches[0].split("/", 1)
+        return domain, entity_type
+    if allow_default_on_unknown:
+        return DEFAULT_DOMAIN_ETYPE
+    raise ValueError(f"unknown entityType hint: {etype_hint!r}")
+
+
+def require_domain_etype(
+    etype_hint: str | None, *, context: str = "entityType"
+) -> tuple[str, str]:
+    try:
+        return resolve_domain_etype(
+            etype_hint,
+            allow_default_on_missing=False,
+            allow_default_on_unknown=False,
+        )
+    except ValueError as exc:
+        raise ValueError(f"{context}: {exc}") from exc
+
+
+def entity_ref(domain: str, entity_type: str, name: str) -> str:
+    return f"/entity/{domain}/{entity_type}/{name}"

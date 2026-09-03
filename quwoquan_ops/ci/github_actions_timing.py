@@ -14,7 +14,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 sys.dont_write_bytecode = True
 
@@ -37,6 +37,10 @@ APPROVAL_EVIDENCE_REASON = (
 )
 
 
+SelectorMode = Literal["contains", "exact", "prefix"]
+SELECTOR_MODES: frozenset[str] = frozenset(("contains", "exact", "prefix"))
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY", ""))
@@ -48,7 +52,19 @@ def parse_args() -> argparse.Namespace:
         "--phase",
         action="append",
         default=[],
-        help="Phase selector NAME=job-name-substring. Repeatable.",
+        help="Compatibility phase selector NAME=job-name-substring. Repeatable.",
+    )
+    parser.add_argument(
+        "--phase-exact",
+        action="append",
+        default=[],
+        help="Exact phase selector NAME=complete-job-name. Repeatable.",
+    )
+    parser.add_argument(
+        "--phase-prefix",
+        action="append",
+        default=[],
+        help="Prefix phase selector NAME=job-name-prefix. Repeatable.",
     )
     parser.add_argument(
         "--require-count",
@@ -147,11 +163,25 @@ def classify_job_attempt(job: dict[str, Any]) -> str:
     return "attempted"
 
 
-def _match_completed(jobs: list[dict[str, Any]], pattern: str) -> list[dict[str, Any]]:
+def _match_completed(
+    jobs: list[dict[str, Any]],
+    pattern: str,
+    *,
+    mode: SelectorMode = "contains",
+) -> list[dict[str, Any]]:
+    def matches(name: str) -> bool:
+        if mode == "exact":
+            return name == pattern
+        if mode == "prefix":
+            return name.startswith(pattern)
+        if mode == "contains":
+            return pattern in name
+        raise ValueError(f"unsupported timing selector mode: {mode}")
+
     return [
         job
         for job in jobs
-        if pattern in str(job.get("name") or "")
+        if matches(str(job.get("name") or ""))
         and classify_job_attempt(job) == "attempted"
         and isinstance(job.get("started_at"), str)
         and isinstance(job.get("completed_at"), str)
@@ -180,8 +210,20 @@ def calculate(
     dag_layers: list[tuple[str, ...]],
     dag_branches: list[tuple[tuple[str, ...], ...]] | None = None,
     external_phases: dict[str, int] | None = None,
+    phase_match_modes: dict[str, SelectorMode] | None = None,
 ) -> dict[str, str | int]:
     external_phases = external_phases or {}
+    phase_match_modes = phase_match_modes or {}
+    unknown_modes = set(phase_match_modes) - set(phases)
+    if unknown_modes:
+        raise ValueError(f"selector modes have no timing phase: {sorted(unknown_modes)}")
+    invalid_modes = {
+        name: mode
+        for name, mode in phase_match_modes.items()
+        if mode not in SELECTOR_MODES
+    }
+    if invalid_modes:
+        raise ValueError(f"unsupported timing selector modes: {invalid_modes}")
     if set(external_phases) & set(phases):
         overlap = sorted(set(external_phases) & set(phases))
         raise ValueError(f"timing phases are both API and external: {overlap}")
@@ -190,7 +232,9 @@ def calculate(
     run_created = parse_timestamp(run.get("created_at"), "run.created_at")
     matched_by_phase: dict[str, list[dict[str, Any]]] = {}
     for name, pattern in phases.items():
-        matched = _match_completed(jobs, pattern)
+        matched = _match_completed(
+            jobs, pattern, mode=phase_match_modes.get(name, "contains")
+        )
         expected = required_counts.get(name)
         if expected is not None and len(matched) != expected:
             raise ValueError(
@@ -349,10 +393,25 @@ def main() -> int:
     args = parse_args()
     try:
         run, jobs = load_api_evidence(args)
+        phase_groups = (
+            ("contains", _parse_pairs(args.phase)),
+            ("exact", _parse_pairs(args.phase_exact)),
+            ("prefix", _parse_pairs(args.phase_prefix)),
+        )
+        phases: dict[str, str] = {}
+        phase_match_modes: dict[str, SelectorMode] = {}
+        for mode, group in phase_groups:
+            duplicate = set(phases) & set(group)
+            if duplicate:
+                raise ValueError(
+                    f"duplicate timing selector across match modes: {sorted(duplicate)}"
+                )
+            phases.update(group)
+            phase_match_modes.update({name: mode for name in group})
         values = calculate(
             run,
             jobs,
-            phases=_parse_pairs(args.phase),
+            phases=phases,
             required_counts=_parse_pairs(args.require_count, integer=True),
             candidate_job=args.candidate_job,
             prod_job=args.prod_job,
@@ -372,6 +431,7 @@ def main() -> int:
                 if branch.strip()
             ],
             external_phases=_parse_pairs(args.external_phase, integer=True),
+            phase_match_modes=phase_match_modes,
         )
         write_github_output(Path(args.github_output), values)
     except (GithubActionsApiError, OSError, ValueError, json.JSONDecodeError) as error:

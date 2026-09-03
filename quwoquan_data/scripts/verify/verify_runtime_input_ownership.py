@@ -1,140 +1,36 @@
 #!/usr/bin/env python3
-"""Keep runtime requests in the disposable execution work package only."""
+"""Verify runtime requests exist only in initialized work packages."""
 from __future__ import annotations
 
-import re
-import sys
 from pathlib import Path
 
 from core.io import read_json
+from core.paths import DATA_EXECUTIONS_ROOT, REPO_ROOT
 from core.schema import assert_valid
-from core.paths import DATA_EXECUTIONS_ROOT, REPO_ROOT, is_execution_id
-from content.execution.execution_terminal import (
-    InvalidTerminalExecutionEvidenceError,
-    load_terminal_execution_evidence,
-)
-from content.execution.planning.recipe.model import RuntimeExecutionRequest
-from content.execution.workspace import orphaned_transaction_workspaces
-
-
-_STATIC_INPUT_ROOTS = (
-    "quwoquan_data/control_plane",
-    "quwoquan_data/verticals",
-    "quwoquan_data/prompts",
-    "quwoquan_data/templates",
-    "quwoquan_data/schema",
-)
-_RUN_VALUE_PATTERNS = (
-    re.compile(r"\.qwq_output/"),
-    re.compile(r"\bexecutionId\s*[:=]\s*20\d{6}--"),
-)
-_REQUEST_REF = Path("0.plan/request.json")
-_TARGET_SET_REF = Path("0.plan/target_set.json")
-_EXECUTION_MANIFEST_NAME = "execution_manifest.json"
-
-
-def _is_execution_work_package_root(path: Path) -> bool:
-    """Use the canonical execution identity or manifest, not namespace names."""
-    return is_execution_id(path.name) or (path / _EXECUTION_MANIFEST_NAME).exists()
-
-
-def _is_static_input(path: Path) -> bool:
-    relative = path.relative_to(REPO_ROOT)
-    parts = relative.parts
-    if len(parts) >= 3 and parts[0:2] == ("quwoquan_data", "verticals"):
-        return path.name in {"providers.yaml", "content_policy.yaml", "license_policy.yaml"}
-    return True
-
-
-def _text_issues() -> list[str]:
-    issues: list[str] = []
-    for relative_root in _STATIC_INPUT_ROOTS:
-        root = REPO_ROOT / relative_root
-        if not root.is_dir():
-            continue
-        for path in sorted(item for item in root.rglob("*") if item.is_file()):
-            if not _is_static_input(path):
-                continue
-            try:
-                text = path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
-                continue
-            for pattern in _RUN_VALUE_PATTERNS:
-                if pattern.search(text):
-                    issues.append(
-                        f"{path.relative_to(REPO_ROOT)}: static input contains frozen runtime value {pattern.pattern}"
-                    )
-                    break
-    return issues
-
-
-def _request_issues() -> list[str]:
-    issues: list[str] = []
-    if not DATA_EXECUTIONS_ROOT.is_dir():
-        return issues
-    for execution_root in sorted(
-        path
-        for path in DATA_EXECUTIONS_ROOT.iterdir()
-        if path.is_dir() and _is_execution_work_package_root(path)
-    ):
-        try:
-            terminal = load_terminal_execution_evidence(execution_root)
-        except InvalidTerminalExecutionEvidenceError as exc:
-            issues.append(
-                f"{execution_root.relative_to(REPO_ROOT)}: invalid terminal execution evidence: {exc}"
-            )
-            # 已出现但无效的 terminal candidate 拥有本 execution 首个 blocker；
-            # 不再用当前 schema 重释冻结 request，避免迁移噪声掩盖终态漂移。
-            continue
-        except (OSError, TypeError, ValueError) as exc:
-            issues.append(
-                f"{execution_root.relative_to(REPO_ROOT)}: invalid terminal execution evidence: {exc}"
-            )
-            terminal = None
-        if terminal is not None:
-            continue
-        request_path = execution_root / _REQUEST_REF
-        target_set_path = execution_root / _TARGET_SET_REF
-        if not request_path.is_file():
-            issues.append(f"{request_path.relative_to(REPO_ROOT)}: execution request is missing")
-            continue
-        if not target_set_path.is_file():
-            issues.append(f"{target_set_path.relative_to(REPO_ROOT)}: frozen target set is missing")
-        try:
-            request = read_json(request_path)
-            if isinstance(request, dict) and request.get("schema") == "quwoquan_data.task_init_request":
-                assert_valid(
-                    request,
-                    "execution",
-                    "task_init_request",
-                    label=f"task init request:{execution_root.name}",
-                )
-            else:
-                RuntimeExecutionRequest.from_document(request)
-        except (OSError, TypeError, ValueError, SystemExit) as exc:
-            issues.append(f"{request_path.relative_to(REPO_ROOT)}: invalid request: {exc}")
-    return issues
-
-
-def _transaction_workspace_issues() -> list[str]:
-    return [
-        f"{path.relative_to(REPO_ROOT)}: transaction evidence has no execution work package"
-        for path in orphaned_transaction_workspaces()
-    ]
 
 
 def runtime_input_ownership_issues() -> list[str]:
-    return [*_text_issues(), *_request_issues(), *_transaction_workspace_issues()]
+    issues: list[str] = []
+    if not DATA_EXECUTIONS_ROOT.is_dir():
+        return issues
+    for root in sorted(path for path in DATA_EXECUTIONS_ROOT.iterdir() if path.is_dir()):
+        for rel, schema in (("0.plan/request.json", "task_init_request"), ("0.plan/target_set.json", "target_set")):
+            path = root / rel
+            try:
+                value = read_json(path)
+                assert_valid(value, "execution", schema, label=str(path))
+            except Exception as exc:  # noqa: BLE001
+                issues.append(f"{path}: {exc}")
+    return issues
 
 
 def main() -> int:
     issues = runtime_input_ownership_issues()
     if issues:
-        print("[verify_runtime_input_ownership] FAIL")
-        for issue in issues:
-            print(f"  - {issue}")
+        print("[verify runtime-input-ownership] FAIL")
+        for issue in issues: print(f"  - {issue}")
         return 1
-    print("[verify_runtime_input_ownership] OK")
+    print("[verify runtime-input-ownership] OK")
     return 0
 
 

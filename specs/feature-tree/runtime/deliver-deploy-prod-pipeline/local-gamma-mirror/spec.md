@@ -117,8 +117,8 @@
   “未执行破坏性动作”或用同一 attestation 静默重放。
 - 全部删除命令成功后，须有界等待目标 runtime 自有的 published endpoint 释放再做最终 postcheck。
   该集合是 transport-exact 的 `role:hostPort/protocol`，由目标 port profile 的 canonical publisher
-  闭包排除 Data fleet 自有 role 后并上 attested 的非 canonical 端口构成；Data fleet 是长驻栈，
-  同 profile 端口不等于目标 runtime 所有权，TCP/UDP 不得合并判定。若 create-once partial consumption 已精确记录
+  闭包与 attested 的非 canonical 端口合成；同 profile 端口不等于目标 runtime 所有权，
+  TCP/UDP 不得合并判定。若 create-once partial consumption 已精确记录
   全部容器/网络删除成功、failedCommand 为空且失败仅来自该即时 postcheck，则允许同一 confirm 做
   audit-only convergence：不得重跑删除，只重采零容器/网络、volume 全等和上述 endpoint 集合全释放，
   并写绑定原 attestation/consumption digest 的 create-once convergence receipt；其他 partial/unknown
@@ -209,7 +209,7 @@
   partial-failure consumption 保存实际成功 ID 和未确定命令，禁止把部分删除记为零变更。
   非 canonical published host port 还必须绑定唯一实时 Docker publisher，且不得落入另一环境的
   canonical block；执行后目标 runtime 自有的 published endpoint 须逐条按 `role:hostPort/protocol`
-  实测释放，该集合为 canonical publisher 闭包排除 Data fleet 自有 role 后并上 attested 非 canonical 端口。
+  实测释放，该集合为 canonical publisher 闭包与 attested 非 canonical 端口的并集。
   全删除成功但即时端口转发尚未释放时必须保留 partial receipt；仅在全部 success step、完整 removed
   ID、空 failedCommand、零资源重现、volume 全等且有界端口复验通过时，后续同一 confirm 才可写
   audit-only convergence receipt，且不得再次执行任何删除命令。

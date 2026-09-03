@@ -86,11 +86,6 @@ class GammaCommercialRunnersLocalContractTest(unittest.TestCase):
         )
         command_by_name = {command["name"]: command for command in commands}
 
-        self.assertNotIn(
-            "gamma-local-reliabletask-api-integration",
-            command_by_name,
-        )
-
         onboarding = command_by_name[
             "gamma-local-onboarding-author-impact-api-integration"
         ]

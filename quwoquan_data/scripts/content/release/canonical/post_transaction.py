@@ -68,11 +68,6 @@ from content.release.canonical.post_transaction_sources import (
 from core.content_library import link_from_library
 from core.control_types import SourcePolicyRevision
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, now_iso
-from core.source_digest import (
-    ExecutionBundleIdentity,
-    SourceDefinitionSnapshot,
-    SourceDigestError,
-)
 from core.tree_integrity import tree_integrity_stats
 from governance.coverage.license import (
     RightsAuditStatus,
@@ -86,26 +81,16 @@ def build_post_object_transaction_package(
     object_ref: str,
     transaction_id: str,
     package_root: Path,
-    pool_delivery_intent: Mapping[str, Any],
 ) -> dict[str, Any]:
     manifest = _read_json(execution_root / "execution_manifest.json")
     execution_id = _execution_id(str(manifest.get("executionId") or ""))
     if execution_root.name != execution_id:
         raise ObjectTransactionError("execution root 与 executionId 不一致")
-    try:
-        source_digest = SourceDefinitionSnapshot.from_document(
-            manifest.get("sourceDigest")
-        )
-        execution_bundle = ExecutionBundleIdentity.from_document(
-            manifest.get("executionBundle")
-        )
-    except SourceDigestError as exc:
-        raise ObjectTransactionError(
-            f"{execution_id}: execution manifest lacks a valid frozen sourceDigest"
-        ) from exc
+    canonical_target_ref = f"posts/{object_ref.removeprefix('posts/').strip('/')}"
     source_identity = freeze_execution_source_identity(
         execution_root=execution_root,
         execution_manifest=manifest,
+        target_ref=canonical_target_ref,
     )
     canonical_ref = _safe_rel(
         object_ref.removeprefix("posts/"), label="objectRef"
@@ -117,8 +102,14 @@ def build_post_object_transaction_package(
     # deriving a second, transaction-private tree identity.
     input_payload_digest = str(tree_integrity_stats(source)["merkleRoot"])
     attestation_source = source / "5.review/attestation.json"
-    evidence_source = source / "5.review/evidence_index.json"
     attestation = _read_json(attestation_source)
+    for review_name in (
+        "rubric_review.json",
+        "reviewer_result.json",
+        "media_ref_review.json",
+    ):
+        if not (attestation_source.parent / review_name).is_file():
+            raise ObjectTransactionError(f"对象缺 AI 直写 review 产物：{review_name}")
     if attestation.get("decision") != "approved":
         raise ObjectTransactionError("post 未 review-approved")
     for key in ("deterministicGate", "independentReviewer", "mediaRefReview"):
@@ -134,49 +125,21 @@ def build_post_object_transaction_package(
         raise ObjectTransactionError(
             f"post transactionId 必须稳定派生：expected={expected_transaction_id}"
         )
-    from content.execution.closure.pool_delivery import (
-        validate_pool_delivery_intent_document,
-    )
-
-    try:
-        delivery_intent = validate_pool_delivery_intent_document(
-            pool_delivery_intent,
-            root=execution_root,
+    creator_binding = {
+        key: source_manifest[key]
+        for key in (
+            "authorId",
+            "creatorProfileId",
+            "creatorArchetype",
+            "creatorProfileDigest",
+            "creatorDisclosure",
+            "experienceClaimMode",
+            "authorQualitySignals",
+            "creator",
         )
-    except (OSError, TypeError, ValueError) as exc:
-        raise ObjectTransactionError(
-            f"pool delivery intent validation failed: {exc}"
-        ) from exc
-    from content.execution.closure.pool_delivery import (
-        creator_binding_from_pool_delivery_intent,
-    )
-
-    creator_binding = creator_binding_from_pool_delivery_intent(
-        source_manifest,
-        delivery_intent,
-        carrier=str(source_manifest.get("contentType") or "").strip(),
-    )
-    effective_source_manifest = {**source_manifest, **creator_binding}
-    expected_intent_bindings = {
-        "executionId": execution_id,
-        "contentObjectDir": f"posts/{canonical_ref}",
-        "transactionId": transaction_id,
-        "transactionInputDigest": input_payload_digest,
-        "carrier": str(source_manifest.get("contentType") or "").strip(),
+        if key in source_manifest
     }
-    drifted_bindings = sorted(
-        key
-        for key, expected in expected_intent_bindings.items()
-        if delivery_intent.get(key) != expected
-    )
-    reservation_id = str(delivery_intent.get("poolIdentityReservationId") or "")
-    if not reservation_id.startswith("sha256:"):
-        drifted_bindings.append("poolIdentityReservationId")
-    if drifted_bindings:
-        raise ObjectTransactionError(
-            "pool delivery intent transaction binding drift: "
-            + ",".join(drifted_bindings)
-        )
+    effective_source_manifest = {**source_manifest, **creator_binding}
     if package_root.exists():
         return reuse_existing_post_package(
             package_root=package_root,
@@ -197,7 +160,6 @@ def build_post_object_transaction_package(
         object_root.mkdir(parents=True)
         _copy_post_surface(source, object_root)
         shutil.copy2(attestation_source, object_root / "attestation.json")
-        shutil.copy2(evidence_source, object_root / "evidence_index.json")
         source_catalog = _source_catalog(execution_root, source, source_manifest)
         _write_json(object_root / "source_catalog.json", source_catalog)
 
@@ -239,9 +201,8 @@ def build_post_object_transaction_package(
                 content_sha256=digest,
                 object_ref=str(source_manifest.get("topicId") or "").strip(),
                 execution_root=execution_root,
-                execution_manifest=manifest,
+                source_identity=source_identity,
                 object_root=object_root,
-                source_digest=source_digest.digest,
             )
             source_url = _https(
                 raw.get("authorizationProof"),
@@ -511,7 +472,10 @@ def build_post_object_transaction_package(
             attestation_path=attestation_source,
             publish_root=PUBLISH_ROOT,
             rights_rows=rights_rows,
-            reserved_identity=delivery_intent,
+            reserved_identity={
+                "contentId": source_manifest.get("contentId"),
+                "version": source_manifest.get("version", 1),
+            },
         )
         canonical_manifest = {
             **effective_source_manifest,
@@ -522,8 +486,6 @@ def build_post_object_transaction_package(
             "payloadDigest": input_payload_digest,
             "publishedAt": str(source_manifest.get("publishedAt") or "").strip()
             or now_iso(),
-            "sourceDigest": source_digest.to_document(),
-            "executionBundle": execution_bundle.to_document(),
             "sourceIdentity": source_identity,
             "finalContentRef": final_content_ref,
             "sourceCatalogRef": "source_catalog.json",
@@ -550,10 +512,7 @@ def build_post_object_transaction_package(
             "rightsRef": "rights.json",
             "casRefs": cas_rows,
         }
-        review = {
-            "attestationRef": "attestation.json",
-            "evidenceIndexRef": "evidence_index.json",
-        }
+        review = {"attestationRef": "attestation.json"}
         review_binding = _review_binding(object_root, {"review": review})
         source_policy = SourcePolicyRevision.RIGHTS_CLEARED_CONTENT.value
         closure_digest = _closure_digest(

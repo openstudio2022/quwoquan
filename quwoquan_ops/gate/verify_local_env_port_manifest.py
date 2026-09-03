@@ -19,7 +19,6 @@ import yaml
 from quwoquan_ops.cli.lib.port_manifest import (
     HOST_PORT_VARIABLES_KEY,
     REQUIRED_PROFILES,
-    RETIRED_COMPOSE_SOURCES_KEY,
     UNOWNED_COMPOSE_SOURCES_KEY,
     compose_published_endpoint_roles,
     compose_publisher_container_role_closure,
@@ -69,14 +68,13 @@ def _local_compose_sources(
     issues: list[str],
     *,
     unowned_sources: Mapping[str, str],
-    retired_sources: Mapping[str, str],
 ) -> list[Path]:
     paths: set[Path] = set()
     for pattern in LOCAL_COMPOSE_GLOBS:
         paths.update(path for path in ROOT.glob(pattern) if path.is_file())
     environment_root = ROOT / "quwoquan_ops" / "environments" / "compose"
     adjudicated = (
-        set(LOCAL_ENVIRONMENT_COMPOSE) | set(unowned_sources) | set(retired_sources)
+        set(LOCAL_ENVIRONMENT_COMPOSE) | set(unowned_sources)
     )
     # 这里的 glob 必须与其余来源目录同宽（`*compose*.y*ml`）：只收 `docker-compose*`
     # 前缀时，`local-elasticsearch.compose.yaml` 这种命名既不进 LOCAL_ENVIRONMENT_COMPOSE、
@@ -365,7 +363,6 @@ def _compose_reverse_closure_issues(manifest: dict[str, Any]) -> list[str]:
     }
     host_port_variables = manifest.get(HOST_PORT_VARIABLES_KEY) or {}
     unowned_sources = manifest.get(UNOWNED_COMPOSE_SOURCES_KEY) or {}
-    retired_sources = manifest.get(RETIRED_COMPOSE_SOURCES_KEY) or {}
     issues.extend(_injection_declaration_agreement_issues(host_port_variables))
     # 声明段的反向闭合：登记了但 compose 里没人用的变量会长期留存且不可见，之后
     # 有人照它改端口归属却不影响任何真实发布口。用过的变量在下面的循环里收集。
@@ -374,7 +371,6 @@ def _compose_reverse_closure_issues(manifest: dict[str, Any]) -> list[str]:
     sources = _local_compose_sources(
         issues,
         unowned_sources=unowned_sources,
-        retired_sources=retired_sources,
     )
     if not sources:
         issues.append("local Compose closure is empty; the reverse closure gate cannot run")

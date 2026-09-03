@@ -24,7 +24,9 @@
 }
 ```
 
-写了 `failure.json` 就保持 `page.md` 占位不动；系统会阻断 finalize 并回退 source 修复。
+写了 `failure.json` 就保持 `page.md` 占位不动；按 `4.draft` stage contract 将该对象问题写入
+self-check 与 agent result envelope，运行点名 verifier，并由宿主 AI 以真实结果提交 blocked 的
+`task stage-close`。不得自行回退、重选来源或假定后继阶段。
 </failure_protocol>
 
 <documents>

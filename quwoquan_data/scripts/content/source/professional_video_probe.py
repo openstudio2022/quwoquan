@@ -10,7 +10,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from content.source.sourced_video_admission import (
+from content.source.video_media_probe import (
     probe_audio_stream,
     probe_sourced_video,
     sample_video_frame_files,

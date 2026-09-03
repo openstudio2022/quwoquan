@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import shutil
 import tempfile
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -52,12 +51,6 @@ from content.release.canonical.pool_source_attribution import (
     source_attribution_complete,
 )
 from core.source_attribution import canonical_source_attribution
-from core.source_digest import (
-    ExecutionBundleIdentity,
-    SourceDefinitionSnapshot,
-    SourceDigestError,
-)
-from core.tree_integrity import tree_integrity_stats
 from governance.coverage.license import (
     RightsAuditStatus,
     parse_rights_audit_status,
@@ -70,7 +63,6 @@ def build_entity_object_transaction_package(
     object_ref: str,
     transaction_id: str,
     package_root: Path,
-    pool_delivery_intent: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Build one production transaction package from an approved execution entity.
 
@@ -83,20 +75,11 @@ def build_entity_object_transaction_package(
     execution_id = _execution_id(str(execution_manifest.get("executionId") or ""))
     if execution_root.name != execution_id:
         raise ObjectTransactionError("execution root 与 executionId 不一致")
-    try:
-        source_digest = SourceDefinitionSnapshot.from_document(
-            execution_manifest.get("sourceDigest")
-        )
-        execution_bundle = ExecutionBundleIdentity.from_document(
-            execution_manifest.get("executionBundle")
-        )
-    except SourceDigestError as exc:
-        raise ObjectTransactionError(
-            f"{execution_id}: execution manifest lacks a valid frozen sourceDigest"
-        ) from exc
+    canonical_target_ref = object_ref.removeprefix("/entity/").strip("/")
     source_identity = freeze_execution_source_identity(
         execution_root=execution_root,
         execution_manifest=execution_manifest,
+        target_ref=f"entities/{canonical_target_ref}",
     )
     rel = _safe_rel(object_ref.removeprefix("/entity/"), label="objectRef")
     if len(rel.parts) < 3:
@@ -128,8 +111,14 @@ def build_entity_object_transaction_package(
     if str(entity.get("entityRef") or "").removeprefix("/entity/") != canonical_ref:
         raise ObjectTransactionError("entityRef 与对象路径不一致")
     attestation_source = object_source / "5.review/attestation.json"
-    evidence_index_source = object_source / "5.review/evidence_index.json"
     attestation = _read_json(attestation_source)
+    for review_name in (
+        "rubric_review.json",
+        "reviewer_result.json",
+        "media_ref_review.json",
+    ):
+        if not (attestation_source.parent / review_name).is_file():
+            raise ObjectTransactionError(f"对象缺 AI 直写 review 产物：{review_name}")
     if attestation.get("decision") != "approved":
         raise ObjectTransactionError("对象未 review-approved")
     for key in ("deterministicGate", "independentReviewer", "mediaRefReview"):
@@ -146,31 +135,6 @@ def build_entity_object_transaction_package(
             "transactionId 必须由 executionId 与 objectRef 稳定派生："
             f"expected={expected_transaction_id}"
         )
-    from content.execution.closure.pool_delivery import (
-        validate_pool_delivery_intent_document,
-    )
-
-    try:
-        delivery_intent = validate_pool_delivery_intent_document(
-            pool_delivery_intent,
-            root=execution_root,
-        )
-    except (OSError, TypeError, ValueError) as exc:
-        raise ObjectTransactionError(
-            f"pool delivery intent validation failed: {exc}"
-        ) from exc
-    if (
-        delivery_intent.get("executionId") != execution_id
-        or delivery_intent.get("carrier") != "homepage"
-        or delivery_intent.get("objectRef") != f"/entity/{canonical_ref}"
-        or delivery_intent.get("contentObjectDir") != f"entities/{canonical_ref}"
-        or delivery_intent.get("transactionId") != transaction_id
-        or delivery_intent.get("contentId") is not None
-        or delivery_intent.get("poolIdentityReservationId") is not None
-        or delivery_intent.get("transactionInputDigest")
-        != str(tree_integrity_stats(object_source)["merkleRoot"])
-    ):
-        raise ObjectTransactionError("pool delivery homepage transaction binding drift")
     if package_root.exists():
         existing = _read_json(package_root / "object_transaction_package.json")
         if (
@@ -195,7 +159,6 @@ def build_entity_object_transaction_package(
             raise ObjectTransactionError("entity 缺 source catalog")
         shutil.copy2(source_catalog_source, object_root / source_catalog_ref)
         shutil.copy2(attestation_source, object_root / "attestation.json")
-        shutil.copy2(evidence_index_source, object_root / "evidence_index.json")
 
         source_assets = _source_assets_by_ref(execution_root)
 
@@ -237,9 +200,8 @@ def build_entity_object_transaction_package(
                 content_sha256=digest,
                 object_ref=object_ref,
                 execution_root=execution_root,
-                execution_manifest=execution_manifest,
+                source_identity=source_identity,
                 object_root=object_root,
-                source_digest=source_digest.digest,
             )
             canonical_file_page = str(
                 raw.get("authorizationProof")
@@ -497,8 +459,6 @@ def build_entity_object_transaction_package(
                 "entityRef": str(entity.get("entityRef") or ""),
                 "version": 1,
                 "executionId": execution_id,
-                "sourceDigest": source_digest.to_document(),
-                "executionBundle": execution_bundle.to_document(),
                 "sourceIdentity": source_identity,
                 "finalContentRef": "page.md",
                 "sourceCatalogRef": source_catalog_ref.as_posix(),
@@ -537,10 +497,7 @@ def build_entity_object_transaction_package(
             "rightsRef": rights_ref.as_posix(),
             "casRefs": cas_rows,
         }
-        review = {
-            "attestationRef": "attestation.json",
-            "evidenceIndexRef": "evidence_index.json",
-        }
+        review = {"attestationRef": "attestation.json"}
         review_binding = _review_binding(object_root, {"review": review})
         closure_digest = _closure_digest(
             object_root=object_root,

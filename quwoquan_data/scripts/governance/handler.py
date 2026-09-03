@@ -212,11 +212,6 @@ def handle_governance(args: argparse.Namespace) -> None:
             )
         )
         return
-    if cmd == "operational-fingerprint":
-        from content.execution.operational_fingerprint import operational_fingerprint
-
-        print(operational_fingerprint())
-        return
     if cmd == "public-cli-live-import-zero":
         from verify.verify_public_cli_live_import_zero import main as live_import_main
 
@@ -241,9 +236,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub = p.add_subparsers(dest="governance_command")
 
     from governance.coverage.handler import register_coverage_parser
-    from governance.stable_production_proof_cli import (
-        register_stable_production_proof_parsers,
-    )
     from governance.taxonomy.handler import register_taxonomy_parser
 
     creators = sub.add_parser(
@@ -270,11 +262,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     register_taxonomy_parser(sub)
     register_coverage_parser(sub)
-    register_stable_production_proof_parsers(sub)
-    sub.add_parser(
-        "operational-fingerprint",
-        help="只读输出当前 host-only operational fingerprint",
-    )
     live_import = sub.add_parser(
         "public-cli-live-import-zero",
         help="隔离导入全部 public CLI command modules 并证明旧五家族零加载",

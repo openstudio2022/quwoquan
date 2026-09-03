@@ -95,7 +95,7 @@ func TestReplayRepairRequiresContentIDDerivedPostBinding(
 	t.Parallel()
 	post := releaseimport.PostDoc{
 		PostRef:         "posts/article/体验/发布身份/1",
-		ContentID:       "qwq_data_content_001",
+		ContentID:       "qwq_release_content_001",
 		ContentVersion:  1,
 		ContentType:     "article",
 		ContentIdentity: "work",

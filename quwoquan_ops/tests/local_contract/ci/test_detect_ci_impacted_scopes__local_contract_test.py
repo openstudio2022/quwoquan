@@ -246,6 +246,51 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             normalize_changed_path("quwoquan_app/lib/main.dart\x00ignored")
 
+    def test_non_ascii_changed_paths_are_read_verbatim_from_git(self) -> None:
+        """quwoquan_data/publish/entities/地点/... 这类路径不得被 quotepath 八进制转义后判为非法。"""
+        from quwoquan_ops.ci import detect_ci_impacted_scopes as module
+        from quwoquan_ops.ci import plan_service_release_images as images
+
+        chinese_path = "quwoquan_data/publish/entities/地点/主题乐园/杭州宋城/_entity.json"
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            env = {
+                "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
+                "HOME": tmp, "PATH": "/usr/bin:/bin:/usr/local/bin",
+            }
+
+            def git(*args: str) -> str:
+                return subprocess.run(
+                    ["git", *args], cwd=repo, check=True, capture_output=True, text=True, env=env
+                ).stdout.strip()
+
+            git("init", "-q", "-b", "main")
+            git("config", "core.quotepath", "true")
+            (repo / "seed.txt").write_text("seed\n", encoding="utf-8")
+            git("add", "-A")
+            git("commit", "-q", "-m", "seed")
+            base = git("rev-parse", "HEAD")
+            target = repo / chinese_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("{}\n", encoding="utf-8")
+            git("add", "-A")
+            git("commit", "-q", "-m", "entity")
+            head = git("rev-parse", "HEAD")
+
+            original_roots = (module.ROOT, images.ROOT)
+            module.ROOT = repo
+            images.ROOT = repo
+            try:
+                self.assertEqual(module.git_changed_files(base, head), [chinese_path])
+                self.assertEqual(images.git_changed_files(base, head), [chinese_path])
+            finally:
+                module.ROOT, images.ROOT = original_roots
+
+        from quwoquan_ops.ci.impact_planner_core import classify_impacts
+
+        self.assertTrue(classify_impacts([chinese_path])["scopes"]["data"])
+
     def test_dot_segment_is_canonicalized_and_nfc_paths_share_identity(self) -> None:
         dotted = run_detect("./quwoquan_app/lib/main.dart")
         self.assertEqual(dotted.returncode, 0, dotted.stderr)

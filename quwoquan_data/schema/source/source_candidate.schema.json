@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/source_candidate.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "sourceId", "title", "sourceClass", "sourceUseMode", "purpose", "rightsClue"],
+  "properties": {
+    "schema": {"const": "quwoquan_data.source_candidate"},
+    "sourceId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"},
+    "title": {"type": "string", "minLength": 1},
+    "sourceClass": {"type": "string", "minLength": 1},
+    "sourceUseMode": {"enum": ["licensed_adaptation", "factual_reference_only", "rights_audit_only"]},
+    "purpose": {"type": "string", "minLength": 1},
+    "rightsClue": {"type": "string", "minLength": 1},
+    "url": {"type": "string", "pattern": "^https://"},
+    "manualFile": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "contentSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "fetchedAt": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {"not": {"required": ["url", "manualFile"]}},
+    {"if": {"required": ["manualFile"]}, "then": {"required": ["contentSha256"]}}
+  ]
+}

@@ -39,7 +39,6 @@ FORBIDDEN_PATTERNS = [
     re.compile(r"quwoquan\.batch\.manifest/\d+"),
     re.compile(r"quwoquan\.download_repair\.old"),
     re.compile(r"quwoquan\.data\.packet\.v\d+"),
-    re.compile(r"quwoquan_data\.content_plan_packet/\d+"),
     re.compile(r"quwoquan_data\.fanout_run_matrix/\d+"),
     re.compile("payloadAllowlist" + "Version"),
     re.compile(r"\bcontent[-_ ]supply\b[^\n]*(?:\bv1\b|\bv2\b)", re.IGNORECASE),

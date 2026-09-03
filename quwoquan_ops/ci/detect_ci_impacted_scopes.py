@@ -63,16 +63,17 @@ def git_changed_files(base_sha: str, head_sha: str) -> list[str]:
         return []
     validate_exact_sha(base_sha, label="base_sha")
     validate_exact_sha(head_sha, label="head_sha")
+    # NUL 分隔 + 关闭 quotepath：中文等非 ASCII 路径否则会被 git 以 "\345\234\260..." 八进制
+    # 引号形式输出，随后被 normalize_changed_path 判为非法 segment（Delivery Gate 基线红的根因）。
     proc = subprocess.run(
-        ["git", "diff", "--name-only", base_sha, head_sha],
+        ["git", "-c", "core.quotepath=off", "diff", "--name-only", "-z", base_sha, head_sha],
         cwd=ROOT,
         check=False,
         capture_output=True,
-        text=True,
     )
     if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or "git diff failed")
-    return proc.stdout.splitlines()
+        raise RuntimeError(proc.stderr.decode("utf-8", "replace").strip() or "git diff failed")
+    return [entry.decode("utf-8") for entry in proc.stdout.split(b"\0") if entry]
 
 
 def classify(paths: list[str]) -> dict[str, bool]:

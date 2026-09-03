@@ -58,7 +58,6 @@ class LocalEnvPortManifestReverseClosureGateTest(unittest.TestCase):
             for path in self.gate._local_compose_sources(
                 issues,
                 unowned_sources=self.manifest[self.gate.UNOWNED_COMPOSE_SOURCES_KEY],
-                retired_sources=self.manifest[self.gate.RETIRED_COMPOSE_SOURCES_KEY],
             )
         }
         self.assertEqual(issues, [])
@@ -75,7 +74,6 @@ class LocalEnvPortManifestReverseClosureGateTest(unittest.TestCase):
         adjudicated = (
             set(self.gate.LOCAL_ENVIRONMENT_COMPOSE)
             | set(self.manifest[self.gate.UNOWNED_COMPOSE_SOURCES_KEY])
-            | set(self.manifest[self.gate.RETIRED_COMPOSE_SOURCES_KEY])
         )
         present = {
             path.name
@@ -86,32 +84,6 @@ class LocalEnvPortManifestReverseClosureGateTest(unittest.TestCase):
         }
         self.assertEqual(sorted(present - adjudicated), [])
         self.assertTrue(present)
-
-    def test_retired_compose_candidate_is_separate_from_permanent_unowned_exemptions(
-        self,
-    ) -> None:
-        retired = self.manifest[self.gate.RETIRED_COMPOSE_SOURCES_KEY]
-        unowned = self.manifest[self.gate.UNOWNED_COMPOSE_SOURCES_KEY]
-
-        self.assertEqual(
-            set(retired),
-            {"docker-compose.data-execution-fleet.yaml"},
-        )
-        self.assertFalse(set(retired) & set(unowned))
-        self.assertNotIn(
-            "docker-compose.data-execution-fleet.yaml",
-            self.gate.LOCAL_ENVIRONMENT_COMPOSE,
-        )
-
-        missing = copy.deepcopy(self.manifest)
-        missing.pop(self.gate.RETIRED_COMPOSE_SOURCES_KEY)
-        self.assertTrue(
-            [
-                item
-                for item in self.gate.validate_port_manifest(missing)
-                if self.gate.RETIRED_COMPOSE_SOURCES_KEY in item
-            ]
-        )
 
     def test_unowned_compose_exemption_lives_in_the_manifest_not_the_gate(self) -> None:
         """豁免声明位在 manifest：门禁不能同时是判据和自己的豁免出处。"""

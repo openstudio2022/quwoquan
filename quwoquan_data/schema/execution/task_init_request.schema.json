@@ -3,34 +3,118 @@
   "$id": "quwoquan_data/schema/execution/task_init_request.schema.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "executionId", "familyRef", "carrier", "quota", "workUnitCount", "carrierDemand", "candidateBinding", "retryOf"],
+  "required": [
+    "schema",
+    "executionId",
+    "carrier",
+    "familyRef",
+    "quota",
+    "candidateCount",
+    "carrierDemand",
+    "immutableCandidateBindings",
+    "submittedInputs",
+    "retryOf"
+  ],
   "properties": {
-    "schema": {"const": "quwoquan_data.task_init_request"},
-    "executionId": {"type": "string", "minLength": 1},
-    "familyRef": {"type": "string", "minLength": 1},
-    "carrier": {"enum": ["homepage", "article", "image", "video"]},
-    "quota": {"type": "integer", "minimum": 1},
-    "workUnitCount": {"type": "integer", "minimum": 1},
+    "schema": {
+      "const": "quwoquan_data.task_init_request"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
+    },
+    "carrier": {
+      "enum": [
+        "homepage",
+        "article",
+        "image",
+        "video"
+      ]
+    },
+    "familyRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "quota": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "candidateCount": {
+      "type": "integer",
+      "minimum": 1
+    },
     "carrierDemand": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ref", "digest", "workRequestRef", "workRequestDigest"],
+      "required": [
+        "scope",
+        "ref",
+        "digest"
+      ],
       "properties": {
-        "ref": {"type": "string", "minLength": 1},
-        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
-        "workRequestRef": {"type": "string", "minLength": 1},
-        "workRequestDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+        "scope": {
+          "const": "output"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
       }
     },
-    "candidateBinding": {
+    "immutableCandidateBindings": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ref", "digest"],
+      "required": [
+        "scope",
+        "ref",
+        "digest"
+      ],
       "properties": {
-        "ref": {"type": "string", "minLength": 1},
-        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+        "scope": {
+          "const": "output"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
       }
     },
-    "retryOf": {"type": ["string", "null"]}
+    "retryOf": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
+        }
+      ]
+    },
+    "submittedInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "carrierDemand",
+        "immutableCandidateBindings"
+      ],
+      "properties": {
+        "carrierDemand": {
+          "$ref": "carrier_demand.schema.json"
+        },
+        "immutableCandidateBindings": {
+          "$ref": "immutable_candidate_bindings.schema.json"
+        }
+      }
+    }
   }
 }

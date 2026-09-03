@@ -1,5 +1,4 @@
 // spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md#dec-032
-// spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020
 package http_test
 
 import (

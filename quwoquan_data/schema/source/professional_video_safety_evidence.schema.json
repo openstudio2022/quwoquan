@@ -21,7 +21,8 @@
     "maliciousMediaRisk",
     "watermarkStatus",
     "reviewedAt",
-    "reviewer"
+    "reviewer",
+    "sourceAttribution"
   ],
   "additionalProperties": false,
   "properties": {

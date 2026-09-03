@@ -11,10 +11,6 @@ import yaml
 _DATA_ROOT = Path(__file__).resolve().parents[2]
 _GLOBAL_RULE_RELATIVE_PATHS = (
     "scripts/core/source_plan_contract.py",
-    "scripts/content/source/prepare.py",
-    "scripts/content/source/source_inputs.py",
-    "scripts/content/source/research/auto_plan_writer.py",
-    "scripts/content/source/research/auto_plan_article.py",
     "scripts/content/source/research/article_crawl_frontier.py",
     "scripts/content/source/research/article_frontier_contract.py",
     "scripts/content/source/research/article_frontier_profile.py",
@@ -23,7 +19,6 @@ _GLOBAL_RULE_RELATIVE_PATHS = (
     "scripts/content/source/research/public_search.py",
     "scripts/content/source/research/qunar_sources.py",
     "scripts/content/source/research/source_registry.py",
-    "scripts/content/source/research/source_quality.py",
     "scripts/content/source/research/network_io.py",
     "scripts/content/source/research/wiki_core.py",
     "scripts/content/source/research/wiki_media.py",
@@ -63,12 +58,7 @@ def _travel_registry_parts(vertical: str, entity_id: str) -> dict[str, Any]:
 
 
 def source_plan_rule_signature(vertical: str, entity_id: str) -> dict[str, Any]:
-    """Return a stable signature for the rules that affect one entity content.execution.planning.
-
-    Global executable/catalog changes intentionally affect every entity. The
-    provider policy is global; entity facts are read from the reference catalog.
-    Homepage authority remains controlled by content_source_registry.
-    """
+    """Return a stable signature for mechanical source acquisition rules."""
     vertical = str(vertical or "travel").strip() or "travel"
     entity_id = str(entity_id or "").strip()
     global_files = {

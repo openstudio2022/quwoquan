@@ -151,31 +151,53 @@ def load_professional_video_acquisition_receipt(
     for row in receipt["assets"]:
         if row["acquisitionStatus"] != "acquired":
             continue
-        asset_ref = str(row["assetRef"])
-        asset_path = canonical_child(
-            resolved_root,
-            asset_ref,
-            label="professional video assetRef",
+        poster_rights = row.get("posterRights")
+        inherited = {
+            "derivation": "frame_from_licensed_video",
+            "sourceAssetId": str(row["assetId"]),
+            "sourceUrl": str(row["sourceUrl"]),
+            "license": str(row["license"]),
+            "termsUrl": str(row["termsUrl"]),
+            "authorizationProof": str(row["authorizationProof"]),
+            "rightsStatus": str(row["rightsStatus"]),
+            "authorizationRequired": row["authorizationRequired"],
+            "distributionDecision": str(row["distributionDecision"]),
+            "rightsIssues": list(row["rightsIssues"]),
+        }
+        if poster_rights != inherited:
+            raise ValueError(
+                f"professional video poster rights inheritance drift: {row['assetId']}"
+            )
+        declarations = (
+            ("assetRef", "contentSha256", "professional video"),
+            ("posterAssetRef", "posterContentSha256", "professional video poster"),
         )
-        if not asset_path.is_file():
-            if require_bodies:
-                raise ValueError(
-                    f"professional video CAS asset is missing: {asset_ref}"
-                )
-            bodies.append(ReclaimedBody(asset_ref=asset_ref))
-            continue
-        bodies.append(asset_path)
-        expected_digest = str(row["contentSha256"])
-        already_verified = verified_asset_digests.get(asset_path)
-        if already_verified is not None:
-            if already_verified != expected_digest:
-                raise ValueError(
-                    f"professional video CAS declaration conflicts: {row['assetRef']}"
-                )
-            continue
-        if file_digest(asset_path) != expected_digest:
-            raise ValueError(f"professional video CAS digest mismatch: {row['assetRef']}")
-        verified_asset_digests[asset_path] = expected_digest
+        for ref_field, digest_field, label in declarations:
+            asset_ref = str(row[ref_field])
+            asset_path = canonical_child(
+                resolved_root,
+                asset_ref,
+                label=f"{label} {ref_field}",
+            )
+            if not asset_path.is_file():
+                if require_bodies:
+                    raise ValueError(f"{label} CAS asset is missing: {asset_ref}")
+                bodies.append(ReclaimedBody(asset_ref=asset_ref))
+                continue
+            bodies.append(asset_path)
+            expected_digest = str(row[digest_field])
+            already_verified = verified_asset_digests.get(asset_path)
+            if already_verified is not None:
+                if already_verified != expected_digest:
+                    raise ValueError(f"{label} CAS declaration conflicts: {asset_ref}")
+                continue
+            if file_digest(asset_path) != expected_digest:
+                raise ValueError(f"{label} CAS digest mismatch: {asset_ref}")
+            if asset_path.stat().st_size != int(
+                row["bytes" if ref_field == "assetRef" else "posterBytes"]
+            ):
+                raise ValueError(f"{label} CAS byte count mismatch: {asset_ref}")
+            verified_asset_digests[asset_path] = expected_digest
     assert_unit_reclamation_is_total(
         bodies,
         label="professional video acquisition receipt",

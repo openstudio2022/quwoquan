@@ -1,97 +1,226 @@
-"""Deterministic host-only work-package initialization."""
+"""从两份 AI 已准备输入确定性创建最小 execution 工作包。"""
 from __future__ import annotations
 
 import fcntl
 import hashlib
 import json
 import os
+import secrets
 import shutil
-import tempfile
+import stat
 from collections.abc import Mapping
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterator
 
 from content.execution.identity import parse_execution_id, validate_execution_id
-from content.execution.operational_fingerprint import operational_fingerprint
-from content.execution.workspace import REQUEST_REF, TARGET_SET_REF
 from core import paths
-from core.io import read_json
 from core.schema import assert_valid
-from core.source_digest import ExecutionBundleIdentity, SourceDefinitionSnapshot
+
+REQUEST_REF = "0.plan/request.json"
+TARGET_SET_REF = "0.plan/target_set.json"
 
 
 class TaskInitError(ValueError):
-    """The immutable init inputs cannot create one host-only work package."""
+    """初始化输入或目标工作包不合法。"""
+
+
+class TaskInitConflict(TaskInitError):
+    """create-once 目标已存在且字节不同。"""
 
 
 def _canonical_bytes(value: object) -> bytes:
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
 
-def _digest(value: object) -> str:
-    return "sha256:" + hashlib.sha256(_canonical_bytes(value)).hexdigest()
+def _sha256(data: bytes) -> str:
+    return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-def _file_digest(path: Path) -> str:
-    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+def _absolute(path: Path) -> Path:
+    expanded = path.expanduser()
+    return Path(os.path.abspath(expanded))
 
 
-def _portable_ref(path: Path, *, output_root: Path) -> str:
-    resolved = path.expanduser().resolve()
-    root = output_root.expanduser().resolve()
+def _relative_ref(path: Path, *, root: Path, label: str) -> str:
+    absolute = _absolute(path)
+    absolute_root = _absolute(root)
     try:
-        return resolved.relative_to(root).as_posix()
+        value = absolute.relative_to(absolute_root).as_posix()
     except ValueError as exc:
-        raise TaskInitError(f"init input must stay under output root: {resolved}") from exc
-
-
-def _load_bound_document(path: Path, *, schema_name: str) -> dict[str, Any]:
-    value = read_json(path)
-    if not isinstance(value, dict):
-        raise TaskInitError(f"{schema_name} must contain one JSON object")
-    assert_valid(value, "execution", schema_name, label=f"task init {schema_name}")
+        raise TaskInitError(f"{label} 必须位于 {absolute_root} 内：{absolute}") from exc
+    parsed = PurePosixPath(value)
+    if not value or parsed.is_absolute() or any(part in {"", ".", ".."} for part in parsed.parts):
+        raise TaskInitError(f"{label} 不是安全相对引用：{value!r}")
     return value
 
 
-def _normalized_targets(value: object, *, carrier: str) -> list[dict[str, Any]]:
+def _open_root(path: Path, *, label: str, create: bool = False) -> int:
+    absolute = _absolute(path)
+    flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    parts = absolute.parts
+    descriptor = os.open(parts[0], flags | nofollow)
+    try:
+        for part in parts[1:]:
+            if create:
+                try:
+                    os.mkdir(part, mode=0o755, dir_fd=descriptor)
+                    os.fsync(descriptor)
+                except FileExistsError:
+                    pass
+            try:
+                next_descriptor = os.open(part, flags | nofollow, dir_fd=descriptor)
+            except OSError as exc:
+                raise TaskInitError(f"{label} 必须是无 symlink 的目录：{absolute}") from exc
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _open_child_directory(parent_fd: int, name: str, *, label: str) -> int:
+    try:
+        return os.open(
+            name,
+            os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=parent_fd,
+        )
+    except OSError as exc:
+        raise TaskInitError(f"{label} 必须是无 symlink 的目录：{name}") from exc
+
+
+def _mkdirs_at(root_fd: int, ref: str) -> int:
+    descriptor = os.dup(root_fd)
+    try:
+        for part in PurePosixPath(ref).parts:
+            try:
+                os.mkdir(part, mode=0o755, dir_fd=descriptor)
+                os.fsync(descriptor)
+            except FileExistsError:
+                pass
+            next_descriptor = _open_child_directory(descriptor, part, label="初始化写入目录")
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _open_relative_directory(root_fd: int, ref: str, *, label: str) -> int:
+    descriptor = os.dup(root_fd)
+    try:
+        for part in PurePosixPath(ref).parts:
+            next_descriptor = _open_child_directory(descriptor, part, label=label)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _read_regular_at(root_fd: int, ref: str, *, label: str) -> bytes:
+    parts = PurePosixPath(ref).parts
+    descriptor = os.dup(root_fd)
+    try:
+        for part in parts[:-1]:
+            next_descriptor = _open_child_directory(descriptor, part, label=f"{label} 父目录")
+            os.close(descriptor)
+            descriptor = next_descriptor
+        try:
+            file_fd = os.open(
+                parts[-1],
+                os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=descriptor,
+            )
+        except OSError as exc:
+            raise TaskInitError(f"{label} 不可读取：{ref}") from exc
+        try:
+            if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+                raise TaskInitError(f"{label} 必须是 regular file：{ref}")
+            chunks: list[bytes] = []
+            while True:
+                chunk = os.read(file_fd, 1024 * 1024)
+                if not chunk:
+                    return b"".join(chunks)
+                chunks.append(chunk)
+        finally:
+            os.close(file_fd)
+    finally:
+        os.close(descriptor)
+
+
+def _load_bound_document(
+    path: Path,
+    *,
+    root: Path,
+    root_fd: int,
+    schema_name: str,
+) -> tuple[dict[str, Any], str, bytes]:
+    ref = _relative_ref(path, root=root, label=f"{schema_name} 输入")
+    raw = _read_regular_at(root_fd, ref, label=schema_name)
+    try:
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise TaskInitError(f"{schema_name} 必须是合法 JSON") from exc
+    if not isinstance(value, dict):
+        raise TaskInitError(f"{schema_name} 必须是 JSON 对象")
+    assert_valid(value, "execution", schema_name, label=f"task init {schema_name}")
+    canonical = _canonical_bytes(value)
+    return value, ref, canonical
+
+
+def _target_ref(target: Mapping[str, Any], *, carrier: str) -> str:
+    name = str(target.get("name") or "").strip()
+    entity_type = str(target.get("entityType") or "").strip().strip("/")
+    if not name or len(entity_type.split("/")) != 2:
+        raise TaskInitError(f"候选 target 非法：{entity_type}/{name}")
+    if carrier == "homepage":
+        return f"entities/{entity_type}/{name}"
+    angle = str(target.get("publishAngle") or "").strip()
+    title = str(target.get("publishTitle") or "").strip()
+    sequence = target.get("publishSeq", 1)
+    if not angle or not title or isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 1:
+        raise TaskInitError(f"候选缺少合法的发布坐标：{name}")
+    return f"posts/{carrier}/{angle}/{title}/{sequence}"
+
+
+def _normalized_targets(value: object, *, carrier: str) -> tuple[list[dict[str, Any]], list[str]]:
     if not isinstance(value, list) or not value:
-        raise TaskInitError("immutable candidate bindings must contain targets")
-    normalized: list[dict[str, Any]] = []
-    refs: set[str] = set()
+        raise TaskInitError("immutable candidate bindings 必须包含 targets")
+    pairs: list[tuple[str, dict[str, Any]]] = []
+    seen: set[str] = set()
     for raw in value:
         if not isinstance(raw, Mapping):
-            raise TaskInitError("immutable candidate target must be an object")
+            raise TaskInitError("每个 candidate target 必须是对象")
         target = dict(raw)
-        name = str(target.get("name") or "").strip()
-        entity_type = str(target.get("entityType") or "").strip().strip("/")
-        entity_ref = f"{entity_type}/{name}"
-        if not name or len(entity_type.split("/")) != 2:
-            raise TaskInitError(f"invalid immutable candidate target: {entity_ref}")
-        if carrier == "homepage":
-            target_ref = entity_ref
-        else:
-            angle = str(target.get("publishAngle") or "").strip()
-            title = str(target.get("publishTitle") or "").strip()
-            sequence = target.get("publishSeq") or 1
-            if not angle or not title or isinstance(sequence, bool) or not isinstance(sequence, int):
-                raise TaskInitError(f"post candidate lacks frozen publish coordinates: {name}")
-            target_ref = f"posts/{carrier}/{angle}/{title}/{sequence}"
-        if target_ref in refs:
-            raise TaskInitError(f"duplicate immutable candidate target: {target_ref}")
-        refs.add(target_ref)
-        normalized.append(target)
-    return normalized
+        target["name"] = str(target.get("name") or "").strip()
+        target["entityType"] = str(target.get("entityType") or "").strip().strip("/")
+        if carrier != "homepage":
+            target["publishAngle"] = str(target.get("publishAngle") or "").strip()
+            target["publishTitle"] = str(target.get("publishTitle") or "").strip()
+            target["publishSeq"] = target.get("publishSeq", 1)
+        ref = _target_ref(target, carrier=carrier)
+        if ref in seen:
+            raise TaskInitError(f"targetRef 重复：{ref}")
+        seen.add(ref)
+        pairs.append((ref, target))
+    pairs.sort(key=lambda pair: pair[0])
+    return [target for _, target in pairs], [ref for ref, _ in pairs]
 
 
 def _validate_retry(execution_id: str, retry_of: object) -> str | None:
     if retry_of is None:
         return None
-    normalized = validate_execution_id(str(retry_of))
+    previous_id = validate_execution_id(str(retry_of))
     current = parse_execution_id(execution_id)
-    previous = parse_execution_id(normalized)
+    previous = parse_execution_id(previous_id)
     if (
-        normalized == execution_id
+        previous_id == execution_id
         or previous.run_date != current.run_date
         or previous.vertical != current.vertical
         or previous.content_type != current.content_type
@@ -100,160 +229,207 @@ def _validate_retry(execution_id: str, retry_of: object) -> str | None:
         or previous.phase != current.phase
         or previous.sequence >= current.sequence
     ):
-        raise TaskInitError("retryOf must be an earlier sequence of the same execution scope")
-    return normalized
+        raise TaskInitError("retryOf 必须是同一 execution scope 的更早 sequence")
+    return previous_id
 
 
 @contextmanager
 def _init_lock(execution_id: str) -> Iterator[None]:
-    root = paths.DATA_EXECUTIONS_ROOT
-    root.mkdir(parents=True, exist_ok=True)
-    lock_root = paths.DATA_LOCAL_ROOT / "runs/locks/task-init"
-    lock_root.mkdir(parents=True, exist_ok=True)
-    lock_path = lock_root / f"{execution_id}.lock"
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-
-
-def _write_stage_document(path: Path, value: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(_canonical_bytes(value))
-    with path.open("rb") as handle:
-        os.fsync(handle.fileno())
-    dir_fd = os.open(path.parent, os.O_RDONLY)
+    output_fd = _open_root(paths.OUTPUT_ROOT, label="output 根", create=True)
     try:
-        os.fsync(dir_fd)
+        lock_ref = _relative_ref(
+            paths.DATA_LOCAL_ROOT / "runs/locks/task-init",
+            root=paths.OUTPUT_ROOT,
+            label="task-init lock 根",
+        )
+        lock_fd = _mkdirs_at(output_fd, lock_ref)
+        try:
+            handle_fd = os.open(
+                f"{execution_id}.lock",
+                os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+                dir_fd=lock_fd,
+            )
+            with os.fdopen(handle_fd, "a+", encoding="utf-8") as handle:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            os.close(lock_fd)
     finally:
-        os.close(dir_fd)
+        os.close(output_fd)
 
 
-def _documents_match(root: Path, documents: Mapping[str, Mapping[str, Any]]) -> bool:
-    allowed = {"execution_manifest.json", "0.plan"}
-    if not root.is_dir() or {path.name for path in root.iterdir()} != allowed:
+def _write_file_at(root_fd: int, ref: str, data: bytes) -> None:
+    path = PurePosixPath(ref)
+    directory_ref = path.parent.as_posix()
+    directory_fd = os.dup(root_fd) if directory_ref == "." else _mkdirs_at(root_fd, directory_ref)
+    try:
+        file_fd = os.open(
+            path.name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=directory_fd,
+        )
+        try:
+            view = memoryview(data)
+            while view:
+                written = os.write(file_fd, view)
+                view = view[written:]
+            os.fsync(file_fd)
+        finally:
+            os.close(file_fd)
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
+def _documents_match(root_fd: int, documents: Mapping[str, Mapping[str, Any]]) -> bool:
+    try:
+        return all(_read_regular_at(root_fd, ref, label="existing task init") == _canonical_bytes(value) for ref, value in documents.items())
+    except TaskInitError:
         return False
-    plan = root / "0.plan"
-    if not plan.is_dir() or {path.name for path in plan.iterdir()} != {"request.json", "target_set.json"}:
-        return False
-    return all((root / rel).is_file() and (root / rel).read_bytes() == _canonical_bytes(value) for rel, value in documents.items())
 
 
 def initialize_task(*, carrier_demand_path: Path, candidate_bindings_path: Path) -> dict[str, Any]:
-    """Validate all immutable inputs, then publish exactly three files atomically."""
-    output_root = paths.OUTPUT_ROOT.resolve()
-    demand_path = carrier_demand_path.expanduser().resolve()
-    candidates_path = candidate_bindings_path.expanduser().resolve()
-    demand = _load_bound_document(demand_path, schema_name="carrier_demand")
-    bindings = _load_bound_document(candidates_path, schema_name="immutable_candidate_bindings")
+    output_fd = _open_root(paths.OUTPUT_ROOT, label="output 根")
+    try:
+        demand, demand_ref, demand_canonical = _load_bound_document(
+            carrier_demand_path,
+            root=paths.OUTPUT_ROOT,
+            root_fd=output_fd,
+            schema_name="carrier_demand",
+        )
+        bindings, bindings_ref, bindings_canonical = _load_bound_document(
+            candidate_bindings_path,
+            root=paths.OUTPUT_ROOT,
+            root_fd=output_fd,
+            schema_name="immutable_candidate_bindings",
+        )
+    finally:
+        os.close(output_fd)
+
     execution_id = validate_execution_id(str(demand["executionId"]))
-    identity = parse_execution_id(execution_id)
-    carrier = identity.content_type.value
+    carrier = parse_execution_id(execution_id).content_type.value
     if demand["carrier"] != carrier or bindings["carrier"] != carrier:
-        raise TaskInitError("carrier demand/candidate binding does not match executionId")
+        raise TaskInitError("carrier 与 executionId 不一致")
     if bindings["executionId"] != execution_id:
-        raise TaskInitError("candidate binding executionId does not match demand")
-    if demand["entityCatalogDigest"] != bindings["entityCatalogDigest"]:
-        raise TaskInitError("candidate binding entity catalog digest drift")
-    SourceDefinitionSnapshot.from_document(demand["sourceDigest"])
-    ExecutionBundleIdentity.from_document(demand["executionBundle"])
-    family_ref = str(demand["familyRef"])
+        raise TaskInitError("两份初始化输入的 executionId 不一致")
+
+    family_ref = str(demand["familyRef"]).strip().strip("/")
+    family_parts = PurePosixPath(family_ref).parts
+    if not family_ref or PurePosixPath(family_ref).is_absolute() or any(part in {"", ".", ".."} for part in family_parts):
+        raise TaskInitError("familyRef 必须是安全相对引用")
     if f"/{carrier}/" not in f"/{family_ref}/":
-        raise TaskInitError("carrier demand familyRef does not match carrier")
-    family_path = paths.recipe_path(family_ref)
-    if not family_path.is_file():
-        raise TaskInitError(f"familyRef does not exist: {family_ref}")
-    targets = _normalized_targets(bindings["targets"], carrier=carrier)
+        raise TaskInitError("familyRef 与 carrier 不一致")
+    repo_fd = _open_root(paths.REPO_ROOT, label="repo 根")
+    try:
+        families_ref = _relative_ref(paths.FAMILIES_ROOT, root=paths.REPO_ROOT, label="families 根")
+        families_fd = _open_relative_directory(repo_fd, families_ref, label="families 根")
+        try:
+            family_bytes = _read_regular_at(families_fd, f"{family_ref}.recipe.yaml", label="familyRef")
+        finally:
+            os.close(families_fd)
+    finally:
+        os.close(repo_fd)
+
+    targets, target_refs = _normalized_targets(bindings["targets"], carrier=carrier)
     candidate_count = int(bindings["candidateCount"])
     quota = int(demand["quota"])
     if candidate_count != len(targets):
-        raise TaskInitError("candidateCount must equal immutable target count")
+        raise TaskInitError("candidateCount 必须等于 targets 数量")
     if candidate_count < quota:
-        raise TaskInitError("accepted candidate count cannot be below demand quota")
+        raise TaskInitError("candidateCount 不得小于 quota")
     retry_of = _validate_retry(execution_id, demand.get("retryOf"))
-    demand_ref = _portable_ref(demand_path, output_root=output_root)
-    candidate_ref = _portable_ref(candidates_path, output_root=output_root)
-    demand_digest = _file_digest(demand_path)
-    candidate_digest = _file_digest(candidates_path)
+
+    demand_binding = {"scope": "output", "ref": demand_ref, "digest": _sha256(demand_canonical)}
+    candidate_binding = {"scope": "output", "ref": bindings_ref, "digest": _sha256(bindings_canonical)}
+    submitted_inputs = {"carrierDemand": demand, "immutableCandidateBindings": bindings}
     request: dict[str, Any] = {
         "schema": "quwoquan_data.task_init_request",
         "executionId": execution_id,
-        "familyRef": family_ref,
         "carrier": carrier,
+        "familyRef": family_ref,
         "quota": quota,
-        "workUnitCount": candidate_count,
-        "carrierDemand": {
-            "ref": demand_ref,
-            "digest": demand_digest,
-            "workRequestRef": demand["workRequestRef"],
-            "workRequestDigest": demand["workRequestDigest"],
-        },
-        "candidateBinding": {"ref": candidate_ref, "digest": candidate_digest},
+        "candidateCount": candidate_count,
+        "carrierDemand": demand_binding,
+        "immutableCandidateBindings": candidate_binding,
+        "submittedInputs": submitted_inputs,
         "retryOf": retry_of,
     }
-    target_refs = sorted(
-        (
-            f"{row['entityType'].strip('/')}/{row['name'].strip()}"
-            if carrier == "homepage"
-            else f"posts/{carrier}/{row['publishAngle'].strip()}/"
-            f"{row['publishTitle'].strip()}/{int(row.get('publishSeq') or 1)}"
-        )
-        for row in targets
-    )
     target_set: dict[str, Any] = {
+        "schema": "quwoquan_data.target_set",
         "executionId": execution_id,
+        "carrier": carrier,
         "selectionPolicy": "frozen",
-        "sourceRef": str(bindings["sourceRef"]),
-        "candidateBinding": {"ref": candidate_ref, "digest": candidate_digest, "candidateCount": candidate_count},
-        "entityCatalogDigest": str(bindings["entityCatalogDigest"]),
+        "entityCatalogDigest": bindings["entityCatalogDigest"],
+        "candidateBinding": {**candidate_binding, "candidateCount": candidate_count},
         "targetCount": candidate_count,
         "targetRefs": target_refs,
         "targets": targets,
     }
-    target_digest = hashlib.sha256(
-        json.dumps(
-            target_set, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-        ).encode("utf-8")
-    ).hexdigest()
     manifest: dict[str, Any] = {
+        "schema": "quwoquan_data.content_execution_manifest",
         "executionId": execution_id,
-        "familyRef": {"ref": family_ref, "sha256": hashlib.sha256(family_path.read_bytes()).hexdigest()},
-        "sourceDigest": demand["sourceDigest"],
-        "executionBundle": demand["executionBundle"],
-        "operationalFingerprint": operational_fingerprint(repo_root=paths.REPO_ROOT),
-        "hostRuntime": "external_host_agent",
-        "carrierDemand": request["carrierDemand"],
-        "requestRef": REQUEST_REF,
-        "targetSetRef": TARGET_SET_REF,
-        "targetSetDigest": target_digest,
+        "carrier": carrier,
+        "familyRef": {"ref": family_ref, "digest": _sha256(family_bytes)},
+        "initInputs": {"carrierDemand": demand_binding, "immutableCandidateBindings": candidate_binding},
+        "submittedInputs": submitted_inputs,
+        "request": {"ref": REQUEST_REF, "digest": _sha256(_canonical_bytes(request))},
+        "targetSet": {"ref": TARGET_SET_REF, "digest": _sha256(_canonical_bytes(target_set))},
         "retryOf": retry_of,
     }
     assert_valid(request, "execution", "task_init_request", label=f"task init request:{execution_id}")
     assert_valid(target_set, "execution", "target_set", label=f"task init target set:{execution_id}")
     assert_valid(manifest, "execution", "content_execution_manifest", label=f"task init manifest:{execution_id}")
+
     documents = {"execution_manifest.json": manifest, REQUEST_REF: request, TARGET_SET_REF: target_set}
     target_root = paths.DATA_EXECUTIONS_ROOT / execution_id
     with _init_lock(execution_id):
-        if target_root.exists():
-            if _documents_match(target_root, documents):
-                return {"executionId": execution_id, "status": "replayed", "artifacts": list(documents)}
-            raise TaskInitError("executionId already exists with different bytes")
-        staging = Path(tempfile.mkdtemp(prefix=f".{execution_id}.init-", dir=paths.DATA_EXECUTIONS_ROOT))
+        output_fd = _open_root(paths.OUTPUT_ROOT, label="output 根")
+        tasks_ref = _relative_ref(paths.DATA_EXECUTIONS_ROOT, root=paths.OUTPUT_ROOT, label="execution 父根")
+        tasks_fd = _mkdirs_at(output_fd, tasks_ref)
+        os.close(output_fd)
+        staging_name = f".{execution_id}.init-{secrets.token_hex(16)}"
+        staging_fd: int | None = None
         try:
-            for rel, value in documents.items():
-                _write_stage_document(staging / rel, value)
-            os.rename(staging, target_root)
-            root_fd = os.open(paths.DATA_EXECUTIONS_ROOT, os.O_RDONLY)
             try:
-                os.fsync(root_fd)
-            finally:
-                os.close(root_fd)
+                target_fd = _open_child_directory(tasks_fd, execution_id, label="execution 根")
+            except TaskInitError as exc:
+                if not isinstance(exc.__cause__, FileNotFoundError):
+                    raise TaskInitConflict("executionId 已存在但不是可信目录") from exc
+            else:
+                try:
+                    if _documents_match(target_fd, documents):
+                        return {"executionId": execution_id, "status": "replayed", "artifacts": list(documents)}
+                    raise TaskInitConflict("executionId 已存在且内容不同")
+                finally:
+                    os.close(target_fd)
+            os.mkdir(staging_name, mode=0o700, dir_fd=tasks_fd)
+            os.fsync(tasks_fd)
+            staging_fd = _open_child_directory(tasks_fd, staging_name, label="task-init staging")
+            for ref, value in documents.items():
+                _write_file_at(staging_fd, ref, _canonical_bytes(value))
+            os.fsync(staging_fd)
+            os.rename(staging_name, execution_id, src_dir_fd=tasks_fd, dst_dir_fd=tasks_fd)
+            os.fsync(tasks_fd)
         except BaseException:
-            shutil.rmtree(staging, ignore_errors=True)
+            if staging_fd is not None:
+                os.close(staging_fd)
+                staging_fd = None
+            shutil.rmtree(paths.DATA_EXECUTIONS_ROOT / staging_name, ignore_errors=True)
+            try:
+                os.fsync(tasks_fd)
+            except OSError:
+                pass
             raise
+        finally:
+            if staging_fd is not None:
+                os.close(staging_fd)
+            os.close(tasks_fd)
     return {"executionId": execution_id, "status": "created", "artifacts": list(documents)}
 
 
-__all__ = ["TaskInitError", "initialize_task"]
+__all__ = ["TaskInitConflict", "TaskInitError", "initialize_task"]

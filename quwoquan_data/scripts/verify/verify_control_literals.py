@@ -7,17 +7,12 @@ import re
 from pathlib import Path
 
 from core.paths import DATA_ROOT, REPO_ROOT
-from core.runtime_policy import load_runtime_policy
 from verify.control_literal_text import text_control_literal_issues
 
 
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
 _POLICY_ARGUMENT = re.compile(
     r"(?:timeout|timeout_seconds|retry_limit|max_retries|max_workers|concurrency|stagger_seconds|backoff_seconds)$",
-    re.IGNORECASE,
-)
-_POLICY_ASSIGNMENT = re.compile(
-    r"(?:timeout|retry|worker|concurrency|stagger|backoff)",
     re.IGNORECASE,
 )
 _RETIRED_PHASE = re.compile(r"\b(?:canary|m[1-3]|h10k)\b", re.IGNORECASE)
@@ -30,9 +25,9 @@ _RETIRED_TASK_IDENTIFIER = re.compile(
 def source_control_literal_issues(source: str, *, label: str) -> list[str]:
     """Check a Python module without encoding task-specific baselines.
 
-    Runtime policy values must be read from ``RuntimePolicy``. A numeric default
-    on a control argument is a hidden second source and is rejected. Protocol
-    payloads may retain numeric data; this check only covers control parameters.
+    Numeric defaults on control arguments are rejected so active modules expose
+    timeouts and retry budgets at their call boundary instead of hiding them.
+    Protocol payloads may retain numeric data; this check only covers control parameters.
     """
     try:
         tree = ast.parse(source, filename=label)
@@ -71,39 +66,14 @@ def source_control_literal_issues(source: str, *, label: str) -> list[str]:
                 and _POLICY_ARGUMENT.search(argument.arg)
             ):
                 issues.append(
-                    f"{label}:{node.lineno}: {argument.arg} numeric default belongs to runtime policy"
+                    f"{label}:{node.lineno}: {argument.arg} numeric default must be explicit at the call boundary"
                 )
-    for node in tree.body:
-        names: list[str] = []
-        value: ast.expr | None = None
-        if isinstance(node, ast.Assign):
-            names = [target.id for target in node.targets if isinstance(target, ast.Name)]
-            value = node.value
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            names = [node.target.id]
-            value = node.value
-        if (
-            value is not None
-            and isinstance(value, ast.Constant)
-            and isinstance(value.value, (int, float))
-            and not isinstance(value.value, bool)
-        ):
-            for name in names:
-                if _POLICY_ASSIGNMENT.search(name):
-                    issues.append(
-                        f"{label}:{node.lineno}: module control {name!r} belongs to runtime policy"
-                    )
     issues.extend(text_control_literal_issues(source, label=label))
     return issues
 
 
 def control_literal_issues() -> list[str]:
     issues: list[str] = []
-    try:
-        load_runtime_policy("semantic_agent_local_calibrated")
-    except (OSError, TypeError, ValueError) as exc:
-        issues.append(f"runtime policy is invalid: {exc}")
-        return issues
     for path in sorted(SCRIPTS_ROOT.rglob("*.py")):
         if (
             path == Path(__file__).resolve()

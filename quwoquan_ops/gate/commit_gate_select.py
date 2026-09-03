@@ -500,14 +500,6 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
             ("quwoquan_data/tests/local_contract/governance",),
         ),
         (
-            "quwoquan_data/scripts/content/homepage/",
-            ("quwoquan_data/tests/local_contract/homepage",),
-        ),
-        (
-            "quwoquan_data/scripts/content/post/",
-            ("quwoquan_data/tests/local_contract/post",),
-        ),
-        (
             "quwoquan_data/scripts/content/filter_catalog/",
             ("quwoquan_data/tests/local_contract/filter_catalog",),
         ),

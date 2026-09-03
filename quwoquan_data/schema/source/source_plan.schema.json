@@ -1,108 +1,115 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/source_plan.schema.json",
   "type": "object",
   "additionalProperties": false,
+  "required": [
+    "schema",
+    "executionId",
+    "targetRef",
+    "carrier",
+    "candidates"
+  ],
   "properties": {
-    "entityId": { "type": "string" },
-    "entityName": { "type": "string", "minLength": 1 },
-    "policyRevision": { "const": "encyclopedia-primary" },
-    "dispatchByContentType": {
-      "type": "object",
-      "additionalProperties": { "type": "integer", "minimum": 0 }
+    "schema": {
+      "const": "quwoquan_data.source_plan"
     },
-    "sources": {
+    "executionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "targetRef": {
+      "type": "string",
+      "pattern": "^(?:entities/[^/]+/[^/]+/[^/]+|posts/(?:article|image|video)/[^/]+/[^/]+/[1-9][0-9]*)$"
+    },
+    "carrier": {
+      "enum": [
+        "homepage",
+        "article",
+        "image",
+        "video"
+      ]
+    },
+    "candidates": {
       "type": "array",
+      "minItems": 1,
       "items": {
         "type": "object",
         "additionalProperties": false,
+        "required": [
+          "sourceId",
+          "title",
+          "purpose",
+          "sourceClass",
+          "sourceUseMode",
+          "rightsClue"
+        ],
         "properties": {
-          "source_id": { "type": "string" },
-          "platform": { "type": "string" },
-          "sourceKind": { "type": "string" },
-          "sourceTitle": { "type": "string", "minLength": 1 },
-          "qualifiedAuthorityTitle": { "type": "string", "minLength": 1 },
-          "url": { "type": "string", "pattern": "^https://" },
-          "canonicalUrl": { "type": "string", "pattern": "^https://" },
-          "extractor": { "type": "string" },
-          "policyRevision": { "type": "string" },
-          "category": { "type": "string" },
-          "sourceRole": { "type": "string" },
-          "researchLane": { "enum": ["homepage", "article", "image", "video"] },
-          "expectedContentType": { "type": "string" },
-          "priority": { "type": "integer" }
+          "sourceId": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://"
+          },
+          "manualFile": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          },
+          "contentSha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceClass": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceUseMode": {
+            "enum": [
+              "licensed_adaptation",
+              "factual_reference_only",
+              "rights_audit_only"
+            ]
+          },
+          "rightsClue": {
+            "type": "string",
+            "minLength": 1
+          }
         },
-        "required": ["platform", "url", "researchLane", "expectedContentType", "priority"],
+        "anyOf": [
+          {
+            "required": [
+              "url"
+            ]
+          },
+          {
+            "required": [
+              "manualFile",
+              "contentSha256"
+            ]
+          }
+        ],
         "allOf": [
           {
-            "if": {
-              "properties": { "researchLane": { "const": "homepage" } },
-              "required": ["researchLane"]
-            },
-            "then": {
-              "properties": {
-                "sourceKind": {
-                  "enum": ["wikipedia", "baidu_baike", "toutiao_baike"]
-                },
-                "policyRevision": { "const": "encyclopedia-primary" }
-              },
+            "not": {
               "required": [
-                "sourceKind",
-                "sourceTitle",
-                "canonicalUrl",
-                "extractor",
-                "policyRevision"
-              ],
-              "oneOf": [
-                {
-                  "properties": {
-                    "sourceKind": { "const": "wikipedia" },
-                    "extractor": { "const": "wikipedia_api" }
-                  }
-                },
-                {
-                  "properties": {
-                    "sourceKind": { "const": "baidu_baike" },
-                    "extractor": { "const": "baidu_baike_html" }
-                  }
-                },
-                {
-                  "properties": {
-                    "sourceKind": { "const": "toutiao_baike" },
-                    "extractor": { "const": "toutiao_baike_html" }
-                  }
-                }
+                "url",
+                "manualFile"
               ]
             }
           }
         ]
-      },
-      "minItems": 1
-    },
-    "homepageMediaCollections": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": true,
-        "required": [
-          "sourceCollectionId",
-          "collectionPageUrl",
-          "license",
-          "termsUrl",
-          "authorizationProof",
-          "mediaEvidenceMode",
-          "images"
-        ],
-        "properties": {
-          "sourceCollectionId": { "type": "string", "minLength": 1 },
-          "collectionPageUrl": { "type": "string", "pattern": "^https://" },
-          "license": { "type": "string", "minLength": 1 },
-          "termsUrl": { "type": "string", "pattern": "^https://" },
-          "authorizationProof": { "type": "string", "pattern": "^https://" },
-          "mediaEvidenceMode": { "const": "independent_rights_cleared" },
-          "images": { "type": "array", "minItems": 1, "items": { "type": "object" } }
-        }
       }
     }
-  },
-  "required": ["entityId", "entityName", "policyRevision", "sources"]
+  }
 }

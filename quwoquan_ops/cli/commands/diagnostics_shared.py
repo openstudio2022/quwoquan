@@ -265,6 +265,7 @@ def _content_data_plane_health_checks(
                 "name": role_name,
                 "scope": "content-import",
                 "url": f"http://127.0.0.1:{port}/healthz",
+                "headers": {"Host": role_name},
             }
         )
     return checks

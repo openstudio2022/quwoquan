@@ -39,6 +39,7 @@ _STACKCTL_HANDLER_NAMES = {
     "inspect": "command_inspect",
     "doctor": "command_doctor",
     "content-readiness": "command_content_readiness",
+    "content-api-consumer": "command_content_api_consumer",
     "research-isolation-probe": "command_research_isolation_probe",
     "research-consumer-credential": "command_research_consumer_credential",
     "app-content-preflight": "command_app_content_preflight",

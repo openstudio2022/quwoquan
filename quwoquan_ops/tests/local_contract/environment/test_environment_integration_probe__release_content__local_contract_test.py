@@ -190,7 +190,6 @@ def test_release_content_probe__rejects_empty_feed_envelopes__local_contract() -
 def test_research_convergence__accepts_no_active_release_empty_page__local_contract() -> (
     None
 ):
-    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
     issue, count = probe._research_anonymous_convergence_issue(
         json.dumps(
             {
@@ -208,7 +207,6 @@ def test_research_convergence__accepts_no_active_release_empty_page__local_contr
 
 
 def test_research_convergence__rejects_no_eligible_content_even_without_identity__local_contract() -> None:
-    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
     issue, count = probe._research_anonymous_convergence_issue(
         json.dumps(
             {
@@ -228,7 +226,6 @@ def test_research_convergence__rejects_no_eligible_content_even_without_identity
 
 
 def test_research_convergence__rejects_release_bound_no_eligible_content_identity__local_contract() -> None:
-    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
     issue, count = probe._research_anonymous_convergence_issue(
         json.dumps(
             {
@@ -247,7 +244,6 @@ def test_research_convergence__rejects_release_bound_no_eligible_content_identit
 
 
 def test_research_convergence__rejects_leaked_items__local_contract() -> None:
-    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
     issue, count = probe._research_anonymous_convergence_issue(
         json.dumps(
             {
@@ -285,7 +281,6 @@ def test_research_convergence__rejects_wrong_empty_semantics__local_contract(
     payload: dict[str, object],
     expected_fragment: str,
 ) -> None:
-    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
     issue, _count = probe._research_anonymous_convergence_issue(json.dumps(payload))
 
     assert issue is not None and expected_fragment in issue
@@ -294,7 +289,6 @@ def test_research_convergence__rejects_wrong_empty_semantics__local_contract(
 def test_research_convergence__mode_builds_feed_checks_and_report_flag__local_contract() -> (
     None
 ):
-    """spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-020"""
     args = _args()
     args.require_non_empty_content_feed = False
     args.research_anonymous_convergence = True

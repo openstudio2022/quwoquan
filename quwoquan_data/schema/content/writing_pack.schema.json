@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "写作契约 writing_pack — 内容对象 3.compose/writing_pack.json（CLI prepare 产出，供会话模型创作正文）",
+  "description": "写作契约 writing_pack — 内容对象 3.compose/writing_pack.json（宿主 AI 逐对象产出，供作者会话创作正文）",
   "type": "object",
   "properties": {
     "stage": {

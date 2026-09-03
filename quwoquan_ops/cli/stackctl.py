@@ -193,6 +193,7 @@ from quwoquan_ops.cli.lib.research_isolation_runtime_probe import (
 from quwoquan_ops.cli.lib.research_consumer_credential import (
     ResearchConsumerCredentialError, issue_research_consumer_credential,
 )
+from quwoquan_ops.cli.lib.content_api_consumer import run_content_api_consumer
 from quwoquan_ops.cli.lib.runtime_port_ownership import (
     project_canonical_runtime_owned_ports,
     project_compose_published_endpoints,
@@ -463,7 +464,8 @@ from quwoquan_ops.cli.commands.consumer_lease import command_consumer_lease
 from quwoquan_ops.cli.commands.content_acceptance import (
     _content_release_uat_command, _release_feed_post_expectations, _run_data_acceptance_lease,
     _run_release_feed_readback_probe, _run_release_video_delivery_probe,
-    command_account_enforcement_uat, command_content_readiness, command_content_uat,
+    command_account_enforcement_uat, command_content_api_consumer,
+    command_content_readiness, command_content_uat,
 )
 from quwoquan_ops.cli.commands.device_trust import command_device_trust
 from quwoquan_ops.cli.commands.diagnostics_shared import (
@@ -792,6 +794,7 @@ def build_parser() -> argparse.ArgumentParser:
     prod_hosted_plan_commands.register_parser(subparsers)
 
     content_acceptance_commands.register_content_readiness_parser(subparsers)
+    content_acceptance_commands.register_content_api_consumer_parser(subparsers)
 
     app_managed_prepare_commands.register_parser(subparsers)
     app_preflight_commands.register_parser(subparsers)

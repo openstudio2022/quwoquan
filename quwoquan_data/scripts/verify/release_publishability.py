@@ -5,7 +5,7 @@
 
 - 对象池准入（`content_pool_record.is_pool_record_admitted`）：进 release 候选；
 - 素材可发布（`core.media_normalization.publishable_media_issue`）：权利与像素准入；
-- execution 准出（`verify_execution_readiness.execution_readiness_outcome`）：工作包能否 release；
+- 对象阶段闭包：工作包的 target_set 与 AI 直写产物是否机械闭合；
 - Ops 能力探针（`content.release.environment.readiness.ShipReadinessPhase`）：含 `import`
   一值，是 stackctl 适配层，不是本收据谓词；
 - Ops CI 身份校验（`quwoquan_ops/ci/generate_release_bound_environment_identity.py`）：

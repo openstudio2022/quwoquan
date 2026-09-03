@@ -12,8 +12,6 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from core.runtime_policy import active_runtime_policy
-
 from content.source.image_payload import sniff_image_ext
 from content.source.professional_image_network_admission import (
     https_tls_peer,
@@ -21,6 +19,10 @@ from content.source.professional_image_network_admission import (
     resolve_https_admission,
     verified_tls_context,
 )
+
+_PAGE_IMAGE_DOWNLOAD_TIMEOUT_SECONDS = 45
+_DOWNLOAD_FETCH_RETRY_LIMIT = 1
+_RETRY_DELAY_SECONDS = 1
 
 _SENSITIVE_QUERY_MARKERS = (
     "access_token",
@@ -128,7 +130,7 @@ def _fetch_public_image_once(
         normalized,
         headers={"User-Agent": "quwoquan-data/1.0"},
     )
-    timeout = active_runtime_policy().page_image_download_timeout_seconds
+    timeout = _PAGE_IMAGE_DOWNLOAD_TIMEOUT_SECONDS
     with opener.open(request, timeout=timeout) as response:
         final_url = _validated_https_url(
             str(response.geturl()),
@@ -184,8 +186,7 @@ def fetch_public_image(
 ) -> dict[str, Any] | None:
     """Fetch one image with governed retries and fail-closed URL admission."""
 
-    policy = active_runtime_policy()
-    attempts = policy.download_fetch_retry_limit + 1
+    attempts = _DOWNLOAD_FETCH_RETRY_LIMIT + 1
     for attempt in range(1, attempts + 1):
         try:
             return _fetch_public_image_once(
@@ -197,7 +198,7 @@ def fetch_public_image(
         except (OSError, TimeoutError, urllib.error.URLError):
             if attempt >= attempts:
                 raise
-            time.sleep(policy.curl_retry_delay_seconds * attempt)
+            time.sleep(_RETRY_DELAY_SECONDS * attempt)
     raise RuntimeError("professional image acquisition retry loop exhausted")
 
 
@@ -219,7 +220,7 @@ def fetch_public_json(
         normalized,
         headers={"Accept": "application/json", "User-Agent": "quwoquan-data/1.0"},
     )
-    timeout = active_runtime_policy().page_image_download_timeout_seconds
+    timeout = _PAGE_IMAGE_DOWNLOAD_TIMEOUT_SECONDS
     with opener.open(request, timeout=timeout) as response:
         final_url = _validated_https_url(
             str(response.geturl()), allow_signed_query=False

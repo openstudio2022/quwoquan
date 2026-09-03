@@ -2459,17 +2459,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "ui_editable": false
     },
     {
-      "default": 16,
-      "key": "sys.content.worker.concurrency",
-      "owner": "platform-ops",
-      "reload": "restart",
-      "risk_level": "medium",
-      "rollout": "progressive",
-      "scope": "service",
-      "type": "int",
-      "ui_editable": false
-    },
-    {
       "default": "",
       "key": "sys.entity-service.content_service.base_url",
       "reload": "restart",

@@ -37,7 +37,7 @@ prompts/
   - `<role>` — 人设与目标（一句话定位「创作 agent」，**不写「会话模型」**）。
   - `<capabilities>` — 可调用的工具 / 可做的事。
   - `<constraints>` — 约束，分 `<always>`（正向必须）与 `<never>`（负向禁止）；**只保留少量必要硬约束**，
-    review gate 几十条细则不在此复述（收回 review 阶段）。
+    详细评审规则不在创作 prompt 复述；独立宿主 AI 按 `5.review` stage contract 显式评审并 close。
   - `<output_format>` — 产出格式（写回哪个文件、draft_meta 字段、figure 块写法）。
 - **任务区（task，动态）** 承载 `<documents>`（底稿 / 素材 / 证据，`<source>` + `<document_content>`）
   与本次任务参数；few-shot 示例（如有）放任务区，不放系统区。

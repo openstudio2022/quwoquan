@@ -125,16 +125,16 @@ def parse_args() -> argparse.Namespace:
 def git_changed_files(base_sha: str, head_sha: str) -> list[str]:
     if not base_sha.strip():
         return []
+    # 与 detect_ci_impacted_scopes 同源：NUL 分隔 + 关闭 quotepath，非 ASCII 路径不再被八进制转义。
     result = subprocess.run(
-        ["git", "diff", "--name-only", base_sha, head_sha],
+        ["git", "-c", "core.quotepath=off", "diff", "--name-only", "-z", base_sha, head_sha],
         cwd=ROOT,
         check=False,
         capture_output=True,
-        text=True,
     )
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "git diff failed")
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        raise RuntimeError(result.stderr.decode("utf-8", "replace").strip() or "git diff failed")
+    return [entry.decode("utf-8") for entry in result.stdout.split(b"\0") if entry.strip()]
 
 
 def _runtime_owner(logical_service: str) -> str:

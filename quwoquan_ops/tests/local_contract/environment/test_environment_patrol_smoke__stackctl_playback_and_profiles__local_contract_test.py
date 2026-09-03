@@ -745,6 +745,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 "content-service",
                 "user-service",
                 "entity-service",
+                "recommendation-service",
+                "search-service",
+                "elasticsearch",
             },
         )
         self.assertNotIn("assistant-service", roles)
@@ -769,6 +772,9 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
                 "content-service",
                 "user-service",
                 "entity-service",
+                "recommendation-service",
+                "search-service",
+                "elasticsearch",
             },
         )
         self.assertNotIn("product-ops-edge", roles)

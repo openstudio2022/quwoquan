@@ -133,7 +133,7 @@ def _entry_carrier_cells() -> list[dict[str, str]]:
             "carrier": carrier,
             "applicability": "required",
             "specRef": "specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-006",
-            "runnerClass": f"qwq_app.content_uat.{entry}.{carrier}.v1",
+            "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1",
         }
         for entry in ENTRIES
         for carrier in CARRIERS
@@ -260,7 +260,7 @@ def test_uat_plan__projects_canonical_samples_and_required_cells__local_contract
     assert plan["orderedSamples"][0] == _samples()[0]
     assert len(plan["requiredCasePlan"]) == 16
     assert plan["requiredCasePlan"][0]["runnerClass"] == (
-        "qwq_app.content_uat.feed.homepage.v1"
+        "qwq.content_consumer.feed.homepage.v1"
     )
     assert len(plan["searchCanaries"]) == 4
     assert plan["videoPagination"]["expectedWorkIds"] == [

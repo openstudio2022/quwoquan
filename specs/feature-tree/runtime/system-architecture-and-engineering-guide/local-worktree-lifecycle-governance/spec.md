@@ -167,3 +167,13 @@
 - 影响或价值：Ops 已提供 host-scoped device/local-runtime lock 与 holder evidence，但 canonical launcher 尚未在同一启动事务中获取 device lock 并绑定精确 `launch-attempt` identity；当前工程治理只声明共享资源和 integration/runtime-host 边界，不复制启动实现。
 - 完成判定：`GWT-004.t6` 保持成立；启动规范 owner 的验收直接证明 canonical launcher 在安装/activation/launch 全窗口持有精确 device lock、冲突时回读 holder evidence，并把同一 lock owner 的 worktree/lane/head 绑定到唯一 `launch-attempt` receipt。
 - 依赖：`lane/ops` host-scoped lock primitive、canonical launcher owner 与 app-launch-attempt contract。
+
+<a id="open-003"></a>
+### OPEN-003 lane recovery 处置尚无直接行为测试
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：[`GWT-004.t1`](#gwt-004) 至 [`GWT-004.t3`](#gwt-004) 已由 lifecycle gate local_contract 绑定，[`GWT-004.t4`](#gwt-004) 由 commit-gate focused test selection 绑定；但当前只有 recovery 文案与策略声明，没有测试直接执行并验证长期 lane fast-forward resync 后 worktree retained，以及 clone/额外副本只由人工决定删除。
+- 完成判定：[`GWT-004.t5`](#gwt-004) 由职责匹配的 local_contract 直接绑定并实际通过，证明 resync 后同一路径 worktree 仍在场且未自动删除 clone/额外副本。
+- 依赖：worktree lifecycle gate 与 branch policy owner；不得把提示文案存在当成处置已执行。

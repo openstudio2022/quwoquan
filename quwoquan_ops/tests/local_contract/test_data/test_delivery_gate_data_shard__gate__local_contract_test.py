@@ -774,7 +774,7 @@ def test_required_shard_count_matches_the_matrix(
         arguments, ("--require-count", f"data_tests={declared_shard_total}")
     )
     _assert_token_sequence(
-        arguments, ("--phase", "data_tests=Delivery Gate — Data Tests Shard ")
+        arguments, ("--phase-prefix", "data_tests=Delivery Gate — Data Tests Shard ")
     )
 
 
@@ -949,13 +949,15 @@ def test_crosscutting_data_changes_defer_the_whole_domain() -> None:
         )
 
 
-def test_narrow_data_changes_defer_only_their_canonical_directory() -> None:
+@pytest.mark.parametrize("retired_owner", ("homepage", "post"))
+def test_retired_content_owner_paths_have_no_stale_commit_gate_mapping(
+    retired_owner: str,
+) -> None:
     selected, deferred = cgs.select_pytest_paths(
-        ["quwoquan_data/scripts/content/homepage/probe.py"]
+        [f"quwoquan_data/scripts/content/{retired_owner}/probe.py"]
     )
     assert selected == []
-    assert deferred == ["quwoquan_data/tests/local_contract/homepage"]
-    assert cgs.DATA_LOCAL_CONTRACT_ROOT not in deferred
+    assert deferred == []
 
 
 def test_over_budget_selection_is_deferred_rather_than_dropped() -> None:

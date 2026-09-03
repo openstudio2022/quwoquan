@@ -26,7 +26,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from core.runtime_policy import active_runtime_policy
 from core.image_decode import ImageDecodeFailure, probe_image_path
 from core.media_processing_policy import MEDIA_PROCESSING_POLICY
 from core.media_source_provenance import (
@@ -129,7 +128,8 @@ TEXT_HEAVY_RATIO = 0.16  # OCR 文字框面积占比 >= 此值视为"图中带�
 NEAR_DUP_HAMMING = 5  # pHash 海明距离 <= 此值视为近重复
 _OCR_MIN_CONF = 45
 _PLACEHOLDER_MAX_EDGE_DELTA = 7.0
-OCR_TIMEOUT_SECONDS = active_runtime_policy().ocr_timeout_seconds
+# Mechanical OCR process bound; semantic Agent runtime profiles do not own CV I/O.
+OCR_TIMEOUT_SECONDS = 30
 MAX_ASSESS_PIXELS = MEDIA_PROCESSING_POLICY.max_assessment_image_pixels
 ASSESSMENT_JPEG_QUALITY = MEDIA_PROCESSING_POLICY.assessment_jpeg_quality
 MAX_PUBLISHABLE_PIXELS = MEDIA_PROCESSING_POLICY.max_publishable_image_pixels

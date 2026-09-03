@@ -182,11 +182,9 @@ def _validate_video_source_attribution(
     item: Mapping[str, Any],
 ) -> None:
     attribution = evidence.get("sourceAttribution")
-    if attribution is None:
-        return
     if not isinstance(attribution, Mapping):
         raise TypeError(
-            f"{item.get('assetId')}: video safety source attribution is invalid"
+            f"{item.get('assetId')}: video safety source attribution is required"
         )
     expected = {
         "provider": item.get("provider"),

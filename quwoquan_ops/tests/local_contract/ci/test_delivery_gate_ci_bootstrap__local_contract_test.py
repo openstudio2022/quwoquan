@@ -354,6 +354,69 @@ def test_ops_portal_build_receives_the_external_deploy_root() -> None:
     ) in job
 
 
+def test_delivery_gate_fetches_history_for_frozen_knowledge_assets() -> None:
+    jobs = _workflow_jobs()
+    expected_repository_gate_jobs = {
+        "quwoquan_service",
+        "quwoquan_service_packaging",
+        "quwoquan_service_coverage",
+        "quwoquan_app_static",
+        "quwoquan_app_tests",
+        "quwoquan_app_serial",
+        "quwoquan_app_coverage",
+        "quwoquan_data",
+        "quwoquan_data_tests",
+        "ops_portal",
+    }
+    repository_gate_jobs = {
+        job_name: job
+        for job_name, job in jobs.items()
+        if any(
+            "bash quwoquan_ops/gate/gate_repo.sh" in str(step.get("run", ""))
+            for step in job.get("steps", [])
+        )
+    }
+
+    assert set(repository_gate_jobs) == expected_repository_gate_jobs
+    for job_name, job in repository_gate_jobs.items():
+        checkouts = [
+            step
+            for step in job.get("steps", [])
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+        ]
+        assert len(checkouts) == 1, job_name
+        # gate_repo 的全局前置检查会从冻结提交读取 S0 knowledge assets；浅克隆
+        # 无法执行 `git show <frozen_sha>:<path>`，会让所有 scope 共因失败。
+        assert (checkouts[0].get("with") or {}).get("fetch-depth") == 0, (
+            f"{job_name} 必须检出完整历史，供 frozen knowledge assets 校验读取"
+        )
+
+
+def test_hosted_gate_jobs_prepare_tesseract_before_repository_gate() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    expected = (
+        "quwoquan_app_static",
+        "quwoquan_app_tests",
+        "quwoquan_data",
+        "quwoquan_data_tests",
+        "ops_portal",
+    )
+    install = "bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr"
+    for job_name in expected:
+        job = _job_body(workflow, job_name)
+        assert job.count(install) == 1, job_name
+        assert job.index(install) < job.index("bash quwoquan_ops/gate/gate_repo.sh")
+
+    app_tests = _job_body(workflow, "quwoquan_app_tests")
+    install_step = app_tests[
+        app_tests.index("Install repository test native dependencies") :
+        app_tests.index("Gate (quwoquan_app tests shard)")
+    ]
+    assert "matrix.shard_index" not in install_step
+
+
 def test_service_gate_installs_required_native_test_dependencies() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     job_start = workflow.index("  quwoquan_service:\n")
@@ -430,6 +493,15 @@ def test_service_gate_phase_partition_executes_each_exact_call_set(
         assert completed.stdout.splitlines() == calls
 
 
+def test_delivery_uses_literal_absolute_output_root_for_flutter_identity() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output" in workflow
+    assert "QWQ_OUTPUT_ROOT: .qwq_output" not in workflow
+
+
 def test_delivery_runs_service_core_and_packaging_as_parallel_siblings() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
         encoding="utf-8"
@@ -450,7 +522,36 @@ def test_delivery_runs_service_core_and_packaging_as_parallel_siblings() -> None
     assert "GATE_SERVICE_PHASE: packaging" in packaging
     assert "设置 Go" not in packaging
     assert "设置 Dart" not in packaging
-    assert "run_bounded_apt_install.sh tesseract-ocr" in packaging
+    assert "run_bounded_apt_install.sh" not in packaging
+    prepare_index = packaging.index("id: strict_inputs")
+    gate_index = packaging.index("Gate (quwoquan_service packaging)")
+    assert prepare_index < gate_index
+    assert "actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9" in packaging
+    assert "quwoquan_app/.flutter-version" in packaging
+    assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve" in packaging
+    assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py install" in packaging
+    assert "subosito/flutter-action@" not in packaging
+    assert "prepare_app_pipeline_inputs.py" in packaging
+    assert "--build-product-id android-nonprod-apk" in packaging
+    assert '--environment "${{ matrix.packaging_env }}"' in packaging
+    assert '--target "${{ matrix.packaging_env }}-local"' in packaging
+    assert '--expected-source-git-sha "$EXPECTED_SOURCE"' in packaging
+    assert (
+        '--work-root "$RUNNER_TEMP/delivery-packaging-inputs-'
+        '${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.packaging_env }}"'
+        in packaging
+    )
+    assert (
+        "QWQ_OUTPUT_ROOT: ${{ steps.strict_inputs.outputs.qwq_output_root }}"
+        in packaging
+    )
+    assert (
+        "QWQ_COCOAPODS_EXECUTABLE: "
+        "${{ steps.strict_inputs.outputs.cocoapods_executable }}"
+        in packaging
+    )
+    assert "app-dependency-sync/cache" not in packaging
+    assert "ln -s" not in packaging
     assert "needs: topology_regression" in coverage
     assert "GATE_SERVICE_PHASE: coverage" in coverage
     coverage_fn = GATE_REPO_PATH.read_text(encoding="utf-8")
@@ -783,8 +884,8 @@ def test_app_shard_zero_owns_native_dependencies_and_shared_contracts() -> None:
     job = workflow[job_start:job_end]
     gate = (ROOT / "quwoquan_ops/gate/gate_repo.sh").read_text(encoding="utf-8")
 
-    assert "Install App shared contract native dependencies" in job
-    assert "if: ${{ matrix.shard_index == 0 }}" in job
+    assert "Install repository test native dependencies" in job
+    assert "if: ${{ matrix.shard_index == 0 }}" not in job
     assert "tesseract-ocr" in job
     assert "run_bounded_apt_install.sh" in job
     assert "apt-get" not in job
@@ -985,6 +1086,8 @@ def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_phases_on_c
         job_end = delivery.index(f"\n  {next_job_name}:\n", job_start)
         job_body = delivery[job_start:job_end]
         assert "runs-on: [self-hosted, macOS, ARM64]" in job_body
+    packaging = _job_body(delivery, "quwoquan_service_packaging")
+    assert "runs-on: [self-hosted, macOS, ARM64]" in packaging
     assert "runs-on: macos-latest" not in delivery
 
 

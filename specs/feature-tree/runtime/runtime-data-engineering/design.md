@@ -74,9 +74,9 @@ execution、reviewed delivery、canonical pool、milestone、release build/promo
 
 <a id="dec-005"></a>
 ### DEC-005 宿主 execution 只作为 discovery owner 的只读上游
-- 决策：宿主 Cursor/Codex Agent 十阶段、stage receipt、reviewed delivery、pool 与 ship terminal 归 discovery owner。本节点不定义 Skill、runner、claim、recovery 或 terminal reducer，只允许 consumer diagnosis 通过公开 release/receipt ref 追溯。
+- 决策：宿主 AI 十阶段、OPEN/CLOSE receipts、逐对象 publish、显式 cohort release 与 ship facts 归 discovery owner。本节点不定义 Skill、stage control、recovery 或执行状态投影，只允许 consumer diagnosis 通过公开 release/receipt ref 追溯。
 - 理由：执行推进方式不是 runtime consumer 的业务事实；在本域再拥有一套会与 discovery 单轨分叉。
-- 被否决方案：仓内 managed SDK/controller/campaign、runtime view 回写 execution、由 importer/UAT 写 succeeded。
+- 被否决方案：仓内 managed SDK/controller/campaign/runner/fleet/claim、stage-gate/semantic wrapper/reducer、runtime view 回写 execution，或由 importer/UAT 写业务 verdict。
 - 失败恢复：execution 问题返回上游 typed ref；本域只能重跑自己的 importer/query，不创建 `retryOf` 内容 execution。
 - 可测试面：静态 owner test 与 projection-only local_contract。
 - 关联要求：`REQ-005`

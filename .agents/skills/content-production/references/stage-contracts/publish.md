@@ -1,63 +1,30 @@
 # 阶段契约：publish
 
-把 approved 对象物化为成品并原子写入 canonical publish（物化 + 提升
-一条原子链，设计归属 L2 `design.md#dec-027`）。
+AI 对每个 approved 对象逐个调用 canonical 单对象事务；不存在 execution 级 publish orchestration。
 
-## 身份
+## PRE
 
-- stage：`publish`（与磁盘目录一字不差）
-- 前置阶段：`5.review`
-- 合法 next：`release`
-- 角色人设：[release-operator](../roles/release-operator.md)
-- 写目录 allowlist：对象根成品（`article.md`/`manifest.json`，只经原子命令）、
-  canonical publish 根（只经原子命令）、工作包根 `publish_ref.json`
+- `5.review` CLOSE 为 pass。
+- AI 在 OPEN 显式冻结 approved 对象清单，以及每对象 draft/manifest 输入、attestation、source/rights/media/content-library bindings；video 对象必须同时冻结 source video 与 source poster 的 CAS ref/digest，以及分别对应的 `media_ref_review.rightsReviews[]` 行，禁止以视频 rights 行隐含覆盖 poster。
+- 每个对象必须可独立验证；不得把 rejected 对象混入范围。
 
-## 做前（PRE）
+## DURING
 
-- `5.review` receipt `verdict=pass`；复跑：
+AI 按 approved 对象逐一：准备该对象的最终 package，先调用 `python3 quwoquan_data/scripts/cli.py release publish-object --execution-id <id> --target-ref <targetRef>` 生成/校验 plan，再以相同参数追加 `--apply` 执行原子 IO，记录 transaction/package/apply exact refs。一个对象失败只使该对象 blocked，不撤销其它成功对象。
 
-```bash
-python3 quwoquan_data/scripts/cli.py verify stage-artifacts \
-  --execution-id <id> --through 5.review
-python3 quwoquan_data/scripts/cli.py verify content-execution-layout \
-  --execution-id <id>
-```
+禁止调用或保留 `publish-execution`、publish runner、drain/process manager、campaign/pool direct-write；禁止手拷 canonical、手写事务 receipt 或把 raw source/draft/log 写入 canonical。
 
-- 物化输入已冻结：发布坐标（`publishAngle/publishTitle/publishSeq`）在
-  `0.plan/target_set.json` 逐 target 在场；每个 approved 对象的
-  `3.compose/writing_pack.json` 含 `creatorProfileRef`、`tagRefs`
-  （schema 真相源 `quwoquan_data/schema/content/writing_pack.schema.json`）。
-  缺失时回对应阶段补冻结，不得靠命令参数替代。
-
-## 做中（DURING）
-
-- 唯一 CLI：`python3 quwoquan_data/scripts/cli.py release publish-execution \
-  --execution-id <id> --apply`（省略 `--apply` 为 plan-only 校验，先 plan 后 apply）。
-  命令内部完成：资格判定（receipt 链 + attestation）→ 成品物化 →
-  delivery intent → 单对象事务写 canonical。
-- [MUST NOT] 手拷文件进 canonical publish 根，或手写成品 `manifest.json`。
-- [MUST NOT] 让 raw source、草稿、prompt、日志或运行状态进入 canonical。
-- [MUST NOT] 对 receipt 协议 execution 使用 `verify execution-readiness` /
-  `release pool-append` / `task drain-pool-delivery`——三者语义属存量 campaign 轨。
-
-## 做后（POST）
-
-交付件：canonical 对象 + `publish_ref.json`。完成判据：
+## POST
 
 ```bash
+python3 quwoquan_data/scripts/cli.py verify stage-artifacts --execution-id <id>
 python3 quwoquan_data/scripts/cli.py verify publish-purity
 python3 quwoquan_data/scripts/cli.py verify publish-closure
 ```
 
-常见 issue → 修复（教训 3：读 issue 修产物，不盲试）：
+AI 逐对象对账 attestation → package → canonical object → pool record/content-library binding，并提交真实 verifier facts 与每对象 result refs。
 
-- purity 报非 approved 对象 → 回查 `5.review` 结论；对象不合格则从本次
-  publish 范围移除，不放宽门禁。
-- closure 报孤立 creator/media 或悬空引用 → 补齐被引用对象的 publish 或
-  修正引用，重跑原子命令。
+## HANDOFF
 
-按 [handoff-protocol.md](../handoff-protocol.md) 执行 `task stage-open` → `task stage-gate` → `task stage-close`；宿主不填写 command 退出码、verdict 或 next。
-
-## 交接（HANDOFF）
-
-- `next=release`。
+- `resultRefs`：每个成功对象的 canonical ref、transaction package/apply receipt 与 pool record。
+- pass 后由 Skill 固定进入 `release`；partial failure 以 typed issues 明确列出，不改写成功对象。

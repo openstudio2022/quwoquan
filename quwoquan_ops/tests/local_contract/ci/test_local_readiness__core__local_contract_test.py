@@ -824,6 +824,18 @@ def test_staged_boundary_uses_local_commit_branch_policy() -> None:
     assert "--pre-push" not in boundary_source
 
 
+def test_staged_pii_phone_pattern_ignores_digits_inside_hex_digests() -> None:
+    from quwoquan_ops.cli.local_readiness import _PII_PATTERNS
+
+    phone_pattern = _PII_PATTERNS[0]
+    digest = b'"sha256": "18916601719eac77353c72e05249c70eb08b547c61f87c78c4f760d94c1f00"'
+    assert phone_pattern.search(digest) is None
+    # 号码字面量在源码里拆开拼接，避免本测试文件自己被 staged-boundary 判为直接 PII。
+    phone = b"189" + b"16601719"
+    assert phone_pattern.search(b"contact " + phone + b" now").group(0) == phone
+    assert phone_pattern.search(b"phone=" + phone + b",") is not None
+
+
 def test_data_scope_without_affected_tests_fails_closed_instead_of_verify_only() -> None:
     with pytest.raises(ValueError, match="affected tests"):
         build_impact_plan(["quwoquan_data/schema/unknown.schema.json"], level="scope")
@@ -1172,7 +1184,7 @@ def test_data_required_release_plan_and_delivery_closure_require_full_gates() ->
     plan = build_impact_plan(
         [
             "quwoquan_data/tests/local_contract/execution/"
-            "test_stage_receipt__handoff_chain__contract__local_contract_test.py"
+            "test_execution_kernel__minimal__contract__local_contract_test.py"
         ],
         level="release",
     )
