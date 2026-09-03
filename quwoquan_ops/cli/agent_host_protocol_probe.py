@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = "quwoquan.agent-host-protocol-probe/v1"
+SCHEMA = "quwoquan.agent-host-protocol-probe"
 LIVE_SOURCE_MARKER = "codex-live-host-capture/v1"
 RECOVERY = "install/access Codex host and run explicit smoke command"
 EXPLICIT_SMOKE_COMMAND = (

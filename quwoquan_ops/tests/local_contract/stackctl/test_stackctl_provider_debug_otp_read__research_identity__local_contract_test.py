@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[4]
 _RESEARCH_PHONE = "+8619912345000"
 _OTP_CODE = "654321"
 _BINDING = {
-    "schema": "qwq.local_research_identity_binding.v1",
+    "schema": "qwq.local_research_identity_binding",
     "environment": "alpha",
     "target": "alpha-local",
     "phone": _RESEARCH_PHONE,

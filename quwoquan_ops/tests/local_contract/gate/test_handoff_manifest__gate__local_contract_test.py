@@ -16,6 +16,8 @@ from types import ModuleType
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _GATE = _REPO_ROOT / "quwoquan_ops/gate/verify_handoff_manifest.py"
+_HANDOFF_INPUT_DIGEST = "sha256:" + "1" * 64
+_HANDOFF_OUTPUT_DIGEST = "sha256:" + "2" * 64
 
 
 def _load_gate() -> ModuleType:
@@ -33,7 +35,7 @@ VALID = """# 轮次交接单
 
 ## EvidenceFingerprint
 
-- handoff_ref: `handoff-ref-v1:sha256:1111111111111111111111111111111111111111111111111111111111111111:sha256:2222222222222222222222222222222222222222222222222222222222222222`
+- handoff_ref: `handoff-ref-v1:__HANDOFF_INPUT_DIGEST__:__HANDOFF_OUTPUT_DIGEST__`
 - payload_ref: `.qwq_output/env/repo/runs/handoff/nonexistent/payload.json`
 - ref: `evidence-fingerprint-v1:sha256:5842e2f11a8de997f4efc4f6e3e0e380a61bc29632f9f94c27170223134862a6`
 - digest: `sha256:5842e2f11a8de997f4efc4f6e3e0e380a61bc29632f9f94c27170223134862a6`
@@ -61,6 +63,10 @@ VALID = """# 轮次交接单
 
 - `make verify-feature-tree` exit=0 2026-08-25T12:00:00+08:00 abc1234
 """
+
+VALID = VALID.replace("__HANDOFF_INPUT_DIGEST__", _HANDOFF_INPUT_DIGEST).replace(
+    "__HANDOFF_OUTPUT_DIGEST__", _HANDOFF_OUTPUT_DIGEST
+)
 
 _CURRENT_HEAD = subprocess.run(
     ["git", "rev-parse", "HEAD"], cwd=_REPO_ROOT, check=True, capture_output=True, text=True
