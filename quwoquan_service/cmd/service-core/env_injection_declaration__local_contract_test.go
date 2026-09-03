@@ -216,7 +216,8 @@ func TestProdPlaneInjectedKeysHaveDeclaredConsumers(t *testing.T) {
 		t.Run(service.name, func(t *testing.T) {
 			keys := injections[service.name]
 			if len(keys) == 0 {
-				t.Skipf("%s has no prod plane env injection", service.name)
+				// 无 prod plane 注入即没有该维度的待对账对象；不是未执行测试。
+				return
 			}
 			declaredKeys, err := service.declaredKeys()
 			if err != nil {
