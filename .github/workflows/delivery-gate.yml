@@ -521,7 +521,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
@@ -658,6 +658,8 @@ jobs:
       - name: Resolve locked Patrol test host dependencies
         working-directory: quwoquan_app/test_host/patrol
         run: flutter pub get --enforce-lockfile
+      - name: Install repository test native dependencies
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_app static + PA core)
         env:
           GATE_APP_PHASE: static
@@ -712,8 +714,7 @@ jobs:
       - name: Resolve locked App dependencies
         working-directory: quwoquan_app
         run: flutter pub get --enforce-lockfile
-      - name: Install App shared contract native dependencies
-        if: ${{ matrix.shard_index == 0 }}
+      - name: Install repository test native dependencies
         run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_app tests shard)
         env:
@@ -898,6 +899,8 @@ jobs:
           cache-dependency-path: quwoquan_data/requirements.txt
       - name: 安装 Data 依赖
         run: pip install -r quwoquan_data/requirements.txt
+      - name: Install repository test native dependencies
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_data verify)
         env:
           GATE_DATA_PHASE: verify
@@ -935,6 +938,8 @@ jobs:
           cache-dependency-path: quwoquan_data/requirements.txt
       - name: 安装 Data 依赖
         run: pip install -r quwoquan_data/requirements.txt
+      - name: Install repository test native dependencies
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_data local_contract shard)
         env:
           GATE_DATA_PHASE: local_contract
@@ -970,6 +975,8 @@ jobs:
           node-version: "20.19.0"
           cache: npm
           cache-dependency-path: quwoquan_ops/portal/package-lock.json
+      - name: Install repository test native dependencies
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (ops-portal)
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope portal

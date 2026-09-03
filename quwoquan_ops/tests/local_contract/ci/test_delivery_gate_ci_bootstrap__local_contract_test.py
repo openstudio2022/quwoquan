@@ -330,6 +330,44 @@ def test_ops_portal_build_receives_the_external_deploy_root() -> None:
     ) in job
 
 
+def test_delivery_gate_fetches_history_for_frozen_knowledge_assets() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    coverage = _job_body(workflow, "quwoquan_service_coverage")
+
+    assert "fetch-depth: 0" in coverage
+    assert "fetch-depth: 1" not in coverage
+    assert coverage.index("fetch-depth: 0") < coverage.index(
+        "Gate (quwoquan_service coverage)"
+    )
+
+
+def test_hosted_gate_jobs_prepare_tesseract_before_repository_gate() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    expected = (
+        "quwoquan_app_static",
+        "quwoquan_app_tests",
+        "quwoquan_data",
+        "quwoquan_data_tests",
+        "ops_portal",
+    )
+    install = "bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr"
+    for job_name in expected:
+        job = _job_body(workflow, job_name)
+        assert job.count(install) == 1, job_name
+        assert job.index(install) < job.index("bash quwoquan_ops/gate/gate_repo.sh")
+
+    app_tests = _job_body(workflow, "quwoquan_app_tests")
+    install_step = app_tests[
+        app_tests.index("Install repository test native dependencies") :
+        app_tests.index("Gate (quwoquan_app tests shard)")
+    ]
+    assert "matrix.shard_index" not in install_step
+
+
 def test_service_gate_installs_required_native_test_dependencies() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     job_start = workflow.index("  quwoquan_service:\n")
@@ -778,8 +816,8 @@ def test_app_shard_zero_owns_native_dependencies_and_shared_contracts() -> None:
     job = workflow[job_start:job_end]
     gate = (ROOT / "quwoquan_ops/gate/gate_repo.sh").read_text(encoding="utf-8")
 
-    assert "Install App shared contract native dependencies" in job
-    assert "if: ${{ matrix.shard_index == 0 }}" in job
+    assert "Install repository test native dependencies" in job
+    assert "if: ${{ matrix.shard_index == 0 }}" not in job
     assert "tesseract-ocr" in job
     assert "run_bounded_apt_install.sh" in job
     assert "apt-get" not in job
