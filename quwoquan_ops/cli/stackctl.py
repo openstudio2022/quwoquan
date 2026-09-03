@@ -213,6 +213,7 @@ from quwoquan_ops.cli.lib.local_runtime_reservation import (
     acquire_local_runtime_use_lock, active_conflicting_local_targets, assert_local_runtime_available,
     assert_no_running_mutable_runtime,
     global_local_operation_lock as _reservation_global_local_operation_lock,
+    local_runtime_lock_holders,
     local_runtime_peer_targets,
     local_runtime_operation_lock_path,
     local_stack_operation_lock as _reservation_local_stack_operation_lock,

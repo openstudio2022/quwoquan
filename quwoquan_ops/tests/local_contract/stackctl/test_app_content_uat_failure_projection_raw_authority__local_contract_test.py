@@ -243,5 +243,3 @@ def test_parent_status_rejects_retired_passed_alias() -> None:
         _projection_receipt(
             status="passed", raw_authority_projection=projection, issues=[]
         )
-
-

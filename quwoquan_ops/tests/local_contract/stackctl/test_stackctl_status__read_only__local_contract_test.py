@@ -87,6 +87,18 @@ def test_status__does_not_execute_stateful_script_probes__local_contract(
         "_read_only_user_availability_report",
         lambda _target: _availability_report(first_blocker_class="release"),
     )
+    runtime_holder = {
+        "path": "/tmp/host-locks/local-runtime/workstation-commercial-runtime.lock",
+        "record": "pid=42 worktree=/tmp/integration lane=dev1.0",
+        "pid": "42",
+        "worktree": "/tmp/integration",
+        "lane": "dev1.0",
+    }
+    monkeypatch.setattr(
+        stackctl,
+        "local_runtime_lock_holders",
+        lambda: [runtime_holder],
+    )
 
     result = stackctl.command_status(
         argparse.Namespace(
@@ -106,6 +118,12 @@ def test_status__does_not_execute_stateful_script_probes__local_contract(
     assert [item["name"] for item in report["userAvailability"]] == list(_LAYERS)
     assert result["candidateWorkspace"]["drifted"] is True
     assert result["firstBlockerClass"] == "release"
+    assert result["localRuntimeLocks"] == [runtime_holder]
+    assert any(
+        "worktree=/tmp/integration lane=dev1.0" in detail
+        for detail in result["details"]
+    )
+    assert report["localRuntimeLocks"] == [runtime_holder]
 
 
 def test_status__currentness_timeout_stays_fail_closed_without_false_drift__local_contract(

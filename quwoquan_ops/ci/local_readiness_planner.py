@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 
 sys.dont_write_bytecode = True
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
@@ -22,8 +25,11 @@ from quwoquan_ops.ci.impact_planner_core import (  # noqa: E402
 )
 from quwoquan_ops.gate.commit_gate_select import build_plan as build_commit_plan  # noqa: E402
 
-PLAN_SCHEMA = "local-readiness-plan-v1"
-CHECK_FIELDS = ("id", "scope", "phase", "command", "cwd", "resources")
+PLAN_SCHEMA = "local-readiness-plan-v2"
+TIMEOUT_POLICY_SCHEMA = "local-readiness-timeouts-v1"
+CONTRACT_PATH = ROOT / "quwoquan_ops/policies/local_readiness_contract.yaml"
+_RAW_CHECK_FIELDS = ("id", "scope", "phase", "command", "cwd", "resources")
+CHECK_FIELDS = (*_RAW_CHECK_FIELDS, "timeout_seconds")
 LOCKFILE_CANDIDATES: dict[str, tuple[str, ...]] = {
     "service": ("quwoquan_service/go.mod", "quwoquan_service/go.sum"),
     "app": ("quwoquan_app/pubspec.yaml", "quwoquan_app/pubspec.lock"),
@@ -35,7 +41,7 @@ LOCKFILE_CANDIDATES: dict[str, tuple[str, ...]] = {
     ),
 }
 STATIC_COMMANDS: dict[str, tuple[list[str], str, list[str]]] = {
-    "branch_policy": (["python3", "-B", "quwoquan_ops/gate/verify_git_branch_policy.py"], ".", ["git-index"]),
+    "branch_policy": (["python3", "-B", "quwoquan_ops/gate/verify_git_branch_policy.py", "--local-commit"], ".", ["git-index"]),
     "feature_tree": (["make", "verify-feature-tree"], ".", ["feature-tree"]),
     "entrypoint_script_paths": (["python3", "-B", "quwoquan_ops/gate/verify_entrypoint_script_paths.py"], ".", ["ops-static"]),
     "local_worktree_lifecycle": (["python3", "-B", "quwoquan_ops/gate/verify_local_worktree_lifecycle.py"], ".", ["git-worktree"]),
@@ -54,6 +60,88 @@ STATIC_COMMANDS: dict[str, tuple[list[str], str, list[str]]] = {
     "verify-app-enum-typed-binding": (["make", "verify-app-enum-typed-binding"], ".", ["app-static"]),
     "verify-app-assistant-search-weak-typing-ratchet": (["make", "verify-app-assistant-search-weak-typing-ratchet"], ".", ["app-static"]),
 }
+
+
+def _canonical_digest(value: Any) -> str:
+    encoded = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _bounded_timeout(value: Any, *, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not (1 <= value <= 86400):
+        raise ValueError(f"local readiness {label} 必须为 1..86400 的整数秒")
+    return value
+
+
+def load_timeout_policy(path: Path | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    selected = path or CONTRACT_PATH
+    try:
+        contract = yaml.safe_load(selected.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        raise ValueError(f"local readiness timeout policy 无法读取: {exc}") from exc
+    if not isinstance(contract, dict) or contract.get("schema_version") != 1:
+        raise ValueError("local readiness contract schema_version 非法")
+    policy = contract.get("timeouts")
+    expected = {
+        "schema_version", "default_seconds", "default_by_level",
+        "default_by_phase", "maximum_by_level", "overrides_by_check",
+        "resolution_order",
+    }
+    if not isinstance(policy, dict) or set(policy) != expected:
+        raise ValueError("local readiness timeouts 字段漂移")
+    if policy.get("schema_version") != 1:
+        raise ValueError("local readiness timeouts schema_version 非法")
+    _bounded_timeout(policy.get("default_seconds"), label="timeouts.default_seconds")
+    levels = policy.get("default_by_level")
+    maxima = policy.get("maximum_by_level")
+    phases = policy.get("default_by_phase")
+    overrides = policy.get("overrides_by_check")
+    if not isinstance(levels, dict) or set(levels) != {"fast", "scope", "release"}:
+        raise ValueError("local readiness timeout level defaults 必须闭合 fast/scope/release")
+    if not isinstance(maxima, dict) or set(maxima) != {"fast", "scope", "release"}:
+        raise ValueError("local readiness timeout level maxima 必须闭合 fast/scope/release")
+    if not isinstance(phases, dict) or set(phases) != {"static", "focused", "scope_build", "release"}:
+        raise ValueError("local readiness timeout phase defaults 必须闭合")
+    if not isinstance(overrides, dict) or not all(isinstance(key, str) and key for key in overrides):
+        raise ValueError("local readiness timeout check overrides 非法")
+    for label, values in (
+        ("default_by_level", levels),
+        ("maximum_by_level", maxima),
+        ("default_by_phase", phases),
+        ("overrides_by_check", overrides),
+    ):
+        for key, value in values.items():
+            _bounded_timeout(value, label=f"timeouts.{label}.{key}")
+    for level in ("fast", "scope", "release"):
+        if levels[level] > maxima[level]:
+            raise ValueError(f"local readiness timeout level default 超过上限: {level}")
+    if policy.get("resolution_order") != ["check", "phase", "level", "default"]:
+        raise ValueError("local readiness timeout resolution_order 非 canonical")
+    identity = {
+        "schema": TIMEOUT_POLICY_SCHEMA,
+        "source": "quwoquan_ops/policies/local_readiness_contract.yaml",
+        "digest": _canonical_digest(policy),
+    }
+    return policy, identity
+
+
+def _canonical_check_timeout(
+    check: dict[str, Any], *, level: str, policy: dict[str, Any]
+) -> dict[str, Any]:
+    configured = policy["overrides_by_check"].get(check["id"])
+    if configured is None:
+        configured = policy["default_by_phase"].get(check["phase"])
+    if configured is None:
+        configured = policy["default_by_level"].get(level)
+    if configured is None:
+        configured = policy["default_seconds"]
+    timeout_seconds = min(configured, policy["maximum_by_level"][level])
+    value = {**check, "timeout_seconds": timeout_seconds}
+    if tuple(value) != CHECK_FIELDS:
+        raise ValueError(f"check={check['id']} timeout schema 漂移")
+    return value
 
 
 def _normalize_paths(paths: list[str], _repo_root: Path) -> list[str]:
@@ -86,8 +174,8 @@ def _check(
         "cwd": cwd,
         "resources": sorted(set(resources or [f"scope:{scope}"])),
     }
-    if tuple(value) != CHECK_FIELDS:
-        raise ValueError(f"check={check_id} schema 漂移")
+    if tuple(value) != _RAW_CHECK_FIELDS:
+        raise ValueError(f"check={check_id} raw schema 漂移")
     return value
 
 
@@ -119,10 +207,16 @@ def build_impact_plan(
 
     if level not in {"fast", "scope", "release"}:
         raise ValueError(f"local readiness level 非法：{level}")
+    timeout_policy, timeout_policy_identity = load_timeout_policy(
+        (repo_root / "quwoquan_ops/policies/local_readiness_contract.yaml")
+        if (repo_root / "quwoquan_ops/policies/local_readiness_contract.yaml").is_file()
+        else CONTRACT_PATH
+    )
     if not paths:
         return {
             "schema": PLAN_SCHEMA,
             "impact_planner": planner_identity(),
+            "timeout_policy": timeout_policy_identity,
             "level": level,
             "paths": [],
             "scopes": [],
@@ -149,11 +243,22 @@ def build_impact_plan(
         checks.append(check)
 
     pytest_paths = list(commit["pytest_paths"])
-    pytest_deferred = [path for path in commit["deferred_to_ci"] if path.endswith(".py") or "tests/local_contract" in path]
-    if level != "fast":
-        pytest_paths.extend(path for path in pytest_deferred if path not in pytest_paths)
-    elif pytest_deferred:
-        deferred.extend({"scope": "data", "work": path} for path in pytest_deferred)
+    pytest_deferred = [
+        path
+        for path in commit["deferred_to_ci"]
+        if path.endswith(".py") or "tests/local_contract" in path
+    ]
+    if pytest_deferred and level == "fast":
+        # L0 preserves every deferred selector target. L1/L2 do not splice
+        # directory suites back into managed-pytest: their canonical scoped
+        # build/release profiles own that coverage instead.
+        deferred.extend(
+            {
+                "scope": "data" if path.startswith("quwoquan_data/") else "ops",
+                "work": path,
+            }
+            for path in pytest_deferred
+        )
     if pytest_paths:
         checks.append(
             _check(
@@ -203,8 +308,33 @@ def build_impact_plan(
     if level != "fast" and "data" in scopes:
         if not any(check["id"] == "static:data_verify" for check in checks):
             checks.append(_check("scope_build:data-verify-all", "data", "scope_build", ["python3", "-B", "quwoquan_data/scripts/cli.py", "verify", "all"], resources=["data-verify"]))
-        if any(path.startswith("quwoquan_data/") for path in normalized) and not any(check["id"] == "focused:python" for check in checks):
+        selector_deferred_data_suite = any(
+            path.startswith("quwoquan_data/tests/local_contract")
+            for path in pytest_deferred
+        )
+        if (
+            any(path.startswith("quwoquan_data/") for path in normalized)
+            and not any(check["id"] == "focused:python" for check in checks)
+            and not selector_deferred_data_suite
+        ):
             raise ValueError("data scope planner 未能选择 affected tests；拒绝以 verify-only 生成 scope_ready")
+        if level == "scope" and selector_deferred_data_suite:
+            checks.append(
+                _check(
+                    "scope_build:data-local-contract",
+                    "data",
+                    "scope_build",
+                    [
+                        "env",
+                        "GATE_DATA_PHASE=local_contract",
+                        "bash",
+                        "quwoquan_ops/gate/gate_repo.sh",
+                        "--scope",
+                        "data",
+                    ],
+                    resources=["data-tests"],
+                )
+            )
     if level != "fast" and "spec_contract" in scopes and not any(check["id"] == "static:feature_tree" for check in checks):
         checks.append(_check("scope_build:feature-tree", "spec_contract", "scope_build", ["make", "verify-feature-tree"], resources=["feature-tree"]))
 
@@ -218,6 +348,10 @@ def build_impact_plan(
 
     if not checks:
         checks.append(_check("focused:git-diff-check", "spec_contract", "focused", ["git", "diff", "--check", "--", *normalized], resources=["git-index"]))
+    checks = [
+        _canonical_check_timeout(check, level=level, policy=timeout_policy)
+        for check in checks
+    ]
     unique: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for check in checks:
@@ -232,6 +366,7 @@ def build_impact_plan(
     return {
         "schema": PLAN_SCHEMA,
         "impact_planner": planner_identity(),
+        "timeout_policy": timeout_policy_identity,
         "level": level,
         "paths": normalized,
         "scopes": scopes,

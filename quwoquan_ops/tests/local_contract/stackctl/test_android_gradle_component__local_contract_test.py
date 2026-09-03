@@ -78,6 +78,10 @@ def _native_identity(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_component_round_trip_binds_invocation_set(tmp_path: Path) -> None:
     project, snapshot, invocations = _snapshot(tmp_path)
+    gradle_root = invocations[0].gradle_root
+    (gradle_root / "gradlew").unlink()
+    (gradle_root / "gradlew.bat").unlink()
+    (gradle_root / "gradle/wrapper/gradle-wrapper.jar").unlink()
     parent = tmp_path / "components"
     parent.mkdir()
     target = parent / "android"

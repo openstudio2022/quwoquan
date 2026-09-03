@@ -104,13 +104,11 @@ class SearchCommercialObservabilityContractTest(unittest.TestCase):
         pre_release = (ROOT / ".github/workflows/pre-release-gate.yml").read_text(
             encoding="utf-8"
         )
+        self.assertIn("Pre-Release — PR Light Governance", pre_release)
         self.assertIn("search_runtime_smoke:", pre_release)
         self.assertIn("--only-check global_search", pre_release)
         self.assertIn("requires search_base_url", pre_release)
-        self.assertIn(
-            'elif [ "${SEARCH_RESULT}" != "success" ]',
-            pre_release,
-        )
+        self.assertIn('if [[ "$PROFILE" != pr_light ]]; then test "$SEARCH_RESULT" = success; fi', pre_release)
 
 
 if __name__ == "__main__":

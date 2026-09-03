@@ -310,6 +310,16 @@ def _repo_ref(raw: str, *, label: str, allowed_roots: tuple[str, ...] = (".qwq_o
     return normalized, path, _read_regular(path, label=label)
 
 
+def _portable_bundle_receipt(provider_id: str, receipt_ref: str, raw: bytes) -> dict[str, Any]:
+    value = {
+        "provider_id": provider_id,
+        "receipt_ref": receipt_ref,
+        "exact_bytes_base64": base64.b64encode(raw).decode("ascii"),
+    }
+    validate_exact_fields(value, "bundle_receipt")
+    return value
+
+
 def _bundle_receipt(provider_id: str, receipt_ref: str, raw: bytes) -> dict[str, Any]:
     value = {
         "provider_id": provider_id,
@@ -332,6 +342,12 @@ def _decode_bundle_receipt(value: object, *, expected_provider: str, label: str)
         raw = base64.b64decode(value["exact_bytes_base64"], validate=True)
     except ValueError as error:
         raise ContractError(f"{label} exact bytes base64 invalid") from error
+    if label == "handoff":
+        import handoff_consumer
+        handoff_consumer.validate_published_bytes(
+            str(value["receipt_ref"]), raw, validate_current=False
+        )
+        return str(value["receipt_ref"]), raw
     ref, _path, current = _repo_ref(value["receipt_ref"], label=f"{label} receipt")
     if current != raw:
         raise EvidenceAdapterError.identity(
@@ -449,7 +465,7 @@ def assemble_evidence_bundle(
         "owner_manifest": provider["owner_manifest"]["provider_id"],
         "local_scope_ready": provider["local_readiness"]["provider_id"],
         "local_release_ready": provider["local_readiness"]["provider_id"],
-        "review_plan": "review_plan_v2",
+        "review_plan": "review_plan_v4",
         "review_consolidation": provider["review_consolidation"]["provider_id"],
         "handoff": provider["handoff"]["provider_id"],
         "human_calibration": provider["human_calibration"]["provider_id"],
@@ -460,6 +476,17 @@ def assemble_evidence_bundle(
     for key, provider_id in singular.items():
         raw_ref = refs.get(key)
         if raw_ref is None:
+            continue
+        if key == "handoff":
+            import handoff_consumer
+            from lib import handoff_store
+            ref = str(raw_ref)
+            try:
+                raw = handoff_store.read(ref, repo_root=REPO_ROOT)
+            except handoff_store.HandoffStoreError as error:
+                raise ContractError(str(error)) from error
+            handoff_consumer.validate_published_bytes(ref, raw, validate_current=False)
+            values[key] = _portable_bundle_receipt(provider_id, ref, raw)
             continue
         ref, _path, raw = _repo_ref(str(raw_ref), label=key)
         values[key] = _bundle_receipt(provider_id, ref, raw)
@@ -568,7 +595,7 @@ def _named_binding_context(
         label="named evidence owner_manifest",
     )
     plan_ref, plan_raw = _decode_bundle_receipt(
-        receipts["review_plan"], expected_provider="review_plan_v2",
+        receipts["review_plan"], expected_provider="review_plan_v4",
         label="named evidence review_plan",
     )
     try:
@@ -614,7 +641,9 @@ def _decode_and_bind_named_receipt(
     try:
         governance_contract.validate_named_evidence_plan_binding(
             plan=plan, receipt=receipt, subject=subject,
-            expected_owner_manifest_ref=owner_manifest_ref, contract=contract,
+            expected_owner_identity_ref=owner_manifest_ref,
+            expected_candidate_evidence_ref=str((plan.get("candidate_evidence_identity") or {}).get("ref") or ""),
+            contract=contract,
             label=f"{layer}:{expected_evidence_id}",
         )
     except EvidenceAdapterError:
@@ -765,11 +794,32 @@ def current_repository_input(
             raise EvidenceAdapterError.identity(
                 "Review named evidence exact receipt missing"
             )
-        evidence_ref, evidence_raw = bound_named[0]
         consolidation_ref, consolidation_raw = _decode_bundle_receipt(receipts["review_consolidation"], expected_provider=contract["current_repository_evidence"]["provider_adapters"]["review_consolidation"]["provider_id"], label="review_consolidation")
+        consolidation = json.loads(consolidation_raw.decode("utf-8"))
+        if not isinstance(consolidation, dict):
+            raise ContractError("Review consolidation must be an object")
+        bound_by_ref = {ref: raw for ref, raw in bound_named}
+        consolidation_identities = consolidation.get("evidence_identities") or []
+        if len(consolidation_identities) != 1:
+            raise ContractError("Review consolidation must bind one exact named evidence receipt")
+        evidence_ref = str(consolidation_identities[0].get("receipt_ref") or "")
+        evidence_raw = bound_by_ref.get(evidence_ref)
+        if evidence_raw is None:
+            raise EvidenceAdapterError.identity(
+                "Review consolidation exact evidence ref is not supplied"
+            )
+        reviewer_result_pairs: list[tuple[str, bytes]] = []
+        for identity in consolidation.get("reviewer_result_identities") or []:
+            if not isinstance(identity, Mapping):
+                raise ContractError("Review consolidation reviewer identity invalid")
+            result_ref, _result_path, result_raw = _repo_ref(
+                str(identity.get("result_ref") or ""), label="reviewer_result"
+            )
+            reviewer_result_pairs.append((result_ref, result_raw))
         readback = adapters.verify_review(
             plan_raw=plan_raw, plan_ref=plan_ref, evidence_raw=evidence_raw,
-            evidence_ref=evidence_ref, consolidation_raw=consolidation_raw,
+            evidence_ref=evidence_ref, reviewer_result_pairs=reviewer_result_pairs,
+            consolidation_raw=consolidation_raw,
             consolidation_ref=consolidation_ref, candidate_id=subject["candidate_id"],
             scope_id=subject["scope_id"], verification_time=now, contract=contract,
         )

@@ -859,7 +859,6 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
         )
         _write_executable(raw_bin / "run.sh", "#!/bin/sh\nprintf 'RAW_RUN\\n'\n")
         self._write_interactive_zsh_startup(path_prefix=raw_bin)
-
         with _InteractiveLoginZsh(
             home=self.home,
             environment=self._interactive_environment(),

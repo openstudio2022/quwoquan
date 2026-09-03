@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from quwoquan_ops.ci.github_actions_timing import (
     APPROVAL_EVIDENCE_REASON,
     calculate,
+    classify_job_attempt,
 )
 
 
@@ -87,6 +88,28 @@ class GithubActionsTimingTest(unittest.TestCase):
 
         self.assertEqual(values["machine_critical_path_seconds"], 1268)
         self.assertEqual(values["calendar_lead_time_seconds"], 1273)
+
+    def test_independent_common_branch_overlaps_topology_and_scope_branch(self) -> None:
+        run = {"created_at": "2026-09-03T00:00:00Z"}
+        jobs = [
+            job("common", "2026-09-03T00:00:00Z", "2026-09-03T00:00:01Z", "2026-09-03T00:03:21Z"),
+            job("topology", "2026-09-03T00:00:00Z", "2026-09-03T00:00:01Z", "2026-09-03T00:01:41Z"),
+            job("scope", "2026-09-03T00:01:41Z", "2026-09-03T00:01:42Z", "2026-09-03T00:06:42Z"),
+        ]
+
+        values = calculate(
+            run,
+            jobs,
+            phases={"common": "common", "topology": "topology", "scope": "scope"},
+            required_counts={"common": 1, "topology": 1, "scope": 1},
+            candidate_job="scope",
+            prod_job="",
+            critical_start="run",
+            dag_layers=[],
+            dag_branches=[(("common",),), (("topology",), ("scope",))],
+        )
+
+        self.assertEqual(values["machine_critical_path_seconds"], 400)
 
     def test_exact_data_job_does_not_capture_prefix_selected_shards(self) -> None:
         run = {"created_at": "2026-09-03T00:00:00Z"}
@@ -438,6 +461,36 @@ class GithubActionsTimingTest(unittest.TestCase):
                 critical_start="jobs",
                 dag_layers=[("candidate",)],
             )
+
+    def test_job_attempt_policy_distinguishes_all_four_states(self) -> None:
+        attempted = job(
+            "attempted", "2026-07-28T00:00:00Z",
+            "2026-07-28T00:00:01Z", "2026-07-28T00:00:02Z"
+        )
+        runnable = {"name": "runnable", "status": "queued", "conclusion": None}
+        skipped = {"name": "skipped", "status": "completed", "conclusion": "skipped"}
+        infra = {"name": "infra", "status": "completed", "conclusion": "timed_out"}
+        self.assertEqual(classify_job_attempt(attempted), "attempted")
+        self.assertEqual(classify_job_attempt(runnable), "runnable")
+        self.assertEqual(classify_job_attempt(skipped), "skipped")
+        self.assertEqual(classify_job_attempt(infra), "infra")
+
+    def test_calculation_exposes_attempt_classification_counts(self) -> None:
+        attempted = job(
+            "candidate", "2026-07-28T00:00:00Z",
+            "2026-07-28T00:00:01Z", "2026-07-28T00:00:02Z"
+        )
+        values = calculate(
+            {"created_at": "2026-07-28T00:00:00Z"},
+            [attempted, {"name": "typed skip", "status": "completed", "conclusion": "skipped"}],
+            phases={"candidate": "candidate"}, required_counts={"candidate": 1},
+            candidate_job="candidate", prod_job="", critical_start="run",
+            dag_layers=[("candidate",)],
+        )
+        self.assertEqual(values["jobs_attempted"], 1)
+        self.assertEqual(values["jobs_skipped"], 1)
+        self.assertEqual(values["jobs_runnable"], 0)
+        self.assertEqual(values["jobs_infra"], 0)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 {
-  "description": "quwoquan 本地工作副本治理：hook 面只注入上下文、不阻断（创建授权提醒与未合入滞留提醒）。判定实现与 Cursor 侧同源，只有输出协议不同；硬门只在准出（branch policy、CI Delivery Gate）。",
+  "description": "quwoquan 本地工作副本治理：仅保留 observe-only 的工作副本上下文与会话提醒。当前没有宿主自动 edit readiness 接线；readiness 只能通过显式 enqueue、worker、inspect 或 readiness 命令运行。硬门只在准出（branch policy、CI Delivery Gate）。",
   "hooks": {
     "PreToolUse": [
       {
@@ -23,19 +23,6 @@
             "command": "PYTHONDONTWRITEBYTECODE=1 python3 \"$(git rev-parse --show-toplevel)/quwoquan_ops/hooks/worktree_merge_reminder.py\" --harness codex --reason session",
             "timeout": 30,
             "statusMessage": "检查未合入工作副本"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "^(Write|Edit|MultiEdit|ApplyPatch)$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "PYTHONDONTWRITEBYTECODE=1 python3 \"$(git rev-parse --show-toplevel)/quwoquan_ops/hooks/local_readiness_after_edit.py\"",
-            "timeout": 20,
-            "statusMessage": "入队本地 readiness 检查"
           }
         ]
       }

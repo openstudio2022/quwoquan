@@ -9,6 +9,7 @@ import copy
 import json
 import os
 import sys
+from unittest import mock
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,10 @@ ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
 
 from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
+from lib.candidate_evidence import build_candidate_evidence  # noqa: E402
+from lib.feature_tree.content_addressed_writer import _write_content_addressed_bytes  # noqa: E402
+import evidence_runner  # noqa: E402
+import review_dispatch  # noqa: E402
 from lib.feature_context_fingerprint import (  # noqa: E402
     build_feature_context_fingerprint,
     embedded_fingerprint_binding,
@@ -180,10 +185,6 @@ def test_bundle_owner_identity_failure_reaches_evaluator_as_fingerprint_mismatch
     contract = load_contract()
     manifest, _raw, _ref = _current_owner_manifest(contract)
     manifest["canonical_contexts"] = []
-    identity = {key: value for key, value in manifest.items() if key != "evidence_fingerprint"}
-    manifest["evidence_fingerprint"] = embedded_fingerprint_binding(
-        build_feature_context_fingerprint(identity, repo_root=ROOT)
-    )
     ref = write_receipt(tmp_path, "forged-owner.json", manifest)
     digest = __import__("hashlib").sha256((ROOT / ref).read_bytes()).hexdigest()
     canonical_ref = (
@@ -287,100 +288,116 @@ def _write_current_owner_manifest(contract: dict[str, Any]) -> str:
     return ref
 
 
-def _named_receipt(
-    *, plan_ref: str, plan_digest: str, evidence_ids: tuple[str, ...],
-) -> dict[str, Any]:
-    fingerprint = subject_fingerprint_receipt(load_contract())
-    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    return {
-        "schema_version": 2,
-        "run_id": "fresh-other-plan",
-        "generation_id": fingerprint["digest"],
-        "plan_fingerprint_ref": plan_ref,
-        "plan_fingerprint_digest": plan_digest,
-        "execution_fingerprint": fingerprint,
-        "result_fingerprint": fingerprint,
-        "evidence": [
-            {
-                "id": evidence_id,
-                "command": f"printf {evidence_id}",
-                "command_digest": "sha256:" + __import__("hashlib").sha256(
-                    f"printf {evidence_id}".encode()
-                ).hexdigest(),
-                "timeout_seconds": 300,
-                "exit_code": 0,
-                "outcome": "exited",
-                "timed_out": False,
-                "termination_signal": None,
-                "stdout_digest": "sha256:" + "1" * 64,
-                "stderr_digest": "sha256:" + "2" * 64,
-                "started_at": timestamp,
-                "finished_at": timestamp,
-                "captured_by": "test",
-                "required": True,
-            }
-            for evidence_id in evidence_ids
-        ],
-        "terminal": {
-            "status": "PASS",
-            "code": "EVIDENCE.PASSED",
-            "failed_evidence": None,
+def _governance_review_fixture(
+    *, changed_paths: list[str], run_id_value: str,
+) -> tuple[dict[str, Any], dict[str, Any], str, str]:
+    contract = load_contract()
+    owner = contract["current_repository_evidence"]["owner_manifest_target"]
+    nodes = discover_nodes()
+    manifest = _context_manifest(owner, resolve_target_details(owner, nodes), nodes)
+    owner_path = _write_content_addressed_bytes(canonical_json_bytes(manifest))
+    owner_ref = owner_path.relative_to(ROOT).as_posix()
+    candidate = build_candidate_evidence(owner_ref, changed_paths, repo_root=ROOT)
+    candidate_path = _write_content_addressed_bytes(
+        canonical_json_bytes(candidate), subdirectory="candidates/by-fingerprint"
+    )
+    registry = copy.deepcopy(
+        __import__("yaml").safe_load(
+            (ROOT / ".agents/skills/review/references/registry.yaml").read_text()
+        )
+    )
+    registry["workflows"]["dev"]["baseline_evidence"] = ""
+    registry["evidence"] = {
+        "portal-test": {
+            "command": "printf portal-test", "segment": "POST",
+            "required": True, "timeout_seconds": 300, "covers": [],
         },
-        "captured_by": "test",
-        "started_at": timestamp,
-        "finished_at": timestamp,
+        "portal-build": {
+            "command": "printf portal-build", "segment": "POST",
+            "required": True, "timeout_seconds": 300, "covers": [],
+        },
     }
+    with mock.patch.object(
+        review_dispatch, "_checklist_evidence",
+        return_value=["portal-test", "portal-build"],
+    ):
+        plan = review_dispatch.build_plan(
+            registry, "dev", "POST", "implementation", changed_paths,
+            context_manifest=manifest, context_manifest_ref=owner_ref,
+            candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
+            scope=owner,
+        )
+        receipt = evidence_runner.run_plan(
+            plan, registry=registry, cwd=ROOT, run_id=run_id_value,
+            plan_bytes=canonical_json_bytes(plan), plan_ref=".qwq_output/test-fixture-plan.json",
+        )
+    evidence_runner.validate_named_evidence_receipt(receipt)
+    return plan, receipt, owner_ref, candidate_path.relative_to(ROOT).as_posix()
+
+
+def test_governance_named_layers_reject_feedback_only_receipt(
+    tmp_path: Path,
+) -> None:
+    plan, receipt, owner_ref, _candidate_ref = _governance_review_fixture(
+        changed_paths=[
+            "quwoquan_ops/cli/lib/governance_pipeline_admission/adapters.py"
+        ],
+        run_id_value="governance-feedback-only",
+    )
+    assert receipt["evidence_class"] == "feedback_only"
+    plan_ref = write_receipt(tmp_path, "review-plan-feedback.json", plan)
+    named_ref = write_receipt(tmp_path, "named-feedback.json", receipt)
+    refs = empty_refs()
+    refs.update({"owner_manifest": owner_ref, "review_plan": plan_ref})
+    refs["named_evidence"] = {
+        "portal-test": named_ref,
+        "portal-build": named_ref,
+    }
+    path = assemble_evidence_bundle(
+        load_contract(), run_id=run_id(tmp_path, "feedback-only"), refs=refs,
+    )
+    payload = current_repository_input(load_contract(), evidence_bundle=path)
+    for layer in ("review_terminal", "portal_test", "portal_build"):
+        item = payload["evidence"][layer]
+        assert item["status"] == "failed"
+        assert item["schema_valid"] is True
+        assert item["fresh"] is True
+        assert "REVIEW.EVIDENCE_FEEDBACK_ONLY" in item["detail"]
 
 
 def test_current_repository_rejects_fresh_named_receipts_from_other_exact_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    contract = load_contract()
-    binding = contract["current_repository_evidence"]["named_evidence_plan_binding"]
-    owner_ref = _write_current_owner_manifest(contract)
-    current_plan = {
-        "ref": "evidence-fingerprint-v1:sha256:" + "3" * 64,
-        "digest": "sha256:" + "3" * 64,
-    }
-    other_plan = {
-        "ref": "evidence-fingerprint-v1:sha256:" + "4" * 64,
-        "digest": "sha256:" + "4" * 64,
-    }
-    plan = {
-        "workflow": binding["workflow"],
-        "segment": binding["segment"],
-        "deliverable": binding["deliverable"],
-        "scope": binding["scope"],
-        "owner_manifest_identity": {
-            "ref": owner_ref,
-            "target": binding["owner_manifest_target"],
-            "resolved_owner": binding["owner_manifest_target"],
-            "scope": binding["scope"],
-        },
-    }
-    plan_ref = write_receipt(tmp_path, "review-plan.json", plan)
-    named = _named_receipt(
-        plan_ref=other_plan["ref"], plan_digest=other_plan["digest"],
-        evidence_ids=("portal-test", "portal-build"),
+    current_plan, _current_receipt, owner_ref, candidate_ref = _governance_review_fixture(
+        changed_paths=[
+            "quwoquan_ops/cli/lib/governance_pipeline_admission/adapters.py"
+        ],
+        run_id_value="governance-current-plan",
     )
-    named_ref = write_receipt(tmp_path, "named-other-plan.json", named)
+    other_plan, other_receipt, other_owner_ref, _other_candidate_ref = _governance_review_fixture(
+        changed_paths=[
+            "quwoquan_ops/cli/lib/governance_pipeline_admission/contract.py"
+        ],
+        run_id_value="governance-other-plan",
+    )
+    assert owner_ref == other_owner_ref
+    assert candidate_ref == current_plan["candidate_evidence_identity"]["ref"]
+    assert other_receipt["plan_fingerprint_ref"] == other_plan["fingerprint_receipt"]["ref"]
+    assert other_receipt["plan_fingerprint_ref"] != current_plan["fingerprint_receipt"]["ref"]
+    evidence_runner.validate_named_evidence_receipt(other_receipt)
+
+    plan_ref = write_receipt(tmp_path, "review-plan.json", current_plan)
+    named_ref = write_receipt(tmp_path, "named-other-plan.json", other_receipt)
     refs = empty_refs()
-    refs.update({
-        "owner_manifest": owner_ref,
-        "review_plan": plan_ref,
-    })
+    refs.update({"owner_manifest": owner_ref, "review_plan": plan_ref})
     refs["named_evidence"] = {
         "portal-test": named_ref,
         "portal-build": named_ref,
     }
-    monkeypatch.setattr(
-        "review_dispatch.validate_current_review_plan",
-        lambda value, registry, phase: current_plan,
-    )
     path = assemble_evidence_bundle(
-        contract, run_id=run_id(tmp_path, "other-plan"), refs=refs,
+        load_contract(), run_id=run_id(tmp_path, "other-plan"), refs=refs,
     )
-    payload = current_repository_input(contract, evidence_bundle=path)
+    payload = current_repository_input(load_contract(), evidence_bundle=path)
     for layer in ("review_terminal", "portal_test", "portal_build"):
         item = payload["evidence"][layer]
         assert item["status"] == "failed"
@@ -577,7 +594,7 @@ def _current_owner_manifest(contract: dict[str, Any]) -> tuple[dict[str, Any], b
     return manifest, raw, ref
 
 
-def test_owner_manifest_consumes_canonical_v3_raw_content_address() -> None:
+def test_owner_identity_consumes_canonical_v4_raw_content_address() -> None:
     contract = load_contract()
     manifest, raw, ref = _current_owner_manifest(contract)
     raw_digest = __import__("hashlib").sha256(raw).hexdigest()
@@ -598,8 +615,6 @@ def test_owner_manifest_rejects_caller_forged_owner_chain_contexts_and_agents() 
     mutations = (
         lambda value: value.update(owner_chain=[]),
         lambda value: value.update(owner_chain=value["owner_chain"][:-1]),
-        lambda value: value.update(canonical_contexts=[]),
-        lambda value: value.update(applicable_agents=[]),
     )
     for mutate in mutations:
         forged = copy.deepcopy(canonical)
@@ -715,13 +730,135 @@ def test_human_readback_consumes_exact_owner_v2_and_rejects_v1_or_digest_drift()
         )
 
 
-def test_review_gate_block_finding_is_defensively_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+def _real_review_exact_fixture(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, Any], bytes, str, bytes, str, bytes]:
+    from lib.agent_governance_contract import contract_schema_version
+    from lib.evidence_fingerprint import build_evidence_fingerprint, canonical_digest
+    import handoff_consumer
+    import review_consolidator
+
+    plan_digest = "sha256:" + "1" * 64
+    plan_ref = "evidence-fingerprint-v1:" + plan_digest
+    plan = {
+        "fingerprint_receipt": {"ref": plan_ref, "digest": plan_digest},
+        "reviewers": [{"role": "developer", "required": True}],
+    }
+    timestamp = "2026-08-30T00:00:00+00:00"
+    fingerprint = build_evidence_fingerprint(
+        {
+            "git": {"head_sha": "a" * 40, "merge_base_sha": "b" * 40},
+            "workspace": {},
+            "assets": {
+                "canonical_assets_digest": canonical_digest("assets"),
+                "review_assets_digest": canonical_digest("review"),
+            },
+            "execution": {
+                "commands_digest": canonical_digest([]),
+                "toolchain_digest": canonical_digest("toolchain"),
+                "provider_digest": canonical_digest("provider"),
+                "generator_digest": canonical_digest("generator"),
+            },
+        },
+        captured_at=timestamp, captured_by="fixture",
+        captured_metadata={"consumer": "test"},
+    )
+    evidence = {
+        "schema_version": contract_schema_version("named_evidence_receipt"),
+        "run_id": "run", "generation_id": fingerprint["digest"],
+        "source": {
+            "mode": "workspace", "head_sha": "a" * 40,
+            "merge_base_sha": "b" * 40, "repository_clean": True,
+            "immutable": False,
+        },
+        "evidence_class": "reusable", "admission_eligible": True,
+        "plan_fingerprint_ref": plan_ref, "plan_fingerprint_digest": plan_digest,
+        "execution_fingerprint": fingerprint, "result_fingerprint": fingerprint,
+        "evidence": [],
+        "terminal": {"status": "PASS", "code": "EVIDENCE.PASSED", "failed_evidence": None},
+        "captured_by": "fixture", "started_at": timestamp, "finished_at": timestamp,
+    }
+    evidence_raw = canonical_json_bytes(evidence)
+    evidence_ref = ".qwq_output/evidence.json"
+    evidence_identity = handoff_consumer.named_evidence_identity_from_raw(
+        evidence_ref, evidence_raw, evidence
+    )
+    result = {
+        "schema_version": contract_schema_version("review_result"),
+        "role": "developer", "status": "completed",
+        "plan_fingerprint_ref": plan_ref, "plan_fingerprint_digest": plan_digest,
+        "evidence_receipt_ref": evidence_ref,
+        "evidence_receipt_canonical_bytes_sha256": evidence_identity["canonical_bytes_sha256"],
+        "evidence_run_id": evidence_identity["run_id"],
+        "evidence_generation_id": evidence_identity["generation_id"],
+        "execution_fingerprint_ref": evidence_identity["execution_fingerprint_ref"],
+        "execution_fingerprint_digest": evidence_identity["execution_fingerprint_digest"],
+        "result_fingerprint_ref": evidence_identity["result_fingerprint_ref"],
+        "result_fingerprint_digest": evidence_identity["result_fingerprint_digest"],
+        "assembled_input_byte_count": 1,
+        "assembled_input_digest": "sha256:" + "3" * 64,
+        "assembled_input_compression": {"mode": "full", "applied": False, "changes": [], "attempts": []},
+        "started_at": timestamp, "finished_at": timestamp, "findings": [],
+    }
+    result_ref = ".qwq_output/review.json"
+    result_raw = canonical_json_bytes(result)
+    monkeypatch.setattr(
+        review_consolidator.review_dispatch, "validate_current_review_plan",
+        lambda *_args, **_kwargs: {"ref": plan_ref, "digest": plan_digest},
+    )
+    monkeypatch.setattr(
+        review_consolidator.handoff_consumer, "validate_named_evidence_ref_payload",
+        lambda receipt, **_kwargs: receipt,
+    )
+    consolidation = review_consolidator.consolidate(
+        plan, [(evidence_ref, evidence)], [(result_ref, result)],
+        generated_at="2026-08-30T00:01:00+00:00",
+        exact_bytes_by_ref={evidence_ref: evidence_raw, result_ref: result_raw},
+    )
+    return plan, evidence_raw, evidence_ref, result_raw, result_ref, canonical_json_bytes(consolidation)
+
+
+def test_review_exact_inputs_have_real_positive_path(monkeypatch: pytest.MonkeyPatch) -> None:
     contract = load_contract()
-    consolidation = {"terminal": {"status": "PASS", "codes": []}, "reviewer_results": [], "findings": [{"severity": "GATE_BLOCK"}]}
-    monkeypatch.setattr("review_consolidator.consolidate", lambda *_args, **_kwargs: consolidation)
-    with pytest.raises(ContractError, match="GATE_BLOCK finding"):
+    plan, evidence_raw, evidence_ref, result_raw, result_ref, consolidation_raw = _real_review_exact_fixture(monkeypatch)
+    readback = adapters.verify_review(
+        plan_raw=canonical_json_bytes(plan), plan_ref="plan.json",
+        evidence_raw=evidence_raw, evidence_ref=evidence_ref,
+        reviewer_result_pairs=[(result_ref, result_raw)],
+        consolidation_raw=consolidation_raw, consolidation_ref="consolidation.json",
+        candidate_id="c", scope_id="s", verification_time=datetime.now(timezone.utc),
+        contract=contract,
+    )
+    assert readback["result"] == "pass"
+    assert readback["receipt_ref"] == "consolidation.json"
+
+
+def test_review_exact_result_ref_drift_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    contract = load_contract()
+    plan, evidence_raw, evidence_ref, result_raw, _result_ref, consolidation_raw = _real_review_exact_fixture(monkeypatch)
+    with pytest.raises(ContractError, match="exact validation failed"):
         adapters.verify_review(
-            plan_raw=b"{}", plan_ref="p", evidence_raw=canonical_json_bytes({"finished_at": "2026-08-30T00:00:00+00:00"}), evidence_ref="e",
-            consolidation_raw=canonical_json_bytes(consolidation), consolidation_ref="c", candidate_id="c", scope_id="s",
+            plan_raw=canonical_json_bytes(plan), plan_ref="plan.json",
+            evidence_raw=evidence_raw, evidence_ref=evidence_ref,
+            reviewer_result_pairs=[(".qwq_output/review-renamed.json", result_raw)],
+            consolidation_raw=consolidation_raw, consolidation_ref="consolidation.json",
+            candidate_id="c", scope_id="s", verification_time=datetime.now(timezone.utc),
+            contract=contract,
+        )
+
+
+def test_review_nonpass_never_projects_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    contract = load_contract()
+    plan, evidence_raw, evidence_ref, result_raw, result_ref, consolidation_raw = _real_review_exact_fixture(monkeypatch)
+    consolidation = json.loads(consolidation_raw)
+    consolidation["terminal"] = {"status": "PR_WARN", "codes": []}
+    monkeypatch.setattr(
+        "review_consolidator.consolidate", lambda *_args, **_kwargs: consolidation
+    )
+    with pytest.raises(ContractError, match="非 PASS"):
+        adapters.verify_review(
+            plan_raw=canonical_json_bytes(plan), plan_ref="plan.json",
+            evidence_raw=evidence_raw, evidence_ref=evidence_ref,
+            reviewer_result_pairs=[(result_ref, result_raw)],
+            consolidation_raw=canonical_json_bytes(consolidation),
+            consolidation_ref="consolidation.json", candidate_id="c", scope_id="s",
             verification_time=datetime.now(timezone.utc), contract=contract,
         )

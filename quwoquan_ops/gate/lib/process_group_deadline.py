@@ -12,7 +12,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Sequence
+from typing import BinaryIO, Mapping, Sequence
 
 TIMEOUT_EXIT_CODE = 124
 DEFAULT_GRACE_SECONDS = 2.0
@@ -46,6 +46,7 @@ def run_command(
     capture_output: bool = False,
     stdout: BinaryIO | int | None = None,
     stderr: BinaryIO | int | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> BoundedProcessResult:
     """Run argv in its own POSIX process group and bound total wall time."""
 
@@ -75,6 +76,7 @@ def run_command(
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE if capture_output else stdout,
         stderr=subprocess.PIPE if capture_output else stderr,
+        env=env,
         start_new_session=True,
     )
     try:

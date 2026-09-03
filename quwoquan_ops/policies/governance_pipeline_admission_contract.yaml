@@ -1,5 +1,5 @@
 schema_id: governance-pipeline-admission-contract
-schema_version: 3
+schema_version: 4
 owner_story: specs/feature-tree/runtime/development-workflow-governance/governance-pipeline-observe-only/spec.md
 local_readiness_source: quwoquan_ops/policies/local_readiness_contract.yaml
 human_eval_source: quwoquan_ops/policies/evals/human_agent_delivery_interaction_v1.yaml
@@ -102,7 +102,7 @@ evidence_layers:
 
 
 layer_admission:
-  owner_manifest: {provider_id: feature_context_manifest_v3, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 1800, verifier_id: governance.owner_manifest.v1, interface: local}
+  owner_manifest: {provider_id: feature_context_owner_identity_v4, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 1800, verifier_id: governance.owner_manifest.v1, interface: local}
   local_scope_ready: {provider_id: local_readiness_receipt_v1, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.local_readiness.read_only.v1, interface: local}
   local_release_ready: {provider_id: local_readiness_receipt_v1, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.local_readiness.read_only.v1, interface: local}
   review_terminal: {provider_id: review_consolidator_v1, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.review.v1, interface: local}
@@ -170,7 +170,7 @@ current_repository_evidence:
     portal_test: {evidence_id: portal-test, qualifying_result: pass}
     portal_build: {evidence_id: portal-build, qualifying_result: pass}
   provider_adapters:
-    owner_manifest: {provider_id: feature_context_manifest_v3, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 1800, verifier_id: governance.owner_manifest.v1}
+    owner_manifest: {provider_id: feature_context_owner_identity_v4, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 1800, verifier_id: governance.owner_manifest.v1}
     local_readiness: {provider_id: local_readiness_receipt_v1, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.local_readiness.read_only.v1}
     review_consolidation: {provider_id: review_consolidator_v1, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.review.v1}
     named_evidence: {provider_id: review_named_evidence_v1, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.named_evidence.v1}

@@ -507,7 +507,8 @@ def validate_contract(value: object) -> None:
         raise ContractError("本地 AuthorizationGrant 不得冒充 authority")
     required_schemas = {
         "decision_unit", "role_submission", "decision_option", "eligibility", "hard_gate",
-        "decision_record", "authorization_grant", "card_projection",
+        "decision_record", "human_runtime_decision_receipt",
+        "human_runtime_decision_projection", "authorization_grant", "card_projection",
         "commercial_readiness_decision", "production_campaign_approval", "outcome_acceptance",
         "role_interaction_envelope", "human_calibration_session",
         "human_calibration_observation", "human_calibration_readback",
@@ -667,6 +668,38 @@ def validate_contract(value: object) -> None:
             raise ContractError(f"router hard_veto_roles 非法: {key!r}")
         if route.get("default_terminal") not in terminals:
             raise ContractError(f"router default_terminal 非法: {key!r}")
+    runtime_bridge = value.get("runtime_bridge")
+    expected_runtime_bridge = {
+        "schema_version": 1,
+        "serialization_version": "human-runtime-decision-v1",
+        "canonical_cli": "quwoquan_ops/cli/human_agent_delivery.py",
+        "local_store": ".qwq_output/env/repo/runs/human-decisions",
+        "decision_values": ["continue", "pause", "redirect", "approve_admission"],
+        "duration_scope_kinds": ["objective", "boundary", "session", "until_replaced"],
+        "target_kinds": ["agent_execution", "review", "handoff"],
+        "admission_classes": ["ordinary", "formal_prod"],
+        "ordinary_missing_projection": "declared_not_projected_nonblocking",
+        "during_poll": "explicit_command_only",
+        "per_tool_hook_polling": "forbidden",
+        "local_input_mode": "explicit_cli_only",
+        "inferred_natural_language_verified": False,
+        "self_attested_formal_production_authority": False,
+        "formal_production_authority_source": "hosted_authenticated_authority_provider",
+        "hosted_authority_adapter": "quwoquan_ops/cli/lib/hosted_authority",
+    }
+    if runtime_bridge != expected_runtime_bridge:
+        raise ContractError("Human runtime bridge 字段或 authority 边界漂移")
+    runtime_receipt = schemas["human_runtime_decision_receipt"]
+    runtime_projection = schemas["human_runtime_decision_projection"]
+    if (
+        runtime_receipt.get("schema_version") != 1
+        or runtime_projection.get("schema_version") != 1
+        or runtime_receipt.get("authority_fields") != ["source", "duration_scope"]
+        or runtime_receipt.get("duration_scope_fields") != ["kind", "value"]
+        or runtime_receipt.get("provider_fields") != ["kind", "provider_id", "provider_receipt_ref"]
+        or runtime_receipt.get("human_identity_fields") != ["subject", "assurance"]
+    ):
+        raise ContractError("Human runtime decision receipt/projection schema 漂移")
     harness = value.get("harness_projection")
     if (
         not isinstance(harness, dict)

@@ -23,6 +23,7 @@ from quwoquan_ops.cli.lib.package_reuse import (
     workspace_snapshot,
 )
 from quwoquan_ops.cli.lib.package_reuse.dependency_bundle import (
+    AppDependencyBundleMissingError,
     AppDependencyBundleStaleError,
 )
 from quwoquan_ops.cli.lib.package_reuse.dependency_fs import remove_private_tree
@@ -246,6 +247,16 @@ def _failure_envelope(error: BaseException) -> tuple[dict[str, str], str]:
     envelope 以 ``"status": "failed"`` 区分，消费方（run.sh）按此判别。
     """
 
+    if isinstance(error, AppDependencyBundleMissingError):
+        return (
+            {
+                "status": "failed",
+                "errorCode": error.code,
+                "errorResource": error.resource,
+                "errorField": error.field,
+            },
+            f"{error.code}: {error}",
+        )
     if isinstance(error, AppDependencyBundleStaleError):
         return (
             {

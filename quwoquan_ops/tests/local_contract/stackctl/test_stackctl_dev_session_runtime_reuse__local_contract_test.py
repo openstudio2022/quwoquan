@@ -563,6 +563,9 @@ class StackctlDevSessionRuntimeReuseTest(StackctlDevSessionTestBase):
                 return_value=Path(temporary),
             ),
             mock.patch.object(
+                stackctl, "local_runtime_capacity_evidence", return_value={"issues": []}
+            ),
+            mock.patch.object(
                 stackctl,
                 "_local_stack_operation_lock",
                 return_value=contextlib.nullcontext(),

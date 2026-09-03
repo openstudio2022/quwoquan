@@ -24,6 +24,7 @@ REFERENCES_DIR = REPO_ROOT / ".agents/skills/review/references"
 REGISTRY_PATH = REFERENCES_DIR / "registry.yaml"
 GRADING_PATH = REFERENCES_DIR / "grading.md"
 
+sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "quwoquan_ops/cli"))
 from lib import review_dispatch_cli as _review_dispatch_cli  # noqa: E402
 from lib import review_owner_manifest as _review_owner_manifest  # noqa: E402
@@ -43,6 +44,10 @@ from lib.evidence_fingerprint import (  # noqa: E402
     snapshot_path,
     validate_evidence_fingerprint,
 )
+from lib.human_agent_delivery.runtime_bridge import (  # noqa: E402
+    HumanDecisionBridgeError,
+    project_runtime_decision,
+)
 from lib.review_fingerprint import (  # noqa: E402
     build_review_fingerprint,
     head_sha as _review_head_sha,
@@ -50,6 +55,13 @@ from lib.review_fingerprint import (  # noqa: E402
     normalize_path as _review_normalize_path,
     sha256_text as _review_sha256_text,
     snapshot as _review_snapshot,
+)
+from lib.review_context_assembler import (  # noqa: E402
+    ReviewerContextBudgetExceeded,
+    assemble_reviewer_context,
+)
+from review_dispatch_terminal import (  # noqa: E402
+    classify_terminal as _classify_terminal_impl,
 )
 
 _EVIDENCE_LINE_RE = re.compile(r"^\s*evidence:\s*(?P<evidence>[a-z0-9][a-z0-9-]*)\s*$")
@@ -106,6 +118,9 @@ def build_plan(
     previous_plan: dict[str, Any] | None = None,
     context_manifest: dict[str, Any] | None = None,
     context_manifest_ref: str | None = None,
+    candidate_evidence_ref: str | None = None,
+    human_decision_ref: str | None = None,
+    admission_class: str = "ordinary",
     scope: str = "",
     incomplete_roles: list[dict[str, str] | str] | None = None,
     failed_evidence_ids: list[str] | None = None,
@@ -165,10 +180,20 @@ def build_plan(
         )
 
     requested_scope = scope or (normalized_previous or {}).get("scope") or ""
+    try:
+        human_decision_projection = project_runtime_decision(
+            target_kind="review",
+            admission_class=admission_class,
+            human_decision_ref=human_decision_ref,
+        )
+    except HumanDecisionBridgeError as exc:
+        raise ValueError(f"{exc.code}: {exc.detail}") from exc
     manifest_required = segment == "POST" and automatic_review
-    contexts, manifest_bytes, manifest_target, owner_manifest_identity = _normalize_contexts(
+    contexts, manifest_bytes, manifest_target, owner_identity, candidate_evidence_identity = _normalize_contexts(
         context_manifest or {},
         manifest_ref=context_manifest_ref,
+        candidate_evidence_ref=candidate_evidence_ref,
+        changed_paths=normalized_paths,
         expected_scope=requested_scope,
         required=manifest_required,
     )
@@ -185,7 +210,14 @@ def build_plan(
         active_profiles=active_profiles,
     )
     all_initial_evidence = _resolve_evidence(
-        registry, initial_reviewers, segment=segment
+        registry,
+        initial_reviewers,
+        segment=segment,
+        baseline_evidence=(
+            str(workflow_config.get("baseline_evidence") or "")
+            if automatic_review
+            else ""
+        ),
     )
 
     previous_fingerprint: str | None = None
@@ -236,7 +268,9 @@ def build_plan(
         workflow=workflow,
         deliverable=resolved_deliverable,
         scope=resolved_scope,
-        owner_manifest_identity=owner_manifest_identity,
+        owner_identity=owner_identity,
+        candidate_evidence_identity=candidate_evidence_identity,
+        human_decision_projection=human_decision_projection,
         terminal=terminal,
         changed_paths=normalized_paths,
         profiles=active_profiles,
@@ -279,7 +313,10 @@ def build_plan(
         "round": round_name,
         "deliverable": resolved_deliverable,
         "scope": resolved_scope,
-        "owner_manifest_identity": owner_manifest_identity,
+        "owner_identity": owner_identity,
+        "candidate_evidence_identity": candidate_evidence_identity,
+        "human_decision_ref": human_decision_ref,
+        "human_decision_projection": human_decision_projection,
         "changed_paths": normalized_paths,
         "profiles": active_profiles,
         "contexts": contexts,
@@ -348,12 +385,20 @@ def _validate_plan_contract(plan: dict[str, Any]) -> None:
             if not isinstance(value, dict):
                 raise TypeError(f"review_plan.{field} 项必须为映射")
             validate_declared_fields(value, "review_plan", declaration)
-    owner_identity = plan["owner_manifest_identity"]
-    if not isinstance(owner_identity, dict):
-        raise TypeError("review_plan.owner_manifest_identity 必须为映射")
+    owner_identity = plan["owner_identity"]
+    candidate_identity = plan["candidate_evidence_identity"]
+    if not isinstance(owner_identity, dict) or not isinstance(candidate_identity, dict):
+        raise TypeError("review_plan 双身份必须为映射")
+    validate_declared_fields(owner_identity, "review_plan", "owner_identity_fields")
+    validate_declared_fields(candidate_identity, "review_plan", "candidate_evidence_identity_fields")
+    human_projection = plan["human_decision_projection"]
+    if not isinstance(human_projection, dict):
+        raise TypeError("review_plan.human_decision_projection 必须为映射")
     validate_declared_fields(
-        owner_identity, "review_plan", "owner_manifest_identity_fields"
+        human_projection, "review_plan", "human_decision_projection_fields"
     )
+    if plan["human_decision_ref"] != human_projection["human_decision_ref"]:
+        raise ValueError("review_plan human decision ref/projection 不一致")
     for field, declaration in (
         ("context_bytes", "context_bytes_fields"),
         ("terminal", "terminal_fields"),
@@ -558,13 +603,21 @@ def _resolve_evidence(
     reviewers: list[dict[str, Any]],
     *,
     segment: str,
+    baseline_evidence: str = "",
 ) -> list[dict[str, Any]]:
     catalog = registry.get("evidence") or {}
     resolved: dict[str, dict[str, Any]] = {}
+    evidence_consumers: dict[str, list[str]] = {}
     for reviewer in reviewers:
-        evidence_ids = _checklist_evidence(reviewer["checklist"])
+        evidence_ids = list(dict.fromkeys(
+            ([baseline_evidence] if baseline_evidence else [])
+            + _checklist_evidence(reviewer["checklist"])
+        ))
         reviewer["evidence"] = evidence_ids
         for evidence_id in evidence_ids:
+            evidence_consumers.setdefault(evidence_id, []).append(reviewer["role"])
+
+    for evidence_id, consumers in evidence_consumers.items():
             config = catalog.get(evidence_id)
             if config is None:
                 _refuse(
@@ -587,8 +640,9 @@ def _resolve_evidence(
                     "consumers": [],
                 }
                 resolved[evidence_id] = existing
-            if reviewer["role"] not in existing["consumers"]:
-                existing["consumers"].append(reviewer["role"])
+            for role in consumers:
+                if role not in existing["consumers"]:
+                    existing["consumers"].append(role)
     return list(resolved.values())
 
 
@@ -616,12 +670,16 @@ def _normalize_contexts(
     manifest: dict[str, Any],
     *,
     manifest_ref: str | None,
+    candidate_evidence_ref: str | None = None,
+    changed_paths: list[str] | None = None,
     expected_scope: str = "",
     required: bool = False,
 ) -> tuple[list[dict[str, Any]], int, str, dict[str, Any]]:
     return _review_owner_manifest.normalize_contexts(
         manifest,
         manifest_ref=manifest_ref,
+        candidate_evidence_ref=candidate_evidence_ref,
+        changed_paths=changed_paths,
         expected_scope=expected_scope,
         required=required,
         repo_root=REPO_ROOT,
@@ -640,47 +698,25 @@ def _measure_reviewer_contexts(
     contexts: list[dict[str, Any]],
     manifest_bytes: int,
 ) -> dict[str, Any]:
-    role_bytes: dict[str, int] = {}
+    """Record only the configured hard boundary; final bytes are assembled later."""
+    del workflow, workflow_config, active_profiles, contexts
     limit = int(registry["limits"]["reviewer_context_bytes"])
+    estimates: dict[str, int] = {}
     grading = GRADING_PATH.read_bytes() if GRADING_PATH.is_file() else b""
+    system_path = REFERENCES_DIR / "reviewer-executor.md"
+    system = system_path.read_bytes() if system_path.is_file() else b""
     for reviewer in reviewers:
         role_path = REFERENCES_DIR / "roles" / reviewer["role"] / "ROLE.md"
         checklist_path = REFERENCES_DIR / reviewer["checklist"]
         if not role_path.is_file():
             _refuse("REVIEW.ROLE_MISSING", f"角色定义不存在：{reviewer['role']}")
-        registry_slice = {
-            "limits": registry["limits"],
-            "workflow": {workflow: workflow_config},
-            "profile": {
-                reviewer["profile"]: (registry.get("profiles") or {}).get(
-                    reviewer["profile"]
-                )
-            }
-            if reviewer["profile"]
-            else {},
-            "evidence": reviewer.get("evidence") or [],
-            "contexts": contexts,
-        }
-        total = (
-            len(role_path.read_bytes())
-            + len(checklist_path.read_bytes())
-            + len(grading)
-            + len(
-                json.dumps(registry_slice, ensure_ascii=False, sort_keys=True).encode(
-                    "utf-8"
-                )
-            )
+        estimates[reviewer["role"]] = (
+            len(system) + len(role_path.read_bytes()) + len(checklist_path.read_bytes()) + len(grading)
         )
-        if total > limit:
-            _refuse(
-                "REVIEW.CONTEXT_BUDGET_EXCEEDED",
-                f"role={reviewer['role']} context={total} bytes 超过 {limit}",
-            )
-        role_bytes[reviewer["role"]] = total
     return {
         "manifest": manifest_bytes,
-        "reviewers": role_bytes,
-        "max_reviewer": max(role_bytes.values(), default=0),
+        "reviewers": estimates,
+        "max_reviewer": max(estimates.values(), default=0),
         "limit": limit,
     }
 
@@ -690,19 +726,27 @@ def _fingerprint_receipt(
     workflow: str,
     deliverable: str,
     scope: str,
-    owner_manifest_identity: dict[str, Any],
+    owner_identity: dict[str, Any],
+    candidate_evidence_identity: dict[str, Any],
     terminal: dict[str, Any],
     changed_paths: list[str],
     profiles: list[str],
     contexts: list[dict[str, Any]],
     initial_reviewers: list[dict[str, Any]],
     evidence: list[dict[str, Any]],
+    human_decision_projection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return build_review_fingerprint(
         workflow=workflow,
         deliverable=deliverable,
         scope=scope,
-        owner_manifest_identity=owner_manifest_identity,
+        owner_identity=owner_identity,
+        candidate_evidence_identity=candidate_evidence_identity,
+        human_decision_projection=(
+            human_decision_projection
+            if human_decision_projection is not None
+            else project_runtime_decision(target_kind="review")
+        ),
         terminal=terminal,
         changed_paths=changed_paths,
         profiles=profiles,
@@ -736,30 +780,19 @@ def recompute_plan_fingerprint(
         active_profiles=profiles,
     )
     evidence = _resolve_evidence(
-        registry, initial_reviewers, segment=str(plan["segment"])
+        registry,
+        initial_reviewers,
+        segment=str(plan["segment"]),
+        baseline_evidence=str(workflow_config.get("baseline_evidence") or ""),
     )
-    contexts: list[dict[str, Any]] = []
-    for raw in plan["contexts"]:
-        relative = _repo_relative(str(raw["path"]))
-        snapshot = _snapshot_path(relative)
-        contexts.append(
-            declared_object(
-                {
-                    "path": relative,
-                    "anchor": raw["anchor"],
-                    "kind": raw["kind"],
-                    "exists": snapshot["exists"],
-                    "content_digest": snapshot["content_digest"],
-                },
-                "review_plan",
-                "context_fields",
-            )
-        )
+    contexts = [declared_object(dict(raw), "review_plan", "context_fields") for raw in plan["contexts"]]
     return _fingerprint_receipt(
         workflow=workflow,
         deliverable=deliverable,
         scope=str(plan["scope"]),
-        owner_manifest_identity=dict(plan["owner_manifest_identity"]),
+        owner_identity=dict(plan["owner_identity"]),
+        candidate_evidence_identity=dict(plan["candidate_evidence_identity"]),
+        human_decision_projection=dict(plan["human_decision_projection"]),
         terminal=dict(plan["terminal"]),
         changed_paths=changed_paths,
         profiles=profiles,
@@ -799,6 +832,24 @@ def validate_current_review_plan(
     plan: dict[str, Any], registry: dict[str, Any], *, phase: str = "evidence"
 ) -> dict[str, Any]:
     validate_plan_terminal_for_phase(plan, phase=phase)
+    try:
+        current_human_projection = project_runtime_decision(
+            target_kind="review",
+            admission_class=str(plan["human_decision_projection"]["admission_class"]),
+            human_decision_ref=plan["human_decision_ref"],
+        )
+    except HumanDecisionBridgeError as exc:
+        _refuse("REVIEW.FINGERPRINT_CHANGED", f"{exc.code}: {exc.detail}")
+    if current_human_projection != plan["human_decision_projection"]:
+        _refuse(
+            "REVIEW.FINGERPRINT_CHANGED",
+            "Review plan human decision ref/projection 已漂移",
+        )
+    if current_human_projection["blocks_execution"]:
+        _refuse(
+            "REVIEW.TERMINAL_CONTRACT_INVALID",
+            f"{current_human_projection['terminal']}: human decision 阻止 phase={phase}",
+        )
     _validate_current_owner_manifest(plan)
     expected = validate_evidence_fingerprint(plan.get("fingerprint_receipt"))
     current = recompute_plan_fingerprint(plan, registry)
@@ -812,28 +863,63 @@ def validate_current_review_plan(
 
 
 def build_reviewer_input(
-    plan: dict[str, Any], evidence_identity: dict[str, Any]
+    plan: dict[str, Any],
+    evidence_identity: dict[str, Any],
+    *,
+    evidence_summary: dict[str, Any] | None = None,
+    reviewer_role: str | None = None,
+    repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
+    """Build one exact final reviewer payload and enforce its canonical byte size."""
     validate_plan_terminal_for_phase(plan, phase="consolidation")
+    selected = [
+        item for item in plan["reviewers"]
+        if reviewer_role is None or item["role"] == reviewer_role
+    ]
+    if len(selected) != 1:
+        _refuse(
+            "REVIEW.INVALID_INCOMPLETE_ROLE",
+            "reviewer input 必须指定且只指定一个已派发 reviewer role",
+        )
+    reviewer = selected[0]
+    role_path = REFERENCES_DIR / "roles" / reviewer["role"] / "ROLE.md"
+    checklist_path = REFERENCES_DIR / reviewer["checklist"]
+    system_path = REFERENCES_DIR / "reviewer-executor.md"
+    for label, path in (("system", system_path), ("role", role_path), ("checklist", checklist_path), ("grading", GRADING_PATH)):
+        if not path.is_file():
+            _refuse("REVIEW.ROLE_MISSING", f"{label} reviewer prompt 不存在：{path.relative_to(REPO_ROOT)}")
+    try:
+        assembled = assemble_reviewer_context(
+            plan=plan,
+            reviewer=reviewer,
+            evidence_identity=evidence_identity,
+            evidence_summary=evidence_summary or {},
+            system_prompt=system_path.read_text(encoding="utf-8"),
+            role_prompt=role_path.read_text(encoding="utf-8"),
+            checklist_prompt=checklist_path.read_text(encoding="utf-8"),
+            grading_prompt=GRADING_PATH.read_text(encoding="utf-8"),
+            repo_root=repo_root,
+            limit=int(plan["context_bytes"]["limit"]),
+        )
+    except ReviewerContextBudgetExceeded as exc:
+        _refuse("REVIEW.CONTEXT_BUDGET_EXCEEDED", str(exc))
     payload = {
         "schema_version": contract_schema_version("reviewer_input"),
         "plan_fingerprint_ref": plan["fingerprint_receipt"]["ref"],
         "plan_fingerprint_digest": plan["fingerprint_receipt"]["digest"],
         "evidence_identity": evidence_identity,
-        "reviewers": [
-            {
-                "role": item["role"],
-                "kind": item["kind"],
-                "required": item["required"],
-                "checklist": item["checklist"],
-            }
-            for item in plan["reviewers"]
-        ],
+        "reviewer": {
+            "role": reviewer["role"],
+            "kind": reviewer["kind"],
+            "required": reviewer["required"],
+            "profile": reviewer["profile"],
+            "checklist": reviewer["checklist"],
+        },
+        **assembled,
         "generated_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
     }
     validate_required_fields(payload, "reviewer_input")
-    for item in payload["reviewers"]:
-        validate_declared_fields(item, "reviewer_input", "reviewer_fields")
+    validate_declared_fields(payload["reviewer"], "reviewer_input", "reviewer_fields")
     return payload
 
 
@@ -863,74 +949,15 @@ def _classify_terminal(
     failed_evidence_ids: list[str],
     cancelled: bool,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    typed: list[dict[str, Any]] = []
-    codes: list[str] = []
-    reviewer_map = {item["role"]: item for item in reviewers}
-    for raw in incomplete_roles:
-        if isinstance(raw, str):
-            role, separator, reason = raw.partition("=")
-            if not separator:
-                role, reason = raw, "unspecified"
-        else:
-            role = str(raw.get("role") or "")
-            reason = str(raw.get("reason") or "unspecified")
-        reviewer = reviewer_map.get(role)
-        if reviewer is None:
-            _refuse(
-                "REVIEW.INVALID_INCOMPLETE_ROLE",
-                f"incomplete role 不在本轮 reviewers 中：{role}",
-            )
-        code = (
-            "REVIEW.REQUIRED_REVIEWER_INCOMPLETE"
-            if reviewer["required"]
-            else "REVIEW.OPTIONAL_REVIEWER_INCOMPLETE"
-        )
-        typed.append(
-            {
-                "role": role,
-                "required": reviewer["required"],
-                "reason": reason,
-                "code": code,
-            }
-        )
-        codes.append(code)
-
-    evidence_ids = {item["id"] for item in evidence}
-    invalid_evidence = [item for item in failed_evidence_ids if item not in evidence_ids]
-    if invalid_evidence:
-        _refuse(
-            "REVIEW.INVALID_EVIDENCE_RESULT",
-            "失败 evidence 不在本轮计划中：" + ", ".join(invalid_evidence),
-        )
-    if failed_evidence_ids:
-        codes.append("REVIEW.EVIDENCE_FAILED")
-    if cancelled:
-        codes.append("REVIEW.CANCELLED")
-
-    unique_codes = list(dict.fromkeys(codes))
-    terminal_contract = contract_section("terminal_codes")
-    unknown_codes = [code for code in unique_codes if code not in terminal_contract]
-    if unknown_codes:
-        _refuse(
-            "REVIEW.TERMINAL_CONTRACT_INVALID",
-            "terminal code 未注册：" + ", ".join(unknown_codes),
-        )
-    status = "READY"
-    if any(
-        (terminal_contract.get(code) or {}).get("severity") == "GATE_BLOCK"
-        for code in unique_codes
-    ):
-        status = "GATE_BLOCK"
-    elif any(
-        (terminal_contract.get(code) or {}).get("severity") == "PR_WARN"
-        for code in unique_codes
-    ):
-        status = "PR_WARN"
-    return typed, {
-        "status": status,
-        "codes": unique_codes,
-        "failed_evidence": list(dict.fromkeys(failed_evidence_ids)),
-    }
+    return _classify_terminal_impl(
+        reviewers,
+        evidence,
+        incomplete_roles=incomplete_roles,
+        failed_evidence_ids=failed_evidence_ids,
+        cancelled=cancelled,
+        contract_section=contract_section,
+        refuse=_refuse,
+    )
 
 
 def _head_sha() -> str:

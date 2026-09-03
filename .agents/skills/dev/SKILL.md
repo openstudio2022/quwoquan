@@ -17,7 +17,7 @@ metadata:
 1. PRE 从用户目标、plan/diff 与已知路径确定 exact target；读取最近子树 `AGENTS.md`，运行默认 compact `make feature-context TARGET=<exact-path>`，保存 stdout 的 immutable exact ref，再确认 owner、scope、验收、OPEN、依赖和命名 evidence。
 2. metadata/contract 变更先改 authoring source，再 verify/codegen；实现按 Red/Green/Refactor 闭环，测试 `spec_ref` 绑定对应验收，不为错误实现保留 shim/fallback。
 3. 执行影响面最小且足够的 `local_contract/api_integration/user_acceptance` 与 gate，分层报告源码、编译、runtime、release 与 UAT。
-4. POST 原样复用 PRE 的 immutable ref，报告命名 evidence 命令与退出码；默认零 Reviewer。只在用户显式 `/review`，或增量进入 lane→`dev1.0` PR、handoff、release 准出时，才按 review Skill 派 Developer 主审与最多一名专审。
+4. POST 复用 PRE owner identity ref，并从 current exact changed paths 生成 candidate evidence predecessor，报告命名 evidence 命令与退出码；默认零 Reviewer。只在用户显式 `/review`，或增量进入 lane→`dev1.0` PR、handoff、release 准出时，才按 review Skill 派 Developer 主审与最多一名专审。
 
 ## 完成证据
 
@@ -29,4 +29,4 @@ spec/design/owner 未冻结或 exact ref stale 时回 prd/design/explore。requi
 
 ## 条件性交接
 
-只有 canonical 六类 handoff 触发成立时持久交接；普通闭环不落第二状态。需要环境操作、内容发布或事故检视时交对应专用 Skill，但源码/spec mutation 仍回 Feature workflow。
+空 triggers 的普通闭环返回 `no_persistent_handoff`，不要求 artifact/Review/authority，也不创建 projection/store。canonical 六类 trigger 任一成立（包括 `cross_session_incomplete`、`multi_party_parallel`）都进入完整 owner/candidate/named evidence/Reviewer/consolidation 与 authoritative create-once store，不降级为临时 checkpoint。需要环境操作、内容发布或事故检视时交对应专用 Skill，但源码/spec mutation 仍回 Feature workflow。

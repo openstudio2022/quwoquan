@@ -393,6 +393,10 @@ def resolve_target_details(raw: str | Path, nodes: list[Node]) -> TargetResoluti
     target = Path(raw_path)
     if not target.is_absolute():
         target = context.REPO_ROOT / target
+    try:
+        target.resolve(strict=False).relative_to(context.REPO_ROOT.resolve())
+    except ValueError as error:
+        raise ValueError(f"GATE_BLOCK: {raw} 越出仓库") from error
     if target.is_dir() and (target / "spec.md").is_file():
         target = target / "spec.md"
     if target.name == "design.md" and (target.parent / "spec.md").is_file():

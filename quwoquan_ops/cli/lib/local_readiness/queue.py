@@ -138,7 +138,7 @@ def read_queue(path: Path) -> dict[str, Any] | None:
     return validate_queue(value)
 
 
-def enqueue_paths(paths: list[str], *, reason: str = "after_edit", state_root: Path | None = None) -> dict[str, Any]:
+def enqueue_paths(paths: list[str], *, reason: str = "explicit_enqueue", state_root: Path | None = None) -> dict[str, Any]:
     root = _core._state_root(state_root)
     queue_path = root / "process/deferred-queue.json"
     normalized = sorted({_core.normalize_repo_relative_path(path, _core.ROOT) for path in paths})
@@ -251,13 +251,95 @@ def record_queue_failure(
         return dict(selected)
 
 
-def assert_scope_queue_closed(plan: dict[str, Any], *, state_root: Path | None = None) -> None:
+def _queue_closure_enforcement() -> str:
+    closure = _core._load_contract().get("queue_closure")
+    if not isinstance(closure, dict) or closure.get("schema_version") != 1:
+        raise _core.LocalReadinessError("queue_closure contract schema_version 非法")
+    if closure.get("classifications") != ["exact-pending", "foreign-pending"]:
+        raise _core.LocalReadinessError("queue_closure classifications 非法")
+    enforcement = closure.get("enforcement")
+    if enforcement not in {
+        "advisory_until_verified_consumer",
+        "block_exact_candidate_pending",
+    }:
+        raise _core.LocalReadinessError("queue_closure enforcement 非法")
+    return str(enforcement)
+
+
+def _classified_queue_item(item: dict[str, Any], classification: str) -> dict[str, Any]:
+    return {
+        "classification": classification,
+        "path": str(item["path"]),
+        "input_digest": str(item["input_digest"]),
+    }
+
+
+def queue_closure(plan: dict[str, Any], *, state_root: Path | None = None) -> dict[str, Any]:
+    """Classify every queue item against one exact L1/L2 candidate.
+
+    Enforcement is owned by the versioned contract. During the current
+    capability stage, exact and foreign pending items remain visible but do
+    not participate in scope/release admission.
+    """
+    enforcement = _queue_closure_enforcement()
     if plan["level"] == "fast":
-        return
-    covered, scopes = set(plan["paths"]), set(plan["scopes"])
-    outstanding = sorted({item["path"] for item in queue_items(state_root=state_root) if set(item["scopes"]) & scopes and item["path"] not in covered})
-    if outstanding:
-        raise _core.LocalReadinessError(f"scope/release persistent queue 仍有相关范围 outstanding: {outstanding}")
+        return {"enforcement": enforcement, "blocking": [], "advisories": []}
+
+    candidate_paths = set(plan["paths"])
+    current_digests: dict[str, str] = {}
+    exact: list[dict[str, Any]] = []
+    foreign: list[dict[str, Any]] = []
+    for item in queue_items(state_root=state_root):
+        path = str(item["path"])
+        if path in candidate_paths:
+            current_digest = current_digests.setdefault(path, path_queue_digest(path))
+            if item["input_digest"] == current_digest:
+                exact.append(_classified_queue_item(item, "exact-pending"))
+                continue
+        foreign.append(_classified_queue_item(item, "foreign-pending"))
+
+    key = lambda item: (str(item["path"]).encode("utf-8"), str(item["classification"]))
+    if enforcement == "block_exact_candidate_pending":
+        blocking = exact
+        advisories = foreign
+    else:
+        blocking = []
+        advisories = exact + foreign
+    return {
+        "enforcement": enforcement,
+        "blocking": sorted(blocking, key=key),
+        "advisories": sorted(advisories, key=key),
+    }
+
+
+def inspect_queue_closure(items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Expose current-identity and stale/foreign advisory items to inspect."""
+    enforcement = _queue_closure_enforcement()
+    advisories: list[dict[str, Any]] = []
+    for item in items:
+        path = str(item["path"])
+        classification = (
+            "exact-pending"
+            if item["input_digest"] == path_queue_digest(path)
+            else "foreign-pending"
+        )
+        advisories.append(_classified_queue_item(item, classification))
+    return {
+        "enforcement": enforcement,
+        "blocking": [],
+        "advisories": sorted(
+            advisories,
+            key=lambda item: (str(item["path"]).encode("utf-8"), str(item["classification"])),
+        ),
+    }
+
+
+def assert_scope_queue_closed(plan: dict[str, Any], *, state_root: Path | None = None) -> dict[str, Any]:
+    closure = queue_closure(plan, state_root=state_root)
+    if closure["blocking"]:
+        paths = [item["path"] for item in closure["blocking"]]
+        raise _core.LocalReadinessError(f"scope/release exact candidate queue 仍为 pending: {paths}")
+    return closure
 
 
 def clear_queue_exact(paths: list[str], *, state_root: Path | None = None) -> None:
@@ -268,9 +350,10 @@ def clear_queue_exact(paths: list[str], *, state_root: Path | None = None) -> No
         value = read_queue(queue_path)
         if value is None:
             return
-        queued = {item["path"]: item for item in value["items"]}
-        for path, digest in current_digests.items():
-            if path in queued and queued[path]["input_digest"] != digest:
-                raise _core.LocalReadinessError(f"queue input changed before clear: {path}")
-        retained = [item for item in value["items"] if item["path"] not in current_digests]
+        retained = [
+            item
+            for item in value["items"]
+            if item["path"] not in current_digests
+            or item["input_digest"] != current_digests[item["path"]]
+        ]
         _core._atomic_json(queue_path, {"schema": "local-readiness-queue-v2", "items": retained})

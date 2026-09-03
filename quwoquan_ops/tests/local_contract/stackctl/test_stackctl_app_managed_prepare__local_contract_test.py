@@ -194,7 +194,12 @@ class ManagedRuntimeReadyTest(unittest.TestCase):
         down.assert_not_called()
 
 
-    def test_immutable_running_full_is_reused_after_exact_readback(self) -> None:
+    def _immutable_runtime_readback(
+        self,
+        *,
+        actual_image: str = "sha256:" + "5" * 64,
+        project_label: str = "quwoquan_alpha_release",
+    ) -> tuple[dict[str, Any], list[list[str]], mock.Mock, mock.Mock, mock.Mock]:
         immutable = {
             "attemptId": "immutable-full-1",
             "status": "running",
@@ -218,6 +223,36 @@ class ManagedRuntimeReadyTest(unittest.TestCase):
                 "imageComposition",
             )
         }
+        commands: list[list[str]] = []
+
+        def docker_run(command: list[str], **_kwargs: Any) -> Any:
+            commands.append(command)
+            if command[:2] == ["docker", "ps"]:
+                return __import__("subprocess").CompletedProcess(
+                    command, 0, "container-1\n", ""
+                )
+            if command[:2] == ["docker", "inspect"]:
+                return __import__("subprocess").CompletedProcess(
+                    command,
+                    0,
+                    json.dumps(
+                        [
+                            {
+                                "Id": "container-1-full-id",
+                                "Config": {
+                                    "Labels": {
+                                        "com.docker.compose.project": project_label,
+                                        "com.docker.compose.service": "service-core",
+                                    }
+                                },
+                                "Image": actual_image,
+                            }
+                        ]
+                    ),
+                    "",
+                )
+            raise AssertionError(f"unexpected Docker command: {command}")
+
         with (
             contextlib.ExitStack() as patches,
             tempfile.TemporaryDirectory() as temporary,
@@ -266,6 +301,13 @@ class ManagedRuntimeReadyTest(unittest.TestCase):
             patches.enter_context(
                 mock.patch.object(stackctl, "_runtime_identity_mismatches", return_value=[])
             )
+            patches.enter_context(
+                mock.patch.object(
+                    stackctl,
+                    "runtime_image_owner_names",
+                    return_value=("service-core",),
+                )
+            )
             assert_snapshot = patches.enter_context(
                 mock.patch.object(stackctl, "assert_active_deployment_candidate_snapshot")
             )
@@ -278,6 +320,7 @@ class ManagedRuntimeReadyTest(unittest.TestCase):
                     ),
                 )
             )
+            patches.enter_context(mock.patch.object(stackctl, "run", side_effect=docker_run))
             patches.enter_context(
                 mock.patch.object(
                     stackctl,
@@ -297,14 +340,52 @@ class ManagedRuntimeReadyTest(unittest.TestCase):
                 target="alpha-local",
                 report_dir=Path(temporary),
             )
+        return payload, commands, assert_snapshot, inspect_runtime, start_runtime
+
+    def test_immutable_running_full_is_reused_after_exact_docker_readback(self) -> None:
+        payload, commands, assert_snapshot, inspect_runtime, start_runtime = (
+            self._immutable_runtime_readback()
+        )
 
         self.assertTrue(payload["reused"])
         self.assertFalse(payload["replaced"])
         self.assertEqual(payload["startupAttempt"]["attemptId"], "immutable-full-1")
-        assert_snapshot.assert_called_once_with(snapshot)
+        assert_snapshot.assert_called_once_with({"target": "alpha-local"})
         inspect_runtime.assert_not_called()
         self.assertEqual(
             payload["runtime"]["images"]["service-core"]["runtimeImageId"],
             "sha256:" + "5" * 64,
         )
+        self.assertEqual(
+            commands[0],
+            [
+                "docker",
+                "ps",
+                "--filter",
+                "label=com.docker.compose.project=quwoquan_alpha_release",
+                "--filter",
+                "status=running",
+                "--format",
+                "{{.ID}}",
+            ],
+        )
+        self.assertEqual(commands[1], ["docker", "inspect", "container-1"])
         start_runtime.assert_not_called()
+
+    def test_immutable_running_full_actual_image_drift_blocks_reuse(self) -> None:
+        with self.assertRaises(stackctl.ManagedPreparationBlocked) as raised:
+            self._immutable_runtime_readback(actual_image="sha256:" + "6" * 64)
+        self.assertTrue(
+            any("image drifted: service-core" in detail for detail in raised.exception.details)
+        )
+
+    def test_immutable_running_full_project_label_drift_blocks_reuse(self) -> None:
+        with self.assertRaises(stackctl.ManagedPreparationBlocked) as raised:
+            self._immutable_runtime_readback(project_label="quwoquan_other_release")
+        self.assertTrue(
+            any("project label drifted" in detail for detail in raised.exception.details)
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -15,18 +15,21 @@
 ### In Scope
 
 - 本地 linked worktree 与同源 clone 的创建授权提醒（observe-only 上下文注入），覆盖 Cursor、Codex 两条执行面。
-- 未合入工作（本地领先提交、工作树脏改动、stash）的滞留识别与分级提醒。
+- 未合入工作（本地领先提交、工作树脏改动、stash）的滞留识别与分级提醒；本地 Cursor/Codex 会话支持该提醒，Cloud Agent 当前不支持 session reminder。
 - git hooks 安装状态（`core.hooksPath`）的自检与失效告知。
 - 上述判定所需清单的实时派生方式，以及「不得留存台账」的约束。
-- 六条长期 lane 的 worktree 身份与 clean/bootstrap 一致性，在准出门禁中验证。
+- 项目容器根、bare hub、六条同名 lane worktree 与唯一 `integration/dev1.0` 的固定身份、路径、clean/bootstrap 一致性，在准出门禁中验证。
+- 会话提醒展示当前 identity、相对 canonical `dev1.0` 的 ahead/behind、dirty 数和路径 ownership drift。
+- 同一物理主机上跨 worktree 共享的设备与 local-runtime 互斥身份及其 holder evidence 边界。
 
 ### Out of Scope
 
 - 分支角色、合法 PR 边与晋级准入，由 [`daily-merge-release-strategy`](../../deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md) 的 `REQ-001`、`REQ-002` 拥有，本 Story 只引用不重复。
-- 远端 GitHub branch protection、ruleset 与托管侧强制，见该 Story 的 `OPEN-002`。
+- 远端 GitHub branch protection、ruleset 与托管侧强制，见 [`daily-merge-release-strategy` OPEN-002](../../deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#open-002)。
 - hook 面的任何阻断（deny/ask）。执行面 hook 只注入上下文，判断权留给执行体；hook 运行在开发者本机且执行体有权改写环境变量与仓内文件，本就不构成安全边界。真正的硬门只在准出：lane→`dev1.0` 合入、交接、发布。
 - 工作副本的自动删除、自动合并或自动 stash。提醒只产生可观察告知，处置由人决定。
 - 同一 worktree 内多会话/多子代理的 writer 互斥。共享工作树的合作规则由根 `AGENTS.md` 的行为条款承担，不以 hook、claim 文件或锁实现。
+- canonical launcher 接入 device lock 与 `launch-attempt` identity 的启动规范化；该能力仍为本 Story 的 `OPEN-002`，不属于当前工程治理实现。
 
 ## 3. 行为要求
 
@@ -47,10 +50,12 @@
 - 「未合入」由三类事实的并集判定：领先 `origin/dev1.0` 的本地提交、工作树脏改动、stash 条目。三类事实全部为空的工作副本不产生提醒。
 - 滞留时长取三类事实中最早的发生时间：最早未合入提交的 committer date、最早脏文件 mtime、最早 stash 时间。
 - 事实必须归属到真正持有它的工作副本。stash 存放在仓库 common dir，全部 linked worktree 与主 worktree 共享同一份，因此 stash 只归属独立 clone；未合入提交必须以主仓库的集成分支为基准判定，不得采用副本自身可能陈旧的远程引用。错误归因会让刚创建的干净副本立刻显示为已滞留，几次假报警之后整条提醒就不再被阅读。
-- 提醒必须在两个时机触达：任何一次向 `dev1.0` 的提交完成后立即触达；每个执行面按最小间隔触达，使自然日内至少提醒一次。
-- 投递事件按执行面各自声明的输出能力选择。执行面的会话开始事件不支持投递消息时，必须回落到该执行面确实支持输出的事件；挂在不支持输出的事件上会让 hook 正常退出却什么也不投递，而静默失效正是本 Story 要治理的那类问题。回落到高频事件时，未到时点的短路判断不得引入第二份间隔参数。
+- `post-commit` 只原子写入可删除的 due/dirty marker，使下一次受支持的 session 检查；该窄路径不得加载 policy、inventory 或执行任何 git 扫描，写入失败必须 fail-open。完整 inventory 只在本地 Cursor/Codex `sessionStart` 到期时运行。
+- Cursor 本地会话使用官方 `sessionStart` 事件，并以 JSON 顶层 `additional_context` 投递；Codex 保持现有 `SessionStart` 与 `hookSpecificOutput.additionalContext` 路径，不在本 Story 推断或改造真实协议。Cursor `beforeShellExecution` 不得保留无 matcher 的 every-shell reminder fallback。Cursor hooks 配置热重载，无需 **Reload Window**。
+- Cloud Agent 当前不支持 `sessionStart`，诊断身份为 `OPS.WORKTREE.CLOUD_SESSION_REMINDER_UNSUPPORTED`：该能力明确标为 unsupported，不以 every-shell 高频 fallback 伪装支持，也不新增硬门。
+- 完整扫描必须受单一总 wall-clock budget 约束，不能只依赖 inventory 子进程逐调用 timeout；超时或任意异常记录 `lastError`/`elapsedMs` 状态、保留 due marker 供下次重试，并始终 fail-open。
 - 滞留时长超过策略阈值的工作副本升级为强提醒，并给出该副本路径、未合入事实计数与滞留天数。
-- 提醒去重状态属于可删除运行输出，丢失后只退化为多提醒一次，不得因其缺失而漏报。
+- 提醒到期、去重与最近扫描状态都属于可删除运行输出；状态缺失只退化为下一次受支持的 session 多扫描一次，不得漏报。
 - 识别范围必须覆盖 linked worktree 与策略声明的发现根下的同源 clone。clone 目标不继承本仓库 hooks，只能由源侧识别。
 - 失败身份为 `OPS.WORKTREE.UNMERGED_OVERDUE`。
 
@@ -58,7 +63,7 @@
 ### REQ-003 hooks 安装状态自检
 
 - `core.hooksPath` 未指向仓内受版本控制的 hook 目录时，本仓库的提交与推送门禁全部失效，该状态本身必须可被发现。
-- 因为 hooks 失效时 pre-commit 不会运行，自检不得只挂在 pre-commit；必须由聚合门禁与执行面会话开始两处交叉承担。
+- 因为 hooks 失效时 pre-commit 不会运行，自检不得只挂在 pre-commit；必须由聚合门禁与受支持的本地执行面 sessionStart 两处交叉承担。Cloud Agent 的能力缺口按 REQ-002 显式诊断，不构造伪自检。
 - 安装入口必须在仓库根被正确解析，并可幂等重复执行。
 - 失败身份为 `OPS.WORKTREE.HOOKS_NOT_INSTALLED`。
 
@@ -66,17 +71,29 @@
 ### REQ-004 清单只实时派生，不得留存台账
 
 - worktree 与 clone 清单只能由 `git worktree list` 与策略声明的发现根实时派生；禁止提交或维护工作副本 registry、inventory、已授权 allowlist 与滞留基线。
-- `git worktree list --porcelain` 失败、linked worktree probe 失败、detached、非 fixed lane、重复 lane 绑定或路径重复均 fail-closed，不得把失败退化为空清单；默认门禁只验证已发现 linked worktree，不要求六条 lane 已全部存在。
-- 全量身份门开启时必须精确存在六条 fixed lane，且每条 worktree clean、HEAD 与优先 `origin/dev1.0` 的 canonical integration ref（不存在时才回落本地 `dev1.0`）一致。
-- 策略参数（数量上限、滞留阈值、提醒最小间隔、发现根、失败码）集中在唯一策略文件，实现不得内联第二份默认值。
+- `worktree_policy.yaml` 是物理布局唯一真相源：project root 下必须恰有一个 bare hub `quwoquan.git/`、一个 `integration/ -> dev1.0`，以及六条 `lane/<name> -> <name>/`。分支闭集只读 `branch_policy.yaml`，路径 ownership 只读 `lane_ownership.yaml`，不得复制。
+- `git worktree list --porcelain` 的 `bare` record 只验证 hub 身份，绝不运行 status/probe 或算作脏 worktree；authority 失败、linked worktree probe 失败、detached、非 integration/fixed lane、分支与目录错绑、重复 lane/integration 或路径重复均 fail-closed。
+- 默认门禁验证已发现 lane 的路径身份并单独要求唯一 integration clean；全量身份门必须精确六条 lane 均 clean 且 HEAD 等于优先 `origin/dev1.0`（不存在时回落本地 `dev1.0`）的 canonical SHA，integration 也必须 clean 且同 HEAD。
+- 会话输出必须列出每个 worktree 的 identity/ahead/behind/dirty 与 engineering ownership drift；drift 只观察不阻断，避免跨域小改动把一个 Increment 拆成多个 writer。
+- 设备与 local-runtime 属于同一物理主机上跨 worktree 共享的资源，其互斥锁必须 host-scoped，不得写入任一 worktree 的 `.qwq_output` 冒充隔离；holder evidence 至少包含 `pid`、`worktree`、`lane` 与 `head`。`integration/ -> dev1.0` 是只读集成 worktree；从该目录承载共享 runtime 时，runtime host 身份必须显式声明且不得从 worktree-local pid/receipt 推断。
+- 策略参数（固定布局、滞留阈值、提醒最小间隔、发现根、失败码）集中在唯一策略文件，实现不得内联第二份默认值。
+
+
+### 执行面能力矩阵与诊断
+
+| 执行面 | session reminder | 输出形状 | 诊断/说明 |
+| --- | --- | --- | --- |
+| Cursor 本地 Agent | supported | `sessionStart` → 顶层 `additional_context` | hooks 配置热重载，无需 Reload Window |
+| Codex 本地 | supported | 现有 `SessionStart` → `hookSpecificOutput.additionalContext` | 保持当前命令路径；本 Story 不处理真实协议 |
+| Cloud Agent | unsupported | 无 | `OPS.WORKTREE.CLOUD_SESSION_REMINDER_UNSUPPORTED`；不设 every-shell fallback，不新增硬门 |
 
 ## 4. 契约引用
 
-- canonical：`quwoquan_ops/policies/worktree_policy.yaml`
+- canonical（物理布局）：`quwoquan_ops/policies/worktree_policy.yaml`
+- canonical（路径 ownership）：`quwoquan_ops/policies/lane_ownership.yaml`
 - canonical：`quwoquan_ops/cli/lib/local_worktree_inventory.py`
 - canonical：`quwoquan_ops/hooks/worktree_authz_guard.py`
 - canonical：`quwoquan_ops/hooks/worktree_merge_reminder.py`
-- canonical：`quwoquan_ops/hooks/worktree_session_reminder_gate.sh`
 - canonical：`quwoquan_ops/hooks/run_install_hooks.sh`
 - canonical：`quwoquan_ops/gate/verify_local_worktree_lifecycle.py`
 - canonical：`.cursor/hooks.json`
@@ -96,20 +113,21 @@
 - AND 同一 command 中每个创建 segment 分别留痕；已留痕且 canonical 的 segment 静默放行并写入可删除运行记录，未留痕或非 canonical 的 segment 只附带对应提醒/模板，不产生任何受版本控制的授权清单。
 
 <a id="gwt-002"></a>
-### GWT-002 滞留工作在提交与会话开始时被提醒
+### GWT-002 提交轻量标记且到期会话执行有界扫描
 
 - GIVEN 存在至少一个含未合入提交、脏改动或 stash 的工作副本，且其最早未合入事实早于策略阈值。
-- WHEN 向 `dev1.0` 完成一次提交，或任一执行面开始新会话且距上次提醒已超过最小间隔。
-- THEN 提醒列出该副本路径、未合入事实计数与滞留天数，并以 `OPS.WORKTREE.UNMERGED_OVERDUE` 标识超阈值项。
+- WHEN 完成一次提交，或受支持的本地执行面开始新会话且 due marker 在场/距上次扫描已超过最小间隔。
+- THEN `post-commit` 只原子标记 due，不调用 collect/policy/inventory/git；到期 sessionStart 才在总 wall-clock budget 内扫描，并列出副本路径、未合入事实计数与滞留天数，以 `OPS.WORKTREE.UNMERGED_OVERDUE` 标识超阈值项。
 - AND 三类未合入事实全部为空的工作副本不出现在提醒中；删除提醒去重状态后重新触发只会多提醒一次，不会漏报。
 - AND 刚创建且自身干净的 linked worktree 不因共享 stash 或副本自身的陈旧远程引用被判为滞留。
-- AND 回落到高频事件的投递通道在未到时点时只返回放行、不携带消息，且其短路判断不内联提醒间隔。
+- AND Cursor 输出形状为顶层 `additional_context`，Codex 保持当前 SessionStart 输出形状；所有 reminder hook 路径都返回成功，不出现 `exit 2`/`failClosed`，扫描失败记录诊断并保留 marker。
+- AND `.cursor/hooks.json` 不存在 every-shell reminder；本地 Cursor hooks 热重载无需 Reload Window。Cloud Agent 显式报告 `OPS.WORKTREE.CLOUD_SESSION_REMINDER_UNSUPPORTED`，但不因此阻断任何动作。
 
 <a id="gwt-003"></a>
 ### GWT-003 hooks 失效可被发现且安装入口可正确解析
 
 - GIVEN `core.hooksPath` 未设置，或未指向仓内受版本控制的 hook 目录。
-- WHEN 执行聚合门禁，或任一执行面开始新会话。
+- WHEN 执行聚合门禁，或受支持的本地执行面开始新会话。
 - THEN 返回 `OPS.WORKTREE.HOOKS_NOT_INSTALLED` 并给出安装命令，且该判定不依赖 pre-commit 自身运行。
 - AND 安装入口在仓库根正确解析并可幂等重复执行；执行后 `core.hooksPath` 指向仓内 hook 目录，提交与推送门禁恢复生效。
 
@@ -118,8 +136,9 @@
 
 - GIVEN 实时 worktree authority 与六条 fixed lane policy。
 - WHEN 准出门禁 `verify_local_worktree_lifecycle.py` 验证已发现 linked worktree，或以全量模式要求六条 lane 全部存在。
-- THEN inventory authority 失败、detached/非 lane/重复身份、probe error、全量 lane 缺失/dirty/HEAD 漂移均返回 typed blocker；默认模式不要求六条 lane 已全部创建。
-- AND 该判定只在显式运行门禁（本地 `make verify-local-worktree-lifecycle`、lane→`dev1.0` PR 的 CI）时生效，不挂在任何执行面 hook 或普通 commit gate 的无条件 static checks 上；改动 worktree 治理实现/策略时，commit gate 只选择 lifecycle focused local_contract；门禁 recovery 要求长期 lane fast-forward resync 并保留 worktree，clone 或额外废弃副本才由人工决定是否删除。
+- THEN bare hub 被识别但不算 worktree/dirty；inventory authority 失败、detached/非 integration 或 lane、branch-path 错绑、重复身份、probe error、唯一 integration 缺失/dirty，以及全量 lane 缺失/dirty/HEAD 漂移均返回 typed blocker；默认模式不要求六条 lane 已全部创建。
+- AND 该判定只在显式运行门禁（本地 `make verify-local-worktree-lifecycle`、lane→`dev1.0` PR 的 CI）时生效，不挂在任何执行面 hook 或普通 commit gate 的无条件 static checks 上；改动 worktree 治理实现/策略时，commit gate 只选择 lifecycle focused local_contract。门禁 recovery 要求长期 lane fast-forward resync 并保留 worktree，clone 或额外废弃副本才由人工决定是否删除。
+- AND 设备与 local-runtime 锁在同一 host 跨 worktree 互斥并产出含 `pid/worktree/lane/head` 的 holder evidence，integration 仅以显式 runtime host 身份承载共享 runtime、不能因其存在而获得本地提交权限。
 
 ## 6. 依赖
 
@@ -131,7 +150,26 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 lane recovery 处置尚无直接行为测试
+### OPEN-001 六 lane 物理布局准出闭合
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺验收证据：当前物理目录已拆分，但其他 lane 尚有 WIP、落后或领先 canonical `dev1.0`，还没有一次六 lane clean + same HEAD 的真实 `lane-preflight` PASS，不能把“目录存在”冒充准出。
+- 完成判定：`GWT-004` 满足，且 `make lane-preflight` 在唯一 bare hub、唯一 clean integration、六条同名 lane worktree 均 clean 且 HEAD 等于 canonical `dev1.0` 时通过。
+
+<a id="open-002"></a>
+### OPEN-002 canonical launcher 设备锁与启动身份接线
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：Ops 已提供 host-scoped device/local-runtime lock 与 holder evidence，但 canonical launcher 尚未在同一启动事务中获取 device lock 并绑定精确 `launch-attempt` identity；当前工程治理只声明共享资源和 integration/runtime-host 边界，不复制启动实现。
+- 完成判定：`GWT-004.t6` 保持成立；启动规范 owner 的验收直接证明 canonical launcher 在安装/activation/launch 全窗口持有精确 device lock、冲突时回读 holder evidence，并把同一 lock owner 的 worktree/lane/head 绑定到唯一 `launch-attempt` receipt。
+- 依赖：`lane/ops` host-scoped lock primitive、canonical launcher owner 与 app-launch-attempt contract。
+
+<a id="open-003"></a>
+### OPEN-003 lane recovery 处置尚无直接行为测试
 
 - 类型：`capability_gap`
 - 优先级：`P2`

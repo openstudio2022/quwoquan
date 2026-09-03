@@ -48,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     bundle = commands.add_parser("bundle")
     bundle.add_argument("--refs", required=True, help="JSON object of explicit owner receipt refs")
     bundle.add_argument("--run-id", required=True)
+    bundle.add_argument("--handoff-ref")
     return parser
 
 
@@ -64,6 +65,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "bundle":
         try:
             refs = _read_input(args.refs)
+            if not isinstance(refs, dict):
+                raise ContractError("bundle refs must be an object")
+            if args.handoff_ref is not None:
+                if refs.get("handoff") not in (None, args.handoff_ref):
+                    raise ContractError("handoff ref sources conflict")
+                refs["handoff"] = args.handoff_ref
             path = assemble_evidence_bundle(contract, run_id=args.run_id, refs=refs)
             _emit({"result": "bundle_assembled", "path": path.relative_to(ROOT).as_posix()})
             return 0

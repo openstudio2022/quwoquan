@@ -94,17 +94,24 @@ def _merge_base_sha(repo_root: Path, head_sha: str) -> str:
     return head_sha
 
 
-def managed_paths(payload: dict[str, Any], *, repo_root: Path) -> list[str]:
-    paths = {
-        normalize_repo_relative_path(str(payload["target"]), repo_root),
-        normalize_repo_relative_path(str(payload["resolved_owner"]), repo_root),
-        *[normalize_repo_relative_path(str(item["path"]), repo_root) for item in payload["owner_chain"]],
-        *[normalize_repo_relative_path(str(item["path"]), repo_root) for item in payload["canonical_contexts"]],
-        *[normalize_repo_relative_path(str(item), repo_root) for item in payload["applicable_agents"]],
-        GENERATOR_PATH,
-        CONTRACT_PATH,
+def owner_identity_projection(payload: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    """Return the stable PRE identity, excluding snapshots and volatile bytes."""
+
+    return {
+        "schema_version": payload["schema_version"],
+        "target": normalize_repo_relative_path(str(payload["target"]), repo_root),
+        "resolved_owner": normalize_repo_relative_path(str(payload["resolved_owner"]), repo_root),
+        "owner_chain": [
+            {
+                "level": item["level"],
+                "node_id": item["node_id"],
+                "path": normalize_repo_relative_path(str(item["path"]), repo_root),
+            }
+            for item in payload["owner_chain"]
+        ],
+        "generator_identity": GENERATOR_PATH,
+        "contract_identity": CONTRACT_PATH,
     }
-    return sorted(paths, key=lambda item: item.encode("utf-8"))
 
 
 def build_feature_context_fingerprint(
@@ -113,46 +120,52 @@ def build_feature_context_fingerprint(
     repo_root: Path,
     captured_by: str = "feature_tree",
 ) -> dict[str, Any]:
-    identity = {key: value for key, value in payload.items() if key != "evidence_fingerprint"}
-    paths = managed_paths(identity, repo_root=repo_root)
-    head_sha = _head_sha(repo_root)
+    identity = owner_identity_projection(payload, repo_root=repo_root)
     return build_evidence_fingerprint(
         {
             "git": {
-                "head_sha": head_sha,
-                "merge_base_sha": _merge_base_sha(repo_root, head_sha),
+                "head_sha": canonical_digest("owner-identity-head-independent"),
+                "merge_base_sha": canonical_digest("owner-identity-merge-base-independent"),
             },
-            "workspace": workspace_digests(paths, repo_root=repo_root),
+            "workspace": workspace_digests([], repo_root=repo_root),
             "assets": {
                 "canonical_assets_digest": canonical_digest(identity),
                 "review_assets_digest": canonical_digest(
-                    [snapshot_path(path, repo_root=repo_root) for path in paths]
+                    {
+                        "generator": snapshot_path(GENERATOR_PATH, repo_root=repo_root),
+                        "contract": snapshot_path(CONTRACT_PATH, repo_root=repo_root),
+                    }
                 ),
             },
             "execution": {
                 "commands_digest": canonical_digest([]),
                 "toolchain_digest": canonical_digest(
                     {
-                        "python": list(sys.version_info[:3]),
                         "feature_context_manifest_schema": contract_schema_version(
                             "feature_context_manifest"
-                        ),
+                        )
                     }
                 ),
-                "provider_digest": canonical_digest("feature_tree"),
+                "provider_digest": canonical_digest("feature_tree.owner_identity"),
                 "generator_digest": canonical_digest(
-                    snapshot_path(GENERATOR_PATH, repo_root=repo_root)
+                    {
+                        "generator": snapshot_path(GENERATOR_PATH, repo_root=repo_root),
+                        "contract": snapshot_path(CONTRACT_PATH, repo_root=repo_root),
+                    }
                 ),
             },
         },
+        captured_at="owner-identity-v4",
         captured_by=captured_by,
-        captured_metadata={"consumer": "feature_context_manifest"},
+        captured_metadata={"consumer": "feature_context_owner_identity"},
     )
 
 
 def validate_current_feature_context_fingerprint(
     payload: dict[str, Any], *, repo_root: Path
 ) -> dict[str, Any]:
+    """Validate stable owner identity; current workspace bytes are intentionally ignored."""
+
     actual = resolve_fingerprint_binding(
         payload.get("evidence_fingerprint"), repo_root=repo_root
     )
@@ -162,7 +175,7 @@ def validate_current_feature_context_fingerprint(
     for field in ("ref", "digest", "digest_payload"):
         if actual[field] != expected[field]:
             raise EvidenceFingerprintError(
-                f"feature context manifest EvidenceFingerprint {field} stale"
+                f"feature context owner identity EvidenceFingerprint {field} invalid"
             )
     return actual
 

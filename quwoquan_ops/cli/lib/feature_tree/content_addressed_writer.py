@@ -141,9 +141,9 @@ def _write_content_addressed_bytes(
 ) -> Path:
     """目录 fd 绑定的原子 create-once；既不跟随 symlink，也不覆盖。"""
 
-    if subdirectory not in (None, "receipts"):
+    if subdirectory not in (None, "receipts", "candidates/by-fingerprint"):
         raise ValueError(
-            "GATE_BLOCK: immutable ref 只允许 canonical receipts 子目录"
+            "GATE_BLOCK: immutable ref 只允许 canonical receipts/candidates 子目录"
         )
     path = _content_addressed_path(content, subdirectory=subdirectory)
     output_root = Path(os.path.abspath(context.OUTPUT_ROOT))

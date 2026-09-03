@@ -14,6 +14,9 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Protocol
 
+from quwoquan_ops.cli.commands.app_dependency_sync_ios import (
+    assert_ios_generated_metadata as _assert_ios_generated_metadata,
+)
 from quwoquan_ops.cli.commands.app_dependency_sync_projection import project
 from quwoquan_ops.cli.lib.app_dependency_sync_diagnostics import (
     dependency_failure_cause,
@@ -677,26 +680,6 @@ def _pod_environment(
         }
     )
     return environment, home, cache
-
-
-def _assert_ios_generated_metadata(app_root: Path) -> None:
-    ios_root = app_root / "ios"
-    encoded, _mode = read_regular_nofollow(
-        ios_root / "Flutter/Generated.xcconfig", label="fresh Generated.xcconfig"
-    )
-    expected = f"FLUTTER_APPLICATION_PATH={app_root}"
-    if expected not in encoded.decode("utf-8").splitlines():
-        raise ValueError("APP.DEPENDENCY.generated_xcconfig_projection_mismatch")
-    read_regular_nofollow(
-        ios_root / "Flutter/Flutter.podspec", label="fresh Flutter.podspec"
-    )
-    project, _mode = read_regular_nofollow(
-        ios_root / "Runner.xcodeproj/project.pbxproj", label="iOS project"
-    )
-    if b"FlutterGeneratedPluginSwiftPackage" in project or list(
-        ios_root.rglob("FlutterGeneratedPluginSwiftPackage")
-    ):
-        raise ValueError("APP.DEPENDENCY.flutter_spm_residue_forbidden")
 
 
 def _build_ios_component(

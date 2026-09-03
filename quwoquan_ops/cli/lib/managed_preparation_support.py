@@ -445,22 +445,132 @@ def _managed_inspect_running_full_runtime(
             + ", ".join(mismatches)
         )
     _stackctl.assert_active_deployment_candidate_snapshot(dict(snapshot))
-    # Alpha/Beta/Gamma 本地 package 由 active candidate 封存本机 OCI image ID；
-    # `_inspect_gamma_release_runtime` 额外要求 registry RepoDigest，只适用于 formal
-    # Gamma pull，不适用于本地 package ref。这里已由 startup/candidate identity
-    # 全字段比对证明 imageComposition 精确一致，再由 canonical health 复验现况。
-    runtime_images = {
-        service: {"runtimeImageId": str(descriptor.get("ref") or "")}
-        for service, descriptor in sorted(
-            dict(expected_identity["imageComposition"]["images"]).items()
-        )
-        if isinstance(descriptor, Mapping)
-    }
-    if not runtime_images or any(
-        _MANAGED_DIGEST_RE.fullmatch(str(item.get("runtimeImageId") or "")) is None
-        for item in runtime_images.values()
-    ):
+    image_composition = expected_identity.get("imageComposition")
+    expected_descriptors = (
+        image_composition.get("images")
+        if isinstance(image_composition, Mapping)
+        else None
+    )
+    if not isinstance(expected_descriptors, Mapping) or not expected_descriptors:
         raise RuntimeError("running immutable full runtime image identity is incomplete")
+    canonical_services = set(_stackctl.runtime_image_owner_names(_stackctl.ROOT))
+    if set(str(service) for service in expected_descriptors) != canonical_services:
+        raise RuntimeError(
+            "running immutable full runtime first-party image closure drifted"
+        )
+    expected_images: dict[str, str] = {}
+    for raw_service, raw_descriptor in sorted(expected_descriptors.items()):
+        service = str(raw_service or "").strip()
+        descriptor = raw_descriptor if isinstance(raw_descriptor, Mapping) else {}
+        image_id = str(descriptor.get("ref") or "").strip()
+        if (
+            not service
+            or _MANAGED_DIGEST_RE.fullmatch(image_id) is None
+            or raw_service != service
+            or descriptor.get("ref") != image_id
+        ):
+            raise RuntimeError(
+                "running immutable full runtime image identity is incomplete"
+            )
+        expected_images[service] = image_id
+
+    compose_project = str(immutable_attempt.get("composeProject") or "").strip()
+    if not compose_project or immutable_attempt.get("composeProject") != compose_project:
+        raise RuntimeError("running immutable full runtime Compose project is missing")
+    lookup = _stackctl.run(
+        [
+            "docker",
+            "ps",
+            "--filter",
+            f"label=com.docker.compose.project={compose_project}",
+            "--filter",
+            "status=running",
+            "--format",
+            "{{.ID}}",
+        ],
+        timeout_seconds=30,
+    )
+    if lookup.returncode != 0:
+        detail = (lookup.stderr or lookup.stdout or "").strip()
+        raise RuntimeError(
+            "running immutable full runtime Docker inventory failed: "
+            + (detail or f"exit={lookup.returncode}")
+        )
+    container_ids = [line.strip() for line in lookup.stdout.splitlines() if line.strip()]
+    if not container_ids or len(container_ids) != len(set(container_ids)):
+        raise RuntimeError(
+            "running immutable full runtime Docker inventory is empty or ambiguous"
+        )
+    inspected = _stackctl.run(
+        ["docker", "inspect", *container_ids],
+        timeout_seconds=30,
+    )
+    if inspected.returncode != 0:
+        detail = (inspected.stderr or inspected.stdout or "").strip()
+        raise RuntimeError(
+            "running immutable full runtime Docker inspect failed: "
+            + (detail or f"exit={inspected.returncode}")
+        )
+    try:
+        inspection = json.loads(inspected.stdout)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise RuntimeError(
+            "running immutable full runtime Docker inspect is not valid JSON"
+        ) from exc
+    if not isinstance(inspection, list) or len(inspection) != len(container_ids):
+        raise RuntimeError(
+            "running immutable full runtime Docker inspect closure drifted"
+        )
+    actual_images: dict[str, set[str]] = {}
+    observed_ids: set[str] = set()
+    for item in inspection:
+        if not isinstance(item, Mapping):
+            raise RuntimeError(
+                "running immutable full runtime Docker inspect entry is invalid"
+            )
+        container_id = str(item.get("Id") or "").strip()
+        config = item.get("Config")
+        labels = config.get("Labels") if isinstance(config, Mapping) else None
+        if (
+            not container_id
+            or not any(container_id.startswith(expected) for expected in container_ids)
+            or container_id in observed_ids
+            or not isinstance(labels, Mapping)
+            or labels.get("com.docker.compose.project") != compose_project
+        ):
+            raise RuntimeError(
+                "running immutable full runtime Docker project label drifted"
+            )
+        observed_ids.add(container_id)
+        service = str(labels.get("com.docker.compose.service") or "").strip()
+        image_id = str(item.get("Image") or "").strip()
+        if not service or _MANAGED_DIGEST_RE.fullmatch(image_id) is None:
+            raise RuntimeError(
+                "running immutable full runtime Docker service/image identity is invalid"
+            )
+        actual_images.setdefault(service, set()).add(image_id)
+    if len(observed_ids) != len(container_ids):
+        raise RuntimeError(
+            "running immutable full runtime Docker inspect identity drifted"
+        )
+
+    runtime_images: dict[str, dict[str, str]] = {}
+    for service, expected_image_id in sorted(expected_images.items()):
+        replicas = actual_images.get(service, set())
+        if not replicas:
+            raise RuntimeError(
+                f"running immutable full runtime is missing service: {service}"
+            )
+        if len(replicas) != 1:
+            raise RuntimeError(
+                f"running immutable full runtime replicas drifted: {service}"
+            )
+        actual_image_id = next(iter(replicas))
+        if actual_image_id != expected_image_id:
+            raise RuntimeError(
+                f"running immutable full runtime image drifted: {service}"
+            )
+        runtime_images[service] = {"runtimeImageId": actual_image_id}
     health = _stackctl.command_health(
         __import__("argparse").Namespace(
             command="health",

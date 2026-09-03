@@ -30,4 +30,8 @@ metadata:
 
 ## 条件性交接
 
-沿用被恢复 Skill 的条件性交接；只有 canonical 六类 handoff 触发成立时持久交接。
+持久交接只认 producer 发布到 current git-common-dir authoritative store 后返回的显式 `handoff-ref-v1`；`.qwq_output` 仅为 projection/cache。恢复或准出必须显式传 ref，禁止扫描 latest、环境变量 truth 或依赖本机 clone/worktree inventory；跨 runner 传同一 ref+exact artifact bytes。
+
+空 triggers 必须立即返回 `no_persistent_handoff`，不要求 artifact、Review 或 authority，也不创建 projection/store。六类 canonical trigger（`cross_session_incomplete`、`multi_party_parallel`、`environment_or_release`、`external_blocker`、`evidence_reuse`、`user_explicit_request`）任一成立都进入 owner/candidate/named evidence/Reviewer/consolidation 完整链和 authoritative create-once store；前两类也是正式 durable handoff，不是轻量 checkpoint。
+
+当前没有 ordinary cross-session 轻量 checkpoint 的 canonical owner/schema；需要该能力时保持 OPEN，不临时创建第二状态源。Reviewer PASS 或当前 Human 聊天同意都不签发正式 authority；正式 provider 缺失继续 blocked/OPEN。

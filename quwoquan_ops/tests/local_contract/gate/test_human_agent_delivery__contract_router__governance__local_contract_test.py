@@ -15,6 +15,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+pytestmark = pytest.mark.usefixtures("isolated_qwq_output_root")
+
 ROOT = Path(__file__).resolve().parents[4]
 CLI = ROOT / "quwoquan_ops/cli/human_agent_delivery.py"
 if str(ROOT / "quwoquan_ops/cli") not in sys.path:
@@ -307,8 +309,8 @@ def test_campaign_uses_one_approval_and_stage_technical_gates() -> None:
     ("admission", "expected"),
     [
         (
-            {"status": "admitted", "write_concurrency": 2},
-            {"s4_admission": "admitted", "write_concurrency": 2},
+            {"status": "admitted", "write_concurrency": 6},
+            {"s4_admission": "admitted", "write_concurrency": 6},
         ),
         (
             {"status": "not_admitted", "write_concurrency": 1},

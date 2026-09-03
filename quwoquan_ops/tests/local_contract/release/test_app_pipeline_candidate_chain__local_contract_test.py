@@ -890,8 +890,11 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     combined = f"{text}\n{platform_text}\n{lease_text}\n{runner_text}"
     assert 'export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"' in runner_text
     assert 'cd "$ROOT"' in runner_text
-    assert "actions/upload-artifact@" not in combined
-    assert "actions/download-artifact@" not in combined
+    impact_job_text = text.split("  impact:\n", 1)[1].split("\n  branch_policy:\n", 1)[0]
+    device_evidence_transport = combined.replace(impact_job_text, "")
+    assert "Upload typed device impact plan" in impact_job_text
+    assert "actions/upload-artifact@" not in device_evidence_transport
+    assert "actions/download-artifact@" not in device_evidence_transport
     assert "rm -rf" not in combined
     assert "git clean" not in combined
     assert "ASSISTANT_MODEL_PROVIDER: deterministic" not in combined
@@ -925,10 +928,18 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     timing_gate = json.loads(TIMING_BUDGETS.read_text(encoding="utf-8"))["gates"][
         "05.app_env_device_matrix_pr"
     ]
-    assert timing_gate["profileHardFailSeconds"]["mainline_auto_prod"] == 480
-    assert timing_gate["profileHardFailSeconds"]["nightly_full"] == 7200
+    assert timing_gate["profileTiming"]["mainline_auto_prod"] == {
+        "policy": "release_sla",
+        "hardFailSeconds": 7800,
+    }
+    assert timing_gate["profileTiming"]["nightly_full"] == {
+        "policy": "telemetry_advisory",
+        "hardFailSeconds": 7200,
+    }
     assert '--budget-profile "$VALIDATION_PROFILE"' in text
     assert "canonical App device timing status=${timing_status}" in text
+    assert "TIMING_PR_WARN" in text
+    assert "GATE_BLOCK: canonical App device release SLA exceeded" in text
     assert '"$calendar_lead_time_seconds" -gt "$profile_hard_fail_seconds"' not in text
     assert 'if [ "$calendar_lead_time_seconds" -gt 480 ]' not in text
     assert 'STACKCTL_AUTO_WIPE_MIGRATION_DRIFT: "0"' in text
@@ -963,7 +974,7 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "source-built or destructive Beta formal runtime" not in text
     assert "steps.formal_runtime.outputs.started" in text
     assert "destructiveActions" in DEVICE_EVIDENCE.read_text(encoding="utf-8")
-    assert combined.count("persist-credentials: false") == 10
+    assert combined.count("persist-credentials: false") == 11
     assert "config --local http.https://github.com/.extraheader" not in combined
     checkout_steps = [
         step
@@ -977,7 +988,7 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
         for step in job.get("steps", [])
         if str(step.get("uses") or "").startswith("actions/checkout@")
     ]
-    assert len(checkout_steps) == 9
+    assert len(checkout_steps) == 10
     assert len(called_checkout_steps) == 1
     assert sum(step["with"].get("clean") == "false" for step in checkout_steps) == 7
     assert all(step["with"]["clean"] == "false" for step in called_checkout_steps)

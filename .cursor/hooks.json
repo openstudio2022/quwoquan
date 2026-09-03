@@ -9,9 +9,11 @@
       {
         "command": "PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/hooks/worktree_authz_guard.py --harness cursor",
         "matcher": "worktree\\s+add|git\\s+clone|checkout\\s+-[bB]|switch\\s+-[cC]|git\\s+branch"
-      },
+      }
+    ],
+    "sessionStart": [
       {
-        "command": "bash quwoquan_ops/hooks/worktree_session_reminder_gate.sh"
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/hooks/worktree_merge_reminder.py --harness cursor --reason session"
       }
     ]
   }

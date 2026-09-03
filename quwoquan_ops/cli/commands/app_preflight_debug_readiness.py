@@ -121,5 +121,3 @@ def _runtime_container_liveness_evidence(
         "issues": report.issues(),
         "warnings": [],
     }
-
-

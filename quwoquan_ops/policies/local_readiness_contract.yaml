@@ -10,7 +10,7 @@ fingerprint:
   canonical_implementation: quwoquan_ops/cli/lib/evidence_fingerprint.py
   exact_input_groups: [git, workspace, assets, execution]
   workspace_categories: [tracked, untracked, deleted, renamed, symlink]
-  invalidating_inputs: [source, lockfile, toolchain, command, owner_manifest, review_consolidation, required_evidence]
+  invalidating_inputs: [source, lockfile, toolchain, command, timeout_policy, owner_identity, candidate_evidence, review_consolidation, required_evidence]
 profiles:
   fast:
     required_checks: [static, focused]
@@ -23,6 +23,24 @@ profiles:
     required_checks: [static, focused, scope_build, release]
     allow_deferred: false
     required_admission: [review_consolidation_pass, required_named_evidence_pass]
+timeouts:
+  schema_version: 1
+  default_seconds: 300
+  default_by_level:
+    fast: 120
+    scope: 600
+    release: 1200
+  default_by_phase:
+    static: 60
+    focused: 300
+    scope_build: 900
+    release: 1800
+  maximum_by_level:
+    fast: 300
+    scope: 1800
+    release: 7200
+  overrides_by_check: {}
+  resolution_order: [check, phase, level, default]
 scope_profiles:
   service:
     focused: [go_test]
@@ -40,8 +58,8 @@ scope_profiles:
     focused: [feature_tree]
     scope_build: [feature_tree]
 commands:
-  recovery_scope_staged: python3 quwoquan_ops/cli/local_readiness.py scope --staged --owner-manifest <current-manifest> --review-consolidation <pass.json> --required-evidence <pass-receipt.json>
-  recovery_release_push_stdin: python3 quwoquan_ops/cli/local_readiness.py release --push-updates - --owner-manifest <current-manifest> --review-consolidation <pass.json> --required-evidence <pass-receipt.json>
+  recovery_scope_staged: python3 quwoquan_ops/cli/local_readiness.py scope --staged --owner-identity <current-owner-identity> --candidate-evidence <current-candidate-evidence> --review-consolidation <pass.json> --required-evidence <pass-receipt.json>
+  recovery_release_push_stdin: python3 quwoquan_ops/cli/local_readiness.py release --push-updates - --owner-identity <current-owner-identity> --candidate-evidence <current-candidate-evidence> --review-consolidation <pass.json> --required-evidence <pass-receipt.json>
   worker_once: python3 quwoquan_ops/cli/local_readiness.py worker --once
 storage:
   root: .qwq_output/env/repo/local/local-readiness
@@ -52,6 +70,9 @@ storage:
   locks: process/locks
 worker:
   debounce_seconds: 2
+  max_items_per_run: 8
+  wall_clock_budget_seconds: 120
+  scheduling_order: [enqueued_at, path]
   queue_identity: [path, exact_input_digest]
   retry_identity: [evidence_fingerprint_ref, check_identity_digest]
   retry_base_seconds: 2
@@ -61,8 +82,22 @@ worker:
   failure_terminal: GATE_BLOCK
 freshness:
   staged_receipt: exact-current-staged-index-fingerprint
+  staged_unstaged_overlap: LOCAL_READINESS.STAGED_UNSTAGED_OVERLAP
   push_receipt: exact-push-updates-local-sha-base-fingerprint
+queue_closure:
+  schema_version: 1
+  enforcement: advisory_until_verified_consumer
+  consuming_levels: [scope, release]
+  classifications: [exact-pending, foreign-pending]
+  exact_pending_definition: candidate_path_with_current_input_identity
+  foreign_pending_definition: any_queue_item_outside_exact_candidate_identity
+  blocking: []
+  ordinary_commit_push_pending: advisory
 failure_semantics:
   hook_exception: no_readiness_pass
   worker_exception: no_readiness_pass
-  deferred_scope_or_release: blocked
+  exact_candidate_pending_scope_or_release: advisory
+  feedback_only_named_evidence: REVIEW.EVIDENCE_FEEDBACK_ONLY
+  staged_unstaged_overlap: LOCAL_READINESS.STAGED_UNSTAGED_OVERLAP
+  foreign_pending: advisory
+  ordinary_commit_push_pending: advisory

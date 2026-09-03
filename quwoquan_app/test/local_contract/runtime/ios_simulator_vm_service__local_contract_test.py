@@ -566,15 +566,15 @@ class IOSSimulatorVMServiceContractTest(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertFalse(executor._is_flutter_app_started_event(line))
 
-        source = (APP_DIR / "scripts/device/run_app_instance.py").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn('"--machine"', source)
-        self.assertIn('"--host-vmservice-port=0"', source)
-        self.assertIn('"--dds-port=0"', source)
-        self.assertNotIn('"--host-vmservice-port=8888"', source)
-        self.assertNotIn('"--dds-port=8889"', source)
-        self.assertNotIn("flutter-attach.pid", source)
+        attach_source = (
+            APP_DIR / "scripts/device/canonical_app_instance/attach_session.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"--machine"', attach_source)
+        self.assertIn('"--host-vmservice-port=0"', attach_source)
+        self.assertIn('"--dds-port=0"', attach_source)
+        self.assertNotIn('"--host-vmservice-port=8888"', attach_source)
+        self.assertNotIn('"--dds-port=8889"', attach_source)
+        self.assertNotIn("flutter-attach.pid", attach_source)
         launcher_source = (APP_DIR / "run.sh").read_text(encoding="utf-8")
         self.assertNotIn("tcp:8888", launcher_source)
         self.assertNotIn("QWQ_ANDROID_VM_FORWARD_PREEXISTING", launcher_source)

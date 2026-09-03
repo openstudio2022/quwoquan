@@ -16,10 +16,10 @@ mkdir -p "$REPORT_DIR"
 SOFT_BUDGET="${COMMIT_GATE_SOFT_BUDGET_SECONDS:-}"
 HARD_BUDGET="${COMMIT_GATE_HARD_BUDGET_SECONDS:-}"
 if [[ -z "$SOFT_BUDGET" ]]; then
-  SOFT_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("budgetSeconds",600)))' "$BUDGETS_JSON")"
+  SOFT_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("budgetSeconds",180)))' "$BUDGETS_JSON")"
 fi
 if [[ -z "$HARD_BUDGET" ]]; then
-  HARD_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("hardFailSeconds",900)))' "$BUDGETS_JSON")"
+  HARD_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("hardFailSeconds",300)))' "$BUDGETS_JSON")"
 fi
 if ! [[ "$SOFT_BUDGET" =~ ^[0-9]+$ && "$HARD_BUDGET" =~ ^[1-9][0-9]*$ ]]; then
   echo "[commit-gate] FAIL: budgets must be non-negative soft and positive hard integers" >&2
@@ -119,7 +119,7 @@ enforce_hard_budget() {
   fi
 }
 
-python3 "$ROOT/quwoquan_ops/gate/verify_git_branch_policy.py"
+python3 "$ROOT/quwoquan_ops/gate/verify_git_branch_policy.py" --local-commit
 python3 "$ROOT/quwoquan_ops/gate/commit_gate_select.py" --use-staged >"$PLAN_JSON"
 log "plan written to $PLAN_JSON"
 
@@ -372,7 +372,7 @@ phase_record "L0_impacted_tests_parallel" "$TEST_PHASE_STATUS" "$TEST_STARTED"
 
 DEFERRED_COUNT="$(python3 -c 'import json,sys; from pathlib import Path; print(len(json.loads(Path(sys.argv[1]).read_text()).get("deferred_to_ci",[])))' "$PLAN_JSON")"
 if [[ "$DEFERRED_COUNT" -gt 0 ]]; then
-  log "deferred_to_ci=$DEFERRED_COUNT Flutter tests (see plan.json)"
+  log "deferred_to_ci=$DEFERRED_COUNT targets (see plan.json)"
 fi
 
 FINGERPRINT_END="$(python3 -B quwoquan_ops/cli/local_readiness.py plan --level fast --staged | python3 -c 'import json,sys; print(json.load(sys.stdin)["fingerprint"]["digest"])')"

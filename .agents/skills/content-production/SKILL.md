@@ -20,6 +20,8 @@ metadata:
 
 ## 触发与输入
 
+本轮若产生、更新或恢复送审交付件 `content-release`，PRE 必须从 current execution/release owner facts 唯一解析 repository-relative exact target；缺失、多 owner 或漂移时 typed `GATE_BLOCK`。随后运行 `make feature-context TARGET=<exact-path>`，保存 content-addressed immutable owner manifest exact ref，PRE 后不得替换。纯只读且无送审交付只允许 `report-only/no-review-deliverable`。
+
 Review 交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.content-production`，由 canonical projector 生成可见输出；准出 deliverable 与 registry 名称保持为 `content-release`。
 
 1. 新任务只允许用 `python3 quwoquan_data/scripts/cli.py task init --carrier-demand <path> --candidate-bindings <path>` 原子创建工作包；命令只写 `execution_manifest.json`、`0.plan/request.json`、`0.plan/target_set.json`。
@@ -39,6 +41,9 @@ Review 交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml
 2. 宿主读取每条 verifier 的真实结果，自检业务产物，形成 `actor`、`verdict=pass|blocked`、`typedIssues[]`、`resultRefs[]`、`verifierFacts[]`。不得伪造退出码、来源、权利、review、release、环境或 UAT 证据。
 3. 调用 `task stage-close --execution-id <id> --stage <stage> --input <agent-result.json>` 提交上述结构化结果。内核只重验 OPEN 的 exact bytes、结果 schema、显式 verifier facts 与 result refs，然后 create-once 写 receipt；内核不派生 verdict、typed issues 或 next。
 4. `pass` 的下一阶段只查本 Skill 固定顺序；`blocked` 不在原 execution rewind，必须创建新的 execution。
+5. 显式或准出 Review 必须把 PRE 保存并在 POST 原样复用的 ref 作为 `--context-manifest` 传入；缺 ref、摘要漂移或 required evidence 未完成均不得声称 `content-release` 完成。
+
+产生 `content-release` 时，POST 必须把 PRE owner identity ref 原样作为 `--owner-identity`，并把 current candidate evidence ref 作为 `--candidate-evidence` 传给 Review（workflow=`content-production`、segment=`POST`、deliverable=`content-release`、scope=`<exact-path>`）；先按 plan 去重执行命名 evidence，再派 registry 主审与至多一名专审。manifest ref 缺失、与 PRE 不同或 stale，required evidence/Reviewer 未完成，均不得完成。
 
 内容生产完成证据必须同时包含：十阶段 create-once receipt 链、immutable release exact identity、目标环境 import/readback/health 与同 identity 的 `EnvironmentAcceptanceFact`。
 
@@ -47,8 +52,12 @@ Review 交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml
 
 ## 失败与停止
 
+任一输入、receipt、引用摘要、owner manifest 或环境证据不闭合即停止并报告首个 typed blocker；不得手改门禁、伪造证据、回写旧 receipt 或绕过新 execution 重试规则。
+
 未闭合项必须明确报告为未完成。不得用 release-only verify、旧 proof、sequence-017、fixture、counts 或历史 receipt 代替当前环境证据。
 
 ## 条件性交接
 
 阶段 HANDOFF 只报告 receipt ref/digest、业务 result refs、typed issues，以及本 Skill 固定的下一阶段；不得输出 execution-state、fleet/campaign 状态或自动恢复指令。
+
+源码/spec mutation 只交 Feature workflow；跨宿主接手、环境/发布、外部阻断或证据复用满足 canonical 触发时生成 handoff。送审交付的 handoff 必须携带 PRE owner identity ref 与 POST candidate evidence predecessor；纯只读无送审交付不生成替代 manifest。

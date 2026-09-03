@@ -22,6 +22,21 @@ pull_request_branch_prefixes:
   - lane/
 
 integration_branch: dev1.0
+integration_branch_activation:
+  state: active
+  transition_command: python3 -B quwoquan_ops/gate/verify_git_branch_policy.py --activation-transition --evidence-path .qwq_output/env/repo/runs/branch-policy/dev1.0-activation.json
+  evidence_kind: integration_branch_activation_v1
+  bootstrap:
+    remote_before_oid: absent
+    remote_after_oid: exact_local_integration_head
+    source_branch: dev1.0
+    target_branch: dev1.0
+    release_eligibility: false
+  active:
+    accepted_updates:
+      - lane_pull_request_merge
+      - system_fast_forward_backsync
+    direct_push: forbidden
 release_branch: main
 production_source_branch: main
 production_workflow: .github/workflows/deploy-prod-auto.yml
@@ -63,3 +78,4 @@ failure_codes:
   backsync_cas_conflict: OPS.BRANCH.BACKSYNC_CAS_CONFLICT
   authority_unavailable: OPS.BRANCH.AUTHORITY_UNAVAILABLE
   source_not_main_reachable: OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE
+  integration_read_only: OPS.BRANCH.INTEGRATION_READ_ONLY

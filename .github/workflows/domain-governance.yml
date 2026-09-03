@@ -25,6 +25,8 @@ jobs:
     environment: domain-governance
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Verify agent context governance budget
+        run: make verify-agent-context-budget
       - name: Apply canonical DNS records
         env:
           QWQ_DNS_PROVISIONING_API_TOKEN: ${{ secrets.QWQ_DNS_PROVISIONING_API_TOKEN }}

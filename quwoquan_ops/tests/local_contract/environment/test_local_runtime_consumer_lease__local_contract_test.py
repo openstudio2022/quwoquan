@@ -70,7 +70,8 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         connected_device: bool = True,
     ) -> _LauncherExecution:
         with tempfile.TemporaryDirectory() as temporary_dir:
-            temp_root = Path(temporary_dir)
+            temp_root = Path(temporary_dir).resolve()
+            temporary_dir = str(temp_root)
             flutter_log = temp_root / "flutter.log"
             stackctl_log = temp_root / "stackctl.log"
             executor_log = temp_root / "executor.log"
@@ -233,6 +234,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                 [
                     "bash",
                     str(APP_RUN),
+                    "--hermetic",
                     "--env",
                     "alpha",
                     "--mode",
@@ -281,15 +283,10 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         execution = self._run_launcher_with_preflight_policy(gate_block=False)
         result = execution.result
 
-        if (
-            "APP.DEPENDENCY." in result.stderr
-            or "APP.LAUNCH.workspace_projection_failed: App dependency" in result.stderr
-        ):
+        if "APP.DEPENDENCY." in result.stderr:
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
             self.assertRegex(
-                result.stderr,
-                r"(?:APP\.DEPENDENCY\.(?:bundle_missing|projection_failed)|"
-                r"APP\.LAUNCH\.workspace_projection_failed: App dependency)",
+                result.stderr, r"APP\.DEPENDENCY\.(?:bundle_missing|projection_failed)"
             )
             self.assertEqual(execution.executor_log, "")
             return
@@ -338,10 +335,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             line for line in result.stderr.splitlines() if line.startswith("{")
         ]
         if not terminal_lines:
-            self.assertIn(
-                "APP.LAUNCH.workspace_projection_failed: App dependency",
-                result.stderr,
-            )
+            self.assertIn("APP.DEPENDENCY.bundle_missing", result.stderr)
             self.assertEqual(execution.executor_log, "")
             return
         terminal = json.loads(terminal_lines[0])
@@ -370,7 +364,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         execution = self._run_launcher_with_preflight_policy(gate_block=False)
         result = execution.result
 
-        if "APP.LAUNCH.workspace_projection_failed" in result.stderr:
+        if "APP.DEPENDENCY.bundle_missing" in result.stderr:
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
             script = APP_RUN.read_text(encoding="utf-8")
             self.assertIn(
@@ -499,8 +493,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         result = execution.result
 
         self.assertEqual(result.returncode, 2)
-        if "APP.LAUNCH.workspace_projection_failed" in result.stderr:
-            self.assertIn("App dependency", result.stderr)
+        if "APP.DEPENDENCY.bundle_missing" in result.stderr:
             self.assertEqual(execution.executor_log, "")
             return
         self.assertIn(

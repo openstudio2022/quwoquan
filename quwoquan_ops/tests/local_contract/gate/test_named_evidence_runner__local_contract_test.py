@@ -14,6 +14,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import unittest
 import uuid
 from pathlib import Path
@@ -26,15 +27,21 @@ sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
 
 import evidence_runner as runner  # noqa: E402
 import review_dispatch as review  # noqa: E402
-from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
+from lib.evidence_fingerprint import canonical_json_bytes
+from lib.candidate_evidence import build_candidate_evidence
+from lib.feature_tree.content_addressed_writer import _write_content_addressed_bytes  # noqa: E402
 from lib.feature_tree.commands import _context_manifest, discover_nodes  # noqa: E402
 from lib.feature_tree.ownership import resolve_target_details  # noqa: E402
 
 REGISTRY_PATH = ROOT / ".agents/skills/review/references/registry.yaml"
-TEST_ROOT = ROOT / ".qwq_output/env/repo/local/named-evidence-tests"
+TEST_ROOT = ROOT / "quwoquan_ops/cli/lib/.named-evidence-tests"
 
 
 class NamedEvidenceRunnerTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._discovered_nodes = tuple(discover_nodes())
+
     def setUp(self) -> None:
         self.case_root = TEST_ROOT / uuid.uuid4().hex
         self.case_root.mkdir(parents=True)
@@ -42,12 +49,8 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
     def tearDown(self) -> None:
         shutil.rmtree(self.case_root, ignore_errors=True)
 
-    def _manifest(self) -> dict:
-        target = (
-            "specs/feature-tree/runtime/development-workflow-governance/"
-            "agent-skill-review-context-organization/spec.md"
-        )
-        nodes = discover_nodes()
+    def _manifest(self, target: str) -> dict:
+        nodes = self._discovered_nodes
         manifest = _context_manifest(
             target, resolve_target_details(target, nodes), nodes
         )
@@ -72,6 +75,7 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
         registry = copy.deepcopy(
             yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
         )
+        registry["workflows"]["dev"]["baseline_evidence"] = ""
         registry["evidence"] = {
             evidence_id: {
                 "command": command,
@@ -86,32 +90,45 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
         with mock.patch.object(
             review, "_checklist_evidence", return_value=evidence_ids
         ):
+            paths = changed_paths or [
+                "specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md"
+            ]
+            manifest = self._manifest(paths[0])
+            candidate = build_candidate_evidence(self.manifest_ref, paths, repo_root=ROOT)
+            candidate_path = _write_content_addressed_bytes(
+                canonical_json_bytes(candidate), subdirectory="candidates/by-fingerprint"
+            )
             plan = review.build_plan(
-                registry,
-                "dev",
-                "POST",
-                None,
-                changed_paths or [],
-                context_manifest=self._manifest(),
-                context_manifest_ref=self.manifest_ref,
+                registry, "dev", "POST", None, paths,
+                context_manifest=manifest, context_manifest_ref=self.manifest_ref,
+                candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
             )
         return plan, registry
 
     def _run(self, plan: dict, registry: dict, **kwargs: object) -> dict:
         ids = [item["id"] for item in plan["evidence"]]
         with mock.patch.object(review, "_checklist_evidence", return_value=ids):
+            kwargs.setdefault("plan_bytes", canonical_json_bytes(plan))
+            kwargs.setdefault("plan_ref", "test-fixture:exact-plan")
             return runner.run_plan(plan, registry=registry, cwd=ROOT, **kwargs)
 
     def test_deduplicates_and_emits_real_workspace_receipt(self) -> None:
-        relative = (self.case_root / "asset.txt").relative_to(ROOT).as_posix()
-        (ROOT / relative).write_text("stable\n", encoding="utf-8")
+        relative = "quwoquan_ops/tests/local_contract/gate/fixtures/named_evidence_workspace_receipt.txt"
+        untracked = self.case_root / "workspace-untracked.txt"
+        untracked.write_text("workspace evidence\n", encoding="utf-8")
+        untracked_relative = untracked.relative_to(ROOT).as_posix()
         plan, registry = self._plan(
-            [("same", True, "printf same")], changed_paths=[relative]
+            [("same", True, "printf same")],
+            changed_paths=[relative, untracked_relative],
         )
         plan["evidence"].append(dict(plan["evidence"][0]))
         receipt = self._run(plan, registry)
         self.assertEqual(["same"], [item["id"] for item in receipt["evidence"]])
         self.assertEqual("PASS", receipt["terminal"]["status"])
+        self.assertEqual("feedback_only", receipt["evidence_class"])
+        self.assertIs(receipt["admission_eligible"], False)
+        self.assertEqual("workspace", receipt["source"]["mode"])
+        self.assertIs(receipt["source"]["repository_clean"], False)
         workspace = receipt["execution_fingerprint"]["digest_payload"]["workspace"]
         self.assertNotEqual(
             runner.canonical_digest([]), workspace["untracked_digest"]
@@ -146,8 +163,11 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
             self._run(plan, registry)
 
     def test_plan_change_is_rejected_before_first_shell_command(self) -> None:
-        relative = (self.case_root / "asset.txt").relative_to(ROOT).as_posix()
-        (ROOT / relative).write_text("before\n", encoding="utf-8")
+        relative = "quwoquan_ops/tests/local_contract/gate/fixtures/named_evidence_preflight_drift.txt"
+        target = ROOT / relative
+        original = target.read_text(encoding="utf-8")
+        target.write_text("before\n", encoding="utf-8")
+        self.addCleanup(target.write_text, original, encoding="utf-8")
         plan, registry = self._plan(
             [("safe", True, "printf safe")], changed_paths=[relative]
         )
@@ -162,22 +182,97 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
         with (
             mock.patch.object(runner, "run_command", side_effect=record),
             self.assertRaisesRegex(
-                runner.EvidenceRunnerError, "REVIEW.FINGERPRINT_CHANGED"
+                runner.EvidenceRunnerError, "CANDIDATE.STALE|REVIEW.FINGERPRINT_CHANGED"
             ),
         ):
             self._run(plan, registry)
         self.assertEqual([], shell_calls)
 
-    def test_command_time_workspace_change_marks_result_stale(self) -> None:
-        target = self.case_root / "asset.txt"
-        relative = target.relative_to(ROOT).as_posix()
+    def test_real_temp_repo_classifies_only_clean_exact_sha_as_reusable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            (repo / "tracked.txt").write_text("clean\n", encoding="utf-8")
+            subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True)
+            subprocess.run(
+                [
+                    "git", "-c", "user.name=Fixture",
+                    "-c", "user.email=fixture@example.invalid",
+                    "commit", "-qm", "clean exact sha",
+                ],
+                cwd=repo, check=True,
+            )
+            clean = runner._workspace_source_classification(repo)
+            self.assertEqual(("reusable", True), runner._evidence_classification(clean))
+            self.assertTrue(clean["repository_clean"])
+            self.assertRegex(clean["head_sha"], r"^[0-9a-f]{40,64}$")
+
+            (repo / "unrelated.txt").write_text("dirty\n", encoding="utf-8")
+            dirty = runner._workspace_source_classification(repo)
+            self.assertEqual(
+                ("feedback_only", False), runner._evidence_classification(dirty)
+            )
+            self.assertFalse(dirty["repository_clean"])
+
+    def test_clean_exact_sha_workspace_receipt_is_admission_eligible(self) -> None:
+        plan, registry = self._plan([("safe", True, "printf safe")])
+        clean_source = {
+            "mode": "workspace",
+            "head_sha": "a" * 40,
+            "merge_base_sha": "b" * 40,
+            "repository_clean": True,
+            "immutable": False,
+        }
+        with mock.patch.object(
+            runner, "_workspace_source_classification", return_value=clean_source
+        ), mock.patch.object(runner, "_assert_source_head"):
+            receipt = self._run(plan, registry)
+        self.assertEqual("reusable", receipt["evidence_class"])
+        self.assertIs(receipt["admission_eligible"], True)
+        self.assertIs(runner.require_admission_eligible(receipt), receipt)
+
+    def test_legacy_receipt_without_evidence_class_requires_migration(self) -> None:
+        plan, registry = self._plan([("safe", True, "printf safe")])
+        receipt = self._run(plan, registry)
+        for field in ("source", "evidence_class", "admission_eligible"):
+            receipt.pop(field)
+        receipt["schema_version"] -= 1
+        with self.assertRaisesRegex(
+            runner.EvidenceRunnerError, "字段漂移|schema_version"
+        ):
+            runner.validate_named_evidence_receipt(receipt)
+
+    def test_first_command_managed_drift_stops_second_marker(self) -> None:
+        relative = "quwoquan_ops/tests/local_contract/gate/fixtures/named_evidence_runtime_drift.txt"
+        target = ROOT / relative
+        original = target.read_text(encoding="utf-8")
+        marker = self.case_root / "second-command-must-not-run.txt"
         target.write_text("before\n", encoding="utf-8")
+        self.addCleanup(target.write_text, original, encoding="utf-8")
+        first = f"printf drift >> {relative}"
+        second = f"printf ran > {marker}"
+        plan, registry = self._plan(
+            [("mutates", True, first), ("later", True, second)],
+            changed_paths=[relative],
+        )
+        with self.assertRaisesRegex(
+            runner.EvidenceRunnerError, "FINGERPRINT_CHANGED"
+        ):
+            self._run(plan, registry)
+        self.assertFalse(marker.exists())
+
+    def test_command_time_workspace_change_marks_result_stale(self) -> None:
+        relative = "quwoquan_ops/tests/local_contract/gate/fixtures/named_evidence_runtime_drift.txt"
+        target = ROOT / relative
+        original = target.read_text(encoding="utf-8")
+        target.write_text("before\n", encoding="utf-8")
+        self.addCleanup(target.write_text, original, encoding="utf-8")
         command = f"printf after >> {relative}"
         plan, registry = self._plan(
             [("mutates", True, command)], changed_paths=[relative]
         )
         with self.assertRaisesRegex(
-            runner.EvidenceRunnerError, "REVIEW.FINGERPRINT_CHANGED"
+            runner.EvidenceRunnerError, "CANDIDATE.STALE|REVIEW.FINGERPRINT_CHANGED"
         ):
             self._run(plan, registry)
 
@@ -185,9 +280,155 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
         plan, registry = self._plan([("safe", True, "printf safe")])
         registry["evidence"]["safe"]["command"] = "printf changed"
         with self.assertRaisesRegex(
-            runner.EvidenceRunnerError, "REVIEW.FINGERPRINT_CHANGED"
+            runner.EvidenceRunnerError, "CANDIDATE.STALE|REVIEW.FINGERPRINT_CHANGED"
         ):
             self._run(plan, registry)
+
+
+    def test_review_baseline_receives_only_runner_exact_plan_identity(self) -> None:
+        registry = copy.deepcopy(
+            yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
+        )
+        command = str(registry["evidence"]["review-baseline"]["command"])
+        self.assertIn("verify_review_baseline.py", command)
+        self.assertNotIn("pytest", command)
+        self.assertNotIn("make verify-review-dispatch", command)
+        paths = [
+            "specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md"
+        ]
+        manifest = self._manifest(paths[0])
+        candidate = build_candidate_evidence(self.manifest_ref, paths, repo_root=ROOT)
+        candidate_path = _write_content_addressed_bytes(
+            canonical_json_bytes(candidate), subdirectory="candidates/by-fingerprint"
+        )
+        plan = review.build_plan(
+            registry, "dev", "POST", None, paths,
+            context_manifest=manifest, context_manifest_ref=self.manifest_ref,
+            candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
+        )
+        captured: dict[str, object] = {}
+        real_run = runner.run_command
+
+        def inspect(args, *positional, **kwargs):
+            env = kwargs["env"]
+            exact_path = Path(env[runner.BASELINE_PLAN_ENV])
+            raw = exact_path.read_bytes()
+            captured.update({
+                "path": exact_path,
+                "raw": raw,
+                "sha": env[runner.BASELINE_PLAN_SHA_ENV],
+                "ref": env[runner.BASELINE_PLAN_REF_ENV],
+            })
+            result = real_run(args, *positional, **kwargs)
+            captured["stderr"] = result.stderr.decode("utf-8", errors="replace")
+            return result
+
+        hostile = {
+            runner.BASELINE_PLAN_ENV: "/tmp/forged-plan.json",
+            runner.BASELINE_PLAN_SHA_ENV: "sha256:" + "0" * 64,
+            runner.BASELINE_PLAN_REF_ENV: "forged",
+        }
+        source_plan = self.case_root / "exact-plan.json"
+        source_plan.write_bytes(canonical_json_bytes(plan))
+        source_ref = source_plan.relative_to(ROOT).as_posix()
+        with mock.patch.dict(os.environ, hostile), mock.patch.object(
+            runner, "run_command", side_effect=inspect
+        ):
+            receipt = self._run(
+                plan, registry,
+                plan_bytes=source_plan.read_bytes(),
+                plan_ref=source_ref,
+            )
+        self.assertEqual(
+            "PASS", receipt["terminal"]["status"],
+            captured.get("stderr") or (receipt["evidence"][0] if receipt["evidence"] else receipt),
+        )
+        self.assertEqual(canonical_json_bytes(plan), captured["raw"])
+        self.assertEqual(
+            "sha256:" + hashlib.sha256(captured["raw"]).hexdigest(), captured["sha"]
+        )
+        self.assertEqual(source_ref, captured["ref"])
+        self.assertFalse(captured["path"].exists())
+
+    def test_runner_refuses_missing_exact_plan_channel(self) -> None:
+        plan, registry = self._plan([("safe", True, "printf safe")])
+        ids = [item["id"] for item in plan["evidence"]]
+        with mock.patch.object(review, "_checklist_evidence", return_value=ids), self.assertRaisesRegex(
+            runner.EvidenceRunnerError, "exact plan bytes/ref"
+        ):
+            runner.run_plan(plan, registry=registry, cwd=ROOT)
+
+    def test_review_baseline_rejects_plan_bytes_ref_candidate_paths_and_registry_drift(self) -> None:
+        registry = copy.deepcopy(
+            yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
+        )
+        command = str(registry["evidence"]["review-baseline"]["command"])
+        paths = [
+            "specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md"
+        ]
+        manifest = self._manifest(paths[0])
+        candidate = build_candidate_evidence(self.manifest_ref, paths, repo_root=ROOT)
+        candidate_path = _write_content_addressed_bytes(
+            canonical_json_bytes(candidate), subdirectory="candidates/by-fingerprint"
+        )
+        plan = review.build_plan(
+            registry, "dev", "POST", None, paths,
+            context_manifest=manifest, context_manifest_ref=self.manifest_ref,
+            candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
+        )
+        wrong_bytes = canonical_json_bytes({**plan, "scope": "forged"})
+        with self.assertRaisesRegex(runner.EvidenceRunnerError, "exact plan bytes"):
+            self._run(plan, registry, plan_bytes=wrong_bytes)
+
+        cases = [
+            ("candidate", lambda value: value["candidate_evidence_identity"].__setitem__("ref", value["owner_identity"]["ref"])),
+            ("changed_paths", lambda value: value.__setitem__("changed_paths", ["README.md"])),
+            ("evidence_registry", lambda value: value["evidence"][0].__setitem__("command", "printf forged")),
+        ]
+        for label, mutate in cases:
+            with self.subTest(label=label):
+                changed = copy.deepcopy(plan)
+                mutate(changed)
+                with self.assertRaisesRegex(
+                    runner.EvidenceRunnerError,
+                    "CANDIDATE|IDENTITY|FINGERPRINT_CHANGED|command 与 registry|identity",
+                ):
+                    self._run(changed, registry, plan_bytes=canonical_json_bytes(changed))
+
+        source_plan = self.case_root / "source-plan.json"
+        source_plan.write_bytes(canonical_json_bytes(plan))
+        with tempfile.TemporaryDirectory(prefix="qwq-review-evidence-plan-") as directory:
+            injected = Path(directory) / "exact-plan.json"
+            injected.write_bytes(canonical_json_bytes(plan))
+            source_plan.write_bytes(canonical_json_bytes({**plan, "generated_at": "drift"}))
+            completed = subprocess.run(
+                [sys.executable, "-B", str(ROOT / "quwoquan_ops/gate/verify_review_baseline.py")],
+                cwd=ROOT,
+                env={
+                    **os.environ,
+                    runner.BASELINE_PLAN_ENV: str(injected),
+                    runner.BASELINE_PLAN_SHA_ENV: "sha256:" + hashlib.sha256(injected.read_bytes()).hexdigest(),
+                    runner.BASELINE_PLAN_REF_ENV: source_plan.relative_to(ROOT).as_posix(),
+                },
+                capture_output=True, text=True, check=False,
+            )
+        self.assertEqual(2, completed.returncode)
+        self.assertIn("ref bytes", completed.stderr)
+
+        outside = self.case_root / "outside-plan.json"
+        outside.write_bytes(canonical_json_bytes(plan))
+        completed = subprocess.run(
+            [sys.executable, "-B", str(ROOT / "quwoquan_ops/gate/verify_review_baseline.py")],
+            cwd=ROOT,
+            env={
+                **os.environ,
+                runner.BASELINE_PLAN_ENV: str(outside),
+                runner.BASELINE_PLAN_SHA_ENV: "sha256:" + hashlib.sha256(outside.read_bytes()).hexdigest(),
+                runner.BASELINE_PLAN_REF_ENV: "forged",
+            },
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(2, completed.returncode)
 
     def test_data_static_contract_declares_isolated_output_and_cleanup(self) -> None:
         registry = yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
@@ -320,6 +561,21 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
                     runner.EvidenceRunnerError, "INVALID_EVIDENCE|timeout_seconds"
                 ):
                     self._run(plan, registry)
+
+    def test_create_once_receipt_is_idempotent_and_conflicts_on_same_run_id(self) -> None:
+        first = {"run_id": "same", "terminal": {"status": "PASS"}}
+        path = runner._write_receipt_create_once("same", first)
+        self.addCleanup(lambda: shutil.rmtree(path.parent, ignore_errors=True))
+        self.assertEqual(path, runner._write_receipt_create_once("same", dict(first)))
+        with self.assertRaisesRegex(runner.EvidenceRunnerError, "create-once conflict"):
+            runner._write_receipt_create_once(
+                "same", {"run_id": "same", "terminal": {"status": "GATE_BLOCK"}}
+            )
+
+    def test_zero_evidence_plan_is_rejected(self) -> None:
+        plan, registry = self._plan([])
+        with self.assertRaisesRegex(runner.EvidenceRunnerError, "不得为空"):
+            self._run(plan, registry)
 
     def test_required_failure_projects_real_exit_and_stops(self) -> None:
         plan, registry = self._plan(

@@ -39,14 +39,14 @@
 - `.cursor/commands` 只是一行式显式入口；`.cursor/agents` 与 `.codex/agents` 只允许 Reviewer projection。宿主专属目录不得承载 Workflow Skill stub、发现副本或规范正文。
 
 <a id="req-002"></a>
-### REQ-002 开发与 Review 共用精确 owner manifest
+### REQ-002 开发与 Review 共用 PRE owner identity 和 POST candidate predecessor
 
 - Skill PRE 确定 exact target 后，`feature-context` 默认只输出内容寻址、不可变的紧凑 manifest exact ref；展开父链正文必须显式请求 expanded 格式。
 - manifest 必须遵守 canonical agent governance contract 的 `feature_context_manifest` schema，指向唯一 owner 与直接 canonical 锚点并绑定自身内容摘要；不得把整条父链正文拼入默认输出。
 - 路径先由 L1 最长工程根确定领域 owner，再由该 L1 下 L2 DEC 的适用工程根与唯一影响 Story
   精确下钻；同优先级多 owner、无 owner或解析失败必须产生 typed owner 解析结果。
 - `explore`、`plan-next` 及 `continue` 的只读恢复 best-effort 调用 `feature-context`：唯一 owner 成功时保存并消费 immutable exact ref；无 owner、多 owner或解析失败时记录 typed 结果，基于当前 Git 快照继续只读，不 `GATE_BLOCK` 整个控制流程，也不得据此进入 mutation。
-- prd、design、dev 等 mutation workflow 进入写入前必须持有唯一且 current 的 immutable exact ref；用户显式或准出 Review 必须原样复用该 ref。ref 缺失、旧 schema、内容摘要漂移、owner 多义、锚点冲突或 fingerprint stale 必须 fail-closed。控制型零 Reviewer workflow 不得包装送审交付件旁路 owner manifest。
+- prd、design、dev 等 mutation workflow 进入写入前必须持有唯一且 current 的 immutable exact ref；用户显式或准出 Review 必须复用该 PRE owner identity ref，并绑定 POST current candidate evidence predecessor。ref 缺失、旧 schema、内容摘要漂移、owner 多义、锚点冲突或 fingerprint stale 必须 fail-closed。控制型零 Reviewer workflow 不得包装送审交付件旁路 owner manifest。
 - manifest 不包含 profiles。Review profile 只在显式或准出 Review 中按 current `changed_paths + deliverable` 派生 specialist 与 evidence，不复制 feature owner 或 design 内容。
 - 上下文装配顺序固定为根 AGENTS → 宿主基于 `.agents/skills` metadata 选择 Skill → 唯一 Skill body → Skill PRE 确定 exact target → 最近子树 AGENTS + compact manifest immutable exact ref → exact contexts/tests。已知目标路径时可先读取最近子树 AGENTS，但子树不参与自然语言路由；禁止 manifest-before-skill。自然语言与显式入口必须由真实宿主加载同一 Skill body 并进入同一生命周期。
 
@@ -56,6 +56,7 @@
 - 显式或准出 Review 的 PRE 只由主会话完成 owner、范围、验收和 evidence 预检；其 POST 按 registry 先执行命名 evidence，再装配唯一 primary 与最高优先级 specialist。计划形态和预算必须遵守 canonical contract 与 registry limits。
 - `explore`、`plan-next`、`continue`、`review` 与 `commit` 是零 Reviewer 的控制型 workflow：前两者不产生送审交付件，`continue` 复用被恢复 workflow，`review` 禁止递归自审，`commit` lane 提交不要求 Review evidence。其他 workflow 在 registry 保留 primary/specialist 角色配置供显式或准出派发，开发期 POST 默认零 Reviewer；显式 Review 仍受同一两角色上限。
 - 修复后只允许 finding owner 定向复审；禁止第二次自动复审、超时自动重试或绕过 registry limits。
+- 24KiB 是单个 Reviewer **最终 assembled input** 的硬边界，不是 dispatcher 规则文件估算：canonical assembler 必须计入 executor/system prompt、role、checklist、grading、owner identity、candidate evidence identity、changed paths/diff summary、named evidence/finding summary 与 relevant contexts。超预算先做带 marker、原始 byte count 与 digest 的结构化压缩/ref-only/truncation；仍超预算返回 `REVIEW.CONTEXT_BUDGET_EXCEEDED`，owner/candidate identity 永不静默删除。reviewer result 与 consolidation identity 必须记录 exact assembled byte count、digest 和压缩/截断元数据。
 
 <a id="req-004"></a>
 ### REQ-004 Evidence 与复用身份单轨
@@ -87,7 +88,10 @@
 
 - evidence 失败、evidence 超时、required/optional Reviewer 未完成、用户取消、owner manifest/指纹/scope 漂移必须分别落到 canonical contract 已声明的 terminal；每条 registry evidence 必须声明 `timeout_seconds`（正整数且不超过 3600），到期终止该 evidence 的独立进程组并记录 typed timeout/exit 语义，不得无限等待。实现可发射的 `REVIEW.*` code 与 contract 必须静态闭集一致，每个 code 只有一个 recovery，未知失败 fail-closed。
 - Named evidence receipt 只有在文件/ref 真实存在、schema 合法、terminal=PASS、plan identity 匹配且 current fingerprint fresh 时才能进入 handoff；handoff evidence 行必须投影真实 command/exit/start-finish/source HEAD，禁止硬编码成功。
-- Handoff producer、consumer/verifier 必须从 digest payload、artifact 与 named evidence receipt 重算 current freshness；同 HEAD 脏树漂移也拒绝旧 handoff，且 downstream 必须属于 canonical workflow registry。
+- `triggers=[]` 必须在读取 run/artifact/Review/Human authority 输入前稳定返回 `no_persistent_handoff`，不创建 `.qwq_output` projection 或 authoritative store entry；普通 same-context 闭环不得被升级为 durable handoff。
+- canonical 六类 trigger 任一成立都进入同一正式链：exact owner identity、candidate evidence、review plan、named evidence、Reviewer result、PASS consolidation 与 create-once authoritative store 缺一不可。`cross_session_incomplete` 与 `multi_party_parallel` 明确属于这六类正式 durable handoff；当前没有 ordinary cross-session 轻量 checkpoint 的 canonical owner/schema，后者保持 OPEN，禁止临时发明第二状态源。
+- Handoff producer 必须把 canonical exact JSON create-once 发布到 current `git-common-dir/qwq-state/handoffs` 的 git-internal authoritative store，并输出内容绑定的 `handoff-ref-v1`；`.qwq_output/**` 仅为可删除 projection/cache。consumer/verifier 只接受 CLI 显式 ref，不扫描 latest、不读取环境变量 truth；相同 identity+same bytes 幂等，不同 bytes 返回 typed conflict，symlink/non-regular/multi-link 拒绝且发布必须 fsync。
+- Handoff manifest 与 Review exact evidence 链共享 owner identity、candidate evidence identity、plan/named evidence/reviewer result/consolidation refs；producer、consumer/verifier 从 exact bytes 与 ref 重算绑定。本地 current freshness 可额外重算工作树，但 Hosted admission 只消费传输的同一 published exact bytes/ref，本机 clone/worktree inventory 仅 diagnostic，不得成为 hosted runner 硬输入。
 - Review consolidator 只消费 current plan、fresh named evidence 与结构化 reviewer results：required incomplete=`GATE_BLOCK`、optional incomplete=`PR_WARN`，finding 确定性去重，旧 fingerprint result 拒绝。Board 必须按 terminal 等级与唯一恢复动作收敛，禁止把 READY、incomplete、cancelled 或 stale 包装为 PASS。
 
 ## 4. 契约引用
@@ -105,8 +109,8 @@
 ### GWT-001 规则分层与上下文预算
 
 - GIVEN 根/子树 AGENTS、Workflow Skill、角色/checklist、Feature 设计和 harness adapter 处于当前态。
-- WHEN 运行 Agent 上下文治理门禁。
-- THEN 根加最近子树 AGENTS 不超过 16KiB，单 Reviewer 规则上下文不超过 24KiB，默认 manifest 不超过 8KiB。
+- WHEN 运行 Agent 上下文治理门禁，并对含长 wrapper、长 finding 与长 relevant context 的 Reviewer input 执行 canonical final assembly。
+- THEN 根加最近子树 AGENTS 不超过 16KiB，单 Reviewer 最终 assembled input 不超过 24KiB，默认 manifest 不超过 8KiB；压缩必须可审计，无法压入时 typed `REVIEW.CONTEXT_BUDGET_EXCEEDED`。
 - AND 角色 reference、规范性 Cursor rule、共享 completion/interaction 跳转或 harness 规范副本出现时门禁判否并指出唯一迁移层。
 
 <a id="gwt-002"></a>
@@ -114,7 +118,7 @@
 
 - GIVEN 一个被稳定 L1 根认领、并被 L2 DEC 适用工程根精确声明的代码路径，以及无 owner、多 owner或解析失败的路径。
 - WHEN 只读控制 Skill、mutation workflow 与显式/准出 Review 分别以默认格式请求 feature context。
-- THEN 唯一 owner 成功时，Skill PRE 产出的 manifest exact ref 与显式/准出 Review 复用的 ref 完全相同，均指向相同的 AppRoot/L1/L2/L3、DEC/REQ/GWT 锚点和适用 AGENTS，不含父链全文或 profiles。
+- THEN 唯一 owner 成功时，Skill PRE 产出的 owner identity exact ref 是显式/准出 Review candidate evidence 的稳定 predecessor，均指向相同的 AppRoot/L1/L2/L3、DEC/REQ/GWT 锚点和适用 AGENTS，不含父链全文或 profiles。
 - AND 无 owner、多 owner或解析失败时，只读控制 Skill 记录 typed 结果并基于当前 Git 快照继续只读，不产生 mutation 授权；mutation workflow 与显式/准出 Review 返回 typed `GATE_BLOCK`。
 - AND ref 摘要漂移、内容寻址 writer 最终读取期间目录项被替换，或 Review profile 未按 `changed_paths + deliverable` 派生时 fail-closed，其中 writer 只有在已验证 fd 与返回 ref 的当前目录项仍指向同一单链接 regular inode 时才可返回。
 
@@ -156,7 +160,19 @@
 - GIVEN 一个 POST plan、canonical named evidence receipt、结构化 reviewer results 与 handoff artifact/ref。
 - WHEN plan 后任一受管工作树字节、context、registry command、review asset 或 artifact 在执行前、命令间或下游消费前变化。
 - THEN 变化在首条命令前导致零命令 `REVIEW.FINGERPRINT_CHANGED`，运行中变化导致 stale/GATE_BLOCK；handoff 拒绝不存在、非 PASS、plan identity 不匹配或 freshness stale 的 evidence ref，并投影真实执行字段。
+- AND 空 triggers 即使未提供 artifacts/Review/authority 也只返回 `no_persistent_handoff` 且零 projection/store；六类 trigger 任一成立则必须通过 exact owner/candidate/named evidence/Reviewer/consolidation 完整链，格式合法但 byte digest 错误的 foreign ref 返回 `HandoffStoreConflict`。
 - AND 仅 current fresh 输入可被确定性 consolidation；required incomplete 为 `GATE_BLOCK`、optional incomplete 为 `PR_WARN`、finding 去重稳定，downstream 只能来自 canonical workflow registry。
+
+<a id="gwt-008"></a>
+### GWT-008 非阻断 Workflow Trace 与宿主能力矩阵
+
+- GIVEN 版本控制中的 12 个 `.agents/skills/*/SKILL.md`、Cursor 当前实际存在的显式 command，以及 Codex 不存在 Workflow command stub 的文件事实。
+- WHEN 运行 `python3 quwoquan_ops/cli/workflow_trace.py matrix`，或通过 `start`、`finish`、`readback` 记录和读取一轮 runtime trace。
+- THEN matrix 精确列出 12 个 Skill、Cursor 仅列实际存在的 8 个显式入口、Codex 显式入口全部为 `unsupported`；未绑定真实宿主 sample 的 discovery 只能为 `declared`，任何文件存在事实都不得产生 `verified`。
+- AND start 记录 entry kind、host、selected Skill、Skill body digest、可选 owner ref、capability status 与时间；finish 必须绑定 exact start ref、create-once，并记录 terminal、可选 candidate ref、status 与时间；opaque owner/candidate ref 仅携带、不在此处冒充双身份校验。
+- AND `natural_language` 不得自动标为 `verified`；只有实际 host sample 与显式 command evidence 才允许对应显式入口为 `verified`。trace 写入、校验、tamper 或 readback 失败只返回 typed non-blocking advisory，不接 hook、硬门或业务高频路径。
+
+运行矩阵机器输出由 `quwoquan_ops/policies/workflow_trace_contract.yaml` 与 `quwoquan_ops/cli/workflow_trace.py matrix` 定义；当前未接入并行 lane 准出，后续消费者必须在使用 owner/candidate opaque ref 时按其各自 canonical contract 验证 exact identity。
 
 ## 6. 依赖
 
@@ -175,3 +191,12 @@
 - 准出影响：`track`
 - 影响或价值：尚缺绑定当前工作树字节的完整治理门、聚合 pageflip evidence，以及 Cursor/Codex 各自对显式入口与自然语言 metadata discovery 的真实宿主 smoke；在这些证据齐备前不得把规格完成当作实现完成。
 - 完成判定：`GWT-001` 至 `GWT-007` 均具备职责匹配的真实 gate/local_contract；`GWT-005` 另具 Cursor 与 Codex 各自的显式/自然语言 discovery smoke，证明命中同一 Skill body 和生命周期，且上述证据绑定当前工作树字节。
+
+<a id="open-002"></a>
+### OPEN-002 ordinary cross-session 轻量 checkpoint 尚无 canonical owner/schema
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 `cross_session_incomplete` 与 `multi_party_parallel` 已是六类正式 durable handoff trigger，必须走完整 Review/handoff 链；普通工作若需要更轻的跨会话 checkpoint，仓库尚无可复用的 canonical owner/schema。
+- 完成判定：由唯一 owner 冻结 checkpoint identity、schema、create-once/freshness/consumer 语义及与正式 handoff 的迁移边界，并以 `GWT-007.t2` 的独立验收证明不会形成第二执行状态源；在此之前不得用临时 JSON、聊天摘要或投影目录冒充 checkpoint authority。
