@@ -141,7 +141,7 @@ class DeploymentCandidateManifestContractTest(
                 purpose="self_verify",
             )
 
-        prod_sim_previous = {**legacy, "environment": "prod", "target": "prod-sim"}
+        prod_sim_previous = {**previous, "environment": "prod", "target": "prod-sim"}
         with self.assertRaisesRegex(ValueError, "manifest fields mismatch"):
             subject.validate_candidate_manifest(
                 prod_sim_previous,
