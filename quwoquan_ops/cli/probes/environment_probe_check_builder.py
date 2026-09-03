@@ -564,5 +564,3 @@ def build_checks(
             }
         )
     return checks
-
-

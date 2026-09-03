@@ -438,6 +438,7 @@ codegen-product-ops-service:
 codegen-platform-ops-service:
 	go run ./tools/codegen_platform_ops_service --metadata-dir "$(CONTRACT_VIEW)" --output-dir control-plane/platform-ops/generated/platform_ops/config_snapshot
 	go run ./tools/codegen_platform_ops_service --metadata-dir "$(CONTRACT_VIEW)" --source-path ops/platform_ops/config_instance_report/errors.yaml --output-dir control-plane/platform-ops/generated/platform_ops/config_instance_report
+	go run ./tools/codegen_platform_ops_service --metadata-dir "$(CONTRACT_VIEW)" --source-path ops/platform_ops/human_authority/errors.yaml --output-dir control-plane/platform-ops/generated/platform_ops/human_authority
 
 codegen-user-service:
 	go run ./tools/codegen_user_service --metadata-dir "$(CONTRACT_VIEW)" --output-dir services/user-service/generated

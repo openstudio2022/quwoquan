@@ -50,14 +50,14 @@ enter_workspace_launch_projection() {
      || ( ! -e "$ROOT_DIR/.git" && ! -L "$ROOT_DIR/.git" ) ]]; then
     return 0
   fi
-  # 依赖 bundle stale 的一次性交互式自动同步。该标志只属于本 recovery 路径，
+  # 依赖 bundle missing/stale 的一次性交互式自动同步。该标志只属于本 recovery 路径，
   # 与后文 iOS 重试的 DEPENDENCY_RETRY 状态机无关，也不共享任何变量。
   WORKSPACE_DEPENDENCY_AUTO_SYNC_USED=0
   WORKSPACE_ATTEMPT_BASE="$QWQ_OUTPUT_ROOT/env/repo/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$-workspace-launch"
   WORKSPACE_ATTEMPT_ROOT="${WORKSPACE_ATTEMPT_BASE}-initial"
   WORKSPACE_PROJECTION_STATUS=0
-  # stderr 直接继承：typed blocker 行（stale 时首行为 APP.DEPENDENCY.bundle_stale:）
-  # 原样先于任何 recovery 说明输出；stdout 捕获失败 envelope 供机器判别。
+  # stderr 直接继承：missing/stale typed blocker 行原样先于 recovery 说明输出；
+  # stdout 捕获失败 envelope 供机器判别。
   if WORKSPACE_PROJECTION_JSON="$(
     PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
       python3 "$APP_DIR/scripts/device/prepare_workspace_launch_projection.py" \
@@ -81,8 +81,19 @@ if isinstance(payload, dict) and payload.get("status") == "failed":
     print(str(payload.get("errorCode") or ""))
 PY
 )" || WORKSPACE_PROJECTION_ERROR_CODE=""
-    # 恢复必须同时满足：stale 码、双 TTY、live workspace 外层入口、且本进程未同步过。
-    if [[ "$WORKSPACE_PROJECTION_ERROR_CODE" != "APP.DEPENDENCY.bundle_stale" \
+    # 恢复必须同时满足：missing/stale 码、双 TTY、live workspace 外层入口、且本进程未同步过。
+    case "$WORKSPACE_PROJECTION_ERROR_CODE" in
+      APP.DEPENDENCY.bundle_missing)
+        WORKSPACE_DEPENDENCY_AUTO_SYNC_REASON="缺失"
+        ;;
+      APP.DEPENDENCY.bundle_stale)
+        WORKSPACE_DEPENDENCY_AUTO_SYNC_REASON="过期"
+        ;;
+      *)
+        WORKSPACE_DEPENDENCY_AUTO_SYNC_REASON=""
+        ;;
+    esac
+    if [[ -z "$WORKSPACE_DEPENDENCY_AUTO_SYNC_REASON" \
        || "$WORKSPACE_DEPENDENCY_AUTO_SYNC_USED" != "0" \
        || ! ( -t 0 && -t 2 ) \
        || -n "${QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST:-}" \
@@ -91,7 +102,7 @@ PY
       exit 2
     fi
     WORKSPACE_DEPENDENCY_AUTO_SYNC_USED=1
-    echo "[run] 检测到依赖 bundle 已过期（APP.DEPENDENCY.bundle_stale）：现在执行一次 canonical 依赖同步 stackctl app-dependency-sync，完成后自动重试一次启动投影。" >&2
+    echo "[run] 检测到依赖 bundle 已${WORKSPACE_DEPENDENCY_AUTO_SYNC_REASON}（${WORKSPACE_PROJECTION_ERROR_CODE}）：现在执行一次 canonical 依赖同步 stackctl app-dependency-sync，完成后自动重试一次启动投影。" >&2
     WORKSPACE_DEPENDENCY_SYNC_REPORT="$(mktemp "${TMPDIR:-/tmp}/qwq-app-dependency-sync-report.XXXXXX")"
     WORKSPACE_DEPENDENCY_SYNC_STATUS=0
     if PYTHONDONTWRITEBYTECODE=1 \
@@ -216,7 +227,7 @@ PY
     unset WORKSPACE_DEPENDENCY_SYNC_REPORT
     if [[ "$WORKSPACE_DEPENDENCY_SYNC_PARSE_STATUS" -ne 0 ]]; then
       if [[ "$WORKSPACE_DEPENDENCY_SYNC_PARSE_STATUS" -eq 3 ]]; then
-        echo "[run] APP.DEPENDENCY.bundle_stale: canonical dependency sync returned invalid or empty JSON; workspace launch stays blocked." >&2
+        echo "[run] ${WORKSPACE_PROJECTION_ERROR_CODE}: canonical dependency sync returned invalid or empty JSON; workspace launch stays blocked." >&2
       fi
       echo "[run] APP.LAUNCH.workspace_entrypoint_inactive: unable to freeze a private workspace launch projection." >&2
       exit 2
@@ -237,13 +248,13 @@ bundle = load_active_dependency_bundle(repo_root=pathlib.Path(sys.argv[1]))
 print(str(bundle.active.get("attemptId") or ""))
 PY
     )"; then
-      echo "[run] APP.DEPENDENCY.bundle_stale: post-sync dependency bundle readback failed; not retrying." >&2
+      echo "[run] ${WORKSPACE_PROJECTION_ERROR_CODE}: post-sync dependency bundle readback failed; not retrying." >&2
       echo "[run] APP.LAUNCH.workspace_entrypoint_inactive: unable to freeze a private workspace launch projection." >&2
       exit 2
     fi
     if [[ -z "$WORKSPACE_DEPENDENCY_SYNC_ATTEMPT_ID" \
        || "$WORKSPACE_DEPENDENCY_ACTIVE_ATTEMPT_ID" != "$WORKSPACE_DEPENDENCY_SYNC_ATTEMPT_ID" ]]; then
-      echo "[run] APP.DEPENDENCY.bundle_stale: post-sync active attempt mismatch; not retrying." >&2
+      echo "[run] ${WORKSPACE_PROJECTION_ERROR_CODE}: post-sync active attempt mismatch; not retrying." >&2
       echo "[run] APP.LAUNCH.workspace_entrypoint_inactive: unable to freeze a private workspace launch projection." >&2
       exit 2
     fi

@@ -20,6 +20,27 @@ errors:
   user_message:
     zh: 人工授权请求无效
     en: The human authority request is invalid
+- code: OPS.USER.human_authority_not_found
+  reason: human_authority_not_found
+  http_status: 404
+  emitted_by:
+  - surface: http
+    operations:
+    - SubmitHumanRoleEvidence
+    - SealHumanDecisionRound
+    - FinalizeHumanDecision
+    - ReadHumanDecisionUnit
+    - ReadHumanAuthorizationReceipt
+    - ReadHumanAuthoritySigningPublicKey
+    - ConsumeHumanAuthorizationReceipt
+    - RevokeHumanAuthorizationReceipt
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: humanAuthorityNotFound
+  go_const: ErrHumanAuthorityNotFound
+  user_message:
+    zh: 人工授权记录不存在
+    en: The human authority record was not found
 - code: OPS.USER.human_authority_unauthorized
   reason: human_authority_unauthorized
   http_status: 401

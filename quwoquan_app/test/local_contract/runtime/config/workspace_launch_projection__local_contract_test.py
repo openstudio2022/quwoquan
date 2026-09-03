@@ -13,6 +13,7 @@ import pytest
 from quwoquan_app.scripts.device import prepare_workspace_launch_projection as source
 from quwoquan_ops.cli.lib.app_source_capsule import app_source_capsule_roots
 from quwoquan_ops.cli.lib.package_reuse.dependency_bundle import (
+    AppDependencyBundleMissingError,
     AppDependencyBundleStaleError,
 )
 
@@ -137,6 +138,36 @@ def _main_args(tmp_path: Path) -> list[str]:
     ]
 
 
+@pytest.mark.parametrize("field", ["root", "activePointer"])
+def test_missing_failure_emits_machine_envelope_and_typed_stderr(
+    field: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def _raise(**_kwargs: object) -> dict[str, str]:
+        raise AppDependencyBundleMissingError("managedDependencyBundle", field)
+
+    monkeypatch.setattr(source, "prepare_workspace_launch_projection", _raise)
+
+    exit_code = source.main(_main_args(tmp_path))
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert json.loads(captured.out) == {
+        "status": "failed",
+        "errorCode": "APP.DEPENDENCY.bundle_missing",
+        "errorResource": "managedDependencyBundle",
+        "errorField": field,
+    }
+    stderr_lines = captured.err.splitlines()
+    assert stderr_lines[0].startswith("APP.DEPENDENCY.bundle_missing:")
+    assert (
+        f"App dependency bundle is missing for managedDependencyBundle.{field}"
+        in stderr_lines[0]
+    )
+
+
 def test_stale_failure_emits_machine_envelope_and_typed_stderr(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -164,7 +195,7 @@ def test_stale_failure_emits_machine_envelope_and_typed_stderr(
     )
 
 
-def test_generic_failure_is_not_disguised_as_stale(
+def test_generic_failure_is_not_disguised_as_dependency_recovery(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -182,6 +213,8 @@ def test_generic_failure_is_not_disguised_as_stale(
         "status": "failed",
         "errorCode": "APP.LAUNCH.workspace_projection_failed",
     }
+    assert "bundle_missing" not in captured.out
+    assert "bundle_missing" not in captured.err
     assert "bundle_stale" not in captured.out
     assert "bundle_stale" not in captured.err
     assert captured.err.splitlines()[0] == (

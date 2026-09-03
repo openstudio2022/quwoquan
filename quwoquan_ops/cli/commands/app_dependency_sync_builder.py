@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
-import tarfile
-import tempfile
-import urllib.error
 import urllib.request
 import stat
 import subprocess
@@ -18,6 +14,9 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Protocol
 
+from quwoquan_ops.cli.commands.app_dependency_sync_ios import (
+    assert_ios_generated_metadata as _assert_ios_generated_metadata,
+)
 from quwoquan_ops.cli.commands.app_dependency_sync_projection import project
 from quwoquan_ops.cli.lib.app_dependency_sync_diagnostics import (
     dependency_failure_cause,
@@ -33,6 +32,7 @@ from quwoquan_ops.cli.lib.package_reuse.android_gradle_component import (
 )
 from quwoquan_ops.cli.lib.package_reuse.android_gradle_store import (
     canonical_android_uat_gradle_invocations,
+    materialize_flutter_gradle_wrappers,
     synchronize_android_gradle_dependencies,
 )
 from quwoquan_ops.cli.lib.package_reuse.dependency_fs import (
@@ -91,107 +91,24 @@ from quwoquan_ops.cli.lib.package_reuse.pub_cache_store import (
 )
 
 
-_PUBLIC_PUB_MIRROR = "https://pub.flutter-io.cn"
-_PUBLIC_PUB_ORIGIN = "https://pub.dev"
-_PUBLIC_PUB_MIRROR_ARCHIVE_PREFIX = (
-    "https://storage.flutter-io.cn/dartlang-pub-exported-api/latest/api/archives/"
+from quwoquan_ops.cli.commands.app_dependency_sync_pub_fallback import (
+    PUBLIC_PUB_MIRROR as _PUBLIC_PUB_MIRROR,
+    public_pub_origin_archive_fallback as _public_pub_origin_archive_fallback_impl,
 )
 
 
 def _public_pub_origin_archive_fallback(
     *, app_dir: Path, pub_cache: Path, log_path: Path
 ) -> bool:
-    """补齐公共 mirror 唯一缺失 archive；lock host 与 live source 均不改写。"""
+    """Retain the builder hook while delegating archive validation/extraction."""
 
-    lock_path = app_dir / "pubspec.lock"
-    _encoded, _lock_digest, hosted_packages = _lock_model(lock_path)
-    hosted_root = pub_cache / "hosted" / "pub.flutter-io.cn"
-    missing: list[tuple[str, str, str]] = []
-    for package in hosted_packages:
-        if package["url"] != _PUBLIC_PUB_MIRROR:
-            return False
-        name = package["name"]
-        version = package["version"]
-        expected = package["archiveSha256"]
-        if not (hosted_root / f"{name}-{version}").is_dir():
-            missing.append((name, version, expected))
-    if len(missing) != 1:
-        return False
-    name, version, expected = missing[0]
-    metadata_path = hosted_root / ".cache" / f"{name}-versions.json"
-    try:
-        metadata = json.loads(
-            read_regular_nofollow(metadata_path, label="public Pub mirror metadata")[0]
-        )
-    except (OSError, TypeError, UnicodeError, ValueError, json.JSONDecodeError):
-        return False
-    versions = metadata.get("versions") if isinstance(metadata, Mapping) else None
-    selected = next(
-        (
-            item
-            for item in versions or ()
-            if isinstance(item, Mapping)
-            and str(item.get("version") or "") == version
-        ),
-        None,
+    return _public_pub_origin_archive_fallback_impl(
+        app_dir=app_dir,
+        pub_cache=pub_cache,
+        log_path=log_path,
+        urlopen=urllib.request.urlopen,
     )
-    archive_url = str(selected.get("archive_url") or "") if selected else ""
-    archive_sha = str(selected.get("archive_sha256") or "") if selected else ""
-    if (
-        not archive_url.startswith(_PUBLIC_PUB_MIRROR_ARCHIVE_PREFIX)
-        or archive_sha != expected
-    ):
-        return False
-    origin_url = f"{_PUBLIC_PUB_ORIGIN}/api/archives/{name}-{version}.tar.gz"
-    request = urllib.request.Request(
-        origin_url, headers={"User-Agent": "quwoquan-dependency-sync/1"}
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            archive = response.read()
-    except (OSError, urllib.error.URLError):
-        return False
-    if hashlib.sha256(archive).hexdigest() != expected:
-        return False
-    target = hosted_root / f"{name}-{version}"
-    if target.exists() or target.is_symlink():
-        return False
-    with tempfile.TemporaryDirectory(prefix="qwq-pub-origin-fallback.", dir=pub_cache) as temporary:
-        archive_path = Path(temporary) / "archive.tar.gz"
-        archive_path.write_bytes(archive)
-        extract_root = Path(temporary) / "extract"
-        extract_root.mkdir(mode=0o700)
-        with tarfile.open(archive_path, mode="r:gz") as tar:
-            members = tar.getmembers()
-            for member in members:
-                member_path = Path(member.name)
-                if (
-                    member_path.is_absolute()
-                    or ".." in member_path.parts
-                    or member.issym()
-                    or member.islnk()
-                ):
-                    return False
-            tar.extractall(extract_root, members=members, filter="data")
-        entries = list(extract_root.iterdir())
-        source = (
-            entries[0]
-            if len(entries) == 1 and entries[0].is_dir()
-            else extract_root
-        )
-        os.replace(source, target)
-    # Canonical capsule 需要 archive SHA sidecar；它由 lock + mirror metadata +
-    # origin archive 三方一致性校验后写入。fallback 后不再调用 Dart Pub，避免
-    # Pub 将 origin 字节误判为 mirror cache 并再次命中同一个 403 archive。
-    hash_root = pub_cache / "hosted-hashes" / "pub.flutter-io.cn"
-    hash_root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    write_fresh_relative_file(
-        root=hash_root,
-        relative=f"{name}-{version}.sha256",
-        content=(expected + "\n").encode(),
-        mode=0o600,
-    )
-    return True
+
 
 _SYNC_TIMEOUT_SECONDS = 900
 _SYNC_NETWORK_MAX_ATTEMPTS = 3
@@ -767,26 +684,6 @@ def _pod_environment(
     return environment, home, cache
 
 
-def _assert_ios_generated_metadata(app_root: Path) -> None:
-    ios_root = app_root / "ios"
-    encoded, _mode = read_regular_nofollow(
-        ios_root / "Flutter/Generated.xcconfig", label="fresh Generated.xcconfig"
-    )
-    expected = f"FLUTTER_APPLICATION_PATH={app_root}"
-    if expected not in encoded.decode("utf-8").splitlines():
-        raise ValueError("APP.DEPENDENCY.generated_xcconfig_projection_mismatch")
-    read_regular_nofollow(
-        ios_root / "Flutter/Flutter.podspec", label="fresh Flutter.podspec"
-    )
-    project, _mode = read_regular_nofollow(
-        ios_root / "Runner.xcodeproj/project.pbxproj", label="iOS project"
-    )
-    if b"FlutterGeneratedPluginSwiftPackage" in project or list(
-        ios_root.rglob("FlutterGeneratedPluginSwiftPackage")
-    ):
-        raise ValueError("APP.DEPENDENCY.flutter_spm_residue_forbidden")
-
-
 def _build_ios_component(
     *,
     context: BuildContext,
@@ -896,78 +793,9 @@ def _build_ios_component(
     return target
 
 
-def _validated_runtime_trust_root(
-    raw: Path, *, repo_root: Path
-) -> tuple[Path, tuple[str, ...]]:
-    expanded = Path(raw).expanduser()
-    if not expanded.is_absolute():
-        raise ValueError(
-            "APP.DEPENDENCY.android_runtime_trust_root_invalid: "
-            "explicit trust root must be absolute"
-        )
-    try:
-        root = expanded.resolve(strict=True)
-        assert_real_directory(root, label="Android runtime trust root")
-    except (OSError, RuntimeError, ValueError) as exc:
-        raise ValueError(
-            "APP.DEPENDENCY.android_runtime_trust_root_invalid: "
-            "trust root is unavailable or unsafe"
-        ) from exc
-    repository = repo_root.expanduser().resolve(strict=False)
-    if root == repository or root.is_relative_to(repository):
-        raise ValueError(
-            "APP.DEPENDENCY.android_runtime_trust_root_invalid: "
-            "trust root must stay outside the repository"
-        )
-    root_metadata = root.stat(follow_symlinks=False)
-    if stat.S_IMODE(root_metadata.st_mode) != 0o700:
-        raise ValueError("APP.DEPENDENCY.android_runtime_trust_permissions_invalid")
-    trust_directory = root / "qwq_runtime"
-    try:
-        assert_real_directory(
-            trust_directory,
-            label="Android runtime trust directory",
-        )
-    except (RuntimeError, ValueError) as exc:
-        raise ValueError(
-            "APP.DEPENDENCY.android_runtime_trust_root_invalid: "
-            "trust directory is unavailable or unsafe"
-        ) from exc
-    if stat.S_IMODE(trust_directory.stat(follow_symlinks=False).st_mode) != 0o700:
-        raise ValueError("APP.DEPENDENCY.android_runtime_trust_permissions_invalid")
-    trust_path = root / "qwq_runtime/runtime-config-trust.json"
-    try:
-        encoded, _mode = read_regular_nofollow(
-            trust_path,
-            label="Android runtime trust envelope",
-        )
-    except (RuntimeError, ValueError) as exc:
-        raise ValueError(
-            "APP.DEPENDENCY.android_runtime_trust_root_invalid: "
-            "trust envelope is unavailable or unsafe"
-        ) from exc
-    trust_metadata = trust_path.stat(follow_symlinks=False)
-    if (
-        not encoded
-        or not stat.S_ISREG(trust_metadata.st_mode)
-        or trust_metadata.st_nlink != 1
-        or stat.S_IMODE(trust_metadata.st_mode) != 0o600
-    ):
-        raise ValueError("APP.DEPENDENCY.android_runtime_trust_permissions_invalid")
-    try:
-        payload = json.loads(encoded)
-    except (UnicodeError, json.JSONDecodeError) as exc:
-        raise ValueError(
-            "APP.DEPENDENCY.android_runtime_trust_invalid: "
-            f"cause={dependency_failure_cause(exc)}"
-        ) from exc
-    keyring = payload.get("trustedPublicKeys") if isinstance(payload, dict) else None
-    key_values = (
-        tuple(str(item) for pair in keyring.items() for item in pair if str(item))
-        if isinstance(keyring, dict)
-        else ()
-    )
-    return root, (str(root), str(trust_path), *key_values)
+from quwoquan_ops.cli.commands.app_dependency_sync_trust import (
+    validated_runtime_trust_root as _validated_runtime_trust_root,
+)
 
 
 def _build_android_component(
@@ -1001,6 +829,15 @@ def _build_android_component(
     )
     invocations = canonical_android_uat_gradle_invocations(projection_root)
     gradle_roots = [item.gradle_root for item in invocations]
+    flutter = str(context.flutter_identity.get("executable") or "")
+    if not flutter:
+        raise ValueError("APP.DEPENDENCY.flutter_executable_missing")
+    context.progress.begin("gradle-wrapper-materialization")
+    materialize_flutter_gradle_wrappers(
+        project_root=projection_root,
+        gradle_roots=gradle_roots,
+        flutter_executable=flutter,
+    )
     context.progress.begin("gradle-online-resolution")
     try:
         result = synchronize_android_gradle_dependencies(

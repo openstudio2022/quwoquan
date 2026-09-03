@@ -34332,6 +34332,7 @@
       "concurrency": {},
       "errorCodes": [
         "OPS.USER.human_authority_invalid",
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.USER.human_authority_conflict",
         "OPS.SYSTEM.human_authority_storage_failed"
@@ -34472,6 +34473,7 @@
       "concurrency": {},
       "errorCodes": [
         "OPS.USER.human_authority_invalid",
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.USER.human_authority_conflict",
         "OPS.USER.human_authority_wrong_role",
@@ -34681,6 +34683,7 @@
       },
       "concurrency": {},
       "errorCodes": [
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.SYSTEM.human_authority_storage_failed"
       ],
@@ -34751,6 +34754,7 @@
       },
       "concurrency": {},
       "errorCodes": [
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.SYSTEM.human_authority_storage_failed"
       ],
@@ -34821,6 +34825,7 @@
       },
       "concurrency": {},
       "errorCodes": [
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.USER.human_authority_wrong_role",
         "OPS.SYSTEM.human_authority_storage_failed"
@@ -34898,6 +34903,7 @@
       "concurrency": {},
       "errorCodes": [
         "OPS.USER.human_authority_invalid",
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.USER.human_authority_conflict",
         "OPS.SYSTEM.human_authority_storage_failed"
@@ -34975,6 +34981,7 @@
       "concurrency": {},
       "errorCodes": [
         "OPS.USER.human_authority_invalid",
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.USER.human_authority_conflict",
         "OPS.USER.human_authority_wrong_role",
@@ -35051,6 +35058,7 @@
       "concurrency": {},
       "errorCodes": [
         "OPS.USER.human_authority_invalid",
+        "OPS.USER.human_authority_not_found",
         "OPS.USER.human_authority_unauthorized",
         "OPS.USER.human_authority_conflict",
         "OPS.USER.human_authority_wrong_role",
@@ -114028,7 +114036,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/testmain__support__api_integration_test.go",
-            "sha256": "f7f3dfcee54e097671d4155ed80920da46370acc0397f3b057441a8568fc14e4"
+            "sha256": "b139fd40ab7d6ac2e663b0ace0b2a113e0c771ebf041ce916f6ecb7ea8df92ef"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/user_account_closed_cleanup__data_consistency__api_integration_test.go",
@@ -119940,7 +119948,7 @@
         "domain": [
           {
             "path": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model/human_contract_generated.go",
-            "sha256": "2ce7ef1eb305ce8e5dd43b4929325d1fac89864d369932da103bf74ab9a49639"
+            "sha256": "3153aacdd71f4e36da46174d9f010d9deceda25fcddd94193da10e1f959fcc81"
           },
           {
             "path": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/domain/model/model.go",
@@ -119990,7 +119998,7 @@
         "transport": [
           {
             "path": "quwoquan_service/control-plane/platform-ops/internal/platform_ops/human_authority/adapters/inbound/http/handler.go",
-            "sha256": "ae9fc207abb009d74e9f7c2f8c02e015168f5ab2cd7bf9808e8905188976d2af"
+            "sha256": "8410800b2dce272076b36f2426ef0b9dc9175d0e6ccfd0470690b771cdcdb85c"
           }
         ],
         "localContract": [
@@ -120000,7 +120008,7 @@
           },
           {
             "path": "quwoquan_service/control-plane/platform-ops/tests/local_contract/platform_ops/human_authority/http_webhook__local_contract_test.go",
-            "sha256": "81a34fdc2270abe2822ebc7e3f77596a23ca0136ecd869e3a13cca23a227b66e"
+            "sha256": "dcf917b7f6dfa45bce14ee8bf3d073f4695cb4843bde16d8a2b9f88a53dffe35"
           }
         ],
         "apiIntegration": [
@@ -132095,7 +132103,7 @@
     },
     {
       "path": "ops/platform_ops/human_authority/errors.yaml",
-      "sha256": "71a4f126182a1dbe1b42fe3c427007b1310156cec94dba4f9cc1d42297fe8248"
+      "sha256": "d81dbdb1e12ddbe2b5f2c787a33158ac9ea7f2a4d8a5d9893427ac3cf0ae86aa"
     },
     {
       "path": "ops/platform_ops/human_authority/fields.yaml",
@@ -132107,7 +132115,7 @@
     },
     {
       "path": "ops/platform_ops/human_authority/operations.yaml",
-      "sha256": "75308bf2239c66f0db39a578240e0cbd1edd0c134e8d9a989740be27e828627b"
+      "sha256": "c61538d2ac00940c97348f0f686e694c43fd6aa82e30b3faa548ade1e8722dce"
     },
     {
       "path": "ops/platform_ops/human_authority/projections/decision_unit_slice.yaml",
@@ -339147,7 +339155,7 @@
     },
     {
       "path": "ops/platform_ops/human_authority/errors.yaml",
-      "sha256": "71a4f126182a1dbe1b42fe3c427007b1310156cec94dba4f9cc1d42297fe8248",
+      "sha256": "d81dbdb1e12ddbe2b5f2c787a33158ac9ea7f2a4d8a5d9893427ac3cf0ae86aa",
       "mediaType": "application/yaml",
       "content": {
         "description": "Hosted Human Authority 的身份、闭集、证据、SoD、CAS 与存储失败语义。",
@@ -339177,6 +339185,34 @@
             "user_message": {
               "en": "The human authority request is invalid",
               "zh": "人工授权请求无效"
+            }
+          },
+          {
+            "code": "OPS.USER.human_authority_not_found",
+            "dart_const": "humanAuthorityNotFound",
+            "disruption_level": "inlineCard",
+            "emitted_by": [
+              {
+                "operations": [
+                  "SubmitHumanRoleEvidence",
+                  "SealHumanDecisionRound",
+                  "FinalizeHumanDecision",
+                  "ReadHumanDecisionUnit",
+                  "ReadHumanAuthorizationReceipt",
+                  "ReadHumanAuthoritySigningPublicKey",
+                  "ConsumeHumanAuthorizationReceipt",
+                  "RevokeHumanAuthorizationReceipt"
+                ],
+                "surface": "http"
+              }
+            ],
+            "go_const": "ErrHumanAuthorityNotFound",
+            "http_status": 404,
+            "reason": "human_authority_not_found",
+            "recovery_action": "surface",
+            "user_message": {
+              "en": "The human authority record was not found",
+              "zh": "人工授权记录不存在"
             }
           },
           {
@@ -340780,7 +340816,7 @@
     },
     {
       "path": "ops/platform_ops/human_authority/operations.yaml",
-      "sha256": "75308bf2239c66f0db39a578240e0cbd1edd0c134e8d9a989740be27e828627b",
+      "sha256": "c61538d2ac00940c97348f0f686e694c43fd6aa82e30b3faa548ade1e8722dce",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -340927,6 +340963,7 @@
               "target_story": "hosted-human-authority"
             },
             "error_codes": [
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.USER.human_authority_wrong_role",
               "OPS.SYSTEM.human_authority_storage_failed"
@@ -340995,6 +341032,7 @@
             },
             "error_codes": [
               "OPS.USER.human_authority_invalid",
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.USER.human_authority_conflict",
               "OPS.USER.human_authority_wrong_role",
@@ -341067,6 +341105,7 @@
             },
             "error_codes": [
               "OPS.USER.human_authority_invalid",
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.USER.human_authority_conflict",
               "OPS.USER.human_authority_wrong_role",
@@ -341140,6 +341179,7 @@
             },
             "error_codes": [
               "OPS.USER.human_authority_invalid",
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.USER.human_authority_conflict",
               "OPS.USER.human_authority_wrong_role",
@@ -341212,6 +341252,7 @@
               "target_story": "hosted-human-authority"
             },
             "error_codes": [
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.SYSTEM.human_authority_storage_failed"
             ],
@@ -341277,6 +341318,7 @@
               "target_story": "hosted-human-authority"
             },
             "error_codes": [
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.SYSTEM.human_authority_storage_failed"
             ],
@@ -341344,6 +341386,7 @@
             },
             "error_codes": [
               "OPS.USER.human_authority_invalid",
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.USER.human_authority_conflict",
               "OPS.SYSTEM.human_authority_storage_failed"
@@ -341416,6 +341459,7 @@
             },
             "error_codes": [
               "OPS.USER.human_authority_invalid",
+              "OPS.USER.human_authority_not_found",
               "OPS.USER.human_authority_unauthorized",
               "OPS.USER.human_authority_conflict",
               "OPS.SYSTEM.human_authority_storage_failed"

@@ -1,5 +1,5 @@
 # spec_ref: specs/feature-tree/runtime/runtime-config/design.md#dec-003
-"""run.sh 依赖 bundle stale 的一次性交互式自动同步契约。
+"""run.sh 依赖 bundle missing/stale 的一次性交互式自动同步契约。
 
 驱动方式：从 run.sh 原字节提取 ``enter_workspace_launch_projection`` 函数，
 在沙箱 ROOT_DIR/APP_DIR/QWQ_OUTPUT_ROOT 下以真实 bash 子进程执行；
@@ -39,7 +39,7 @@ count = int(counter.read_text(encoding="ascii")) if counter.exists() else 0
 count += 1
 counter.write_text(str(count), encoding="ascii")
 mode = os.environ.get("STUB_PREPARE_MODE", "always_stale")
-if mode == "stale_then_ok" and count >= 2:
+if mode in {"stale_then_ok", "missing_then_ok"} and count >= 2:
     print(
         json.dumps(
             {
@@ -53,6 +53,24 @@ if mode == "stale_then_ok" and count >= 2:
         )
     )
     raise SystemExit(0)
+if mode in {"always_missing", "missing_then_ok"}:
+    print(
+        json.dumps(
+            {
+                "status": "failed",
+                "errorCode": "APP.DEPENDENCY.bundle_missing",
+                "errorResource": "managedDependencyBundle",
+                "errorField": "root",
+            },
+            sort_keys=True,
+        )
+    )
+    print(
+        "APP.DEPENDENCY.bundle_missing: App dependency bundle is missing for "
+        "managedDependencyBundle.root",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
 if mode == "generic_failure":
     print(
         json.dumps(
@@ -382,7 +400,8 @@ class TestStaticContract:
         assert "-t 0 && -t 2" in section
         assert "--output-format json app-dependency-sync" in section
         assert "load_active_dependency_bundle" in section
-        assert '"APP.DEPENDENCY.bundle_stale"' in section
+        assert 'APP.DEPENDENCY.bundle_missing)' in section
+        assert 'APP.DEPENDENCY.bundle_stale)' in section
         # 不复用/污染后文 iOS 重试的 DEPENDENCY_RETRY 状态机（注释提及除外）。
         assert "$DEPENDENCY_RETRY" not in section
         assert "DEPENDENCY_RETRY=" not in section
@@ -391,8 +410,10 @@ class TestStaticContract:
 
     def test_recovery_requires_live_workspace_outer_entry(self) -> None:
         section = _extracted_projection_function()
-        recovery_guard = section.index('!= "APP.DEPENDENCY.bundle_stale"')
+        recovery_guard = section.index('case "$WORKSPACE_PROJECTION_ERROR_CODE" in')
         guard_block = section[recovery_guard : section.index("mktemp", recovery_guard)]
+        assert "APP.DEPENDENCY.bundle_missing" in guard_block
+        assert "APP.DEPENDENCY.bundle_stale" in guard_block
         assert "QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST" in guard_block
         assert '.git' in guard_block
 
@@ -422,6 +443,47 @@ class TestRealSubprocess:
         assert "APP.LAUNCH.workspace_entrypoint_inactive" in result.stderr
         assert _EXEC_MARKER not in result.stdout
 
+    def test_non_tty_missing_fails_closed_without_auto_sync(
+        self, tmp_path: Path
+    ) -> None:
+        driver, env, state = _build_sandbox(tmp_path, prepare_mode="always_missing")
+
+        result = subprocess.run(
+            ["/bin/bash", str(driver)],
+            cwd=tmp_path,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+        assert result.returncode == 2
+        assert _count(state, "projection_calls") == 1
+        assert _count(state, "sync_calls") == 0
+        assert result.stderr.splitlines()[0].startswith(
+            "APP.DEPENDENCY.bundle_missing:"
+        )
+        assert _EXEC_MARKER not in result.stdout
+
+    def test_tty_missing_syncs_once_then_retries_projection_once(
+        self, tmp_path: Path
+    ) -> None:
+        driver, env, state = _build_sandbox(tmp_path, prepare_mode="missing_then_ok")
+
+        exit_code, output = _run_driver_in_pty(driver, env, cwd=tmp_path)
+
+        assert exit_code == 0, output
+        assert _EXEC_MARKER in output
+        assert _count(state, "projection_calls") == 2
+        assert _count(state, "sync_calls") == 1
+        assert _count(state, "readback_calls") == 1
+        missing_at = output.index("APP.DEPENDENCY.bundle_missing:")
+        notice_at = output.index(_SYNC_NOTICE)
+        assert missing_at < notice_at
+        assert "依赖 bundle 已缺失（APP.DEPENDENCY.bundle_missing）" in output
+
     def test_tty_stale_syncs_once_then_retries_projection_once(
         self, tmp_path: Path
     ) -> None:
@@ -443,6 +505,7 @@ class TestRealSubprocess:
         stale_at = output.index("APP.DEPENDENCY.bundle_stale:")
         notice_at = output.index(_SYNC_NOTICE)
         assert stale_at < notice_at
+        assert "依赖 bundle 已过期（APP.DEPENDENCY.bundle_stale）" in output
 
     @pytest.mark.parametrize(
         "sync_mode", ["shell_fail", "ambiguous", "not_committed"]

@@ -9,6 +9,7 @@ import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .android_gradle_capsule import (
     _WRAPPER_FILES,
@@ -21,6 +22,11 @@ from .android_gradle_capsule import (
     canonical_bytes,
     digest_bytes,
     wrapper_identity,
+)
+from .dependency_fs import (
+    _directory_fd,
+    assert_real_directory,
+    write_fresh_relative_file,
 )
 from .dependency_network_command import (
     retry_event,
@@ -38,6 +44,221 @@ _GRADLE_NETWORK_MAX_ATTEMPTS = 3
 _GRADLE_NETWORK_BACKOFF_SECONDS = (1.0, 2.0)
 _GRADLE_PROCESS_TIMEOUT_SECONDS = 20 * 60
 _GRADLE_INVOCATION_DEADLINE_SECONDS = 45 * 60
+
+_FLUTTER_GRADLE_WRAPPER_ARTIFACTS = (
+    "gradlew",
+    "gradlew.bat",
+    "gradle/wrapper/gradle-wrapper.jar",
+)
+
+
+def _lexical_absolute(path: Path) -> Path:
+    return Path(os.path.abspath(path.expanduser()))
+
+
+def _exact_regular_file(path: Path, *, label: str) -> tuple[bytes, int]:
+    """Read one stable real file and retain its exact permission bits."""
+
+    absolute = _lexical_absolute(path)
+    parent_descriptor = -1
+    descriptor = -1
+    try:
+        parent_descriptor = _directory_fd(absolute.parent, label=f"{label} parent")
+        descriptor = os.open(
+            absolute.name,
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=parent_descriptor,
+        )
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+            raise ValueError(
+                f"Android Gradle {label} is not a single-link regular file"
+            )
+        content = bytearray()
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            content.extend(chunk)
+        after = os.fstat(descriptor)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ValueError(f"Android Gradle {label} is unavailable or unsafe") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        if parent_descriptor >= 0:
+            os.close(parent_descriptor)
+    identity = lambda item: (
+        item.st_dev,
+        item.st_ino,
+        item.st_mode,
+        item.st_nlink,
+        item.st_size,
+        item.st_mtime_ns,
+        item.st_ctime_ns,
+    )
+    if identity(before) != identity(after):
+        raise ValueError(f"Android Gradle {label} changed during read")
+    return bytes(content), stat.S_IMODE(before.st_mode)
+
+
+def _present_nofollow(path: Path, *, label: str) -> bool:
+    absolute = _lexical_absolute(path)
+    parent_descriptor = -1
+    try:
+        parent_descriptor = _directory_fd(absolute.parent, label=f"{label} parent")
+        os.stat(absolute.name, dir_fd=parent_descriptor, follow_symlinks=False)
+    except FileNotFoundError:
+        return False
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ValueError(f"Android Gradle {label} cannot be inspected safely") from exc
+    finally:
+        if parent_descriptor >= 0:
+            os.close(parent_descriptor)
+    return True
+
+
+def materialize_flutter_gradle_wrappers(
+    *,
+    project_root: Path,
+    gradle_roots: Sequence[Path],
+    flutter_executable: str | Path,
+) -> tuple[dict[str, Any], ...]:
+    """Fill Flutter's ignored wrapper tools into one private source projection."""
+
+    repository = _lexical_absolute(project_root)
+    try:
+        assert_real_directory(repository, label="wrapper projection root")
+    except (RuntimeError, ValueError) as exc:
+        raise ValueError(
+            "Android Gradle wrapper projection root is unavailable or linked"
+        ) from exc
+
+    declared_flutter = Path(flutter_executable).expanduser()
+    if not declared_flutter.is_absolute():
+        raise ValueError("Android Gradle Flutter executable must be absolute")
+    try:
+        physical_flutter = declared_flutter.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ValueError("Android Gradle Flutter executable is unavailable") from exc
+    _flutter_bytes, flutter_mode = _exact_regular_file(
+        physical_flutter, label="Flutter executable"
+    )
+    if (
+        physical_flutter.name != "flutter"
+        or physical_flutter.parent.name != "bin"
+        or not flutter_mode & 0o111
+    ):
+        raise ValueError(
+            "Android Gradle Flutter executable is not a canonical executable"
+        )
+
+    flutter_root = physical_flutter.parent.parent
+    artifact_root = flutter_root / "bin/cache/artifacts/gradle_wrapper"
+    try:
+        assert_real_directory(flutter_root, label="Flutter SDK root")
+        assert_real_directory(
+            artifact_root, label="Flutter Gradle wrapper artifact root"
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise ValueError(
+            "Android Gradle Flutter SDK wrapper artifact root is unavailable or linked"
+        ) from exc
+
+    sdk_artifacts = {
+        relative: _exact_regular_file(
+            artifact_root / relative,
+            label=f"Flutter SDK wrapper artifact {relative}",
+        )
+        for relative in _FLUTTER_GRADLE_WRAPPER_ARTIFACTS
+    }
+    if not sdk_artifacts["gradlew"][1] & 0o111:
+        raise ValueError("Android Gradle Flutter SDK wrapper script is not executable")
+
+    plans: list[tuple[Path, tuple[bytes, int], tuple[str, ...]]] = []
+    seen_roots: set[str] = set()
+    for gradle_root in gradle_roots:
+        target_root = _lexical_absolute(gradle_root)
+        if not target_root.is_relative_to(repository):
+            raise ValueError("Android Gradle wrapper root escapes the private project")
+        relative_root = target_root.relative_to(repository).as_posix()
+        if not relative_root or relative_root in seen_roots:
+            raise ValueError("Android Gradle wrapper roots are empty or duplicated")
+        seen_roots.add(relative_root)
+        try:
+            assert_real_directory(target_root, label=f"wrapper root {relative_root}")
+        except (RuntimeError, ValueError) as exc:
+            raise ValueError(
+                f"Android Gradle wrapper root is unavailable or linked: {relative_root}"
+            ) from exc
+
+        properties = _exact_regular_file(
+            target_root / "gradle/wrapper/gradle-wrapper.properties",
+            label=f"wrapper properties {relative_root}",
+        )
+        missing: list[str] = []
+        for relative, sdk_identity in sdk_artifacts.items():
+            destination = target_root / relative
+            if not _present_nofollow(
+                destination,
+                label=f"projected wrapper artifact {relative_root}/{relative}",
+            ):
+                missing.append(relative)
+                continue
+            target_identity = _exact_regular_file(
+                destination,
+                label=f"projected wrapper artifact {relative_root}/{relative}",
+            )
+            if target_identity != sdk_identity:
+                raise ValueError(
+                    "Android Gradle projected wrapper artifact differs from Flutter SDK: "
+                    f"{relative_root}/{relative}"
+                )
+        plans.append((target_root, properties, tuple(missing)))
+
+    if not plans:
+        raise ValueError("Android Gradle wrapper roots are empty or duplicated")
+
+    for target_root, _properties, missing in plans:
+        for relative in missing:
+            content, mode = sdk_artifacts[relative]
+            write_fresh_relative_file(
+                root=target_root,
+                relative=relative,
+                content=content,
+                mode=mode,
+            )
+
+    identities: list[dict[str, Any]] = []
+    for target_root, original_properties, _missing in plans:
+        relative_root = target_root.relative_to(repository).as_posix()
+        current_properties = _exact_regular_file(
+            target_root / "gradle/wrapper/gradle-wrapper.properties",
+            label=f"wrapper properties {relative_root}",
+        )
+        if current_properties != original_properties:
+            raise ValueError(
+                "Android Gradle wrapper properties changed during materialization: "
+                f"{relative_root}"
+            )
+        for relative, sdk_identity in sdk_artifacts.items():
+            if (
+                _exact_regular_file(
+                    target_root / relative,
+                    label=f"materialized wrapper artifact {relative_root}/{relative}",
+                )
+                != sdk_identity
+            ):
+                raise ValueError(
+                    "Android Gradle materialized wrapper artifact identity drifted: "
+                    f"{relative_root}/{relative}"
+                )
+        identities.append(
+            wrapper_identity(project_root=repository, gradle_root=target_root)
+        )
+    return tuple(identities)
 
 
 @dataclass(frozen=True, slots=True)

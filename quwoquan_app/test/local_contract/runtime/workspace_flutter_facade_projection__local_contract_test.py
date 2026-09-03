@@ -849,11 +849,16 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
         raw_bin = self.root / "raw-sdk/bin"
         raw_flutter = _write_executable(
             raw_bin / "flutter",
-            "#!/bin/sh\nprintf 'RAW_SDK %s\\n' \"$*\"\n",
+            "#!/bin/sh\n"
+            "if [ \"$*\" = \"--version --machine\" ]; then\n"
+            "  printf '%s' '{\"frameworkVersion\":\"3.47.0\","
+            "\"frameworkRevision\":\"fixture-revision\"}'\n"
+            "  exit 0\n"
+            "fi\n"
+            "printf 'RAW_SDK %s\\n' \"$*\"\n",
         )
         _write_executable(raw_bin / "run.sh", "#!/bin/sh\nprintf 'RAW_RUN\\n'\n")
         self._write_interactive_zsh_startup(path_prefix=raw_bin)
-
         with _InteractiveLoginZsh(
             home=self.home,
             environment=self._interactive_environment(),
@@ -882,9 +887,19 @@ class WorkspaceTerminalInjectionLocalContractTest(unittest.TestCase):
             fake_app.joinpath("pubspec.yaml").write_text(
                 "name: fixture_app\n", encoding="utf-8"
             )
+            fake_app.joinpath(".flutter-version").write_text(
+                "3.47.0\n", encoding="utf-8"
+            )
+            fake_stackctl = fake_app.parent / "quwoquan_ops/cli/stackctl.py"
+            fake_stackctl.parent.mkdir(parents=True)
+            fake_stackctl.touch()
             fake_carrier = fake_app / "scripts/tools/flutter_facade/user_zsh_projection.zsh"
             fake_carrier.parent.mkdir(parents=True)
             fake_carrier.write_bytes(USER_ZSH_CARRIER.read_bytes())
+            fake_facade = fake_carrier.with_name("flutter_facade.py")
+            fake_facade.write_bytes(
+                (FACADE_DIR / "flutter_facade.py").read_bytes()
+            )
             physical_python = Path(sys.executable).resolve()
             fake_projection = self.home / ".config/quwoquan/fake-flutter-facade.zsh"
             fake_projection.parent.mkdir(mode=0o700, parents=True, exist_ok=True)

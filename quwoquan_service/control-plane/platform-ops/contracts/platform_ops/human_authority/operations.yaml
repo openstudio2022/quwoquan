@@ -112,6 +112,7 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
+  - OPS.USER.human_authority_not_found
   - OPS.USER.human_authority_unauthorized
   - OPS.USER.human_authority_wrong_role
   - OPS.SYSTEM.human_authority_storage_failed
@@ -164,6 +165,7 @@ api_routes:
     idempotency: required
   error_codes:
   - OPS.USER.human_authority_invalid
+  - OPS.USER.human_authority_not_found
   - OPS.USER.human_authority_unauthorized
   - OPS.USER.human_authority_conflict
   - OPS.USER.human_authority_wrong_role
@@ -217,6 +219,7 @@ api_routes:
     idempotency: required
   error_codes:
   - OPS.USER.human_authority_invalid
+  - OPS.USER.human_authority_not_found
   - OPS.USER.human_authority_unauthorized
   - OPS.USER.human_authority_conflict
   - OPS.USER.human_authority_wrong_role
@@ -273,6 +276,7 @@ api_routes:
     idempotency: required
   error_codes:
   - OPS.USER.human_authority_invalid
+  - OPS.USER.human_authority_not_found
   - OPS.USER.human_authority_unauthorized
   - OPS.USER.human_authority_conflict
   - OPS.USER.human_authority_wrong_role
@@ -327,6 +331,7 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
+  - OPS.USER.human_authority_not_found
   - OPS.USER.human_authority_unauthorized
   - OPS.SYSTEM.human_authority_storage_failed
   privacy:
@@ -375,6 +380,7 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
+  - OPS.USER.human_authority_not_found
   - OPS.USER.human_authority_unauthorized
   - OPS.SYSTEM.human_authority_storage_failed
   privacy:
@@ -428,6 +434,7 @@ api_routes:
     idempotency: required
   error_codes:
   - OPS.USER.human_authority_invalid
+  - OPS.USER.human_authority_not_found
   - OPS.USER.human_authority_unauthorized
   - OPS.USER.human_authority_conflict
   - OPS.SYSTEM.human_authority_storage_failed
@@ -483,6 +490,7 @@ api_routes:
     idempotency: required
   error_codes:
   - OPS.USER.human_authority_invalid
+  - OPS.USER.human_authority_not_found
   - OPS.USER.human_authority_unauthorized
   - OPS.USER.human_authority_conflict
   - OPS.SYSTEM.human_authority_storage_failed
