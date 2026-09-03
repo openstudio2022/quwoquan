@@ -1031,69 +1031,92 @@ enum NativeRuntimeConfigActivationCoordinator {
         validationIssues: []
       )
     } catch {
-      let normalizedError = (error as? NativeRuntimeConfigReadError)
-        ?? nativeRuntimeConfigInternalFailure(
-          context: "consume_activation_request",
-          error: error
-        )
-      var errorCode = normalizedError.flutterCode
-      var issues = [errorCode]
-      // 读取失败时状态未知：保持最后已知 CAS 值并追加 rollback_failed，不得宣称空 active，
-      // 也不得覆盖原始失败码；只有确认读取成功且与 CAS 前不一致才升级为 rollback_failed。
-      var activeDigest = previousActiveDigest
-      var activeDigestUnknown = false
-      do {
-        activeDigest = try currentActiveDigest()
-        if !previousActiveDigestKnown {
-          previousActiveDigest = activeDigest
-          previousActiveDigestKnown = true
-        }
-      } catch {
-        activeDigestUnknown = true
+      return recordActivationFailure(
+        error,
+        context: "consume_activation_request",
+        receiptIdentity: receiptIdentity,
+        requestDigest: requestDigest,
+        previousActiveDigest: previousActiveDigest,
+        previousActiveDigestKnown: previousActiveDigestKnown,
+        cleanupPendingRequestFile: true
+      )
+    }
+  }
+
+  private static func recordActivationFailure(
+    _ error: Error,
+    context: String,
+    receiptIdentity: NativeRuntimeConfigReceiptIdentityProjection,
+    requestDigest: String,
+    previousActiveDigest initialPreviousActiveDigest: String,
+    previousActiveDigestKnown initialPreviousActiveDigestKnown: Bool,
+    cleanupPendingRequestFile: Bool
+  ) -> NativeRuntimeConfigActivationConsumeResult {
+    var previousActiveDigest = initialPreviousActiveDigest
+    var previousActiveDigestKnown = initialPreviousActiveDigestKnown
+    let normalizedError = (error as? NativeRuntimeConfigReadError)
+      ?? nativeRuntimeConfigInternalFailure(
+        context: context,
+        error: error
+      )
+    var errorCode = normalizedError.flutterCode
+    var issues = [errorCode]
+    // 读取失败时状态未知：保持最后已知 CAS 值并追加 rollback_failed，不得宣称空 active，
+    // 也不得覆盖原始失败码；只有确认读取成功且与 CAS 前不一致才升级为 rollback_failed。
+    var activeDigest = previousActiveDigest
+    var activeDigestUnknown = false
+    do {
+      activeDigest = try currentActiveDigest()
+      if !previousActiveDigestKnown {
+        previousActiveDigest = activeDigest
+        previousActiveDigestKnown = true
       }
-      let rollbackCode = NativeRuntimeConfigReadError.activationRollbackFailed.flutterCode
-      if activeDigestUnknown {
-        if !issues.contains(rollbackCode) {
-          issues.append(rollbackCode)
-        }
-      } else if activeDigest != previousActiveDigest {
-        errorCode = rollbackCode
-        issues.insert(errorCode, at: 0)
+    } catch {
+      activeDigestUnknown = true
+    }
+    let rollbackCode = NativeRuntimeConfigReadError.activationRollbackFailed.flutterCode
+    if activeDigestUnknown {
+      if !issues.contains(rollbackCode) {
+        issues.append(rollbackCode)
       }
-      var failedReceiptWritten = false
-      do {
-        let receipt = buildReceipt(
-          identity: receiptIdentity,
-          requestDigest: requestDigest,
-          status: failedReceiptStatus,
-          previousActiveDigest: previousActiveDigest,
-          activePackageDigest: activeDigest,
-          errorCode: errorCode,
-          validationIssues: issues
-        )
-        try writeReceipt(receipt, name: nativeRuntimeActivationReceiptFileName)
-        failedReceiptWritten = true
-      } catch {
-        if !issues.contains(NativeRuntimeConfigReadError.activationReceiptWriteFailed.flutterCode) {
-          issues.append(NativeRuntimeConfigReadError.activationReceiptWriteFailed.flutterCode)
-        }
-      }
-      if failedReceiptWritten,
-         let requestURL = try? runtimeConfigFileURL(
-           name: nativeRuntimeActivationRequestFileName,
-           createDirectory: false,
-           requireExisting: false
-         )
-      {
-        try? FileManager.default.removeItem(at: requestURL)
-      }
-      return NativeRuntimeConfigActivationConsumeResult(
-        requested: true,
-        activated: false,
+    } else if activeDigest != previousActiveDigest {
+      errorCode = rollbackCode
+      issues.insert(errorCode, at: 0)
+    }
+    var failedReceiptWritten = false
+    do {
+      let receipt = buildReceipt(
+        identity: receiptIdentity,
+        requestDigest: requestDigest,
+        status: failedReceiptStatus,
+        previousActiveDigest: previousActiveDigest,
+        activePackageDigest: activeDigest,
         errorCode: errorCode,
         validationIssues: issues
       )
+      try writeReceipt(receipt, name: nativeRuntimeActivationReceiptFileName)
+      failedReceiptWritten = true
+    } catch {
+      if !issues.contains(NativeRuntimeConfigReadError.activationReceiptWriteFailed.flutterCode) {
+        issues.append(NativeRuntimeConfigReadError.activationReceiptWriteFailed.flutterCode)
+      }
     }
+    if cleanupPendingRequestFile,
+       failedReceiptWritten,
+       let requestURL = try? runtimeConfigFileURL(
+         name: nativeRuntimeActivationRequestFileName,
+         createDirectory: false,
+         requireExisting: false
+       )
+    {
+      try? FileManager.default.removeItem(at: requestURL)
+    }
+    return NativeRuntimeConfigActivationConsumeResult(
+      requested: true,
+      activated: false,
+      errorCode: errorCode,
+      validationIssues: issues
+    )
   }
 
   // Active receipt 的缺席、读取失败与解码失败必须使用 receipt 语义错误码，

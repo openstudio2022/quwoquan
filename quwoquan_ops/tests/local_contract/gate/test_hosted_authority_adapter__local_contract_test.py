@@ -10,6 +10,9 @@
 from __future__ import annotations
 
 import base64
+from contextlib import redirect_stdout
+from datetime import datetime, timezone
+import io
 import json
 import os
 import socket
@@ -30,6 +33,7 @@ from lib.hosted_authority import (  # noqa: E402
     EXTERNAL_BLOCKER_CODE,
     PROTOCOL_BLOCKER_CODE,
     UNKNOWN_OUTCOME_CODE,
+    AuthorityAbsent,
     CommandOutcomeUnknown,
     HostedAuthorityConfig,
     HostedAuthorityError,
@@ -41,6 +45,22 @@ from lib.hosted_authority import (  # noqa: E402
     load_hosted_authority_wire,
     signature_message,
 )
+from hosted_authority_smoke import (  # noqa: E402
+    OWNER_MANIFEST_ROOT,
+    READINESS_BUNDLE_ROOT,
+    SmokeFailure,
+    _fresh_readiness,
+    _normalize_owner_manifest_path,
+    _read_canonical_input,
+    _read_canonical_repo_ref,
+    _verify_owner_manifest,
+    build_parser as build_smoke_parser,
+    main as smoke_main,
+    run_observe_only_smoke,
+)
+from lib.agent_governance_contract import validate_feature_context_manifest  # noqa: E402
+from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
+from lib.feature_context_fingerprint import build_feature_context_fingerprint  # noqa: E402
 from lib.hosted_authority.runtime import runtime_from_env  # noqa: E402
 from lib.objective_execution.hosted_provider import (  # noqa: E402
     HostedAuthorityProvider,
@@ -52,6 +72,13 @@ ISSUER = "https://authority.example.com"
 DECISION_ID = "decision/1"
 KEY_ID = "authority-ed25519-2026-08"
 VERSION = '"receipt-v3"'
+CANDIDATE = "sha256:" + "a" * 64
+MANIFEST_SHA256 = "b" * 64
+EXPECTED_SCOPE = {"objective": CANDIDATE}
+EXPECTED_ENVIRONMENT = "gamma"
+EXPECTED_DECISION_KIND = "delivery_authorization"
+EXPECTED_ACTION = "observe_objective"
+READINESS_REF = (READINESS_BUNDLE_ROOT / "fixture.json").as_posix()
 
 
 def claims(*, release_eligible: bool, test_key: bool) -> dict[str, object]:
@@ -68,8 +95,14 @@ def claims(*, release_eligible: bool, test_key: bool) -> dict[str, object]:
     }
 
 
-def wrapper_fixture(private: Path, *, release_eligible: bool, test_key: bool, state: str = "available", generation: int = 1, winner_key: str = "", winner_digest: str = "") -> tuple[bytes, dict[str, str]]:
+def wrapper_fixture(
+    private: Path, *, release_eligible: bool, test_key: bool,
+    state: str = "available", generation: int = 1,
+    winner_key: str = "", winner_digest: str = "",
+    claim_overrides: dict[str, object] | None = None,
+) -> tuple[bytes, dict[str, str]]:
     claim = claims(release_eligible=release_eligible, test_key=test_key)
+    claim.update(claim_overrides or {})
     canonical = exact(claim)
     previous = generation - 1
     state_at = "" if state == "available" else "2026-08-30T00:01:00Z"
@@ -138,9 +171,7 @@ def wire_config(*, opener, allow_http: bool = False) -> HostedAuthorityHttpClien
     return HostedAuthorityHttpClient(
         HostedAuthorityConfig(
             base_url="http://127.0.0.1:9" if allow_http else "https://authority.example.com",
-            expected_issuer=ISSUER,
-            wire=wire,
-            explicit_release_policy=True,
+            expected_issuer=ISSUER, wire=wire, explicit_release_policy=True,
             allow_insecure_http_for_tests=allow_http,
         ),
         token_provider=lambda: "token", opener=opener,
@@ -164,7 +195,375 @@ class Response:
         return self._body
 
 
+class StaticHostedAuthorityClient:
+    def __init__(self, response: HostedAuthorityResponse) -> None:
+        self.response = response
+        self.config = type(
+            "SmokeHostedAuthorityConfig", (),
+            {"expected_issuer": ISSUER, "explicit_release_policy": True},
+        )()
+
+    def query(self, receipt_ref: str) -> HostedAuthorityResponse:
+        if receipt_ref != DECISION_ID:
+            raise AssertionError(receipt_ref)
+        return self.response
+
+
+class FailedHostedAuthorityClient(StaticHostedAuthorityClient):
+    def query(self, receipt_ref: str) -> HostedAuthorityResponse:
+        raise HostedAuthorityError("HOSTED_AUTHORITY.UNAVAILABLE", receipt_ref)
+
+
+class AbsentHostedAuthorityClient(StaticHostedAuthorityClient):
+    def query(self, receipt_ref: str) -> HostedAuthorityResponse:
+        raise AuthorityAbsent(receipt_ref)
+
+
+def readiness_result(
+    *, candidate: str = CANDIDATE, environment: str = EXPECTED_ENVIRONMENT,
+    manifest_sha256: str = MANIFEST_SHA256, status: str = "passed",
+) -> dict[str, object]:
+    result: dict[str, object] = {
+        "objectId": "platform-ops.hosted-authority", "specRef": "spec#gwt-004",
+        "caseId": "hosted_authority_observe_only", "producer": "ops",
+        "layer": "environment_acceptance", "status": status,
+        "target": {"kind": "object", "id": "hosted-authority"},
+        "commitSha": "1" * 40, "contractGraphSourceHash": "2" * 64,
+        "deploymentTarget": "gamma-local", "baselineId": "baseline-1",
+        "packageDigest": "sha256:" + "3" * 64,
+        "configurationDigest": "sha256:" + "4" * 64,
+        "candidateManifestSha256": manifest_sha256, "candidateDigest": candidate,
+        "environment": environment, "platform": "ops", "deviceClass": "hosted",
+        "provider": "hosted-human-authority", "startedAt": "2026-09-01T00:00:00Z",
+        "completedAt": "2026-09-01T00:00:01Z", "runnerIdentity": "hosted-authority-smoke",
+        "artifactSha256": "5" * 64, "artifactPath": "env/repo/runs/authority.json",
+    }
+    if status != "passed":
+        result["reasonCode"] = "HOSTED_AUTHORITY.not_ready"
+    return result
+
+
+def readiness_bytes(
+    *, generated_at: str, results: list[dict[str, object]] | None = None,
+) -> bytes:
+    return exact({"generatedAt": generated_at, "results": results if results is not None else [readiness_result()]})
+
+
+def manifest_fixture(*, target: str = "AGENTS.md") -> tuple[str, bytes]:
+    payload = {
+        "schema_version": 3, "target": target,
+        "resolved_owner": "specs/feature-tree/spec.md",
+        "owner_chain": [{"level": 0, "node_id": "app-root", "path": "specs/feature-tree/spec.md"}],
+        "canonical_contexts": [{"path": "specs/feature-tree/spec.md", "anchor": None, "kind": "spec"}],
+        "applicable_agents": ["AGENTS.md"], "open_items": [],
+    }
+    receipt = build_feature_context_fingerprint(payload, repo_root=ROOT)
+    payload["evidence_fingerprint"] = {
+        "mode": "embedded", "ref": receipt["ref"], "digest": receipt["digest"],
+        "receipt": receipt, "receipt_ref": None,
+    }
+    validate_feature_context_manifest(payload)
+    raw = canonical_json_bytes(payload)
+    digest = __import__("hashlib").sha256(raw).hexdigest()
+    ref = (OWNER_MANIFEST_ROOT / f"{digest}.json").as_posix()
+    path = ROOT / ref
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(raw)
+    return ref, raw
+
+
 class HostedAuthorityAdapterTest(unittest.TestCase):
+
+    def _authority_client(
+        self, private: Path, *, fingerprint: str, public: bytes,
+        claim_overrides: dict[str, object] | None = None,
+        state: str = "available",
+    ) -> StaticHostedAuthorityClient:
+        overrides = {
+            "evidenceFingerprint": fingerprint, "scope": EXPECTED_SCOPE,
+            "decisionKind": EXPECTED_DECISION_KIND, "actions": [EXPECTED_ACTION],
+            **(claim_overrides or {}),
+        }
+        terminal = state != "available"
+        body, headers = wrapper_fixture(
+            private, release_eligible=True, test_key=False, state=state,
+            generation=2 if terminal else 1,
+            winner_key="winner-1" if terminal else "",
+            winner_digest="sha256:" + "6" * 64 if terminal else "",
+            claim_overrides=overrides,
+        )
+        envelope = wire_config(opener=lambda *_args, **_kwargs: None)._envelope(
+            headers, tls=True, expected_decision_id=DECISION_ID
+        )
+        return StaticHostedAuthorityClient(HostedAuthorityResponse(body, envelope, 200))
+
+    def _smoke_fixture(self):
+        temporary, private, public = keypair()
+        self.addCleanup(temporary.cleanup)
+        owner_ref, owner_bytes = manifest_fixture()
+        self.addCleanup((ROOT / owner_ref).unlink, missing_ok=True)
+        fingerprint = str(json.loads(owner_bytes)["evidence_fingerprint"]["digest"])
+        readiness = readiness_bytes(generated_at="2026-09-01T00:00:00+00:00")
+        client = self._authority_client(private, fingerprint=fingerprint, public=public)
+        return temporary, private, owner_ref, owner_bytes, readiness, client, public
+
+    def _arguments(self, owner_ref, owner_bytes, readiness, client, public, **overrides):
+        readiness_ref = (
+            READINESS_BUNDLE_ROOT
+            / (__import__("hashlib").sha256(readiness).hexdigest() + ".json")
+        ).as_posix()
+        readiness_path = ROOT / readiness_ref
+        readiness_path.parent.mkdir(parents=True, exist_ok=True)
+        if readiness_path.exists():
+            self.assertEqual(readiness_path.read_bytes(), readiness)
+        else:
+            readiness_path.write_bytes(readiness)
+        self.addCleanup(readiness_path.unlink, missing_ok=True)
+        arguments = {
+            "owner_manifest_ref": owner_ref, "owner_manifest_bytes": owner_bytes,
+            "readiness_bundle_ref": readiness_ref, "readiness_bundle_bytes": readiness,
+            "receipt_ref": DECISION_ID, "client": client,
+            "trusted_public_keys": {KEY_ID: public}, "expected_scope": EXPECTED_SCOPE,
+            "expected_environment": EXPECTED_ENVIRONMENT,
+            "expected_manifest_sha256": MANIFEST_SHA256,
+            "expected_decision_kind": EXPECTED_DECISION_KIND, "action": EXPECTED_ACTION,
+            "now": datetime(2026, 9, 1, 0, 1, tzinfo=timezone.utc),
+        }
+        arguments.update(overrides)
+        return arguments
+
+    def test_hosted_smoke_cli_requires_explicit_expected_identity(self) -> None:
+        parser = build_smoke_parser()
+        parsed = parser.parse_args([
+            "--owner-manifest", "owner.json", "--readiness-bundle", "readiness.json",
+            "--authority-receipt-ref", DECISION_ID, "--expected-scope-kind", "objective",
+            "--expected-scope-id", CANDIDATE, "--expected-environment", "gamma",
+            "--expected-manifest-sha256", MANIFEST_SHA256,
+            "--expected-decision-kind", EXPECTED_DECISION_KIND, "--action", EXPECTED_ACTION,
+        ])
+        self.assertEqual(parsed.authority_receipt_ref, DECISION_ID)
+        self.assertEqual(parsed.expected_scope_id, CANDIDATE)
+        self.assertNotIn("resolver_receipt", vars(parsed))
+
+    def test_hosted_smoke_normalizes_repository_relative_and_absolute_manifest_paths(self) -> None:
+        owner_ref, _owner_bytes = manifest_fixture()
+        owner_path = ROOT / owner_ref
+        self.addCleanup(owner_path.unlink, missing_ok=True)
+        relative_path, relative_ref = _normalize_owner_manifest_path(Path(owner_ref))
+        absolute_path, absolute_ref = _normalize_owner_manifest_path(owner_path)
+        self.assertEqual(relative_path, owner_path.absolute())
+        self.assertEqual(absolute_path, relative_path)
+        self.assertEqual(relative_ref, owner_ref)
+        self.assertEqual(absolute_ref, relative_ref)
+
+    def test_hosted_smoke_rejects_owner_manifest_outside_repository(self) -> None:
+        with tempfile.NamedTemporaryFile() as external:
+            with self.assertRaises(SmokeFailure) as captured:
+                _normalize_owner_manifest_path(Path(external.name))
+        self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH")
+
+    def test_hosted_smoke_same_exact_inputs_are_idempotent_and_observe_only(self) -> None:
+        _, _, owner_ref, owner_bytes, readiness, client, public = self._smoke_fixture()
+        arguments = self._arguments(owner_ref, owner_bytes, readiness, client, public)
+        first = run_observe_only_smoke(**arguments)
+        second = run_observe_only_smoke(**arguments)
+        self.assertEqual(first["observation_identity"], second["observation_identity"])
+        self.assertEqual(first["owner_manifest_ref"], owner_ref)
+        self.assertEqual(first["readiness_candidate_digest"], CANDIDATE)
+        self.assertTrue(first["signature_verified"])
+        self.assertFalse(first["mutation_performed"])
+        self.assertEqual(first["objective_effect"], "observe-only-test")
+        self.assertNotIn("resolver_mode", first)
+        self.assertNotIn("workflow", first)
+
+    def test_hosted_smoke_identity_changes_for_each_exact_input(self) -> None:
+        _, private, owner_ref, owner_bytes, readiness, client, public = self._smoke_fixture()
+        baseline = run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, readiness, client, public))["observation_identity"]
+        changed_readiness = readiness_bytes(generated_at="2026-09-01T00:00:01+00:00")
+        changed = run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, changed_readiness, client, public))["observation_identity"]
+        self.assertNotEqual(changed, baseline)
+        second_ref, second_bytes = manifest_fixture(target="quwoquan_ops/AGENTS.md")
+        self.addCleanup((ROOT / second_ref).unlink, missing_ok=True)
+        second_fingerprint = str(json.loads(second_bytes)["evidence_fingerprint"]["digest"])
+        second_client = self._authority_client(private, fingerprint=second_fingerprint, public=public)
+        self.assertNotEqual(
+            run_observe_only_smoke(**self._arguments(second_ref, second_bytes, readiness, second_client, public))["observation_identity"], baseline,
+        )
+        authority_changed = self._authority_client(
+            private, fingerprint=str(json.loads(owner_bytes)["evidence_fingerprint"]["digest"]),
+            public=public, claim_overrides={"actorId": "actor-2"},
+        )
+        self.assertNotEqual(
+            run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, readiness, authority_changed, public))["observation_identity"], baseline,
+        )
+
+    def test_hosted_smoke_rejects_noncanonical_manifest_ref_filename_and_json(self) -> None:
+        _, _, owner_ref, owner_bytes, readiness, client, public = self._smoke_fixture()
+        arguments = self._arguments(owner_ref, owner_bytes, readiness, client, public)
+        for noncanonical_ref in (".qwq_output/owner.json", f"./{owner_ref}", owner_ref.replace("/", "//", 1), str(ROOT / owner_ref)):
+            with self.subTest(ref=noncanonical_ref), self.assertRaises(SmokeFailure) as captured:
+                run_observe_only_smoke(**{**arguments, "owner_manifest_ref": noncanonical_ref})
+            self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH")
+        wrong = (Path(owner_ref).parent / ("0" * 64 + ".json")).as_posix()
+        (ROOT / wrong).write_bytes(owner_bytes)
+        self.addCleanup((ROOT / wrong).unlink, missing_ok=True)
+        with self.assertRaises(SmokeFailure) as captured:
+            run_observe_only_smoke(**{**arguments, "owner_manifest_ref": wrong})
+        self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_STALE_INPUT")
+        noncanonical = json.dumps(json.loads(owner_bytes), ensure_ascii=False, indent=2).encode()
+        noncanonical_ref = (OWNER_MANIFEST_ROOT / (__import__("hashlib").sha256(noncanonical).hexdigest() + ".json")).as_posix()
+        (ROOT / noncanonical_ref).write_bytes(noncanonical)
+        self.addCleanup((ROOT / noncanonical_ref).unlink, missing_ok=True)
+        with self.assertRaises(SmokeFailure) as captured:
+            run_observe_only_smoke(**{**arguments, "owner_manifest_ref": noncanonical_ref, "owner_manifest_bytes": noncanonical})
+        self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_SCHEMA_INVALID")
+
+    def test_hosted_smoke_rejects_owner_manifest_symlink_and_hardlink_nodes(self) -> None:
+        owner_bytes = b"{}"
+        filename = __import__("hashlib").sha256(owner_bytes).hexdigest() + ".json"
+        owner_ref = (OWNER_MANIFEST_ROOT / filename).as_posix()
+        for node_kind in ("ancestor-symlink", "final-symlink", "hardlink"):
+            with self.subTest(node_kind=node_kind), tempfile.TemporaryDirectory(prefix="qwq-owner-node-") as temporary:
+                fixture_root = Path(temporary)
+                repository = fixture_root / "repo"
+                canonical_root = repository / OWNER_MANIFEST_ROOT
+                external = fixture_root / "external"
+                external.mkdir()
+                external_file = external / filename
+                external_file.write_bytes(owner_bytes)
+                if node_kind == "ancestor-symlink":
+                    repository.mkdir()
+                    (repository / OWNER_MANIFEST_ROOT.parts[0]).symlink_to(external, target_is_directory=True)
+                else:
+                    canonical_root.mkdir(parents=True)
+                    final_path = canonical_root / filename
+                    if node_kind == "final-symlink":
+                        final_path.symlink_to(external_file)
+                    else:
+                        os.link(external_file, final_path)
+                with mock.patch("hosted_authority_smoke.REPO_ROOT", repository), self.assertRaises(SmokeFailure) as captured:
+                    _verify_owner_manifest(owner_manifest_ref=owner_ref, owner_manifest_bytes=owner_bytes)
+                self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH")
+
+    def test_readiness_descriptor_reader_rejects_unsafe_nodes_and_replacement(self) -> None:
+        for node_kind in ("ancestor-symlink", "final-symlink", "hardlink", "replacement"):
+            with self.subTest(node_kind=node_kind), tempfile.TemporaryDirectory(prefix="qwq-readiness-node-") as temporary:
+                fixture_root = Path(temporary)
+                repository = fixture_root / "repo"
+                canonical_root = repository / READINESS_BUNDLE_ROOT
+                external = fixture_root / "external"
+                external.mkdir()
+                external_file = external / "bundle.json"
+                external_file.write_bytes(b"external")
+                relative = (READINESS_BUNDLE_ROOT / "bundle.json").as_posix()
+                if node_kind == "ancestor-symlink":
+                    repository.mkdir()
+                    (repository / READINESS_BUNDLE_ROOT.parts[0]).symlink_to(external, target_is_directory=True)
+                else:
+                    canonical_root.mkdir(parents=True)
+                    path = canonical_root / "bundle.json"
+                    if node_kind == "final-symlink":
+                        path.symlink_to(external_file)
+                    elif node_kind == "hardlink":
+                        os.link(external_file, path)
+                    else:
+                        path.write_bytes(b"original")
+                        original_read = os.read
+                        replaced = False
+                        def replace_after_open(fd, size):
+                            nonlocal replaced
+                            chunk = original_read(fd, size)
+                            if not replaced:
+                                path.unlink()
+                                path.write_bytes(b"replacement")
+                                replaced = True
+                            return chunk
+                patches = [mock.patch("hosted_authority_smoke.REPO_ROOT", repository)]
+                if node_kind == "replacement":
+                    patches.append(mock.patch("hosted_authority_smoke.os.read", side_effect=replace_after_open))
+                with patches[0]:
+                    context = patches[1] if len(patches) == 2 else mock.patch("hosted_authority_smoke.os.read", wraps=os.read)
+                    with context, self.assertRaises(SmokeFailure) as captured:
+                        _read_canonical_repo_ref(relative, allowed_root=READINESS_BUNDLE_ROOT, label="readiness bundle")
+                self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH")
+
+    def test_hosted_smoke_rejects_empty_or_mismatched_readiness(self) -> None:
+        _, _, owner_ref, owner_bytes, _readiness, client, public = self._smoke_fixture()
+        cases = {
+            "empty": [],
+            "candidate": [readiness_result(candidate="sha256:" + "c" * 64)],
+            "environment": [readiness_result(environment="prod")],
+            "manifest": [readiness_result(manifest_sha256="d" * 64)],
+            "failed": [readiness_result(status="failed")],
+        }
+        for label, results in cases.items():
+            readiness = readiness_bytes(generated_at="2026-09-01T00:00:00Z", results=results)
+            with self.subTest(label=label), self.assertRaises(SmokeFailure) as captured:
+                run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, readiness, client, public))
+            self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_READINESS_NOT_QUALIFYING")
+
+    def test_hosted_smoke_rejects_wrong_or_terminal_authority_claims(self) -> None:
+        _, private, owner_ref, owner_bytes, readiness, _client, public = self._smoke_fixture()
+        fingerprint = str(json.loads(owner_bytes)["evidence_fingerprint"]["digest"])
+        cases = {
+            "fingerprint": ({"evidenceFingerprint": "sha256:" + "f" * 64}, "available"),
+            "scope": ({"scope": {"objective": "sha256:" + "e" * 64}}, "available"),
+            "decision": ({"decisionKind": "routine_execution"}, "available"),
+            "action": ({"actions": ["read_authority_receipt"]}, "available"),
+            "expired": ({"expiresAt": "2026-08-31T23:59:59Z"}, "available"),
+            "consumed": ({}, "consumed"), "revoked": ({}, "revoked"),
+        }
+        for label, (overrides, state) in cases.items():
+            client = self._authority_client(private, fingerprint=fingerprint, public=public, claim_overrides=overrides, state=state)
+            with self.subTest(label=label), self.assertRaises(SmokeFailure) as captured:
+                run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, readiness, client, public))
+            self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_AUTHORITY_INVALID")
+
+    def test_hosted_smoke_distinguishes_stale_schema_unavailable_and_readback(self) -> None:
+        with self.assertRaises(SmokeFailure) as stale:
+            _fresh_readiness(json.loads(readiness_bytes(generated_at="2026-08-31T00:00:00Z")), now=datetime(2026, 9, 1, tzinfo=timezone.utc), max_age_seconds=300)
+        self.assertEqual(stale.exception.code, "HOSTED_AUTHORITY.SMOKE_STALE_INPUT")
+        with self.assertRaises(SmokeFailure) as schema:
+            _fresh_readiness({"generatedAt": "bad", "results": []}, now=datetime(2026, 9, 1, tzinfo=timezone.utc), max_age_seconds=300)
+        self.assertEqual(schema.exception.code, "HOSTED_AUTHORITY.SMOKE_SCHEMA_INVALID")
+        _, _, owner_ref, owner_bytes, readiness, client, public = self._smoke_fixture()
+        failed = FailedHostedAuthorityClient(client.response)
+        with self.assertRaises(SmokeFailure) as unavailable:
+            run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, readiness, failed, public))
+        self.assertEqual(unavailable.exception.code, "HOSTED_AUTHORITY.SMOKE_AUTHORITY_UNAVAILABLE")
+        absent = AbsentHostedAuthorityClient(client.response)
+        with self.assertRaises(SmokeFailure) as readback:
+            run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, readiness, absent, public))
+        self.assertEqual(readback.exception.code, "HOSTED_AUTHORITY.SMOKE_READBACK_FAILED")
+
+    def test_hosted_smoke_cli_typed_terminals_have_unique_recovery_and_exit_two(self) -> None:
+        codes = (
+            "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH", "HOSTED_AUTHORITY.SMOKE_STALE_INPUT",
+            "HOSTED_AUTHORITY.SMOKE_SCHEMA_INVALID", "HOSTED_AUTHORITY.SMOKE_AUTHORITY_UNAVAILABLE",
+            "HOSTED_AUTHORITY.SMOKE_READBACK_FAILED",
+        )
+        argv = [
+            "--owner-manifest", str(OWNER_MANIFEST_ROOT / "owner.json"),
+            "--readiness-bundle", str(READINESS_BUNDLE_ROOT / "readiness.json"),
+            "--authority-receipt-ref", DECISION_ID, "--expected-scope-kind", "objective",
+            "--expected-scope-id", CANDIDATE, "--expected-environment", "gamma",
+            "--expected-manifest-sha256", MANIFEST_SHA256,
+            "--expected-decision-kind", EXPECTED_DECISION_KIND, "--action", EXPECTED_ACTION,
+        ]
+        recoveries = set()
+        runtime = type("Runtime", (), {"config": object(), "token_provider": lambda: "token", "trusted_public_keys": {}})()
+        for code in codes:
+            output = io.StringIO()
+            with self.subTest(code=code), mock.patch("hosted_authority_smoke._read_canonical_input", return_value=("fixture.json", b"{}")), mock.patch("hosted_authority_smoke.runtime_from_env", return_value=runtime), mock.patch("hosted_authority_smoke.HostedAuthorityHttpClient", return_value=object()), mock.patch("hosted_authority_smoke.run_observe_only_smoke", side_effect=SmokeFailure(code, "blocked")), redirect_stdout(output):
+                self.assertEqual(smoke_main(argv), 2)
+            payload = json.loads(output.getvalue())
+            self.assertEqual(payload["code"], code)
+            self.assertEqual(payload["terminal"], "blocked")
+            self.assertFalse(payload["retry_allowed"])
+            self.assertEqual(set(payload), {"result", "code", "terminal", "retry_allowed", "recovery", "detail"})
+            recoveries.add(payload["recovery"])
+        self.assertEqual(len(recoveries), len(codes))
+
     def test_wire_routes_are_loaded_from_canonical_operations_contract(self) -> None:
         wire = load_hosted_authority_wire(ROOT)
         self.assertEqual(wire.source_path, (ROOT / CANONICAL_OPERATIONS_RELATIVE_PATH).resolve())

@@ -1,50 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 本地 pre-push 只做 branch policy：禁止直推 dev1.0/main 与非白名单分支——这就是准出
+# 边界本身。发布就绪回执不在这里消费；lane→dev1.0 的合入由 PR 上的 CI Delivery
+# Gate 承担，本地 lane 推送不背负回执。
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 export QWQ_OUTPUT_ROOT="$ROOT/.qwq_output"
 export PYTHONDONTWRITEBYTECODE=1
 
-updates_root="$QWQ_OUTPUT_ROOT/env/repo/local/local-readiness/process/push-updates"
-mkdir -p "$updates_root"
-chmod 700 "$updates_root"
-temporary="$(mktemp "$updates_root/incoming.XXXXXX")"
-trap 'rm -f "$temporary"' EXIT
-chmod 600 "$temporary"
-cat >"$temporary"
-if [[ ! -s "$temporary" ]]; then
-  echo "[pre-push] GATE_BLOCK: push updates 为空，无法精确绑定 release_ready" >&2
-  exit 1
+updates="$(cat)"
+if [[ -z "$updates" ]]; then
+  echo "[pre-push] nothing to push"
+  exit 0
 fi
-updates_digest="$(python3 - "$temporary" <<'PYDIGEST'
-import hashlib, sys
-from pathlib import Path
-print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
-PYDIGEST
-)"
-updates_file="$updates_root/$updates_digest.txt"
-if [[ ! -e "$updates_file" ]]; then
-  mv "$temporary" "$updates_file"
-  chmod 600 "$updates_file"
-else
-  cmp -s "$temporary" "$updates_file" || {
-    echo "[pre-push] GATE_BLOCK: content-addressed push updates collision" >&2
-    exit 1
-  }
-fi
-trap - EXIT
-rm -f "$temporary"
 
-recovery="python3 quwoquan_ops/cli/local_readiness.py release --push-updates $updates_file"
-if ! python3 quwoquan_ops/gate/verify_git_branch_policy.py --pre-push <"$updates_file"; then
-  echo "[pre-push] RECOVER: $recovery" >&2
-  exit 1
-fi
-if ! python3 -B quwoquan_ops/cli/local_readiness.py verify --level release --push-updates "$updates_file" >/dev/null; then
-  echo "[pre-push] GATE_BLOCK: exact local sha/base has no fresh Review-terminal release_ready receipt" >&2
-  echo "[pre-push] RECOVER: $recovery" >&2
+if ! printf '%s\n' "$updates" | python3 -B quwoquan_ops/gate/verify_git_branch_policy.py --pre-push; then
+  echo "[pre-push] GATE_BLOCK: branch policy rejected push updates" >&2
   exit 1
 fi
 
-echo "[pre-push] fresh release_ready receipt accepted for exact push updates"
+echo "[pre-push] branch policy ok"

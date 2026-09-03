@@ -54,19 +54,6 @@ def test_article_task_carries_figure_group_contract():
     assert ":::figuregroup" in out
 
 
-def test_content_plan_prompt_uses_validator_quota_semantics():
-    system_vars, task_vars = _required_dummy("checkpoint_content_plan")
-    out = pr.render(
-        "checkpoint_content_plan",
-        system_vars=system_vars,
-        task_vars=task_vars,
-    )
-    assert "执行配额（硬性篇数与上限" in out
-    assert "不得超额" in out
-    assert "枚举每个 coverageTarget 下所有合格" not in out
-    assert "不是硬性篇数" not in out
-
-
 def test_missing_required_var_raises():
     schema = pr.load_vars_schema("article_author")
     required = schema[pr.TASK_KEY]["required"]

@@ -258,7 +258,7 @@ class CanonicalLaunchPlatformContractMixin:
                 device_id="SIM-1",
                 application_id=application_id,
                 process_id=82001,
-                log_start="2026-08-29 08:00:00.000000+0800",
+                log_start="2026-08-29 08:00:00+0800",
             ),
         ) as launch:
             simulator.install()

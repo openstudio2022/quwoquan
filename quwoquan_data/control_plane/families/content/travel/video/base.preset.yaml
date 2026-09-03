@@ -8,7 +8,6 @@ defaults:
     carriers: [video]
     modalityContract: separated_research
     research:
-      lanes: [video]
       imageAssetStrategy: attribution_audited_publish
       imageCountPolicy: score_bonus
       allowAiImages: false

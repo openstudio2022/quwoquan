@@ -269,7 +269,7 @@ def _validate_evidence_fingerprint_contract(definition: dict[str, Any]) -> None:
         "review-tracked-untracked-deleted",
         "legacy-review-algorithm-not-consumed",
         "handoff-stale-missing-fingerprint-and-recovery-failure",
-        "feature-manifest-v2-fingerprint-and-budget",
+        "feature-manifest-v3-content-addressed-fingerprint-and-budget",
         "named-evidence-dedup-drift-failure-and-result",
         "handoff-six-trigger-producer-and-ordinary-noop",
     }
@@ -376,7 +376,7 @@ def validate_feature_context_manifest(payload: dict[str, Any]) -> None:
                 "feature_context_manifest",
                 declaration,
             )
-    for field in ("applicable_agents", "profiles"):
+    for field in ("applicable_agents",):
         values = payload[field]
         if not isinstance(values, list) or not all(
             isinstance(value, str) and value for value in values

@@ -13,9 +13,8 @@
 - 观测、配置、rollout、gate、dependency、runbook 页面要展示结构化状态、错误码、恢复建议和证据来源，不能只展示 raw 字符串。
 - 新增页面或 API client 改动必须补测试，并确保在 `quwoquan_ops/portal/` 内执行 `npm test` 与 `npm run build` 通过。
 
-## 典型触发与 E2E
+## Portal 领域 E2E
 
-- 用户说“运维后台、控制面、观测页面、rollout 页面、gate 页面、runbook、配置平台”时，默认加载本文件。
 - 若页面展示服务/环境状态，必须追溯到 runtime error、stackctl、metrics 或 generated control-plane 真相源。
 - Portal 只负责展示和操作控制面，不得复制服务端配置、错误码或环境拓扑为第二真相源。
 

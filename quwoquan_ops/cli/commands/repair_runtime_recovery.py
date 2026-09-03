@@ -267,47 +267,6 @@ def _close_orphan_reclaimed_startup_receipt(
     return stopped, f"retired startup receipt status={status} attempt={attempt_id}"
 
 
-def _orphan_compose_runtime_gate(target_name: str) -> dict[str, Any] | None:
-    """Return the receipt when normal candidate-bound down cannot apply.
-
-    An absent or stopped receipt claims nothing, so exact-resource recovery owns
-    the residue outright. A non-stopped receipt still claims the runtime, and it
-    keeps priority: recovery is admitted only when that receipt's own candidate
-    is objectively unusable, never on an operator's word. Otherwise the residue
-    belongs to candidate-bound normal down.
-    """
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-
-    leases = _stackctl.active_consumer_leases(target_name)
-    if leases:
-        identities = ", ".join(
-            f"{item.get('device')}:{item.get('consumer')}" for item in leases
-        )
-        raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
-            "orphan Compose teardown requires zero active consumer leases"
-            + (f": {identities}" if identities else "")
-        )
-    try:
-        startup = _stackctl.load_startup_attempt(target_name)
-    except (OSError, ValueError) as exc:
-        raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
-            f"canonical startup receipt is unreadable: {exc}"
-        ) from exc
-    if startup is None:
-        return None
-    status = str(startup.get("status") or "").strip()
-    if status != "stopped" and not _stackctl._normal_down_structurally_impossible(
-        target_name,
-        startup,
-    ):
-        raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
-            "orphan Compose teardown requires an absent or stopped startup receipt; "
-            f"status={status or '<missing>'} must use candidate-bound normal down"
-        )
-    return startup
-
-
 def _wait_for_attested_orphan_compose_ports_released(
     target_name: str,
     attestation: Mapping[str, Any],
@@ -552,7 +511,10 @@ def _repair_orphaned_compose(
     step_evidence_verified = False
     try:
         with _stackctl._local_stack_operation_lock(target_name):
-            startup = _stackctl._orphan_compose_runtime_gate(target_name)
+            runtime_gate = _stackctl._orphan_compose_runtime_gate(target_name)
+            startup = runtime_gate["startup"]
+            stale_mutable_startup = runtime_gate["staleMutableStartup"]
+            expected_project = str(runtime_gate["expectedProject"] or "")
             status = str((startup or {}).get("status") or "").strip()
             require_removable = startup is None or status == "stopped"
             consumption_path = attestation_path.with_name(
@@ -575,22 +537,28 @@ def _repair_orphaned_compose(
                     target_name,
                     attestation.get("project"),
                 )
-                if startup is not None:
+                receipt_project = expected_project
+                if not receipt_project and startup is not None:
                     receipt_project = (
                         _stackctl.orphan_compose_teardown.require_canonical_project(
                             target_name,
                             startup.get("composeProject"),
                         )
                     )
-                    if project != receipt_project:
-                        raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
-                            "orphan Compose attestation project differs from the current startup receipt"
-                        )
-            elif startup is None:
+                if receipt_project and project != receipt_project:
+                    raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
+                        "orphan Compose attestation project differs from the current startup receipt"
+                    )
+            elif expected_project or startup is None:
                 project = _stackctl.orphan_compose_teardown.discover_exact_project(
                     target=target_name,
                     run_command=_stackctl.run,
                 )
+                if expected_project and project != expected_project:
+                    raise _stackctl.orphan_compose_teardown.OrphanComposeTeardownError(
+                        "discovered orphan Compose project differs from the bounded "
+                        "stale mutable startup receipt"
+                    )
             else:
                 project = _stackctl.orphan_compose_teardown.require_canonical_project(
                     target_name,
@@ -640,6 +608,7 @@ def _repair_orphaned_compose(
                         "status": "planned",
                         "destructiveRepairPerformed": False,
                         "startupAttempt": startup,
+                        "staleMutableStartupAttempt": stale_mutable_startup,
                         "attestation": _stackctl.relpath(written_path),
                         "attestationDigest": attestation["attestationDigest"],
                         "details": details,
@@ -651,6 +620,12 @@ def _repair_orphaned_compose(
                         "target": target_name,
                         "fix": args.fix,
                         "project": attestation["project"],
+                        "projectKind": (
+                            _stackctl.orphan_compose_teardown.canonical_project_kind(
+                                target_name,
+                                attestation["project"],
+                            )
+                        ),
                         "attestation": _stackctl.relpath(written_path),
                         "attestationDigest": attestation["attestationDigest"],
                         "containerIds": [

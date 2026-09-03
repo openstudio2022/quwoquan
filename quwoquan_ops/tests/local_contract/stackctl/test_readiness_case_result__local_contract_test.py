@@ -15,6 +15,7 @@ from quwoquan_ops.cli.lib.readiness_case_result import (
     canonical_json_bytes,
     validate_readiness_case_result,
     write_create_once_json,
+    write_readiness_case_result,
 )
 
 
@@ -43,6 +44,7 @@ def _result() -> dict[str, object]:
         "environment": "gamma",
         "platform": "android",
         "deviceClass": "simulator",
+        "deviceRegistered": False,
         "provider": "first-party-https",
         "startedAt": "2026-08-29T07:00:00Z",
         "completedAt": "2026-08-29T07:01:00Z",
@@ -57,6 +59,37 @@ def _result() -> dict[str, object]:
         "reasonCode": "APP.GAMMA_UAT.blocked",
     }
 
+
+
+def _service_result() -> dict[str, object]:
+    result = _result()
+    for field in (
+        "targetUatBindingDigest", "platform", "deviceClass", "deviceIdentity",
+        "deviceRegistered", "uatProfile", "nonPromotable", "artifactClass",
+        "physicalDevice", "reasonCode",
+    ):
+        result.pop(field, None)
+    result.update({
+        "objectId": "article-001",
+        "objectRef": "objects/posts/article/article-001",
+        "objectDigest": "sha256:" + "5" * 64,
+        "caseId": "baseline-article-001",
+        "producer": "service",
+        "layer": "api_integration",
+        "status": "passed",
+        "target": {"kind": "operation", "id": "feed"},
+        "deploymentTarget": "alpha-local",
+        "baselineId": "baseline-m1-api-consumer",
+        "releaseId": "release-a",
+        "releaseDigest": "sha256:" + "2" * 64,
+        "importRunId": "import-run-a",
+        "verifyRunId": "verify-run-a",
+        "entrySurface": "feed",
+        "carrier": "article",
+        "environment": "alpha",
+        "provider": "first-party-https",
+    })
+    return result
 
 def test_validator_uses_canonical_schema_and_rejects_retired_fields() -> None:
     result = _result()
@@ -92,3 +125,45 @@ def test_create_once_conflict_never_overwrites_old_result(tmp_path: Path) -> Non
     with pytest.raises(ReadinessCaseResultError, match="different bytes"):
         write_create_once_json(path, failed)
     assert path.read_bytes() == original == canonical_json_bytes(_result())
+
+
+def test_service_api_release_bound_raw_is_canonical_and_excludes_app_authority() -> None:
+    result = _service_result()
+    assert validate_readiness_case_result(
+        result, generated_at="2026-08-29T07:01:00Z"
+    ) == result
+    for field in ("importRunId", "verifyRunId", "objectRef", "objectDigest"):
+        missing = dict(result)
+        missing.pop(field)
+        with pytest.raises(ReadinessCaseResultError):
+            validate_readiness_case_result(
+                missing, generated_at="2026-08-29T07:01:00Z"
+            )
+    for field, value in (
+        ("platform", "android"),
+        ("deviceClass", "physical"),
+        ("targetUatBindingDigest", "sha256:" + "6" * 64),
+    ):
+        mixed = dict(result, **{field: value})
+        with pytest.raises(ReadinessCaseResultError):
+            validate_readiness_case_result(
+                mixed, generated_at="2026-08-29T07:01:00Z"
+            )
+
+
+def test_narrow_writer_validates_before_create_once(tmp_path: Path) -> None:
+    path = write_readiness_case_result(
+        tmp_path / "service-result.json",
+        _service_result(),
+        generated_at="2026-08-29T07:01:00Z",
+    )
+    assert path.read_bytes() == canonical_json_bytes(_service_result())
+    invalid = _service_result()
+    invalid.pop("verifyRunId")
+    with pytest.raises(ReadinessCaseResultError):
+        write_readiness_case_result(
+            tmp_path / "invalid.json",
+            invalid,
+            generated_at="2026-08-29T07:01:00Z",
+        )
+    assert not (tmp_path / "invalid.json").exists()

@@ -43,7 +43,7 @@ _RETIRED_ROOTS = (
 )
 _LEGACY_MARKERS = frozenset({"LEGACY_READONLY.md", "legacy_index.json", "migration_manifest.json"})
 _OUTPUT_CHILDREN = frozenset({"tasks", "releases", "local"})
-_LOCAL_CHILDREN = frozenset({"cache", "workspace"})
+_LOCAL_CHILDREN = frozenset({"cache", "runs", "workspace"})
 _FORBIDDEN_SOURCE_TRUTH_DIRS = frozenset(
     {"control_plane", "prompts", "templates", "schema", "specs", "policies", "reference"}
 )
@@ -121,7 +121,7 @@ def _output_layout_issues(root: Path | None = None) -> list[str]:
     if local_root.exists():
         for entry in sorted(local_root.iterdir()):
             if entry.name not in _LOCAL_CHILDREN:
-                issues.append(f"{entry}: data/local only allows cache/ and workspace/")
+                issues.append(f"{entry}: data/local only allows cache/, runs/, and workspace/")
     return issues
 
 

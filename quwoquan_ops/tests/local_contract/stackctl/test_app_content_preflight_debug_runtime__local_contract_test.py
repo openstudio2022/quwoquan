@@ -160,6 +160,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                         {
                             "role": "sms-provider-substitute",
                             "adapterIds": ["ext.sms.local_capture"],
+                            "capabilityIds": ["identity.sms.otp"],
                         }
                     ],
                 }
@@ -182,12 +183,14 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             }
 
             def fetch(url: str, **_kwargs: object) -> tuple[bool, int, str, str]:
-                return (
-                    True,
-                    200,
-                    provider_health if "17330" in url else '{"status":"ok"}',
-                    "application/json",
+                body = (
+                    '{"availability":"ready","retryAfterSeconds":0}'
+                    if url.endswith("/auth/otp/readiness")
+                    else provider_health
+                    if "17330" in url
+                    else '{"status":"ok"}'
                 )
+                return True, 200, body, "application/json"
 
             with (
                 patch.object(
@@ -286,6 +289,9 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                 "ext.sms.local_capture",
             )
             self.assertEqual(passed["launchPolicy"], "test_live")
+            self.assertEqual(
+                passed["observabilityLogSinkDigest"], "sha256:" + "7" * 64
+            )
             self.assertEqual(passed["contentBindingState"], "unbound")
             self.assertEqual(passed["packageBaseline"], "")
             self.assertEqual(passed["releaseId"], "")
@@ -433,6 +439,7 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                         {
                             "role": "sms-provider-substitute",
                             "adapterIds": ["ext.sms.local_capture"],
+                            "capabilityIds": ["identity.sms.otp"],
                         }
                     ],
                 },
@@ -466,8 +473,10 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
             }
 
             def fetch(url: str, **_kwargs: object) -> tuple[bool, int, str, str]:
-                body = (
-                    json.dumps(
+                if url.endswith("/auth/otp/readiness"):
+                    body = '{"availability":"ready","retryAfterSeconds":0}'
+                elif "17330" in url:
+                    body = json.dumps(
                         {
                             "status": "ready",
                             "adapterId": "ext.sms.local_capture",
@@ -477,9 +486,8 @@ class AppContentPreflightDebugRuntimeTest(unittest.TestCase):
                             "nonPromotable": True,
                         }
                     )
-                    if "17330" in url
-                    else '{"status":"ok"}'
-                )
+                else:
+                    body = '{"status":"ok"}'
                 return True, 200, body, "application/json"
 
             with (

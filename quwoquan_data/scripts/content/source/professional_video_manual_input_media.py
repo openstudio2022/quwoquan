@@ -9,12 +9,13 @@ from typing import Any
 import cv2
 import imageio_ffmpeg
 import numpy as np
-from core.runtime_policy import active_runtime_policy
 
 _CONTACT_COLUMNS = 4
 _CONTACT_ROWS = 3
 _CONTACT_WIDTH = 320
 _CONTACT_HEIGHT = 180
+_VIDEO_PROBE_TIMEOUT_SECONDS = 60
+_VIDEO_TRANSCODE_TIMEOUT_SECONDS = 300
 
 
 def ffmpeg_executable() -> str:
@@ -27,7 +28,7 @@ def ffmpeg_version(executable: str, *, fail: Any) -> str:
         check=False,
         capture_output=True,
         text=True,
-        timeout=active_runtime_policy().video_probe_timeout_seconds,
+        timeout=_VIDEO_PROBE_TIMEOUT_SECONDS,
     )
     first = completed.stdout.splitlines()[0].strip() if completed.stdout else ""
     if completed.returncode != 0 or not first:
@@ -108,7 +109,7 @@ def run_transcode(
         check=False,
         capture_output=True,
         text=True,
-        timeout=active_runtime_policy().video_transcode_timeout_seconds,
+        timeout=_VIDEO_TRANSCODE_TIMEOUT_SECONDS,
     )
     if completed.returncode != 0:
         detail = completed.stderr.strip().splitlines()
@@ -149,7 +150,7 @@ def render_contact_sheet(
     decode cleanly, so sampling shares the ffmpeg timestamp fallback with the
     admission/motion probes instead of a second seek-only chain.
     """
-    from content.source.sourced_video_admission import sample_video_frame_files
+    from content.source.video_media_probe import sample_video_frame_files
 
     sample_count = _CONTACT_COLUMNS * _CONTACT_ROWS
     positions = sorted(

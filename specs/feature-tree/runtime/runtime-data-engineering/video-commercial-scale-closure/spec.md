@@ -52,7 +52,7 @@
 
 - canonical：`quwoquan_data/verticals/<vertical>/providers.yaml`
 - canonical：`quwoquan_data/schema/source`
-- canonical：`quwoquan_data/scripts/content/post/video`
+- canonical：`quwoquan_data/scripts/content/source/video_source_unit_contract.py`
 - canonical：`quwoquan_service/services/content-service/contracts`
 - canonical：`quwoquan_data/scripts/content/release`
 - canonical：`quwoquan_ops/environments`

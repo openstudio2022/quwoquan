@@ -338,6 +338,11 @@ def test_ios_uat_main_projects_both_pub_hosts_then_replays_both_pod_hosts(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # 宿主终端投影可能携带 QWQ_*（CocoaPods/Flutter 身份），必须隔离，
+    # 否则 main() 会走 environment-identity 分支与 fixture 身份冲突。
+    for key in list(os.environ):
+        if key.startswith("QWQ_"):
+            monkeypatch.delenv(key, raising=False)
     order: list[str] = []
     monkeypatch.setattr(prepare, "_platform", lambda _device: "ios")
     pod = tmp_path / "canonical/pod"
@@ -367,7 +372,7 @@ def test_ios_uat_main_projects_both_pub_hosts_then_replays_both_pod_hosts(
     monkeypatch.setattr(
         prepare,
         "resolve_cocoapods_identity",
-        lambda _pod: pod_identity,
+        lambda _pod, search_path=None: pod_identity,
     )
     flutter = tmp_path / "canonical/flutter"
     flutter.parent.mkdir(parents=True, exist_ok=True)

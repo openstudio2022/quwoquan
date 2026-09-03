@@ -7,7 +7,6 @@ import re
 import urllib.parse
 
 from core.baike_source_contract import BAIDU_BAIKE_CANONICAL_RESOLUTION
-from core.runtime_policy import active_runtime_policy
 from content.source.html_text import _html_to_plain_text
 from content.source.research import network_io
 from content.source.research.text_match import (
@@ -103,7 +102,7 @@ def resolve_baidu_baike_page(
         [entity_id, *entity_aliases],
         limit=policy.candidate_limit,
     )
-    timeout = active_runtime_policy().provider_timeouts.encyclopedia_seconds
+    timeout = 20
     for candidate in candidates:
         response = network_io.fetch_http(
             baidu_baike_search_url(candidate),

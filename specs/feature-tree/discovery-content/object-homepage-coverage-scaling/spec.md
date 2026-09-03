@@ -31,9 +31,9 @@
 
 ## 4. Story
 
-- [`work-request-compilation`](./work-request-compilation/spec.md)：confirmed 按需 handoff 与派生 WorkRequest 的意图编译单轨，终点为 confirmed WorkRequest 与逐载体 request envelope。
+- [`work-request-compilation`](./work-request-compilation/spec.md)：confirmed 按需意图收敛为现役逐载体 demand 与 immutable candidate bindings；旧 handoff/WorkRequest/request-envelope schema 已删除。
 - [`on-demand-content-pool-admission`](./on-demand-content-pool-admission/spec.md)：所选载体生产、来源/媒体准入、article 来源预筛与唯一 reviewed delivery 入池路径，终点为 canonical pool record 与可恢复 typed 终态。
-- [`source-discovery-scale-reliability`](./source-discovery-scale-reliability/spec.md)：来源发现阶段的有界并发、slot 接管与运行中存活/进度可判定。
+- [`source-discovery-scale-reliability`](./source-discovery-scale-reliability/spec.md)：来源发现由宿主 AI 原生串并行，仓内 worker/slot/heartbeat 控制面退役。
 - [`canonical-content-identity-recovery`](./canonical-content-identity-recovery/spec.md)：invalid canonical identity 的互斥状态、受治理修复与 source-ready 调度不再永久饥饿。
 - [`multi-carrier-release`](./multi-carrier-release/spec.md)：每个发布对象必须闭合 creator、tag、entity、media 与 source 引用，运行 receipt 只能写入输出目录、不得回写静态真相源；immutable release、环境导入与 App 消费是本 Story 的唯一下游终点。
 
@@ -47,9 +47,9 @@
 - 四类载体均能由同一 CLI 门面创建、review、promote 与聚合 release。
 - homepage/article/image/video 的 quota/count 同时表达日常请求负载与累计 milestone target；日常 publish 允许 partial 并发布全部合格对象，M100 的唯一目标为 `100/100/100/10`，后继规模按当前池中唯一合格对象计算差额。
 - milestone 只表示池中已达到的累计规模，不是日常 Research 发布的前驱门；历史批次、不同 source identity 与既有 release 中的合格对象可以按稳定对象身份累计，未达到目标时如实报告 gap 并继续增量发布。
-- 文章配图率、素材来源分布、视频热度、automatic recovery、workspace/soak/resource samples、实际并发、重试与吞吐只记录诊断过程和统计，不改变 task dispatch、单对象的质量、授权范围或 Research 发布资格；完全重复作品不重复计数，但不阻断同批其它对象。
-- homepage/article/image/video active workloads 彼此独立调度，可按可用容量串行或重叠运行，不要求固定四路并发、固定 worker 数或四个同时 workspace。每个实际启动的 task 逐项形成 typed 终态；共享 canonical publish 保持对象事务单写者，最终 Manifest/release 仍精确闭合全部被选对象与引用。
-- 调度容量是上限语义而不是下限承诺：execution 冻结的并行 worker 上限与批次绝对截止只约束同时运行的进程数与总时长，与「不要求固定四路并发」并不冲突。对象下限、工作单元数与并行上限三者各自独立冻结，不得互相派生。
+- 文章配图率、素材来源分布、视频热度与宿主实际并发仅作外部诊断，不进入 Data 业务 authority；不存在仓内 automatic recovery、workspace/soak/capacity 状态。
+- homepage/article/image/video execution 可由宿主原生串行或重叠运行，不要求固定并发。每个 stage 的 verdict/typed issues 由宿主 AI 显式提交；共享 canonical 只经单对象事务，release 只消费显式 cohort。
+- 宿主并发、截止、模型与会话重启不进入 execution 或仓库配置。对象下限与工作单元数相互独立；宿主运行能力不得成为第三个业务 authority。
 - release 只绑定 execution/source digest 与 desired state；环境 receipt、rollback/replay 通过 ship 写入输出。
 
 <a id="req-002"></a>
@@ -88,9 +88,9 @@
 - THEN execution packet 的 request 与 target set 均固化在 `0.plan`，且 output 删除后仍可从受版本控制的静态输入重建。
 - THEN 四类载体均能由同一 CLI 门面创建、review、promote 与聚合 release。
 - THEN 池按稳定对象身份累计四类唯一合格对象，M100 只以 `100/100/100/10` 判断目标是否达到；未达到时返回 gap，已合格对象仍可形成 partial Research release。
-- THEN 文章配图、来源分布、视频热度、automatic recovery、workspace/soak/resource samples、实际调度重叠、重试与吞吐保留为诊断统计，且其缺失、失败或变化不改变 task dispatch、质量合格并具有目标环境使用范围的对象准入或规模 promotion 结果。
+- THEN 文章配图、来源分布、视频热度与宿主实际重叠只作诊断；仓内不存在 automatic recovery、workspace/soak/capacity authority。
 - THEN 每个实际启动的 task 分别形成 typed 终态；排队、未启动或诊断 sample 不算 task 结果。canonical publish 以单写对象事务接收已合格对象，最终 Manifest/release 对被选对象及引用做 exact closure。
-- THEN 对象下限、工作单元数与并行 worker 上限在 execution 中各自独立冻结，任一项都不由另一项派生；批次绝对截止跨进程重启不续期，运行回执可复核实际并行峰值、wave 数与该截止。
+- THEN 对象下限与工作单元数独立冻结；宿主并发/截止不写入 execution，receipt 不记录 worker/wave/fleet authority。
 - THEN release 只绑定 execution/source digest 与 desired state；环境 receipt、rollback/replay 通过 ship 写入输出。
 
 <a id="sit-002"></a>

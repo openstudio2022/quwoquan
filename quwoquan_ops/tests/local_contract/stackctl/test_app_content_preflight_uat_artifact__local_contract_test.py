@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+from contextlib import ExitStack
+
 from quwoquan_ops.cli.commands import app_preflight_uat as uat
 from quwoquan_ops.cli.commands.app_preflight_uat_binding import (
     _candidate_runtime_identities,
@@ -67,10 +71,37 @@ class AppContentPreflightUatArtifactTest(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
-            report_dir = Path(temporary_directory) / "android-uat"
-            readiness_path = Path(temporary_directory) / "readiness.json"
+            root = Path(temporary_directory).resolve()
+            report_dir = root / "android-uat"
+            readiness_path = root / "readiness.json"
             call_order: list[str] = []
             baseline = "sha256:" + "8" * 64
+            sample_plan = {
+                "schema": "quwoquan_data.release_uat_sample_plan",
+                "releaseId": "beta-research-pool8",
+                "releaseDigest": "sha256:" + "5" * 64,
+                "selectionEvidence": {
+                    "sourceIdentitySetDigest": "sha256:" + "d" * 64
+                },
+            }
+            sample_plan_path = root / "uat/sample_plan.json"
+            sample_plan_path.parent.mkdir(parents=True, exist_ok=True)
+            sample_plan_path.write_bytes(
+                json.dumps(
+                    sample_plan, sort_keys=True, separators=(",", ":")
+                ).encode("utf-8")
+            )
+            sample_plan_digest = (
+                "sha256:"
+                + hashlib.sha256(sample_plan_path.read_bytes()).hexdigest()
+            )
+            candidate_manifest = root / "candidate/manifest.json"
+            candidate_manifest.parent.mkdir(parents=True, exist_ok=True)
+            candidate_manifest.write_text(
+                "candidate-manifest\n", encoding="utf-8"
+            )
+            contract_graph = root / "contract-graph.json"
+            contract_graph.write_text("contract-graph\n", encoding="utf-8")
             preflight = {
                 "exitCode": 0,
                 "target": "beta-local",
@@ -86,15 +117,16 @@ class AppContentPreflightUatArtifactTest(unittest.TestCase):
                 "manifestDigest": "sha256:" + "5" * 64,
                 "readinessReceiptRef": str(readiness_path),
                 "readinessReceiptDigest": "sha256:" + "6" * 64,
-                "releaseUatSamplePlanRef": "uat/sample_plan.json",
-                "releaseUatSamplePlanDigest": "sha256:" + "7" * 64,
+                "releaseUatSamplePlan": sample_plan,
+                "releaseUatSamplePlanRef": str(sample_plan_path),
+                "releaseUatSamplePlanDigest": sample_plan_digest,
                 "appUatPlan": {
                     "releaseIdentity": {
                         "releaseId": "beta-research-pool8",
                         "payloadSha256": "sha256:" + "5" * 64,
                     },
-                    "releaseUatSamplePlanRef": "uat/sample_plan.json",
-                    "releaseUatSamplePlanDigest": "sha256:" + "7" * 64,
+                    "releaseUatSamplePlanRef": str(sample_plan_path),
+                    "releaseUatSamplePlanDigest": sample_plan_digest,
                     "carrierIdentities": {"video": "video-01"},
                     "orderedSamples": [
                         {
@@ -190,7 +222,12 @@ class AppContentPreflightUatArtifactTest(unittest.TestCase):
                 call_order.append("patrol")
                 return subprocess.CompletedProcess(["patrol"], 2, "", "")
 
-            with (
+            patchers = [
+                patch.object(
+                    stackctl,
+                    "output_root",
+                    return_value=root,
+                ),
                 patch.object(
                     stackctl,
                     "command_app_debug_preflight",
@@ -203,7 +240,26 @@ class AppContentPreflightUatArtifactTest(unittest.TestCase):
                         "target": "beta-local",
                         "candidateDigest": baseline,
                         "releaseTrainId": "sha256:" + "9" * 64,
+                        "sourceCapsuleManifestRef": str(
+                            root / "candidate/input-capsule/manifest.json"
+                        ),
                     },
+                ),
+                patch.object(
+                    uat,
+                    "_target_uat_binding_for_execution",
+                    return_value=(
+                        {"schema": "fixture-target-uat-binding"},
+                        {
+                            "ref": "target-uat-bindings/beta-local.json",
+                            "digest": "sha256:" + "4" * 64,
+                        },
+                    ),
+                ),
+                patch.object(
+                    uat,
+                    "expected_app_uat_raw_coverage",
+                    return_value=1,
                 ),
                 patch.object(
                     uat,
@@ -243,6 +299,16 @@ class AppContentPreflightUatArtifactTest(unittest.TestCase):
                         "target": "beta-local",
                         "suite": "release-bound-readback",
                         "exitCode": 0,
+                        "sampleExecution": {
+                            "samples": [
+                                {
+                                    "sampleId": "canary-video-001",
+                                    "carrier": "video",
+                                    "sourceObjectId": "video-01",
+                                    "readObjectId": "video-01",
+                                }
+                            ]
+                        },
                     },
                 ),
                 patch.object(
@@ -270,6 +336,11 @@ class AppContentPreflightUatArtifactTest(unittest.TestCase):
                             report_dir
                             / "beta-local/canonical-launch/attempt-1/report.json"
                         ),
+                        "contractGraphDigest": "sha256:"
+                        + hashlib.sha256(
+                            contract_graph.read_bytes()
+                        ).hexdigest(),
+                        "contractGraphRef": str(contract_graph),
                     },
                 ),
                 patch.object(
@@ -322,7 +393,10 @@ class AppContentPreflightUatArtifactTest(unittest.TestCase):
                     },
                 ),
                 patch.object(stackctl, "run", side_effect=execute),
-            ):
+            ]
+            with ExitStack() as stack:
+                for patcher in patchers:
+                    stack.enter_context(patcher)
                 artifact_blocked_result = stackctl._command_app_content_uat(
                     stackctl.argparse.Namespace(
                         targets="beta-local",

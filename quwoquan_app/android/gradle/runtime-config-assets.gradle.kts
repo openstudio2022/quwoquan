@@ -13,6 +13,10 @@ import java.util.Base64
 //
 // 仓库根由消费方 Gradle 根显式声明（qwq.repositoryRoot），不按固定相对深度推断：
 // 两个工程到仓库根的深度不同，而「assets 根必须在源码树外」这条判否依赖它。
+//
+// 构建期默认供给（embedded_default_package）已退役（REQ-002/REQ-003）：
+// QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT 缺席时不物化任何 runtime config assets，
+// 一切 buildMode/buildProfile 的 artifact task 都以 trust blocker fail-closed。
 
 val declaredRepositoryRoot =
     (project.findProperty("qwq.repositoryRoot") as String?)?.trim().orEmpty()
@@ -23,7 +27,8 @@ val repositoryRoot = rootProject.projectDir.resolve(declaredRepositoryRoot).cano
 
 val configuredAssetRoot =
     System.getenv("QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT")?.trim().orEmpty()
-val resolvedAssetRoot =
+
+val resolvedAssetRoot: File? =
     configuredAssetRoot.takeIf { it.isNotEmpty() }?.let(::File)?.canonicalFile
 
 fun requiresRuntimeConfigTrust(taskName: String): Boolean {
@@ -155,15 +160,21 @@ fun loadGeneratedLaunchContract(): Map<String, Any?> {
         )
 }
 
-@Suppress("UNCHECKED_CAST")
-fun validateRuntimeConfigTrust(generatedContract: Map<String, Any?>) {
+fun generatedTrustBlocker(generatedContract: Map<String, Any?>): String {
     val launchBlockers = generatedContract["launchBlockers"] as? Map<String, Any?>
         ?: throw GradleException("GATE_BLOCK: generated launchBlockers projection is missing.")
-    val blocker =
-        launchBlockers.keys.singleOrNull { it.endsWith(".runtime_config_trust_missing") }
-            ?: throw GradleException(
-                "GATE_BLOCK: generated runtime-config trust blocker projection is missing.",
-            )
+    return launchBlockers.keys.singleOrNull { it.endsWith(".runtime_config_trust_missing") }
+        ?: throw GradleException(
+            "GATE_BLOCK: generated runtime-config trust blocker projection is missing.",
+        )
+}
+
+@Suppress("UNCHECKED_CAST")
+fun validateRuntimeConfigTrust(
+    generatedContract: Map<String, Any?>,
+    assetRootDeclaration: String,
+) {
+    val blocker = generatedTrustBlocker(generatedContract)
     fun reject(reason: String): Nothing {
         throw GradleException(
             "GATE_BLOCK: $blocker: $reason " +
@@ -193,10 +204,10 @@ fun validateRuntimeConfigTrust(generatedContract: Map<String, Any?>) {
             ?.get("build_profiles") as? List<*>)?.map { it.toString() }?.toSet()
             ?: reject("The generated runtime trust build profiles are missing.")
 
-    if (configuredAssetRoot.isEmpty()) {
+    if (assetRootDeclaration.isEmpty()) {
         reject("QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT is absent.")
     }
-    val configuredRoot = File(configuredAssetRoot)
+    val configuredRoot = File(assetRootDeclaration)
     if (!configuredRoot.isAbsolute) {
         reject("The Android runtime configuration asset root must be absolute.")
     }
@@ -218,6 +229,7 @@ fun validateRuntimeConfigTrust(generatedContract: Map<String, Any?>) {
     val runtimeRoot = canonicalRoot.resolve("qwq_runtime")
     val trustFile = runtimeRoot.resolve("runtime-config-trust.json")
     val packageFile = runtimeRoot.resolve("runtime-config-package.json")
+    // canonical 注入只嵌 trust envelope；任何 runtime package 材料都不得进入产物。
     if (!runtimeRoot.isDirectory ||
         Files.isSymbolicLink(runtimeRoot.toPath()) ||
         runtimeRoot.listFiles()?.map { it.name }?.toSet() != setOf("runtime-config-trust.json")
@@ -296,11 +308,11 @@ gradle.taskGraph.whenReady {
             "artifactTasks=${artifactTasks.map { it.path }}",
     )
     if (artifactTasks.isNotEmpty() && !pureUnitTestInvocation) {
-        validateRuntimeConfigTrust(
+        val contract =
             requireNotNull(generatedContract) {
                 "artifact tasks must consume the generated App launch contract"
-            },
-        )
+            }
+        validateRuntimeConfigTrust(contract, configuredAssetRoot)
     }
 }
 

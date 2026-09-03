@@ -363,7 +363,9 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         self.assertNotIn("--dart-define=CLOUD_GATEWAY_BASE_URL", source)
         self.assertIn('scripts/device/run_app_instance.py"', source)
         self.assertNotIn('"$QWQ_REAL_FLUTTER" run', source)
-        self.assertIn("workspace literal `flutter run`", source)
+        self.assertIn('exec "$APP_DIR/scripts/device/dev_launch.sh"', source)
+        self.assertIn("Hermetic direct run.sh always re-execs from a frozen private source projection.", source)
+        self.assertIn('argument" == "--hermetic', source)
 
     def test_android_debug_mounts_only_external_profile_trust_asset(self) -> None:
         # assets 准入校验落在共享脚本，生产 App 与 Patrol UAT test host 两个 Gradle 工程
@@ -513,6 +515,9 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         runner = (APP_DIR / "scripts/device/run_app_instance.py").read_text(
             encoding="utf-8"
         )
+        attach = (APP_DIR / "scripts/device/canonical_app_instance/attach_session.py").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("consumePendingRequest", android_gate)
         self.assertLess(
             android_gate.index("consumePendingRequest"),
@@ -532,8 +537,9 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         )
         self.assertIn('self._emit_phase("configuring")', activation)
         self.assertIn('self._emit_phase("configured")', activation)
-        self.assertIn("flutter attach", runner)
-        self.assertNotIn("flutter run", runner)
+        self.assertIn('"attach"', attach)
+        self.assertIn("flutter_executable", attach)
+        self.assertNotIn('"run"', attach)
 
     def test_runtime_package_rejects_profile_target_policy_and_source_drift(self) -> None:
         handoff = _build_handoff("alpha", "alpha-local")
@@ -759,7 +765,7 @@ class LauncherHandoffMetadataContractTest(unittest.TestCase):
         test_live = _build_handoff(
             "alpha",
             "alpha-local",
-            launch_provenance="workspace_flutter_run",
+            launch_provenance="workspace_ide_debug",
         )
         self.assertEqual(test_live["launchPolicy"], "test_live")
         self.assertNotIn("contentBindingState", test_live)

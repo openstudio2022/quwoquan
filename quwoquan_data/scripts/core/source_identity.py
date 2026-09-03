@@ -1,6 +1,7 @@
 """Typed source identity checks shared by source admission and download gates."""
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
@@ -77,8 +78,30 @@ def source_geography_issue(
     return None
 
 
+def source_unit_id(
+    *,
+    canonical_url: str = "",
+    snapshot_hash: str = "",
+    source_ref: str = "",
+    entity_name: str = "",
+    source_kind: str = "",
+) -> str:
+    """Build the stable directory identity for one atomic public source unit."""
+    _ = snapshot_hash
+    seed = canonical_url.strip() or source_ref.strip()
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()
+    name = str(entity_name or "").strip()
+    kind = str(source_kind or "").strip()
+    if name and kind:
+        safe_name = re.sub(r'[\\/:*?"<>|\s]+', "_", name).strip("_.") or "entity"
+        safe_kind = re.sub(r"[^a-zA-Z0-9_\-]+", "_", kind).strip("_") or "web"
+        return f"{safe_name}__{safe_kind}__{digest[:8]}"
+    return "su_" + digest[:20]
+
+
 __all__ = [
     "SourceIdentityIssue",
     "SourceIdentityIssueKind",
     "source_geography_issue",
+    "source_unit_id",
 ]

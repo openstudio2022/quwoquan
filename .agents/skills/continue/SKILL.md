@@ -10,34 +10,24 @@ metadata:
 
 ## 触发与输入
 
-用于从中断位置续跑，或收口已完成轮次后进入下一轮。输入优先是当前 todo/plan、Git 字节、最近可验指纹和持久交接（如有），不以对话印象为证据。
-
-
-
-自然语言触发与显式 Skill 调用同轨，字段、闭集与审计隔离只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.continue`：
-
-- PRE：`progress_update` / `delivery_planning_authorization` / `engineering_delivery_owner`。
+用于从中断位置续跑，或收口已完成轮次后进入下一轮。输入优先是当前 todo/plan、Git 字节、最近 immutable owner ref、证据与持久交接（如有），不以对话印象为证据。角色交互只引用 `quwoquan_ops/policies/human_agent_delivery_contract.yaml#workflow_interaction_binding.bindings.continue`，可见输出由 canonical projector 生成。
 
 ## 执行
 
-1. 重建 HEAD/status、目标 diff、untracked、writer、plan/todo 和证据时效。
-2. 未完 todo 继续原工作流；上轮已收口时进入 `plan-next`；无可靠上下文时先 `explore`。
-3. 只编排被选工作流，不自建另一套 PRE/POST/Reviewer/验证逻辑。过期证据由所属工作流复跑。
-
-- 执行中：`exception_escalation` / `agent_led_implementation` / `$route`。
-
-`$route` 表示按当前决定责任动态路由；Skill 不复制 envelope schema，所有可见输出统一由 canonical projector 生成。
+1. 重建 HEAD/status、目标 diff、untracked、writer、plan/todo、证据 freshness 与 durable handoff。
+2. 识别被恢复的原 Workflow Skill：未完 todo 继续原工作流，上轮已收口进入 plan-next，无可靠上下文先 explore。
+3. 完整继承被恢复 Skill 的 PRE、target 解析、immutable owner ref、验证与 POST 规则；continue 不自建 manifest 前置、resolver、Reviewer 或证据逻辑。
+4. 被恢复 workflow 是 plan-next、explore 等只读控制型 workflow 时，`feature-context` 失败按其 best-effort 语义记录 typed owner 解析结果并继续只读；被恢复 workflow 是 prd、design、dev 等 mutation workflow 时，进入写入前仍必须取得唯一 owner 与 immutable ref。
+5. stale ref/receipt 由所属工作流按当前 target 重新生成或复跑，不转抄聊天记忆和旧摘要。
 
 ## 完成证据
 
-报告采用的恢复分支、已恢复工作流的当前产物/证据、剩余 todo 与首个 typed blocker。被编排 Skill 自己的完成证据仍是唯一准据。
-
-- POST：`completion_report` / `agent_led_implementation` / `$route`。
+报告采用的恢复分支、继承的 workflow、当前 exact target/ref、已恢复产物与证据、剩余 todo 和首个 typed blocker；完成判定以被恢复 Skill 为准。
 
 ## 失败与停止
 
-恢复身份不唯一、指纹过期、持久交接断链或发现未授权 writer 时 `GATE_BLOCK`，先 explore/重建证据；不运行 reset/clean/kill 推测恢复。
+恢复 workflow/target 不唯一、证据过期、持久交接断链，或 mutation workflow 写入前无法取得唯一 owner/ref 时 `GATE_BLOCK`，先 explore 或重建所属证据。发现并行冲突时报告风险与共享写点，只编辑本任务字节并交由准出暴露冲突；不扩大授权，也不 reset/clean/kill 推测恢复。
 
 ## 条件性交接
 
-六类触发（跨会话未完成、多人并行、环境/发布、外部阻断、证据复用、用户显式要求）统一调用 canonical handoff producer；普通闭环不落持久交接。恢复只消费 fresh durable receipt 与 Objective/hosted readback；handoff 指纹 stale 时复跑所属 evidence，不转抄聊天记忆或旧摘要。
+沿用被恢复 Skill 的条件性交接；只有 canonical 六类 handoff 触发成立时持久交接。

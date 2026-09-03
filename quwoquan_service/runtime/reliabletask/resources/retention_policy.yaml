@@ -53,8 +53,3 @@ rateLimits:
     claimPerSecond: 50
     retryPerSecond: 20
     priority: low
-  reliabletask.rate.data_content_supply:
-    dispatchPerSecond: 500
-    claimPerSecond: 200
-    retryPerSecond: 50
-    priority: normal

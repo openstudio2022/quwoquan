@@ -13,13 +13,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
 import tempfile
-import uuid
 import unittest
 from pathlib import Path
 from types import ModuleType
@@ -27,12 +28,19 @@ from unittest import mock
 
 import yaml
 
+from quwoquan_ops.cli.lib.evidence_fingerprint import canonical_json_bytes
+
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CLI = _REPO_ROOT / "quwoquan_ops/cli/review_dispatch.py"
 _REGISTRY = _REPO_ROOT / ".agents/skills/review/references/registry.yaml"
 _GOVERNANCE_CONTRACT = _REPO_ROOT / "quwoquan_ops/policies/agent_governance_contract.yaml"
 _OUTPUT_ROOT = _REPO_ROOT / ".qwq_output/env/repo/local/review-dispatch-tests"
 _MANIFEST_REFS: dict[int, str] = {}
+
+
+def _owner_manifest_ref(raw: bytes) -> str:
+    prefix = ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
+    return prefix + hashlib.sha256(raw).hexdigest() + ".json"
 
 
 def _load_cli() -> ModuleType:
@@ -110,16 +118,16 @@ def _context_manifest(
             *list(contexts),
         ],
         "applicable_agents": ["AGENTS.md"],
-        "profiles": [],
         "open_items": [],
     }
     manifest["evidence_fingerprint"] = _cli.embedded_fingerprint_binding(
         _cli.build_feature_context_fingerprint(manifest, repo_root=_REPO_ROOT)
     )
-    root = _OUTPUT_ROOT / "manifests"
+    raw = canonical_json_bytes(manifest)
+    root = _REPO_ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint"
     root.mkdir(parents=True, exist_ok=True)
-    path = root / f"{uuid.uuid4().hex}.json"
-    path.write_text(json.dumps(manifest, ensure_ascii=False) + "\n", encoding="utf-8")
+    path = _REPO_ROOT / _owner_manifest_ref(raw)
+    path.write_bytes(raw)
     _MANIFEST_REFS[id(manifest)] = path.relative_to(_REPO_ROOT).as_posix()
     return manifest
 
@@ -358,7 +366,6 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
     def test_governance_profiles_outrank_recommendation_for_mixed_worktree(self) -> None:
         governance_paths = (
             "quwoquan_ops/ci/local_readiness_planner.py",
-            "quwoquan_ops/gate/verify_workflow_resolution.py",
             "quwoquan_ops/cli/lib/hosted_authority/client.py",
             "quwoquan_ops/cli/objective_execution.py",
             "quwoquan_ops/gate/verify_governance_pipeline_admission.py",
@@ -738,6 +745,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(3, json.loads(result.stdout)["schema_version"])
 
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t3
     def test_post_requires_current_owner_manifest_and_matches_scope(self) -> None:
         with self.assertRaises(_cli.ReviewDispatchError) as missing:
             _cli.build_plan(_registry, "dev", "POST", None, ["README.md"])
@@ -782,6 +790,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             )
         self.assertEqual("REVIEW.TERMINAL_CONTRACT_INVALID", blocked.exception.code)
 
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t4
     def test_owner_manifest_ref_replacement_is_stale(self) -> None:
         manifest = _context_manifest()
         plan = _plan("dev", "POST", ["README.md"], context_manifest=manifest)
@@ -794,6 +803,65 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             self.assertEqual("REVIEW.OWNER_MANIFEST_STALE", stale.exception.code)
         finally:
             ref.write_text(original, encoding="utf-8")
+
+    def test_plan_and_revalidation_share_owner_manifest_reader(self) -> None:
+        manifest = _context_manifest()
+        ref = _MANIFEST_REFS[id(manifest)]
+        raw = (_REPO_ROOT / ref).read_bytes()
+        identity = {
+            "ref": ref,
+            "canonical_bytes_sha256": "sha256:"
+            + hashlib.sha256(raw).hexdigest(),
+            "target": manifest["target"],
+            "scope": manifest["target"],
+            "resolved_owner": manifest["resolved_owner"],
+            "fingerprint_ref": manifest["evidence_fingerprint"]["ref"],
+            "fingerprint_digest": manifest["evidence_fingerprint"]["digest"],
+        }
+        with (
+            mock.patch.object(
+                _cli,
+                "_read_owner_manifest_exact_bytes",
+                wraps=_cli._read_owner_manifest_exact_bytes,
+            ) as reader,
+            mock.patch.object(_cli, "validate_feature_context_manifest"),
+            mock.patch.object(
+                _cli, "validate_current_feature_context_fingerprint"
+            ),
+        ):
+            _cli._normalize_contexts(
+                manifest,
+                manifest_ref=ref,
+                expected_scope=str(manifest["target"]),
+                required=True,
+            )
+            self.assertEqual(1, reader.call_count)
+
+            from lib.feature_tree import commands as feature_tree_commands
+            from lib.feature_tree import ownership as feature_tree_ownership
+
+            with (
+                mock.patch.object(
+                    feature_tree_commands, "discover_nodes", return_value=[]
+                ),
+                mock.patch.object(
+                    feature_tree_ownership,
+                    "resolve_target_details",
+                    return_value=object(),
+                ),
+                mock.patch.object(
+                    feature_tree_commands,
+                    "_context_manifest",
+                    return_value=manifest,
+                ),
+            ):
+                _cli._validate_current_owner_manifest(
+                    {
+                        "owner_manifest_identity": identity,
+                        "scope": manifest["target"],
+                    }
+                )
+            self.assertEqual(2, reader.call_count)
 
     def test_control_workflow_cannot_wrap_delivery_deliverable(self) -> None:
         with self.assertRaises(_cli.ReviewDispatchError) as forbidden:

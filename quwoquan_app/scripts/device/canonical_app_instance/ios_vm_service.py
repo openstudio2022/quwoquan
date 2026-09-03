@@ -87,8 +87,14 @@ def launch_selected_simulator_application(
         normalized_device_id,
         normalized_application_id,
     ]
-    log_start = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S.%f%z")
     try:
+        # Activation-only 进程在回执提交后仍可能存活；先显式终止并确认其
+        # launchd service 消失，再记录 canonical launch 的日志边界。
+        _terminate_selected_application(
+            normalized_device_id,
+            normalized_application_id,
+        )
+        log_start = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S%z")
         result = subprocess.run(
             command,
             cwd=APP_DIR,
@@ -120,6 +126,63 @@ def launch_selected_simulator_application(
         process_id=int(process_matches[0]),
         log_start=log_start,
     )
+
+
+def _terminate_selected_application(
+    device_id: str,
+    application_id: str,
+    *,
+    timeout_seconds: float = 2.0,
+) -> None:
+    terminate_command = [
+        "xcrun",
+        "simctl",
+        "terminate",
+        device_id,
+        application_id,
+    ]
+    terminate = subprocess.run(
+        terminate_command,
+        cwd=APP_DIR,
+        env=compile_environment(os.environ),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if terminate.returncode != 0:
+        raise CanonicalExecutorError(
+            "unable to terminate iOS Simulator activation process "
+            f"(code {terminate.returncode})"
+        )
+
+    deadline = time.monotonic() + timeout_seconds
+    service_fragment = f"UIKitApplication:{application_id}["
+    probe_command = [
+        "xcrun",
+        "simctl",
+        "spawn",
+        device_id,
+        "launchctl",
+        "print",
+        f"user/{os.getuid()}",
+    ]
+    while True:
+        probe = subprocess.run(
+            probe_command,
+            cwd=APP_DIR,
+            env=compile_environment(os.environ),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if probe.returncode != 0 or service_fragment not in str(probe.stdout):
+            return
+        if time.monotonic() >= deadline:
+            raise CanonicalExecutorError(
+                "iOS Simulator activation process did not terminate before "
+                "canonical launch"
+            )
+        time.sleep(0.05)
 
 
 def resolve_ios_simulator_debug_url(

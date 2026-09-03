@@ -21,17 +21,14 @@
         "post_trip_journal"
       ]
     },
-    "generationModelFamily": {
-      "type": "string",
-      "description": "生成正文所用模型族；judge 必须不同族以避免 self-preference 偏差（rubric_judge.review_rigor_issues 强制）"
-    },
     "judges": {
       "type": "array",
-      "description": "判官清单（jury-of-judges 多数表决）；高风险维度需 >= 3 个不同族判官。pin modelId/promptHash/temperature 作为 eval 合约。",
+      "description": "判官清单（jury-of-judges 多数表决）；高风险维度需 >= 3 个独立判官记录。modelFamily 只记录真实调用，不要求与作者或其他 judge 异族；pin modelId/promptHash/temperature 作为 eval 合约。",
       "items": {
         "type": "object",
         "required": [
           "modelId",
+          "modelFamily",
           "promptHash",
           "temperature"
         ],
@@ -40,7 +37,9 @@
             "type": "string"
           },
           "modelFamily": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "description": "judge 实际模型族审计记录；不与作者或其他 judge 比较准出。"
           },
           "promptHash": {
             "type": "string",

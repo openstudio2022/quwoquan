@@ -16,20 +16,15 @@ COMMON_STAGE_ARTIFACTS: Final[dict[str, tuple[str, ...]]] = {
     "1.download": ("source_refs.json",),
     "2.quality": ("quality_analysis.json",),
     "4.draft": (
-        "author_job_packet.json",
-        "prompt.md",
-        "prompt_snapshot.json",
         "draft_meta.json",
         "author_self_check.json",
         "agent_result_envelope.json",
     ),
     "5.review": (
-        "deterministic_gate.json",
+        "rubric_review.json",
         "reviewer_result.json",
         "media_ref_review.json",
-        "finalization_report.json",
         "attestation.json",
-        "evidence_index.json",
     ),
 }
 
@@ -46,12 +41,12 @@ LANE_ADAPTERS: Final[dict[str, dict[str, tuple[str, ...]]]] = {
     },
     "image": {
         "3.compose": ("writing_pack.json",),
-        "4.draft": (),
+        "4.draft": ("image_work.json",),
         "final": ("manifest.json",),
     },
     "video": {
         "3.compose": ("writing_pack.json",),
-        "4.draft": (),
+        "4.draft": ("video_script.json",),
         "final": ("manifest.json",),
     },
 }
@@ -67,9 +62,6 @@ SOURCE_UNIT_ARTIFACTS: Final[tuple[str, ...]] = (
 
 PROCESS_ARTIFACT_NAMES: Final[frozenset[str]] = frozenset(
     {
-        "prompt.md",
-        "prompt_snapshot.json",
-        "author_job_packet.json",
         "author_self_check.json",
         "agent_result_envelope.json",
         "draft_meta.json",

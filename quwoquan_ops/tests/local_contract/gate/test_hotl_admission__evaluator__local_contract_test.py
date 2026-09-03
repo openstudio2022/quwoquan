@@ -25,10 +25,12 @@ from lib.hotl_admission import ContractError, inspect  # noqa: E402
 from lib.hotl_admission import evaluator as evaluator_module  # noqa: E402
 from lib.objective_execution.contract import admission_readback  # noqa: E402
 
+# WRITE_EXPANSION_NOT_ADMITTED 只在动态 S4 未 admitted 时在场；当前 lane 生命周期
+# 政策下 S4 为 admitted（objective-execution REQ-003），故不属于当前必在 blocker。
 CURRENT_BLOCKERS = {
     "AUTHORITY_PROVIDER_UNAVAILABLE", "HUMAN_BOTTLENECK_COHORT_MISSING",
     "CONTROL_PROOF_MISSING", "COMMERCIAL_AUTHORITY_NOT_CLOSED",
-    "CHECKPOINT_POLICY_UNRESOLVED", "WRITE_EXPANSION_NOT_ADMITTED",
+    "CHECKPOINT_POLICY_UNRESOLVED",
 }
 
 
@@ -139,8 +141,9 @@ def test_current_actual_prerequisites_are_deterministic_manual_single_writer_and
     assert first["grant_executable"] is False
     assert first["mutation_allowed"] is False
     assert CURRENT_BLOCKERS <= set(first["blockers"])
-    assert first["s4_readback"]["status"] == "not_admitted"
-    assert first["s4_readback"]["write_concurrency"] == 1
+    assert "WRITE_EXPANSION_NOT_ADMITTED" not in first["blockers"]
+    assert first["s4_readback"]["status"] == "admitted"
+    assert first["s4_readback"]["write_concurrency"] == 2
 
 
 @pytest.mark.parametrize("risk_tier", ["R2", "R3", "R4"])
@@ -314,8 +317,11 @@ def test_ack_without_effect_identity_drift_disconnect_audit_timeout_and_revoke_a
 
 
 def test_requested_concurrency_above_dynamic_s4_is_blocked() -> None:
-    result = assert_not_admitted(complete_input(requested_write_concurrency=2), "REQUESTED_WRITE_CONCURRENCY_EXCEEDED")
+    result = assert_not_admitted(complete_input(requested_write_concurrency=3), "REQUESTED_WRITE_CONCURRENCY_EXCEEDED")
     assert result["max_write_concurrency"] == 1
+    within_dynamic_s4 = inspect(complete_input(requested_write_concurrency=2))
+    assert "REQUESTED_WRITE_CONCURRENCY_EXCEEDED" not in within_dynamic_s4["blockers"]
+    assert within_dynamic_s4["max_write_concurrency"] == 1
 
 
 @pytest.mark.parametrize(

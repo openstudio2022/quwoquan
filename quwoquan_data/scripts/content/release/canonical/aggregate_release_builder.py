@@ -65,12 +65,6 @@ from content.release.canonical.object_transaction_lock import (
 from content.release.canonical.release_admission import (
     build_release_asset_admission,
 )
-from content.release.canonical.reviewed_closure_aggregate import (
-    ReviewedClosureSelection,
-    copy_reviewed_closure_media,
-    revalidate_reviewed_closure_selection,
-    reviewed_closure_selection,
-)
 from content.release.environment.consistency import scan_release_contract
 from content.release.model import DataSourceOwner
 from core.media_asset_url import (
@@ -104,9 +98,8 @@ def _build_aggregate_release(
     reviewed_closure_adoption: Mapping[str, Any] | None = None,
     adoption_output_root: Path | None = None,
     target_environment: str | None = None,
-    all_publishable: bool = False,
-    milestone: str | None = None,
     release_class: str,
+    cohort: dict[str, object] | None = None,
     pool_wide: bool = False,
     sampling_authority_artifact_root: Path | None = None,
     sampling_authority_binding: Mapping[str, str] | None = None,
@@ -116,7 +109,6 @@ def _build_aggregate_release(
     release_mode = str(release_class or "").strip()
     if release_mode not in {"research", "commercial"}:
         raise ObjectTransactionError(f"DATA.RELEASE.CLASS_INVALID: {release_mode!r}")
-    reviewed_selection: ReviewedClosureSelection | None = None
     environment_selection: EnvironmentReleaseSelection | None = None
     source_identities: tuple[dict[str, object], ...] = ()
     source_identity_set_digest: str | None = None
@@ -126,25 +118,17 @@ def _build_aggregate_release(
             raise ObjectTransactionError(
                 "pool release cannot be combined with reviewed-closure adoption"
             )
-        if (
-            sum(
-                (
-                    target_environment is not None,
-                    all_publishable,
-                    milestone is not None,
-                )
-            )
-            != 1
-        ):
+        if cohort is None:
             raise ObjectTransactionError(
-                "DATA.RELEASE.SELECTION_INVALID: pool release requires exactly one "
-                "target environment, all-publishable, or milestone scope"
+                "DATA.RELEASE.COHORT_REQUIRED: pool release requires --cohort-file"
+            )
+        if target_environment is not None:
+            raise ObjectTransactionError(
+                "DATA.RELEASE.SELECTION_INVALID: cohort release is environment-neutral"
             )
         pool_preparation = prepare_pool_release(
             publish_root=publish_root,
-            target_environment=target_environment,
-            all_publishable=all_publishable,
-            milestone=milestone,
+            cohort=cohort,
             release_class=release_class,
         )
         pool_excluded = pool_preparation.excluded
@@ -158,22 +142,7 @@ def _build_aggregate_release(
         desired = pool_preparation.desired
         object_source_root = publish_root
     elif reviewed_closure_adoption is not None:
-        if target_environment is not None:
-            raise ObjectTransactionError(
-                "environment selection cannot be combined with reviewed-closure adoption"
-            )
-        reviewed_selection = reviewed_closure_selection(
-            release_id=release_id,
-            execution_ids=execution_ids,
-            source_revision=source_revision,
-            entity_catalog_digest=entity_catalog_digest,
-            reviewed_closure_adoption=reviewed_closure_adoption,
-            output_root=adoption_output_root,
-        )
-        execution_ids = list(reviewed_selection.execution_ids)
-        source_digests = (reviewed_selection.source_digest,)
-        desired = reviewed_selection.desired
-        object_source_root = reviewed_selection.object_root
+        raise ObjectTransactionError("reviewed-closure adoption is retired")
     else:
         closures = tuple(
             execution_publish_closure(execution_id, publish_root=publish_root)
@@ -307,7 +276,7 @@ def _build_aggregate_release(
             release_class=release_mode,
             reviewed_closure_adoption=reviewed_closure_adoption,
             adoption_output_root=adoption_output_root,
-            reviewed_selection=reviewed_selection,
+            reviewed_selection=None,
             environment_selection=environment_selection,
             release_contents=release_contents,
             release_authors=release_authors,
@@ -355,36 +324,23 @@ def _build_aggregate_release(
                         copy_tag_snapshot(source, target)
                 else:
                     _copy_tree(source, target)
-        if reviewed_selection is not None:
-            media_manifest = {
-                **reviewed_selection.media_manifest,
-                "releaseId": release_id,
-                "sourceOwner": DataSourceOwner.QWQ_DATA,
-            }
-            assert_valid(
-                media_manifest,
-                "release",
-                "media_manifest",
-                label=f"release_media_manifest:{release_id}",
+        media_manifest = build_release_media_manifest(
+            release_id=release_id,
+            post_refs=desired["posts"],
+            entity_refs=desired["entities"],
+            creator_refs=desired["creators"],
+            publish_root=publish_root,
+            release_class=release_mode,
+        )
+        if media_manifest["issues"]:
+            raise ObjectTransactionError(
+                "aggregate release media closure invalid: "
+                + "; ".join(str(issue) for issue in media_manifest["issues"][:5])
             )
-        else:
-            media_manifest = build_release_media_manifest(
-                release_id=release_id,
-                post_refs=desired["posts"],
-                entity_refs=desired["entities"],
-                creator_refs=desired["creators"],
-                publish_root=publish_root,
-                release_class=release_mode,
-            )
-            if media_manifest["issues"]:
-                raise ObjectTransactionError(
-                    "aggregate release media closure invalid: "
-                    + "; ".join(str(issue) for issue in media_manifest["issues"][:5])
-                )
-            bind_release_object_media_assets(
-                objects_root=payload / "objects",
-                manifest=media_manifest,
-            )
+        bind_release_object_media_assets(
+            objects_root=payload / "objects",
+            manifest=media_manifest,
+        )
         asset_admission = build_release_asset_admission(
             release_id=release_id,
             objects_root=payload / "objects",
@@ -399,12 +355,6 @@ def _build_aggregate_release(
         )
         _write_json(payload / "asset_admission.json", asset_admission)
         selected_merkle = objects_merkle(staging, create=True)
-        if reviewed_selection is not None and selected_merkle != objects_merkle(
-            reviewed_selection.source_release_root
-        ):
-            raise ObjectTransactionError(
-                "reviewed closure adoption object bytes changed during aggregation"
-            )
         uat_sample_plan, sample_plan_digest = (
             build_release_uat_sample_plan_artifact(
                 payload=payload,
@@ -496,13 +446,7 @@ def _build_aggregate_release(
             payload / "sample_bundle.json",
             {"schema": "quwoquan_data.release_sample_bundle", **desired},
         )
-        if reviewed_selection is not None:
-            copy_reviewed_closure_media(
-                source_release_root=reviewed_selection.source_release_root,
-                target_release_root=staging,
-                media_manifest=media_manifest,
-            )
-        else:
+        if True:
             copy_release_media_objects(
                 manifest=media_manifest,
                 release_root=staging,
@@ -553,12 +497,6 @@ def _build_aggregate_release(
             label=f"release_attestation:{release_id}",
         )
         _write_json(attestation_root(staging) / "release.json", release_attestation)
-        if reviewed_selection is not None:
-            revalidate_reviewed_closure_selection(
-                reviewed_closure_adoption=reviewed_closure_adoption,
-                output_root=adoption_output_root,
-                selection=reviewed_selection,
-            )
         assert_environment_neutral(staging)
         staging.replace(final_root)
         return aggregate_release_result(

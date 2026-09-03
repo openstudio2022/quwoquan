@@ -49,7 +49,7 @@
 ### REQ-003 evaluator 只读且 activation 独立绑定当前评估
 
 - evaluator 永远只读，并稳定返回 deterministic JSON、canonical evaluation digest 与 EvidenceFingerprint ref；输入集合按 stable id 排序，调用方顺序不得改变 digest 或 blocker 优先级。
-- 首版当前前提必须返回 `not_admitted`、`allowed_mode=manual`、`checkpoint_reduction_allowed=false`、`max_write_concurrency=1`、`grant_executable=false`、`mutation_allowed=false`，并显式给出 authority、cohort、control、commercial、checkpoint 与 write expansion 未闭合原因。
+- 首版当前前提必须返回 `not_admitted`、`allowed_mode=manual`、`checkpoint_reduction_allowed=false`、`max_write_concurrency=1`、`grant_executable=false`、`mutation_allowed=false`，并显式给出 authority、cohort、control、commercial 与 checkpoint 未闭合原因；动态 S4 未 `admitted` 时必须额外给出 write expansion 未闭合原因，S4 `admitted` 只消除该条 blocker，不改变上述任何 fallback 值。
 - 即使所有评估事实满足，首版也只能到 `eligible_for_activation`、`allowed_mode=observe_only`；首版没有 activation verifier/provider，任何调用方提交的 receipt 及其中 authenticated/exact/release 布尔值都只是未受信审计输入，必须以 `ACTIVATION_PROVIDER_UNAVAILABLE` 返回 `not_admitted/manual`，永远不能读回 `admitted` 或 executable。未来 authenticated consumer 必须引入新的 contract/version/implementation。
 - 所有 `blocked / not_admitted` 结果只从 canonical `current_fallback` 取得 manual、禁止 checkpoint reduction、最大写并发 1、grant 不可执行和零 mutation。动态 S4 仅作为证据与 requested concurrency 门，不得抬高结果并发。Objective canonical contract 无法加载时，HOTL 只能调用 Objective owner 模块内不依赖 YAML 的 emergency blocked S4 helper，且 HOTL 不得复制 S4 字段或 wire/value。
 - 首版 CLI 只提供 `contract` 和 `inspect --input <file|->`，不提供 activate、grant 或 resume mutation command。真正的 JSON、I/O 与 inspection input/schema 问题使用 `INPUT_CONTRACT_INVALID / HOTL.CONTRACT_INVALID` 并投影 canonical fallback；S4 provider/descriptor/validation 失败或规范 S4 直接返回 blocked，与 EvidenceFingerprint canonical serialization/digest/ref 依赖异常分别在公开 inspect 边界单义返回 `OBJECTIVE_ADMISSION_BLOCKED / HOTL.OBJECTIVE_ADMISSION_BLOCKED` 和 `EVALUATION_IDENTITY_FAILED / HOTL.EVALUATION_IDENTITY_FAILED` typed blocked，保留首次 detail、已取得或 owner-owned S4 readback，且 CLI 原样输出、退出 2、不抛 traceback。HOTL canonical contract 自身加载失败必须返回独立最小 contract terminal `CANONICAL_CONTRACT_INVALID / HOTL.CANONICAL_CONTRACT_INVALID`，不得伪造 status、mode、并发、grant、mutation 或 S4 admission facts。
@@ -66,9 +66,9 @@
 <a id="gwt-001"></a>
 ### GWT-001 当前 readback 保持 manual、单写者与零 mutation
 
-- GIVEN R0/R1 请求缺真实 authority provider、固定 cohort human calibration、四类控制 readback、商用 authority 与已解析 checkpoint policy，且动态 S4 为 not admitted/write concurrency 1。
+- GIVEN R0/R1 请求缺真实 authority provider、固定 cohort human calibration、四类控制 readback、商用 authority 与已解析 checkpoint policy，且动态 S4 处于 branch policy 推导的任一准入态。
 - WHEN 调用方以合法输入执行只读 inspect。
-- THEN 结果确定性返回 not_admitted、manual、禁止 checkpoint reduction、最大写并发 1、grant 不可执行且零 mutation，并包含六类当前 blocker。
+- THEN 结果确定性返回 not_admitted、manual、禁止 checkpoint reduction、最大写并发 1、grant 不可执行且零 mutation，并包含五类当前 blocker；S4 未 admitted 时额外包含 write expansion blocker。
 - AND R2-R4、projection/test/expired authority、SoD 失败、cohort/coverage/query/threshold/wait source 漂移、不可移除 checkpoint、控制 proof 缺失/identity 漂移、disconnect/audit/timeout、v1 resume 携带任意 decision ID 或请求并发超 S4 均 fail-closed；S4 readback schema/value 漂移与首次 provider 失败返回 Objective admission 专用 typed blocked，三个 EvidenceFingerprint 身份依赖任一失败返回 evaluation identity 专用 typed blocked，二者都不冒充输入无效，且 S4 provider 在一轮 inspect 中最多调用一次。
 
 <a id="gwt-002"></a>

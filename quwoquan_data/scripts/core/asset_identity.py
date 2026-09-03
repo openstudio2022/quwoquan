@@ -6,7 +6,7 @@
 
 caption 为图注 token 段（清洗 + 截断 ≤16 字符），退化时按
 sectionSlug → 图{ordinal} → 实体名 降级，保证恒非空且非纯数字。
-caption 不进 hash seed；同一 execution 的幂等由 asset registry owner key 复用保证。
+caption 不进 hash seed；调用方以冻结 ref 与 executionSequence 保持同一 execution 的幂等。
 """
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ def compute_post_asset_id(
 ) -> str:
     """成品图统一命名：实体_角色_图注_全局执行序号_hash。
 
-    caption 不进 seed：图注微调不改 digest；批内幂等由 registry owner key 保证。
+    caption 不进 seed：图注微调不改 digest；调用方以冻结 ref 保持批内幂等。
     """
     entity = asset_token(entity_name)
     role_token = role_file_token(role)

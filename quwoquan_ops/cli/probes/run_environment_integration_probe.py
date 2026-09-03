@@ -12,8 +12,6 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 sys.dont_write_bytecode = True
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -24,11 +22,22 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from quwoquan_ops.cli.probes.environment_probe_check_builder import (  # noqa: E402
+    _owner_matches_post,
+    _release_creator_profiles,
+    _release_probe_identity as _build_release_probe_identity,
+    _release_samples,
+    _release_search_canaries,
+    _release_signed_media,
+    build_checks as _build_checks,
+)
+
 # 响应语义判定家族已迁至 environment_probe_semantics；此处 re-export 保持
 # 测试与消费者的 `probe.<符号>` 读取面不变。
 from quwoquan_ops.cli.probes.environment_probe_semantics import (  # noqa: E402
     AUTHOR_POSTS_CHECK_NAME,
     CONTENT_POST_PROJECTION_PATH,
+    CREATOR_PROFILE_CHECK_NAME,
     FEED_MEDIA_SLICES_CHECK_NAME,
     FEED_MEDIA_SOURCE_CHECK_NAMES,
     _author_posts_semantic_result,
@@ -38,9 +47,12 @@ from quwoquan_ops.cli.probes.environment_probe_semantics import (  # noqa: E402
     _expected_release_post_ids,
     _feed_media_slice_urls,
     _media_origin,
+    PRIVATE_FEED_CHECK_NAMES,
+    _release_creator_profile_semantic_result,
     _release_sample_semantic_result,
     _research_anonymous_convergence_issue,
     _search_semantic_issue,
+    SIGNED_MEDIA_CHECK_NAME,
 )
 # HTTP 传输与重试裁决同样已分家到 environment_probe_transport；沿用同一 re-export
 # 约定，让 `probe.request` 一类读取面不因内部拆分而变化。
@@ -57,7 +69,6 @@ from quwoquan_ops.cli.probes.environment_probe_transport import (  # noqa: E402
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from quwoquan_ops.cli.lib.media_delivery_manifest import build_media_delivery_url
 from quwoquan_ops.cli.lib.release_video_delivery import (
     ReleaseVideoDeliveryError,
     load_release_content_identity,
@@ -80,6 +91,27 @@ def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _redact_sensitive_values(value: Any, secrets: tuple[str, ...]) -> Any:
+    """从持久化 report 投影递归移除内存态凭证字节。"""
+
+    if isinstance(value, dict):
+        return {
+            key: _redact_sensitive_values(item, secrets)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_sensitive_values(item, secrets) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_sensitive_values(item, secrets) for item in value)
+    if isinstance(value, str):
+        redacted = value
+        for secret in secrets:
+            if secret:
+                redacted = redacted.replace(secret, "[REDACTED]")
+        return redacted
+    return value
+
+
 @lru_cache(maxsize=1)
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -99,7 +131,8 @@ def parse_args() -> argparse.Namespace:
             "sample probe is enabled; no fixture/default media identity exists."
         ),
     )
-    parser.add_argument("--test-auth-token", default="")
+    # 凭证只接受环境变量注入；禁止提供 secret-bearing argv surface。
+    parser.set_defaults(test_auth_token="")
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
     parser.add_argument("--request-timeout-seconds", type=int, default=12)
     parser.add_argument("--retry-attempts", type=int, default=2)
@@ -150,6 +183,12 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--expected-homepage-recommend-post-id",
+        action="append",
+        default=[],
+        help="Exact release postId expected from homepage recommendation.",
+    )
+    parser.add_argument(
         "--expected-video-post-id",
         action="append",
         default=[],
@@ -192,6 +231,18 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--release-creator-profile",
+        action="append",
+        default=[],
+        help="Canonical JSON exact creator/profile/avatar projection.",
+    )
+    parser.add_argument(
+        "--release-signed-media",
+        action="append",
+        default=[],
+        help="Canonical JSON release-bound private media classification.",
+    )
+    parser.add_argument(
         "--mode",
         choices=("readonly", "post-deploy"),
         default="readonly",
@@ -208,11 +259,23 @@ def parse_args() -> argparse.Namespace:
             "are mutually exclusive feed identities"
         )
     args.test_auth_token = _resolve_test_auth_token(args.env, args.test_auth_token)
+    args.research_consumer_attestation = os.environ.get(
+        "RESEARCH_CONSUMER_ATTESTATION", ""
+    ).strip()
     if args.research_consumer_readback and not args.test_auth_token:
         parser.error(
             "--research-consumer-readback requires the research consumer bearer "
             "via the test auth token environment variable"
         )
+    if args.research_consumer_readback and not args.research_consumer_attestation:
+        parser.error(
+            "--research-consumer-readback requires the research attestation "
+            "via RESEARCH_CONSUMER_ATTESTATION"
+        )
+    # research consumer 身份本身即 release-bound 非空语义；调用方无需再维护
+    # 第二个 boolean 真相源。exact expected IDs 仍在 run_checks 对选中 feed 逐项要求。
+    if args.research_consumer_readback:
+        args.require_non_empty_content_feed = True
     return args
 
 
@@ -233,164 +296,13 @@ def _resolve_test_auth_token(env_name: str, explicit_token: str) -> str:
     return ""
 
 
-def _owner_matches_post(owner_ref: object, post_ref: str) -> bool:
-    owner = str(owner_ref or "").strip().strip("/")
-    post = str(post_ref or "").strip().strip("/")
-    return owner == post or owner == f"posts/{post}"
-
-
 def _release_probe_identity(args: argparse.Namespace) -> dict[str, Any]:
-    raw_receipt = str(getattr(args, "release_readiness", "") or "").strip()
-    if not raw_receipt:
-        raise ReleaseVideoDeliveryError(
-            "DATA_RELEASE_READINESS_RECEIPT is required for the media integration probe"
-        )
-    identity = load_release_content_identity(
-        resolve_readiness_path(raw_receipt),
-        expected_environment=args.env,
+    return _build_release_probe_identity(
+        args,
+        load_release_content_identity_fn=load_release_content_identity,
+        resolve_readiness_path_fn=resolve_readiness_path,
+        release_video_delivery_error=ReleaseVideoDeliveryError,
     )
-    if str(identity["receipt"].get("releaseClass") or "") == "research":
-        # research 私有交付（DEC-031）不存在匿名可采样图片，media_sample
-        # 语义不成立；identity 其余字段照常供 feed 绑定检查使用。
-        return {
-            "releaseId": identity["releaseId"],
-            "manifestDigest": identity["manifestDigest"],
-            "importRunId": identity["importRunId"],
-            "verifyRunId": identity["verifyRunId"],
-            "readinessReceiptRef": identity["readinessReceiptRef"],
-            "media": None,
-        }
-    image_posts = {
-        str(binding["postRef"]).strip().strip("/")
-        for binding in identity["postBindings"]
-        if binding.get("contentType") == "image"
-    }
-    candidates = sorted(
-        (
-            dict(asset)
-            for asset in identity["mediaAssets"]
-            if asset.get("kind") == "image"
-            and str(asset.get("contentType") or "").lower().startswith("image/")
-            and str(asset.get("publicSliceKey") or "").startswith("media/image/s/")
-            and any(
-                _owner_matches_post(owner, post_ref)
-                for owner in asset.get("ownerRefs") or []
-                for post_ref in image_posts
-            )
-        ),
-        key=lambda asset: (
-            str(asset.get("assetId") or ""),
-            str(asset.get("publicSliceKey") or ""),
-        ),
-    )
-    if not candidates:
-        raise ReleaseVideoDeliveryError(
-            "canonical Data readiness/import receipt has no release-bound image asset"
-        )
-    media = candidates[0]
-    version = media.get("version")
-    if not isinstance(version, int) or isinstance(version, bool) or version <= 0:
-        raise ReleaseVideoDeliveryError(
-            "release-bound image asset version must be a positive integer"
-        )
-    return {
-        "releaseId": identity["releaseId"],
-        "manifestDigest": identity["manifestDigest"],
-        "importRunId": identity["importRunId"],
-        "verifyRunId": identity["verifyRunId"],
-        "readinessReceiptRef": identity["readinessReceiptRef"],
-        "media": {
-            "assetId": str(media["assetId"]),
-            "version": version,
-            "publicSliceKey": str(media["publicSliceKey"]),
-            "sha256": str(media.get("sha256") or ""),
-            "contentType": str(media["contentType"]),
-        },
-    }
-
-
-def _release_search_canaries(args: argparse.Namespace) -> list[dict[str, str]]:
-    raw_canaries = getattr(args, "release_search_canary", []) or []
-    if not raw_canaries:
-        return []
-    expected_types = {
-        "homepage": "entity.homepage",
-        "article": "content.post",
-        "image": "content.post",
-        "video": "content.post",
-    }
-    canaries: list[dict[str, str]] = []
-    observed_kinds: set[str] = set()
-    for index, raw in enumerate(raw_canaries):
-        try:
-            value = json.loads(str(raw))
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"release search canary {index} is not canonical JSON"
-            ) from exc
-        if not isinstance(value, dict) or set(value) != {
-            "kind",
-            "query",
-            "expectedObjectType",
-            "expectedObjectId",
-        }:
-            raise ValueError(f"release search canary {index} fields are invalid")
-        canary = {key: str(value.get(key) or "").strip() for key in value}
-        kind = canary["kind"]
-        if (
-            kind not in expected_types
-            or kind in observed_kinds
-            or canary["expectedObjectType"] != expected_types[kind]
-            or not canary["query"]
-            or not canary["expectedObjectId"]
-        ):
-            raise ValueError(f"release search canary {index} identity is invalid")
-        observed_kinds.add(kind)
-        canaries.append(canary)
-    if observed_kinds != set(expected_types):
-        raise ValueError(
-            "release search canaries must cover Homepage, Article, Image, and Video"
-        )
-    return canaries
-
-
-def _release_samples(args: argparse.Namespace) -> list[dict[str, Any]]:
-    raw_samples = getattr(args, "release_sample", []) or []
-    samples: list[dict[str, Any]] = []
-    observed_ids: set[str] = set()
-    expected_fields = {
-        "sampleId",
-        "carrier",
-        "sourceReadback",
-        "sourceObjectId",
-        "ordinal",
-        "readObjectId",
-        "expectedContentType",
-    }
-    for index, raw in enumerate(raw_samples):
-        try:
-            value = json.loads(str(raw))
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"release sample {index} is not canonical JSON") from exc
-        if not isinstance(value, dict) or set(value) != expected_fields:
-            raise ValueError(f"release sample {index} fields are invalid")
-        sample_id = str(value.get("sampleId") or "").strip()
-        carrier = str(value.get("carrier") or "").strip()
-        source_object_id = str(value.get("sourceObjectId") or "").strip()
-        read_object_id = str(value.get("readObjectId") or "").strip()
-        content_type = str(value.get("expectedContentType") or "").strip()
-        if (
-            not sample_id
-            or sample_id in observed_ids
-            or carrier not in {"homepage", "article", "image", "video"}
-            or not source_object_id
-            or not read_object_id
-            or content_type != ("" if carrier == "homepage" else carrier)
-        ):
-            raise ValueError(f"release sample {index} identity is invalid")
-        observed_ids.add(sample_id)
-        samples.append(dict(value))
-    return samples
 
 
 def build_checks(
@@ -398,203 +310,20 @@ def build_checks(
     *,
     release_identity: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    base = args.base_url.rstrip("/")
-    require_non_empty_content_feed = bool(
-        getattr(args, "require_non_empty_content_feed", False)
+    return _build_checks(
+        args,
+        release_identity=release_identity,
+        default_environment_search_query=DEFAULT_ENVIRONMENT_SEARCH_QUERY,
+        common_headers=_common_headers,
+        feed_headers=_feed_headers,
+        feed_url=_feed_url,
+        json_headers=_json_headers,
+        public_headers=_public_headers,
+        release_search_canaries=_release_search_canaries,
+        release_samples=_release_samples,
+        release_creator_profiles=_release_creator_profiles,
+        release_signed_media=_release_signed_media,
     )
-    research_anonymous_convergence = bool(
-        getattr(args, "research_anonymous_convergence", False)
-    )
-    research_consumer_readback = bool(
-        getattr(args, "research_consumer_readback", False)
-    )
-    # feed 检查默认走匿名面（发现面语义）；research consumer 模式下改带
-    # research 凭证，否则 DEC-032 匿名收敛会让 release-bound 非空断言恒假。
-    feed_auth_token = args.test_auth_token if research_consumer_readback else ""
-    media_image_base_url = str(
-        getattr(
-            args,
-            "media_image_base_url",
-            getattr(args, "media_base_url", ""),
-        )
-        or ""
-    )
-    public_headers = (
-        _public_headers()
-        if args.env == "prod"
-        else _common_headers(args.test_auth_token)
-    )
-    search_canaries = _release_search_canaries(args)
-    release_samples = _release_samples(args)
-    search_limit = 20 if search_canaries else 1
-    homepage_query = next(
-        (
-            item["query"]
-            for item in search_canaries
-            if item["kind"] == "homepage"
-        ),
-        DEFAULT_ENVIRONMENT_SEARCH_QUERY,
-    )
-    checks: list[dict[str, Any]] = [
-        {
-            "name": "gateway_healthz",
-            "method": "GET",
-            "url": f"{base}/healthz",
-            "headers": public_headers,
-            "expected_statuses": [200],
-        },
-        {
-            "name": "app_config",
-            "method": "GET",
-            "url": f"{base}/config/app",
-            "headers": public_headers,
-            "expected_statuses": [200],
-        },
-        {
-            "name": "content_feed",
-            "method": "GET",
-            "url": _feed_url(base, "?identity=work&sort=recommend&limit=1"),
-            "headers": _feed_headers(feed_auth_token),
-            "expected_statuses": [200],
-        },
-        {
-            "name": "entity_homepage_search",
-            "method": "GET",
-            "url": (
-                f"{base}/homepages/search?query="
-                f"{urllib.parse.quote(homepage_query)}&limit=1"
-            ),
-            "headers": _common_headers(args.test_auth_token),
-            "expected_statuses": [200],
-        },
-    ]
-    for canary in search_canaries or [
-        {
-            "kind": "generic",
-            "query": DEFAULT_ENVIRONMENT_SEARCH_QUERY,
-            "expectedObjectType": "",
-            "expectedObjectId": "",
-        }
-    ]:
-        checks.append(
-            {
-                "name": "global_search",
-                "method": "POST",
-                "url": f"{base}/search",
-                "headers": {
-                    **_json_headers(args.test_auth_token),
-                    "X-Session-Id": "stackctl-environment-probe",
-                },
-                "body": json.dumps(
-                    {
-                        "query": canary["query"],
-                        "mode": "result",
-                        "limit": search_limit,
-                    },
-                    ensure_ascii=False,
-                ).encode("utf-8"),
-                "expected_statuses": [200],
-                "searchCanaryKind": canary["kind"],
-                "expectedSearchObjectType": canary["expectedObjectType"],
-                "expectedSearchObjectId": canary["expectedObjectId"],
-            }
-        )
-    for sample in release_samples:
-        carrier = str(sample["carrier"])
-        read_object_id = urllib.parse.quote(str(sample["readObjectId"]), safe="")
-        path = (
-            f"homepages/{read_object_id}"
-            if carrier == "homepage"
-            else f"content/posts/{read_object_id}"
-        )
-        checks.append(
-            {
-                "name": "release_sample",
-                "method": "GET",
-                "url": f"{base}/{path}",
-                "headers": _common_headers(args.test_auth_token),
-                "expected_statuses": [200],
-                **sample,
-            }
-        )
-    if require_non_empty_content_feed or research_anonymous_convergence:
-        video_page_size = int(getattr(args, "video_page_size", 1) or 1)
-        if not 1 <= video_page_size <= 100:
-            raise ValueError("video page size must be between 1 and 100")
-        feed_headers = _feed_headers(feed_auth_token)
-        checks.extend(
-            [
-                {
-                    "name": "video_book_feed",
-                    "method": "GET",
-                    "url": _feed_url(
-                        base,
-                        "?identity=work&type=video&sort=recommend&limit="
-                        f"{video_page_size}",
-                    ),
-                    "headers": feed_headers,
-                    "expected_statuses": [200],
-                },
-                {
-                    "name": "premium_feed",
-                    "method": "GET",
-                    "url": _feed_url(
-                        base,
-                        "?sort=recommend&channelId=premium_stream&limit=1",
-                    ),
-                    "headers": feed_headers,
-                    "expected_statuses": [200],
-                },
-            ]
-        )
-    if args.test_auth_token:
-        checks.append(
-            {
-                "name": "user_sync",
-                "method": "POST",
-                "url": f"{base}/user/sync",
-                "headers": _json_headers(args.test_auth_token),
-                "body": json.dumps(
-                    {"afterSeq": 0, "limit": 1}, ensure_ascii=False
-                ).encode("utf-8"),
-                "expected_statuses": [200],
-            }
-        )
-    product_ops = args.product_ops_base_url.rstrip("/")
-    if product_ops:
-        checks.append(
-            {
-                "name": "product_ops_healthz",
-                "method": "GET",
-                "url": f"{product_ops}/healthz",
-                "headers": public_headers,
-                "expected_statuses": [200],
-            }
-        )
-    media_base = media_image_base_url.rstrip("/")
-    media = (
-        release_identity.get("media")
-        if isinstance(release_identity, dict)
-        else None
-    )
-    if media_base and isinstance(media, dict):
-        checks.append(
-            {
-                "name": "media_sample",
-                "method": "GET",
-                "url": build_media_delivery_url(
-                    {"mediaImage": media_base},
-                    {
-                        "mediaType": "image",
-                        "publicSliceKey": media["publicSliceKey"],
-                        "version": media["version"],
-                    },
-                ),
-                "headers": public_headers,
-                "expected_statuses": [200],
-            }
-        )
-    return checks
 
 
 def run_checks(args: argparse.Namespace) -> dict[str, Any]:
@@ -619,6 +348,27 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
     research_anonymous_convergence = bool(
         getattr(args, "research_anonymous_convergence", False)
     )
+    research_consumer_readback = bool(
+        getattr(args, "research_consumer_readback", False)
+    )
+    require_authenticated_feed = (
+        require_non_empty_content_feed or research_consumer_readback
+    )
+    research_consumer_attestation = str(
+        getattr(args, "research_consumer_attestation", "") or ""
+    ).strip()
+    if research_consumer_readback and not str(args.test_auth_token or "").strip():
+        findings.append(
+            "GATE_BLOCK: research consumer readback requires a bearer token"
+        )
+    if research_consumer_readback and not research_consumer_attestation:
+        findings.append(
+            "GATE_BLOCK: research consumer readback requires an attestation"
+        )
+    if research_consumer_readback and research_anonymous_convergence:
+        findings.append(
+            "GATE_BLOCK: research consumer and anonymous convergence identities conflict"
+        )
     if mode == "post-deploy" and not args.test_auth_token:
         findings.append(
             "GATE_BLOCK: post-deploy integration requires a valid environment test auth token"
@@ -657,6 +407,61 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
     feed_media_origin = _media_origin(media_image_base_url)
     for check in selected_checks:
         retry_trace: list[dict[str, Any]] = []
+        if check["name"] == SIGNED_MEDIA_CHECK_NAME:
+            if not getattr(args, "research_consumer_readback", False):
+                findings.append(
+                    f"{SIGNED_MEDIA_CHECK_NAME} failed: requires research consumer identity"
+                )
+                continue
+            from quwoquan_ops.cli.lib.local_environment_auth import LocalAcceptanceSession
+            from quwoquan_ops.cli.lib.research_isolation_runtime_probe import (
+                ResearchIsolationProbeError,
+                probe_release_bound_signed_media,
+            )
+
+            session = LocalAcceptanceSession(
+                owner_id="release-preflight",
+                persona_id="release-preflight",
+                access_token=args.test_auth_token,
+            )
+            evidence: list[dict[str, Any]] = []
+            try:
+                for asset in check["assets"]:
+                    evidence.append(
+                        probe_release_bound_signed_media(
+                            api_base_url=args.base_url.rstrip("/"),
+                            session=session,
+                            asset=asset,
+                            attestation_token=research_consumer_attestation,
+                            timeout_seconds=max(1, request_timeout_seconds),
+                        )
+                    )
+            except (ResearchIsolationProbeError, ValueError) as exc:
+                entry = {
+                    "name": SIGNED_MEDIA_CHECK_NAME,
+                    "method": "GET",
+                    "url": check["url"],
+                    "statusCode": 0,
+                    "ok": False,
+                    "bodyPreview": "",
+                    "semanticError": str(exc),
+                    "assets": evidence,
+                }
+                results.append(entry)
+                findings.append(f"{SIGNED_MEDIA_CHECK_NAME} failed: {exc}")
+                continue
+            entry = {
+                "name": SIGNED_MEDIA_CHECK_NAME,
+                "method": "GET",
+                "url": check["url"],
+                "statusCode": 200,
+                "ok": True,
+                "bodyPreview": "",
+                "assets": evidence,
+                "executedAssetCount": len(evidence),
+            }
+            results.append(entry)
+            continue
         ok, status_code, payload = request(
             check["method"],
             check["url"],
@@ -684,18 +489,25 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
             entry["retriedAttempts"] = retry_trace
         if (
             matched
-            and require_non_empty_content_feed
-            and check["name"] in {"content_feed", "video_book_feed", "premium_feed"}
+            and require_authenticated_feed
+            and check["name"] in PRIVATE_FEED_CHECK_NAMES
         ):
+            expected_post_ids = _expected_release_post_ids(args, check["name"])
             semantic_issue, item_count, returned_post_ids = (
                 _content_feed_semantic_result(
                     payload,
-                    expected_post_ids=_expected_release_post_ids(
-                        args,
-                        check["name"],
-                    ),
+                    expected_post_ids=expected_post_ids,
                 )
             )
+            if (
+                research_consumer_readback
+                and not expected_post_ids
+                and semantic_issue is None
+            ):
+                semantic_issue = (
+                    "research consumer readback requires exact immutable release "
+                    f"post IDs for {check['name']}"
+                )
             if item_count is not None:
                 entry["contentItemCount"] = item_count
             if returned_post_ids:
@@ -707,11 +519,19 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         if (
             matched
             and research_anonymous_convergence
-            and check["name"] in {"content_feed", "video_book_feed", "premium_feed"}
+            and not research_consumer_readback
+            and check["name"] in PRIVATE_FEED_CHECK_NAMES
         ):
-            semantic_issue, item_count = _research_anonymous_convergence_issue(
-                payload
-            )
+            authorization = str((check.get("headers") or {}).get("Authorization") or "")
+            if authorization:
+                semantic_issue, item_count = (
+                    "research anonymous convergence carried a credential",
+                    None,
+                )
+            else:
+                semantic_issue, item_count = _research_anonymous_convergence_issue(
+                    payload
+                )
             if item_count is not None:
                 entry["contentItemCount"] = item_count
             if semantic_issue:
@@ -758,6 +578,13 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                 carrier=str(check.get("carrier") or ""),
                 read_object_id=str(check.get("readObjectId") or ""),
                 expected_content_type=str(check.get("expectedContentType") or ""),
+                expected_author_id=str(check.get("expectedAuthorId") or ""),
+                expected_author_display_name=str(
+                    check.get("expectedAuthorDisplayName") or ""
+                ),
+                expected_avatar_delivery_ref=str(
+                    check.get("expectedAvatarDeliveryRef") or ""
+                ),
             )
             for field in (
                 "sampleId",
@@ -767,6 +594,11 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                 "ordinal",
                 "readObjectId",
                 "expectedContentType",
+                "expectedAuthorId",
+                "expectedPersonaId",
+                "expectedAuthorDisplayName",
+                "expectedAvatarAssetId",
+                "expectedAvatarDeliveryRef",
             ):
                 entry[field] = check.get(field)
             entry["returnedObjectId"] = returned_id
@@ -792,6 +624,40 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                     author_persona_id = str(
                         decoded_sample.get("authorId") or ""
                     ).strip()
+        if matched and check["name"] == CREATOR_PROFILE_CHECK_NAME:
+            semantic_issue, persona_id, avatar_ref = (
+                _release_creator_profile_semantic_result(
+                    payload,
+                    expected_persona_id=str(check.get("personaId") or ""),
+                    expected_display_name=str(check.get("displayName") or ""),
+                    expected_avatar_delivery_ref=str(
+                        check.get("avatarDeliveryRef") or ""
+                    ),
+                )
+            )
+            entry.update(
+                {
+                    key: check.get(key)
+                    for key in (
+                        "creatorRef",
+                        "authorId",
+                        "personaId",
+                        "displayName",
+                        "avatarAssetId",
+                        "avatarDeliveryRef",
+                    )
+                }
+            )
+            entry["returnedPersonaId"] = persona_id
+            entry["returnedAvatarDeliveryRef"] = avatar_ref
+            entry["responseDigest"] = "sha256:" + hashlib.sha256(
+                payload.encode("utf-8")
+            ).hexdigest()
+            entry["responseBytes"] = len(payload.encode("utf-8"))
+            if semantic_issue:
+                matched = False
+                entry["ok"] = False
+                entry["semanticError"] = semantic_issue
         results.append(entry)
         if not matched:
             detail = entry.get("semanticError")
@@ -907,7 +773,7 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                     f"{len(slice_failures)}/{checked} feed media slices are "
                     "unreadable: " + "; ".join(slice_failures[:5])
                 )
-    return {
+    report = {
         "schema": "environment-integration-probe-report",
         "status": "passed" if not findings else "failed",
         "env": args.env,
@@ -922,14 +788,20 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         "retryAttempts": retry_attempts,
         "retrySleepSeconds": retry_sleep_seconds,
         "onlyChecks": sorted(only_checks),
-        "requireNonEmptyContentFeed": require_non_empty_content_feed,
+        "requireNonEmptyContentFeed": require_authenticated_feed,
         "researchAnonymousConvergence": research_anonymous_convergence,
-        "researchConsumerReadback": bool(
-            getattr(args, "research_consumer_readback", False)
-        ),
+        "researchConsumerReadback": research_consumer_readback,
+        "researchConsumerAttested": bool(research_consumer_attestation),
         "checks": results,
         "findings": findings,
     }
+    return _redact_sensitive_values(
+        report,
+        (
+            str(args.test_auth_token or ""),
+            research_consumer_attestation,
+        ),
+    )
 
 
 def main() -> int:

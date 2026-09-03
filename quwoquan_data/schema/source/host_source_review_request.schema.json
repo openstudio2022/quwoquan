@@ -5,12 +5,11 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema", "contractVersion", "sourceIdentity", "assetBinding",
+    "schema", "sourceIdentity", "assetBinding",
     "entityBinding", "evidenceBindings", "rubric", "requestDigest"
   ],
   "properties": {
     "schema": {"const": "quwoquan_data.host_source_review_request"},
-    "contractVersion": {"const": "host-source-review/v1"},
     "sourceIdentity": {"$ref": "#/$defs/sourceIdentity"},
     "assetBinding": {"$ref": "#/$defs/assetBinding"},
     "entityBinding": {"$ref": "#/$defs/entityBinding"},

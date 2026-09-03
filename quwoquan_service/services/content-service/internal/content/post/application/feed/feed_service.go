@@ -55,9 +55,9 @@ type FeedServiceOption func(*FeedService)
 // partially imported release.
 type ActiveSupplySnapshot = postports.ActiveSupplySnapshot
 
-// ActiveSupplyReader reads the production data_release_state projection. It is
-// required by every discovery/recommend, premium_stream/similar and video-book
-// page. Following is an independent social feed and deliberately bypasses it.
+// ActiveSupplyReader reads the production data_release_state projection. Every
+// feed route uses it as the release-class authority before querying viewer,
+// recommendation, delivery-page or Post read models (DEC-032).
 type ActiveSupplyReader = postports.ActiveSupplyReader
 
 func WithActiveSupplyReader(reader ActiveSupplyReader) FeedServiceOption {
@@ -372,6 +372,43 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	default:
 		terminalClass = rtrec.FeedRequestClassBrowse
 	}
+	// ActiveSupplySnapshot 是全部 feed route 的 release-class authority。即使
+	// identity/type 选择具名 PostReader、following 或 delivery-page replay，也必须
+	// 在任何 viewer/recommendation/Post 查询前完成同一份 readback；否则具名浏览
+	// 会绕过 DEC-032 的 research principal 收敛。
+	activeSupply := ActiveSupplySnapshot{}
+	if s.activeSupply == nil {
+		terminalStage = rtrec.FailureStageActiveSupplyMissing
+		return nil, requiredDependencyFailure(
+			terminalStage,
+			fmt.Errorf("active content release snapshot reader is not configured"),
+		)
+	}
+	activeSupply, err = s.activeSupply.ActiveSupplySnapshot(ctx)
+	if err != nil {
+		terminalStage = rtrec.FailureStageActiveSupplyMissing
+		return nil, requiredDependencyFailure(
+			terminalStage,
+			fmt.Errorf("read active content release snapshot: %w", err),
+		)
+	}
+	if !activeSupply.IsEmpty() && !activeSupply.ReleaseBoundReadbackReady() {
+		terminalStage = rtrec.FailureStageActiveSupplyMissing
+		return nil, requiredDependencyFailure(
+			terminalStage,
+			fmt.Errorf("active release readback binding is inconsistent"),
+		)
+	}
+	if activeSupply.IsResearchRelease() && !req.ResearchPrincipal {
+		terminalOutcome = rtrec.FeedTerminalEmpty
+		return emptyListFeedResponse(
+			feedRequestID,
+			FeedEmptyReasonNoActiveRelease,
+			"",
+			"",
+		), nil
+	}
+
 	blockedPersonaIDs, blockErr := s.resolveViewerBlockedPersonaIDs(
 		ctx,
 		req.ViewerPersonaID,
@@ -408,44 +445,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	policyDigest := ""
 	experimentBucket := ""
 	seenPostIDs := map[string]struct{}{}
-	activeSupply := ActiveSupplySnapshot{}
 	releaseBound := releaseBoundRecommend || releaseBoundVideoBook
-	if releaseBound && s.activeSupply == nil {
-		terminalStage = rtrec.FailureStageActiveSupplyMissing
-		return nil, requiredDependencyFailure(
-			terminalStage,
-			fmt.Errorf("active content release snapshot reader is not configured"),
-		)
-	}
-	if s.activeSupply != nil {
-		var supplyErr error
-		activeSupply, supplyErr = s.activeSupply.ActiveSupplySnapshot(ctx)
-		if supplyErr != nil {
-			terminalStage = rtrec.FailureStageActiveSupplyMissing
-			return nil, requiredDependencyFailure(
-				terminalStage,
-				fmt.Errorf("read active content release snapshot: %w", supplyErr),
-			)
-		}
-		// DEC-032 匿名内容面收敛：active release 为 research 时，全部 feed
-		// 内容读面（推荐、频道、具名浏览时间线、视频书、社交流）只对
-		// research principal 在场。匿名与非 research 认证请求收敛为
-		// no_active_release 缺席结果，且不回显 releaseId/manifestDigest，
-		// 不泄露 research release 的存在性；分页请求同样收敛（rollout
-		// 中途切换 release class 时游标随之失效）。收敛必须先于任何路由
-		// 分支：具名浏览（identity=work 无 type）等 PostReader 查询同样
-		// 能读回 release 承载内容，漏收敛即隔离泄露。
-		if strings.TrimSpace(activeSupply.ReleaseClass) == "research" &&
-			!req.ResearchPrincipal {
-			terminalOutcome = rtrec.FeedTerminalEmpty
-			return emptyListFeedResponse(
-				feedRequestID,
-				FeedEmptyReasonNoActiveRelease,
-				"",
-				"",
-			), nil
-		}
-	}
 	if releaseBound {
 		if activeSupply.IsEmpty() {
 			if requestedCursor != "" {
@@ -751,8 +751,8 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 					postports.ContentType(feedContentType),
 					postports.NewPostID(pageCursor),
 					readerLimit,
-					activeSupply.ActiveReleaseID,
-					activeSupply.ManifestDigest,
+					releaseBoundCursorValue(releaseBoundVideoBook, activeSupply.ActiveReleaseID),
+					releaseBoundCursorValue(releaseBoundVideoBook, activeSupply.ManifestDigest),
 				),
 			)
 			if readErr != nil {

@@ -117,7 +117,7 @@ api_routes:
       gap_id: CONTENT_POST_RESEARCH_ONLY
       target_story: multi-carrier-release
     reliability: {timeout_ms: 800, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
-    error_codes: [CONTENT.USER.unauthorized, CONTENT.USER.research_identity_invalid, CONTENT.SYSTEM.required_dependency_unavailable, CONTENT.SYSTEM.internal_error]
+    error_codes: [CONTENT.USER.unauthorized, CONTENT.USER.research_identity_invalid, CONTENT.SYSTEM.research_release_state_unavailable, CONTENT.SYSTEM.required_dependency_unavailable, CONTENT.SYSTEM.internal_error]
     privacy: {request_classification: SECRET, response_classification: INTERNAL, log_policy: none}
     telemetry: {metric: content_research_release_readback, trace: true, attributes: [environment, outcome, error_code]}
     slo: {latency_p95_ms: 500, availability_percent: 99.9}

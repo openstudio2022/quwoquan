@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -15,14 +18,52 @@ from .evidence_fingerprint import (
     EvidenceFingerprintError,
     build_evidence_fingerprint,
     canonical_digest,
+    canonical_json_bytes,
     normalize_repo_relative_path,
     snapshot_path,
     validate_evidence_fingerprint,
     workspace_digests,
 )
+from .descriptor_safe_io import read_repo_relative_regular_single_link
 
 GENERATOR_PATH = "quwoquan_ops/cli/lib/feature_tree/commands.py"
 CONTRACT_PATH = "quwoquan_ops/policies/agent_governance_contract.yaml"
+
+_CONTENT_ADDRESSED_REF_RE = re.compile(
+    r"^\.qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
+    r"(?P<receipt>receipts/)?(?P<digest>[0-9a-f]{64})\.json$"
+)
+
+
+def validate_content_addressed_ref(
+    raw_ref: str,
+    *,
+    raw_bytes: bytes,
+    repo_root: Path,
+    receipt: bool = False,
+) -> str:
+    """验证 immutable ref 的物理位置、raw bytes 摘要与 canonical bytes。"""
+
+    relative = normalize_repo_relative_path(raw_ref, repo_root)
+    match = _CONTENT_ADDRESSED_REF_RE.fullmatch(relative)
+    if match is None or bool(match.group("receipt")) is not receipt:
+        kind = "receipt" if receipt else "manifest"
+        raise EvidenceFingerprintError(
+            f"feature context {kind} ref 不是 canonical content-addressed path：{relative}"
+        )
+    actual = hashlib.sha256(raw_bytes).hexdigest()
+    if actual != match.group("digest"):
+        raise EvidenceFingerprintError(
+            "feature context ref filename 与 exact raw bytes sha256 不一致"
+        )
+    try:
+        value = json.loads(raw_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EvidenceFingerprintError(f"feature context ref 不是有效 UTF-8 JSON：{exc}") from exc
+    if canonical_json_bytes(value) != raw_bytes:
+        raise EvidenceFingerprintError("feature context ref 不是 exact canonical JSON bytes")
+    return relative
+
 
 
 def _git(repo_root: Path, *args: str) -> str:
@@ -178,14 +219,25 @@ def resolve_fingerprint_binding(
         if not isinstance(raw_ref, str) or not raw_ref:
             raise EvidenceFingerprintError("referenced fingerprint binding 缺 receipt_ref")
         relative = normalize_repo_relative_path(raw_ref, repo_root)
-        path = repo_root / relative
-        if not path.is_file():
-            raise EvidenceFingerprintError(f"feature context fingerprint receipt 不存在：{relative}")
-        import json
-
         try:
-            value = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+            raw_bytes = read_repo_relative_regular_single_link(
+                repo_root,
+                relative,
+                expected_directory_parts=(
+                    ".qwq_output",
+                    "env",
+                    "repo",
+                    "runs",
+                    "feature-tree",
+                    "by-fingerprint",
+                    "receipts",
+                ),
+            )
+            validate_content_addressed_ref(
+                relative, raw_bytes=raw_bytes, repo_root=repo_root, receipt=True
+            )
+            value = json.loads(raw_bytes.decode("utf-8"))
+        except (OSError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise EvidenceFingerprintError(
                 f"feature context fingerprint receipt 无法读取：{exc}"
             ) from exc

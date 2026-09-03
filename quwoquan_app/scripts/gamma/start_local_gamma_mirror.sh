@@ -250,9 +250,32 @@ if [[ "$EARLY_BUILD_ONLY" == "1" ]]; then
       content-service
       user-service
       entity-service
+      search-service
     )
     if [[ "$WORKLOAD" == "content-commercial" ]]; then
       content_slice_services+=(product-ops-service)
+    fi
+    if [[ "$WORKLOAD" == "content-release" ]]; then
+      bounded_search_elasticsearch_compose="$QWQ_RUN_ROOT/attachments/bounded-search-elasticsearch.compose.yaml"
+      if ! PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - \
+        "$bounded_search_elasticsearch_compose" "$ROOT" <<'PY_BOUNDED_SEARCH_ES'
+import sys
+from pathlib import Path
+
+from quwoquan_ops.cli.lib.runtime_topology_package import (
+    materialize_bounded_search_elasticsearch_compose,
+)
+
+materialize_bounded_search_elasticsearch_compose(
+    Path(sys.argv[1]),
+    repo_root=Path(sys.argv[2]),
+)
+PY_BOUNDED_SEARCH_ES
+      then
+        echo "[local-release] GATE_BLOCK: bounded Search Elasticsearch execution copy failed" >&2
+        exit 2
+      fi
+      COMPOSE_FILES+=("$bounded_search_elasticsearch_compose")
     fi
     for content_slice_service in "${content_slice_services[@]}"; do
       service_compose_file="$ROOT/quwoquan_service/services/${content_slice_service}/deploy/compose.yaml"
@@ -971,6 +994,7 @@ start_colima_tunnels_if_needed() {
   local content_port="${LOCAL_GAMMA_CONTENT_PORT:-19220}"
   local entity_port="${LOCAL_GAMMA_ENTITY_PORT:-19290}"
   local recommendation_port="${LOCAL_GAMMA_REC_MODEL_PORT:-19240}"
+  local search_port="${LOCAL_GAMMA_SEARCH_PORT:-19280}"
   # Data CLI ship import uses host-side Postgres/Mongo/Redis/ES topology ports.
   local postgres_port="${LOCAL_GAMMA_POSTGRES_PORT:-19400}"
   local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-19410}"
@@ -995,6 +1019,7 @@ start_colima_tunnels_if_needed() {
     "$content_port" \
     "$entity_port" \
     "$recommendation_port" \
+    "$search_port" \
     "$postgres_port" \
     "$mongo_port" \
     "$redis_port" \
@@ -1679,15 +1704,16 @@ if [[ "$formal_release" == "1" ]]; then
 fi
 if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
   # Start only the canonical import/public-read role set. Compose adds the
-  # declared Mongo, Redis, Postgres, object-storage and Elasticsearch
-  # dependencies; unrelated full-workload services and their Providers remain
-  # outside this diagnostic runtime. 名单按逻辑服务表达，经投影映射得到当前
+  # declared Mongo, Redis, Postgres, object-storage and bounded Search
+  # Elasticsearch dependencies; unrelated full-workload services and their
+  # Providers remain outside this diagnostic runtime. 名单按逻辑服务表达，经投影映射得到当前
   # 拓扑（dev 每服务 / candidate service-core 合并）的真实服务名。
   content_slice_up_services=(
     recommendation-service
     content-service
     user-service
     entity-service
+    search-service
   )
   if [[ "$WORKLOAD" == "content-commercial" ]]; then
     content_slice_up_services+=(product-ops-service)
@@ -2694,6 +2720,14 @@ gamma_platform_ops_ready() {
   curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-19260}/readyz" >/dev/null 2>&1
 }
 
+gamma_bounded_search_ready() {
+  if [[ "$WORKLOAD" != "content-release" && "$WORKLOAD" != "content-commercial" ]]; then
+    return 0
+  fi
+  curl -fsS -H "Host: search-service" \
+    "http://127.0.0.1:${LOCAL_GAMMA_SEARCH_PORT:-19280}/healthz" >/dev/null 2>&1
+}
+
 gamma_full_workload_dependencies_ready() {
   if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
     return 0
@@ -2733,6 +2767,7 @@ wait_local_gamma_host_ready() {
       && { [[ "$PRODUCT_OPS_REQUIRED" != "1" ]] || curl -fsS "http://127.0.0.1:${po_port}/healthz" >/dev/null 2>&1; } \
       && gamma_platform_ops_ready \
       && curl -fsS -H "Host: user-service" "http://127.0.0.1:${user_port}/healthz" >/dev/null 2>&1 \
+      && gamma_bounded_search_ready \
       && gamma_full_workload_dependencies_ready
     then
       return 0
@@ -2773,6 +2808,8 @@ wait_local_gamma_host_ready() {
   # 会命中 421 misdirected_request，探测必须携带模块逻辑主机名。
   probe_one user-service curl -fsS -H "Host: user-service" "http://127.0.0.1:${user_port}/healthz" || true
   if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
+    probe_one search-service curl -fsS -H "Host: search-service" \
+      "http://127.0.0.1:${LOCAL_GAMMA_SEARCH_PORT:-19280}/healthz" || true
     echo "[local-gamma] probe integration/notification/tag: SKIP" >&2
   else
     probe_one integration-service curl -fsS -H "Host: integration-service" "http://127.0.0.1:${integration_port}/healthz" || true

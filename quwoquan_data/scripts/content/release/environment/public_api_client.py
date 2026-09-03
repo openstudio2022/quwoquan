@@ -16,7 +16,9 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 
-from core.runtime_policy import active_runtime_policy
+
+
+_API_REQUEST_TIMEOUT_SECONDS = 30.0
 
 
 class PublicApiClientError(ValueError):
@@ -251,9 +253,7 @@ class PublicApiClient:
             )
         request_id = identity.request_id
         trace_id = identity.trace_id
-        runtime_timeout_seconds = float(
-            active_runtime_policy().api_request_timeout_seconds
-        )
+        runtime_timeout_seconds = _API_REQUEST_TIMEOUT_SECONDS
         try:
             effective_timeout_seconds = (
                 runtime_timeout_seconds
@@ -483,7 +483,7 @@ class PublicApiClient:
         try:
             with opener.open(
                 request,
-                timeout=active_runtime_policy().api_request_timeout_seconds,
+                timeout=_API_REQUEST_TIMEOUT_SECONDS,
             ) as response:  # noqa: S310
                 body = response.read(max_bytes + 1)
                 if len(body) > max_bytes:

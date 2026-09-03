@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
+import re
 import subprocess
 import sys
-
 from pathlib import Path
 
 import pytest
@@ -22,8 +23,11 @@ SPEC.loader.exec_module(feature_tree)
 from quwoquan_ops.cli.lib.feature_tree import commands as ft_commands  # noqa: E402
 from quwoquan_ops.cli.lib.feature_tree import context as ft_context  # noqa: E402
 from quwoquan_ops.cli.lib.feature_tree import gitio as ft_gitio  # noqa: E402
-from quwoquan_ops.cli.lib.evidence_fingerprint import validate_evidence_fingerprint  # noqa: E402
+from quwoquan_ops.cli.lib.evidence_fingerprint import (  # noqa: E402
+    validate_evidence_fingerprint,
+)
 from quwoquan_ops.cli.lib.feature_context_fingerprint import (  # noqa: E402
+    validate_content_addressed_ref,
     validate_current_feature_context_fingerprint,
 )
 
@@ -54,6 +58,7 @@ def build_tree(tmp_path: Path) -> Path:
 def test_l2_dec_owner_manifest_is_shared_by_pageflip_code_and_projected_test(
     tmp_path: Path,
     monkeypatch,
+    capsys,
 ) -> None:
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
     root = build_tree(tmp_path)
@@ -141,13 +146,10 @@ def test_l2_dec_owner_manifest_is_shared_by_pageflip_code_and_projected_test(
         cwd=root,
         check=True,
     )
-    outputs: dict[str, str] = {}
-
-    def capture_output(name: str, content: str) -> Path:
-        outputs[name] = content
-        return root / name
-
-    monkeypatch.setattr(ft_commands, "write_output", capture_output)
+    monkeypatch.setattr(
+        ft_context, "OUTPUT_ROOT",
+        root / ".qwq_output/env/repo/runs/feature-tree",
+    )
     nodes = feature_tree.discover_nodes()
 
     code_owner = feature_tree.resolve_target(code_path, nodes)
@@ -159,10 +161,11 @@ def test_l2_dec_owner_manifest_is_shared_by_pageflip_code_and_projected_test(
     assert exit_code == 0
     assert code_owner == test_owner
     assert test_owner.node_id == "story"
-    manifest = json.loads(outputs["context-manifest.json"])
+    ref = capsys.readouterr().out.strip()
+    manifest = json.loads((root / ref).read_bytes())
     assert manifest["resolved_owner"].endswith("/capability/story/spec.md")
     assert manifest["applicable_agents"] == ["AGENTS.md", "quwoquan_app/AGENTS.md"]
-    assert manifest["profiles"] == ["dart-app", "pageflip"]
+    assert "profiles" not in manifest
     assert {
         (item["kind"], item["anchor"])
         for item in manifest["canonical_contexts"]
@@ -177,14 +180,15 @@ def test_l2_dec_owner_manifest_is_shared_by_pageflip_code_and_projected_test(
         manifest["evidence_fingerprint"]["receipt"]
     )
     assert receipt["captured_by"] == "feature_tree"
-    assert len((outputs["context-manifest.json"] + "\n").encode("utf-8")) <= 8192
+    assert len((root / ref).read_bytes()) <= 8192
 
     first_digest = receipt["digest"]
     code_path.write_text("class Geometry { int changed = 1; }\n", encoding="utf-8")
     assert feature_tree.command_context(
         argparse.Namespace(target=str(code_path), format="manifest")
     ) == 0
-    changed_manifest = json.loads(outputs["context-manifest.json"])
+    changed_ref = capsys.readouterr().out.strip()
+    changed_manifest = json.loads((root / changed_ref).read_bytes())
     assert (
         changed_manifest["evidence_fingerprint"]["digest"] != first_digest
     )
@@ -298,10 +302,17 @@ def test_selected_dec_direct_refs_include_canonical_contracts_and_feature_specs(
         return root / name
 
     monkeypatch.setattr(ft_commands, "write_output", capture_output)
+    monkeypatch.setattr(
+        ft_commands,
+        "_write_content_addressed_bytes",
+        lambda content, **_: capture_output(
+            "captured-manifest.json", content.decode("utf-8")
+        ),
+    )
     assert feature_tree.command_context(
         argparse.Namespace(target=str(code_path), format="manifest")
     ) == 0
-    manifest = json.loads(outputs["context-manifest.json"])
+    manifest = json.loads(outputs["captured-manifest.json"])
     contexts = {
         (item["kind"], item["path"], item["anchor"])
         for item in manifest["canonical_contexts"]
@@ -322,7 +333,7 @@ def test_selected_dec_direct_refs_include_canonical_contracts_and_feature_specs(
         "spec", "specs/feature-tree/domain/capability/story/spec.md", "req-003",
     ) in contexts
     assert not any("unselected" in item[1] for item in contexts)
-    assert len((outputs["context-manifest.json"] + "\n").encode("utf-8")) <= 8192
+    assert len((outputs["captured-manifest.json"] + "\n").encode("utf-8")) <= 8192
 
 
 def test_service_contract_directory_direct_ref_is_preserved_as_one_context(
@@ -370,13 +381,20 @@ def test_service_contract_directory_direct_ref_is_preserved_as_one_context(
         return root / name
 
     monkeypatch.setattr(ft_commands, "write_output", capture_output)
+    monkeypatch.setattr(
+        ft_commands,
+        "_write_content_addressed_bytes",
+        lambda content, **_: capture_output(
+            "captured-manifest.json", content.decode("utf-8")
+        ),
+    )
     assert feature_tree.command_context(
         argparse.Namespace(
             target="specs/feature-tree/domain/capability/spec.md",
             format="manifest",
         )
     ) == 0
-    manifest = json.loads(outputs["context-manifest.json"])
+    manifest = json.loads(outputs["captured-manifest.json"])
     contract_contexts = [
         item
         for item in manifest["canonical_contexts"]
@@ -491,13 +509,20 @@ def test_direct_spec_does_not_expand_sibling_design_refs(
         return root / name
 
     monkeypatch.setattr(ft_commands, "write_output", capture_output)
+    monkeypatch.setattr(
+        ft_commands,
+        "_write_content_addressed_bytes",
+        lambda content, **_: capture_output(
+            "captured-manifest.json", content.decode("utf-8")
+        ),
+    )
     assert feature_tree.command_context(
         argparse.Namespace(
             target="specs/feature-tree/domain/capability/spec.md",
             format="manifest",
         )
     ) == 0
-    manifest = json.loads(outputs["context-manifest.json"])
+    manifest = json.loads(outputs["captured-manifest.json"])
     assert not any(
         item["path"].endswith("design_only.yaml")
         for item in manifest["canonical_contexts"]
@@ -537,6 +562,13 @@ def test_missing_bare_policy_basename_is_typed_gate_block_without_manifest(
         return root / name
 
     monkeypatch.setattr(ft_commands, "write_output", capture_output)
+    monkeypatch.setattr(
+        ft_commands,
+        "_write_content_addressed_bytes",
+        lambda content, **_: capture_output(
+            "captured-manifest.json", content.decode("utf-8")
+        ),
+    )
     assert feature_tree.command_context(
         argparse.Namespace(
             target="specs/feature-tree/domain/capability/design.md",
@@ -547,7 +579,7 @@ def test_missing_bare_policy_basename_is_typed_gate_block_without_manifest(
     assert "GATE_BLOCK:" in captured.err
     assert "renamed_or_missing_policy.yaml" in captured.err
     assert "quwoquan_ops/policies/renamed_or_missing_policy.yaml" in captured.err
-    assert "context-manifest.json" not in captured.out
+    assert "by-fingerprint" not in captured.out
     assert writes == []
     assert ft_commands._direct_canonical_references(
         tree / "domain/capability/spec.md",
@@ -567,6 +599,13 @@ def test_development_workflow_l2_manifest_reaches_objective_hotl_specs_and_contr
         return ROOT / ".qwq_output/env/repo/runs/feature-tree" / name
 
     monkeypatch.setattr(ft_commands, "write_output", capture_output)
+    monkeypatch.setattr(
+        ft_commands,
+        "_write_content_addressed_bytes",
+        lambda content, **_: capture_output(
+            "captured-manifest.json", content.decode("utf-8")
+        ),
+    )
     target = (
         ROOT
         / "specs/feature-tree/runtime/development-workflow-governance/design.md"
@@ -574,7 +613,7 @@ def test_development_workflow_l2_manifest_reaches_objective_hotl_specs_and_contr
     assert feature_tree.command_context(
         argparse.Namespace(target=str(target), format="manifest")
     ) == 0
-    manifest = json.loads(outputs["context-manifest.json"])
+    manifest = json.loads(outputs["captured-manifest.json"])
     contexts = {
         (item["kind"], item["path"], item["anchor"])
         for item in manifest["canonical_contexts"]
@@ -609,7 +648,7 @@ def test_development_workflow_l2_manifest_reaches_objective_hotl_specs_and_contr
             "hotl_admission_contract.yaml",
         }
     } <= contexts
-    assert len((outputs["context-manifest.json"] + "\n").encode("utf-8")) <= 8192
+    assert len((outputs["captured-manifest.json"] + "\n").encode("utf-8")) <= 8192
 
 
 
@@ -625,12 +664,19 @@ def test_runtime_l1_compact_manifest_preserves_owner_and_fingerprint_semantics(
         return ROOT / ".qwq_output/env/repo/runs/feature-tree" / name
 
     monkeypatch.setattr(ft_commands, "write_output", capture_output)
+    monkeypatch.setattr(
+        ft_commands,
+        "_write_content_addressed_bytes",
+        lambda content, **_: capture_output(
+            "captured-manifest.json", content.decode("utf-8")
+        ),
+    )
     target = "specs/feature-tree/runtime/spec.md"
     assert feature_tree.command_context(
         argparse.Namespace(target=target, format="manifest")
     ) == 0
 
-    raw_manifest = outputs["context-manifest.json"]
+    raw_manifest = outputs["captured-manifest.json"]
     manifest = json.loads(raw_manifest)
     assert "\n" not in raw_manifest
     assert len((raw_manifest + "\n").encode("utf-8")) <= 8192
@@ -751,55 +797,40 @@ def test_canonical_direct_reference_fail_closed_for_invalid_targets(
     ) == set()
 
 
-@pytest.mark.parametrize(
-    "registry_text, expected",
-    [
-        (None, "registry 缺失"),
-        ("- invalid\n", "根必须是 mapping"),
-        ("profiles: []\n", "profiles 必须是 mapping"),
-        ("profiles:\n  python-script: []\n", "config 必须是 mapping"),
-        (
-            "profiles:\n  python-script:\n    paths: quwoquan_ops/**\n",
-            "paths 必须是 string list",
-        ),
-        (
-            "profiles:\n  python-script:\n    paths: [quwoquan_ops/**, 1]\n",
-            "paths 必须是 string list",
-        ),
-    ],
-)
-def test_profile_registry_missing_or_malformed_is_typed_gate_block(
-    tmp_path: Path,
-    monkeypatch,
-    capsys,
-    registry_text: str | None,
-    expected: str,
+def test_review_registry_missing_or_malformed_does_not_block_feature_context(
+    tmp_path: Path, monkeypatch, capsys,
 ) -> None:
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
     root = build_tree(tmp_path)
-    registry_path = root / ".agents/skills/review/references/registry.yaml"
-    if registry_text is not None:
-        write(registry_path, registry_text)
+    tree = root / "specs/feature-tree"
+    write(root / ".agents/skills/review/references/registry.yaml", "- invalid\n")
     monkeypatch.setattr(ft_context, "REPO_ROOT", root)
-    monkeypatch.setattr(ft_context, "TREE_ROOT", root / "specs/feature-tree")
-    writes: list[str] = []
-
-    def reject_manifest_write(name: str, content: str) -> Path:
-        writes.append(name)
-        return root / name
-
-    monkeypatch.setattr(ft_commands, "write_output", reject_manifest_write)
-
-    exit_code = feature_tree.command_context(
-        argparse.Namespace(target="specs/feature-tree/spec.md", format="manifest")
+    monkeypatch.setattr(ft_context, "TREE_ROOT", tree)
+    monkeypatch.setattr(
+        ft_context, "OUTPUT_ROOT",
+        root / ".qwq_output/env/repo/runs/feature-tree",
+    )
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    write(root / "quwoquan_ops/cli/lib/feature_tree/commands.py", "# fixture generator\n")
+    write(root / "quwoquan_ops/policies/agent_governance_contract.yaml", "schema_version: 1\n")
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+         "commit", "-qm", "fixture"],
+        cwd=root, check=True,
     )
 
-    captured = capsys.readouterr()
-    assert exit_code == 2
-    assert "GATE_BLOCK:" in captured.err
-    assert expected in captured.err
-    assert "context-manifest.json" not in captured.out
-    assert writes == []
+    assert feature_tree.command_context(
+        argparse.Namespace(target="specs/feature-tree/spec.md", format="manifest")
+    ) == 0
+    ref = capsys.readouterr().out.strip()
+    assert re.fullmatch(
+        r"\.qwq_output/env/repo/runs/feature-tree/by-fingerprint/[0-9a-f]{64}\.json",
+        ref,
+    )
+    raw = (root / ref).read_bytes()
+    validate_content_addressed_ref(ref, raw_bytes=raw, repo_root=root)
+    assert "profiles" not in json.loads(raw)
 
 
 
@@ -818,26 +849,24 @@ def test_large_manifest_uses_verifiable_receipt_reference(
         "captured_metadata": {},
     }
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "target": "x" * 7000,
         "resolved_owner": "specs/feature-tree/spec.md",
         "owner_chain": [],
         "canonical_contexts": [],
         "applicable_agents": [],
-        "profiles": [],
         "open_items": [],
         "evidence_fingerprint": ft_commands.embedded_fingerprint_binding(
             validate_evidence_fingerprint(
                 ft_commands.build_feature_context_fingerprint(
                     {
-                        "schema_version": 2,
+                        "schema_version": 3,
                         "target": "README.md",
                         "resolved_owner": "specs/feature-tree/spec.md",
                         "owner_chain": [],
                         "canonical_contexts": [],
                         "applicable_agents": ["AGENTS.md"],
-                        "profiles": [],
-                        "open_items": [],
+                                        "open_items": [],
                     },
                     repo_root=ROOT,
                 )
@@ -852,8 +881,11 @@ def test_large_manifest_uses_verifiable_receipt_reference(
     manifest["evidence_fingerprint"] = ft_commands.referenced_fingerprint_binding(
         canonical_receipt,
         receipt_ref=(
-            ".qwq_output/env/repo/runs/feature-tree/"
-            "context-manifest.evidence-fingerprint.json"
+            ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/receipts/"
+            + hashlib.sha256(
+                ft_commands.canonical_json_bytes(canonical_receipt)
+            ).hexdigest()
+            + ".json"
         ),
     )
     assert len(
@@ -868,26 +900,24 @@ def test_manifest_over_budget_after_receipt_compaction_fails_closed(
     receipt = validate_evidence_fingerprint(
         ft_commands.build_feature_context_fingerprint(
             {
-                "schema_version": 2,
+                "schema_version": 3,
                 "target": "README.md",
                 "resolved_owner": "specs/feature-tree/spec.md",
                 "owner_chain": [],
                 "canonical_contexts": [],
                 "applicable_agents": ["AGENTS.md"],
-                "profiles": [],
-                "open_items": [],
+                        "open_items": [],
             },
             repo_root=ROOT,
         )
     )
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "target": "x" * 9000,
         "resolved_owner": "specs/feature-tree/spec.md",
         "owner_chain": [],
         "canonical_contexts": [],
         "applicable_agents": [],
-        "profiles": [],
         "open_items": [],
         "evidence_fingerprint": ft_commands.embedded_fingerprint_binding(receipt),
     }
@@ -900,6 +930,12 @@ def test_manifest_over_budget_after_receipt_compaction_fails_closed(
         ft_commands,
         "write_output",
         lambda name, content: writes.append(name) or ROOT / name,
+    )
+    monkeypatch.setattr(
+        ft_commands,
+        "_write_content_addressed_bytes",
+        lambda content, **_: writes.append("content-addressed-manifest")
+        or ROOT / "content-addressed-manifest",
     )
 
     assert feature_tree.command_context(

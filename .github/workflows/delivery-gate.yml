@@ -1,5 +1,7 @@
 # Delivery Gate — PR 合入主门禁（L1+L2）
-# 触发：dev1.0 push + dev1.0 -> main pull_request + workflow_dispatch；生产 branch evaluator 决定合法边
+# 触发：dev1.0/lane push + pull_request + workflow_dispatch；生产 branch evaluator 决定合法边。
+# lane push 生产该 head 的完整 G0 证据（含 App 重活）；lane -> dev1.0 PR 在 merge ref 上
+# 重跑 Service closure 并核验 push 侧 App 证据，required scope 不得以 skipped 计绿。
 # 职责：拓扑校验 + metadata + L1(Flutter) + L2(Go contract) + portal
 # 交付契约见 specs/feature-tree/runtime/development-workflow-governance/spec.md；本 workflow 是 CI 行为真相源。
 name: 03. Delivery Gate
@@ -9,7 +11,7 @@ permissions:
   actions: read
 
 env:
-  QWQ_OUTPUT_ROOT: .qwq_output
+  QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
   PUB_HOSTED_URL: https://pub.flutter-io.cn
   FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
 
@@ -22,7 +24,7 @@ concurrency:
 
 on:
   push:
-    branches: [dev1.0]
+    branches: [dev1.0, 'lane/**']
   pull_request:
   workflow_dispatch:
   workflow_call:
@@ -138,10 +140,10 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - name: Require clean exact-SHA checkout
         env:
-          EXPECTED_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_SHA: ${{ inputs.head_sha || github.sha }}
         run: |
           set -euo pipefail
           ACTUAL_SHA="$(git rev-parse HEAD)"
@@ -186,7 +188,7 @@ jobs:
           echo "duration_seconds=$DURATION_SECONDS" >> "$GITHUB_OUTPUT"
           {
             echo "### Common governance short reverification"
-            echo "- exact SHA: \`${{ inputs.head_sha || github.event.pull_request.head.sha || github.sha }}\`"
+            echo "- exact SHA: \`${{ inputs.head_sha || github.sha }}\`"
             echo "- elapsed: \`${DURATION_SECONDS}s\`"
             echo "- job hard boundary: \`900s (15m)\`"
             echo "- Delivery PR soft/hard targets remain \`600s/900s\`; this job timing alone does not claim the whole run meets them."
@@ -217,12 +219,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: detect
         name: Detect impacted scopes
         env:
           BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before || '' }}
-          HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha || github.sha }}
+          HEAD_SHA: ${{ inputs.head_sha || github.sha }}
         run: |
           python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
             --base-sha "${BASE_SHA}" \
@@ -234,7 +236,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_BASE_SHA: ${{ inputs.base_sha || '' }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
-          HEAD_SHA: ${{ inputs.head_sha || github.event.pull_request.head.sha || github.sha }}
+          HEAD_SHA: ${{ inputs.head_sha || github.sha }}
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" == "push" ]]; then
@@ -318,14 +320,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     needs: topology_regression
-    if: ${{ github.event_name != 'pull_request' && needs.topology_regression.outputs.service == 'true' }}
+    # G1：service impacted 的 exact merge candidate 必须在 PR merge ref 上重跑，不得 skip。
+    if: ${{ needs.topology_regression.outputs.service == 'true' }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -337,8 +340,8 @@ jobs:
           INPUT_BASE_SHA: ${{ inputs.base_sha || '' }}
           INPUT_HEAD_SHA: ${{ inputs.head_sha || '' }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
           PUSH_BEFORE_SHA: ${{ github.event.before || '' }}
+          PUSH_REF_NAME: ${{ github.ref_name }}
           DISPATCH_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -351,10 +354,14 @@ jobs:
             REQUESTED_BASE_SHA="$INPUT_BASE_SHA"
             REQUESTED_CANDIDATE_SHA="$INPUT_HEAD_SHA"
           elif [[ "$EVENT_NAME" == pull_request ]]; then
-              REQUESTED_CHECKOUT_REF="$PR_HEAD_SHA"
-              REQUESTED_BASE_SHA="$PR_BASE_SHA"
-              REQUESTED_CANDIDATE_SHA="$PR_HEAD_SHA"
+            REQUESTED_CHECKOUT_REF="$DISPATCH_SHA"
+            REQUESTED_BASE_SHA="$PR_BASE_SHA"
+            REQUESTED_CANDIDATE_SHA="$DISPATCH_SHA"
           elif [[ "$EVENT_NAME" == push ]]; then
+            if [[ "$PUSH_BEFORE_SHA" == "0000000000000000000000000000000000000000" && "$PUSH_REF_NAME" == lane/* ]]; then
+              # lane 分支首推没有旧 tip；变更区间锚定到 dev1.0 merge-base，保持 exact。
+              PUSH_BEFORE_SHA="$(git merge-base origin/dev1.0 "$DISPATCH_SHA")"
+            fi
             if [[ ! "$PUSH_BEFORE_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$PUSH_BEFORE_SHA" == "0000000000000000000000000000000000000000" ]]; then
               echo "::error::GATE_BLOCK: Delivery push requires an exact non-zero before SHA"
               exit 2
@@ -431,14 +438,17 @@ jobs:
 
   quwoquan_service_packaging:
     name: Delivery Gate — Service Packaging (${{ matrix.packaging_env }})
-    runs-on: ubuntu-latest
+    # Canonical App dependency sync seals both CocoaPods hosts, while runtime
+    # packaging also builds OCI images. Keep both on the controlled macOS runner
+    # so one physical Flutter/CocoaPods/Docker toolchain owns the real bundle.
+    runs-on: [self-hosted, macOS, ARM64]
     # 构建期固化恢复后，三个环境各自是一次真实镜像构建（环境固化输入进了
     # buildInputDigest 闭包），不再是 alpha 之后两次廉价复用：
     # 事故前 820+126+119 秒，恢复后 884+461+426 秒，串行装不进门禁的
     # 端到端硬阀。三者互不共享中间态，按 env 并行后这条边只剩最长的一个环境。
     timeout-minutes: 30
     needs: topology_regression
-    if: ${{ github.event_name != 'pull_request' && needs.topology_regression.outputs.service == 'true' }}
+    if: ${{ needs.topology_regression.outputs.service == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -448,17 +458,47 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          fetch-depth: 1
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
+        with: {distribution: temurin, java-version: '17'}
+      - id: flutter
+        name: Resolve repository-pinned Flutter SDK
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
+      - name: Install verified Flutter SDK
+        env:
+          FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
+          FLUTTER_CACHE_PATH: ${{ steps.flutter.outputs.cache_path }}
+          FLUTTER_SHA256: ${{ steps.flutter.outputs.sha256 }}
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py install \
+            --archive-url "$FLUTTER_ARCHIVE_URL" \
+            --cache-path "$FLUTTER_CACHE_PATH" \
+            --sha256 "$FLUTTER_SHA256"
+      - id: strict_inputs
+        name: Prepare fresh source-bound packaging inputs
+        env:
+          EXPECTED_SOURCE: ${{ inputs.head_sha || github.sha }}
+          QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.packaging_env }}
+        run: |
+          set -euo pipefail
+          python3 quwoquan_ops/ci/prepare_app_pipeline_inputs.py \
+            --build-product-id android-nonprod-apk \
+            --environment "${{ matrix.packaging_env }}" \
+            --target "${{ matrix.packaging_env }}-local" \
+            --expected-source-git-sha "$EXPECTED_SOURCE" \
+            --work-root "$RUNNER_TEMP/delivery-packaging-inputs-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.packaging_env }}" \
+            --github-output "$GITHUB_OUTPUT"
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
-      - name: 安装 Service Packaging 系统测试依赖
-        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_service packaging)
         env:
+          QWQ_OUTPUT_ROOT: ${{ steps.strict_inputs.outputs.qwq_output_root }}
+          QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.packaging_env }}
+          QWQ_COCOAPODS_EXECUTABLE: ${{ steps.strict_inputs.outputs.cocoapods_executable }}
           GATE_SERVICE_PHASE: packaging
           QWQ_PACKAGING_ENVS: ${{ matrix.packaging_env }}
         run: bash quwoquan_ops/gate/gate_repo.sh --scope service
@@ -475,14 +515,14 @@ jobs:
     # 因此与 App 侧一样独立成格：core 这条边省下这段采集时间。
     timeout-minutes: 40
     needs: topology_regression
-    if: ${{ github.event_name != 'pull_request' && needs.topology_regression.outputs.service == 'true' }}
+    if: ${{ needs.topology_regression.outputs.service == 'true' }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          fetch-depth: 1
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -538,7 +578,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -584,7 +624,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -618,6 +659,8 @@ jobs:
       - name: Resolve locked Patrol test host dependencies
         working-directory: quwoquan_app/test_host/patrol
         run: flutter pub get --enforce-lockfile
+      - name: Install repository test native dependencies
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_app static + PA core)
         env:
           GATE_APP_PHASE: static
@@ -643,7 +686,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -672,8 +716,7 @@ jobs:
       - name: Resolve locked App dependencies
         working-directory: quwoquan_app
         run: flutter pub get --enforce-lockfile
-      - name: Install App shared contract native dependencies
-        if: ${{ matrix.shard_index == 0 }}
+      - name: Install repository test native dependencies
         run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_app tests shard)
         env:
@@ -701,7 +744,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -753,7 +797,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -809,14 +854,16 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: external
         name: Verify push-owned App evidence
         if: ${{ github.event_name == 'pull_request' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # head.ref 是不可信输入，经 env 传入而不内联进 shell（actionlint）。
+          PR_HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          make verify-delivery-app-evidence ARGS="--repository ${{ github.repository }} --head-sha ${{ github.event.pull_request.head.sha }} --current-run-id ${{ github.run_id }} --github-output $GITHUB_OUTPUT"
+          make verify-delivery-app-evidence ARGS="--repository ${{ github.repository }} --head-sha ${{ github.event.pull_request.head.sha }} --head-branch $PR_HEAD_BRANCH --current-run-id ${{ github.run_id }} --github-output $GITHUB_OUTPUT"
       - id: combine
         name: Require every local App phase
         if: ${{ github.event_name != 'pull_request' }}
@@ -844,7 +891,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -856,6 +904,21 @@ jobs:
           cache-dependency-path: quwoquan_data/requirements.txt
       - name: 安装 Data 依赖
         run: pip install -r quwoquan_data/requirements.txt
+      - name: Install repository test native dependencies
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
+      - id: flutter
+        name: Resolve repository-pinned Flutter SDK for repository gate
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
+      - name: Install verified Flutter SDK for repository gate
+        env:
+          FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
+          FLUTTER_CACHE_PATH: ${{ steps.flutter.outputs.cache_path }}
+          FLUTTER_SHA256: ${{ steps.flutter.outputs.sha256 }}
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py install \
+            --archive-url "$FLUTTER_ARCHIVE_URL" \
+            --cache-path "$FLUTTER_CACHE_PATH" \
+            --sha256 "$FLUTTER_SHA256"
       - name: Gate (quwoquan_data verify)
         env:
           GATE_DATA_PHASE: verify
@@ -881,7 +944,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -893,6 +957,21 @@ jobs:
           cache-dependency-path: quwoquan_data/requirements.txt
       - name: 安装 Data 依赖
         run: pip install -r quwoquan_data/requirements.txt
+      - name: Install repository test native dependencies
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
+      - id: flutter
+        name: Resolve repository-pinned Flutter SDK for repository gate
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
+      - name: Install verified Flutter SDK for repository gate
+        env:
+          FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
+          FLUTTER_CACHE_PATH: ${{ steps.flutter.outputs.cache_path }}
+          FLUTTER_SHA256: ${{ steps.flutter.outputs.sha256 }}
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py install \
+            --archive-url "$FLUTTER_ARCHIVE_URL" \
+            --cache-path "$FLUTTER_CACHE_PATH" \
+            --sha256 "$FLUTTER_SHA256"
       - name: Gate (quwoquan_data local_contract shard)
         env:
           GATE_DATA_PHASE: local_contract
@@ -916,7 +995,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -928,6 +1008,21 @@ jobs:
           node-version: "20.19.0"
           cache: npm
           cache-dependency-path: quwoquan_ops/portal/package-lock.json
+      - name: Install repository test native dependencies
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
+      - id: flutter
+        name: Resolve repository-pinned Flutter SDK for repository gate
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
+      - name: Install verified Flutter SDK for repository gate
+        env:
+          FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
+          FLUTTER_CACHE_PATH: ${{ steps.flutter.outputs.cache_path }}
+          FLUTTER_SHA256: ${{ steps.flutter.outputs.sha256 }}
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py install \
+            --archive-url "$FLUTTER_ARCHIVE_URL" \
+            --cache-path "$FLUTTER_CACHE_PATH" \
+            --sha256 "$FLUTTER_SHA256"
       - name: Gate (ops-portal)
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope portal
@@ -968,7 +1063,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 1
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - id: identity
         name: Resolve immutable evidence coordinates
         run: |
@@ -1189,7 +1284,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.checkout_ref || github.sha }}
       - name: Read authoritative Delivery Gate job timings
         id: job_timing
         env:
@@ -1209,17 +1304,17 @@ jobs:
           ARGS=(
             --repository "${{ github.repository }}"
             --run-id "${{ github.run_id }}"
-            --phase "common_governance=Delivery Gate — Common Governance"
-            --phase "topology=Delivery Gate — Topology"
-            --phase "service=Delivery Gate — Service Core (L2)"
-            --phase "service_packaging=Delivery Gate — Service Packaging"
-            --phase "service_coverage=Delivery Gate — Service Canonical Coverage"
-            --phase "search=Delivery Gate — Search /search Contract Smoke"
-            --phase "app_evidence=Delivery Gate — App (L1)"
-            --phase "data=Delivery Gate — Data"
-            --phase "data_tests=Delivery Gate — Data Tests Shard "
-            --phase "portal=Delivery Gate — Ops Portal"
-            --phase "release_evidence=Delivery Gate — Candidate qualification evidence"
+            --phase-exact "common_governance=Delivery Gate — Common Governance"
+            --phase-exact "topology=Delivery Gate — Topology"
+            --phase-exact "service=Delivery Gate — Service Core (L2)"
+            --phase-prefix "service_packaging=Delivery Gate — Service Packaging"
+            --phase-exact "service_coverage=Delivery Gate — Service Canonical Coverage"
+            --phase-exact "search=Delivery Gate — Search /search Contract Smoke"
+            --phase-exact "app_evidence=Delivery Gate — App (L1)"
+            --phase-exact "data=Delivery Gate — Data"
+            --phase-prefix "data_tests=Delivery Gate — Data Tests Shard "
+            --phase-exact "portal=Delivery Gate — Ops Portal"
+            --phase-exact "release_evidence=Delivery Gate — Candidate qualification evidence"
             --require-count "common_governance=1"
             --require-count "topology=1"
             --dag-layer "common_governance"
@@ -1228,7 +1323,7 @@ jobs:
             --github-output "$GITHUB_OUTPUT"
           )
           FANOUT=()
-          if [[ "$SERVICE_IMPACTED" == "true" && "$EVENT_NAME" != "pull_request" ]]; then
+          if [[ "$SERVICE_IMPACTED" == "true" ]]; then
             ARGS+=(--require-count "service=1" --require-count "service_packaging=3" --require-count "service_coverage=1")
             FANOUT+=(service service_packaging service_coverage)
           fi
@@ -1251,10 +1346,10 @@ jobs:
               )
             else
               ARGS+=(
-                --phase "app_static=Delivery Gate — App Static"
-                --phase "app_tests=Delivery Gate — App Tests Shard "
-                --phase "app_serial=Delivery Gate — App Serial"
-                --phase "app_coverage=Delivery Gate — App Canonical Coverage"
+                --phase-exact "app_static=Delivery Gate — App Static"
+                --phase-prefix "app_tests=Delivery Gate — App Tests Shard "
+                --phase-exact "app_serial=Delivery Gate — App Serial"
+                --phase-exact "app_coverage=Delivery Gate — App Canonical Coverage"
                 --require-count "app_static=1"
                 --require-count "app_tests=4"
                 --require-count "app_serial=1"
@@ -1352,7 +1447,7 @@ jobs:
             --critical-path-source github_run_calendar \
             --candidate-digest "${{ inputs.candidate_digest }}" \
             --workflow-run-id "${{ inputs.producer_workflow_run_id || github.run_id }}" \
-            --source-git-sha "${{ inputs.source_git_sha || github.event.pull_request.head.sha || github.sha }}" \
+            --source-git-sha "${{ inputs.source_git_sha || github.sha }}" \
             --run-created-at "$RUN_CREATED_AT" \
             --candidate-ready-at "$CANDIDATE_READY_AT" \
             "${DURATION_ARGS[@]}" \
@@ -1390,6 +1485,7 @@ jobs:
           DATA: ${{ needs.quwoquan_data.result }}
           DATA_TESTS: ${{ needs.quwoquan_data_tests.result }}
           DATA_IMPACTED: ${{ needs.topology_regression.outputs.data }}
+          SERVICE_IMPACTED: ${{ needs.topology_regression.outputs.service }}
           PORTAL: ${{ needs.ops_portal.result }}
           RELEASE_EVIDENCE: ${{ needs.release_evidence.result }}
           PRODUCE_RELEASE_EVIDENCE: ${{ inputs.produce_release_evidence }}
@@ -1415,15 +1511,15 @@ jobs:
             if [ "$impacted" = "true" ]; then
               expect_success "$name" "$val" "$hint"
             elif [ "$val" != "skipped" ]; then
-              echo "::error::${name} expected skipped only when Data is not required, got ${val}. ${hint}"
+              echo "::error::${name} expected skipped only when its scope is not required, got ${val}. ${hint}"
               fail=1
             fi
           }
           expect_success "common_governance" "${COMMON_GOVERNANCE}" "检查 exact-SHA、branch、supply-chain 与 workflow 治理"
           expect_success "topology_regression" "${TOPOLOGY}" "检查部署拓扑 / metadata 回归脚本"
-          expect_success_or_skipped "quwoquan_service" "${SERVICE}" "检查 service scope gate 输出"
-          expect_success_or_skipped "quwoquan_service_packaging" "${SERVICE_PACKAGING}" "检查三环境与 Prod packaging contract 输出"
-          expect_success_or_skipped "quwoquan_service_coverage" "${SERVICE_COVERAGE}" "检查云侧 canonical coverage 棘轮"
+          expect_typed_pending_or_skipped "quwoquan_service" "${SERVICE}" "$SERVICE_IMPACTED" "Service required 时必须在 exact candidate 上执行 core gate，不得以 skipped 计绿"
+          expect_typed_pending_or_skipped "quwoquan_service_packaging" "${SERVICE_PACKAGING}" "$SERVICE_IMPACTED" "Service required 时三环境 packaging contract 必须成功，不得以 skipped 计绿"
+          expect_typed_pending_or_skipped "quwoquan_service_coverage" "${SERVICE_COVERAGE}" "$SERVICE_IMPACTED" "Service required 时云侧 canonical coverage 棘轮必须成功，不得以 skipped 计绿"
           expect_success_or_skipped "search_contract_smoke" "${SEARCH}" "检查 /search 商业信封与四环境探针契约"
           expect_success_or_skipped "quwoquan_app" "${APP}" "检查 app scope 汇总"
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then

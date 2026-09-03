@@ -12,12 +12,19 @@ video 作品的差异判据。产物清单真相源是
 ## 各阶段差异
 
 - `1.download`：与 image 同走 media source admission exact pair 冻结
-  workUnit（L2 `design.md#dec-022`）；视频字节与 poster 均走 CAS。
-- `3.compose`：证据包含视频源引用与剪辑意图；无正文创作。
+  workUnit（L2 `design.md#dec-022`）；取得模块必须从已取得视频机械提取一帧 PNG poster，
+  视频与 poster 写入同一 create-once CAS receipt。receipt 必须分别冻结两者的 ref、
+  SHA-256、bytes、MIME；poster 明确声明为同 licensed video 的派生帧，并逐字段继承
+  sourceUrl/license/termsUrl/authorizationProof/rightsStatus/rightsIssues。原子物化必须把
+  两个对象都链接到 source unit `assets/` 并登记 `assets/index.json`。
+- `3.compose`：证据包含视频源引用与叙事/剪辑意图；`4.draft` 必须由 AI 写 `video_script`。
 - `4.draft`：物化前置判据含成片时长下限——sourced clip 短于 policy 下限时
   该对象 typed discard（`DATA.MEDIA.PUBLISHABLE_SHORTFALL`），不拖垮批次。
-- `5.review`：`mediaRefReview` 覆盖视频与 poster 的权利链。
-- `publish`：物化需冻结 poster 身份（canonical video poster identity）；
+- `5.review`：`mediaRefReview.rightsReviews[]` 必须按 source-unit assetRef 分别覆盖
+  视频和 poster；只有视频行、用视频结论隐含覆盖 poster，或任一 rights 字段与
+  acquisition receipt 漂移都必须 fail closed。
+- `publish`：物化需冻结 poster 身份（canonical video poster identity），且该身份
+  必须回指已独立 rights-review 的 source poster CAS；
   跨 canonical 的视频内容与 poster 复用由事务核心拒绝。
 
 ## 状态

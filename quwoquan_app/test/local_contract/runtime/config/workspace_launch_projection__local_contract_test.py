@@ -5,12 +5,16 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
 
 from quwoquan_app.scripts.device import prepare_workspace_launch_projection as source
 from quwoquan_ops.cli.lib.app_source_capsule import app_source_capsule_roots
+from quwoquan_ops.cli.lib.package_reuse.dependency_bundle import (
+    AppDependencyBundleStaleError,
+)
 
 
 def _digest(content: bytes) -> str:
@@ -77,6 +81,9 @@ def test_package_and_workspace_share_one_source_root_closure() -> None:
         "quwoquan_service/contracts/metadata",
         "quwoquan_service/contracts/runtime_errors/packages/dart/quwoquan_runtime_errors",
     )
+    assert "quwoquan_service/services" in roots
+    assert "quwoquan_service/control-plane/platform-ops" in roots
+    assert "quwoquan_service/cmd/service-core/composition.yaml" in roots
     assert len(roots) == len(set(roots))
 
 
@@ -118,6 +125,119 @@ def test_attempt_root_rejects_parent_traversal_without_mutation(tmp_path: Path) 
         source._safe_attempt_root(output, output / "runs/../../outside/attempt")
 
     assert not outside.exists()
+
+
+def _main_args(tmp_path: Path) -> list[str]:
+    output = tmp_path / "output"
+    return [
+        "--output-root",
+        str(output),
+        "--attempt-root",
+        str(output / "env/repo/runs/attempt"),
+    ]
+
+
+def test_stale_failure_emits_machine_envelope_and_typed_stderr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def _raise(**_kwargs: object) -> dict[str, str]:
+        raise AppDependencyBundleStaleError("nativeResolutionInputDigest")
+
+    monkeypatch.setattr(source, "prepare_workspace_launch_projection", _raise)
+
+    exit_code = source.main(_main_args(tmp_path))
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert json.loads(captured.out) == {
+        "status": "failed",
+        "errorCode": "APP.DEPENDENCY.bundle_stale",
+        "errorField": "nativeResolutionInputDigest",
+    }
+    stderr_lines = captured.err.splitlines()
+    assert stderr_lines[0].startswith("APP.DEPENDENCY.bundle_stale:")
+    assert (
+        "App dependency bundle is stale for nativeResolutionInputDigest"
+        in stderr_lines[0]
+    )
+
+
+def test_generic_failure_is_not_disguised_as_stale(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def _raise(**_kwargs: object) -> dict[str, str]:
+        raise ValueError("fixture generic failure")
+
+    monkeypatch.setattr(source, "prepare_workspace_launch_projection", _raise)
+
+    exit_code = source.main(_main_args(tmp_path))
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert json.loads(captured.out) == {
+        "status": "failed",
+        "errorCode": "APP.LAUNCH.workspace_projection_failed",
+    }
+    assert "bundle_stale" not in captured.out
+    assert "bundle_stale" not in captured.err
+    assert captured.err.splitlines()[0] == (
+        "APP.LAUNCH.workspace_projection_failed: fixture generic failure"
+    )
+
+
+def test_typed_failure_envelope_carries_leading_error_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def _raise(**_kwargs: object) -> dict[str, str]:
+        raise ValueError("APP.LAUNCH.workspace_projection_not_fresh")
+
+    monkeypatch.setattr(source, "prepare_workspace_launch_projection", _raise)
+
+    exit_code = source.main(_main_args(tmp_path))
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert json.loads(captured.out) == {
+        "status": "failed",
+        "errorCode": "APP.LAUNCH.workspace_projection_not_fresh",
+    }
+    assert captured.err.splitlines()[0] == (
+        "APP.LAUNCH.workspace_projection_not_fresh"
+    )
+
+
+def test_success_stdout_export_protocol_is_unchanged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = {
+        "projectionRoot": str(tmp_path / "projection/repo"),
+        "sourceCapsuleManifest": str(tmp_path / "projection/input-capsule/manifest.json"),
+        "sourceRevision": "1" * 40,
+        "sourceCapsuleDigest": "sha256:" + "2" * 64,
+    }
+    monkeypatch.setattr(
+        source,
+        "prepare_workspace_launch_projection",
+        lambda **_kwargs: dict(result),
+    )
+
+    exit_code = source.main(_main_args(tmp_path))
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload == result
+    # 失败 envelope 依赖 "status" 字段判别；成功导出协议不得携带该字段。
+    assert "status" not in payload
+    assert captured.err == ""
 
 
 def test_projection_verifier_rejects_intermediate_symlink_escape(

@@ -47,7 +47,7 @@ class BehaviorFingerprintContractTest(unittest.TestCase):
         base = derive_behavior_fingerprint(_sample(), release_id="rel-1")
         varied = derive_behavior_fingerprint(
             _sample(
-                launchProvenance="workspace_flutter_run",
+                launchProvenance="workspace_ide_debug",
                 deviceKind="android-physical",
                 deviceId="R5CT10ABCDE",
                 attemptId="attempt-b",
@@ -85,7 +85,7 @@ class BehaviorFingerprintContractTest(unittest.TestCase):
             ),
             _sample(
                 platform="ios",
-                launchProvenance="workspace_flutter_run",
+                launchProvenance="workspace_ide_debug",
                 deviceKind="ios-simulator",
                 attemptId="attempt-c",
                 launcherResolution=None,

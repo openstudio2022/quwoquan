@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "5.review compact attestation",
+  "title": "5.review four-file closure attestation",
   "type": "object",
   "required": [
     "schema",
@@ -12,9 +12,7 @@
     "deterministicGate",
     "independentReviewer",
     "mediaRefReview",
-    "repair",
-    "finalizationRef",
-    "evidenceIndexRef"
+    "repair"
   ],
   "additionalProperties": false,
   "properties": {
@@ -47,12 +45,10 @@
     },
     "independentReviewer": {
       "type": "object",
+      "description": "独立宿主 reviewer 结论；actor 与 reviewer_result.actor 必须一致，modelFamily 只作真实审计记录，不作异族准出硬门。",
       "required": [
         "status",
-        "provider",
-        "model",
-        "modelFamily",
-        "runId"
+        "actor"
       ],
       "additionalProperties": false,
       "properties": {
@@ -63,24 +59,9 @@
             "failed"
           ]
         },
-        "provider": {
-          "type": "string",
-          "minLength": 1
-        },
-        "model": {
-          "type": "string",
-          "minLength": 1
-        },
-        "modelFamily": {
-          "type": "string",
-          "minLength": 1
-        },
-        "runId": {
-          "type": "string",
-          "minLength": 1,
-          "not": {
-            "pattern": "^contract-output:"
-          }
+        "actor": {
+          "$ref": "reviewer_result.schema.json#/properties/actor",
+          "description": "与 reviewer_result.actor 相同的独立宿主 reviewer 身份与真实调用。"
         },
         "resultHash": {
           "oneOf": [
@@ -114,14 +95,6 @@
           ]
         }
       }
-    },
-    "finalizationRef": {
-      "type": "string",
-      "minLength": 1
-    },
-    "evidenceIndexRef": {
-      "type": "string",
-      "minLength": 1
     },
     "schema": {
       "const": "quwoquan_data.review_attestation"

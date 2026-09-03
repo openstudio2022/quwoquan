@@ -104,9 +104,11 @@ from .log_sink_package import (  # noqa: F401
     _ELASTICSEARCH_IMAGE_LOCAL_TAG_RE,
     _canonical_observability_log_sink_binding,
     _local_elasticsearch_runtime_selection,
+    canonical_local_observability_log_sink_composition,
     load_observability_log_sink_package,
     local_elasticsearch_image_digest,
     materialize_observability_log_sink_package,
+    observability_log_sink_composition_digest,
     validate_observability_log_sink_package,
 )
 from .provider_binding_overlay import (  # noqa: F401

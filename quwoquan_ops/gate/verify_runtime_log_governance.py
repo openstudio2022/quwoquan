@@ -118,8 +118,8 @@ def main() -> int:
         issues,
     )
     _require_text(
-        ROOT / "quwoquan_data/scripts/content/execution/controller/orchestrator.py",
-        ('"repo" / "observability"', "write_data_run_manifest"),
+        ROOT / "quwoquan_data/scripts/core/runtime_observability.py",
+        ('"repo"', "write_data_run_manifest"),
         issues,
     )
     _require_text(

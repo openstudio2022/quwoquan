@@ -19,7 +19,7 @@ from content.release.canonical.object_transaction_contract import (
     object_lineage,
 )
 from core.image_deduplication import perceptual_hash_distance
-from core.image_safety import NEAR_DUP_HAMMING
+NEAR_DUP_HAMMING = 5
 
 IMAGE_INDEX_SCHEMA = "quwoquan_data.canonical_image_inventory"
 _BAND_COUNT = NEAR_DUP_HAMMING + 1

@@ -69,7 +69,7 @@ def _host_port_variable_issues(
 
     走 `${VAR:?msg}` 必填形态的发布口在字面上判定不出主机端口，注入值由各启动面提供。
     没有这个声明位时，门禁只能对这些声明「不判定」，等于整片逃出 canonical 断言；而注入面
-    本身分散在 profile 导出、fleet compose 环境、content-backing 等多处，不能作单一真相源。
+    本身分散在 profile 导出、content-backing 与 provider substitute 等多处，不能作单一真相源。
     """
     declared = manifest.get(HOST_PORT_VARIABLES_KEY)
     if declared is None:
@@ -90,27 +90,33 @@ def _host_port_variable_issues(
     return issues
 
 
-def _unowned_compose_source_issues(manifest: dict[str, Any]) -> list[str]:
-    """不受端口所有权模型管辖的 Compose 源，必须带理由声明在 manifest 里。
-
-    这类豁免原先只存在于门禁代码内，门禁同时是判据和自己的豁免出处 —— 那正是棘轮治理
-    要防的形态。声明位放在 manifest，门禁只读取。
-    """
-    declared = manifest.get(UNOWNED_COMPOSE_SOURCES_KEY)
+def _compose_source_adjudication_issues(
+    manifest: dict[str, Any],
+    *,
+    key: str,
+) -> list[str]:
+    declared = manifest.get(key)
     if declared is None:
-        return [f"{UNOWNED_COMPOSE_SOURCES_KEY} must be declared"]
+        return [f"{key} must be declared"]
     if not isinstance(declared, dict):
-        return [f"{UNOWNED_COMPOSE_SOURCES_KEY} must be a mapping"]
+        return [f"{key} must be a mapping"]
     issues: list[str] = []
     for name, reason in sorted(declared.items()):
         if not isinstance(name, str) or not name.strip():
-            issues.append(f"{UNOWNED_COMPOSE_SOURCES_KEY}: file name is invalid")
+            issues.append(f"{key}: file name is invalid")
             continue
         if not isinstance(reason, str) or not reason.strip():
-            issues.append(
-                f"{UNOWNED_COMPOSE_SOURCES_KEY}[{name}]: reason is required"
-            )
+            issues.append(f"{key}[{name}]: reason is required")
     return issues
+
+
+def _unowned_compose_source_issues(manifest: dict[str, Any]) -> list[str]:
+    """不受端口所有权模型管辖的 Compose 源，必须带理由声明在 manifest 里。"""
+    return _compose_source_adjudication_issues(
+        manifest,
+        key=UNOWNED_COMPOSE_SOURCES_KEY,
+    )
+
 
 
 def validate_port_manifest(manifest: dict[str, Any]) -> list[str]:
@@ -132,7 +138,6 @@ def validate_port_manifest(manifest: dict[str, Any]) -> list[str]:
         return issues
     issues.extend(_host_port_variable_issues(manifest, roles))
     issues.extend(_unowned_compose_source_issues(manifest))
-
     for plane_name in REQUIRED_PLANES:
         plane = planes.get(plane_name)
         if not isinstance(plane, dict):

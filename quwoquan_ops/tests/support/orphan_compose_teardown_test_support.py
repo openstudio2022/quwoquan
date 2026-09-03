@@ -223,6 +223,16 @@ def install_stackctl_fakes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> P
     monkeypatch.setattr(stackctl, "active_consumer_leases", lambda _target: [])
     monkeypatch.setattr(
         stackctl,
+        "load_test_live_startup_attempt",
+        lambda _target: None,
+    )
+    monkeypatch.setattr(
+        stackctl,
+        "read_stale_test_live_startup_attempt",
+        lambda _target: None,
+    )
+    monkeypatch.setattr(
+        stackctl,
         "load_startup_attempt",
         lambda _target: {
             "target": "alpha-local",

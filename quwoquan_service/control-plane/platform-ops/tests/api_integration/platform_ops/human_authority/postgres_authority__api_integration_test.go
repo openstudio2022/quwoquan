@@ -23,7 +23,7 @@ func TestPostgresAppendOnlyAtomicReceiptAndCAS(t *testing.T) {
 	defer cancel()
 	fixture, err := testinfra.StartPostgresFixture(t.TempDir()+"/postgres", 0)
 	if err != nil {
-		t.Skipf("PostgreSQL prerequisite unavailable: %v", err)
+		t.Fatalf("PostgreSQL prerequisite unavailable: %v", err)
 	}
 	t.Cleanup(func() { _ = fixture.Close() })
 	pool, err := pgxpool.New(ctx, fixture.DSN())

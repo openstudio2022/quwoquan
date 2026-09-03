@@ -14,14 +14,14 @@
 
 ### In Scope
 
-- 分层消费 workflow resolve、fingerprint-indexed owner manifest、本地 scope/release readiness、Review、Human-owned calibration readback、hosted authority、Objective、effect、Portal、hosted CI、环境/设备/UAT、Commercial/Prod/channel/outcome、handoff consumer 与 HOTL inspect 的 readback。
+- 从 Skill PRE 生成的 fingerprint-indexed owner manifest immutable exact ref 开始，分层消费本地 scope/release readiness、Review、Human-owned calibration readback、hosted authority、Objective、effect、Portal、hosted CI、环境/设备/UAT、Commercial/Prod/channel/outcome、handoff consumer 与 HOTL inspect 的 readback。
 - 只读输出 `blocked / not_admitted / eligible_observe_only / observe_only`，按 schema、freshness、fingerprint 和独立证据 owner 进行 fail-closed 聚合。
 - 定义治理运行指标的 schema 与安全维度；evaluator 只验证指标存在和 shape，不采集指标。
 
 ### Out of Scope
 
 - 不创建 Human、hosted、activation、production、commercial、channel、outcome 或 HOTL authority；不实现 effect、发布、激活、grant、resume 或 mutation command。
-- 不修改 Human、Objective、HOTL、workflow resolver、local readiness、hosted authority、Review、Makefile 或父特性节点。
+- 不修改 Human、Objective、HOTL、local readiness、hosted authority、Review、Makefile 或父特性节点。
 - 不以本地 fixture 关闭 Human owner 定义的六类责任/四类 principal calibration、hosted live、环境/设备/UAT、商用、生产、渠道或 outcome 的外部 OPEN。
 
 ## 3. 行为要求
@@ -29,7 +29,7 @@
 <a id="req-001"></a>
 ### REQ-001 分层证据只聚合、不互相冒充
 
-- evaluator 必须分别消费各层 exact readback；schema 无效、证据过期或 fingerprint mismatch 优先返回 `blocked`。代码存在、命名证据未执行、集成未证明与 live 外部依赖缺失必须使用不同终态和 blocker，不得统一写成 `absent`。
+- evaluator 必须从 owner manifest immutable exact ref 开始分别消费各层 exact readback；manifest ref 缺失、摘要漂移、schema 无效、证据过期或 fingerprint mismatch 优先返回 `blocked`。代码存在、命名证据未执行、集成未证明与 live 外部依赖缺失必须使用不同终态和 blocker，不得统一写成 `absent`。
 - 各层证据必须保持独立：machine baseline 不得替代 Human-owned calibration readback，Review `READY` 不得替代 `PASS`，且 consolidation 中出现任一 `GATE_BLOCK` finding 时必须拒绝 Review PASS；`scope_ready` 不得替代 `release_ready`。hosted code/integration 不得替代 hosted live，Portal test/build 不得替代 Portal UAT，released、published 与 outcome attained 不得互推。
 - 每层由 contract 冻结唯一 producer/adapter 身份、允许的 provider kind、release eligibility、candidate/scope/fingerprint binding 与最大证据年龄。freshness 只能由 adapter 对 provider-owned timestamp 验证，不接受 `fresh=true`；bundle 保存显式 receipt ref 与 exact bytes，不保存调用方自报 truth boolean。
 - canonical contract 只拥有 schema、required evidence、真实 hosted Story/service contract/adapter 实现引用与命名 evidence 身份，不拥有随运行变化的当前 PASS/absent 状态。当前状态只能从绑定 current EvidenceFingerprint 的 canonical receipt 读取。
@@ -48,12 +48,11 @@
 - governance 不拥有第二套 calibration 角色 schema；它只能动态消费 Human owner 的版本化 `human_calibration_readback`。该 readback 以 `product / engineering / quality / release_operations` 四类 principal class 覆盖 `business / product / experience / quality / engineering / release_operations` 六类责任，责任映射、观察维度、三态、24 小时 freshness、最小样本和 decision-specific distinct-principal 规则均由 Human owner 定义；governance 不得复制 desired role list、静默映射或自行扩为六类 principal。
 - governance 必须区分责任覆盖与 distinct authenticated principal/quorum；只有 Human readback 声明的预冻结 `independent-principal-required` 决定才校验不同 principal，routine calibration、咨询/知会与 cross-role impact 不得被自动升级为六人 checkpoint。
 - 本地 fixture 只能为 `not_observed` 或结构性的 `insufficient`，machine baseline 仅证明结构代理，不是人类可理解性证据；只有 authenticated/consented/deidentified source 基于 fresh exact session bytes 派生且兼容的 Human readback 才可能为 `calibrated`。缺版本/字段、unknown model、过期、摘要漂移、shadow schema 或 machine self-claim 必须 fail closed。
-- 观测 contract 必须覆盖 edit/idle/scope/release latency、cache hit、deferred age、commit freshness、hosted mismatch、resolve latency、authority wait/transfer/timeout、review incomplete、handoff stale、objective pending/revoke；维度不得包含 prompt、message、raw payload、actor/user identity 或 PII。
+- 观测 contract 必须覆盖 edit/idle/scope/release latency、cache hit、deferred age、commit freshness、hosted mismatch、authority wait/transfer/timeout、review incomplete、handoff stale、objective pending/revoke；维度不得包含 prompt、message、raw payload、actor/user identity 或 PII。
 
 ## 4. 契约引用
 
 - 本 Story canonical contract：`quwoquan_ops/policies/governance_pipeline_admission_contract.yaml`
-- Workflow resolve：`quwoquan_ops/policies/workflow_resolution_contract.yaml`
 - Local readiness：`quwoquan_ops/policies/local_readiness_contract.yaml`
 - Human machine baseline 与 authority：`quwoquan_ops/policies/evals/human_agent_delivery_interaction_v1.yaml`、`quwoquan_ops/policies/human_agent_delivery_contract.yaml`
 - Objective S4：`quwoquan_ops/policies/objective_execution_contract.yaml#admission.readback_contract`
@@ -81,7 +80,7 @@
 <a id="gwt-003"></a>
 ### GWT-003 CLI、指标 shape 与当前仓终态诚实
 
-- GIVEN canonical contract、只读 CLI、当前仓真实 code、明确命名的 owner/workflow/readiness/Review/code/integration/Portal receipt 与尚未完成的外部依赖。
+- GIVEN canonical contract、只读 CLI、当前仓真实 code、owner manifest immutable exact ref、明确命名的 readiness/Review/code/integration/Portal receipt 与尚未完成的外部依赖。
 - WHEN gate 不带 bundle 仅执行 evaluator safety self-check，或显式从受限 `.qwq_output/env/repo/runs/governance-pipeline/**` evidence bundle 读取 owner receipt refs、冻结 exact bytes 并验证 current canonical EvidenceFingerprint；receipt 缺失、伪造、过期、跨 fingerprint、仅文件存在或自报 boolean。
 - THEN typed JSON 不输出 traceback，只有 exact current receipt 能投影对应层 PASS；Review `READY`、Portal pass、代码存在和 activation self-assert 均不得冒充下游事实。输出包含首个优先 blocker 与完整 blocker 集。
 - AND gate 对当前仓输出 `not_admitted/manual` 的预期终态；成功退出只表示 expected fail-closed evaluator 有效，不是 admission PASS，production/commercial/HOTL claims 恒为 false。
@@ -91,7 +90,7 @@
 - Human 与真实 calibration：`human-agent-delivery-interaction` 的 Human provider/calibration OPEN。
 - Hosted authority：`hosted-human-authority` 的 contract/provider/consumer、identity/infrastructure/live UAT OPEN。
 - Objective/HOTL：只动态消费现有 owner readback，不复制其 wire 或升级其 authority。
-- 父节点与 Makefile/gate_repo 接线由主会话后续完成，不在本 Story 当前授权范围内。
+- owner manifest exact ref、父节点与 Makefile/gate_repo 接线均由当前 canonical producer、consumer 与 gate 直接验证；不得以固定 current pointer 或另一个 admission receipt 代替。
 
 ## 7. 开放事项
 

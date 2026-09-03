@@ -31,9 +31,16 @@ def test_task_help():
         text=True,
     )
     assert result.returncode == 0
-    assert "init" in result.stdout
-    assert "stage-record" in result.stdout
-    assert "execute" not in result.stdout
+    current = (
+        "init", "stage-open", "stage-close", "acquire-images",
+        "acquire-videos",
+    )
+    retired = (
+        "stage-record", "stage-gate", "semantic-prepare", "semantic-record",
+        "lane-claim", "fleet-status", "execute",
+    )
+    assert all(command in result.stdout for command in current)
+    assert all(command not in result.stdout for command in retired)
 
 
 def test_ship_help_does_not_import_content_production_toolchain(tmp_path: Path):
@@ -67,7 +74,27 @@ sys.meta_path.insert(0, _BlockCanonicalRelease())
     assert "usage: qwq-data ship" in result.stdout
 
 
-@pytest.mark.parametrize("retired_command", ["execute", "recipe", "prepare-campaign", "preflight", "calibrate-capacity", "reconcile-stale", "runtime-evidence", "plan-images"])
+@pytest.mark.parametrize(
+    "retired_command",
+    [
+        "execute",
+        "recipe",
+        "prepare-campaign",
+        "preflight",
+        "compile-intent",
+        "project-init-inputs",
+        "materialize-sources",
+        "stage-gate",
+        "semantic-prepare",
+        "semantic-record",
+        "lane-claim",
+        "fleet-status",
+        "calibrate-capacity",
+        "reconcile-stale",
+        "runtime-evidence",
+        "plan-images",
+    ],
+)
 def test_retired_task_commands_are_rejected(retired_command: str):
     result = subprocess.run(
         [sys.executable, "-B", str(CLI_PATH), "task", retired_command, "--help"],

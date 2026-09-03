@@ -72,10 +72,16 @@ def _review_attestation() -> dict:
         "deterministicGate": {"status": "passed", "issues": []},
         "independentReviewer": {
             "status": "passed",
-            "provider": "cursor_sdk",
-            "model": "composer-2.5",
-            "modelFamily": "composer",
-            "runId": "review-run",
+            "actor": {
+                "host": "cursor",
+                "sessionId": "review-session",
+                "modelFamily": "composer",
+                "invocation": {
+                    "provider": "host",
+                    "model": "composer-2.5",
+                    "runId": "review-run",
+                },
+            },
         },
         "mediaRefReview": {"status": "passed", "issues": []},
     }
@@ -270,10 +276,7 @@ def build_package(
             }
         ],
     }
-    review = {
-        "attestationRef": "attestation.json",
-        "evidenceIndexRef": "evidence_index.json",
-    }
+    review = {"attestationRef": "attestation.json"}
     review_binding = transaction._review_binding(object_root, {"review": review})
     closure_digest = transaction._closure_digest(
         object_root=object_root,

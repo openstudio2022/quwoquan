@@ -140,6 +140,79 @@ def test_active_bundle_rejects_source_or_toolchain_drift(
         bundle.load_active_dependency_bundle(repo_root=repo)
 
 
+@pytest.mark.parametrize("field", bundle.APP_DEPENDENCY_BUNDLE_STALE_FIELDS)
+def test_stale_identity_field_raises_typed_bundle_stale_error(
+    field: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, _root, _active = _fixture(tmp_path, monkeypatch)
+    drifted = {
+        "flutterVersion": "3.47.0",
+        "flutterCommandResolutionDigest": "sha256:" + "1" * 64,
+        "productionPubResolutionInputDigest": "sha256:" + "2" * 64,
+        "patrolPubResolutionInputDigest": "sha256:" + "3" * 64,
+        "nativeResolutionInputDigest": "sha256:" + "4" * 64,
+    }
+    drifted[field] = (
+        "3.99.9" if field == "flutterVersion" else "sha256:" + "f" * 64
+    )
+    monkeypatch.setattr(bundle, "_current_source_identity", lambda _root: drifted)
+
+    with pytest.raises(bundle.AppDependencyBundleStaleError) as excinfo:
+        bundle.load_active_dependency_bundle(repo_root=repo)
+
+    error = excinfo.value
+    assert isinstance(error, ValueError)
+    assert error.code == "APP.DEPENDENCY.bundle_stale"
+    assert error.field == field
+    assert str(error) == f"App dependency bundle is stale for {field}"
+
+
+def test_stale_error_rejects_unknown_identity_field() -> None:
+    with pytest.raises(ValueError, match="stale field is unknown"):
+        bundle.AppDependencyBundleStaleError("receiptDigest")
+
+
+def test_missing_active_pointer_is_not_classified_stale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, root, _active = _fixture(tmp_path, monkeypatch)
+    (root / "active.json").unlink()
+
+    with pytest.raises(ValueError) as excinfo:
+        bundle.load_active_dependency_bundle(repo_root=repo)
+
+    assert not isinstance(excinfo.value, bundle.AppDependencyBundleStaleError)
+    assert "is stale for" not in str(excinfo.value)
+
+
+def test_corrupt_active_pointer_is_not_classified_stale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, root, _active = _fixture(tmp_path, monkeypatch)
+    (root / "active.json").write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(ValueError) as excinfo:
+        bundle.load_active_dependency_bundle(repo_root=repo)
+
+    assert not isinstance(excinfo.value, bundle.AppDependencyBundleStaleError)
+    assert "is stale for" not in str(excinfo.value)
+
+
+def test_receipt_drift_is_not_classified_stale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, _root, active = _fixture(tmp_path, monkeypatch)
+    receipt = Path(tmp_path / "output" / active["receiptRef"])
+    payload = json.loads(receipt.read_text(encoding="utf-8"))
+    payload["attemptId"] = "def"
+    _write_json(receipt, payload)
+
+    with pytest.raises(ValueError) as excinfo:
+        bundle.load_active_dependency_bundle(repo_root=repo)
+
+    assert not isinstance(excinfo.value, bundle.AppDependencyBundleStaleError)
+
+
 def test_active_bundle_rejects_receipt_rebinding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

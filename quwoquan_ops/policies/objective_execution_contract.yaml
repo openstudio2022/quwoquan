@@ -94,7 +94,7 @@ schemas:
   effect_readback:
     required_fields: [status, effect_id, idempotency_key, exact_match, provider_receipt_ref]
   admission_readback:
-    required_fields: [status, stage, write_concurrency, temporary_branch_allowed, branch_policy_digest, reason, terminal]
+    required_fields: [status, stage, write_concurrency, persistent_lane_allowed, branch_policy_digest, reason, terminal]
 
 commands:
   append_transition:
@@ -136,6 +136,7 @@ journal:
   event_atomic_write: private_staging_fsync_exclusive_publish_fsync_directory
   exclusive_publish:
     darwin: renameatx_np_RENAME_EXCL
+    linux: renameat2_RENAME_NOREPLACE
     unsupported_platform: fail_closed
     overwrite_fallback_allowed: false
   derived_atomic_write: descriptor_relative_fsync_replace_fsync_directory
@@ -187,17 +188,17 @@ admission:
     statuses:
       admitted:
         reason_policy: fixed
-        reason: temporary_execution_lifecycle_admitted
+        reason: persistent_lane_lifecycle_admitted
         terminal: admitted
-        write_concurrency: 2
-        temporary_branch_allowed: true
+        write_concurrency: 6
+        persistent_lane_allowed: true
         branch_policy_digest: sha256_required
       not_admitted:
         reason_policy: fixed
-        reason: temporary_execution_lifecycle_not_admitted
+        reason: persistent_lane_lifecycle_not_admitted
         terminal: not_admitted
         write_concurrency: 1
-        temporary_branch_allowed: false
+        persistent_lane_allowed: false
         branch_policy_digest: sha256_required
       blocked:
         reason_policy: dynamic_detail
@@ -205,10 +206,10 @@ admission:
         fallback_reason: dynamic_inspection_unavailable
         terminal: OEX.ADMISSION_BLOCKED
         write_concurrency: 0
-        temporary_branch_allowed: false
+        persistent_lane_allowed: false
         branch_policy_digest: null
   derivation:
-    admitted_requires_all: [pull_request_prefix_declared, isolated_writer_branch, declared_promotion_path, mandatory_cleanup_after_promotion_or_abort, concurrency_evidence_required]
+    admitted_requires_all: [pull_request_prefix_declared, isolated_writer_branch, declared_promotion_path, mandatory_fast_forward_resync_after_integration_or_abort, retained_worktree_lifecycle, concurrency_evidence_required]
   writer_lease: exclusive_nonblocking
   loser_effect_allowed: false
   loser_event_allowed: false

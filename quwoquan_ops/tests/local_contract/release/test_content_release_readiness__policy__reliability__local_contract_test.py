@@ -166,7 +166,7 @@ def test_media_edge_health_uses_edge_root_not_carrier_path_base__local_contract(
         assert "/media/video/" not in media["url"]
 
 
-def test_content_release_import_plane_excludes_tag_and_search__local_contract(
+def test_content_release_import_plane_includes_search_but_excludes_tag__local_contract(
     monkeypatch,
 ) -> None:
     topology = stackctl.load_environment_topology()
@@ -180,7 +180,7 @@ def test_content_release_import_plane_excludes_tag_and_search__local_contract(
     assert "content-service" in names
     assert "entity-service" in names
     assert "tag-service" not in names
-    assert "search-service" not in names
+    assert "search-service" in names
 
     composition = compile_provider_runtime_composition(
         environment="alpha",
@@ -210,6 +210,26 @@ def test_content_release_import_plane_excludes_tag_and_search__local_contract(
     }
     assert "tag-service" in full_plane
     assert "search-service" in full_plane
+
+
+def test_content_consumer_health_probes_search_service_endpoint__local_contract() -> None:
+    topology = stackctl.load_environment_topology()
+    manifest = stackctl.load_port_manifest()
+    for target_name in ("alpha-local", "beta-local", "gamma-local"):
+        checks = stackctl._health_checks_for_target(
+            topology,
+            target_name,
+            "content-consumer",
+            workload="content-release",
+        )
+        search = next(item for item in checks if item["name"] == "search-service")
+        port = stackctl.canonical_port(manifest, target_name, "search-service")
+        assert search == {
+            "name": "search-service",
+            "scope": "content-import",
+            "url": f"http://127.0.0.1:{port}/healthz",
+            "headers": {"Host": "search-service"},
+        }
 
 
 def test_content_consumer_feed_health_uses_canonical_homepage_route__local_contract() -> None:

@@ -34,8 +34,6 @@ REVIEWER_CONTEXT_BYTE_BUDGET = 24 * 1024
 SKILL_LINE_BUDGET = 500
 SKILL_DESCRIPTION_EACH_BUDGET = 500
 SKILL_DESCRIPTION_TOTAL_BUDGET = 8000
-COMMAND_FILE_LINE_BUDGET = 12
-HARNESS_STUB_LINE_BUDGET = 12
 
 PRUNED_DIR_NAMES = {
     ".git",
@@ -49,30 +47,98 @@ PRUNED_DIR_NAMES = {
     "build",
 }
 
-WORKFLOW_SKILLS = (
-    "explore",
-    "prd",
-    "design",
-    "dev",
-    "continue",
-    "plan-next",
-    "review",
-    "commit",
-    "environment-ops",
-    "content-production",
-    "incident-inspection",
-    "distill",
-)
-COMMAND_BOUND_WORKFLOWS = (
-    "explore",
-    "prd",
-    "design",
-    "dev",
-    "continue",
-    "plan-next",
-    "review",
-    "commit",
-)
+def _discover_workflow_skill_metadata() -> tuple[dict[str, dict[str, Any]], list[str]]:
+    agents_root = ROOT / ".agents"
+    root = agents_root / "skills"
+    workflows: dict[str, dict[str, Any]] = {}
+    issues: list[str] = []
+    if agents_root.is_symlink():
+        return workflows, [".agents 必须是 real non-symlink directory"]
+    if not agents_root.is_dir():
+        return workflows, [".agents 不存在"]
+    if root.is_symlink():
+        return workflows, [".agents/skills 必须是 real non-symlink directory"]
+    if not root.is_dir():
+        return workflows, [".agents/skills 不存在"]
+    try:
+        children = sorted(root.iterdir(), key=lambda item: item.name)
+    except OSError as error:
+        return workflows, [f".agents/skills 无法枚举（{error}）"]
+    directories: list[Path] = []
+    for child in children:
+        if child.is_symlink():
+            issues.append(
+                f"{_rel(child)}: Skill 直接子项必须是 real directory，不得是 symlink"
+            )
+            continue
+        if child.is_dir():
+            directories.append(child)
+    for directory in directories:
+        issue_count = len(issues)
+        path = directory / "SKILL.md"
+        rel = _rel(path)
+        if path.is_symlink() or not path.is_file():
+            issues.append(f"{rel}: 每个 Skill 直接子目录必须包含 regular non-symlink SKILL.md")
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            issues.append(f"{rel}: 无法读取 SKILL.md（{error}）")
+            continue
+        fields, error = _frontmatter(text)
+        if error or fields is None:
+            issues.append(f"{rel}: {error or 'frontmatter 无效'}")
+            continue
+        metadata = fields.get("metadata")
+        if not isinstance(metadata, dict):
+            issues.append(f"{rel}: metadata 必须是映射")
+        elif metadata.get("kind") != "workflow":
+            issues.append(f"{rel}: metadata.kind 必须为 workflow")
+        if fields.get("name") != directory.name:
+            issues.append(f"{rel}: name={fields.get('name')!r} 与目录名不一致")
+        extra = sorted(set(fields) - SPEC_FRONTMATTER_FIELDS)
+        if extra:
+            issues.append(f"{rel}: frontmatter 含非开放字段 {extra}")
+        description = fields.get("description")
+        if not isinstance(description, str) or not description:
+            issues.append(f"{rel}: 缺 description")
+        elif len(description) > SKILL_DESCRIPTION_EACH_BUDGET:
+            issues.append(f"{rel}: description 超过 {SKILL_DESCRIPTION_EACH_BUDGET} 字符")
+        if len(text.splitlines()) > SKILL_LINE_BUDGET:
+            issues.append(f"{rel}: 超过 {SKILL_LINE_BUDGET} 行，重资料应按需放 references")
+        declared = metadata.get("command") if isinstance(metadata, dict) else None
+        if declared is not None and declared != f"/{directory.name}":
+            issues.append(f"{rel}: metadata.command={declared!r}，应为 /{directory.name}")
+        headings = re.findall(r"^##\s+(.+?)\s*$", text, re.M)
+        if headings != list(REQUIRED_SKILL_SECTIONS):
+            issues.append(
+                f"{rel}: 二级段落必须且只能按顺序为 "
+                + " / ".join(REQUIRED_SKILL_SECTIONS)
+            )
+        if any(token in text for token in ("completion-criteria.md", "interaction-protocols.md")):
+            issues.append(f"{rel}: 完成与交互契约必须就地声明，不得跳转共享文档")
+        if len(issues) == issue_count:
+            workflows[directory.name] = fields
+    return workflows, issues
+
+
+def _workflow_skill_metadata() -> dict[str, dict[str, Any]]:
+    workflows, _ = _discover_workflow_skill_metadata()
+    return workflows
+
+
+def _workflow_skills() -> tuple[str, ...]:
+    return tuple(_workflow_skill_metadata())
+
+
+def _command_bound_workflows() -> tuple[str, ...]:
+    return tuple(
+        name
+        for name, fields in _workflow_skill_metadata().items()
+        if isinstance(fields.get("metadata"), dict)
+        and fields["metadata"].get("command") is not None
+    )
+
 CONTROL_WORKFLOWS_WITHOUT_AUTOMATIC_REVIEW = {
     "explore",
     "continue",
@@ -136,9 +202,56 @@ RETIRED_REFERENCE_TOKENS = (
     "interaction-protocols.md",
     "generate_codex_agents.py",
 )
+RETIRED_WFR_PATHS = (
+    "specs/feature-tree/runtime/development-workflow-governance/workflow-resolution/spec.md",
+    "quwoquan_ops/policies/workflow_resolution_contract.yaml",
+    "quwoquan_ops/cli/lib/workflow_resolution/__init__.py",
+    "quwoquan_ops/cli/lib/workflow_resolution/contract.py",
+    "quwoquan_ops/cli/lib/workflow_resolution/resolver.py",
+    "quwoquan_ops/cli/workflow_resolver.py",
+    "quwoquan_ops/cli/workflow_host_adapter.py",
+    "quwoquan_ops/gate/verify_workflow_resolution.py",
+    "quwoquan_ops/tests/local_contract/gate/test_workflow_resolution__gate__local_contract_test.py",
+    "quwoquan_ops/tests/local_contract/gate/test_workflow_resolution__resolver__local_contract_test.py",
+)
+WFR_SCAN_SOURCE_ROOTS = (
+    "quwoquan_ops/cli/",
+    "quwoquan_ops/gate/",
+    "quwoquan_ops/policies/",
+    ".agents/",
+    ".cursor/commands/",
+    "specs/feature-tree/runtime/development-workflow-governance/",
+)
+WFR_SCAN_SOURCE_SUFFIXES = {
+    ".json",
+    ".md",
+    ".py",
+    ".sh",
+    ".toml",
+    ".yaml",
+    ".yml",
+}
+WFR_SCAN_EXCLUDED_PREFIXES = (
+    "quwoquan_ops/tests/",
+)
+WFR_SCAN_EXCLUDED_PATHS = {
+    # 本门禁必须声明退役 identity；扫描自身只会把 detector 当成回潮源。
+    "quwoquan_ops/gate/verify_agent_context_budget.py",
+}
+WFR_GENERATED_PATH_PARTS = {
+    "build",
+    "dist",
+    "generated",
+}
+RETIRED_WFR_STRUCTURE_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:"
+    r"workflow_resolve_receipt|workflow_resolve_source|workflow_resolution|workflow_resolver|"
+    r"workflow_resolve|resolver_receipt|route_receipt|workflow-resolution-contract|"
+    r"workflow-resolution|WFR\.[A-Z][A-Z0-9_]*"
+    r")(?![A-Za-z0-9_])|[\"'`]route receipt[\"'`]"
+)
 HARNESS_PRIVATE_TRUTH_MARKERS = (
     ".cursor/rules/",
-    ".cursor/skills/environment-ops/SKILL.md",
 )
 GRADE_TAGS = {"MUST NOT", "MUST", "SHOULD NOT", "SHOULD", "MAY", "ADVISORY"}
 CHECKLIST_ITEM_RE = re.compile(r"^-\s*\[(?P<tag>[A-Z ]+)\]")
@@ -207,6 +320,66 @@ def _frontmatter(text: str) -> tuple[dict[str, Any] | None, str | None]:
     if not isinstance(value, dict):
         return None, "frontmatter 不是键值映射"
     return value, None
+
+
+def _is_generated_wfr_source(rel: str) -> bool:
+    parts = Path(rel).parts
+    return any(part in WFR_GENERATED_PATH_PARTS for part in parts) or any(
+        name_part == "generated"
+        for name_part in Path(rel).name.lower().replace("-", ".").replace("_", ".").split(".")
+    )
+
+
+def _is_active_wfr_source(rel: str) -> bool:
+    if rel in WFR_SCAN_EXCLUDED_PATHS:
+        return False
+    if any(rel.startswith(prefix) for prefix in WFR_SCAN_EXCLUDED_PREFIXES):
+        return False
+    if _is_generated_wfr_source(rel):
+        return False
+    if rel == "Makefile" or rel == "AGENTS.md" or rel.endswith("/AGENTS.md"):
+        return True
+    return rel.endswith(tuple(WFR_SCAN_SOURCE_SUFFIXES)) and any(
+        rel.startswith(root) for root in WFR_SCAN_SOURCE_ROOTS
+    )
+
+
+def _tracked_active_wfr_sources() -> tuple[list[Path], list[str]]:
+    tracked = _tracked_files()
+    if tracked is None:
+        return [], ["无法查询 git 索引，退役 WFR 结构扫描不可执行"]
+    paths: list[Path] = []
+    for rel in sorted(tracked):
+        if not _is_active_wfr_source(rel):
+            continue
+        path = ROOT / rel
+        # git ls-files 仍会列出工作树中尚未登记删除的旧路径；只扫描当前活跃 regular file。
+        if path.is_symlink() or not path.is_file():
+            continue
+        paths.append(path)
+    return paths, []
+
+
+def check_retired_workflow_resolution() -> list[str]:
+    issues = [
+        f"退役 WFR 路径回潮: {rel}"
+        for rel in RETIRED_WFR_PATHS
+        if (ROOT / rel).exists() or (ROOT / rel).is_symlink()
+    ]
+    sources, discovery_issues = _tracked_active_wfr_sources()
+    issues.extend(discovery_issues)
+    for path in sources:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError) as error:
+            issues.append(f"{_rel(path)}: 无法检查退役 WFR 结构身份（{error}）")
+            continue
+        for line_number, line in enumerate(lines, start=1):
+            for match in RETIRED_WFR_STRUCTURE_RE.finditer(line):
+                issues.append(
+                    f"{_rel(path)}:{line_number}: 退役 WFR 结构身份回潮: {match.group(0)}"
+                )
+    return issues
 
 
 def check_required_sources_and_carriers() -> list[str]:
@@ -322,21 +495,23 @@ def check_manifest_budget() -> list[str]:
                         f"{target}: manifest 字段与 agent governance contract 不一致"
                     )
                 size = len(
-                    (_serialize_context_manifest(payload) + "\n").encode("utf-8")
+                    _serialize_context_manifest(payload).encode("utf-8")
                 )
                 if size > MANIFEST_BYTE_BUDGET:
+                    import hashlib
+                    from lib.evidence_fingerprint import canonical_json_bytes
                     from lib.feature_context_fingerprint import referenced_fingerprint_binding
 
+                    receipt = payload["evidence_fingerprint"]["receipt"]
+                    receipt_digest = hashlib.sha256(canonical_json_bytes(receipt)).hexdigest()
                     payload["evidence_fingerprint"] = referenced_fingerprint_binding(
-                        payload["evidence_fingerprint"]["receipt"],
+                        receipt,
                         receipt_ref=(
                             ".qwq_output/env/repo/runs/feature-tree/"
-                            "context-manifest.evidence-fingerprint.json"
+                            f"by-fingerprint/receipts/{receipt_digest}.json"
                         ),
                     )
-                    size = len(
-                        (_serialize_context_manifest(payload) + "\n").encode("utf-8")
-                    )
+                    size = len(_serialize_context_manifest(payload).encode("utf-8"))
                 if size > MANIFEST_BYTE_BUDGET:
                     issues.append(f"{target}: 默认 manifest {size} bytes 超过 8192 bytes")
         except (ImportError, OSError, ValueError) as error:
@@ -345,62 +520,14 @@ def check_manifest_budget() -> list[str]:
 
 
 def check_workflow_skills() -> list[str]:
-    issues: list[str] = []
     root = ROOT / ".agents/skills"
+    workflow_metadata, issues = _discover_workflow_skill_metadata()
     if not root.is_dir():
-        return [".agents/skills 不存在"]
-
-    on_disk = {path.name for path in root.iterdir() if path.is_dir()}
-    for name in sorted(set(WORKFLOW_SKILLS) - on_disk):
-        issues.append(f"缺 Workflow Skill: .agents/skills/{name}/SKILL.md")
-    for name in sorted(on_disk - set(WORKFLOW_SKILLS)):
-        issues.append(f".agents/skills/{name}: 顶层只允许完整 Workflow Skill")
-
-    descriptions = 0
-    for name in sorted(set(WORKFLOW_SKILLS) & on_disk):
-        path = root / name / "SKILL.md"
-        if not path.is_file():
-            issues.append(f".agents/skills/{name}: 缺 SKILL.md")
-            continue
-        text = path.read_text(encoding="utf-8")
-        rel = _rel(path)
-        fields, error = _frontmatter(text)
-        if error:
-            issues.append(f"{rel}: {error}")
-            continue
-        assert fields is not None
-        extra = sorted(set(fields) - SPEC_FRONTMATTER_FIELDS)
-        if extra:
-            issues.append(f"{rel}: frontmatter 含非开放字段 {extra}")
-        if fields.get("name") != name:
-            issues.append(f"{rel}: name={fields.get('name')!r} 与目录名不一致")
-        description = str(fields.get("description") or "")
-        descriptions += len(description)
-        if not description:
-            issues.append(f"{rel}: 缺 description")
-        elif len(description) > SKILL_DESCRIPTION_EACH_BUDGET:
-            issues.append(f"{rel}: description 超过 {SKILL_DESCRIPTION_EACH_BUDGET} 字符")
-        if len(text.splitlines()) > SKILL_LINE_BUDGET:
-            issues.append(f"{rel}: 超过 {SKILL_LINE_BUDGET} 行，重资料应按需放 references")
-
-        metadata = fields.get("metadata") or {}
-        if not isinstance(metadata, dict) or metadata.get("kind") != "workflow":
-            issues.append(f"{rel}: metadata.kind 必须为 workflow")
-            metadata = {}
-        declared = metadata.get("command")
-        expected = f"/{name}" if name in COMMAND_BOUND_WORKFLOWS else None
-        if declared != expected:
-            issues.append(f"{rel}: metadata.command={declared!r}，应为 {expected!r}")
-
-        headings = re.findall(r"^##\s+(.+?)\s*$", text, re.M)
-        if headings != list(REQUIRED_SKILL_SECTIONS):
-            issues.append(
-                f"{rel}: 二级段落必须且只能按顺序为 "
-                + " / ".join(REQUIRED_SKILL_SECTIONS)
-            )
-        if any(token in text for token in ("completion-criteria.md", "interaction-protocols.md")):
-            issues.append(f"{rel}: 完成与交互契约必须就地声明，不得跳转共享文档")
-
+        return issues
+    if not workflow_metadata:
+        issues.append(".agents/skills 未发现完整验证通过的 Workflow Skill")
+        return issues
+    descriptions = sum(len(fields["description"]) for fields in workflow_metadata.values())
     if descriptions > SKILL_DESCRIPTION_TOTAL_BUDGET:
         issues.append(
             f".agents/skills description 合计 {descriptions} 字符超过 "
@@ -408,38 +535,35 @@ def check_workflow_skills() -> list[str]:
         )
     return issues
 
-
 def check_commands_and_harness_stubs() -> list[str]:
     issues: list[str] = []
+    command_bound = set(_command_bound_workflows())
     commands = ROOT / ".cursor/commands"
     command_files = {path.stem for path in commands.glob("*.md")} if commands.is_dir() else set()
-    for name in sorted(set(COMMAND_BOUND_WORKFLOWS) - command_files):
+    for name in sorted(command_bound - command_files):
         issues.append(f"缺 Cursor 命令薄壳: .cursor/commands/{name}.md")
-    for name in sorted(command_files - set(COMMAND_BOUND_WORKFLOWS)):
-        issues.append(f".cursor/commands/{name}.md: 没有同名 Workflow Skill")
+    for name in sorted(command_files - command_bound):
+        issues.append(f".cursor/commands/{name}.md: 没有声明同名 command 的 Workflow Skill")
     for name in sorted(command_files):
         path = commands / f"{name}.md"
         text = path.read_text(encoding="utf-8")
-        _, error = _frontmatter(text)
+        match = re.match(r"---\n.*?\n---\n(?P<body>.*)\Z", text, re.S)
+        fields, error = _frontmatter(text)
         if error:
             issues.append(f"{_rel(path)}: {error}")
-        if len(text.splitlines()) > COMMAND_FILE_LINE_BUDGET:
-            issues.append(f"{_rel(path)}: 超过 {COMMAND_FILE_LINE_BUDGET} 行命令薄壳预算")
-        if f".agents/skills/{name}/SKILL.md" not in text:
-            issues.append(f"{_rel(path)}: 未指向 .agents/skills/{name}/SKILL.md")
+        if fields is not None and fields.get("name") != f"/{name}":
+            issues.append(f"{_rel(path)}: frontmatter name 必须为 /{name}")
+        body = match.group("body").strip() if match is not None else ""
+        expected = f"加载并按 `.agents/skills/{name}/SKILL.md` 执行。"
+        if body != expected:
+            issues.append(f"{_rel(path)}: 正文必须仅为 canonical 单行 Skill 投影")
 
+    forbidden_stubs = []
     for pattern in (".cursor/skills/*/SKILL.md", ".codex/skills/*/SKILL.md"):
-        for path in sorted(ROOT.glob(pattern)):
-            text = path.read_text(encoding="utf-8")
-            _, error = _frontmatter(text)
-            if error:
-                issues.append(f"{_rel(path)}: {error}")
-            if len(text.splitlines()) > HARNESS_STUB_LINE_BUDGET:
-                issues.append(f"{_rel(path)}: 超过 {HARNESS_STUB_LINE_BUDGET} 行 adapter stub 预算")
-            if ".agents/skills/" not in text:
-                issues.append(f"{_rel(path)}: 未指向 .agents/skills 真相源")
+        forbidden_stubs.extend(sorted(ROOT.glob(pattern)))
+    for path in forbidden_stubs:
+        issues.append(f"{_rel(path)}: 禁止宿主专属 Workflow stub；只保留 .agents/skills 真相源")
     return issues
-
 
 def _load_registry() -> tuple[dict[str, Any] | None, list[str]]:
     path = ROOT / ".agents/skills/review/references/registry.yaml"
@@ -458,6 +582,7 @@ def check_checklists_and_registry() -> list[str]:
     registry, issues = _load_registry()
     if registry is None:
         return issues
+    workflow_skills = set(_workflow_skills())
     if registry.get("schema_version") != 2:
         issues.append("registry.yaml: schema_version 必须为 2")
     if any(key in registry for key in ("concurrency", "bindings")):
@@ -467,6 +592,7 @@ def check_checklists_and_registry() -> list[str]:
     expected_limits = {
         "max_parallel": 2,
         "max_role_invocations": 4,
+        "max_evidence_timeout_seconds": 3600,
         "reviewer_context_bytes": REVIEWER_CONTEXT_BYTE_BUDGET,
     }
     for key, expected in expected_limits.items():
@@ -487,7 +613,7 @@ def check_checklists_and_registry() -> list[str]:
         if not isinstance(config, dict):
             issues.append(f"registry.yaml: evidence.{evidence_id} 必须是映射")
             continue
-        for key in ("command", "segment", "required", "covers"):
+        for key in ("command", "segment", "required", "covers", "timeout_seconds"):
             if key not in config:
                 issues.append(f"registry.yaml: evidence.{evidence_id} 缺 {key}")
         if config.get("segment") != "POST":
@@ -496,6 +622,16 @@ def check_checklists_and_registry() -> list[str]:
             issues.append(f"registry.yaml: evidence.{evidence_id}.required 必须为 bool")
         if not isinstance(config.get("covers"), list):
             issues.append(f"registry.yaml: evidence.{evidence_id}.covers 必须为 list")
+        evidence_timeout = config.get("timeout_seconds")
+        if (
+            not isinstance(evidence_timeout, int)
+            or isinstance(evidence_timeout, bool)
+            or evidence_timeout <= 0
+            or evidence_timeout > 3600
+        ):
+            issues.append(
+                f"registry.yaml: evidence.{evidence_id}.timeout_seconds 必须为 1..3600 的整数"
+            )
         command = str(config.get("command") or "")
         make = re.fullmatch(r"make\s+([a-zA-Z0-9][a-zA-Z0-9_-]*)", command)
         if make and make.group(1) not in root_targets:
@@ -531,8 +667,12 @@ def check_checklists_and_registry() -> list[str]:
         role = str(specialist.get("role") or "")
         if role and not (roles_root / role / "ROLE.md").is_file():
             issues.append(f"registry.yaml: specialist 角色 {role} 缺 ROLE.md")
-        for workflow, checklist in (specialist.get("checklists") or {}).items():
-            if workflow not in WORKFLOW_SKILLS:
+        checklists = specialist.get("checklists")
+        if not isinstance(checklists, dict):
+            issues.append(f"registry.yaml: profiles.{profile}.specialist.checklists 必须是映射")
+            checklists = {}
+        for workflow, checklist in checklists.items():
+            if workflow not in workflow_skills:
                 issues.append(f"registry.yaml: profiles.{profile} 引用未知 workflow {workflow}")
             if not (ROOT / ".agents/skills/review/references" / str(checklist)).is_file():
                 issues.append(f"registry.yaml: profiles.{profile} checklist 不存在: {checklist}")
@@ -541,11 +681,15 @@ def check_checklists_and_registry() -> list[str]:
     if not isinstance(workflows, dict):
         issues.append("registry.yaml: workflows 必须是映射")
         workflows = {}
-    for workflow in WORKFLOW_SKILLS:
+    for workflow in sorted(workflow_skills):
         if workflow not in workflows:
             issues.append(f"registry.yaml: 缺 workflows.{workflow}")
     for workflow, config in workflows.items():
-        if workflow not in WORKFLOW_SKILLS or not isinstance(config, dict):
+        if workflow not in workflow_skills:
+            issues.append(f"registry.yaml: workflows.{workflow} 未对应成功发现的 Workflow Skill")
+            continue
+        if not isinstance(config, dict):
+            issues.append(f"registry.yaml: workflows.{workflow} 必须是映射")
             continue
         if config.get("segments") != ["PRE", "POST"]:
             issues.append(f"registry.yaml: workflows.{workflow}.segments 必须为 [PRE, POST]")
@@ -762,6 +906,7 @@ def check_adapter_generation() -> list[str]:
 
 CHECKS = (
     ("载体分层", check_required_sources_and_carriers),
+    ("WFR 回潮", check_retired_workflow_resolution),
     ("AGENTS 链预算", check_agents_budget),
     ("默认 manifest 预算", check_manifest_budget),
     ("Workflow Skill 五段", check_workflow_skills),

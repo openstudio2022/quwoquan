@@ -153,6 +153,9 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         )[0]
         bounded_content_services = script.split(
             "content_slice_services=(", 1
+        )[1].split("\n    )", 1)[0]
+        bounded_up_services = script.split(
+            "content_slice_up_services=(", 1
         )[1].split("\n  )", 1)[0]
 
         self.assertIn('profiles: ["assistant-runtime"]', assistant)
@@ -171,6 +174,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "content-service",
             "user-service",
             "entity-service",
+            "search-service",
         ):
             self.assertIn(service_name, script)
         self.assertIn(
@@ -188,8 +192,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
         self.assertIn("content_slice_services+=(product-ops-service)", script)
         self.assertIn("PRODUCT_OPS_REQUIRED=1", script)
         self.assertIn("PRODUCT_TELEMETRY_AVAILABLE=0", script)
-        self.assertIn("compose_up_args+=(product-ops-service)", script)
-        self.assertIn("compose_up_args+=(api-edge gamma-proxy)", script)
+        self.assertIn("content_slice_up_services+=(product-ops-service)", script)
+        self.assertIn("content_slice_up_services+=(api-edge gamma-proxy)", script)
         self.assertIn(
             "bounded content workloads require canonical Docker Compose service slicing",
             script,
@@ -207,6 +211,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "api-edge:\n        condition: service_healthy",
             proxy,
         )
+        self.assertIn("search-service", bounded_content_services)
+        self.assertIn("search-service", bounded_up_services)
         self.assertNotIn("assistant-service", bounded_content_services)
         self.assertNotIn("required: false", proxy)
 

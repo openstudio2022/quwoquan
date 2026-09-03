@@ -40,12 +40,12 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 		bson.M{
 			"environment": environment, "sourceOwner": "other_owner",
 			"status": "active", "activeReleaseId": "rel_wrong_owner",
-			"manifestDigest": manifestDigest,
+			"manifestDigest": manifestDigest, "releaseClass": "commercial",
 		},
 		bson.M{
 			"environment": environment, "sourceOwner": "qwq_data",
 			"status": "active", "activeReleaseId": "rel_empty",
-			"manifestDigest": manifestDigest,
+			"manifestDigest": manifestDigest, "releaseClass": "commercial",
 		},
 	}); err != nil {
 		t.Fatalf("insert release states: %v", err)
@@ -87,8 +87,24 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 	}
 	if snapshot.ActiveReleaseID != releaseID || snapshot.SourceOwner != "qwq_data" ||
 		snapshot.Status != "active" || snapshot.ManifestDigest != manifestDigest ||
-		snapshot.ReadbackStatus != "passed" || snapshot.Posts != 1 ||
-		snapshot.PlayableVideos != 1 {
+		snapshot.ReleaseClass != "commercial" || snapshot.ReadbackStatus != "passed" ||
+		snapshot.Posts != 1 || snapshot.PlayableVideos != 1 {
 		t.Fatalf("active supply snapshot mismatch: %+v", snapshot)
+	}
+
+	// 同一 release identity 修复 releaseClass 时必须立即切换缓存身份；旧
+	// commercial snapshot 不得在 TTL 内继续放行匿名 research feed。
+	if _, err := collection.UpdateOne(ctx,
+		bson.M{"environment": environment, "sourceOwner": "qwq_data"},
+		bson.M{"$set": bson.M{"releaseClass": "research"}},
+	); err != nil {
+		t.Fatalf("switch active release class: %v", err)
+	}
+	snapshot, err = reader.ActiveSupplySnapshot(ctx)
+	if err != nil {
+		t.Fatalf("ActiveSupplySnapshot research class: %v", err)
+	}
+	if snapshot.ReleaseClass != "research" || !snapshot.IsResearchRelease() {
+		t.Fatalf("releaseClass cache identity drifted: %+v", snapshot)
 	}
 }

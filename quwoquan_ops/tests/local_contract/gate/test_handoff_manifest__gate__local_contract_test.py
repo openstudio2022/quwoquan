@@ -61,7 +61,9 @@ VALID = """# 轮次交接单
 - `make verify-feature-tree` exit=0 2026-08-25T12:00:00+08:00 abc1234
 """
 
-_CURRENT_HEAD = "8c0451797ead697f0aa3981bba7603f9cb108245"
+_CURRENT_HEAD = subprocess.run(
+    ["git", "rev-parse", "HEAD"], cwd=_REPO_ROOT, check=True, capture_output=True, text=True
+).stdout.strip()
 VALID = VALID.replace("`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`", f"`{_CURRENT_HEAD}`", 1)
 
 

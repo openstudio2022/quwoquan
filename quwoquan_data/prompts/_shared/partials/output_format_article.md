@@ -5,6 +5,7 @@
   `citedSourcePaths`、`coveredFacts`、`creativePlan`（≥2 候选构思 + selectedPlanId + selectionReason +
   readerPromise + unusedFacts）、`selfCritique`（readerPromise / titlePromise / informationDensity /
   evidenceBoundary / personaBoundary）。
-- 之后运行 `post --stage review` 过门禁；失败按 `5.review/repair_report.json` 的 issues 自修重跑，
-  直到 `ref_review_gate` 全绿（approved），不得在未过门时宣称完成。
+- 写回后按当前 `4.draft` stage contract 补齐并自检 draft meta、author self-check 与 agent result envelope，
+  运行其中点名的 verifier，再由宿主 AI 用真实结果显式执行 `task stage-close`；不得调用任何
+  旧式组合审稿入口，也不得假定 review 自动运行、自动批准。
 </output_format>

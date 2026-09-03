@@ -617,3 +617,102 @@ def test_duplicate_request_identities_are_rejected_without_writing(
 
     assert excinfo.value.code == "OPS.RESEARCH.PROOF_EVIDENCE_REUSED"
     assert not _proof_path(output_root).exists()
+
+
+
+def _strict_asset(*, kind: str = "image", require_range: bool = False) -> dict[str, object]:
+    body = b"\x00\x00\x00\x18ftyp" if kind == "video" else b"private-image"
+    return {
+        "assetId": "strict-video" if kind == "video" else "strict-image",
+        "kind": kind,
+        "expectedBytes": len(body),
+        "expectedSha256": "sha256:" + hashlib.sha256(body).hexdigest(),
+        "expectedMimeType": "video/mp4" if kind == "video" else "image/jpeg",
+        "privateDeliveryRef": "media/objects/sha256/aa/strict",
+        "classifications": ["typed_video", "premium_video"] if kind == "video" else ["image"],
+        "requireRange": require_range,
+    }
+
+
+def test_release_bound_signed_media__verifies_full_hash_and_video_range__local_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asset = _strict_asset(kind="video", require_range=True)
+    signed_url = ORIGINAL_URL
+
+    def fake_json(*args, **kwargs):
+        assert kwargs["body"] == {"mediaId": "strict-video", "purpose": "view"}
+        assert kwargs["headers"]["X-Research-Identity-Attestation"] == ATTESTATION_TOKEN
+        return {
+            "mediaId": "strict-video",
+            "originalUrl": signed_url,
+            "auditId": "audit-strict-video",
+        }
+
+    calls: list[dict[str, str]] = []
+
+    def fake_bytes(url, *, headers, timeout_seconds, max_bytes):
+        calls.append(dict(headers))
+        if headers.get("Range") == "bytes=0-1":
+            return 206, b"\x00\x00", "video/mp4", "bytes 0-1/12"
+        return 200, b"\x00\x00\x00\x18ftyp", "video/mp4", ""
+
+    monkeypatch.setattr(probe, "request_local_environment_json", fake_json)
+    monkeypatch.setattr(probe, "_fetch_media_bytes", fake_bytes)
+
+    evidence = probe.probe_release_bound_signed_media(
+        api_base_url=API_BASE,
+        session=_fake_actor().session,
+        asset=asset,
+        attestation_token=ATTESTATION_TOKEN,
+    )
+
+    assert evidence["hashVerified"] is True
+    assert evidence["sha256"] == asset["expectedSha256"]
+    assert evidence["rangeStatusCode"] == 206
+    assert [call.get("Range") for call in calls] == [None, "bytes=0-1"]
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_fragment"),
+    [
+        ("empty", "bytes/MIME/hash"),
+        ("hash", "bytes/MIME/hash"),
+        ("range", "required byte Range"),
+    ],
+)
+def test_release_bound_signed_media__byte_hash_or_range_failure_gate_blocks__local_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
+    expected_fragment: str,
+) -> None:
+    asset = _strict_asset(kind="video", require_range=True)
+    monkeypatch.setattr(
+        probe,
+        "request_local_environment_json",
+        lambda *args, **kwargs: {
+            "mediaId": "strict-video",
+            "originalUrl": ORIGINAL_URL,
+            "auditId": "audit-strict-video",
+        },
+    )
+
+    def fake_bytes(url, *, headers, timeout_seconds, max_bytes):
+        if headers.get("Range") == "bytes=0-1":
+            if failure == "range":
+                return 200, b"\x00\x00", "video/mp4", ""
+            return 206, b"\x00\x00", "video/mp4", "bytes 0-1/12"
+        if failure == "empty":
+            return 200, b"", "video/mp4", ""
+        if failure == "hash":
+            return 200, b"wrong-bytes!", "video/mp4", ""
+        return 200, b"\x00\x00\x00\x18ftyp", "video/mp4", ""
+
+    monkeypatch.setattr(probe, "_fetch_media_bytes", fake_bytes)
+
+    with pytest.raises(probe.ResearchIsolationProbeError, match=expected_fragment):
+        probe.probe_release_bound_signed_media(
+            api_base_url=API_BASE,
+            session=_fake_actor().session,
+            asset=asset,
+        )

@@ -1,4 +1,4 @@
-"""Public Data CLI binding for professional research-image acquisition."""
+"""Public CLI for explicit professional-image acquisition into CAS."""
 from __future__ import annotations
 
 import argparse
@@ -21,7 +21,6 @@ def handle_acquire_images(args: argparse.Namespace) -> None:
     try:
         receipt, path = acquire_professional_images(
             Path(args.manifest).expanduser().resolve(),
-            handoff_ref=Path(args.handoff_ref).expanduser().resolve(),
             manual_root=manual_root,
             output_root=output_root,
         )
@@ -39,41 +38,14 @@ def handle_acquire_images(args: argparse.Namespace) -> None:
 def register_acquire_images_parser(sub: argparse._SubParsersAction) -> None:
     parser = sub.add_parser(
         "acquire-images",
-        help="通过公开直链、平台支持 API 或人工文件取得 Pinterest/图虫研究图片",
+        help="按显式 manifest 取得专业研究图片并写 CAS",
     )
     parser.add_argument("--manifest", required=True)
-    parser.add_argument("--handoff-ref", required=True)
     parser.add_argument("--manual-root")
     parser.add_argument("--output-root")
     parser.set_defaults(handler=handle_acquire_images)
 
-    rebind = sub.add_parser(
-        "rebind-image-acquisition-manifest",
-        help="将已验证frozen physical image closure绑定到fresh handoff identity",
-    )
-    rebind.add_argument("--source-manifest", required=True)
-    rebind.add_argument("--handoff-ref", required=True)
-    rebind.add_argument("--destination", required=True)
-    rebind.set_defaults(handler=handle_rebind_image_acquisition_manifest)
 
 
-def handle_rebind_image_acquisition_manifest(args: argparse.Namespace) -> None:
-    from content.source.professional_image_acquisition import rebind_professional_image_acquisition_manifest
-    try:
-        manifest, path = rebind_professional_image_acquisition_manifest(
-            Path(args.source_manifest).expanduser().resolve(),
-            handoff_ref=Path(args.handoff_ref).expanduser().resolve(),
-            destination=Path(args.destination).expanduser().resolve(),
-        )
-    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
-        raise SystemExit(f"[task rebind-image-acquisition-manifest] GATE_BLOCK {exc}") from exc
-    print(json.dumps({
-        "manifestId": manifest["manifestId"], "sourceRevision": manifest["sourceRevision"],
-        "sourceDigest": manifest["sourceDigest"], "manifestPath": path.as_posix(),
-    }, ensure_ascii=False, indent=2))
 
-
-__all__ = [
-    "handle_acquire_images", "handle_rebind_image_acquisition_manifest",
-    "register_acquire_images_parser",
-]
+__all__ = ["handle_acquire_images", "register_acquire_images_parser"]

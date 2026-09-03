@@ -5,17 +5,27 @@ Clause bindings stay next to the test that actually asserts each outcome.
 from __future__ import annotations
 
 from copy import deepcopy
+import errno
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT / "quwoquan_ops/cli") not in sys.path:
     sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
 
-from lib.human_agent_delivery.eval_runner import evaluate_policy, load_eval_policy, run_eval  # noqa: E402
+from lib.human_agent_delivery import ContractError  # noqa: E402
+import lib.human_agent_delivery.eval_runner as eval_runner  # noqa: E402
+from lib.human_agent_delivery.eval_runner import (  # noqa: E402
+    evaluate_policy,
+    load_eval_policy,
+    run_eval,
+    write_report,
+)
 
 
 def policy() -> dict[str, object]:
@@ -67,7 +77,11 @@ def test_canonical_policy_passes_fixed_denominator_and_keeps_human_calibration_h
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/human-agent-delivery-interaction/spec.md#gwt-002.t4
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/human-agent-delivery-interaction/spec.md#gwt-002.t5
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/human-agent-delivery-interaction/spec.md#gwt-002.t7
-    report = run_eval(report_path=tmp_path / "report.json")
+    report_ref = Path(
+        ".qwq_output/env/repo/runs/human-agent-delivery-eval/tests/"
+        f"{tmp_path.name}-report.json"
+    )
+    report = run_eval(report_path=report_ref)
     assert report["status"] == "pass"
     assert report["fixture_count"] == 30
     assert report["family_counts"] == {"A": 3, "B": 3, "C": 2, "D": 3, "E": 3, "F": 3, "G": 8, "H": 5}
@@ -76,6 +90,23 @@ def test_canonical_policy_passes_fixed_denominator_and_keeps_human_calibration_h
     assert report["human_calibration"]["status"] == "not_observed"
     assert report["human_calibration"]["qualifying_role_session_count"] == 0
     assert report["human_calibration"]["machine_baseline_is_human_usability_evidence"] is False
+
+
+def test_g07_tracks_persistent_six_lane_canonical_admission() -> None:
+    loaded = policy()
+    fixture = next(item for item in loaded["fixtures"] if item["id"] == "G07")
+
+    assert fixture["state_probe"] == {"kind": "production_concurrency"}
+    assert fixture["expected_state"] == {
+        "s4_admission": "admitted",
+        "write_concurrency": 6,
+    }
+    result = next(
+        item
+        for item in evaluate_policy(loaded)["fixture_results"]
+        if item["fixture_id"] == "G07"
+    )
+    assert result["passed"] is True
 
 
 def test_every_declared_legal_branch_is_reachable_without_reprompting() -> None:
@@ -168,3 +199,129 @@ def test_upper_layer_pass_cannot_project_user_or_business_availability() -> None
     assert report["status"] == "block"
     assert any(item["check_id"] == "global.role_interaction_fixtures" for item in report["failed_checks"])
 
+
+
+@pytest.mark.parametrize(
+    "unsafe_path",
+    [
+        "/tmp/human-agent-delivery-report.json",
+        "../outside.json",
+        ".qwq_output/env/repo/runs/../outside.json",
+        "quwoquan_ops/report.json",
+        "README.md",
+    ],
+)
+def test_eval_report_path_rejects_absolute_traversal_and_source_paths(
+    unsafe_path: str,
+) -> None:
+    with pytest.raises(ContractError) as failure:
+        write_report({"status": "block"}, unsafe_path)
+    assert failure.value.code in {
+        "HAD.EVAL_REPORT_PATH_INVALID",
+        "HAD.EVAL_REPORT_PATH_OUTSIDE_RUNTIME_ROOT",
+    }
+    assert failure.value.causal_category in {"path_type", "path_boundary"}
+
+
+def test_eval_report_rejects_symlink_parent(tmp_path: Path) -> None:
+    parent_name = f"human-agent-delivery-eval-symlink-{tmp_path.name}"
+    parent = ROOT / ".qwq_output/env/repo/runs" / parent_name
+    external = tmp_path / "external"
+    external.mkdir()
+    parent.parent.mkdir(parents=True, exist_ok=True)
+    parent.symlink_to(external, target_is_directory=True)
+    try:
+        with pytest.raises(ContractError) as failure:
+            write_report({"status": "block"}, f".qwq_output/env/repo/runs/{parent_name}/report.json")
+        assert failure.value.code == "HAD.EVAL_REPORT_SYMLINK_FORBIDDEN"
+        assert failure.value.causal_category == "symlink"
+        assert not (external / "report.json").exists()
+    finally:
+        parent.unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize(
+    ("raised", "code", "category"),
+    [
+        (
+            PermissionError(errno.EACCES, "denied"),
+            "HAD.EVAL_REPORT_PERMISSION_DENIED",
+            "permission",
+        ),
+        (
+            OSError(errno.EIO, "io failure"),
+            "HAD.EVAL_REPORT_IO_FAILED",
+            "io",
+        ),
+    ],
+)
+def test_eval_report_preserves_permission_and_io_categories(
+    raised: OSError,
+    code: str,
+    category: str,
+) -> None:
+    failure = eval_runner._report_io_error(raised, label="eval report destination")
+    assert failure.code == code
+    assert failure.causal_category == category
+    assert failure.detail
+
+
+def test_eval_preserves_contract_code_detail_and_causal_category(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = ContractError(
+        "skill collection changed while accepting",
+        code="HAD.SKILL_DISCOVERY_CONCURRENT_DRIFT",
+        causal_category="concurrent_drift",
+    )
+
+    def fail_contract() -> dict[str, object]:
+        raise expected
+
+    monkeypatch.setattr(eval_runner, "load_contract", fail_contract)
+    report = evaluate_policy(policy())
+    failed = next(
+        item
+        for item in report["failed_checks"]
+        if item["check_id"] == "global.canonical_contract_loaded"
+    )
+    assert failed["code"] == expected.code
+    assert failed["detail"] == expected.detail
+    assert failed["causal_category"] == expected.causal_category
+    assert failed["code"] != "HAD.CONTRACT_INVALID"
+
+
+@pytest.mark.parametrize(
+    ("raised", "code", "category"),
+    [
+        (
+            PermissionError(errno.EACCES, "denied"),
+            "HAD.SKILL_DISCOVERY_PERMISSION_DENIED",
+            "permission",
+        ),
+        (
+            OSError(errno.EIO, "io failure"),
+            "HAD.SKILL_DISCOVERY_IO_FAILED",
+            "io",
+        ),
+    ],
+)
+def test_eval_preserves_unwrapped_contract_io_categories(
+    raised: OSError,
+    code: str,
+    category: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_contract() -> dict[str, object]:
+        raise raised
+
+    monkeypatch.setattr(eval_runner, "load_contract", fail_contract)
+    report = evaluate_policy(policy())
+    failed = next(
+        item
+        for item in report["failed_checks"]
+        if item["check_id"] == "global.canonical_contract_loaded"
+    )
+    assert failed["code"] == code
+    assert failed["causal_category"] == category
+    assert failed["detail"]

@@ -13,6 +13,8 @@
 
 规则（never）：
 - 禁止新增、删除、移动、复制任何占位符行；禁止改动占位符 id；禁止在占位符行前后拼写图注。
-- 禁止书写任何 `asset://`、`:::figure`、`:::gallery`、frontmatter、封面或『相关图片』章节——图注与这些结构全部由系统在 finalize 阶段生成。
-- 任一占位符缺失 / 新增 / 重复 / 行尾追加文字，都会被校验门整篇 reject 重跑。
+- 禁止书写任何 `asset://`、`:::figure`、`:::gallery`、frontmatter、封面或『相关图片』章节；
+  当前 draft 只保留 compose 阶段已经冻结的图片占位关系，最终对象结构留给 publish 阶段显式物化。
+- 任一占位符缺失 / 新增 / 重复 / 行尾追加文字，都必须在 stage contract 自检中判为 blocked，
+  不得伪报通过或等待自动重跑。
 </image_placeholder_contract>

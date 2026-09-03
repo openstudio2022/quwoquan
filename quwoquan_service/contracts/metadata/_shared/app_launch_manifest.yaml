@@ -52,8 +52,11 @@ runtime_config_trust:
   signature_algorithm: ed25519
   build_profiles: [nonprod, prod]
 
-# 配置供给方式与启动来源正交。当前 AppArtifact 只接受安装后由平台私有容器读取的
-# 外部签名 package；入口 provenance 的闭集唯一来自 app_artifact_manifest。
+# 配置供给方式与启动来源正交。AppArtifact 只接受安装后由平台私有容器读取的
+# 外部签名 package；embedded_default_package（Debug-nonprod 构建期嵌入默认
+# alpha 签名 package）已退役，任何制品不得再物化或消费嵌入默认供给，无 canonical
+# handoff 的构建在 trust gate fail-closed。入口 provenance 的闭集唯一来自
+# app_artifact_manifest。
 runtime_config_supply_modes:
   - external_runtime_package
 
@@ -123,10 +126,16 @@ launch_blockers:
   APP.LAUNCH.workspace_entrypoint_inactive: 工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。
   APP.LAUNCH.workspace_flutter_sdk_unavailable: 工作区激活时无法解析真实 Flutter SDK 或 SDK 版本与仓库锁定不符；激活必须在写入任何 workspace facade 投影前以本码阻断。
   APP.LAUNCH.launch_surface_unsupported: 启动入口不属于 canonical launcher、工作区字面 Flutter 或受控制 IDE profile。
+  APP.LAUNCH.managed_argument_unsupported: 受管字面 flutter run 收到会改变 canonical build/runtime identity 的参数（如 --target、flavor、dart-define、Profile/Release 或端口类），typed 阻断而非静默忽略。
+  APP.PREPARATION.runtime_unavailable: managed 准备无法复用 exact running full runtime，且不满足有界替换条件（非 target lock 内、存在其他 live consumer lease 或替换失败）。
+  APP.PREPARATION.content_binding_unavailable: 无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=research 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。
+  APP.PREPARATION.strict_preflight_failed: managed 严格预检（TLS、api-edge、user-service、integration-service、SMS Provider/relay identity、真实 OTP journey 与 homepage/creator avatar/image/typed video/premium stream 媒体字节）任一失败，在 Flutter build 前阻断。
+  APP.PREPARATION.receipt_invalid: managed preparation receipt 缺失、schema/digest 非法或与本次 launch 身份不一致，canonical launcher 不得复用。
   APP.DEPENDENCY.lock_drift: App 生产工程、UAT test host 或已投影依赖的锁定身份不一致。
   APP.DEPENDENCY.cocoapods_missing: iOS 启动缺少契约锁定的 CocoaPods 可执行文件。
   APP.DEPENDENCY.cocoapods_mixed: iOS 依赖投影混用了不同 CocoaPods 可执行文件或版本。
   APP.DEPENDENCY.bundle_missing: 启动未获得经验证的 source capsule 与原子依赖 bundle。
+  APP.DEPENDENCY.bundle_stale: active 依赖 bundle 与当前 source/toolchain identity 不一致；仅 canonical 交互式 launcher 可执行一次有界 canonical 同步恢复，非交互 fail-closed，不得更新 lock。
   APP.DEPENDENCY.projection_failed: 启动期原子依赖投影或离线回放未完成。
   APP.DEPENDENCY.projection_expectation_invalid: 依赖投影 expectation 或其摘要、读回身份缺失或非法。
   APP.DEPENDENCY.projection_cas_drift: 冻结的依赖投影在命令执行前后发生 CAS 漂移。
@@ -377,6 +386,8 @@ schemas:
       - applicationId
       - flutterVersion
       - commandResolutionDigest
+      - terminalCarrierReceiptDigest
+      - terminalCarrierReceiptRef
       - launchDigest
       - startupTerminalAttemptId
       - startupTerminalEvidenceDigest
@@ -413,6 +424,8 @@ schemas:
       applicationId: { type: string, min_length: 1 }
       flutterVersion: { type: string, min_length: 1 }
       commandResolutionDigest: { type: string, format: sha256_identity }
+      terminalCarrierReceiptDigest: { type: string, format: optional_sha256_identity }
+      terminalCarrierReceiptRef: { type: string }
       launchDigest: { type: string, format: optional_sha256_identity }
       startupTerminalAttemptId: { type: string }
       startupTerminalEvidenceDigest: { type: string, format: optional_sha256_identity }
@@ -448,6 +461,7 @@ schemas:
       - prepared/compiling 允许 artifactDigest 为空；写入 compiled transition 时必须在同一次原子回执更新中填入本次 canonical executor 实际产出的 Android APK 或 iOS .app payload sha256，installed transition 前必须在真实安装完成后对同一路径按 AppArtifact payload digest 算法重读且完全相等。出现 compiled 后 artifactDigest 必须始终非空且不可变；产物缺失或不可读以 APP.LAUNCH.compile_failed 阻断，安装前后错配以 APP.LAUNCH.install_failed 阻断，源码、配置、handoff 或 package digest 不得冒充制品摘要。
       - buildProfile 必须与 environment 满足 launch_policies 和 app_artifact_manifest.build_profiles 的单轨映射；launchProvenance 必须来自 app_artifact_manifest.launch_provenances，runtimeConfigSupplyMode 必须来自 runtime_config_supply_modes。
       - runtimeConfigTrustEnvelopeDigest/runtimeConfigPackageDigest 必须与同 attempt 的 handoff、制品回读与 activation receipt 一致；applicationId 必须匹配 buildProfile × buildMode 的生成身份，commandResolutionDigest 只记录脱敏后的 SDK/入口解析身份。
+      - terminal carrier receipt 机制已退役：所有 launchProvenance 下 terminalCarrierReceiptDigest/terminalCarrierReceiptRef 必须全空；受管字面 `flutter run` 经 launcher dispatcher 归一化进入 canonical launcher，以 launchProvenance=canonical_launcher 产生同一 canonical launch attempt，不存在第二种字面命令 attempt 形态。
       - release-artifact attempt 的 candidateDigest/artifactManifestDigest/launcherHandoffDigest 必须全为 canonical sha256 且分别绑定 fixed deployment candidate、exact AppArtifactManifest 与 canonical launcher handoff；非 release-artifact attempt 三者必须全空。startup safe-terminal 通过 launchAttemptId 闭包继承这三项身份，不得从 latest、日志或外部 mutable pointer 补猜。
       - startupTerminalAttemptId/startupTerminalEvidenceDigest/startupTerminalEvidenceRef 必须全空或全非空；非空时 evidence 必须是同一 launchAttemptId、artifactDigest、device/applicationId、launchProvenance/runtimeConfigSupplyMode/effectiveLaunchManifestDigest 的 cold startup_safe_terminal/routerShell canonical receipt。严格 app-content-uat 必须先原子绑定该 receipt 才可把 VM attach 推进为 launched；仅有 app.started/debugPort 不构成 launched。
       - 编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；缺 build-profile trust 使用 APP.LAUNCH.runtime_config_trust_missing，无 active package 使用 APP.LAUNCH.runtime_config_missing，runtime package 验证、原子写入或 readback 失败使用 APP.LAUNCH.runtime_config_activation_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。
@@ -557,3 +571,96 @@ schemas:
       - runtimeConfigPackageDigest 必须是 digest_contract 对完整 runtimeConfigPackage canonical JSON 的摘要，并与 effectiveLaunchManifest 完全一致。
       - runtimeConfigTrustEnvelopeDigest 必须与 effectiveLaunchManifest 完全一致，并在安装后 activation 前与 AppArtifact/Web bootstrap 回读的实际 envelope digest 相等；handoff 不携带 trust envelope 或 keyring 原文。
       - compileDiagnostics 只允许非环境、非 endpoint、非 secret 的 string-only 编译诊断；不得携带 APP_RUNTIME_ENV、CLOUD_GATEWAY、RTC、CDN 或其等价环境配置。
+
+  app_managed_preparation:
+    schema_value: quwoquan_ops.app_managed_preparation.v1
+    additional_fields: false
+    required_fields:
+      - schema
+      - target
+      - environment
+      - platform
+      - deviceId
+      - runtimeIdentity
+      - consumerId
+      - consumerLeaseId
+      - androidReversePorts
+      - androidReverseOwnedPorts
+      - deviceTrustReceiptRef
+      - deviceTrustReceiptDigest
+      - contentBinding
+      - strictPreflightReceiptRef
+      - strictPreflightReceiptDigest
+      - strictContentPreflightReceiptRef
+      - strictContentPreflightReceiptDigest
+      - createdAt
+      - status
+      - firstBlocker
+    fields:
+      schema: { type: string, const: quwoquan_ops.app_managed_preparation.v1 }
+      target: { type: string, allowed_values: [alpha-local], allow_empty: true }
+      environment: { type: string, allowed_values: [alpha], allow_empty: true }
+      platform: { type: string, allowed_values: [android, ios], allow_empty: true }
+      deviceId: { type: string, min_length: 1, allow_empty: true }
+      runtimeIdentity:
+        type: object
+        allow_empty: true
+        additional_fields: false
+        required_fields:
+          - startupAttemptId
+          - composeProject
+          - composeDigest
+          - configurationDigest
+          - providerRuntimeDigest
+          - reused
+          - replaced
+        fields:
+          startupAttemptId: { type: string, min_length: 1 }
+          composeProject: { type: string, min_length: 1 }
+          composeDigest: { type: string, format: sha256_identity }
+          configurationDigest: { type: string, format: sha256_identity }
+          providerRuntimeDigest: { type: string, format: sha256_identity }
+          reused: { type: boolean }
+          replaced: { type: boolean }
+      consumerId: { type: string, min_length: 1, allow_empty: true }
+      consumerLeaseId: { type: string, format: optional_sha256_identity }
+      androidReversePorts: { type: string }
+      androidReverseOwnedPorts: { type: string }
+      deviceTrustReceiptRef: { type: string }
+      deviceTrustReceiptDigest: { type: string, format: optional_sha256_identity }
+      contentBinding:
+        type: object
+        allow_empty: true
+        additional_fields: false
+        required_fields:
+          - releaseId
+          - verifyRunId
+          - manifestDigest
+          - readinessPhase
+          - readinessReceiptRef
+          - readinessReceiptDigest
+        fields:
+          releaseId: { type: string, min_length: 1 }
+          verifyRunId: { type: string, min_length: 1 }
+          manifestDigest: { type: string, format: sha256_identity }
+          readinessPhase: { type: string, allowed_values: [research] }
+          readinessReceiptRef: { type: string, min_length: 1 }
+          readinessReceiptDigest: { type: string, format: sha256_identity }
+      strictPreflightReceiptRef: { type: string }
+      strictPreflightReceiptDigest: { type: string, format: optional_sha256_identity }
+      strictContentPreflightReceiptRef: { type: string }
+      strictContentPreflightReceiptDigest: { type: string, format: optional_sha256_identity }
+      createdAt: { type: string, format: rfc3339_utc }
+      status: { type: string, allowed_values: [prepared, blocked] }
+      firstBlocker: { type: string, allowed_values_ref: launch_blockers, allow_empty: true }
+    constraints:
+      - receipt-first：本 receipt 是 private managed preparation 事实，唯一写入方与消费方是 canonical launcher；canonical launcher 必须在前台 exec canonical run.sh 之前原子写入本 receipt，status=blocked 时不得继续 Flutter build。
+      - exact readback：runtimeIdentity（复用或有界替换后的 runtime attempt/compose identity）、consumerId、consumerLeaseId、Android reverse transport/所有权、device trust receipt、contentBinding、strict debug preflight receipt 与 strict content preflight receipt 的全部身份字段必须来自本次 preparation 的真实 readback，不得从 latest、缓存或历史 receipt 补猜。
+      - consumerId 是 dispatcher/run.sh 为本次前台启动预先确定的稳定 consumer identity；preparation 必须以该 consumer 获取 consumerLeaseId，保持该 lease active 并交给同一 run.sh 接管。run.sh exact readback 后不得重复 acquire，最终 cleanup 只释放同一 consumer；consumerLeaseId 必须是 canonical sha256 identity。
+      - androidReversePorts 是同一 lease 的完整 canonical same-port transport 集合，Android prepared receipt 必须非空，非 Android 必须为空；androidReverseOwnedPorts 只记录 preparation 在获取同一 consumer lease 前新建、且启动 cleanup 可以安全移除的 Android same-port reverse 集合；非 Android 或没有新建映射时为空，不得把既存映射声明为本次所有。
+      - contentBinding 必须保留 create_test_live_content_binding 返回的完整 canonical binding，并向 prepared receipt 投影 releaseId、verifyRunId、manifestDigest、readinessPhase、readinessReceiptRef 与 readinessReceiptDigest；readinessReceiptRef 必须是 absolute regular no-symlink exact receipt，digest 必须是该文件 exact bytes 的 sha256，JSON 必须同一 releaseId/verifyRunId/manifestDigest/readinessPhase=research/passed=true。服务端 active release readback 的合法候选必须唯一；零个或多个候选一律以 APP.PREPARATION.content_binding_unavailable 阻断。
+      - deviceTrustReceiptRef/deviceTrustReceiptDigest 必须同时为空或同时非空；无需 local trust 的 physical device 允许两者为空，非空 digest 必须是 canonical sha256 identity。verify-first 只在已有 trust receipt 的 leases 包含当前 consumerLeaseId 时复用，否则必须以当前真实 lease install/bind 后再 verify。
+      - strictPreflightReceiptRef/strictPreflightReceiptDigest 继续绑定 write_app_debug_preflight_receipt 生成的 exact debug preflight envelope；strictContentPreflightReceiptRef/strictContentPreflightReceiptDigest 必须绑定本次 preparation 私有原子写入的 quwoquan_ops.app_content_preflight_exact.v1 envelope；envelope 顶层投影 absolute readiness 身份并在 payload 中原样保留 command_app_content_preflight 返回的 exact payload，禁止信任 command 自写的 mutable report path。两组 ref 必须是 absolute regular no-symlink，digest 均为文件 exact bytes sha256。
+      - strict content payload 必须 schema=quwoquan_ops.app_content_preflight、target 与本次 target 一致、status=passed，并与 contentBinding 的 releaseId/manifestDigest/readinessReceiptRef/readinessReceiptDigest 完全一致；releaseProbe 必须 exitCode=0、executedSampleCount>0 且 mediaChecks.automatic=true。readiness receipt 还必须同一 verifyRunId/readinessPhase=research/passed=true，确保 release/verify/manifest/research 身份单轨。
+      - status=blocked 时 firstBlocker 必须非空且取 launch_blockers 闭集，尚未完成的 target/environment/platform/deviceId/runtimeIdentity/consumer/transport/trust/content/preflight 字段允许按本 schema 取空值；不得伪造中间身份。status=prepared 时 firstBlocker 必须为空，target/environment/platform/deviceId/runtimeIdentity/consumerId/consumerLeaseId/contentBinding/strictPreflightReceiptRef/strictPreflightReceiptDigest/strictContentPreflightReceiptRef/strictContentPreflightReceiptDigest 必须全部非空且逐字段合法，trust ref/digest 必须满足成对约束。
+      - canonical run.sh 必须在 Flutter build 前独立严格验证 receipt、readiness exact receipt、strict debug preflight envelope 与 strict content preflight exact payload 的字段集、类型、闭集、byte sha256、consumer/runtime/content/trust 身份和本次 target/device/purpose；任何漂移以 APP.PREPARATION.receipt_invalid 阻断，并把 readinessReceiptDigest 交给 final consumer-lease bind。

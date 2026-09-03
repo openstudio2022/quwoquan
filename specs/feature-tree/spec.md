@@ -60,7 +60,7 @@
 - 运行中发生根级不可恢复异常时只允许一次受控主容器重建；成功直接替换路由进入首页，失败后不得形成恢复循环。
 - 恢复页在全部状态提供官方网页版。
 - 版本服务确认有新版且存在当前平台可安装通道后，Android 进入趣我圈官网受信 APK 下载通道或引导到本机来源的已登记受信应用市场（华为、小米、OPPO、vivo、应用宝）；公众 iOS 进入 App Store 官方更新通道，PWA 与网页版继续作为无原生通道时的恢复兜底，已登记测试设备才可使用受控 Ad Hoc 通道。只有版本服务确认后才能显示“需要更新”或“已是最新版本”。
-- 同一环境与同一服务端状态下，所有受支持的构建、安装与启动路径必须进入同一业务行为：同一配置完成态、同一首个安全终态、同一路由与登录态、同一内容 outcome 与 release identity、同一恢复动作。有效路径集合（含经工作区 facade 的字面 `flutter run`）与等价指纹定义由 [`environment-topology-and-packaging` REQ-004](./runtime/runtime-config/environment-topology-and-packaging/spec.md#req-004) 唯一拥有，本条只引用不复制。BuildMode、启动来源（launch provenance）与安装渠道（install channel）只允许作为观测事实记录，不得改变任何用户可见行为。
+- 同一环境与同一服务端状态下，所有受支持的构建、安装与启动路径必须进入同一业务行为：同一配置完成态、同一首个安全终态、同一路由与登录态、同一内容 outcome 与 release identity、同一恢复动作。有效路径集合（含受管 PATH 中经 launcher dispatcher 进入 canonical launcher 的字面 `flutter run`）与等价指纹定义由 [`environment-topology-and-packaging` REQ-004](./runtime/runtime-config/environment-topology-and-packaging/spec.md#req-004) 唯一拥有，本条只引用不复制。BuildMode、启动来源（launch provenance）与安装渠道（install channel）只允许作为观测事实记录，不得改变任何用户可见行为。
 - 页面只表达已确认事实、恢复状态和当前动作，不显示技术原因、诊断编号、日志进度、错误码或缺乏操作价值的不确定描述。
 
 <a id="req-004"></a>
@@ -629,7 +629,7 @@
 <a id="scn-035"></a>
 #### SCN-035 按需请求经来源发现与四载体生产入池
 
-- 场景目标：内容运营者确认按需请求后，系统依次完成来源发现、SourcePool 固化、WorkRequest 派生编译、所选载体生产与独立审核，把合格对象经唯一 reviewed delivery 路径原子入池，运营者只读 typed 终态即可复核数量与恢复方式。
+- 场景目标：内容运营者确认按需请求后，系统依次完成来源发现、SourcePool 固化、candidate-backed 任务初始化、所选载体生产与独立审核，把合格对象经唯一 reviewed delivery 路径原子入池，运营者只读 typed 终态即可复核数量与恢复方式。
 - 领域交接：discovery-content
 - 对应验收：`UAT-013`
 
@@ -670,7 +670,7 @@
 - THEN 确认已最新、地址不可用或检查未完成时仍可进入官方网页版。
 - THEN 页面不存在技术原因、诊断编号或日志状态；脱敏异常先保存后异步上报，上报失败不影响任何恢复动作。
 - THEN Android/iOS 安装包、原生身份、runtime probe 与发布 provenance 绑定同一 effective launch manifest；package-only 编译不得替代真实 launcher/scene、safe terminal、motion、非 `unknown` attempt 与 telemetry readback 证据。
-- THEN <a id="install-launch-equivalence"></a>同一环境与同一服务端状态下，[`environment-topology-and-packaging` REQ-004](./runtime/runtime-config/environment-topology-and-packaging/spec.md#req-004) 所列全部有效路径——含经工作区 facade 的字面 `flutter run`（launch provenance=`workspace_flutter_run`）与受控制 IDE profile（`workspace_ide_debug`）——的规范化启动行为指纹一致：配置完成态、首个安全终态、路由/登录态、内容 outcome 与 release identity、恢复动作均相同，且无 fatal recovery 差异；BuildMode、launch provenance 与 install channel 仅出现在观测事实中。
+- THEN <a id="install-launch-equivalence"></a>同一环境与同一服务端状态下，[`environment-topology-and-packaging` REQ-004](./runtime/runtime-config/environment-topology-and-packaging/spec.md#req-004) 所列全部有效路径——含受管字面 `flutter run`（经 launcher `flutter` dispatcher 进入 canonical launcher，launch provenance=`canonical_launcher`）与受控制 IDE profile（`workspace_ide_debug`）——的规范化启动行为指纹一致：配置完成态、首个安全终态、路由/登录态、内容 outcome 与 release identity、恢复动作均相同，且无 fatal recovery 差异；BuildMode、launch provenance 与 install channel 仅出现在观测事实中。
 - THEN 应用市场与官网 APK 安装的验收各自绑定真实下载/安装回执与安装后冷启动 telemetry 回读，package-only、side-load 或另一渠道的回执不得互相替代。
 
 <a id="uat-004"></a>
@@ -795,7 +795,7 @@
 ### UAT-013 内容运营者按需生成内容并入池
 
 - GIVEN 内容运营者持有可确认的按需请求：范围为 `vertical | region | topic | region_topic` 之一、canonical 主题引用、`homepage|article|image|video` 的非空载体组合与逐载体正整数数量，以及已声明的来源策略。
-- WHEN 运营者确认请求，系统依次执行来源发现、SourcePool 固化、WorkRequest 派生编译、载体生产、独立审核与 canonical 池准入。
+- WHEN 运营者确认请求，系统依次执行来源发现、SourcePool 固化、candidate-backed 任务初始化、载体生产、独立审核与 canonical 池准入。
 - THEN 每个 active 载体的合格对象经唯一 reviewed delivery 路径以单对象事务幂等入池，池 record 可沿同一 execution 身份回溯到 confirmed 请求，来源、权利、review、实体与标签引用全部闭合。
 - THEN 同一已冻结请求 exact replay 时池增量为零、既有 record 字节不变；漂移返回 typed conflict 且零写入。
 - THEN 任一非成功终态（needs_input、blocked、partial、pending）携带结构化 nextAction 与绑定原请求摘要的 reentry 引用，运营者只读终态即可决定补输入、修来源、恢复交付或换载体，已入池对象不被撤销。
@@ -934,7 +934,7 @@
 - 准出影响：`block`
 - 影响或价值：当前从未有一份按需请求经来源发现、四载体任选生产与审核后可复证地进入 canonical 内容池；意图入口、来源发现、数量守恒、恢复面与入池单轨的契约阻断由 `discovery-content` 下 `object-homepage-coverage-scaling` 的各 Story OPEN 分别承接。
 - 完成判定：`UAT-013` 全部结果子句由真实 Data operator 旅程 user_acceptance 直接 `spec_ref`：先以 typed 单载体 M1 首次真实入池与 exact replay 零增量，再以同一 confirmed 请求完成四载体 M1 各一入池；证据不得使用 fixture、seed 或旧 receipt 冒充。
-- 依赖：[`work-request-compilation`](./discovery-content/object-homepage-coverage-scaling/work-request-compilation/spec.md)、[`on-demand-content-pool-admission`](./discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md)、[`canonical-content-identity-recovery`](./discovery-content/object-homepage-coverage-scaling/canonical-content-identity-recovery/spec.md) 与收窄后 [`multi-carrier-release`](./discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md) 的最低节点 OPEN。
+- 依赖：[`on-demand-content-pool-admission`](./discovery-content/object-homepage-coverage-scaling/on-demand-content-pool-admission/spec.md)、[`canonical-content-identity-recovery`](./discovery-content/object-homepage-coverage-scaling/canonical-content-identity-recovery/spec.md) 与收窄后 [`multi-carrier-release`](./discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md) 的最低节点 OPEN。
 
 <a id="open-013"></a>
 ### OPEN-013 双端真实账号商业登录与安全恢复证据

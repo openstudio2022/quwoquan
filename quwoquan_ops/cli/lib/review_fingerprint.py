@@ -72,7 +72,16 @@ def build_review_fingerprint(
             for item in initial_reviewers
         ],
         "evidence": [
-            {key: item[key] for key in ("id", "required", "covers", "command_digest")}
+            {
+                key: item[key]
+                for key in (
+                    "id",
+                    "required",
+                    "covers",
+                    "timeout_seconds",
+                    "command_digest",
+                )
+            }
             for item in evidence
         ],
     }

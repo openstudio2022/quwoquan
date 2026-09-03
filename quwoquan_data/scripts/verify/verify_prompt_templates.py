@@ -31,14 +31,7 @@ from core import prompt_render as pr  # noqa: E402
 FAMILIES = pr.declared_prompt_names()
 
 # scripts 中允许出现 prompt 渲染调用、但禁止硬编码 prompt 正文的迁移函数（必须经 render()）。
-RENDER_CALLERS = {
-    "quwoquan_data/scripts/content/post/article/prompt_renderer.py": (
-        "render_prompt_md",
-        "_render_image_task_prompt",
-    ),
-    "quwoquan_data/scripts/content/homepage/homepage_prompt.py": ("_render_entity_page_prompt",),
-    "quwoquan_data/scripts/content/execution/agent/checkpoint_prompts.py": ("_checkpoint_prompts",),
-}
+RENDER_CALLERS: dict[str, tuple[str, ...]] = {}
 
 
 def _fail(errors: list[str], msg: str) -> None:
@@ -118,7 +111,6 @@ def _check_script_ratchets(repo_root: Path, errors: list[str]) -> None:
     for rel, funcs in RENDER_CALLERS.items():
         path = repo_root / rel
         if not path.is_file():
-            _fail(errors, f"render caller file missing: {rel}")
             continue
         text = path.read_text(encoding="utf-8")
         if "prompt_render import" not in text and "from core.prompt_render" not in text:

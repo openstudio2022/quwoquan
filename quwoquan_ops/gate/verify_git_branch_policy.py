@@ -27,6 +27,16 @@ FAILURE_CODE_KEYS = frozenset(
     }
 )
 FAILURE_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*$")
+FIXED_PERSISTENT_LANE_BRANCHES = frozenset(
+    {
+        "lane/product-mainline",
+        "lane/data-engineering",
+        "lane/engineering",
+        "lane/ops",
+        "lane/small-fix",
+        "lane/refactor",
+    }
+)
 BRANCH_POLICY_FIELDS = frozenset(
     {
         "allowed_local_branches",
@@ -39,12 +49,21 @@ BRANCH_POLICY_FIELDS = frozenset(
         "required_promotion_checks",
         "allowed_pull_request_edges",
         "system_backsync",
-        "temporary_execution_admission",
+        "persistent_lane_admission",
         "failure_codes",
     }
 )
 POLICY_INVALID_RECOVERY = "repair_canonical_branch_policy"
 AUTHORITY_UNAVAILABLE_RECOVERY = "restore_git_authority_then_retry"
+RECOVERY_BY_FAILURE_KEY = {
+    "policy_invalid": POLICY_INVALID_RECOVERY,
+    "ref_not_allowed": "use_declared_branch_and_allowed_pr_edge_then_retry",
+    "direct_push_not_allowed": "open_allowed_pull_request_then_retry",
+    "backsync_not_fast_forward": "restore_fast_forward_backsync_precondition",
+    "backsync_cas_conflict": "refresh_remote_refs_and_retry_compare_and_swap",
+    "authority_unavailable": AUTHORITY_UNAVAILABLE_RECOVERY,
+    "source_not_main_reachable": "select_exact_main_reachable_source",
+}
 
 
 class _UniqueKeySafeLoader(yaml.SafeLoader):
@@ -117,10 +136,11 @@ class RequiredPromotionCheck:
 
 
 @dataclass(frozen=True)
-class TemporaryExecutionAdmission:
+class PersistentLaneAdmission:
     isolation: str
     promotion: str
-    cleanup: str
+    resync: str
+    worktree_lifecycle: str
     concurrency_evidence: str
 
 
@@ -136,7 +156,7 @@ class BranchPolicy:
     required_promotion_checks: tuple[RequiredPromotionCheck, ...]
     allowed_pull_request_edges: tuple[PullRequestEdge, ...]
     system_backsync: SystemBacksync | None
-    temporary_execution_admission: TemporaryExecutionAdmission | None
+    persistent_lane_admission: PersistentLaneAdmission | None
     failure_codes: tuple[tuple[str, str], ...]
 
     def failure_code(self, name: str) -> str:
@@ -162,6 +182,7 @@ class BranchTransition:
 class BranchDecision:
     status: str
     reason_code: str | None = None
+    recovery_action: str | None = None
     string_context: tuple[tuple[str, str], ...] = ()
 
     @property
@@ -280,34 +301,35 @@ def _system_backsync(payload: Mapping[str, object]) -> SystemBacksync | None:
     )
 
 
-def _temporary_execution_admission(
+def _persistent_lane_admission(
     payload: Mapping[str, object],
-) -> TemporaryExecutionAdmission | None:
-    raw = payload.get("temporary_execution_admission")
+) -> PersistentLaneAdmission | None:
+    raw = payload.get("persistent_lane_admission")
     if raw is None:
         return None
     expected = {
         "isolation": "branch_per_writer",
         "promotion": "declared_pull_request_edge_only",
-        "cleanup": "mandatory_after_promotion_or_abort",
+        "resync": "mandatory_fast_forward_after_integration_or_abort",
+        "worktree_lifecycle": "retained",
         "concurrency_evidence": "required",
     }
     if not isinstance(raw, Mapping) or set(raw) != set(expected):
         raise ValueError(
-            "branch policy temporary_execution_admission must contain the exact "
-            "isolation/promotion/cleanup/concurrency_evidence lifecycle fields"
+            "branch policy persistent_lane_admission must contain the exact "
+            "isolation/promotion/resync/worktree_lifecycle/concurrency_evidence lifecycle fields"
         )
     values = {
-        key: _strict_string(raw.get(key), f"temporary_execution_admission.{key}")
+        key: _strict_string(raw.get(key), f"persistent_lane_admission.{key}")
         for key in expected
     }
     for key, expected_value in expected.items():
         if values[key] != expected_value:
             raise ValueError(
-                f"branch policy temporary_execution_admission.{key} must be "
+                f"branch policy persistent_lane_admission.{key} must be "
                 f"{expected_value!r}"
             )
-    return TemporaryExecutionAdmission(**values)
+    return PersistentLaneAdmission(**values)
 
 
 def _failure_codes(payload: Mapping[str, object]) -> tuple[tuple[str, str], ...]:
@@ -348,7 +370,7 @@ def load_policy_bytes(raw: bytes) -> BranchPolicy:
         raise TypeError("branch policy root must be a mapping")
     actual_fields = set(payload)
     required_fields = BRANCH_POLICY_FIELDS - {
-        "system_backsync", "temporary_execution_admission",
+        "system_backsync", "persistent_lane_admission",
     }
     missing = sorted(required_fields - actual_fields)
     unexpected = sorted(actual_fields - BRANCH_POLICY_FIELDS, key=repr)
@@ -370,7 +392,7 @@ def load_policy_bytes(raw: bytes) -> BranchPolicy:
         required_promotion_checks=_required_promotion_checks(payload),
         allowed_pull_request_edges=_pull_request_edges(payload),
         system_backsync=_system_backsync(payload),
-        temporary_execution_admission=_temporary_execution_admission(payload),
+        persistent_lane_admission=_persistent_lane_admission(payload),
         failure_codes=_failure_codes(payload),
     )
     for branch_name in (
@@ -408,21 +430,28 @@ def load_policy_bytes(raw: bytes) -> BranchPolicy:
             raise ValueError(
                 f"branch policy PR head pattern {edge.head!r} is not a declared pull-request prefix"
             )
-    if policy.temporary_execution_admission is not None:
-        if not policy.pull_request_prefixes:
+    if policy.persistent_lane_admission is not None:
+        if policy.pull_request_prefixes != {"lane/"}:
             raise ValueError(
-                "branch policy temporary execution admission requires at least one "
-                "declared pull-request prefix"
+                "branch policy persistent lane admission requires the exact lane/ prefix"
             )
-        admitted_prefixes = {
-            edge.prefix
-            for edge in policy.allowed_pull_request_edges
-            if edge.prefix is not None and edge.base == policy.integration_branch
+        expected_branches = FIXED_PERSISTENT_LANE_BRANCHES | {
+            policy.integration_branch,
+            policy.release_branch,
         }
-        if admitted_prefixes != set(policy.pull_request_prefixes):
+        if policy.allowed_local != expected_branches or policy.allowed_remote != expected_branches:
             raise ValueError(
-                "branch policy temporary execution admission requires every and only "
-                "declared prefix to promote into the integration branch"
+                "branch policy persistent lane admission requires exactly the six fixed "
+                "lane branches plus integration and release"
+            )
+        expected_edges = {
+            PullRequestEdge(head="lane/*", base=policy.integration_branch),
+            PullRequestEdge(head=policy.integration_branch, base=policy.release_branch),
+        }
+        if set(policy.allowed_pull_request_edges) != expected_edges:
+            raise ValueError(
+                "branch policy persistent lane admission requires exactly the declared "
+                "lane integration and integration promotion edges"
             )
     if policy.integration_branch == policy.release_branch:
         if policy.system_backsync is not None:
@@ -501,25 +530,37 @@ def evaluate_transition(
         afterOid=transition.after_oid,
     )
     if transition.event == "pull_request":
-        if transition.head and transition.base and any(
-            edge.matches(head=transition.head, base=transition.base)
-            for edge in policy.allowed_pull_request_edges
+        if (
+            transition.head in policy.allowed_local
+            and transition.head in policy.allowed_remote
+            and transition.base in policy.allowed_remote
+            and any(
+                edge.matches(head=transition.head, base=transition.base)
+                for edge in policy.allowed_pull_request_edges
+            )
         ):
             return BranchDecision(status="allowed", string_context=context)
         return BranchDecision(
             status="blocked",
             reason_code=policy.failure_code("ref_not_allowed"),
+            recovery_action=RECOVERY_BY_FAILURE_KEY["ref_not_allowed"],
             string_context=context,
         )
     if transition.event == "direct_push":
-        if (
+        if transition.head == transition.base and (
             transition.head == policy.integration_branch
-            and transition.base == policy.integration_branch
+            or (
+                transition.head in policy.allowed_local
+                and _matches_pull_request_prefix(
+                    transition.head, policy.pull_request_prefixes
+                )
+            )
         ):
             return BranchDecision(status="allowed", string_context=context)
         return BranchDecision(
             status="blocked",
             reason_code=policy.failure_code("direct_push_not_allowed"),
+            recovery_action=RECOVERY_BY_FAILURE_KEY["direct_push_not_allowed"],
             string_context=context,
         )
     if transition.event == "system_backsync":
@@ -535,6 +576,7 @@ def evaluate_transition(
             return BranchDecision(
                 status="blocked",
                 reason_code=policy.failure_code("ref_not_allowed"),
+                recovery_action=RECOVERY_BY_FAILURE_KEY["ref_not_allowed"],
                 string_context=context,
             )
         if transition.before_oid == transition.after_oid:
@@ -543,6 +585,7 @@ def evaluate_transition(
             return BranchDecision(
                 status="blocked",
                 reason_code=policy.failure_code("authority_unavailable"),
+                recovery_action=RECOVERY_BY_FAILURE_KEY["authority_unavailable"],
                 string_context=context,
             )
         try:
@@ -551,6 +594,7 @@ def evaluate_transition(
             return BranchDecision(
                 status="blocked",
                 reason_code=policy.failure_code("authority_unavailable"),
+                recovery_action=RECOVERY_BY_FAILURE_KEY["authority_unavailable"],
                 string_context=context,
             )
         if ancestor:
@@ -558,17 +602,22 @@ def evaluate_transition(
         return BranchDecision(
             status="blocked",
             reason_code=policy.failure_code("backsync_not_fast_forward"),
+            recovery_action=RECOVERY_BY_FAILURE_KEY["backsync_not_fast_forward"],
             string_context=context,
         )
     return BranchDecision(
         status="blocked",
         reason_code=policy.failure_code("policy_invalid"),
+        recovery_action=RECOVERY_BY_FAILURE_KEY["policy_invalid"],
         string_context=context,
     )
 
 
 def _issue(policy: BranchPolicy, failure_key: str, message: str) -> str:
-    return f"{policy.failure_code(failure_key)}: {message}"
+    return (
+        f"{policy.failure_code(failure_key)}: terminal=blocked; {message}; "
+        f"recovery={RECOVERY_BY_FAILURE_KEY[failure_key]}"
+    )
 
 
 def branch_policy_issues(
@@ -582,9 +631,7 @@ def branch_policy_issues(
 ) -> list[str]:
     issues: list[str] = []
     active_pull_request_branch = (
-        current_branch
-        if _matches_pull_request_prefix(current_branch, policy.pull_request_prefixes)
-        else None
+        current_branch if current_branch in policy.allowed_local else None
     )
     has_pr_context = ci_head_branch is not None or ci_base_branch is not None
     if has_pr_context:
@@ -609,14 +656,15 @@ def branch_policy_issues(
             )
             if not decision.allowed:
                 issues.append(
-                    f"{decision.reason_code}: pull-request edge "
-                    f"'{ci_head_branch} -> {ci_base_branch}' is not allowed"
+                    _issue(
+                        policy,
+                        "ref_not_allowed",
+                        f"pull-request edge '{ci_head_branch} -> {ci_base_branch}' is not allowed",
+                    )
                 )
 
     if not current_branch:
-        if ci_head_branch in policy.allowed_local or _matches_pull_request_prefix(
-            ci_head_branch, policy.pull_request_prefixes
-        ):
+        if ci_head_branch in policy.allowed_local:
             pass
         else:
             issues.append(
@@ -642,17 +690,12 @@ def branch_policy_issues(
     permitted_local = set(policy.allowed_local)
     if active_pull_request_branch:
         permitted_local.add(active_pull_request_branch)
-    if ci_head_branch and (
-        ci_head_branch in policy.allowed_local
-        or _matches_pull_request_prefix(ci_head_branch, policy.pull_request_prefixes)
-    ):
+    if ci_head_branch in policy.allowed_local:
         permitted_local.add(ci_head_branch)
     permitted_remote = set(policy.allowed_remote)
-    if ci_head_branch and _matches_pull_request_prefix(
-        ci_head_branch, policy.pull_request_prefixes
-    ):
+    if ci_head_branch in policy.allowed_remote:
         permitted_remote.add(ci_head_branch)
-    elif active_pull_request_branch:
+    elif active_pull_request_branch in policy.allowed_remote:
         permitted_remote.add(active_pull_request_branch)
 
     extra_local = sorted(
@@ -725,9 +768,7 @@ def pre_push_issues(
                 "detached HEAD is forbidden; push from a declared branch",
             )
         ]
-    if current_branch not in policy.allowed_local and not _matches_pull_request_prefix(
-        current_branch, policy.pull_request_prefixes
-    ):
+    if current_branch not in policy.allowed_local:
         issues.append(
             _issue(
                 policy,
@@ -758,15 +799,21 @@ def pre_push_issues(
             continue
         remote_branch = remote_ref.removeprefix("refs/heads/")
         if local_sha == ZERO_SHA:
-            if _matches_pull_request_prefix(
-                remote_branch, policy.pull_request_prefixes
-            ):
-                continue
+            # 所有声明的长期分支受保护；未声明 ref 同样禁止借删除操作进入协议。
             issues.append(
                 _issue(
                     policy,
                     "ref_not_allowed",
                     f"deletion of protected or undeclared branch '{remote_branch}' is blocked",
+                )
+            )
+            continue
+        if remote_branch not in policy.allowed_remote:
+            issues.append(
+                _issue(
+                    policy,
+                    "ref_not_allowed",
+                    f"push to undeclared remote branch '{remote_branch}' is blocked",
                 )
             )
             continue
@@ -779,18 +826,9 @@ def pre_push_issues(
                     _issue(
                         policy,
                         "ref_not_allowed",
-                        f"temporary branch push must update its matching remote ref: {current_branch!r}",
+                        f"persistent lane push must update its matching remote ref: {current_branch!r}",
                     )
                 )
-            continue
-        if remote_branch not in policy.allowed_remote:
-            issues.append(
-                _issue(
-                    policy,
-                    "ref_not_allowed",
-                    f"push to undeclared remote branch '{remote_branch}' is blocked",
-                )
-            )
             continue
         if remote_branch == policy.integration_branch:
             if (

@@ -1,4 +1,4 @@
-# 旅行图片作品基线 preset；只启用 image lane，不夹带文章或主页配额。
+# 旅行图片作品基线 preset；只声明 image 载体，不夹带文章或主页配额。
 schema: quwoquan.content.preset
 presetId: content/travel/image/base
 title: 旅行图片作品内容基线
@@ -12,8 +12,6 @@ defaults:
     - image
     modalityContract: separated_research
     research:
-      lanes:
-      - image
       imageAssetStrategy: attribution_audited_publish
       allowAiImages: false
       # 图作品批次的图不是加分项而是产出本体；授权完备度由垂类 policy 决定审计或阻断。

@@ -48,6 +48,9 @@ apply(from = file({json.dumps(str(TRUST_GATE))}))
 
 tasks.register("packageArtifact")
 tasks.register("testDebugUnitTest")
+tasks.register("assembleNonprodDebug")
+tasks.register("assembleNonprodRelease")
+tasks.register("assembleNonprodProfile")
 """
         (self.gradle_project / "settings.gradle.kts").write_text(
             'rootProject.name = "runtime-config-trust-gate-contract"\n',
@@ -61,22 +64,39 @@ tasks.register("testDebugUnitTest")
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def _run(self, task: str, *, trust_root: Path | None = None) -> subprocess.CompletedProcess[str]:
+    def _run(
+        self,
+        task: str,
+        *,
+        trust_root: Path | None = None,
+        extra_environment: dict[str, str] | None = None,
+        extra_arguments: tuple[str, ...] = (),
+    ) -> subprocess.CompletedProcess[str]:
         environment = os.environ.copy()
         environment.pop("QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT", None)
         environment.pop("QWQ_APP_BUILD_PROFILE", None)
         if trust_root is not None:
             environment["QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT"] = str(trust_root)
             environment["QWQ_APP_BUILD_PROFILE"] = "nonprod"
+        if extra_environment:
+            environment.update(extra_environment)
         return subprocess.run(
-            [str(GRADLEW), "--no-daemon", "--offline", "-p", str(self.gradle_project), task],
+            [
+                str(GRADLEW),
+                "--no-daemon",
+                "--offline",
+                "-p",
+                str(self.gradle_project),
+                *extra_arguments,
+                task,
+            ],
             cwd=REPO_ROOT,
             env=environment,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             check=False,
-            timeout=120,
+            timeout=180,
         )
 
     def _valid_trust_root(self) -> Path:
@@ -158,6 +178,56 @@ tasks.register("testDebugUnitTest")
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 self.assertIn("APP.LAUNCH.runtime_config_trust_missing", result.stdout)
                 self.assertIn(expected_reason, result.stdout)
+
+    def test_debug_artifact_without_asset_root_stays_gate_blocked(self) -> None:
+        # 构建期默认供给（embedded_default_package）已退役：Debug artifact 缺
+        # asset root 时不再物化仓库外私有默认供给目录，直接 typed GATE_BLOCK。
+        # user.home 定向到临时目录以断言零物化，GRADLE_USER_HOME 显式固定回
+        # 真实缓存以保住 --offline 的依赖解析。
+        private_home = self.root / "private-home"
+        private_home.mkdir()
+        result = self._run(
+            "assembleNonprodDebug",
+            extra_environment={
+                "GRADLE_USER_HOME": str(Path.home() / ".gradle"),
+            },
+            extra_arguments=(f"-Duser.home={private_home}",),
+        )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("APP.LAUNCH.runtime_config_trust_missing", result.stdout)
+        self.assertIn("./quwoquan_app/run.sh -d <device>", result.stdout)
+        self.assertEqual(
+            sorted(private_home.glob(".cache/quwoquan/default-debug-supply/**/*")),
+            [],
+            result.stdout,
+        )
+
+    def test_release_and_profile_artifacts_without_asset_root_stay_gate_blocked(
+        self,
+    ) -> None:
+        for task in ("assembleNonprodRelease", "assembleNonprodProfile"):
+            with self.subTest(task=task):
+                result = self._run(task)
+
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(
+                    "APP.LAUNCH.runtime_config_trust_missing", result.stdout
+                )
+                self.assertIn("./quwoquan_app/run.sh -d <device>", result.stdout)
+
+    def test_external_injection_rejects_default_supply_material_in_assets(self) -> None:
+        trust_root = self._valid_trust_root()
+        (trust_root / "qwq_runtime/runtime-config-default-package.json").write_text(
+            "{}",
+            encoding="utf-8",
+        )
+
+        result = self._run("packageArtifact", trust_root=trust_root)
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("APP.LAUNCH.runtime_config_trust_missing", result.stdout)
+        self.assertIn("target runtime package", result.stdout.lower())
 
     def test_target_runtime_package_cannot_enter_artifact_assets(self) -> None:
         trust_root = self._valid_trust_root()

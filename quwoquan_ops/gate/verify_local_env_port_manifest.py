@@ -52,7 +52,6 @@ LOCAL_ENVIRONMENT_COMPOSE = (
     "docker-compose.gamma-local.yaml",
     "docker-compose.beta-backing.yaml",
     "docker-compose.local-content-backing.yaml",
-    "docker-compose.data-execution-fleet.yaml",
 )
 
 # `"<host>:<container>[/protocol]"`：host 段可能整段是 `${VAR:-default}` 或
@@ -74,7 +73,9 @@ def _local_compose_sources(
     for pattern in LOCAL_COMPOSE_GLOBS:
         paths.update(path for path in ROOT.glob(pattern) if path.is_file())
     environment_root = ROOT / "quwoquan_ops" / "environments" / "compose"
-    adjudicated = set(LOCAL_ENVIRONMENT_COMPOSE) | set(unowned_sources)
+    adjudicated = (
+        set(LOCAL_ENVIRONMENT_COMPOSE) | set(unowned_sources)
+    )
     # 这里的 glob 必须与其余来源目录同宽（`*compose*.y*ml`）：只收 `docker-compose*`
     # 前缀时，`local-elasticsearch.compose.yaml` 这种命名既不进 LOCAL_ENVIRONMENT_COMPOSE、
     # 不匹配闭包 glob、也不被本裁决收集 —— 三重漏网，而漏网的表现恰好是「门禁通过」。
@@ -145,7 +146,7 @@ def _host_segment_is_recognized(spec: str) -> bool:
     """host 段是否属于本 gate 能分类的形态。
 
     「主机端口静态不可判定」有两种成因，判否力度不同：已识别形态但变量不在任何注入
-    声明位（如 fleet 自有注入面），是有界且登记在案的缺口；而**形态本身没被识别**说明
+    声明位（如外部 provider 注入面），是有界且登记在案的缺口；而**形态本身没被识别**说明
     gate 连该声明是什么都不知道，此时返回「不可判定」等于把读不出来塌陷成通过 —— 新
     形态一旦出现就静默逃出闭包。故后者必须判否。
     """
@@ -215,8 +216,8 @@ def _injected_host_port_role(
     必须就是该容器端点的归属 role**。两侧分叉时端口能起但归属判错，而那种漂移不会自己暴露。
 
     声明位取 manifest 的 `composeHostPortVariables` 而不是 `print_local_port_profile`
-    的 `ENV_EXPORTS`：后者只覆盖 target runtime profile 的 shell 导出面，fleet、
-    content-backing 与 provider substitute 三个注入面都不在其中。
+    的 `ENV_EXPORTS`：后者只覆盖 target runtime profile 的 shell 导出面，
+    content-backing 与 provider substitute 注入面都不在其中。
     """
     name = _host_port_variable_name(host_spec)
     if name is None:
@@ -234,7 +235,7 @@ def _injection_declaration_agreement_issues(
     能起但归属判错。
 
     只比对**交集**：`ENV_EXPORTS` 覆盖启动器导出的全部变量，其中多数被 Caddyfile 模板与
-    服务环境消费，并不出现在 compose 的主机端口位；反过来 fleet 等注入面的变量也不在
+    服务环境消费，并不出现在 compose 的主机端口位；反过来独立注入面的变量也不在
     `ENV_EXPORTS` 里。要求任一侧全覆盖都会把无关变量拖进判定。
     """
     issues: list[str] = []
@@ -367,7 +368,10 @@ def _compose_reverse_closure_issues(manifest: dict[str, Any]) -> list[str]:
     # 有人照它改端口归属却不影响任何真实发布口。用过的变量在下面的循环里收集。
     consumed_variables: set[str] = set()
 
-    sources = _local_compose_sources(issues, unowned_sources=unowned_sources)
+    sources = _local_compose_sources(
+        issues,
+        unowned_sources=unowned_sources,
+    )
     if not sources:
         issues.append("local Compose closure is empty; the reverse closure gate cannot run")
         return issues

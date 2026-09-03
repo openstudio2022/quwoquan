@@ -54,7 +54,7 @@ def validate_release_header(
         isinstance(value, Mapping)
         and any(field in value for field in _SOURCE_IDENTITY_SET_FIELDS)
         and value.get("selectionScope")
-        not in {"target_environment", "all_publishable", "milestone"}
+        not in {"target_environment", "explicit_cohort"}
     ):
         raise ReleaseHeaderError(
             f"{label} source identity set requires a pool selection"
@@ -91,16 +91,11 @@ def validate_release_header(
         )
     target_environment = document.get("targetEnvironment")
     selection_scope = document.get("selectionScope")
-    milestone = document.get("milestone")
     release_mode = document.get("releaseMode")
     if selection_scope is not None:
         if release_mode != release_class.value:
             raise ReleaseHeaderError(
                 f"{label} releaseMode/releaseClass are inconsistent"
-            )
-        if milestone is not None and release_class is not ReleaseClass.RESEARCH:
-            raise ReleaseHeaderError(
-                f"{label} milestone cohort must be a research release"
             )
         counts = document.get("counts")
         if not isinstance(counts, Mapping) or int(counts.get("total") or 0) != sum(
@@ -213,7 +208,6 @@ def validate_release_header(
             "contents",
             "authors",
             "buildResult",
-            "milestoneTargets",
         )
     ):
         raise ReleaseHeaderError(
@@ -302,8 +296,7 @@ def validate_release_header(
                 )
             if selection_scope not in {
                 "target_environment",
-                "all_publishable",
-                "milestone",
+                "explicit_cohort",
             }:
                 raise ReleaseHeaderError(
                     f"{label} source identity set requires a pool release"

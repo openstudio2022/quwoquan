@@ -4,7 +4,9 @@
 `runtime_config_error_codes` 是双端原生可达错误面（MethodChannel、activation
 receipt、原生日志错误码）的唯一闭集：
 
-- Android/iOS 原生源码中出现的全部 `runtime_config_*` 完整字符串字面量必须在册；
+- Android/iOS 原生源码中出现的全部 `runtime_config_*` 完整字符串字面量必须在册：
+  或登记为错误码，或是 manifest `schemas:` 闭集的 schema key
+  （生成契约 `schemaValues` 的下标访问）；
 - 已退役的自由文本 fallback `runtime_config_operation_failed` 不得回归；
 - receipt 语义与 rollback「状态未知」语义的关键错误码必须保持在册。
 """
@@ -57,6 +59,23 @@ def registered_error_codes() -> set[str]:
     return codes
 
 
+def registered_schema_keys() -> set[str]:
+    """manifest `schemas:` 闭集的 schema key（原生经 schemaValues 下标消费）。"""
+    keys: set[str] = set()
+    inside = False
+    for line in MANIFEST_PATH.read_text(encoding="utf-8").splitlines():
+        if line.startswith("schemas:"):
+            inside = True
+            continue
+        if inside:
+            if line and not line.startswith(" "):
+                break
+            match = re.match(r"  (runtime_config_[a-z_]+):", line)
+            if match:
+                keys.add(match.group(1))
+    return keys
+
+
 def native_literal_codes() -> dict[str, set[str]]:
     sources = {
         "android": sorted(ANDROID_SOURCE_DIR.rglob("*.java")),
@@ -86,9 +105,13 @@ class NativeRuntimeConfigErrorCodeClosedSetTest(unittest.TestCase):
 
     def test_native_error_literals_are_all_registered(self) -> None:
         registered = registered_error_codes()
+        schema_keys = registered_schema_keys()
+        self.assertGreater(len(schema_keys), 0, "manifest schemas 闭集不得为空")
+        # schema key 与错误码是两个不相交闭集：任何一侧不得冒用另一侧命名。
+        self.assertEqual(sorted(registered & schema_keys), [])
         for platform, codes in native_literal_codes().items():
             self.assertGreater(len(codes), 0, f"{platform} 原生错误码采集不得为空")
-            unregistered = sorted(codes - registered)
+            unregistered = sorted(codes - registered - schema_keys)
             self.assertEqual(
                 unregistered,
                 [],

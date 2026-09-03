@@ -103,9 +103,9 @@ func TestRedisReadyIndexMergesRepeatedReadyDispatchUntilAcknowledged(t *testing.
 	task := ReliableAsyncTask{
 		TaskID:         "task-dedupe-1",
 		OutboxID:       "outbox-dedupe-1",
-		TaskType:       "data.content_object.execute",
-		DedupeKey:      "execution|entity|homepage|revision|author",
-		IdempotencyKey: "execution|entity|homepage|revision|author",
+		TaskType:       "chat.group_avatar.recompute",
+		DedupeKey:      "chat.group_avatar.recompute:conv-dedupe",
+		IdempotencyKey: "chat.group_avatar.recompute:conv-dedupe:revision-1",
 	}
 	if err := index.EnqueueReadyOrMerge(context.Background(), task); err != nil {
 		t.Fatalf("initial enqueue: %v", err)

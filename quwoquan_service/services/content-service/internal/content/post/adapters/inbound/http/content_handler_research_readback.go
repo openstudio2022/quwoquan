@@ -56,8 +56,8 @@ func (h *ContentHandler) handleGetResearchReleaseReadback(
 		case errors.Is(err, postapp.ErrResearchIdentityInvalid):
 			writeHTTPError(w, r, contentgenerated.AppErrorFromResearchIdentityInvalid(err.Error()))
 		case errors.Is(err, postapp.ErrResearchReleaseNotResearch):
-			writeHTTPError(w, r, contentgenerated.AppErrorFromResearchIdentityInvalid(
-				"active release is not research-only",
+			writeHTTPError(w, r, contentgenerated.AppErrorFromResearchReleaseStateUnavailable(
+				"active release does not satisfy research readback state",
 			))
 		default:
 			writeHTTPError(w, r, contentgenerated.AppErrorFromRequiredDependencyUnavailable(err.Error()))

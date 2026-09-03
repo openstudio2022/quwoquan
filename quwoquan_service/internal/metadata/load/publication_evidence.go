@@ -264,8 +264,8 @@ func (cache *serviceWriteIndexCache) forService(
 // 自持句柄、跨包 interface 的事务实参事实，或同包最多四跳的有限调用传播决定。
 //
 // 为什么不能退回包级 join：包级只能回答「这个包里有事务性写入，且这个包提到过这张表」，
-// 回答不了「有人往这张表里写」。`content.post` 的 `post_import_task_outbox` 就是反例——
-// 只有一个集合句柄、没有任何写调用，包级 join 会把它判成有发布实现。
+// 回答不了「有人往这张表里写」。只有集合句柄、没有任何写调用的关系会被包级 join
+// 误判为有发布实现。
 //
 // 为什么必须解析结构体字段绑定：Go 里集合句柄几乎总是在构造处绑定、在方法里使用
 // （`outbox: db.Collection("content_outbox")` + `s.outbox.InsertOne(sessCtx, ...)`），

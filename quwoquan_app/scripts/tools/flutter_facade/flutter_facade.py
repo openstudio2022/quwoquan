@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""工作区 `flutter` facade：把本 App 的字面 `flutter run` 归一化进 canonical launcher。
+"""真实 Flutter SDK 单轨解析库。
 
 契约（specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003）：
-- 只接管「cwd 位于本 App 项目内」的 `run` 子命令，归一化进 `run.sh` 同一执行体，
-  launch provenance 固定为 `workspace_flutter_run`；其余子命令与其他 Flutter 项目全部
-  原样透传真实 SDK。
-- 真实 SDK 单轨解析：`QWQ_REAL_FLUTTER` → `FLUTTER_ROOT/bin/flutter` → PATH 中排除
-  facade 自身后的首个 flutter；解析结果指回 facade 自身即拒绝（防递归）。
-- 接管前把仓库根 realpath 物理化，废弃 recovery 工作树的物理路径继续被
-  run.sh 阻断，symlink 到 canonical 主工作树的逻辑路径不被误伤。
-- trust 生成、构建、安装、activation、启动与 attach 全部归 canonical launcher，
-  本 facade 不生成任何配置事实。
+- 受管 PATH 的字面 `flutter` 由 launcher bin 的 `flutter` dispatcher 单轨承接
+  （`run` 归一化进入 canonical launcher，其余子命令 exact 透传真实 SDK）；工作区
+  facade 接管、terminal carrier receipt 与 `workspace_flutter_run` provenance 已
+  整体退役。
+- 本模块只保留单轨 SDK 解析：`QWQ_REAL_FLUTTER` → `FLUTTER_ROOT/bin/flutter` →
+  PATH 首个 flutter；解析到 launcher `flutter` dispatcher（含任何工作树拷贝，
+  防 dispatcher→facade→dispatcher 递归）或任一历史 facade shim 副本即拒绝。
+- 版本探针使用 allowlist env，并把 Flutter tool state 封闭进可删除输出树，
+  不向源码树或用户 HOME 写字节。
 
 本模块必须保持自足（无仓库内跨树 import），使其可与 run.sh 一起按相对位置
-整体验证；单轨 SDK 解析的其他 Python 消费方经 `quwoquan_ops/cli/lib/
-app_dependency_toolchain.py` 委托本模块，不得复制解析逻辑。
+整体验证。单轨 SDK 解析的其他 Python 消费方经
+`quwoquan_ops/cli/lib/app_dependency_toolchain.py` 委托本模块，不得复制解析逻辑。
 """
 
 from __future__ import annotations
@@ -25,17 +25,11 @@ import os
 import shutil
 import stat
 import subprocess
-import sys
 from pathlib import Path
-from typing import NoReturn
 
 FACADE_PACKAGE_DIR = Path(__file__).resolve().parent
-FACADE_EXECUTABLE = FACADE_PACKAGE_DIR / "bin" / "flutter"
 APP_ROOT = FACADE_PACKAGE_DIR.parents[2]
 REPO_ROOT = APP_ROOT.parent
-CANONICAL_LAUNCHER = APP_ROOT / "run.sh"
-LAUNCH_PROVENANCE_WORKSPACE_FLUTTER_RUN = "workspace_flutter_run"
-MOBILE_TARGET_PLATFORM_PREFIXES = ("ios", "android")
 FLUTTER_PROBE_STATE_ROOT = REPO_ROOT / ".qwq_output/env/repo/local/flutter-facade-probe"
 FLUTTER_PROBE_OS_ENV_KEYS = (
     "PATH",
@@ -64,33 +58,21 @@ FLUTTER_PROBE_OS_ENV_KEYS = (
     "PATHEXT",
 )
 
-USAGE_HINT = (
-    "受支持入口：`./quwoquan_app/run.sh --env alpha|beta|gamma -d <device>`，"
-    "或在启用工作区 facade 的终端执行 `flutter run [-d <device>]`"
-    "（QWQ_ENVIRONMENT 显式选择环境，默认 Alpha）。"
-)
-
 
 class FacadeError(Exception):
-    """typed facade 失败：message 面向终端用户，指向合法入口。"""
-
-
-def _fail(message: str) -> NoReturn:
-    print(f"[flutter-facade] GATE_BLOCK: {message}", file=sys.stderr)
-    print(f"[flutter-facade] {USAGE_HINT}", file=sys.stderr)
-    raise SystemExit(2)
+    """typed 解析失败：message 面向终端用户，指向合法入口。"""
 
 
 def _is_facade_copy(candidate: Path) -> bool:
+    """识别历史 workspace facade shim 的结构性副本（bin/flutter + flutter_facade.py）。
+
+    shim 已退役，但废弃工作树或旧 checkout 里仍可能残留其字节；解析防御保留。
+    """
+
     try:
         resolved = candidate.resolve()
     except OSError:
         return False
-    if resolved in (
-        FACADE_EXECUTABLE.resolve(),
-        Path(__file__).resolve(),
-    ):
-        return True
     package_dir = resolved.parent.parent
     return (
         resolved.name == "flutter"
@@ -98,6 +80,30 @@ def _is_facade_copy(candidate: Path) -> bool:
         and package_dir.name == "flutter_facade"
         and (package_dir / "flutter_facade.py").is_file()
     )
+
+
+def _is_launcher_dispatcher_copy(candidate: Path) -> bool:
+    """识别 launcher bin `flutter` dispatcher（含任何工作树拷贝）的结构性副本。
+
+    dispatcher 位于受管 PATH 首位；解析真实 SDK 时必须按物理路径跳过它，
+    否则 dispatcher 委托本模块解析会形成递归。
+    """
+
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        return False
+    bin_dir = resolved.parent
+    return (
+        resolved.name == "flutter"
+        and bin_dir.name == "bin"
+        and bin_dir.parent.name == "launcher"
+        and (bin_dir / "run.sh").is_file()
+    )
+
+
+def _is_workspace_shim_copy(candidate: Path) -> bool:
+    return _is_facade_copy(candidate) or _is_launcher_dispatcher_copy(candidate)
 
 
 def _physical_executable(candidate: Path) -> Path:
@@ -111,7 +117,12 @@ def _physical_executable(candidate: Path) -> Path:
             f"Flutter SDK executable 无法解析：{expanded}: {error}"
         ) from error
     if _is_facade_copy(resolved):
-        raise FacadeError("真实 Flutter SDK 解析回 workspace facade，构成递归")
+        raise FacadeError("真实 Flutter SDK 解析到已退役的 workspace facade shim 副本")
+    if _is_launcher_dispatcher_copy(resolved):
+        raise FacadeError(
+            "真实 Flutter SDK 解析到 launcher flutter dispatcher；"
+            "请把真实 SDK 的 bin 目录放入 PATH 或设置 QWQ_REAL_FLUTTER"
+        )
     if not resolved.is_file() or not os.access(resolved, os.X_OK):
         raise FacadeError(f"Flutter SDK executable 不是可执行文件：{resolved}")
     return resolved
@@ -272,7 +283,7 @@ def _validated_candidate(candidate: Path, environ: dict[str, str]) -> Path:
 
 
 def resolve_real_flutter(environ: dict[str, str]) -> Path:
-    """单轨解析真实 Flutter SDK；解析到任一 workspace facade 副本即失败。"""
+    """单轨解析真实 Flutter SDK；解析到任一历史 facade shim 副本即失败。"""
     explicit = environ.get("QWQ_REAL_FLUTTER", "").strip()
     if explicit:
         return _validated_candidate(Path(explicit), environ)
@@ -285,161 +296,22 @@ def resolve_real_flutter(environ: dict[str, str]) -> Path:
         except FacadeError as error:
             raise FacadeError(f"FLUTTER_ROOT 无效：{error}") from error
 
-    facade_bin_dir = FACADE_EXECUTABLE.parent.resolve()
     for path_entry in environ.get("PATH", "").split(os.pathsep):
         entry = path_entry.strip()
         if not entry:
             continue
         candidate = Path(entry) / "flutter"
-        try:
-            if candidate.parent.resolve() == facade_bin_dir:
-                continue
-        except OSError:
-            continue
         if (
             candidate.is_file()
             and os.access(candidate, os.X_OK)
-            and not _is_facade_copy(candidate)
+            and not _is_workspace_shim_copy(candidate)
         ):
             return _validated_candidate(candidate, environ)
 
     fallback = shutil.which("flutter")
-    if fallback and not _is_facade_copy(Path(fallback)):
+    if fallback and not _is_workspace_shim_copy(Path(fallback)):
         return _validated_candidate(Path(fallback), environ)
     raise FacadeError(
         "无法解析真实 Flutter SDK：请设置 FLUTTER_ROOT，"
         "或把真实 SDK 的 bin 目录放入 PATH"
     )
-
-
-def _first_subcommand(argv: list[str]) -> str:
-    for token in argv:
-        if not token.startswith("-"):
-            return token
-    return ""
-
-
-def _enclosing_flutter_project(start: Path) -> Path | None:
-    current = start.resolve()
-    for candidate in (current, *current.parents):
-        if (candidate / "pubspec.yaml").is_file():
-            return candidate
-    return None
-
-
-def _should_take_over(argv: list[str], cwd: Path) -> bool:
-    if _first_subcommand(argv) != "run":
-        return False
-    project_root = _enclosing_flutter_project(cwd)
-    return project_root is not None and project_root == APP_ROOT
-
-
-def _parse_run_arguments(argv: list[str]) -> str:
-    """解析接管模式支持的参数闭集，返回显式 device id（可为空）。"""
-    device_id = ""
-    index = argv.index("run") + 1
-    tokens = argv[index:]
-    position = 0
-    while position < len(tokens):
-        token = tokens[position]
-        if token in ("-d", "--device-id"):
-            if position + 1 >= len(tokens):
-                raise FacadeError(f"{token} 需要一个设备 id")
-            device_id = tokens[position + 1]
-            position += 2
-            continue
-        if token.startswith(("-d=", "--device-id=")):
-            device_id = token.split("=", 1)[1]
-            position += 1
-            continue
-        raise FacadeError(
-            f"workspace_flutter_run surface 不支持参数 {token}；"
-            "环境用 QWQ_ENVIRONMENT 选择，其余启动配置由 canonical launcher 拥有"
-        )
-    if device_id == "":
-        return ""
-    if not device_id.strip():
-        raise FacadeError("设备 id 不能为空")
-    return device_id.strip()
-
-
-def _list_mobile_devices(real_flutter: Path) -> list[dict[str, object]]:
-    try:
-        completed = subprocess.run(
-            [str(real_flutter), "devices", "--machine"],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise FacadeError(f"设备发现失败：{exc}") from exc
-    if completed.returncode != 0:
-        raise FacadeError(
-            f"设备发现失败：`flutter devices --machine` 退出码 {completed.returncode}"
-        )
-    payload = completed.stdout.strip()
-    start = payload.find("[")
-    if start < 0:
-        raise FacadeError("设备发现输出不是 JSON 设备清单")
-    try:
-        devices = json.loads(payload[start:])
-    except json.JSONDecodeError as exc:
-        raise FacadeError(f"设备清单 JSON 解析失败：{exc}") from exc
-    mobile: list[dict[str, object]] = []
-    for device in devices:
-        target_platform = str(device.get("targetPlatform", ""))
-        if target_platform.startswith(MOBILE_TARGET_PLATFORM_PREFIXES):
-            mobile.append(device)
-    return mobile
-
-
-def _select_device(argv: list[str], real_flutter: Path) -> str:
-    explicit = _parse_run_arguments(argv)
-    if explicit:
-        return explicit
-    devices = _list_mobile_devices(real_flutter)
-    if len(devices) == 1:
-        return str(devices[0]["id"])
-    if not devices:
-        raise FacadeError(
-            "没有可用的移动设备；请先启动 Simulator/Emulator 或连接登记设备"
-        )
-    inventory = "\n".join(
-        f"  {device.get('id')}  {device.get('name')}" for device in devices
-    )
-    raise FacadeError(
-        "存在多台可用移动设备，必须显式 `flutter run -d <device>` 选择其一，"
-        f"不按最近使用猜测：\n{inventory}"
-    )
-
-
-def _take_over_run(argv: list[str], real_flutter: Path) -> NoReturn:
-    device_id = _select_device(argv, real_flutter)
-    launcher = CANONICAL_LAUNCHER
-    if not launcher.is_file() or not os.access(launcher, os.X_OK):
-        raise FacadeError(f"canonical launcher 缺失或不可执行：{launcher}")
-    environ = dict(os.environ)
-    environ["QWQ_REAL_FLUTTER"] = str(real_flutter)
-    environ["QWQ_APP_LAUNCH_PROVENANCE"] = LAUNCH_PROVENANCE_WORKSPACE_FLUTTER_RUN
-    # realpath 物理化：symlink 视图下也从物理仓库根启动，使 run.sh 的
-    # recovery 工作树阻断只命中真正废弃的物理树。
-    os.chdir(APP_ROOT)
-    os.execve(str(launcher), [str(launcher), "-d", device_id], environ)
-    raise AssertionError("unreachable")
-
-
-def main(argv: list[str]) -> int:
-    try:
-        real_flutter = resolve_real_flutter(dict(os.environ))
-        if _should_take_over(argv, Path.cwd()):
-            _take_over_run(argv, real_flutter)
-        os.execv(str(real_flutter), [str(real_flutter), *argv])
-        raise AssertionError("unreachable")
-    except FacadeError as error:
-        _fail(str(error))
-    return 2
-
-
-if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))

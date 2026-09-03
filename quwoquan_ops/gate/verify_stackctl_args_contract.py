@@ -37,7 +37,6 @@ def main() -> int:
         "package",
         "content-readiness",
         "account-enforcement-uat",
-        "data-execution-fleet",
         "filter-catalog",
         "deploy",
         "roll",
@@ -47,7 +46,7 @@ def main() -> int:
     )
     if help_result.returncode != 0 or any(command not in help_result.stdout for command in required_commands):
         issues.append(
-            "stackctl --help must list package, content-readiness, data-execution-fleet, "
+            "stackctl --help must list package, content-readiness, "
             "account-enforcement-uat, filter-catalog, roll, deploy, matrix, "
             "dev-session and provider-config commands"
         )
@@ -60,28 +59,6 @@ def main() -> int:
         or "--env" not in readiness_help.stdout
     ):
         issues.append("stackctl content-readiness must require phase/env and forbid target override")
-
-    fleet_result = run(
-        ["python3", str(STACKCTL), "--output-format", "json", "data-execution-fleet"]
-    )
-    if fleet_result.returncode != 0:
-        issues.append("stackctl data-execution-fleet failed")
-    else:
-        try:
-            fleet_payload = json.loads(fleet_result.stdout)
-            fleet = fleet_payload.get("fleet") or {}
-            if set(fleet) != {"target", "mongoUri", "redisAddr"}:
-                issues.append("stackctl data-execution-fleet must return the exact fleet endpoint contract")
-        except json.JSONDecodeError:
-            issues.append("stackctl data-execution-fleet must return JSON with --output-format json")
-
-    fleet_help = run(["python3", str(STACKCTL), "data-execution-fleet", "--help"])
-    if (
-        fleet_help.returncode != 0
-        or "--action" not in fleet_help.stdout
-        or any(action not in fleet_help.stdout for action in ("resolve", "up", "status", "down"))
-    ):
-        issues.append("stackctl data-execution-fleet must expose resolve/up/status/down actions")
 
     verify_help = run(["python3", str(STACKCTL), "verify", "--help"])
     if (

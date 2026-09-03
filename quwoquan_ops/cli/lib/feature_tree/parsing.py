@@ -19,6 +19,7 @@ from .patterns import (
     OUTCOME_CLAUSE_SPLIT_RE,
     PATH_RE,
     PRECONDITION_BULLET_RE,
+    REPOSITORY_SINGLETON_ROOTS,
     TOP_BULLET_RE,
 )
 
@@ -358,8 +359,11 @@ def singleton_repository_roots(node: Node) -> list[str]:
         if "协作引用" in line:
             continue
         match = ENGINEERING_CLAIM_RE.match(line.strip())
-        if match is not None and "`Makefile`" in line:
-            roots.add("Makefile")
+        if match is None:
+            continue
+        for singleton in REPOSITORY_SINGLETON_ROOTS:
+            if f"`{singleton}`" in line:
+                roots.add(singleton)
     return sorted(roots)
 
 

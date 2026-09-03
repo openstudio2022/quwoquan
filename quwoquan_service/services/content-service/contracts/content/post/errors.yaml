@@ -169,6 +169,20 @@ errors:
   user_message:
     zh: 当前研究态身份无效或已过期
     en: The research identity is invalid or expired
+- code: CONTENT.SYSTEM.research_release_state_unavailable
+  reason: research_release_state_unavailable
+  http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [GetResearchReleaseReadback]
+  recovery_action: retry
+  disruption_level: snackbar
+  recovery_after_seconds: 5
+  dart_const: researchReleaseStateUnavailable
+  go_const: ErrResearchReleaseStateUnavailable
+  user_message:
+    zh: 研究回读所需内容状态暂不可用，请稍后重试
+    en: The content state required for research readback is temporarily unavailable
 - code: CONTENT.USER.invalid_argument
   reason: invalid_argument
   http_status: 400

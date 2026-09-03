@@ -198,6 +198,8 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             projection_builder.chmod(0o755)
 
             environment.pop("QWQ_REAL_FLUTTER", None)
+            # 本用例断言 PATH 解析轨；宿主 FLUTTER_ROOT 优先级更高，必须隔离。
+            environment.pop("FLUTTER_ROOT", None)
             environment["PATH"] = os.pathsep.join(
                 (
                     str(facade_copy / "bin"),
@@ -376,6 +378,34 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             calls = (root / "preflight_calls.log").read_text(encoding="utf-8")
             self.assertEqual(len(calls.strip().splitlines()), 1, calls)
             self.assertIn("--purpose runtime", calls)
+
+    def test_warning_collection_remains_valid_in_posix_mode(self) -> None:
+        source = LAUNCHER.read_text(encoding="utf-8")
+        environment = dict(os.environ)
+        environment["POSIXLY_CORRECT"] = "1"
+        result = subprocess.run(
+            ["bash", "-n", str(LAUNCHER)],
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("done < <(", source)
+        self.assertIn('done <<< "$PREFLIGHT_WARNING_TEXT"', source)
+
+    def test_dependency_private_home_preserves_external_handoff_authority(self) -> None:
+        source = LAUNCHER.read_text(encoding="utf-8")
+
+        freeze_authority = source.index('QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-')
+        dependency_replay = source.index("prepare_flutter_dependencies.py")
+        handoff = source.index('HANDOFF_JSON="$("${HANDOFF_CMD[@]}")"')
+        self.assertLess(freeze_authority, dependency_replay)
+        self.assertLess(dependency_replay, handoff)
+        self.assertIn("export QWQ_DEPLOY_WORK_ROOT", source)
+        self.assertIn('if ! HANDOFF_JSON="$("${HANDOFF_CMD[@]}")"; then', source)
+        self.assertIn('echo "$HANDOFF_JSON" >&2', source)
 
     def test_content_live_transport_failures_are_test_live_warnings(self) -> None:
         source = LAUNCHER.read_text(encoding="utf-8")

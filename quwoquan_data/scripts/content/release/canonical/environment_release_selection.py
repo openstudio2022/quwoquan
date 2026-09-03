@@ -300,157 +300,15 @@ def select_environment_release_posts(
     )
 
 
-def select_all_publishable_release_posts(
-    *,
-    publish_root: Path,
-    post_refs: Sequence[str],
-    release_class: str,
-    strict_admission: bool = True,
-) -> EnvironmentReleaseSelection:
-    """Select every publishable object without environment or milestone identity."""
-
-    release_mode = str(release_class or "").strip()
-    if release_mode not in {"research", "commercial"}:
-        raise ObjectTransactionError(f"DATA.RELEASE.CLASS_INVALID: {release_mode!r}")
-    candidates, excluded = discover_pool_candidates(
-        publish_root=publish_root,
-        post_refs=post_refs,
-        strict_admission=strict_admission,
-    )
-    latest, version_exclusions = _latest_versions(
-        candidates,
-        release_mode=release_mode,
-    )
-    excluded.extend(version_exclusions)
-    selected = _stable_balanced_order(latest)
-    eligible_counts = {
-        content_type: sum(row.content_type == content_type for row in latest)
-        for content_type in _CONTENT_TYPES
-    }
-    counts = {
-        content_type: sum(row.content_type == content_type for row in selected)
-        for content_type in _CONTENT_TYPES
-    }
-    counts["total"] = len(selected)
-    return EnvironmentReleaseSelection(
-        environment=None,
-        release_mode=release_mode,
-        post_refs=tuple(row.post_ref for row in selected),
-        candidates=tuple(selected),
-        pool_digest=_pool_digest(candidates),
-        eligible_count=len(latest),
-        eligible_counts=eligible_counts,
-        counts=counts,
-        excluded=tuple(
-            sorted(excluded, key=lambda row: (row.gate, row.code, row.post_ref))
-        ),
-        selection_scope="all_publishable",
-    )
-
-
-def select_milestone_release_posts(
-    *,
-    publish_root: Path,
-    post_refs: Sequence[str],
-    milestone: str,
-    strict_admission: bool = True,
-    allowed_entity_refs: set[str] | None = None,
-) -> EnvironmentReleaseSelection:
-    """Select an exact, deterministic Research cohort for one cumulative milestone."""
-
-    milestone_name = str(milestone).strip()
-    targets = MILESTONE_TARGETS.get(milestone_name)
-    if targets is None:
-        raise ObjectTransactionError(f"DATA.POOL.MILESTONE_INVALID: {milestone_name!r}")
-    candidates, excluded = discover_pool_candidates(
-        publish_root=publish_root,
-        post_refs=post_refs,
-        strict_admission=strict_admission,
-        allowed_entity_refs=allowed_entity_refs,
-    )
-    latest, version_exclusions = _latest_versions(
-        candidates,
-        release_mode="research",
-    )
-    excluded.extend(version_exclusions)
-    ordered = _stable_balanced_order(latest)
-    eligible_counts = {
-        content_type: sum(row.content_type == content_type for row in latest)
-        for content_type in _CONTENT_TYPES
-    }
-    remaining = {carrier: targets[carrier] for carrier in _CONTENT_TYPES}
-    selected: list[PoolCandidate] = []
-    selected_entity_refs: set[str] = set()
-    for candidate in ordered:
-        if remaining[candidate.content_type] <= 0:
-            continue
-        manifest = _read_json(
-            publish_root / "posts" / candidate.post_ref / "manifest.json"
-        )
-        raw_entity_refs = manifest.get("entityRefs")
-        candidate_entity_refs = (
-            {str(value).removeprefix("/entity/") for value in raw_entity_refs}
-            if isinstance(raw_entity_refs, list)
-            else set()
-        )
-        if (
-            not candidate_entity_refs
-            or len(selected_entity_refs | candidate_entity_refs) > targets["homepage"]
-        ):
-            excluded.append(
-                PoolExclusion(
-                    post_ref=candidate.post_ref,
-                    gate="delivery",
-                    code="DATA.POOL.MILESTONE_HOMEPAGE_BUDGET_EXCEEDED",
-                )
-            )
-            continue
-        selected.append(candidate)
-        selected_entity_refs.update(candidate_entity_refs)
-        remaining[candidate.content_type] -= 1
-    if any(remaining.values()):
-        counts = {
-            carrier: targets[carrier] - remaining[carrier] for carrier in _CONTENT_TYPES
-        }
-        raise ObjectTransactionError(
-            "DATA.POOL.MILESTONE_SHORTFALL: "
-            f"milestone={milestone_name} targets="
-            f"{ {carrier: targets[carrier] for carrier in _CONTENT_TYPES} } "
-            f"publishable={counts}"
-        )
-    counts = {
-        content_type: sum(row.content_type == content_type for row in selected)
-        for content_type in _CONTENT_TYPES
-    }
-    counts["total"] = len(selected)
-    return EnvironmentReleaseSelection(
-        environment=None,
-        release_mode="research",
-        post_refs=tuple(row.post_ref for row in selected),
-        candidates=tuple(selected),
-        pool_digest=_pool_digest(candidates),
-        eligible_count=len(latest),
-        eligible_counts=eligible_counts,
-        counts=counts,
-        excluded=tuple(
-            sorted(excluded, key=lambda row: (row.gate, row.code, row.post_ref))
-        ),
-        selection_scope="milestone",
-        milestone=milestone_name,
-        milestone_targets=dict(targets),
-    )
 
 
 __all__ = [
     "DATA_POST_CAPS",
-    "MILESTONE_TARGETS",
     "EnvironmentReleaseSelection",
     "PoolExclusion",
     "discover_pool_candidates",
     "pool_candidate_digest",
     "pool_delivery_issue",
-    "select_all_publishable_release_posts",
     "select_environment_release_posts",
-    "select_milestone_release_posts",
     "source_attribution_complete",
 ]

@@ -10,11 +10,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from content.execution.closure.publish_outcome import (
-    OBJECT_ASSET_OVER_BUDGET,
-    OBJECT_CLOSURE_OVER_BUDGET,
-    TypedPublishExclusion,
-)
+OBJECT_ASSET_OVER_BUDGET = "DATA.PUBLISH.OBJECT_ASSET_OVER_BUDGET"
+OBJECT_CLOSURE_OVER_BUDGET = "DATA.PUBLISH.OBJECT_CLOSURE_OVER_BUDGET"
+
+
+class TypedPublishExclusion:
+    """Typed mechanical publish exclusion without execution orchestration."""
+
+    def __init__(self, issue_code: str, message: str) -> None:
+        self.issue_code = issue_code
+        super().__init__(message)
 from content.release.canonical.object_transaction_bindings import (
     collect_object_keys,
     verify_entity_manifest_asset_binding,
@@ -337,14 +342,9 @@ def _review_binding(object_root: Path, package: Mapping[str, Any]) -> dict[str, 
         str(review.get("attestationRef") or ""),
         label="review.attestationRef",
     )
-    evidence_ref = _safe_rel(
-        str(review.get("evidenceIndexRef") or ""),
-        label="review.evidenceIndexRef",
-    )
     attestation_path = object_root / attestation_ref
-    evidence_path = object_root / evidence_ref
-    if not attestation_path.is_file() or not evidence_path.is_file():
-        raise ObjectTransactionError("对象包缺 compact review attestation/evidence index")
+    if not attestation_path.is_file():
+        raise ObjectTransactionError("对象包缺 review attestation")
     attestation = _read_json(attestation_path)
     if attestation.get("decision") != "approved":
         raise ObjectTransactionError("对象未 review-approved")
@@ -355,8 +355,6 @@ def _review_binding(object_root: Path, package: Mapping[str, Any]) -> dict[str, 
     return {
         "attestationRef": attestation_ref.as_posix(),
         "attestationSha256": _digest_file(attestation_path),
-        "evidenceIndexRef": evidence_ref.as_posix(),
-        "evidenceIndexSha256": _digest_file(evidence_path),
     }
 
 def _rights_binding(

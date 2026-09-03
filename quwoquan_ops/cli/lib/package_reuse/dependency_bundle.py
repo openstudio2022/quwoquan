@@ -24,6 +24,33 @@ from .pub_cache_capsule import _canonical_bytes, _digest_bytes
 APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA = "stackctl-app-dependency-bundle-active.v2"
 APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA = "stackctl-app-dependency-sync-receipt.v3"
 
+# 与 canonical launch blocker 契约字面量对齐；contracts codegen 由并行任务落地，
+# 这里不 import generated 契约，只承诺同一字符串。
+APP_DEPENDENCY_BUNDLE_STALE_CODE = "APP.DEPENDENCY.bundle_stale"
+APP_DEPENDENCY_BUNDLE_STALE_FIELDS = (
+    "flutterVersion",
+    "flutterCommandResolutionDigest",
+    "productionPubResolutionInputDigest",
+    "patrolPubResolutionInputDigest",
+    "nativeResolutionInputDigest",
+)
+
+
+class AppDependencyBundleStaleError(ValueError):
+    """Active pointer identity no longer matches the current source/toolchain.
+
+    仅覆盖 source identity 漂移（stale）；missing/corrupt/receipt drift 仍是
+    普通 ``ValueError``，不得归类为 stale。消息保持
+    ``App dependency bundle is stale for <field>`` 以兼容既有文本消费者。
+    """
+
+    def __init__(self, field: str) -> None:
+        if field not in APP_DEPENDENCY_BUNDLE_STALE_FIELDS:
+            raise ValueError(f"App dependency bundle stale field is unknown: {field}")
+        super().__init__(f"App dependency bundle is stale for {field}")
+        self.code = APP_DEPENDENCY_BUNDLE_STALE_CODE
+        self.field = field
+
 APP_DEPENDENCY_COMPONENTS = (
     "productionPub",
     "patrolPub",
@@ -217,7 +244,7 @@ def load_active_dependency_bundle(*, repo_root: Path) -> AppDependencyBundle:
     current = _current_source_identity(repository)
     for field, expected in current.items():
         if active.get(field) != expected:
-            raise ValueError(f"App dependency bundle is stale for {field}")
+            raise AppDependencyBundleStaleError(field)
     raw_components = active.get("components")
     if not isinstance(raw_components, Mapping) or set(raw_components) != set(
         APP_DEPENDENCY_COMPONENTS

@@ -20,6 +20,9 @@ import sys
 sys.dont_write_bytecode = True
 
 from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service_names
+from quwoquan_ops.cli.lib.deployment_candidate_manifest.log_sink_package import (
+    canonical_local_observability_log_sink_composition,
+)
 from quwoquan_ops.cli.lib.service_core_composition import (
     SERVICE_CORE_MODULE_SET,
     SERVICE_CORE_MODULES,
@@ -29,7 +32,7 @@ from quwoquan_ops.cli.lib.service_core_composition import (
 
 
 ROOT = Path(__file__).resolve().parents[3]
-SCHEMA = "qwq.runtime_topology_package.v3"
+SCHEMA = "qwq.runtime_topology_package.v4"
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 TOPOLOGY_RELATIVE_ROOT = PurePosixPath(
     "packages/runtime-shared/runtime-topology"
@@ -41,6 +44,7 @@ CONTENT_RELEASE_SERVICES = frozenset(
         "content-service",
         "user-service",
         "entity-service",
+        "search-service",
     }
 )
 CONTENT_COMMERCIAL_SERVICES = frozenset(
@@ -75,6 +79,9 @@ _SEALED_BIND_SOURCES: dict[str, str] = {
         "./" + _ALERT_POLICY_PACKAGE_REF.as_posix()
     ),
 }
+_BOUNDED_SEARCH_ELASTICSEARCH_REF = PurePosixPath(
+    "dependencies/search/elasticsearch.compose.yaml"
+)
 
 
 class RuntimeTopologyPackageError(ValueError):
@@ -174,6 +181,84 @@ def _seal_relative_bind_mounts(service: dict[str, Any], *, source: Path) -> None
                 f"candidate: {host} ({source})"
             )
         volumes[index] = replacement + ":" + container
+
+
+def bounded_search_elasticsearch_compose_bytes(
+    repo_root: Path = ROOT,
+) -> tuple[bytes, str]:
+    """Project shared local Elasticsearch bytes into a Search-owned slice.
+
+    本地 CJK Elasticsearch 的镜像/JVM 平台选择仍复用既有 package authority；
+    bounded content-release 只封装其 ``elasticsearch`` service，并改用 Search
+    数据面命名。Product Ops service、遥测策略与 promotion readiness 不得借由
+    这份依赖投影进入 M1 consumer runtime。
+    """
+
+    source = (
+        repo_root
+        / "quwoquan_service/services/product-ops-service/deploy"
+        / "local-elasticsearch.compose.yaml"
+    )
+    canonical = canonical_local_observability_log_sink_composition(source)
+    raw_compose = canonical.get("compose")
+    compose = json.loads(json.dumps(raw_compose)) if isinstance(raw_compose, dict) else None
+    services = compose.get("services") if isinstance(compose, dict) else None
+    elasticsearch = services.get("elasticsearch") if isinstance(services, dict) else None
+    if not isinstance(compose, dict) or not isinstance(elasticsearch, dict):
+        raise RuntimeTopologyPackageError(
+            "bounded Search Elasticsearch source is incomplete"
+        )
+
+    volumes = elasticsearch.get("volumes")
+    if not isinstance(volumes, list):
+        raise RuntimeTopologyPackageError(
+            "bounded Search Elasticsearch data volume is missing"
+        )
+    source_volume = "product-ops-elasticsearch-data"
+    search_volume = "bounded-search-elasticsearch-data"
+    rewritten_volumes: list[object] = []
+    for volume in volumes:
+        if isinstance(volume, str) and volume.startswith(source_volume + ":"):
+            rewritten_volumes.append(search_volume + volume[len(source_volume) :])
+        else:
+            rewritten_volumes.append(volume)
+    elasticsearch["volumes"] = rewritten_volumes
+    environment = elasticsearch.get("environment")
+    if not isinstance(environment, dict):
+        raise RuntimeTopologyPackageError(
+            "bounded Search Elasticsearch environment is missing"
+        )
+    environment["cluster.name"] = (
+        "quwoquan-${QWQ_LOCAL_RELEASE_TARGET:?QWQ_LOCAL_RELEASE_TARGET is required}-search"
+    )
+    environment["node.name"] = (
+        "${QWQ_LOCAL_RELEASE_TARGET:?QWQ_LOCAL_RELEASE_TARGET is required}-search-0"
+    )
+    compose["services"] = {"elasticsearch": elasticsearch}
+    compose["volumes"] = {search_volume: None}
+    encoded = yaml.safe_dump(
+        project_compose_document(compose),
+        allow_unicode=True,
+        sort_keys=False,
+    ).encode("utf-8")
+    if "product-ops" in encoded.decode("utf-8"):
+        raise RuntimeTopologyPackageError(
+            "bounded Search Elasticsearch projection retained Product Ops ownership"
+        )
+    return encoded, str(canonical["sourceComposeDigest"])
+
+
+def materialize_bounded_search_elasticsearch_compose(
+    destination: Path,
+    *,
+    repo_root: Path = ROOT,
+) -> str:
+    """Write one build-only execution copy of the bounded Search dependency."""
+
+    encoded, source_digest = bounded_search_elasticsearch_compose_bytes(repo_root)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(encoded)
+    return source_digest
 
 
 def _validate_relative(relative: PurePosixPath, *, label: str) -> None:
@@ -320,7 +405,6 @@ def materialize_runtime_topology_package(
         role="ops-base",
         layer="base",
     )
-
     services_root = repo_root / "quwoquan_service/services"
     try:
         service_directories = sorted(services_root.iterdir(), key=lambda path: path.name)
@@ -378,6 +462,27 @@ def materialize_runtime_topology_package(
     if not service_names:
         raise RuntimeTopologyPackageError(
             "runtime topology package has no first-party services"
+        )
+    if "search-service" in service_names:
+        search_elasticsearch_bytes, search_elasticsearch_source_digest = (
+            bounded_search_elasticsearch_compose_bytes(repo_root)
+        )
+        _write_exclusive(
+            root,
+            output_prefix / _BOUNDED_SEARCH_ELASTICSEARCH_REF,
+            search_elasticsearch_bytes,
+        )
+        entries.append(
+            _entry(
+                role="bounded-dependency",
+                layer="base",
+                service="search-service",
+                reference=(
+                    TOPOLOGY_RELATIVE_ROOT / _BOUNDED_SEARCH_ELASTICSEARCH_REF
+                ),
+                payload=search_elasticsearch_bytes,
+                source_digest=search_elasticsearch_source_digest,
+            )
         )
     add_compose(
         repo_root
@@ -672,6 +777,7 @@ def load_runtime_topology_package(
     seen_refs: set[str] = set()
     seen_base = 0
     seen_service_layers: set[tuple[str, str]] = set()
+    seen_bounded_dependencies = 0
     seen_control_plane = 0
     selected_paths: list[Path] = []
     for item in compose:
@@ -724,6 +830,22 @@ def load_runtime_topology_package(
                     service in SERVICE_CORE_MODULE_SET
                     and bool(SERVICE_CORE_MODULE_SET & selected_services)
                 )
+            )
+        elif role == "bounded-dependency":
+            if (
+                layer != "base"
+                or service != "search-service"
+                or reference
+                != TOPOLOGY_RELATIVE_ROOT / _BOUNDED_SEARCH_ELASTICSEARCH_REF
+            ):
+                raise RuntimeTopologyPackageError(
+                    "runtime topology bounded dependency identity is invalid"
+                )
+            seen_bounded_dependencies += 1
+            selected = (
+                workload == "content-release"
+                and selected_services is not None
+                and "search-service" in selected_services
             )
         elif role == "control-plane":
             if layer != "base" or service:
@@ -793,6 +915,7 @@ def load_runtime_topology_package(
     if (
         seen_base != 1
         or seen_control_plane != 1
+        or seen_bounded_dependencies != (1 if "search-service" in service_names else 0)
         or seen_service_base != set(service_names)
     ):
         raise RuntimeTopologyPackageError(

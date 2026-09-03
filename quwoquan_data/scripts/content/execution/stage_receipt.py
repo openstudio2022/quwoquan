@@ -1,395 +1,746 @@
-"""Stage receipt 链与 single-writer lane claim（DEC-005）。
+"""最小 stage open/close execution 内核。
 
-receipt 是跨会话/跨宿主交接与恢复的唯一状态源：
-`_shared/receipts/<seq 3 位>-<stage>.json`，create-once 原子写，最新 sequence 为权威。
-claim 是可清理过程层（`_shared/claims/lane.json`），心跳过 TTL 即死 lane 可接手。
-本模块只做检查与确定性 IO，不驱动、不等待 agent、不推进状态机。
+本模块只冻结调用方声明的引用及其实际字节摘要；不查找候选、不运行业务命令、
+不派生 verdict/recovery/next，也不写任何状态投影。``verifierFacts`` 只是宿主对
+已执行显式 verifier 的证明声明；内核不能证明命令确实执行过。
 """
 from __future__ import annotations
 
+import fcntl
+import hashlib
 import json
 import os
 import re
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
+import secrets
+import stat
+from contextlib import contextmanager
+from datetime import datetime
+from pathlib import Path, PurePosixPath
+from typing import Any, Iterator
 
-from core.control_types import RECEIPT_STAGE_SEQUENCE, ExecutionStateStatus
-from core.paths import DATA_EXECUTIONS_ROOT, execution_root, is_execution_id
+from content.execution.identity import validate_execution_id
+from core import paths
+from core.control_types import RECEIPT_STAGE_SEQUENCE
 from core.schema import assert_valid
 
-RECEIPT_SCHEMA = "quwoquan_data.stage_receipt"
-RECEIPT_STAGES: tuple[str, ...] = tuple(
-    stage.value for stage in RECEIPT_STAGE_SEQUENCE
-)
-RECEIPT_NEXT_VALUES: tuple[str, ...] = (*RECEIPT_STAGES, "END")
-OPEN_ITEM_DISPOSITIONS: tuple[str, ...] = (
-    "return_to_stage", "gate_block", "out_of_scope",
-)
-DEFAULT_CLAIM_TTL_MINUTES = 45
-# 驱动杀死一轮之后、claim 过 TTL 之前必须留出的余量：这段余量是给运营者接手用的，
-# 不是给在飞会话续命用的。
-CLAIM_TTL_SAFETY_MARGIN_MINUTES = 5
-_RECEIPT_NAME_RE = re.compile(r"^(\d{3})-(.+)\.json$")
+RECEIPT_STAGES: tuple[str, ...] = tuple(stage.value for stage in RECEIPT_STAGE_SEQUENCE)
+_STAGE_INDEX = {stage: index for index, stage in enumerate(RECEIPT_STAGES)}
+_OPEN_DIRECTORY = "_shared/stage-open"
+_RECEIPT_DIRECTORY = "_shared/receipts"
 
 
-def receipts_dir(execution_id: str) -> Path:
-    return execution_root(execution_id) / "_shared" / "receipts"
+class StageProtocolError(ValueError):
+    """stage 请求违反协议。"""
 
 
-def claim_path(execution_id: str) -> Path:
-    return execution_root(execution_id) / "_shared" / "claims" / "lane.json"
+class StageConflict(StageProtocolError):
+    """create-once 文件已存在且输入不同。"""
 
 
-def _now() -> datetime:
-    return datetime.now(UTC)
+def _canonical_bytes(value: object) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
 
-def _now_iso() -> str:
-    return _now().replace(microsecond=0).isoformat().replace("+00:00", "Z")
+def _sha256(data: bytes) -> str:
+    return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-def _claim_expired(existing: dict) -> bool:
-    heartbeat = datetime.fromisoformat(
-        str(existing["heartbeatAt"]).replace("Z", "+00:00")
-    )
-    return _now() >= heartbeat + timedelta(minutes=int(existing["ttlMinutes"]))
-
-
-def list_receipt_files(execution_id: str) -> list[tuple[int, str, Path]]:
-    """按 sequence 升序返回 (sequence, stage, path)。非法命名直接失败。"""
-    root = receipts_dir(execution_id)
-    if not root.is_dir():
-        return []
-    entries: list[tuple[int, str, Path]] = []
-    for path in sorted(root.iterdir()):
-        if path.name.startswith("."):
-            continue
-        match = _RECEIPT_NAME_RE.fullmatch(path.name)
-        if match is None:
-            raise ValueError(f"illegal receipt filename: {path}")
-        entries.append((int(match.group(1)), match.group(2), path))
-    entries.sort(key=lambda item: item[0])
-    return entries
-
-
-def load_receipt(path: Path) -> dict:
-    with path.open(encoding="utf-8") as handle:
-        payload = json.load(handle)
-    if not isinstance(payload, dict):
-        raise ValueError(f"receipt must be an object: {path}")
-    return payload
-
-
-def latest_receipt(execution_id: str) -> dict | None:
-    entries = list_receipt_files(execution_id)
-    if not entries:
-        return None
-    return load_receipt(entries[-1][2])
-
-
-def _next_sequence(execution_id: str) -> int:
-    entries = list_receipt_files(execution_id)
-    return entries[-1][0] + 1 if entries else 1
-
-
-def build_receipt(
-    *,
-    execution_id: str,
-    stage: str,
-    verdict: str,
-    actor_host: str,
-    actor_model_family: str,
-    actor_session: str,
-    artifacts: list[str],
-    open_items: list[dict],
-    next_stage: str,
-    evidence_commands: list[dict],
-    issue_count: int,
-    repair_rounds: int,
-) -> dict:
-    """构建并做协议级校验；schema 校验由 assert_valid 兜底。"""
-    if actor_model_family.strip().lower() == "auto":
-        raise ValueError(
-            "actor.modelFamily must record the actual routed family, not literal 'auto'"
-        )
-    if verdict == "blocked" and not open_items:
-        raise ValueError("blocked receipt requires at least one --open-item")
-    if verdict == "pass":
-        if stage == "ship" and next_stage != "END":
-            raise ValueError("ship pass receipt must set next=END")
-        if stage != "ship" and next_stage == "END":
-            raise ValueError("next=END is only legal for the ship stage")
-    for item in open_items:
-        if item["disposition"] == "return_to_stage" and "returnStage" not in item:
-            raise ValueError(
-                f"open item requires returnStage for return_to_stage: {item['item']}"
-            )
-    payload = {
-        "schema": RECEIPT_SCHEMA,
-        "executionId": execution_id,
-        "stage": stage,
-        "sequence": _next_sequence(execution_id),
-        "verdict": verdict,
-        "actor": {
-            "host": actor_host,
-            "modelFamily": actor_model_family,
-            "sessionId": actor_session,
-        },
-        "artifacts": list(artifacts),
-        "openItems": list(open_items),
-        "next": next_stage,
-        "evidence": {
-            "commands": list(evidence_commands),
-            "issueCount": issue_count,
-            "repairRounds": repair_rounds,
-        },
-        "recordedAt": _now_iso(),
-    }
-    assert_valid(payload, "execution", "stage_receipt", label="stage-record")
-    return payload
-
-
-def write_receipt_create_once(execution_id: str, payload: dict) -> Path:
-    """tmp + os.link 原子 create-once：目标已存在即失败，绝不覆盖历史。"""
-    if payload.get("executionId") != execution_id:
-        raise ValueError("receipt executionId must match target execution")
-    root = receipts_dir(execution_id)
-    root.mkdir(parents=True, exist_ok=True)
-    target = root / f"{payload['sequence']:03d}-{payload['stage']}.json"
-    tmp = root / f".tmp-{os.getpid()}-{target.name}"
-    tmp.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+def _parse_json_object(raw: bytes, *, label: str) -> dict[str, Any]:
     try:
-        os.link(tmp, target)
-    except FileExistsError as exc:
-        raise FileExistsError(
-            f"receipt already exists (create-once): {target}"
-        ) from exc
+        value = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise StageProtocolError(f"{label} 不是合法 JSON") from exc
+    if not isinstance(value, dict):
+        raise StageProtocolError(f"{label} 必须是 JSON 对象")
+    return value
+
+
+def _load_input(path: Path, *, schema_name: str | None = None) -> tuple[dict[str, Any], bytes]:
+    raw = path.expanduser().read_bytes()
+    value = _parse_json_object(raw, label="input")
+    if schema_name:
+        try:
+            assert_valid(value, "execution", schema_name, label=f"stage {schema_name}")
+        except ValueError as exc:
+            raise StageProtocolError(str(exc)) from exc
+    canonical = _canonical_bytes(value)
+    return value, canonical
+
+
+def _stage(stage: str) -> tuple[str, int]:
+    normalized = str(stage or "").strip()
+    if normalized not in _STAGE_INDEX:
+        raise StageProtocolError(f"未知 stage：{normalized}")
+    return normalized, _STAGE_INDEX[normalized] + 1
+
+
+def _safe_ref(ref: object) -> str:
+    value = str(ref or "")
+    path = PurePosixPath(value)
+    if (
+        not value
+        or "\x00" in value
+        or path.is_absolute()
+        or value != path.as_posix()
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
+        raise StageProtocolError(f"ref 必须是安全相对路径：{value!r}")
+    return value
+
+
+def _open_root(path: Path, *, label: str) -> int:
+    expanded = path.expanduser()
+    flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    if not expanded.is_absolute():
+        expanded = Path.cwd() / expanded
+    parts = expanded.parts
+    descriptor = os.open(parts[0], flags | nofollow)
+    try:
+        for part in parts[1:]:
+            next_descriptor = os.open(part, flags | nofollow, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except (OSError, ValueError) as exc:
+        os.close(descriptor)
+        raise StageProtocolError(f"{label} 必须是无 symlink 的目录：{expanded}") from exc
+
+
+def _open_child_directory(parent_fd: int, name: str, *, label: str) -> int:
+    try:
+        return os.open(
+            name,
+            os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=parent_fd,
+        )
+    except OSError as exc:
+        raise StageProtocolError(f"{label} 必须是无 symlink 的目录：{name}") from exc
+
+
+def _read_regular_at(root_fd: int, ref: str, *, label: str) -> bytes:
+    parts = PurePosixPath(_safe_ref(ref)).parts
+    descriptor = os.dup(root_fd)
+    try:
+        for part in parts[:-1]:
+            next_descriptor = _open_child_directory(descriptor, part, label=f"{label} 父目录")
+            os.close(descriptor)
+            descriptor = next_descriptor
+        try:
+            file_fd = os.open(
+                parts[-1],
+                os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=descriptor,
+            )
+        except OSError as exc:
+            raise StageProtocolError(f"{label} 不可读取：{ref}") from exc
+        try:
+            if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+                raise StageProtocolError(f"{label} 必须是 regular file：{ref}")
+            chunks: list[bytes] = []
+            while True:
+                chunk = os.read(file_fd, 1024 * 1024)
+                if not chunk:
+                    return b"".join(chunks)
+                chunks.append(chunk)
+        finally:
+            os.close(file_fd)
     finally:
-        tmp.unlink(missing_ok=True)
-    return target
+        os.close(descriptor)
 
 
-def receipt_state_status(payload: dict) -> ExecutionStateStatus:
-    """receipt → execution_state.status 的唯一映射（handoff-protocol.md）。"""
-    if payload["verdict"] == "blocked":
-        return ExecutionStateStatus.MANUAL_REQUIRED
-    if payload["stage"] == "ship":
-        return ExecutionStateStatus.SUCCEEDED
-    return ExecutionStateStatus.RUNNING
+def _mkdirs_at(root_fd: int, ref: str) -> int:
+    descriptor = os.dup(root_fd)
+    try:
+        for part in PurePosixPath(_safe_ref(ref)).parts:
+            try:
+                os.mkdir(part, mode=0o755, dir_fd=descriptor)
+                os.fsync(descriptor)
+            except FileExistsError:
+                pass
+            next_descriptor = _open_child_directory(descriptor, part, label="execution 写入目录")
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
 
 
-def _matches_stage_record(existing: dict, kwargs: dict[str, object]) -> bool:
-    expected = {
-        "executionId": str(kwargs["execution_id"]),
-        "stage": str(kwargs["stage"]),
-        "verdict": str(kwargs["verdict"]),
-        "actor": {
-            "host": str(kwargs["actor_host"]),
-            "modelFamily": str(kwargs["actor_model_family"]),
-            "sessionId": str(kwargs["actor_session"]),
-        },
-        "artifacts": list(kwargs["artifacts"]),
-        "openItems": list(kwargs["open_items"]),
-        "next": str(kwargs["next_stage"]),
-        "evidence": {
-            "commands": list(kwargs["evidence_commands"]),
-            "issueCount": int(kwargs["issue_count"]),
-            "repairRounds": int(kwargs["repair_rounds"]),
-        },
-    }
-    return all(existing.get(key) == value for key, value in expected.items())
+def _read_optional_at(root_fd: int, directory: str, name: str, *, label: str) -> bytes | None:
+    directory_fd = os.dup(root_fd)
+    try:
+        for part in directory.split("/"):
+            try:
+                next_fd = _open_child_directory(directory_fd, part, label=label)
+            except StageProtocolError as exc:
+                if isinstance(exc.__cause__, FileNotFoundError):
+                    return None
+                raise
+            os.close(directory_fd)
+            directory_fd = next_fd
+        try:
+            file_fd = os.open(
+                name,
+                os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+                dir_fd=directory_fd,
+            )
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise StageProtocolError(f"{label} 不可读取：{name}") from exc
+        try:
+            if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+                raise StageProtocolError(f"{label} 必须是 regular file：{name}")
+            chunks: list[bytes] = []
+            while True:
+                chunk = os.read(file_fd, 1024 * 1024)
+                if not chunk:
+                    return b"".join(chunks)
+                chunks.append(chunk)
+        finally:
+            os.close(file_fd)
+    finally:
+        os.close(directory_fd)
 
 
-def record_stage_receipt(**kwargs: object) -> Path:
-    """Create one receipt or replay it solely to heal the derived projection."""
-    execution_id = str(kwargs["execution_id"])
-    entries = list_receipt_files(execution_id)
-    if entries:
-        latest = load_receipt(entries[-1][2])
-        state_path = execution_root(execution_id) / "_shared/execution_state.json"
-        if _matches_stage_record(latest, kwargs) and not state_path.is_file():
-            from content.execution.receipt_state_reducer import reduce_receipt_projection
+def _atomic_create_once(root_fd: int, directory: str, name: str, data: bytes) -> None:
+    directory_fd = _mkdirs_at(root_fd, directory)
+    temporary = f".tmp-{secrets.token_hex(16)}"
+    created = False
+    try:
+        temp_fd = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+            dir_fd=directory_fd,
+        )
+        try:
+            view = memoryview(data)
+            while view:
+                written = os.write(temp_fd, view)
+                view = view[written:]
+            os.fsync(temp_fd)
+        finally:
+            os.close(temp_fd)
+        try:
+            os.link(temporary, name, src_dir_fd=directory_fd, dst_dir_fd=directory_fd, follow_symlinks=False)
+            created = True
+        except FileExistsError as exc:
+            existing = _read_regular_at(directory_fd, name, label="create-once 目标")
+            if existing != data:
+                raise StageConflict(f"create-once 冲突：{directory}/{name}") from exc
+        os.fsync(directory_fd)
+    finally:
+        try:
+            os.unlink(temporary, dir_fd=directory_fd)
+            os.fsync(directory_fd)
+        except FileNotFoundError:
+            pass
+        finally:
+            os.close(directory_fd)
+    if not created:
+        return
 
-            reduce_receipt_projection(execution_id)
-            return entries[-1][2]
-    payload = build_receipt(**kwargs)  # type: ignore[arg-type]
-    target = write_receipt_create_once(execution_id, payload)
-    from content.execution.receipt_state_reducer import reduce_receipt_projection
 
-    reduce_receipt_projection(execution_id)
-    return target
+def _execution_root_fd(execution_id: str) -> tuple[Path, int]:
+    normalized = validate_execution_id(execution_id)
+    output_fd = _open_root(paths.OUTPUT_ROOT, label="output 根")
+    try:
+        tasks_ref = _relative_to_output(paths.DATA_EXECUTIONS_ROOT, label="execution 父根")
+        tasks_fd = os.dup(output_fd)
+        try:
+            for part in PurePosixPath(tasks_ref).parts:
+                next_fd = _open_child_directory(tasks_fd, part, label="execution 父根")
+                os.close(tasks_fd)
+                tasks_fd = next_fd
+            root_fd = _open_child_directory(tasks_fd, normalized, label="execution 根")
+        finally:
+            os.close(tasks_fd)
+    finally:
+        os.close(output_fd)
+    try:
+        _read_regular_at(root_fd, "execution_manifest.json", label="execution manifest")
+    except BaseException:
+        os.close(root_fd)
+        raise StageProtocolError(f"execution 不存在、未初始化或不可信：{normalized}")
+    return paths.DATA_EXECUTIONS_ROOT / normalized, root_fd
 
 
-def acquire_lane_claim(
+def _scope_fd(scope: str, execution_fd: int) -> int:
+    if scope == "execution":
+        return os.dup(execution_fd)
+    if scope == "output":
+        return _open_root(paths.OUTPUT_ROOT, label="output 根")
+    if scope == "repo":
+        return _open_root(paths.REPO_ROOT, label="repo 根")
+    raise StageProtocolError(f"未知 ref scope：{scope}")
+
+
+def _resolve_ref(binding: dict[str, Any], *, execution_fd: int) -> dict[str, str]:
+    scope = str(binding.get("scope") or "")
+    ref = _safe_ref(binding.get("ref"))
+    root_fd = _scope_fd(scope, execution_fd)
+    try:
+        raw = _read_regular_at(root_fd, ref, label=f"{scope} ref")
+    finally:
+        os.close(root_fd)
+    return {"scope": scope, "ref": ref, "digest": _sha256(raw)}
+
+
+def _freeze_refs(value: object, *, execution_fd: int, label: str) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        raise StageProtocolError(f"{label} 必须是数组")
+    frozen: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw in value:
+        if not isinstance(raw, dict) or set(raw) != {"scope", "ref"}:
+            raise StageProtocolError(f"{label} 元素只能包含 scope/ref")
+        binding = _resolve_ref(raw, execution_fd=execution_fd)
+        key = (binding["scope"], binding["ref"])
+        if key in seen:
+            raise StageProtocolError(f"{label} 含重复引用：{key[0]}:{key[1]}")
+        seen.add(key)
+        frozen.append(binding)
+    return frozen
+
+
+def _validate_review_close_actor(
+    request: dict[str, Any],
+    *,
+    execution_fd: int,
+) -> None:
+    """5.review CLOSE 必须复用独立 reviewer 的真实 actor，而非作者身份。"""
+    close_actor = request.get("actor")
+    close_actor = close_actor if isinstance(close_actor, dict) else {}
+    close_invocation = close_actor.get("invocation")
+    if not isinstance(close_invocation, dict):
+        raise StageProtocolError("5.review actor.invocation 必须记录真实 provider/model/runId")
+
+    reviewer_actors: list[dict[str, Any]] = []
+    for binding in request.get("resultRefs") or []:
+        if not isinstance(binding, dict):
+            continue
+        scope = str(binding.get("scope") or "")
+        ref = str(binding.get("ref") or "")
+        if not ref.endswith("5.review/reviewer_result.json"):
+            continue
+        if scope != "execution":
+            raise StageProtocolError("5.review reviewer_result 必须使用 execution ref")
+        raw = _read_regular_at(execution_fd, ref, label="5.review reviewer_result")
+        reviewer_result = _parse_json_object(raw, label="5.review reviewer_result")
+        try:
+            assert_valid(
+                reviewer_result,
+                "content",
+                "reviewer_result",
+                label="5.review reviewer_result",
+            )
+        except ValueError as exc:
+            raise StageProtocolError(str(exc)) from exc
+        reviewer_actors.append(dict(reviewer_result["actor"]))
+    if not reviewer_actors:
+        raise StageProtocolError("5.review resultRefs 必须包含 reviewer_result.json")
+    if any(actor != close_actor for actor in reviewer_actors):
+        raise StageProtocolError("5.review CLOSE actor 与 reviewer_result.actor 不一致")
+    draft_receipt = _load_artifact(
+        execution_fd,
+        _RECEIPT_DIRECTORY,
+        _expected_name("4.draft"),
+        label="4.draft stage receipt",
+        schema_name="stage_receipt",
+    )
+    if draft_receipt is None:
+        raise StageProtocolError("5.review 缺少 4.draft receipt")
+    author_actor = draft_receipt[0].get("actor")
+    author_actor = author_actor if isinstance(author_actor, dict) else {}
+    if (close_actor.get("host"), close_actor.get("sessionId")) == (
+        author_actor.get("host"),
+        author_actor.get("sessionId"),
+    ):
+        raise StageProtocolError("5.review reviewer 与 4.draft 作者使用同一 host/sessionId")
+    author_invocation = author_actor.get("invocation")
+    author_invocation = author_invocation if isinstance(author_invocation, dict) else {}
+    author_run_id = str(author_invocation.get("runId") or "").strip()
+    reviewer_run_id = str(close_invocation.get("runId") or "").strip()
+    if not author_run_id or author_run_id == reviewer_run_id:
+        raise StageProtocolError("5.review reviewer 必须使用不同于作者的真实 invocation.runId")
+
+
+def _load_artifact(root_fd: int, directory: str, name: str, *, label: str, schema_name: str) -> tuple[dict[str, Any], bytes] | None:
+    raw = _read_optional_at(root_fd, directory, name, label=label)
+    if raw is None:
+        return None
+    value = _parse_json_object(raw, label=label)
+    try:
+        assert_valid(value, "execution", schema_name, label=label)
+    except ValueError as exc:
+        raise StageProtocolError(str(exc)) from exc
+    if raw != _canonical_bytes(value):
+        raise StageProtocolError(f"{label} 不是 canonical JSON：{name}")
+    return value, raw
+
+
+def _artifact_names(root_fd: int, directory: str) -> set[str]:
+    descriptor = os.dup(root_fd)
+    try:
+        for part in directory.split("/"):
+            try:
+                next_fd = _open_child_directory(descriptor, part, label=directory)
+            except StageProtocolError as exc:
+                if isinstance(exc.__cause__, FileNotFoundError):
+                    return set()
+                raise
+            os.close(descriptor)
+            descriptor = next_fd
+        try:
+            names = set(os.listdir(descriptor))
+        except OSError as exc:
+            raise StageProtocolError(f"无法扫描 {directory}") from exc
+        for name in names:
+            try:
+                mode = os.stat(name, dir_fd=descriptor, follow_symlinks=False).st_mode
+            except OSError as exc:
+                raise StageProtocolError(f"无法检查 {directory}/{name}") from exc
+            if not stat.S_ISREG(mode):
+                raise StageProtocolError(f"{directory} 只能包含 regular files：{name}")
+        return names
+    finally:
+        os.close(descriptor)
+
+
+def _expected_name(stage: str) -> str:
+    return f"{_STAGE_INDEX[stage] + 1:03d}-{stage}.json"
+
+
+def _validate_progress(
+    root_fd: int,
     execution_id: str,
     *,
-    actor_host: str,
-    actor_session: str,
-    ttl_minutes: int = DEFAULT_CLAIM_TTL_MINUTES,
-) -> dict:
-    """single-writer claim：同 session 刷新心跳；异 session 未过 TTL 拒绝。"""
-    path = claim_path(execution_id)
-    existing: dict | None = None
-    if path.is_file():
-        with path.open(encoding="utf-8") as handle:
-            existing = json.load(handle)
-    if (
-        existing is not None
-        and existing["owner"]["sessionId"] != actor_session
-        and not _claim_expired(existing)
-    ):
-        return {
-            "acquired": False,
-            "reason": "active claim held by another session",
-            "claim": existing,
-        }
-    claim = {
-        "executionId": execution_id,
-        "owner": {"host": actor_host, "sessionId": actor_session},
-        "claimedAt": (
-            existing["claimedAt"]
-            if existing is not None
-            and existing["owner"]["sessionId"] == actor_session
-            else _now_iso()
-        ),
-        "heartbeatAt": _now_iso(),
-        "ttlMinutes": ttl_minutes,
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.parent / f".tmp-{os.getpid()}-lane.json"
-    tmp.write_text(
-        json.dumps(claim, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
-    os.replace(tmp, path)
-    return {"acquired": True, "reason": "", "claim": claim}
-
-
-def round_timeout_admission(
-    execution_id: str, *, round_timeout_seconds: int
-) -> dict:
-    """判驱动的单轮 hard timeout 是否短于执行者 claim 的存活窗口。
-
-    驱动杀掉一轮宿主会话后，该会话的心跳随之停止；只有在 claim 仍未过 TTL 时，
-    这段空窗才不会被别的 lane 当成死 lane 接手。若单轮超时反而长于 TTL，在飞的
-    会话还活着、claim 已过期，两个写者会同时认为自己持有 lane。因此两者的关系
-    必须在驱动启动时判定，而不是靠默认值恰好成立。
-    """
-    if round_timeout_seconds <= 0:
-        return {
-            "admitted": False,
-            "ttlMinutes": 0,
-            "reason": "round timeout must be a positive number of seconds",
-        }
-    claim = check_lane_claim(execution_id)["claim"]
-    ttl_minutes = (
-        int(claim["ttlMinutes"])
-        if isinstance(claim, dict)
-        else DEFAULT_CLAIM_TTL_MINUTES
-    )
-    budget = ttl_minutes * 60 - CLAIM_TTL_SAFETY_MARGIN_MINUTES * 60
-    if round_timeout_seconds > budget:
-        return {
-            "admitted": False,
-            "ttlMinutes": ttl_minutes,
-            "reason": (
-                f"round timeout {round_timeout_seconds}s leaves no margin under "
-                f"claim TTL {ttl_minutes}m; must be at most {budget}s "
-                f"(TTL minus {CLAIM_TTL_SAFETY_MARGIN_MINUTES}m safety margin)"
-            ),
-        }
-    return {"admitted": True, "ttlMinutes": ttl_minutes, "reason": ""}
-
-
-def check_lane_claim(execution_id: str) -> dict:
-    """只读探测活跃 claim：不写盘、不刷心跳。
-
-    驱动层（loop_driver）预检专用：claim 的获取与释放只属于执行者
-    （每轮宿主会话），驱动自己写 claim 会锁死宿主会话的合法 claim。
-    """
-    path = claim_path(execution_id)
-    if not path.is_file():
-        return {"active": False, "claim": None}
-    with path.open(encoding="utf-8") as handle:
-        existing = json.load(handle)
-    return {"active": not _claim_expired(existing), "claim": existing}
-
-
-def release_lane_claim(execution_id: str, *, actor_session: str) -> dict:
-    """仅释放本 session 持有的 claim；异主 no-op（防误删活跃 lane）。"""
-    path = claim_path(execution_id)
-    if not path.is_file():
-        return {"released": False, "reason": "no claim on disk"}
-    with path.open(encoding="utf-8") as handle:
-        existing = json.load(handle)
-    if existing["owner"]["sessionId"] != actor_session:
-        return {"released": False, "reason": "claim held by another session"}
-    path.unlink()
-    return {"released": True, "reason": ""}
-
-
-def _execution_status_entry(execution_id: str) -> dict:
-    receipt = latest_receipt(execution_id)
-    if receipt is None:
-        return {
-            "executionId": execution_id,
-            "stage": None,
-            "verdict": None,
-            "next": "0.plan",
-            "modelFamily": None,
-            "blockedItems": [],
-        }
-    return {
-        "executionId": execution_id,
-        "stage": receipt["stage"],
-        "verdict": receipt["verdict"],
-        "next": receipt["next"],
-        "modelFamily": receipt["actor"]["modelFamily"],
-        "blockedItems": [
-            item["item"]
-            for item in receipt["openItems"]
-            if receipt["verdict"] == "blocked"
-        ],
-    }
-
-
-def fleet_status(execution_ids: list[str] | None = None) -> dict:
-    """只读聚合 receipt 链：产出率、阶段分布、blocked 原因、模型族切片。"""
-    if execution_ids:
-        ids = list(execution_ids)
-    elif DATA_EXECUTIONS_ROOT.is_dir():
-        ids = sorted(
-            entry.name
-            for entry in DATA_EXECUTIONS_ROOT.iterdir()
-            if entry.is_dir() and is_execution_id(entry.name)
+    stage: str,
+    sequence: int,
+    include_current_receipt: bool = False,
+) -> dict[str, Any] | None:
+    receipt_count = sequence if include_current_receipt else sequence - 1
+    expected_receipts = {_expected_name(item) for item in RECEIPT_STAGES[:receipt_count]}
+    actual_receipts = _artifact_names(root_fd, _RECEIPT_DIRECTORY)
+    if actual_receipts != expected_receipts:
+        missing = sorted(expected_receipts - actual_receipts)
+        extra = sorted(actual_receipts - expected_receipts)
+        raise StageProtocolError(f"receipt 必须是严格连续前缀；missing={missing} extra={extra}")
+    predecessor: dict[str, Any] | None = None
+    direct_predecessor: dict[str, Any] | None = None
+    for index, prior_stage in enumerate(RECEIPT_STAGES[:receipt_count], start=1):
+        if index == sequence:
+            direct_predecessor = predecessor
+        loaded = _load_artifact(
+            root_fd,
+            _RECEIPT_DIRECTORY,
+            _expected_name(prior_stage),
+            label=f"receipt:{prior_stage}",
+            schema_name="stage_receipt",
         )
-    else:
-        ids = []
-    executions = [_execution_status_entry(execution_id) for execution_id in ids]
-    stage_distribution: dict[str, int] = {}
-    model_families: dict[str, int] = {}
-    blocked_reasons: dict[str, int] = {}
-    succeeded = 0
-    for entry in executions:
-        key = entry["next"] if entry["verdict"] != "blocked" else f"blocked@{entry['stage']}"
-        stage_distribution[key] = stage_distribution.get(key, 0) + 1
-        if entry["next"] == "END" and entry["verdict"] == "pass":
-            succeeded += 1
-        if entry["modelFamily"]:
-            model_families[entry["modelFamily"]] = (
-                model_families.get(entry["modelFamily"], 0) + 1
+        assert loaded is not None
+        receipt, raw = loaded
+        if receipt.get("executionId") != execution_id or receipt.get("stage") != prior_stage or receipt.get("sequence") != index:
+            raise StageProtocolError(f"receipt 身份漂移：{prior_stage}")
+        if receipt.get("verdict") != "pass":
+            raise StageProtocolError(f"已有 blocked receipt，不得继续：{prior_stage}")
+        expected_predecessor = None if predecessor is None else predecessor
+        if receipt.get("predecessor") != expected_predecessor:
+            raise StageProtocolError(f"receipt predecessor 链漂移：{prior_stage}")
+        predecessor = {
+            "scope": "execution",
+            "ref": f"{_RECEIPT_DIRECTORY}/{_expected_name(prior_stage)}",
+            "digest": _sha256(raw),
+        }
+    return direct_predecessor if include_current_receipt else predecessor
+
+
+def _reject_if_blocked(root_fd: int, execution_id: str) -> None:
+    actual = _artifact_names(root_fd, _RECEIPT_DIRECTORY)
+    expected_names = {_expected_name(item) for item in RECEIPT_STAGES}
+    if not actual.issubset(expected_names):
+        raise StageProtocolError(f"receipt 含非法命名：{sorted(actual - expected_names)}")
+    for index, receipt_stage in enumerate(RECEIPT_STAGES, start=1):
+        name = _expected_name(receipt_stage)
+        if name not in actual:
+            continue
+        try:
+            loaded = _load_artifact(
+                root_fd,
+                _RECEIPT_DIRECTORY,
+                name,
+                label=f"receipt:{receipt_stage}",
+                schema_name="stage_receipt",
             )
-        for item in entry["blockedItems"]:
-            blocked_reasons[item] = blocked_reasons.get(item, 0) + 1
-    return {
-        "total": len(executions),
-        "succeeded": succeeded,
-        "stageDistribution": dict(sorted(stage_distribution.items())),
-        "modelFamilies": dict(sorted(model_families.items())),
-        "blockedReasons": dict(
-            sorted(blocked_reasons.items(), key=lambda kv: -kv[1])
-        ),
-        "executions": executions,
-    }
+        except StageProtocolError:
+            # 拓扑校验负责报告 future/缺口；任意合法 blocked receipt 即使位于坏拓扑中也终止。
+            continue
+        assert loaded is not None
+        receipt, _raw = loaded
+        if (
+            receipt.get("executionId") != execution_id
+            or receipt.get("stage") != receipt_stage
+            or receipt.get("sequence") != index
+        ):
+            raise StageProtocolError(f"receipt 身份漂移：{receipt_stage}")
+        if receipt.get("verdict") == "blocked":
+            raise StageProtocolError(f"已有 blocked receipt，不得继续：{receipt_stage}")
+
+
+def _validate_open_topology(root_fd: int, *, stage: str, sequence: int, allow_current: bool) -> None:
+    current_name = _expected_name(stage)
+    allowed = {_expected_name(item) for item in RECEIPT_STAGES[: sequence - 1]}
+    if allow_current:
+        allowed.add(current_name)
+    actual = _artifact_names(root_fd, _OPEN_DIRECTORY)
+    if actual != allowed:
+        missing = sorted(allowed - actual)
+        extra = sorted(actual - allowed)
+        raise StageProtocolError(f"stage open 必须是严格连续前缀；missing={missing} extra={extra}")
+
+
+def _validate_open(root_fd: int, execution_id: str, *, stage: str, sequence: int) -> tuple[dict[str, Any], bytes]:
+    loaded = _load_artifact(
+        root_fd,
+        _OPEN_DIRECTORY,
+        _expected_name(stage),
+        label=f"stage-open:{stage}",
+        schema_name="stage_open_request",
+    )
+    if loaded is None:
+        raise StageProtocolError(f"stage 尚未 open：{stage}")
+    value, raw = loaded
+    if value.get("executionId") != execution_id or value.get("stage") != stage or value.get("sequence") != sequence:
+        raise StageProtocolError("stage open 身份漂移")
+    return value, raw
+
+
+def _revalidate_open_inputs(root_fd: int, open_value: dict[str, Any]) -> None:
+    for binding in open_value["inputRefs"]:
+        current = _resolve_ref({"scope": binding["scope"], "ref": binding["ref"]}, execution_fd=root_fd)
+        if current != binding:
+            raise StageProtocolError(f"stage-open input exact bytes 漂移：{binding['scope']}:{binding['ref']}")
+
+
+_RFC3339 = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+)
+
+
+def _observed_at(value: object) -> None:
+    if not isinstance(value, str) or _RFC3339.fullmatch(value) is None:
+        raise StageProtocolError("verifierFacts.observedAt 必须是含 timezone 的 RFC3339")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise StageProtocolError("verifierFacts.observedAt 必须是含 timezone 的 RFC3339") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise StageProtocolError("verifierFacts.observedAt 必须是含 timezone 的 RFC3339")
+
+
+def _validate_verifier_facts(value: list[dict[str, Any]], *, root_fd: int) -> list[dict[str, Any]]:
+    facts: list[dict[str, Any]] = []
+    for fact in value:
+        copied = dict(fact)
+        _observed_at(copied.get("observedAt"))
+        evidence_ref = copied.get("evidenceRef")
+        evidence_digest = copied.get("evidenceDigest")
+        if evidence_digest is not None and evidence_ref is None:
+            raise StageProtocolError("verifierFacts.evidenceDigest 必须与 evidenceRef 同时出现")
+        if evidence_ref is not None:
+            if not isinstance(evidence_ref, dict):
+                raise StageProtocolError("verifierFacts.evidenceRef 必须是 ref 对象")
+            frozen = _resolve_ref(evidence_ref, execution_fd=root_fd)
+            if evidence_digest is not None and evidence_digest != frozen["digest"]:
+                raise StageProtocolError("verifier evidence digest 不匹配实际字节")
+            copied["evidenceRef"] = {"scope": frozen["scope"], "ref": frozen["ref"]}
+            copied["evidenceDigest"] = frozen["digest"]
+        facts.append(copied)
+    return facts
+
+
+def _relative_to_output(path: Path, *, label: str) -> str:
+    absolute = Path(os.path.abspath(path.expanduser()))
+    output = Path(os.path.abspath(paths.OUTPUT_ROOT.expanduser()))
+    try:
+        return _safe_ref(absolute.relative_to(output).as_posix())
+    except ValueError as exc:
+        raise StageProtocolError(f"{label} 必须位于 output 根内") from exc
+
+
+@contextmanager
+def _stage_lock(execution_id: str) -> Iterator[None]:
+    output_fd = _open_root(paths.OUTPUT_ROOT, label="output 根")
+    try:
+        lock_ref = _relative_to_output(
+            paths.DATA_LOCAL_ROOT / "runs/locks/stage-receipt",
+            label="stage lock 根",
+        )
+        lock_fd = _mkdirs_at(output_fd, lock_ref)
+        try:
+            try:
+                handle_fd = os.open(
+                    f"{execution_id}.lock",
+                    os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+                    0o600,
+                    dir_fd=lock_fd,
+                )
+            except OSError as exc:
+                raise StageProtocolError("stage lock 必须是无 symlink 的 regular file") from exc
+            if not stat.S_ISREG(os.fstat(handle_fd).st_mode):
+                os.close(handle_fd)
+                raise StageProtocolError("stage lock 必须是 regular file")
+            with os.fdopen(handle_fd, "a+", encoding="utf-8") as handle:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            os.close(lock_fd)
+    finally:
+        os.close(output_fd)
+
+
+def open_stage(execution_id: str, stage: str, input_path: Path) -> Path:
+    normalized_stage, sequence = _stage(stage)
+    request, canonical_input = _load_input(input_path)
+    if set(request) != {"inputRefs"} or not isinstance(request.get("inputRefs"), list):
+        raise StageProtocolError("stage-open input 只能包含 inputRefs 数组")
+    normalized_id = validate_execution_id(execution_id)
+    with _stage_lock(normalized_id):
+        root, root_fd = _execution_root_fd(normalized_id)
+        try:
+            _reject_if_blocked(root_fd, normalized_id)
+            receipt = _load_artifact(root_fd, _RECEIPT_DIRECTORY, _expected_name(normalized_stage), label="stage receipt", schema_name="stage_receipt")
+            if receipt is not None:
+                if receipt[0].get("verdict") == "blocked":
+                    raise StageProtocolError(f"已有 blocked receipt，不得继续：{normalized_stage}")
+                raise StageProtocolError(f"stage 已关闭：{normalized_stage}")
+            predecessor = _validate_progress(root_fd, normalized_id, stage=normalized_stage, sequence=sequence)
+            current = _load_artifact(root_fd, _OPEN_DIRECTORY, _expected_name(normalized_stage), label="stage open", schema_name="stage_open_request")
+            _validate_open_topology(root_fd, stage=normalized_stage, sequence=sequence, allow_current=current is not None)
+            frozen_refs = _freeze_refs(request["inputRefs"], execution_fd=root_fd, label="inputRefs")
+            value = {
+                "schema": "quwoquan_data.stage_open_request",
+                "executionId": normalized_id,
+                "stage": normalized_stage,
+                "sequence": sequence,
+                "predecessor": predecessor,
+                "input": {"digest": _sha256(canonical_input)},
+                "submittedInput": request,
+                "inputRefs": frozen_refs,
+            }
+            assert_valid(value, "execution", "stage_open_request", label=f"stage-open:{normalized_stage}")
+            encoded = _canonical_bytes(value)
+            if current is not None:
+                if current[1] == encoded:
+                    return root / _OPEN_DIRECTORY / _expected_name(normalized_stage)
+                raise StageConflict(f"stage-open 输入或引用字节冲突：{normalized_stage}")
+            _atomic_create_once(root_fd, _OPEN_DIRECTORY, _expected_name(normalized_stage), encoded)
+            return root / _OPEN_DIRECTORY / _expected_name(normalized_stage)
+        finally:
+            os.close(root_fd)
+
+
+def close_stage(execution_id: str, stage: str, input_path: Path) -> Path:
+    normalized_stage, sequence = _stage(stage)
+    request, canonical_input = _load_input(input_path, schema_name="stage_close_input")
+    verdict = request["verdict"]
+    issues = request["typedIssues"]
+    results = request["resultRefs"]
+    facts = request["verifierFacts"]
+    if any(_STAGE_INDEX[issue["recoveryStage"]] > sequence - 1 for issue in issues):
+        raise StageProtocolError("typedIssues.recoveryStage 只能是当前或已完成 stage")
+    if verdict == "pass":
+        if (
+            issues
+            or not results
+            or not facts
+            or any(
+                fact.get("status") != "passed"
+                or fact.get("exitCode") != 0
+                or fact.get("evidenceRef") is None
+                or fact.get("evidenceDigest") is None
+                for fact in facts
+            )
+        ):
+            raise StageProtocolError("pass 必须 resultRefs 非空、typedIssues 为空，且 verifierFacts 全部 passed/exitCode=0 并绑定 evidence")
+    elif not issues:
+        raise StageProtocolError("blocked 必须包含 typedIssues")
+
+    normalized_id = validate_execution_id(execution_id)
+    with _stage_lock(normalized_id):
+        root, root_fd = _execution_root_fd(normalized_id)
+        try:
+            _reject_if_blocked(root_fd, normalized_id)
+            if normalized_stage == "5.review" and verdict == "pass":
+                _validate_review_close_actor(request, execution_fd=root_fd)
+            facts = _validate_verifier_facts(facts, root_fd=root_fd)
+            if verdict == "pass" and any(
+                fact.get("status") != "passed"
+                or fact.get("exitCode") != 0
+                or fact.get("evidenceRef") is None
+                or fact.get("evidenceDigest") is None
+                for fact in facts
+            ):
+                raise StageProtocolError("pass verifierFacts 必须全部 passed/exitCode=0 并绑定有效 evidence")
+            current = _load_artifact(root_fd, _RECEIPT_DIRECTORY, _expected_name(normalized_stage), label="stage receipt", schema_name="stage_receipt")
+            if current is not None and current[0].get("verdict") == "blocked":
+                raise StageProtocolError(f"已有 blocked receipt，不得继续：{normalized_stage}")
+            predecessor = _validate_progress(
+                root_fd,
+                normalized_id,
+                stage=normalized_stage,
+                sequence=sequence,
+                include_current_receipt=current is not None,
+            )
+            _validate_open_topology(root_fd, stage=normalized_stage, sequence=sequence, allow_current=True)
+            open_value, open_raw = _validate_open(root_fd, normalized_id, stage=normalized_stage, sequence=sequence)
+            if open_value.get("predecessor") != predecessor:
+                raise StageProtocolError("stage open predecessor 漂移")
+            _revalidate_open_inputs(root_fd, open_value)
+            frozen_results = _freeze_refs(results, execution_fd=root_fd, label="resultRefs")
+            frozen_facts = facts
+            value = {
+                "schema": "quwoquan_data.stage_receipt",
+                "executionId": normalized_id,
+                "stage": normalized_stage,
+                "sequence": sequence,
+                "predecessor": predecessor,
+                "openRequest": {
+                    "scope": "execution",
+                    "ref": f"{_OPEN_DIRECTORY}/{_expected_name(normalized_stage)}",
+                    "digest": _sha256(open_raw),
+                },
+                "closeInput": {"digest": _sha256(canonical_input)},
+                "submittedClose": request,
+                "actor": request["actor"],
+                "verdict": verdict,
+                "typedIssues": issues,
+                "inputRefs": open_value["inputRefs"],
+                "resultRefs": frozen_results,
+                "verifierFacts": frozen_facts,
+            }
+            assert_valid(value, "execution", "stage_receipt", label=f"stage-close:{normalized_stage}")
+            encoded = _canonical_bytes(value)
+            if current is not None:
+                if current[1] == encoded:
+                    return root / _RECEIPT_DIRECTORY / _expected_name(normalized_stage)
+                raise StageConflict(f"stage-close 输入或引用字节冲突：{normalized_stage}")
+            _atomic_create_once(root_fd, _RECEIPT_DIRECTORY, _expected_name(normalized_stage), encoded)
+            return root / _RECEIPT_DIRECTORY / _expected_name(normalized_stage)
+        finally:
+            os.close(root_fd)
+
+
+__all__ = [
+    "RECEIPT_STAGES",
+    "StageConflict",
+    "StageProtocolError",
+    "close_stage",
+    "open_stage",
+]

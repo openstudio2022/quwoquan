@@ -9,6 +9,7 @@ import copy
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -18,15 +19,34 @@ ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
 
 from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
-from lib.governance_pipeline_admission import (  # noqa: E402
-    assemble_evidence_bundle, current_repository_input, inspect, load_contract,
-    subject_fingerprint, subject_fingerprint_receipt,
+from lib.feature_context_fingerprint import (  # noqa: E402
+    build_feature_context_fingerprint,
+    embedded_fingerprint_binding,
 )
-from lib.governance_pipeline_admission import adapters  # noqa: E402
-from lib.governance_pipeline_admission.contract import ContractError  # noqa: E402
-from lib.governance_pipeline_admission.evidence import _assert_layer_policy, _named_receipts  # noqa: E402
-from lib.governance_pipeline_admission.read_only_local_readiness import verify_explicit_receipt_read_only  # noqa: E402
-from lib.objective_execution.contract import admission_readback  # noqa: E402
+from lib.feature_tree.commands import _context_manifest  # noqa: E402
+from lib.feature_tree.nodes import discover_nodes  # noqa: E402
+from lib.feature_tree.ownership import resolve_target_details  # noqa: E402
+from lib.governance_pipeline_admission import (  # noqa: E402
+    adapters,
+    assemble_evidence_bundle,
+    current_repository_input,
+    inspect,
+    load_contract,
+    subject_fingerprint,
+    subject_fingerprint_receipt,
+)
+from lib.governance_pipeline_admission import evidence as evidence_module  # noqa: E402
+from lib.governance_pipeline_admission.contract import (  # noqa: E402
+    ContractError,
+    EvidenceAdapterError,
+)
+from lib.governance_pipeline_admission.evidence import (  # noqa: E402
+    _assert_layer_policy,
+    _named_receipts,
+)
+from lib.governance_pipeline_admission.read_only_local_readiness import (
+    verify_explicit_receipt_read_only,  # noqa: E402
+)
 from lib.human_agent_delivery import summarize_calibration_sessions  # noqa: E402
 from lib.human_agent_delivery.calibration import _canonical_bytes  # noqa: E402
 
@@ -44,12 +64,17 @@ def empty_refs() -> dict[str, Any]:
     return {"named_evidence": {}, "external": {}}
 
 
+def run_id(tmp_path: Path, prefix: str) -> str:
+    digest = __import__("hashlib").sha256(str(tmp_path).encode("utf-8")).hexdigest()[:16]
+    return f"{prefix}-{tmp_path.name}-{digest}"
+
+
 def test_bundle_producer_freezes_exact_refs_and_managed_drift_rejects(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     contract = load_contract()
     raw_ref = write_receipt(tmp_path, "external.json", {"opaque": "provider-owned"})
     refs = empty_refs()
     refs["external"]["prod"] = raw_ref
-    path = assemble_evidence_bundle(contract, run_id=f"tests/{tmp_path.name}".replace("/", "-"), refs=refs)
+    path = assemble_evidence_bundle(contract, run_id=run_id(tmp_path, "tests"), refs=refs)
     bundle = json.loads(path.read_text())
     frozen = bundle["receipts"]["external"]["prod"]
     assert frozen["receipt_ref"] == raw_ref
@@ -60,26 +85,120 @@ def test_bundle_producer_freezes_exact_refs_and_managed_drift_rejects(tmp_path: 
     monkeypatch.setattr(adapters, "REPO_ROOT", ROOT)
     try:
         managed.write_bytes(original + b"\n")
-        with pytest.raises(ContractError, match="managed source fingerprint stale"):
-            current_repository_input(contract, evidence_bundle=path)
+        payload = current_repository_input(contract, evidence_bundle=path)
+        result = inspect(payload)
+        assert payload["evidence"]["owner_manifest"]["schema_valid"] is True
+        assert payload["evidence"]["owner_manifest"]["fresh"] is False
+        assert payload["evidence"]["owner_manifest"]["fingerprint_match"] is True
+        assert result["blockers"][0] == "EVIDENCE_STALE"
     finally:
         managed.write_bytes(original)
+
+
+def test_bundle_run_root_rejects_root_and_intermediate_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = load_contract()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    fake_repo = tmp_path / "repo"
+    fake_repo.mkdir()
+    monkeypatch.setattr(evidence_module, "REPO_ROOT", fake_repo)
+    root = fake_repo / contract["current_repository_evidence"]["evidence_bundle_root"]
+    root.parent.mkdir(parents=True)
+    root.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ContractError, match="run root is unsafe"):
+        evidence_module._canonical_run_root_fd(contract, create=True)
+
+    root.unlink()
+    root.mkdir()
+    root_fd = evidence_module._canonical_run_root_fd(contract, create=False)
+    try:
+        (root / "middle").symlink_to(outside, target_is_directory=True)
+        with pytest.raises(ContractError, match="run directory is unsafe"):
+            evidence_module._run_directory_fd(root_fd, "middle", create=False)
+    finally:
+        os.close(root_fd)
+
+
+def test_bundle_run_root_rejects_in_repo_redirect_and_replacement_race(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = load_contract()
+    fake_repo = tmp_path / "repo"
+    fake_repo.mkdir()
+    monkeypatch.setattr(evidence_module, "REPO_ROOT", fake_repo)
+    root = fake_repo / contract["current_repository_evidence"]["evidence_bundle_root"]
+    root.parent.mkdir(parents=True)
+    redirect = fake_repo / ".qwq_output/env/repo/runs/redirect"
+    redirect.mkdir(parents=True)
+    root.symlink_to(redirect, target_is_directory=True)
+    with pytest.raises(ContractError, match="run root is unsafe"):
+        evidence_module._canonical_run_root_fd(contract, create=True)
+
+    root.unlink()
+    root.mkdir()
+    root_fd = evidence_module._canonical_run_root_fd(contract, create=False)
+    run_fd = evidence_module._run_directory_fd(root_fd, "replace-race", create=True)
+    try:
+        root_stat = os.fstat(root_fd)
+        run_stat = os.fstat(run_fd)
+        file_stat = evidence_module._write_bundle_create_once(run_fd, b"{}")
+    finally:
+        os.close(run_fd)
+        os.close(root_fd)
+    moved = root.with_name(root.name + "-moved")
+    root.rename(moved)
+    root.mkdir()
+    with pytest.raises(ContractError, match="run root was replaced"):
+        evidence_module._verify_bundle_binding(
+            contract, run_id="replace-race", root_stat=root_stat,
+            run_stat=run_stat, file_stat=file_stat, exact_bytes=b"{}",
+        )
 
 
 def test_locally_resigned_external_receipt_is_rejected_without_real_verifier(tmp_path: Path) -> None:
     contract = load_contract()
     ref = write_receipt(tmp_path, "commercial.json", {"passed": True, "provider_kind": "authenticated_external"})
     refs = empty_refs()
+    refs["owner_manifest"] = _write_current_owner_manifest(contract)
     refs["external"]["commercial"] = ref
-    path = assemble_evidence_bundle(contract, run_id=f"forged-{tmp_path.name}", refs=refs)
+    path = assemble_evidence_bundle(contract, run_id=run_id(tmp_path, "forged"), refs=refs)
     payload = current_repository_input(contract, evidence_bundle=path)
     item = payload["evidence"]["commercial"]
     assert item["status"] == "failed"
-    assert item["schema_valid"] is False
+    assert item["schema_valid"] is True
+    assert item["fresh"] is True
+    assert item["fingerprint_match"] is False
     assert "external verifier unavailable" in item["detail"]
     result = inspect(payload)
     assert result["status"] == "blocked"
-    assert result["blockers"][0] == "EVIDENCE_SCHEMA_INVALID"
+    assert result["blockers"][0] == "EVIDENCE_FINGERPRINT_MISMATCH"
+
+
+def test_bundle_owner_identity_failure_reaches_evaluator_as_fingerprint_mismatch(tmp_path: Path) -> None:
+    contract = load_contract()
+    manifest, _raw, _ref = _current_owner_manifest(contract)
+    manifest["canonical_contexts"] = []
+    identity = {key: value for key, value in manifest.items() if key != "evidence_fingerprint"}
+    manifest["evidence_fingerprint"] = embedded_fingerprint_binding(
+        build_feature_context_fingerprint(identity, repo_root=ROOT)
+    )
+    ref = write_receipt(tmp_path, "forged-owner.json", manifest)
+    digest = __import__("hashlib").sha256((ROOT / ref).read_bytes()).hexdigest()
+    canonical_ref = (
+        ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint" / f"{digest}.json"
+    )
+    canonical_ref.write_bytes((ROOT / ref).read_bytes())
+    refs = empty_refs()
+    refs["owner_manifest"] = canonical_ref.relative_to(ROOT).as_posix()
+    path = assemble_evidence_bundle(contract, run_id=run_id(tmp_path, "owner-identity"), refs=refs)
+    payload = current_repository_input(contract, evidence_bundle=path)
+    owner = payload["evidence"]["owner_manifest"]
+    assert owner["schema_valid"] is True
+    assert owner["fresh"] is True
+    assert owner["fingerprint_match"] is False
+    assert inspect(payload)["blockers"][0] == "EVIDENCE_FINGERPRINT_MISMATCH"
 
 
 @pytest.mark.parametrize(
@@ -112,15 +231,257 @@ def test_forged_named_workspace_or_toolchain_receipt_is_rejected(tmp_path: Path)
     ref = write_receipt(tmp_path, "named.json", forged)
     refs = empty_refs()
     refs["named_evidence"]["portal-test"] = ref
-    path = assemble_evidence_bundle(contract, run_id=f"named-{tmp_path.name}", refs=refs)
+    path = assemble_evidence_bundle(contract, run_id=run_id(tmp_path, "named"), refs=refs)
     bundle = json.loads(path.read_text())
-    subject = {"candidate_id": "working-tree", "scope_id": "governance-pipeline"}
+    subject = {
+        "subject_id": "current-repository",
+        "candidate_id": "working-tree",
+        "scope_id": "governance-pipeline",
+    }
     projected = _named_receipts(
         bundle, contract, subject=subject,
         now=__import__("datetime").datetime.now(__import__("datetime").timezone.utc),
     )
     assert projected["portal_test"]["status"] == "failed"
-    assert projected["portal_test"]["schema_valid"] is False
+    assert projected["portal_test"]["schema_valid"] is True
+    assert projected["portal_test"]["fingerprint_match"] is False
+
+
+@pytest.mark.parametrize("missing", ("review_plan", "owner_manifest"))
+def test_named_receipt_requires_exact_plan_and_owner_manifest(
+    tmp_path: Path, missing: str,
+) -> None:
+    contract = load_contract()
+    refs = empty_refs()
+    refs["owner_manifest"] = _write_current_owner_manifest(contract)
+    refs["review_plan"] = write_receipt(tmp_path, "review-plan.json", {})
+    refs["named_evidence"]["portal-test"] = write_receipt(
+        tmp_path, "named.json", {},
+    )
+    refs[missing] = None
+    path = assemble_evidence_bundle(
+        contract, run_id=run_id(tmp_path, f"missing-{missing}"), refs=refs,
+    )
+    bundle = json.loads(path.read_text())
+    subject = {
+        "subject_id": "current-repository",
+        "candidate_id": "working-tree",
+        "scope_id": "governance-pipeline",
+    }
+    projected = _named_receipts(
+        bundle, contract, subject=subject, now=datetime.now(timezone.utc),
+    )
+    item = projected["portal_test"]
+    assert item["status"] == "failed"
+    assert item["schema_valid"] is True
+    assert item["fresh"] is True
+    assert item["fingerprint_match"] is False
+    assert "missing" in item["detail"]
+
+
+def _write_current_owner_manifest(contract: dict[str, Any]) -> str:
+    _manifest, raw, ref = _current_owner_manifest(contract)
+    path = ROOT / ref
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(raw)
+    return ref
+
+
+def _named_receipt(
+    *, plan_ref: str, plan_digest: str, evidence_ids: tuple[str, ...],
+) -> dict[str, Any]:
+    fingerprint = subject_fingerprint_receipt(load_contract())
+    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return {
+        "schema_version": 2,
+        "run_id": "fresh-other-plan",
+        "generation_id": fingerprint["digest"],
+        "plan_fingerprint_ref": plan_ref,
+        "plan_fingerprint_digest": plan_digest,
+        "execution_fingerprint": fingerprint,
+        "result_fingerprint": fingerprint,
+        "evidence": [
+            {
+                "id": evidence_id,
+                "command": f"printf {evidence_id}",
+                "command_digest": "sha256:" + __import__("hashlib").sha256(
+                    f"printf {evidence_id}".encode()
+                ).hexdigest(),
+                "timeout_seconds": 300,
+                "exit_code": 0,
+                "outcome": "exited",
+                "timed_out": False,
+                "termination_signal": None,
+                "stdout_digest": "sha256:" + "1" * 64,
+                "stderr_digest": "sha256:" + "2" * 64,
+                "started_at": timestamp,
+                "finished_at": timestamp,
+                "captured_by": "test",
+                "required": True,
+            }
+            for evidence_id in evidence_ids
+        ],
+        "terminal": {
+            "status": "PASS",
+            "code": "EVIDENCE.PASSED",
+            "failed_evidence": None,
+        },
+        "captured_by": "test",
+        "started_at": timestamp,
+        "finished_at": timestamp,
+    }
+
+
+def test_current_repository_rejects_fresh_named_receipts_from_other_exact_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = load_contract()
+    binding = contract["current_repository_evidence"]["named_evidence_plan_binding"]
+    owner_ref = _write_current_owner_manifest(contract)
+    current_plan = {
+        "ref": "evidence-fingerprint-v1:sha256:" + "3" * 64,
+        "digest": "sha256:" + "3" * 64,
+    }
+    other_plan = {
+        "ref": "evidence-fingerprint-v1:sha256:" + "4" * 64,
+        "digest": "sha256:" + "4" * 64,
+    }
+    plan = {
+        "workflow": binding["workflow"],
+        "segment": binding["segment"],
+        "deliverable": binding["deliverable"],
+        "scope": binding["scope"],
+        "owner_manifest_identity": {
+            "ref": owner_ref,
+            "target": binding["owner_manifest_target"],
+            "resolved_owner": binding["owner_manifest_target"],
+            "scope": binding["scope"],
+        },
+    }
+    plan_ref = write_receipt(tmp_path, "review-plan.json", plan)
+    named = _named_receipt(
+        plan_ref=other_plan["ref"], plan_digest=other_plan["digest"],
+        evidence_ids=("portal-test", "portal-build"),
+    )
+    named_ref = write_receipt(tmp_path, "named-other-plan.json", named)
+    refs = empty_refs()
+    refs.update({
+        "owner_manifest": owner_ref,
+        "review_plan": plan_ref,
+    })
+    refs["named_evidence"] = {
+        "portal-test": named_ref,
+        "portal-build": named_ref,
+    }
+    monkeypatch.setattr(
+        "review_dispatch.validate_current_review_plan",
+        lambda value, registry, phase: current_plan,
+    )
+    path = assemble_evidence_bundle(
+        contract, run_id=run_id(tmp_path, "other-plan"), refs=refs,
+    )
+    payload = current_repository_input(contract, evidence_bundle=path)
+    for layer in ("review_terminal", "portal_test", "portal_build"):
+        item = payload["evidence"][layer]
+        assert item["status"] == "failed"
+        assert item["schema_valid"] is True
+        assert item["fresh"] is True
+        assert item["fingerprint_match"] is False
+        assert "different exact Review plan" in item["detail"]
+    result = inspect(payload)
+    assert result["status"] == "blocked"
+    assert result["blockers"][0] == "EVIDENCE_FINGERPRINT_MISMATCH"
+
+
+def test_external_readback_shape_is_schema_but_identity_drift_is_fingerprint() -> None:
+    contract = load_contract()
+    now = datetime.now(timezone.utc)
+    subject = {
+        "subject_id": "current-repository",
+        "candidate_id": "working-tree",
+        "scope_id": "governance-pipeline",
+        "evidence_fingerprint": subject_fingerprint(contract),
+    }
+    raw = canonical_json_bytes({"provider": "opaque"})
+    with pytest.raises(EvidenceAdapterError) as shape_error:
+        adapters.verify_external(
+            layer="commercial", raw=raw, receipt_ref=".qwq_output/external.json",
+            verifier=lambda _request: {}, subject=subject,
+            verification_time=now, contract=contract,
+        )
+    assert shape_error.value.schema_valid is False
+    assert shape_error.value.fingerprint_match is True
+
+    def verifier(request: dict[str, Any]) -> dict[str, Any]:
+        policy = contract["layer_admission"]["commercial"]
+        return {
+            "provider_id": policy["provider_id"],
+            "provider_kind": "authenticated_external",
+            "authenticated": True,
+            "exact_bytes_verified": True,
+            "release_evidence_eligible": True,
+            "candidate_id": "other-candidate",
+            "scope_id": subject["scope_id"],
+            "evidence_fingerprint": subject["evidence_fingerprint"],
+            "result": "closed",
+            "provider_timestamp": now.isoformat(timespec="seconds"),
+            "receipt_bytes_sha256": request["receipt_bytes_sha256"],
+            "verifier_id": policy["verifier_id"],
+        }
+
+    with pytest.raises(EvidenceAdapterError) as identity_error:
+        adapters.verify_external(
+            layer="commercial", raw=raw, receipt_ref=".qwq_output/external.json",
+            verifier=verifier, subject=subject, verification_time=now,
+            contract=contract,
+        )
+    assert identity_error.value.schema_valid is True
+    assert identity_error.value.fingerprint_match is False
+
+
+def test_bundle_consumption_uses_one_timezone_aware_verification_clock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = load_contract()
+    path = assemble_evidence_bundle(
+        contract, run_id=run_id(tmp_path, "single-clock"), refs=empty_refs(),
+    )
+    fixed = datetime(2026, 9, 1, 4, 30, 0, tzinfo=timezone.utc)
+    seen: list[datetime] = []
+    original_absent = evidence_module._absent
+    def capture_absent(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        seen.append(kwargs["verification_time"])
+        return original_absent(*args, **kwargs)
+    monkeypatch.setattr(evidence_module, "_absent", capture_absent)
+    payload = current_repository_input(
+        contract, evidence_bundle=path, verification_time=fixed,
+    )
+    assert seen and set(seen) == {fixed}
+    assert {item["verified_at"] for item in payload["evidence"].values()} == {
+        fixed.isoformat(timespec="seconds")
+    }
+    with pytest.raises(ContractError, match="timezone-aware"):
+        current_repository_input(
+            contract, evidence_bundle=path,
+            verification_time=datetime(2026, 9, 1, 4, 30, 0),
+        )
+
+
+def test_failed_adapter_dimensions_reach_evaluator_with_exact_precedence() -> None:
+    contract = load_contract()
+    now = datetime.now(timezone.utc)
+    for detail, expected, dimensions in (
+        ("receipt stale: source changed", "EVIDENCE_STALE", (True, False, True)),
+        ("provider identity mismatch", "EVIDENCE_FINGERPRINT_MISMATCH", (True, True, False)),
+        ("receipt JSON invalid", "EVIDENCE_SCHEMA_INVALID", (False, True, True)),
+    ):
+        payload = current_repository_input(contract, verification_time=now)
+        payload["evidence"]["owner_manifest"] = evidence_module._failed(
+            ContractError(detail), verification_time=now,
+        )
+        item = payload["evidence"]["owner_manifest"]
+        assert (item["schema_valid"], item["fresh"], item["fingerprint_match"]) == dimensions
+        assert inspect(payload)["blockers"][0] == expected
 
 
 def test_stale_and_bad_timestamp_are_rejected() -> None:
@@ -165,18 +526,24 @@ def test_objective_and_hosted_source_adapter_local_boundaries() -> None:
     contract = load_contract()
     objective = adapters.produce_objective_bytes()
     readback = adapters.objective_readback(
-        raw=objective, receipt_ref=".qwq_output/objective.json", candidate_id="c", scope_id="s", contract=contract,
+        raw=objective, receipt_ref=".qwq_output/objective.json", candidate_id="c", scope_id="s",
+        verification_time=datetime.now(timezone.utc), contract=contract,
     )
     assert readback["provider_kind"] == "local_runtime"
     hosted = adapters.produce_hosted_source_bytes(contract)
     source = adapters.verify_hosted_source(
-        raw=hosted, receipt_ref=".qwq_output/hosted.json", candidate_id="c", scope_id="s", contract=contract,
+        raw=hosted, receipt_ref=".qwq_output/hosted.json", candidate_id="c", scope_id="s",
+        verification_time=datetime.now(timezone.utc), contract=contract,
     )
     assert source["result"] in {"code_pass", "code_absent"}
     tampered = json.loads(hosted)
     tampered["snapshots"][0]["sha256"] = "sha256:" + "0" * 64
     with pytest.raises(ContractError, match="source bytes drifted"):
-        adapters.verify_hosted_source(raw=canonical_json_bytes(tampered), receipt_ref=".qwq_output/hosted.json", candidate_id="c", scope_id="s", contract=contract)
+        adapters.verify_hosted_source(
+            raw=canonical_json_bytes(tampered), receipt_ref=".qwq_output/hosted.json",
+            candidate_id="c", scope_id="s", verification_time=datetime.now(timezone.utc),
+            contract=contract,
+        )
 
 
 def test_hotl_and_handoff_adapter_negative_boundaries() -> None:
@@ -185,10 +552,106 @@ def test_hotl_and_handoff_adapter_negative_boundaries() -> None:
         "provider_timestamp": "2026-08-30T00:00:00+00:00",
         "readback": {"allowed_mode": "hotl", "mutation_allowed": True, "grant_executable": True, "max_write_concurrency": 2},
     })
-    readback = adapters.verify_hotl(raw=unsafe_hotl, receipt_ref=".qwq_output/hotl.json", candidate_id="c", scope_id="s", contract=contract)
+    readback = adapters.verify_hotl(
+        raw=unsafe_hotl, receipt_ref=".qwq_output/hotl.json", candidate_id="c",
+        scope_id="s", verification_time=datetime.now(timezone.utc), contract=contract,
+    )
     assert readback["result"] == "absent"
     with pytest.raises(Exception):
-        adapters.verify_handoff(raw=b"{}", receipt_ref=".qwq_output/handoff.json", candidate_id="c", scope_id="s", contract=contract)
+        adapters.verify_handoff(
+            raw=b"{}", receipt_ref=".qwq_output/handoff.json", candidate_id="c",
+            scope_id="s", verification_time=datetime.now(timezone.utc), contract=contract,
+        )
+
+
+def _current_owner_manifest(contract: dict[str, Any]) -> tuple[dict[str, Any], bytes, str]:
+    owner = contract["current_repository_evidence"]["owner_manifest_target"]
+    nodes = discover_nodes()
+    manifest = _context_manifest(owner, resolve_target_details(owner, nodes), nodes)
+    raw = canonical_json_bytes(manifest)
+    ref = (
+        ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
+        + __import__("hashlib").sha256(raw).hexdigest()
+        + ".json"
+    )
+    return manifest, raw, ref
+
+
+def test_owner_manifest_consumes_canonical_v3_raw_content_address() -> None:
+    contract = load_contract()
+    manifest, raw, ref = _current_owner_manifest(contract)
+    raw_digest = __import__("hashlib").sha256(raw).hexdigest()
+    evidence_digest = manifest["evidence_fingerprint"]["digest"].removeprefix("sha256:")
+    assert raw_digest != evidence_digest
+
+    readback, fingerprint = adapters.verify_owner_manifest(
+        raw=raw, receipt_ref=ref, candidate_id="c", scope_id="s",
+        verification_time=datetime.now(timezone.utc), contract=contract,
+    )
+    assert readback["result"] == "pass"
+    assert fingerprint["digest"] == manifest["evidence_fingerprint"]["digest"]
+
+
+def test_owner_manifest_rejects_caller_forged_owner_chain_contexts_and_agents() -> None:
+    contract = load_contract()
+    canonical, _raw, _ref = _current_owner_manifest(contract)
+    mutations = (
+        lambda value: value.update(owner_chain=[]),
+        lambda value: value.update(owner_chain=value["owner_chain"][:-1]),
+        lambda value: value.update(canonical_contexts=[]),
+        lambda value: value.update(applicable_agents=[]),
+    )
+    for mutate in mutations:
+        forged = copy.deepcopy(canonical)
+        mutate(forged)
+        identity = {key: value for key, value in forged.items() if key != "evidence_fingerprint"}
+        forged["evidence_fingerprint"] = embedded_fingerprint_binding(
+            build_feature_context_fingerprint(identity, repo_root=ROOT)
+        )
+        raw = canonical_json_bytes(forged)
+        ref = (
+            ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
+            + __import__("hashlib").sha256(raw).hexdigest()
+            + ".json"
+        )
+        with pytest.raises(Exception, match="canonical feature-tree producer|non-empty"):
+            adapters.verify_owner_manifest(
+                raw=raw, receipt_ref=ref, candidate_id="c", scope_id="s",
+                verification_time=datetime.now(timezone.utc), contract=contract,
+            )
+
+
+def test_owner_manifest_rejects_wrong_filename_schema_drift_and_noncanonical_bytes() -> None:
+    contract = load_contract()
+    manifest, raw, _ref = _current_owner_manifest(contract)
+    root = ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
+
+    with pytest.raises(Exception, match="filename"):
+        adapters.verify_owner_manifest(
+            raw=raw, receipt_ref=root + "0" * 64 + ".json",
+            candidate_id="c", scope_id="s", verification_time=datetime.now(timezone.utc),
+            contract=contract,
+        )
+
+    drifted = dict(manifest)
+    drifted["unexpected"] = True
+    drifted_raw = canonical_json_bytes(drifted)
+    with pytest.raises(Exception, match="字段漂移"):
+        adapters.verify_owner_manifest(
+            raw=drifted_raw,
+            receipt_ref=root + __import__("hashlib").sha256(drifted_raw).hexdigest() + ".json",
+            candidate_id="c", scope_id="s", verification_time=datetime.now(timezone.utc),
+            contract=contract,
+        )
+
+    noncanonical_raw = json.dumps(manifest, indent=2, ensure_ascii=False).encode("utf-8")
+    with pytest.raises(Exception, match="canonical JSON bytes"):
+        adapters.verify_owner_manifest(
+            raw=noncanonical_raw,
+            receipt_ref=root + __import__("hashlib").sha256(noncanonical_raw).hexdigest() + ".json",
+            candidate_id="c", scope_id="s", verification_time=datetime.now(timezone.utc),
+            contract=contract,
+        )
 
 
 def test_human_readback_consumes_exact_owner_v2_and_rejects_v1_or_digest_drift() -> None:
@@ -199,7 +662,7 @@ def test_human_readback_consumes_exact_owner_v2_and_rejects_v1_or_digest_drift()
     sessions = []
     for principal, responsibilities in model["principal_responsibility_mapping"].items():
         sessions.append({
-            "schema_version": 2, "contract_version": model["contract_version"],
+            "schema_version": human["schema_version"], "contract_version": model["contract_version"],
             "role_model_version": model["role_model_version"], "observation_model_version": model["observation_model_version"],
             "session_id": f"calibration-{principal.replace('_', '-')}", "principal_class": principal,
             "participant_ref": f"participant-{principal.replace('_', '-')}",
@@ -209,7 +672,8 @@ def test_human_readback_consumes_exact_owner_v2_and_rejects_v1_or_digest_drift()
             "separation_policy": "role-record-only",
             "observations": [{"observation_id": f"observation-{index+1}", "dimension": dimension, "observed_at": "2026-08-30T00:10:00+00:00", "outcome": "demonstrated", "responsibility_classes": responsibilities} for index, dimension in enumerate(dimensions)],
         })
-    now = __import__("datetime").datetime(2026, 8, 30, 1, 0, tzinfo=__import__("datetime").timezone.utc)
+    datetime_module = __import__("datetime")
+    now = datetime_module.datetime(2026, 8, 30, 1, 0, tzinfo=datetime_module.timezone.utc)
     payload = summarize_calibration_sessions(sessions, now=now)
     by_id = {item["session_id"]: _canonical_bytes(item) for item in sessions}
     session_bytes = {ref["ref"]: by_id[ref["session_id"]] for ref in payload["session_refs"]}
@@ -226,17 +690,29 @@ def test_human_readback_consumes_exact_owner_v2_and_rejects_v1_or_digest_drift()
     readback, exact = adapters.verify_human_readback(
         raw=raw, receipt_ref=".qwq_output/human.json", candidate_id="c", scope_id="s",
         evidence_fingerprint="sha256:" + "a" * 64, session_bytes_by_ref=session_bytes,
-        provider_timestamp=payload["generated_at"], verifier=verifier, contract=contract,
+        provider_timestamp=payload["generated_at"], verification_time=now,
+        verifier=verifier, contract=contract,
     )
     assert exact["status"] == "calibrated"
     assert readback["provider_kind"] == "authenticated_external"
     assert readback["release_evidence_eligible"] is True
     v1 = {"schema_version": 1, "status": "observed"}
     with pytest.raises(ContractError, match="HAD.CALIBRATION_CONTRACT_INCOMPATIBLE"):
-        adapters.verify_human_readback(raw=canonical_json_bytes(v1), receipt_ref=".qwq_output/human.json", candidate_id="c", scope_id="s", evidence_fingerprint="sha256:" + "a" * 64, session_bytes_by_ref={}, provider_timestamp=payload["generated_at"], verifier=verifier, contract=contract)
+        adapters.verify_human_readback(raw=canonical_json_bytes(v1), receipt_ref=".qwq_output/human.json", candidate_id="c", scope_id="s", evidence_fingerprint="sha256:" + "a" * 64, session_bytes_by_ref={}, provider_timestamp=payload["generated_at"], verification_time=now, verifier=verifier, contract=contract)
     drift = dict(session_bytes); first = next(iter(drift)); drift[first] += b" "
     with pytest.raises(ContractError, match="HAD.CALIBRATION_CONTRACT_INCOMPATIBLE"):
-        adapters.verify_human_readback(raw=canonical_json_bytes(payload), receipt_ref=".qwq_output/human.json", candidate_id="c", scope_id="s", evidence_fingerprint="sha256:" + "a" * 64, session_bytes_by_ref=drift, provider_timestamp=payload["generated_at"], verifier=verifier, contract=contract)
+        adapters.verify_human_readback(raw=canonical_json_bytes(payload), receipt_ref=".qwq_output/human.json", candidate_id="c", scope_id="s", evidence_fingerprint="sha256:" + "a" * 64, session_bytes_by_ref=drift, provider_timestamp=payload["generated_at"], verification_time=now, verifier=verifier, contract=contract)
+
+    stale_time = datetime_module.datetime.fromisoformat(payload["fresh_until"]) + datetime_module.timedelta(seconds=1)
+    generated_at = datetime_module.datetime.fromisoformat(payload["generated_at"])
+    assert (stale_time - generated_at).total_seconds() < contract["layer_admission"]["human_calibration"]["max_age_seconds"]
+    with pytest.raises(ContractError, match="readback is stale"):
+        adapters.verify_human_readback(
+            raw=raw, receipt_ref=".qwq_output/human.json", candidate_id="c", scope_id="s",
+            evidence_fingerprint="sha256:" + "a" * 64, session_bytes_by_ref=session_bytes,
+            provider_timestamp=payload["generated_at"], verification_time=stale_time,
+            verifier=verifier, contract=contract,
+        )
 
 
 def test_review_gate_block_finding_is_defensively_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -246,5 +722,6 @@ def test_review_gate_block_finding_is_defensively_rejected(monkeypatch: pytest.M
     with pytest.raises(ContractError, match="GATE_BLOCK finding"):
         adapters.verify_review(
             plan_raw=b"{}", plan_ref="p", evidence_raw=canonical_json_bytes({"finished_at": "2026-08-30T00:00:00+00:00"}), evidence_ref="e",
-            consolidation_raw=canonical_json_bytes(consolidation), consolidation_ref="c", candidate_id="c", scope_id="s", contract=contract,
+            consolidation_raw=canonical_json_bytes(consolidation), consolidation_ref="c", candidate_id="c", scope_id="s",
+            verification_time=datetime.now(timezone.utc), contract=contract,
         )

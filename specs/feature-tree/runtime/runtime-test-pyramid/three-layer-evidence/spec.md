@@ -17,6 +17,7 @@
 - local_contract、api_integration、user_acceptance 三层目录与 `spec_ref` 双向校验。
 - App 与服务测试按 production 对象身份同构，support 只承载共享测试支撑。
 - 结构入口与真实 CaseResult、环境及用户验收回执分侧、分字段表达。
+- App 与 app↔cloud 边界合入候选在更新 `dev1.0` 前的端云真实启动闭环结果证据。
 - 无证据验收必须由同节点 OPEN 声明；环境缺失必须保留 GATE_BLOCK。
 
 ### Out of Scope
@@ -52,6 +53,14 @@
 - App、Service、Data、Ops 的结构入口必须分侧表达，任一侧存在测试不能替代另一侧的对象义务；结果证据必须绑定对象、验收锚点与不可变候选摘要。
 - 缺少必需结果时保持 GATE_BLOCK，不得以结构入口、覆盖率、合法业务空或历史结果替代。
 
+<a id="req-005"></a>
+### REQ-005 App 端云真实启动闭环证据
+
+- 影响 App 或 app↔cloud 边界（App 源码、App contract/generated、App 消费的服务 API 或其 wire schema）的合入候选，在更新 `dev1.0` 前必须产生三项结果证据，且全部绑定同一 exact merge candidate：受管 canonical launcher 的真实 Flutter 启动回执（launched、runtime health healthy、configuration complete）；App 连接真实 Service 进程执行的受影响 `api_integration` CaseResult；调用方显式声明的全部受影响 Journey 的 App→Service→readback 闭环结果，原始 readback 的 Journey 身份必须先全量唯一，再与 verified readback 身份及 required Journey 身份三个集合完全相等，无关、未验证或候选漂移的 Journey 均不得混入或替代。
+- analyzer、widget test、进程内替身 API、编译或打包成功均属结构或本地证据，不得替代上述结果证据；受影响 required case 身份必须由 current ContractGraph 的 App `api_integration` readiness case 选择结果派生并与 CaseResult 精确闭合，CaseResult 必须唯一、`status=passed`、`executed>0`、`failed=0`、`skipped=0`，缺选择身份、缺 raw result、失败或重复均保持 GATE_BLOCK。
+- 模拟器/仿真器上的启动与闭环证据可支撑集成合入，但必须标记 `nonPromotable`；`dev1.0 → main` promotion 只认真实设备证据。
+- 候选的三档集成深度定义保持为 `no_live`（runtime-neutral 免真启）、`alpha_integration`（默认 Alpha 集成）、`abg_release_sensitive`（release-sensitive 全 ABG），只能由 typed impact 派生，不得人工改档或降档。
+
 ## 4. 契约引用
 
 - trace gate：`quwoquan_ops/cli/feature_tree.py`
@@ -74,6 +83,14 @@
 - THEN 每个入口精确归属到 canonical 对象与正确测试层，support 与测试 double 不越过 local_contract 边界。
 - AND 静态入口只形成结构证据，真实 CaseResult 单独形成结果证据；缺失、失败或跳过不会被文件存在或另一 producer 的结果掩盖。
 
+<a id="gwt-003"></a>
+### GWT-003 端云真启闭环证据缺一即阻断
+
+- GIVEN 一个影响 App 或 app↔cloud 边界的 exact merge candidate 请求更新 `dev1.0`。
+- WHEN 集成门禁核对该候选的结果证据。
+- THEN 受管真实启动回执、真实 Service `api_integration` CaseResult 与 Journey readback 三项齐备且绑定同一候选摘要时放行；模拟器证据放行但标记 `nonPromotable`，不进入 promotion。
+- AND 缺任一项、缺受影响 required case/Journey 身份、CaseResult 或任意状态/候选摘要的 Journey readback 重复、`status=failed|error`、`failed>0`、`executed=0`、`skipped>0`、原始/verified/required Journey 身份集合不完全相等、证据绑定到其他候选摘要，或以 analyzer/widget/编译/替身 API/无关 Journey 结果冒充时，保持 GATE_BLOCK。
+
 ## 6. 依赖
 
 - 前置要求：节点验收 ID 稳定，测试目录采用 canonical 三层名称。
@@ -92,3 +109,13 @@
 - 影响或价值：当前物理测试门仍容纳旧技术大桶，App 路径未逐级验证 context/object，readiness 入口也未把 App、服务与 Ops 的结构证据和 runner 结果完整分侧承载，因此局部文件存在仍可能掩盖另一侧缺口。UAT 与 ops 层测试义务由 `quwoquan_ops/gate/verify_readiness_case_coverage.py` 看护：磁盘验收测试必须有契约 readiness case，UA 声明 runner 路径 strict-zero，无缺口容忍基线。全部有 UAT 测试的对象声明 `layer: user_acceptance` case，全部有环境验收脚本的服务声明 `producer: ops, layer: environment_acceptance` case，runner 均携带 `readiness_case`/`spec_ref` 双向标注并由 loader 校验；ops runner 的 canonical 位置是 `tests/acceptance/user_acceptance/service_ops/<service>/` 内的实现脚本（loader 与根 AGENTS 条款同源单轨）。
 - 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效；`readiness_case_coverage_baseline.json` 两个缺口清单清零后删除。
 - 依赖：对象级 case、生产 runner、canonical snapshot authority、结果 receipt 与 stage 消费边界完成。
+
+<a id="open-002"></a>
+### OPEN-002 端云真启闭环 gate 尚未接入合入执行路径
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：`REQ-005` 的 gate 已核对三项 exact candidate 结果证据，并对真实 Service CaseResult 与 Journey readback 的显式 required 身份、唯一性、精确闭合、成功状态/计数及稳定 recovery fail-closed；typed impact 档位由 `impact_planner_core.derive_integration_depth` 派生，Delivery Gate 的 Service PR job 已改为 synthetic merge candidate，App 重活仍由 lane push 生产 exact head 证据。剩余缺口是受影响 App `api_integration` readiness case 与 required Journey 尚未由 current ContractGraph 自动投影进 bundle，且该 gate 尚未接入 lane PR 合入执行流程；在此之前更新 `dev1.0` 仍须由集成执行者使用 ContractGraph 选择结果组装 bundle 并执行本 gate，执行遗漏或自报不完整 selection 不得冒充闭环。
+- 完成判定：current ContractGraph 自动投影受影响 App `api_integration` required case 与 required Journey，由 canonical producers 为 exact merge candidate 组装完整 bundle；至少一个 App/app↔cloud 候选按 `GWT-003.t1` 放行且负例按 `GWT-003.t2` 阻断，并归档执行 receipt。
+- 依赖：ContractGraph automatic required selection、canonical launcher/Journey/Service CaseResult producers 与 lane PR 合入 gate 接线。

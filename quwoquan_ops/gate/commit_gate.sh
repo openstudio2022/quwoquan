@@ -15,12 +15,21 @@ mkdir -p "$REPORT_DIR"
 
 SOFT_BUDGET="${COMMIT_GATE_SOFT_BUDGET_SECONDS:-}"
 HARD_BUDGET="${COMMIT_GATE_HARD_BUDGET_SECONDS:-}"
-if [[ -z "$SOFT_BUDGET" || -z "$HARD_BUDGET" ]]; then
+if [[ -z "$SOFT_BUDGET" ]]; then
   SOFT_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("budgetSeconds",600)))' "$BUDGETS_JSON")"
+fi
+if [[ -z "$HARD_BUDGET" ]]; then
   HARD_BUDGET="$(python3 -c 'import json,sys; from pathlib import Path; g=json.loads(Path(sys.argv[1]).read_text()).get("gates",{}).get("00.local_commit_gate",{}); print(int(g.get("hardFailSeconds",900)))' "$BUDGETS_JSON")"
+fi
+if ! [[ "$SOFT_BUDGET" =~ ^[0-9]+$ && "$HARD_BUDGET" =~ ^[1-9][0-9]*$ ]]; then
+  echo "[commit-gate] FAIL: budgets must be non-negative soft and positive hard integers" >&2
+  exit 2
 fi
 
 STARTED_AT=$(date +%s)
+HARD_DEADLINE=$((STARTED_AT + HARD_BUDGET))
+PROCESS_GROUP_GRACE_SECONDS="${COMMIT_GATE_PROCESS_GROUP_GRACE_SECONDS:-2}"
+DEADLINE_RUNNER="$ROOT/quwoquan_ops/gate/lib/process_group_deadline.py"
 FINGERPRINT_START="$(python3 -B quwoquan_ops/cli/local_readiness.py plan --level fast --staged | python3 -c 'import json,sys; print(json.load(sys.stdin)["fingerprint"]["digest"])')"
 PLAN_JSON="$REPORT_DIR/plan.json"
 PHASE_LOG="$REPORT_DIR/phases.jsonl"
@@ -60,6 +69,16 @@ plan = {}
 plan_path = Path(os.environ["PLAN_JSON"])
 if plan_path.exists():
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
+jobs = []
+for phase, directory in (("static", "static"), ("tests", "tests")):
+    root = Path(os.environ["REPORT_DIR"]) / directory
+    if not root.is_dir():
+        continue
+    for result_path in sorted(root.glob("*.result.json")):
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        result["phase"] = phase
+        result["name"] = result_path.name.removesuffix(".result.json")
+        jobs.append(result)
 elapsed = int(os.environ["ELAPSED"])
 soft = int(os.environ["SOFT_BUDGET"])
 summary = {
@@ -68,10 +87,18 @@ summary = {
     "softBudgetSeconds": soft,
     "hardBudgetSeconds": int(os.environ["HARD_BUDGET"]),
     "overSoftBudget": elapsed > soft,
+    "hardBudgetExceeded": os.environ["RESULT"] == "fail_budget" or elapsed > int(os.environ["HARD_BUDGET"]),
+    "terminal": {
+        "status": "GATE_BLOCK" if os.environ["RESULT"].startswith("fail") else "PASS",
+        "code": "COMMIT_GATE.HARD_TIMEOUT" if os.environ["RESULT"] == "fail_budget" else (
+            "COMMIT_GATE.FAILED" if os.environ["RESULT"].startswith("fail") else "COMMIT_GATE.PASSED"
+        ),
+    },
     "fingerprintStart": os.environ["FINGERPRINT_START"],
     "fingerprintEnd": os.environ["FINGERPRINT_END"],
     "fingerprintChanged": os.environ["FINGERPRINT_START"] != os.environ["FINGERPRINT_END"],
     "phases": phases,
+    "jobs": jobs,
     "deferredToCi": plan.get("deferred_to_ci", []),
     "flutterTests": plan.get("flutter_tests", []),
     "staticChecks": plan.get("static_checks", []),
@@ -115,7 +142,8 @@ run_static_check() {
       python3 -B quwoquan_ops/gate/verify_entrypoint_script_paths.py
       ;;
     local_worktree_lifecycle)
-      python3 -B quwoquan_ops/gate/verify_local_worktree_lifecycle.py
+      log "FAIL: local_worktree_lifecycle is forbidden in commit-gate static checks"
+      return 2
       ;;
     service_architecture) make verify-service-architecture ;;
     service_probe_homology) make verify-service-probe-homology ;;
@@ -140,6 +168,9 @@ run_static_check() {
   esac
 }
 
+export -f run_static_check log
+export ROOT HARD_DEADLINE PROCESS_GROUP_GRACE_SECONDS DEADLINE_RUNNER
+
 STATIC_PIDS=()
 STATIC_NAMES=()
 STATIC_DIR="$REPORT_DIR/static"
@@ -148,8 +179,16 @@ if [[ "${#STATIC_CHECKS[@]}" -gt 0 ]]; then
   for check in "${STATIC_CHECKS[@]}"; do
     [[ "$check" == "branch_policy" ]] && continue
     (
-      if run_static_check "$check" >"$STATIC_DIR/$check.log" 2>&1; then
+      result_json="$STATIC_DIR/$check.result.json"
+      if python3 -B "$DEADLINE_RUNNER" \
+        --deadline-epoch-seconds "$HARD_DEADLINE" \
+        --grace-seconds "$PROCESS_GROUP_GRACE_SECONDS" \
+        --result-json "$result_json" \
+        -- bash -c 'run_static_check "$1"' _ "$check" \
+        >"$STATIC_DIR/$check.log" 2>&1; then
         echo ok >"$STATIC_DIR/$check.status"
+      elif python3 -c 'import json,sys; from pathlib import Path; p=Path(sys.argv[1]); raise SystemExit(0 if p.is_file() and json.loads(p.read_text()).get("timedOut") else 1)' "$result_json"; then
+        echo timeout >"$STATIC_DIR/$check.status"
       else
         echo fail >"$STATIC_DIR/$check.status"
       fi
@@ -169,8 +208,11 @@ if [[ "${#STATIC_PIDS[@]}" -gt 0 ]]; then
     wait "$pid"
     set -e
     status="$(cat "$STATIC_DIR/$name.status" 2>/dev/null || echo fail)"
-    if [[ "$status" != "ok" ]]; then
-      STATIC_FAIL=1
+    if [[ "$status" == "timeout" ]]; then
+      STATIC_FAIL=2
+      log "static TIMEOUT: $name (see $STATIC_DIR/$name.log)"
+    elif [[ "$status" != "ok" ]]; then
+      [[ "$STATIC_FAIL" -eq 2 ]] || STATIC_FAIL=1
       log "static FAIL: $name (see $STATIC_DIR/$name.log)"
       tail -n 40 "$STATIC_DIR/$name.log" || true
     else
@@ -178,9 +220,14 @@ if [[ "${#STATIC_PIDS[@]}" -gt 0 ]]; then
     fi
   done
 fi
-phase_record "L0_static_parallel" "$([[ "$STATIC_FAIL" -eq 0 ]] && echo ok || echo fail)" "$STATIC_STARTED"
+STATIC_PHASE_STATUS="$([[ "$STATIC_FAIL" -eq 0 ]] && echo ok || ([[ "$STATIC_FAIL" -eq 2 ]] && echo timeout || echo fail))"
+phase_record "L0_static_parallel" "$STATIC_PHASE_STATUS" "$STATIC_STARTED"
 if [[ "$STATIC_FAIL" -ne 0 ]]; then
-  write_summary "fail_static"
+  if [[ "$STATIC_FAIL" -eq 2 ]]; then
+    write_summary "fail_budget"
+  else
+    write_summary "fail_static"
+  fi
   exit 1
 fi
 enforce_hard_budget
@@ -194,8 +241,15 @@ start_test_job() {
   local name="$1"
   shift
   (
-    if "$@" >"$TEST_DIR/$name.log" 2>&1; then
+    result_json="$TEST_DIR/$name.result.json"
+    if python3 -B "$DEADLINE_RUNNER" \
+      --deadline-epoch-seconds "$HARD_DEADLINE" \
+      --grace-seconds "$PROCESS_GROUP_GRACE_SECONDS" \
+      --result-json "$result_json" \
+      -- "$@" >"$TEST_DIR/$name.log" 2>&1; then
       echo ok >"$TEST_DIR/$name.status"
+    elif python3 -c 'import json,sys; from pathlib import Path; p=Path(sys.argv[1]); raise SystemExit(0 if p.is_file() and json.loads(p.read_text()).get("timedOut") else 1)' "$result_json"; then
+      echo timeout >"$TEST_DIR/$name.status"
     else
       echo fail >"$TEST_DIR/$name.status"
     fi
@@ -300,8 +354,11 @@ else
     wait "$pid"
     set -e
     status="$(cat "$TEST_DIR/$name.status" 2>/dev/null || echo fail)"
-    if [[ "$status" != "ok" ]]; then
-      TEST_FAIL=1
+    if [[ "$status" == "timeout" ]]; then
+      TEST_FAIL=2
+      log "test TIMEOUT: $name (see $TEST_DIR/$name.log)"
+    elif [[ "$status" != "ok" ]]; then
+      [[ "$TEST_FAIL" -eq 2 ]] || TEST_FAIL=1
       log "test FAIL: $name (see $TEST_DIR/$name.log)"
       tail -n 60 "$TEST_DIR/$name.log" || true
     else
@@ -310,7 +367,8 @@ else
     enforce_hard_budget
   done
 fi
-phase_record "L0_impacted_tests_parallel" "$([[ "$TEST_FAIL" -eq 0 ]] && echo ok || echo fail)" "$TEST_STARTED"
+TEST_PHASE_STATUS="$([[ "$TEST_FAIL" -eq 0 ]] && echo ok || ([[ "$TEST_FAIL" -eq 2 ]] && echo timeout || echo fail))"
+phase_record "L0_impacted_tests_parallel" "$TEST_PHASE_STATUS" "$TEST_STARTED"
 
 DEFERRED_COUNT="$(python3 -c 'import json,sys; from pathlib import Path; print(len(json.loads(Path(sys.argv[1]).read_text()).get("deferred_to_ci",[])))' "$PLAN_JSON")"
 if [[ "$DEFERRED_COUNT" -gt 0 ]]; then
@@ -326,7 +384,11 @@ fi
 
 ELAPSED="$(elapsed_now)"
 if [[ "$TEST_FAIL" -ne 0 ]]; then
-  write_summary "fail_tests"
+  if [[ "$TEST_FAIL" -eq 2 ]]; then
+    write_summary "fail_budget"
+  else
+    write_summary "fail_tests"
+  fi
   exit 1
 fi
 if [[ "$ELAPSED" -gt "$HARD_BUDGET" ]]; then

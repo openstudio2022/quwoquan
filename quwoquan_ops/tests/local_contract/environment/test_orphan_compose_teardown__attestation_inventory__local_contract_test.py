@@ -171,6 +171,66 @@ def test_run_scoped_formal_project_is_sampled_and_attested_exactly() -> None:
     )
 
 
+def test_mutable_test_live_project_is_target_exact_and_attested_without_kind_field() -> None:
+    project = "quwoquan_alpha_test_live"
+    snapshot = sample(project=project)
+    attestation = contract.seal_attestation(snapshot)
+
+    assert contract.require_canonical_project("alpha-local", project) == project
+    assert contract.canonical_project_kind("alpha-local", project) == "mutable_test_live"
+    assert attestation["target"] == "alpha-local"
+    assert attestation["project"] == project
+    assert attestation["snapshot"]["project"] == project
+    assert "projectKind" not in attestation
+
+
+def test_absent_receipt_discovers_one_exact_mutable_project_from_docker_labels() -> None:
+    project = "quwoquan_alpha_test_live"
+    outputs = iter(
+        (
+            f"foreign_project\nquwoquan_beta_test_live\n{project}\n",
+            f"{project}\n",
+        )
+    )
+
+    discovered = contract.discover_exact_project(
+        target="alpha-local",
+        run_command=lambda argv: CompletedProcess(argv, 0, next(outputs), ""),
+    )
+
+    assert discovered == project
+
+
+@pytest.mark.parametrize(
+    "project",
+    [
+        "quwoquan_beta_test_live",
+        "quwoquan_alpha_test_live_1",
+        "operator_supplied_project",
+    ],
+)
+def test_project_validation_rejects_other_target_and_arbitrary_projects(
+    project: str,
+) -> None:
+    with pytest.raises(contract.OrphanComposeTeardownError, match="project mismatch"):
+        contract.require_canonical_project("alpha-local", project)
+
+
+def test_discovery_rejects_formal_and_mutable_project_ambiguity() -> None:
+    outputs = iter(
+        (
+            "quwoquan_alpha_test_live\n",
+            "quwoquan_alpha_release_78142_3\n",
+        )
+    )
+
+    with pytest.raises(contract.OrphanComposeTeardownError, match="multiple exact projects"):
+        contract.discover_exact_project(
+            target="alpha-local",
+            run_command=lambda argv: CompletedProcess(argv, 0, next(outputs), ""),
+        )
+
+
 def test_absent_receipt_discovers_one_exact_formal_project_from_docker_labels() -> None:
     project = "quwoquan_alpha_release_78142_3"
     outputs = iter((f"quwoquan_beta_release\n{project}\n", f"{project}\n"))

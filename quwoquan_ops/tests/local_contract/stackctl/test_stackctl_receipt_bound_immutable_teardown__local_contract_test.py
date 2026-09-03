@@ -18,7 +18,6 @@ from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
-from quwoquan_ops.cli.lib.data_execution_fleet import load_data_execution_fleet_config
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 
 
@@ -151,33 +150,31 @@ class StackctlReceiptBoundImmutableTeardownTest(unittest.TestCase):
             )
         self.assertEqual(occupied, udp_only)
 
-    def test_runtime_owned_endpoints_exclude_independent_data_fleet_ports(
+    def test_runtime_owned_endpoints_preserve_exact_current_receipt_ports(
         self,
     ) -> None:
         manifest = load_port_manifest()
         canonical_ports = profile_ports(manifest, "beta-local")
-        fleet = load_data_execution_fleet_config()
-        runtime_endpoint = {
-            "role": "api-edge",
-            "hostPort": canonical_ports["api-edge"],
-            "protocol": "tcp",
-        }
-        fleet_endpoints = [
+        runtime_endpoints = [
             {
-                "role": role,
-                "hostPort": canonical_ports[role],
+                "role": "api-edge",
+                "hostPort": canonical_ports["api-edge"],
                 "protocol": "tcp",
-            }
-            for role in (fleet.mongo_port_role, fleet.redis_port_role)
+            },
+            {
+                "role": "coturn",
+                "hostPort": canonical_ports["coturn"],
+                "protocol": "udp",
+            },
         ]
 
         projected = stackctl._project_target_runtime_owned_ports(
             "beta-local",
-            published_ports=[runtime_endpoint, *fleet_endpoints],
+            published_ports=runtime_endpoints,
             manifest=manifest,
         )
 
-        self.assertEqual(projected, [runtime_endpoint])
+        self.assertEqual(projected, runtime_endpoints)
 
     def test_bind_projects_exact_receipt_candidate_root_without_active_fallback(
         self,

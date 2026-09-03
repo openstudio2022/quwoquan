@@ -24,6 +24,7 @@ def _plan() -> dict[str, object]:
         "composeDigest": "sha256:" + "1" * 64,
         "configurationDigest": "sha256:" + "2" * 64,
         "providerRuntimeDigest": "sha256:" + "3" * 64,
+        "observabilityLogSinkDigest": "sha256:" + "9" * 64,
         "portProfile": "alpha-local",
         "portBlock": {"start": 17000, "end": 17999},
         "publishedPorts": [
@@ -97,6 +98,9 @@ class TestLiveStartupAttemptReceiptContractTest(unittest.TestCase):
         self.assertEqual(running, loaded)
         self.assertEqual(running["status"], "running")
         self.assertEqual(running["configurationDigest"], "sha256:" + "2" * 64)
+        self.assertEqual(
+            running["observabilityLogSinkDigest"], "sha256:" + "9" * 64
+        )
         self.assertEqual(
             running["publishedPorts"][1:3],
             [
@@ -175,6 +179,21 @@ class TestLiveStartupAttemptReceiptContractTest(unittest.TestCase):
                         runtime_plan=drifted,
                         run_root=run_root,
                     )
+                drifted_observability = _plan()
+                drifted_observability["observabilityLogSinkDigest"] = (
+                    "sha256:" + "8" * 64
+                )
+                with self.assertRaisesRegex(
+                    ValueError, "observabilityLogSinkDigest"
+                ):
+                    receipt.transition_test_live_startup_attempt(
+                        environment="alpha",
+                        target="alpha-local",
+                        attempt_id=prepared["attemptId"],
+                        status="partial",
+                        runtime_plan=drifted_observability,
+                        run_root=run_root,
+                    )
                 drifted_web = _plan()
                 drifted_web["publicWebPackage"] = {
                     **drifted_web["publicWebPackage"],
@@ -189,6 +208,16 @@ class TestLiveStartupAttemptReceiptContractTest(unittest.TestCase):
                         runtime_plan=drifted_web,
                         run_root=run_root,
                     )
+                missing_observability = dict(prepared)
+                del missing_observability["observabilityLogSinkDigest"]
+                with self.assertRaisesRegex(ValueError, "fields mismatch"):
+                    receipt.validate_test_live_startup_attempt(missing_observability)
+                invalid_observability = dict(prepared)
+                invalid_observability["observabilityLogSinkDigest"] = "source-name"
+                with self.assertRaisesRegex(
+                    ValueError, "observabilityLogSinkDigest"
+                ):
+                    receipt.validate_test_live_startup_attempt(invalid_observability)
                 invalid = dict(prepared)
                 invalid["candidateDigest"] = "sha256:" + "7" * 64
                 with self.assertRaisesRegex(ValueError, "fields mismatch"):
@@ -366,6 +395,32 @@ class StaleTestLiveStartupReceiptReclaimTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "no inadmissible"):
                     receipt.reclaim_stale_test_live_startup_attempt("alpha-local")
 
+                self.assertTrue(path.exists())
+
+    def test_bounded_replacement_retires_only_canonical_stale_generation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            process_patch, runs_patch = self._patch_roots(root)
+            with process_patch, runs_patch:
+                stopped = self._write_running_receipt(root)
+                stale = dict(stopped)
+                stale.pop("observabilityLogSinkDigest")
+                path = receipt.test_live_startup_attempt_path("alpha-local")
+                path.write_text(json.dumps(stale), encoding="utf-8")
+
+                replaced = receipt.bounded_replace_stale_test_live_startup_attempt(
+                    "alpha-local"
+                )
+
+                self.assertEqual(replaced, stale)
+                self.assertFalse(path.exists())
+
+                foreign = {**stale, "composeProject": "foreign_project"}
+                path.write_text(json.dumps(foreign), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "replacement boundary"):
+                    receipt.bounded_replace_stale_test_live_startup_attempt(
+                        "alpha-local"
+                    )
                 self.assertTrue(path.exists())
 
     def test_unsafe_receipt_path_is_never_reclaimed(self) -> None:

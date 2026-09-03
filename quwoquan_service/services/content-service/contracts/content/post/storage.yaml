@@ -160,44 +160,6 @@ collections:
       unique: true
     - name: idx_data_release_stage_receipt_timeline
       keys: {environment: 1, releaseId: 1, recordedAt: 1}
-  post_import_task_outbox:
-    publication_role: not_published
-    entity: Post
-    role: authoritative
-    description: 不可变 Data release 中单个 Post import job 的宣告 outbox；与 Integration reliable-task 物理隔离。
-    indexes:
-    - name: uq_post_import_task_outbox_idempotency
-      keys: {idempotencyKey: 1}
-      unique: true
-      partial_filter:
-        idempotencyKey: {type: string}
-    - name: uq_post_import_task_outbox_pending_dedupe
-      keys: {dedupeKey: 1, status: 1}
-      unique: true
-      partial_filter:
-        status: pending
-  post_import_task:
-    publication_role: not_published
-    entity: Post
-    role: authoritative
-    description: Post import job 的租约、重试与终态；仅 data-content-worker 的 typed store 可读写。
-    indexes:
-    - name: uq_post_import_task_active_dedupe
-      keys: {dedupeKey: 1, status: 1}
-      unique: true
-      partial_filter:
-        status: {in: [ready, processing, retry_wait]}
-  post_import_task_recovery_receipt:
-    publication_role: not_published
-    entity: Post
-    role: authoritative
-    description: 已审计 dead Post import task 的幂等恢复回执。
-    indexes:
-    - name: idx_post_import_task_recovery_task
-      keys: {taskId: 1}
-    - name: idx_post_import_task_recovery_expiry
-      keys: {expiresAt: 1}
-      expire_after_seconds: 0
   rm_search_intent:
     publication_role: not_published
     entity: SearchIntentProjection

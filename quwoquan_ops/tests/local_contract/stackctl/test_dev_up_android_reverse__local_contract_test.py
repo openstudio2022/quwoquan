@@ -74,6 +74,64 @@ class DevUpAndroidReverseContractTest(unittest.TestCase):
         )
         self.assertFalse(any(call[-1] == "tcp:54321" for call in calls))
 
+    def test_repeat_same_target_reverse_is_idempotent_without_removals(self) -> None:
+        """同设备同 target 的第二次会话不清理既有映射，只做等值重建。"""
+        topology = {
+            "targets": {
+                "alpha-local": {"backend": "local", "portProfile": "alpha-local"},
+                "beta-local": {"backend": "local", "portProfile": "beta-local"},
+                "gamma-local": {"backend": "local", "portProfile": "gamma-local"},
+                "prod-sim": {"backend": "local", "portProfile": "prod-sim"},
+            }
+        }
+        manifest = {
+            "profiles": {
+                name: {"blockStart": start, "blockEnd": start + 999}
+                for name, start in (
+                    ("alpha-local", 17000),
+                    ("beta-local", 18000),
+                    ("gamma-local", 19000),
+                    ("prod-sim", 16000),
+                )
+            },
+            "roles": {
+                "api-edge": {"slotOffset": 0},
+                "user-service": {"slotOffset": 210},
+            },
+        }
+        calls: list[list[str]] = []
+
+        def run(argv: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+            calls.append(argv)
+            if argv[-1] == "--list":
+                # 上一会话已建立的同 target 映射仍然在位。
+                return subprocess.CompletedProcess(
+                    argv,
+                    0,
+                    "host tcp:17000 tcp:17000\nhost tcp:17210 tcp:17210\n",
+                    "",
+                )
+            return subprocess.CompletedProcess(argv, 0, "", "")
+
+        with (
+            mock.patch.object(dev_up.shutil, "which", return_value="/usr/bin/adb"),
+            mock.patch.object(dev_up, "get_target", side_effect=lambda value, name: value["targets"][name]),
+            mock.patch.object(dev_up, "load_port_manifest", return_value=manifest),
+            mock.patch.object(dev_up, "active_consumer_leases", return_value=[]),
+            mock.patch.object(dev_up.subprocess, "run", side_effect=run),
+        ):
+            ports = dev_up.enable_android_adb_reverse(
+                "emulator-5554",
+                "alpha-local",
+                topology=topology,
+            )
+
+        self.assertEqual(ports, [17000, 17210])
+        self.assertFalse(
+            any("--remove" in call for call in calls),
+            calls,
+        )
+
     def test_active_other_target_lease_blocks_before_transport_mutation(self) -> None:
         topology = {
             "targets": {

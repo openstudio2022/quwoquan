@@ -29,6 +29,7 @@ class StackctlAppDebugPreflightHealthRetryContract(unittest.TestCase):
                 {
                     "role": "sms-provider-substitute",
                     "adapterIds": ["ext.sms.local_capture"],
+                    "capabilityIds": ["identity.sms.otp"],
                 },
             ],
         }
@@ -44,6 +45,15 @@ class StackctlAppDebugPreflightHealthRetryContract(unittest.TestCase):
 
         def fetch(url: str, **kwargs: object) -> tuple[bool, int, str, str]:
             checked_urls.append(url)
+            if url.endswith("/auth/otp/readiness"):
+                self.assertEqual(kwargs["retry_attempts"], 1)
+                self.assertEqual(kwargs["retry_sleep_seconds"], 0.0)
+                return (
+                    True,
+                    200,
+                    '{"availability":"ready","retryAfterSeconds":0}',
+                    "application/json",
+                )
             self.assertEqual(kwargs["retry_attempts"], 3)
             self.assertEqual(kwargs["retry_sleep_seconds"], 0.5)
             if ":17330/healthz" in url:
@@ -100,6 +110,9 @@ class StackctlAppDebugPreflightHealthRetryContract(unittest.TestCase):
         self.assertEqual(result["exitCode"], 0)
         self.assertEqual(result["status"], "warning")
         self.assertTrue(any(":17210/healthz" in url for url in checked_urls))
+        self.assertTrue(
+            any(url.endswith("/auth/otp/readiness") for url in checked_urls)
+        )
 
 
 if __name__ == "__main__":

@@ -46,6 +46,18 @@ _PACKAGE_NAME = re.compile(r"^[a-z0-9_]+$")
 _VERSION = re.compile(r"^[0-9A-Za-z.+_-]+$")
 _HOST = re.compile(r"^[a-z0-9.-]+$")
 _FORBIDDEN_CACHE_SEGMENTS = frozenset({".cxx", ".gradle", ".kotlin"})
+_PUB_TRANSIENT_ROOTS = frozenset({"active_roots", "_temp", "log"})
+
+
+def is_canonical_pub_cache_transient(relative: str, is_directory: bool) -> bool:
+    """Admit only Pub-owned transient roots and their descendants."""
+
+    if relative == "README.md":
+        return not is_directory
+    parts = PurePosixPath(relative).parts
+    if not parts or parts[0] not in _PUB_TRANSIENT_ROOTS:
+        return False
+    return len(parts) > 1 or is_directory
 
 
 @dataclass(frozen=True, slots=True)
@@ -575,11 +587,14 @@ def _normalize_writable_clone_tree(
     *,
     destination: Path,
     snapshot: PubCacheSnapshot,
+    admitted_extra: Callable[[str, bool], bool] | None = None,
 ) -> None:
     expected_files = {item.relative: item for item in snapshot.files}
     expected_directories = set(snapshot.directories)
     actual_files: set[str] = set()
     actual_directories: set[str] = set()
+    extra_files: dict[str, tuple[Path, tuple[int, ...]]] = {}
+    extra_directories: dict[str, tuple[Path, tuple[int, int]]] = {}
     root_metadata = destination.lstat()
     if not stat.S_ISDIR(root_metadata.st_mode) or stat.S_ISLNK(root_metadata.st_mode):
         raise ValueError("App dependency cloned cache root is unsafe")
@@ -598,24 +613,40 @@ def _normalize_writable_clone_tree(
                 raise ValueError(
                     f"App dependency cloned cache directory is unsafe: {relative}"
                 )
-            if relative not in expected_directories:
+            path.chmod(0o700, follow_symlinks=False)
+            if relative in expected_directories:
+                actual_directories.add(relative)
+                continue
+            if admitted_extra is None or not admitted_extra(relative, True):
                 raise ValueError(
                     f"App dependency cloned cache contains extra directory: {relative}"
                 )
-            path.chmod(0o700, follow_symlinks=False)
-            actual_directories.add(relative)
+            normalized = path.lstat()
+            extra_directories[relative] = (
+                path,
+                (normalized.st_dev, normalized.st_ino),
+            )
         for name in file_names:
             path = parent_path / name
             relative = path.relative_to(destination).as_posix()
             metadata = path.lstat()
-            expected = expected_files.get(relative)
             if (
-                expected is None
-                or not stat.S_ISREG(metadata.st_mode)
+                not stat.S_ISREG(metadata.st_mode)
                 or stat.S_ISLNK(metadata.st_mode)
                 or metadata.st_nlink != 1
-                or metadata.st_size != expected.size
             ):
+                raise ValueError(
+                    f"App dependency cloned cache file is unsafe: {relative}"
+                )
+            expected = expected_files.get(relative)
+            if expected is None:
+                if admitted_extra is None or not admitted_extra(relative, False):
+                    raise ValueError(
+                        f"App dependency cloned cache contains extra file: {relative}"
+                    )
+                extra_files[relative] = (path, _stable_node_identity(metadata))
+                continue
+            if metadata.st_size != expected.size:
                 raise ValueError(
                     f"App dependency cloned cache file is unsafe: {relative}"
                 )
@@ -624,6 +655,33 @@ def _normalize_writable_clone_tree(
                 follow_symlinks=False,
             )
             actual_files.add(relative)
+    for relative, (path, identity) in sorted(extra_files.items()):
+        metadata = path.lstat()
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or stat.S_ISLNK(metadata.st_mode)
+            or metadata.st_nlink != 1
+            or _stable_node_identity(metadata) != identity
+        ):
+            raise ValueError(
+                f"App dependency cloned cache extra file changed: {relative}"
+            )
+        path.unlink()
+    for relative, (path, identity) in sorted(
+        extra_directories.items(),
+        key=lambda item: (len(PurePosixPath(item[0]).parts), item[0]),
+        reverse=True,
+    ):
+        metadata = path.lstat()
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or stat.S_ISLNK(metadata.st_mode)
+            or (metadata.st_dev, metadata.st_ino) != identity
+        ):
+            raise ValueError(
+                f"App dependency cloned cache extra directory changed: {relative}"
+            )
+        path.rmdir()
     if actual_files != set(expected_files) or actual_directories != expected_directories:
         raise ValueError("App dependency cloned cache closure drifted")
 
@@ -632,6 +690,7 @@ def _clone_writable_snapshot_tree_darwin(
     *,
     snapshot: PubCacheSnapshot,
     destination: Path,
+    admitted_extra: Callable[[str, bool], bool] | None = None,
 ) -> None:
     source = snapshot.cache_root.expanduser().absolute()
     assert_real_directory(source, label="writable clone source root")
@@ -658,6 +717,7 @@ def _clone_writable_snapshot_tree_darwin(
         _normalize_writable_clone_tree(
             destination=destination,
             snapshot=snapshot,
+            admitted_extra=admitted_extra,
         )
     except BaseException:
         if destination.exists() and not destination.is_symlink():
@@ -671,16 +731,20 @@ def copy_snapshot_tree_with_lock(
     *,
     lock_path: Path,
     writable: bool,
+    admitted_extra: Callable[[str, bool], bool] | None = None,
 ) -> None:
     """Copy then verify against an explicit lock (avoids path inference)."""
 
     if destination.exists() or destination.is_symlink():
         raise ValueError("App dependency snapshot destination must be fresh")
     if writable and sys.platform == "darwin":
-        _clone_writable_snapshot_tree_darwin(
-            snapshot=snapshot,
-            destination=destination,
-        )
+        clone_options: dict[str, Any] = {
+            "snapshot": snapshot,
+            "destination": destination,
+        }
+        if admitted_extra is not None:
+            clone_options["admitted_extra"] = admitted_extra
+        _clone_writable_snapshot_tree_darwin(**clone_options)
     else:
         destination.mkdir(parents=True, mode=0o700)
         for relative in sorted(

@@ -296,6 +296,87 @@ func TestAppLaunchContractCodegenRejectsUnknownDuplicateMissingAndDrift(t *testi
 			want: "duplicate app_launch_attempt_statuses value",
 		},
 		{
+			name:       "managed target widens beyond alpha local",
+			sourceName: "app_launch_manifest.yaml",
+			mutate: func(source string) string {
+				return strings.Replace(
+					source,
+					"target: { type: string, allowed_values: [alpha-local], allow_empty: true }",
+					"target: { type: string, allowed_values: [alpha-local, beta-local], allow_empty: true }",
+					1,
+				)
+			},
+			want: "app_managed_preparation.fields.target.allowed_values",
+		},
+		{
+			name:       "managed runtime identity falls back to string",
+			sourceName: "app_launch_manifest.yaml",
+			mutate: func(source string) string {
+				start := strings.Index(source, "      runtimeIdentity:\n")
+				end := strings.Index(source[start:], "      consumerId:")
+				if start < 0 || end < 0 {
+					return source
+				}
+				end += start
+				return source[:start] +
+					"      runtimeIdentity: { type: string, min_length: 1, allow_empty: true }\n" +
+					source[end:]
+			},
+			want: "runtimeIdentity must be an empty-capable closed object",
+		},
+		{
+			name:       "managed trust digest becomes required sha256",
+			sourceName: "app_launch_manifest.yaml",
+			mutate: func(source string) string {
+				return strings.Replace(
+					source,
+					"deviceTrustReceiptDigest: { type: string, format: optional_sha256_identity }",
+					"deviceTrustReceiptDigest: { type: string, format: sha256_identity }",
+					1,
+				)
+			},
+			want: "deviceTrustReceiptDigest must use optional_sha256_identity",
+		},
+		{
+			name:       "managed readiness digest loses byte identity",
+			sourceName: "app_launch_manifest.yaml",
+			mutate: func(source string) string {
+				return strings.Replace(
+					source,
+					"readinessReceiptDigest: { type: string, format: sha256_identity }",
+					"readinessReceiptDigest: { type: string, format: optional_sha256_identity }",
+					1,
+				)
+			},
+			want: "contentBinding.fields.readinessReceiptDigest must use sha256_identity",
+		},
+		{
+			name:       "managed content receipt digest becomes required sha256",
+			sourceName: "app_launch_manifest.yaml",
+			mutate: func(source string) string {
+				return strings.Replace(
+					source,
+					"strictContentPreflightReceiptDigest: { type: string, format: optional_sha256_identity }",
+					"strictContentPreflightReceiptDigest: { type: string, format: sha256_identity }",
+					1,
+				)
+			},
+			want: "strictContentPreflightReceiptDigest must use optional_sha256_identity",
+		},
+		{
+			name:       "managed blocked runtime object cannot be empty",
+			sourceName: "app_launch_manifest.yaml",
+			mutate: func(source string) string {
+				start := strings.Index(source, "      runtimeIdentity:\n")
+				if start < 0 {
+					return source
+				}
+				tail := source[start:]
+				return source[:start] + strings.Replace(tail, "        allow_empty: true\n", "", 1)
+			},
+			want: "runtimeIdentity must be an empty-capable closed object",
+		},
+		{
 			name:       "missing terminal attempt state",
 			sourceName: "app_launch_manifest.yaml",
 			mutate: func(source string) string {

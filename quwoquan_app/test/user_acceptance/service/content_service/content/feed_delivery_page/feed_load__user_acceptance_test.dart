@@ -22,7 +22,13 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart';
+import 'package:go_router/go_router.dart';
 import 'package:patrol/patrol.dart';
+import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart'
+    show appImageLoadErrorKey, appImageLoadSuccessKey;
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+
+import '../../../../../support/runtime/patrol/patrol_app_content_screenshot.dart';
 import '../../../../../support/runtime/patrol/patrol_test_support.dart';
 
 const _feedCardProbeKeys = <ValueKey<String>>[
@@ -57,24 +63,62 @@ void main() {
         'Patrol user_acceptance tests must bind API_CONTRACT_ENV to the selected nonprod runtime',
       );
 
-      // ── 等待首页真实 feed 卡片渲染（默认推荐频道可能是双列发现卡）───────
-      final visibleFeedCard = await _waitForAnyFeedCard($);
-
+      // ── 等待首页真实 feed 卡片及该卡片自己的媒体解码终态 ────────────
+      final visibleFeedCardKey = await _waitForVisibleFeedCard($);
       expect(
-        visibleFeedCard,
-        isTrue,
+        visibleFeedCardKey,
+        isNotNull,
         reason:
             'At least one $_runtimeEnv feed card must be visible after load',
       );
+      final terminalKey = visibleFeedCardKey!.value;
+      final visibleFeedCard = find.byKey(visibleFeedCardKey).first;
+      final feedCardImageSuccess = find.descendant(
+        of: visibleFeedCard,
+        matching: find.byKey(appImageLoadSuccessKey),
+      );
+      expect(
+        await _waitForFinder($, feedCardImageSuccess),
+        isTrue,
+        reason:
+            'the visible home feed card itself must decode media; an avatar elsewhere '
+            'cannot satisfy feed media readback',
+      );
+      expect(
+        find.descendant(
+          of: visibleFeedCard,
+          matching: find.byKey(appImageLoadErrorKey),
+        ),
+        findsNothing,
+        reason:
+            'the visible home feed card must not render a media error state',
+      );
+      final terminalRoute = GoRouterState.of($.tester.element(visibleFeedCard))
+          .uri
+          .path;
+      expect(
+        terminalRoute,
+        AppRoutePaths.home,
+        reason:
+            'feed evidence must remain bound to the current home feed route',
+      );
       final visibleCardKeys = _visibleFeedCardKeys();
-      expect(visibleCardKeys, isNotEmpty);
+      expect(visibleCardKeys, contains(terminalKey));
       // The host-side Patrol runner captures the Dart test process stdout.
       // PatrolTester.log is not forwarded by iOS XCTest, so it cannot carry
       // release-bound acceptance evidence across the device boundary.
       // ignore: avoid_print
       print(
         'QWQ_FEED_CONTENT_EVIDENCE '
-        '${jsonEncode(<String, Object>{'environment': _runtimeEnv, 'visibleCardCount': visibleCardKeys.length, 'visibleCardKeys': visibleCardKeys})}',
+        '${jsonEncode(<String, Object>{'environment': _runtimeEnv, 'visibleCardCount': visibleCardKeys.length, 'visibleCardKeys': visibleCardKeys, 'terminalKey': terminalKey, 'route': terminalRoute, 'mediaLoadStatus': 'decoded'})}',
+      );
+      await emitPatrolAppContentPageScreenshotReady(
+        $,
+        environment: _runtimeEnv,
+        suite: 'discovery-feed-load-and-render',
+        route: terminalRoute,
+        terminalKey: terminalKey,
+        terminalFinder: visibleFeedCard,
       );
     },
   );
@@ -93,15 +137,27 @@ List<String> _visibleFeedCardKeys() {
   return visible;
 }
 
-Future<bool> _waitForAnyFeedCard(PatrolIntegrationTester $) async {
+Future<ValueKey<String>?> _waitForVisibleFeedCard(
+  PatrolIntegrationTester $,
+) async {
   final deadline = DateTime.now().add(const Duration(seconds: 40));
   while (DateTime.now().isBefore(deadline)) {
     for (final key in _feedCardProbeKeys) {
       if ($(key).visible) {
-        return true;
+        return key;
       }
     }
     await $.pump(const Duration(milliseconds: 500));
+  }
+  return null;
+}
+
+Future<bool> _waitForFinder(PatrolIntegrationTester $, Finder finder) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 45));
+  while (DateTime.now().isBefore(deadline)) {
+    await $.pump();
+    if (finder.evaluate().isNotEmpty) return true;
+    await $.pump(const Duration(milliseconds: 250));
   }
   return false;
 }

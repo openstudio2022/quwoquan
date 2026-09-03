@@ -64,12 +64,12 @@ APP_OBJECT_LAYERS = ("domain", "application", "adapters", "presentation")
 #: 棘轮上限：由本脚本对 App 物理树实时测量，治理 owner 为上述 GWT-007，**只减不增**。
 #: 采集时间点的实测值（`--report` 可复现）：
 #:   di_presentation_files             = 4
-#:   objects_missing_layer             = 62   （82 个对象中缺至少一层）
+#:   objects_missing_layer             = 61   （对象中缺至少一层）
 #:   objects_presentation_without_domain = 17 （domain=0 且 presentation>0）
 #:   client_empty_directories          = 0
 RATCHET_CEILINGS = {
     "di_presentation_files": 4,
-    "objects_missing_layer": 62,
+    "objects_missing_layer": 61,
     "objects_presentation_without_domain": 17,
     "client_empty_directories": 0,
 }

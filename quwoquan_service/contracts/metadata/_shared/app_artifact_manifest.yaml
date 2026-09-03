@@ -80,7 +80,7 @@ distribution_classes:
     build_modes: [debug, profile, release]
     platforms: [android, ios]
     launch_provenances:
-      [canonical_launcher, workspace_flutter_run, workspace_ide_debug, hot_restart, icon_cold_launch]
+      [canonical_launcher, workspace_ide_debug, hot_restart, icon_cold_launch]
     promotable: false
   simulator:
     description: Simulator/Emulator 安装制品；Flutter iOS simulator 只支持 Debug，iOS AOT Release 必须编译 iphoneos 制品且不能用 simulator 冒充。
@@ -90,14 +90,14 @@ distribution_classes:
       ios: [debug]
     platforms: [android, ios]
     launch_provenances:
-      [canonical_launcher, workspace_flutter_run, workspace_ide_debug, release_package, icon_cold_launch]
+      [canonical_launcher, workspace_ide_debug, release_package, icon_cold_launch]
     promotable: false
   registered_device:
     description: 登记设备 Development/Ad Hoc 分发。
     build_modes: [debug, profile, release]
     platforms: [android, ios]
     launch_provenances:
-      [canonical_launcher, workspace_flutter_run, workspace_ide_debug, release_package, icon_cold_launch]
+      [canonical_launcher, workspace_ide_debug, release_package, icon_cold_launch]
     promotable: false
   store:
     description: Apple App Store/TestFlight 与登记 Android 应用市场。
@@ -153,9 +153,11 @@ application_identity:
     release: ""
 
 # launch provenance 枚举：只记录启动来源，任何消费方不得据此改变业务行为。
+# workspace_flutter_run（工作区 facade 接管）与 native_flutter_run（原生字面
+# flutter run 的 Debug 开发面）均已退役；受管字面 flutter run 经 launcher
+# dispatcher 归一化进入 canonical launcher，以 canonical_launcher 记录。
 launch_provenances:
   - canonical_launcher
-  - workspace_flutter_run
   - workspace_ide_debug
   - release_package
   - hot_restart

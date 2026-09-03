@@ -4,8 +4,8 @@
 固定 rubric 评分写回）。本模块把 2026 LLM-as-judge 业界纪律固化为可校验的门，
 确保软轨判官可信，不靠口头"看起来不错"：
 
-- 判官元数据 pin：modelId + promptHash + temperature 作为 eval 合约一部分，可复算可审计。
-- 判官与生成模型不同族（self-preference 偏差 5–15% → 禁止同族自评）。
+- 判官元数据 pin：modelId + modelFamily + promptHash + temperature 作为 eval 合约一部分，可复算可审计；模型族只记录真实调用，不作准出硬门。
+- 作者自评由独立宿主 session/actor/runId 契约禁止。
 - 二元 verdict（pass/fail）+ reason-before-score（rationale 必填，留审计轨迹）。
 - 偏差缓解声明：position（双序）+ verbosity（控长度）。
 - jury-of-judges：高风险维度需 >= JURY_MIN 个判官多数表决。
@@ -90,12 +90,10 @@ def cohen_kappa(judge: Sequence[Any], human: Sequence[Any]) -> float:
 def review_rigor_issues(
     review: Mapping[str, Any],
     *,
-    generation_model_family: str | None = None,
     require_jury: bool = False,
 ) -> list[str]:
     """校验一份 rubric_review.json 是否满足 LLM-as-judge 严格性纪律。
 
-    generation_model_family：生成正文所用模型族（用于强制 judge ≠ generator 防自评偏差）。
     require_jury：高风险场景要求 >= JURY_MIN 判官多数表决。
     """
     issues: list[str] = []
@@ -107,33 +105,22 @@ def review_rigor_issues(
         judges = [judge] if isinstance(judge, Mapping) else []
     judges = [j for j in judges if isinstance(j, Mapping)]
     if not judges:
-        issues.append("judgeMetadata: missing judge block(s) (modelId/promptHash/temperature required)")
+        issues.append("judgeMetadata: missing judge block(s) (modelId/modelFamily/promptHash/temperature required)")
     for idx, j in enumerate(judges):
-        for field in ("modelId", "promptHash", "temperature"):
+        for field in ("modelId", "modelFamily", "promptHash", "temperature"):
             if j.get(field) in (None, ""):
                 issues.append(f"judgeMetadata[{idx}]: `{field}` required (eval contract must be pinnable)")
 
-    # 2) judge ≠ generator 模型族（self-preference 偏差）
-    gen_family = generation_model_family or review.get("generationModelFamily")
-    if gen_family:
-        for idx, j in enumerate(judges):
-            fam = str(j.get("modelFamily") or "").strip()
-            if fam and fam == str(gen_family).strip():
-                issues.append(
-                    f"judgeFamily[{idx}]: judge family `{fam}` == generation family "
-                    "(self-preference bias; use a different model family to judge)"
-                )
-
-    # 3) jury-of-judges
+    # 2) jury-of-judges
     if require_jury and len(judges) < JURY_MIN:
         issues.append(f"jury: high-stakes review needs >= {JURY_MIN} judges, got {len(judges)}")
 
-    # 4) decision 合法
+    # 3) decision 合法
     decision = review.get("decision")
     if decision not in ALLOWED_DECISIONS:
         issues.append(f"decision: invalid {decision!r}; allowed={sorted(ALLOWED_DECISIONS)}")
 
-    # 5) 维度：二元 verdict + reason-before-score（rationale 必填）
+    # 4) 维度：二元 verdict + reason-before-score（rationale 必填）
     dims = review.get("dimensions") or []
     if not dims:
         issues.append("dimensions: at least one rubric dimension required")
@@ -147,7 +134,7 @@ def review_rigor_issues(
         if not str(dim.get("rationale") or "").strip():
             issues.append(f"dimension[{name}]: rationale required (reason-before-score / critique-based)")
 
-    # 6) 偏差缓解声明（position 双序 + verbosity 控长度）
+    # 5) 偏差缓解声明（position 双序 + verbosity 控长度）
     bias = review.get("biasControls") or {}
     if not bias.get("positionSwapApplied"):
         issues.append("biasControls: positionSwapApplied must be true (mitigate position bias)")

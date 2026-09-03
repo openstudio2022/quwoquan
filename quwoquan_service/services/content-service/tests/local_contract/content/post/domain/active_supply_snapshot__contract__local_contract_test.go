@@ -14,6 +14,7 @@ func TestActiveSupplySnapshotRequiresReleaseBoundPlayableReadback(t *testing.T) 
 		Status:          "active",
 		ActiveReleaseID: "rel_pilot_002",
 		ManifestDigest:  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ReleaseClass:    "commercial",
 		ReadbackStatus:  "passed",
 		Posts:           3,
 		PlayableVideos:  1,
@@ -24,16 +25,26 @@ func TestActiveSupplySnapshotRequiresReleaseBoundPlayableReadback(t *testing.T) 
 	if !ready.ReleaseBoundReadbackReady() || !ready.ContentReady() || !ready.PlayableVideoReady() {
 		t.Fatalf("complete snapshot must satisfy every release-bound view: %+v", ready)
 	}
+	if ready.IsResearchRelease() {
+		t.Fatalf("commercial snapshot must not be research: %+v", ready)
+	}
+	research := ready
+	research.ReleaseClass = "research"
+	if !research.IsResearchRelease() {
+		t.Fatalf("research releaseClass must be authoritative: %+v", research)
+	}
 	if !(postports.ActiveSupplySnapshot{}).IsEmpty() {
 		t.Fatal("zero snapshot must be the sole no-active-release sentinel")
 	}
 
 	cases := map[string]func(*postports.ActiveSupplySnapshot){
-		"wrong owner":         func(value *postports.ActiveSupplySnapshot) { value.SourceOwner = "other" },
-		"invalid digest":      func(value *postports.ActiveSupplySnapshot) { value.ManifestDigest = "bad" },
-		"readback pending":    func(value *postports.ActiveSupplySnapshot) { value.ReadbackStatus = "pending" },
-		"zero posts":          func(value *postports.ActiveSupplySnapshot) { value.Posts = 0 },
-		"zero playable video": func(value *postports.ActiveSupplySnapshot) { value.PlayableVideos = 0 },
+		"wrong owner":           func(value *postports.ActiveSupplySnapshot) { value.SourceOwner = "other" },
+		"missing release class": func(value *postports.ActiveSupplySnapshot) { value.ReleaseClass = "" },
+		"unknown release class": func(value *postports.ActiveSupplySnapshot) { value.ReleaseClass = "preview" },
+		"invalid digest":        func(value *postports.ActiveSupplySnapshot) { value.ManifestDigest = "bad" },
+		"readback pending":      func(value *postports.ActiveSupplySnapshot) { value.ReadbackStatus = "pending" },
+		"zero posts":            func(value *postports.ActiveSupplySnapshot) { value.Posts = 0 },
+		"zero playable video":   func(value *postports.ActiveSupplySnapshot) { value.PlayableVideos = 0 },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {

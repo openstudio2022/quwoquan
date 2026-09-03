@@ -1,9 +1,0 @@
-schema: quwoquan_data.capacity_bootstrap_measurement_safety_policy
-policyId: capacity-bootstrap-measurement-safety
-authority: measurement_only
-workload:
-  scale: M100
-  objectCount: 100
-maxConcurrentWorkers: 1
-allowedSemanticSelectionIds:
-  - cursor_grok

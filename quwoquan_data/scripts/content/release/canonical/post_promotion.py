@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
 from pathlib import Path
+from collections.abc import Mapping
 
-from content.execution.workspace import execution_root, write_publish_ref
+from content.execution.workspace import execution_root
 from content.release.canonical.application import apply_object_transaction
 from content.release.canonical.canonical_inventory import (
     assert_canonical_image_unique,
@@ -117,57 +117,18 @@ def _assert_cross_publish_video_unique(
     )
 
 
-def _qualified_post_refs(execution_id: str) -> tuple[str, ...]:
-    from content.execution.closure.post_review import (
-        indexed_post_targets,
-        load_post_review_closure,
-    )
-
-    closure = load_post_review_closure(
-        execution_id,
-        expected_object_targets=indexed_post_targets(execution_id),
-        require_quota_milestone=False,
-    )
-    refs = tuple(
-        publish_ref.removeprefix("posts/")
-        for publish_ref in closure.qualified_publish_refs
-    )
-    if not refs:
-        raise ObjectTransactionError(
-            "post review closure has no qualified posts for canonical promotion"
-        )
-    return refs
-
-
 @canonical_publish_serialized
 def promote_post_object(
     execution_id: str,
     post_ref: str,
-    *,
-    pool_delivery_intent: Mapping[str, object],
-    qualified_refs: tuple[str, ...] | None = None,
 ) -> dict[str, str]:
-    """Atomically promote one reviewed post and return fenced result evidence.
-
-    资格判定按协议分家（DEC-027）：存量 campaign 路径默认走 review closure；
-    receipt 协议调用方以 receipt 链 + attestation 判定后显式传 qualified_refs。
-    两者共用同一事务核心，核心不感知协议。
-    """
+    """Atomically promote one explicitly selected, review-approved post."""
     root = execution_root(execution_id)
     normalized_ref = str(post_ref or "").strip().strip("/")
     if normalized_ref.startswith("posts/"):
         normalized_ref = normalized_ref.removeprefix("posts/")
     if len(normalized_ref.split("/")) < 4:
         raise ObjectTransactionError(f"post objectRef is invalid: {post_ref!r}")
-    qualified = (
-        {str(ref).strip().strip("/").removeprefix("posts/") for ref in qualified_refs}
-        if qualified_refs is not None
-        else set(_qualified_post_refs(execution_id))
-    )
-    if normalized_ref not in qualified:
-        raise ObjectTransactionError(
-            f"post is discarded by the post review closure: {normalized_ref}"
-        )
     post_root = root / "posts" / normalized_ref
     attestation_path = post_root / "5.review/attestation.json"
     if not attestation_path.is_file() or not (post_root / "manifest.json").is_file():
@@ -194,7 +155,6 @@ def promote_post_object(
         object_ref=normalized_ref,
         transaction_id=transaction_id,
         package_root=package_root,
-        pool_delivery_intent=pool_delivery_intent,
     )
     _assert_cross_publish_video_unique(
         package_root=package_root,
@@ -250,74 +210,5 @@ def promote_post_object(
     }
 
 
-def promote_execution_posts(execution_id: str) -> tuple[str, ...]:
-    from content.execution.closure.publish_outcome import (
-        is_hard_publish_failure,
-        publish_discard,
-        publish_issue_code,
-    )
 
-    refs = _qualified_post_refs(execution_id)
-    promoted: list[str] = []
-    failures: list[str] = []
-    intent_root = execution_root(execution_id) / "_shared/pool_delivery_intents"
-    intent_by_ref: dict[str, dict[str, object]] = {}
-    for path in sorted(intent_root.glob("*.json")):
-        payload = read_json(path)
-        if isinstance(payload, dict):
-            relative = str(payload.get("contentObjectDir") or "").removeprefix(
-                "posts/"
-            )
-            if relative:
-                if (
-                    relative in intent_by_ref
-                    and intent_by_ref[relative] != payload
-                ):
-                    raise ObjectTransactionError(
-                        "DATA.PUBLISH.TARGET_CONFLICT: duplicate pool delivery intent"
-                    )
-                intent_by_ref[relative] = payload
-    publish_discards: list[dict[str, object]] = []
-    for post_ref in refs:
-        try:
-            intent = intent_by_ref.get(post_ref)
-            if intent is None:
-                raise ObjectTransactionError(
-                    f"pool delivery intent is missing: {post_ref}"
-                )
-            promote_post_object(
-                execution_id,
-                post_ref,
-                pool_delivery_intent=intent,
-            )
-            promoted.append(post_ref)
-        except ObjectTransactionError as exc:
-            # Canonical existence is not success evidence.  promote_post_object
-            # only returns for an existing object when its complete Merkle root
-            # equals this execution's transaction package.  Any error here is
-            # therefore a non-promoted ref (including execution/source drift)
-            # and must never count toward quota or enter publish_ref.
-            if is_hard_publish_failure(exc):
-                raise
-            failures.append(f"{post_ref}: {exc}")
-            publish_discards.append(
-                publish_discard(post_ref, issue=publish_issue_code(exc))
-            )
-    if not promoted:
-        raise ObjectTransactionError(
-            "canonical post promotion finalized zero objects: "
-            + "; ".join(failures[:5])
-        )
-    write_publish_ref(
-        execution_id,
-        post_refs=promoted,
-        publish_discards=publish_discards,
-    )
-    return tuple(promoted)
-
-
-__all__ = [
-    "promote_execution_posts",
-    "promote_post_object",
-    "repair_applied_post_pool_record_drift",
-]
+__all__ = ["promote_post_object", "repair_applied_post_pool_record_drift"]

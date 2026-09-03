@@ -13,13 +13,13 @@
 ### In Scope
 
 - AppRoot/L1/L2/L3 的目录、规格、设计与验收规则。
-- 工作流技能（`explore/prd/design/dev/continue/plan-next/review/commit` 与自动触发的 `environment-ops/content-production/incident-inspection/distill`）的统一模板、上下文链与工作流间交接契约。
+- 宿主从 `.agents/skills/*/SKILL.md` metadata 发现的 Workflow Skill，其唯一 body、上下文链与工作流间交接契约。
 - Agent 主导的概念、产品、体验、方案、交付授权、实施、质量/UAT、集成 CI、制品、Alpha/Beta/Gamma、商用、Prod、渠道、outcome 与沉淀全链阶段，以及人类角色在每阶段的输入、升级、验收和准出责任。
 - 人类选择、授权、异常处置与事后检查的可理解交互；人类决定与技术 Review 分轨，Review 结果只作为证据。
 - 按 `(workflow, deliverable, profiles)` 派发角色评审的 review 机制与分级语义。
 - Cursor / Codex 两个 harness 的指令载体分配、渐进加载与上下文预算。
 - 动态特性上下文、总览、变更影响报告和机器门禁。
-- 本地优先持续集成、工作流同轨解析和全链治理 observe-only 准入的单轨编排与证据分层。
+- 本地优先持续集成和全链治理 observe-only 准入的单轨编排与证据分层。
 
 ### Out of Scope
 
@@ -39,7 +39,6 @@
 - [`objective-execution`](./objective-execution/spec.md)：Objective 与 Increment 通过 append-only TransitionEvent、deterministic reducer、authenticated authority readback 和 effect readback 可恢复推进；S4 准入直接消费 branch policy。
 - [`hotl-expansion-control`](./hotl-expansion-control/spec.md)：S6 只读评估固定 cohort 人工瓶颈、checkpoint delta、紧急控制 proof 与 capability admission；当前 fail-closed 为 manual/单写者且不授予 mutation。
 - [`local-continuous-integration`](./local-continuous-integration/spec.md)：按编辑、空闲、提交范围与推送范围调度 canonical checks，并以精确输入回执区分 `fast_green`、`scope_ready` 与 `release_ready`。
-- [`workflow-resolution`](./workflow-resolution/spec.md)：显式 Skill 与自然语言意图经同一 resolver 选择 canonical workflow，歧义、低置信或 owner manifest 漂移时 fail closed。
 - [`governance-pipeline-observe-only`](./governance-pipeline-observe-only/spec.md)：只读聚合全链独立证据并给出 observe-only 准入解释，任何终态都不授予生产、商用或 HOTL mutation。
 
 ## 5. 能力要求
@@ -54,8 +53,8 @@
 <a id="req-002"></a>
 ### REQ-002 命令与自然语言一致执行
 
-- 显式调用工作流技能与自然语言意图必须使用同一 `RESOLVE / PRE / DURING / POST / HANDOFF` 生命周期；两者只在 RESOLVE 输入方式上不同，产出同一 `(workflow, deliverable, scope)`。
-- PRE 由主会话按 owner manifest 明确目标、验收、证据层、OPEN 与风险，不自动派 Reviewer；DURING 不再要求把角色 checklist 复制进回复。
+- 自然语言与显式入口必须由宿主基于 `.agents/skills/*/SKILL.md` metadata 选择并加载同一 Skill body，进入同一 `PRE / DURING / POST / HANDOFF` 生命周期；不得由机器 boolean、route receipt 或中央 resolver 自证同轨。
+- Skill PRE 先确定 exact target，再生成内容寻址、不可变的 compact owner manifest exact ref，并据此明确验收、证据层、OPEN 与风险；PRE 不自动派 Reviewer，开发期 POST 默认零 Reviewer 只报告命名 evidence，Review 只在用户显式 `/review` 或准出（lane→`dev1.0` PR、handoff、release）时派发；DURING 不再要求把角色 checklist 复制进回复。
 - 普通单步闭环的 HANDOFF 只需产物、验证与未决项。只有跨会话未完成、多人并行、环境/发布、外部阻断、证据需要后继复用或用户显式要求交接时，才落 `.qwq_output/env/repo/runs/handoff/<轮次>/manifest.md`。
 - 持久交接中的未决项必须落到「最低可关闭节点 `OPEN-###`」「Out of Scope」「下一工作流承接」之一；下游消费时证据字节或来源漂移即复跑，不得转抄结论。
 - 教训沉淀由 `distill` 工作流（`.agents/skills/distill/SKILL.md`）承接：输入为交接单跨轮重复缺口、评审 finding 复发、用户同类纠正第二次，输出为带触发场景、根因层、建议落点、gate/check 绑定四字段的规则候选（无绑定候选不得标 MUST）。回写只走「提议 + 人确认 + prd/dev 正常工作流」，agent 不得绕过工作流直接修改规则资产。
@@ -68,9 +67,9 @@
 ### REQ-003 角色化评审与跨 harness 载体
 
 - context manifest、Review plan 与 typed terminal 的字段和恢复语义只由 `quwoquan_ops/policies/agent_governance_contract.yaml` 拥有；workflow/profile/evidence 的可变路由只由 Review registry 拥有。
-- profile 只拥有 specialist/evidence 路由，不拥有 Feature 事实；Feature 上下文由开发与 Review 共享的 owner resolver 直接指向 spec/design/contracts 锚点。
+- profile 只拥有 specialist/evidence 路由，不拥有 Feature 事实，也不进入 owner manifest；Feature 上下文由 Skill PRE 生成的 immutable manifest exact ref 直接指向 spec/design/contracts 锚点，Review POST 原样复用该 ref，并仅按 `changed_paths + deliverable` 派生 profile。
 - role 只定义职责与盲区；checklist 只放分级判定并引用 registry 的命名 evidence。功能、架构、页面和算法事实不得放在角色 reference 中。
-- 指令真相源只存在于 `AGENTS.md`、`.agents/skills/` 与 Feature Tree；Cursor/Codex 专属目录只允许命令薄壳与生成 adapter。
+- 指令真相源只存在于 `AGENTS.md`、`.agents/skills/` 与 Feature Tree；`.agents/skills` 是 Workflow 唯一 authoring source 与发现面，Cursor/Codex 专属目录只允许一行命令入口与生成的 Reviewer projection。
 - 常驻 AGENTS、默认 owner manifest 与单 Reviewer 上下文必须遵守 canonical contract、registry 和门禁绑定的预算，任一超限都阻断。
 
 <a id="req-004"></a>
@@ -102,11 +101,18 @@
 - 商用准备、生产 campaign、渠道公开和 outcome 接受必须分层裁定；上游通过不得冒充下游决定，硬门不得由 Limited Go、风险接受或多数意见绕过。
 
 <a id="req-007"></a>
-### REQ-007 本地反馈、工作流解析与治理准入保持单轨
+### REQ-007 本地反馈与治理准入保持单轨
 
 - Local CI 只规划和调度 canonical checks，readiness queue、exact-input cache 与 receipt 都是可删除投影，不得形成第二事实台账；本地 `scope_ready`/`release_ready` 只证明所绑定的源码与测试范围。
-- 显式 Skill 与自然语言输入必须进入同一 workflow resolver 和同一后继生命周期；歧义、低置信、owner manifest 缺失或漂移均 fail closed，真实 Cursor/Codex 双宿主发现未取证前保持 Story OPEN。
-- 治理流水线 admission 只消费各 owner 的 exact readback 并执行 observe-only 评估，不得从 Review、本地 readiness 或调用方自报推导 Human、Commercial、Prod、channel、outcome 或 HOTL authority；任一终态的 Prod/HOTL mutation 均为 `false`。
+- 治理流水线 admission 从 owner manifest immutable exact ref 开始，只消费各 owner 的 exact readback 并执行 observe-only 评估，不消费 workflow route evidence，也不得从 Review、本地 readiness 或调用方自报推导 Human、Commercial、Prod、channel、outcome 或 HOTL authority；任一终态的 Prod/HOTL mutation 均为 `false`。
+
+<a id="req-008"></a>
+### REQ-008 多车道并行交付准入
+
+- 日常开发的物理隔离单元是六条长期 lane 分支各自的专属 worktree；`dev1.0` worktree 只承担集成、验收与过渡期收敛。分支角色与 PR 边由 [`daily-merge-release-strategy` REQ-001/REQ-002](../deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#req-001) 拥有，写并发由 [`objective-execution` REQ-003](./objective-execution/spec.md#req-003) 拥有，worktree 授权与身份由 [`local-worktree-lifecycle-governance` REQ-001](../system-architecture-and-engineering-guide/local-worktree-lifecycle-governance/spec.md#req-001) 拥有，端云闭环证据由 [`three-layer-evidence` REQ-005](../runtime-test-pyramid/three-layer-evidence/spec.md#req-005) 拥有；本 REQ 只声明工作流准入语义，不复制其值。
+- 一个 Increment 只有一个 lead lane、一个 writer 与一个原子 PR；跨 owner 变更按 owner manifest 选定唯一 lead lane，不拆成多个并行 writer；`small-fix`/`refactor` lane 不降低影响面验证义务。简单只读问答不创建 Increment、lane 或 writer lease。
+- Skill 显式入口与自然语言入口按 `REQ-002` 同轨进入同一生命周期后，PRE 必须校验当前 worktree 与 lead lane 一致；不一致时在任何 mutation 前 fail-closed，恢复动作限定为切换到正确 worktree、整体转移 lead lane、收窄 Increment 三种，禁止跨 worktree 隐式写入。
+- 六条固定长期 lane 已由用户裁决立即开放，最多允许六个不同 lane writer 并发；启用后观察用于补齐真实证据，不作为渐进扩容或阻断当前准入的前置门。共享 host 资源（环境 cell、真机/模拟器、ContractGraph accept/codegen、可晋级 package、Docker prune）仍维持单 writer 租约与唯一 host coordination root；lane worktree 不得直接写共享 Alpha/Beta/Gamma，环境操作一律经 environment-ops 工作流进入。
 
 ## 6. 契约与依赖
 
@@ -151,12 +157,20 @@
 - AND 历史知识资产迁移闭包只能由 tracked machine-readable fixture 从冻结 Git source object 重算；行数、source bytes、clause identity/digest、唯一 disposition、当前 target/anchor、terminal status 或 dangling reference 任一漂移均被结构门禁判否。
 
 <a id="sit-005"></a>
-### SIT-005 本地 CI、workflow resolver 与治理准入共用唯一门禁链
+### SIT-005 Local CI 与治理准入共用治理门禁链
 
-- GIVEN Local CI、workflow resolver 与治理 admission 的 canonical contracts、focused local contracts 和各自外部 OPEN。
-- WHEN 执行三个公开 focused verify target、特性树门禁与仓库门禁链。
-- THEN Local CI 只调度 canonical checks，workflow 显式/自然输入保持同轨且歧义 fail closed，admission 只返回保守 observe-only 评估并保持 Prod/HOTL mutation false。
-- AND 本地 PASS 只证明当前 contract、实现与 fixture 自洽，不关闭真实双宿主、外部身份、六角色 calibration、activation、环境、生产、渠道或 outcome 证据。
+- GIVEN Local CI 与治理 admission 的 canonical contracts、focused local contracts 和各自外部 OPEN。
+- WHEN 执行两者公开 focused verify target、特性树门禁与仓库治理门禁链。
+- THEN Local CI 只调度 canonical checks，admission 从 owner manifest immutable exact ref 开始返回保守 observe-only 评估并保持 Prod/HOTL mutation false。
+- AND 本地 PASS 只证明当前 contract、实现与 fixture 自洽，不关闭外部身份、六角色 calibration、activation、环境、生产、渠道或 outcome 证据。
+
+<a id="sit-006"></a>
+### SIT-006 多车道 lead lane 与双入口准入
+
+- GIVEN 六条 lane 分支与 `dev1.0` 各自的专属 worktree，以及一个已确定 lead lane 的 Increment。
+- WHEN 会话经 Skill 显式入口或自然语言进入工作流并请求 mutation，或第二个会话在同一 lane worktree 上并行工作。
+- THEN 当前 worktree 与 lead lane 一致时才允许 mutation；不一致时在任何 mutation 前 fail-closed，并给出切换 worktree、转移 lead lane、收窄 Increment 三种恢复动作；同一 lane 内的并行会话按根 `AGENTS.md` 共享工作树条款合作（检查活跃 writer、只编辑本任务字节），不由 hook 或 claim 文件互斥，冲突在 lane→`dev1.0` PR 准出时由 Delivery Gate 暴露。
+- AND 两种入口在同一 lane 上进入同一生命周期并承担等价证据义务，不存在按入口差异化的旁路或降档。
 
 ## 8. 开放事项
 
@@ -179,3 +193,13 @@
 - 影响或价值：尚缺可执行 gate/check 与直接测试 `spec_ref`——协议语义已冻结为 `REQ-004`（scope-green + foreign-red 登记、部分暂存、scope 内 pathspec、ContractGraph 静止窗口），但语义只靠自觉时，并行脏树互锁仍可能逼出 `--no-verify`（出处：调研转录 `0c4c608c-7219-47c2-bcda-5c66dcf93294`）。
 - 完成判定：`SIT-003` 的合入子句（`.t2`）由真实 gate/check 覆盖——`REQ-004` 的合法合入态有可执行校验（如提交前 scope-green 自动判定、交接单 foreign-red 登记联动检查），ContractGraph 静止窗口约定有门禁化表达，且对应测试带 `spec_ref` 绑定。
 - 依赖：commit gate、handoff manifest 与 ContractGraph 静止窗口门禁。
+
+<a id="open-006"></a>
+### OPEN-006 多车道准出 gate 与双入口证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：六条 lane 已立即开放；同 lane 并行会话不再由 hook/claim 互斥（该机制在实践中自锁、误导执行体绕道整仓 clone，已拆除），改为根 `AGENTS.md` 合作条款 + 准出时暴露冲突。lane PR ready 与 exact merge candidate 两级准出 gate 仍未实现，Skill 显式入口与自然语言入口在同一 canonical Skill 生命周期上的真实等价证据也未产生。启用后观察不阻断六车道。
+- 完成判定：lane PR ready / exact merge candidate gate 闭合并覆盖 `SIT-006.t1`、`SIT-006.t2` 的 lead lane 一致性子句，且 `SIT-006.t3` 由至少一次 Skill 显式入口和一次自然语言入口在不同 lane 上完成等价 PRE、PR、evidence 与 retained-worktree resync readback 后删除。
+- 依赖：[`daily-merge-release-strategy` OPEN-003](../deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#open-003)、[`objective-execution` OPEN-002](./objective-execution/spec.md#open-002)、[`three-layer-evidence` OPEN-002](../runtime-test-pyramid/three-layer-evidence/spec.md#open-002)。

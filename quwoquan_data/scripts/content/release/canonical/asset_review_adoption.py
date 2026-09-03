@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -21,15 +19,7 @@ from content.source.independent_asset_review_contract import (
     file_digest,
 )
 from core.io import read_json
-from core.schema import assert_valid
 from core.source_digest import content_source_revision
-
-
-def _canonical_payload_digest(value: Mapping[str, Any]) -> str:
-    encoded = json.dumps(
-        dict(value), ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
 
 
 def _output_root(execution_root: Path) -> Path:
@@ -42,51 +32,32 @@ def _output_root(execution_root: Path) -> Path:
 
 
 def _execution_source_identity(
-    execution_root: Path,
-    manifest: Mapping[str, Any],
-    *,
-    source_digest: str,
+    source_identity: Mapping[str, Any],
 ) -> tuple[str, str, str]:
-    manifest_source = manifest.get("sourceDigest")
-    manifest_source = manifest_source if isinstance(manifest_source, Mapping) else {}
-    if manifest_source.get("digest") != source_digest:
-        raise ObjectTransactionError("professional asset execution sourceDigest drift")
-    target_ref = str(manifest.get("targetSetRef") or "").strip()
-    if target_ref != "0.plan/target_set.json":
-        raise ObjectTransactionError("professional asset requires canonical targetSetRef")
-    target_path = execution_root / target_ref
-    target = read_json(target_path)
-    if not isinstance(target, dict):
-        raise ObjectTransactionError("professional asset target set must be an object")
+    required = ("sourceRevision", "sourceDigest", "entityCatalogDigest")
+    values = tuple(str(source_identity.get(field) or "").strip() for field in required)
     try:
-        assert_valid(
-            target,
-            "execution",
-            "target_set",
-            label="professional asset target set",
-        )
-    except (FileNotFoundError, TypeError, ValueError) as exc:
-        raise ObjectTransactionError(str(exc)) from exc
-    if (
-        target.get("executionId") != manifest.get("executionId")
-        or _canonical_payload_digest(target) != manifest.get("targetSetDigest")
-    ):
-        raise ObjectTransactionError("professional asset target-set identity drift")
-    entity_catalog_digest = str(target.get("entityCatalogDigest") or "").strip()
-    try:
-        source_revision = content_source_revision(
-            source_digest=source_digest,
-            entity_catalog_digest=entity_catalog_digest,
+        expected_revision = content_source_revision(
+            source_digest=values[1],
+            entity_catalog_digest=values[2],
         )
     except ValueError as exc:
         raise ObjectTransactionError(str(exc)) from exc
-    return source_revision, source_digest, entity_catalog_digest
+    if expected_revision != values[0]:
+        raise ObjectTransactionError(
+            "professional asset execution source identity drift"
+        )
+    return values
 
 
 def _one_value(values: Sequence[object], *, label: str) -> str:
-    normalized = {str(value or "").strip() for value in values if str(value or "").strip()}
+    normalized = {
+        str(value or "").strip() for value in values if str(value or "").strip()
+    }
     if len(normalized) != 1:
-        raise ObjectTransactionError(f"professional asset {label} is missing or ambiguous")
+        raise ObjectTransactionError(
+            f"professional asset {label} is missing or ambiguous"
+        )
     return next(iter(normalized))
 
 
@@ -122,7 +93,9 @@ def _professional_identity(
         or ".." in relative.parts
         or (asset_kind == "video" and len(relative.parts) != 2)
     ):
-        raise ObjectTransactionError("professional asset acquisitionReceiptRef is non-canonical")
+        raise ObjectTransactionError(
+            "professional asset acquisitionReceiptRef is non-canonical"
+        )
     if not content_sha256.startswith("sha256:") or len(content_sha256) != 71:
         raise ObjectTransactionError("professional asset contentSha256 is invalid")
     return receipt_ref, asset_id, content_sha256
@@ -176,9 +149,8 @@ def adopt_independent_asset_review(
     content_sha256: str,
     object_ref: str,
     execution_root: Path,
-    execution_manifest: Mapping[str, Any],
+    source_identity: Mapping[str, Any],
     object_root: Path,
-    source_digest: str,
 ) -> dict[str, Any] | None:
     """Bind one exact execution receipt without copying it into publish content."""
 
@@ -191,7 +163,9 @@ def adopt_independent_asset_review(
         # 派生自这份采集 CAS 内容；否则按字节漂移拒绝。video 的 transcode 同理豁免。
         declared = str(raw_asset.get("professionalContentSha256") or "").strip()
         if declared != acquired_sha256:
-            raise ObjectTransactionError("professional asset bytes drift from acquisition CAS")
+            raise ObjectTransactionError(
+                "professional asset bytes drift from acquisition CAS"
+            )
     output_root = _output_root(execution_root)
     acquisition_root_ref = "data/local/workspace/source-acquisition"
     expected_acquisition_ref = (
@@ -199,16 +173,15 @@ def adopt_independent_asset_review(
         if asset_kind == "video"
         else f"{acquisition_root_ref}/{receipt_ref}"
     )
-    expected_source_identity = _execution_source_identity(
-        execution_root,
-        execution_manifest,
-        source_digest=source_digest,
-    )
+    expected_source_identity = _execution_source_identity(source_identity)
+    source_digest = expected_source_identity[1]
     review_root = execution_root / "evidence/asset_reviews/receipts"
     candidates: list[Path] = []
     for path in sorted(review_root.glob("*.json")) if review_root.is_dir() else ():
         payload = read_json(path)
-        snapshot = payload.get("assetSnapshot") if isinstance(payload, Mapping) else None
+        snapshot = (
+            payload.get("assetSnapshot") if isinstance(payload, Mapping) else None
+        )
         if (
             isinstance(snapshot, Mapping)
             and payload.get("assetKind") == asset_kind
@@ -243,7 +216,9 @@ def adopt_independent_asset_review(
         str(receipt["entityCatalogDigest"]),
     )
     if actual_source_identity != expected_source_identity:
-        raise ObjectTransactionError("professional asset independent review source identity drift")
+        raise ObjectTransactionError(
+            "professional asset independent review source identity drift"
+        )
     if asset_kind == "video":
         professional_sources = [
             row
@@ -337,7 +312,9 @@ def validate_frozen_asset_review_binding(
         receipt_file_sha256=file_digest(receipt_path),
     )
     if dict(raw_binding) != expected:
-        raise ObjectTransactionError(f"{object_ref}: independent asset review binding drift")
+        raise ObjectTransactionError(
+            f"{object_ref}: independent asset review binding drift"
+        )
     if (
         acquisition_ref != expected["acquisitionReceiptRef"]
         or expected["objectRef"] != object_ref
@@ -348,7 +325,9 @@ def validate_frozen_asset_review_binding(
             entity_catalog_digest=expected["entityCatalogDigest"],
         )
     ):
-        raise ObjectTransactionError(f"{object_ref}: independent asset review identity drift")
+        raise ObjectTransactionError(
+            f"{object_ref}: independent asset review identity drift"
+        )
     return expected
 
 

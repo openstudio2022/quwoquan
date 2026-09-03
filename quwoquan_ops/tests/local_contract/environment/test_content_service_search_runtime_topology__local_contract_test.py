@@ -19,7 +19,7 @@ CONTENT_ENVIRONMENT_ARTIFACT = (
 
 
 class ContentServiceSearchRuntimeTopologyTest(unittest.TestCase):
-    def test_environment_search_dependency_is_selected_only_for_es_workloads(self) -> None:
+    def test_content_release_selects_search_dependency_without_product_ops_overlay(self) -> None:
         for environment in ("alpha", "beta", "gamma"):
             with self.subTest(environment=environment), tempfile.TemporaryDirectory() as temporary:
                 candidate = Path(temporary) / "candidate"
@@ -52,6 +52,10 @@ class ContentServiceSearchRuntimeTopologyTest(unittest.TestCase):
                 )
                 self.assertNotIn(
                     CONTENT_ENVIRONMENT_ARTIFACT,
+                    selected["content-release"],
+                )
+                self.assertIn(
+                    "runtime-topology/dependencies/search/elasticsearch.compose.yaml",
                     selected["content-release"],
                 )
 

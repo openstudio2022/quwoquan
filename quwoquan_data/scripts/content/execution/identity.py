@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
-from core.control_types import ContentType, ExecutionPhase, SelectionPolicy
+from core.control_types import ContentType, ExecutionPhase
 
 
 _EXECUTION_ID_RE = re.compile(

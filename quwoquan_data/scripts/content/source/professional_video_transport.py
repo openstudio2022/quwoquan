@@ -9,8 +9,6 @@ import urllib.request
 from pathlib import Path
 
 from core.content_library import link_from_library
-from core.runtime_policy import active_runtime_policy
-
 from content.source.professional_image_network_admission import (
     https_tls_peer,
     resolve_https_admission,
@@ -18,6 +16,9 @@ from content.source.professional_image_network_admission import (
 )
 
 _MAX_VIDEO_BYTES = 512 * 1024 * 1024
+_SOURCE_VIDEO_READ_TIMEOUT_SECONDS = 180
+_DOWNLOAD_FETCH_RETRY_LIMIT = 1
+_RETRY_DELAY_SECONDS = 1
 _MIN_VIDEO_BYTES = 8_000
 _VIDEO_EXTENSIONS = frozenset({".mp4", ".webm", ".ogv", ".mov"})
 _CONTENT_TYPE_EXTENSIONS = {
@@ -144,7 +145,7 @@ def _fetch_public_video_once(
         normalized,
         headers={"User-Agent": "quwoquan-data/1.0"},
     )
-    timeout = active_runtime_policy().source_video_read_timeout_seconds
+    timeout = _SOURCE_VIDEO_READ_TIMEOUT_SECONDS
     destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         with opener.open(request, timeout=timeout) as response:
@@ -199,8 +200,7 @@ def fetch_public_video(
     supported_api: bool,
 ) -> str:
     """Retry transient anonymous fetches within the governed download budget."""
-    policy = active_runtime_policy()
-    attempts = policy.download_fetch_retry_limit + 1
+    attempts = _DOWNLOAD_FETCH_RETRY_LIMIT + 1
     for attempt in range(1, attempts + 1):
         try:
             return _fetch_public_video_once(
@@ -211,15 +211,20 @@ def fetch_public_video(
         except (OSError, TimeoutError, urllib.error.URLError):
             if attempt >= attempts:
                 raise
-            time.sleep(policy.curl_retry_delay_seconds * attempt)
+            time.sleep(_RETRY_DELAY_SECONDS * attempt)
     raise RuntimeError("professional video acquisition retry loop exhausted")
 
 
 def copy_manual_video(relative_ref: str, destination: Path, *, manual_root: Path) -> str:
     relative = Path(str(relative_ref or "").strip())
-    if not str(relative) or relative.is_absolute():
-        raise ValueError("manualFile must be a non-empty relative path")
+    if not str(relative) or relative.is_absolute() or ".." in relative.parts:
+        raise ValueError("manualFile must be a safe non-empty relative path")
     root = manual_root.resolve()
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError("manualFile must not traverse a symlink")
     source = (root / relative).resolve()
     if source != root and root not in source.parents:
         raise ValueError("manualFile escapes the declared manual root")

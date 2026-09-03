@@ -1,7 +1,7 @@
 """stackctl verify 域 profile 命令表（对象级环境验证命令工厂）。
 
 从 stackctl.py 逐字迁出 12 个 profile 命令工厂：五域 generated typed
-Remote、ReliableTask、onboarding/AuthorImpact、search、assistant learning、
+Remote、onboarding/AuthorImpact、search、assistant learning、
 ProfileUpdateProposal 的 Gamma API integration 绑定；举报回流、媒体发布、
 群聊生命周期三条对象级旅程 probe；release 阶段的媒体预检
 （`_target_media_preflight_profile_command`）、环境页面 smoke / Patrol
@@ -72,45 +72,6 @@ def _app_domain_remote_api_integration_profile_command(
         "cwd": _stackctl.ROOT,
         "stopOnFailure": True,
         "reportPath": _stackctl.relpath(evidence_root / "report.json"),
-    }
-
-
-def _reliabletask_gamma_api_integration_profile_command(
-    target_name: str,
-    profile: VerificationProfile,
-    report_dir: Path | None,
-) -> dict[str, Any] | None:
-    """Bind the real Gamma Mongo/Redis ReliableTask suite to release verification."""
-    import quwoquan_ops.cli.stackctl as _stackctl
-
-    if (
-        target_name != "gamma-local"
-        or profile is not VerificationProfile.RELEASE
-    ):
-        return None
-
-    evidence_root = (
-        report_dir / "reliabletask-gamma-api-integration"
-        if report_dir is not None
-        else _stackctl.env_runs_root("gamma")
-        / "reliabletask-gamma-api-integration"
-        / target_name
-    )
-    report_path = evidence_root / "reliabletask_api_integration_report.json"
-    return {
-        "name": "gamma-local-reliabletask-api-integration",
-        "argv": [
-            "bash",
-            "quwoquan_ops/cli/gamma/run_reliabletask_gamma_api_integration.sh",
-            "--reuse-stack",
-        ],
-        "cwd": _stackctl.ROOT,
-        "env": {
-            "QWQ_RUN_ROOT": str(evidence_root),
-            "GAMMA_RELIABLETASK_API_INTEGRATION_REPORT": str(report_path),
-        },
-        "stopOnFailure": True,
-        "reportPath": _stackctl.relpath(report_path),
     }
 
 

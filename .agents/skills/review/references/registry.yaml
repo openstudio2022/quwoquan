@@ -9,6 +9,7 @@ limits:
   max_parallel: 2
   max_role_invocations: 4
   per_role_timeout_minutes: 10
+  max_evidence_timeout_seconds: 3600
   reviewer_context_bytes: 24576
 
 evidence:
@@ -16,16 +17,19 @@ evidence:
     command: make verify-feature-tree
     segment: POST
     required: true
+    timeout_seconds: 300
     covers: []
   agent-context-budget:
     command: make verify-agent-context-budget
     segment: POST
     required: true
+    timeout_seconds: 300
     covers: []
   app-pageflip-back-mainline:
     command: make verify-app-pageflip-back-mainline
     segment: POST
     required: true
+    timeout_seconds: 300
     covers:
       - pageflip-backward-static
       - pageflip-backward-tests
@@ -33,46 +37,61 @@ evidence:
     command: make verify-app-page-object-contract
     segment: POST
     required: true
+    timeout_seconds: 300
     covers: []
   app-mock-isolation:
     command: make verify-app-mock-isolation
     segment: POST
     required: true
+    timeout_seconds: 300
     covers: []
   service-object-evidence:
     command: make verify-object-evidence-closure
     segment: POST
     required: true
+    timeout_seconds: 300
     covers: []
   python-script-governance:
     command: make verify-python-script-governance
     segment: POST
     required: true
+    timeout_seconds: 300
     covers: []
   recommendation-event-contract:
     command: make verify-behavior-event-type-contract
     segment: POST
     required: true
+    timeout_seconds: 300
     covers: []
   data-static-contract:
-    command: python3 -B quwoquan_data/scripts/cli.py verify all
+    command: |-
+      isolated_output_root="$(mktemp -d "${TMPDIR:-/tmp}/qwq-data-static-contract.XXXXXX")" || exit $?
+      cleanup_data_static_contract_output() {
+        rm -rf -- "$isolated_output_root"
+      }
+      trap cleanup_data_static_contract_output EXIT
+      QWQ_OUTPUT_ROOT="$isolated_output_root" python3 -B quwoquan_data/scripts/cli.py verify all
     segment: POST
     required: true
+    timeout_seconds: 900
     covers: []
   content-publish-purity:
     command: python3 -B quwoquan_data/scripts/cli.py verify publish-purity
     segment: POST
     required: true
+    timeout_seconds: 300
     covers: []
   environment-release-evidence:
     command: make verify-environment-stability-final-acceptance
     segment: POST
     required: true
+    timeout_seconds: 900
     covers: []
   observability-catalog:
     command: make verify-observability-catalog
     segment: POST
     required: true
+    timeout_seconds: 300
     covers: []
 
 # profile 顺序是同优先级的稳定 tie-break；priority 越大越优先。只有被选中的
@@ -144,7 +163,6 @@ profiles:
       - .github/workflows/**
       - .agents/skills/review/**
       - quwoquan_ops/**/*local_readiness*
-      - quwoquan_ops/**/*workflow_resolution*
       - quwoquan_ops/**/*hosted_authority*
       - quwoquan_ops/**/*objective_execution*
       - quwoquan_ops/**/*governance_pipeline*

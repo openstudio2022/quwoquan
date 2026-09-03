@@ -133,7 +133,7 @@ def _entry_carrier_cells() -> list[dict[str, str]]:
             "carrier": carrier,
             "applicability": "required",
             "specRef": "specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-006",
-            "runnerClass": f"qwq_app.content_uat.{entry}.{carrier}.v1",
+            "runnerClass": f"qwq.content_consumer.{entry}.{carrier}.v1",
         }
         for entry in ENTRIES
         for carrier in CARRIERS
@@ -260,10 +260,24 @@ def test_uat_plan__projects_canonical_samples_and_required_cells__local_contract
     assert plan["orderedSamples"][0] == _samples()[0]
     assert len(plan["requiredCasePlan"]) == 16
     assert plan["requiredCasePlan"][0]["runnerClass"] == (
-        "qwq_app.content_uat.feed.homepage.v1"
+        "qwq.content_consumer.feed.homepage.v1"
     )
     assert len(plan["searchCanaries"]) == 4
     assert plan["videoPagination"]["expectedWorkIds"] == [
+        f"video-{index:03d}" for index in range(1, 11)
+    ]
+    assert plan["mediaChecks"]["homepageRecommendation"]["expectedPostIds"] == [
+        *[f"article-{index:03d}" for index in range(1, 101)],
+        *[f"image-{index:03d}" for index in range(1, 101)],
+        *[f"video-{index:03d}" for index in range(1, 11)],
+    ]
+    assert plan["mediaChecks"]["typedVideo"]["expectedPostIds"] == [
+        f"video-{index:03d}" for index in range(1, 11)
+    ]
+    # Legacy fixture has no premium_stream row; plan preserves the old typed-video
+    # fallback only for that historical shape. Current readiness carries an exact
+    # premium_stream row and strict Research tests exercise it directly.
+    assert plan["mediaChecks"]["premiumVideo"]["expectedPostIds"] == [
         f"video-{index:03d}" for index in range(1, 11)
     ]
     assert "stratifiedSamples" not in plan
@@ -338,3 +352,28 @@ def test_load_release_uat_sample_plan__uses_header_ref_and_exact_bytes__local_co
             release_root=tmp_path,
             release_header=_header(digest),
         )
+
+
+
+def test_uat_plan__research_feed_projection_rejects_missing_or_nonrelease_ids__local_contract() -> None:
+    readiness = _readiness()
+    readiness["feedQueries"].append(
+        {
+            "name": "premium_stream",
+            "query": "sort=recommend&channelId=premium_stream&limit=10",
+            "matchedPostIds": ["video-001"],
+        }
+    )
+    plan = _build(readiness=readiness)
+    assert plan["mediaChecks"]["premiumVideo"]["expectedPostIds"] == ["video-001"]
+
+    drifted = _readiness()
+    drifted["feedQueries"].append(
+        {
+            "name": "premium_stream",
+            "query": "sort=recommend&channelId=premium_stream&limit=10",
+            "matchedPostIds": ["other-release-video"],
+        }
+    )
+    with pytest.raises(ValueError, match="not release-bound"):
+        _build(readiness=drifted)

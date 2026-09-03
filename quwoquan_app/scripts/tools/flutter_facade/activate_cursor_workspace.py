@@ -1,29 +1,38 @@
 #!/usr/bin/env python3
-"""工作区 flutter facade 的受版本控制激活入口。
+"""工作区终端注入的受版本控制具名激活入口（纯 PATH 注入）。
 
-把 facade 的 PATH、本机真实 `FLUTTER_ROOT`、受控 ZDOTDIR bridge 与 Dart-Code
-PATH 策略合并进本机 `.vscode/settings.json`（gitignore 的本地投影）。Cursor 从
-Dock 启动时进程 PATH 通常不含 Flutter；激活时把真实 SDK 钉进终端 env，使新开
-集成终端 / automation 终端不依赖用户是否已 source `~/.zshrc`。同一个 zsh 仍先
-代理用户 startup files，再把 facade 放回 PATH 首位，字面 `flutter run` 归一化进
-canonical launcher；仓库外终端与系统 Flutter 不受影响。
+契约（specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#req-003、
+specs/feature-tree/runtime/runtime-config/design.md#dec-003）：
 
-- 激活：python3 quwoquan_app/scripts/tools/flutter_facade/activate_cursor_workspace.py
-- 回退：同命令加 `--deactivate`，随后重载编辑器窗口即回到真实 SDK 直连。
-- 本地投影可随时删除；凭本脚本可完全重建，符合「激活面可凭受版本控制
-  真相源重建」的规格要求（environment-topology-and-packaging REQ-003）。
-
-合并策略是标记块文本级增删：保留用户注释与既有配置；发现非本工具管理的
-`dart.addSdkToTerminalPath` 或 `terminal.integrated.env.osx` 时拒绝静默覆盖。
+- 只做两类可逆注入：
+  1. cursor scope：`.vscode/settings.json` 的 `terminal.integrated.env.osx`
+     受管块（对所有 terminal profiles 生效），内容仅为受管 PATH bin 目录前置
+     与钉定的 Flutter SDK / CocoaPods / Python 身份变量；另投影受控 IDE
+     Run/Debug 的 tasks/launch 文件（`workspace_ide_debug` 薄包装）。
+  2. user-zsh scope（显式 opt-in，`--scope user-zsh`）：在 `~/.config/quwoquan`
+     写受管投影并在用户 zshrc 维护可识别 managed source block，source 仓库内
+     `user_zsh_projection.zsh`。
+- 受管 PATH 前置目录固定为（按序）：`quwoquan_app/scripts/tools/launcher/bin`
+  （全局 `run.sh` wrapper 与字面 `flutter` dispatcher）、钉定真实 Flutter SDK
+  bin、钉定 CocoaPods bin、钉定 Python bin。字面 `flutter run` 因此进入
+  canonical launcher，其余 flutter 子命令由 dispatcher exact 透传真实 SDK。
+- 除 launcher bin 内的 `flutter` dispatcher 外无第二个 shim；不改 ZDOTDIR、
+  不生成 terminal receipt；terminal carrier receipt 与 `workspace_flutter_run`
+  provenance 已整体退役。
+- 可回退：`--deactivate` 移除全部注入并逐字恢复用户文件；`--status` 如实区分
+  未激活 / 已激活 / 漂移。受管块以标记行界定 ownership：activate 对块内漂移
+  直接以当前解析结果修复（refreshed），块外出现受管键则拒绝写入。
 """
 
 from __future__ import annotations
 
-import argparse
+import hashlib
+import importlib
 import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -32,78 +41,62 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+_SCRIPTS_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "scripts" and (parent / "_common" / "paths.py").is_file()
+)
+if str(_SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_ROOT))
+from _common.paths import REPO_ROOT  # noqa: E402
 
-from quwoquan_app.scripts.tools.flutter_facade import (
-    cursor_terminal_surface_state as _terminal_surface_state,
-)
-from quwoquan_app.scripts.tools.flutter_facade import (
-    cursor_workspace_projection_io as _workspace_projection_io,
-)
+APP_ROOT = _SCRIPTS_ROOT.parent
 DEFAULT_SETTINGS_PATH = REPO_ROOT / ".vscode/settings.json"
-DEFAULT_TASKS_PATH = REPO_ROOT / ".vscode/tasks.json"
-DEFAULT_LAUNCH_PATH = REPO_ROOT / ".vscode/launch.json"
 GENERATED_APP_LAUNCH_CONTRACT_PATH = (
     REPO_ROOT
     / "quwoquan_app/tool/app_launch_contract_codegen/app_launch_contract.generated.json"
 )
+
 BEGIN_MARKER = "// qwq-flutter-facade-begin"
 END_MARKER = "// qwq-flutter-facade-end"
 MANAGED_DART_KEY = "dart.addSdkToTerminalPath"
 MANAGED_ENV_KEY = "terminal.integrated.env.osx"
-MANAGED_PROFILES_KEY = "terminal.integrated.profiles.osx"
-MANAGED_DEFAULT_PROFILE_KEY = "terminal.integrated.defaultProfile.osx"
-MANAGED_KEYS = (
+# 历史受管键：新受管块不再写入，但块外出现任一键仍视为外来 ownership。
+FOREIGN_MANAGED_KEYS = (
     MANAGED_DART_KEY,
     MANAGED_ENV_KEY,
-    MANAGED_PROFILES_KEY,
-    MANAGED_DEFAULT_PROFILE_KEY,
+    "terminal.integrated.profiles.osx",
+    "terminal.integrated.defaultProfile.osx",
+    "terminal.integrated.automationProfile.osx",
+    "chat.tools.terminal.terminalProfile.osx",
 )
-GENERATED_MARKER = _workspace_projection_io.GENERATED_MARKER
-FACADE_BIN_VALUE = "${workspaceFolder}/quwoquan_app/scripts/tools/flutter_facade/bin"
-ZDOTDIR_VALUE = (
-    "${workspaceFolder}/quwoquan_app/scripts/tools/flutter_facade/zsh_projection"
-)
-PROFILE_NAME = "QuWoQuan Workspace Flutter Facade"
-PROFILE_LAUNCHER_VALUE = (
-    "${workspaceFolder}/quwoquan_app/scripts/tools/flutter_facade/"
-    "cursor_terminal_profile.zsh"
-)
-PROFILE_SURFACE_UNKNOWN = _terminal_surface_state.PROFILE_SURFACE_UNKNOWN
-PROFILE_SURFACES = _terminal_surface_state.PROFILE_SURFACES
-PROFILE_SURFACE_VALUES = _terminal_surface_state.PROFILE_SURFACE_VALUES
-PROFILE_LAUNCHER_PATH = _terminal_surface_state.PROFILE_LAUNCHER_PATH
-RECEIPT_TOOL_PATH = _terminal_surface_state.RECEIPT_TOOL_PATH
-RECEIPT_ROOT = _terminal_surface_state.RECEIPT_ROOT
+CANONICAL_LAUNCHER_BIN_PATH = APP_ROOT / "scripts/tools/launcher/bin"
+CANONICAL_FLUTTER_DISPATCHER_PATH = CANONICAL_LAUNCHER_BIN_PATH / "flutter"
+CANONICAL_RUN_SH_WRAPPER_PATH = CANONICAL_LAUNCHER_BIN_PATH / "run.sh"
+LAUNCHER_BIN_VALUE = "${workspaceFolder}/quwoquan_app/scripts/tools/launcher/bin"
+
+USER_ZSH_CARRIER_PATH = Path(__file__).resolve().with_name("user_zsh_projection.zsh")
+USER_ZSH_CONFIG_RELATIVE_PATH = Path(".config/quwoquan/flutter-facade.zsh")
+USER_ZSH_CONFIG_MARKER = "# qwq-user-zsh-projection-v1"
+USER_ZSH_SOURCE_BEGIN = "# >>> qwq flutter facade user-zsh projection >>>"
+USER_ZSH_SOURCE_END = "# <<< qwq flutter facade user-zsh projection <<<"
+USER_ZSH_PREFIX_NEWLINE_MARKER = "# qwq-user-zsh-prefix-newline"
+
 SDK_EXECUTABLE_KEY = "QWQ_REAL_FLUTTER"
 SDK_VERSION_KEY = "QWQ_REAL_FLUTTER_VERSION"
-SDK_IDENTITY_KEY = "QWQ_REAL_FLUTTER_COMMAND_RESOLUTION_DIGEST"
-SDK_STATUS_KEYS = (
-    SDK_EXECUTABLE_KEY,
-    SDK_VERSION_KEY,
-    SDK_IDENTITY_KEY,
-)
 PYTHON_EXECUTABLE_KEY = "QWQ_WORKSPACE_PYTHON"
 PYTHON_VERSION_KEY = "QWQ_WORKSPACE_PYTHON_VERSION"
-PYTHON_STATUS_KEYS = (PYTHON_EXECUTABLE_KEY, PYTHON_VERSION_KEY)
+USER_ZSH_CARRIER_DIGEST_KEY = "QWQ_USER_ZSH_CARRIER_DIGEST"
+FLUTTER_DISPATCHER_DIGEST_KEY = "QWQ_FLUTTER_DISPATCHER_DIGEST"
+RUN_SH_WRAPPER_DIGEST_KEY = "QWQ_RUN_SH_WRAPPER_DIGEST"
+WORKSPACE_ENTRYPOINT_DIGEST_KEYS = (
+    USER_ZSH_CARRIER_DIGEST_KEY,
+    FLUTTER_DISPATCHER_DIGEST_KEY,
+    RUN_SH_WRAPPER_DIGEST_KEY,
+)
 PYTHON_MINIMUM_VERSION = (3, 10)
 TRUSTED_PYTHON_PREFIXES = (Path("/opt/homebrew/bin"), Path("/usr/local/bin"))
-PYTHON_BINDING_MARKER_PREFIX = "// qwq-workspace-python-binding "
-SDK_BINDING_MARKER_PREFIX = "// qwq-flutter-sdk-binding "
-PROJECTION_MARKER_PREFIX = "// qwq-flutter-terminal-projection "
 _SHA256_IDENTITY_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
-LEGACY_MANAGED_ENV_KEYS = frozenset(
-    {
-        "PATH",
-        "QWQ_WORKSPACE_FLUTTER_FACADE_BIN",
-        "QWQ_WORKSPACE_ORIGINAL_ZDOTDIR",
-        "ZDOTDIR",
-        "FLUTTER_ROOT",
-        SDK_EXECUTABLE_KEY,
-    }
-)
 
 
 def _load_canonical_launch_blockers() -> frozenset[str]:
@@ -142,51 +135,168 @@ def _canonical_launch_blocker(code: str) -> str:
 WORKSPACE_FLUTTER_SDK_UNAVAILABLE_BLOCKER = _canonical_launch_blocker(
     "APP.LAUNCH.workspace_flutter_sdk_unavailable"
 )
-COCOAPODS_MISSING_BLOCKER = _canonical_launch_blocker(
-    "APP.DEPENDENCY.cocoapods_missing"
+WORKSPACE_ENTRYPOINT_INACTIVE_BLOCKER = _canonical_launch_blocker(
+    "APP.LAUNCH.workspace_entrypoint_inactive"
 )
-COCOAPODS_MIXED_BLOCKER = _canonical_launch_blocker(
-    "APP.DEPENDENCY.cocoapods_mixed"
-)
+COCOAPODS_MIXED_BLOCKER = _canonical_launch_blocker("APP.DEPENDENCY.cocoapods_mixed")
 
 
-def _load_canonical_facade_module():
-    module_path = Path(__file__).resolve().with_name("flutter_facade.py")
-    spec = importlib.util.spec_from_file_location(
-        "qwq_workspace_flutter_facade_canonical", module_path
+class WorkspaceEntrypointError(RuntimeError):
+    """canonical Mac Terminal 入口缺失、漂移或权限不可用。"""
+
+
+def _literal_physical_directory(path: Path, *, label: str) -> Path:
+    expected = Path(os.path.abspath(path))
+    try:
+        metadata = expected.lstat()
+        physical = expected.resolve(strict=True)
+    except OSError as error:
+        raise WorkspaceEntrypointError(f"{label} is unavailable: {expected}") from error
+    if (
+        expected.is_symlink()
+        or not stat.S_ISDIR(metadata.st_mode)
+        or physical != expected
+        or not os.access(expected, os.R_OK | os.X_OK)
+    ):
+        raise WorkspaceEntrypointError(
+            f"{label} must be the readable/executable non-symlink physical directory: "
+            f"{expected}"
+        )
+    return physical
+
+
+def _literal_physical_file(
+    path: Path,
+    *,
+    label: str,
+    executable: bool,
+) -> Path:
+    expected = Path(os.path.abspath(path))
+    try:
+        metadata = expected.lstat()
+        physical = expected.resolve(strict=True)
+        physical_metadata = physical.stat()
+    except OSError as error:
+        raise WorkspaceEntrypointError(f"{label} is unavailable: {expected}") from error
+    required_access = os.R_OK | (os.X_OK if executable else 0)
+    if (
+        expected.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or not stat.S_ISREG(physical_metadata.st_mode)
+        or physical != expected
+        or not os.access(expected, required_access)
+    ):
+        permission = "readable/executable" if executable else "readable"
+        raise WorkspaceEntrypointError(
+            f"{label} must be the {permission} regular non-symlink physical file: "
+            f"{expected}"
+        )
+    return physical
+
+
+def _sha256_identity(path: Path) -> str:
+    try:
+        return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as error:
+        raise WorkspaceEntrypointError(
+            f"workspace entrypoint bytes are unreadable: {path}"
+        ) from error
+
+
+def _workspace_entrypoint_binding() -> dict[str, str]:
+    """预检 canonical launcher 物理入口，并冻结三份 exact bytes identity。"""
+    launcher_bin = _literal_physical_directory(
+        CANONICAL_LAUNCHER_BIN_PATH,
+        label="canonical launcher bin",
     )
+    dispatcher = _literal_physical_file(
+        CANONICAL_FLUTTER_DISPATCHER_PATH,
+        label="canonical Flutter dispatcher",
+        executable=True,
+    )
+    wrapper = _literal_physical_file(
+        CANONICAL_RUN_SH_WRAPPER_PATH,
+        label="canonical run.sh wrapper",
+        executable=True,
+    )
+    carrier = _literal_physical_file(
+        USER_ZSH_CARRIER_PATH,
+        label="canonical user-zsh carrier",
+        executable=False,
+    )
+    if dispatcher.parent != launcher_bin or wrapper.parent != launcher_bin:
+        raise WorkspaceEntrypointError(
+            "dispatcher and run.sh wrapper must reside in canonical launcher bin"
+        )
+    return {
+        USER_ZSH_CARRIER_DIGEST_KEY: _sha256_identity(carrier),
+        FLUTTER_DISPATCHER_DIGEST_KEY: _sha256_identity(dispatcher),
+        RUN_SH_WRAPPER_DIGEST_KEY: _sha256_identity(wrapper),
+    }
+
+
+def _required_workspace_entrypoint_binding() -> dict[str, str]:
+    try:
+        return _workspace_entrypoint_binding()
+    except WorkspaceEntrypointError as error:
+        raise SystemExit(
+            f"GATE_BLOCK: {WORKSPACE_ENTRYPOINT_INACTIVE_BLOCKER}; {error}"
+        ) from error
+
+
+
+def _load_sibling_module(filename: str, module_name: str):
+    """按物理路径加载同目录 canonical 模块，使假工作树整体复制后仍可运行。"""
+    module_path = Path(__file__).resolve().with_name(filename)
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"unable to load canonical Flutter facade: {module_path}")
+        raise RuntimeError(f"unable to load canonical module: {module_path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-_CANONICAL_FACADE = _load_canonical_facade_module()
+_CANONICAL_FACADE = _load_sibling_module(
+    "flutter_facade.py", "qwq_workspace_flutter_facade_canonical"
+)
+_WORKSPACE_PROJECTION_IO = _load_sibling_module(
+    "cursor_workspace_projection_io.py", "qwq_workspace_projection_io_canonical"
+)
+_USER_ZSH_PROJECTION_IO = _load_sibling_module(
+    "user_zsh_projection_io.py", "qwq_user_zsh_projection_io_canonical"
+)
+_WORKSPACE_ACTIVATION_CLI = _load_sibling_module(
+    "workspace_activation_cli.py", "qwq_workspace_activation_cli_canonical"
+)
 
 
 def _load_canonical_cocoapods_module():
-    module_path = REPO_ROOT / "quwoquan_ops/cli/lib/app_dependency_toolchain.py"
-    spec = importlib.util.spec_from_file_location(
-        "qwq_workspace_app_dependency_toolchain", module_path
-    )
-    if spec is None or spec.loader is None:
-        raise RuntimeError(
-            f"unable to load canonical App dependency toolchain: {module_path}"
-        )
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
+    # canonical toolchain 模块内部使用 quwoquan_ops.* 绝对包导入，须以包身份加载。
+    repo_root = str(REPO_ROOT)
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
     try:
-        spec.loader.exec_module(module)
-    except Exception:
-        sys.modules.pop(spec.name, None)
-        raise
-    return module
+        return importlib.import_module("quwoquan_ops.cli.lib.app_dependency_toolchain")
+    except ImportError as error:
+        raise RuntimeError(
+            "unable to load canonical App dependency toolchain from "
+            f"{REPO_ROOT / 'quwoquan_ops/cli/lib/app_dependency_toolchain.py'}"
+        ) from error
 
 
 _CANONICAL_COCOAPODS = _load_canonical_cocoapods_module()
 COCOAPODS_STATUS_KEYS = tuple(_CANONICAL_COCOAPODS.COCOAPODS_ENVIRONMENT_KEYS)
-COCOAPODS_BINDING_MARKER_PREFIX = "// qwq-cocoapods-binding "
+
+_tasks_projection = _WORKSPACE_PROJECTION_IO.tasks_projection
+_launch_projection = _WORKSPACE_PROJECTION_IO.launch_projection
+_assert_projection_owned = _WORKSPACE_PROJECTION_IO.assert_projection_owned
+_atomic_write = _WORKSPACE_PROJECTION_IO.atomic_write
+_private_atomic_write = _USER_ZSH_PROJECTION_IO.private_atomic_write
+
+
+# ---------------------------------------------------------------------------
+# 钉定工具链身份解析（单轨：SDK 归 flutter_facade，CocoaPods 归 ops toolchain）
+# ---------------------------------------------------------------------------
 
 
 def _resolved_sdk_binding(environ: dict[str, str]) -> dict[str, str]:
@@ -201,10 +311,8 @@ def _resolved_sdk_binding(environ: dict[str, str]) -> dict[str, str]:
         )
     physical_executable = Path(executable).resolve(strict=True)
     return {
-        "flutterRoot": str(physical_executable.parent.parent),
         "executable": str(physical_executable),
         "flutterVersion": version,
-        "commandResolutionDigest": digest,
     }
 
 
@@ -228,14 +336,6 @@ def _resolved_cocoapods_binding(environ: dict[str, str]) -> dict[str, str]:
     return resolved
 
 
-_canonical_digest = _terminal_surface_state.canonical_digest
-_sdk_binding_seal = _terminal_surface_state.sdk_binding_seal
-_cocoapods_binding_seal = _terminal_surface_state.cocoapods_binding_seal
-_python_binding_seal = _terminal_surface_state.python_binding_seal
-_projection_seal = _terminal_surface_state.projection_seal
-_projection_generation = _terminal_surface_state.projection_generation
-
-
 def _inspect_python(candidate: Path) -> dict[str, str] | None:
     try:
         path_metadata = candidate.lstat()
@@ -250,25 +350,28 @@ def _inspect_python(candidate: Path) -> dict[str, str] | None:
         or resolved_metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
     ):
         return None
-    completed = subprocess.run(
-        [
-            str(resolved),
-            "-I",
-            "-c",
-            (
-                "import json,os,sys; "
-                "print(json.dumps({"
-                "'executable':os.path.realpath(sys.executable),"
-                "'version':[sys.version_info.major,sys.version_info.minor,"
-                "sys.version_info.micro]}))"
-            ),
-        ],
-        env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
-        capture_output=True,
-        text=True,
-        timeout=5,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            [
+                str(resolved),
+                "-I",
+                "-c",
+                (
+                    "import json,os,sys; "
+                    "print(json.dumps({"
+                    "'executable':os.path.realpath(sys.executable),"
+                    "'version':[sys.version_info.major,sys.version_info.minor,"
+                    "sys.version_info.micro]}))"
+                ),
+            ],
+            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
     if completed.returncode != 0:
         return None
     try:
@@ -277,7 +380,11 @@ def _inspect_python(candidate: Path) -> dict[str, str] | None:
         executable = Path(str(payload["executable"])).resolve(strict=True)
     except (json.JSONDecodeError, KeyError, OSError, TypeError, ValueError):
         return None
-    if len(version_parts) != 3 or version_parts < PYTHON_MINIMUM_VERSION or executable != resolved:
+    if (
+        len(version_parts) != 3
+        or version_parts < PYTHON_MINIMUM_VERSION
+        or executable != resolved
+    ):
         return None
     return {
         "executable": str(resolved),
@@ -291,8 +398,7 @@ def _resolved_python_binding(environ: dict[str, str]) -> dict[str, str]:
     if declared:
         candidates.append(Path(declared))
     else:
-        current_python = Path(sys.executable)
-        candidates.append(current_python)
+        candidates.append(Path(sys.executable))
         resolved_from_path = shutil.which("python3", path=environ.get("PATH", ""))
         if resolved_from_path:
             path_candidate = Path(resolved_from_path)
@@ -321,320 +427,95 @@ def _resolved_python_binding(environ: dict[str, str]) -> dict[str, str]:
     raise ValueError("workspace terminal requires a trusted physical Python 3.10+")
 
 
+def _resolved_bindings(
+    environ: dict[str, str],
+) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+    try:
+        sdk_binding = _resolved_sdk_binding(environ)
+    except (_CANONICAL_FACADE.FacadeError, OSError, ValueError) as error:
+        raise SystemExit(
+            f"GATE_BLOCK: {WORKSPACE_FLUTTER_SDK_UNAVAILABLE_BLOCKER}; {error}"
+        ) from error
+    try:
+        cocoapods_binding = _resolved_cocoapods_binding(environ)
+    except _CANONICAL_COCOAPODS.AppDependencyToolchainError as error:
+        raise SystemExit(f"GATE_BLOCK: {error}") from error
+    try:
+        python_binding = _resolved_python_binding(environ)
+    except (OSError, ValueError) as error:
+        raise SystemExit(
+            f"GATE_BLOCK: {WORKSPACE_ENTRYPOINT_INACTIVE_BLOCKER}; {error}"
+        ) from error
+    return sdk_binding, cocoapods_binding, python_binding
+
+
+def _identity_environment_entries(
+    sdk_binding: dict[str, str],
+    cocoapods_binding: dict[str, str],
+    python_binding: dict[str, str],
+    entrypoint_binding: dict[str, str],
+) -> list[tuple[str, str]]:
+    """钉定工具链身份与三份 workspace entrypoint exact bytes。"""
+    return [
+        (SDK_EXECUTABLE_KEY, sdk_binding["executable"]),
+        (SDK_VERSION_KEY, sdk_binding["flutterVersion"]),
+        *[(key, cocoapods_binding[key]) for key in COCOAPODS_STATUS_KEYS],
+        (PYTHON_EXECUTABLE_KEY, python_binding["executable"]),
+        (PYTHON_VERSION_KEY, python_binding["version"]),
+        *[(key, entrypoint_binding[key]) for key in WORKSPACE_ENTRYPOINT_DIGEST_KEYS],
+    ]
+
+
+# ---------------------------------------------------------------------------
+# cursor scope：.vscode/settings.json 受管块 + IDE tasks/launch 投影
+# ---------------------------------------------------------------------------
+
+
 def _managed_terminal_env(
     sdk_binding: dict[str, str],
     cocoapods_binding: dict[str, str],
     python_binding: dict[str, str],
+    entrypoint_binding: dict[str, str],
 ) -> dict[str, str]:
-    flutter_root = Path(sdk_binding["flutterRoot"])
-    real_bin = flutter_root / "bin"
+    flutter_bin = Path(sdk_binding["executable"]).parent
     pod_bin = Path(cocoapods_binding["QWQ_COCOAPODS_EXECUTABLE"]).parent
+    python_bin = Path(python_binding["executable"]).parent
     env: dict[str, str] = {
-        "PATH": f"{FACADE_BIN_VALUE}:{real_bin}:{pod_bin}:${{env:PATH}}",
-        "QWQ_WORKSPACE_FLUTTER_FACADE_BIN": FACADE_BIN_VALUE,
-        "QWQ_WORKSPACE_ORIGINAL_ZDOTDIR": "${env:ZDOTDIR}",
-        "ZDOTDIR": ZDOTDIR_VALUE,
-        "FLUTTER_ROOT": str(flutter_root),
-        SDK_EXECUTABLE_KEY: sdk_binding["executable"],
-        SDK_VERSION_KEY: sdk_binding["flutterVersion"],
-        SDK_IDENTITY_KEY: sdk_binding["commandResolutionDigest"],
-        PYTHON_EXECUTABLE_KEY: python_binding["executable"],
-        PYTHON_VERSION_KEY: python_binding["version"],
-        **cocoapods_binding,
+        "PATH": (
+            f"{LAUNCHER_BIN_VALUE}:{flutter_bin}:{pod_bin}:{python_bin}:${{env:PATH}}"
+        ),
     }
+    env.update(
+        _identity_environment_entries(
+            sdk_binding,
+            cocoapods_binding,
+            python_binding,
+            entrypoint_binding,
+        )
+    )
     return env
 
 
-def _managed_profile(
-    sdk_binding: dict[str, str],
-    cocoapods_binding: dict[str, str],
-    python_binding: dict[str, str],
-) -> dict[str, object]:
-    return {
-        "path": PROFILE_LAUNCHER_VALUE,
-        "args": [],
-        "env": {
-            "QWQ_TERMINAL_SURFACE": PROFILE_SURFACE_UNKNOWN,
-            "QWQ_TERMINAL_PROJECTION_SEAL": _projection_seal(
-                sdk_binding, cocoapods_binding, python_binding
+def _managed_block(terminal_env: dict[str, str], indent: str = "    ") -> str:
+    env_lines = []
+    items = list(terminal_env.items())
+    for index, (key, value) in enumerate(items):
+        suffix = "," if index < len(items) - 1 else ""
+        env_lines.append(f"{indent}    {json.dumps(key)}: {json.dumps(value)}{suffix}")
+    return "\n".join(
+        [
+            f"{indent}{BEGIN_MARKER}",
+            (
+                f"{indent}// 由 activate_cursor_workspace.py 管理，勿手改；"
+                "回退：--deactivate 后重载窗口。"
             ),
-            "QWQ_TERMINAL_PROJECTION_GENERATION": _projection_generation(
-                sdk_binding, cocoapods_binding, python_binding
-            ),
-            "QWQ_TERMINAL_WORKSPACE_URI": "${workspaceFolder}",
-            "FLUTTER_ROOT": sdk_binding["flutterRoot"],
-            SDK_EXECUTABLE_KEY: sdk_binding["executable"],
-            SDK_VERSION_KEY: sdk_binding["flutterVersion"],
-            SDK_IDENTITY_KEY: sdk_binding["commandResolutionDigest"],
-            PYTHON_EXECUTABLE_KEY: python_binding["executable"],
-            PYTHON_VERSION_KEY: python_binding["version"],
-            **cocoapods_binding,
-        },
-    }
-
-
-def _managed_profiles(
-    sdk_binding: dict[str, str],
-    cocoapods_binding: dict[str, str],
-    python_binding: dict[str, str],
-) -> dict[str, object]:
-    return {
-        PROFILE_NAME: _managed_profile(
-            sdk_binding, cocoapods_binding, python_binding
-        )
-    }
-
-
-def _stored_cocoapods_binding(text: str) -> dict[str, str]:
-    parsed = _parse_settings(text)
-    env = parsed.get(MANAGED_ENV_KEY)
-    if not isinstance(env, dict):
-        raise TypeError("managed terminal environment is missing")
-    return _CANONICAL_COCOAPODS.cocoapods_identity_from_environment(
-        env,
-        inspect_physical=False,
-    ).as_environment()
-
-
-def _stored_python_binding(text: str) -> dict[str, str]:
-    parsed = _parse_settings(text)
-    env = parsed.get(MANAGED_ENV_KEY)
-    if not isinstance(env, dict):
-        raise TypeError("managed terminal environment is missing")
-    executable = str(env.get(PYTHON_EXECUTABLE_KEY) or "").strip()
-    version = str(env.get(PYTHON_VERSION_KEY) or "").strip()
-    if not executable or not version:
-        raise ValueError("managed workspace Python identity is incomplete")
-    binding = _inspect_python(Path(executable))
-    if binding is None or binding["version"] != version:
-        raise ValueError("managed workspace Python identity differs from physical runtime")
-    return binding
-
-
-def _stored_sdk_binding(text: str) -> dict[str, str]:
-    parsed = _parse_settings(text)
-    env = parsed.get(MANAGED_ENV_KEY)
-    if not isinstance(env, dict):
-        raise TypeError("managed terminal environment is missing")
-    flutter_root = str(env.get("FLUTTER_ROOT") or "").strip()
-    executable = str(env.get(SDK_EXECUTABLE_KEY) or "").strip()
-    version = str(env.get(SDK_VERSION_KEY) or "").strip()
-    digest = str(env.get(SDK_IDENTITY_KEY) or "").strip()
-    if not flutter_root or not executable or not version or not digest:
-        raise ValueError("managed Flutter SDK status fields are incomplete")
-    if Path(executable) != Path(flutter_root) / "bin" / "flutter":
-        raise ValueError("managed Flutter SDK root/executable fields disagree")
-    expected_version = (
-        (REPO_ROOT / "quwoquan_app/.flutter-version")
-        .read_text(encoding="utf-8")
-        .strip()
+            f'{indent}"{MANAGED_DART_KEY}": false,',
+            f'{indent}"{MANAGED_ENV_KEY}": {{',
+            *env_lines,
+            f"{indent}}},",
+            f"{indent}{END_MARKER}",
+        ]
     )
-    if version != expected_version:
-        raise ValueError("managed Flutter SDK version differs from workspace pin")
-    if not _SHA256_IDENTITY_PATTERN.fullmatch(digest):
-        raise ValueError("managed Flutter SDK identity is invalid")
-    return {
-        "flutterRoot": flutter_root,
-        "executable": executable,
-        "flutterVersion": version,
-        "commandResolutionDigest": digest,
-    }
-
-
-def _settings_lines(
-    sdk_binding: dict[str, str],
-    cocoapods_binding: dict[str, str],
-    python_binding: dict[str, str],
-    *,
-    indent: str = "    ",
-) -> list[str]:
-    terminal_env = _managed_terminal_env(
-        sdk_binding, cocoapods_binding, python_binding
-    )
-    profiles = _managed_profiles(sdk_binding, cocoapods_binding, python_binding)
-    settings = [
-        (MANAGED_DART_KEY, False),
-        (MANAGED_ENV_KEY, terminal_env),
-        (MANAGED_PROFILES_KEY, profiles),
-        (MANAGED_DEFAULT_PROFILE_KEY, PROFILE_NAME),
-    ]
-    lines: list[str] = []
-    for index, (key, value) in enumerate(settings):
-        encoded = json.dumps(value, ensure_ascii=False, indent=4).splitlines()
-        suffix = ","
-        if len(encoded) == 1:
-            lines.append(f"{indent}{json.dumps(key)}: {encoded[0]}{suffix}")
-            continue
-        lines.append(f"{indent}{json.dumps(key)}: {encoded[0]}")
-        for encoded_line in encoded[1:-1]:
-            lines.append(f"{indent}{encoded_line}")
-        lines.append(f"{indent}{encoded[-1]}{suffix}")
-    return lines
-
-
-def _managed_block(
-    sdk_binding: dict[str, str],
-    cocoapods_binding: dict[str, str],
-    python_binding: dict[str, str],
-    indent: str = "    ",
-) -> str:
-    lines = [
-        f"{indent}{BEGIN_MARKER}",
-        (
-            f"{indent}// 由 activate_cursor_workspace.py 管理，勿手改；"
-            "回退：--deactivate 后重载窗口。"
-        ),
-        f"{indent}{SDK_BINDING_MARKER_PREFIX}{_sdk_binding_seal(sdk_binding)}",
-        (
-            f"{indent}{PYTHON_BINDING_MARKER_PREFIX}"
-            f"{_python_binding_seal(python_binding)}"
-        ),
-        (
-            f"{indent}{COCOAPODS_BINDING_MARKER_PREFIX}"
-            f"{_cocoapods_binding_seal(cocoapods_binding)}"
-        ),
-        (
-            f"{indent}{PROJECTION_MARKER_PREFIX}"
-            f"{_projection_generation(sdk_binding, cocoapods_binding, python_binding)}"
-        ),
-        *_settings_lines(
-            sdk_binding, cocoapods_binding, python_binding, indent=indent
-        ),
-        f"{indent}{END_MARKER}",
-    ]
-    return "\n".join(lines)
-
-
-def _managed_segment(
-    sdk_binding: dict[str, str],
-    cocoapods_binding: dict[str, str],
-    python_binding: dict[str, str],
-) -> str:
-    return (
-        "\n"
-        + _managed_block(sdk_binding, cocoapods_binding, python_binding)
-        + "\n"
-    )
-
-
-def _pre_python_identity_managed_segment(
-    sdk_binding: dict[str, str],
-    cocoapods_binding: dict[str, str],
-    python_binding: dict[str, str],
-) -> str:
-    terminal_env = _managed_terminal_env(
-        sdk_binding, cocoapods_binding, python_binding
-    )
-    profiles = _managed_profiles(
-        sdk_binding, cocoapods_binding, python_binding
-    )
-    profile_env = profiles[PROFILE_NAME]["env"]
-    if not isinstance(profile_env, dict):
-        raise TypeError("managed terminal profile environment is invalid")
-    profile_env["QWQ_TERMINAL_PROJECTION_SEAL"] = _sdk_binding_seal(
-        sdk_binding
-    )
-    profile_env[
-        "QWQ_TERMINAL_PROJECTION_GENERATION"
-    ] = _terminal_surface_state.legacy_projection_generation(
-        sdk_binding, cocoapods_binding
-    )
-    settings = [
-        (MANAGED_DART_KEY, False),
-        (MANAGED_ENV_KEY, terminal_env),
-        (MANAGED_PROFILES_KEY, profiles),
-        (MANAGED_DEFAULT_PROFILE_KEY, PROFILE_NAME),
-    ]
-    lines = [
-        f"    {BEGIN_MARKER}",
-        (
-            "    // 由 activate_cursor_workspace.py 管理，勿手改；"
-            "回退：--deactivate 后重载窗口。"
-        ),
-        f"    {SDK_BINDING_MARKER_PREFIX}{_sdk_binding_seal(sdk_binding)}",
-        (
-            f"    {PYTHON_BINDING_MARKER_PREFIX}"
-            f"{_python_binding_seal(python_binding)}"
-        ),
-        (
-            f"    {COCOAPODS_BINDING_MARKER_PREFIX}"
-            f"{_cocoapods_binding_seal(cocoapods_binding)}"
-        ),
-        (
-            f"    {PROJECTION_MARKER_PREFIX}"
-            f"{_terminal_surface_state.legacy_projection_generation(sdk_binding, cocoapods_binding)}"
-        ),
-    ]
-    for key, value in settings:
-        encoded = json.dumps(value, ensure_ascii=False, indent=4).splitlines()
-        if len(encoded) == 1:
-            lines.append(f"    {json.dumps(key)}: {encoded[0]},")
-            continue
-        lines.append(f"    {json.dumps(key)}: {encoded[0]}")
-        lines.extend(f"    {encoded_line}" for encoded_line in encoded[1:-1])
-        lines.append(f"    {encoded[-1]},")
-    lines.append(f"    {END_MARKER}")
-    return "\n" + "\n".join(lines) + "\n"
-
-
-def _pre_python_managed_segment(
-    sdk_binding: dict[str, str],
-    cocoapods_binding: dict[str, str],
-) -> str:
-    sentinel_python = {"executable": "", "version": ""}
-    terminal_env = _managed_terminal_env(
-        sdk_binding, cocoapods_binding, sentinel_python
-    )
-    for key in PYTHON_STATUS_KEYS:
-        terminal_env.pop(key)
-    profiles = _managed_profiles(
-        sdk_binding, cocoapods_binding, sentinel_python
-    )
-    profile_env = profiles[PROFILE_NAME]["env"]
-    if not isinstance(profile_env, dict):
-        raise TypeError("managed terminal profile environment is invalid")
-    for key in PYTHON_STATUS_KEYS:
-        profile_env.pop(key)
-    profile_env["QWQ_TERMINAL_PROJECTION_SEAL"] = _sdk_binding_seal(
-        sdk_binding
-    )
-    profile_env[
-        "QWQ_TERMINAL_PROJECTION_GENERATION"
-    ] = _terminal_surface_state.legacy_projection_generation(
-        sdk_binding, cocoapods_binding
-    )
-    settings = [
-        (MANAGED_DART_KEY, False),
-        (MANAGED_ENV_KEY, terminal_env),
-        (MANAGED_PROFILES_KEY, profiles),
-        (MANAGED_DEFAULT_PROFILE_KEY, PROFILE_NAME),
-    ]
-    lines = [
-        f"    {BEGIN_MARKER}",
-        (
-            "    // 由 activate_cursor_workspace.py 管理，勿手改；"
-            "回退：--deactivate 后重载窗口。"
-        ),
-        f"    {SDK_BINDING_MARKER_PREFIX}{_sdk_binding_seal(sdk_binding)}",
-        (
-            f"    {COCOAPODS_BINDING_MARKER_PREFIX}"
-            f"{_cocoapods_binding_seal(cocoapods_binding)}"
-        ),
-        (
-            f"    {PROJECTION_MARKER_PREFIX}"
-            f"{_terminal_surface_state.legacy_projection_generation(sdk_binding, cocoapods_binding)}"
-        ),
-    ]
-    for key, value in settings:
-        encoded = json.dumps(value, ensure_ascii=False, indent=4).splitlines()
-        if len(encoded) == 1:
-            lines.append(f"    {json.dumps(key)}: {encoded[0]},")
-            continue
-        lines.append(f"    {json.dumps(key)}: {encoded[0]}")
-        lines.extend(f"    {encoded_line}" for encoded_line in encoded[1:-1])
-        lines.append(f"    {encoded[-1]},")
-    lines.append(f"    {END_MARKER}")
-    return "\n" + "\n".join(lines) + "\n"
 
 
 def _strip_line_comments(text: str) -> str:
@@ -649,298 +530,64 @@ def _parse_settings(text: str) -> dict:
     return json.loads(stripped)
 
 
-def _marked_managed_segment(text: str) -> str:
+def _marked_segment_span(text: str) -> tuple[int, int] | None:
+    """受管段以标记行界定 ownership；返回含首尾换行的 [start, end) 区间。"""
     begin_count = text.count(BEGIN_MARKER)
     end_count = text.count(END_MARKER)
+    if begin_count == 0 and end_count == 0:
+        return None
     if begin_count != 1 or end_count != 1:
         raise ValueError("managed settings markers are malformed")
     begin = text.index(BEGIN_MARKER)
     end = text.index(END_MARKER, begin) + len(END_MARKER)
     if "\n" not in text[:begin] or not text[end:].startswith("\n"):
         raise ValueError("managed settings segment boundaries are drifted")
-    segment_start = text.rfind("\n", 0, begin)
-    segment_end = end + 1
-    return text[segment_start:segment_end]
+    return text.rfind("\n", 0, begin), end + 1
 
 
-def _exact_pre_python_identity_managed_segment(text: str) -> str:
-    segment = _marked_managed_segment(text)
-    sdk_binding = _stored_sdk_binding(text)
-    cocoapods_binding = _stored_cocoapods_binding(text)
-    python_binding = _stored_python_binding(text)
-    expected = _pre_python_identity_managed_segment(
-        sdk_binding, cocoapods_binding, python_binding
-    )
-    if (
-        text.count(SDK_BINDING_MARKER_PREFIX) != 1
-        or text.count(PYTHON_BINDING_MARKER_PREFIX) != 1
-        or text.count(COCOAPODS_BINDING_MARKER_PREFIX) != 1
-        or text.count(PROJECTION_MARKER_PREFIX) != 1
-        or segment != expected
-    ):
-        raise ValueError(
-            "pre-Python-identity managed settings projection is drifted"
-        )
-    return segment
-
-
-def _exact_pre_python_managed_segment(text: str) -> str:
-    segment = _marked_managed_segment(text)
-    if PYTHON_BINDING_MARKER_PREFIX in text:
-        raise ValueError("pre-Python projection contains a Python marker")
-    parsed = _parse_settings(text)
-    env = parsed.get(MANAGED_ENV_KEY)
-    profiles = parsed.get(MANAGED_PROFILES_KEY)
-    if not isinstance(env, dict) or any(key in env for key in PYTHON_STATUS_KEYS):
-        raise ValueError("pre-Python terminal environment is invalid")
-    if not isinstance(profiles, dict):
-        raise ValueError("pre-Python terminal profiles are invalid")
-    profile = profiles.get(PROFILE_NAME)
-    profile_env = profile.get("env") if isinstance(profile, dict) else None
-    if not isinstance(profile_env, dict) or any(
-        key in profile_env for key in PYTHON_STATUS_KEYS
-    ):
-        raise ValueError("pre-Python terminal profile environment is invalid")
-    sdk_binding = _stored_sdk_binding(text)
-    cocoapods_binding = _stored_cocoapods_binding(text)
-    expected = _pre_python_managed_segment(sdk_binding, cocoapods_binding)
-    if (
-        text.count(SDK_BINDING_MARKER_PREFIX) != 1
-        or text.count(COCOAPODS_BINDING_MARKER_PREFIX) != 1
-        or text.count(PROJECTION_MARKER_PREFIX) != 1
-        or segment != expected
-    ):
-        raise ValueError("pre-Python managed settings projection is drifted")
-    return segment
-
-
-def _exact_legacy_managed_segment(text: str) -> str:
-    segment = _marked_managed_segment(text)
-    if PROJECTION_MARKER_PREFIX in text:
-        raise ValueError("legacy managed settings contain a current projection marker")
-    parsed = _parse_settings(text)
-    if PYTHON_BINDING_MARKER_PREFIX in text:
-        raise ValueError(
-            "legacy managed settings contain a current Python marker"
-        )
-    if COCOAPODS_BINDING_MARKER_PREFIX in text:
-        raise ValueError(
-            "legacy managed settings contain a current CocoaPods marker"
-        )
-    if any(
-        key in parsed
-        for key in (MANAGED_PROFILES_KEY, MANAGED_DEFAULT_PROFILE_KEY)
-    ):
-        raise ValueError("legacy managed settings contain terminal profile keys")
-    if parsed.get(MANAGED_DART_KEY) is not False:
-        raise ValueError("legacy Dart terminal PATH policy is invalid")
-    env = parsed.get(MANAGED_ENV_KEY)
-    if not isinstance(env, dict):
-        raise ValueError("legacy managed terminal environment is invalid")
-    if set(env) == LEGACY_MANAGED_ENV_KEYS:
-        flutter_root = str(env.get("FLUTTER_ROOT") or "").strip()
-        executable = str(env.get(SDK_EXECUTABLE_KEY) or "").strip()
-        if not flutter_root or Path(executable) != Path(flutter_root) / "bin" / "flutter":
-            raise ValueError("legacy Flutter SDK root/executable fields disagree")
-        expected_env = {
-            "PATH": f"{FACADE_BIN_VALUE}:{Path(flutter_root) / 'bin'}:${{env:PATH}}",
-            "QWQ_WORKSPACE_FLUTTER_FACADE_BIN": FACADE_BIN_VALUE,
-            "QWQ_WORKSPACE_ORIGINAL_ZDOTDIR": "${env:ZDOTDIR}",
-            "ZDOTDIR": ZDOTDIR_VALUE,
-            "FLUTTER_ROOT": flutter_root,
-            SDK_EXECUTABLE_KEY: executable,
-        }
-        expected_segment = "\n" + _managed_block_from_env(expected_env) + "\n"
-    else:
-        sdk_binding = _stored_sdk_binding(text)
-        flutter_root = Path(sdk_binding["flutterRoot"])
-        expected_env = {
-            "PATH": (
-                f"{FACADE_BIN_VALUE}:{flutter_root / 'bin'}:${{env:PATH}}"
-            ),
-            "QWQ_WORKSPACE_FLUTTER_FACADE_BIN": FACADE_BIN_VALUE,
-            "QWQ_WORKSPACE_ORIGINAL_ZDOTDIR": "${env:ZDOTDIR}",
-            "ZDOTDIR": ZDOTDIR_VALUE,
-            "FLUTTER_ROOT": str(flutter_root),
-            SDK_EXECUTABLE_KEY: sdk_binding["executable"],
-            SDK_VERSION_KEY: sdk_binding["flutterVersion"],
-            SDK_IDENTITY_KEY: sdk_binding["commandResolutionDigest"],
-        }
-        expected_segment = "\n" + _managed_sdk_env_block(sdk_binding) + "\n"
-    if env != expected_env or segment != expected_segment:
-        raise ValueError("legacy managed settings projection is drifted")
-    return segment
-
-
-def _managed_block_from_env(
-    terminal_env: dict[str, str],
-    indent: str = "    ",
-) -> str:
-    env_lines = []
-    items = list(terminal_env.items())
-    for index, (key, value) in enumerate(items):
-        suffix = "," if index < len(items) - 1 else ""
-        env_lines.append(f"{indent}    {json.dumps(key)}: {json.dumps(value)}{suffix}")
-    return "\n".join(
-        [
-            f"{indent}{BEGIN_MARKER}",
-            (
-                f"{indent}// 由 activate_cursor_workspace.py 管理，勿手改；"
-                "回退：--deactivate 后重载窗口。"
-            ),
-            f'{indent}"{MANAGED_DART_KEY}": false,',
-            f'{indent}"{MANAGED_ENV_KEY}": {{',
-            *env_lines,
-            f"{indent}}},",
-            f"{indent}{END_MARKER}",
-        ]
-    )
-
-
-def _managed_sdk_env_block(
-    sdk_binding: dict[str, str],
-    indent: str = "    ",
-) -> str:
-    flutter_root = Path(sdk_binding["flutterRoot"])
-    terminal_env = {
-        "PATH": f"{FACADE_BIN_VALUE}:{flutter_root / 'bin'}:${{env:PATH}}",
-        "QWQ_WORKSPACE_FLUTTER_FACADE_BIN": FACADE_BIN_VALUE,
-        "QWQ_WORKSPACE_ORIGINAL_ZDOTDIR": "${env:ZDOTDIR}",
-        "ZDOTDIR": ZDOTDIR_VALUE,
-        "FLUTTER_ROOT": str(flutter_root),
-        SDK_EXECUTABLE_KEY: sdk_binding["executable"],
-        SDK_VERSION_KEY: sdk_binding["flutterVersion"],
-        SDK_IDENTITY_KEY: sdk_binding["commandResolutionDigest"],
-    }
-    env_lines = []
-    items = list(terminal_env.items())
-    for index, (key, value) in enumerate(items):
-        suffix = "," if index < len(items) - 1 else ""
-        env_lines.append(f"{indent}    {json.dumps(key)}: {json.dumps(value)}{suffix}")
-    return "\n".join(
-        [
-            f"{indent}{BEGIN_MARKER}",
-            (
-                f"{indent}// 由 activate_cursor_workspace.py 管理，勿手改；"
-                "回退：--deactivate 后重载窗口。"
-            ),
-            f"{indent}{SDK_BINDING_MARKER_PREFIX}{_sdk_binding_seal(sdk_binding)}",
-            f'{indent}"{MANAGED_DART_KEY}": false,',
-            f'{indent}"{MANAGED_ENV_KEY}": {{',
-            *env_lines,
-            f"{indent}}},",
-            f"{indent}{END_MARKER}",
-        ]
-    )
-
-
-def _remove_managed_block(text: str, *, allow_legacy: bool = False) -> str:
-    if not _has_any_managed_marker(text):
-        return text
+def _settings_baseline(settings_path: Path, original: str) -> str:
+    """移除受管段并验证块外无受管键；漂移的块内容不阻断（由新内容修复）。"""
     try:
-        sdk_binding = _stored_sdk_binding(text)
-        cocoapods_binding = _stored_cocoapods_binding(text)
-        python_binding = _stored_python_binding(text)
-        segment = _managed_segment(
-            sdk_binding, cocoapods_binding, python_binding
-        )
-        if text.count(SDK_BINDING_MARKER_PREFIX) != 1:
-            raise ValueError("managed SDK binding marker is malformed")
-        if text.count(PYTHON_BINDING_MARKER_PREFIX) != 1:
-            raise ValueError("managed Python binding marker is malformed")
-        if text.count(COCOAPODS_BINDING_MARKER_PREFIX) != 1:
-            raise ValueError("managed CocoaPods binding marker is malformed")
-        if text.count(PROJECTION_MARKER_PREFIX) != 1:
-            raise ValueError("managed projection marker is malformed")
-        if text.count(segment) != 1:
-            raise ValueError("managed settings projection is drifted")
-    except (json.JSONDecodeError, OSError, RuntimeError, TypeError, ValueError):
-        if not allow_legacy:
-            raise
-        try:
-            segment = _exact_pre_python_identity_managed_segment(text)
-        except (
-            json.JSONDecodeError,
-            OSError,
-            RuntimeError,
-            TypeError,
-            ValueError,
-        ):
-            try:
-                segment = _exact_pre_python_managed_segment(text)
-            except (
-                json.JSONDecodeError,
-                OSError,
-                RuntimeError,
-                TypeError,
-                ValueError,
-            ):
-                segment = _exact_legacy_managed_segment(text)
-    return text.replace(segment, "", 1)
-
-
-def _has_managed_block(text: str) -> bool:
-    return BEGIN_MARKER in text and END_MARKER in text
-
-
-def _has_any_managed_marker(text: str) -> bool:
-    return (
-        BEGIN_MARKER in text
-        or END_MARKER in text
-        or SDK_BINDING_MARKER_PREFIX in text
-        or PYTHON_BINDING_MARKER_PREFIX in text
-        or COCOAPODS_BINDING_MARKER_PREFIX in text
-        or PROJECTION_MARKER_PREFIX in text
-    )
-
-
-def _has_exact_managed_block(text: str) -> bool:
-    try:
-        sdk_binding = _stored_sdk_binding(text)
-        cocoapods_binding = _stored_cocoapods_binding(text)
-        python_binding = _stored_python_binding(text)
-        return (
-            text.count(BEGIN_MARKER) == 1
-            and text.count(END_MARKER) == 1
-            and text.count(SDK_BINDING_MARKER_PREFIX) == 1
-            and text.count(PYTHON_BINDING_MARKER_PREFIX) == 1
-            and text.count(COCOAPODS_BINDING_MARKER_PREFIX) == 1
-            and text.count(PROJECTION_MARKER_PREFIX) == 1
-            and text.count(
-                _managed_segment(sdk_binding, cocoapods_binding, python_binding)
-            ) == 1
-        )
-    except (json.JSONDecodeError, OSError, RuntimeError, TypeError, ValueError):
-        return False
-
-
-_tasks_projection = _workspace_projection_io.tasks_projection
-_launch_projection = _workspace_projection_io.launch_projection
-_assert_projection_owned = _workspace_projection_io.assert_projection_owned
-_atomic_write = _workspace_projection_io.atomic_write
-
-
-def _settings_baseline_for_activation(settings_path: Path, original: str) -> str:
-    begin_count = original.count(BEGIN_MARKER)
-    end_count = original.count(END_MARKER)
-    if begin_count != end_count or begin_count > 1:
+        span = _marked_segment_span(original)
+    except ValueError as error:
         raise SystemExit(
-            f"GATE_BLOCK: {settings_path} contains a malformed managed settings block"
-        )
-    try:
-        baseline = _remove_managed_block(original, allow_legacy=True)
-    except (json.JSONDecodeError, OSError, RuntimeError, TypeError, ValueError) as error:
-        raise SystemExit(
-            f"GATE_BLOCK: {settings_path} contains a drifted managed settings block"
+            f"GATE_BLOCK: {settings_path} contains a malformed managed settings block: "
+            f"{error}"
         ) from error
-    parsed = _parse_settings(baseline)
-    foreign = [key for key in MANAGED_KEYS if key in parsed]
+    baseline = original if span is None else original[: span[0]] + original[span[1] :]
+    try:
+        parsed = _parse_settings(baseline)
+    except json.JSONDecodeError as error:
+        raise SystemExit(
+            f"GATE_BLOCK: {settings_path} is not parseable outside the managed block"
+        ) from error
+    foreign = [key for key in FOREIGN_MANAGED_KEYS if key in parsed]
     if foreign:
         raise SystemExit(
             f"GATE_BLOCK: {settings_path} already contains foreign managed keys: "
             + ",".join(sorted(foreign))
         )
     return baseline
+
+
+def _settings_with_managed_block(
+    settings_path: Path, original: str, terminal_env: dict[str, str]
+) -> str:
+    baseline = _settings_baseline(settings_path, original)
+    if "{" not in baseline:
+        raise SystemExit(
+            f"GATE_BLOCK: {settings_path} is not a JSON object settings file"
+        )
+    opening = baseline.index("{")
+    updated = (
+        baseline[: opening + 1]
+        + "\n"
+        + _managed_block(terminal_env)
+        + "\n"
+        + baseline[opening + 1 :]
+    )
+    _parse_settings(updated)
+    return updated
 
 
 def activate(
@@ -950,29 +597,17 @@ def activate(
     environ: dict[str, str] | None = None,
 ) -> str:
     activation_environment = dict(os.environ if environ is None else environ)
-    try:
-        sdk_binding = _resolved_sdk_binding(activation_environment)
-    except (_CANONICAL_FACADE.FacadeError, OSError, ValueError) as error:
-        raise SystemExit(
-            f"GATE_BLOCK: {WORKSPACE_FLUTTER_SDK_UNAVAILABLE_BLOCKER}; {error}"
-        ) from error
-    try:
-        cocoapods_binding = _resolved_cocoapods_binding(activation_environment)
-    except _CANONICAL_COCOAPODS.AppDependencyToolchainError as error:
-        raise SystemExit(f"GATE_BLOCK: {error}") from error
-    try:
-        python_binding = _resolved_python_binding(activation_environment)
-    except (OSError, ValueError) as error:
-        raise SystemExit(
-            "GATE_BLOCK: APP.LAUNCH.workspace_entrypoint_inactive; "
-            f"{error}"
-        ) from error
+    entrypoint_binding = _required_workspace_entrypoint_binding()
+    sdk_binding, cocoapods_binding, python_binding = _resolved_bindings(
+        activation_environment
+    )
     tasks_path = tasks_path or settings_path.with_name("tasks.json")
     launch_path = launch_path or settings_path.with_name("launch.json")
-    if settings_path.exists():
-        original = settings_path.read_text(encoding="utf-8")
-    else:
-        original = "{\n}\n"
+    original = (
+        settings_path.read_text(encoding="utf-8")
+        if settings_path.exists()
+        else "{\n}\n"
+    )
 
     # 三份本地投影构成一个入口。先验证全部 ownership，再写任一字节，避免
     # settings 已激活而 tasks/launch 因外来配置拒绝后的半激活状态。
@@ -980,19 +615,20 @@ def activate(
     launch_content = _launch_projection()
     _assert_projection_owned(tasks_path, tasks_content, allow_managed_drift=True)
     _assert_projection_owned(launch_path, launch_content, allow_managed_drift=True)
-    baseline = _settings_baseline_for_activation(settings_path, original)
-
-    opening = baseline.index("{")
-    updated = (
-        baseline[: opening + 1]
-        + _managed_segment(sdk_binding, cocoapods_binding, python_binding)
-        + baseline[opening + 1 :]
+    updated = _settings_with_managed_block(
+        settings_path,
+        original,
+        _managed_terminal_env(
+            sdk_binding,
+            cocoapods_binding,
+            python_binding,
+            entrypoint_binding,
+        ),
     )
-    _parse_settings(updated)
     settings_outcome = "unchanged"
     if updated != original:
         _atomic_write(settings_path, updated)
-        settings_outcome = "refreshed" if _has_managed_block(original) else "activated"
+        settings_outcome = "refreshed" if BEGIN_MARKER in original else "activated"
     task_outcome = "unchanged"
     if (
         not tasks_path.exists()
@@ -1021,49 +657,23 @@ def deactivate(
     launch_path = launch_path or settings_path.with_name("launch.json")
     _assert_projection_owned(tasks_path, _tasks_projection(), deleting=True)
     _assert_projection_owned(launch_path, _launch_projection(), deleting=True)
-    settings_original = ""
-    settings_updated = ""
     settings_changed = False
+    settings_updated = ""
     if settings_path.exists():
-        settings_original = settings_path.read_text(encoding="utf-8")
-        if _has_any_managed_marker(settings_original):
-            if not _has_exact_managed_block(settings_original):
-                raise SystemExit(
-                    "GATE_BLOCK: refusing to delete drifted managed settings projection"
-                )
-            sdk_binding = _stored_sdk_binding(settings_original)
-            cocoapods_binding = _stored_cocoapods_binding(settings_original)
-            python_binding = _stored_python_binding(settings_original)
-            settings_updated = settings_original.replace(
-                _managed_segment(
-                    sdk_binding, cocoapods_binding, python_binding
-                ),
-                "",
-                1,
-            )
-            _parse_settings(settings_updated)
-            parsed = _parse_settings(settings_updated)
-            if any(key in parsed for key in MANAGED_KEYS):
-                raise SystemExit(
-                    "GATE_BLOCK: refusing to delete settings with foreign managed keys"
-                )
-            settings_changed = True
+        original = settings_path.read_text(encoding="utf-8")
+        if BEGIN_MARKER in original or END_MARKER in original:
+            settings_updated = _settings_baseline(settings_path, original)
+            settings_changed = settings_updated != original
     changed = False
     for projection in (tasks_path, launch_path):
         if not projection.exists():
             continue
         projection.unlink()
         changed = True
-    if not settings_path.exists():
-        return "deactivated" if changed else "unchanged"
-    if not settings_changed:
-        return "deactivated" if changed else "unchanged"
-    _atomic_write(settings_path, settings_updated)
-    return "deactivated"
-
-
-_load_receipt_module = _terminal_surface_state.load_receipt_module
-_surface_receipt_state = _terminal_surface_state.surface_receipt_state
+    if settings_changed:
+        _atomic_write(settings_path, settings_updated)
+        changed = True
+    return "deactivated" if changed else "unchanged"
 
 
 def status(
@@ -1071,11 +681,6 @@ def status(
     tasks_path: Path | None = None,
     launch_path: Path | None = None,
     environ: dict[str, str] | None = None,
-    *,
-    surface: str | None = None,
-    receipt_root: Path = RECEIPT_ROOT,
-    max_age_seconds: int = 900,
-    now_epoch_ms: int | None = None,
 ) -> dict[str, str]:
     env = dict(os.environ if environ is None else environ)
     tasks_path = tasks_path or settings_path.with_name("tasks.json")
@@ -1083,79 +688,66 @@ def status(
     settings_text = (
         settings_path.read_text(encoding="utf-8") if settings_path.exists() else ""
     )
-    settings_active = False
-    stored_sdk_binding: dict[str, str] | None = None
-    stored_cocoapods_binding: dict[str, str] | None = None
-    stored_python_binding: dict[str, str] | None = None
-    if _has_exact_managed_block(settings_text):
+    markers_present = BEGIN_MARKER in settings_text or END_MARKER in settings_text
+
+    live_env: dict[str, str] | None = None
+    resolution_error = ""
+    try:
+        live_env = _managed_terminal_env(
+            _resolved_sdk_binding(env),
+            _resolved_cocoapods_binding(env),
+            _resolved_python_binding(env),
+            _workspace_entrypoint_binding(),
+        )
+    except (
+        _CANONICAL_FACADE.FacadeError,
+        _CANONICAL_COCOAPODS.AppDependencyToolchainError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        WorkspaceEntrypointError,
+    ) as error:
+        resolution_error = str(error)
+
+    if not markers_present:
+        settings_state = "missing"
+    elif live_env is None:
+        settings_state = "unverifiable"
+    else:
         try:
-            stored_sdk_binding = _stored_sdk_binding(settings_text)
-            stored_cocoapods_binding = _stored_cocoapods_binding(settings_text)
-            stored_python_binding = _stored_python_binding(settings_text)
-            baseline = settings_text.replace(
-                _managed_segment(
-                    stored_sdk_binding,
-                    stored_cocoapods_binding,
-                    stored_python_binding,
-                ),
-                "",
-                1,
+            settings_state = (
+                "active"
+                if _settings_with_managed_block(settings_path, settings_text, live_env)
+                == settings_text
+                else "drifted"
             )
-            parsed = _parse_settings(baseline)
-            settings_active = not any(key in parsed for key in MANAGED_KEYS)
-        except (json.JSONDecodeError, OSError, RuntimeError, TypeError, ValueError):
-            settings_active = False
-    live_sdk_binding: dict[str, str] | None = None
+        except (SystemExit, ValueError):
+            settings_state = "drifted"
+
+    stored_env: dict[str, str] | None = None
     try:
-        live_sdk_binding = _resolved_sdk_binding(env)
-    except (_CANONICAL_FACADE.FacadeError, OSError, ValueError):
-        pass
-    if stored_sdk_binding is None:
-        sdk_state = (
-            "invalid_projection"
-            if _has_any_managed_marker(settings_text)
-            else "missing"
-        )
-    elif live_sdk_binding is None:
-        sdk_state = "unavailable"
-    elif live_sdk_binding != stored_sdk_binding:
-        sdk_state = "drifted"
-    else:
-        sdk_state = "active"
-    live_cocoapods_binding: dict[str, str] | None = None
-    try:
-        live_cocoapods_binding = _resolved_cocoapods_binding(env)
-    except _CANONICAL_COCOAPODS.AppDependencyToolchainError:
-        pass
-    if stored_cocoapods_binding is None:
-        cocoapods_state = (
-            "invalid_projection"
-            if _has_any_managed_marker(settings_text)
-            else "missing"
-        )
-    elif live_cocoapods_binding is None:
-        cocoapods_state = "unavailable"
-    elif live_cocoapods_binding != stored_cocoapods_binding:
-        cocoapods_state = "drifted"
-    else:
-        cocoapods_state = "active"
-    live_python_binding: dict[str, str] | None = None
-    try:
-        live_python_binding = _resolved_python_binding(env)
-    except (OSError, ValueError):
-        pass
-    if stored_python_binding is None:
-        python_state = (
-            "invalid_projection"
-            if _has_any_managed_marker(settings_text)
-            else "missing"
-        )
-    elif live_python_binding is None:
-        python_state = "unavailable"
-    elif live_python_binding != stored_python_binding:
-        python_state = "drifted"
-    else:
-        python_state = "active"
+        parsed = _parse_settings(settings_text) if settings_text else {}
+        candidate_env = parsed.get(MANAGED_ENV_KEY)
+        if isinstance(candidate_env, dict):
+            stored_env = {str(key): str(value) for key, value in candidate_env.items()}
+    except json.JSONDecodeError:
+        stored_env = None
+
+    def _binding_state(keys: tuple[str, ...]) -> str:
+        if stored_env is None or any(not stored_env.get(key) for key in keys):
+            return "invalid_projection" if markers_present else "missing"
+        if live_env is None:
+            return "unavailable"
+        if any(stored_env.get(key) != live_env.get(key) for key in keys):
+            return "drifted"
+        return "active"
+
+    sdk_state = _binding_state((SDK_EXECUTABLE_KEY, SDK_VERSION_KEY))
+    cocoapods_state = _binding_state(COCOAPODS_STATUS_KEYS)
+    python_state = _binding_state((PYTHON_EXECUTABLE_KEY, PYTHON_VERSION_KEY))
+    entrypoint_state = _binding_state(WORKSPACE_ENTRYPOINT_DIGEST_KEYS)
+
     tasks_active = (
         tasks_path.exists()
         and tasks_path.read_text(encoding="utf-8") == _tasks_projection()
@@ -1164,39 +756,6 @@ def status(
         launch_path.exists()
         and launch_path.read_text(encoding="utf-8") == _launch_projection()
     )
-    resolved = shutil.which("flutter", path=env.get("PATH", ""))
-    expected = REPO_ROOT / "quwoquan_app/scripts/tools/flutter_facade/bin/flutter"
-    if resolved is None:
-        command_state = "missing"
-    else:
-        try:
-            command_state = (
-                "facade"
-                if Path(resolved).resolve() == expected.resolve()
-                else "real_sdk"
-            )
-        except OSError:
-            command_state = "unresolved"
-    projection_active = (
-        settings_active
-        and sdk_state == "active"
-        and cocoapods_state == "active"
-        and python_state == "active"
-        and tasks_active
-        and launch_active
-    )
-    projection_present = (
-        _has_any_managed_marker(settings_text)
-        or tasks_path.exists()
-        or launch_path.exists()
-    )
-    projection_state = (
-        "active"
-        if projection_active
-        else "partial"
-        if projection_present
-        else "inactive"
-    )
     ide_state = (
         "active"
         if tasks_active and launch_active
@@ -1204,114 +763,386 @@ def status(
         if tasks_path.exists() or launch_path.exists()
         else "inactive"
     )
-    receipt_state = _surface_receipt_state(
-        surface=surface,
-        sdk_binding=stored_sdk_binding if settings_active else None,
-        cocoapods_binding=(
-            stored_cocoapods_binding if settings_active else None
-        ),
-        python_binding=(
-            stored_python_binding if settings_active else None
-        ),
-        receipt_root=receipt_root,
-        max_age_seconds=max_age_seconds,
-        now_epoch_ms=now_epoch_ms,
-    )
-    if surface is None:
-        effective_state = "surface_required" if projection_active else (
-            "inconsistent" if projection_present else "inactive"
-        )
-    elif projection_active and receipt_state == "active":
-        effective_state = "active"
-    elif projection_active:
-        effective_state = "probe_required"
+
+    present = markers_present or tasks_path.exists() or launch_path.exists()
+    if settings_state == "active" and ide_state == "active":
+        projection_state = "active"
+    elif not present:
+        projection_state = "inactive"
     else:
-        effective_state = "inconsistent" if projection_present else "inactive"
-    return {
+        projection_state = "drifted"
+    payload = {
         "projectionState": projection_state,
-        "callerCommandResolution": command_state,
+        "settingsState": settings_state,
         "sdkResolutionState": sdk_state,
         "cocoaPodsResolutionState": cocoapods_state,
         "pythonResolutionState": python_state,
+        "workspaceEntrypointState": entrypoint_state,
+        "workspaceEntrypointDigests": (
+            {
+                key: live_env[key]
+                for key in WORKSPACE_ENTRYPOINT_DIGEST_KEYS
+                if live_env and live_env.get(key)
+            }
+        ),
         "ideProfileState": ide_state,
-        "targetSurface": surface or "none",
-        "targetSurfaceReceiptState": receipt_state,
-        "effectiveState": effective_state,
     }
+    if resolution_error:
+        payload["resolutionError"] = resolution_error
+    return payload
 
 
-probe_surface = _terminal_surface_state.probe_surface
+# ---------------------------------------------------------------------------
+# user-zsh scope：~/.config/quwoquan 受管投影 + 用户 zshrc managed source block
+# ---------------------------------------------------------------------------
+
+
+def _literal_existing_home(home_path: Path) -> Path:
+    if not home_path.is_absolute():
+        raise SystemExit("GATE_BLOCK: user-zsh home path must be absolute")
+    home_path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if home_path.is_symlink():
+        raise SystemExit("GATE_BLOCK: user-zsh home path must not be a symlink")
+    try:
+        return home_path.resolve(strict=True)
+    except OSError as error:
+        raise SystemExit("GATE_BLOCK: user-zsh home path is unavailable") from error
+
+
+def _user_zsh_paths(
+    *,
+    home_path: Path,
+    config_path: Path | None = None,
+    zshrc_path: Path | None = None,
+    zprofile_path: Path | None = None,
+) -> tuple[Path, Path, Path]:
+    home = _literal_existing_home(home_path)
+    generated = config_path or home / USER_ZSH_CONFIG_RELATIVE_PATH
+    zshrc = zshrc_path or home / ".zshrc"
+    zprofile = zprofile_path or home / ".zprofile"
+    for candidate, field in (
+        (generated, "config"),
+        (zshrc, "zshrc"),
+        (zprofile, "zprofile"),
+    ):
+        if not candidate.is_absolute():
+            raise SystemExit(f"GATE_BLOCK: user-zsh {field} path must be absolute")
+    return generated, zshrc, zprofile
+
+
+def _generated_user_zsh_projection(
+    sdk_binding: dict[str, str],
+    cocoapods_binding: dict[str, str],
+    python_binding: dict[str, str],
+    entrypoint_binding: dict[str, str],
+) -> bytes:
+    carrier = USER_ZSH_CARRIER_PATH.resolve(strict=True)
+    body_lines = [
+        f"export {key}={shlex.quote(value)}"
+        for key, value in _identity_environment_entries(
+            sdk_binding,
+            cocoapods_binding,
+            python_binding,
+            entrypoint_binding,
+        )
+    ]
+    body_lines.append(f"builtin source {shlex.quote(str(carrier))}")
+    body = ("\n".join(body_lines) + "\n").encode("utf-8")
+    digest = "sha256:" + hashlib.sha256(body).hexdigest()
+    return f"{USER_ZSH_CONFIG_MARKER} {digest}\n".encode("utf-8") + body
+
+
+def _user_zsh_projection_is_recognized(content: bytes) -> bool:
+    first_line = content.partition(b"\n")[0]
+    return first_line.startswith((USER_ZSH_CONFIG_MARKER + " ").encode("utf-8"))
+
+
+def _user_zsh_block(config_path: Path, *, inserted_prefix_newline: bool) -> bytes:
+    quoted = shlex.quote(str(config_path))
+    newline_mode = "inserted" if inserted_prefix_newline else "preserved"
+    return (
+        f"{USER_ZSH_SOURCE_BEGIN}\n"
+        f"{USER_ZSH_PREFIX_NEWLINE_MARKER} {newline_mode}\n"
+        f"[[ -r {quoted} ]] && builtin source {quoted}\n"
+        f"{USER_ZSH_SOURCE_END}\n"
+    ).encode("utf-8")
+
+
+def _strip_user_zsh_block(original: bytes, *, path: Path) -> bytes:
+    """移除标记界定的 managed block（含 legacy 形态），按记录的前缀换行逐字回退。"""
+    begin = USER_ZSH_SOURCE_BEGIN.encode("utf-8")
+    end = USER_ZSH_SOURCE_END.encode("utf-8")
+    if begin not in original and end not in original:
+        return original
+    if original.count(begin) != 1 or original.count(end) != 1:
+        raise SystemExit(
+            f"GATE_BLOCK: user-zsh managed block markers are malformed in {path}"
+        )
+    block_start = original.index(begin)
+    try:
+        block_end = original.index(end, block_start) + len(end)
+    except ValueError as error:
+        raise SystemExit(
+            f"GATE_BLOCK: user-zsh managed block markers are malformed in {path}"
+        ) from error
+    if original[block_end : block_end + 1] == b"\n":
+        block_end += 1
+    segment = original[block_start:block_end]
+    inserted_marker = f"{USER_ZSH_PREFIX_NEWLINE_MARKER} inserted".encode("utf-8")
+    if inserted_marker in segment and original[block_start - 1 : block_start] == b"\n":
+        block_start -= 1
+    return original[:block_start] + original[block_end:]
+
+
+def _with_user_zsh_block(original: bytes, *, config_path: Path, path: Path) -> bytes:
+    base = _strip_user_zsh_block(original, path=path)
+    inserted = bool(base and not base.endswith(b"\n"))
+    prefix = b"\n" if inserted else b""
+    return base + prefix + _user_zsh_block(config_path, inserted_prefix_newline=inserted)
+
+
+def activate_user_zsh(
+    *,
+    home_path: Path,
+    environ: dict[str, str] | None = None,
+    config_path: Path | None = None,
+    zshrc_path: Path | None = None,
+    zprofile_path: Path | None = None,
+) -> str:
+    entrypoint_binding = _required_workspace_entrypoint_binding()
+    generated, zshrc, zprofile = _user_zsh_paths(
+        home_path=home_path,
+        config_path=config_path,
+        zshrc_path=zshrc_path,
+        zprofile_path=zprofile_path,
+    )
+    env = dict(os.environ if environ is None else environ)
+    sdk_binding, cocoapods_binding, python_binding = _resolved_bindings(env)
+    expected_generated = _generated_user_zsh_projection(
+        sdk_binding,
+        cocoapods_binding,
+        python_binding,
+        entrypoint_binding,
+    )
+    if generated.exists():
+        metadata = generated.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or generated.is_symlink():
+            raise SystemExit("GATE_BLOCK: user-zsh generated projection is not regular")
+        if not _user_zsh_projection_is_recognized(generated.read_bytes()):
+            raise SystemExit(
+                "GATE_BLOCK: refusing to replace foreign user-zsh projection"
+            )
+    originals = {
+        zshrc: zshrc.read_bytes() if zshrc.exists() else b"",
+        zprofile: zprofile.read_bytes() if zprofile.exists() else b"",
+    }
+    updates = {
+        zshrc: _with_user_zsh_block(originals[zshrc], config_path=generated, path=zshrc),
+        # 新契约只在 zshrc 维护单个 managed block；zprofile 里的 legacy 块被回收。
+        zprofile: _strip_user_zsh_block(originals[zprofile], path=zprofile),
+    }
+    generated_missing = not generated.exists()
+    changed = generated_missing or generated.read_bytes() != expected_generated
+    changed = changed or any(updates[path] != originals[path] for path in originals)
+    if not changed:
+        return "unchanged"
+    _private_atomic_write(generated, expected_generated, mode=0o600, private_parent=True)
+    for startup in (zshrc, zprofile):
+        if updates[startup] != originals[startup]:
+            _private_atomic_write(startup, updates[startup])
+    return "activated" if generated_missing else "refreshed"
+
+
+def deactivate_user_zsh(
+    *,
+    home_path: Path,
+    config_path: Path | None = None,
+    zshrc_path: Path | None = None,
+    zprofile_path: Path | None = None,
+) -> str:
+    generated, zshrc, zprofile = _user_zsh_paths(
+        home_path=home_path,
+        config_path=config_path,
+        zshrc_path=zshrc_path,
+        zprofile_path=zprofile_path,
+    )
+    originals = {
+        zshrc: zshrc.read_bytes() if zshrc.exists() else b"",
+        zprofile: zprofile.read_bytes() if zprofile.exists() else b"",
+    }
+    updates = {
+        zshrc: _strip_user_zsh_block(originals[zshrc], path=zshrc),
+        zprofile: _strip_user_zsh_block(originals[zprofile], path=zprofile),
+    }
+    generated_present = generated.exists()
+    if generated_present:
+        metadata = generated.lstat()
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or generated.is_symlink()
+            or not _user_zsh_projection_is_recognized(generated.read_bytes())
+        ):
+            raise SystemExit("GATE_BLOCK: refusing to delete foreign user-zsh projection")
+    changed = generated_present or any(
+        updates[path] != originals[path] for path in originals
+    )
+    if not changed:
+        return "unchanged"
+    for startup in (zshrc, zprofile):
+        if updates[startup] != originals[startup]:
+            _private_atomic_write(startup, updates[startup])
+    if generated_present:
+        generated.unlink()
+    return "deactivated"
+
+
+def user_zsh_status(
+    *,
+    home_path: Path,
+    environ: dict[str, str] | None = None,
+    config_path: Path | None = None,
+    zshrc_path: Path | None = None,
+    zprofile_path: Path | None = None,
+) -> dict[str, str]:
+    generated, zshrc, zprofile = _user_zsh_paths(
+        home_path=home_path,
+        config_path=config_path,
+        zshrc_path=zshrc_path,
+        zprofile_path=zprofile_path,
+    )
+    env = dict(os.environ if environ is None else environ)
+    expected_generated: bytes | None = None
+    resolution_error = ""
+    try:
+        expected_generated = _generated_user_zsh_projection(
+            _resolved_sdk_binding(env),
+            _resolved_cocoapods_binding(env),
+            _resolved_python_binding(env),
+            _workspace_entrypoint_binding(),
+        )
+    except (
+        _CANONICAL_FACADE.FacadeError,
+        _CANONICAL_COCOAPODS.AppDependencyToolchainError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        WorkspaceEntrypointError,
+    ) as error:
+        resolution_error = str(error)
+
+    if not generated.exists():
+        generated_state = "missing"
+    elif expected_generated is None:
+        generated_state = "unverifiable"
+    else:
+        generated_state = (
+            "active" if generated.read_bytes() == expected_generated else "drifted"
+        )
+
+    zshrc_bytes = zshrc.read_bytes() if zshrc.exists() else b""
+    if (
+        USER_ZSH_SOURCE_BEGIN.encode("utf-8") not in zshrc_bytes
+        and USER_ZSH_SOURCE_END.encode("utf-8") not in zshrc_bytes
+    ):
+        zshrc_state = "missing"
+    else:
+        try:
+            zshrc_state = (
+                "active"
+                if _with_user_zsh_block(zshrc_bytes, config_path=generated, path=zshrc)
+                == zshrc_bytes
+                else "drifted"
+            )
+        except SystemExit:
+            zshrc_state = "drifted"
+
+    zprofile_bytes = zprofile.read_bytes() if zprofile.exists() else b""
+    legacy_zprofile_block = (
+        USER_ZSH_SOURCE_BEGIN.encode("utf-8") in zprofile_bytes
+        or USER_ZSH_SOURCE_END.encode("utf-8") in zprofile_bytes
+    )
+
+    if (
+        generated_state == "active"
+        and zshrc_state == "active"
+        and not legacy_zprofile_block
+    ):
+        projection_state = "active"
+    elif (
+        generated_state == "missing"
+        and zshrc_state == "missing"
+        and not legacy_zprofile_block
+    ):
+        projection_state = "inactive"
+    else:
+        projection_state = "drifted"
+    stored_entrypoint_digests: dict[str, str] = {}
+    if generated.exists():
+        try:
+            generated_text = generated.read_text(encoding="utf-8")
+        except OSError:
+            generated_text = ""
+        for line in generated_text.splitlines():
+            for key in WORKSPACE_ENTRYPOINT_DIGEST_KEYS:
+                prefix = f"export {key}="
+                if not line.startswith(prefix):
+                    continue
+                try:
+                    assignment = shlex.split(line[len("export ") :], posix=True)
+                except ValueError:
+                    continue
+                if len(assignment) == 1 and "=" in assignment[0]:
+                    stored_entrypoint_digests[key] = assignment[0].split("=", 1)[1]
+    payload = {
+        "projectionState": projection_state,
+        "generatedProjectionState": generated_state,
+        "zshrcBlockState": zshrc_state,
+        "workspaceEntrypointState": (
+            "active"
+            if generated_state == "active"
+            else "missing"
+            if generated_state == "missing"
+            else "drifted"
+        ),
+        "workspaceEntrypointDigests": stored_entrypoint_digests,
+        "legacyZprofileBlockPresent": "present" if legacy_zprofile_block else "absent",
+    }
+    if resolution_error:
+        payload["resolutionError"] = resolution_error
+    return payload
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+_merge_outcomes = _WORKSPACE_ACTIVATION_CLI.merge_outcomes
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--settings",
-        type=Path,
-        default=DEFAULT_SETTINGS_PATH,
-        help="目标 settings.json（默认本仓库 .vscode/settings.json）",
+    return _WORKSPACE_ACTIVATION_CLI.run_cli(
+        argv,
+        description=__doc__,
+        default_settings_path=DEFAULT_SETTINGS_PATH,
+        workspace_entrypoint_inactive_blocker=WORKSPACE_ENTRYPOINT_INACTIVE_BLOCKER,
+        cursor_activate=activate,
+        cursor_deactivate=deactivate,
+        cursor_status=status,
+        user_zsh_activate=activate_user_zsh,
+        user_zsh_deactivate=deactivate_user_zsh,
+        user_zsh_status=user_zsh_status,
+        user_zsh_paths=_user_zsh_paths,
     )
-    parser.add_argument("--tasks", type=Path)
-    parser.add_argument("--launch", type=Path)
-    parser.add_argument("--surface", choices=sorted(PROFILE_SURFACES))
-    parser.add_argument("--receipt-root", type=Path, default=RECEIPT_ROOT)
-    parser.add_argument("--max-receipt-age-seconds", type=int, default=900)
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--deactivate", action="store_true")
-    group.add_argument("--status", action="store_true")
-    group.add_argument("--probe-surface", action="store_true")
-    args = parser.parse_args(argv)
-
-    if args.probe_surface:
-        if args.surface is None:
-            parser.error("--probe-surface requires --surface")
-        print(
-            probe_surface(
-                surface=args.surface,
-                receipt_root=args.receipt_root,
-            )
-        )
-        return 0
-    if args.status:
-        status_payload = status(
-            args.settings,
-            args.tasks,
-            args.launch,
-            surface=args.surface,
-            receipt_root=args.receipt_root,
-            max_age_seconds=args.max_receipt_age_seconds,
-        )
-        print(
-            json.dumps(
-                status_payload,
-                ensure_ascii=False,
-                sort_keys=True,
-            )
-        )
-        if status_payload["effectiveState"] != "active":
-            recovery = (
-                "run the probe command inside the requested target terminal"
-                if args.surface is not None
-                else "run `make app-activate-flutter-facade` and Reload Window"
-            )
-            print(
-                "GATE_BLOCK: APP.LAUNCH.workspace_entrypoint_inactive; " + recovery,
-                file=sys.stderr,
-            )
-            return 2
-        return 0
-    if args.deactivate:
-        outcome = deactivate(args.settings, args.tasks, args.launch)
-    else:
-        outcome = activate(args.settings, args.tasks, args.launch)
-    print(outcome)
-    if outcome in ("activated", "refreshed", "deactivated"):
-        print(
-            "[flutter-facade] 请重载编辑器窗口（Reload Window）使新终端 PATH 生效。",
-            file=sys.stderr,
-        )
-    return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
+    try:
+        raise SystemExit(main(sys.argv[1:]))
+    except SystemExit as error:
+        # typed GATE_BLOCK 以字符串携带；CLI 契约统一用退出码 2 表示阻断。
+        if isinstance(error.code, str):
+            print(error.code, file=sys.stderr)
+            raise SystemExit(2) from None
+        raise

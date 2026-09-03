@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -86,7 +87,17 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                 ),
                 encoding="utf-8",
             )
+            plan["composeFiles"] = [
+                "quwoquan_service/services/product-ops-service/deploy/"
+                "local-elasticsearch.compose.yaml"
+            ]
             plan["executionComposeFiles"] = [str(compose_path)]
+            plan["observabilityLogSinkDigest"] = (
+                "sha256:" + hashlib.sha256(compose_path.read_bytes()).hexdigest()
+            )
+            receipt["observabilityLogSinkDigest"] = plan[
+                "observabilityLogSinkDigest"
+            ]
             (run_root / "mutable-runtime-plan.json").write_text(
                 json.dumps(plan),
                 encoding="utf-8",
@@ -423,6 +434,45 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                     f"required service is .*: {required_service}",
                 )
 
+            original_compose = json.loads(
+                compose_path.read_text(encoding="utf-8")
+            )
+            drifted_compose = json.loads(json.dumps(original_compose))
+            drifted_compose["services"]["elasticsearch"]["environment"] = {
+                "ES_JAVA_OPTS": "-Xms1g -Xmx1g"
+            }
+            compose_path.write_text(json.dumps(drifted_compose), encoding="utf-8")
+            with mock.patch.object(
+                stackctl,
+                "load_test_live_startup_attempt",
+                return_value=receipt,
+            ):
+                with self.assertRaisesRegex(
+                    ValueError, "observability log-sink composition drifted"
+                ):
+                    stackctl._dev_session_resume_running_mutable_runtime(
+                        environment="alpha",
+                        target="alpha-local",
+                        workspace_snapshot=dict(plan["workspaceIdentity"]),
+                    )
+            compose_path.write_text(json.dumps(original_compose), encoding="utf-8")
+            semantically_equal = json.dumps(original_compose, indent=2, sort_keys=True)
+            compose_path.write_text(semantically_equal, encoding="utf-8")
+            with mock.patch.object(
+                stackctl,
+                "load_test_live_startup_attempt",
+                return_value=receipt,
+            ):
+                with self.assertRaisesRegex(
+                    ValueError, "observability log-sink composition drifted"
+                ):
+                    stackctl._dev_session_resume_running_mutable_runtime(
+                        environment="alpha",
+                        target="alpha-local",
+                        workspace_snapshot=dict(plan["workspaceIdentity"]),
+                    )
+            compose_path.write_text(json.dumps(original_compose), encoding="utf-8")
+
             plan_path = run_root / "mutable-runtime-plan.json"
             plan_path.unlink()
             plan_path.symlink_to(compose_path)
@@ -469,6 +519,50 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                 payload["services"]["api"]["build"]["dockerfile"],
                 "build/Dockerfile",
             )
+
+    def test_mutable_elasticsearch_execution_copy_matches_canonical_composition(
+        self,
+    ) -> None:
+        source = (
+            stackctl.ROOT
+            / "quwoquan_service/services/product-ops-service/deploy/"
+            "local-elasticsearch.compose.yaml"
+        )
+        canonical = stackctl.canonical_local_observability_log_sink_composition(
+            source
+        )
+        with tempfile.TemporaryDirectory(dir=stackctl.output_root()) as temporary:
+            [execution] = stackctl._dev_session_materialize_compose_files(
+                [source],
+                destination_root=Path(temporary) / "rendered",
+            )
+            execution_bytes = execution.read_bytes()
+            payload = json.loads(execution_bytes)
+            launch_environment = (
+                stackctl._mutable_observability_log_sink_launch_environment(
+                    execution_path=execution,
+                    composition=canonical,
+                )
+            )
+
+        self.assertNotIn("x-qwq-package-elasticsearch", payload)
+        self.assertEqual(
+            payload["services"]["elasticsearch"]["image"],
+            canonical["selection"]["image"],
+        )
+        self.assertEqual(execution_bytes, canonical["composeBytes"])
+        self.assertEqual(
+            "sha256:" + hashlib.sha256(execution_bytes).hexdigest(),
+            canonical["composeDigest"],
+        )
+        self.assertEqual(
+            launch_environment["QWQ_OBSERVABILITY_LOG_SINK_COMPOSE_FILE"],
+            str(execution),
+        )
+        self.assertEqual(
+            launch_environment["QWQ_OBSERVABILITY_LOG_SINK_DIGEST"],
+            canonical["composeDigest"],
+        )
 
     def test_mutable_compose_execution_copy_supports_base_relative_fragments(self) -> None:
         with tempfile.TemporaryDirectory(dir=stackctl.output_root()) as temporary:

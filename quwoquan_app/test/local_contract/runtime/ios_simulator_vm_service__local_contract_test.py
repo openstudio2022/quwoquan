@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest import mock
 
@@ -63,7 +64,7 @@ def _launch_identity(
         device_id=device_id,
         application_id="com.example.app",
         process_id=process_id,
-        log_start="2026-08-29 08:00:00.000000+0800",
+        log_start="2026-08-29 08:00:00+0800",
     )
 
 
@@ -352,6 +353,9 @@ class IOSSimulatorVMServiceContractTest(unittest.TestCase):
             {"QWQ_ANDROID_RELEASE_STORE_PASSWORD": "secret"},
             clear=False,
         ), mock.patch.object(
+            vm_service,
+            "_terminate_selected_application",
+        ) as terminate, mock.patch.object(
             vm_service.subprocess,
             "run",
             return_value=completed,
@@ -364,7 +368,16 @@ class IOSSimulatorVMServiceContractTest(unittest.TestCase):
         self.assertEqual(launch.device_id, "simulator-2")
         self.assertEqual(launch.application_id, "com.example.app")
         self.assertEqual(launch.process_id, 82001)
-        self.assertTrue(launch.log_start)
+        self.assertNotRegex(launch.log_start, r"\.\d{6}")
+        parsed_log_start = datetime.strptime(
+            launch.log_start,
+            "%Y-%m-%d %H:%M:%S%z",
+        )
+        self.assertEqual(
+            parsed_log_start.strftime("%Y-%m-%d %H:%M:%S%z"),
+            launch.log_start,
+        )
+        terminate.assert_called_once_with("simulator-2", "com.example.app")
         self.assertEqual(
             run.call_args.args[0],
             [
@@ -380,6 +393,65 @@ class IOSSimulatorVMServiceContractTest(unittest.TestCase):
             "QWQ_ANDROID_RELEASE_STORE_PASSWORD",
             run.call_args.kwargs["env"],
         )
+
+    def test_activation_process_is_terminated_before_launch(self) -> None:
+        running = subprocess.CompletedProcess(
+            ["launchctl"],
+            0,
+            stdout=(
+                "123 - UIKitApplication:com.example.app[abcd][rb-legacy]\n"
+            ),
+            stderr="",
+        )
+        stopped = subprocess.CompletedProcess(
+            ["launchctl"], 0, stdout="services = {}\n", stderr=""
+        )
+        terminated = subprocess.CompletedProcess(
+            ["simctl"], 0, stdout="", stderr=""
+        )
+        with mock.patch.dict(
+            os.environ,
+            {"QWQ_ANDROID_RELEASE_STORE_PASSWORD": "secret"},
+            clear=False,
+        ), mock.patch.object(
+            vm_service.subprocess,
+            "run",
+            side_effect=(terminated, running, stopped),
+        ) as run, mock.patch.object(vm_service.time, "sleep") as sleep:
+            vm_service._terminate_selected_application(
+                "simulator-2",
+                "com.example.app",
+            )
+
+        self.assertEqual(
+            run.call_args_list[0].args[0],
+            [
+                "xcrun",
+                "simctl",
+                "terminate",
+                "simulator-2",
+                "com.example.app",
+            ],
+        )
+        self.assertEqual(
+            run.call_args_list[1].args[0],
+            [
+                "xcrun",
+                "simctl",
+                "spawn",
+                "simulator-2",
+                "launchctl",
+                "print",
+                f"user/{os.getuid()}",
+            ],
+        )
+        self.assertEqual(run.call_args_list[2].args[0], run.call_args_list[1].args[0])
+        for call in run.call_args_list:
+            self.assertNotIn(
+                "QWQ_ANDROID_RELEASE_STORE_PASSWORD",
+                call.kwargs["env"],
+            )
+        sleep.assert_called_once_with(0.05)
 
     def test_prelaunch_log_readback_is_device_pid_bound_and_clean(self) -> None:
         attempt = (

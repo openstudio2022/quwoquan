@@ -1,12 +1,10 @@
-# 旅行地点主页通用 recipe，仅由 task execute 内部消费。
-# 区域、主题与目标数只作为运行参数进入 execution work package，不得复制 recipe。
-# 分支治理：不绑定 Git 分支；契约门按 quwoquan_ops/policies/branch_policy.yaml 校验。
-# 断点续跑：同 --execution-id 只允许 resume；新尝试递增 sequence 并声明 retryOf。
+# `task init` 从已确认 carrier demand 的 familyRef 读取本 recipe；本文件不包含实例参数。
+# 区域、主题与目标数只进入 carrier demand / immutable candidate bindings，不得复制到 recipe。
+# 同一 executionId 只允许字节一致重放；blocked 后用新 executionId，并由 carrier demand 声明 retryOf。
 schema: quwoquan.content.recipe
 recipeId: content/travel/homepage/homepage
 title: 旅行地点主页执行（通用模板）
 presetRef: content/travel/homepage/base
-runtimeProfile: semantic_agent_local_calibrated
 selection:
   # 全旅游地点：在冻结前以地点实体分区选取，覆盖景区、博物馆、古镇等地点类型。
   category: 地点

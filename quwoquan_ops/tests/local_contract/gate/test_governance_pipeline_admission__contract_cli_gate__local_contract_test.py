@@ -9,7 +9,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from uuid import uuid4
 
 import pytest
 import yaml
@@ -17,9 +17,13 @@ import yaml
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
 
-from lib.governance_pipeline_admission import load_contract  # noqa: E402
 from lib.governance_pipeline_admission import contract as contract_module  # noqa: E402
-from lib.governance_pipeline_admission.contract import ContractError, validate_contract  # noqa: E402
+from lib.governance_pipeline_admission import load_contract  # noqa: E402
+from lib.governance_pipeline_admission.contract import (  # noqa: E402
+    ContractError,
+    validate_contract,
+    validate_named_evidence_plan_binding,
+)
 
 
 def run(*args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -48,6 +52,12 @@ def test_contract_owns_real_sources_required_evidence_and_zero_mutation() -> Non
     assert contract["admission_policy"]["current_max_write_concurrency"] == 1
     assert contract["admission_policy"]["objective_s4_upper_bound"] == 1
     assert set(contract["layer_admission"]) == set(contract["evidence_layers"])
+    assert len(contract["evidence_layers"]) == 26
+    assert next(iter(contract["evidence_layers"])) == "owner_manifest"
+    assert contract["schemas"]["evidence_bundle_receipts"]["required_fields"][0] == "owner_manifest"
+    assert contract["layer_admission"]["owner_manifest"]["provider_id"] == "feature_context_manifest_v3"
+    assert contract["current_repository_evidence"]["provider_adapters"]["owner_manifest"]["provider_id"] == "feature_context_manifest_v3"
+    assert "feature_context_manifest_v2" not in serialized
     assert contract["layer_admission"]["prod"]["provider_kinds"] == ["authenticated_external"]
     assert contract["layer_admission"]["portal_test"]["release_evidence_eligible"] is False
     assert contract["human_calibration_policy"]["owner_contract_version"] == 2
@@ -68,11 +78,83 @@ def test_contract_rejects_status_concurrency_activation_and_metric_drift() -> No
         lambda value: value["admission_policy"]["activation"].update(provider_available=True),
         lambda value: value["hosted_authority_source"].update(service_contract_refs=[]),
         lambda value: value["observation_metrics"]["definitions"][0]["dimensions"].append("prompt"),
+        lambda value: value["current_repository_evidence"]["named_evidence_plan_binding"]["subject"].update(candidate_id="forged"),
     ):
         broken = yaml.safe_load(yaml.safe_dump(contract))
         mutate(broken)
         with pytest.raises(ContractError):
             validate_contract(broken)
+
+
+def test_named_evidence_requires_current_exact_plan_and_governance_subject(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = load_contract()
+    binding = contract["current_repository_evidence"]["named_evidence_plan_binding"]
+    assert binding["registry_ref"] == ".agents/skills/review/references/registry.yaml"
+    assert binding["subject"] == {
+        "subject_id": "current-repository",
+        "candidate_id": "working-tree",
+        "scope_id": "governance-pipeline",
+    }
+    current = {
+        "ref": "evidence-fingerprint-v1:sha256:" + "1" * 64,
+        "digest": "sha256:" + "1" * 64,
+    }
+    plan = {
+        "workflow": binding["workflow"],
+        "segment": binding["segment"],
+        "deliverable": binding["deliverable"],
+        "scope": binding["scope"],
+        "owner_manifest_identity": {
+            "ref": "current-owner-manifest.json",
+            "target": binding["owner_manifest_target"],
+            "resolved_owner": binding["owner_manifest_target"],
+            "scope": binding["scope"],
+        },
+    }
+    receipt = {
+        "plan_fingerprint_ref": current["ref"],
+        "plan_fingerprint_digest": current["digest"],
+        "evidence": [{"id": "portal-test", "exit_code": 0}],
+        "terminal": {
+            "status": "PASS",
+            "code": "EVIDENCE.PASSED",
+            "failed_evidence": None,
+        },
+    }
+    subject = dict(binding["subject"])
+    monkeypatch.setattr(
+        "review_dispatch.validate_current_review_plan",
+        lambda value, registry, phase: current,
+    )
+    monkeypatch.setattr(
+        "handoff_consumer.validate_named_evidence_ref_payload",
+        lambda value, plan, registry, label: value,
+    )
+    assert validate_named_evidence_plan_binding(
+        plan=plan, receipt=receipt, subject=subject,
+        expected_owner_manifest_ref="current-owner-manifest.json", contract=contract,
+    ) is receipt
+
+    other_plan_receipt = dict(receipt)
+    other_plan_receipt["plan_fingerprint_ref"] = (
+        "evidence-fingerprint-v1:sha256:" + "2" * 64
+    )
+    other_plan_receipt["plan_fingerprint_digest"] = "sha256:" + "2" * 64
+    with pytest.raises(ContractError, match="different exact Review plan"):
+        validate_named_evidence_plan_binding(
+            plan=plan, receipt=other_plan_receipt, subject=subject,
+            expected_owner_manifest_ref="current-owner-manifest.json", contract=contract,
+        )
+
+    other_candidate = dict(subject)
+    other_candidate["candidate_id"] = "another-fresh-candidate"
+    with pytest.raises(ContractError, match="candidate_id mismatch"):
+        validate_named_evidence_plan_binding(
+            plan=plan, receipt=receipt, subject=other_candidate,
+            expected_owner_manifest_ref="current-owner-manifest.json", contract=contract,
+        )
 
 
 def test_observation_metric_contract_is_complete_shape_only_and_no_prompt_pii() -> None:
@@ -82,7 +164,7 @@ def test_observation_metric_contract_is_complete_shape_only_and_no_prompt_pii() 
     assert ids == {
         "governance_edit_latency_ms", "governance_idle_latency_ms", "governance_scope_latency_ms",
         "governance_release_latency_ms", "governance_cache_hit_ratio", "governance_deferred_age_ms",
-        "governance_commit_freshness_ms", "governance_hosted_mismatch_total", "governance_resolve_latency_ms",
+        "governance_commit_freshness_ms", "governance_hosted_mismatch_total",
         "governance_authority_wait_ms", "governance_authority_transfer_total", "governance_authority_timeout_total",
         "governance_review_incomplete_total", "governance_handoff_stale_total",
         "governance_objective_pending_total", "governance_objective_revoke_total",
@@ -145,10 +227,12 @@ def test_gate_reports_expected_terminal_without_wrapping_external_blocker_as_pas
     assert "Traceback" not in completed.stdout + completed.stderr
 
 
-def test_gate_with_structurally_blocked_bundle_fails(tmp_path: Path) -> None:
+def test_gate_with_structurally_blocked_bundle_fails() -> None:
     from lib.governance_pipeline_admission import assemble_evidence_bundle
     contract = load_contract()
-    path = assemble_evidence_bundle(contract, run_id=f"gate-{tmp_path.name}", refs={"named_evidence": {}, "external": {}})
+    path = assemble_evidence_bundle(
+        contract, run_id=f"gate-{uuid4().hex}", refs={"named_evidence": {}, "external": {}},
+    )
     completed = subprocess.run(
         [sys.executable, "-B", "quwoquan_ops/gate/verify_governance_pipeline_admission.py", "--evidence-bundle", str(path)],
         cwd=ROOT, text=True, capture_output=True, check=False,
@@ -159,9 +243,10 @@ def test_gate_with_structurally_blocked_bundle_fails(tmp_path: Path) -> None:
     assert "GPA.EVIDENCE_IDENTITY_BLOCKED" in completed.stderr
 
 
-def test_story_preserves_external_open_and_no_parent_or_makefile_self_wiring_claim() -> None:
+def test_story_preserves_external_open_and_binds_current_owner_evidence() -> None:
     story = (ROOT / "specs/feature-tree/runtime/development-workflow-governance/governance-pipeline-observe-only/spec.md").read_text(encoding="utf-8")
     assert all(f'<a id="gwt-00{index}"></a>' in story for index in (1, 2, 3))
     assert all(f'<a id="open-00{index}"></a>' in story for index in (1, 2, 3))
-    assert "主会话后续完成" in story
+    assert "owner manifest exact ref" in story
+    assert "固定 current pointer" in story
     assert "不得声明" in story or "不证明" in story

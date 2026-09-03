@@ -3,17 +3,25 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
-from ..evidence_fingerprint import canonical_json_bytes, validate_digest, validate_evidence_fingerprint
-from ..feature_context_fingerprint import validate_current_feature_context_fingerprint
+from .. import feature_context_fingerprint
+from ..agent_governance_contract import validate_feature_context_manifest
+from ..evidence_fingerprint import (
+    canonical_json_bytes,
+    validate_digest,
+    validate_evidence_fingerprint,
+)
+from ..feature_context_fingerprint import (
+    build_feature_context_fingerprint,
+    validate_current_feature_context_fingerprint,
+)
 from ..human_agent_delivery import CalibrationError, verify_calibration_readback
 from ..objective_execution import inspect_admission
 from ..objective_execution.contract import validate_admission_readback
-from ..workflow_resolution import verify_receipt as verify_workflow_receipt
-from .contract import ContractError, REPO_ROOT
+from .contract import REPO_ROOT, ContractError, EvidenceAdapterError
 from .read_only_local_readiness import verify_explicit_receipt_read_only
 
 ExternalVerifier = Callable[[Mapping[str, Any]], Mapping[str, Any]]
@@ -57,8 +65,12 @@ def _readback(
     scope_id: str,
     verifier_id: str,
     detail: str | None = None,
+    verification_time: datetime | None = None,
 ) -> dict[str, Any]:
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    current = verification_time or datetime.now(timezone.utc)
+    if current.tzinfo is None or current.utcoffset() is None:
+        raise ContractError("verification time must be timezone-aware")
+    verified_at = current.astimezone(timezone.utc).isoformat(timespec="seconds")
     return {
         "status": "present",
         "schema_valid": True,
@@ -70,7 +82,7 @@ def _readback(
         "detail": detail,
         "receipt_ref": receipt_ref,
         "receipt_bytes_sha256": _sha256(raw),
-        "verified_at": now,
+        "verified_at": verified_at,
         "provider_timestamp": _timestamp(provider_timestamp, "provider timestamp"),
         "candidate_id": candidate_id,
         "scope_id": scope_id,
@@ -78,46 +90,75 @@ def _readback(
     }
 
 
-def verify_owner_manifest(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str, contract: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    manifest = _json(raw, "owner manifest")
-    source = contract["current_repository_evidence"]
-    if manifest.get("target") != source["owner_manifest_target"] or manifest.get("resolved_owner") != source["owner_manifest_target"]:
-        raise ContractError("owner manifest target/owner mismatch")
-    fingerprint = validate_current_feature_context_fingerprint(manifest, repo_root=REPO_ROOT)
-    path = REPO_ROOT / receipt_ref
-    root = (REPO_ROOT / source["owner_manifest_root"]).resolve()
+def verify_owner_manifest(
+    *, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str,
+    verification_time: datetime, contract: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
     try:
-        relative = path.resolve().relative_to(root)
-    except ValueError as error:
-        raise ContractError("owner manifest ref must be under fingerprint-indexed root") from error
-    expected_name = f"{fingerprint['digest'].removeprefix('sha256:')}.json"
-    if len(relative.parts) != 1 or relative.name != expected_name:
-        raise ContractError("owner manifest ref is not indexed by its canonical fingerprint")
+        manifest = _json(raw, "owner manifest")
+        validate_feature_context_manifest(manifest)
+        feature_context_fingerprint.validate_content_addressed_ref(
+            receipt_ref, raw_bytes=raw, repo_root=REPO_ROOT,
+        )
+    except Exception as error:
+        raise EvidenceAdapterError.schema(str(error) or type(error).__name__) from error
+    source = contract["current_repository_evidence"]
+    target = str(source["owner_manifest_target"])
+    if manifest.get("target") != target or manifest.get("resolved_owner") != target:
+        raise EvidenceAdapterError.identity("owner manifest target/owner mismatch")
+    try:
+        from ..feature_tree.commands import _context_manifest
+        from ..feature_tree.nodes import discover_nodes
+        from ..feature_tree.ownership import resolve_target_details
+
+        nodes = discover_nodes()
+        canonical = _context_manifest(target, resolve_target_details(target, nodes), nodes)
+    except Exception as error:
+        raise EvidenceAdapterError.schema(
+            f"canonical owner manifest could not be resolved: {error}"
+        ) from error
+    for field in (
+        "target", "resolved_owner", "owner_chain", "canonical_contexts",
+        "applicable_agents", "open_items",
+    ):
+        if manifest[field] != canonical[field]:
+            raise EvidenceAdapterError.identity(
+                f"owner manifest {field} differs from canonical feature-tree producer"
+            )
+    chain = manifest["owner_chain"]
+    if not chain or chain[-1].get("path") != manifest["resolved_owner"]:
+        raise EvidenceAdapterError.identity(
+            "owner manifest owner_chain must be non-empty and end at resolved_owner"
+        )
+    try:
+        fingerprint = validate_current_feature_context_fingerprint(
+            manifest, repo_root=REPO_ROOT,
+        )
+    except Exception as error:
+        identity = {key: value for key, value in manifest.items() if key != "evidence_fingerprint"}
+        try:
+            expected = build_feature_context_fingerprint(identity, repo_root=REPO_ROOT)
+            actual = feature_context_fingerprint.resolve_fingerprint_binding(
+                manifest.get("evidence_fingerprint"), repo_root=REPO_ROOT,
+            )
+        except Exception as identity_error:
+            raise EvidenceAdapterError.identity(
+                str(identity_error) or type(identity_error).__name__
+            ) from identity_error
+        if actual.get("digest_payload") != expected.get("digest_payload"):
+            raise EvidenceAdapterError.stale(str(error) or type(error).__name__) from error
+        raise EvidenceAdapterError.identity(str(error) or type(error).__name__) from error
     readback = _readback(
         result="pass", provider_kind="local_runtime", release=False,
         receipt_ref=receipt_ref, raw=raw, provider_timestamp=fingerprint["captured_at"],
         candidate_id=candidate_id, scope_id=scope_id,
         verifier_id=contract["layer_admission"]["owner_manifest"]["verifier_id"],
+        verification_time=verification_time,
     )
     return readback, fingerprint
 
 
-def verify_workflow(*, raw: bytes, receipt_ref: str, manifest_fingerprint: Mapping[str, Any], candidate_id: str, scope_id: str, contract: Mapping[str, Any]) -> dict[str, Any]:
-    receipt = _json(raw, "workflow receipt")
-    verified = verify_workflow_receipt(receipt)
-    fingerprint = validate_evidence_fingerprint(receipt.get("evidence_fingerprint"))
-    if fingerprint["digest"] != manifest_fingerprint["digest"]:
-        raise ContractError("workflow receipt is not bound to current owner manifest")
-    result = "selected" if receipt.get("result") == "selected" and receipt.get("owner_manifest_status") == "fresh" and verified.get("selected_workflow") else "absent"
-    return _readback(
-        result=result, provider_kind="local_runtime", release=False,
-        receipt_ref=receipt_ref, raw=raw, provider_timestamp=fingerprint["captured_at"],
-        candidate_id=candidate_id, scope_id=scope_id,
-        verifier_id=contract["layer_admission"]["workflow_resolve"]["verifier_id"],
-    )
-
-
-def verify_local_readiness(*, level: str, raw: bytes, receipt_ref: str, owner_manifest_ref: str, candidate_id: str, scope_id: str, contract: Mapping[str, Any]) -> dict[str, Any]:
+def verify_local_readiness(*, level: str, raw: bytes, receipt_ref: str, owner_manifest_ref: str, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
     source = contract["current_repository_evidence"]
     receipt = verify_explicit_receipt_read_only(
         level=level, receipt_path=REPO_ROOT / receipt_ref, exact_bytes=raw,
@@ -129,10 +170,11 @@ def verify_local_readiness(*, level: str, raw: bytes, receipt_ref: str, owner_ma
         provider_kind="local_runtime", release=False, receipt_ref=receipt_ref, raw=raw,
         provider_timestamp=str(receipt["finished_at"]), candidate_id=candidate_id, scope_id=scope_id,
         verifier_id=contract["layer_admission"][f"local_{level}_ready"]["verifier_id"],
+        verification_time=verification_time,
     )
 
 
-def verify_review(*, plan_raw: bytes, plan_ref: str, evidence_raw: bytes, evidence_ref: str, consolidation_raw: bytes, consolidation_ref: str, candidate_id: str, scope_id: str, contract: Mapping[str, Any]) -> dict[str, Any]:
+def verify_review(*, plan_raw: bytes, plan_ref: str, evidence_raw: bytes, evidence_ref: str, consolidation_raw: bytes, consolidation_ref: str, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
     plan = _json(plan_raw, "Review plan")
     evidence = _json(evidence_raw, "Review named evidence")
     consolidation = _json(consolidation_raw, "Review consolidation")
@@ -147,7 +189,7 @@ def verify_review(*, plan_raw: bytes, plan_ref: str, evidence_raw: bytes, eviden
             receipt_ref=consolidation_ref, raw=consolidation_raw,
             provider_timestamp=str(evidence.get("finished_at")), candidate_id=candidate_id,
             scope_id=scope_id, verifier_id=contract["layer_admission"]["review_terminal"]["verifier_id"],
-            detail="Review consolidation is not PASS",
+            detail="Review consolidation is not PASS", verification_time=verification_time,
         )
     if any(item.get("severity") == "GATE_BLOCK" for item in consolidation.get("findings") or []):
         raise ContractError("Review consolidation contains a GATE_BLOCK finding")
@@ -156,11 +198,11 @@ def verify_review(*, plan_raw: bytes, plan_ref: str, evidence_raw: bytes, eviden
         receipt_ref=consolidation_ref, raw=consolidation_raw,
         provider_timestamp=str(evidence.get("finished_at")), candidate_id=candidate_id,
         scope_id=scope_id, verifier_id=contract["layer_admission"]["review_terminal"]["verifier_id"],
-        detail=f"plan={plan_ref}; named_evidence={evidence_ref}",
+        detail=f"plan={plan_ref}; named_evidence={evidence_ref}", verification_time=verification_time,
     )
 
 
-def verify_handoff(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str, contract: Mapping[str, Any]) -> dict[str, Any]:
+def verify_handoff(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
     payload = _json(raw, "handoff manifest")
     import handoff_consumer
     verified = handoff_consumer.validate_handoff_payload(payload)
@@ -170,20 +212,21 @@ def verify_handoff(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id:
         receipt_ref=receipt_ref, raw=raw, provider_timestamp=fingerprint["captured_at"],
         candidate_id=candidate_id, scope_id=scope_id,
         verifier_id=contract["layer_admission"]["handoff_freshness"]["verifier_id"],
+        verification_time=verification_time,
     )
 
 
 def verify_human_readback(
     *, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str,
     evidence_fingerprint: str, session_bytes_by_ref: Mapping[str, bytes],
-    provider_timestamp: str, verifier: ExternalVerifier | None, contract: Mapping[str, Any],
+    provider_timestamp: str, verification_time: datetime,
+    verifier: ExternalVerifier | None, contract: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Consume only Human-owned exact v2 readback; never recompute a shadow role model."""
     value = _json(raw, "Human calibration readback")
-    verified_at = datetime.now(timezone.utc)
     try:
         readback = verify_calibration_readback(
-            value, session_bytes_by_ref=session_bytes_by_ref, now=verified_at,
+            value, session_bytes_by_ref=session_bytes_by_ref, now=verification_time,
             expected_scope={
                 "decision_unit_id": str(value.get("scope", {}).get("decision_unit_id", "")),
                 "evidence_fingerprint": evidence_fingerprint,
@@ -229,11 +272,12 @@ def verify_human_readback(
             result=readback["status"], provider_kind="authenticated_external", release=True,
             receipt_ref=receipt_ref, raw=raw, provider_timestamp=provider_timestamp,
             candidate_id=candidate_id, scope_id=scope_id, verifier_id=policy["verifier_id"],
+            verification_time=verification_time,
         ),
         readback,
     )
 
-def objective_readback(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str, contract: Mapping[str, Any]) -> dict[str, Any]:
+def objective_readback(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
     envelope = _json(raw, "Objective dynamic inspect")
     if set(envelope) != {"provider_timestamp", "readback"}:
         raise ContractError("Objective dynamic inspect envelope fields drifted")
@@ -243,7 +287,7 @@ def objective_readback(*, raw: bytes, receipt_ref: str, candidate_id: str, scope
         provider_kind="local_runtime", release=False, receipt_ref=receipt_ref, raw=raw,
         provider_timestamp=str(envelope["provider_timestamp"]), candidate_id=candidate_id,
         scope_id=scope_id, verifier_id=contract["layer_admission"]["objective_readback"]["verifier_id"],
-        detail=readback["reason"],
+        detail=readback["reason"], verification_time=verification_time,
     )
 
 
@@ -252,7 +296,7 @@ def produce_objective_bytes() -> bytes:
     return canonical_json_bytes(envelope)
 
 
-def verify_hotl(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str, contract: Mapping[str, Any]) -> dict[str, Any]:
+def verify_hotl(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
     envelope = _json(raw, "HOTL dynamic inspect")
     if set(envelope) != {"provider_timestamp", "readback"} or not isinstance(envelope["readback"], Mapping):
         raise ContractError("HOTL dynamic inspect envelope fields drifted")
@@ -263,6 +307,7 @@ def verify_hotl(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: st
         receipt_ref=receipt_ref, raw=raw, provider_timestamp=str(envelope["provider_timestamp"]),
         candidate_id=candidate_id, scope_id=scope_id,
         verifier_id=contract["layer_admission"]["hotl_inspect"]["verifier_id"],
+        verification_time=verification_time,
     )
 
 
@@ -273,7 +318,7 @@ def produce_hotl_bytes(input_raw: bytes) -> bytes:
     return canonical_json_bytes(envelope)
 
 
-def produce_hosted_source_bytes(contract: Mapping[str, Any]) -> bytes:
+def _hosted_source_snapshots(contract: Mapping[str, Any]) -> list[dict[str, Any]]:
     hosted = contract["hosted_authority_source"]
     refs: list[str] = []
     for key in ("service_contract_refs", "adapter_implementation_refs", "service_implementation_refs", "portal_implementation_refs"):
@@ -285,14 +330,19 @@ def produce_hosted_source_bytes(contract: Mapping[str, Any]) -> bytes:
             snapshots.append({"path": ref, "state": "missing", "sha256": None})
         else:
             snapshots.append({"path": ref, "state": "present", "sha256": _sha256(path.read_bytes())})
-    return canonical_json_bytes({"provider_timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"), "snapshots": snapshots})
+    return snapshots
 
 
-def verify_hosted_source(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str, contract: Mapping[str, Any]) -> dict[str, Any]:
-    expected = produce_hosted_source_bytes(contract)
+def produce_hosted_source_bytes(contract: Mapping[str, Any]) -> bytes:
+    return canonical_json_bytes({
+        "provider_timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "snapshots": _hosted_source_snapshots(contract),
+    })
+
+
+def verify_hosted_source(*, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
     actual = _json(raw, "hosted authority source inspect")
-    current = _json(expected, "current hosted authority source inspect")
-    if actual.get("snapshots") != current.get("snapshots"):
+    if actual.get("snapshots") != _hosted_source_snapshots(contract):
         raise ContractError("hosted authority source bytes drifted")
     missing = [item["path"] for item in actual["snapshots"] if item.get("state") != "present"]
     return _readback(
@@ -301,15 +351,18 @@ def verify_hosted_source(*, raw: bytes, receipt_ref: str, candidate_id: str, sco
         candidate_id=candidate_id, scope_id=scope_id,
         verifier_id=contract["layer_admission"]["hosted_authority_code"]["verifier_id"],
         detail=("missing required source: " + ",".join(missing)) if missing else None,
+        verification_time=verification_time,
     )
 
 
-def verify_external(*, layer: str, raw: bytes, receipt_ref: str, verifier: ExternalVerifier | None, subject: Mapping[str, Any], contract: Mapping[str, Any]) -> dict[str, Any]:
+def verify_external(*, layer: str, raw: bytes, receipt_ref: str, verifier: ExternalVerifier | None, subject: Mapping[str, Any], verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
     policy = contract["layer_admission"][layer]
     if policy["interface"] != "external":
         raise ContractError(f"{layer} does not accept an external provider interface")
     if verifier is None:
-        raise ContractError(f"external verifier unavailable for {policy['provider_id']}")
+        raise EvidenceAdapterError.identity(
+            f"external verifier unavailable for {policy['provider_id']}"
+        )
     request = {
         "provider_id": policy["provider_id"], "receipt_ref": receipt_ref,
         "receipt_bytes": raw, "receipt_bytes_sha256": _sha256(raw), "subject": dict(subject),
@@ -317,21 +370,35 @@ def verify_external(*, layer: str, raw: bytes, receipt_ref: str, verifier: Exter
     verified = verifier(request)
     required = {"provider_id", "provider_kind", "authenticated", "exact_bytes_verified", "release_evidence_eligible", "candidate_id", "scope_id", "evidence_fingerprint", "result", "provider_timestamp", "receipt_bytes_sha256", "verifier_id"}
     if not isinstance(verified, Mapping) or set(verified) != required:
-        raise ContractError("external verifier readback fields drifted")
+        raise EvidenceAdapterError.schema("external verifier readback fields drifted")
     if verified["provider_id"] != policy["provider_id"] or verified["provider_kind"] not in policy["provider_kinds"]:
-        raise ContractError("external verifier provider identity is not allowed for layer")
+        raise EvidenceAdapterError.identity(
+            "external verifier provider identity is not allowed for layer"
+        )
     if verified["authenticated"] is not True or verified["exact_bytes_verified"] is not True:
-        raise ContractError("external provider receipt is not authenticated exact-byte readback")
+        raise EvidenceAdapterError.identity(
+            "external provider receipt is not authenticated exact-byte readback"
+        )
     if verified["receipt_bytes_sha256"] != _sha256(raw) or verified["evidence_fingerprint"] != subject["evidence_fingerprint"]:
-        raise ContractError("external provider receipt bytes/fingerprint mismatch")
+        raise EvidenceAdapterError.identity(
+            "external provider receipt bytes/fingerprint mismatch"
+        )
     if verified["candidate_id"] != subject["candidate_id"] or verified["scope_id"] != subject["scope_id"]:
-        raise ContractError("external provider candidate/scope mismatch")
+        raise EvidenceAdapterError.identity(
+            "external provider candidate/scope mismatch"
+        )
     if verified["verifier_id"] != policy["verifier_id"]:
-        raise ContractError("external verifier identity mismatch")
-    validate_digest(verified["receipt_bytes_sha256"])
+        raise EvidenceAdapterError.identity("external verifier identity mismatch")
+    try:
+        validate_digest(verified["receipt_bytes_sha256"])
+    except Exception as error:
+        raise EvidenceAdapterError.identity(
+            str(error) or type(error).__name__
+        ) from error
     return _readback(
         result=str(verified["result"]), provider_kind=str(verified["provider_kind"]),
         release=bool(verified["release_evidence_eligible"]), receipt_ref=receipt_ref, raw=raw,
         provider_timestamp=str(verified["provider_timestamp"]), candidate_id=str(verified["candidate_id"]),
         scope_id=str(verified["scope_id"]), verifier_id=str(verified["verifier_id"]),
+        verification_time=verification_time,
     )

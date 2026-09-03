@@ -1,8 +1,8 @@
+# `task init` 从已确认 carrier demand 的 familyRef 读取本 recipe；本文件不包含实例参数。
 schema: quwoquan.content.recipe
 recipeId: content/travel/video/video
 title: 旅行视频作品执行（通用模板）
 presetRef: content/travel/video/base
-runtimeProfile: semantic_agent_local_calibrated
 selection:
   # 媒体作品面向所有旅游地点；主清单已用精确 entityType
   # 区分景区、博物馆、主题乐园等，recipe 不得二次缩窄。

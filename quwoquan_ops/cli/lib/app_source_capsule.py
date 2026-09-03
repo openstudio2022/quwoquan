@@ -24,5 +24,8 @@ def app_source_capsule_roots() -> tuple[str, ...]:
         "quwoquan_ops",
         "quwoquan_service/contracts/metadata",
         "quwoquan_service/contracts/runtime_errors/packages/dart/quwoquan_runtime_errors",
+        "quwoquan_service/services",
+        "quwoquan_service/control-plane/platform-ops",
+        "quwoquan_service/cmd/service-core/composition.yaml",
         *environment_roots,
     )

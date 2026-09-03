@@ -84,6 +84,13 @@ def _parser(contract: dict[str, Any]) -> argparse.ArgumentParser:
     parser.add_argument("--reverse-receipt-digest", default="")
     parser.add_argument("--consumer-lease-id", default="")
     parser.add_argument("--runtime-config-trust-output", default="")
+    # 供给模式默认保持 canonical 外部注入（闭集首位）；闭集由 metadata 唯一拥有，
+    # 这里不自持第二份枚举（embedded_default_package 已从闭集退役）。
+    parser.add_argument(
+        "--runtime-config-supply-mode",
+        choices=tuple(contract["runtime_config_supply_modes"]),
+        default="",
+    )
     return parser
 
 
@@ -187,8 +194,10 @@ def materialize_runtime_config_trust_envelope(
 
 
 def _load_runtime_config_package(args: argparse.Namespace) -> dict[str, Any]:
+    # 继承当前解释器：Xcode build phase 的 PATH 首个 python3 可能缺 PyYAML，
+    # 而本进程已由 resolver 校验过兼容性（3.10+ 且可 import yaml）。
     package_command = [
-        "python3",
+        sys.executable,
         "scripts/env/print_app_env_dart_defines.py",
         "--env",
         args.env,
@@ -268,6 +277,16 @@ def build_handoff(
             raise ValueError(
                 f"runtime configuration package {field} does not match launcher selection"
             )
+    supply_modes = tuple(contract["runtime_config_supply_modes"])
+    runtime_config_supply_mode = (
+        str(getattr(args, "runtime_config_supply_mode", "") or "").strip()
+        or supply_modes[0]
+    )
+    if runtime_config_supply_mode not in supply_modes:
+        raise ValueError(
+            "runtime config supply mode "
+            f"{runtime_config_supply_mode} is not in the canonical closed set"
+        )
     effective_schema = contract["schemas"]["app_effective_launch_manifest"]
     handoff_schema = contract["schemas"]["app_launcher_handoff"]
     entrypoint = effective_schema["fields"]["entrypoint"]["const"]
@@ -308,7 +327,7 @@ def build_handoff(
         "target": args.target,
         "entrypoint": entrypoint,
         "launchProvenance": args.launch_provenance,
-        "runtimeConfigSupplyMode": contract["runtime_config_supply_modes"][0],
+        "runtimeConfigSupplyMode": runtime_config_supply_mode,
         "launchPolicy": args.launch_policy,
         "runtimeConfigPackageDigest": package_digest,
         "runtimeConfigTrustEnvelopeDigest": trust_envelope_digest,
@@ -321,7 +340,7 @@ def build_handoff(
     effective_digest = effective_launch_manifest_digest(effective_manifest, contract)
     compile_diagnostics = {
         "launchProvenance": args.launch_provenance,
-        "runtimeConfigSupplyMode": contract["runtime_config_supply_modes"][0],
+        "runtimeConfigSupplyMode": runtime_config_supply_mode,
     }
     handoff = {
         **effective_manifest,

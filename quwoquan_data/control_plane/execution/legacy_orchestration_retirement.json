@@ -1,7 +1,40 @@
 {
   "schema": "quwoquan_data.legacy_orchestration_retirement_inventory",
-  "state": "operationally_retired",
-  "deleteFamilies": ["agent", "queue", "controller", "recovery", "campaign"],
-  "preserveProtocolKernels": ["closure", "runtime_evidence", "scale"],
+  "state": "retired",
+  "deleteFamilies": [
+    "agent",
+    "queue",
+    "controller",
+    "recovery",
+    "campaign",
+    "planning",
+    "preflight",
+    "source_pool",
+    "runtime_evidence",
+    "scale",
+    "runner",
+    "closure",
+    "authority",
+    "semantic",
+    "reducer",
+    "terminal",
+    "supersession",
+    "proof",
+    "model",
+    "store",
+    "context",
+    "contracts",
+    "runtime_state",
+    "stage_reports",
+    "prompt_snapshot"
+  ],
+  "preserveProtocolKernels": [
+    "identity",
+    "task_init",
+    "stage_receipt",
+    "workspace",
+    "runtime_contract",
+    "production_contracts"
+  ],
   "forbiddenCompatibility": ["alias", "dual_read", "dual_write", "shim"]
 }

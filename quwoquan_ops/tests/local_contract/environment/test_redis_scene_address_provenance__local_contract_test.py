@@ -214,9 +214,9 @@ def test_every_consumed_redis_scene_has_an_address_provenance__local_contract(
     sources = production_go_sources(service)
     assembled = assembled_scenes(sources)
     if not assembled:
-        # 两种合法情形：非 Go 服务（recommendation-service），以及刻意不装配任何
-        # scene 的服务（api-edge 不持有领域缓存）。两者都没有可判定的 scene。
-        pytest.skip(f"{service} assembles no Redis scene")
+        # 非 Go 服务或刻意不装配 scene 的服务没有可判定对象；空集合已由
+        # redis_bearing_services 的真实渲染枚举证明，而不是运行期 skip 伪绿。
+        return
     compose_path = SERVICE_ROOT / service / "deploy" / "compose.yaml"
     compose = compose_path.read_text(encoding="utf-8") if compose_path.is_file() else ""
     shared_keys = shared_address_keys(service, sources)

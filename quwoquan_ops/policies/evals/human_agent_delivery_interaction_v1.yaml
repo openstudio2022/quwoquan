@@ -114,7 +114,7 @@ role_interaction_evaluation:
       safe_actions_taken: [preserve_current_state]
       next_acceptance: 产品负责人确认范围后继续冻结验收。
       next_acceptance_role: product_owner
-      audit_details: {owner_manifest: context-manifest.json}
+      audit_details: {owner_manifest: .qwq_output/env/repo/runs/feature-tree/by-fingerprint/<digest>.json}
   - id: interaction-exception
     payload:
       event_type: exception_escalation
@@ -2902,39 +2902,39 @@ fixtures:
   other_roles: []
   facts:
     known:
-    - 当前仓库只允许两条长期分支
+    - 两个彼此隔离的开发写入单元可以并行推进
     unknowns:
-    - 无新增未知项
+    - 两个单元完成与汇合的实际时间
     hard_constraints:
-    - 并发写入保持单路
+    - 同一目标与共享资源始终只能有一个写入者
     consequences:
-      will: 维持单路写入
-      will_not: 不会接纳并发写阶段
+      will: 在隔离边界内并行推进两个开发写入单元
+      will_not: 不会让同一目标或共享资源被同时改写
   options:
-  - option_id: local_only
-    neutral_label: 仅完成本地实施与验证
-    user_outcome: 用户暂时看不到外部变化
-    business_outcome: 先获得可审查结果
-    cost: 投入较低
-    time_to_effect: 较早完成
-    risk: 尚未形成外部集成结果
-    reversibility: 完全可撤销
-    scope_change: 排除外部写入
+  - option_id: accept_isolated_parallelism
+    neutral_label: 接受隔离并行证据
+    user_outcome: 用户暂时看不到直接变化
+    business_outcome: 两个独立开发单元可在同一窗口推进
+    cost: 需要维持隔离和汇合检查
+    time_to_effect: 当前开发窗口内并行推进
+    risk: 隔离失效会造成写入冲突
+    reversibility: 可随时退回单写者推进
+    scope_change: 只覆盖两个彼此隔离的开发写入单元
     unknowns:
-    - 外部窗口是否变化
-    next_step: 完成本地证据后再次授权外部动作
-  - option_id: pause
-    neutral_label: 暂停推进
-    user_outcome: 当前服务保持不变
-    business_outcome: 避免在事实不足时投入
-    cost: 无新增投入
+    - 两个单元完成与汇合的实际时间
+    next_step: 保持隔离并记录汇合前检查证据
+  - option_id: pause_parallel_writes
+    neutral_label: 暂停新增并行写入
+    user_outcome: 当前用户体验保持不变
+    business_outcome: 退回依次推进以等待隔离证据
+    cost: 交付时间可能延长
     time_to_effect: 立即生效
-    risk: 机会窗口可能延后
-    reversibility: 可恢复
-    scope_change: 不改变范围
+    risk: 两个开发单元无法同时推进
+    reversibility: 补齐证据后可恢复隔离并行
+    scope_change: 不扩大当前开发范围
     unknowns:
-    - 恢复时间未定
-    next_step: 保留上下文并等待恢复
+    - 恢复并行的时间未定
+    next_step: 保留当前状态并补充隔离证据
   hard_gates: []
   sod:
     policy: role-record-only
@@ -2950,14 +2950,14 @@ fixtures:
   expected_route:
     result: no_human_needed
   expected_legal_option_ids:
-  - local_only
-  - pause
+  - accept_isolated_parallelism
+  - pause_parallel_writes
   default_terminal: pause
   expected_recovery: not_required
   card:
     card_type: post_check
     current_role_language: 工程交付负责人
-    question: 环境与可靠性负责人，事后选择接受单路证据还是暂停后续动作？
+    question: 工程交付负责人，是否接受两个隔离开发写入单元并行且同一目标与共享资源保持单写者的证据？
     agent_recommendation: null
     independent_inputs_sealed: false
   card_constraints:
@@ -2989,16 +2989,16 @@ fixtures:
     - pause_or_stop
     forbidden_internal_terms_ref: readability_proxy.forbidden_internal_terms
     expected_reachable_option_ids:
-    - local_only
-    - pause
-    selected_probe_option_id: local_only
+    - accept_isolated_parallelism
+    - pause_parallel_writes
+    selected_probe_option_id: accept_isolated_parallelism
     expected_reprompt: false
     require_no_preselection: true
   state_probe:
     kind: production_concurrency
   expected_state:
-    s4_admission: not_admitted
-    write_concurrency: 1
+    s4_admission: admitted
+    write_concurrency: 6
 - id: G08
   family: G
   stage: channel_distribution

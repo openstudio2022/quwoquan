@@ -86,7 +86,7 @@
           "type": "object",
           "oneOf": [
             {
-              "maxProperties": 0
+              "additionalProperties": false
             },
             {
               "additionalProperties": false,

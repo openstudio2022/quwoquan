@@ -4,8 +4,8 @@
 # 角色：hook。由 `.cursor/hooks.json` 的 `beforeShellExecution`（无 matcher）调用。
 #
 # 为什么不挂 sessionStart：Cursor 的 Event Output Cheat Sheet 只为 preToolUse、
-# postToolUse、subagentStart/Stop 与 beforeShellExecution/beforeMCPExecution 声明了输出
-# 字段，sessionStart 没有任何可投递消息的字段。提醒必须落在能出声的事件上，否则它会
+# postToolUse 与 beforeShellExecution/beforeMCPExecution 声明了输出字段，sessionStart
+# 没有任何可投递消息的字段。提醒必须落在能出声的事件上，否则它会
 # 静默不生效——而静默失效正是本机制要治理的那类问题。
 #
 # 因为它对每条 shell 命令都触发，未到提醒时点必须在 bash 内短路，不启动解释器：把

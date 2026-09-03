@@ -170,6 +170,7 @@ from quwoquan_ops.cli.smoke.environment_patrol_smoke import (  # noqa: E402,F401
     _canonical_handoff_projection,
     _test_host_dart_defines,
     _canonical_test_live_launcher_handoff,
+    _cleanup_android_local_port_reverse,
     _cleanup_patrol_target_wrapper,
     _create_patrol_secret_define_file,
     _create_patrol_target_wrapper,

@@ -50,6 +50,7 @@ _STARTUP_IDENTITY_FIELDS = (
     "composeDigest",
     "configurationDigest",
     "providerRuntimeDigest",
+    "observabilityLogSinkDigest",
     "resolverHandoffDigest",
 )
 _LIFECYCLE_FIELDS = frozenset(

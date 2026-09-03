@@ -27,11 +27,13 @@ type ActiveSupplySnapshot struct {
 }
 
 func (snapshot ActiveSupplySnapshot) ReleaseBoundReadbackReady() bool {
+	releaseClass := strings.TrimSpace(snapshot.ReleaseClass)
 	return strings.TrimSpace(snapshot.Environment) != "" &&
 		strings.TrimSpace(snapshot.SourceOwner) == "qwq_data" &&
 		strings.TrimSpace(snapshot.Status) == "active" &&
 		strings.TrimSpace(snapshot.ActiveReleaseID) != "" &&
 		canonicalReleaseDigestPattern.MatchString(strings.TrimSpace(snapshot.ManifestDigest)) &&
+		(releaseClass == "research" || releaseClass == "commercial") &&
 		strings.TrimSpace(snapshot.ReadbackStatus) == "passed"
 }
 
@@ -48,6 +50,14 @@ func (snapshot ActiveSupplySnapshot) IsEmpty() bool {
 		strings.TrimSpace(snapshot.ReadbackStatus) == "" &&
 		snapshot.Posts == 0 &&
 		snapshot.PlayableVideos == 0
+}
+
+// IsResearchRelease 只从 importer 落入 active release state 的 releaseClass
+// 判定研究态；feed application/query owner 不从 route、对象 usageScope 或媒体
+// 形态反推 release 类别。
+func (snapshot ActiveSupplySnapshot) IsResearchRelease() bool {
+	return snapshot.ReleaseBoundReadbackReady() &&
+		strings.TrimSpace(snapshot.ReleaseClass) == "research"
 }
 
 func (snapshot ActiveSupplySnapshot) ContentReady() bool {
