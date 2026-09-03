@@ -28,7 +28,12 @@ CATALOG = ROOT / "quwoquan_service/contracts/metadata/_shared/runtime_observabil
 STORAGE = ROOT / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/storage.yaml"
 ROLLUPS = ROOT / "quwoquan_service/services/product-ops-service/contracts/product_ops/event_record/rollups.yaml"
 PRODUCT_OPS_ROOT = ROOT / "quwoquan_service/services/product-ops-service"
+PRODUCT_OPS_MAIN = PRODUCT_OPS_ROOT / "cmd/api/main.go"
+PRODUCT_OPS_BOOTSTRAP = PRODUCT_OPS_ROOT / "cmd/api/bootstrap.go"
 PRODUCT_OPS_ROUTES = PRODUCT_OPS_ROOT / "cmd/api/product_routes.go"
+SERVICEKIT_ROOT = ROOT / "quwoquan_service/runtime/servicekit"
+SERVICEKIT_BOOTSTRAP = SERVICEKIT_ROOT / "bootstrap.go"
+SERVICEKIT_OBSERVABILITY = SERVICEKIT_ROOT / "observability.go"
 EVENT_RECORD_OPERATIONS = (
     PRODUCT_OPS_ROOT / "contracts/product_ops/event_record/operations.yaml"
 )
@@ -95,11 +100,7 @@ def main() -> int:
         ("NewRuntimeLogExportWriter", "CanonicalRuntimeLogFields"),
         issues,
     )
-    _require_text(
-        ROOT / "quwoquan_service/services/product-ops-service/cmd/api/main.go",
-        ("NewRuntimeLogExportWriter", "NewProcessTraceLogger"),
-        issues,
-    )
+    _verify_product_ops_servicekit_runtime_log_wiring(issues)
     _require_text(
         ROOT / "quwoquan_app/lib/runtime/di/cloud_http_client_provider.dart",
         ("RuntimeApiLatencyDispatcher",),
@@ -193,6 +194,149 @@ def _load_storage(path: Path, issues: list[str]) -> dict[str, object]:
             f"{_rel(path)} cannot be decoded by canonical storage view: {exc}"
         )
         return {}
+
+
+def _go_function_body(source: str, declaration: re.Pattern[str]) -> str | None:
+    """Return one function body, excluding comment and literal lookalikes."""
+
+    code = re.sub(r"//[^\n]*|/\*.*?\*/|`[^`]*`", " ", source, flags=re.DOTALL)
+    match = declaration.search(code)
+    if match is None:
+        return None
+    opening = code.find("{", match.end())
+    if opening < 0:
+        return None
+    depth = 0
+    for index in range(opening, len(code)):
+        if code[index] == "{":
+            depth += 1
+        elif code[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return code[opening + 1 : index]
+    return None
+
+
+def _verify_product_ops_servicekit_runtime_log_wiring(
+    issues: list[str],
+    *,
+    main_text: str | None = None,
+    product_bootstrap_text: str | None = None,
+    servicekit_bootstrap_text: str | None = None,
+    observability_text: str | None = None,
+) -> None:
+    """Verify the Product Ops entrypoint reaches the shared runtime-log stack."""
+
+    main_source = _read(PRODUCT_OPS_MAIN, issues) if main_text is None else main_text
+    product_bootstrap_source = (
+        _read(PRODUCT_OPS_BOOTSTRAP, issues)
+        if product_bootstrap_text is None
+        else product_bootstrap_text
+    )
+    servicekit_bootstrap_source = (
+        _read(SERVICEKIT_BOOTSTRAP, issues)
+        if servicekit_bootstrap_text is None
+        else servicekit_bootstrap_text
+    )
+    observability_source = (
+        _read(SERVICEKIT_OBSERVABILITY, issues)
+        if observability_text is None
+        else observability_text
+    )
+
+    main_body = _go_function_body(
+        main_source,
+        re.compile(r"\bfunc\s+main\s*\(\s*\)"),
+    )
+    standalone_module = re.compile(
+        r"\bservicekit\.RunStandalone\s*\(\s*serviceName\s*,\s*"
+        r"func\s*\(\s*\)\s*\(\s*servicehost\.Module\s*,\s*error\s*\)\s*"
+        r"\{\s*return\s+newModule\s*\(\s*\)\s*\}\s*,?\s*\)",
+        re.DOTALL,
+    )
+    if main_body is None or standalone_module.search(main_body) is None:
+        issues.append(
+            f"{_rel(PRODUCT_OPS_MAIN)} must enter the canonical "
+            "servicekit.RunStandalone/newModule bootstrap path"
+        )
+
+    module_body = _go_function_body(
+        product_bootstrap_source,
+        re.compile(r"\bfunc\s+newModule\s*\(\s*\)"),
+    )
+    module_bootstrap = re.compile(
+        r"\breturn\s+servicekit\.Bootstrap\s*\(\s*serviceName\s*,\s*"
+        r"servicekit\.BootstrapSpec\s*\[\s*config\s*\]\s*\{",
+        re.DOTALL,
+    )
+    if module_body is None or module_bootstrap.search(module_body) is None:
+        issues.append(
+            f"{_rel(PRODUCT_OPS_BOOTSTRAP)} newModule must delegate to "
+            "servicekit.Bootstrap"
+        )
+
+    bootstrap_body = _go_function_body(
+        servicekit_bootstrap_source,
+        re.compile(r"\bfunc\s+bootstrapAssembly\s*\["),
+    )
+    observability_variable: str | None = None
+    if bootstrap_body is not None:
+        constructor = re.search(
+            r"\b(?P<name>[A-Za-z_]\w*)\s*,\s*err\s*:=\s*"
+            r"NewObservabilityStack\s*\(",
+            bootstrap_body,
+        )
+        if constructor is not None:
+            observability_variable = constructor.group("name")
+    if observability_variable is None:
+        issues.append(
+            f"{_rel(SERVICEKIT_BOOTSTRAP)} bootstrapAssembly must construct "
+            "NewObservabilityStack"
+        )
+    elif re.search(
+        rf"\bhandler\s*:=\s*{re.escape(observability_variable)}"
+        r"\.WrapHTTPHandler\s*\(",
+        bootstrap_body or "",
+    ) is None:
+        issues.append(
+            f"{_rel(SERVICEKIT_BOOTSTRAP)} bootstrapAssembly must route HTTP "
+            "through the constructed ObservabilityStack"
+        )
+
+    stack_body = _go_function_body(
+        observability_source,
+        re.compile(r"\bfunc\s+NewObservabilityStack\s*\("),
+    )
+    for fragment, description in (
+        ("robs.NewRuntimeLogExportWriter", "runtime-log export writer"),
+        ("robs.NewProcessTraceLogger", "process trace logger"),
+    ):
+        if stack_body is None or fragment not in stack_body:
+            issues.append(
+                f"{_rel(SERVICEKIT_OBSERVABILITY)} NewObservabilityStack must "
+                f"construct the {description} with {fragment}"
+            )
+
+    wrapper_body = _go_function_body(
+        observability_source,
+        re.compile(
+            r"\bfunc\s*\(\s*stack\s+\*ObservabilityStack\s*\)\s*"
+            r"WrapHTTPHandler\s*\("
+        ),
+    )
+    required_wrapper_fragments = (
+        "rthttp.NewHTTPServerMiddleware",
+        "stack.IOLogger",
+        "stack.ProcessLogger",
+        "stack.ExceptionLogger",
+    )
+    if wrapper_body is None or any(
+        fragment not in wrapper_body for fragment in required_wrapper_fragments
+    ):
+        issues.append(
+            f"{_rel(SERVICEKIT_OBSERVABILITY)} WrapHTTPHandler must connect "
+            "IO, process, and exception loggers through NewHTTPServerMiddleware"
+        )
 
 
 def _verify_runtime_log_http_registration(
