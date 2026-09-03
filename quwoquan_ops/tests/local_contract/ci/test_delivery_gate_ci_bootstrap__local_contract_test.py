@@ -331,16 +331,41 @@ def test_ops_portal_build_receives_the_external_deploy_root() -> None:
 
 
 def test_delivery_gate_fetches_history_for_frozen_knowledge_assets() -> None:
-    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
-        encoding="utf-8"
-    )
-    coverage = _job_body(workflow, "quwoquan_service_coverage")
+    jobs = _workflow_jobs()
+    expected_repository_gate_jobs = {
+        "quwoquan_service",
+        "quwoquan_service_packaging",
+        "quwoquan_service_coverage",
+        "quwoquan_app_static",
+        "quwoquan_app_tests",
+        "quwoquan_app_serial",
+        "quwoquan_app_coverage",
+        "quwoquan_data",
+        "quwoquan_data_tests",
+        "ops_portal",
+    }
+    repository_gate_jobs = {
+        job_name: job
+        for job_name, job in jobs.items()
+        if any(
+            "bash quwoquan_ops/gate/gate_repo.sh" in str(step.get("run", ""))
+            for step in job.get("steps", [])
+        )
+    }
 
-    assert "fetch-depth: 0" in coverage
-    assert "fetch-depth: 1" not in coverage
-    assert coverage.index("fetch-depth: 0") < coverage.index(
-        "Gate (quwoquan_service coverage)"
-    )
+    assert set(repository_gate_jobs) == expected_repository_gate_jobs
+    for job_name, job in repository_gate_jobs.items():
+        checkouts = [
+            step
+            for step in job.get("steps", [])
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+        ]
+        assert len(checkouts) == 1, job_name
+        # gate_repo 的全局前置检查会从冻结提交读取 S0 knowledge assets；浅克隆
+        # 无法执行 `git show <frozen_sha>:<path>`，会让所有 scope 共因失败。
+        assert (checkouts[0].get("with") or {}).get("fetch-depth") == 0, (
+            f"{job_name} 必须检出完整历史，供 frozen knowledge assets 校验读取"
+        )
 
 
 def test_hosted_gate_jobs_prepare_tesseract_before_repository_gate() -> None:
