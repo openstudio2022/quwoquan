@@ -152,6 +152,7 @@ type appLaunchSchemas struct {
 	AppLaunchAttempt               appLaunchSchemaContract `yaml:"app_launch_attempt"`
 	AppEffectiveLaunchManifest     appLaunchSchemaContract `yaml:"app_effective_launch_manifest"`
 	AppLauncherHandoff             appLaunchSchemaContract `yaml:"app_launcher_handoff"`
+	AppManagedPreparation          appLaunchSchemaContract `yaml:"app_managed_preparation"`
 }
 
 type appLaunchMetadata struct {

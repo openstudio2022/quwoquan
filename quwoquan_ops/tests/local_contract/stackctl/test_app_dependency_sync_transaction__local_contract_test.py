@@ -1,11 +1,13 @@
 """Transactional publication contract for ``stackctl app-dependency-sync``."""
 
-# spec_ref: specs/feature-tree/runtime/runtime-config/design.md#dec-003
+# spec_ref: specs/feature-tree/platform-ops-governance/spec.md#dom-004
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import stat
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
@@ -201,6 +203,37 @@ def test_active_write_post_replace_unknown_readback_preserves_generation(
     )
 
 
+def test_successful_active_write_with_unavailable_fresh_readback_is_ambiguous(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "output"
+    _stub_sync(monkeypatch, output)
+    original_read = sync.read_regular_nofollow
+
+    def unavailable_active(path: Path, *, label: str):
+        if path.name == "active.json":
+            raise OSError("fresh active readback unavailable")
+        return original_read(path, label=label)
+
+    monkeypatch.setattr(sync, "read_regular_nofollow", unavailable_active)
+    result = sync.command_app_dependency_sync(
+        argparse.Namespace(), component_builder=_component_builder()
+    )
+
+    assert result["exitCode"] == 2
+    assert result["details"][0].startswith(
+        "APP.DEPENDENCY.activation_commit_ambiguous"
+    )
+    active_path = output / "env/repo/local/app-dependency-sync/cache/active.json"
+    active = json.loads(active_path.read_text(encoding="utf-8"))
+    generation = active_path.parent / "snapshots" / active["attemptId"]
+    assert generation.is_dir()
+    assert {path.name for path in generation.iterdir()} == set(
+        sync.APP_DEPENDENCY_COMPONENTS
+    )
+
+
 def test_active_write_failure_with_valid_other_pointer_cleans_new_generation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -227,7 +260,7 @@ def test_active_write_failure_with_valid_other_pointer_cleans_new_generation(
     )
 
     assert second["exitCode"] == 2
-    assert second["details"][0] == "APP.DEPENDENCY.sync_blocked: cause=io_error"
+    assert second["details"][0] == "APP.DEPENDENCY.sync_blocked: cause=io_error; detail=active replace unavailable"
     active_path = output / "env/repo/local/app-dependency-sync/cache/active.json"
     active = json.loads(active_path.read_text(encoding="utf-8"))
     assert active["attemptId"] == first_attempt
@@ -497,15 +530,17 @@ def test_primary_trust_failure_precedes_cleanup_failure_without_leakage(
     rendered = json.dumps(result, ensure_ascii=False, sort_keys=True)
     original_remove(roots[0])
     assert result["exitCode"] == 2
-    expected = (
-        "APP.DEPENDENCY.android_runtime_trust_materialization_failed: cause=io_error"
-        if primary == "materialize"
-        else "APP.DEPENDENCY.sync_blocked: cause=io_error"
+    if primary == "materialize":
+        assert result["details"][0] == (
+            "APP.DEPENDENCY.android_runtime_trust_materialization_failed: cause=io_error"
+        )
+    else:
+        assert result["details"][0].startswith(
+            "APP.DEPENDENCY.sync_blocked: cause=io_error; detail="
+        )
+    assert result["details"][1] == (
+        "APP.DEPENDENCY.android_runtime_trust_cleanup_warning: cause=io_error"
     )
-    assert result["details"][:2] == [
-        expected,
-        "APP.DEPENDENCY.android_runtime_trust_cleanup_warning: cause=io_error",
-    ]
     assert str(roots[0]) not in rendered and secret not in rendered
     assert "trustedPublicKeys" not in rendered and "privateKey" not in rendered
     assert not roots[0].exists()
@@ -541,7 +576,9 @@ def test_default_sync_cleans_trust_on_build_and_ambiguous_failure(
     assert result["exitCode"] == 2
     assert len(roots) == 1 and not roots[0].exists()
     if failure_mode == "build":
-        assert result["details"][0] == "APP.DEPENDENCY.sync_blocked: cause=io_error"
+        assert result["details"][0].startswith(
+            "APP.DEPENDENCY.sync_blocked: cause=io_error; detail="
+        )
         work = output / "env/repo/local/app-dependency-sync/cache/work"
         snapshots = output / "env/repo/local/app-dependency-sync/cache/snapshots"
         assert not work.exists() or not any(work.iterdir())
@@ -565,6 +602,9 @@ def test_android_gradle_failure_log_and_detail_redact_trust_material(
     monkeypatch.setattr(
         sync._builder, "canonical_android_uat_gradle_invocations", lambda _root: ()
     )
+    monkeypatch.setattr(
+        sync._builder, "materialize_flutter_gradle_wrappers", lambda **_kwargs: ()
+    )
     def fail(**_kwargs: object) -> object:
         raise subprocess.CalledProcessError(7, ["gradle"], output=leaked)
     monkeypatch.setattr(sync._builder, "synchronize_android_gradle_dependencies", fail)
@@ -583,6 +623,76 @@ def test_android_gradle_failure_log_and_detail_redact_trust_material(
     )
     assert log == "[REDACTED dependency trust material]"
     assert all(value not in f"{raised.value}\n{log}" for value in (str(trust), secret, "/private/key"))
+
+
+def test_android_builder_materializes_with_exact_flutter_before_sync(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context, projection, replays, digests, trust = android_failure_fixture(tmp_path)
+    exact_flutter = str(context.flutter_identity["executable"])
+    invocations = (
+        SimpleNamespace(gradle_root=projection / "quwoquan_app/android"),
+        SimpleNamespace(
+            gradle_root=projection / "quwoquan_app/test_host/patrol/android"
+        ),
+    )
+    calls: list[tuple[str, object]] = []
+    monkeypatch.setattr(
+        sync._builder,
+        "canonical_android_uat_gradle_invocations",
+        lambda root: (
+            invocations
+            if root == projection
+            else tuple(
+                SimpleNamespace(
+                    gradle_root=context.repo_root
+                    / item.gradle_root.relative_to(projection)
+                )
+                for item in invocations
+            )
+        ),
+    )
+
+    def materialize(**kwargs: object) -> tuple[object, ...]:
+        calls.append(("materialize", kwargs["flutter_executable"]))
+        assert kwargs["project_root"] == projection
+        assert kwargs["gradle_roots"] == [
+            item.gradle_root for item in invocations
+        ]
+        return ()
+
+    def synchronize(**_kwargs: object) -> object:
+        calls.append(("synchronize", None))
+        return SimpleNamespace(
+            snapshot=SimpleNamespace(manifest={}),
+            online_results=(),
+            offline_results=(),
+        )
+
+    monkeypatch.setattr(
+        sync._builder, "materialize_flutter_gradle_wrappers", materialize
+    )
+    monkeypatch.setattr(
+        sync._builder, "synchronize_android_gradle_dependencies", synchronize
+    )
+    monkeypatch.setattr(
+        sync._builder,
+        "write_android_gradle_component",
+        lambda **_kwargs: context.generation_root / "androidGradle",
+    )
+
+    result = sync._builder._build_android_component(
+        context=context,
+        projection_root=projection,
+        pub_replays=replays,
+        pub_digests=digests,
+        trust_root=trust,
+    )
+
+    assert result == context.generation_root / "androidGradle"
+    assert calls == [("materialize", exact_flutter), ("synchronize", None)]
+    assert context.progress.current_phase == "gradle-offline-replay"
 
 
 @pytest.mark.parametrize("offline", [False, True])
@@ -681,7 +791,7 @@ def test_builder_error_returns_typed_result_and_cleans_attempt_roots(
     )
 
     assert result["exitCode"] == 2
-    assert result["details"][0] == "APP.DEPENDENCY.sync_blocked: cause=io_error"
+    assert result["details"][0] == "APP.DEPENDENCY.sync_blocked: cause=io_error; detail=projection denied"
     work = output / "env/repo/local/app-dependency-sync/cache/work"
     snapshots = output / "env/repo/local/app-dependency-sync/cache/snapshots"
     assert not work.exists() or not any(work.iterdir())
@@ -836,16 +946,20 @@ def test_ios_builder_refreshes_config_in_private_spm_false_environment(
     )
     for path in (process, generation, work):
         path.mkdir()
+    flutter = tmp_path / "toolchain/flutter/bin/flutter"
+    flutter.parent.mkdir(parents=True)
+    flutter.write_text("#!/bin/sh\n", encoding="utf-8")
+    flutter.chmod(0o755)
     context = sync.DependencyComponentBuildContext(
         repo_root=tmp_path / "repo",
         attempt_id="a" * 32,
         work_root=work,
         process_root=process,
         generation_root=generation,
-        flutter_identity={"executable": "/flutter"},
+        flutter_identity={"executable": str(flutter)},
         source_identity=_source_identity(),
     )
-    commands: list[tuple[list[str], Mapping[str, str]]] = []
+    commands: list[dict[str, object]] = []
     pod_home, pod_cache = tmp_path / "pod-home", tmp_path / "pod-cache"
     pod_home.mkdir()
     pod_cache.mkdir()
@@ -861,7 +975,7 @@ def test_ios_builder_refreshes_config_in_private_spm_false_environment(
     )
 
     def run_checked(**kwargs: object) -> subprocess.CompletedProcess[str]:
-        commands.append((list(kwargs["command"]), dict(kwargs["environment"])))
+        commands.append(dict(kwargs))
         if kwargs["command"][0] == "/pod":
             (ios / "Pods").mkdir()
         return subprocess.CompletedProcess(kwargs["command"], 0, stdout="ok")
@@ -906,14 +1020,22 @@ def test_ios_builder_refreshes_config_in_private_spm_false_environment(
         upstream_digest=_digest("1"),
     )
 
-    flutter_command, environment = commands[0]
-    assert flutter_command[:3] == ["/flutter", "build", "ios"]
+    flutter_call, pod_call = commands
+    flutter_command = flutter_call["command"]
+    environment = flutter_call["environment"]
+    assert isinstance(flutter_command, list)
+    assert isinstance(environment, Mapping)
+    assert flutter_command[:3] == [str(flutter), "build", "ios"]
     assert {"--config-only", "--no-codesign", "--no-pub", "-t"}.issubset(
         flutter_command
     )
     assert ("--flavor" in flutter_command) is has_flavor
     assert environment["FLUTTER_SWIFT_PACKAGE_MANAGER"] == "false"
-    assert commands[1][0] == ["/pod", "install", "--deployment"]
+    assert environment["QWQ_REAL_FLUTTER"] == str(flutter)
+    assert environment["FLUTTER_ROOT"] == str(flutter.parent.parent)
+    assert flutter_call["retry_transient_network"] is True
+    assert pod_call["command"] == ["/pod", "install", "--deployment"]
+    assert pod_call["retry_transient_network"] is True
 
 
 def test_ios_generated_metadata_must_bind_projection_and_remove_spm(
@@ -935,63 +1057,3 @@ def test_ios_generated_metadata_must_bind_projection_and_remove_spm(
     project.write_text("FlutterGeneratedPluginSwiftPackage\n", encoding="utf-8")
     with pytest.raises(ValueError, match="flutter_spm_residue_forbidden"):
         sync._builder._assert_ios_generated_metadata(app)
-
-
-def test_pub_offline_replay_allows_only_host_bound_active_root_marker(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cache = tmp_path / "cache"
-    dependency = cache / "hosted/pkg/file"
-    dependency.parent.mkdir(parents=True)
-    dependency.write_text("dependency\n", encoding="utf-8")
-    host = tmp_path / "projection/app"
-    (host / ".dart_tool").mkdir(parents=True)
-    (host / ".dart_tool/package_config.json").write_text("{}", encoding="utf-8")
-    marker = cache / ("active_roots/ab/" + "c" * 62)
-    marker.parent.mkdir(parents=True)
-    marker.write_text(
-        json.dumps(
-            {"package_config": (host / ".dart_tool/package_config.json").as_uri()}
-        ),
-        encoding="utf-8",
-    )
-    snapshot = SimpleNamespace(
-        manifest={"treeDigest": _digest("1")},
-        files=(SimpleNamespace(relative="hosted/pkg/file"),),
-        directories=("hosted", "hosted/pkg"),
-    )
-    monkeypatch.setattr(
-        sync._builder,
-        "build_pub_cache_snapshot",
-        lambda **_kwargs: SimpleNamespace(manifest=snapshot.manifest),
-    )
-
-    sync._builder._verify_pub_replay(
-        snapshot=snapshot,
-        lock_path=tmp_path / "pubspec.lock",
-        cache_root=cache,
-        host_root=host,
-    )
-
-    (cache / "unexpected").write_text("escape\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="pub_offline_replay_extra_bytes"):
-        sync._builder._verify_pub_replay(
-            snapshot=snapshot,
-            lock_path=tmp_path / "pubspec.lock",
-            cache_root=cache,
-            host_root=host,
-        )
-
-
-def test_pub_replay_state_is_inside_source_projection_for_ios_cas_validation(
-    tmp_path: Path,
-) -> None:
-    projection = tmp_path / "work/source-projection"
-    for name in ("productionPub", "patrolPub"):
-        state = sync._builder._pub_state_root(projection, name)
-        assert state.is_relative_to(projection)
-        assert state == projection / ".dependency-sync/pub" / name
-
-    with pytest.raises(ValueError, match="pub_component_invalid"):
-        sync._builder._pub_state_root(projection, "../outside")

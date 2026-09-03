@@ -16,8 +16,15 @@ from uuid import uuid4
 
 sys.dont_write_bytecode = True
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
-APP_ROOT = REPO_ROOT / "quwoquan_app"
+_SCRIPTS_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "scripts" and (parent / "_common" / "paths.py").is_file()
+)
+if str(_SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_ROOT))
+from _common.paths import APP_ROOT, REPO_ROOT  # noqa: E402
+
 DEVICE_SCRIPTS_ROOT = APP_ROOT / "scripts/device"
 if str(DEVICE_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(DEVICE_SCRIPTS_ROOT))

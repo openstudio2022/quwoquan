@@ -2,7 +2,7 @@
 import Foundation
 
 enum AppLaunchContract {
-  static let sourceDigest = "sha256:a325c484b79e46a75639359283fcac1c4f256cc7f10d5f1d01f25608b724f885"
+  static let sourceDigest = "sha256:edcb4f0bd745d5d751cfaba1f37e5d6dd1319b5324e148fd39a77ebf2892a015"
   static let environments: [String] = [
     "alpha",
     "beta",
@@ -56,6 +56,7 @@ enum AppLaunchContract {
   ]
   static let launchBlockers: [String: String] = [
     "APP.DEPENDENCY.bundle_missing": "启动未获得经验证的 source capsule 与原子依赖 bundle。",
+    "APP.DEPENDENCY.bundle_stale": "active 依赖 bundle 与当前 source/toolchain identity 不一致；仅 canonical 交互式 launcher 可执行一次有界 canonical 同步恢复，非交互 fail-closed，不得更新 lock。",
     "APP.DEPENDENCY.cocoapods_missing": "iOS 启动缺少契约锁定的 CocoaPods 可执行文件。",
     "APP.DEPENDENCY.cocoapods_mixed": "iOS 依赖投影混用了不同 CocoaPods 可执行文件或版本。",
     "APP.DEPENDENCY.cross_platform_generated_tooling_unsafe": "当前平台投影中的跨平台生成工具残留无法安全检查或剪除。",
@@ -72,6 +73,7 @@ enum AppLaunchContract {
     "APP.LAUNCH.ios_release_simulator_unsupported": "Flutter iOS Simulator 只支持 Debug，不得伪造 Release 启动回执。",
     "APP.LAUNCH.launch_failed": "已安装但未能到达 launched。",
     "APP.LAUNCH.launch_surface_unsupported": "启动入口不属于 canonical launcher、工作区字面 Flutter 或受控制 IDE profile。",
+    "APP.LAUNCH.managed_argument_unsupported": "受管字面 flutter run 收到会改变 canonical build/runtime identity 的参数（如 --target、flavor、dart-define、Profile/Release 或端口类），typed 阻断而非静默忽略。",
     "APP.LAUNCH.platform_unsupported": "目标平台不属于 android、ios。",
     "APP.LAUNCH.prod_artifact_invalid": "给出的 Prod artifact manifest 与 exact 身份或摘要不符。",
     "APP.LAUNCH.prod_artifact_required": "prod-sim 必须显式给出 canonical Release artifact manifest。",
@@ -87,6 +89,10 @@ enum AppLaunchContract {
     "APP.LAUNCH.runtime_dependency_unavailable": "目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。",
     "APP.LAUNCH.workspace_entrypoint_inactive": "工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。",
     "APP.LAUNCH.workspace_flutter_sdk_unavailable": "工作区激活时无法解析真实 Flutter SDK 或 SDK 版本与仓库锁定不符；激活必须在写入任何 workspace facade 投影前以本码阻断。",
+    "APP.PREPARATION.content_binding_unavailable": "无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=research 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。",
+    "APP.PREPARATION.receipt_invalid": "managed preparation receipt 缺失、schema/digest 非法或与本次 launch 身份不一致，canonical launcher 不得复用。",
+    "APP.PREPARATION.runtime_unavailable": "managed 准备无法复用 exact running full runtime，且不满足有界替换条件（非 target lock 内、存在其他 live consumer lease 或替换失败）。",
+    "APP.PREPARATION.strict_preflight_failed": "managed 严格预检（TLS、api-edge、user-service、integration-service、SMS Provider/relay identity、真实 OTP journey 与 homepage/creator avatar/image/typed video/premium stream 媒体字节）任一失败，在 Flutter build 前阻断。",
     "APP.UAT.page_artifact_binding_missing": "页面自动化实际安装并启动的 AppArtifact 缺少与同 target canonical launch 的完整身份绑定或逐字段不一致，禁止生成页面通过结果。",
     "APP.WEB.recovery_unavailable": "恢复 Web 静态面不可达，不得据此生成 launched 或 ready 假证据。",
   ]
@@ -144,6 +150,7 @@ enum AppLaunchContract {
     "app_effective_launch_manifest": "app-effective-launch-manifest",
     "app_launch_attempt": "app-launch-attempt",
     "app_launcher_handoff": "app-launcher-handoff",
+    "app_managed_preparation": "quwoquan_ops.app_managed_preparation.v1",
     "runtime_config_activation_receipt": "app-runtime-config-activation-receipt",
     "runtime_config_activation_request": "app-runtime-config-activation-request",
     "runtime_config_package": "app-runtime-config-package",
@@ -183,6 +190,8 @@ enum AppLaunchContract {
     "applicationId",
     "flutterVersion",
     "commandResolutionDigest",
+    "terminalCarrierReceiptDigest",
+    "terminalCarrierReceiptRef",
     "launchDigest",
     "startupTerminalAttemptId",
     "startupTerminalEvidenceDigest",
@@ -217,6 +226,28 @@ enum AppLaunchContract {
     "runtimeConfigPackage",
     "effectiveLaunchManifest",
     "effectiveLaunchManifestDigest",
+  ]
+  static let appManagedPreparationRequiredFields: [String] = [
+    "schema",
+    "target",
+    "environment",
+    "platform",
+    "deviceId",
+    "runtimeIdentity",
+    "consumerId",
+    "consumerLeaseId",
+    "androidReversePorts",
+    "androidReverseOwnedPorts",
+    "deviceTrustReceiptRef",
+    "deviceTrustReceiptDigest",
+    "contentBinding",
+    "strictPreflightReceiptRef",
+    "strictPreflightReceiptDigest",
+    "strictContentPreflightReceiptRef",
+    "strictContentPreflightReceiptDigest",
+    "createdAt",
+    "status",
+    "firstBlocker",
   ]
   static let runtimeConfigActivationReceiptRequiredFields: [String] = [
     "schema",

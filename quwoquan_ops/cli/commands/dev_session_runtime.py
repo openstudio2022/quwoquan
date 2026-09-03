@@ -67,23 +67,95 @@ def _dev_session_phase(
     }
 
 
+class InadmissibleCurrentTestLiveReceipt(ValueError):
+    """当前 mutable target 持有可界定、但已不再可接纳的旧代际 receipt。"""
+
+    def __init__(self, target: str, detail: str) -> None:
+        super().__init__(
+            f"{target} current test-live startup receipt is inadmissible: {detail}"
+        )
+        self.target = target
+        self.detail = detail
+
+
+def _mutable_test_live_target(topology: Mapping[str, Any], target: str) -> bool:
+    """仅 Alpha/Beta/Gamma canonical local target 拥有 test-live receipt。"""
+
+    targets = topology.get("targets")
+    if not isinstance(targets, Mapping):
+        raise RuntimeError("environment topology targets must be a mapping")
+    contract = targets.get(target)
+    if not isinstance(contract, Mapping):
+        raise RuntimeError(f"unknown local runtime target: {target}")
+    environment = str(contract.get("env") or "").strip()
+    return (
+        environment in {"alpha", "beta", "gamma"}
+        and target == f"{environment}-local"
+        and str(contract.get("backend") or "").strip() == "local"
+        and str(contract.get("portProfile") or "").strip() == target
+    )
+
+
+def _load_test_live_attempt_for_preflight(
+    target: str,
+    *,
+    current_target: bool,
+) -> dict[str, Any] | None:
+    """读取 mutable receipt；仅把当前 target 的 bounded 旧代际标成可替换。"""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    try:
+        return _stackctl.load_test_live_startup_attempt(target)
+    except ValueError as original:
+        if not current_target:
+            raise
+        try:
+            stale = _stackctl.read_stale_test_live_startup_attempt(target)
+            if stale is None:
+                raise original
+            _stackctl.require_bounded_stale_test_live_startup_attempt(target, stale)
+        except (OSError, RuntimeError, TypeError, ValueError):
+            raise original
+        raise InadmissibleCurrentTestLiveReceipt(target, str(original)) from original
+
+
 def _dev_session_active_receipts(
     topology: Mapping[str, Any],
     target: str,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
-    """读取 target 与 workload-scoped receipt，并返回当前 active 冲突。"""
+    """按 target 的 canonical authority 返回当前 active 共享资源冲突。"""
     import quwoquan_ops.cli.stackctl as _stackctl
+
+    if not _mutable_test_live_target(topology, target):
+        raise ValueError(f"mutable dev-session target is not admissible: {target}")
 
     requested_attempt: dict[str, Any] | None = None
     active: list[dict[str, Any]] = []
-    targets = (target, *_stackctl.local_runtime_peer_targets(topology, target))
-    for candidate in targets:
+    mutable_targets: list[str] = [target]
+    for candidate in _stackctl.local_runtime_peer_targets(topology, target):
+        if _mutable_test_live_target(topology, candidate):
+            mutable_targets.append(candidate)
+    for candidate in mutable_targets:
         target_attempt = _stackctl.load_startup_attempt(candidate)
+        test_live_attempt = _load_test_live_attempt_for_preflight(
+            candidate,
+            current_target=candidate == target,
+        )
         if candidate == target:
             requested_attempt = target_attempt
+            if (
+                test_live_attempt is not None
+                and (
+                    requested_attempt is None
+                    or requested_attempt.get("status") == "stopped"
+                )
+            ):
+                requested_attempt = test_live_attempt
         candidate_attempts: list[tuple[str, dict[str, Any]]] = []
         if target_attempt and target_attempt.get("status") != "stopped":
             candidate_attempts.append(("target", target_attempt))
+        if test_live_attempt and test_live_attempt.get("status") != "stopped":
+            candidate_attempts.append(("test-live", test_live_attempt))
         for workload in _stackctl._DEV_SESSION_WORKLOADS:
             scoped_attempt = _stackctl.load_workload_startup_attempt(candidate, workload)
             if not scoped_attempt or scoped_attempt.get("status") == "stopped":
@@ -108,7 +180,67 @@ def _dev_session_active_receipts(
                     "receiptScope": receipt_scope,
                 }
             )
+
+    occupied_peers = _stackctl.active_conflicting_local_targets(topology, target)
+    for candidate in occupied_peers:
+        if _mutable_test_live_target(topology, candidate):
+            continue
+        active.append(
+            {
+                "target": candidate,
+                "workload": "canonical-occupancy",
+                "attemptId": f"{candidate}-canonical-occupancy",
+                "status": "running",
+                "receiptScope": "canonical-occupancy",
+            }
+        )
     return requested_attempt, active
+
+
+def _bounded_replace_stale_managed_receipt(
+    *,
+    target: str,
+) -> dict[str, Any]:
+    """Retire one stale process receipt only after proving no live runtime.
+
+    A retired test-live field set cannot authorize normal down, but managed
+    startup still needs one bounded path forward. The process receipt is
+    replaceable only when no consumer, container, network, or canonical target
+    endpoint remains; otherwise the governed down/orphan repair path keeps
+    ownership and startup stays fail-closed.
+    """
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    leases = _stackctl.active_consumer_leases(target)
+    if leases:
+        raise ValueError("stale mutable startup receipt still has live consumer leases")
+    environment = target.removesuffix("-local")
+    compose_project = _stackctl._dev_session_compose_project(environment, target)
+    containers = _stackctl._mutable_test_live_container_ids(compose_project)
+    networks = _stackctl._mutable_test_live_resource_names(
+        "network", compose_project=compose_project
+    )
+    topology = _stackctl.load_environment_topology()
+    manifest = _stackctl.load_port_manifest()
+    occupancy = _stackctl._runtime_owned_port_occupancy_report(
+        target,
+        published_ports=_stackctl.project_canonical_runtime_owned_ports(
+            port_profile=target,
+            manifest=manifest,
+        ),
+        topology=topology,
+        manifest=manifest,
+    )
+    occupied = [
+        endpoint
+        for endpoint in occupancy.get("publishedEndpoints") or []
+        if endpoint.get("open") is True
+    ]
+    if containers or networks or occupied:
+        raise ValueError(
+            "stale mutable startup receipt still describes live runtime residue"
+        )
+    return _stackctl.bounded_replace_stale_test_live_startup_attempt(target)
 
 
 def _dev_session_runtime_preflight(

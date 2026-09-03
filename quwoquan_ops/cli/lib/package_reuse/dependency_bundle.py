@@ -10,6 +10,7 @@ attempts.
 from __future__ import annotations
 
 import json
+import stat
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -23,6 +24,59 @@ from .pub_cache_capsule import _canonical_bytes, _digest_bytes
 
 APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA = "stackctl-app-dependency-bundle-active.v2"
 APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA = "stackctl-app-dependency-sync-receipt.v3"
+
+# 与 canonical launch blocker 契约字面量对齐；contracts codegen 由并行任务落地，
+# 这里不 import generated 契约，只承诺同一字符串。
+APP_DEPENDENCY_BUNDLE_MISSING_CODE = "APP.DEPENDENCY.bundle_missing"
+APP_DEPENDENCY_BUNDLE_MISSING_LOCATIONS = frozenset(
+    {
+        ("managedDependencyBundle", "root"),
+        ("managedDependencyBundle", "activePointer"),
+    }
+)
+APP_DEPENDENCY_BUNDLE_STALE_CODE = "APP.DEPENDENCY.bundle_stale"
+APP_DEPENDENCY_BUNDLE_STALE_FIELDS = (
+    "flutterVersion",
+    "flutterCommandResolutionDigest",
+    "productionPubResolutionInputDigest",
+    "patrolPubResolutionInputDigest",
+    "nativeResolutionInputDigest",
+)
+
+
+class AppDependencyBundleMissingError(ValueError):
+    """Canonical managed bundle 或其 active pointer 确实不存在。
+
+    ``resource``/``field`` 来自不含 secret 的闭集；symlink、权限、JSON
+    损坏、receipt 与 CAS 失败绝不使用此类型。
+    """
+
+    def __init__(self, resource: str, field: str) -> None:
+        if (resource, field) not in APP_DEPENDENCY_BUNDLE_MISSING_LOCATIONS:
+            raise ValueError(
+                "App dependency bundle missing location is unknown: "
+                f"{resource}.{field}"
+            )
+        super().__init__(f"App dependency bundle is missing for {resource}.{field}")
+        self.code = APP_DEPENDENCY_BUNDLE_MISSING_CODE
+        self.resource = resource
+        self.field = field
+
+
+class AppDependencyBundleStaleError(ValueError):
+    """Active pointer identity no longer matches the current source/toolchain.
+
+    仅覆盖 source identity 漂移（stale）；missing/corrupt/receipt drift 仍是
+    普通 ``ValueError``，不得归类为 stale。消息保持
+    ``App dependency bundle is stale for <field>`` 以兼容既有文本消费者。
+    """
+
+    def __init__(self, field: str) -> None:
+        if field not in APP_DEPENDENCY_BUNDLE_STALE_FIELDS:
+            raise ValueError(f"App dependency bundle stale field is unknown: {field}")
+        super().__init__(f"App dependency bundle is stale for {field}")
+        self.code = APP_DEPENDENCY_BUNDLE_STALE_CODE
+        self.field = field
 
 APP_DEPENDENCY_COMPONENTS = (
     "productionPub",
@@ -87,6 +141,28 @@ def managed_dependency_bundle_root() -> Path:
         output_root().expanduser().absolute()
         / "env/repo/local/app-dependency-sync/cache"
     )
+
+
+def _is_lexically_missing(path: Path) -> bool:
+    """逐段 lstat 确认真正缺失，不跟随任何既存词法路径节点。"""
+
+    absolute = path.expanduser().absolute()
+    current = Path(absolute.anchor)
+    for segment in absolute.parts[1:]:
+        candidate = current / segment
+        try:
+            metadata = candidate.lstat()
+        except FileNotFoundError:
+            return True
+        except OSError:
+            # 权限与其他路径失败属于完整性失败，不能判成 missing。
+            return False
+        if stat.S_ISLNK(metadata.st_mode):
+            return False
+        if candidate != absolute and not stat.S_ISDIR(metadata.st_mode):
+            return False
+        current = candidate
+    return False
 
 
 def _read_json(path: Path, *, label: str) -> tuple[bytes, dict[str, Any]]:
@@ -205,8 +281,27 @@ def load_active_dependency_bundle(*, repo_root: Path) -> AppDependencyBundle:
 
     repository = repo_root.expanduser().absolute()
     root = managed_dependency_bundle_root()
-    assert_real_directory(root, label="managed dependency bundle root")
-    _encoded, active = _read_json(root / "active.json", label="bundle active pointer")
+    try:
+        assert_real_directory(root, label="managed dependency bundle root")
+    except ValueError as error:
+        if _is_lexically_missing(root):
+            raise AppDependencyBundleMissingError(
+                "managedDependencyBundle", "root"
+            ) from error
+        raise
+    active_path = root / "active.json"
+    try:
+        _encoded, active = _read_json(active_path, label="bundle active pointer")
+    except ValueError as error:
+        if _is_lexically_missing(root):
+            raise AppDependencyBundleMissingError(
+                "managedDependencyBundle", "root"
+            ) from error
+        if _is_lexically_missing(active_path):
+            raise AppDependencyBundleMissingError(
+                "managedDependencyBundle", "activePointer"
+            ) from error
+        raise
     if set(active) != _ACTIVE_FIELDS:
         raise ValueError("App dependency bundle active pointer fields mismatch")
     if active.get("schema") != APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA:
@@ -217,7 +312,7 @@ def load_active_dependency_bundle(*, repo_root: Path) -> AppDependencyBundle:
     current = _current_source_identity(repository)
     for field, expected in current.items():
         if active.get(field) != expected:
-            raise ValueError(f"App dependency bundle is stale for {field}")
+            raise AppDependencyBundleStaleError(field)
     raw_components = active.get("components")
     if not isinstance(raw_components, Mapping) or set(raw_components) != set(
         APP_DEPENDENCY_COMPONENTS

@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import tarfile
+import tempfile
+import urllib.error
+import urllib.request
 import stat
 import subprocess
 import time
@@ -14,6 +19,11 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from quwoquan_ops.cli.commands.app_dependency_sync_projection import project
+from quwoquan_ops.cli.lib.app_dependency_sync_diagnostics import (
+    dependency_failure_cause,
+    redact_dependency_failure_text,
+    write_private_log as _write_private_log,
+)
 from quwoquan_ops.cli.lib.app_dependency_toolchain import (
     resolve_cocoapods_executable,
 )
@@ -23,6 +33,7 @@ from quwoquan_ops.cli.lib.package_reuse.android_gradle_component import (
 )
 from quwoquan_ops.cli.lib.package_reuse.android_gradle_store import (
     canonical_android_uat_gradle_invocations,
+    materialize_flutter_gradle_wrappers,
     synchronize_android_gradle_dependencies,
 )
 from quwoquan_ops.cli.lib.package_reuse.dependency_fs import (
@@ -72,12 +83,116 @@ from quwoquan_ops.cli.lib.package_reuse.pub_cache_capsule import (
     _lock_model,
     build_pub_cache_snapshot,
     copy_snapshot_tree_with_lock,
+    is_canonical_pub_cache_transient,
 )
 from quwoquan_ops.cli.lib.package_reuse.pub_cache_store import (
     build_sync_manifest,
     load_pub_cache_snapshot_at,
     pub_resolution_input_paths,
 )
+
+
+_PUBLIC_PUB_MIRROR = "https://pub.flutter-io.cn"
+_PUBLIC_PUB_ORIGIN = "https://pub.dev"
+_PUBLIC_PUB_MIRROR_ARCHIVE_PREFIX = (
+    "https://storage.flutter-io.cn/dartlang-pub-exported-api/latest/api/archives/"
+)
+
+
+def _public_pub_origin_archive_fallback(
+    *, app_dir: Path, pub_cache: Path, log_path: Path
+) -> bool:
+    """补齐公共 mirror 唯一缺失 archive；lock host 与 live source 均不改写。"""
+
+    lock_path = app_dir / "pubspec.lock"
+    _encoded, _lock_digest, hosted_packages = _lock_model(lock_path)
+    hosted_root = pub_cache / "hosted" / "pub.flutter-io.cn"
+    missing: list[tuple[str, str, str]] = []
+    for package in hosted_packages:
+        if package["url"] != _PUBLIC_PUB_MIRROR:
+            return False
+        name = package["name"]
+        version = package["version"]
+        expected = package["archiveSha256"]
+        if not (hosted_root / f"{name}-{version}").is_dir():
+            missing.append((name, version, expected))
+    if len(missing) != 1:
+        return False
+    name, version, expected = missing[0]
+    metadata_path = hosted_root / ".cache" / f"{name}-versions.json"
+    try:
+        metadata = json.loads(
+            read_regular_nofollow(metadata_path, label="public Pub mirror metadata")[0]
+        )
+    except (OSError, TypeError, UnicodeError, ValueError, json.JSONDecodeError):
+        return False
+    versions = metadata.get("versions") if isinstance(metadata, Mapping) else None
+    selected = next(
+        (
+            item
+            for item in versions or ()
+            if isinstance(item, Mapping)
+            and str(item.get("version") or "") == version
+        ),
+        None,
+    )
+    archive_url = str(selected.get("archive_url") or "") if selected else ""
+    archive_sha = str(selected.get("archive_sha256") or "") if selected else ""
+    if (
+        not archive_url.startswith(_PUBLIC_PUB_MIRROR_ARCHIVE_PREFIX)
+        or archive_sha != expected
+    ):
+        return False
+    origin_url = f"{_PUBLIC_PUB_ORIGIN}/api/archives/{name}-{version}.tar.gz"
+    request = urllib.request.Request(
+        origin_url, headers={"User-Agent": "quwoquan-dependency-sync/1"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            archive = response.read()
+    except (OSError, urllib.error.URLError):
+        return False
+    if hashlib.sha256(archive).hexdigest() != expected:
+        return False
+    target = hosted_root / f"{name}-{version}"
+    if target.exists() or target.is_symlink():
+        return False
+    with tempfile.TemporaryDirectory(prefix="qwq-pub-origin-fallback.", dir=pub_cache) as temporary:
+        archive_path = Path(temporary) / "archive.tar.gz"
+        archive_path.write_bytes(archive)
+        extract_root = Path(temporary) / "extract"
+        extract_root.mkdir(mode=0o700)
+        with tarfile.open(archive_path, mode="r:gz") as tar:
+            members = tar.getmembers()
+            for member in members:
+                member_path = Path(member.name)
+                if (
+                    member_path.is_absolute()
+                    or ".." in member_path.parts
+                    or member.issym()
+                    or member.islnk()
+                ):
+                    return False
+            tar.extractall(extract_root, members=members, filter="data")
+        entries = list(extract_root.iterdir())
+        source = (
+            entries[0]
+            if len(entries) == 1 and entries[0].is_dir()
+            else extract_root
+        )
+        os.replace(source, target)
+    # Canonical capsule 需要 archive SHA sidecar；它由 lock + mirror metadata +
+    # origin archive 三方一致性校验后写入。fallback 后不再调用 Dart Pub，避免
+    # Pub 将 origin 字节误判为 mirror cache 并再次命中同一个 403 archive。
+    hash_root = pub_cache / "hosted-hashes" / "pub.flutter-io.cn"
+    hash_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    write_fresh_relative_file(
+        root=hash_root,
+        relative=f"{name}-{version}.sha256",
+        content=(expected + "\n").encode(),
+        mode=0o600,
+    )
+    return True
 
 _SYNC_TIMEOUT_SECONDS = 900
 _SYNC_NETWORK_MAX_ATTEMPTS = 3
@@ -108,72 +223,6 @@ _BASE_ENVIRONMENT_KEYS = {
     "TMPDIR",
     "TOOLCHAINS",
 }
-_SENSITIVE_MATERIAL_MARKERS = (
-    "-----begin private key-----",
-    "privatekey",
-    "private_key",
-    "private-key",
-    "trustedpublickeys",
-    "trusted_public_keys",
-    "trusted-public-keys",
-    "keyring",
-    "qwq_android_runtime_config_asset_root",
-    "runtime-config-trust.json",
-)
-_REDACTED_DEPENDENCY_MATERIAL = "[REDACTED dependency trust material]"
-
-
-class BuildContext(Protocol):
-    repo_root: Path
-    work_root: Path
-    process_root: Path
-    generation_root: Path
-    flutter_identity: Mapping[str, str]
-    source_identity: Mapping[str, str]
-
-
-def dependency_failure_cause(exc: BaseException) -> str:
-    """Map internal exceptions to a closed, non-sensitive failure cause."""
-
-    if isinstance(exc, subprocess.TimeoutExpired):
-        return "subprocess_timeout"
-    if isinstance(exc, subprocess.CalledProcessError):
-        return "subprocess_nonzero"
-    if isinstance(exc, json.JSONDecodeError):
-        return "invalid_json"
-    if isinstance(exc, UnicodeError):
-        return "invalid_text"
-    if isinstance(exc, OSError):
-        return "io_error"
-    if isinstance(exc, TypeError):
-        return "type_error"
-    if isinstance(exc, ValueError):
-        return "value_error"
-    if isinstance(exc, RuntimeError):
-        return "runtime_error"
-    return "unknown_error"
-
-
-def redact_dependency_failure_text(
-    value: object, *, sensitive_values: tuple[str, ...] = ()
-) -> str:
-    """Remove attempt trust paths and key material from persisted diagnostics."""
-
-    text = str(value or "")
-    redacted = False
-    for sensitive in sorted(
-        {item for item in sensitive_values if item}, key=len, reverse=True
-    ):
-        if sensitive in text:
-            redacted = True
-            text = text.replace(sensitive, _REDACTED_DEPENDENCY_MATERIAL)
-    if redacted or any(
-        marker in text.casefold() for marker in _SENSITIVE_MATERIAL_MARKERS
-    ):
-        return _REDACTED_DEPENDENCY_MATERIAL
-    return text
-
-
 def private_environment(
     *, home: Path, pub_cache: Path | None, hosted_url: str | None
 ) -> dict[str, str]:
@@ -232,6 +281,7 @@ def _run_checked(
     log_path: Path,
     phase: str,
     retry_transient_network: bool = False,
+    public_hosted_upstream: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     attempts = _SYNC_NETWORK_MAX_ATTEMPTS if retry_transient_network else 1
     started_at = time.monotonic()
@@ -266,11 +316,22 @@ def _run_checked(
                     )
                 else:
                     log_entries.append(output)
-                log_path.parent.mkdir(parents=True, exist_ok=True)
-                log_path.write_text("\n".join(log_entries), encoding="utf-8")
+                _write_private_log(
+                    log_path,
+                    redact_dependency_failure_text("\n".join(log_entries)),
+                )
                 return completed
             failures.append((output, None))
             cause = transient_network_cause(output)
+            if (
+                cause is None
+                and public_hosted_upstream
+                and "package not available (authorization failed)" in output.lower()
+            ):
+                # pub.flutter-io.cn 是公开 hosted mirror，不存在 package 凭据。
+                # 其 archive upstream 403/5xx 会被 Dart Pub 折叠成该固定文案；
+                # 仅对这个钉定公共 mirror 视作暂态，私有 hosted auth 仍立即阻断。
+                cause = "public_hosted_upstream_unavailable"
             if not retry_transient_network or cause is None:
                 terminal_failure = (output, None)
                 break
@@ -292,8 +353,12 @@ def _run_checked(
             f"APP.DEPENDENCY.sync_timeout: {phase} exceeded network deadline"
         )
     selected_output, selected_error = terminal_failure or failures[0]
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_path.write_text("\n".join([*log_entries, selected_output]), encoding="utf-8")
+    _write_private_log(
+        log_path,
+        redact_dependency_failure_text(
+            "\n".join([*log_entries, selected_output])
+        ),
+    )
     if selected_error is not None:
         raise ValueError(
             f"APP.DEPENDENCY.sync_timeout: {phase} exceeded {_SYNC_TIMEOUT_SECONDS}s"
@@ -323,16 +388,54 @@ def run_pub_get(
     if offline:
         command.append("--offline")
     command.extend(["--enforce-lockfile", "--no-example"])
-    _run_checked(
-        command=command,
-        cwd=app_dir,
-        environment=environment,
-        log_path=log_path,
-        phase=f"Pub {'offline validation' if offline else 'network sync'}",
-    )
+    try:
+        _run_checked(
+            command=command,
+            cwd=app_dir,
+            environment=environment,
+            log_path=log_path,
+            phase=f"Pub {'offline validation' if offline else 'network sync'}",
+            retry_transient_network=not offline,
+            public_hosted_upstream=(
+                not offline and hosted_url == _PUBLIC_PUB_MIRROR
+            ),
+        )
+    except ValueError as error:
+        if (
+            offline
+            or hosted_url != _PUBLIC_PUB_MIRROR
+            or "Package not available (authorization failed)" not in str(error)
+            or not _public_pub_origin_archive_fallback(
+                app_dir=app_dir, pub_cache=pub_cache, log_path=log_path
+            )
+        ):
+            raise
+        _write_private_log(
+            log_path.with_name(f"{log_path.stem}-origin-fallback{log_path.suffix}"),
+            retry_event(
+                attempt=1,
+                result="origin_fallback",
+                cause="public_mirror_archive_unavailable",
+            ),
+        )
 
 
-def _resolution_seal(repo_root: Path) -> dict[str, tuple[bytes, int]]:
+
+
+def _remove_pub_online_transients(cache_root: Path) -> None:
+    """在 sealing 前移除 Pub online-only metadata，不触碰 locked package bytes。"""
+
+    for relative in ("hosted/pub.flutter-io.cn/.cache", "_temp", "log", "README.md"):
+        path = cache_root / relative
+        if path.is_symlink():
+            raise ValueError("APP.DEPENDENCY.pub_online_transient_unsafe")
+        if path.is_dir():
+            remove_private_tree(path)
+        elif path.exists():
+            path.unlink()
+
+
+def _resolution_input_paths(repo_root: Path) -> set[Path]:
     root = repo_root.expanduser().absolute()
     paths = {
         *pub_resolution_input_paths(root),
@@ -345,21 +448,73 @@ def _resolution_seal(repo_root: Path) -> dict[str, tuple[bytes, int]]:
         paths.update(
             ios_pod_resolution_inputs(repo_root=root, dependency_host=host).values()
         )
+    return paths
+
+
+def _exact_source_file(path: Path, *, label: str) -> tuple[bytes, int]:
+    before = path.stat(follow_symlinks=False)
+    content, _normalized_mode = read_regular_nofollow(path, label=label)
+    after = path.stat(follow_symlinks=False)
+    identity = lambda item: (
+        item.st_dev,
+        item.st_ino,
+        item.st_mode,
+        item.st_nlink,
+        item.st_size,
+        item.st_mtime_ns,
+        item.st_ctime_ns,
+    )
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or before.st_nlink != 1
+        or identity(before) != identity(after)
+    ):
+        raise ValueError(f"APP.DEPENDENCY.live_source_unsafe: {label}")
+    return content, stat.S_IMODE(before.st_mode)
+
+
+def _resolution_seal(repo_root: Path) -> dict[str, tuple[bytes, int]]:
+    root = repo_root.expanduser().absolute()
     return {
-        path.relative_to(root).as_posix(): read_regular_nofollow(
+        path.relative_to(root).as_posix(): _exact_source_file(
             path, label=f"sync source {path.relative_to(root).as_posix()}"
         )
-        for path in sorted(paths)
+        for path in sorted(_resolution_input_paths(root))
     }
+
+
+def resolution_seal(repo_root: Path) -> dict[str, tuple[bytes, int]]:
+    """Public intra-command live seal hook retained separately from projection checks."""
+
+    return _resolution_seal(repo_root)
+
+
+def assert_live_resolution_seal(
+    *, repo_root: Path, expected: Mapping[str, tuple[bytes, int]]
+) -> None:
+    root = repo_root.expanduser().absolute()
+    current_paths = {
+        path.relative_to(root).as_posix() for path in _resolution_input_paths(root)
+    }
+    if current_paths != set(expected):
+        raise ValueError("APP.DEPENDENCY.live_source_set_drift")
+    for relative, sealed in expected.items():
+        actual = _exact_source_file(
+            root / relative, label=f"live sync source {relative}"
+        )
+        if actual != sealed:
+            raise ValueError(f"APP.DEPENDENCY.live_source_drift: {relative}")
 
 
 def _assert_resolution_seal(
     *, projection_root: Path, expected: Mapping[str, tuple[bytes, int]]
 ) -> None:
     for relative, sealed in expected.items():
-        actual = read_regular_nofollow(
+        content, _normalized_mode = read_regular_nofollow(
             projection_root / relative, label=f"projected sync source {relative}"
         )
+        metadata = (projection_root / relative).stat(follow_symlinks=False)
+        actual = content, stat.S_IMODE(metadata.st_mode)
         if actual != sealed:
             raise ValueError(f"APP.DEPENDENCY.source_projection_drift: {relative}")
 
@@ -507,6 +662,7 @@ def _build_pub_components(
         base = _pub_state_root(projection_root, name)
         online = base / "online-cache"
         online.mkdir(parents=True, mode=0o700)
+        context.progress.begin("pub-online-resolution")
         run_pub_get(
             flutter=flutter,
             app_dir=host_root,
@@ -516,19 +672,31 @@ def _build_pub_components(
             log_path=context.process_root / f"{name}-online.log",
             private_home=base / "online-home",
         )
+        _remove_pub_online_transients(online)
+        try:
+            dependency = build_pub_cache_snapshot(
+                lock_path=lock,
+                cache_root=online,
+                admitted_extra=is_canonical_pub_cache_transient,
+            )
+        except ValueError as error:
+            raise ValueError(
+                f"APP.DEPENDENCY.pub_online_snapshot_invalid: {error}"
+            ) from error
         if patrol:
             snapshot = build_patrol_pub_cache_snapshot(
                 repo_root=projection_root,
                 cache_root=online,
                 flutter_identity=context.flutter_identity,
             )
+            if snapshot.manifest != dependency.manifest:
+                raise ValueError("APP.DEPENDENCY.patrol_pub_online_scan_drift")
             root = write_patrol_pub_cache_snapshot(
                 snapshot=snapshot,
                 destination=context.generation_root / name,
                 repo_root=projection_root,
             )
         else:
-            dependency = build_pub_cache_snapshot(lock_path=lock, cache_root=online)
             manifest = build_sync_manifest(
                 repo_root=projection_root,
                 snapshot=dependency,
@@ -544,7 +712,14 @@ def _build_pub_components(
             )
         _clear_flutter_metadata(host_root)
         replay = base / "replay-cache"
-        copy_snapshot_tree_with_lock(snapshot, replay, lock_path=lock, writable=True)
+        copy_snapshot_tree_with_lock(
+            snapshot,
+            replay,
+            lock_path=lock,
+            writable=True,
+            admitted_extra=is_canonical_pub_cache_transient,
+        )
+        context.progress.begin("pub-offline-replay")
         run_pub_get(
             flutter=flutter,
             app_dir=host_root,
@@ -636,6 +811,12 @@ def _build_ios_component(
         pod=pod,
     )
     flutter = str(context.flutter_identity.get("executable") or "")
+    if not flutter:
+        raise ValueError("APP.DEPENDENCY.flutter_executable_missing")
+    environment["QWQ_REAL_FLUTTER"] = flutter
+    environment["FLUTTER_ROOT"] = str(
+        Path(flutter).expanduser().resolve(strict=True).parent.parent
+    )
     config_command = [
         flutter,
         "build",
@@ -653,7 +834,9 @@ def _build_ios_component(
         environment=environment,
         log_path=context.process_root / f"{host}-ios-config.log",
         phase=f"{host} iOS Flutter config",
+        retry_transient_network=True,
     )
+    context.progress.begin("pods-online-resolution")
     _run_checked(
         command=[pod, "install", "--deployment"],
         cwd=ios_root,
@@ -687,21 +870,29 @@ def _build_ios_component(
         dependency_host=host,
         build_projection_root=projection_root,
     )
-    replay = run_offline_cocoapods_install(
-        projection=projection,
-        pod_executable=pod,
-        base_environment=environment,
-        timeout_seconds=_SYNC_TIMEOUT_SECONDS,
-    )
+    context.progress.begin("pods-offline-replay")
+    try:
+        replay = run_offline_cocoapods_install(
+            projection=projection,
+            pod_executable=pod,
+            base_environment=environment,
+            timeout_seconds=_SYNC_TIMEOUT_SECONDS,
+        )
+    except ValueError as error:
+        raise ValueError(
+            f"APP.DEPENDENCY.ios_pod_offline_replay_failed: {error}"
+        ) from error
     write_fresh_relative_file(
         root=context.process_root,
         relative=f"{host}-pod-offline-evidence.json",
         content=_canonical_bytes(replay.evidence_manifest),
         mode=0o600,
     )
-    (context.process_root / f"{host}-pod-offline.log").write_text(
-        replay.stdout + replay.stderr + replay.second_stdout + replay.second_stderr,
-        encoding="utf-8",
+    _write_private_log(
+        context.process_root / f"{host}-pod-offline.log",
+        redact_dependency_failure_text(
+            replay.stdout + replay.stderr + replay.second_stdout + replay.second_stderr
+        ),
     )
     return target
 
@@ -811,6 +1002,16 @@ def _build_android_component(
     )
     invocations = canonical_android_uat_gradle_invocations(projection_root)
     gradle_roots = [item.gradle_root for item in invocations]
+    flutter = str(context.flutter_identity.get("executable") or "")
+    if not flutter:
+        raise ValueError("APP.DEPENDENCY.flutter_executable_missing")
+    context.progress.begin("gradle-wrapper-materialization")
+    materialize_flutter_gradle_wrappers(
+        project_root=projection_root,
+        gradle_roots=gradle_roots,
+        flutter_executable=flutter,
+    )
+    context.progress.begin("gradle-online-resolution")
     try:
         result = synchronize_android_gradle_dependencies(
             project_root=projection_root,
@@ -826,25 +1027,27 @@ def _build_android_component(
             exc.stdout or exc.output or "",
             sensitive_values=trust_sensitive_values or (str(trust_root),),
         )
-        (context.process_root / "android-gradle-failed.log").write_text(
-            output, encoding="utf-8"
+        _write_private_log(
+            context.process_root / "android-gradle-failed.log",
+            output,
         )
         tail = "\n".join(output.splitlines()[-20:])
         raise ValueError(
             "APP.DEPENDENCY.android_sync_failed: "
             f"cause={dependency_failure_cause(exc)}" + (f"\n{tail}" if tail else "")
         ) from exc
+    context.progress.begin("gradle-offline-replay")
     for phase, results in (
         ("online", result.online_results),
         ("offline", result.offline_results),
     ):
         for index, completed in enumerate(results):
-            (context.process_root / f"android-{phase}-{index}.log").write_text(
+            _write_private_log(
+                context.process_root / f"android-{phase}-{index}.log",
                 redact_dependency_failure_text(
                     completed.stdout or "",
                     sensitive_values=trust_sensitive_values or (str(trust_root),),
                 ),
-                encoding="utf-8",
             )
     original_invocations = canonical_android_uat_gradle_invocations(context.repo_root)
     return write_android_gradle_component(
@@ -908,16 +1111,21 @@ def build_dependency_components(
     validated_trust_root, trust_sensitive_values = _validated_runtime_trust_root(
         trust_root, repo_root=context.repo_root
     )
+    context.progress.begin("toolchain-resolution")
     pod = resolve_cocoapods_executable(
         str(os.environ.get("QWQ_COCOAPODS_EXECUTABLE") or "")
     )
-    sealed_sources = _resolution_seal(context.repo_root)
+    context.progress.begin("live-source-seal")
+    sealed_sources = resolution_seal(context.repo_root)
     projection_root = context.work_root / "source-projection"
+    context.progress.begin("source-projection")
     project(context.repo_root, projection_root)
     _assert_resolution_seal(projection_root=projection_root, expected=sealed_sources)
+    context.progress.begin("pub-resolution-replay")
     roots, pub_replays, pub_digests = _build_pub_components(
         context=context, projection_root=projection_root
     )
+    context.progress.begin("ios-resolution-replay")
     for name, host in (
         ("productionIosPods", IOS_POD_PRODUCTION_HOST),
         ("patrolIosPods", IOS_POD_PATROL_HOST),
@@ -931,6 +1139,7 @@ def build_dependency_components(
             pub_cache=pub_replays[pub_name],
             upstream_digest=pub_digests[pub_name],
         )
+    context.progress.begin("android-resolution-replay")
     roots["androidGradle"] = _build_android_component(
         context=context,
         projection_root=projection_root,
@@ -939,7 +1148,9 @@ def build_dependency_components(
         trust_root=validated_trust_root,
         trust_sensitive_values=trust_sensitive_values,
     )
+    context.progress.begin("source-projection-readback")
     _assert_resolution_seal(projection_root=projection_root, expected=sealed_sources)
+    context.progress.begin("component-readback")
     _verify_components(
         context=context,
         projection_root=projection_root,

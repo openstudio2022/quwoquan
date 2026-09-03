@@ -199,7 +199,7 @@ def clone_fresh_relative_file(
             not stat.S_ISREG(before.st_mode)
             or before.st_nlink != 1
             or before.st_size != expected_size
-            or (before.st_mode & 0o111) != (mode & 0o111)
+            or bool(before.st_mode & 0o111) != bool(mode & 0o111)
         ):
             raise ValueError(f"App dependency snapshot clone source drifted: {relative}")
         for segment in pure.parts[:-1]:

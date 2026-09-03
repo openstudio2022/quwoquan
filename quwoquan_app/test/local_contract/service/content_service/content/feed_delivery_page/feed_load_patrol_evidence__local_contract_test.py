@@ -30,9 +30,19 @@ def test_feed_uat_emits_release_bound_evidence_through_captured_stdout() -> None
     assert "print(\n        'QWQ_FEED_CONTENT_EVIDENCE " in source
     assert "$.log(\n        'QWQ_FEED_CONTENT_EVIDENCE " not in source
     assert "debugPrint(\n        'QWQ_FEED_CONTENT_EVIDENCE " not in source
-    assert source.index("expect(visibleCardKeys, isNotEmpty)") < source.index(
-        "QWQ_FEED_CONTENT_EVIDENCE "
-    )
+    media_success = "matching: find.byKey(appImageLoadSuccessKey)"
+    media_error = "matching: find.byKey(appImageLoadErrorKey)"
+    evidence = source.index("QWQ_FEED_CONTENT_EVIDENCE ")
+    screenshot = source.index("emitPatrolAppContentPageScreenshotReady(")
+    assert "package:quwoquan_app/design_system/media/app_cached_network_image.dart" in source
+    assert media_success in source and media_error in source
+    assert source.index("of: visibleFeedCard") < source.index(media_success) < evidence
+    assert source.index(media_error) < evidence < screenshot
+    assert "GoRouterState.of(" in source
+    assert "AppRoutePaths.home" in source
+    assert "terminalKey: terminalKey" in source
+    assert "terminalFinder: visibleFeedCard" in source
+    assert "'mediaLoadStatus': 'decoded'" in source
 
 
 def test_video_and_recovery_evidence_use_captured_stdout() -> None:

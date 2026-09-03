@@ -40,10 +40,10 @@ class _Lock:
 def _passing_direct_evidence() -> dict[str, object]:
     return {
         "status": "passed",
-        "launchProvenance": "workspace_flutter_run",
+        "launchProvenance": "canonical_launcher",
         "runtimeConfigSupplyMode": "external_runtime_package",
         "consumerLeaseId": "sha256:" + "7" * 64,
-        "reportPath": "/evidence/workspace-flutter-run.json",
+        "reportPath": "/evidence/canonical-hot-restart.json",
         "runtimeIdentitySnapshots": [
             {
                 "runtimeConfigDigest": "runtime-package-digest",

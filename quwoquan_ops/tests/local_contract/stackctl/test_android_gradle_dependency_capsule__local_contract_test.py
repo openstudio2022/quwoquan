@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -30,6 +31,7 @@ from quwoquan_ops.cli.lib.package_reuse.android_gradle_store import (
     GradleInvocation,
     canonical_android_uat_gradle_invocations,
     copy_android_gradle_snapshot,
+    materialize_flutter_gradle_wrappers,
     run_gradle_invocations,
     seal_android_gradle_home,
     synchronize_android_gradle_dependencies,
@@ -59,6 +61,40 @@ def _wrapper(project: Path, archive: bytes = b"gradle distribution") -> Path:
     gradlew.chmod(0o755)
     (root / "gradlew.bat").write_text("@echo off\r\n", encoding="utf-8")
     return root
+
+
+def _flutter_wrapper_sdk(tmp_path: Path) -> tuple[Path, dict[str, tuple[bytes, int]]]:
+    flutter = tmp_path / "flutter-sdk/bin/flutter"
+    flutter.parent.mkdir(parents=True)
+    flutter.write_bytes(b"#!/bin/sh\n")
+    flutter.chmod(0o755)
+    artifacts = {
+        "gradlew": (b"#!/bin/sh\n# sdk wrapper\n", 0o755),
+        "gradlew.bat": (b"@echo off\r\nREM sdk wrapper\r\n", 0o644),
+        "gradle/wrapper/gradle-wrapper.jar": (b"sdk wrapper jar", 0o644),
+    }
+    artifact_root = flutter.parent / "cache/artifacts/gradle_wrapper"
+    for relative, (content, mode) in artifacts.items():
+        target = artifact_root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+        target.chmod(mode)
+    return flutter, artifacts
+
+
+def _wrapper_properties(
+    root: Path, *, version: str, archive: bytes
+) -> tuple[Path, bytes]:
+    wrapper = root / "gradle/wrapper"
+    wrapper.mkdir(parents=True)
+    encoded = (
+        "distributionBase=GRADLE_USER_HOME\n"
+        f"distributionUrl=https\\://services.gradle.org/distributions/gradle-{version}-bin.zip\n"
+        f"distributionSha256Sum={hashlib.sha256(archive).hexdigest()}\n"
+    ).encode()
+    properties = wrapper / "gradle-wrapper.properties"
+    properties.write_bytes(encoded)
+    return properties, encoded
 
 
 def _raw_home(tmp_path: Path, archive: bytes = b"gradle distribution") -> Path:
@@ -109,6 +145,85 @@ def _sealed(tmp_path: Path) -> tuple[Path, Path, Path, object]:
         gradle_roots=[gradle_root],
     )
     return project, gradle_root, sealed, snapshot
+
+
+def test_flutter_sdk_materializes_both_private_wrappers_and_preserves_properties(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "private-projection"
+    production = project / "quwoquan_app/android"
+    patrol = project / "quwoquan_app/test_host/patrol/android"
+    production_properties, production_bytes = _wrapper_properties(
+        production, version="8.14", archive=b"production distribution"
+    )
+    patrol_properties, patrol_bytes = _wrapper_properties(
+        patrol, version="8.12.1", archive=b"patrol distribution"
+    )
+    flutter, artifacts = _flutter_wrapper_sdk(tmp_path)
+
+    identities = materialize_flutter_gradle_wrappers(
+        project_root=project,
+        gradle_roots=[production, patrol],
+        flutter_executable=flutter,
+    )
+
+    assert [item["root"] for item in identities] == [
+        "quwoquan_app/android",
+        "quwoquan_app/test_host/patrol/android",
+    ]
+    assert identities[0]["distributionUrl"].endswith("gradle-8.14-bin.zip")
+    assert identities[1]["distributionUrl"].endswith("gradle-8.12.1-bin.zip")
+    assert identities[0]["distributionSha256"] != identities[1][
+        "distributionSha256"
+    ]
+    assert production_properties.read_bytes() == production_bytes
+    assert patrol_properties.read_bytes() == patrol_bytes
+    for gradle_root in (production, patrol):
+        for relative, expected in artifacts.items():
+            target = gradle_root / relative
+            assert target.read_bytes() == expected[0]
+            assert stat.S_IMODE(target.stat().st_mode) == expected[1]
+
+
+@pytest.mark.parametrize("unsafe", ["symlink", "drift", "sdk-missing"])
+def test_flutter_wrapper_materialization_fails_closed_without_overwrite(
+    tmp_path: Path, unsafe: str
+) -> None:
+    project = tmp_path / "private-projection"
+    production = project / "quwoquan_app/android"
+    patrol = project / "quwoquan_app/test_host/patrol/android"
+    _wrapper_properties(production, version="8.14", archive=b"production")
+    _wrapper_properties(patrol, version="8.12.1", archive=b"patrol")
+    flutter, artifacts = _flutter_wrapper_sdk(tmp_path)
+    existing = production / "gradlew"
+    if unsafe == "symlink":
+        existing.symlink_to(flutter)
+    elif unsafe == "drift":
+        existing.write_bytes(b"project-local wrapper drift")
+        existing.chmod(0o755)
+    else:
+        (
+            flutter.parent
+            / "cache/artifacts/gradle_wrapper/gradle/wrapper/gradle-wrapper.jar"
+        ).unlink()
+
+    with pytest.raises(ValueError, match="wrapper|Wrapper"):
+        materialize_flutter_gradle_wrappers(
+            project_root=project,
+            gradle_roots=[production, patrol],
+            flutter_executable=flutter,
+        )
+
+    assert not (patrol / "gradlew").exists()
+    assert not (patrol / "gradlew.bat").exists()
+    assert not (patrol / "gradle/wrapper/gradle-wrapper.jar").exists()
+    if unsafe == "drift":
+        assert existing.read_bytes() == b"project-local wrapper drift"
+    if unsafe != "sdk-missing":
+        sdk_batch = artifacts["gradlew.bat"]
+        assert (
+            flutter.parent / "cache/artifacts/gradle_wrapper/gradlew.bat"
+        ).read_bytes() == sdk_batch[0]
 
 
 def test_seal_binds_wrapper_maven_artifacts_lock_and_verification_metadata(

@@ -21,25 +21,242 @@ import sys
 print(pathlib.Path(sys.argv[1]).expanduser().absolute())
 PY
 )"
+export QWQ_OUTPUT_ROOT
+# 依赖回放随后会把 HOME 切换到私有构建目录；先冻结仓库外 deployment authority，
+# 避免 runtime-config 签名路径落入可写 source projection。output_paths 会再次校验。
+QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${HOME}/.cache/quwoquan/deploy}"
+export QWQ_DEPLOY_WORK_ROOT
 ORIGINAL_LAUNCH_ARGUMENTS=("$@")
 
-# Direct run.sh and the workspace literal `flutter run` always re-exec from a
-# frozen private source projection. app-content-uat already supplies its own
-# candidate projection and therefore skips this workspace-only wrapper.
+# Direct run.sh always re-execs from a frozen private source projection.
+# app-content-uat already supplies its own candidate projection and therefore
+# skips this workspace-only wrapper.
 enter_workspace_launch_projection() {
   if [[ -n "${QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST:-}" \
      || ( ! -e "$ROOT_DIR/.git" && ! -L "$ROOT_DIR/.git" ) ]]; then
     return 0
   fi
-  WORKSPACE_ATTEMPT_ROOT="$QWQ_OUTPUT_ROOT/env/repo/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$-workspace-launch"
-  if ! WORKSPACE_PROJECTION_JSON="$(
+  # 依赖 bundle missing/stale 的一次性交互式自动同步。该标志只属于本 recovery 路径，
+  # 与后文 iOS 重试的 DEPENDENCY_RETRY 状态机无关，也不共享任何变量。
+  WORKSPACE_DEPENDENCY_AUTO_SYNC_USED=0
+  WORKSPACE_ATTEMPT_BASE="$QWQ_OUTPUT_ROOT/env/repo/runs/$(date -u +%Y%m%dT%H%M%SZ)-$$-workspace-launch"
+  WORKSPACE_ATTEMPT_ROOT="${WORKSPACE_ATTEMPT_BASE}-initial"
+  WORKSPACE_PROJECTION_STATUS=0
+  # stderr 直接继承：missing/stale typed blocker 行原样先于 recovery 说明输出；
+  # stdout 捕获失败 envelope 供机器判别。
+  if WORKSPACE_PROJECTION_JSON="$(
     PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
       python3 "$APP_DIR/scripts/device/prepare_workspace_launch_projection.py" \
       --output-root "$QWQ_OUTPUT_ROOT" \
       --attempt-root "$WORKSPACE_ATTEMPT_ROOT"
   )"; then
-    echo "[run] APP.LAUNCH.workspace_entrypoint_inactive: unable to freeze a private workspace launch projection." >&2
-    exit 2
+    :
+  else
+    WORKSPACE_PROJECTION_STATUS=$?
+  fi
+  if [[ "$WORKSPACE_PROJECTION_STATUS" -ne 0 ]]; then
+    WORKSPACE_PROJECTION_ERROR_CODE="$(python3 - "$WORKSPACE_PROJECTION_JSON" <<'PY'
+import json
+import sys
+
+try:
+    payload = json.loads(sys.argv[1])
+except ValueError:
+    payload = None
+if isinstance(payload, dict) and payload.get("status") == "failed":
+    print(str(payload.get("errorCode") or ""))
+PY
+)" || WORKSPACE_PROJECTION_ERROR_CODE=""
+    # 恢复必须同时满足：missing/stale 码、双 TTY、live workspace 外层入口、且本进程未同步过。
+    case "$WORKSPACE_PROJECTION_ERROR_CODE" in
+      APP.DEPENDENCY.bundle_missing)
+        WORKSPACE_DEPENDENCY_AUTO_SYNC_REASON="缺失"
+        ;;
+      APP.DEPENDENCY.bundle_stale)
+        WORKSPACE_DEPENDENCY_AUTO_SYNC_REASON="过期"
+        ;;
+      *)
+        WORKSPACE_DEPENDENCY_AUTO_SYNC_REASON=""
+        ;;
+    esac
+    if [[ -z "$WORKSPACE_DEPENDENCY_AUTO_SYNC_REASON" \
+       || "$WORKSPACE_DEPENDENCY_AUTO_SYNC_USED" != "0" \
+       || ! ( -t 0 && -t 2 ) \
+       || -n "${QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST:-}" \
+       || ( ! -e "$ROOT_DIR/.git" && ! -L "$ROOT_DIR/.git" ) ]]; then
+      echo "[run] APP.LAUNCH.workspace_entrypoint_inactive: unable to freeze a private workspace launch projection." >&2
+      exit 2
+    fi
+    WORKSPACE_DEPENDENCY_AUTO_SYNC_USED=1
+    echo "[run] 检测到依赖 bundle 已${WORKSPACE_DEPENDENCY_AUTO_SYNC_REASON}（${WORKSPACE_PROJECTION_ERROR_CODE}）：现在执行一次 canonical 依赖同步 stackctl app-dependency-sync，完成后自动重试一次启动投影。" >&2
+    WORKSPACE_DEPENDENCY_SYNC_REPORT="$(mktemp "${TMPDIR:-/tmp}/qwq-app-dependency-sync-report.XXXXXX")"
+    WORKSPACE_DEPENDENCY_SYNC_STATUS=0
+    if PYTHONDONTWRITEBYTECODE=1 \
+      python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json app-dependency-sync \
+      >"$WORKSPACE_DEPENDENCY_SYNC_REPORT"; then
+      :
+    else
+      WORKSPACE_DEPENDENCY_SYNC_STATUS=$?
+    fi
+    WORKSPACE_DEPENDENCY_SYNC_PARSE_STATUS=0
+    if WORKSPACE_DEPENDENCY_SYNC_ATTEMPT_ID="$(
+      python3 - "$WORKSPACE_DEPENDENCY_SYNC_REPORT" "$WORKSPACE_DEPENDENCY_SYNC_STATUS" <<'PY'
+import json
+import pathlib
+import re
+import sys
+
+report = pathlib.Path(sys.argv[1])
+command_status = int(sys.argv[2])
+try:
+    encoded = report.read_text(encoding="utf-8")
+    if not encoded.strip():
+        raise ValueError("empty sync JSON")
+    payload = json.loads(encoded)
+except (OSError, UnicodeError, ValueError):
+    raise SystemExit(3)
+if not isinstance(payload, dict):
+    raise SystemExit(3)
+exit_code = payload.get("exitCode")
+summary = payload.get("summary")
+details = payload.get("details")
+
+def sanitized(value: str) -> str:
+    text = " ".join(value.splitlines()).strip()
+    lowered = text.casefold()
+    if any(
+        marker in lowered
+        for marker in (
+            "-----begin private key-----",
+            "privatekey",
+            "private_key",
+            "private-key",
+            "trustedpublickeys",
+            "trusted_public_keys",
+            "trusted-public-keys",
+            "runtime-config-trust.json",
+        )
+    ):
+        return "[REDACTED dependency diagnostic]"
+    text = re.sub(
+        r"(?i)\b(authorization|password|passwd|token|secret|api[_-]?key)\b"
+        r"\s*[:=]\s*(?:bearer\s+)?[^\s,;]+",
+        r"\1=[REDACTED]",
+        text,
+    )
+    return text or "[empty dependency diagnostic]"
+
+def emit_details() -> None:
+    values = (
+        details
+        if isinstance(details, list) and all(isinstance(item, str) for item in details)
+        else []
+    )
+    values = values or [
+        summary
+        if isinstance(summary, str) and summary
+        else "APP.DEPENDENCY.sync_blocked: no details reported"
+    ]
+    for item in values:
+        print("[run] dependency sync detail: " + sanitized(item), file=sys.stderr)
+
+if (
+    not isinstance(exit_code, int)
+    or isinstance(exit_code, bool)
+    or not isinstance(summary, str)
+    or not isinstance(details, list)
+    or not all(isinstance(item, str) for item in details)
+):
+    emit_details()
+    print(
+        "[run] APP.DEPENDENCY.sync_result_invalid: dependency sync JSON envelope is invalid.",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
+
+activation = payload.get("activation")
+committed = (
+    exit_code == 0
+    and isinstance(activation, dict)
+    and activation.get("status") == "committed"
+    and isinstance(activation.get("attemptId"), str)
+    and bool(activation["attemptId"])
+)
+if command_status != 0 or exit_code != 0:
+    emit_details()
+    if command_status != exit_code:
+        print(
+            "[run] APP.DEPENDENCY.sync_result_exit_mismatch: "
+            f"process={command_status} result={exit_code}",
+            file=sys.stderr,
+        )
+    raise SystemExit(2)
+if not committed:
+    emit_details()
+    print(
+        "[run] APP.DEPENDENCY.sync_activation_uncommitted: "
+        "dependency sync did not report a committed activation.",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
+print(activation["attemptId"])
+PY
+    )"; then
+      :
+    else
+      WORKSPACE_DEPENDENCY_SYNC_PARSE_STATUS=$?
+      WORKSPACE_DEPENDENCY_SYNC_ATTEMPT_ID=""
+    fi
+    if ! rm -f -- "$WORKSPACE_DEPENDENCY_SYNC_REPORT"; then
+      echo "[run] APP.DEPENDENCY.sync_report_cleanup_warning: unable to remove temporary sync report." >&2
+    fi
+    unset WORKSPACE_DEPENDENCY_SYNC_REPORT
+    if [[ "$WORKSPACE_DEPENDENCY_SYNC_PARSE_STATUS" -ne 0 ]]; then
+      if [[ "$WORKSPACE_DEPENDENCY_SYNC_PARSE_STATUS" -eq 3 ]]; then
+        echo "[run] ${WORKSPACE_PROJECTION_ERROR_CODE}: canonical dependency sync returned invalid or empty JSON; workspace launch stays blocked." >&2
+      fi
+      echo "[run] APP.LAUNCH.workspace_entrypoint_inactive: unable to freeze a private workspace launch projection." >&2
+      exit 2
+    fi
+    # 独立读回：fresh Python 进程经 canonical loader 验证 active 指针确实指向本次 sync。
+    if ! WORKSPACE_DEPENDENCY_ACTIVE_ATTEMPT_ID="$(
+      PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+        QWQ_OUTPUT_ROOT="$QWQ_OUTPUT_ROOT" \
+        python3 - "$ROOT_DIR" <<'PY'
+import pathlib
+import sys
+
+from quwoquan_ops.cli.lib.package_reuse.dependency_bundle import (
+    load_active_dependency_bundle,
+)
+
+bundle = load_active_dependency_bundle(repo_root=pathlib.Path(sys.argv[1]))
+print(str(bundle.active.get("attemptId") or ""))
+PY
+    )"; then
+      echo "[run] ${WORKSPACE_PROJECTION_ERROR_CODE}: post-sync dependency bundle readback failed; not retrying." >&2
+      echo "[run] APP.LAUNCH.workspace_entrypoint_inactive: unable to freeze a private workspace launch projection." >&2
+      exit 2
+    fi
+    if [[ -z "$WORKSPACE_DEPENDENCY_SYNC_ATTEMPT_ID" \
+       || "$WORKSPACE_DEPENDENCY_ACTIVE_ATTEMPT_ID" != "$WORKSPACE_DEPENDENCY_SYNC_ATTEMPT_ID" ]]; then
+      echo "[run] ${WORKSPACE_PROJECTION_ERROR_CODE}: post-sync active attempt mismatch; not retrying." >&2
+      echo "[run] APP.LAUNCH.workspace_entrypoint_inactive: unable to freeze a private workspace launch projection." >&2
+      exit 2
+    fi
+    echo "[run] 依赖同步已提交（attemptId=${WORKSPACE_DEPENDENCY_SYNC_ATTEMPT_ID}），重试一次 workspace 启动投影。" >&2
+    WORKSPACE_ATTEMPT_ROOT="${WORKSPACE_ATTEMPT_BASE}-retry"
+    if WORKSPACE_PROJECTION_JSON="$(
+      PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+        python3 "$APP_DIR/scripts/device/prepare_workspace_launch_projection.py" \
+        --output-root "$QWQ_OUTPUT_ROOT" \
+        --attempt-root "$WORKSPACE_ATTEMPT_ROOT"
+    )"; then
+      :
+    else
+      echo "[run] APP.LAUNCH.workspace_entrypoint_inactive: unable to freeze a private workspace launch projection." >&2
+      exit 2
+    fi
   fi
   WORKSPACE_PROJECTION_EXPORTS="$(python3 - "$WORKSPACE_PROJECTION_JSON" <<'PY'
 import json
@@ -63,21 +280,21 @@ print(
     "QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST="
     + shlex.quote(payload["sourceCapsuleManifest"])
 )
-print("QWQ_PACKAGE_SOURCE_REVISION=" + shlex.quote(payload["sourceRevision"]))
 print(
-    "QWQ_PACKAGE_SOURCE_TREE_DIGEST="
+    "QWQ_WORKSPACE_SOURCE_REVISION="
+    + shlex.quote(payload["sourceRevision"])
+)
+print(
+    "QWQ_WORKSPACE_SOURCE_CAPSULE_DIGEST="
     + shlex.quote(payload["sourceCapsuleDigest"])
 )
 PY
-  )" || {
-    echo "[run] APP.LAUNCH.workspace_entrypoint_inactive: workspace projection handoff is invalid." >&2
-    exit 2
-  }
+)"
   eval "$WORKSPACE_PROJECTION_EXPORTS"
-  export QWQ_OUTPUT_ROOT QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST
-  export QWQ_PACKAGE_SOURCE_REVISION QWQ_PACKAGE_SOURCE_TREE_DIGEST
-  export QWQ_PACKAGE_SOURCE_CAPSULE_MANIFEST="$QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST"
-  exec "$QWQ_WORKSPACE_PROJECTION_ROOT/quwoquan_app/run.sh" "$@"
+  export QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST
+  export QWQ_WORKSPACE_SOURCE_REVISION QWQ_WORKSPACE_SOURCE_CAPSULE_DIGEST
+  PROJECTED_APP_DIR="$QWQ_WORKSPACE_PROJECTION_ROOT/quwoquan_app"
+  exec "$PROJECTED_APP_DIR/run.sh" "${ORIGINAL_LAUNCH_ARGUMENTS[@]}"
 }
 if [[ -n "${QWQ_WORKSPACE_SOURCE_CAPSULE_MANIFEST:-}" ]]; then
   if ! PYTHONDONTWRITEBYTECODE=1 \
@@ -110,7 +327,7 @@ export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-$QWQ_OUTPUT_ROOT/env/repo/loc
 REQUESTED_ENVIRONMENT="${QWQ_ENVIRONMENT:-}"
 REQUESTED_TARGET=""
 REQUESTED_DEVICE_ID=""
-# workspace surface（IDE attach / 字面 Flutter 启动命令）无命令行 --mode 通道，
+# workspace surface（IDE attach）无命令行 --mode 通道，
 # mode 与环境同构经 QWQ_RUN_MODE 选择；显式 --mode 参数覆盖环境值。
 RUN_MODE="${QWQ_RUN_MODE:-content-live}"
 # launch surface（launch provenance）只记录启动来源，不改变任何行为分支；
@@ -118,9 +335,9 @@ RUN_MODE="${QWQ_RUN_MODE:-content-live}"
 # 子集与闭集的一致性由 local_contract 断言。
 LAUNCH_PROVENANCE="${QWQ_APP_LAUNCH_PROVENANCE:-canonical_launcher}"
 case "$LAUNCH_PROVENANCE" in
-  canonical_launcher|workspace_flutter_run|workspace_ide_debug) ;;
+  canonical_launcher|workspace_ide_debug) ;;
   *)
-    echo "[run] APP.LAUNCH.launch_surface_unsupported: '$LAUNCH_PROVENANCE'; supported provenance is canonical_launcher, workspace_flutter_run, or workspace_ide_debug." >&2
+    echo "[run] APP.LAUNCH.launch_surface_unsupported: '$LAUNCH_PROVENANCE'; supported provenance is canonical_launcher or workspace_ide_debug." >&2
     exit 2
     ;;
 esac
@@ -353,9 +570,12 @@ PY
 
 print_usage() {
   cat <<'EOF'
-Usage: ./run.sh [--env alpha|beta|gamma] [--target alpha-local|beta-local|gamma-local]
-                [--mode content-live|ui-only] [--launch-receipt <path>]
-                [--launch-log-ref <path>] [--ensure-runtime] -d <device>
+Usage: run.sh [--env alpha|beta|gamma] [--target alpha-local|beta-local|gamma-local]
+              [--mode content-live|ui-only] [--launch-receipt <path>]
+              [--launch-log-ref <path>] [--ensure-runtime] [-d <device>]
+
+Defaults to --env alpha. Without -d in an interactive TTY, a numbered device list is
+shown for one-time selection; non-TTY invocations must pass -d explicitly.
 
 Both test_live modes continue through a real build, install, activation and launch when
 service, Provider, content or observability readiness is unavailable. content-live
@@ -414,7 +634,7 @@ while [[ $# -gt 0 ]]; do
       ENSURE_RUNTIME=1
       shift
       ;;
-    -d|--device-id)
+    -d|--device-id|--device)
       value="${2:-}"
       if [[ -z "$value" ]]; then
         echo "[run] GATE_BLOCK: $1 requires a device id." >&2
@@ -427,7 +647,7 @@ while [[ $# -gt 0 ]]; do
       REQUESTED_DEVICE_ID="$value"
       shift 2
       ;;
-    --device-id=*)
+    --device-id=*|--device=*)
       value="${1#*=}"
       if [[ -z "$value" ]]; then
         echo "[run] GATE_BLOCK: --device-id requires a device id." >&2
@@ -830,6 +1050,503 @@ except ValueError as error:
   exit 2
 fi
 
+# managed dispatcher 入口：严格准备由 stackctl app-managed-prepare 单独完成，
+# launcher 只 exact readback 私有 receipt 并复用其 trust/preflight/binding 结论。
+# 未设 QWQ_MANAGED_FLUTTER_ENTRY 时本块零调用，direct run.sh 行为完全不变。
+QWQ_MANAGED_PREPARATION_ACTIVE=0
+# 本次前台进程是 consumer identity 的唯一 authority；ambient 不得覆盖。
+QWQ_RUN_CONSUMER_ID="flutter-run-$$"
+QWQ_CONSUMER_LEASE_ACQUIRED=0
+QWQ_CONSUMER_LEASE_ID=""
+QWQ_ANDROID_REVERSE_OWNED_PORTS=""
+QWQ_MANAGED_DEVICE_TRUST_PLATFORM=""
+QWQ_MANAGED_TRUST_CLEANUP_REQUIRED=0
+QWQ_MANAGED_LEASE_CLEANUP_REQUIRED=0
+export QWQ_RUN_CONSUMER_ID QWQ_CONSUMER_LEASE_ACQUIRED
+export QWQ_CONSUMER_LEASE_ID QWQ_ANDROID_REVERSE_OWNED_PORTS
+export QWQ_MANAGED_DEVICE_TRUST_PLATFORM QWQ_MANAGED_TRUST_CLEANUP_REQUIRED
+export QWQ_MANAGED_LEASE_CLEANUP_REQUIRED
+
+cleanup_managed_handoff_resources() {
+  if [[ "${QWQ_MANAGED_TRUST_CLEANUP_REQUIRED:-0}" == "1" \
+     && -n "${QWQ_MANAGED_DEVICE_TRUST_PLATFORM:-}" \
+     && -n "${QWQ_CONSUMER_LEASE_ID:-}" ]]; then
+    if ! PYTHONDONTWRITEBYTECODE=1 \
+      python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" device-trust \
+      --target "$QWQ_LAUNCH_TARGET" \
+      --platform "$QWQ_MANAGED_DEVICE_TRUST_PLATFORM" \
+      --action release --device "$DEVICE_ID" \
+      --lease-id "$QWQ_CONSUMER_LEASE_ID" >/dev/null; then
+      record_teardown_warning "failed to release managed device trust lease."
+    fi
+    QWQ_MANAGED_TRUST_CLEANUP_REQUIRED=0
+  fi
+  if command -v adb >/dev/null 2>&1 \
+    && [[ -n "${QWQ_ANDROID_REVERSE_OWNED_PORTS:-}" ]]; then
+    IFS=',' read -r -a managed_reverse_ports <<< "$QWQ_ANDROID_REVERSE_OWNED_PORTS"
+    for port in "${managed_reverse_ports[@]}"; do
+      [[ -n "$port" ]] || continue
+      if ! adb -s "$DEVICE_ID" reverse --remove "tcp:$port" >/dev/null 2>&1; then
+        record_teardown_warning "failed to remove owned adb reverse tcp:$port."
+      fi
+    done
+    QWQ_ANDROID_REVERSE_OWNED_PORTS=""
+  fi
+  if [[ "${QWQ_MANAGED_LEASE_CLEANUP_REQUIRED:-0}" == "1" \
+     || "${QWQ_CONSUMER_LEASE_ACQUIRED:-0}" == "1" ]]; then
+    if [[ "${QWQ_MANAGED_PREPARATION_ACTIVE:-0}" == "1" \
+       && ( "$QWQ_CONSUMER_LEASE_ID" != "$QWQ_MANAGED_CONSUMER_LEASE_ID" \
+         || "$QWQ_RUN_CONSUMER_ID" != "$QWQ_MANAGED_CONSUMER_ID" ) ]]; then
+      record_teardown_warning "managed lease cleanup identity drifted; refusing unrelated release."
+      return
+    fi
+    if ! PYTHONDONTWRITEBYTECODE=1 \
+      python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" consumer-lease release \
+      --target "$QWQ_LAUNCH_TARGET" --device "$DEVICE_ID" \
+      --consumer "$QWQ_RUN_CONSUMER_ID" >/dev/null; then
+      record_teardown_warning "failed to release runtime consumer lease."
+    fi
+    QWQ_MANAGED_LEASE_CLEANUP_REQUIRED=0
+    QWQ_CONSUMER_LEASE_ACQUIRED=0
+  fi
+}
+
+# preparation 在 run.sh 接管前即可创建 stable-consumer lease；trap 必须先于命令安装，
+# receipt command/readback 任一失败都至少按该 consumer 归还 lease。
+managed_prelaunch_cleanup() {
+  local exit_code=$?
+  trap - EXIT
+  set +e
+  cleanup_managed_handoff_resources
+  exit "$exit_code"
+}
+
+if [[ "${QWQ_MANAGED_FLUTTER_ENTRY:-}" == "1" ]]; then
+  if [[ -z "$DEVICE_ID" ]]; then
+    echo "[run] APP.PREPARATION.receipt_invalid: managed flutter entry requires an explicit --device id." >&2
+    exit 2
+  fi
+  echo "[run] managed preparation for $QWQ_LAUNCH_TARGET on $DEVICE_ID..."
+  QWQ_MANAGED_LEASE_CLEANUP_REQUIRED=1
+  export QWQ_MANAGED_LEASE_CLEANUP_REQUIRED
+  trap managed_prelaunch_cleanup EXIT
+  if ! MANAGED_PREPARE_JSON="$(
+    PYTHONDONTWRITEBYTECODE=1 python3 \
+      "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
+      app-managed-prepare --target "$QWQ_LAUNCH_TARGET" --device "$DEVICE_ID" \
+      --consumer-id "$QWQ_RUN_CONSUMER_ID"
+  )"; then
+    MANAGED_PREPARE_BLOCKER="$(
+      python3 - "$MANAGED_PREPARE_JSON" <<'PY'
+import json
+import sys
+
+try:
+    payload = json.loads(sys.argv[1])
+except ValueError:
+    payload = {}
+for item in payload.get("details") or []:
+    print("[run] managed preparation detail: " + str(item).replace("\n", " "), file=sys.stderr)
+print(str(payload.get("firstBlocker") or "APP.PREPARATION.receipt_invalid"))
+PY
+    )" || MANAGED_PREPARE_BLOCKER="APP.PREPARATION.receipt_invalid"
+    echo "[run] GATE_BLOCK: $MANAGED_PREPARE_BLOCKER: managed preparation did not reach prepared." >&2
+    exit 2
+  fi
+  QWQ_CONSUMER_LEASE_ACQUIRED=1
+  export QWQ_CONSUMER_LEASE_ACQUIRED
+  if ! MANAGED_PREPARE_EXPORTS="$(
+    PYTHONDONTWRITEBYTECODE=1 python3 - \
+      "$MANAGED_PREPARE_JSON" "$QWQ_LAUNCH_TARGET" "$QWQ_APP_RUNTIME_ENV" \
+      "$DEVICE_ID" "$PREFLIGHT_PURPOSE" "$QWQ_RUN_CONSUMER_ID" <<'PY'
+import hashlib
+import json
+import os
+import pathlib
+import re
+import shlex
+import sys
+
+command_json, target, environment, device_id, preflight_purpose, consumer_id = sys.argv[1:7]
+digest_pattern = re.compile(r"^sha256:[0-9a-f]{64}$")
+port_pattern = re.compile(r"^[1-9][0-9]*(?:,[1-9][0-9]*)*$")
+
+
+def require_nonempty_string(value, label):
+    if not isinstance(value, str) or not value.strip():
+        raise SystemExit(f"managed preparation {label} must be a non-empty string")
+    return value
+
+
+def require_digest(value, label, *, allow_empty=False):
+    if allow_empty and value == "":
+        return value
+    if not isinstance(value, str) or digest_pattern.fullmatch(value) is None:
+        raise SystemExit(f"managed preparation {label} must be a canonical sha256 identity")
+    return value
+
+
+def file_digest(path):
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def exact_regular_file(raw_ref, label):
+    if not isinstance(raw_ref, str) or not raw_ref:
+        raise SystemExit(f"managed preparation {label} reference is empty")
+    path = pathlib.Path(raw_ref)
+    if not path.is_absolute() or path.is_symlink() or not path.is_file():
+        raise SystemExit(f"managed preparation {label} reference is unsafe")
+    return path
+
+
+try:
+    command_payload = json.loads(command_json)
+except ValueError:
+    raise SystemExit("managed preparation command output is not JSON")
+if not isinstance(command_payload, dict) or set(command_payload) != {
+    "exitCode", "summary", "status", "firstBlocker", "receiptPath",
+    "receiptDigest", "details", "warnings", "reportDir", "startedAt",
+    "endedAt", "durationMs",
+}:
+    raise SystemExit("managed preparation command envelope field set drifted")
+if (
+    type(command_payload.get("exitCode")) is not int
+    or command_payload["exitCode"] != 0
+    or command_payload.get("status") != "prepared"
+    or command_payload.get("firstBlocker") != ""
+    or not isinstance(command_payload.get("details"), list)
+    or not isinstance(command_payload.get("warnings"), list)
+):
+    raise SystemExit("managed preparation command envelope is not strictly prepared")
+receipt_path = exact_regular_file(command_payload.get("receiptPath"), "receipt")
+declared_digest = require_digest(command_payload.get("receiptDigest"), "receiptDigest")
+receipt_bytes = receipt_path.read_bytes()
+if "sha256:" + hashlib.sha256(receipt_bytes).hexdigest() != declared_digest:
+    raise SystemExit("managed preparation receipt digest mismatch")
+try:
+    receipt = json.loads(receipt_bytes)
+except (UnicodeError, ValueError):
+    raise SystemExit("managed preparation receipt is not UTF-8 JSON")
+expected_fields = {
+    "schema", "target", "environment", "platform", "deviceId", "runtimeIdentity",
+    "consumerId", "consumerLeaseId", "androidReversePorts", "androidReverseOwnedPorts",
+    "deviceTrustReceiptRef", "deviceTrustReceiptDigest", "contentBinding",
+    "strictPreflightReceiptRef", "strictPreflightReceiptDigest",
+    "strictContentPreflightReceiptRef", "strictContentPreflightReceiptDigest",
+    "createdAt", "status", "firstBlocker",
+}
+if not isinstance(receipt, dict) or set(receipt) != expected_fields:
+    raise SystemExit("managed preparation receipt field set drifted")
+for field, expected in (
+    ("schema", "quwoquan_ops.app_managed_preparation.v1"),
+    ("target", target),
+    ("environment", environment),
+    ("deviceId", device_id),
+    ("consumerId", consumer_id),
+    ("status", "prepared"),
+    ("firstBlocker", ""),
+):
+    if receipt.get(field) != expected:
+        raise SystemExit(f"managed preparation receipt {field} mismatch")
+platform = receipt.get("platform")
+if platform not in {"android", "ios"}:
+    raise SystemExit("managed preparation receipt platform is outside the closed set")
+runtime = receipt.get("runtimeIdentity")
+runtime_fields = {
+    "startupAttemptId", "composeProject", "composeDigest", "configurationDigest",
+    "providerRuntimeDigest", "reused", "replaced",
+}
+if not isinstance(runtime, dict) or set(runtime) != runtime_fields:
+    raise SystemExit("managed preparation runtimeIdentity field set drifted")
+for field in ("startupAttemptId", "composeProject"):
+    require_nonempty_string(runtime.get(field), f"runtimeIdentity.{field}")
+for field in ("composeDigest", "configurationDigest", "providerRuntimeDigest"):
+    require_digest(runtime.get(field), f"runtimeIdentity.{field}")
+if any(type(runtime.get(field)) is not bool for field in ("reused", "replaced")):
+    raise SystemExit("managed preparation runtimeIdentity booleans are invalid")
+lease_id = require_digest(receipt.get("consumerLeaseId"), "consumerLeaseId")
+reverse_ports = receipt.get("androidReversePorts")
+owned_ports = receipt.get("androidReverseOwnedPorts")
+if not isinstance(reverse_ports, str) or not isinstance(owned_ports, str):
+    raise SystemExit("managed preparation Android reverse fields must be strings")
+if platform == "android":
+    if port_pattern.fullmatch(reverse_ports) is None:
+        raise SystemExit("managed preparation Android transport ports are invalid")
+    canonical_reverse = ",".join(
+        str(value) for value in sorted({int(value) for value in reverse_ports.split(",")})
+    )
+    if reverse_ports != canonical_reverse:
+        raise SystemExit("managed preparation Android transport ports are not canonical")
+    if owned_ports and port_pattern.fullmatch(owned_ports) is None:
+        raise SystemExit("managed preparation owned Android reverse ports are invalid")
+    canonical_owned = ",".join(
+        str(value) for value in sorted({int(value) for value in owned_ports.split(",")})
+    ) if owned_ports else ""
+    if owned_ports != canonical_owned:
+        raise SystemExit("managed preparation owned Android reverse ports are not canonical")
+    if owned_ports and not set(owned_ports.split(",")) <= set(reverse_ports.split(",")):
+        raise SystemExit("managed preparation owned ports exceed transport ports")
+elif reverse_ports or owned_ports:
+    raise SystemExit("managed preparation iOS receipt carries Android reverse ports")
+trust_ref_raw = receipt.get("deviceTrustReceiptRef")
+trust_digest = receipt.get("deviceTrustReceiptDigest")
+if not isinstance(trust_ref_raw, str) or not isinstance(trust_digest, str):
+    raise SystemExit("managed preparation trust fields must be strings")
+if bool(trust_ref_raw) != bool(trust_digest):
+    raise SystemExit("managed preparation trust reference/digest pairing is invalid")
+trust_platform = ""
+if trust_ref_raw:
+    trust_ref = exact_regular_file(trust_ref_raw, "device trust receipt")
+    require_digest(trust_digest, "deviceTrustReceiptDigest")
+    if file_digest(trust_ref) != trust_digest:
+        raise SystemExit("managed preparation device trust digest mismatch")
+    try:
+        trust_receipt = json.loads(trust_ref.read_bytes())
+    except (UnicodeError, ValueError):
+        raise SystemExit("managed device trust receipt is not UTF-8 JSON")
+    if (
+        not isinstance(trust_receipt, dict)
+        or trust_receipt.get("target") != target
+        or trust_receipt.get("device") != device_id
+        or trust_receipt.get("status") != "installed"
+        or trust_receipt.get("systemTrustStore") is not True
+        or lease_id not in {
+            str(value) for value in trust_receipt.get("leases") or []
+        }
+    ):
+        raise SystemExit("managed device trust receipt does not bind this lease")
+    trust_platform = trust_receipt.get("platform")
+    if trust_platform not in {"ios-simulator", "android-emulator"}:
+        raise SystemExit("managed device trust receipt platform is invalid")
+    if (platform == "ios") != (trust_platform == "ios-simulator"):
+        raise SystemExit("managed device trust platform does not match preparation")
+else:
+    require_digest(trust_digest, "deviceTrustReceiptDigest", allow_empty=True)
+binding = receipt.get("contentBinding")
+binding_fields = {
+    "releaseId", "verifyRunId", "manifestDigest", "readinessPhase",
+    "readinessReceiptRef", "readinessReceiptDigest",
+}
+if not isinstance(binding, dict) or set(binding) != binding_fields:
+    raise SystemExit("managed preparation content binding field set drifted")
+for field in ("releaseId", "verifyRunId"):
+    require_nonempty_string(binding.get(field), f"contentBinding.{field}")
+require_digest(binding.get("manifestDigest"), "contentBinding.manifestDigest")
+if binding.get("readinessPhase") != "research":
+    raise SystemExit("managed preparation content binding is not research readiness")
+readiness_ref = exact_regular_file(
+    binding.get("readinessReceiptRef"), "content readiness receipt"
+)
+readiness_digest = require_digest(
+    binding.get("readinessReceiptDigest"), "contentBinding.readinessReceiptDigest"
+)
+readiness_bytes = readiness_ref.read_bytes()
+if "sha256:" + hashlib.sha256(readiness_bytes).hexdigest() != readiness_digest:
+    raise SystemExit("managed preparation content readiness byte digest mismatch")
+try:
+    readiness_receipt = json.loads(readiness_bytes)
+except (UnicodeError, ValueError):
+    raise SystemExit("managed content readiness receipt is not UTF-8 JSON")
+if (
+    not isinstance(readiness_receipt, dict)
+    or readiness_receipt.get("releaseId") != binding["releaseId"]
+    or readiness_receipt.get("verifyRunId") != binding["verifyRunId"]
+    or readiness_receipt.get("manifestDigest") != binding["manifestDigest"]
+    or readiness_receipt.get("readinessPhase") != "research"
+    or readiness_receipt.get("passed") is not True
+):
+    raise SystemExit("managed content readiness receipt identity drifted")
+
+
+def normalized_readiness_ref(value, label):
+    require_nonempty_string(value, label)
+    path = pathlib.Path(value)
+    if not path.is_absolute():
+        path = pathlib.Path(os.environ["QWQ_OUTPUT_ROOT"]) / path
+    return path.absolute()
+
+
+created_at = require_nonempty_string(receipt.get("createdAt"), "createdAt")
+try:
+    import datetime as dt
+    parsed_created_at = dt.datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+except ValueError:
+    raise SystemExit("managed preparation createdAt is not RFC3339")
+if parsed_created_at.tzinfo is None or parsed_created_at.utcoffset() != dt.timedelta(0):
+    raise SystemExit("managed preparation createdAt is not UTC")
+strict_debug_ref = exact_regular_file(
+    receipt.get("strictPreflightReceiptRef"), "strict debug preflight receipt"
+)
+strict_debug_digest = require_digest(
+    receipt.get("strictPreflightReceiptDigest"), "strictPreflightReceiptDigest"
+)
+strict_debug_bytes = strict_debug_ref.read_bytes()
+if "sha256:" + hashlib.sha256(strict_debug_bytes).hexdigest() != strict_debug_digest:
+    raise SystemExit("managed preparation strict debug preflight digest mismatch")
+try:
+    debug_envelope = json.loads(strict_debug_bytes)
+except (UnicodeError, ValueError):
+    raise SystemExit("managed strict debug preflight envelope is not UTF-8 JSON")
+if not isinstance(debug_envelope, dict) or set(debug_envelope) != {
+    "schema", "purpose", "target", "payload"
+}:
+    raise SystemExit("managed strict debug preflight envelope field set drifted")
+if (
+    debug_envelope.get("schema") != "quwoquan_ops.app_debug_preflight"
+    or debug_envelope.get("purpose") != preflight_purpose
+    or debug_envelope.get("target") != target
+):
+    raise SystemExit("managed strict debug preflight envelope does not match this launch")
+debug_payload = debug_envelope.get("payload")
+if not isinstance(debug_payload, dict):
+    raise SystemExit("managed strict debug preflight envelope carries no payload")
+debug_binding = debug_payload.get("contentBinding")
+debug_binding = debug_binding if isinstance(debug_binding, dict) else {}
+if (
+    debug_payload.get("purpose") != preflight_purpose
+    or debug_payload.get("target") != target
+    or debug_payload.get("status") != "passed"
+    or debug_payload.get("firstBlocker") not in (None, "")
+    or debug_payload.get("nonPromotable") is not True
+    or str(debug_payload.get("releaseId") or "") != binding["releaseId"]
+    or str(debug_payload.get("manifestDigest") or "") != binding["manifestDigest"]
+    or str(debug_payload.get("readinessReceiptDigest") or "")
+    != readiness_digest
+    or normalized_readiness_ref(
+        debug_payload.get("readinessReceiptRef"),
+        "strict debug preflight readinessReceiptRef",
+    )
+    != readiness_ref
+    or str(debug_binding.get("releaseId") or "") != binding["releaseId"]
+    or str(debug_binding.get("verifyRunId") or "") != binding["verifyRunId"]
+    or str(debug_binding.get("manifestDigest") or "") != binding["manifestDigest"]
+    or str(debug_binding.get("readinessPhase") or "") != "research"
+    or normalized_readiness_ref(
+        debug_binding.get("readinessReceiptRef"),
+        "strict debug preflight contentBinding.readinessReceiptRef",
+    )
+    != readiness_ref
+    or str(debug_binding.get("readinessReceiptDigest") or "")
+    != readiness_digest
+):
+    raise SystemExit("managed strict debug preflight payload drifted from the receipt")
+
+strict_content_ref = exact_regular_file(
+    receipt.get("strictContentPreflightReceiptRef"),
+    "strict content preflight receipt",
+)
+strict_content_digest = require_digest(
+    receipt.get("strictContentPreflightReceiptDigest"),
+    "strictContentPreflightReceiptDigest",
+)
+strict_content_bytes = strict_content_ref.read_bytes()
+if "sha256:" + hashlib.sha256(strict_content_bytes).hexdigest() != strict_content_digest:
+    raise SystemExit("managed preparation strict content preflight digest mismatch")
+try:
+    content_envelope = json.loads(strict_content_bytes)
+except (UnicodeError, ValueError):
+    raise SystemExit("managed strict content preflight envelope is not UTF-8 JSON")
+content_envelope_fields = {
+    "schema", "target", "status", "releaseId", "manifestDigest",
+    "readinessReceiptRef", "readinessReceiptDigest", "releaseProbe", "payload",
+}
+if not isinstance(content_envelope, dict) or set(content_envelope) != content_envelope_fields:
+    raise SystemExit("managed strict content preflight envelope field set drifted")
+content_payload = content_envelope.get("payload")
+content_payload = content_payload if isinstance(content_payload, dict) else {}
+release_probe = content_envelope.get("releaseProbe")
+release_probe = release_probe if isinstance(release_probe, dict) else {}
+media_checks = release_probe.get("mediaChecks")
+media_checks = media_checks if isinstance(media_checks, dict) else {}
+if (
+    content_envelope.get("schema")
+    != "quwoquan_ops.app_content_preflight_exact.v1"
+    or content_envelope.get("target") != target
+    or content_envelope.get("status") != "passed"
+    or content_envelope.get("releaseId") != binding["releaseId"]
+    or content_envelope.get("manifestDigest") != binding["manifestDigest"]
+    or content_envelope.get("readinessReceiptRef") != str(readiness_ref)
+    or content_envelope.get("readinessReceiptDigest") != readiness_digest
+    or content_payload.get("schema") != "quwoquan_ops.app_content_preflight"
+    or content_payload.get("target") != target
+    or content_payload.get("status") != "passed"
+    or str(content_payload.get("releaseId") or "") != binding["releaseId"]
+    or str(content_payload.get("manifestDigest") or "") != binding["manifestDigest"]
+    or normalized_readiness_ref(
+        content_payload.get("readinessReceiptRef"),
+        "strict content preflight readinessReceiptRef",
+    )
+    != readiness_ref
+    or str(content_payload.get("readinessReceiptDigest") or "")
+    != readiness_digest
+    or content_payload.get("releaseProbe") != release_probe
+    or release_probe.get("exitCode") != 0
+    or type(release_probe.get("executedSampleCount")) is not int
+    or release_probe["executedSampleCount"] <= 0
+    or media_checks.get("automatic") is not True
+):
+    raise SystemExit("managed strict content preflight payload drifted from the receipt")
+print("export QWQ_MANAGED_PREPARATION_RECEIPT=" + shlex.quote(str(receipt_path)))
+print("export QWQ_MANAGED_PREPARATION_DIGEST=" + shlex.quote(declared_digest))
+print("export QWQ_APP_DEBUG_PREFLIGHT_RECEIPT=" + shlex.quote(str(strict_debug_ref)))
+print("export QWQ_MANAGED_CONSUMER_ID=" + shlex.quote(consumer_id))
+print("export QWQ_MANAGED_CONSUMER_LEASE_ID=" + shlex.quote(lease_id))
+print("export QWQ_MANAGED_ANDROID_REVERSE_PORTS=" + shlex.quote(reverse_ports))
+print("export QWQ_MANAGED_ANDROID_REVERSE_OWNED_PORTS=" + shlex.quote(owned_ports))
+print("export QWQ_MANAGED_DEVICE_TRUST_PLATFORM=" + shlex.quote(trust_platform))
+print("export QWQ_CONTENT_RELEASE_ID=" + shlex.quote(binding["releaseId"]))
+print("export QWQ_CONTENT_VERIFY_RUN_ID=" + shlex.quote(binding["verifyRunId"]))
+print("export QWQ_CONTENT_MANIFEST_DIGEST=" + shlex.quote(binding["manifestDigest"]))
+print("export QWQ_CONTENT_READINESS_RECEIPT_DIGEST=" + shlex.quote(readiness_digest))
+PY
+  )"; then
+    echo "[run] APP.PREPARATION.receipt_invalid: managed preparation receipt readback failed." >&2
+    exit 2
+  fi
+  eval "$MANAGED_PREPARE_EXPORTS"
+  QWQ_CONSUMER_LEASE_ID="$QWQ_MANAGED_CONSUMER_LEASE_ID"
+  QWQ_ANDROID_REVERSE_OWNED_PORTS="$QWQ_MANAGED_ANDROID_REVERSE_OWNED_PORTS"
+  if [[ -n "$QWQ_MANAGED_DEVICE_TRUST_PLATFORM" ]]; then
+    QWQ_MANAGED_TRUST_CLEANUP_REQUIRED=1
+  fi
+  export QWQ_CONSUMER_LEASE_ID QWQ_ANDROID_REVERSE_OWNED_PORTS
+  export QWQ_MANAGED_DEVICE_TRUST_PLATFORM QWQ_MANAGED_TRUST_CLEANUP_REQUIRED
+  if ! MANAGED_LEASE_STATUS_JSON="$(
+    PYTHONDONTWRITEBYTECODE=1 python3 \
+      "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
+      consumer-lease status --target "$QWQ_LAUNCH_TARGET"
+  )" || ! python3 - "$MANAGED_LEASE_STATUS_JSON" \
+      "$QWQ_LAUNCH_TARGET" "$DEVICE_ID" "$QWQ_RUN_CONSUMER_ID" \
+      "$QWQ_CONSUMER_LEASE_ID" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+target, device, consumer, lease_id = sys.argv[2:6]
+if not isinstance(payload, dict) or payload.get("exitCode") != 0:
+    raise SystemExit("consumer lease status readback failed")
+matching = [
+    lease
+    for lease in payload.get("occupyingLeases") or []
+    if isinstance(lease, dict)
+    and lease.get("target") == target
+    and lease.get("device") == device
+    and lease.get("consumer") == consumer
+    and lease.get("leaseId") == lease_id
+    and not lease.get("releasedAt")
+]
+if len(matching) != 1:
+    raise SystemExit("managed preparation consumer lease is not uniquely active")
+PY
+  then
+    echo "[run] APP.PREPARATION.receipt_invalid: managed consumer lease readback failed." >&2
+    exit 2
+  fi
+  QWQ_MANAGED_PREPARATION_ACTIVE=1
+  export QWQ_MANAGED_PREPARATION_ACTIVE
+  echo "[run] managed preparation receipt verified: $QWQ_MANAGED_PREPARATION_DIGEST"
+fi
+
 # 整个 attempt 只允许一个 preflight owner。上游编排方（dev-session）已执行时会
 # 交出 exact receipt；launcher 只复用或显式阻断，绝不重复执行第二次 preflight。
 APP_CONTENT_PREFLIGHT_JSON=""
@@ -930,9 +1647,7 @@ PY
   exit 2
 }
 eval "$APP_CONTENT_EXPORTS"
-while IFS= read -r preflight_warning; do
-  record_prelaunch_warning "$preflight_warning"
-done < <(
+PREFLIGHT_WARNING_TEXT="$(
   python3 - "$APP_CONTENT_PREFLIGHT_JSON" <<'PY'
 import json
 import sys
@@ -940,7 +1655,11 @@ import sys
 for item in json.loads(sys.argv[1]).get("warnings") or []:
     print(str(item).replace("\n", " "))
 PY
-)
+)"
+while IFS= read -r preflight_warning; do
+  [[ -n "$preflight_warning" ]] || continue
+  record_prelaunch_warning "$preflight_warning"
+done <<< "$PREFLIGHT_WARNING_TEXT"
 
 APP_CONTENT_DELIVERY_JSON='{}'
 if [[ "$RUN_MODE" == "content-live" ]]; then
@@ -988,6 +1707,36 @@ PY
   fi
 fi
 
+if [[ -z "$DEVICE_ID" && -t 0 && -t 2 ]]; then
+  # 无 -d 且处于交互 TTY：委托 canonical device authority（dev_up.pick_device）
+  # 显示编号列表并接受一次选择。程序经 -c 传入而非 heredoc，
+  # 保证 stdin 仍绑定当前 TTY 供选择读取。
+  if ! DEVICE_ID="$(
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+      python3 -c '
+import pathlib
+import sys
+
+from quwoquan_ops.cli.lib.dev_up import discover_flutter_devices, pick_device
+
+try:
+    devices = discover_flutter_devices(
+        pathlib.Path(sys.argv[1]),
+        include_mobile=True,
+        include_web=False,
+        include_desktop=False,
+    )
+    print(pick_device(devices, label="[run]"))
+except RuntimeError as error:
+    print(str(error), file=sys.stderr)
+    raise SystemExit(2)
+' "$APP_DIR"
+  )"; then
+    echo "[run] GATE_BLOCK: interactive device selection failed; pass -d/--device-id." >&2
+    exit 2
+  fi
+  export QWQ_RUN_DEVICE_ID="$DEVICE_ID"
+fi
 if [[ -z "$DEVICE_ID" ]]; then
   echo "[run] GATE_BLOCK: pass -d/--device-id so runtime ports and the consumer lease bind to one device."
   exit 2
@@ -1069,32 +1818,9 @@ ANDROID_LOCAL_MEDIA_VIDEO_BASE_URL=""
 ANDROID_LOCAL_MEDIA_UPLOAD_BASE_URL=""
 QWQ_ANDROID_LOCAL_PORTS=""
 QWQ_ANDROID_TRANSPORT_WARNING=""
-export QWQ_RUN_CONSUMER_ID="flutter-run-$$"
-export QWQ_CONSUMER_LEASE_ACQUIRED=0
-export QWQ_CONSUMER_LEASE_ID=""
-export QWQ_ANDROID_REVERSE_OWNED_PORTS=""
 
 release_consumer_lease() {
-  if command -v adb >/dev/null 2>&1 \
-    && [[ -n "$QWQ_ANDROID_REVERSE_OWNED_PORTS" ]]; then
-    IFS=',' read -r -a reverse_ports <<< "$QWQ_ANDROID_REVERSE_OWNED_PORTS"
-    for port in "${reverse_ports[@]}"; do
-      [[ -z "$port" ]] && continue
-      if ! adb -s "$DEVICE_ID" reverse --remove "tcp:$port" >/dev/null 2>&1; then
-        record_teardown_warning "failed to remove owned adb reverse tcp:$port."
-      fi
-    done
-  fi
-  if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" != "1" ]]; then
-    return
-  fi
-  if ! python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" consumer-lease release \
-    --target "$QWQ_LAUNCH_TARGET" \
-    --device "$DEVICE_ID" \
-    --consumer "$QWQ_RUN_CONSUMER_ID" >/dev/null; then
-    record_teardown_warning "failed to release runtime consumer lease."
-  fi
-  QWQ_CONSUMER_LEASE_ACQUIRED=0
+  cleanup_managed_handoff_resources
 }
 
 cleanup_run() {
@@ -1186,6 +1912,7 @@ from quwoquan_ops.cli.lib.dev_up import (
 device_id = sys.argv[1].strip()
 environment = sys.argv[2].strip()
 target = sys.argv[3].strip()
+managed_active = os.environ.get("QWQ_MANAGED_PREPARATION_ACTIVE") == "1"
 device = find_device(device_id, include_desktop=False) or {}
 device_kind = detect_device_kind(
     device_id,
@@ -1213,8 +1940,33 @@ if device_kind.startswith("android"):
             int(match.group(1))
             for match in re.finditer(r"tcp:(\d+)\s+tcp:\d+", before.stdout)
         }
-        ports = enable_android_adb_reverse(device_id, target, topology=topology)
+        if managed_active:
+            ports = [
+                int(value)
+                for value in os.environ.get(
+                    "QWQ_MANAGED_ANDROID_REVERSE_PORTS", ""
+                ).split(",")
+                if value
+            ]
+            if not ports or any(port not in preexisting_ports for port in ports):
+                raise RuntimeError(
+                    "managed preparation reverse transport is no longer active"
+                )
+            owned_port_list = os.environ.get(
+                "QWQ_MANAGED_ANDROID_REVERSE_OWNED_PORTS", ""
+            )
+        else:
+            ports = enable_android_adb_reverse(device_id, target, topology=topology)
+            owned_port_list = ",".join(
+                str(port) for port in ports if int(port) not in preexisting_ports
+            )
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        if managed_active:
+            print(
+                f"APP.PREPARATION.receipt_invalid: managed Android transport drifted: {exc}",
+                file=sys.stderr,
+            )
+            raise SystemExit(2)
         warning = (
             "Android transport preparation is unavailable; "
             f"test_live continues with typed network recovery: {exc}"
@@ -1223,9 +1975,6 @@ if device_kind.startswith("android"):
         print("export QWQ_ANDROID_TRANSPORT_READY=0")
         raise SystemExit(0)
     port_list = ",".join(str(port) for port in ports)
-    owned_port_list = ",".join(
-        str(port) for port in ports if int(port) not in preexisting_ports
-    )
     print("export QWQ_ANDROID_LOCAL_PORTS=" + shlex.quote(port_list))
     print("export QWQ_ANDROID_REVERSE_EXPECTED_PORTS=" + shlex.quote(port_list))
     print("export QWQ_ANDROID_REVERSE_ACTUAL_PORTS=" + shlex.quote(port_list))
@@ -1414,29 +2163,6 @@ RUNTIME_STACKCTL_PYTHON="$(
   exit 2
 }
 
-if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
-   || "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
-  DEVICE_TRUST_PLATFORM="$QWQ_RUN_DEVICE_KIND"
-  if [[ "$DEVICE_TRUST_PLATFORM" == "android_emulator" ]]; then
-    DEVICE_TRUST_PLATFORM="android-emulator"
-  fi
-  DEVICE_TRUST_COMMAND=(
-    "$RUNTIME_STACKCTL_PYTHON" "$ROOT_DIR/quwoquan_ops/cli/stackctl.py"
-    --output-format json device-trust --target "$QWQ_LAUNCH_TARGET"
-    --platform "$DEVICE_TRUST_PLATFORM" --action install --device "$DEVICE_ID"
-    --lease-id "canonical-launcher:${DEVICE_ID}"
-  )
-  if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" ]]; then
-    DEVICE_TRUST_COMMAND+=(--defer-endpoint-probe)
-  elif [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
-    DEVICE_TRUST_COMMAND+=(--allow-unprovisioned-system-trust)
-  fi
-  if ! PYTHONDONTWRITEBYTECODE=1 "${DEVICE_TRUST_COMMAND[@]}" >/dev/null; then
-    record_prelaunch_warning \
-      "target-bound transport trust is unavailable; test_live continues to a typed runtime outcome."
-  fi
-fi
-
 if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
   export ANDROID_SERIAL="$DEVICE_ID"
   if [[ -z "$QWQ_ANDROID_LOCAL_PORTS" ]]; then
@@ -1461,53 +2187,102 @@ QWQ_DEBUG_APP_ID="$(
 if [[ "${QWQ_RUN_DEVICE_KIND:-}" == ios-* \
    || ("${QWQ_RUN_DEVICE_KIND:-}" == android* \
       && -n "$QWQ_ANDROID_LOCAL_PORTS") ]]; then
-  LEASE_COMMAND=(
-    "$RUNTIME_STACKCTL_PYTHON" "$ROOT_DIR/quwoquan_ops/cli/stackctl.py"
-    --output-format json consumer-lease acquire
-    --target "$QWQ_LAUNCH_TARGET"
-    --device "$DEVICE_ID"
-    --consumer "$QWQ_RUN_CONSUMER_ID"
-  )
-  case "${QWQ_RUN_DEVICE_KIND:-}" in
-    ios-simulator)
-      LEASE_COMMAND+=(
-        --platform ios-simulator
-        --bundle-id "$QWQ_DEBUG_APP_ID"
-        --ports ""
-      )
-      ;;
-    ios-physical)
-      LEASE_COMMAND+=(
-        --platform ios-physical
-        --bundle-id "$QWQ_DEBUG_APP_ID"
-        --ports ""
-      )
-      ;;
-    android*)
-      LEASE_COMMAND+=(
-        --platform android
-        --package-name "$QWQ_DEBUG_APP_ID"
-        --ports "$QWQ_ANDROID_LOCAL_PORTS"
-      )
-      ;;
-  esac
-  if LEASE_JSON="$(PYTHONDONTWRITEBYTECODE=1 "${LEASE_COMMAND[@]}")"; then
-    QWQ_CONSUMER_LEASE_ID="$(
-    python3 - "$LEASE_JSON" <<'PY'
+  if [[ "${QWQ_MANAGED_PREPARATION_ACTIVE:-0}" == "1" ]]; then
+    if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" != "1" \
+       || "$QWQ_CONSUMER_LEASE_ID" != "$QWQ_MANAGED_CONSUMER_LEASE_ID" \
+       || "$QWQ_RUN_CONSUMER_ID" != "$QWQ_MANAGED_CONSUMER_ID" ]]; then
+      echo "[run] APP.PREPARATION.receipt_invalid: managed consumer lease handoff drifted." >&2
+      exit 2
+    fi
+    echo "[run] reusing managed preparation consumer lease: $QWQ_CONSUMER_LEASE_ID"
+  else
+    LEASE_COMMAND=(
+      "$RUNTIME_STACKCTL_PYTHON" "$ROOT_DIR/quwoquan_ops/cli/stackctl.py"
+      --output-format json consumer-lease acquire
+      --target "$QWQ_LAUNCH_TARGET"
+      --device "$DEVICE_ID"
+      --consumer "$QWQ_RUN_CONSUMER_ID"
+    )
+    case "${QWQ_RUN_DEVICE_KIND:-}" in
+      ios-simulator)
+        LEASE_COMMAND+=(
+          --platform ios-simulator
+          --bundle-id "$QWQ_DEBUG_APP_ID"
+          --ports ""
+        )
+        ;;
+      ios-physical)
+        LEASE_COMMAND+=(
+          --platform ios-physical
+          --bundle-id "$QWQ_DEBUG_APP_ID"
+          --ports ""
+        )
+        ;;
+      android*)
+        LEASE_COMMAND+=(
+          --platform android
+          --package-name "$QWQ_DEBUG_APP_ID"
+          --ports "$QWQ_ANDROID_LOCAL_PORTS"
+        )
+        ;;
+    esac
+    if LEASE_JSON="$(PYTHONDONTWRITEBYTECODE=1 "${LEASE_COMMAND[@]}")"; then
+      QWQ_CONSUMER_LEASE_ID="$(
+        python3 - "$LEASE_JSON" <<'PYLEASE'
 import json
+import re
 import sys
 
 lease_id = str((json.loads(sys.argv[1]).get("lease") or {}).get("leaseId") or "")
-if not lease_id:
-    raise SystemExit("consumer lease response is missing leaseId")
+if re.fullmatch(r"sha256:[0-9a-f]{64}", lease_id) is None:
+    raise SystemExit("consumer lease response is missing canonical leaseId")
 print(lease_id)
-PY
-    )"
-    export QWQ_CONSUMER_LEASE_ID
-    QWQ_CONSUMER_LEASE_ACQUIRED=1
+PYLEASE
+      )"
+      export QWQ_CONSUMER_LEASE_ID
+      QWQ_CONSUMER_LEASE_ACQUIRED=1
+      QWQ_MANAGED_LEASE_CLEANUP_REQUIRED=1
+    else
+      record_prelaunch_warning \
+        "runtime consumer lease is unavailable; test_live remains nonPromotable."
+    fi
+  fi
+fi
+
+# device trust 回执必须绑定真实 consumer lease（漂移修正：不再使用
+# canonical-launcher 拼接出来的 fabricated lease 身份）。managed 入口的 trust
+# 已由 app-managed-prepare 以其准备期 lease 安装并验证，这里直接复用。
+if [[ "${QWQ_MANAGED_PREPARATION_ACTIVE:-0}" == "1" ]]; then
+  echo "[run] reusing managed preparation device trust for $DEVICE_ID"
+elif [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
+   || "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
+  if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" == "1" ]]; then
+    DEVICE_TRUST_PLATFORM="$QWQ_RUN_DEVICE_KIND"
+    if [[ "$DEVICE_TRUST_PLATFORM" == "android_emulator" ]]; then
+      DEVICE_TRUST_PLATFORM="android-emulator"
+    fi
+    DEVICE_TRUST_COMMAND=(
+      "$RUNTIME_STACKCTL_PYTHON" "$ROOT_DIR/quwoquan_ops/cli/stackctl.py"
+      --output-format json device-trust --target "$QWQ_LAUNCH_TARGET"
+      --platform "$DEVICE_TRUST_PLATFORM" --action install --device "$DEVICE_ID"
+      --lease-id "$QWQ_CONSUMER_LEASE_ID"
+    )
+    if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" ]]; then
+      DEVICE_TRUST_COMMAND+=(--defer-endpoint-probe)
+    elif [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
+      DEVICE_TRUST_COMMAND+=(--allow-unprovisioned-system-trust)
+    fi
+    if PYTHONDONTWRITEBYTECODE=1 "${DEVICE_TRUST_COMMAND[@]}" >/dev/null; then
+      QWQ_MANAGED_DEVICE_TRUST_PLATFORM="$DEVICE_TRUST_PLATFORM"
+      QWQ_MANAGED_TRUST_CLEANUP_REQUIRED=1
+      export QWQ_MANAGED_DEVICE_TRUST_PLATFORM QWQ_MANAGED_TRUST_CLEANUP_REQUIRED
+    else
+      record_prelaunch_warning \
+        "target-bound transport trust is unavailable; test_live continues to a typed runtime outcome."
+    fi
   else
     record_prelaunch_warning \
-      "runtime consumer lease is unavailable; test_live remains nonPromotable."
+      "target-bound transport trust is unavailable; test_live continues to a typed runtime outcome."
   fi
 fi
 
@@ -1562,7 +2337,14 @@ if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* \
   )
 fi
 
-HANDOFF_JSON="$("${HANDOFF_CMD[@]}")"
+if ! HANDOFF_JSON="$("${HANDOFF_CMD[@]}")"; then
+  if [[ -n "$HANDOFF_JSON" ]]; then
+    echo "$HANDOFF_JSON" >&2
+  else
+    echo "[run] GATE_BLOCK: launcher handoff generation failed without diagnostics." >&2
+  fi
+  exit 2
+fi
 HANDOFF_EXPORTS="$(
   python3 - "$HANDOFF_JSON" <<'PY'
 import json
@@ -1598,7 +2380,12 @@ export QWQ_RUNTIME_CONFIG_TRUST_ENVELOPE_DIGEST="$RUNTIME_CONFIG_TRUST_ENVELOPE_
 export QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST="$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
 if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" == "1" ]]; then
   LEASE_BIND_COMMAND=(
-    "${LEASE_COMMAND[@]}"
+    "$RUNTIME_STACKCTL_PYTHON" "$ROOT_DIR/quwoquan_ops/cli/stackctl.py"
+    --output-format json consumer-lease bind
+    --target "$QWQ_LAUNCH_TARGET"
+    --device "$DEVICE_ID"
+    --consumer "$QWQ_RUN_CONSUMER_ID"
+    --lease-id "$QWQ_CONSUMER_LEASE_ID"
     --handoff-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
   )
   if [[ -n "${QWQ_CONTENT_RELEASE_ID:-}" ]]; then
@@ -1613,6 +2400,10 @@ if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" == "1" ]]; then
     )
   fi
   if ! PYTHONDONTWRITEBYTECODE=1 "${LEASE_BIND_COMMAND[@]}" >/dev/null; then
+    if [[ "${QWQ_MANAGED_PREPARATION_ACTIVE:-0}" == "1" ]]; then
+      echo "[run] APP.PREPARATION.receipt_invalid: managed consumer lease final bind failed." >&2
+      exit 2
+    fi
     record_prelaunch_warning \
       "failed to bind the runtime consumer lease to the final handoff digest."
   fi

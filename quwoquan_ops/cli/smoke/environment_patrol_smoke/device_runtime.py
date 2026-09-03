@@ -295,11 +295,92 @@ def _local_tls_trust_evidence(*, dry_run: bool) -> dict[str, str]:
     return {"status": "system-public-ca", "reason": "dns-01"}
 
 
+def _android_reverse_list_mappings(output: str) -> set[tuple[int, int]]:
+    """Parse exact device/host TCP pairs from ``adb reverse --list`` output."""
+
+    mappings: set[tuple[int, int]] = set()
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) < 2:
+            continue
+        device_ref, host_ref = fields[-2:]
+        if not (device_ref.startswith("tcp:") and host_ref.startswith("tcp:")):
+            continue
+        try:
+            device_port = int(device_ref.removeprefix("tcp:"))
+            host_port = int(host_ref.removeprefix("tcp:"))
+        except ValueError:
+            continue
+        if device_port > 0 and host_port > 0:
+            mappings.add((device_port, host_port))
+    return mappings
+
+
+def _cleanup_android_local_port_reverse(
+    args: argparse.Namespace,
+    device: dict[str, Any],
+    state: dict[str, Any],
+) -> dict[str, Any]:
+    """Best-effort remove only reverse mappings owned by this preparation."""
+
+    existing = state.get("teardown")
+    if isinstance(existing, dict):
+        return existing
+    owned = state.get("ownedMappings")
+    if not isinstance(owned, list) or not owned:
+        teardown = {"status": "skipped", "reason": "no-owned-mappings"}
+        state["teardown"] = teardown
+        return teardown
+    device_id = str(state.get("deviceId") or device.get("id") or "").strip()
+    adb = str(state.get("adbExecutable") or "").strip()
+    if not device_id or not adb:
+        teardown = {
+            "status": "failed",
+            "removedDevicePorts": [],
+            "failures": ["android reverse cleanup identity is missing"],
+        }
+        state["teardown"] = teardown
+        return teardown
+    removed: list[int] = []
+    failures: list[str] = []
+    for mapping in owned:
+        if not isinstance(mapping, dict):
+            continue
+        try:
+            port = int(mapping.get("devicePort") or 0)
+        except (TypeError, ValueError):
+            continue
+        if port <= 0:
+            continue
+        try:
+            result = _run_device_preflight_command(
+                args,
+                device,
+                operation=f"android-reverse-remove-{port}",
+                command=[adb, "-s", device_id, "reverse", "--remove", f"tcp:{port}"],
+            )
+            if result.get("exitCode") != 0:
+                raise _device_preflight_failure(
+                    f"android-reverse-remove-{port}", result=result
+                )
+        except RuntimeError as error:
+            failures.append(str(error))
+        else:
+            removed.append(port)
+    teardown = {
+        "status": "failed" if failures else "passed",
+        "removedDevicePorts": removed,
+        "failures": failures,
+    }
+    state["teardown"] = teardown
+    return teardown
+
+
 def _prepare_android_local_port_reverse(
     args: argparse.Namespace,
     device: dict[str, Any],
 ) -> dict[str, Any]:
-    """反向映射 canonical HTTPS/WSS authority 使用的本地 target 端口。"""
+    """反向映射 canonical HTTPS/WSS authority，并只拥有本次新安装项。"""
 
     target_platform = str(device.get("targetPlatform", "")).strip().lower()
     if not (_is_local_target(args.env_name) and target_platform.startswith("android")):
@@ -324,16 +405,49 @@ def _prepare_android_local_port_reverse(
         ports.add(parsed.port or 443)
     if not ports:
         raise _device_preflight_failure("android-reverse-port-resolution")
-    mappings: list[dict[str, Any]] = []
+    inventory = _run_device_preflight_command(
+        args,
+        device,
+        operation="android-reverse-list",
+        command=[adb, "-s", device_id, "reverse", "--list"],
+    )
+    if inventory["exitCode"] != 0:
+        raise _device_preflight_failure("android-reverse-list", result=inventory)
+    preexisting = _android_reverse_list_mappings(
+        str(inventory.get("outputSummary") or "")
+    )
+    state: dict[str, Any] = {
+        "status": "installing",
+        "deviceId": device_id,
+        "adbExecutable": adb,
+        "mappings": [],
+        "ownedMappings": [],
+    }
     for port in sorted(ports):
-        command = [
-            adb,
-            "-s",
-            device_id,
-            "reverse",
-            f"tcp:{port}",
-            f"tcp:{port}",
-        ]
+        mapping: dict[str, Any] = {
+            "devicePort": port,
+            "hostPort": port,
+            "owned": False,
+        }
+        existing_hosts = {
+            host_port
+            for device_port, host_port in preexisting
+            if device_port == port
+        }
+        if existing_hosts:
+            if existing_hosts == {port}:
+                mapping["preexisting"] = True
+                state["mappings"].append(mapping)
+                continue
+            primary = _device_preflight_failure(
+                f"android-reverse-{port}-preexisting-conflict"
+            )
+            state["status"] = "failed"
+            state["firstBlocker"] = str(primary)
+            _cleanup_android_local_port_reverse(args, device, state)
+            setattr(primary, "android_port_reverse", state)
+            raise primary
+        command = [adb, "-s", device_id, "reverse", f"tcp:{port}", f"tcp:{port}"]
         result = _run_device_preflight_command(
             args,
             device,
@@ -341,19 +455,21 @@ def _prepare_android_local_port_reverse(
             command=command,
         )
         if result["exitCode"] != 0:
-            raise _device_preflight_failure(
-                f"android-reverse-{port}",
-                result=result,
+            primary = _device_preflight_failure(
+                f"android-reverse-{port}", result=result
             )
-        mapping: dict[str, Any] = {"devicePort": port, "hostPort": port}
+            state["status"] = "failed"
+            state["firstBlocker"] = str(primary)
+            _cleanup_android_local_port_reverse(args, device, state)
+            setattr(primary, "android_port_reverse", state)
+            raise primary
+        mapping["owned"] = True
         if result.get("logPath"):
             mapping["logPath"] = str(result["logPath"])
-        mappings.append(mapping)
-    return {
-        "status": "installed",
-        "deviceId": device_id,
-        "mappings": mappings,
-    }
+        state["mappings"].append(mapping)
+        state["ownedMappings"].append(dict(mapping))
+    state["status"] = "installed"
+    return state
 
 
 def _acquire_patrol_consumer_lease(

@@ -1,6 +1,6 @@
 {
   "schema": "qwq.app-launch-contract.generated",
-  "sourceDigest": "sha256:a325c484b79e46a75639359283fcac1c4f256cc7f10d5f1d01f25608b724f885",
+  "sourceDigest": "sha256:edcb4f0bd745d5d751cfaba1f37e5d6dd1319b5324e148fd39a77ebf2892a015",
   "sources": [
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml",
@@ -8,7 +8,7 @@
     },
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml",
-      "sha256": "sha256:69c957b6d4e34f2b8f6a4e04b1c61a2214a0e2f70e5c3a7fdf7969f2d65950e9"
+      "sha256": "sha256:68d7c43820d427203d4d0c7ebf97b238dda50d308762c4909fadd80046f0b77f"
     }
   ],
   "environments": [
@@ -70,6 +70,7 @@
   ],
   "launchBlockers": {
     "APP.DEPENDENCY.bundle_missing": "启动未获得经验证的 source capsule 与原子依赖 bundle。",
+    "APP.DEPENDENCY.bundle_stale": "active 依赖 bundle 与当前 source/toolchain identity 不一致；仅 canonical 交互式 launcher 可执行一次有界 canonical 同步恢复，非交互 fail-closed，不得更新 lock。",
     "APP.DEPENDENCY.cocoapods_missing": "iOS 启动缺少契约锁定的 CocoaPods 可执行文件。",
     "APP.DEPENDENCY.cocoapods_mixed": "iOS 依赖投影混用了不同 CocoaPods 可执行文件或版本。",
     "APP.DEPENDENCY.cross_platform_generated_tooling_unsafe": "当前平台投影中的跨平台生成工具残留无法安全检查或剪除。",
@@ -86,6 +87,7 @@
     "APP.LAUNCH.ios_release_simulator_unsupported": "Flutter iOS Simulator 只支持 Debug，不得伪造 Release 启动回执。",
     "APP.LAUNCH.launch_failed": "已安装但未能到达 launched。",
     "APP.LAUNCH.launch_surface_unsupported": "启动入口不属于 canonical launcher、工作区字面 Flutter 或受控制 IDE profile。",
+    "APP.LAUNCH.managed_argument_unsupported": "受管字面 flutter run 收到会改变 canonical build/runtime identity 的参数（如 --target、flavor、dart-define、Profile/Release 或端口类），typed 阻断而非静默忽略。",
     "APP.LAUNCH.platform_unsupported": "目标平台不属于 android、ios。",
     "APP.LAUNCH.prod_artifact_invalid": "给出的 Prod artifact manifest 与 exact 身份或摘要不符。",
     "APP.LAUNCH.prod_artifact_required": "prod-sim 必须显式给出 canonical Release artifact manifest。",
@@ -101,6 +103,10 @@
     "APP.LAUNCH.runtime_dependency_unavailable": "目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。",
     "APP.LAUNCH.workspace_entrypoint_inactive": "工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。",
     "APP.LAUNCH.workspace_flutter_sdk_unavailable": "工作区激活时无法解析真实 Flutter SDK 或 SDK 版本与仓库锁定不符；激活必须在写入任何 workspace facade 投影前以本码阻断。",
+    "APP.PREPARATION.content_binding_unavailable": "无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=research 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。",
+    "APP.PREPARATION.receipt_invalid": "managed preparation receipt 缺失、schema/digest 非法或与本次 launch 身份不一致，canonical launcher 不得复用。",
+    "APP.PREPARATION.runtime_unavailable": "managed 准备无法复用 exact running full runtime，且不满足有界替换条件（非 target lock 内、存在其他 live consumer lease 或替换失败）。",
+    "APP.PREPARATION.strict_preflight_failed": "managed 严格预检（TLS、api-edge、user-service、integration-service、SMS Provider/relay identity、真实 OTP journey 与 homepage/creator avatar/image/typed video/premium stream 媒体字节）任一失败，在 Flutter build 前阻断。",
     "APP.UAT.page_artifact_binding_missing": "页面自动化实际安装并启动的 AppArtifact 缺少与同 target canonical launch 的完整身份绑定或逐字段不一致，禁止生成页面通过结果。",
     "APP.WEB.recovery_unavailable": "恢复 Web 静态面不可达，不得据此生成 launched 或 ready 假证据。"
   },
@@ -158,6 +164,7 @@
     "app_effective_launch_manifest": "app-effective-launch-manifest",
     "app_launch_attempt": "app-launch-attempt",
     "app_launcher_handoff": "app-launcher-handoff",
+    "app_managed_preparation": "quwoquan_ops.app_managed_preparation.v1",
     "runtime_config_activation_receipt": "app-runtime-config-activation-receipt",
     "runtime_config_activation_request": "app-runtime-config-activation-request",
     "runtime_config_package": "app-runtime-config-package",
@@ -198,6 +205,8 @@
       "applicationId",
       "flutterVersion",
       "commandResolutionDigest",
+      "terminalCarrierReceiptDigest",
+      "terminalCarrierReceiptRef",
       "launchDigest",
       "startupTerminalAttemptId",
       "startupTerminalEvidenceDigest",
@@ -232,6 +241,28 @@
       "runtimeConfigPackage",
       "effectiveLaunchManifest",
       "effectiveLaunchManifestDigest"
+    ],
+    "app_managed_preparation": [
+      "schema",
+      "target",
+      "environment",
+      "platform",
+      "deviceId",
+      "runtimeIdentity",
+      "consumerId",
+      "consumerLeaseId",
+      "androidReversePorts",
+      "androidReverseOwnedPorts",
+      "deviceTrustReceiptRef",
+      "deviceTrustReceiptDigest",
+      "contentBinding",
+      "strictPreflightReceiptRef",
+      "strictPreflightReceiptDigest",
+      "strictContentPreflightReceiptRef",
+      "strictContentPreflightReceiptDigest",
+      "createdAt",
+      "status",
+      "firstBlocker"
     ],
     "runtime_config_activation_receipt": [
       "schema",
@@ -334,6 +365,8 @@
     "applicationId",
     "flutterVersion",
     "commandResolutionDigest",
+    "terminalCarrierReceiptDigest",
+    "terminalCarrierReceiptRef",
     "launchDigest",
     "startupTerminalAttemptId",
     "startupTerminalEvidenceDigest",
@@ -423,6 +456,7 @@
     },
     "launch_blockers": {
       "APP.DEPENDENCY.bundle_missing": "启动未获得经验证的 source capsule 与原子依赖 bundle。",
+      "APP.DEPENDENCY.bundle_stale": "active 依赖 bundle 与当前 source/toolchain identity 不一致；仅 canonical 交互式 launcher 可执行一次有界 canonical 同步恢复，非交互 fail-closed，不得更新 lock。",
       "APP.DEPENDENCY.cocoapods_missing": "iOS 启动缺少契约锁定的 CocoaPods 可执行文件。",
       "APP.DEPENDENCY.cocoapods_mixed": "iOS 依赖投影混用了不同 CocoaPods 可执行文件或版本。",
       "APP.DEPENDENCY.cross_platform_generated_tooling_unsafe": "当前平台投影中的跨平台生成工具残留无法安全检查或剪除。",
@@ -439,6 +473,7 @@
       "APP.LAUNCH.ios_release_simulator_unsupported": "Flutter iOS Simulator 只支持 Debug，不得伪造 Release 启动回执。",
       "APP.LAUNCH.launch_failed": "已安装但未能到达 launched。",
       "APP.LAUNCH.launch_surface_unsupported": "启动入口不属于 canonical launcher、工作区字面 Flutter 或受控制 IDE profile。",
+      "APP.LAUNCH.managed_argument_unsupported": "受管字面 flutter run 收到会改变 canonical build/runtime identity 的参数（如 --target、flavor、dart-define、Profile/Release 或端口类），typed 阻断而非静默忽略。",
       "APP.LAUNCH.platform_unsupported": "目标平台不属于 android、ios。",
       "APP.LAUNCH.prod_artifact_invalid": "给出的 Prod artifact manifest 与 exact 身份或摘要不符。",
       "APP.LAUNCH.prod_artifact_required": "prod-sim 必须显式给出 canonical Release artifact manifest。",
@@ -454,6 +489,10 @@
       "APP.LAUNCH.runtime_dependency_unavailable": "目标 runtime 的必需容器已退出或 unhealthy，编译安装前即阻断。",
       "APP.LAUNCH.workspace_entrypoint_inactive": "工作区投影存在性、当前终端命令解析或 IDE profile 尚未进入受支持状态。",
       "APP.LAUNCH.workspace_flutter_sdk_unavailable": "工作区激活时无法解析真实 Flutter SDK 或 SDK 版本与仓库锁定不符；激活必须在写入任何 workspace facade 投影前以本码阻断。",
+      "APP.PREPARATION.content_binding_unavailable": "无法从服务端 active release readback 解析出唯一 schema/digest 合法、passed=true 且 readinessPhase=research 的内容 readiness；零个或多个候选均阻断，禁止 latest 猜测。",
+      "APP.PREPARATION.receipt_invalid": "managed preparation receipt 缺失、schema/digest 非法或与本次 launch 身份不一致，canonical launcher 不得复用。",
+      "APP.PREPARATION.runtime_unavailable": "managed 准备无法复用 exact running full runtime，且不满足有界替换条件（非 target lock 内、存在其他 live consumer lease 或替换失败）。",
+      "APP.PREPARATION.strict_preflight_failed": "managed 严格预检（TLS、api-edge、user-service、integration-service、SMS Provider/relay identity、真实 OTP journey 与 homepage/creator avatar/image/typed video/premium stream 媒体字节）任一失败，在 Flutter build 前阻断。",
       "APP.UAT.page_artifact_binding_missing": "页面自动化实际安装并启动的 AppArtifact 缺少与同 target canonical launch 的完整身份绑定或逐字段不一致，禁止生成页面通过结果。",
       "APP.WEB.recovery_unavailable": "恢复 Web 静态面不可达，不得据此生成 launched 或 ready 假证据。"
     },
@@ -755,6 +794,7 @@
           "prepared/compiling 允许 artifactDigest 为空；写入 compiled transition 时必须在同一次原子回执更新中填入本次 canonical executor 实际产出的 Android APK 或 iOS .app payload sha256，installed transition 前必须在真实安装完成后对同一路径按 AppArtifact payload digest 算法重读且完全相等。出现 compiled 后 artifactDigest 必须始终非空且不可变；产物缺失或不可读以 APP.LAUNCH.compile_failed 阻断，安装前后错配以 APP.LAUNCH.install_failed 阻断，源码、配置、handoff 或 package digest 不得冒充制品摘要。",
           "buildProfile 必须与 environment 满足 launch_policies 和 app_artifact_manifest.build_profiles 的单轨映射；launchProvenance 必须来自 app_artifact_manifest.launch_provenances，runtimeConfigSupplyMode 必须来自 runtime_config_supply_modes。",
           "runtimeConfigTrustEnvelopeDigest/runtimeConfigPackageDigest 必须与同 attempt 的 handoff、制品回读与 activation receipt 一致；applicationId 必须匹配 buildProfile × buildMode 的生成身份，commandResolutionDigest 只记录脱敏后的 SDK/入口解析身份。",
+          "terminal carrier receipt 机制已退役：所有 launchProvenance 下 terminalCarrierReceiptDigest/terminalCarrierReceiptRef 必须全空；受管字面 `flutter run` 经 launcher dispatcher 归一化进入 canonical launcher，以 launchProvenance=canonical_launcher 产生同一 canonical launch attempt，不存在第二种字面命令 attempt 形态。",
           "release-artifact attempt 的 candidateDigest/artifactManifestDigest/launcherHandoffDigest 必须全为 canonical sha256 且分别绑定 fixed deployment candidate、exact AppArtifactManifest 与 canonical launcher handoff；非 release-artifact attempt 三者必须全空。startup safe-terminal 通过 launchAttemptId 闭包继承这三项身份，不得从 latest、日志或外部 mutable pointer 补猜。",
           "startupTerminalAttemptId/startupTerminalEvidenceDigest/startupTerminalEvidenceRef 必须全空或全非空；非空时 evidence 必须是同一 launchAttemptId、artifactDigest、device/applicationId、launchProvenance/runtimeConfigSupplyMode/effectiveLaunchManifestDigest 的 cold startup_safe_terminal/routerShell canonical receipt。严格 app-content-uat 必须先原子绑定该 receipt 才可把 VM attach 推进为 launched；仅有 app.started/debugPort 不构成 launched。",
           "编译、安装和启动失败的 firstBlocker 分别为 APP.LAUNCH.compile_failed、APP.LAUNCH.install_failed 与 APP.LAUNCH.launch_failed；缺 build-profile trust 使用 APP.LAUNCH.runtime_config_trust_missing，无 active package 使用 APP.LAUNCH.runtime_config_missing，runtime package 验证、原子写入或 readback 失败使用 APP.LAUNCH.runtime_config_activation_failed；Prod Debug 必须在 prepared 后以 APP.LAUNCH.prod_debug_forbidden 失败。",
@@ -935,6 +975,13 @@
             ],
             "type": "string"
           },
+          "terminalCarrierReceiptDigest": {
+            "format": "optional_sha256_identity",
+            "type": "string"
+          },
+          "terminalCarrierReceiptRef": {
+            "type": "string"
+          },
           "transitions": {
             "items": {
               "type": "object"
@@ -972,6 +1019,8 @@
           "applicationId",
           "flutterVersion",
           "commandResolutionDigest",
+          "terminalCarrierReceiptDigest",
+          "terminalCarrierReceiptRef",
           "launchDigest",
           "startupTerminalAttemptId",
           "startupTerminalEvidenceDigest",
@@ -1085,6 +1134,212 @@
           "effectiveLaunchManifestDigest"
         ],
         "schema_value": "app-launcher-handoff"
+      },
+      "app_managed_preparation": {
+        "additional_fields": false,
+        "constraints": [
+          "receipt-first：本 receipt 是 private managed preparation 事实，唯一写入方与消费方是 canonical launcher；canonical launcher 必须在前台 exec canonical run.sh 之前原子写入本 receipt，status=blocked 时不得继续 Flutter build。",
+          "exact readback：runtimeIdentity（复用或有界替换后的 runtime attempt/compose identity）、consumerId、consumerLeaseId、Android reverse transport/所有权、device trust receipt、contentBinding、strict debug preflight receipt 与 strict content preflight receipt 的全部身份字段必须来自本次 preparation 的真实 readback，不得从 latest、缓存或历史 receipt 补猜。",
+          "consumerId 是 dispatcher/run.sh 为本次前台启动预先确定的稳定 consumer identity；preparation 必须以该 consumer 获取 consumerLeaseId，保持该 lease active 并交给同一 run.sh 接管。run.sh exact readback 后不得重复 acquire，最终 cleanup 只释放同一 consumer；consumerLeaseId 必须是 canonical sha256 identity。",
+          "androidReversePorts 是同一 lease 的完整 canonical same-port transport 集合，Android prepared receipt 必须非空，非 Android 必须为空；androidReverseOwnedPorts 只记录 preparation 在获取同一 consumer lease 前新建、且启动 cleanup 可以安全移除的 Android same-port reverse 集合；非 Android 或没有新建映射时为空，不得把既存映射声明为本次所有。",
+          "contentBinding 必须保留 create_test_live_content_binding 返回的完整 canonical binding，并向 prepared receipt 投影 releaseId、verifyRunId、manifestDigest、readinessPhase、readinessReceiptRef 与 readinessReceiptDigest；readinessReceiptRef 必须是 absolute regular no-symlink exact receipt，digest 必须是该文件 exact bytes 的 sha256，JSON 必须同一 releaseId/verifyRunId/manifestDigest/readinessPhase=research/passed=true。服务端 active release readback 的合法候选必须唯一；零个或多个候选一律以 APP.PREPARATION.content_binding_unavailable 阻断。",
+          "deviceTrustReceiptRef/deviceTrustReceiptDigest 必须同时为空或同时非空；无需 local trust 的 physical device 允许两者为空，非空 digest 必须是 canonical sha256 identity。verify-first 只在已有 trust receipt 的 leases 包含当前 consumerLeaseId 时复用，否则必须以当前真实 lease install/bind 后再 verify。",
+          "strictPreflightReceiptRef/strictPreflightReceiptDigest 继续绑定 write_app_debug_preflight_receipt 生成的 exact debug preflight envelope；strictContentPreflightReceiptRef/strictContentPreflightReceiptDigest 必须绑定本次 preparation 私有原子写入的 quwoquan_ops.app_content_preflight_exact.v1 envelope；envelope 顶层投影 absolute readiness 身份并在 payload 中原样保留 command_app_content_preflight 返回的 exact payload，禁止信任 command 自写的 mutable report path。两组 ref 必须是 absolute regular no-symlink，digest 均为文件 exact bytes sha256。",
+          "strict content payload 必须 schema=quwoquan_ops.app_content_preflight、target 与本次 target 一致、status=passed，并与 contentBinding 的 releaseId/manifestDigest/readinessReceiptRef/readinessReceiptDigest 完全一致；releaseProbe 必须 exitCode=0、executedSampleCount\u003e0 且 mediaChecks.automatic=true。readiness receipt 还必须同一 verifyRunId/readinessPhase=research/passed=true，确保 release/verify/manifest/research 身份单轨。",
+          "status=blocked 时 firstBlocker 必须非空且取 launch_blockers 闭集，尚未完成的 target/environment/platform/deviceId/runtimeIdentity/consumer/transport/trust/content/preflight 字段允许按本 schema 取空值；不得伪造中间身份。status=prepared 时 firstBlocker 必须为空，target/environment/platform/deviceId/runtimeIdentity/consumerId/consumerLeaseId/contentBinding/strictPreflightReceiptRef/strictPreflightReceiptDigest/strictContentPreflightReceiptRef/strictContentPreflightReceiptDigest 必须全部非空且逐字段合法，trust ref/digest 必须满足成对约束。",
+          "canonical run.sh 必须在 Flutter build 前独立严格验证 receipt、readiness exact receipt、strict debug preflight envelope 与 strict content preflight exact payload 的字段集、类型、闭集、byte sha256、consumer/runtime/content/trust 身份和本次 target/device/purpose；任何漂移以 APP.PREPARATION.receipt_invalid 阻断，并把 readinessReceiptDigest 交给 final consumer-lease bind。"
+        ],
+        "fields": {
+          "androidReverseOwnedPorts": {
+            "type": "string"
+          },
+          "androidReversePorts": {
+            "type": "string"
+          },
+          "consumerId": {
+            "allow_empty": true,
+            "min_length": 1,
+            "type": "string"
+          },
+          "consumerLeaseId": {
+            "format": "optional_sha256_identity",
+            "type": "string"
+          },
+          "contentBinding": {
+            "additional_fields": false,
+            "allow_empty": true,
+            "fields": {
+              "manifestDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "readinessPhase": {
+                "allowed_values": [
+                  "research"
+                ],
+                "type": "string"
+              },
+              "readinessReceiptDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "readinessReceiptRef": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "releaseId": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "verifyRunId": {
+                "min_length": 1,
+                "type": "string"
+              }
+            },
+            "required_fields": [
+              "releaseId",
+              "verifyRunId",
+              "manifestDigest",
+              "readinessPhase",
+              "readinessReceiptRef",
+              "readinessReceiptDigest"
+            ],
+            "type": "object"
+          },
+          "createdAt": {
+            "format": "rfc3339_utc",
+            "type": "string"
+          },
+          "deviceId": {
+            "allow_empty": true,
+            "min_length": 1,
+            "type": "string"
+          },
+          "deviceTrustReceiptDigest": {
+            "format": "optional_sha256_identity",
+            "type": "string"
+          },
+          "deviceTrustReceiptRef": {
+            "type": "string"
+          },
+          "environment": {
+            "allow_empty": true,
+            "allowed_values": [
+              "alpha"
+            ],
+            "type": "string"
+          },
+          "firstBlocker": {
+            "allow_empty": true,
+            "allowed_values_ref": "launch_blockers",
+            "type": "string"
+          },
+          "platform": {
+            "allow_empty": true,
+            "allowed_values": [
+              "android",
+              "ios"
+            ],
+            "type": "string"
+          },
+          "runtimeIdentity": {
+            "additional_fields": false,
+            "allow_empty": true,
+            "fields": {
+              "composeDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "composeProject": {
+                "min_length": 1,
+                "type": "string"
+              },
+              "configurationDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "providerRuntimeDigest": {
+                "format": "sha256_identity",
+                "type": "string"
+              },
+              "replaced": {
+                "type": "boolean"
+              },
+              "reused": {
+                "type": "boolean"
+              },
+              "startupAttemptId": {
+                "min_length": 1,
+                "type": "string"
+              }
+            },
+            "required_fields": [
+              "startupAttemptId",
+              "composeProject",
+              "composeDigest",
+              "configurationDigest",
+              "providerRuntimeDigest",
+              "reused",
+              "replaced"
+            ],
+            "type": "object"
+          },
+          "schema": {
+            "const": "quwoquan_ops.app_managed_preparation.v1",
+            "type": "string"
+          },
+          "status": {
+            "allowed_values": [
+              "prepared",
+              "blocked"
+            ],
+            "type": "string"
+          },
+          "strictContentPreflightReceiptDigest": {
+            "format": "optional_sha256_identity",
+            "type": "string"
+          },
+          "strictContentPreflightReceiptRef": {
+            "type": "string"
+          },
+          "strictPreflightReceiptDigest": {
+            "format": "optional_sha256_identity",
+            "type": "string"
+          },
+          "strictPreflightReceiptRef": {
+            "type": "string"
+          },
+          "target": {
+            "allow_empty": true,
+            "allowed_values": [
+              "alpha-local"
+            ],
+            "type": "string"
+          }
+        },
+        "required_fields": [
+          "schema",
+          "target",
+          "environment",
+          "platform",
+          "deviceId",
+          "runtimeIdentity",
+          "consumerId",
+          "consumerLeaseId",
+          "androidReversePorts",
+          "androidReverseOwnedPorts",
+          "deviceTrustReceiptRef",
+          "deviceTrustReceiptDigest",
+          "contentBinding",
+          "strictPreflightReceiptRef",
+          "strictPreflightReceiptDigest",
+          "strictContentPreflightReceiptRef",
+          "strictContentPreflightReceiptDigest",
+          "createdAt",
+          "status",
+          "firstBlocker"
+        ],
+        "schema_value": "quwoquan_ops.app_managed_preparation.v1"
       },
       "runtime_config_activation_receipt": {
         "additional_fields": false,

@@ -340,6 +340,134 @@ func validateAppLaunchSchemas(
 	if err := requireUniqueNonEmptyStrings("runtime_config_activation_receipt.fields.status.allowed_values", statuses); err != nil {
 		return err
 	}
+	if err := validateAppManagedPreparationSchema(launch.Schemas.AppManagedPreparation); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateAppManagedPreparationSchema(schema appLaunchSchemaContract) error {
+	for fieldName, expected := range map[string][]string{
+		"target":      {"alpha-local"},
+		"environment": {"alpha"},
+		"platform":    {"android", "ios"},
+		"status":      {"prepared", "blocked"},
+	} {
+		field := schema.Fields[fieldName]
+		if field.Type != "string" {
+			return fmt.Errorf("app_managed_preparation.fields.%s must be string", fieldName)
+		}
+		if err := requireExactOrderedStrings(
+			"app_managed_preparation.fields."+fieldName+".allowed_values",
+			field.AllowedValues,
+			expected,
+		); err != nil {
+			return err
+		}
+	}
+	for _, fieldName := range []string{"target", "environment", "platform", "deviceId", "consumerId"} {
+		if !schema.Fields[fieldName].AllowEmpty {
+			return fmt.Errorf("app_managed_preparation.fields.%s must allow empty for blocked receipts", fieldName)
+		}
+	}
+	for _, fieldName := range []string{"deviceId", "consumerId"} {
+		if schema.Fields[fieldName].MinLength != 1 {
+			return fmt.Errorf("app_managed_preparation.fields.%s must require non-empty prepared values", fieldName)
+		}
+	}
+	for _, fieldName := range []string{
+		"consumerLeaseId", "deviceTrustReceiptDigest", "strictPreflightReceiptDigest",
+		"strictContentPreflightReceiptDigest",
+	} {
+		field := schema.Fields[fieldName]
+		if field.Type != "string" || field.Format != "optional_sha256_identity" {
+			return fmt.Errorf("app_managed_preparation.fields.%s must use optional_sha256_identity", fieldName)
+		}
+	}
+	for _, fieldName := range []string{
+		"androidReversePorts", "androidReverseOwnedPorts", "deviceTrustReceiptRef",
+		"strictPreflightReceiptRef", "strictContentPreflightReceiptRef",
+	} {
+		field := schema.Fields[fieldName]
+		if field.Type != "string" || field.MinLength != 0 {
+			return fmt.Errorf("app_managed_preparation.fields.%s must be an empty-capable string", fieldName)
+		}
+	}
+	runtimeIdentity := schema.Fields["runtimeIdentity"]
+	if runtimeIdentity.Type != "object" || !runtimeIdentity.AllowEmpty ||
+		runtimeIdentity.AdditionalFields == nil || *runtimeIdentity.AdditionalFields {
+		return fmt.Errorf("app_managed_preparation.fields.runtimeIdentity must be an empty-capable closed object")
+	}
+	expectedRuntimeFields := []string{
+		"startupAttemptId", "composeProject", "composeDigest", "configurationDigest",
+		"providerRuntimeDigest", "reused", "replaced",
+	}
+	if err := requireExactStringSet(
+		"app_managed_preparation.fields.runtimeIdentity.required_fields",
+		runtimeIdentity.RequiredFields,
+		expectedRuntimeFields,
+	); err != nil {
+		return err
+	}
+	for _, fieldName := range []string{"startupAttemptId", "composeProject"} {
+		field := runtimeIdentity.Fields[fieldName]
+		if field.Type != "string" || field.MinLength != 1 {
+			return fmt.Errorf("app_managed_preparation.fields.runtimeIdentity.fields.%s must be non-empty string", fieldName)
+		}
+	}
+	for _, fieldName := range []string{"composeDigest", "configurationDigest", "providerRuntimeDigest"} {
+		field := runtimeIdentity.Fields[fieldName]
+		if field.Type != "string" || field.Format != "sha256_identity" {
+			return fmt.Errorf("app_managed_preparation.fields.runtimeIdentity.fields.%s must use sha256_identity", fieldName)
+		}
+	}
+	for _, fieldName := range []string{"reused", "replaced"} {
+		if runtimeIdentity.Fields[fieldName].Type != "boolean" {
+			return fmt.Errorf("app_managed_preparation.fields.runtimeIdentity.fields.%s must be boolean", fieldName)
+		}
+	}
+	contentBinding := schema.Fields["contentBinding"]
+	if contentBinding.Type != "object" || !contentBinding.AllowEmpty ||
+		contentBinding.AdditionalFields == nil || *contentBinding.AdditionalFields {
+		return fmt.Errorf("app_managed_preparation.fields.contentBinding must be an empty-capable closed object")
+	}
+	expectedContentBindingFields := []string{
+		"releaseId", "verifyRunId", "manifestDigest", "readinessPhase",
+		"readinessReceiptRef", "readinessReceiptDigest",
+	}
+	if err := requireExactStringSet(
+		"app_managed_preparation.fields.contentBinding.required_fields",
+		contentBinding.RequiredFields,
+		expectedContentBindingFields,
+	); err != nil {
+		return err
+	}
+	for _, fieldName := range []string{"releaseId", "verifyRunId", "readinessReceiptRef"} {
+		field := contentBinding.Fields[fieldName]
+		if field.Type != "string" || field.MinLength != 1 {
+			return fmt.Errorf("app_managed_preparation.fields.contentBinding.fields.%s must be non-empty string", fieldName)
+		}
+	}
+	for _, fieldName := range []string{"manifestDigest", "readinessReceiptDigest"} {
+		field := contentBinding.Fields[fieldName]
+		if field.Type != "string" || field.Format != "sha256_identity" {
+			return fmt.Errorf("app_managed_preparation.fields.contentBinding.fields.%s must use sha256_identity", fieldName)
+		}
+	}
+	readiness := contentBinding.Fields["readinessPhase"]
+	if err := requireExactOrderedStrings(
+		"app_managed_preparation.fields.contentBinding.fields.readinessPhase.allowed_values",
+		readiness.AllowedValues,
+		[]string{"research"},
+	); err != nil {
+		return err
+	}
+	if err := requireAppLaunchFieldRef(schema, "firstBlocker", "launch_blockers"); err != nil {
+		return err
+	}
+	if !schema.Fields["firstBlocker"].AllowEmpty {
+		return fmt.Errorf("app_managed_preparation firstBlocker must allow empty on prepared receipts")
+	}
 	return nil
 }
 
@@ -352,6 +480,7 @@ func appLaunchNamedSchemas(schemas appLaunchSchemas) map[string]appLaunchSchemaC
 		"app_launch_attempt":                schemas.AppLaunchAttempt,
 		"app_effective_launch_manifest":     schemas.AppEffectiveLaunchManifest,
 		"app_launcher_handoff":              schemas.AppLauncherHandoff,
+		"app_managed_preparation":           schemas.AppManagedPreparation,
 	}
 }
 

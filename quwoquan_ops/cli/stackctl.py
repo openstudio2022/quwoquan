@@ -207,7 +207,8 @@ from quwoquan_ops.cli.lib.domain_remote_api_integration import (
 )
 from quwoquan_ops.cli.lib.local_runtime_reservation import (
     LocalOperationLockBusyError,
-    acquire_local_runtime_use_lock, assert_local_runtime_available,
+    acquire_local_runtime_use_lock, active_conflicting_local_targets,
+    assert_local_runtime_available,
     assert_no_running_mutable_runtime,
     global_local_operation_lock as _reservation_global_local_operation_lock,
     local_runtime_peer_targets,
@@ -216,8 +217,8 @@ from quwoquan_ops.cli.lib.local_runtime_reservation import (
 )
 from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
     DEFAULT_BUILD_GRACE_SECONDS, OCCUPANCY_FREE_STATES, acquire_consumer_lease,
-    active_consumer_leases, consumer_lease_dir, inspect_consumer_leases,
-    release_consumer_lease,
+    active_consumer_leases, bind_consumer_lease, consumer_lease_dir,
+    inspect_consumer_leases, release_consumer_lease,
 )
 from quwoquan_ops.cli.lib import orphan_compose_teardown
 from quwoquan_ops.cli.lib import output_layout_reconciliation
@@ -229,9 +230,10 @@ from quwoquan_ops.cli.lib.startup_attempt_receipt import (
     transition_startup_attempt,
 )
 from quwoquan_ops.cli.lib.test_live_startup_attempt_receipt import (
-    load_test_live_startup_attempt, read_stale_test_live_startup_attempt,
-    reclaim_stale_test_live_startup_attempt, test_live_startup_attempt_path,
-    transition_test_live_startup_attempt,
+    bounded_replace_stale_test_live_startup_attempt, load_test_live_startup_attempt,
+    read_stale_test_live_startup_attempt, reclaim_stale_test_live_startup_attempt,
+    require_bounded_stale_test_live_startup_attempt,
+    test_live_startup_attempt_path, transition_test_live_startup_attempt,
 )
 from quwoquan_ops.cli.lib.test_live_content_binding import (
     create_test_live_content_binding, load_test_live_content_binding,
@@ -305,8 +307,16 @@ from quwoquan_ops.cli.lib.test_data.model import TestDataContext
 from quwoquan_ops.cli.lib.test_data.operations import TestDataRuntime
 from quwoquan_ops.cli.lib.test_data.serialization import case_request_document, load_case_requests
 from quwoquan_ops.cli.lib.dev_up import (
-    DEV_UP_ENVS, DEV_UP_STACK_TARGETS, app_target_for_env, build_start_app_command, launch_app,
-    pick_dev_up_env, resolve_device_id,
+    DEV_UP_ENVS, DEV_UP_STACK_TARGETS, app_target_for_env, build_start_app_command,
+    detect_device_kind, find_device, launch_app, pick_dev_up_env, resolve_device_id,
+)
+from quwoquan_ops.cli.lib.managed_preparation import (
+    MANAGED_PREPARATION_SCHEMA, ManagedPreparationBlocked,
+    _managed_active_release_readback, _managed_android_adb_reverse_ports,
+    _managed_content_binding, _managed_device_identity, _managed_device_trust,
+    _managed_inspect_running_full_runtime, _managed_research_readiness_candidates,
+    _managed_runtime_ready, _managed_strict_preflight,
+    _write_managed_preparation_receipt, run_managed_preparation,
 )
 from quwoquan_ops.cli.lib.filter_catalog_release import (
     LOCAL_FILTER_CATALOG_TARGETS, MUTATING_ACTIONS as FILTER_CATALOG_MUTATING_ACTIONS,
@@ -362,6 +372,7 @@ def _global_local_operation_lock(
 # 子命令域外挂模块：argparse 表面与编排胶水迁往 quwoquan_ops/cli/commands/**，
 # stackctl 保持唯一入口；此处 import + 再导出保证 dispatch 与测试
 # monkeypatch（mock.patch.object(stackctl, ...)）语义零漂移。
+from quwoquan_ops.cli.commands import app_managed_prepare as app_managed_prepare_commands
 from quwoquan_ops.cli.commands import app_preflight as app_preflight_commands
 from quwoquan_ops.cli.commands import app_uat_evidence as app_uat_evidence_commands
 from quwoquan_ops.cli.commands import app_preflight_shared as app_preflight_shared_commands
@@ -585,7 +596,9 @@ from quwoquan_ops.cli.commands.dev_session_compose import (
     _dev_session_materialize_compose_files, _dev_session_source_compose_files,
 )
 from quwoquan_ops.cli.commands.dev_session_runtime import (
-    _dev_session_active_receipts, _dev_session_child_args, _dev_session_compose_project,
+    InadmissibleCurrentTestLiveReceipt,
+    _bounded_replace_stale_managed_receipt, _dev_session_active_receipts,
+    _dev_session_child_args, _dev_session_compose_project,
     _dev_session_finalize_runtime_plan, _dev_session_phase,
     _dev_session_render_runtime_inputs, _dev_session_runtime_preflight,
     _dev_session_target_media_root, _dev_session_workload_conflict,
@@ -774,6 +787,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     content_acceptance_commands.register_content_readiness_parser(subparsers)
 
+    app_managed_prepare_commands.register_parser(subparsers)
     app_preflight_commands.register_parser(subparsers)
     app_dependency_sync_commands.register_parser(subparsers)
     provider_debug_commands.register_parser(subparsers)
@@ -970,6 +984,7 @@ def main() -> int:
         "content-readiness": command_content_readiness,
         "research-isolation-probe": command_research_isolation_probe,
         "research-consumer-credential": command_research_consumer_credential,
+        "app-managed-prepare": app_managed_prepare_commands.command_app_managed_prepare,
         "app-content-preflight": command_app_content_preflight,
         "app-debug-preflight": command_app_debug_preflight,
         "app-domain-api-integration": command_app_domain_api_integration,

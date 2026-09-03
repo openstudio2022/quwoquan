@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# 工作区 flutter facade 的 PATH 占位入口；本目录只允许这一个可执行文件。
-# 逻辑全部在 ../flutter_facade.py，本文件不承载任何判定。
-set -euo pipefail
-exec python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/flutter_facade.py" "$@"

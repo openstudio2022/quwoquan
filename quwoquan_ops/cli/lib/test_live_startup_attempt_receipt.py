@@ -449,6 +449,49 @@ def reclaim_stale_test_live_startup_attempt(target: str) -> dict[str, Any]:
     return stale
 
 
+def require_bounded_stale_test_live_startup_attempt(
+    target: str,
+    value: object,
+) -> dict[str, Any]:
+    """Admit only a retired generation of this target's mutable receipt."""
+
+    environment = target.removesuffix("-local")
+    expected_project = f"quwoquan_{environment}_test_live"
+    if (
+        not isinstance(value, Mapping)
+        or value.get("schema") != SCHEMA
+        or value.get("launchPolicy") != "test_live"
+        or value.get("nonPromotable") is not True
+        or value.get("environment") != environment
+        or value.get("target") != target
+        or value.get("workload") != "full"
+        or value.get("composeProject") != expected_project
+        or value.get("status") not in STATUSES
+        or _ATTEMPT_ID.fullmatch(str(value.get("attemptId") or "")) is None
+    ):
+        raise ValueError(
+            "stale test-live startup receipt is outside the bounded replacement boundary"
+        )
+    return dict(value)
+
+
+def bounded_replace_stale_test_live_startup_attempt(target: str) -> dict[str, Any]:
+    """Retire one stale process receipt before a managed bounded replacement.
+
+    The caller owns the local runtime operation lock and has already proved
+    that no live consumer lease can observe the replacement. Only a retired
+    field set for the canonical mutable project is admitted here; the document
+    remains untrusted for runtime identity or teardown.
+    """
+    stale = read_stale_test_live_startup_attempt(target)
+    if stale is None:
+        raise ValueError(
+            f"{target} holds no inadmissible test-live startup receipt to replace"
+        )
+    require_bounded_stale_test_live_startup_attempt(target, stale)
+    return reclaim_stale_test_live_startup_attempt(target)
+
+
 def transition_test_live_startup_attempt(
     *,
     environment: str,

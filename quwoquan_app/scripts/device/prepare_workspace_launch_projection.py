@@ -22,6 +22,10 @@ from quwoquan_ops.cli.lib.package_reuse import (
     verify_package_input_capsule,
     workspace_snapshot,
 )
+from quwoquan_ops.cli.lib.package_reuse.dependency_bundle import (
+    AppDependencyBundleMissingError,
+    AppDependencyBundleStaleError,
+)
 from quwoquan_ops.cli.lib.package_reuse.dependency_fs import remove_private_tree
 
 
@@ -236,6 +240,44 @@ def prepare_workspace_launch_projection(
             remove_private_tree(attempt)
 
 
+def _failure_envelope(error: BaseException) -> tuple[dict[str, str], str]:
+    """一份失败拆两路：stdout 机器可读 envelope，stderr 人类可读 typed 行。
+
+    成功路径的 stdout 仍是 projection 导出 JSON（无 ``status`` 字段）；失败
+    envelope 以 ``"status": "failed"`` 区分，消费方（run.sh）按此判别。
+    """
+
+    if isinstance(error, AppDependencyBundleMissingError):
+        return (
+            {
+                "status": "failed",
+                "errorCode": error.code,
+                "errorResource": error.resource,
+                "errorField": error.field,
+            },
+            f"{error.code}: {error}",
+        )
+    if isinstance(error, AppDependencyBundleStaleError):
+        return (
+            {
+                "status": "failed",
+                "errorCode": error.code,
+                "errorField": error.field,
+            },
+            f"{error.code}: {error}",
+        )
+    detail = str(error) or type(error).__name__
+    if not detail.startswith(("APP.LAUNCH", "WORKSPACE.")):
+        detail = f"APP.LAUNCH.workspace_projection_failed: {detail}"
+    return (
+        {
+            "status": "failed",
+            "errorCode": detail.split(":", 1)[0].strip(),
+        },
+        detail,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
@@ -244,9 +286,8 @@ def main(argv: list[str] | None = None) -> int:
             attempt_root=Path(args.attempt_root),
         )
     except (OSError, TypeError, ValueError) as error:
-        detail = str(error) or type(error).__name__
-        if not detail.startswith(("APP.LAUNCH", "WORKSPACE.")):
-            detail = f"APP.LAUNCH.workspace_projection_failed: {detail}"
+        envelope, detail = _failure_envelope(error)
+        print(json.dumps(envelope, ensure_ascii=False, sort_keys=True))
         print(detail, file=sys.stderr)
         return 2
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
