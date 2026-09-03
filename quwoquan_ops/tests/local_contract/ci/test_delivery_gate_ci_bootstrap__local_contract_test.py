@@ -1122,13 +1122,11 @@ def test_search_smoke_builds_the_pinned_cjk_provider_before_api_tests() -> None:
 
 
 def test_environment_writing_jobs_stay_on_controlled_runners() -> None:
-    for workflow_path in (
-        ROOT / ".github/workflows/pre-release-gate.yml",
-        ROOT / ".github/workflows/artifact-lifecycle.yml",
-    ):
-        workflow = workflow_path.read_text(encoding="utf-8")
-        assert "runs-on: macos-latest" not in workflow
-        assert "runs-on: [self-hosted, macOS, ARM64]" in workflow
+    workflow = (ROOT / ".github/workflows/pre-release-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "runs-on: macos-latest" not in workflow
+    assert "runs-on: [self-hosted, macOS, ARM64]" in workflow
 
 
 def test_contract_metadata_bootstrap_creates_cache_parent_before_mktemp() -> None:

@@ -137,13 +137,39 @@ def test_pr_workflows_use_lock_bound_shared_dependency_caches() -> None:
     assert "quwoquan_app/.flutter-version" in delivery
 
 
-def test_lifecycle_only_spends_a_runner_for_failures_or_service_build_record_audit() -> None:
+def test_lifecycle_uses_github_hosted_linux_without_changing_trigger_filter() -> None:
     lifecycle = (ROOT / ".github/workflows/artifact-lifecycle.yml").read_text(
         encoding="utf-8"
     )
 
+    assert "runs-on: ubuntu-latest" in lifecycle
+    assert "runs-on: [self-hosted, macOS, ARM64]" not in lifecycle
     assert "github.event.workflow_run.name == '02. Service Pipeline'" in lifecycle
     assert "github.event.workflow_run.conclusion != 'success'" in lifecycle
+
+
+def test_gate_rejects_self_hosted_macos_arm64_lifecycle_runner(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    lifecycle = (ROOT / ".github/workflows/artifact-lifecycle.yml").read_text(
+        encoding="utf-8"
+    )
+    forbidden_workflow = tmp_path / "artifact-lifecycle.yml"
+    forbidden_workflow.write_text(
+        lifecycle.replace(
+            "runs-on: ubuntu-latest", "runs-on: [self-hosted, macOS, ARM64]"
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(  # type: ignore[attr-defined]
+        "quwoquan_ops.gate.verify_github_artifact_lifecycle.LIFECYCLE_WORKFLOW",
+        forbidden_workflow,
+    )
+
+    assert (
+        "artifact lifecycle workflow must not use a self-hosted macOS ARM64 runner"
+        in verify()
+    )
 
 
 def test_lifecycle_reclaims_isolated_cache_when_pull_request_closes() -> None:
