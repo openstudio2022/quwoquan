@@ -45,6 +45,7 @@ STACKCTL = ROOT / "quwoquan_ops/cli/stackctl.py"
 APP_RUN = APP_DIR / "run.sh"
 APP_EXECUTOR = APP_DIR / "scripts/device/run_app_instance.py"
 APP_SUPERVISOR = APP_DIR / "scripts/device/supervise_app_launch.py"
+DEPENDENCY_PREPARER = APP_DIR / "scripts/device/prepare_flutter_dependencies.py"
 HANDOFF_BUILDER = APP_DIR / "scripts/device/build_launcher_handoff.py"
 LAUNCH_CONTRACT = ROOT / "quwoquan_ops/cli/lib/app_launch_manifest_contract.py"
 
@@ -67,7 +68,6 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         *,
         gate_block: bool,
         connected_device: bool = True,
-        transport_ready: bool = False,
     ) -> _LauncherExecution:
         with tempfile.TemporaryDirectory() as temporary_dir:
             temp_root = Path(temporary_dir)
@@ -78,7 +78,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             adb_log = temp_root / "adb.log"
             target = "alpha-local"
             expected_ports = tuple(local_target_ports(target))
-            preexisting_ports = expected_ports[:1] if transport_ready else ()
+            preexisting_ports = expected_ports[:1]
             device_payload = (
                 '[{"id":"policy-android","name":"Policy Android",'
                 '"targetPlatform":"android-arm64","emulator":true,'
@@ -225,7 +225,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             environment["PYTHONDONTWRITEBYTECODE"] = "1"
             environment["PYTHONPYCACHEPREFIX"] = str(temp_root / "pycache")
             environment["TEST_PREFLIGHT_GATE_BLOCK"] = "1" if gate_block else "0"
-            environment["TEST_TRANSPORT_READY"] = "1" if transport_ready else "0"
+            environment["TEST_TRANSPORT_READY"] = "0"
             environment["TEST_ADB_REVERSE_READY_FILE"] = str(
                 temp_root / "adb-reverse-ready"
             )
@@ -303,8 +303,20 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             "WARN: runtime consumer lease is unavailable",
             result.stderr,
         )
-        self.assertIn("pub get", execution.flutter_log)
+        self.assertIn("--version --machine", execution.flutter_log)
+        self.assertIn("devices --machine", execution.flutter_log)
         self.assertNotIn(" run", execution.flutter_log)
+        launcher_script = APP_RUN.read_text(encoding="utf-8")
+        dependency_prepare_index = launcher_script.index(
+            'python3 "$APP_DIR/scripts/device/prepare_flutter_dependencies.py"'
+        )
+        executor_index = launcher_script.index(
+            'python3 "$APP_DIR/scripts/device/run_app_instance.py"'
+        )
+        self.assertLess(dependency_prepare_index, executor_index)
+        dependency_preparer = DEPENDENCY_PREPARER.read_text(encoding="utf-8")
+        for locked_argument in ('"pub"', '"get"', '"--offline"', '"--enforce-lockfile"'):
+            self.assertIn(locked_argument, dependency_preparer)
         executor_arguments = execution.executor_log.splitlines()
         self.assertIn(str(APP_EXECUTOR), executor_arguments)
         self.assertEqual(
@@ -352,13 +364,10 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             execution.stackctl_log,
         )
 
-    def test_launcher_binds_transport_receipt_before_executor_and_cleans_only_owned_reverse(
+    def test_direct_launcher_omits_unowned_receipt_and_canonical_path_cleans_owned_reverse(
         self,
     ) -> None:
-        execution = self._run_launcher_with_preflight_policy(
-            gate_block=False,
-            transport_ready=True,
-        )
+        execution = self._run_launcher_with_preflight_policy(gate_block=False)
         result = execution.result
 
         if "APP.LAUNCH.workspace_projection_failed" in result.stderr:
@@ -373,19 +382,35 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         handoff = json.loads(execution.handoff_json)
-        self.assertRegex(
-            handoff["transport"]["reverseReceiptDigest"],
-            r"^sha256:[0-9a-f]{64}$",
-        )
-        self.assertIn("--handoff-digest", execution.stackctl_log)
+        self.assertFalse(handoff["transport"]["required"])
+        self.assertEqual(handoff["transport"]["reverseReceiptDigest"], "")
+        self.assertNotIn("--handoff-digest", execution.stackctl_log)
         self.assertIn(str(APP_EXECUTOR), execution.executor_log)
-        for port in execution.expected_ports:
-            self.assertIn(f"reverse tcp:{port} tcp:{port}", execution.adb_log)
-        for port in execution.preexisting_ports:
-            self.assertNotIn(f"reverse --remove tcp:{port}", execution.adb_log)
-        for port in execution.expected_ports[len(execution.preexisting_ports) :]:
-            self.assertIn(f"reverse --remove tcp:{port}", execution.adb_log)
-        self.assertNotIn("forward --remove tcp:8888", execution.adb_log)
+        self.assertNotIn(" reverse ", execution.adb_log)
+
+        script = APP_RUN.read_text(encoding="utf-8")
+        receipt_export_index = script.index(
+            'print("export QWQ_ANDROID_REVERSE_RECEIPT_DIGEST="'
+        )
+        handoff_digest_index = script.index(
+            '--reverse-receipt-digest "$QWQ_ANDROID_REVERSE_RECEIPT_DIGEST"'
+        )
+        bind_index = script.index(
+            '--handoff-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"'
+        )
+        executor_index = script.index(
+            'python3 "$APP_DIR/scripts/device/run_app_instance.py"'
+        )
+        self.assertLess(receipt_export_index, handoff_digest_index)
+        self.assertLess(handoff_digest_index, bind_index)
+        self.assertLess(bind_index, executor_index)
+        cleanup_start = script.index("cleanup_managed_handoff_resources()")
+        cleanup_end = script.index("# preparation", cleanup_start)
+        cleanup_script = script[cleanup_start:cleanup_end]
+        self.assertIn("QWQ_ANDROID_REVERSE_OWNED_PORTS", cleanup_script)
+        self.assertNotIn("QWQ_ANDROID_REVERSE_EXPECTED_PORTS", cleanup_script)
+        self.assertIn('reverse --remove "tcp:$port"', cleanup_script)
+        self.assertNotIn("forward --remove tcp:8888", cleanup_script)
 
     def test_android_launcher_owns_and_releases_lease(self) -> None:
         script = APP_RUN.read_text(encoding="utf-8")
@@ -479,12 +504,16 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             self.assertEqual(execution.executor_log, "")
             return
         self.assertIn(
-            "a connected iOS/Android device is required after runtime preflight",
+            "Flutter mobile device 'policy-android' is not visible",
+            result.stderr,
+        )
+        self.assertIn(
+            "choose a connected iOS/Android device",
             result.stderr,
         )
         self.assertIn("app-debug-preflight --purpose runtime", execution.stackctl_log)
-        self.assertIn("pub get --offline", execution.flutter_log)
         self.assertIn("devices --machine", execution.flutter_log)
+        self.assertNotIn("pub get", execution.flutter_log)
         self.assertEqual(execution.executor_log, "")
 
     def test_handoff_contract_is_transport_receipt_authority(self) -> None:
