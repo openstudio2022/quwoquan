@@ -140,9 +140,33 @@ if [ -d "$ROOT/scripts" ]; then
   exit 1
 fi
 
+bootstrap_canonical_runtime_root() {
+  local runtime_root="$ROOT/.qwq_output"
+  if [[ -L "$runtime_root" ]]; then
+    echo "[gate] FAIL: canonical runtime root must not be a symlink: $runtime_root" >&2
+    return 1
+  fi
+  if [[ -e "$runtime_root" ]]; then
+    if [[ ! -d "$runtime_root" ]]; then
+      echo "[gate] FAIL: canonical runtime root must be a directory: $runtime_root" >&2
+      return 1
+    fi
+    return 0
+  fi
+  if ! mkdir "$runtime_root"; then
+    echo "[gate] FAIL: could not create canonical runtime root: $runtime_root" >&2
+    return 1
+  fi
+  if [[ -L "$runtime_root" || ! -d "$runtime_root" ]]; then
+    echo "[gate] FAIL: canonical runtime root changed during bootstrap: $runtime_root" >&2
+    return 1
+  fi
+}
+
 bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
 python3 quwoquan_ops/gate/verify_git_branch_policy.py
 python3 quwoquan_ops/gate/verify_github_supply_chain.py
+bootstrap_canonical_runtime_root
 python3 -B quwoquan_ops/gate/verify_human_agent_delivery_eval.py
 python3 -B quwoquan_ops/gate/verify_objective_execution.py
 python3 -B quwoquan_ops/gate/verify_hotl_admission.py
