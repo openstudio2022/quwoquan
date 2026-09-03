@@ -29,7 +29,7 @@ from quwoquan_ops.cli.lib.package_reuse.android_gradle_component import (
 )
 from quwoquan_ops.cli.lib.package_reuse.android_gradle_store import (
     canonical_android_uat_gradle_invocations,
-    materialize_flutter_gradle_wrappers,
+    materialize_pinned_flutter_gradle_wrappers,
     synchronize_android_gradle_dependencies,
 )
 from quwoquan_ops.cli.lib.package_reuse.dependency_fs import (
@@ -106,7 +106,6 @@ def _public_pub_origin_archive_fallback(
         urlopen=urllib.request.urlopen,
     )
 
-
 _SYNC_TIMEOUT_SECONDS = 900
 _SYNC_NETWORK_MAX_ATTEMPTS = 3
 _SYNC_NETWORK_DEADLINE_SECONDS = 45 * 60
@@ -136,6 +135,7 @@ _BASE_ENVIRONMENT_KEYS = {
     "TMPDIR",
     "TOOLCHAINS",
 }
+
 def private_environment(
     *, home: Path, pub_cache: Path | None, hosted_url: str | None
 ) -> dict[str, str]:
@@ -331,8 +331,6 @@ def run_pub_get(
                 cause="public_mirror_archive_unavailable",
             ),
         )
-
-
 
 
 def _remove_pub_online_transients(cache_root: Path) -> None:
@@ -847,16 +845,9 @@ def _build_android_component(
     invocations = canonical_android_uat_gradle_invocations(projection_root)
     gradle_roots = [item.gradle_root for item in invocations]
     context.progress.begin("gradle-wrapper-bootstrap")
-    if gradle_roots:
-        flutter = str(context.flutter_identity.get("executable") or "")
-        if not flutter:
-            raise ValueError("APP.DEPENDENCY.flutter_executable_missing")
-        materialize_flutter_gradle_wrappers(
-            project_root=projection_root,
-            gradle_roots=gradle_roots,
-            flutter_executable=Path(flutter),
-            expected_flutter_identity=context.flutter_identity,
-        )
+    materialize_pinned_flutter_gradle_wrappers(
+        projection_root, gradle_roots, context.flutter_identity
+    )
     context.progress.begin("gradle-online-resolution")
     try:
         result = synchronize_android_gradle_dependencies(

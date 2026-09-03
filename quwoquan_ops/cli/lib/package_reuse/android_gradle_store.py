@@ -277,6 +277,26 @@ def materialize_flutter_gradle_wrappers(
     )
 
 
+def materialize_pinned_flutter_gradle_wrappers(
+    project_root: Path,
+    gradle_roots: Sequence[Path],
+    flutter_identity: Mapping[str, str],
+) -> tuple[dict[str, object], ...]:
+    """Resolve the pinned Flutter executable only when wrapper hosts exist."""
+
+    if not gradle_roots:
+        return ()
+    flutter = str(flutter_identity.get("executable") or "")
+    if not flutter:
+        raise ValueError("APP.DEPENDENCY.flutter_executable_missing")
+    return materialize_flutter_gradle_wrappers(
+        project_root=project_root,
+        gradle_roots=gradle_roots,
+        flutter_executable=Path(flutter),
+        expected_flutter_identity=flutter_identity,
+    )
+
+
 def canonical_android_uat_gradle_invocations(
     project_root: Path,
 ) -> tuple[GradleInvocation, GradleInvocation]:

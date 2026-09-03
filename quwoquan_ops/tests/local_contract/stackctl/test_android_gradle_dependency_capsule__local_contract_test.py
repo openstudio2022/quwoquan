@@ -31,6 +31,7 @@ from quwoquan_ops.cli.lib.package_reuse.android_gradle_store import (
     canonical_android_uat_gradle_invocations,
     copy_android_gradle_snapshot,
     materialize_flutter_gradle_wrappers,
+    materialize_pinned_flutter_gradle_wrappers,
     run_gradle_invocations,
     seal_android_gradle_home,
     synchronize_android_gradle_dependencies,
@@ -189,11 +190,10 @@ def test_clean_projection_materializes_both_wrappers_from_pinned_flutter(
         roots.append(root)
     flutter, artifact = _pinned_flutter_sdk(tmp_path)
 
-    identities = materialize_flutter_gradle_wrappers(
-        project_root=project,
-        gradle_roots=roots,
-        flutter_executable=flutter,
-        expected_flutter_identity=_PINNED_FLUTTER_IDENTITY,
+    identities = materialize_pinned_flutter_gradle_wrappers(
+        project,
+        roots,
+        {**_PINNED_FLUTTER_IDENTITY, "executable": str(flutter)},
     )
 
     assert [item["root"] for item in identities] == [
@@ -205,6 +205,32 @@ def test_clean_projection_materializes_both_wrappers_from_pinned_flutter(
             assert (root / relative).read_bytes() == expected
         assert (root / "gradlew").stat().st_mode & 0o111
         assert (root / "gradle/wrapper/gradle-wrapper.properties").is_file()
+
+
+def test_pinned_wrapper_bootstrap_requires_executable_for_nonempty_roots(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "projection"
+
+    with pytest.raises(ValueError, match="APP.DEPENDENCY.flutter_executable_missing"):
+        materialize_pinned_flutter_gradle_wrappers(
+            project, [project / "quwoquan_app/android"], _PINNED_FLUTTER_IDENTITY
+        )
+
+    assert not project.exists()
+
+
+def test_pinned_wrapper_bootstrap_allows_empty_roots_without_executable(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "projection"
+
+    identities = materialize_pinned_flutter_gradle_wrappers(
+        project, [], _PINNED_FLUTTER_IDENTITY
+    )
+
+    assert identities == ()
+    assert not project.exists()
 
 
 def test_wrapper_bootstrap_rejects_wrong_flutter_layout_before_write(
