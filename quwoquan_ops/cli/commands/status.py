@@ -47,6 +47,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         deadline_epoch=int(time.time()) + 8,
     )
     result = _stackctl.command_health(health_args)
+    runtime_lock_holders = _stackctl.local_runtime_lock_holders()
     currentness_requested = getattr(args, "currentness", False)
     candidate_workspace = (
         _stackctl._candidate_workspace_report(args.target, purpose="currentness")
@@ -83,10 +84,21 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         if isinstance(report, dict):
             report["command"] = "status"
             report["candidateWorkspace"] = candidate_workspace
+            report["localRuntimeLocks"] = runtime_lock_holders
             _stackctl.write_json(report_path, report)
     except (OSError, json.JSONDecodeError):
         # status 的健康结果仍由 command_health 拥有；候选漂移是只读附加信息，
         # 报告文件异常不能被包装成新的运行时健康结论。
         pass
     result["candidateWorkspace"] = candidate_workspace
+    result["localRuntimeLocks"] = runtime_lock_holders
+    if runtime_lock_holders:
+        details = list(result.get("details") or [])
+        for holder in runtime_lock_holders:
+            owner = str(holder.get("worktree") or "unknown")
+            lane = str(holder.get("lane") or "unknown")
+            detail = f"local runtime lock held by worktree={owner} lane={lane}"
+            if detail not in details:
+                details.append(detail)
+        result["details"] = details
     return result
