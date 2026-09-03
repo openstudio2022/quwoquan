@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import stat
 import subprocess
 import time
@@ -22,6 +23,7 @@ from .android_gradle_capsule import (
     digest_bytes,
     wrapper_identity,
 )
+from .dependency_fs import read_regular_nofollow, write_fresh_relative_file
 from .dependency_network_command import (
     retry_event,
     run_managed_subprocess,
@@ -38,6 +40,17 @@ _GRADLE_NETWORK_MAX_ATTEMPTS = 3
 _GRADLE_NETWORK_BACKOFF_SECONDS = (1.0, 2.0)
 _GRADLE_PROCESS_TIMEOUT_SECONDS = 20 * 60
 _GRADLE_INVOCATION_DEADLINE_SECONDS = 45 * 60
+_FLUTTER_WRAPPER_CACHE_RELATIVE = Path("bin/cache/artifacts/gradle_wrapper")
+_FLUTTER_WRAPPER_STAMP_RELATIVE = Path("bin/cache/gradle_wrapper.stamp")
+_FLUTTER_WRAPPER_VERSION_RELATIVE = Path("bin/internal/gradle_wrapper.version")
+_FLUTTER_WRAPPER_VERSION = re.compile(
+    r"flutter_infra_release/gradle-wrapper/[0-9a-f]{40}/gradle-wrapper\.tgz\Z"
+)
+_FLUTTER_WRAPPER_ARTIFACT_FILES = (
+    "gradlew",
+    "gradlew.bat",
+    "gradle/wrapper/gradle-wrapper.jar",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +64,111 @@ class AndroidGradleSyncResult:
     snapshot: AndroidGradleSnapshot
     online_results: tuple[subprocess.CompletedProcess[str], ...]
     offline_results: tuple[subprocess.CompletedProcess[str], ...]
+
+
+def _flutter_sdk_root(flutter_executable: Path) -> Path:
+    executable = flutter_executable.expanduser().absolute()
+    try:
+        resolved = executable.resolve(strict=True)
+    except OSError as exc:
+        raise ValueError(
+            "Android Gradle wrapper Flutter executable is unavailable"
+        ) from exc
+    if resolved.name != "flutter" or resolved.parent.name != "bin":
+        raise ValueError("Android Gradle wrapper Flutter executable layout is invalid")
+    root = resolved.parent.parent
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("Android Gradle wrapper Flutter SDK root is unsafe")
+    return root
+
+
+def _flutter_wrapper_artifact(flutter_root: Path) -> dict[str, tuple[bytes, int]]:
+    try:
+        version, _version_mode = read_regular_nofollow(
+            flutter_root / _FLUTTER_WRAPPER_VERSION_RELATIVE,
+            label="Flutter Gradle wrapper artifact version",
+        )
+        stamp, _stamp_mode = read_regular_nofollow(
+            flutter_root / _FLUTTER_WRAPPER_STAMP_RELATIVE,
+            label="Flutter Gradle wrapper artifact stamp",
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise ValueError(
+            "Android Gradle wrapper official Flutter artifact is unavailable"
+        ) from exc
+    try:
+        version_value = version.decode("utf-8", errors="strict").strip()
+        stamp_value = stamp.decode("utf-8", errors="strict").strip()
+    except UnicodeError as exc:
+        raise ValueError(
+            "Android Gradle wrapper official Flutter artifact metadata is invalid"
+        ) from exc
+    if (
+        _FLUTTER_WRAPPER_VERSION.fullmatch(version_value) is None
+        or stamp_value != version_value
+    ):
+        raise ValueError(
+            "Android Gradle wrapper official Flutter artifact identity is unsealed"
+        )
+
+    source_root = flutter_root / _FLUTTER_WRAPPER_CACHE_RELATIVE
+    artifact: dict[str, tuple[bytes, int]] = {}
+    for relative in _FLUTTER_WRAPPER_ARTIFACT_FILES:
+        try:
+            content, mode = read_regular_nofollow(
+                source_root / relative,
+                label=f"Flutter Gradle wrapper artifact {relative}",
+            )
+        except (RuntimeError, ValueError) as exc:
+            raise ValueError(
+                "Android Gradle wrapper official Flutter artifact is unavailable"
+            ) from exc
+        if relative == "gradlew" and not mode & 0o111:
+            raise ValueError(
+                "Android Gradle wrapper official Flutter script is not executable"
+            )
+        artifact[relative] = content, mode
+    return artifact
+
+
+def materialize_flutter_gradle_wrappers(
+    *,
+    project_root: Path,
+    gradle_roots: Sequence[Path],
+    flutter_executable: Path,
+) -> tuple[dict[str, Any], ...]:
+    """Inject the pinned Flutter SDK's sealed wrapper artifact into fresh hosts."""
+
+    repository = project_root.expanduser().absolute()
+    flutter_root = _flutter_sdk_root(flutter_executable)
+    artifact = _flutter_wrapper_artifact(flutter_root)
+    roots: list[Path] = []
+    targets: list[tuple[str, str]] = []
+    for gradle_root in gradle_roots:
+        root = gradle_root.expanduser().absolute()
+        if not root.is_relative_to(repository):
+            raise ValueError("Android Gradle wrapper root escapes the project")
+        relative_root = root.relative_to(repository).as_posix()
+        roots.append(root)
+        for artifact_relative in artifact:
+            target = root / artifact_relative
+            if target.exists() or target.is_symlink():
+                raise ValueError(
+                    f"Android Gradle wrapper bootstrap target is not fresh: "
+                    f"{relative_root}/{artifact_relative}"
+                )
+            targets.append(
+                (artifact_relative, f"{relative_root}/{artifact_relative}")
+            )
+
+    for artifact_relative, target_relative in targets:
+        content, mode = artifact[artifact_relative]
+        write_fresh_relative_file(
+            root=repository, relative=target_relative, content=content, mode=mode
+        )
+    return tuple(
+        wrapper_identity(project_root=repository, gradle_root=root) for root in roots
+    )
 
 
 def canonical_android_uat_gradle_invocations(

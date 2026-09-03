@@ -970,6 +970,23 @@ def _validated_runtime_trust_root(
     return root, (str(root), str(trust_path), *key_values)
 
 
+def _materialize_android_gradle_wrappers(
+    *, context: BuildContext, projection_root: Path, gradle_roots: list[Path]
+) -> None:
+    from quwoquan_ops.cli.lib.package_reuse.android_gradle_store import (
+        materialize_flutter_gradle_wrappers,
+    )
+
+    flutter = str(context.flutter_identity.get("executable") or "")
+    if not flutter:
+        raise ValueError("APP.DEPENDENCY.flutter_executable_missing")
+    materialize_flutter_gradle_wrappers(
+        project_root=projection_root,
+        gradle_roots=gradle_roots,
+        flutter_executable=Path(flutter),
+    )
+
+
 def _build_android_component(
     *,
     context: BuildContext,
@@ -1001,6 +1018,11 @@ def _build_android_component(
     )
     invocations = canonical_android_uat_gradle_invocations(projection_root)
     gradle_roots = [item.gradle_root for item in invocations]
+    context.progress.begin("gradle-wrapper-bootstrap")
+    if gradle_roots:
+        _materialize_android_gradle_wrappers(
+            context=context, projection_root=projection_root, gradle_roots=gradle_roots
+        )
     context.progress.begin("gradle-online-resolution")
     try:
         result = synchronize_android_gradle_dependencies(
