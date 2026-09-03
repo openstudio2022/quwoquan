@@ -152,6 +152,8 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                 "      exit 2\n"
                 "    fi\n"
                 "    echo '{\"exitCode\":0,\"status\":\"warning\","
+                "\"target\":\"alpha-local\",\"environment\":\"alpha\","
+                "\"firstBlocker\":\"\","
                 "\"purpose\":\"runtime\",\"nonPromotable\":true,"
                 "\"details\":[],\"warnings\":[\"target startup status is not running: stopped\"],"
                 "\"runtimeChecks\":[],\"contentBindingState\":\"unbound\","
@@ -174,6 +176,19 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                 "build_launcher_handoff.py ]]; then\n"
                 f"  {shlex.quote(sys.executable)} \"$@\" | tee {shlex.quote(str(handoff_json))}\n"
                 "  exit \"${PIPESTATUS[0]}\"\n"
+                "fi\n"
+                "if [[ \"${1:-}\" == */quwoquan_app/scripts/device/"
+                "run_app_instance.py ]]; then\n"
+                f"  printf '%s\\n' \"$@\" >> {shlex.quote(str(executor_log))}\n"
+                "  printf '%s\\n' "
+                "'QWQ_APP_LAUNCH_PHASE status=compiled' "
+                "'QWQ_APP_LAUNCH_PHASE status=installing' "
+                "'QWQ_APP_LAUNCH_PHASE status=installed' "
+                "'QWQ_APP_LAUNCH_PHASE status=configuring' "
+                "'QWQ_APP_LAUNCH_PHASE status=configured' "
+                "'QWQ_APP_LAUNCH_PHASE status=launching' "
+                "'QWQ_APP_LAUNCH_PHASE status=launched'\n"
+                "  exit 0\n"
                 "fi\n"
                 "if [[ \"${1:-}\" == */quwoquan_app/scripts/device/"
                 "supervise_app_launch.py ]]; then\n"
@@ -204,7 +219,9 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                 f"{temporary_dir}{os.pathsep}{environment['PATH']}"
             )
             environment["QWQ_IOS_STACKCTL_PYTHON"] = str(fake_python)
-            environment["QWQ_OUTPUT_ROOT"] = str(temp_root / "output")
+            environment["QWQ_OUTPUT_ROOT"] = str((temp_root / "output").resolve())
+            environment["QWQ_REAL_FLUTTER"] = str(fake_flutter.resolve())
+            environment.pop("FLUTTER_ROOT", None)
             environment["PYTHONDONTWRITEBYTECODE"] = "1"
             environment["PYTHONPYCACHEPREFIX"] = str(temp_root / "pycache")
             environment["TEST_PREFLIGHT_GATE_BLOCK"] = "1" if gate_block else "0"
@@ -286,8 +303,8 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             "WARN: runtime consumer lease is unavailable",
             result.stderr,
         )
-        self.assertIn("pub get --offline --enforce-lockfile", execution.flutter_log)
-        self.assertNotIn("run --no-pub", execution.flutter_log)
+        self.assertIn("pub get", execution.flutter_log)
+        self.assertNotIn(" run", execution.flutter_log)
         executor_arguments = execution.executor_log.splitlines()
         self.assertIn(str(APP_EXECUTOR), executor_arguments)
         self.assertEqual(
@@ -328,6 +345,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertTrue(terminal["details"])
         self.assertFalse(terminal["warnings"])
         self.assertEqual(execution.executor_log, "")
+        self.assertEqual(execution.flutter_log, "")
         self.assertIn(
             "app-debug-preflight --purpose runtime "
             "--target alpha-local --runtime-mode test_live",

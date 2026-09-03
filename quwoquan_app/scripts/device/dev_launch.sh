@@ -40,6 +40,83 @@ import math, sys
 if any(not math.isfinite(float(value)) or float(value) <= 0 for value in sys.argv[1:]): raise SystemExit(2)
 PY
 
+PREFLIGHT_PURPOSE="$(python3 - "$RUN_MODE" <<'PY'
+import sys
+from quwoquan_ops.cli.lib.app_debug_preflight_handoff import (
+    app_debug_preflight_purpose,
+)
+
+try:
+    print(app_debug_preflight_purpose(sys.argv[1]))
+except ValueError as error:
+    print(error, file=sys.stderr)
+    raise SystemExit(2) from None
+PY
+)" || block "invalid App launch preflight purpose"
+PREFLIGHT_STATUS=0
+if APP_DEBUG_PREFLIGHT_JSON="$(
+  python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
+    app-debug-preflight --purpose "$PREFLIGHT_PURPOSE" \
+    --target "${ENVIRONMENT}-local" --runtime-mode test_live
+)"; then
+  :
+else
+  PREFLIGHT_STATUS=$?
+  [[ -z "$APP_DEBUG_PREFLIGHT_JSON" ]] || printf '%s\n' "$APP_DEBUG_PREFLIGHT_JSON" >&2
+  # stackctl owns the typed blocker and normally returns 2. Preserve any
+  # other non-zero status so launcher transport failures are not relabeled.
+  exit "$PREFLIGHT_STATUS"
+fi
+PREFLIGHT_WARNING_TEXT="$(python3 - \
+  "$APP_DEBUG_PREFLIGHT_JSON" "$PREFLIGHT_PURPOSE" "${ENVIRONMENT}-local" <<'PY'
+import json
+import sys
+
+try:
+    payload = json.loads(sys.argv[1])
+except (TypeError, ValueError):
+    raise SystemExit("App debug preflight output is not JSON") from None
+if not isinstance(payload, dict):
+    raise SystemExit("App debug preflight output is not an object")
+required_fields = {
+    "exitCode",
+    "status",
+    "purpose",
+    "nonPromotable",
+    "firstBlocker",
+    "target",
+    "environment",
+    "details",
+    "warnings",
+}
+if not required_fields.issubset(payload):
+    raise SystemExit("App debug preflight output is incomplete")
+if (
+    type(payload.get("exitCode")) is not int
+    or payload.get("exitCode") != 0
+    or payload.get("status") not in {"passed", "warning"}
+    or payload.get("purpose") != sys.argv[2]
+    or payload.get("nonPromotable") is not True
+    or str(payload.get("firstBlocker") or "").strip()
+    or payload.get("target") != sys.argv[3]
+    or payload.get("environment") != sys.argv[3].removesuffix("-local")
+    or not isinstance(payload.get("details"), list)
+    or not isinstance(payload.get("warnings"), list)
+    or not all(isinstance(item, str) for item in payload["warnings"])
+):
+    raise SystemExit("App debug preflight did not return launchable test_live readiness")
+for warning in payload.get("warnings") or []:
+    print(str(warning).replace("\n", " "))
+PY
+)" || block "App debug preflight contract is invalid"
+while IFS= read -r preflight_warning; do
+  [[ -n "$preflight_warning" ]] || continue
+  log "WARN: $preflight_warning"
+done <<< "$PREFLIGHT_WARNING_TEXT"
+# Workspace-direct test_live intentionally carries no release-grade consumer
+# lease. Keep that absence visible and non-promotable without blocking compile.
+log "WARN: runtime consumer lease is unavailable; test_live remains nonPromotable."
+
 log "tree: $APP_DIR"
 if ! SDK_JSON="$(python3 "$APP_DIR/scripts/tools/flutter_facade/resolve_real_flutter.py" --format json)"; then
   block "APP.LAUNCH.workspace_flutter_sdk_unavailable: 真实 Flutter SDK 解析失败（见上方输出）"
@@ -105,6 +182,7 @@ PUB_INPUT_DIGEST="$(shasum -a 256 "$APP_DIR/pubspec.yaml" "$APP_DIR/pubspec.lock
 if [[ ! -f "$PACKAGE_CONFIG" || ! -f "$PACKAGE_STAMP" || "$(<"$PACKAGE_STAMP")" != "$PUB_INPUT_DIGEST" ]]; then
   log "deps: pubspec changed → flutter pub get（本机 PUB_CACHE）"
   (cd "$APP_DIR" && "$REAL_FLUTTER" pub get) || block "flutter pub get failed（见上方输出）"
+  mkdir -p "$(dirname "$PACKAGE_STAMP")"
   printf '%s\n' "$PUB_INPUT_DIGEST" > "$PACKAGE_STAMP"
 else
   log "deps: pub inputs unchanged; pub get skipped（iOS Pods 由 flutter build 按需安装）"
