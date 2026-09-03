@@ -22,6 +22,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parents[3]
 REPO_ROOT = APP_DIR.parent
 FACADE_DIR = APP_DIR / "scripts/tools/flutter_facade"
+OUTPUT_LAYOUT_GATE = REPO_ROOT / "quwoquan_ops/gate/verify_output_layout.py"
 SUBPROCESS_TIMEOUT_SECONDS = 30
 
 FIXTURE_VERSION_PAYLOAD = {
@@ -40,6 +41,63 @@ def _load_facade_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _load_output_layout_gate():
+    spec = importlib.util.spec_from_file_location(
+        "verify_output_layout_under_test", OUTPUT_LAYOUT_GATE
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _assert_canonical_probe_layout(
+    test_case: unittest.TestCase,
+    *,
+    output_root: Path,
+    probe_environment: dict[str, object],
+) -> Path:
+    managed_root = output_root / "env/repo/local/flutter-facade-probe"
+    process_root = managed_root / "process"
+    expected_environment_paths = {
+        "HOME": process_root / "home",
+        "XDG_CONFIG_HOME": process_root / "config",
+        "XDG_CACHE_HOME": managed_root / "cache",
+        "PUB_CACHE": managed_root / "cache/pub-cache",
+    }
+    for key, expected in expected_environment_paths.items():
+        test_case.assertEqual(Path(str(probe_environment[key])), expected, key)
+
+    test_case.assertEqual(
+        {entry.name for entry in managed_root.iterdir()},
+        {"process", "cache"},
+        "local target 一级只能包含 canonical process/cache",
+    )
+    test_case.assertEqual(
+        {entry.name for entry in process_root.iterdir()},
+        {"home", "config"},
+        "HOME/XDG_CONFIG_HOME 必须封闭在 process 下",
+    )
+    for directory in (
+        managed_root,
+        process_root,
+        expected_environment_paths["HOME"],
+        expected_environment_paths["XDG_CONFIG_HOME"],
+        expected_environment_paths["XDG_CACHE_HOME"],
+    ):
+        test_case.assertTrue(directory.is_dir(), directory)
+        test_case.assertFalse(directory.is_symlink(), directory)
+        test_case.assertEqual(directory.stat().st_mode & 0o777, 0o700, directory)
+
+    layout_issues = _load_output_layout_gate().output_layout_issues(root=output_root)
+    test_case.assertEqual(
+        layout_issues,
+        [],
+        "真实探针产物必须满足 canonical output layout:\n"
+        + "\n".join(layout_issues),
+    )
+    return managed_root
 
 
 def _write_executable(path: Path, body: str) -> Path:
@@ -128,6 +186,7 @@ def _write_probe_environment_spy(root: Path, *, capture_path: Path) -> Path:
         "    'HOME': home,\n"
         "    'XDG_CONFIG_HOME': config_home,\n"
         "    'XDG_CACHE_HOME': cache_home,\n"
+        "    'PUB_CACHE': os.environ.get('PUB_CACHE'),\n"
         "    'PATH': os.environ.get('PATH'),\n"
         "    'outputRoot': os.environ.get('QWQ_OUTPUT_ROOT'),\n"
         "    'secret': os.environ.get('QWQ_PROBE_SECRET_DO_NOT_LEAK'),\n"
@@ -386,14 +445,11 @@ class FlutterSdkResolutionContractTest(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        managed_root = explicit_output_root / "env/repo/local/flutter-facade-probe"
         probe_environment = json.loads(capture.read_text(encoding="utf-8"))
-        self.assertEqual(Path(probe_environment["HOME"]), managed_root / "home")
-        self.assertEqual(
-            Path(probe_environment["XDG_CONFIG_HOME"]), managed_root / "config"
-        )
-        self.assertEqual(
-            Path(probe_environment["XDG_CACHE_HOME"]), managed_root / "cache"
+        _assert_canonical_probe_layout(
+            self,
+            output_root=explicit_output_root,
+            probe_environment=probe_environment,
         )
         self.assertFalse(
             (self.root / ".qwq_output").exists(),
@@ -456,12 +512,12 @@ class FlutterSdkResolutionContractTest(unittest.TestCase):
             "HOME/XDG 缺席时版本探针不得在 repo root 写 .config/flutter/tool_state",
         )
         probe_environment = json.loads(capture.read_text(encoding="utf-8"))
-        managed_root = (
-            self.root / ".qwq_output/env/repo/local/flutter-facade-probe"
-        ).resolve()
+        managed_root = _assert_canonical_probe_layout(
+            self,
+            output_root=(self.root / ".qwq_output").resolve(),
+            probe_environment=probe_environment,
+        )
         for key in ("HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
-            value = Path(probe_environment[key]).resolve()
-            self.assertTrue(value.is_relative_to(managed_root), (key, value))
             self.assertEqual(probe_environment["modes"][key], 0o700)
         self.assertEqual(probe_environment["PATH"], "/usr/bin:/bin")
         self.assertIsNone(
