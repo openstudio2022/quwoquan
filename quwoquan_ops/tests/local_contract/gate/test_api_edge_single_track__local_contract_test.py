@@ -38,9 +38,6 @@ class ApiEdgeSingleTrackLocalContractTest(unittest.TestCase):
             "user-service",
         ):
             owner_proxy = f"reverse_proxy {forbidden_owner}:"
-            if forbidden_owner == "product-ops-service":
-                self.assertEqual(caddy.count(owner_proxy), 2)
-                continue
             self.assertNotIn(owner_proxy, caddy)
         # publicWeb host 的 SEO/transfer 读面由 public-content owner 承接；
         # 只允许这一条精确映射，业务 API 仍必须唯一进入 api-edge。
@@ -55,10 +52,8 @@ class ApiEdgeSingleTrackLocalContractTest(unittest.TestCase):
         )[1].split("https://{$QWQ_PUBLIC_CDN_HOST}:", 1)[0]
         for path in ("/healthz", "/readyz"):
             self.assertIn(f"handle {path} {{", product_ops_block)
-        self.assertEqual(
-            product_ops_block.count("reverse_proxy product-ops-service:18086"), 2
-        )
-        self.assertEqual(product_ops_block.count("import business_api_edge"), 3)
+        self.assertNotIn("reverse_proxy product-ops-service:", product_ops_block)
+        self.assertEqual(product_ops_block.count("import business_api_edge"), 5)
 
     def test_gamma_proxy_readiness_depends_on_the_canonical_edge_only(self) -> None:
         compose = yaml.safe_load(GAMMA_COMPOSE.read_text(encoding="utf-8"))
